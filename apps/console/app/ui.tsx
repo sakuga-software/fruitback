@@ -6,6 +6,7 @@ import {
   Header,
   Button as HeroButton,
   Checkbox as HeroCheckbox,
+  CheckboxGroup,
   Chip as HeroChip,
   Input,
   Label,
@@ -95,6 +96,9 @@ type ButtonProps = Destination & {
    * button shows, so that somebody who speaks to their browser can say what they read.
    */
   label?: string;
+  /** The button shows or hides `controls`: a panel under a row (FRU-462). */
+  expanded?: boolean;
+  controls?: string;
   children: ReactNode;
 };
 
@@ -135,6 +139,8 @@ export function Button({
   href,
   newTab,
   label,
+  expanded,
+  controls,
   children,
 }: ButtonProps) {
   const classes = `${TONE_CLASSES[tone]} ${className}`;
@@ -142,6 +148,8 @@ export function Button({
     'data-size': size,
     'data-wide': wide,
     ...(label === undefined ? {} : { 'aria-label': label }),
+    ...(expanded === undefined ? {} : { 'aria-expanded': expanded }),
+    ...(controls === undefined ? {} : { 'aria-controls': controls }),
     ...(inset === undefined ? {} : { style: { paddingInline: inset } }),
   };
   if (to !== undefined || href !== undefined) return anchor({ to, href, newTab }, classes, data, children);
@@ -313,8 +321,11 @@ type FieldProps = {
   value?: string;
   onChange?: (event: ChangeEvent<HTMLInputElement>) => void;
   type?: 'text' | 'email' | 'url' | 'password' | 'search';
-  /** The keyboard of a phone, for a field that is not `type="url"` so that the screen judges what is typed. */
-  inputMode?: 'url';
+  /**
+   * The keyboard of a phone, for a field that is not `type="url"` so that the screen judges what is
+   * typed, or the digits of a number of days (FRU-462).
+   */
+  inputMode?: 'url' | 'numeric';
   placeholder?: string;
   autoComplete?: string;
   maxLength?: number;
@@ -570,6 +581,54 @@ export function Checkbox({ label, checked, onChange }: CheckboxProps) {
         <Label>{label}</Label>
       </HeroCheckbox.Content>
     </HeroCheckbox>
+  );
+}
+
+type ChecksProps = {
+  label: string;
+  value: readonly string[];
+  onChange: (value: string[]) => void;
+  /** `detail`: a line beside the label, as who reads the notes of a site. */
+  options: readonly { value: string; label: string; detail?: string; disabled?: boolean }[];
+  hint?: string;
+  /** What the group needs, said under it: the group reads as invalid to a screen reader. */
+  error?: string;
+  groupRef?: Ref<HTMLDivElement>;
+};
+
+/**
+ * Several boxes to tick, under one label (FRU-462): the checkbox group of HeroUI, each box as
+ * `Checkbox` draws it, with its hint, or its error, under the group.
+ */
+export function Checks({ label, value, onChange, options, hint, error, groupRef }: ChecksProps) {
+  return (
+    <CheckboxGroup
+      value={[...value]}
+      onChange={onChange}
+      isInvalid={error !== undefined}
+      className="kit-checks flex flex-col gap-[2px]"
+      {...(groupRef === undefined ? {} : { ref: groupRef })}
+    >
+      <Label className="mb-[6px] text-small font-semibold">{label}</Label>
+      {options.map((option) => (
+        <HeroCheckbox
+          key={option.value}
+          value={option.value}
+          isDisabled={option.disabled === true}
+          className="kit-checkbox"
+        >
+          <HeroCheckbox.Control>
+            <HeroCheckbox.Indicator />
+          </HeroCheckbox.Control>
+          <HeroCheckbox.Content className="flex flex-wrap items-baseline gap-x-[10px]">
+            <Label>{option.label}</Label>
+            {option.detail === undefined ? null : <span className="text-hint text-muted">{option.detail}</span>}
+          </HeroCheckbox.Content>
+        </HeroCheckbox>
+      ))}
+      {hint === undefined || error !== undefined ? null : <Description>{hint}</Description>}
+      {error === undefined ? null : <FieldError>{error}</FieldError>}
+    </CheckboxGroup>
   );
 }
 

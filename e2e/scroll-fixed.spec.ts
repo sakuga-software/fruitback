@@ -87,6 +87,7 @@ test('the composer of an element that scrolls with the page stays with that elem
   await expect.poll(cta).toBeLessThan(ctaBefore);
   const moved = ctaBefore - (await cta());
   const after = await tops(page);
-  expect(after.composer).toBe((before.composer ?? 0) - moved);
-  expect(after.frame).toBe((before.frame ?? 0) - moved);
+  // Within a pixel: the element sits on a fraction of a pixel, and each top is rounded on its own.
+  expect(Math.abs((after.composer ?? 0) - ((before.composer ?? 0) - moved))).toBeLessThanOrEqual(1);
+  expect(Math.abs((after.frame ?? 0) - ((before.frame ?? 0) - moved))).toBeLessThanOrEqual(1);
 });

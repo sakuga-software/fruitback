@@ -405,6 +405,25 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   a read that failed is the alert of the Sites screen, with « Try again ». A hash of the address
   scrolls to its section once the site is drawn. `e2e/console-site-page.spec.ts` holds the
   sections, the roles, the hash, the two failures, 390 px in English and in French, and axe.
+- **The agent keys of a workspace have a page of their own** (FRU-462, `routes/agents.tsx`, the
+  board `design/agents/`), `/w/<workspace>/settings/agents`, with the crumbs « Workspace settings ›
+  Agents », reached from the section « Agents » of the settings. It is no section of the rail: only
+  the owner and the admins make a key (decision 5 of [agents.md](agents.md)), and anybody else reads
+  one sentence there, and on the page, which then asks the worker nothing. **The key is shown once**,
+  in a card above the list, held in the state of the screen and in no storage of the browser, with
+  the line that connects Claude Code (`claudeLine` of `agent-keys.ts`, the line of `docs/agents.md`
+  with the address of this worker and the key) and a button to copy each; « I kept it » takes it off
+  the screen. **The list** says, for each key, its sites, its rights and whether it reads only the
+  notes of known people, its last use (`lastUsedAt` of the worker, to the minute, with `ago()`), and
+  its end; 7 days or less before it, « Ends in N days » in the strong accent and one line above the
+  list that says what to do (`keyEnd`); an ended key stays until it is revoked. « Writes » unfolds
+  what the key wrote under its row (`aria-expanded`), read when it opens; the note is named by its
+  id, with no link: the console has no page of one note. « Revoke » asks a second time (`Confirm`).
+  **No edit of a key**: the worker has no route, and a key that changes under a running agent is a
+  surprise. Two things of the kit came with it: `Checks`, a group of boxes with its hint or its error
+  (the sites of a key), and `expanded` and `controls` of `Button`. `e2e/console-agents.spec.ts` holds
+  the way from the settings, the list and its warning, a key made, shown once, copied and gone, the
+  refusals, the writes, the revocation, a member, and 390 px in French, with axe.
 - **The statuses of a site have a page of their own** (FRU-371, `routes/site-statuses.tsx`), reached
   from « Statuses » in the menu of a card and on the page of a site, for an owner or an admin. It is the board
   `design/site-statuses/`; [statuses.md](statuses.md) says what it does and why. Its crumbs are in the
@@ -551,6 +570,14 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   query by the nodes it may return, and the status of each project doubles them. The answer of
   `GET …/connectors/<id>/teams` gains `private` and `status`, both optional: a console of before
   ignores them.
+  **Each place shows the mark of its source, and a place of Linear its colour** (FRU-459, Mathieu):
+  the `ConnectorMark` of FRU-435 before its name, then a dot in the colour Linear gives its project,
+  else its team (`color` of the teams answer, `#rrggbb` only: anything else would reach a style, and
+  the worker drops it). The colour is known once the teams of its source are read; GitHub and an
+  address have none. Both are `aria-hidden`: the name says the source. **Linear's `icon` is not
+  shown**: Linear documents it as « an emoji or a decorative icon type », and the icon types are
+  names of Linear's own glyphs (`Rocket`…), with no public set to draw them from; an emoji is the
+  system's font, which `icons.md` turned away.
 - **My account shows the sessions of the console, and ends them, with the routes of FRU-181**
   (FRU-248, `routes/account.tsx`). `GET /console/sessions` lists them by id, with no token: this
   browser first, then the others, each with « Disconnect » (`DELETE /console/sessions/<id>`, one

@@ -799,17 +799,31 @@ export function createComposer(options: ComposerOptions): Composer {
   }
 
   /**
-   * Placed again when its element moved against the document (FRU-457). An element that moves with
-   * the document keeps the composer where it is: a scroll does not slide it along the window.
+   * Moved by as much as its element moved against the document (FRU-457): a fixed sidebar at a scroll,
+   * a row in a box that scrolls. It keeps its side and its offset to the element. Placed again, it
+   * would weigh the room above against the window of now, and jump to the other side of an element
+   * that only shifted by a pixel as the page scrolled. An element that moves with the document keeps
+   * the composer where it is: a scroll does not slide it along the window.
    */
   function follow(): void {
     // An element the page took away measures as a box of nothing at 0, 0: the composer stays.
-    if (root.hidden || following === null || !following.isConnected) return;
+    if (root.hidden || following === null || !following.isConnected || placedAt === undefined) return;
+    // An element the page hides (`display: none`) measures the same way while it stays connected.
+    const rect = following.getBoundingClientRect();
+    if (rect.width === 0 && rect.height === 0) return;
     const now = boxOf(following);
-    if (placedAt !== undefined && Math.abs(now.left - placedAt.left) < 1 && Math.abs(now.top - placedAt.top) < 1)
-      return;
+    const dx = now.left - placedAt.left;
+    const dy = now.top - placedAt.top;
+    if (dx === 0 && dy === 0) return;
     placedAt = now;
-    place(now);
+    // Across, it stays inside the window, as `place` keeps it: an element that a box scrolls sideways
+    // out of the window must not take the composer out of reach.
+    const scrollX = view?.scrollX ?? 0;
+    const left = (Number.parseFloat(root.style.getPropertyValue('--fruitback-composer-left')) || 0) + dx;
+    const most = scrollX + (view?.innerWidth ?? 0) - WIDTH - GAP;
+    root.style.setProperty('--fruitback-composer-left', `${Math.max(scrollX + GAP, Math.min(left, most))}px`);
+    const top = (Number.parseFloat(root.style.getPropertyValue('--fruitback-composer-top')) || 0) + dy;
+    root.style.setProperty('--fruitback-composer-top', `${top}px`);
   }
   // Capture phase: a scroll event does not bubble, and a box of the page that scrolls must count too.
   view?.addEventListener('scroll', follow, { passive: true, capture: true });

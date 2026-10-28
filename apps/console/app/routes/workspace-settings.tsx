@@ -14,7 +14,8 @@ import { PageHead, WorkspaceMark, useWorkspace } from './workspace';
  * rail. No board draws it: it is the kit, as « My account » lays it out.
  *
  * It holds what the worker lets a workspace change today, for an owner or an admin: its name
- * (FRU-236) and its logo (FRU-428). Every member reads both.
+ * (FRU-236) and its logo (FRU-428). Every member reads both. The section « Agents » leads an owner
+ * or an admin to the agent keys (FRU-462).
  */
 export default function WorkspaceSettings() {
   const { workspace } = useWorkspace();
@@ -90,7 +91,38 @@ function Settings() {
         </p>
       </section>
       <LogoSection workspace={workspace} may={may} />
+      <AgentsSection workspace={workspace} may={may} />
     </>
+  );
+}
+
+/**
+ * The way to the agent keys of the workspace (FRU-462): a page of its own, `routes/agents.tsx`, for
+ * an owner or an admin. Anybody else reads why there is no way.
+ */
+function AgentsSection({ workspace, may }: { workspace: Workspace; may: boolean }) {
+  useLocale();
+
+  return (
+    <section aria-labelledby="workspace-agents-title" className="flex max-w-[640px] flex-col gap-[14px] pt-[32px]">
+      <h2 id="workspace-agents-title" className="text-section font-bold">
+        {t('Agents')}
+      </h2>
+      <p className="text-body">
+        {t('Keys that let an AI agent of your team read the notes of some sites, and reply to them.')}
+      </p>
+      {may ? (
+        <div>
+          <Button tone="outline" size="page" to={`/w/${workspace.id}/settings/agents`}>
+            {t('Manage the agent keys')}
+          </Button>
+        </div>
+      ) : (
+        <p className="text-small text-muted">
+          {t('Only an owner or an admin of the workspace manages its agent keys.')}
+        </p>
+      )}
+    </section>
   );
 }
 
