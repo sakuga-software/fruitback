@@ -700,6 +700,14 @@ describe('createComposer', () => {
     assert.equal(top(), '22px', 'the composer jumped to the other side of its element');
     assert.equal(opened.element.dataset.fruitbackSide, 'above');
 
+    // An element the page hides, still in the document, measures as a box of nothing: the composer stays.
+    Object.defineProperty(prose, 'getBoundingClientRect', {
+      value: () => ({ left: 0, right: 0, top: 0, bottom: 0, width: 0, height: 0 }),
+      configurable: true,
+    });
+    scroll(400);
+    assert.equal(top(), '22px', 'the composer followed an element that is hidden');
+
     // An element the page took away: the composer stays where it was, not at the top of the page.
     scroll(0);
     opened.open(fixed);

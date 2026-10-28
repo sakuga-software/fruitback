@@ -808,6 +808,9 @@ export function createComposer(options: ComposerOptions): Composer {
   function follow(): void {
     // An element the page took away measures as a box of nothing at 0, 0: the composer stays.
     if (root.hidden || following === null || !following.isConnected || placedAt === undefined) return;
+    // An element the page hides (`display: none`) measures the same way while it stays connected.
+    const rect = following.getBoundingClientRect();
+    if (rect.width === 0 && rect.height === 0) return;
     const now = boxOf(following);
     const dx = now.left - placedAt.left;
     const dy = now.top - placedAt.top;
