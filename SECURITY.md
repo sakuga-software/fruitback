@@ -758,6 +758,21 @@ that reviewer signs a note with it, and not before. test:`tells a reader it woul
 identified, and tells nobody who (FRU-112)` holds the worker's half, and
 test:`names nothing of who the session is in code the page can read` holds the extension's.
 
+**« All pages » of the widget the extension mounts reads the whole site, and the page can read
+that answer** (FRU-470). In team mode with the widget mounted by the extension, the list of the
+widget asks the background for one page of `GET /session/notes` (FRU-306), the read the side panel
+makes for « Whole site ». The widget lives in the page's world, so a script of the site can post the
+same request and read the answer. What it gets is what the side panel shows the reviewer for that
+site: for each note an excerpt of 64 characters at most, its page, its stage, the name of its author
+and its date, never its text, a reply, the link to the tracker or a token. This is new to the page in
+one way: it learns which pages of its own site have notes, where `GET /feedback` answers one page it
+names. **The condition**: the background reads only for the origin the browser reports, for the
+entry the reviewer stored for that origin, switched on, in team mode and mounted by the extension,
+for the site id of that entry, on its `https` or loopback endpoint, with the reviewer's session. The
+page names the words of a search and a cursor, nothing else; any other field is dropped by the parse
+(test:`reads nothing for a sender with no origin, no entry, an entry off, private, not mounted, or on http`,
+test:`carries the words and the cursor of the page, and nothing else`).
+
 **The first administrator signs in by a link that the worker writes, with no e-mail and no
 provider** (FRU-221). An instance that sends no e-mail and has no GitHub or Google sign-in could make
 no account at all. With `FRUITBACK_FIRST_ADMIN=<address>`, a worker whose instance has no owner yet
