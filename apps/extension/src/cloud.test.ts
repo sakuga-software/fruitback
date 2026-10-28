@@ -10,6 +10,7 @@ import {
   offerFor,
   parseWorkspaceSites,
   setSiteSettings,
+  sitesOf,
   sourceOffer,
 } from './cloud.ts';
 import { type LanguageArea, storedLanguage } from './language.ts';
@@ -45,6 +46,37 @@ function worker(body: unknown = LISTED, status = 200) {
 
   return { asked, fetcher };
 }
+
+describe('the sites the welcome page turns on (FRU-483)', () => {
+  const seams = (fetcher: typeof fetch) => ({
+    endpoints: async () => ['https://api.fruitback.test'],
+    ensureAccess: async () => GRANTED,
+    fetcher,
+  });
+
+  it('lists each site of the account as an offer for its own origin, and leaves a pattern out', async () => {
+    const { fetcher } = worker({
+      ...LISTED,
+      sites: [...LISTED.sites, { id: 'site_3', origin: 'https://*.preview.acme.dev', visibility: 'members' }],
+    });
+    const sites = await sitesOf('https://api.fruitback.test', seams(fetcher));
+
+    assert.deepEqual(
+      sites?.map((offer) => [offer.pattern, offer.site.id, offer.workspace.name]),
+      [
+        ['https://staging.acme.dev', 'site_1', 'Acme'],
+        ['https://acme.dev', 'site_2', 'Acme'],
+      ],
+    );
+    assert.deepEqual(cloudEntry(sites![0]!), parseSite(cloudEntry(sites![0]!)));
+    assert.equal(cloudEntry(sites![0]!).endpoint, 'https://api.fruitback.test');
+  });
+
+  it('says nothing when Fruitback does not answer, which is not « no site »', async () => {
+    assert.equal(await sitesOf('https://api.fruitback.test', seams(worker({}, 500).fetcher)), undefined);
+    assert.deepEqual(await sitesOf('https://api.fruitback.test', seams(worker({ ...LISTED, sites: [] }).fetcher)), []);
+  });
+});
 
 describe('the sites of the workspace (FRU-101)', () => {
   it('offers the site the tab is on, through the session that lists it', async () => {

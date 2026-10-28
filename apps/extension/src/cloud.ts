@@ -297,6 +297,20 @@ export async function offerFor(origin: string, seams: CloudSeams): Promise<Offer
 }
 
 /**
+ * The sites of the workspaces of the account (FRU-483), each as an offer for its own origin: what
+ * the welcome page turns on. A site named by a pattern (`*.preview.acme.dev`) is left out, as no
+ * tab opens on a pattern. `undefined`: Fruitback did not answer, or this session holds no account.
+ */
+export async function sitesOf(endpoint: string, seams: CloudSeams): Promise<Offer[] | undefined> {
+  const listed = await listedBy(endpoint, seams);
+  if (listed === undefined) return undefined;
+
+  return listed.sites
+    .filter((site) => !site.origin.includes('*'))
+    .map((site) => ({ endpoint, workspace: site.workspace, site, pattern: site.origin }));
+}
+
+/**
  * What a worker lists now, kept as the previews this browser grants (FRU-103), or `undefined` when
  * it said nothing. A worker that keeps no accounts lists nothing, and what it listed before goes. A
  * worker that did not answer changes nothing: what it listed ages by itself.

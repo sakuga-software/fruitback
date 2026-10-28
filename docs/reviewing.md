@@ -67,7 +67,9 @@ There is nothing to type, and four steps.
 
    ![The word in the console, to check against the popup, with Connect](assets/guide-word.png)
 
-3. **Turn it on.** On a site of one of your workspaces, the popup asks **Turn Fruitback on for this
+3. **Turn it on.** Signed in on the tab that opened at install, that tab lists the sites of your
+   workspaces: **Turn on** beside one asks the browser for that site, and opens it with the widget.
+   Later, on a site of one of your workspaces, the popup asks **Turn Fruitback on for this
    site?**, says where its notes go and who sees them, and offers **Turn on**. One click: the browser
    asks for access to that site only, and the widget appears, reading and writing as you. On a site
    of none of your workspaces, an owner or an admin gets the same question with **Turn on**, and a

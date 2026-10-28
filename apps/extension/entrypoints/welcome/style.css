@@ -98,3 +98,21 @@ body {
   margin: 0;
   font-weight: 600;
 }
+
+/* The sites to turn on (FRU-483): one button each, as the popup lists its lines. */
+.welcome-sites {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.welcome-sites button {
+  width: 100%;
+}
+
+.welcome-sign-in .problem {
+  margin: 0;
+}

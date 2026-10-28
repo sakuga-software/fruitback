@@ -188,6 +188,13 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Signed in as {who}.': 'Connecté en tant que {who}.',
   'Open a site of your team, then click the Fruitback icon.':
     'Ouvrez un site de votre équipe, puis cliquez sur l’icône Fruitback.',
+  'No site in your workspaces yet.': 'Aucun site dans vos workspaces pour l’instant.',
+  'Open {site}': 'Ouvrir {site}',
+  'Turn on {site}': 'Activer sur {site}',
+  'Turn on a site of your workspaces:': 'Activez un site de vos workspaces :',
+  'Chrome asks for access to this site only.': 'Chrome demande l’accès à ce site seulement.',
+  'The browser did not give access to this site.': 'Le navigateur n’a pas donné l’accès à ce site.',
+  'The site could not be turned on. Try again.': 'Le site n’a pas pu être activé. Réessayez.',
   'The browser did not give the extension access to Fruitback.':
     'Le navigateur n’a pas donné à l’extension l’accès à Fruitback.',
   'Fruitback works on http and https pages.': 'Fruitback fonctionne sur les pages http et https.',
