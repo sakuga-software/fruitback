@@ -2230,13 +2230,15 @@ Chrome, `sidebar_action` on Firefox. It is a page of the extension, `sidepanel.h
 - **And from the button of the widget the extension mounts that shows every note** (FRU-469): the
   widget posts `open-panel-request` on the bridge, and the background opens the panel of the tab the
   browser reports as the sender, before any `await`. **A script of a site the reviewer turned on can
-  post that request too, and open the panel with no gesture of the person**: measured on Chromium 156
-  (Playwright 1.64.1), `sidePanel.open` from a message of a content script needs none. It gains
-  nothing: the panel is a page of the extension that reads nothing of the site, and the answer says
-  only whether it opened. **The condition**: our content scripts run only on a site the reviewer
-  turned on, and a tab is answered once in 2 s, so a page cannot open the panel again and again after
-  the reviewer closed it (test:`answers a tab once in an interval, and each tab apart`). A page where
-  Fruitback is not on cannot reach the bridge, and cannot open the panel.
+  post that request too.** The condition that bounds it: the bridge carries it only while the window
+  holds the activation of a gesture of the person (`navigator.userActivation.isActive`, read in the
+  isolated world, which no script of the page can set), and Chrome refuses `sidePanel.open` with no
+  gesture anyway (measured on Chromium 156: a click on the page opens it, a timer of the page is
+  refused). So a page can open the panel only in the seconds after a click or a key of the person on
+  it, once in 2 s per tab (test:`answers a tab once in an interval, and each tab apart`,
+  test:`is carried only while the window holds the activation of a gesture (review of #648)`). It
+  gains nothing: the panel is a page of the extension that reads nothing of the site, and the answer
+  says only whether it opened. A page where Fruitback is not on cannot reach the bridge.
 - **What it reads.** The address of the active tab of its window, as the popup does: the browser
   gives it only for a site the extension has access to, or after the click on its icon. With it, the
   rule of that site from the extension's storage. It reads no worker and keeps nothing.

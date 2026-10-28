@@ -742,11 +742,13 @@ did not change: the fields of 760 px and the file input of the browser are as th
   the sender (`src/panel-request.ts`), **at once, before any `await`**, then answers `opened`.
 - **Refused, absent or silent for 3 s, the widget opens its own list**: Firefox's `sidebarAction.open`
   takes no call from a message, and a browser with no panel has the list of the page.
-- **A tab is answered once in 2 s**: a script of the page can post the same request, and must not
-  reopen the panel after the reviewer closed it. `SECURITY.md` says what this lets a page do.
-- Measured on Chromium 156 (Playwright 1.64.1): `sidePanel.open` from a message of a content script
-  opens the panel with no gesture at all, from a click and from a timer of the page alike. Google
-  Chrome and Firefox are not measured here.
+- **Only during a gesture of the person**: the bridge carries the request only while
+  `navigator.userActivation.isActive`, which the isolated world reads and no script of the page sets.
+  And a tab is answered once in 2 s. `SECURITY.md` says what this lets a page do.
+- Measured on Chromium 156 (Playwright 1.64.1), with a probe extension and no `evaluate` of Playwright
+  before the page acts (an `evaluate` carries a gesture, and spoiled a first measure): `sidePanel.open`
+  from a message of a content script opens the panel after a click on the page, and is refused after
+  a timer of the page. Google Chrome and Firefox are not measured here.
 - A site that embeds its own widget (team mode, not mounted by the extension) is not covered: its
   widget does not know the extension, and `FruitbackExtensionApi` offers no way to the panel.
 

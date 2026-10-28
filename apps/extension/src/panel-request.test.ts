@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { PANEL_REQUEST_INTERVAL_MS, createPanelGate, openPanelForTab } from './panel-request.ts';
+import { PANEL_REQUEST_INTERVAL_MS, createPanelGate, hasGesture, openPanelForTab } from './panel-request.ts';
 import { parseBridgeMessage } from './protocol.ts';
 
 /** The button of the widget opens the side panel of the browser (FRU-469). */
@@ -65,6 +65,13 @@ describe('the side panel asked by the widget (FRU-469)', () => {
     assert.equal(gate(2), true);
     now = PANEL_REQUEST_INTERVAL_MS;
     assert.equal(gate(1), true);
+  });
+
+  it('is carried only while the window holds the activation of a gesture (review of #648)', () => {
+    assert.equal(hasGesture({ userActivation: { isActive: true } }), true);
+    assert.equal(hasGesture({ userActivation: { isActive: false } }), false);
+    // A browser that does not say: no.
+    assert.equal(hasGesture({}), false);
   });
 
   it('carries an id across the bridge, and nothing else', () => {

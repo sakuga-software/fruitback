@@ -5,16 +5,25 @@ import { type PanelApis, openPanel } from './side-panel.ts';
  *
  * The widget the extension mounts asks through the bridge (`open-panel-request`), and the background
  * opens the panel of the tab the browser reports as the sender. **The call is made at once, before
- * any `await`**: a browser that wants a gesture of the person keeps it only that long (Firefox's
- * `sidebarAction.open` refuses a call from a message, and the widget then shows its own list).
+ * any `await`**: the browser keeps the gesture of the person only that long.
  *
- * **The page can send this request too**, as for every message of the bridge. Measured on Chromium
- * 156 (Playwright 1.64.1): `sidePanel.open` from a message of a content script opens the panel even
- * with no gesture of the person. So a script of a site the reviewer turned on can open the panel of
- * the extension. It opens a page of the extension that reads nothing of the site and shows what
- * the reviewer already sees; it gives the page nothing. To keep a page from opening it again and
- * again after the reviewer closed it, a tab is answered once in `PANEL_REQUEST_INTERVAL_MS`.
+ * **Measured on Chromium 156 (Playwright 1.64.1)**, with a probe extension and no `evaluate` of
+ * Playwright before the page acts (an `evaluate` carries a gesture, and spoiled a first measure):
+ * `sidePanel.open` from the message of a content script opens the panel after a click on the page,
+ * and is refused with « may only be called in response to a user gesture » after a timer of the page.
+ *
+ * **The page can send this request too**, as for every message of the bridge. So the bridge carries
+ * it only while the window holds the activation of a gesture (`hasGesture`): the isolated world reads
+ * it, and no script of the page makes it. A script of a site the reviewer turned on can then open the
+ * panel only in the seconds after a click or a key of the person on that page, and a tab is answered
+ * once in `PANEL_REQUEST_INTERVAL_MS`. It gains nothing: the panel is a page of the extension that
+ * reads nothing of the site, and the answer says only whether it opened.
  */
+
+/** Whether the window holds the activation of a gesture of the person now. Unknown: no. */
+export function hasGesture(navigator: { userActivation?: { isActive: boolean } }): boolean {
+  return navigator.userActivation?.isActive === true;
+}
 
 export const PANEL_REQUEST_INTERVAL_MS = 2_000;
 
