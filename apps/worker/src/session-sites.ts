@@ -151,9 +151,8 @@ async function sitesOfAccount(accounts: AccountStore, account: string, now: numb
     const previewsOf = await previewsIn(accounts, workspace.id, now);
     const notes = await notesIn(noteIndex, workspace.id);
     const toCheck = await toCheckIn(noteIndex, workspace.id, account);
-    const every = await accounts.sites(workspace.id);
-    if (can(role, 'manage-sites')) placesIn.set(workspace.id, placesOf(every));
-    for (const site of readableSites(every, reach)) {
+    if (can(role, 'manage-sites')) placesIn.set(workspace.id, placesOf(await accounts.sites(workspace.id)));
+    for (const site of readableSites(await accounts.sites(workspace.id), reach)) {
       const previews = previewsOf(site.id);
       sites.push({
         id: site.id,
