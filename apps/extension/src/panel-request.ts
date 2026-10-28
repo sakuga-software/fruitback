@@ -27,10 +27,12 @@ export function hasGesture(navigator: { userActivation?: { isActive: boolean } }
 
 export const PANEL_REQUEST_INTERVAL_MS = 2_000;
 
-export function createPanelGate(now: () => number = Date.now): (tabId: number) => boolean {
-  const last = new Map<number, number>();
+/** Whether a tab may be answered now, which counts as its answer; `forget` gives a failed one back. */
+export type PanelGate = ((tabId: number) => boolean) & { forget(tabId: number): void };
 
-  return (tabId) => {
+export function createPanelGate(now: () => number = Date.now): PanelGate {
+  const last = new Map<number, number>();
+  const gate = (tabId: number): boolean => {
     const at = now();
     const before = last.get(tabId);
     if (before !== undefined && at - before < PANEL_REQUEST_INTERVAL_MS) return false;
@@ -38,6 +40,8 @@ export function createPanelGate(now: () => number = Date.now): (tabId: number) =
 
     return true;
   };
+
+  return Object.assign(gate, { forget: (tabId: number) => void last.delete(tabId) });
 }
 
 /**
@@ -48,19 +52,23 @@ export function createPanelGate(now: () => number = Date.now): (tabId: number) =
 export function openPanelForTab(
   apis: PanelApis,
   tabId: number | undefined,
-  gate: (tabId: number) => boolean,
+  gate: ((tabId: number) => boolean) & { forget?(tabId: number): void },
 ): Promise<boolean> {
   if (tabId === undefined || !gate(tabId)) return Promise.resolve(false);
+  // A panel that did not open does not count: the next click of the person may try again at once
+  // (review of #648).
+  const failed = (): false => {
+    gate.forget?.(tabId);
+
+    return false;
+  };
   let opened: Promise<void> | undefined;
   try {
     opened = openPanel(apis, { tabId });
   } catch {
-    return Promise.resolve(false);
+    return Promise.resolve(failed());
   }
-  if (opened === undefined) return Promise.resolve(false);
+  if (opened === undefined) return Promise.resolve(failed());
 
-  return opened.then(
-    () => true,
-    () => false,
-  );
+  return opened.then(() => true, failed);
 }

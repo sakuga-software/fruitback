@@ -57,6 +57,15 @@ describe('the side panel asked by the widget (FRU-469)', () => {
     assert.equal(opened, 1);
   });
 
+  it('gives the interval back when the panel did not open (review of #648)', async () => {
+    const gate = createPanelGate(() => 0);
+    const refusing = { sidePanel: { open: async () => Promise.reject(new Error('gesture')) } };
+    const opening = { sidePanel: { open: async () => {} } };
+    assert.equal(await openPanelForTab(refusing, 3, gate), false);
+    assert.equal(await openPanelForTab(opening, 3, gate), true, 'a refusal kept the tab waiting');
+    assert.equal(await openPanelForTab(opening, 3, gate), false, 'an opening did not count');
+  });
+
   it('answers a tab once in an interval, and each tab apart', () => {
     let now = 0;
     const gate = createPanelGate(() => now);
