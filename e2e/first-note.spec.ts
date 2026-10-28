@@ -33,8 +33,8 @@ function measuredInThePage(): Action[] {
         .slice(1, -1)
         .map((cell) => cell.trim()),
     );
-  // A control: the reading found the table, so an equal list is a result.
-  expect(rows.length, 'rows read from the page').toBeGreaterThan(20);
+  // A control: the reading found the table from its first row, so an equal list is a result.
+  expect(rows[0]?.[2], 'the first row read from the page').toBe('open fruitback.com, then « Set up »');
   for (const row of rows) expect(row, 'a row of the table: #, place, action, becomes').toHaveLength(4);
 
   return rows.map(([, place, what]) => ({ place: place as Place, what: what ?? '' }));
@@ -108,8 +108,7 @@ test('a first user goes from the setup to a first note (FRU-481)', async ({ exte
   const welcome = context.pages().find((page) => page.url() === welcomeUrl);
   expect(welcome, 'the welcome page').toBeDefined();
   await welcome!.screenshot({ path: test.info().outputPath('04-welcome.png') });
-  did('chrome', 'open the puzzle menu of the toolbar');
-  did('chrome', 'click the pin beside Fruitback');
+  // Pinning Fruitback is a tip of the page, and no step of this path needs it (FRU-484).
 
   // The popup on the welcome page, a page that is not a site, offers the sign-in too (FRU-482).
   const onWelcome = await openPopup(extension, welcome!);

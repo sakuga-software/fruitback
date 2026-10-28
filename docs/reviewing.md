@@ -22,9 +22,10 @@ minutes and no developer tools.
    the folder: the browser loads the extension from it.
 2. Open `chrome://extensions` in a new tab, and turn on **Developer mode**, at the top right.
 3. Choose **Load unpacked**, and pick the folder you unzipped.
-4. A Fruitback tab opens by itself: **pin Fruitback**. Open the puzzle piece at the right of the
-   address bar, then press the pin beside Fruitback. Its icon stays in the toolbar.
-5. On that tab, choose **Sign in with email**, **Google** or **GitHub**: section 2 goes on from there.
+4. A Fruitback tab opens by itself. Choose **Sign in with email**, **Google** or **GitHub** there:
+   section 2 goes on from there.
+5. To find Fruitback in the toolbar later, pin it: open the puzzle piece at the right of the address
+   bar, then press the pin beside Fruitback. Nothing needs it to leave a first note.
 
    ![The page that opens at install: pin Fruitback, then sign in](assets/guide-welcome.png)
 
