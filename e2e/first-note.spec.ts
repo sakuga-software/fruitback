@@ -18,9 +18,6 @@ test.use({ keepWelcome: true });
 type Place = 'console' | 'mail' | 'store' | 'chrome' | 'welcome' | 'popup' | 'site' | 'tab';
 type Action = { place: Place; what: string };
 
-const actions: Action[] = [];
-const did = (place: Place, what: string): void => void actions.push({ place, what });
-
 let worker: Worker | undefined;
 
 /** The rows of the table « What was measured » of `docs/decisions/onboarding.md`, in their order. */
@@ -36,6 +33,9 @@ function measuredInThePage(): Action[] {
 test.afterEach(async ({ extension }) => finished(extension.context, worker));
 
 test('a first user goes from the setup to a first note (FRU-481)', async ({ extension }) => {
+  // In the test: a retry starts from an empty list.
+  const actions: Action[] = [];
+  const did = (place: Place, what: string): void => void actions.push({ place, what });
   test.setTimeout(120_000);
   worker = await cloudWorker();
   const { context } = extension;
