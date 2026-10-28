@@ -21,8 +21,9 @@ import { type NoteStore, StoreError } from './store.ts';
  *   (`readPage`, the read of `GET /feedback` and its cache). A note that the index lists and that
  *   its store no longer holds is left out.
  * - **On a site that everyone reads, a key with `verifiedOnly` reads only the notes of a known
- *   person**: `reporter.verified` is `true`. The filter runs after the read of a page of the index,
- *   so a page of answers can hold fewer notes than its `limit`, and `next` still says if more wait.
+ *   person**: `reporter.verified` is `true`. This filter and the one of `status` run after the read
+ *   of a page of the index, so a page of answers can hold fewer notes than its `limit`, and `next`
+ *   still says if more wait.
  * - **A key whose member does not see the tracker reads no reference of it**, as a guest in the
  *   console (FRU-250).
  */
@@ -76,6 +77,11 @@ export function agentTools(context: AgentToolsContext): McpTool[] {
         properties: {
           site: { type: 'string', description: `One of: ${grant.sites.join(', ')}` },
           stage: { type: 'string', enum: STAGE_NAMES },
+          status: {
+            type: 'string',
+            description:
+              'The key of a status of the site, as each note gives it in `status`: `own:<key>` for a status Fruitback keeps.',
+          },
           since: { type: 'string', description: 'An ISO 8601 date: only the notes left at it or after it.' },
           q: { type: 'string', description: 'Words to look for in the excerpt, the page and the stage.' },
           cursor: { type: 'string', description: 'The `next` of the answer before.' },
@@ -205,7 +211,11 @@ function listFeedback(
       searchesReference: seesTracker,
       ...(since === undefined ? {} : { since }),
     });
-    const issues = (await contentOf(site, listed.notes)).filter((issue) => readable(context, site, issue));
+    if (args.status !== undefined && typeof args.status !== 'string') return { ok: false, error: 'Invalid status.' };
+    const status = args.status;
+    const issues = (await contentOf(site, listed.notes)).filter(
+      (issue) => readable(context, site, issue) && (status === undefined || issue.status === status),
+    );
 
     return {
       ok: true,

@@ -3,6 +3,7 @@ import { afterEach, describe, it } from 'vitest';
 import type { Visibility } from './accounts.ts';
 import { type World, callOn, memberOf, signInTo, workspaceIn, worlds } from './console-world.fixture.ts';
 import { resetMemoryLinear } from './linear-memory.ts';
+import { createPostgresNoteStore } from './notes-postgres.ts';
 import { DATA_NOT_INSTRUCTION, PROTOCOL_VERSIONS } from './mcp.ts';
 import { rowsOf } from './postgres.fixture.ts';
 import { createPairing, redeemPairing } from './session.ts';
@@ -304,6 +305,21 @@ describe('the read tools of /mcp (FRU-463)', () => {
     const text: string = (await call(world, ofTheAdmin, 'feedback_as_text', { site: shop.id })).body.result
       .structuredContent.text;
     assert.ok(text.includes('## 1. sd_one') && !text.includes(seen.identifier), text);
+  });
+
+  it('reads the notes of one status, by the key that each note gives', async () => {
+    const { world, shop, member, key } = await acme();
+    world.context.store = createPostgresNoteStore(world.database);
+    await leave(world, shop, 'sd_one', 'A note.', { token: member });
+    const good = await key({ sites: [shop.id], verifiedOnly: false });
+
+    const listed = (status: unknown) => call(world, good, 'list_feedback', { site: shop.id, status });
+    assert.deepEqual(
+      notesOf(await listed('own:new')).map((note) => note.note.text),
+      ['A note.'],
+    );
+    assert.deepEqual(notesOf(await listed('own:done')), []);
+    assert.equal((await listed(42)).body.result.isError, true);
   });
 
   it('reads the notes left since a date, and refuses a date it cannot read', async () => {

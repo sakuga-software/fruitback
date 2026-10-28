@@ -4461,8 +4461,9 @@ framing; `SECURITY.md` says what is protected.
   tools on the store of a world.
 - **The id of a note is `noteIdOf` of the console**: its site and its note id, opaque. The id of the
   issue in its tracker is `issueId`, for a key that sees the tracker.
-- **`verifiedOnly` filters after the page of the index**, so an answer can hold fewer notes than its
-  `limit`, and `next` still says that more wait.
+- **`verifiedOnly` and `status` filter after the page of the index**, so an answer can hold fewer
+  notes than its `limit`, and `next` still says that more wait. `status` is the key that each note
+  gives in `status` (`own:<key>` for a status the worker keeps).
 - **`feedback_as_text` writes the text of `feedbackText`**, in English, with no placement: the worker
   has no page to find a note on. A whole site is its newest `MAX_TEXT_NOTES` notes, one block a
   page, and `truncated: true` past them.
