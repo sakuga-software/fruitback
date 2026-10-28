@@ -1764,6 +1764,11 @@ const STYLES = `
 @media (prefers-reduced-motion: reduce) {
   .fruitback-pin-badge { animation: none; transition: none; }
 }
+/* FRU-471: a thread fades in where it opens. Opacity only: the placement measures its box. */
+@keyframes fruitback-thread-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
 .fruitback-thread {
   position: absolute;
   z-index: 2147483100;
@@ -1776,6 +1781,10 @@ const STYLES = `
   color: var(--fruitback-color-text);
   font: 14px/1.5 var(--fruitback-font-sans);
   box-shadow: var(--fruitback-shadow-lg);
+  animation: fruitback-thread-in var(--fruitback-duration-fast) var(--fruitback-ease-out);
+}
+@media (prefers-reduced-motion: reduce) {
+  .fruitback-thread { animation: none; }
 }
 /*
   In a panel of the widget (FRU-312): the column of the list holds it, so it has no place of its own,
