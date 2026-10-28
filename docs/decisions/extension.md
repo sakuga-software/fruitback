@@ -1064,9 +1064,15 @@ which replaced the fields of before for a person signed in on a site of no rule.
   Linear or the repository of a GitHub, then a project of the team, which may be none. Each list is
   read again when the one before changes (`place-choice.ts`); the teams are read from the tracker by
   the worker (`GET /session/sites/places`), as the console reads them (FRU-458).
-- **The marks are in the options through Chromium's customizable select** (`appearance: base-select`):
-  the list stays a native `select`, for the keyboard and a screen reader. A browser without it (Firefox
-  today) shows the names alone. The marks are the console's (`connector-marks.tsx`).
+- **Every list of screen 2 is Chromium's customizable select** (`appearance: base-select`, second
+  review of Mathieu): the marks are in the options and in the field, the arrow is one chevron at the
+  right edge that turns when the menu opens, and words too long for the field or the menu end with
+  « … ». The menu is as wide as its field. It stays a native `select`, for the keyboard and a screen
+  reader. A browser without it (Firefox today) shows its own lists, the names alone. The marks are the
+  console's (`connector-marks.tsx`); « Fruitback » is the red drop of the mark.
+- **What moves is short, and nothing moves under `prefers-reduced-motion`**: the menu fades in and
+  slides 4 px (0.15 s), the arrow turns (0.18 s), a line that appears in the cascade fades in
+  (0.18 s, `@starting-style`).
 - **A place is written once it is whole**: « Fruitback » and an address at once, a Linear or a GitHub
   once its team or repository is chosen, a project when it is chosen. It **replaces the default place**
   of the site; the other places stay after it, so flipping the lists does not pile places up. The

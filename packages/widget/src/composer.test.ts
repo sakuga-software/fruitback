@@ -686,6 +686,39 @@ describe('createComposer', () => {
     scroll(500);
     assert.equal(top(), '320px');
 
+    // An element of the document that shifts by 2 px as the page scrolls: the composer moves by as
+    // much, on the side it opened on, though the room above is out of the window now.
+    opened.close();
+    scroll(0);
+    const shifting = { top: 300 };
+    at(prose, shifting);
+    opened.open(prose);
+    assert.equal(top(), '20px');
+    assert.equal(opened.element.dataset.fruitbackSide, 'above');
+    shifting.top = 102;
+    scroll(200);
+    assert.equal(top(), '22px', 'the composer jumped to the other side of its element');
+    assert.equal(opened.element.dataset.fruitbackSide, 'above');
+
+    // An element that a box scrolls sideways out of the window: the composer follows it down, and
+    // stays inside the window across, 10 px from its edge (1000 - 360 - 10).
+    shifting.top = 102;
+    Object.defineProperty(prose, 'getBoundingClientRect', {
+      value: () => ({ left: 1_500, right: 1_620, top: 112, bottom: 142, width: 120, height: 30 }),
+      configurable: true,
+    });
+    scroll(200);
+    assert.equal(top(), '32px');
+    assert.equal(opened.element.style.getPropertyValue('--fruitback-composer-left'), '630px');
+
+    // An element the page hides, still in the document, measures as a box of nothing: the composer stays.
+    Object.defineProperty(prose, 'getBoundingClientRect', {
+      value: () => ({ left: 0, right: 0, top: 0, bottom: 0, width: 0, height: 0 }),
+      configurable: true,
+    });
+    scroll(400);
+    assert.equal(top(), '32px', 'the composer followed an element that is hidden');
+
     // An element the page took away: the composer stays where it was, not at the top of the page.
     scroll(0);
     opened.open(fixed);

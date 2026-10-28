@@ -1419,9 +1419,25 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
     pins » and the cross « Close the sidebar ». Both close the list. The board draws two buttons,
     and the widget has one state besides the list: the floating pins. The dialog keeps the name
     « Notes on this page »: « Notes » alone starts like « Note 3 », the name of a thread.
-  - **« This page · 8 » alone, and no « Whole site »**: the script reads the notes of this page
-    only (`GET /feedback` by page), and has no route for the site. Drawn as the chosen part of the
-    rail of the board, as words: a list of one tab chooses nothing. No number until a read answered.
+  - **« This page · 8 » alone, unless the host reads the site**: the script reads the notes of this
+    page only (`GET /feedback` by page), and has no route for the site. Drawn as the chosen part of
+    the rail of the board, as words: a list of one tab chooses nothing. No number until a read
+    answered.
+  - **« All pages » (FRU-470) comes through a seam**, `siteNotes` of `init` (`src/site-notes.ts`):
+    a host that reads the whole site, the extension with the session of its reviewer, gives it, and
+    the rail then has two buttons, « This page · 8 » and « All pages · 23 » (`aria-pressed`). The
+    shape is the answer of `GET /session/notes` (FRU-306): an excerpt, the page, the stage, the
+    author, the date, never the text of a note nor its replies. In « All pages » the chips, the
+    drafts and the detached notes go; the search asks the host 300 ms after the last key, and an
+    older answer is dropped; « Show more » follows the cursor of the host and gives focus to the
+    first note it brought. The list opens on « This page » and keeps nothing of « All pages » once
+    it closes: the host is the one source, as in the side panel (FRU-307).
+  - **A row of « All pages » opens its note**: in the list when it is a note of this page; otherwise
+    its page, by the link of FRU-253 (`#fruitback-note=<id>`), **on the origin of this page only**.
+    The address of a note is written by whoever wrote the note, so any other address, a
+    `javascript:` one too, opens nothing (`aria-disabled`).
+  - « Failed » offers « Try again », « signed out » offers « Sign in » (`onSignIn`), « unavailable »
+    (a host that cannot read this site) says so with no button.
   - **« Search notes »** reads the whole text of each note and the identifier of its store, in any
     case, in the notes the widget holds: no request. Its keys stay in the field: a site and the
     capture mode listen on the document. Escape still closes the list.

@@ -1,5 +1,5 @@
 import { type ChildProcess, spawn } from 'node:child_process';
-import { type BrowserContext, type Page, expect } from '@playwright/test';
+import { type BrowserContext, type Page, expect, test } from '@playwright/test';
 import { WORKER_ORIGIN } from './pin.ts';
 
 /**
@@ -24,11 +24,10 @@ export type Worker = {
   close(): Promise<void>;
 };
 
-/**
- * Starts a worker of the Cloud on PGlite, in a process of its own: `cloud-worker.fixture.ts` says
- * why it is not imported here.
- */
-export async function cloudWorker(options: { mail?: boolean } = {}): Promise<Worker> {
+type Started = { child: ChildProcess; port: string };
+
+/** Spawns the process of a worker of the Cloud, and answers when it listens. */
+function spawnWorker(options: { mail?: boolean }): Promise<Started> {
   const child: ChildProcess = spawn(process.execPath, ['src/cloud-worker.fixture.ts'], {
     // Relative to the root of the repository, where Playwright runs: a spec has no `import.meta.url`.
     cwd: 'apps/worker',
@@ -38,15 +37,61 @@ export async function cloudWorker(options: { mail?: boolean } = {}): Promise<Wor
     },
     stdio: ['ignore', 'pipe', 'inherit', 'ipc'],
   });
-  const port = await new Promise<string>((resolve, reject) => {
+  // A spare that no test takes must not keep the Playwright worker alive. It stops with its parent.
+  child.unref();
+  child.channel?.unref();
+  (child.stdout as { unref?: () => void } | null)?.unref?.();
+
+  return new Promise<Started>((resolve, reject) => {
     let said = '';
     child.stdout?.on('data', (chunk: Buffer) => {
       said += chunk.toString();
       const found = /cloud-worker listening on (\d+)/.exec(said)?.[1];
-      if (found !== undefined) resolve(found);
+      if (found !== undefined) resolve({ child, port: found });
     });
     child.once('exit', (code) => reject(new Error(`the worker of the test stopped with ${code}: ${said}`)));
   });
+}
+
+/**
+ * One process that starts before a test asks for it, per set of options, in each Playwright worker.
+ *
+ * A worker starts in 2 to 3 s on this machine, and in 8 s on a CI runner where four browsers and four
+ * servers share four cores (trace of run 40718203870). That was a quarter of the 30 s of a test, and
+ * two tests that sign in three browsers, or wait out the 5 s interval of a claim twice, went over it.
+ * Each test still gets a new process with an empty database: only the time of its start moves.
+ */
+const spares = new Map<string, Promise<Started>>();
+
+function spareOf(options: { mail?: boolean }): Promise<Started> {
+  const started = spawnWorker(options);
+  // A spare that fails is reported to the test that takes it, not as an unhandled rejection.
+  started.catch(() => {});
+
+  return started;
+}
+
+/**
+ * Starts a worker of the Cloud on PGlite, in a process of its own: `cloud-worker.fixture.ts` says
+ * why it is not imported here.
+ *
+ * The time the test waits for the process is added to its timeout: the timeout is for the steps of
+ * the test, not for the start of its worker. With a spare that is ready, that time is about 0.
+ */
+export async function cloudWorker(options: { mail?: boolean } = {}): Promise<Worker> {
+  const key = JSON.stringify(options);
+  const spare = spares.get(key);
+  spares.delete(key);
+  const asked = performance.now();
+  let started = spare === undefined ? undefined : await spare.catch(() => undefined);
+  // A spare that stopped before a test took it is replaced by a new one.
+  if (started === undefined || started.child.exitCode !== null || started.child.signalCode !== null) {
+    started = await spawnWorker(options);
+  }
+  const info = test.info();
+  info.setTimeout(info.timeout + Math.ceil(performance.now() - asked));
+  spares.set(key, spareOf(options));
+  const { child, port } = started;
   const origin = `http://127.0.0.1:${port}`;
   // A worker that stops while its spec runs leaves every request of its pages without an answer: say
   // it, so the log of a failed run has the cause, not only « Loading… » (FRU-275).

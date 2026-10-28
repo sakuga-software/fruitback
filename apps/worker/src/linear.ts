@@ -857,9 +857,20 @@ function attachmentsOf(node: IssueNode): { attachments?: { name: string; url: st
  * it under, `backlog`, `planned`, `started`, `paused`, `completed` or `canceled`.
  */
 export type LinearProjectStatus = { name: string; type: string };
-export type LinearProject = { id: string; name: string; status?: LinearProjectStatus };
-/** `private`: only its members see the team in Linear (FRU-458). Absent when Linear did not say. */
-export type LinearTeam = { id: string; name: string; key: string; private?: boolean; projects: LinearProject[] };
+/** `color`: the one Linear draws the project with (FRU-459), when it is `#rrggbb`. */
+export type LinearProject = { id: string; name: string; status?: LinearProjectStatus; color?: string };
+/**
+ * `private`: only its members see the team in Linear (FRU-458). `color`: the one Linear draws the team
+ * with (FRU-459), when it is `#rrggbb`. Each is absent when Linear did not say.
+ */
+export type LinearTeam = {
+  id: string;
+  name: string;
+  key: string;
+  private?: boolean;
+  color?: string;
+  projects: LinearProject[];
+};
 
 /**
  * A page of 50 teams with 50 projects each, then the projects that are left, team by team (FRU-458).
@@ -872,8 +883,8 @@ const TEAMS_QUERY = `
     organization { name }
     teams(first: 50, after: $after) {
       nodes {
-        id name key private
-        projects(first: 50) { nodes { id name status { name type } } pageInfo { hasNextPage endCursor } }
+        id name key private color
+        projects(first: 50) { nodes { id name color status { name type } } pageInfo { hasNextPage endCursor } }
       }
       pageInfo { hasNextPage endCursor }
     }
@@ -883,7 +894,10 @@ const TEAMS_QUERY = `
 const TEAM_PROJECTS_QUERY = `
   query FruitbackTeamProjects($team: String!, $after: String) {
     team(id: $team) {
-      projects(first: 100, after: $after) { nodes { id name status { name type } } pageInfo { hasNextPage endCursor } }
+      projects(first: 100, after: $after) {
+        nodes { id name color status { name type } }
+        pageInfo { hasNextPage endCursor }
+      }
     }
   }
 `;
@@ -892,7 +906,17 @@ const TEAM_PROJECTS_QUERY = `
 const MAX_PAGES = 20;
 
 type PageInfo = { hasNextPage?: unknown; endCursor?: unknown };
-type ProjectNode = { id?: unknown; name?: unknown; status?: { name?: unknown; type?: unknown } | null };
+type ProjectNode = {
+  id?: unknown;
+  name?: unknown;
+  color?: unknown;
+  status?: { name?: unknown; type?: unknown } | null;
+};
+
+/** A colour of Linear as `#rrggbb` in lower case, or nothing: anything else would reach a style. */
+function colorOf(color: unknown): { color?: string } {
+  return typeof color === 'string' && STATUS_COLOR.test(color) ? { color: color.toLowerCase() } : {};
+}
 
 /** The cursor of the next page, or `undefined` when there is none. */
 function nextOf(page: PageInfo | undefined): string | undefined {
@@ -911,6 +935,7 @@ function projectsOf(nodes: ProjectNode[] | undefined): LinearProject[] {
         ...(typeof status?.name === 'string' && typeof status.type === 'string'
           ? { status: { name: status.name, type: status.type } }
           : {}),
+        ...colorOf(project.color),
       },
     ];
   });
@@ -941,6 +966,7 @@ export async function listLinearTeams(
           name?: unknown;
           key?: unknown;
           private?: unknown;
+          color?: unknown;
           projects?: { nodes?: ProjectNode[]; pageInfo?: PageInfo };
         }[];
         pageInfo?: PageInfo;
@@ -959,6 +985,7 @@ export async function listLinearTeams(
         name: node.name,
         key: typeof node.key === 'string' ? node.key : '',
         ...(typeof node.private === 'boolean' ? { private: node.private } : {}),
+        ...colorOf(node.color),
         projects: projectsOf(node.projects?.nodes),
       };
       teams.push(team);
@@ -1039,7 +1066,7 @@ export async function listLinearStates(apiKey: string, teamIds: readonly string[
         teamId: team.id,
         team: typeof team.name === 'string' ? team.name : '',
         stage: stageForLinearState(type),
-        ...(typeof color === 'string' && STATUS_COLOR.test(color) ? { color: color.toLowerCase() } : {}),
+        ...colorOf(color),
         position: typeof position === 'number' ? position : 0,
       },
     ];

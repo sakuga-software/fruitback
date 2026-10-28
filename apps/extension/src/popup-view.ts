@@ -13,7 +13,7 @@ import {
   toggle,
 } from './kit.ts';
 import type { PlaceIds, Source, SourceOffer } from './cloud.ts';
-import { placeChoice } from './place-choice.ts';
+import { option, placeChoice, shownChoice } from './place-choice.ts';
 
 /**
  * The screens of the popup. The shell and the screens 1 and 4 are those of the mock-up of 2026-10-20
@@ -351,12 +351,11 @@ function visibilityChoice(
   const select = element(document, 'select', '');
   select.name = 'visibility';
   select.setAttribute('aria-label', t('Who sees the notes'));
-  for (const value of ['members', 'everyone'] as const) {
-    const option = element(document, 'option', visibilityWords(value));
-    option.value = value;
-    option.selected = value === visibility;
-    select.append(option);
-  }
+  select.append(
+    shownChoice(document),
+    ...(['members', 'everyone'] as const).map((value) => option(document, value, visibilityWords(value))),
+  );
+  select.value = visibility;
   answered(select, () => onVisibility(select.value === 'everyone' ? 'everyone' : 'members'));
 
   return select;
@@ -473,11 +472,7 @@ export function turnOnScreen(document: Document, options: TurnOnOptions): HTMLEl
     const select = element(document, 'select', '');
     select.name = 'workspace';
     select.setAttribute('aria-label', t('Workspace'));
-    for (const workspace of addable) {
-      const option = element(document, 'option', workspace.name);
-      option.value = workspace.id;
-      select.append(option);
-    }
+    select.append(shownChoice(document), ...addable.map((workspace) => option(document, workspace.id, workspace.name)));
     select.addEventListener('change', () => {
       chosen = select.value;
       refill?.();

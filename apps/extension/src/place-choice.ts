@@ -77,13 +77,36 @@ export type PlaceChoice = {
   reset: () => void;
 };
 
-function option(document: Document, value: string, label: string, disabled = false): HTMLOptionElement {
+/**
+ * An option whose words are in a `span`: the field of a customizable select copies them, and cuts them
+ * with « … » when they are long (`style.css`).
+ */
+export function option(document: Document, value: string, label: string, disabled = false): HTMLOptionElement {
   const node = document.createElement('option');
   node.value = value;
-  node.textContent = label;
+  const words = document.createElement('span');
+  words.className = 'choice-label';
+  words.textContent = label;
+  node.append(words);
   node.disabled = disabled;
 
   return node;
+}
+
+/**
+ * The field of a customizable select: a `button` whose `selectedcontent` shows the option chosen, its
+ * mark with it. A browser without it draws neither, and shows the words of the option.
+ */
+export function shownChoice(document: Document): HTMLButtonElement {
+  const shown = document.createElement('button');
+  shown.append(document.createElement('selectedcontent'));
+
+  return shown;
+}
+
+/** The options of a list, after its field. */
+function fill(select: HTMLSelectElement, ...nodes: HTMLOptionElement[]): void {
+  select.replaceChildren(shownChoice(select.ownerDocument), ...nodes);
 }
 
 function line(document: Document, term: string, select: HTMLSelectElement): HTMLElement {
@@ -101,7 +124,6 @@ function line(document: Document, term: string, select: HTMLSelectElement): HTML
 export function placeChoice(document: Document, options: PlaceChoiceOptions): PlaceChoice {
   const provider = document.createElement('select');
   provider.name = 'provider';
-  provider.className = 'with-marks';
   provider.setAttribute('aria-label', t('Notes go to'));
   const team = document.createElement('select');
   team.name = 'team';
@@ -125,13 +147,11 @@ export function placeChoice(document: Document, options: PlaceChoiceOptions): Pl
   const sourceOf = (id: string) => options.sources().find((each) => each.id === id);
 
   function fillProviders(current: PlaceIds | null | undefined): void {
-    // The button of a customizable select shows the option chosen, its mark with it.
-    const shown = document.createElement('button');
-    shown.append(document.createElement('selectedcontent'));
-    provider.replaceChildren(shown);
     const none = option(document, NO_PLACE, t('Fruitback (no tracker)'));
-    none.prepend(dropMark(document, 'source-mark'));
-    provider.append(none);
+    const drop = dropMark(document, 'source-mark');
+    drop.dataset.kind = 'fruitback';
+    none.prepend(drop);
+    fill(provider, none);
     for (const source of options.sources()) {
       const each = option(document, source.id, source.label);
       each.prepend(sourceMark(document, source.kind));
@@ -150,7 +170,7 @@ export function placeChoice(document: Document, options: PlaceChoiceOptions): Pl
 
   function fillProjects(current: PlaceIds | undefined): void {
     const chosen = offer?.kind === 'linear' ? offer.teams.find((each) => each.id === team.value) : undefined;
-    project.replaceChildren(option(document, NO_PLACE, t('No project')));
+    fill(project, option(document, NO_PLACE, t('No project')));
     for (const each of chosen?.projects ?? []) project.append(option(document, each.id, each.name));
     project.value =
       current?.projectId !== undefined && chosen?.projects.some((each) => each.id === current.projectId) === true
@@ -173,7 +193,7 @@ export function placeChoice(document: Document, options: PlaceChoiceOptions): Pl
     const term = kind === 'linear' ? t('Team') : t('Repository');
     teamTerm.textContent = term;
     team.setAttribute('aria-label', term);
-    team.replaceChildren(option(document, NOTHING, t('Loading…'), true));
+    fill(team, option(document, NOTHING, t('Loading…'), true));
     team.value = NOTHING;
     team.disabled = true;
     teamLine.hidden = false;
@@ -181,7 +201,7 @@ export function placeChoice(document: Document, options: PlaceChoiceOptions): Pl
     if (thisDrawing !== drawing) return;
     team.disabled = false;
     if (read === undefined || read.kind === 'rest') {
-      team.replaceChildren(option(document, NOTHING, t('The list did not load. Choose the provider again.'), true));
+      fill(team, option(document, NOTHING, t('The list did not load. Choose the provider again.'), true));
       team.value = NOTHING;
 
       return;
@@ -194,7 +214,8 @@ export function placeChoice(document: Document, options: PlaceChoiceOptions): Pl
             label: each.key === '' ? each.name : `${each.name} (${each.key})`,
           }))
         : read.repositories.map((each) => ({ value: each.fullName, label: each.fullName }));
-    team.replaceChildren(
+    fill(
+      team,
       option(document, NOTHING, kind === 'linear' ? t('Choose a team…') : t('Choose a repository…'), true),
       ...choices.map((each) => option(document, each.value, each.label)),
     );

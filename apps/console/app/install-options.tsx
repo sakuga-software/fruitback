@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { API, type Site, type Workspace, call, pairingLink } from './api';
 import { msg, t } from './i18n';
+import { useConnectedExtension } from './extension-connected';
 import { connectsBySignIn } from './instance';
 import { copyText, problemOf } from './problems';
-import { Button, Problem, Snippet } from './ui';
+import { Button, Problem, Snippet, StatusDot } from './ui';
 import { useLocale } from './use-locale';
 import { WIDGET_SCRIPT_PATH } from './widget-script';
 
@@ -79,11 +80,18 @@ export function useConnect(workspace: Workspace): {
   return { link, problem, connect: () => void connect() };
 }
 
+/**
+ * With a browser of the extension already connected to the account, the block of the extension says
+ * so and names it, and « Connect another browser » is the way on (FRU-455), as step 3 of the setup
+ * and the rail say it (FRU-441).
+ */
 export function InstallOptions({ workspace, site }: { workspace: Workspace; site: Site }) {
   useLocale();
   const snippet = snippetFor(site);
   const { copied, copy } = useCopy(snippet);
   const { link, problem, connect } = useConnect(workspace);
+  const connected = useConnectedExtension();
+  const connectLabel = connected === undefined ? t('Connect this browser') : t('Connect another browser');
 
   return (
     <div className="space-y-5">
@@ -103,18 +111,25 @@ export function InstallOptions({ workspace, site }: { workspace: Workspace; site
       </div>
       <div>
         <h2 className="text-sm font-semibold">{t('Extension')}</h2>
-        <p className="mb-2 text-xs text-muted">
-          {t(
-            'Nothing to change on the site. Connect this browser, then click the Fruitback icon on the page that opens.',
-          )}
-        </p>
+        {connected === undefined ? (
+          <p className="mb-2 text-xs text-muted">
+            {t(
+              'Nothing to change on the site. Connect this browser, then click the Fruitback icon on the page that opens.',
+            )}
+          </p>
+        ) : (
+          <p className="mb-2 flex items-center gap-2 text-xs font-semibold">
+            <StatusDot status="done" size={10} />
+            {t('Extension connected · {browser}', { browser: connected.browser })}
+          </p>
+        )}
         {BY_SIGN_IN ? (
           <Button tone="outline" href={CONNECT_PAGE} newTab>
-            {t('Connect this browser')}
+            {connectLabel}
           </Button>
         ) : (
           <Button tone="outline" onClick={connect}>
-            {t('Connect this browser')}
+            {connectLabel}
           </Button>
         )}
         {problem === undefined ? null : (

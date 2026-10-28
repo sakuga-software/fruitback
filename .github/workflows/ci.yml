@@ -113,7 +113,8 @@ jobs:
   e2e-shard:
     # The two things `node --test` cannot answer for: a real selector engine and real layout. The
     # suite runs in three parts side by side, each on four workers (FRU-268): on one runner it took 6
-    # minutes of tests on four workers, 12 on one. `e2e` below is the one check that says whether
+    # minutes of tests on four workers, 12 on one. The parts have the same duration, not the same
+    # count of tests: `e2e/shards.ts`. `e2e` below is the one check that says whether
     # every part passed.
     name: e2e (${{ matrix.shard }}/${{ strategy.job-total }})
     strategy:
@@ -173,11 +174,11 @@ jobs:
       - name: Run one part of the E2E suite
         # No key and no service: each worker of the suite has a PostgreSQL in its process (PGlite,
         # `dev-worker.fixture.ts`, FRU-223). The count of parts comes from the matrix, so a part
-        # added there is run here too.
+        # added there is run here too. `playwright.config.ts` chooses the files of the part by
+        # their duration on CI (`e2e/shards.ts`), not `--shard`, which cuts by the count of tests.
         env:
-          SHARD: ${{ matrix.shard }}
-          SHARDS: ${{ strategy.job-total }}
-        run: pnpm e2e --shard="$SHARD/$SHARDS"
+          E2E_SHARD: ${{ matrix.shard }}/${{ strategy.job-total }}
+        run: pnpm e2e
 
       - name: Keep the traces of a failed run
         if: failure()
