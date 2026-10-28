@@ -2,6 +2,7 @@ import { isSecureWorkerEndpoint } from './endpoint.ts';
 import { type ListedPreviews, listedPreviews, readPreviewPattern } from './proven-previews.ts';
 import { coversOrigin } from './site-patterns.ts';
 import type { AccessResult } from './session.ts';
+import type { AddOutcome, PendingAdd } from './pending-site.ts';
 import type { SiteConfig } from './sites.ts';
 
 /**
@@ -528,6 +529,31 @@ export async function setSiteSettings(
   if (parsed === undefined || parsed.id !== site) return { ok: false, reason: 'unavailable' };
 
   return { ok: true, site: parsed };
+}
+
+/**
+ * Finishes the add of a site of no workspace that a permission prompt cut short (FRU-454): the site
+ * is added, then what was chosen for it is written, and the entry the popup would have stored is
+ * answered. The worker answers the site that exists to a second add, so the popup and the background
+ * can both finish it.
+ *
+ * A refusal that holds (a role, a session that ended, the count of the hour) is `never`: the intent
+ * goes, and the popup draws what is true when it opens. A worker that did not answer is `again`.
+ */
+export async function finishAdd(
+  pattern: string,
+  intent: PendingAdd,
+  seams: Pick<CloudSeams, 'ensureAccess' | 'fetcher'>,
+): Promise<AddOutcome> {
+  const added = await addSite(intent.endpoint, intent.workspace, pattern, seams);
+  if (!added.ok) return added.reason === 'unavailable' ? 'again' : 'never';
+  const settings = intent.settings ?? {};
+  if (settings.visibility === 'everyone' || (settings.place !== undefined && settings.place !== null)) {
+    const set = await setSiteSettings(intent.endpoint, intent.workspace, added.offer.site.id, settings, seams);
+    if (!set.ok) return set.reason === 'unavailable' ? 'again' : 'never';
+  }
+
+  return cloudEntry(added.offer);
 }
 
 /**

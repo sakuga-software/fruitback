@@ -33,6 +33,7 @@ import {
   addSite,
   addableWorkspaces,
   cloudEntry,
+  finishAdd,
   offerFor,
   setSiteSettings,
   sourceOffer,
@@ -104,7 +105,7 @@ const sessions = createBrowserSessions();
 const returnAccess = createBrowserAccessReturn(sessions);
 
 /** The site somebody asked for, kept across a permission prompt that can close this popup (FRU-118). */
-const pending = createBrowserPending(writeSite);
+const pending = createBrowserPending(writeSite, (pattern, intent) => finishAdd(pattern, intent, cloudSeams()));
 
 const app = document.querySelector('#app');
 
@@ -680,9 +681,23 @@ function addAndTurnOn(origin: string, workspace: Workspace, problem: HTMLElement
     for (const button of app?.querySelectorAll('button') ?? []) button.disabled = false;
   };
 
+  // FRU-454: remembered before the prompt, which can close this popup: the background then adds the
+  // site and turns it on when the access arrives, and nobody clicks « Turn on » twice. WARNING: not
+  // awaited, an await before `permissions.request` loses the gesture.
+  void pending
+    .rememberAdd(origin, {
+      endpoint,
+      workspace: { id: workspace.id, name: workspace.name },
+      ...(Object.keys(wanted).length === 0 ? {} : { settings: wanted }),
+    })
+    .catch(() => undefined);
+  // Only the intent of this site: another click may have written another one since (raised in review).
+  const forget = (): Promise<void> => pending.forgetAdd(origin).catch(() => undefined);
   void (async () => {
     const granted = await browser.permissions.request({ origins: [matchPatternFor(origin)] }).catch(() => false);
     if (!granted) {
+      // Refused: no site is added later by surprise, if the access comes another way.
+      await forget();
       done();
       showProblem(problem, NO_ACCESS_PROBLEM, { grant: again });
 
@@ -690,6 +705,7 @@ function addAndTurnOn(origin: string, workspace: Workspace, problem: HTMLElement
     }
     const added = await addSite(endpoint, workspace, origin, cloudSeams());
     if (!added.ok) {
+      await forget();
       // Drawn again, with the buttons off until then: on, a second click would add once more while the
       // popup reads the session (raised in review).
       if (added.reason === 'signed-out') {
@@ -707,6 +723,7 @@ function addAndTurnOn(origin: string, workspace: Workspace, problem: HTMLElement
     if (wanted.visibility === 'everyone' || (wanted.place !== undefined && wanted.place !== null)) {
       const set = await setSiteSettings(endpoint, workspace, added.offer.site.id, wanted, cloudSeams());
       if (!set.ok) {
+        await forget();
         done();
         showProblem(problem, t(SETTINGS_PROBLEM[set.reason]));
 
@@ -715,8 +732,11 @@ function addAndTurnOn(origin: string, workspace: Workspace, problem: HTMLElement
     }
     try {
       await writeSite(origin, cloudEntry(added.offer));
+      // Done here: the background has nothing left to finish.
+      await forget();
       await activateOpenTabs(origin);
     } catch (error) {
+      await forget();
       // The site is in the workspace now, and the rule is not here: drawn again, the popup shows
       // what is true, the site of the workspace and its « Turn on here » (raised in review).
       console.error('[fruitback] the site was added, and its rule was not stored', error);
@@ -726,6 +746,7 @@ function addAndTurnOn(origin: string, workspace: Workspace, problem: HTMLElement
     }
     await render();
   })().catch((error: unknown) => {
+    void forget();
     done();
     failed(problem)(error);
   });
