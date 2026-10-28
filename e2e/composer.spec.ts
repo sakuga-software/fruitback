@@ -130,6 +130,10 @@ test('the composer has the measures of the mock-up, above its element (FRU-258, 
   // The button at the foot of the page: the window has room above it, whatever the fonts measure.
   const button = page.locator('#checkout-cta');
   await button.scrollIntoViewIfNeeded();
+  // HeroUI scales a pressed button to 0.97: its top moves 0.54 px down during the press. The composer
+  // is placed during the click, so on the pressed box. The test read the box later, pressed or not
+  // depending on the timing, and failed on main at 663.53 for 663. Without the scale, there is one box.
+  await button.evaluate((element) => element.style.setProperty('transform', 'none', 'important'));
   await page.getByRole('button', { name: /Leave feedback/ }).click();
   await button.click();
   const composer = page.getByRole('dialog', { name: 'New note', exact: true });
@@ -169,6 +173,11 @@ test('the composer has the measures of the mock-up, above its element (FRU-258, 
     'rgba(24, 24, 27, 0.22) 0px 14px 40px 0px',
   );
   // Above the element: it ends 40 px over its top, on the edge of the frame, 5 px off the element.
+  // The button is read at rest, as a person sees it once the click is over.
+  await page.mouse.move(0, 0);
+  await expect
+    .poll(() => button.evaluate((element) => getComputedStyle(element).transform))
+    .toMatch(/^(none|matrix\(1, 0, 0, 1, 0, 0\))$/);
   const target = (await button.boundingBox())!;
   expect(Number(box.y) + Number(box.height)).toBeCloseTo(target.y - 40, 0);
   expect(Number(box.x)).toBeCloseTo(target.x - 5, 0);
