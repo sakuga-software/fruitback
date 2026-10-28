@@ -184,10 +184,13 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Sign in again to see and leave notes here.': 'Reconnectez-vous pour voir et laisser des notes ici.',
   'Fruitback did not answer. The popup asks again.': 'Fruitback n’a pas répondu. Le popup redemande.',
   'Fruitback did not answer. The page asks again.': 'Fruitback n’a pas répondu. La page redemande.',
-  'Here, with the email of your work.': 'Ici, avec l’e-mail de votre travail.',
   'Signed in as {who}.': 'Connecté en tant que {who}.',
   'Open a site of your team, then click the Fruitback icon.':
     'Ouvrez un site de votre équipe, puis cliquez sur l’icône Fruitback.',
+  'Sign in, then turn on a site your team reviews.': 'Connectez-vous, puis activez un site que votre équipe relit.',
+  'Tip:': 'Astuce :',
+  'Pin Fruitback to find it in the toolbar later: open the puzzle piece at the right of the address bar, then press the pin beside Fruitback.':
+    'Épinglez Fruitback pour le retrouver ensuite dans la barre d’outils : ouvrez la pièce de puzzle à droite de la barre d’adresse, puis appuyez sur l’épingle à côté de Fruitback.',
   'No site in your workspaces yet.': 'Aucun site dans vos workspaces pour l’instant.',
   'Open {site}': 'Ouvrir {site}',
   'Turn on {site}': 'Activer sur {site}',
