@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'vitest';
-import { REPLY_NAME_LENGTH, markedAgent, replyName, replyText } from './reply-text.ts';
+import { REPLY_NAME_LENGTH, checkedOf, editText, markedAgent, replyName, replyText } from './reply-text.ts';
 
 describe('the text of a reply in a tracker (FRU-257)', () => {
   it('says who wrote it, then quotes every line of what they wrote', () => {
@@ -64,5 +64,27 @@ describe('a reply of an agent (FRU-464)', () => {
     ]) {
       assert.equal(markedAgent(comment(body)).by, undefined, body);
     }
+  });
+});
+
+describe('the reply that an edit of a note writes (FRU-475)', () => {
+  const author = { kind: 'member' as const, name: 'Ana Martin', workspace: 'Acme' };
+
+  it('says who edited the note, in the language of the team, and never the text of before', () => {
+    assert.equal(
+      editText({ text: 'The new words', author }),
+      '**Ana Martin** via Fruitback · member of Acme\nEdited the note',
+    );
+    assert.equal(
+      editText({ text: 'Les mots nouveaux', author }, 'fr-FR'),
+      '**Ana Martin** via Fruitback · membre de Acme\nA modifié la note',
+    );
+    assert.ok(!editText({ text: 'The new words', author }).includes('The new words'));
+  });
+
+  it('is no verdict: a note done stays unconfirmed after it', () => {
+    const body = editText({ text: 'x', author });
+
+    assert.equal(checkedOf([{ id: '1', body, createdAt: '2026-10-28T10:00:00.000Z' }]), undefined);
   });
 });

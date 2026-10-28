@@ -114,6 +114,12 @@ export type NoteIndex = {
      */
     options?: { verdicts?: boolean },
   ): Promise<void>;
+  /**
+   * Writes the excerpt of one note again, from the text its author just gave it (FRU-475). Only the
+   * route of the edit calls it: `refresh` never writes an excerpt, so a read that started before the
+   * edit cannot put the text of before back. A note the index does not hold is left absent.
+   */
+  reword(workspace: string, site: string, note: string, text: string): Promise<void>;
   /** The notes of each site of a workspace that has some. A site with none is absent. */
   summary(workspace: string): Promise<Map<string, SiteNotes>>;
   /**

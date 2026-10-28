@@ -1,11 +1,20 @@
 import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm';
-import { DEFAULT_NOTE_STAGE, type Note, type NoteIssue } from '@fruitback/shared';
+import { DEFAULT_NOTE_STAGE, type Note, type NoteIssue, noteSchema } from '@fruitback/shared';
 import type { Database, Db } from './postgres.ts';
 import { migrated } from './postgres-migrate.ts';
 import { note_comments, notes, sites, statuses } from './postgres-schema.ts';
 import { OWN_SOURCE } from './site-statuses.ts';
-import { forgetSelectorFor, identifierFor, stageOf, textOf, threadsOf, toNoteIssue, widgetIdOf } from './note-rows.ts';
-import { checkText, replyText } from './reply-text.ts';
+import {
+  forgetSelectorFor,
+  identifierFor,
+  readJson,
+  stageOf,
+  textOf,
+  threadsOf,
+  toNoteIssue,
+  widgetIdOf,
+} from './note-rows.ts';
+import { checkText, editText, replyText } from './reply-text.ts';
 import { type BatchAnswer, type CreatedIssue, type NoteStore, StoreError } from './store.ts';
 
 /**
@@ -257,6 +266,48 @@ export function createPostgresNoteStore(database: Database): NoteStore {
           return note === undefined
             ? undefined
             : { stage: stageOf(note.stage), was: stageOf(before.stage), page: note.page };
+        }),
+      ),
+    // FRU-475: the text of a note that is still `new`, and the reply that says it was edited, in one
+    // transaction. The row is taken for update: a status or a verdict written meanwhile waits, and
+    // the stage read here is the one the edit is decided on.
+    edit: (target, edit, _client, policy) =>
+      through('keep the edit', ({ transaction }) =>
+        transaction(async (tx) => {
+          const id = Number(target.issue);
+          if (!Number.isSafeInteger(id)) return undefined;
+          const [row] = await tx
+            .select({ stage: notes.stage, payload: notes.payload })
+            .from(notes)
+            .where(
+              and(
+                eq(notes.id, id),
+                target.clientId === undefined ? isNull(notes.client_id) : eq(notes.client_id, target.clientId),
+              ),
+            )
+            .for('update');
+          if (row === undefined) return undefined;
+          if (stageOf(row.stage) !== DEFAULT_NOTE_STAGE) return 'not-new' as const;
+          // The note as it is kept, with its text changed and nothing else: a row that does not parse
+          // is no note this store can answer for.
+          const parsed = noteSchema.safeParse(readJson(row.payload));
+          if (!parsed.success) return undefined;
+          const note: Note = { ...parsed.data, text: edit.text };
+          const now = Date.now();
+          await tx
+            .update(notes)
+            .set({ payload: JSON.stringify(note), updated_at: now })
+            .where(eq(notes.id, id));
+          const [comment] = await tx
+            .insert(note_comments)
+            .values({ note_id: id, author: null, body: editText(edit, policy.locale), created_at: now })
+            .returning({ id: note_comments.id, body: note_comments.body });
+          if (comment === undefined) throw new StoreError('PostgreSQL kept an edit and answered no number for it');
+
+          return {
+            note,
+            comment: { id: String(comment.id), body: comment.body, createdAt: new Date(now).toISOString() },
+          };
         }),
       ),
     // The notes of the whole instance, whatever their site: the command of whoever runs the worker.

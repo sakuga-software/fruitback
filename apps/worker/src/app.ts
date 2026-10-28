@@ -27,6 +27,7 @@ import { handleAttachment } from './attachment-routes.ts';
 import { handleConsole } from './console-routes.ts';
 import { handlePairing, handleSessionRoutes } from './session-routes.ts';
 import { CHECK_PATH, REPLY_PATH, STATUS_PATH, postCheck, postReply, postStatus } from './reply-routes.ts';
+import { EDIT_PATH, postEdit } from './edit-routes.ts';
 import { getFeedback, postFeedback } from './feedback-routes.ts';
 import { MCP_PATH, handleMcp } from './mcp.ts';
 import { resolveAgentKey } from './agent-keys.ts';
@@ -454,7 +455,14 @@ async function routed(
   const replyTo = REPLY_PATH.exec(pathname)?.[1];
   const checkOf = CHECK_PATH.exec(pathname)?.[1];
   const statusOfNote = STATUS_PATH.exec(pathname)?.[1];
-  if (pathname !== '/feedback' && replyTo === undefined && checkOf === undefined && statusOfNote === undefined) {
+  const editOf = EDIT_PATH.exec(pathname)?.[1];
+  if (
+    pathname !== '/feedback' &&
+    replyTo === undefined &&
+    checkOf === undefined &&
+    statusOfNote === undefined &&
+    editOf === undefined
+  ) {
     return json(404, { error: 'not-found' }, cors.headers);
   }
 
@@ -504,6 +512,22 @@ async function routed(
     return postStatus(
       request,
       statusOfNote,
+      served,
+      watchedStore(store, accounts),
+      kv,
+      cors.headers,
+      { accounts, noteIndex, context },
+      checks,
+    );
+  }
+
+  // FRU-475: the text of a note, edited by the person who left it.
+  if (editOf !== undefined) {
+    if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, cors.headers);
+
+    return postEdit(
+      request,
+      editOf,
       served,
       watchedStore(store, accounts),
       kv,

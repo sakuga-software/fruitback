@@ -177,6 +177,8 @@ export const ENGLISH = {
   'thread.team': 'Team',
   /** A reply that an AI agent wrote, beside the name of its key (FRU-465). */
   'thread.agent': 'Agent',
+  /** The reply the worker writes when the author edits their note (FRU-475). */
+  'thread.edited': 'Edited the note',
   'reply.label': 'Reply',
   'reply.placeholder': 'Reply to {name}',
   'reply.placeholderAnonymous': 'Write a reply',
@@ -187,6 +189,19 @@ export const ENGLISH = {
   'reply.failed': 'Did not go through — your text is kept, try again',
   'reply.failedWait': 'Too many replies just now. Your text is kept: send it again in a minute.',
   'reply.failedSignedOut': 'Your session has ended. Your text is kept: sign in again, then send it.',
+  // FRU-475: the author edits the text of their note, from its thread.
+  'edit.open': 'Edit',
+  'edit.openLabel': 'Edit your note',
+  'edit.label': 'Your note',
+  'edit.save': 'Save',
+  'edit.cancel': 'Cancel',
+  'edit.saving': 'Saving…',
+  'edit.saved': 'Saved',
+  'edit.failed': 'Not saved — your text is kept, try again',
+  'edit.failedWait': 'Too many requests just now. Your text is kept: save it again in a minute.',
+  'edit.failedSignedOut': 'Your session has ended. Your text is kept: sign in again, then save it.',
+  'edit.refused':
+    'This note can no longer be edited: the team has started on it. Your text is kept here; send it as a reply.',
   'thread.anonymous': 'Anonymous',
   'thread.orphan': 'Element not found — approximate position.',
   'thread.uncertain': 'Element found by its position, not by its identity — the page may have changed under the pin.',

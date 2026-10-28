@@ -122,7 +122,7 @@ export const CHECK_LOCK_MS = 15_000;
  * store that does not answer: `502`, and the person tries again. Never « nobody », which would refuse
  * the author as if they were somebody else.
  */
-async function indexedAuthorOf(
+export async function indexedAuthorOf(
   index: NoteIndex | undefined,
   workspace: string,
   site: string,

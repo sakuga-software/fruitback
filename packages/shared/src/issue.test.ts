@@ -97,6 +97,15 @@ describe('the read envelope (FRU-10, FRU-13)', () => {
     }
   });
 
+  it('reads editable, and refuses an editable that is not true (FRU-475)', () => {
+    const issue = realisticIssue({ mine: true, editable: true });
+
+    assert.deepEqual(noteIssueSchema.parse(issue), issue);
+    for (const editable of [false, 'true', 1]) {
+      assert.equal(noteIssueSchema.safeParse({ ...issue, editable }).success, false, String(editable));
+    }
+  });
+
   it('reads an answer with no URL, as a store with no web interface gives it', () => {
     const { url: _none, ...issue } = realisticIssue();
 

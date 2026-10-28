@@ -101,6 +101,8 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
           )
           // A note it holds: the stage, and when the tracker said it. Nothing else of the row moves,
           // and a read with no replies leaves the verdict as the last read with replies said it.
+          // Never the excerpt (FRU-475): a read that started before an edit would write the text of
+          // before over it. `reword` writes it, for the edit only.
           .onConflictDoUpdate({
             target: [note_index.site_id, note_index.note_id],
             set: {
@@ -112,6 +114,17 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
             // A note of another workspace under the same ids is not this one.
             setWhere: eq(note_index.workspace_id, workspace),
           }),
+      );
+    },
+
+    async reword(workspace, site, note, text) {
+      await run((db) =>
+        db
+          .update(note_index)
+          .set({ excerpt: excerptOf(text) })
+          .where(
+            and(eq(note_index.workspace_id, workspace), eq(note_index.site_id, site), eq(note_index.note_id, note)),
+          ),
       );
     },
 

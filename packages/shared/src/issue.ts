@@ -216,6 +216,11 @@ export const noteIssueSchema = z.object({
    */
   mine: z.literal(true).optional(),
   /**
+   * `true` on a note that the reader may edit now (FRU-475): their own (`mine`), still `new`, kept by
+   * the worker on a site with one place. Absent for every other note and reader. Read-envelope field.
+   */
+  editable: z.literal(true).optional(),
+  /**
    * The files of the note, as its tracker keeps them (FRU-331): a name, and the address of the
    * tracker. Absent when the store says nothing of them. Read-envelope field.
    */

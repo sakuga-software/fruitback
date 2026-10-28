@@ -1,4 +1,4 @@
-import { type NoteBounds, type NoteComment, type NoteIssue, type NoteStatus } from '@fruitback/shared';
+import { type Note, type NoteBounds, type NoteComment, type NoteIssue, type NoteStatus } from '@fruitback/shared';
 import { type Direction, type Translator, createTranslator, languageOf } from './messages.ts';
 import { createIcon } from './icons.ts';
 import { type Box, type Offset, NO_OFFSET, attachHandle, clampOffset, moved, tether } from './bubble-drag.ts';
@@ -131,6 +131,11 @@ export type OverlayOptions = {
   /** How a reader replies to a note from its thread (FRU-257). Left out: no thread has a field. */
   reply?: ReplySeam;
   /**
+   * How the author edits the text of their note from its thread (FRU-475). Offered on a note whose
+   * read says `editable`. Left out: no thread offers it.
+   */
+  edit?: EditSeam;
+  /**
    * Show the CSS selector of the element in a thread (FRU-349). Off by default: a reviewer reads the
    * note, and the selector is for a developer. The note and the issue keep it either way.
    */
@@ -147,6 +152,23 @@ export type ReplyFailure = 'retry' | 'wait' | 'signed-out';
 export type ReplySeam = {
   allowed(issue: NoteIssue): boolean;
   send(issue: NoteIssue, body: string): Promise<NoteComment | ReplyFailure>;
+};
+
+/**
+ * Why an edit did not go (FRU-475). The text stays in its field in every case. `refused`: the worker
+ * takes no edit of this note any more (the team moved it), and trying again does not change it.
+ */
+export type EditFailure = ReplyFailure | 'refused';
+
+/**
+ * What the store kept of an edit (FRU-475): the note, and the reply that says it was edited, when the
+ * reader reads the replies.
+ */
+export type EditAnswer = { note: Note; comment?: NoteComment };
+
+/** A seam like `ReplySeam` (FRU-475): `send` answers the note as the store kept it. */
+export type EditSeam = {
+  send(issue: NoteIssue, text: string): Promise<EditAnswer | EditFailure>;
 };
 
 export type Overlay = {
@@ -795,6 +817,36 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     const field = thread?.querySelector<HTMLTextAreaElement>('.fruitback-thread-reply-field');
     if (focused) field?.focus();
   };
+  // FRU-475: the edit of a note outlives its thread too, as a reply does. `editing` holds the notes
+  // whose text is open in a field.
+  const editing = new Set<string>();
+  const editTexts = new Map<string, string>();
+  const editsInFlight = new Set<string>();
+  const editSaid = new Map<string, string>();
+  /** Draws the thread of `issue` again, if it is open, and puts focus where the person was. */
+  const editSettled = (issue: NoteIssue, focus: 'field' | 'edit' | undefined): void => {
+    const entry = placed.find((candidate) => candidate.issue.id === issue.id);
+    if (entry === undefined || thread?.dataset.fruitbackThread !== issue.note.id) return;
+    // A read may have drawn the note again since: the text goes on the issue that is on screen too.
+    if (entry.issue !== issue) {
+      entry.issue.note = issue.note;
+      if (issue.comments !== undefined) entry.issue.comments = issue.comments;
+    }
+    reopenThread(entry);
+    if (focus === 'field') thread?.querySelector<HTMLTextAreaElement>('.fruitback-thread-edit-field')?.focus();
+    if (focus === 'edit') thread?.querySelector<HTMLElement>('.fruitback-thread-edit')?.focus();
+  };
+  const editFor = (issue: NoteIssue): EditFooter | undefined =>
+    options.edit === undefined || DRAFTS.has(issue) || issue.editable !== true
+      ? undefined
+      : {
+          seam: options.edit,
+          editing,
+          texts: editTexts,
+          inFlight: editsInFlight,
+          said: editSaid,
+          settled: editSettled,
+        };
   const replyFor = (issue: NoteIssue): ReplyFooter | undefined =>
     options.reply === undefined || DRAFTS.has(issue) || !options.reply.allowed(issue)
       ? undefined
@@ -807,9 +859,14 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     // can change under the thread at any keystroke, and focus on Close would take the next ones.
     const active = deepActiveElement(document);
     const typing =
-      isElement(active) && active.classList.contains('fruitback-thread-reply-field')
+      isElement(active) &&
+      (active.classList.contains('fruitback-thread-reply-field') ||
+        active.classList.contains('fruitback-thread-edit-field'))
         ? (active as HTMLTextAreaElement)
         : undefined;
+    const typingIn = typing?.classList.contains('fruitback-thread-edit-field')
+      ? '.fruitback-thread-edit-field'
+      : '.fruitback-thread-reply-field';
     const caret = typing === undefined ? undefined : ([typing.selectionStart, typing.selectionEnd] as const);
     const onHandle = isElement(active) && active.classList.contains('fruitback-thread-handle');
     thread?.remove();
@@ -821,10 +878,11 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
       replyFor(entry.issue),
       selectorsShown,
       threadHome === null,
+      editFor(entry.issue),
     );
     wireThread(thread);
     mountThread(thread, entry);
-    const field = thread.querySelector<HTMLTextAreaElement>('.fruitback-thread-reply-field');
+    const field = thread.querySelector<HTMLTextAreaElement>(typingIn);
     if (caret !== undefined && field !== null) {
       field.focus();
       field.setSelectionRange(caret[0], caret[1]);
@@ -864,6 +922,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
       replyFor(entry.issue),
       selectorsShown,
       home === null,
+      editFor(entry.issue),
     );
     wireThread(thread);
     mountThread(thread, entry);
@@ -877,6 +936,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     const focused = restoreFocus && threadHasFocus();
     // The last word of a reply is said once: a thread opened again starts with an empty status.
     replySaid.clear();
+    editSaid.clear();
     const opener = placed.find((entry) => entry.pin.dataset.fruitbackOpen !== undefined);
     const wasOpen = thread !== null;
     // A thread in the list gives focus back through the list, to the row of its note (FRU-312): the
@@ -1163,7 +1223,7 @@ function replies(document: Document, issue: NoteIssue, t: Translator): HTMLEleme
   for (const comment of issue.comments) {
     const item = document.createElement('li');
     item.className = 'fruitback-thread-reply';
-    const fromPage = replyFromPage(comment.body);
+    const fromPage = replyFromPage(comment.body) ?? editFromPage(comment.body, t);
     const who = fromPage === undefined ? (comment.author ?? t.text('thread.team')) : fromPage.name;
     // FRU-465: the worker says that an agent wrote it. The word is the reader's, not the line's.
     const qualifier = comment.by === 'agent' ? t.text('thread.agent') : fromPage?.who;
@@ -1255,6 +1315,7 @@ function buildThread(
   reply: ReplyFooter | undefined,
   showSelector: boolean,
   movable: boolean,
+  edit?: EditFooter,
 ): HTMLElement {
   const thread = document.createElement('div');
   thread.className = 'fruitback-thread';
@@ -1303,7 +1364,7 @@ function buildThread(
   thread.append(
     head,
     element(document, 'div', 'fruitback-thread-body', [
-      element(document, 'p', 'fruitback-thread-note', issue.note.text || t.text('thread.noNote')),
+      ...noteText(document, issue, t, edit),
       byline(document, 'p', 'fruitback-thread-meta', reporter, issue.note.createdAt, t),
       ...sourceBlock(document, issue, showSelector),
       ...attachmentsLine(document, issue, t),
@@ -1316,6 +1377,136 @@ function buildThread(
   );
 
   return thread;
+}
+
+/** What the edits of the notes share, by note, as `ReplyFooter` (FRU-475). */
+type EditFooter = {
+  seam: EditSeam;
+  editing: Set<string>;
+  texts: Map<string, string>;
+  inFlight: Set<string>;
+  said: Map<string, string>;
+  settled: (issue: NoteIssue, focus: 'field' | 'edit' | undefined) => void;
+};
+
+const EDIT_FAILURES = {
+  retry: 'edit.failed',
+  wait: 'edit.failedWait',
+  'signed-out': 'edit.failedSignedOut',
+  refused: 'edit.refused',
+} as const;
+
+/**
+ * The text of the note, and for its author the way to edit it (FRU-475): « Edit » under the text, then
+ * a field with the text, « Save » and « Cancel ».
+ *
+ * WARNING: nothing here clears the field but an edit that the store kept, or « Cancel ». A failure
+ * keeps the text and says why. The text lives in `texts` too, so a thread built again shows it again.
+ */
+function noteText(document: Document, issue: NoteIssue, t: Translator, edit: EditFooter | undefined): HTMLElement[] {
+  const text = element(document, 'p', 'fruitback-thread-note', issue.note.text || t.text('thread.noNote'));
+  if (edit === undefined) return [text];
+  const id = issue.note.id;
+  const status = document.createElement('span');
+  status.className = 'fruitback-thread-edit-status';
+  status.setAttribute('role', 'status');
+  status.setAttribute('aria-live', 'polite');
+  status.textContent = edit.said.get(id) ?? '';
+
+  if (!edit.editing.has(id)) {
+    const open = document.createElement('button');
+    open.type = 'button';
+    open.className = 'fruitback-thread-edit';
+    open.textContent = t.text('edit.open');
+    open.setAttribute('aria-label', t.text('edit.openLabel'));
+    open.addEventListener('click', () => {
+      edit.editing.add(id);
+      edit.said.delete(id);
+      edit.settled(issue, 'field');
+    });
+
+    return [text, element(document, 'div', 'fruitback-thread-edit-row', [open, status])];
+  }
+
+  const form = document.createElement('form');
+  form.className = 'fruitback-thread-edit-form';
+  const field = document.createElement('textarea');
+  field.className = 'fruitback-thread-edit-field';
+  field.rows = 3;
+  field.setAttribute('aria-label', t.text('edit.label'));
+  field.value = edit.texts.get(id) ?? issue.note.text;
+  const save = document.createElement('button');
+  save.type = 'submit';
+  save.className = 'fruitback-thread-edit-save';
+  save.textContent = t.text('edit.save');
+  const cancel = document.createElement('button');
+  cancel.type = 'button';
+  cancel.className = 'fruitback-thread-edit-cancel';
+  cancel.textContent = t.text('edit.cancel');
+  const inFlight = edit.inFlight.has(id);
+  save.disabled = inFlight;
+  cancel.disabled = inFlight;
+  field.readOnly = inFlight;
+  if (inFlight) status.textContent = t.text('edit.saving');
+
+  field.addEventListener('input', () => {
+    edit.texts.set(id, field.value);
+    edit.said.delete(id);
+    status.textContent = '';
+  });
+  cancel.addEventListener('click', () => {
+    // The one way out that drops the text: the person asked for it.
+    edit.editing.delete(id);
+    edit.texts.delete(id);
+    edit.said.delete(id);
+    edit.settled(issue, 'edit');
+  });
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const typed = field.value;
+    if (edit.inFlight.has(id) || typed.trim() === '') return;
+    // Nothing changed: nothing to send, and the note stays as it is.
+    if (typed.trim() === issue.note.text) {
+      edit.editing.delete(id);
+      edit.texts.delete(id);
+      edit.settled(issue, 'edit');
+      return;
+    }
+    edit.inFlight.add(id);
+    save.disabled = true;
+    cancel.disabled = true;
+    field.readOnly = true;
+    status.textContent = t.text('edit.saving');
+    void edit.seam
+      .send(issue, typed)
+      .catch((): EditFailure => 'retry')
+      .then((answer) => {
+        edit.inFlight.delete(id);
+        if (typeof answer === 'string') {
+          edit.texts.set(id, typed);
+          edit.said.set(id, t.text(EDIT_FAILURES[answer]));
+          edit.settled(issue, 'field');
+          return;
+        }
+        applyEdit(issue, answer);
+        edit.editing.delete(id);
+        edit.texts.delete(id);
+        edit.said.set(id, t.text('edit.saved'));
+        edit.settled(issue, 'edit');
+      });
+  });
+  form.append(field, element(document, 'div', 'fruitback-thread-edit-actions', [save, cancel]), status);
+
+  return [form];
+}
+
+/** The note as the store kept it, and the reply of the edit once, on the issue on screen (FRU-475). */
+export function applyEdit(issue: NoteIssue, answer: EditAnswer): void {
+  issue.note = answer.note;
+  const { comment } = answer;
+  if (comment !== undefined && issue.comments !== undefined && !issue.comments.some((each) => each.id === comment.id)) {
+    issue.comments = [...issue.comments, comment];
+  }
 }
 
 /**
@@ -1350,6 +1541,19 @@ export function replyFromPage(body: string): { name: string; who: string; text: 
     .join('\n');
 
   return { name: match[1] ?? '', who: match[2] ?? '', text };
+}
+
+/**
+ * The reply the worker writes when the author edits a note (FRU-475, `editText`): the line of who
+ * wrote it, then « Edited the note » in the language of the team. The page shows the name, and its own
+ * words for the edit. Any other comment is `undefined`.
+ */
+const EDITED = /^\*\*([^*\n]+)\*\* via Fruitback · ([^\n]+)\n(?:Edited the note|A modifié la note)$/u;
+
+export function editFromPage(body: string, t: Translator): { name: string; who: string; text: string } | undefined {
+  const match = EDITED.exec(body);
+
+  return match === null ? undefined : { name: match[1] ?? '', who: match[2] ?? '', text: t.text('thread.edited') };
 }
 
 const REPLY_FAILURES = {
@@ -2043,6 +2247,61 @@ const STYLES = `
 .fruitback-thread-reply-who { margin: 0; font-size: 11px; color: var(--fruitback-color-text-muted); overflow-wrap: anywhere; }
 .fruitback-thread-reply-name { font-weight: 600; color: var(--fruitback-color-text); }
 .fruitback-thread-reply-body { margin: 0; font-size: 13px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+/* The edit of a note by its author (FRU-475): a quiet word under the text, then the text in a field. */
+.fruitback-thread-edit-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: -6px; }
+.fruitback-thread-edit, .fruitback-thread-edit-cancel {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: 600 12px/1.5 var(--fruitback-font-sans);
+  color: var(--fruitback-color-text-muted);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.fruitback-thread-edit:hover, .fruitback-thread-edit-cancel:hover:not([disabled]) { color: var(--fruitback-color-text); }
+.fruitback-thread-edit:focus-visible, .fruitback-thread-edit-cancel:focus-visible,
+.fruitback-thread-edit-save:focus-visible {
+  outline: 2px solid var(--fruitback-color-accent);
+  outline-offset: 2px;
+  border-radius: var(--fruitback-radius-sm);
+}
+.fruitback-thread-edit-form { display: flex; flex-direction: column; gap: 8px; }
+.fruitback-thread-edit-field {
+  min-height: 64px;
+  max-height: 200px;
+  resize: vertical;
+  field-sizing: content;
+  border: 1px solid var(--fruitback-color-border-strong);
+  border-radius: var(--fruitback-radius-field);
+  padding: 7px 10px;
+  font: 14px/1.5 var(--fruitback-font-sans);
+  background: var(--fruitback-color-surface);
+  color: inherit;
+  caret-color: var(--fruitback-color-accent);
+}
+.fruitback-thread-edit-field:focus-visible { outline: 2px solid var(--fruitback-color-accent); outline-offset: 1px; }
+.fruitback-thread-edit-actions { display: flex; align-items: center; gap: 12px; }
+.fruitback-thread-edit-save {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--fruitback-radius-pill);
+  background: var(--fruitback-color-accent);
+  color: var(--fruitback-color-on-accent);
+  font: 600 13px/1 var(--fruitback-font-sans);
+  cursor: pointer;
+}
+.fruitback-thread-edit-save:hover:not([disabled]) { background: var(--fruitback-color-accent-strong); }
+.fruitback-thread-edit-save[disabled], .fruitback-thread-edit-cancel[disabled] { opacity: 0.55; cursor: default; }
+.fruitback-thread-edit-status { font-size: 12px; color: var(--fruitback-color-text-muted); }
+.fruitback-thread-edit-status:empty { display: none; }
+@media (pointer: coarse) {
+  .fruitback-thread-edit-field { font-size: 16px; }
+  .fruitback-thread-edit-save, .fruitback-thread-edit, .fruitback-thread-edit-cancel { min-height: 44px; }
+}
 /* The foot where a reader replies (FRU-257): the field grows with the text, the button stays at its foot. */
 .fruitback-thread-reply-form {
   display: flex;

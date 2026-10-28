@@ -1,5 +1,5 @@
 import type { NoteComment } from '@fruitback/shared';
-import type { CheckVerdict, NewCheck, NewReply } from './store.ts';
+import type { CheckVerdict, NewCheck, NewEdit, NewReply } from './store.ts';
 
 /**
  * The text of a reply in a tracker (FRU-257): one line that says who wrote it, then what they wrote,
@@ -91,6 +91,20 @@ export function checkText(check: NewCheck, locale?: string): string {
     VERDICTS[language][check.verdict],
     ...(typed === '' ? [] : ['', ...quoted(typed)]),
   ].join('\n');
+}
+
+/** The line under the line of who wrote it that marks an edit of the note (FRU-475). */
+const EDITED = { en: 'Edited the note', fr: 'A modifié la note' } as const;
+
+/**
+ * The reply that an edit of a note writes under it (FRU-475): the line of who wrote it, then the line
+ * of the edit. Never the text of before: a person may edit a note to take out what they should not
+ * have written.
+ */
+export function editText(edit: NewEdit, locale?: string): string {
+  const language = locale?.toLowerCase().startsWith('fr') ? 'fr' : 'en';
+
+  return [whoLine(edit.author, locale), EDITED[language]].join('\n');
 }
 
 /** The first line that the worker writes, and the name in it. */

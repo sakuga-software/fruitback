@@ -13,6 +13,8 @@ import {
   type NoteSource,
   type NoteStage,
   type NoteStatus,
+  noteCommentSchema,
+  noteSchema,
 } from '@fruitback/shared';
 import { type CapturedPlace, captureNote, capturePlace } from './capture.ts';
 import { captureAnchor } from './anchor.ts';
@@ -59,7 +61,16 @@ import {
   offeredDestinations,
 } from './destinations.ts';
 import { type FruitbackMessages, createTranslator, languageOf } from './messages.ts';
-import { type Overlay, type ReplyFailure, createOverlay, replyFromPage } from './overlay.ts';
+import {
+  type EditAnswer,
+  type EditFailure,
+  type Overlay,
+  type ReplyFailure,
+  applyEdit,
+  createOverlay,
+  editFromPage,
+  replyFromPage,
+} from './overlay.ts';
 import { type ConfigPanel, type OfferedStages, createConfigPanel, createOfferedStages } from './panel.ts';
 import { linkedNote, withoutLinkedNote } from './page.ts';
 
@@ -544,6 +555,19 @@ export function init(options: FruitbackOptions): Fruitback {
               sendReply(options, view, issue, body, readerIdentity.identified ? undefined : config.get().reporterName),
           },
         }),
+    // FRU-475: the author edits their note. No read after it: a read draws the pins again and would
+    // close the thread the person is in. The note and its reply go on the issue, and the lists follow.
+    edit: {
+      send: async (issue: NoteIssue, text: string) => {
+        const answer = await sendEdit(options, view, issue, text);
+        if (typeof answer === 'string') return answer;
+        applyEdit(issue, answer);
+        sidebar.refresh();
+        tellNotes({ kind: 'list' });
+
+        return answer;
+      },
+    },
   });
 
   const stages = createOfferedStages();
@@ -1117,7 +1141,7 @@ export function init(options: FruitbackOptions): Fruitback {
           updatedAt: issue.updatedAt,
           // A reply written from a page reads as the thread shows it: its name, and its text unquoted.
           replies: (issue.comments ?? []).map((comment) => {
-            const fromPage = replyFromPage(comment.body);
+            const fromPage = replyFromPage(comment.body) ?? editFromPage(comment.body, translator);
             const author = fromPage?.name ?? comment.author;
 
             return {
@@ -1539,6 +1563,36 @@ async function sendReply(
   const comment = (JSON.parse(response.body) as { comment?: NoteComment }).comment;
 
   return comment === undefined ? 'retry' : comment;
+}
+
+/**
+ * The new text of a note, by its author (FRU-475), through the transport of the host. `refused`: the
+ * worker takes no edit of this note (`403`, `404`, `409 not-new`): nothing moved, and trying again
+ * does not change it.
+ */
+async function sendEdit(
+  options: FruitbackOptions,
+  view: Window & typeof globalThis,
+  issue: NoteIssue,
+  text: string,
+): Promise<EditAnswer | EditFailure> {
+  const token = await options.identityToken?.();
+  const response = await transportFor(options)({
+    url: `${options.endpoint}/feedback/${encodeURIComponent(issue.id)}/text?client=${encodeURIComponent(options.clientId)}`,
+    method: 'POST',
+    headers: writeHeaders(token),
+    body: JSON.stringify({ url: canonicalizePageUrl(view.location.href), text }),
+  });
+  if (response.status === 429) return 'wait';
+  if (response.status === 401) return 'signed-out';
+  if (response.status === 403 || response.status === 404 || response.status === 409) return 'refused';
+  if (!response.ok) return 'retry';
+  const body = JSON.parse(response.body) as { note?: unknown; comment?: unknown };
+  const note = noteSchema.safeParse(body.note);
+  if (!note.success) return 'retry';
+  const comment = noteCommentSchema.safeParse(body.comment);
+
+  return { note: note.data, ...(comment.success ? { comment: comment.data } : {}) };
 }
 
 /**

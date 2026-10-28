@@ -37,6 +37,12 @@ export const REPLY_PATH = /^\/feedback\/[A-Za-z0-9_-]{1,100}\/replies$/;
 export const CHECK_PATH = /^\/feedback\/[A-Za-z0-9_-]{1,100}\/check$/;
 
 /**
+ * The path of the text of one note, edited by its author (FRU-475): `FEEDBACK_PATH`, the id, then
+ * `/text`. The worker decides who may: the relay carries the session, as for a reply.
+ */
+export const EDIT_PATH = /^\/feedback\/[A-Za-z0-9_-]{1,100}\/text$/;
+
+/**
  * The path of a file of a note on its way (FRU-332): `POST /attachments`, its bytes in base64 between
  * the page and the background. The only path that takes a body in base64.
  */
@@ -179,7 +185,7 @@ function targets(url: string, endpoint: string): boolean {
     if (!target.pathname.startsWith(base)) return false;
     const rest = target.pathname.slice(base.length);
 
-    return REPLY_PATH.test(rest) || CHECK_PATH.test(rest) || rest === ATTACHMENTS_PATH;
+    return REPLY_PATH.test(rest) || CHECK_PATH.test(rest) || EDIT_PATH.test(rest) || rest === ATTACHMENTS_PATH;
   } catch {
     return false;
   }

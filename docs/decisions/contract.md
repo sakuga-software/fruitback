@@ -45,6 +45,8 @@ first publish made it expensive.
 - **An issue says `checked: { by, at }` and `mine: true`** (FRU-294): `checked` on a done note whose
   newest verdict in its replies is « looks fixed », `mine` to the reader who left the note. Both
   optional, both read-envelope fields: `NOTE_VERSION` does not move.
+- **An issue says `editable: true`** (FRU-475) to the reader who may edit its text now: their own
+  note, still `new`, kept by the worker. Optional, a read-envelope field: `NOTE_VERSION` does not move.
 
 ### The reasons, and the history
 

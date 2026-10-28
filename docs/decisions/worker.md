@@ -3408,6 +3408,35 @@ replies, and on a public site mounted by the extension with no session, only the
 - **`checked` and `mine` are added after the cache.** `checked` comes from the replies, so a read with
   the replies hidden says none; `mine` is the reader's.
 
+## The author edits a note (FRU-475)
+
+**The rules, in short** (the ticket left every choice open; the agent decided the simplest and the
+safest, 2026-10-28):
+
+- **One route, `POST /feedback/<id>/text?client=<site>`, body `{ url, text }`** (`edit-routes.ts`).
+  The text is trimmed, never empty, at most `NOTE_MAX_LENGTH` (`400 invalid-text`).
+- **Who: the author the index keeps, and nobody else.** `NoteIndex.authors`, as for a verdict, with a
+  session of the extension read again in the store. A role that manages the sites does not rewrite
+  somebody else's words (`403 not-allowed`); a visitor and a token of a site are nobody the worker
+  can name (`401`).
+- **Until when: while the note is `new`.** The stage is read in the store for the request, and again
+  under the lock of the row (`SELECT … FOR UPDATE`): a note the team moved meanwhile is `409 not-new`,
+  and nothing is written (test:`writes nothing on a note that moved since the route read it, nor on a note of another site`).
+- **Where: `NoteStore.edit`, the worker's own store only; `takesEdits` says where.** A note of a
+  tracker is the team's issue there, and an address (`receivingStore`) already has the note it was
+  sent: both refuse (`403 edits-not-taken`), and nothing is sent again to a tracker or an address. A
+  site with two places or more takes no edit either: its notes are read in each place.
+- **History: none.** The text of before is not kept anywhere: a person may edit a note to take out what
+  they should not have written. In the same transaction the store writes a reply under the note,
+  `editText`: the line of who wrote it, then « Edited the note ». No text in it.
+- **`editable: true` is added after the cache**, as `mine`: on a note of the reader, still `new`, on a
+  site with one place whose store takes an edit. The route decides again; the flag only says where to
+  offer it.
+- **The index follows the text.** The route writes the excerpt again with `NoteIndex.reword`, so
+  the list of the console shows the new words at once. `refresh` never writes an excerpt: a read
+  that started before the edit would put the text of before back (balanced review of #661)
+  (test:`keeps the new excerpt when a read that started before the edit refreshes the index after it`).
+
 ## Where the notes go, and the fixes to check, in `GET /session/sites` (FRU-295)
 
 **The rules, in short:**

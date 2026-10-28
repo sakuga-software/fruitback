@@ -22,7 +22,7 @@ import { type ListState, createSidebar } from './sidebar.ts';
 import type { SiteRead } from './site-notes.ts';
 import { feedbackAsText, placementOf } from './export.ts';
 import { createConfigStore } from './config.ts';
-import { type ReplyFailure, createOverlay } from './overlay.ts';
+import { type EditAnswer, type EditFailure, type ReplyFailure, createOverlay } from './overlay.ts';
 import {
   globalNavigatorSpeaks,
   keyboardEventCtor,
@@ -281,6 +281,8 @@ describe('every word the widget shows', () => {
     let draftIssue: unknown;
     // Each reply waits for the answer that the case gives it (FRU-257).
     const replyAnswers: ((answer: NoteComment | ReplyFailure) => void)[] = [];
+    // And each edit of a note (FRU-475).
+    const editAnswers: ((answer: EditAnswer | EditFailure) => void)[] = [];
     const overlay = createOverlay({
       document: page.document,
       host: host.root,
@@ -288,6 +290,7 @@ describe('every word the widget shows', () => {
       translator,
       isDraft: (issue) => issue === draftIssue,
       reply: { allowed: () => true, send: () => new Promise((resolve) => replyAnswers.push(resolve)) },
+      edit: { send: () => new Promise((resolve) => editAnswers.push(resolve)) },
     });
     cleanup.push(() => overlay.destroy());
 
@@ -297,6 +300,9 @@ describe('every word the widget shows', () => {
       comments: [],
       // FRU-332: the files of the note, in its tracker. The thread says how many, and links the ticket.
       attachments: [{ name: 'FILE ONE', url: 'https://tracker.test/file' }],
+      // FRU-475: its reader left it, and may edit it.
+      mine: true,
+      editable: true,
       note: noteFixture({
         id: 'sd_found',
         text: 'NOTE ONE',
@@ -488,6 +494,30 @@ describe('every word the widget shows', () => {
     }
     replyForm.requestSubmit();
     replyAnswers.shift()?.({ id: 'c3', body: 'BODY', createdAt: '2026-08-01T12:00:00.000Z' });
+    await settleReply();
+    snapshots.push(...shown(host.root));
+    // The edit of the note from its thread: open, in flight, each failure, then kept (FRU-475).
+    (host.root.querySelector('.fruitback-thread-edit') as HTMLButtonElement).click();
+    snapshots.push(...shown(host.root));
+    for (const answer of ['wait', 'signed-out', 'retry', 'refused'] as const) {
+      const field = host.root.querySelector('.fruitback-thread-edit-field') as HTMLTextAreaElement;
+      field.value = 'EDITED';
+      (host.root.querySelector('.fruitback-thread-edit-form') as HTMLFormElement).requestSubmit();
+      snapshots.push(...shown(host.root));
+      editAnswers.shift()?.(answer);
+      await settleReply();
+      snapshots.push(...shown(host.root));
+    }
+    (host.root.querySelector('.fruitback-thread-edit-form') as HTMLFormElement).requestSubmit();
+    editAnswers.shift()?.({
+      note: { ...found.note, text: 'EDITED' },
+      // The reply the worker writes for it: the thread writes its own words for it.
+      comment: {
+        id: 'c4',
+        body: '**REPORTER** via Fruitback · member of WORKSPACE\nEdited the note',
+        createdAt: '2026-08-01T12:00:00.000Z',
+      },
+    });
     await settleReply();
     snapshots.push(...shown(host.root));
     composer.open({ left: 0, top: 0, bottom: 10, right: 10 }, 'ELEMENT');
@@ -699,6 +729,10 @@ describe('every word the widget shows', () => {
       'FILE.png',
       'page.png',
       readableSize(2_048, translator.locale),
+      // FRU-475: the text the author typed in the field of an edit.
+      'EDITED',
+      // What the worker writes of who edited it, in the language of the team (FRU-475).
+      'member of WORKSPACE',
     ];
     // The short selector the frame of a capture writes (FRU-303), the tag of an element of the page.
     // Matched whole: as a part, « i » would take that letter out of every other text.
@@ -710,6 +744,8 @@ describe('every word the widget shows', () => {
       '#gone',
       '#renamed',
       '[data-testid="checkout-cta"]',
+      // The initial of who edited the note, in its round (FRU-475).
+      'R',
     ]);
     const untranslated = snapshots.filter((text) => {
       if (selectors.has(text)) return false;
@@ -775,6 +811,10 @@ describe('the catalogs in the bundle (FRU-38)', () => {
       'reply.sending',
       'reply.sent',
       'reply.failed',
+      'edit.saving',
+      'edit.saved',
+      'edit.failed',
+      'edit.refused',
     ] as const;
 
     for (const catalog of [ENGLISH, FRENCH]) {

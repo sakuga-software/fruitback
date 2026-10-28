@@ -232,6 +232,7 @@ export function postgresNoteIndex(url: string, schema: string): NoteIndex {
   return later(async () => (await import('./notes-index-postgres.ts')).createPostgresNoteIndex(database), {
     record: true,
     refresh: true,
+    reword: true,
     summary: true,
     undelivered: true,
     forget: true,
@@ -281,7 +282,7 @@ export function postgresInstanceAdmin(url: string, schema: string): InstanceAdmi
 export function postgresNoteStore(url: string, schema: string): NoteStore {
   const database = databaseFor(url, schema);
   type Calls = Required<
-    Pick<NoteStore, 'create' | 'createBatch' | 'findForPage' | 'forget' | 'reply' | 'check' | 'setStatus'>
+    Pick<NoteStore, 'create' | 'createBatch' | 'findForPage' | 'forget' | 'reply' | 'check' | 'setStatus' | 'edit'>
   >;
   const store = later<Calls>(
     async () => (await import('./notes-postgres.ts')).createPostgresNoteStore(database) as Calls,
@@ -293,6 +294,7 @@ export function postgresNoteStore(url: string, schema: string): NoteStore {
       reply: true,
       check: true,
       setStatus: true,
+      edit: true,
     },
   );
 
