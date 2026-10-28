@@ -21,6 +21,7 @@ import {
   relayRefusal,
 } from '../src/protocol.ts';
 import { createRelay } from '../src/relay.ts';
+import { createSiteNotesRelay } from '../src/site-notes-relay.ts';
 import { KNOWN_SETTING, SYNC_SETTING, createSiteSync } from '../src/site-sync.ts';
 import { type CaptureArea, bytesOf, captureAnswerOf, createCapture, pixelsOf } from '../src/capture.ts';
 import { pollConnect } from '../src/connect.ts';
@@ -214,6 +215,13 @@ export default defineBackground(() => {
     warn: (reason) => console.warn('[fruitback] the relay answered 401, with no session:', reason),
   });
 
+  /** « All pages » of the widget the extension mounts (FRU-470): see `src/site-notes-relay.ts`. */
+  const siteNotesRelay = createSiteNotesRelay({
+    readSite,
+    ensureAccess: (endpoint) => sessions.ensureAccess(endpoint),
+    renewAccess: (endpoint, refused) => sessions.renewAccess(endpoint, refused),
+  });
+
   /** A capture of the page or of an area (FRU-44, FRU-332): see `src/capture.ts`. It sends nothing. */
   const capture = (area: CaptureArea | undefined, origin: string | undefined, windowId: number) =>
     createCapture({
@@ -324,6 +332,12 @@ export default defineBackground(() => {
         return false;
       }
       void capture(parsed.area, senderOrigin(sender), windowId).then((taken) => sendResponse(captureAnswerOf(taken)));
+
+      return true;
+    }
+    // FRU-470: the notes of every page of the site of the tab, for the origin the browser reports.
+    if (parsed?.kind === 'site-notes-request') {
+      void siteNotesRelay(parsed.query, senderOrigin(sender)).then(sendResponse);
 
       return true;
     }

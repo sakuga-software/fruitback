@@ -733,6 +733,23 @@ did not change: the fields of 760 px and the file input of the browser are as th
   `e2e/extension-dock-position.spec.ts` chooses a corner over a note being written, reloads, and
   goes back to the default.
 
+## « All pages » of the widget it mounts (FRU-470)
+
+### The rules, in short
+
+- **The widget the extension mounts in team mode gets `siteNotes`**: « All pages » of its list reads
+  `GET /session/notes` (FRU-306) through the bridge and the background, as « Whole site » of the side
+  panel does (`src/site-notes.ts`). With no relay (private mode) it gets none: there is no session
+  here, and the list keeps « This page » alone.
+- **The page asks, the background decides** (`src/site-notes-relay.ts`): `site-notes-request` carries
+  an id, the words of a search and a cursor, nothing else. The background reads the origin off the
+  sender, the entry of that origin (on, team mode, mounted), its site id and its endpoint (`https` or
+  loopback), then the session. Anything else answers `unavailable`, and reads nothing.
+- **What goes back to the page is less than the side panel holds**: the link to the tracker and
+  « mine » stay out. The bridge rebuilds the answer field by field (`parsePageSiteRead`) and answers
+  every request, `failed` when the background gave nothing. The page script waits 15 s at most.
+- `SECURITY.md` says what this lets a script of the site read, and on which condition.
+
 ## The rules in the reviewer's other browsers (FRU-72)
 
 ### The rules, in short

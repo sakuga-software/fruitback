@@ -1,5 +1,11 @@
 import { init } from '@fruitback/widget';
-import { CHANNEL, type BridgeMessage, type CaptureResponseMessage, parseBridgeMessage } from '../src/protocol.ts';
+import {
+  CHANNEL,
+  type BridgeMessage,
+  type CaptureResponseMessage,
+  type SiteNotesResponseMessage,
+  parseBridgeMessage,
+} from '../src/protocol.ts';
 import { createRelayTransport, randomId } from '../src/relay-transport.ts';
 import { captureOfAnswer } from '../src/capture-answer.ts';
 import {
@@ -40,6 +46,8 @@ import { version as VERSION } from '../package.json';
  * dropped.
  */
 const CAPTURE_TIMEOUT_MS = 30_000;
+/** As long as a read of the side panel may take, and a little more for the two hops (FRU-470). */
+const SITE_NOTES_TIMEOUT_MS = 15_000;
 
 export default defineContentScript({
   // Registered by `background.ts` for the origins somebody turned on, never declared. See
@@ -122,6 +130,27 @@ export default defineContentScript({
           ...(area === undefined ? {} : { area }),
         });
       });
+    /** The reads of « All pages » asked for and not answered yet, by the id of the request (FRU-470). */
+    const siteReads = new Map<string, (answer: SiteNotesResponseMessage['read']) => void>();
+
+    /**
+     * « All pages » of the list (FRU-470): one page of the notes of the site, read by the background
+     * with the session of the reviewer (`src/site-notes-relay.ts`). Nothing comes back in fifteen
+     * seconds: the list says that the notes could not be read, and offers « Try again ».
+     */
+    const siteNotes = (query: { q?: string; cursor?: string }): Promise<SiteNotesResponseMessage['read']> =>
+      new Promise((resolve) => {
+        const id = randomId(window);
+        const timer = setTimeout(() => {
+          siteReads.delete(id);
+          resolve({ ok: false, reason: 'failed' });
+        }, SITE_NOTES_TIMEOUT_MS);
+        siteReads.set(id, (read) => {
+          clearTimeout(timer);
+          resolve(read);
+        });
+        post({ channel: CHANNEL, kind: 'site-notes-request', id, query });
+      });
     /**
      * The mount that built `widget`, as it was posted (FRU-186).
      *
@@ -201,6 +230,7 @@ export default defineContentScript({
         message.kind === 'ready' ||
         message.kind === 'relay-request' ||
         message.kind === 'capture-request' ||
+        message.kind === 'site-notes-request' ||
         message.kind === 'command-response' ||
         message.kind === 'sign-in' ||
         message.kind === 'notes-changed'
@@ -341,6 +371,13 @@ export default defineContentScript({
         return;
       }
 
+      if (message.kind === 'site-notes-response') {
+        siteReads.get(message.id)?.(message.read);
+        siteReads.delete(message.id);
+
+        return;
+      }
+
       if (message.kind === 'announce') {
         // Team mode mounts nothing: the widget on this page is the site's own.
         widget?.destroy();
@@ -396,6 +433,9 @@ export default defineContentScript({
         // FRU-332: the capture of the page or of an area, for a site of a workspace: the files of a
         // note go through the relay, with the session. The picture of the element of FRU-44 is gone.
         ...(message.relay === true ? { captureVisible } : {}),
+        // FRU-470: « All pages » of the list, read with the session of the reviewer, for a site of a
+        // workspace only. With no relay there is no session here, and the list has « This page » alone.
+        ...(message.relay === true ? { siteNotes } : {}),
         // FRU-302: « Name on my notes », for a reporter who kept none on this site.
         ...(message.name !== undefined ? { reporterName: message.name } : {}),
         // FRU-411: the head of the composer writes the selector only with « Show CSS selectors ».
