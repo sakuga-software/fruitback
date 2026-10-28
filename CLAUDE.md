@@ -54,6 +54,7 @@ pnpm exec vitest run src/cache.test.ts       # one file of the worker, from apps
 | `apps/console`, a screen that has a board in `design/`      | [console.md](docs/decisions/console.md)                   |
 | a status of a pin, its colour, a state read from a tracker  | [statuses.md](docs/decisions/statuses.md)                 |
 | an AI agent, `/mcp`, an agent key                           | [agents.md](docs/decisions/agents.md)                     |
+| the setup, the welcome page, the guide                      | [onboarding.md](docs/decisions/onboarding.md)             |
 | the name of a stage, a `--fruitback-stage-*` token          | [stage-names.md](docs/decisions/stage-names.md)           |
 | the Dockerfile, a workflow, `docker-compose.yml`, the guide | [image.md](docs/decisions/image.md)                       |
 | `apps/playground`, a spec in `e2e/`                         | [dev-loop.md](docs/decisions/dev-loop.md)                 |
