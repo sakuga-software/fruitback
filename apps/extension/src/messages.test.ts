@@ -31,6 +31,8 @@ const PAGES = ['../entrypoints/popup/main.ts', '../entrypoints/options/main.ts']
 /** The modules that draw a screen of the popup: their words go through `t` like a page's (FRU-251). */
 const VIEWS = [
   './popup-view.ts',
+  // FRU-453: the lists of « Notes go to ».
+  './place-choice.ts',
   './kit.ts',
   './site-page.ts',
   './share-rules.ts',

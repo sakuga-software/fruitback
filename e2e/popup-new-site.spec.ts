@@ -87,10 +87,33 @@ async function signedIn(extension: LoadedExtension, page: Page, request: string)
 /** The list of an account, and the add, in the shape of the worker (#310). */
 async function sitesRoute(
   context: BrowserContext,
-  workspaces: { id: string; name: string; role: string; canAddSite: boolean }[],
+  workspaces: { id: string; name: string; role: string; canAddSite: boolean; sources?: unknown[] }[],
 ) {
   const sites: Record<string, unknown>[] = [];
   const posted: { body: unknown; authorization: string | null }[] = [];
+  // FRU-453: the settings chosen on the screen, written after the add.
+  const settings: unknown[] = [];
+  // FRU-453: the teams of the Linear of a workspace, as the worker reads them from Linear.
+  await context.route(`${CLOUD}/session/sites/places?*`, (route) =>
+    route.fulfill({
+      json: {
+        kind: 'linear',
+        teams: [
+          { id: 'team_1', name: 'Northwind', key: 'NOR', projects: [{ id: 'proj_1', name: 'Website' }] },
+          { id: 'team_2', name: 'Support', key: 'SUP', projects: [] },
+        ],
+      },
+    }),
+  );
+  await context.route(`${CLOUD}/session/sites/settings`, async (route) => {
+    const body = route.request().postDataJSON() as { workspace: string; site: string; visibility?: string };
+    settings.push(body);
+    const site = sites.find((each) => each.id === body.site);
+
+    return route.fulfill({
+      json: { site: { ...site, visibility: body.visibility ?? 'members', workspace: body.workspace } },
+    });
+  });
   await context.route(`${CLOUD}/session/sites`, async (route) => {
     const request = route.request();
     if (request.method() === 'POST') {
@@ -116,7 +139,7 @@ async function sitesRoute(
     return route.fulfill({ json: { account: true, workspaces, sites } });
   });
 
-  return { sites, posted };
+  return { sites, posted, settings };
 }
 
 /**
@@ -147,9 +170,10 @@ test('a site of no workspace: added to one and turned on, in one click, then scr
 }) => {
   const page = await extension.context.newPage();
   await openBareSite(page, 'popup-new-site');
-  const { posted } = await sitesRoute(extension.context, [
-    { id: 'ws_1', name: 'Sakuga', role: 'owner', canAddSite: true },
-    { id: 'ws_2', name: 'Northwind', role: 'admin', canAddSite: true },
+  const LINEAR = { id: 'conn_1', kind: 'linear', label: 'Linear · Acme' };
+  const { posted, settings } = await sitesRoute(extension.context, [
+    { id: 'ws_1', name: 'Sakuga', role: 'owner', canAddSite: true, sources: [] },
+    { id: 'ws_2', name: 'Northwind', role: 'admin', canAddSite: true, sources: [LINEAR] },
     { id: 'ws_3', name: 'Lumen', role: 'guest', canAddSite: false },
   ]);
   await signedIn(extension, page, 'req_add_1');
@@ -162,9 +186,12 @@ test('a site of no workspace: added to one and turned on, in one click, then scr
   // Only where the account may add a site: not Lumen, where it is a guest.
   const list = popup.getByRole('combobox', { name: 'Workspace' });
   await expect(list.locator('option')).toHaveText(['Sakuga', 'Northwind']);
-  await expect(
-    popup.locator('.kit-dl-entry').filter({ hasText: 'Who sees the notes' }).locator('dd:not(.kit-dl-action)'),
-  ).toHaveText('Your team and invited guests');
+  // FRU-453: who sees the notes and where they go are lists, for a role that manages the sites.
+  const who = popup.getByRole('combobox', { name: 'Who sees the notes' });
+  await expect(who).toHaveValue('members');
+  await expect(who.locator('option:checked')).toHaveText('Your team and invited guests');
+  const where = popup.getByRole('combobox', { name: 'Notes go to' });
+  await expect(where.locator('option')).toHaveText(['Fruitback (no tracker)']);
   await expect(popup.getByText(/preview build/i)).toHaveCount(0);
   expectNear(await boxOf(popup.getByRole('heading', { level: 1 })), { x: 24, width: 332 }, 'title');
   expectNear(await boxOf(popup.getByRole('button', { name: 'Turn on' })), { x: 24, width: 332, height: 46 }, 'turn on');
@@ -172,6 +199,14 @@ test('a site of no workspace: added to one and turned on, in one click, then scr
   await clean(popup, 'the popup on a site of no workspace');
 
   await list.selectOption('ws_2');
+  // The providers follow the workspace chosen; then a team, then a project of it.
+  await expect(where.locator('option')).toHaveText(['Fruitback (no tracker)', 'Linear · Acme']);
+  await where.selectOption('conn_1');
+  const team = popup.getByRole('combobox', { name: 'Team' });
+  await expect(team.locator('option')).toHaveText(['Choose a team…', 'Northwind (NOR)', 'Support (SUP)']);
+  await team.selectOption('team_1');
+  await popup.getByRole('combobox', { name: 'Project' }).selectOption('proj_1');
+  await who.selectOption('everyone');
   await popup.getByRole('button', { name: 'Turn on' }).click();
 
   // 3: on, in Northwind. The site was asked for with the token, as one of the workspace chosen.
@@ -203,6 +238,14 @@ test('a site of no workspace: added to one and turned on, in one click, then scr
   await clean(popup, 'the popup on a site that is on, for an account');
   expect(posted).toEqual([
     { body: { workspace: 'ws_2', origin: PLAYGROUND_ORIGIN }, authorization: 'Bearer add-access' },
+  ]);
+  expect(settings).toEqual([
+    {
+      workspace: 'ws_2',
+      site: 'site_1',
+      visibility: 'everyone',
+      place: { connector: 'conn_1', teamId: 'team_1', projectId: 'proj_1' },
+    },
   ]);
   const rules = await extension.worker.evaluate(async () => (await chrome.storage.local.get('sites')).sites);
   expect(rules).toEqual({
@@ -328,7 +371,8 @@ test('a site of no workspace speaks French, with one workspace and no list', asy
   await popup.setViewportSize({ width: 380, height: 580 });
   await expect(popup.getByText('Pas encore dans vos sites')).toBeVisible();
   await expect(popup.getByRole('heading', { level: 1, name: 'Activer Fruitback sur ce site ?' })).toBeVisible();
-  await expect(popup.getByRole('combobox')).toHaveCount(0);
+  // One workspace: no list of workspaces (the lists of FRU-453 are about the site).
+  await expect(popup.getByRole('combobox', { name: 'Workspace' })).toHaveCount(0);
   await expect(popup.getByRole('button', { name: 'Activer', exact: true })).toBeVisible();
   expect(await popup.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(380);
   await clean(popup, 'the popup on a site of no workspace, in French');

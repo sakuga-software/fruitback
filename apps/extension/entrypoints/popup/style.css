@@ -564,6 +564,162 @@ body.popup-page {
 }
 
 /*
+  The lists of screen 2 (FRU-453): Chromium's customizable select, so a provider shows its mark in the
+  list and in the field, every list has the same arrow, and the menu and the lines that appear move a
+  little. Each stays a native `select`, for the keyboard and a screen reader. A browser without it
+  (Firefox) shows its own lists, the names alone.
+*/
+@supports (appearance: base-select) {
+  .popup-screen-2 .kit-dl select,
+  .popup-screen-2 .kit-dl select::picker(select) {
+    appearance: base-select;
+  }
+
+  .popup-screen-2 .kit-dl select {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 12px 0 10px;
+    transition:
+      border-color 0.15s,
+      box-shadow 0.15s;
+  }
+
+  .popup-screen-2 .kit-dl select:hover:not(:disabled) {
+    border-color: var(--ink);
+  }
+
+  /* The arrow: a chevron drawn by two borders, at the right edge, never over the words. */
+  .popup-screen-2 .kit-dl select::picker-icon {
+    content: '';
+    flex: none;
+    box-sizing: border-box;
+    width: 7px;
+    height: 7px;
+    margin: -3px 2px 0 auto;
+    border: solid currentColor;
+    border-width: 0 1.5px 1.5px 0;
+    rotate: 45deg;
+    transition:
+      rotate 0.18s ease,
+      margin 0.18s ease;
+  }
+
+  .popup-screen-2 .kit-dl select:open::picker-icon {
+    margin-top: 3px;
+    rotate: 225deg;
+  }
+
+  /* The field shows the option chosen: its mark and its words, cut with « … » when they are long. */
+  .popup-screen-2 .kit-dl select > button {
+    all: unset;
+    display: flex;
+    flex: 1;
+    align-items: center;
+    min-width: 0;
+  }
+
+  .popup-screen-2 .kit-dl selectedcontent,
+  .popup-screen-2 .kit-dl select option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .popup-screen-2 .kit-dl .choice-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* The menu opens under the field, fading and sliding 4 px. */
+  /* As wide as its field, under it: a long name is cut, never out of the popup. */
+  .popup-screen-2 .kit-dl select::picker(select) {
+    box-sizing: border-box;
+    width: anchor-size(width);
+    max-height: 260px;
+    margin-top: 4px;
+    padding: 4px;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-field);
+    background: var(--surface);
+    box-shadow: var(--shadow-popup);
+    opacity: 0;
+    translate: 0 -4px;
+    transition:
+      opacity 0.15s ease,
+      translate 0.15s ease,
+      display 0.15s allow-discrete,
+      overlay 0.15s allow-discrete;
+  }
+
+  .popup-screen-2 .kit-dl select:open::picker(select) {
+    opacity: 1;
+    translate: 0 0;
+  }
+
+  @starting-style {
+    .popup-screen-2 .kit-dl select:open::picker(select) {
+      opacity: 0;
+      translate: 0 -4px;
+    }
+  }
+
+  .popup-screen-2 .kit-dl select option {
+    padding: 8px 10px;
+    border-radius: calc(var(--radius-field) - 2px);
+  }
+
+  .popup-screen-2 .kit-dl select option:hover,
+  .popup-screen-2 .kit-dl select option:focus-visible {
+    background: var(--line-row);
+  }
+
+  .popup-screen-2 .kit-dl select option::checkmark {
+    order: 1;
+    margin-left: auto;
+  }
+}
+
+/* A line of the lists that has nothing to choose yet, or any more. */
+.popup-screen-2 .kit-dl-entry[hidden] {
+  display: none;
+}
+
+/* A line that appears, the team after the provider, the project after the team: it fades in. */
+.popup-screen-2 .kit-dl-entry {
+  transition:
+    opacity 0.18s ease,
+    translate 0.18s ease;
+
+  @starting-style {
+    opacity: 0;
+    translate: 0 -4px;
+  }
+}
+
+.source-mark {
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+
+/* The drop of « Fruitback (no tracker) » in the red of the mark. */
+.source-mark[data-kind='fruitback'] {
+  color: var(--accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .popup-screen-2 .kit-dl-entry,
+  .popup-screen-2 .kit-dl select,
+  .popup-screen-2 .kit-dl select::picker-icon,
+  .popup-screen-2 .kit-dl select::picker(select) {
+    transition: none;
+  }
+}
+
+/*
   3 · Site on (FRU-298): 20 px above, 24 around, 20 between the blocks. The site and its switch,
   « Leave feedback » and its keys, the lines of what waits, and the side panel at the foot.
 */

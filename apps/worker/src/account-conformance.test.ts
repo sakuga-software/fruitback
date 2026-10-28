@@ -251,6 +251,27 @@ const VIOLATIONS: Violation<AccountStore>[] = [
     },
   },
   {
+    breaks: 'changes who reads a site that exists, and makes no site that is gone or of another workspace (FRU-453)',
+    by: 'changes the visibility of a site of another workspace',
+    replace: {
+      after: 'async setSiteVisibility(',
+      from: '.where(and(eq(sites.workspace_id, workspace), eq(sites.id, site)))',
+      to: '.where(eq(sites.id, site))',
+    },
+  },
+  {
+    breaks: 'changes who reads a site that exists, and makes no site that is gone or of another workspace (FRU-453)',
+    by: 'makes the site again, as an add of its address would',
+    wrap: (real) => ({
+      ...real,
+      async setSiteVisibility() {
+        await real.addSite('gone', { origin: 'https://acme.dev', visibility: 'members' }).catch(() => undefined);
+
+        return true;
+      },
+    }),
+  },
+  {
     breaks: 'lists the sites and the connectors of a workspace oldest first',
     by: 'lists the sites newest first',
     replace: {

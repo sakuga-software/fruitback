@@ -12,6 +12,8 @@ import {
   textButton,
   toggle,
 } from './kit.ts';
+import type { PlaceIds, Source, SourceOffer } from './cloud.ts';
+import { option, placeChoice, shownChoice } from './place-choice.ts';
 
 /**
  * The screens of the popup. The shell and the screens 1 and 4 are those of the mock-up of 2026-10-20
@@ -318,10 +320,64 @@ export type TurnOnOptions = {
   account?: Account;
   /** « Change »: the site in the console. None: no « Change ». */
   onChange?: () => void;
+  /**
+   * FRU-453: the lines are choices, for a role that changes them. `sources` are the sources of each
+   * workspace, by id (for a site of no workspace, the lists follow the workspace chosen). `place` is
+   * where the notes go now: `null` for « Fruitback », absent when not known.
+   */
+  choices?: {
+    sources: Record<string, Source[]>;
+    workspace?: string;
+    place?: PlaceIds | null;
+    loadOffer: (workspace: string, connector: string) => Promise<SourceOffer | undefined>;
+    /** Answers whether the change holds: `false` puts the list back as it was. */
+    onVisibility: (visibility: 'members' | 'everyone') => Promise<boolean>;
+    onPlace: (place: PlaceIds | null) => Promise<boolean>;
+  };
   /** « Turn on », with the workspace chosen for a site of no workspace. */
   onTurnOn: (workspace?: string) => void;
   onSettings: () => void;
 };
+
+/**
+ * « Who sees the notes » as a list of two (FRU-453). Each change goes to `onVisibility`; the
+ * entrypoint says when the worker refused it.
+ */
+function visibilityChoice(
+  document: Document,
+  visibility: 'members' | 'everyone',
+  onVisibility: (visibility: 'members' | 'everyone') => Promise<boolean>,
+): HTMLSelectElement {
+  const select = element(document, 'select', '');
+  select.name = 'visibility';
+  select.setAttribute('aria-label', t('Who sees the notes'));
+  select.append(
+    shownChoice(document),
+    ...(['members', 'everyone'] as const).map((value) => option(document, value, visibilityWords(value))),
+  );
+  select.value = visibility;
+  answered(select, () => onVisibility(select.value === 'everyone' ? 'everyone' : 'members'));
+
+  return select;
+}
+
+/**
+ * A list whose change the worker may refuse: it is off while the change is asked, and goes back to
+ * what it was when the answer is `false`.
+ */
+function answered(select: HTMLSelectElement, change: () => Promise<boolean>): void {
+  let held = select.value;
+  select.addEventListener('change', () => {
+    select.disabled = true;
+    void change()
+      .catch(() => false)
+      .then((holds) => {
+        if (holds) held = select.value;
+        else select.value = held;
+        select.disabled = false;
+      });
+  });
+}
 
 /**
  * 2 · Signed in, site not added (FRU-298): « Turn Fruitback on for this site? ». A site of a
@@ -364,8 +420,10 @@ export function turnOnScreen(document: Document, options: TurnOnOptions): HTMLEl
 
   const change = (): HTMLButtonElement | undefined =>
     options.onChange === undefined ? undefined : textButton(document, t('Change'), options.onChange);
+  const choices = options.choices;
+  let chosen = first?.id;
   const entries: Definition[] = [];
-  if (options.destination !== undefined) {
+  if (choices === undefined && options.destination !== undefined) {
     const where = change();
     entries.push({
       term: t('Notes go to'),
@@ -373,32 +431,53 @@ export function turnOnScreen(document: Document, options: TurnOnOptions): HTMLEl
       ...(where === undefined ? {} : { action: where }),
     });
   }
-  const who = change();
-  entries.push({
-    term: t('Who sees the notes'),
-    value: visibilityWords(options.visibility),
-    ...(who === undefined ? {} : { action: who }),
-  });
+  if (choices === undefined) {
+    const who = change();
+    entries.push({
+      term: t('Who sees the notes'),
+      value: visibilityWords(options.visibility),
+      ...(who === undefined ? {} : { action: who }),
+    });
+  }
   const facts = definitions(document, entries);
+  /** A line of the list whose value is a field: a `select` in its `dd`. */
+  const field = (term: string, input: HTMLElement): HTMLElement => {
+    const entry = element(document, 'div', '', 'kit-dl-entry');
+    const value = element(document, 'dd', '');
+    value.append(input);
+    entry.append(element(document, 'dt', term), value);
 
-  let chosen = first?.id;
+    return entry;
+  };
+
+  // FRU-453: the place, then who sees the notes, each a list. The places follow the workspace chosen.
+  let refill: (() => void) | undefined;
+  if (choices !== undefined) {
+    const workspaceNow = (): string => chosen ?? choices.workspace ?? '';
+    const place = placeChoice(document, {
+      sources: () => choices.sources[workspaceNow()] ?? [],
+      ...(choices.place === undefined ? {} : { place: choices.place }),
+      loadOffer: (connector) => choices.loadOffer(workspaceNow(), connector),
+      onPlace: choices.onPlace,
+    });
+    facts.append(
+      ...place.entries,
+      field(t('Who sees the notes'), visibilityChoice(document, options.visibility, choices.onVisibility)),
+    );
+    // Another workspace offers other sources: the lists are drawn again, with « Fruitback » chosen.
+    refill = place.reset;
+  }
+
   if (addable.length > 1) {
     const select = element(document, 'select', '');
     select.name = 'workspace';
     select.setAttribute('aria-label', t('Workspace'));
-    for (const workspace of addable) {
-      const option = element(document, 'option', workspace.name);
-      option.value = workspace.id;
-      select.append(option);
-    }
+    select.append(shownChoice(document), ...addable.map((workspace) => option(document, workspace.id, workspace.name)));
     select.addEventListener('change', () => {
       chosen = select.value;
+      refill?.();
     });
-    const entry = element(document, 'div', '', 'kit-dl-entry');
-    const value = element(document, 'dd', '');
-    value.append(select);
-    entry.append(element(document, 'dt', t('Workspace')), value);
-    facts.prepend(entry);
+    facts.prepend(field(t('Workspace'), select));
   }
 
   const act = element(document, 'div', '', 'action-block');

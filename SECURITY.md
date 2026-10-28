@@ -680,7 +680,8 @@ cases run on PostgreSQL 17, and a store that reads apart from the statement that
 10 minutes, and nothing reaches a token already minted. So a route that **writes** for an extension
 asks the store, at each call, whether the session of the token is still live, still the same person,
 still a member of its workspace or still an account (`sessionStillValid` of `session-check.ts`). The
-routes that write are a file of a note (FRU-331), the creation of a site of FRU-255, and the note itself,
+routes that write are a file of a note (FRU-331), the creation of a site of FRU-255, the settings of a
+site of FRU-453, and the note itself,
 alone or in a batch, when a session of an account signs it: once per request. A session ended a
 second ago writes nothing (test:`writes nothing for a session that ended, a note or a picture, with
 the access token it still holds, and reads in its window`). That closes the case of a stolen refresh
@@ -1147,6 +1148,24 @@ with the access token it still holds, and a token that names no session (no `sid
 test:`adds no site after a log out: the write reads the session again`,
 test:`adds no site once the browser is disconnected in the console`. The role is read at each call
 too: test:`reads the role at each call: a person removed between two calls adds nothing more`.
+
+**`POST /session/sites/settings` changes who sees the notes of a site and where they go, from the
+extension; `GET /session/sites/places` reads what a source offers for it** (FRU-453): the popup
+offers both on the screen that turns a site on, a provider, then a team (a repository for GitHub),
+then a project. They ask what the add asks: a session of an **account**, read again in the store
+(test:`changes nothing after a log out: the write reads the session again`); an `Origin` of an
+extension, or none; `manage-sites` in the workspace named, read at this call (a member and a guest get
+`403`, an account outside the workspace `404`, a site of another workspace `404`). **It can make the
+notes of a site readable by everyone who visits it**, as « Anyone on the page » does in the console,
+for the same roles: an owner or an admin of the workspace. **A place is checked as the console checks
+it**: a connector of the workspace (one of another workspace is `400`, and `404` for the read), a team
+or a repository its key reaches, the label the tracker answers and never the words of the body. **The
+keys of the connectors are opened in the worker and never leave it**: the popup gets ids and names. A
+tracker that does not answer is `502`, and nothing is written. A site with two places or more is not
+emptied from here (`409`). Each of these guards, taken out, fails a test of
+`session-site-settings.test.ts`. `GET /session/sites` lists the sources of a workspace (`sources`: an
+id, a kind, a name) and where each site sends (`place`: ids) to a role of `manage-sites` only, which
+already reads them in the console.
 
 ### Signing in to the console (FRU-98)
 

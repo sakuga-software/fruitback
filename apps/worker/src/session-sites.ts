@@ -141,13 +141,26 @@ async function sitesOfAccount(accounts: AccountStore, account: string, now: numb
   const memberships = (await accounts.memberships(account)).filter((each) => each.suspension === undefined);
   const locale = (await accounts.account(account))?.locale;
   const sites = [];
-  for (const { workspace } of memberships) {
+  // FRU-453: the sources the popup offers, for a role that changes the place of a site, by workspace.
+  const sourcesIn = new Map<string, { id: string; kind: string; label: string }[]>();
+  for (const { workspace, role } of memberships) {
     // Read again, with the sites of a guest (FRU-250). A membership that ended since reads none.
     const reach = await accounts.reach(workspace.id, account);
     if (reach === undefined) continue;
     const previewsOf = await previewsIn(accounts, workspace.id, now);
     const notes = await notesIn(noteIndex, workspace.id);
     const toCheck = await toCheckIn(noteIndex, workspace.id, account);
+    const manages = can(role, 'manage-sites');
+    if (manages) {
+      sourcesIn.set(
+        workspace.id,
+        (await accounts.connectors(workspace.id)).map((each) => ({
+          id: each.id,
+          kind: each.kind,
+          label: each.name ?? each.label,
+        })),
+      );
+    }
     for (const site of readableSites(await accounts.sites(workspace.id), reach)) {
       const previews = previewsOf(site.id);
       sites.push({
@@ -157,6 +170,8 @@ async function sitesOfAccount(accounts: AccountStore, account: string, now: numb
         workspace: workspace.id,
         ...(previews.length === 0 ? {} : { previews }),
         ...destinationFor(site, reach.role),
+        // FRU-453: the ids of where its notes go now, so the lists of the popup start there.
+        ...(manages ? placeIdsOf(site) : {}),
         ...(notes === undefined ? {} : (notes.get(site.id) ?? noNotes())),
         // FRU-295: the notes of this person that the team marked done and that they did not confirm.
         ...(toCheck === undefined ? {} : { toCheck: toCheck.get(site.id) ?? 0 }),
@@ -173,8 +188,23 @@ async function sitesOfAccount(accounts: AccountStore, account: string, now: numb
       name: workspace.name,
       role,
       canAddSite: can(role, 'manage-sites'),
+      ...(sourcesIn.has(workspace.id) ? { sources: sourcesIn.get(workspace.id) } : {}),
     })),
     sites,
+  };
+}
+
+/** The ids of the first place of a site (FRU-453), or `null` for « Fruitback ». */
+function placeIdsOf(site: Site): { place: { connector: string; teamId?: string; projectId?: string } | null } {
+  const [first] = site.destinations;
+  if (first === undefined) return { place: null };
+
+  return {
+    place: {
+      connector: first.connector,
+      ...(first.teamId === undefined ? {} : { teamId: first.teamId }),
+      ...(first.projectId === undefined ? {} : { projectId: first.projectId }),
+    },
   };
 }
 

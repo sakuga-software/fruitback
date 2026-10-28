@@ -1,7 +1,16 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { createApply } from './bridge.ts';
-import { accountLanguage, addSite, addableWorkspaces, cloudEntry, offerFor, parseWorkspaceSites } from './cloud.ts';
+import {
+  accountLanguage,
+  addSite,
+  addableWorkspaces,
+  cloudEntry,
+  offerFor,
+  parseWorkspaceSites,
+  setSiteSettings,
+  sourceOffer,
+} from './cloud.ts';
 import { type LanguageArea, storedLanguage } from './language.ts';
 import { rememberLanguage } from './language-sync.ts';
 import { CHANNEL, type BridgeMessage, parseBridgeMessage } from './protocol.ts';
@@ -527,5 +536,164 @@ describe('adding the site of the tab to a workspace (FRU-255)', () => {
         reason: 'unavailable',
       },
     );
+  });
+});
+
+describe('who sees the notes and where they go, from the popup (FRU-453)', () => {
+  const PLACE = { connector: 'conn_1', teamId: 'team_1' };
+  const SAKUGA = { id: 'ws_1', name: 'Sakuga', role: 'owner', canAddSite: true };
+  const seamsWith = (fetcher: typeof fetch) => ({ ensureAccess: async () => GRANTED, fetcher });
+
+  it('reads the sources of a workspace and where a site sends, and drops what is malformed', () => {
+    const listed = parseWorkspaceSites({
+      account: true,
+      workspaces: [
+        {
+          id: 'ws_1',
+          name: 'Sakuga',
+          canAddSite: true,
+          sources: [
+            { id: 'conn_1', kind: 'linear', label: 'Linear · Acme' },
+            { id: 'conn_2', kind: 'jira', label: 'Jira' },
+            { id: 'conn_3', kind: 'rest' },
+            { id: 'conn_4', kind: 'github', label: 'GitHub · acme' },
+          ],
+        },
+        { id: 'ws_2', name: 'Northwind' },
+      ],
+      sites: [
+        { id: 's1', origin: 'https://a.fr', visibility: 'members', workspace: 'ws_1', place: PLACE },
+        { id: 's2', origin: 'https://b.fr', visibility: 'members', workspace: 'ws_1', place: null },
+        { id: 's3', origin: 'https://c.fr', visibility: 'members', workspace: 'ws_1', place: { teamId: 'x' } },
+      ],
+    });
+    assert.deepEqual(listed?.workspaces, [
+      {
+        id: 'ws_1',
+        name: 'Sakuga',
+        canAddSite: true,
+        sources: [
+          { id: 'conn_1', kind: 'linear', label: 'Linear · Acme' },
+          { id: 'conn_4', kind: 'github', label: 'GitHub · acme' },
+        ],
+      },
+      { id: 'ws_2', name: 'Northwind' },
+    ]);
+    assert.deepEqual(
+      listed?.sites.map((site) => site.place),
+      [PLACE, null, undefined],
+    );
+  });
+
+  it('posts the site, the visibility and the ids of the place, and gives the site back', async () => {
+    const sent: { url: string; init?: RequestInit }[] = [];
+    const fetcher = (async (url: string, init?: RequestInit) => {
+      sent.push({ url, ...(init === undefined ? {} : { init }) });
+
+      return new Response(
+        JSON.stringify({
+          site: {
+            id: 'site_9',
+            origin: 'https://preview.client.fr',
+            visibility: 'everyone',
+            workspace: 'ws_1',
+            destination: { label: 'Linear · Northwind' },
+          },
+        }),
+        { status: 200 },
+      );
+    }) as typeof fetch;
+
+    const set = await setSiteSettings(
+      'https://api.fruitback.test',
+      SAKUGA,
+      'site_9',
+      { visibility: 'everyone', place: { ...PLACE, projectId: 'proj_1' } },
+      seamsWith(fetcher),
+    );
+
+    assert.equal(set.ok, true);
+    assert.equal(sent[0]?.url, 'https://api.fruitback.test/session/sites/settings');
+    assert.equal(sent[0]?.init?.method, 'POST');
+    assert.equal(new Headers(sent[0]?.init?.headers).get('Authorization'), 'Bearer tok');
+    assert.deepEqual(JSON.parse(String(sent[0]?.init?.body)), {
+      workspace: 'ws_1',
+      site: 'site_9',
+      visibility: 'everyone',
+      place: { connector: 'conn_1', teamId: 'team_1', projectId: 'proj_1' },
+    });
+
+    await setSiteSettings('https://api.fruitback.test', SAKUGA, 'site_9', { place: null }, seamsWith(fetcher));
+    assert.deepEqual(JSON.parse(String(sent[1]?.init?.body)), { workspace: 'ws_1', site: 'site_9', place: null });
+  });
+
+  it('says why it changed nothing, and believes no answer about another site', async () => {
+    for (const [status, body, reason] of [
+      [403, { error: 'forbidden', role: 'member' }, 'forbidden'],
+      [404, { error: 'not-found' }, 'forbidden'],
+      [409, { error: 'site-has-destinations' }, 'several-places'],
+      [400, { error: 'invalid-place' }, 'unknown-place'],
+      [401, { error: 'identity-required' }, 'signed-out'],
+      [502, {}, 'unavailable'],
+      [200, { site: { id: 'other', origin: 'https://x.fr', visibility: 'members', workspace: 'ws_1' } }, 'unavailable'],
+    ] as const) {
+      const fetcher = (async () => new Response(JSON.stringify(body), { status })) as unknown as typeof fetch;
+      assert.deepEqual(
+        await setSiteSettings(
+          'https://api.fruitback.test',
+          SAKUGA,
+          'site_9',
+          { visibility: 'members' },
+          seamsWith(fetcher),
+        ),
+        { ok: false, reason },
+        `${status} ${JSON.stringify(body)}`,
+      );
+    }
+  });
+
+  it('asks what a source offers with the token, and reads teams, repositories and an address', async () => {
+    const asked: string[] = [];
+    const answer = (body: unknown, status = 200) =>
+      (async (url: string) => {
+        asked.push(url);
+
+        return new Response(JSON.stringify(body), { status });
+      }) as unknown as typeof fetch;
+
+    assert.deepEqual(
+      await sourceOffer(
+        'https://api.fruitback.test',
+        'ws_1',
+        'conn_1',
+        seamsWith(
+          answer({
+            kind: 'linear',
+            teams: [
+              { id: 't1', name: 'Design', key: 'DES', projects: [{ id: 'p1', name: 'Site' }, { id: 7 }] },
+              { name: 'no id' },
+            ],
+          }),
+        ),
+      ),
+      { kind: 'linear', teams: [{ id: 't1', name: 'Design', key: 'DES', projects: [{ id: 'p1', name: 'Site' }] }] },
+    );
+    assert.equal(asked[0], 'https://api.fruitback.test/session/sites/places?workspace=ws_1&connector=conn_1');
+    assert.deepEqual(
+      await sourceOffer(
+        'https://api.fruitback.test',
+        'ws_1',
+        'c',
+        seamsWith(answer({ kind: 'github', repositories: [{ fullName: 'acme/web', private: true }, {}] })),
+      ),
+      { kind: 'github', repositories: [{ fullName: 'acme/web' }] },
+    );
+    assert.deepEqual(
+      await sourceOffer('https://api.fruitback.test', 'ws_1', 'c', seamsWith(answer({ kind: 'rest' }))),
+      { kind: 'rest' },
+    );
+    for (const failed of [answer({}, 502), answer({ kind: 'jira' })]) {
+      assert.equal(await sourceOffer('https://api.fruitback.test', 'ws_1', 'c', seamsWith(failed)), undefined);
+    }
   });
 });

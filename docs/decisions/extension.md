@@ -1047,10 +1047,44 @@ which replaced the fields of before for a person signed in on a site of no rule.
   site the worker answers must be the origin of the tab, in the workspace chosen, or nothing is stored.
 - A refused add says why: the role does not allow it, too many sites in the hour, Fruitback did not
   answer; a session that ended draws the screen of a sign-in that ended.
-- **This screen has no fields.** A site of no workspace that one browser alone should cover (a private
+- **This screen has no fields to type in.** A site of no workspace that one browser alone should cover (a private
   site, a worker of its own) is set in the settings, one click away, as the person with no account
-  reaches it. It is drawn only signed in to the build's Fruitback, so a build without one never asks
+  reaches it. Its lists of « Notes go to » and « Who sees the notes » are FRU-453's. It is drawn only signed in to the build's Fruitback, so a build without one never asks
   for the workspaces.
+
+## Who sees the notes and where they go, chosen at the turn on (FRU-453)
+
+### The rules, in short
+
+- **Screen 2 shows lists in place of « Change »**, for a role that manages the sites of the
+  workspace (owner, admin: the worker lists `sources` for it in `GET /session/sites`, and the `place`
+  of each site by ids). Another role keeps the lines and their « Change », which opens the console.
+- **« Notes go to » is three lists, as Mathieu asked in the review of #636**: the provider (« Fruitback
+  (no tracker) », then each source of the workspace with its mark beside its name), then the team of a
+  Linear or the repository of a GitHub, then a project of the team, which may be none. Each list is
+  read again when the one before changes (`place-choice.ts`); the teams are read from the tracker by
+  the worker (`GET /session/sites/places`), as the console reads them (FRU-458).
+- **Every list of screen 2 is Chromium's customizable select** (`appearance: base-select`, second
+  review of Mathieu): the marks are in the options and in the field, the arrow is one chevron at the
+  right edge that turns when the menu opens, and words too long for the field or the menu end with
+  « … ». The menu is as wide as its field. It stays a native `select`, for the keyboard and a screen
+  reader. A browser without it (Firefox today) shows its own lists, the names alone. The marks are the
+  console's (`connector-marks.tsx`); « Fruitback » is the red drop of the mark.
+- **What moves is short, and nothing moves under `prefers-reduced-motion`**: the menu fades in and
+  slides 4 px (0.15 s), the arrow turns (0.18 s), a line that appears in the cascade fades in
+  (0.18 s, `@starting-style`).
+- **A place is written once it is whole**: « Fruitback » and an address at once, a Linear or a GitHub
+  once its team or repository is chosen, a project when it is chosen. It **replaces the default place**
+  of the site; the other places stay after it, so flipping the lists does not pile places up. The
+  worker checks it against the tracker and writes the label the tracker answers.
+- **A site of a workspace: each choice is written at once** (`POST /session/sites/settings`), before
+  « Turn on » and not by it: the prompt of the browser can close the popup, and a choice that waited
+  for the click would be lost with it. A refusal says why and draws the lists again at the place of
+  before.
+- **A site of no workspace: the choices are written once the site is added**, before its rule. The
+  sources follow the workspace chosen, and go back to « Fruitback » when it changes. A refusal stops
+  before the rule: the site is in the workspace as members only, and « Turn on » again adds nothing
+  more (the add answers the site that exists).
 
 ## A session that ended, met by the relay (FRU-238)
 

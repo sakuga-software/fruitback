@@ -22,7 +22,25 @@ export const STAGES = ['new', 'todo', 'progress', 'done', 'closed'] as const;
  * A workspace of the session, and the role the person holds there (an account's session only).
  * `canAddSite`: the role may add a site there from the popup (FRU-255), as the worker read it now.
  */
-export type Workspace = { id: string; name: string; role?: string; canAddSite?: boolean };
+export type Workspace = { id: string; name: string; role?: string; canAddSite?: boolean; sources?: Source[] };
+
+/**
+ * A source of a workspace (FRU-453): a Linear, a GitHub, an address. Listed for a role that changes
+ * where the notes of a site go, so the popup offers a provider, then a team, then a project.
+ */
+export type Source = { id: string; kind: 'linear' | 'github' | 'rest'; label: string };
+
+/** Where the notes of a site go, by ids: a connector, its team (a repository for GitHub), its project. */
+export type PlaceIds = { connector: string; teamId?: string; projectId?: string };
+
+/** What a source offers to choose (FRU-453), as the worker reads it from the tracker. */
+export type SourceOffer =
+  | { kind: 'linear'; teams: { id: string; name: string; key: string; projects: { id: string; name: string }[] }[] }
+  | { kind: 'github'; repositories: { fullName: string }[] }
+  | { kind: 'rest' };
+
+/** How many sources, teams, projects or repositories the popup reads: a list is bounded by a screen. */
+const MAX_LISTED = 500;
 
 /**
  * `previews`: the wildcards the workspace proved for this site (FRU-103), as the worker lists them now.
@@ -45,6 +63,8 @@ export type WorkspaceSite = {
    * the session of an account. Absent: not known, never zero.
    */
   toCheck?: number;
+  /** Where its notes go now, by ids (FRU-453), for a role that changes it: `null` is « Fruitback ». */
+  place?: PlaceIds | null;
 };
 /**
  * What `GET /session/sites` lists, in either of its two shapes: a pairing's session names one
@@ -114,6 +134,7 @@ export function parseWorkspaceSites(body: unknown): WorkspaceSites | undefined {
       const notes = countsOf(entry.notes);
       const destination = destinationOf(entry.destination);
       const toCheck = countOf(entry.toCheck);
+      const place = entry.place === null ? null : placeIdsOf(entry.place);
 
       return [
         {
@@ -125,6 +146,7 @@ export function parseWorkspaceSites(body: unknown): WorkspaceSites | undefined {
           ...(notes === undefined ? {} : { notes }),
           ...(destination === undefined ? {} : { destination }),
           ...(toCheck === undefined ? {} : { toCheck }),
+          ...(place === undefined ? {} : { place }),
         },
       ];
     }),
@@ -148,15 +170,87 @@ function countOf(value: unknown): number | undefined {
 
 function workspaceOf(value: unknown): Workspace | undefined {
   if (typeof value !== 'object' || value === null) return undefined;
-  const { id, name, role, canAddSite } = value as Record<string, unknown>;
+  const { id, name, role, canAddSite, sources } = value as Record<string, unknown>;
   if (typeof id !== 'string' || id === '') return undefined;
+  const listed = Array.isArray(sources) ? sources.slice(0, MAX_LISTED).flatMap((each) => sourceOf(each) ?? []) : [];
 
   return {
     id,
     name: typeof name === 'string' ? name : '',
     ...(typeof role === 'string' && role !== '' ? { role } : {}),
     ...(canAddSite === true ? { canAddSite: true } : {}),
+    ...(Array.isArray(sources) ? { sources: listed } : {}),
   };
+}
+
+/** A short id or name the worker gave, or nothing. */
+const short = (field: unknown): field is string => typeof field === 'string' && field !== '' && field.length <= 200;
+
+function sourceOf(value: unknown): Source | undefined {
+  if (typeof value !== 'object' || value === null) return undefined;
+  const { id, kind, label } = value as Record<string, unknown>;
+  if (!short(id) || !short(label)) return undefined;
+  if (kind !== 'linear' && kind !== 'github' && kind !== 'rest') return undefined;
+
+  return { id, kind, label };
+}
+
+function placeIdsOf(value: unknown): PlaceIds | undefined {
+  if (typeof value !== 'object' || value === null) return undefined;
+  const { connector, teamId, projectId } = value as Record<string, unknown>;
+  if (!short(connector)) return undefined;
+  if (teamId !== undefined && !short(teamId)) return undefined;
+  if (projectId !== undefined && !short(projectId)) return undefined;
+
+  return {
+    connector,
+    ...(teamId === undefined ? {} : { teamId }),
+    ...(projectId === undefined ? {} : { projectId }),
+  };
+}
+
+/** What the worker answered for a source, field by field: a bad team or project costs that entry. */
+export function parseSourceOffer(body: unknown): SourceOffer | undefined {
+  if (typeof body !== 'object' || body === null) return undefined;
+  const { kind, teams, repositories } = body as Record<string, unknown>;
+  if (kind === 'rest') return { kind };
+  const named = (each: unknown): { id: string; name: string } | undefined => {
+    if (typeof each !== 'object' || each === null) return undefined;
+    const { id, name } = each as Record<string, unknown>;
+
+    return short(id) && short(name) ? { id, name } : undefined;
+  };
+  if (kind === 'linear' && Array.isArray(teams)) {
+    return {
+      kind,
+      teams: teams.slice(0, MAX_LISTED).flatMap((each: unknown) => {
+        const team = named(each);
+        if (team === undefined) return [];
+        const { key, projects } = each as Record<string, unknown>;
+
+        return [
+          {
+            ...team,
+            key: typeof key === 'string' && key.length <= 20 ? key : '',
+            projects: Array.isArray(projects) ? projects.slice(0, MAX_LISTED).flatMap((one) => named(one) ?? []) : [],
+          },
+        ];
+      }),
+    };
+  }
+  if (kind === 'github' && Array.isArray(repositories)) {
+    return {
+      kind,
+      repositories: repositories.slice(0, MAX_LISTED).flatMap((each: unknown) => {
+        const fullName =
+          typeof each === 'object' && each !== null ? (each as { fullName?: unknown }).fullName : undefined;
+
+        return short(fullName) ? [{ fullName }] : [];
+      }),
+    };
+  }
+
+  return undefined;
 }
 
 /** Five whole numbers or nothing: a count that is not one would draw a bar that lies. */
@@ -371,4 +465,94 @@ export function cloudEntry(offer: Offer): SiteConfig {
     mode: 'team',
     mount: { clientId: offer.site.id, ...(offer.workspace.name === '' ? {} : { workspace: offer.workspace.name }) },
   };
+}
+
+/** What the popup changes on a site before it turns it on (FRU-453). `place: null` is « Fruitback ». */
+export type SiteSettings = { visibility?: 'members' | 'everyone'; place?: PlaceIds | null };
+
+export type SettingsFailure = 'forbidden' | 'several-places' | 'unknown-place' | 'signed-out' | 'unavailable';
+export type SettingsResult = { ok: true; site: WorkspaceSite } | { ok: false; reason: SettingsFailure };
+
+/**
+ * `POST /session/sites/settings` (FRU-453): who sees the notes of a site of the workspace, and where
+ * they go. The answer is the site as the worker holds it now, so the screen says what is true.
+ */
+export async function setSiteSettings(
+  endpoint: string,
+  workspace: Workspace,
+  site: string,
+  settings: SiteSettings,
+  seams: Pick<CloudSeams, 'ensureAccess' | 'fetcher'>,
+): Promise<SettingsResult> {
+  const access = await seams.ensureAccess(endpoint).catch(() => undefined);
+  if (access === undefined || (!access.ok && access.reason === 'unavailable'))
+    return { ok: false, reason: 'unavailable' };
+  if (!access.ok) return { ok: false, reason: 'signed-out' };
+
+  let response: Response;
+  try {
+    response = await (seams.fetcher ?? fetch)(`${endpoint}/session/sites/settings`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${access.grant.accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        workspace: workspace.id,
+        site,
+        ...(settings.visibility === undefined ? {} : { visibility: settings.visibility }),
+        ...(settings.place === undefined
+          ? {}
+          : {
+              place:
+                settings.place === null
+                  ? null
+                  : {
+                      connector: settings.place.connector,
+                      ...(settings.place.teamId === undefined ? {} : { teamId: settings.place.teamId }),
+                      ...(settings.place.projectId === undefined ? {} : { projectId: settings.place.projectId }),
+                    },
+            }),
+      }),
+      signal: AbortSignal.timeout(ASK_TIMEOUT_MS),
+    });
+  } catch {
+    return { ok: false, reason: 'unavailable' };
+  }
+  if (response.status === 403 || response.status === 404) return { ok: false, reason: 'forbidden' };
+  if (response.status === 409) return { ok: false, reason: 'several-places' };
+  if (response.status === 400) return { ok: false, reason: 'unknown-place' };
+  if (response.status === 401) return { ok: false, reason: 'signed-out' };
+  if (response.status !== 200) return { ok: false, reason: 'unavailable' };
+
+  const body: unknown = await response.json().catch(() => undefined);
+  const answered = typeof body === 'object' && body !== null ? (body as { site?: unknown }).site : undefined;
+  const parsed = parseWorkspaceSites({ account: true, workspaces: [workspace], sites: [answered] })?.sites[0];
+  if (parsed === undefined || parsed.id !== site) return { ok: false, reason: 'unavailable' };
+
+  return { ok: true, site: parsed };
+}
+
+/**
+ * `GET /session/sites/places` (FRU-453): the teams of a Linear with their projects, the repositories
+ * of a GitHub, or nothing to choose for an address. `undefined` when the worker or the tracker did not
+ * answer, or refused: the popup then says so, and keeps what was chosen.
+ */
+export async function sourceOffer(
+  endpoint: string,
+  workspace: string,
+  connector: string,
+  seams: Pick<CloudSeams, 'ensureAccess' | 'fetcher'>,
+): Promise<SourceOffer | undefined> {
+  const access = await seams.ensureAccess(endpoint).catch(() => undefined);
+  if (access === undefined || !access.ok) return undefined;
+  const query = new URLSearchParams({ workspace, connector });
+  try {
+    const response = await (seams.fetcher ?? fetch)(`${endpoint}/session/sites/places?${query.toString()}`, {
+      headers: { Authorization: `Bearer ${access.grant.accessToken}` },
+      // A tracker is asked page after page: longer than a read of the worker alone.
+      signal: AbortSignal.timeout(ASK_TIMEOUT_MS * 3),
+    });
+
+    return response.ok ? parseSourceOffer(await response.json()) : undefined;
+  } catch {
+    return undefined;
+  }
 }

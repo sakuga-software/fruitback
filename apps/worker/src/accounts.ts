@@ -544,6 +544,11 @@ export type AccountStore = {
   sites(workspace: string): Promise<Site[]>;
   removeSite(workspace: string, site: string): Promise<boolean>;
   /**
+   * Who reads the notes of a site that exists (FRU-453). `false` when the site is not of this
+   * workspace, or is gone: nothing is made, where `addSite` would make the site again.
+   */
+  setSiteVisibility(workspace: string, site: string, visibility: Visibility): Promise<boolean>;
+  /**
    * The statuses of a site (FRU-366), ordered by `position`, then source and key. `undefined` when the
    * site is not of this workspace.
    */
