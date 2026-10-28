@@ -414,7 +414,8 @@ export async function postStatus(
       );
 
       // FRU-468: a person moved the note to To do, from another stage: the trigger of its site may call.
-      if (answer.stage === 'todo' && found.stage !== 'todo') {
+      // `was` is read under the lock of the write: two moves at once call once.
+      if (answer.stage === 'todo' && answer.was !== 'todo') {
         await config.requestAgent?.({
           workspace,
           site: clientId,

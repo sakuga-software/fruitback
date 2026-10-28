@@ -255,7 +255,7 @@ describe('the status of a note, written under the lock of its site (FRU-367, hea
       ...team,
     });
     const set = await store.setStatus?.(target, { key: 'waiting', stage: TODO as never }, undefined);
-    assert.deepEqual(set, { stage: DONE, page: PAGE });
+    assert.deepEqual(set, { stage: DONE, was: NEW, page: PAGE });
     assert.deepEqual(await before(), [{ stage: DONE, status_key: 'waiting' }]);
   });
 });

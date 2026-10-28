@@ -79,6 +79,31 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
       assert.equal((await rowsOf(database, 'SELECT id FROM note_comments')).length, 1);
     });
 
+    it('answers the stage of before under the lock of the write: of two moves to To do at once, one moves the note (FRU-468)', async () => {
+      const { database, store } = await opened();
+      await rowsOf(
+        database,
+        `INSERT INTO organization (id, name, slug, "createdAt") VALUES ('ws_a', 'A', 'ws_a', now())`,
+      );
+      await rowsOf(
+        database,
+        `INSERT INTO sites (id, workspace_id, origin, visibility, created_at) VALUES ('site_a', 'ws_a', '${SITE}', 'everyone', 1)`,
+      );
+      const note = await store.create(noteFixtureOf('sd_moved', 'site_a'), undefined, POLICY);
+      const todo = { key: null, stage: 'todo' as const };
+
+      const answers = await Promise.all(
+        [1, 2, 3].map(() => store.setStatus?.({ issue: note.id, clientId: 'site_a' }, todo, undefined)),
+      );
+
+      const into = answers.filter((answer) => typeof answer === 'object' && answer.was !== 'todo');
+      assert.equal(into.length, 1, JSON.stringify(answers));
+      assert.deepEqual(
+        answers.map((answer) => (typeof answer === 'object' ? answer.stage : answer)),
+        ['todo', 'todo', 'todo'],
+      );
+    });
+
     it('gives a read that names no site the notes that name none, and never the notes of a site', async () => {
       const { store } = await opened();
       await store.create(noteFixtureOf('sd_site', 'site_a'), undefined, POLICY);

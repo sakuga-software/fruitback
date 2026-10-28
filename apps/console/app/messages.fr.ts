@@ -1444,4 +1444,5 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Saved.': 'Enregistré.',
   '1 call of an agent did not arrive': '1 appel d’un agent n’est pas arrivé',
   '{count} calls of an agent did not arrive': '{count} appels d’un agent ne sont pas arrivés',
+  'The addresses of the workspace did not load.': 'Les adresses du workspace ne se sont pas chargées.',
 };

@@ -231,11 +231,7 @@ export default function SitePage() {
         ) : null}
 
         {manages ? (
-          <SiteAgent
-            workspace={workspace}
-            site={site}
-            connectors={typeof connectors === 'string' ? undefined : connectors}
-          />
+          <SiteAgent workspace={workspace} site={site} connectors={connectors} onRetry={() => void readConnectors()} />
         ) : null}
 
         {manages ? (

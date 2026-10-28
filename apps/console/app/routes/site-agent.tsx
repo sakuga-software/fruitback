@@ -9,6 +9,7 @@ import {
   setAgentTrigger,
 } from '../api';
 import { msg, t } from '../i18n';
+import { type Listed, known } from '../listed';
 import { problemOf } from '../problems';
 import { Button, Callout, Choice, LinkButton, Pick, Problem, Snippet, Toggle } from '../ui';
 import { useLocale } from '../use-locale';
@@ -52,12 +53,15 @@ type Read = AgentTrigger | null | 'loading' | 'failed';
 export function SiteAgent({
   workspace,
   site,
-  connectors,
+  connectors: listed,
+  onRetry,
 }: {
   workspace: Workspace;
   site: Site;
-  /** The sources of the workspace, or `undefined` while they load or when they did not. */
-  connectors: readonly Connector[] | undefined;
+  /** The sources of the workspace, as the page of the site reads them. */
+  connectors: Listed<Connector>;
+  /** Reads the sources again, after a read that failed. */
+  onRetry: () => void;
 }) {
   useLocale();
   const [read, setRead] = useState<Read>('loading');
@@ -67,6 +71,7 @@ export function SiteAgent({
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [problem, setProblem] = useState<string | undefined>();
+  const connectors = known(listed);
   const receivers = (connectors ?? []).filter((each) => each.kind === 'rest');
 
   const load = useCallback(async () => {
@@ -119,6 +124,14 @@ export function SiteAgent({
         )}
       </p>
       {read === 'loading' ? <p className="text-small text-muted">{t('Loading…')}</p> : null}
+      {listed === 'failed' ? (
+        <div role="alert" className="flex flex-wrap items-center gap-[12px]">
+          <p className="text-small">{t('The addresses of the workspace did not load.')}</p>
+          <Button tone="outline" onClick={onRetry}>
+            {t('Try again')}
+          </Button>
+        </div>
+      ) : null}
       {read === 'failed' ? (
         <div role="alert" className="flex flex-wrap items-center gap-[12px]">
           <p className="text-small">{t('The trigger of this site did not load.')}</p>

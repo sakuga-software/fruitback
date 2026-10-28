@@ -175,3 +175,31 @@ test('the address counts a call of an agent apart from a note, and its panel nam
   await expect(page.locator('[data-deliveries]')).toContainText('Call of an agent');
   await expect(page.locator('[data-deliveries]')).toContainText('Your receiver answered 401');
 });
+
+test('a read of the addresses that failed says so, and « Try again » brings the section back', async ({ page }) => {
+  let fails = true;
+  await stubWorker(page, {
+    workspaces: [ACME],
+    answer: (pathname, route) => {
+      if (pathname === '/console/workspaces/w1/sites') return route.fulfill({ json: { sites: SITES } });
+      if (pathname === '/console/workspaces/w1/connectors')
+        return fails
+          ? route.fulfill({ status: 500, json: { error: 'unknown' } })
+          : route.fulfill({ json: { connectors: [HOOK], available: true } });
+      if (pathname === '/console/workspaces/w1/sites/s1/agent-trigger')
+        return route.fulfill({
+          json: { trigger: { connector: 'c2', moment: 'verified-note', enabled: true, waiting: 0 } },
+        });
+
+      return undefined;
+    },
+  });
+  await page.goto(`${CONSOLE}/w/w1/sites/s1`);
+  const agent = section(page);
+  await expect(agent.getByRole('alert')).toContainText('The addresses of the workspace did not load.');
+  // The control: no switch is drawn on a list that was not read.
+  await expect(agent.getByRole('switch')).toHaveCount(0);
+  fails = false;
+  await agent.getByRole('button', { name: 'Try again' }).click();
+  await expect(agent.getByRole('switch', { name: /Start an agent when a note arrives/ })).toBeChecked();
+});
