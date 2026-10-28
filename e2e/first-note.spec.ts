@@ -23,6 +23,16 @@ const did = (place: Place, what: string): void => void actions.push({ place, wha
 
 let worker: Worker | undefined;
 
+/** The rows of the table « What was measured » of `docs/decisions/onboarding.md`, in their order. */
+function measuredInThePage(): Action[] {
+  const page = fs.readFileSync('docs/decisions/onboarding.md', 'utf8');
+  const rows = [...page.matchAll(/^\| (\d+) +\| ([a-z]+) +\| (.+?) +\| .+\|$/gm)];
+  // A control: the reading found the table, so an equal list is a result.
+  expect(rows.length, 'rows read from the page').toBeGreaterThan(20);
+
+  return rows.map((row) => ({ place: row[2] as Place, what: row[3] ?? '' }));
+}
+
 test.afterEach(async ({ extension }) => finished(extension.context, worker));
 
 test('a first user goes from the setup to a first note (FRU-481)', async ({ extension }) => {
@@ -51,7 +61,7 @@ test('a first user goes from the setup to a first note (FRU-481)', async ({ exte
   const link = await context.newPage();
   await link.goto(await linkIn(worker));
   did('mail', 'click the link: a new tab opens');
-  await expect(link.getByText('You are signed in')).toBeVisible({ timeout: 15_000 });
+  await expect(link.getByRole('heading', { name: 'You are signed in' })).toBeVisible({ timeout: 15_000 });
   await setup.screenshot({ path: test.info().outputPath('01-setup-after-link.png') });
   await link.screenshot({ path: test.info().outputPath('02-link-tab.png') });
 
@@ -78,7 +88,7 @@ test('a first user goes from the setup to a first note (FRU-481)', async ({ exte
   await context.route('https://chromewebstore.google.com/**', (route) => route.abort());
   const storeOpens = context.waitForEvent('page');
   await card.getByRole('link', { name: 'Install the extension (beta)' }).click();
-  did('console', 'click « Install the extension (beta) »: the Chrome Web Store opens in a tab');
+  did('console', 'click « Install the extension (beta) »: the store opens in a tab');
   await (await storeOpens).close();
   did('store', 'click « Add to Chrome »');
   did('chrome', 'click « Add extension » in the dialog of Chrome');
@@ -106,7 +116,7 @@ test('a first user goes from the setup to a first note (FRU-481)', async ({ exte
   await goesOn.bringToFront();
   const siteOpens = context.waitForEvent('page');
   await goesOn.getByRole('link', { name: /^Open .*localhost:5177$/ }).click();
-  did('console', `click « Open ${new URL(PLAYGROUND_ORIGIN).host} »: the site opens in a tab`);
+  did('console', 'click « Open <site> »: the site opens in a tab');
   const site = await siteOpens;
   // The playground mounts a widget of its own: `widget=off` keeps only the one of the extension.
   await site.goto(`${PLAYGROUND_ORIGIN}/?widget=off`);
@@ -155,5 +165,7 @@ test('a first user goes from the setup to a first note (FRU-481)', async ({ exte
   await site.screenshot({ path: test.info().outputPath('10-sent.png') });
 
   fs.writeFileSync(test.info().outputPath('actions.json'), JSON.stringify(actions, null, 2));
+  // The table of the page is this list: a change to the path changes both in one pull request.
+  expect(actions).toEqual(measuredInThePage());
   console.log(actions.map((action, index) => `${index + 1}. [${action.place}] ${action.what}`).join('\n'));
 });

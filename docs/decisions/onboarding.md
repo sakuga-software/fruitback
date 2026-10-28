@@ -29,35 +29,35 @@ The path of a new person who signs in by e-mail, on `main` at `389ac285`, in the
 it. The place is where the action happens: `console`, `mail`, `tab` (going back to a tab that is
 already open), `store`, `chrome`, `popup`, `site`.
 
-| #   | Place   | Action                                                             | Becomes             |
-| --- | ------- | ------------------------------------------------------------------ | ------------------- |
-| 1   | console | open fruitback.com, then « Set up »                                | stays               |
-| 2   | console | type the e-mail address                                            | stays               |
-| 3   | console | click « Email me a link »                                          | stays               |
-| 4   | mail    | open the mailbox, then the message                                 | stays               |
-| 5   | mail    | click the link: a new tab opens                                    | stays               |
-| 6   | tab     | go back to the tab of the setup                                    | stays (SPEC P4)     |
-| 7   | console | type the address of the site                                       | stays               |
-| 8   | console | click « Add site »                                                 | stays               |
-| 9   | console | click « Install the extension (beta) »: the store opens in a tab   | stays               |
-| 10  | store   | click « Add to Chrome »                                            | stays               |
-| 11  | chrome  | click « Add extension » in the dialog of Chrome                    | stays               |
-| 12  | chrome  | open the puzzle menu of the toolbar                                | a tip, FRU-484      |
-| 13  | chrome  | click the pin beside Fruitback                                     | a tip, FRU-484      |
-| 14  | popup   | click the Fruitback icon, as the welcome page says: **a dead end** | removed, FRU-482    |
-| 15  | tab     | go back to the tab of the setup                                    | removed, FRU-482    |
-| 16  | console | click « Open <site> »: the site opens in a tab                     | removed, FRU-483    |
-| 17  | popup   | click the Fruitback icon                                           | removed, FRU-483    |
-| 18  | popup   | click « Sign in with email »: the console opens in a tab           | on the welcome page |
-| 19  | console | click « Connect Chrome » after the word                            | stays               |
-| 20  | tab     | go back to the tab of the site                                     | removed, FRU-482    |
-| 21  | popup   | click the Fruitback icon                                           | removed, FRU-483    |
-| 22  | popup   | click « Turn on »                                                  | on the welcome page |
-| 23  | chrome  | click « Allow » in the prompt of Chrome for the access to the site | stays               |
-| 24  | site    | click « Leave feedback »                                           | removed, FRU-485    |
-| 25  | site    | click the element of the page                                      | stays               |
-| 26  | site    | type the note                                                      | stays               |
-| 27  | site    | click « Send »                                                     | stays               |
+| #   | Place   | Action                                                             | Becomes                      |
+| --- | ------- | ------------------------------------------------------------------ | ---------------------------- |
+| 1   | console | open fruitback.com, then « Set up »                                | stays                        |
+| 2   | console | type the e-mail address                                            | stays                        |
+| 3   | console | click « Email me a link »                                          | stays                        |
+| 4   | mail    | open the mailbox, then the message                                 | stays                        |
+| 5   | mail    | click the link: a new tab opens                                    | stays                        |
+| 6   | tab     | go back to the tab of the setup                                    | stays (SPEC P4)              |
+| 7   | console | type the address of the site                                       | stays                        |
+| 8   | console | click « Add site »                                                 | stays                        |
+| 9   | console | click « Install the extension (beta) »: the store opens in a tab   | stays                        |
+| 10  | store   | click « Add to Chrome »                                            | stays                        |
+| 11  | chrome  | click « Add extension » in the dialog of Chrome                    | stays                        |
+| 12  | chrome  | open the puzzle menu of the toolbar                                | a tip, FRU-484               |
+| 13  | chrome  | click the pin beside Fruitback                                     | a tip, FRU-484               |
+| 14  | popup   | click the Fruitback icon, as the welcome page says                 | removed, FRU-482: a dead end |
+| 15  | tab     | go back to the tab of the setup                                    | removed, FRU-482             |
+| 16  | console | click « Open <site> »: the site opens in a tab                     | removed, FRU-483             |
+| 17  | popup   | click the Fruitback icon                                           | removed, FRU-483             |
+| 18  | popup   | click « Sign in with email »: the console opens in a tab           | on the welcome page          |
+| 19  | console | click « Connect Chrome » after the word                            | stays                        |
+| 20  | tab     | go back to the tab of the site                                     | removed, FRU-482             |
+| 21  | popup   | click the Fruitback icon                                           | removed, FRU-483             |
+| 22  | popup   | click « Turn on »                                                  | on the welcome page          |
+| 23  | chrome  | click « Allow » in the prompt of Chrome for the access to the site | stays                        |
+| 24  | site    | click « Leave feedback »                                           | removed, FRU-485             |
+| 25  | site    | click the element of the page                                      | stays                        |
+| 26  | site    | type the note                                                      | stays                        |
+| 27  | site    | click « Send »                                                     | stays                        |
 
 **27 actions: 5 in the screens of Chrome and its store (2 of them become tips with FRU-484), 3
 returns to a tab that is already open, and 1 dead end.** The spec also measured that the setup goes
