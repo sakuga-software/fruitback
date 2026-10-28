@@ -368,7 +368,16 @@ async function routed(
   if (pairing) return handlePairing(request, served, context);
 
   if (session) {
-    return handleSessionRoutes(request, pathname, { served, context, accounts, kv, noteIndex, cors, sessionWrites });
+    return handleSessionRoutes(request, pathname, {
+      served,
+      context,
+      accounts,
+      kv,
+      noteIndex,
+      cors,
+      sessionWrites,
+      ...githubAppOf(context, served),
+    });
   }
 
   // Resolved once here, not inside each handler: see `RequestContext.store`.

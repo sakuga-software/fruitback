@@ -27,7 +27,6 @@ import {
   type AddFailure,
   type CloudSeams,
   type Offer,
-  type Place,
   type SettingsFailure,
   type SiteSettings,
   type Workspace,
@@ -36,6 +35,7 @@ import {
   cloudEntry,
   offerFor,
   setSiteSettings,
+  sourceOffer,
 } from '../../src/cloud.ts';
 import { language, msg, setLanguage, t } from '../../src/i18n.ts';
 import { holdsSiteAccess } from '../../src/site-grant.ts';
@@ -578,7 +578,7 @@ function offered(origin: string, offer: Offer, account: Account | undefined): HT
   // FRU-453: a role that manages the sites chooses here, and each choice is written at once. Written
   // before « Turn on » and not by it: the prompt of the browser can close the popup, and a choice
   // that waited for the click would be lost with it.
-  const places = offer.workspace.places;
+  const sources = offer.workspace.sources;
   const save = async (settings: SiteSettings): Promise<boolean> => {
     problem.replaceChildren();
     const set = await setSiteSettings(offer.endpoint, offer.workspace, offer.site.id, settings, cloudSeams());
@@ -593,15 +593,16 @@ function offered(origin: string, offer: Offer, account: Account | undefined): HT
     visibility: offer.site.visibility,
     ...(account === undefined ? {} : { account }),
     ...(change === undefined ? {} : { onChange: change }),
-    ...(places === undefined
+    ...(sources === undefined
       ? {}
       : {
           choices: {
-            places: { [offer.workspace.id]: places },
+            sources: { [offer.workspace.id]: sources },
             workspace: offer.workspace.id,
-            ...currentPlace(offer.site.destination),
+            ...(offer.site.place === undefined ? {} : { place: offer.site.place }),
+            loadOffer: (workspace, connector) => sourceOffer(offer.endpoint, workspace, connector, cloudSeams()),
             onVisibility: (visibility) => save({ visibility }),
-            onPlace: (place) => save({ place: place as Place | null }),
+            onPlace: (place) => save({ place }),
           },
         }),
     onTurnOn: turn,
@@ -612,19 +613,10 @@ function offered(origin: string, offer: Offer, account: Account | undefined): HT
   return screen;
 }
 
-/**
- * Where the notes of a site go now, as the list of the places reads it: « Fruitback » is no place.
- * A label the worker did not give is not known, and the list then shows « Fruitback » chosen.
- */
-function currentPlace(destination: { label: string } | undefined): { place?: { label: string } | null } {
-  if (destination === undefined) return {};
-
-  return { place: destination.label === 'Fruitback' ? null : destination };
-}
-
 const SETTINGS_PROBLEM: Record<SettingsFailure, string> = {
   forbidden: msg('Your role in this workspace does not let you change this site.'),
   'several-places': msg('This site sends to several places. Change them in Fruitback.'),
+  'unknown-place': msg('This place is not in the tracker any more. Choose another one.'),
   'signed-out': msg('Fruitback did not answer. Try again.'),
   unavailable: msg('Fruitback did not answer. Try again.'),
 };
@@ -647,15 +639,17 @@ async function siteOfNoWorkspace(origin: string, account: Account | undefined): 
     visibility: 'members',
     workspaces,
     choices: {
-      places: Object.fromEntries(workspaces.map((each) => [each.id, each.places ?? []])),
+      sources: Object.fromEntries(workspaces.map((each) => [each.id, each.sources ?? []])),
       place: null,
+      loadOffer: (workspace, connector) =>
+        CLOUD === undefined ? Promise.resolve(undefined) : sourceOffer(CLOUD, workspace, connector, cloudSeams()),
       onVisibility: async (visibility) => {
         wanted.visibility = visibility;
 
         return true;
       },
       onPlace: async (place) => {
-        wanted.place = place as Place | null;
+        wanted.place = place;
 
         return true;
       },

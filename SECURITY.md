@@ -1150,18 +1150,22 @@ test:`adds no site once the browser is disconnected in the console`. The role is
 too: test:`reads the role at each call: a person removed between two calls adds nothing more`.
 
 **`POST /session/sites/settings` changes who sees the notes of a site and where they go, from the
-extension** (FRU-453): the popup offers it on the screen that turns a site on. It asks what the add
-asks: a session of an **account**, read again in the store (test:`changes nothing after a log out: the write reads the session again`);
-an `Origin` of an extension, or none; `manage-sites` in the workspace named, read at this call (a
-member and a guest get `403`, an account outside the workspace `404`, a site of another workspace
-`404`). **It can make the notes of a site readable by everyone who visits it**, as « Anyone on the
-page » does in the console, for the same roles: an owner or an admin of the workspace. **A place is
-one that a site of the workspace already sends to**, and it is written with the label and the privacy
-the worker stored, never with the words of the body; a place no site sends to is `400`. A site with
-two places or more is not emptied from here (`409`). Each of these guards, taken out, fails a test of
-`session-site-settings.test.ts`. `GET /session/sites` lists those places (`places`, a label and the
-ids of a connector, a team and a project) to a role of `manage-sites` only, which already reads them
-in the console.
+extension; `GET /session/sites/places` reads what a source offers for it** (FRU-453): the popup
+offers both on the screen that turns a site on, a provider, then a team (a repository for GitHub),
+then a project. They ask what the add asks: a session of an **account**, read again in the store
+(test:`changes nothing after a log out: the write reads the session again`); an `Origin` of an
+extension, or none; `manage-sites` in the workspace named, read at this call (a member and a guest get
+`403`, an account outside the workspace `404`, a site of another workspace `404`). **It can make the
+notes of a site readable by everyone who visits it**, as « Anyone on the page » does in the console,
+for the same roles: an owner or an admin of the workspace. **A place is checked as the console checks
+it**: a connector of the workspace (one of another workspace is `400`, and `404` for the read), a team
+or a repository its key reaches, the label the tracker answers and never the words of the body. **The
+keys of the connectors are opened in the worker and never leave it**: the popup gets ids and names. A
+tracker that does not answer is `502`, and nothing is written. A site with two places or more is not
+emptied from here (`409`). Each of these guards, taken out, fails a test of
+`session-site-settings.test.ts`. `GET /session/sites` lists the sources of a workspace (`sources`: an
+id, a kind, a name) and where each site sends (`place`: ids) to a role of `manage-sites` only, which
+already reads them in the console.
 
 ### Signing in to the console (FRU-98)
 

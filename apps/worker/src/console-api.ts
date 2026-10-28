@@ -244,14 +244,77 @@ async function counted<T>(read: () => Promise<T> | undefined): Promise<T | undef
 const KIND_NAMES: Record<ConnectorKind, string> = { linear: 'Linear', rest: 'REST API', github: 'GitHub' };
 
 /** The place does not exist in the tracker of the connector: nothing must be kept for it. */
-class UnknownPlace extends Error {}
+export class UnknownPlace extends Error {}
+
+/**
+ * What a read of a tracker needs (FRU-453): the console's context, and the session routes of the
+ * extension, which choose a place too. The keys of the connectors are opened here and never leave.
+ */
+export type TrackerContext = Pick<ConsoleApiContext, 'accounts' | 'secretsKey' | 'linearOAuth' | 'githubApp' | 'now'>;
+
+/** What a source offers to choose (FRU-453), as the console's routes answer it. */
+export type SourceOffer =
+  | { kind: 'linear'; teams: Awaited<ReturnType<typeof listLinearTeams>>['teams'] }
+  | { kind: 'github'; repositories: { fullName: string; private: boolean }[] }
+  | { kind: 'rest' };
+
+/**
+ * The teams of a Linear, the repositories of a GitHub, or nothing to choose for an address: what the
+ * console reads from `/connectors/<id>/teams` and `/repositories`, for the popup (FRU-453). `undefined`
+ * for a connector of another workspace, or one this worker cannot open.
+ */
+export async function offerOf(
+  context: TrackerContext,
+  workspace: string,
+  connector: string,
+): Promise<SourceOffer | undefined> {
+  const kept = await context.accounts.sealedKey(connector);
+  if (kept === undefined || kept.workspaceId !== workspace) return undefined;
+  if (kept.kind === 'rest') return { kind: 'rest' };
+  if (kept.kind === 'github') {
+    if (context.githubApp === undefined || context.secretsKey === undefined) return undefined;
+
+    return { kind: 'github', repositories: await listRepositories(context, workspace, connector, kept.sealed) };
+  }
+  if (context.secretsKey === undefined) return undefined;
+
+  return { kind: 'linear', teams: (await askLinear(context, connector, kept.sealed, listLinearTeams)).teams };
+}
+
+/**
+ * A place named by the popup (FRU-453), checked as the console checks one: a connector of this
+ * workspace, a team or a repository its key reaches, and the label the tracker answers. `undefined`
+ * for a connector of another workspace; `UnknownPlace` is thrown for a place the key does not reach.
+ */
+export async function placeOf(
+  context: TrackerContext,
+  workspace: string,
+  asked: { connector: string; teamId?: string; projectId?: string },
+): Promise<Destination | undefined> {
+  const named = await context.accounts.sealedKey(asked.connector);
+  if (named === undefined || named.workspaceId !== workspace) return undefined;
+  const body =
+    named.kind === 'github'
+      ? {
+          connector: asked.connector,
+          repository: asked.teamId,
+          ...(asked.projectId === undefined ? {} : { projectId: asked.projectId }),
+        }
+      : asked;
+  const wanted = destinationOf(body, named.kind);
+  if (wanted === undefined) throw new UnknownPlace();
+  const [kept] = await labelled(context, workspace, [wanted]);
+  if (kept === undefined) throw new UnknownPlace();
+
+  return kept;
+}
 
 /**
  * A call to the Linear of a connector, with its stored key. What Linear answers is noted on the
  * connector, as for a note (FRU-102): a refusal makes it « Needs attention », and an answer ends it.
  */
 async function askLinear<T>(
-  context: ConsoleApiContext,
+  context: TrackerContext,
   connector: string,
   sealed: string,
   ask: (authorization: string) => Promise<T>,
@@ -283,7 +346,7 @@ async function askLinear<T>(
  * and nothing of the repository of each destination.
  */
 async function listRepositories(
-  context: ConsoleApiContext,
+  context: TrackerContext,
   workspace: string,
   connector: string,
   sealed: string,
@@ -315,7 +378,7 @@ async function listRepositories(
  * project the key does not reach.
  */
 async function labelled(
-  context: ConsoleApiContext,
+  context: TrackerContext,
   workspaceId: string,
   wanted: readonly Destination[],
 ): Promise<Destination[]> {
@@ -374,7 +437,7 @@ async function labelled(
  * all the same, as before: GitHub is asked again when a note goes there.
  */
 async function privacyOf(
-  context: ConsoleApiContext,
+  context: TrackerContext,
   connector: string,
   repository: string | undefined,
 ): Promise<boolean | undefined> {

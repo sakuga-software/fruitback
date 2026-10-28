@@ -2,38 +2,40 @@ import {
   type AccountStore,
   type Destination,
   MAX_DESTINATIONS,
-  type Site,
   VISIBILITIES,
   type Visibility,
   can,
 } from './accounts.ts';
 import { readBoundedBytes } from './bounded-body.ts';
+import { type TrackerContext, UnknownPlace, offerOf, placeOf } from './console-api.ts';
 import { isExtensionOrigin } from './cors.ts';
+import { StoreError } from './store.ts';
 
 /**
  * `POST /session/sites/settings`: the popup changes who sees the notes of a site and where they go,
- * on the screen that turns the site on (FRU-453).
+ * on the screen that turns the site on (FRU-453). `GET /session/sites/places`: what a source of the
+ * workspace offers to choose there, a provider, then a team, then a project (review of Mathieu).
  *
- * The second route that lets the token of an extension write. It asks what `POST /session/sites`
- * asks, and reads all of it at this call, never from the token:
+ * The second and third routes where the token of an extension is read for a write. They ask what
+ * `POST /session/sites` asks, and read all of it at this call, never from the token:
  *
- * - a session of an **account**, read again in the store (in `session-sites.ts`);
+ * - a session of an **account**, read again in the store (in `session-routes.ts`);
  * - an `Origin` that is an extension's, or none;
  * - the **role** in the workspace named, read now: `manage-sites`, the role that changes the same
  *   two fields in the console. Not a member, or a suspended workspace, answers `404`;
  * - a site of that workspace, or `404`.
  *
- * **A place is one that a site of the workspace already sends to.** The popup chooses among those, as
- * `GET /session/sites` lists them (`placesOf`). A new place, which asks the tracker for its teams or
- * its repositories, is chosen in the console: that read needs the keys of the connectors, and the
- * routes of a session hold none. The place is written with the label and the privacy the worker
- * stored, never with what the body says.
+ * **A place is checked as the console checks it** (`placeOf` of `console-api.ts`): a connector of the
+ * workspace, a team or a repository its key reaches, and the label the tracker answers, never the
+ * words of the body. The keys of the connectors are opened in the worker and never leave it: the
+ * popup gets names and ids.
  *
- * The chosen place goes first, the default of the site; the other places of the site stay after it.
+ * The chosen place replaces the first, the default of the site; the other places stay after it.
  * `null` is « Fruitback »: no place. A site with two places or more is not emptied from here
  * (`409`), as the console's `/destination` refuses it.
  */
 export const SESSION_SITE_SETTINGS_PATH = '/session/sites/settings';
+export const SESSION_SITE_PLACES_PATH = '/session/sites/places';
 
 /** A body of this route is two ids, a word and one place. */
 const MAX_BODY_BYTES = 2 * 1_024;
@@ -44,52 +46,63 @@ export type SiteSettingsContext = {
   accounts: AccountStore;
   /** The account the access token names, already read again as a session of an account. */
   account: string;
+  /** What reads a tracker with the key of a connector, as the console does. */
+  tracker: TrackerContext;
 };
-
-/** A place offered in the popup: what names it, and the words the worker wrote for it. */
-export type Place = { connector: string; teamId?: string; projectId?: string; label: string };
 
 /** The key of a place, whatever site it is of. */
 function keyOf(place: { connector: string; teamId?: string; projectId?: string }): string {
   return [place.connector, place.teamId ?? '', place.projectId ?? ''].join('\n');
 }
 
-/**
- * The places the sites of a workspace send to, once each, in the order of the sites. A place with
- * no label is left out: the popup names a place by its label, and has none to show.
- */
-export function placesOf(sites: readonly Site[]): Place[] {
-  const seen = new Map<string, Place>();
-  for (const site of sites) {
-    for (const each of site.destinations) {
-      if (each.label === undefined || each.label === '' || seen.has(keyOf(each))) continue;
-      seen.set(keyOf(each), {
-        connector: each.connector,
-        ...(each.teamId === undefined ? {} : { teamId: each.teamId }),
-        ...(each.projectId === undefined ? {} : { projectId: each.projectId }),
-        label: each.label,
-      });
-    }
-  }
+/** An id of a body: a short string, or absent. `null` when it is something else. */
+function idOf(value: unknown): string | undefined | null {
+  if (value === undefined) return undefined;
 
-  return [...seen.values()];
+  return typeof value === 'string' && value !== '' && value.length <= 200 ? value : null;
 }
 
-/** The stored destination of the workspace that a place of the body names, with its label and privacy. */
-function storedPlace(sites: readonly Site[], asked: Record<string, unknown>): Destination | undefined {
-  const { connector, teamId, projectId } = asked;
-  if (typeof connector !== 'string') return undefined;
-  if (teamId !== undefined && typeof teamId !== 'string') return undefined;
-  if (projectId !== undefined && typeof projectId !== 'string') return undefined;
-  const key = keyOf({
-    connector,
-    ...(teamId === undefined ? {} : { teamId }),
-    ...(projectId === undefined ? {} : { projectId }),
-  });
+/** The workspace named by a request, with the role read now: `manage-sites`, or an answer. */
+async function managed(
+  context: SiteSettingsContext,
+  workspace: unknown,
+): Promise<{ ok: true; workspace: string } | { ok: false; answer: Answer }> {
+  if (typeof workspace !== 'string' || workspace === '' || workspace.length > 100) {
+    return { ok: false, answer: { status: 400, body: { error: 'invalid-body' } } };
+  }
+  const role = await context.accounts.role(workspace, context.account);
+  // A suspended workspace (FRU-282) answers as one that does not exist, as `POST /session/sites` does.
+  if (role === undefined || (await context.accounts.suspension(workspace)) !== undefined) {
+    return { ok: false, answer: { status: 404, body: { error: 'not-found' } } };
+  }
+  if (!can(role, 'manage-sites')) return { ok: false, answer: { status: 403, body: { error: 'forbidden', role } } };
 
-  return sites
-    .flatMap((site) => site.destinations)
-    .find((each) => keyOf(each) === key && each.label !== undefined && each.label !== '');
+  return { ok: true, workspace };
+}
+
+/**
+ * `GET /session/sites/places?workspace=…&connector=…`: the teams of a Linear with their projects, the
+ * repositories of a GitHub, or nothing to choose for an address (FRU-453). A tracker that does not
+ * answer is `502`: the popup says so, and keeps what is chosen.
+ */
+export async function sourceOffer(request: Request, context: SiteSettingsContext): Promise<Answer> {
+  const origin = request.headers.get('Origin');
+  if (origin !== null && !isExtensionOrigin(origin)) return { status: 403, body: { error: 'origin-not-allowed' } };
+  const query = new URL(request.url).searchParams;
+  const allowed = await managed(context, query.get('workspace') ?? undefined);
+  if (!allowed.ok) return allowed.answer;
+  const connector = idOf(query.get('connector') ?? undefined);
+  if (connector === undefined || connector === null) return { status: 400, body: { error: 'invalid-body' } };
+
+  try {
+    const offer = await offerOf(context.tracker, allowed.workspace, connector);
+
+    return offer === undefined ? { status: 404, body: { error: 'not-found' } } : { status: 200, body: offer };
+  } catch (error) {
+    if (!(error instanceof StoreError)) throw error;
+
+    return { status: 502, body: { error: 'tracker-unavailable' } };
+  }
 }
 
 export async function setSessionSite(request: Request, context: SiteSettingsContext): Promise<Answer> {
@@ -98,10 +111,7 @@ export async function setSessionSite(request: Request, context: SiteSettingsCont
 
   const body = await bodyOf(request);
   if (body === undefined) return { status: 400, body: { error: 'invalid-body' } };
-  const { workspace, site: siteId, visibility: askedVisibility, place: askedPlace } = body;
-  if (typeof workspace !== 'string' || workspace === '' || workspace.length > 100) {
-    return { status: 400, body: { error: 'invalid-body' } };
-  }
+  const { site: siteId, visibility: askedVisibility, place: askedPlace } = body;
   if (typeof siteId !== 'string' || siteId === '' || siteId.length > 100) {
     return { status: 400, body: { error: 'invalid-body' } };
   }
@@ -109,22 +119,27 @@ export async function setSessionSite(request: Request, context: SiteSettingsCont
     return { status: 400, body: { error: 'invalid-visibility' } };
   }
   const visibility = askedVisibility as Visibility | undefined;
-  const placeAsked: unknown = askedPlace;
-  if (
-    placeAsked !== undefined &&
-    placeAsked !== null &&
-    (typeof placeAsked !== 'object' || Array.isArray(placeAsked))
-  ) {
-    return { status: 400, body: { error: 'invalid-place' } };
+  let asked: { connector: string; teamId?: string; projectId?: string } | null | undefined;
+  if (askedPlace === null) asked = null;
+  else if (askedPlace !== undefined) {
+    if (typeof askedPlace !== 'object' || Array.isArray(askedPlace))
+      return { status: 400, body: { error: 'invalid-place' } };
+    const fields = askedPlace as Record<string, unknown>;
+    const [connector, teamId, projectId] = [idOf(fields.connector), idOf(fields.teamId), idOf(fields.projectId)];
+    if (connector === undefined || connector === null || teamId === null || projectId === null) {
+      return { status: 400, body: { error: 'invalid-place' } };
+    }
+    asked = {
+      connector,
+      ...(teamId === undefined ? {} : { teamId }),
+      ...(projectId === undefined ? {} : { projectId }),
+    };
   }
-  if (visibility === undefined && placeAsked === undefined) return { status: 400, body: { error: 'invalid-body' } };
+  if (visibility === undefined && asked === undefined) return { status: 400, body: { error: 'invalid-body' } };
 
-  const role = await context.accounts.role(workspace, context.account);
-  // A suspended workspace (FRU-282) answers as one that does not exist, as `POST /session/sites` does.
-  if (role === undefined || (await context.accounts.suspension(workspace)) !== undefined) {
-    return { status: 404, body: { error: 'not-found' } };
-  }
-  if (!can(role, 'manage-sites')) return { status: 403, body: { error: 'forbidden', role } };
+  const allowed = await managed(context, body.workspace);
+  if (!allowed.ok) return allowed.answer;
+  const { workspace } = allowed;
 
   const sites = await context.accounts.sites(workspace);
   const site = sites.find((each) => each.id === siteId);
@@ -132,16 +147,27 @@ export async function setSessionSite(request: Request, context: SiteSettingsCont
 
   // Both are read before anything is written: a bad place changes no visibility.
   let places: Destination[] | undefined;
-  if (placeAsked === null) {
+  if (asked === null) {
     if (site.destinations.length > 1) {
       return { status: 409, body: { error: 'site-has-destinations', count: site.destinations.length } };
     }
     places = [];
-  } else if (placeAsked !== undefined) {
-    const chosen = storedPlace(sites, placeAsked as Record<string, unknown>);
+  } else if (asked !== undefined) {
+    let chosen: Destination | undefined;
+    try {
+      chosen = await placeOf(context.tracker, workspace, asked);
+    } catch (error) {
+      if (error instanceof UnknownPlace) return { status: 400, body: { error: 'invalid-place' } };
+      if (error instanceof StoreError) return { status: 502, body: { error: 'tracker-unavailable' } };
+      throw error;
+    }
+    // A connector of another workspace answers like a place that does not exist.
     if (chosen === undefined) return { status: 400, body: { error: 'invalid-place' } };
-    const others = site.destinations.filter((each) => keyOf(each) !== keyOf(chosen));
-    places = [chosen, ...others].slice(0, MAX_DESTINATIONS);
+    const picked = chosen;
+    // The default place is replaced, and the other places of the site stay after it: flipping the
+    // list in the popup does not pile places up.
+    const others = site.destinations.slice(1).filter((each) => keyOf(each) !== keyOf(picked));
+    places = [picked, ...others].slice(0, MAX_DESTINATIONS);
   }
 
   // On the site read above only: a site removed since is not made again (raised in review).

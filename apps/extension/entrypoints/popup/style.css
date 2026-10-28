@@ -564,6 +564,56 @@ body.popup-page {
 }
 
 /*
+  « Notes go to » (FRU-453): each provider with its mark, in Chromium's customizable select. The list
+  stays a native `select` for the keyboard. A browser without it shows the names alone.
+*/
+.popup-screen-2 select.with-marks,
+.popup-screen-2 select.with-marks::picker(select) {
+  appearance: base-select;
+}
+
+.popup-screen-2 select.with-marks {
+  display: flex;
+  align-items: center;
+}
+
+.popup-screen-2 select.with-marks::picker(select) {
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-field);
+  background: var(--surface);
+}
+
+/* The button of the list shows the provider chosen: none of the look of a button of the popup. */
+.popup-screen-2 select.with-marks > button {
+  all: unset;
+  flex: 1;
+  min-width: 0;
+}
+
+/* A line of the lists that has nothing to choose yet, or any more. */
+.popup-screen-2 .kit-dl-entry[hidden] {
+  display: none;
+}
+
+.popup-screen-2 select.with-marks > button,
+.popup-screen-2 select.with-marks selectedcontent,
+.popup-screen-2 select.with-marks option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.popup-screen-2 select.with-marks option {
+  padding: 8px 10px;
+}
+
+.source-mark {
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+
+/*
   3 · Site on (FRU-298): 20 px above, 24 around, 20 between the blocks. The site and its switch,
   « Leave feedback » and its keys, the lines of what waits, and the side panel at the foot.
 */

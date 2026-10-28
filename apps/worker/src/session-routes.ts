@@ -2,6 +2,8 @@ import type { AccountStore } from './accounts.ts';
 import { MAX_BODY_BYTES, readBoundedText } from './bounded-body.ts';
 import { handleExtensionConnect } from './connect-routes.ts';
 import type { CorsDecision } from './cors.ts';
+import type { GithubApp } from './github-connector.ts';
+import type { TrackerContext } from './console-api.ts';
 import { type WorkerConfig, hasSessions } from './env.ts';
 import type { Kv } from './kv.ts';
 import type { NoteIndex } from './notes-index.ts';
@@ -17,7 +19,12 @@ import {
 } from './session.ts';
 import { SESSION_NOTES_PATH, handleSessionNotes } from './session-notes.ts';
 import { SESSION_SITES_PATH, handleSessionSites } from './session-sites.ts';
-import { SESSION_SITE_SETTINGS_PATH, setSessionSite } from './session-site-settings.ts';
+import {
+  SESSION_SITE_PLACES_PATH,
+  SESSION_SITE_SETTINGS_PATH,
+  setSessionSite,
+  sourceOffer,
+} from './session-site-settings.ts';
 import { StoreError } from './store.ts';
 import { connectStoreFor, sessionStoreFor } from './worker-stores.ts';
 
@@ -37,6 +44,8 @@ export type SessionSeams = {
   kv: Kv;
   noteIndex: NoteIndex | undefined;
   cors: CorsDecision;
+  /** The GitHub App of the connectors (FRU-360), when this worker has one: the popup reads its repositories. */
+  githubApp?: GithubApp;
   /** `sessionWrites` of `app.ts`: the person of a session still valid in the store, the check of every write. */
   sessionWrites: (request: Request, config: Served, context: RequestContext) => Promise<SessionIdentity | undefined>;
 };
@@ -55,7 +64,7 @@ export async function handlePairing(request: Request, served: Served, context: R
 }
 
 export async function handleSessionRoutes(request: Request, pathname: string, seams: SessionSeams): Promise<Response> {
-  const { served, context, accounts, kv, noteIndex, cors, sessionWrites } = seams;
+  const { served, context, accounts, kv, noteIndex, cors, sessionWrites, githubApp } = seams;
   try {
     // FRU-306: the notes of a whole site, for the side panel. The session is read again in the store.
     if (pathname === SESSION_NOTES_PATH && accounts !== undefined && served.identitySecret !== undefined) {
@@ -84,16 +93,23 @@ export async function handleSessionRoutes(request: Request, pathname: string, se
       );
     }
 
-    // FRU-453: who sees the notes of a site and where they go, changed in the popup. A write: the
-    // session is read again in the store, and it must be a session of an account.
-    if (pathname === SESSION_SITE_SETTINGS_PATH && accounts !== undefined && served.identitySecret !== undefined) {
-      if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, cors.headers);
+    // FRU-453: who sees the notes of a site and where they go, changed in the popup, and what a source
+    // offers there. The session is read again in the store, and it must be a session of an account.
+    const settings = pathname === SESSION_SITE_SETTINGS_PATH;
+    if (
+      (settings || pathname === SESSION_SITE_PLACES_PATH) &&
+      accounts !== undefined &&
+      served.identitySecret !== undefined
+    ) {
+      if (request.method !== (settings ? 'POST' : 'GET'))
+        return json(405, { error: 'method-not-allowed' }, cors.headers);
       const session = await sessionWrites(request, served, context);
       if (session === undefined) return json(401, { error: 'identity-required' }, cors.headers);
       if (session.account !== true) return json(403, { error: 'account-required' }, cors.headers);
-      const set = await setSessionSite(request, { accounts, account: session.subject });
+      const seams = { accounts, account: session.subject, tracker: { accounts, ...trackerOf(served, githubApp) } };
+      const answer = settings ? await setSessionSite(request, seams) : await sourceOffer(request, seams);
 
-      return json(set.status, set.body, cors.headers);
+      return json(answer.status, answer.body, cors.headers);
     }
 
     // FRU-238: the extension asks to be connected, and comes back for its session. Only where a
@@ -285,4 +301,13 @@ function json(status: number, body: unknown, headers: Record<string, string> = {
     status,
     headers: { 'Content-Type': 'application/json', ...headers },
   });
+}
+
+/** What reads a tracker for the popup (FRU-453): the keys of this worker, as the console has them. */
+function trackerOf(served: Served, githubApp: GithubApp | undefined): Omit<TrackerContext, 'accounts'> {
+  return {
+    ...(served.secretsKey === undefined ? {} : { secretsKey: served.secretsKey }),
+    ...(served.linearOAuth === undefined ? {} : { linearOAuth: served.linearOAuth }),
+    ...(githubApp === undefined ? {} : { githubApp }),
+  };
 }

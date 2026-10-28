@@ -396,33 +396,37 @@ describe('2 · a site of no workspace (FRU-298, FRU-255)', () => {
 });
 
 describe('2 · who sees the notes and where they go, chosen at the turn on (FRU-453)', () => {
-  const NORTHWIND = { connector: 'c1', teamId: 't1', label: 'Linear · Northwind' };
-  const DESIGN = { connector: 'c1', teamId: 't2', label: 'Linear · Design' };
+  const LINEAR = { id: 'lin', kind: 'linear' as const, label: 'Linear · Acme' };
+  const HOOK = { id: 'hook', kind: 'rest' as const, label: 'REST API · Hook' };
   const change = (select: HTMLSelectElement, value: string): void => {
     select.value = value;
     select.dispatchEvent(new (select.ownerDocument.defaultView as unknown as typeof globalThis).Event('change'));
   };
   const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-  it('shows two lists in place of « Change », with where the notes go now chosen', async () => {
+  it('shows the lists in place of « Change », in the order a keyboard meets them', async () => {
     const calls: string[] = [];
     const screen = turnOnScreen(page(), {
       origin: 'https://preview.northwind.io',
       workspace: 'Northwind',
-      destination: 'Linear · Northwind',
+      destination: 'Linear · Acme · Design',
       visibility: 'members',
       onChange: () => calls.push('change'),
       choices: {
-        places: { w1: [DESIGN, NORTHWIND] },
+        sources: { w1: [LINEAR, HOOK] },
         workspace: 'w1',
-        place: { label: 'Linear · Northwind' },
+        place: { connector: 'lin', teamId: 'design' },
+        loadOffer: async () => ({
+          kind: 'linear',
+          teams: [{ id: 'design', name: 'Design', key: 'DES', projects: [] }],
+        }),
         onVisibility: async (visibility) => {
           calls.push(`visibility:${visibility}`);
 
           return true;
         },
         onPlace: async (place) => {
-          calls.push(`place:${place?.label ?? 'none'}`);
+          calls.push(`place:${JSON.stringify(place)}`);
 
           return true;
         },
@@ -430,23 +434,17 @@ describe('2 · who sees the notes and where they go, chosen at the turn on (FRU-
       onTurnOn: () => calls.push('turn-on'),
       onSettings: nothing,
     });
+    await settle();
 
-    assert.deepEqual(stops(screen), [
-      'button: Account and settings',
-      'button: Notes go to',
-      'button: Who sees the notes',
-      'button: Turn on',
-    ]);
-    const [place, visibility] = [...screen.querySelectorAll('select')];
-    if (place === undefined || visibility === undefined) throw new Error('no lists');
     assert.deepEqual(
-      [...place.options].map((option) => [option.textContent, option.selected]),
-      [
-        ['Fruitback (no tracker)', false],
-        ['Linear · Design', false],
-        ['Linear · Northwind', true],
-      ],
+      [...screen.querySelectorAll('select')]
+        .filter((each) => !(each.closest('.kit-dl-entry') as HTMLElement).hidden)
+        .map((each) => each.getAttribute('aria-label')),
+      ['Notes go to', 'Team', 'Who sees the notes'],
     );
+    assert.equal(screen.querySelector('.kit-dl-action'), null, 'no « Change »');
+    const visibility = screen.querySelector<HTMLSelectElement>('select[name="visibility"]');
+    if (visibility === null) throw new Error('no list');
     assert.deepEqual(
       [...visibility.options].map((option) => [option.value, option.textContent, option.selected]),
       [
@@ -454,25 +452,23 @@ describe('2 · who sees the notes and where they go, chosen at the turn on (FRU-
         ['everyone', 'Everyone who visits the site', false],
       ],
     );
-
     change(visibility, 'everyone');
     await settle();
-    change(place, '0');
+    change(screen.querySelector('select[name="provider"]') as HTMLSelectElement, 'hook');
     await settle();
-    change(place, '');
-    await settle();
-    assert.deepEqual(calls, ['visibility:everyone', 'place:Linear · Design', 'place:none']);
+    assert.deepEqual(calls, ['visibility:everyone', 'place:{"connector":"hook"}']);
   });
 
-  it('puts a list back as it was when the worker refuses the change', async () => {
+  it('puts the visibility back when the worker refuses the change', async () => {
     const screen = turnOnScreen(page(), {
       origin: 'https://preview.northwind.io',
       workspace: 'Northwind',
       visibility: 'members',
       choices: {
-        places: { w1: [] },
+        sources: { w1: [] },
         workspace: 'w1',
         place: null,
+        loadOffer: async () => undefined,
         onVisibility: async () => false,
         onPlace: async () => false,
       },
@@ -489,40 +485,7 @@ describe('2 · who sees the notes and where they go, chosen at the turn on (FRU-
     assert.equal(visibility.disabled, false);
   });
 
-  it('keeps a place the list does not hold, chosen and shown', () => {
-    const screen = turnOnScreen(page(), {
-      origin: 'https://preview.northwind.io',
-      workspace: 'Northwind',
-      visibility: 'members',
-      choices: {
-        places: { w1: [DESIGN] },
-        workspace: 'w1',
-        place: { label: 'GitHub · acme/web' },
-        onVisibility: async () => true,
-        onPlace: async () => true,
-      },
-      onTurnOn: nothing,
-      onSettings: nothing,
-    });
-    const place = screen.querySelector<HTMLSelectElement>('select[name="place"]');
-    assert.equal(place?.selectedOptions[0]?.textContent, 'GitHub · acme/web');
-  });
-
-  it('says a place it does not know as « Not known », never as « Fruitback »', () => {
-    const screen = turnOnScreen(page(), {
-      origin: 'https://preview.northwind.io',
-      workspace: 'Northwind',
-      visibility: 'members',
-      choices: { places: { w1: [DESIGN] }, workspace: 'w1', onVisibility: async () => true, onPlace: async () => true },
-      onTurnOn: nothing,
-      onSettings: nothing,
-    });
-    const place = screen.querySelector<HTMLSelectElement>('select[name="place"]');
-    assert.equal(place?.selectedOptions[0]?.textContent, 'Not known');
-    assert.equal(place?.selectedOptions[0]?.disabled, true);
-  });
-
-  it('for a site of no workspace: the places follow the workspace chosen, back to « Fruitback »', async () => {
+  it('for a site of no workspace: the sources follow the workspace chosen, back to « Fruitback »', async () => {
     const calls: string[] = [];
     const screen = turnOnScreen(page(), {
       origin: 'https://preview.northwind.io',
@@ -532,11 +495,16 @@ describe('2 · who sees the notes and where they go, chosen at the turn on (FRU-
         { id: 'w2', name: 'Acme' },
       ],
       choices: {
-        places: { w1: [NORTHWIND], w2: [DESIGN] },
+        sources: { w1: [HOOK], w2: [LINEAR] },
         place: null,
+        loadOffer: async (workspace, connector) => {
+          calls.push(`load:${workspace}:${connector}`);
+
+          return { kind: 'linear', teams: [{ id: 'design', name: 'Design', key: 'DES', projects: [] }] };
+        },
         onVisibility: async () => true,
         onPlace: async (place) => {
-          calls.push(`place:${place?.label ?? 'none'}`);
+          calls.push(`place:${JSON.stringify(place)}`);
 
           return true;
         },
@@ -545,40 +513,34 @@ describe('2 · who sees the notes and where they go, chosen at the turn on (FRU-
       onSettings: nothing,
     });
     const workspace = screen.querySelector<HTMLSelectElement>('select[name="workspace"]');
-    const place = screen.querySelector<HTMLSelectElement>('select[name="place"]');
-    if (workspace === null || place === null) throw new Error('no lists');
+    const provider = screen.querySelector<HTMLSelectElement>('select[name="provider"]');
+    if (workspace === null || provider === null) throw new Error('no lists');
 
     assert.deepEqual(
-      [...place.options].map((option) => option.textContent),
-      ['Fruitback (no tracker)', 'Linear · Northwind'],
+      [...provider.options].map((option) => option.textContent),
+      ['Fruitback (no tracker)', 'REST API · Hook'],
     );
-    change(place, '0');
+    change(provider, 'hook');
     await settle();
     change(workspace, 'w2');
     assert.deepEqual(
-      [...place.options].map((option) => option.textContent),
-      ['Fruitback (no tracker)', 'Linear · Design'],
+      [...provider.options].map((option) => option.textContent),
+      ['Fruitback (no tracker)', 'Linear · Acme'],
     );
-    assert.equal(place.value, '');
+    assert.equal(provider.value, '');
     await settle();
-    // The places of the workspace chosen now, not those of the first.
-    change(place, '0');
+    change(provider, 'lin');
+    await settle();
+    change(screen.querySelector('select[name="team"]') as HTMLSelectElement, 'design');
     await settle();
     screen.querySelector<HTMLButtonElement>('.action-block button')?.click();
-    assert.deepEqual(calls, ['place:Linear · Northwind', 'place:none', 'place:Linear · Design', 'turn-on:w2']);
-  });
-
-  it('speaks French', () => {
-    setLanguage('fr');
-    const screen = turnOnScreen(page(), {
-      origin: 'https://preview.northwind.io',
-      workspace: 'Northwind',
-      visibility: 'members',
-      choices: { places: {}, place: null, onVisibility: async () => true, onPlace: async () => true },
-      onTurnOn: nothing,
-      onSettings: nothing,
-    });
-    assert.equal(screen.querySelector('select[name="place"] option')?.textContent, 'Fruitback (sans outil de suivi)');
+    assert.deepEqual(calls, [
+      'place:{"connector":"hook"}',
+      'place:null',
+      'load:w2:lin',
+      'place:{"connector":"lin","teamId":"design"}',
+      'turn-on:w2',
+    ]);
   });
 });
 
