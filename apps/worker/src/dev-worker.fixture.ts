@@ -2,6 +2,8 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createPostgresAccountStore } from './accounts-postgres.ts';
 import { type Visibility, WRITERS, type Writers } from './accounts.ts';
 import { createPairingCommand } from './app.ts';
+import { newAgentKey } from './agent-keys.ts';
+import { digest } from './session.ts';
 import { type WorkerEnv, readConfig } from './env.ts';
 import { createLinearFake, installLinearFake, LINEAR_FAKE_TEAM, type LinearFake } from './linear-fake.fixture.ts';
 import { pairingLink } from './pair-page.ts';
@@ -35,6 +37,8 @@ import { startServer } from './server.ts';
  *   tracker's. The specs of « Looks fixed » need a note the team marked done.
  * - **`POST /__dev/pair`**, which answers a pairing code and its link for the workspace. The `pair`
  *   command is another process: it cannot reach a database that lives in this one.
+ * - **`POST /__dev/agent-key`** `{ write?, verifiedOnly? }` (FRU-463): an agent key of the owner on the
+ *   site, which it answers once, for `claude mcp add` and the specs of `/mcp`.
  * - **`POST /__dev/writers`** `{ writers }` (FRU-330), who may leave a note on the site: `members`,
  *   the default of a new site, or `anyone`. A spec about one of the two says it, rather than
  *   reading the default. Through `addSite`, as the console writes it.
@@ -123,6 +127,37 @@ async function setWriters(
   response
     .writeHead(200, { 'Content-Type': 'application/json' })
     .end(JSON.stringify({ id: site.id, writers: site.writers }));
+}
+
+/**
+ * `POST /__dev/agent-key` `{ write?, verifiedOnly? }` (FRU-463): an agent key of the owner on the site of
+ * the playground, as the console makes one. It answers the key, for `claude mcp add` and the specs of `/mcp`.
+ */
+async function makeAgentKey(
+  database: PgDatabase,
+  seeded: { workspace: string; owner: string },
+  incoming: IncomingMessage,
+  response: ServerResponse,
+): Promise<void> {
+  const asked = await bodyOf(incoming);
+  const secret = newAgentKey();
+  const now = Date.now();
+  const made = await createPostgresAccountStore(database).createAgentKey(seeded.workspace, {
+    name: 'Dev agent',
+    sites: [DEV_SITE],
+    write: asked.write === true,
+    verifiedOnly: asked.verifiedOnly !== false,
+    createdBy: seeded.owner,
+    keyHash: await digest(secret),
+    createdAt: now,
+    expiresAt: now + 86_400_000,
+  });
+  if (typeof made !== 'object') {
+    response.writeHead(409, { 'Content-Type': 'application/json' }).end(JSON.stringify({ error: made }));
+
+    return;
+  }
+  response.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ id: made.id, secret }));
 }
 
 const STAGES = ['new', 'todo', 'progress', 'done', 'closed'];
@@ -237,6 +272,11 @@ export async function startDevWorker(given: WorkerEnv = process.env): Promise<vo
     }
     if (tracker !== undefined && incoming.method === 'GET' && incoming.url === '/__dev/tracker') {
       response.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(tracker.received()));
+
+      return;
+    }
+    if (incoming.method === 'POST' && incoming.url === '/__dev/agent-key') {
+      void makeAgentKey(database, seeded, incoming, response);
 
       return;
     }

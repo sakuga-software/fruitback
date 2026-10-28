@@ -148,6 +148,8 @@ export type NoteIndex = {
   toCheck(workspace: string, account: string): Promise<Map<string, number>>;
   /** The delivery of one note that did not arrive (FRU-244), for « Send again ». */
   deliveryOf(workspace: string, site: string, note: string): Promise<{ connector: string; id: string } | undefined>;
+  /** The page of one note of a site of the workspace (FRU-463), or `undefined` for a note it does not hold. */
+  pageOfNote(workspace: string, site: string, note: string): Promise<string | undefined>;
 };
 
 /** The smallest and the largest page of `list`, and the page when none is asked. */
@@ -177,6 +179,8 @@ export type NoteQuery = {
    */
   sites?: readonly string[];
   after?: NoteCursor;
+  /** The notes left at this instant or after it, in milliseconds (FRU-463). */
+  since?: number;
   limit: number;
 };
 

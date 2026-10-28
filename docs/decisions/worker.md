@@ -4437,3 +4437,33 @@ The identity of an agent with no browser, for the remote MCP server of FRU-463.
   write, rather than a key that sets statuses its member can no longer set.
 - **A prefix.** `fbk_` lets a scanner of secrets (GitHub's push protection, `gitleaks`) be told what
   a Fruitback key looks like. The rest is 32 bytes of `crypto.getRandomValues`, as a refresh token.
+
+## The remote MCP server, `/mcp` (FRU-463)
+
+An agent with an agent key (FRU-461) reads the notes of its sites. [agents.md](agents.md) gives the
+framing; `SECURITY.md` says what is protected.
+
+### The rules, in short
+
+- **`mcp.ts` is the transport, `agent-tools.ts` the tools.** `handleRequest` sends `/mcp` there after
+  the rate limit, with the store of the request (`storeOfRequest`) and `routeFor`.
+- **The transport is written here, with no SDK.** `POST`, one JSON-RPC message, one `application/json`
+  answer: `initialize`, `ping`, `tools/list`, `tools/call`, and `202` for a notification. No stream
+  (`GET` is `405`), no session id, no batch. Claude Code lists, reads and renders notes over it
+  (measured on 2026-10-28 with `claude -p --mcp-config`, a key of `POST /__dev/agent-key`).
+- **The key is read at each request** (`resolveAgentKey`), then the suspension of its workspace.
+  Each refusal is `404`.
+- **A note comes from the index, its content from its page.** `list_feedback` reads one page of the
+  index (`list`, with `since` since this ticket), then each page of the notes through `readPage`, the
+  read of `GET /feedback` with its cache, which refreshes the index as a read of the widget does.
+  `get_feedback` finds the page of a note with `pageOfNote`. So every store answers what its
+  `findForPage` answers: the store conformance suite holds that read, and `mcp.test.ts` holds the
+  tools on the store of a world.
+- **The id of a note is `noteIdOf` of the console**: its site and its note id, opaque. The id of the
+  issue in its tracker is `issueId`, for a key that sees the tracker.
+- **`verifiedOnly` and `status` filter after the page of the index**, so an answer can hold fewer
+  notes than its `limit`, and `next` still says that more wait. `status` is the key that each note
+  gives in `status` (`own:<key>` for a status the worker keeps).
+- **`feedback_as_text` writes the text of `feedbackText`**, in English, with no placement: the worker
+  has no page to find a note on. A whole site is its newest `MAX_TEXT_NOTES` notes, one block a
+  page, and `truncated: true` past them.

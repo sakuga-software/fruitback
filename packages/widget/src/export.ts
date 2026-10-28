@@ -1,19 +1,15 @@
-import type { NoteComment, NoteIssue, NoteStatus } from '@fruitback/shared';
+import { type FeedbackWords, type NotePlacement, feedbackText } from '@fruitback/shared';
+import type { NoteIssue, NoteStatus } from '@fruitback/shared';
 import type { Translator } from './messages.ts';
 import { statusLabel } from './status-paint.ts';
 
 /**
- * The feedback of a page as plain text (FRU-109).
- *
- * The text holds what the reviewers wrote and where, and nothing more: no instruction and no
- * introduction. The person who pastes it writes the request around it.
- *
- * Markdown, because a person and a model both read it. **Every line a reviewer wrote is quoted.**
- * A note is text from anybody who can reach the page, so it must not be able to close a block, open
- * a heading or pass for a line of this format.
+ * The feedback of a page as plain text (FRU-109). The format is `feedbackText` of
+ * `@fruitback/shared`, which the worker writes too (FRU-463); the widget gives it its words, in the
+ * language of the reader, and the place of each note on the page.
  */
 
-export type FeedbackPlacement = 'found' | 'approximate' | 'detached';
+export type FeedbackPlacement = NotePlacement;
 
 /** `status`: the status of the note in its read (FRU-370), when it has one. */
 export type FeedbackEntry = { issue: NoteIssue; placement: FeedbackPlacement; status?: NoteStatus };
@@ -32,102 +28,23 @@ export type FeedbackTextOptions = {
 };
 
 export function feedbackAsText(entries: readonly FeedbackEntry[], options: FeedbackTextOptions): string {
-  const t = options.translator;
-  const title = `# ${t.text('export.title', { url: options.pageUrl })}`;
-  if (entries.length === 0) return `${title}\n\n${t.text('export.empty')}\n`;
-
-  const blocks = entries.map((entry, index) => block(entry, index + 1, t));
-
-  return `${[title, ...blocks].join('\n\n')}\n`;
+  return feedbackText(entries, { pageUrl: options.pageUrl, words: wordsOf(options.translator) });
 }
 
-function block({ issue, placement, status }: FeedbackEntry, position: number, t: Translator): string {
-  const note = issue.note;
-  const facts = [
-    t.text('export.element', { element: element(issue) }),
-    component(issue, t),
-    signature(issue, t),
-    placement === 'approximate' ? t.text('export.approximate') : undefined,
-    placement === 'detached' ? t.text('export.detached') : undefined,
-    note.screenshot?.url !== undefined ? t.text('export.picture', { url: note.screenshot.url }) : undefined,
-  ].filter((line): line is string => line !== undefined);
-
-  return [
-    `## ${position}. ${oneLine(issue.identifier)} — ${oneLine(statusLabel(issue, status, t))}`,
-    facts.map((fact) => `- ${fact}`).join('\n'),
-    note.text.trim().length > 0 ? quote(note.text) : t.text('thread.noNote'),
-    ...(issue.comments ?? []).map((comment) => reply(comment, t)),
-  ].join('\n\n');
-}
-
-/** The tag, the text the element showed, and the selector that found it. */
-function element(issue: NoteIssue): string {
-  const anchor = issue.note.anchor;
-  const text = oneLine(anchor.text ?? '');
-
-  return [text.length > 0 ? `${anchor.tag} "${text}"` : anchor.tag, code(anchor.selector)].join(' · ');
-}
-
-function component(issue: NoteIssue, t: Translator): string | undefined {
-  const source = issue.note.source;
-  if (source === undefined) return undefined;
-
-  const file = source.file === undefined ? undefined : [source.file, source.line].filter(isPresent).join(':');
-  const parts = [source.component, file].filter(isPresent).map(oneLine);
-
-  return parts.length > 0 ? t.text('export.component', { component: parts.join(' · ') }) : undefined;
-}
-
-function signature(issue: NoteIssue, t: Translator): string | undefined {
-  const name = issue.note.reporter?.name ?? issue.note.reporter?.email;
-  const date = day(issue.note.createdAt);
-  if (name !== undefined) return dated(t.text('export.by', { name: oneLine(name) }), date);
-
-  return date === '' ? undefined : t.text('export.written', { date });
-}
-
-function reply(comment: NoteComment, t: Translator): string {
-  const head = t.text('export.reply', { author: oneLine(comment.author ?? t.text('thread.team')) });
-
-  return `${dated(head, day(comment.createdAt))}\n${quote(comment.body)}`;
-}
-
-/** The date after the words, and nothing after them when the store gave no date. */
-function dated(words: string, date: string): string {
-  return date === '' ? words : `${words} · ${date}`;
-}
-
-/** Each line behind a quote mark, so nothing in the text can end the quote. */
-function quote(text: string): string {
-  return text
-    .trim()
-    .split(/\r\n|\r|\n/)
-    .map((line) => (line.length > 0 ? `> ${line}` : '>'))
-    .join('\n');
-}
-
-/** A code span that holds its content whatever backticks the content has. */
-function code(text: string): string {
-  const content = oneLine(text);
-  const longest = Math.max(0, ...[...content.matchAll(/`+/g)].map((run) => run[0].length));
-  const fence = '`'.repeat(longest + 1);
-  const pad = content.startsWith('`') || content.endsWith('`') ? ' ' : '';
-
-  return `${fence}${pad}${content}${pad}${fence}`;
-}
-
-function oneLine(text: string): string {
-  return text.replace(/\s+/g, ' ').trim();
-}
-
-/** The date as `2026-10-06`: the same in every language, and what sorts. Empty when it is no date. */
-function day(value: string | undefined): string {
-  if (value === undefined) return '';
-  const date = new Date(value);
-
-  return Number.isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 10);
-}
-
-function isPresent<Value>(value: Value | undefined): value is Value {
-  return value !== undefined;
+function wordsOf(t: Translator): FeedbackWords {
+  return {
+    title: (url) => t.text('export.title', { url }),
+    empty: t.text('export.empty'),
+    element: (element) => t.text('export.element', { element }),
+    component: (component) => t.text('export.component', { component }),
+    by: (name) => t.text('export.by', { name }),
+    written: (date) => t.text('export.written', { date }),
+    approximate: t.text('export.approximate'),
+    detached: t.text('export.detached'),
+    picture: (url) => t.text('export.picture', { url }),
+    noNote: t.text('thread.noNote'),
+    team: t.text('thread.team'),
+    reply: (author) => t.text('export.reply', { author }),
+    status: (issue, status) => statusLabel(issue, status, t),
+  };
 }

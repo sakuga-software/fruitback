@@ -253,7 +253,7 @@ export function noteIdOf(site: string, note: string): string {
   return Buffer.from(JSON.stringify([site, note])).toString('base64url');
 }
 
-function noteKeyOf(id: string): { site: string; note: string } | undefined {
+export function noteKeyOf(id: string): { site: string; note: string } | undefined {
   const read = readJson(id);
 
   return Array.isArray(read) && read.length === 2 && typeof read[0] === 'string' && typeof read[1] === 'string'

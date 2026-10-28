@@ -35,6 +35,10 @@ first publish made it expensive.
   `GET /session/notes` and each REST delivery (version 2) carry the note under `note`. A refused
   note is `invalid-note`. An answer of the read cache of before is under another prefix of the `Kv`
   (`read-v3`), where no reader looks.
+- **The text of the notes of a page is `feedbackText`** (FRU-109, moved by FRU-463): the widget's
+  « Copy as text » and the tool `feedback_as_text` of the worker write it. The contract holds the
+  format and no word: the caller gives `FeedbackWords`, in its language. `placement` is absent where
+  the caller has no page to find a note on, and the text then says nothing of it.
 - **An issue says `checked: { by, at }` and `mine: true`** (FRU-294): `checked` on a done note whose
   newest verdict in its replies is « looks fixed », `mine` to the reader who left the note. Both
   optional, both read-envelope fields: `NOTE_VERSION` does not move.
