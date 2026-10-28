@@ -1312,4 +1312,97 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'The source was not renamed. Try again.': 'La source n’a pas été renommée. Réessayez.',
   'Name of this source': 'Nom de cette source',
   'Empty, it is named {kind}.': 'Vide, elle s’appelle {kind}.',
+  // FRU-462: the agent keys of a workspace.
+  Agents: 'Agents',
+  'A key lets an AI agent of your team read the notes of some sites through the MCP server of Fruitback, and reply to them when you allow it. Fruitback calls no model: the agent is yours.':
+    'Une clé permet à un agent IA de votre équipe de lire les notes de certains sites par le serveur MCP de Fruitback, et d’y répondre si vous l’autorisez. Fruitback n’appelle aucun modèle : l’agent est le vôtre.',
+  'Only an owner or an admin of the workspace manages its agent keys.':
+    'Seul un propriétaire ou un admin du workspace gère ses clés d’agent.',
+  'Add a site first': 'Ajoutez d’abord un site',
+  'New key': 'Nouvelle clé',
+  'Connect an AI agent': 'Connecter un agent IA',
+  'The agent keys did not load.': 'Les clés d’agent ne se sont pas chargées.',
+  '« {name} » is revoked.': '« {name} » est révoquée.',
+  'Give the key a name of one line, up to 80 characters.':
+    'Donnez à la clé un nom d’une ligne, de 80 caractères au plus.',
+  'Choose from 1 to 20 sites.': 'Choisissez de 1 à 20 sites.',
+  'A site you chose is not in the workspace any more. Reload the page.':
+    'Un site que vous avez choisi n’est plus dans le workspace. Rechargez la page.',
+  'Choose from 1 to 365 days.': 'Choisissez de 1 à 365 jours.',
+  'A workspace holds 20 keys at most. Revoke one to make another.':
+    'Un workspace a 20 clés au plus. Révoquez-en une pour en créer une autre.',
+  'The key was not made. Try again.': 'La clé n’a pas été créée. Réessayez.',
+  'Give the key a name.': 'Donnez un nom à la clé.',
+  'Choose at least one site.': 'Choisissez au moins un site.',
+  'New agent key': 'Nouvelle clé d’agent',
+  'Its replies are signed with it, beside « Agent ».': 'Ses réponses sont signées de ce nom, à côté de « Agent ».',
+  'Everyone reads its notes': 'Tout le monde lit ses notes',
+  'Members read its notes': 'Les membres lisent ses notes',
+  'The key reads nothing of another site. 20 at most.': 'La clé ne lit rien d’un autre site. 20 au plus.',
+  'What the agent can do': 'Ce que l’agent peut faire',
+  'Read the notes': 'Lire les notes',
+  'Their text, page, element, component, file and line, picture, replies and status.':
+    'Leur texte, page, élément, composant, fichier et ligne, capture, réponses et statut.',
+  'Read, reply and set a status': 'Lire, répondre et changer un statut',
+  'A reply says it is from an agent. A status is set only on a note that Fruitback keeps.':
+    'Une réponse dit qu’elle vient d’un agent. Un statut ne change que sur une note que garde Fruitback.',
+  'Lives for, in days': 'Durée, en jours',
+  'From 1 to 365 days: no key lives with no end.': 'De 1 à 365 jours : aucune clé ne vit sans fin.',
+  'Ends on {day}. From 1 to 365 days: no key lives with no end.':
+    'Prend fin le {day}. De 1 à 365 jours : aucune clé ne vit sans fin.',
+  'Only the notes of known people': 'Seulement les notes de personnes connues',
+  'On a site that everyone reads, the agent does not see a note of a visitor: anybody can write one, and an agent can obey its text. Turn it off only knowing that.':
+    'Sur un site que tout le monde lit, l’agent ne voit pas la note d’un visiteur : n’importe qui peut en écrire une, et un agent peut obéir à son texte. Désactivez-le en le sachant.',
+  'Making…': 'Création…',
+  'Make the key': 'Créer la clé',
+  '« {name} » is made': '« {name} » est créée',
+  'Copy the key now: Fruitback shows it only once, and keeps only its digest.':
+    'Copiez la clé maintenant : Fruitback ne la montre qu’une fois, et n’en garde que l’empreinte.',
+  'Copy the key': 'Copier la clé',
+  'Connect Claude Code': 'Connecter Claude Code',
+  'Run this line where Claude Code runs. It holds the key: paste it nowhere else.':
+    'Lancez cette ligne là où tourne Claude Code. Elle contient la clé : ne la collez nulle part ailleurs.',
+  'The line that connects Claude Code': 'La ligne qui connecte Claude Code',
+  'Copy the line': 'Copier la ligne',
+  'Another agent, in CI or in the cloud': 'Un autre agent, en CI ou dans le cloud',
+  'The browser refused the copy. Select the key above and copy it by hand.':
+    'Le navigateur a refusé la copie. Sélectionnez la clé ci-dessus et copiez-la à la main.',
+  'No agent key yet': 'Aucune clé d’agent',
+  'Make one for each agent: Claude Code on a laptop, a job of your CI, a cloud agent. Revoking one stops that agent alone.':
+    'Créez-en une par agent : Claude Code sur un portable, un job de votre CI, un agent dans le cloud. En révoquer une n’arrête que cet agent.',
+  '« {name} » ends in {count} days. Its agent stops then: make a new key, give it to the agent, then revoke this one.':
+    '« {name} » prend fin dans {count} jours. Son agent s’arrête alors : créez une nouvelle clé, donnez-la à l’agent, puis révoquez celle-ci.',
+  '{count} keys end within 7 days. Their agents stop then: make new keys, give them to the agents, then revoke the old ones.':
+    '{count} clés prennent fin dans 7 jours ou moins. Leurs agents s’arrêtent alors : créez de nouvelles clés, donnez-les aux agents, puis révoquez les anciennes.',
+  'Agent keys': 'Clés d’agent',
+  '{count} of 20 keys.': '{count} clés sur 20.',
+  'The key was not revoked. Try again.': 'La clé n’a pas été révoquée. Réessayez.',
+  'Made on {day}': 'Créée le {day}',
+  Can: 'Peut',
+  'Notes of known people only': 'Notes de personnes connues seulement',
+  'Every note, a visitor’s too': 'Toutes les notes, celles des visiteurs aussi',
+  'Last used': 'Dernier usage',
+  'Never used': 'Jamais utilisée',
+  Ends: 'Fin',
+  'Ends in {count} days': 'Prend fin dans {count} jours',
+  Ended: 'Terminée',
+  'On {day}': 'Le {day}',
+  Writes: 'Écritures',
+  Revoke: 'Révoquer',
+  'Revoke « {name} »': 'Révoquer « {name} »',
+  'An agent that uses this key is refused from its next request, and the key never works again. What it wrote stays in the threads of the notes.':
+    'Un agent qui utilise cette clé est refusé dès sa prochaine requête, et la clé ne marche plus jamais. Ce qu’elle a écrit reste dans les fils des notes.',
+  'Replied to a note': 'A répondu à une note',
+  'Set the status to « {status} »': 'A passé le statut à « {status} »',
+  'Writes of {name}': 'Écritures de {name}',
+  'What this key wrote': 'Ce que cette clé a écrit',
+  'The writes of this key did not load.': 'Les écritures de cette clé ne se sont pas chargées.',
+  'This key wrote nothing yet. A key that only reads never writes.':
+    'Cette clé n’a encore rien écrit. Une clé qui ne fait que lire n’écrit jamais.',
+  'The last 100 writes are listed.': 'Les 100 dernières écritures sont listées.',
+  'A reply shows in the thread of its note as « Agent », beside the name of the key. A status can be set back on the page of the note.':
+    'Une réponse apparaît dans le fil de sa note avec « Agent », à côté du nom de la clé. Un statut se remet sur la page de la note.',
+  'Keys that let an AI agent of your team read the notes of some sites, and reply to them.':
+    'Les clés qui permettent à un agent IA de votre équipe de lire les notes de certains sites, et d’y répondre.',
+  'Manage the agent keys': 'Gérer les clés d’agent',
 };
