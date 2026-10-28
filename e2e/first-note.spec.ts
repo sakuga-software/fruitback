@@ -136,25 +136,22 @@ test('a first user goes from the setup to a first note (FRU-481)', async ({ exte
   await expect.poll(() => connect.isClosed()).toBe(true);
   await welcome!.screenshot({ path: test.info().outputPath('07-welcome-signed-in.png') });
 
-  // To the site, by the link of the setup.
-  did('tab', 'go back to the tab of the setup');
-  await goesOn.bringToFront();
+  // The welcome page offers the one site of the workspace: « Turn on » asks Chrome, then opens it.
+  const turnOn = welcome!.getByRole('button', { name: 'Turn on localhost:5177' });
+  await expect(turnOn).toBeVisible({ timeout: 15_000 });
+  await welcome!.screenshot({ path: test.info().outputPath('08-welcome-turn-on.png') });
   const siteOpens = context.waitForEvent('page');
-  await goesOn.getByRole('link', { name: /^Open .*localhost:5177$/ }).click();
-  did('console', 'click « Open <site> »: the site opens in a tab');
+  await turnOn.click();
+  did('welcome', 'click « Turn on <site> »: the site opens in a tab');
+  did('chrome', 'click « Allow » in the prompt of Chrome for the access to the site');
   const site = await siteOpens;
+  await site.waitForLoadState();
+  expect(new URL(site.url()).origin).toBe(PLAYGROUND_ORIGIN);
   // The playground mounts a widget of its own: `widget=off` keeps only the one of the extension.
   await site.goto(`${PLAYGROUND_ORIGIN}/?widget=off`);
   await expect(site.getByRole('heading', { name: 'Nos formules' })).toBeVisible();
-
-  did('popup', 'click the Fruitback icon');
-  const onSite = await openPopup(extension, site);
-  await onSite.screenshot({ path: test.info().outputPath('08-popup-on-site.png') });
-  const turnOn = onSite.getByRole('button', { name: /^Turn on/ });
-  await expect(turnOn).toBeVisible({ timeout: 15_000 });
-  await turnOn.click();
-  did('popup', 'click « Turn on »');
-  did('chrome', 'click « Allow » in the prompt of Chrome for the access to the site');
+  // The welcome page says the site is on now, and offers to open it.
+  await expect(welcome!.getByRole('button', { name: 'Open localhost:5177' })).toBeVisible();
 
   // The widget of the extension appears on the site.
   await site.bringToFront();

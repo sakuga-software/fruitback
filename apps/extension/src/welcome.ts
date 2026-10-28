@@ -16,17 +16,34 @@ import { type SignInStop, element, linkButton } from './popup-view.ts';
  * It is an extension page that `tabs.create` opens: no permission, and no entry in the manifest.
  */
 
-/** Where the sign-in of the page is. `who`: the account, as the head of the popup names it. */
+/** A site of the workspaces of the account (FRU-483). `on`: a rule of this browser turns it on. */
+export type WelcomeSite = { origin: string; on: boolean };
+
+/**
+ * Where the sign-in of the page is. `who`: the account, as the head of the popup names it. `sites`:
+ * the sites of its workspaces, `unavailable` when Fruitback did not answer, absent while they are
+ * read. `problem`: what stopped the last « Turn on ».
+ */
 export type WelcomeSignIn =
   | { kind: 'signed-out'; stop?: SignInStop }
   | { kind: 'connecting'; word: string; unanswered?: boolean }
-  | { kind: 'signed-in'; who: string };
+  | { kind: 'signed-in'; who: string; sites?: readonly WelcomeSite[] | 'unavailable'; problem?: string };
 
 export type WelcomeOptions = {
   /** Opens the popup of the extension. It rejects where the browser does not let a page open it. */
   openPopup: () => Promise<void>;
   /** Absent in a build that names no Fruitback: the page then leads to the popup. */
-  signIn?: { state: WelcomeSignIn; onSignIn: () => void; onStartAgain: () => void };
+  signIn?: {
+    state: WelcomeSignIn;
+    onSignIn: () => void;
+    onStartAgain: () => void;
+    /** Asks the browser for the site, turns it on, and opens it (FRU-483). */
+    onTurnOn?: (origin: string) => void;
+    /** Opens a site that is on already. */
+    onOpen?: (origin: string) => void;
+    /** The setup of the console, for an account whose workspaces have no site yet. */
+    onAddSite?: () => void;
+  };
 };
 
 /** The page: two steps, and the sign-in. */
@@ -118,7 +135,7 @@ function signInPart(document: Document, signIn: NonNullable<WelcomeOptions['sign
     const done = element(document, 'section', '', 'welcome-sign-in');
     const said = element(document, 'p', t('Signed in as {who}.', { who: state.who }), 'welcome-done');
     said.setAttribute('role', 'status');
-    done.append(said, element(document, 'p', t('Open a site of your team, then click the Fruitback icon.'), 'lead'));
+    done.append(said, ...sitesPart(document, state, signIn));
 
     return [done];
   }
@@ -133,6 +150,58 @@ function signInPart(document: Document, signIn: NonNullable<WelcomeOptions['sign
   part.append(primaryButton(document, t('Sign in with email'), signIn.onSignIn), others);
 
   return [part];
+}
+
+/**
+ * The sites to turn on (FRU-483): one site is the one button of the page, several are a list. The
+ * browser asks for the access to the site at the click, for that site only.
+ */
+function sitesPart(
+  document: Document,
+  state: Extract<WelcomeSignIn, { kind: 'signed-in' }>,
+  signIn: NonNullable<WelcomeOptions['signIn']>,
+): HTMLElement[] {
+  const { sites } = state;
+  const elsewhere = () => [
+    element(document, 'p', t('Open a site of your team, then click the Fruitback icon.'), 'lead'),
+  ];
+  if (sites === undefined) return [];
+  if (sites === 'unavailable' || signIn.onTurnOn === undefined) return elsewhere();
+  if (sites.length === 0) {
+    const none = element(document, 'p', t('No site in your workspaces yet.'), 'lead');
+
+    return signIn.onAddSite === undefined ? [none] : [none, primaryButton(document, t('Add a site'), signIn.onAddSite)];
+  }
+
+  const button = (site: WelcomeSite, main: boolean): HTMLButtonElement => {
+    const host = new URL(site.origin).host;
+    const label = site.on ? t('Open {site}', { site: host }) : t('Turn on {site}', { site: host });
+    const act = () => (site.on ? signIn.onOpen?.(site.origin) : signIn.onTurnOn?.(site.origin));
+
+    return main && !site.on ? primaryButton(document, label, act) : secondaryButton(document, label, act);
+  };
+  const part: HTMLElement[] = [];
+  if (sites.length === 1) {
+    part.push(button(sites[0] as WelcomeSite, true));
+  } else {
+    const list = element(document, 'ul', '', 'welcome-sites');
+    for (const site of sites) {
+      const row = element(document, 'li', '');
+      row.append(button(site, false));
+      list.append(row);
+    }
+    part.push(element(document, 'p', t('Turn on a site of your workspaces:'), 'lead'), list);
+  }
+  if (sites.some((site) => !site.on)) {
+    part.push(element(document, 'p', t('Chrome asks for access to this site only.'), 'welcome-hint'));
+  }
+  if (state.problem !== undefined) {
+    const problem = element(document, 'p', state.problem, 'problem');
+    problem.setAttribute('role', 'alert');
+    part.push(problem);
+  }
+
+  return part;
 }
 
 function step(document: Document, name: string, text: string): HTMLLIElement {

@@ -39,6 +39,7 @@ const VIEWS = [
   './side-panel.ts',
   './search-options.ts',
   './welcome.ts',
+  '../entrypoints/welcome/main.ts',
   './workers-page.ts',
   // FRU-425: the prompt of each browser, quoted by « Allow captures on every site ».
   './capture-everywhere.ts',

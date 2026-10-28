@@ -5,6 +5,8 @@ import { setLanguage } from './i18n.ts';
 import { WELCOME_PATH, opensWelcome } from './welcome-install.ts';
 import { type WelcomeSignIn, welcomeScreen } from './welcome.ts';
 
+type WelcomeSign = Extract<WelcomeSignIn, { kind: 'signed-in' }>;
+
 function page(): Document {
   return new HappyDomWindow({ url: `chrome-extension://fruitback${WELCOME_PATH}` }).document as unknown as Document;
 }
@@ -90,6 +92,83 @@ describe('the page that opens at install (FRU-318)', () => {
       assert.equal(screen.querySelector('[role="status"]')?.textContent, 'Waiting for you to connect in the tab…');
       screen.querySelector('button')?.click();
       assert.equal(again, 1);
+    });
+
+    describe('the sites to turn on (FRU-483)', () => {
+      const signedIn = (sites: WelcomeSign['sites'], extra: Partial<WelcomeSign> = {}) => {
+        const asked: string[] = [];
+        const screen = welcomeScreen(page(), {
+          openPopup: async () => {},
+          signIn: {
+            state: { kind: 'signed-in', who: 'ana@acme.dev', ...(sites === undefined ? {} : { sites }), ...extra },
+            onSignIn: () => {},
+            onStartAgain: () => {},
+            onTurnOn: (origin) => asked.push(`on ${origin}`),
+            onOpen: (origin) => asked.push(`open ${origin}`),
+            onAddSite: () => asked.push('add'),
+          },
+        });
+
+        return { screen, asked, buttons: () => [...screen.querySelectorAll('button')] };
+      };
+
+      it('offers one site as the one button of the page, and says what Chrome asks', () => {
+        const { screen, asked, buttons } = signedIn([{ origin: 'https://staging.acme.dev', on: false }]);
+        assert.deepEqual(
+          buttons().map((button) => button.textContent),
+          ['Turn on staging.acme.dev'],
+        );
+        assert.equal(buttons()[0]?.className, 'kit-primary');
+        assert.match(screen.textContent ?? '', /Chrome asks for access to this site only\./);
+        buttons()[0]?.click();
+        assert.deepEqual(asked, ['on https://staging.acme.dev']);
+      });
+
+      it('lists several sites, and opens one that is on already', () => {
+        const { screen, asked, buttons } = signedIn([
+          { origin: 'https://staging.acme.dev', on: true },
+          { origin: 'https://acme.dev', on: false },
+        ]);
+        assert.equal(screen.querySelectorAll('.welcome-sites li').length, 2);
+        assert.ok(buttons().every((button) => button.className === 'kit-secondary'));
+        assert.deepEqual(
+          buttons().map((button) => button.textContent),
+          ['Open staging.acme.dev', 'Turn on acme.dev'],
+        );
+        for (const button of buttons()) button.click();
+        assert.deepEqual(asked, ['open https://staging.acme.dev', 'on https://acme.dev']);
+      });
+
+      it('leads an account with no site to the console, and says nothing of Chrome', () => {
+        const { screen, asked, buttons } = signedIn([]);
+        assert.match(screen.textContent ?? '', /No site in your workspaces yet\./);
+        assert.doesNotMatch(screen.textContent ?? '', /Chrome asks/);
+        buttons()[0]?.click();
+        assert.deepEqual(asked, ['add']);
+      });
+
+      it('says where to go when Fruitback did not answer, which is not « no site »', () => {
+        const { screen, buttons } = signedIn('unavailable');
+        assert.match(screen.textContent ?? '', /Open a site of your team, then click the Fruitback icon\./);
+        assert.doesNotMatch(screen.textContent ?? '', /No site/);
+        assert.equal(buttons().length, 0);
+      });
+
+      it('says what stopped a « Turn on », and keeps the button', () => {
+        const { screen, buttons } = signedIn([{ origin: 'https://staging.acme.dev', on: false }], {
+          problem: 'The browser did not give access to this site.',
+        });
+        assert.equal(
+          screen.querySelector('[role="alert"]')?.textContent,
+          'The browser did not give access to this site.',
+        );
+        assert.equal(buttons()[0]?.textContent, 'Turn on staging.acme.dev');
+      });
+
+      it('draws nothing more while the sites are read', () => {
+        const { buttons } = signedIn(undefined);
+        assert.equal(buttons().length, 0);
+      });
     });
 
     it('says who is signed in, and where to go next', () => {

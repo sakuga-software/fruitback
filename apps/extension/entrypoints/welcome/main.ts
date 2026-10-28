@@ -1,15 +1,17 @@
 import { browser } from 'wxt/browser';
 import { workerOrigin } from '../../src/endpoint.ts';
-import { language, setLanguage } from '../../src/i18n.ts';
+import { language, msg, setLanguage, t } from '../../src/i18n.ts';
 import { storedLanguage } from '../../src/language.ts';
 import { type ConnectState, forgetConnect, pollConnect, startConnect } from '../../src/connect.ts';
-import { createBrowserConnect, rememberConsole } from '../../src/connect-browser.ts';
+import { type CloudSeams, type Offer, cloudEntry, sitesOf } from '../../src/cloud.ts';
+import { consoleOf, createBrowserConnect, rememberConsole } from '../../src/connect-browser.ts';
 import { cloudEndpoint } from '../../src/popup-state.ts';
 import { signInStop } from '../../src/popup-view.ts';
 import { matchPatternFor } from '../../src/registration.ts';
 import { createBrowserSessions } from '../../src/session-browser.ts';
 import { describeIdentity } from '../../src/session.ts';
-import { type WelcomeSignIn, welcomeScreen } from '../../src/welcome.ts';
+import { readAll, rememberPreviews, writeSite } from '../../src/sites.ts';
+import { type WelcomeSignIn, type WelcomeSite, welcomeScreen } from '../../src/welcome.ts';
 
 /** The page that opens at install (FRU-318), and its sign-in (FRU-482): what `src/welcome.ts` draws. */
 setLanguage((await storedLanguage(browser.storage.local)) ?? navigator.language);
@@ -25,6 +27,11 @@ let approveTab: number | undefined;
 let nextClaim: ReturnType<typeof setTimeout> | undefined;
 /** Each draw counts: a claim of a screen that is gone does not draw. */
 let drawn = 0;
+/** The sites of the account, by origin, as the last read listed them (FRU-483). */
+let offers = new Map<string, Offer>();
+
+const NO_ACCESS = msg('The browser did not give access to this site.');
+const NOT_TURNED_ON = msg('The site could not be turned on. Try again.');
 
 // `action.openPopup` needs no permission. Where the browser does not let a page call it, it rejects,
 // and the page says where the icon is.
@@ -38,7 +45,16 @@ function draw(state: WelcomeSignIn | undefined): void {
       openPopup,
       ...(state === undefined
         ? {}
-        : { signIn: { state, onSignIn: () => signIn(false), onStartAgain: () => signIn(true) } }),
+        : {
+            signIn: {
+              state,
+              onSignIn: () => signIn(false),
+              onStartAgain: () => signIn(true),
+              onTurnOn: turnOn,
+              onOpen: (origin: string) => void browser.tabs.create({ url: origin }),
+              onAddSite: () => void addSite(),
+            },
+          }),
     }),
   );
 }
@@ -54,10 +70,68 @@ async function current(): Promise<WelcomeSignIn | undefined> {
   return { kind: 'signed-out' };
 }
 
-async function show(): Promise<void> {
+async function show(problem?: string): Promise<void> {
   const state = await current();
   draw(state);
   if (state?.kind === 'connecting') waitForTheConsole(false);
+  if (state?.kind !== 'signed-in') return;
+  const screen = drawn;
+  const sites = await sitesNow();
+  if (screen === drawn) draw({ ...state, sites, ...(problem === undefined ? {} : { problem }) });
+}
+
+/** What `sitesOf` needs, bound to this page's one `Sessions`, as `cloudSeams` of the popup. */
+function cloudSeams(): CloudSeams {
+  return {
+    endpoints: async () => Object.keys(await sessions.list()),
+    ensureAccess: (endpoint) => sessions.ensureAccess(endpoint),
+    remember: rememberPreviews,
+    sessionOf: async (endpoint) => {
+      const held = (await sessions.list())[endpoint];
+
+      return held === undefined ? undefined : (held.epoch ?? '');
+    },
+  };
+}
+
+/** The sites of the account, each on when a rule of this browser turns it on. */
+async function sitesNow(): Promise<readonly WelcomeSite[] | 'unavailable'> {
+  const listed = CLOUD === undefined ? undefined : await sitesOf(CLOUD, cloudSeams()).catch(() => undefined);
+  if (listed === undefined) return 'unavailable';
+  offers = new Map(listed.map((offer) => [offer.pattern, offer]));
+  const rules = await readAll();
+
+  return listed.map((offer) => ({ origin: offer.pattern, on: rules[offer.pattern]?.enabled === true }));
+}
+
+/**
+ * « Turn on <site> » (FRU-483), as « Turn on » of the popup: the browser asks for that site, the rule
+ * is written, and the site opens with its widget.
+ *
+ * **The request comes first, from this click**: a host permission may only be asked for while the
+ * click is handled, so nothing is awaited before it.
+ */
+function turnOn(origin: string): void {
+  const offer = offers.get(origin);
+  if (offer === undefined) return;
+  const granted = browser.permissions.request({ origins: [matchPatternFor(offer.pattern)] });
+  for (const button of app?.querySelectorAll('button') ?? []) button.disabled = true;
+
+  void (async () => {
+    if (!(await granted.catch(() => false))) return show(t(NO_ACCESS));
+    await writeSite(offer.pattern, cloudEntry(offer));
+    await browser.tabs.create({ url: origin });
+    await show();
+  })().catch((error: unknown) => {
+    console.error('[fruitback] could not turn the site on', error);
+    void show(t(NOT_TURNED_ON));
+  });
+}
+
+/** The setup of the console: an account with no site adds its first one there. */
+async function addSite(): Promise<void> {
+  const consoleAt = CLOUD === undefined ? undefined : await consoleOf(CLOUD);
+  if (consoleAt !== undefined) await browser.tabs.create({ url: `${consoleAt}/setup` });
 }
 
 /**
