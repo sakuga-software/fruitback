@@ -413,6 +413,12 @@ const STYLES = `
   box-shadow: var(--fruitback-shadow-lg);
 }
 .fruitback-panel-config[hidden] { display: none; }
+/* FRU-471: the settings fade in at each opening. Opacity only: their box does not move. */
+.fruitback-panel-config:not([hidden]) { animation: fruitback-panel-in var(--fruitback-duration-fast) var(--fruitback-ease-out); }
+@keyframes fruitback-panel-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
 /* FRU-443: the settings open from the corner of the dock, above it or under it. */
 :host([data-fruitback-position$='-right']) .fruitback-panel-config { right: 16px; left: auto; }
 :host([data-fruitback-position$='-left']) .fruitback-panel-config { left: 16px; right: auto; }
@@ -552,6 +558,7 @@ const STYLES = `
 }
 @media (prefers-reduced-motion: reduce) {
   .fruitback-config-check input, .fruitback-config-check input::before { transition: none; }
+  .fruitback-panel-config:not([hidden]) { animation: none; }
 }
 /*
   FRU-472: the four corners, in a square laid out left to right whatever the reading direction. Each

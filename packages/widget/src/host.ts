@@ -885,6 +885,23 @@ li { display: list-item; }
   box-shadow: var(--fruitback-shadow-md);
 }
 /*
+  FRU-471: the dock fades in when the widget mounts, and when it comes back after the list. Opacity
+  only: its box is where the specs and the person expect it from the first frame.
+*/
+.fruitback-dock { animation: fruitback-dock-in var(--fruitback-duration-fast) var(--fruitback-ease-out) both; }
+@keyframes fruitback-dock-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+/* A press of a button of the dock gives way a little, and comes back. */
+.fruitback-dock button { transition: transform var(--fruitback-duration-fast) var(--fruitback-ease-out); }
+.fruitback-dock button:active:not([aria-disabled='true']) { transform: scale(0.96); }
+@media (prefers-reduced-motion: reduce) {
+  .fruitback-dock { animation: none; }
+  .fruitback-dock button { transition: none; }
+  .fruitback-dock button:active:not([aria-disabled='true']) { transform: none; }
+}
+/*
   FRU-443: a corner that was chosen is a corner of the window, whatever the direction of the page.
   The settings and the list of the detached notes open from the dock: see panel.ts and orphans.ts.
 */
