@@ -72,3 +72,29 @@ body {
 .welcome-hint:empty {
   display: none;
 }
+
+/* The sign-in of the page (FRU-482): the ways of the popup, and the word to check. */
+.welcome-sign-in {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.welcome-sign-in > .word {
+  margin: 0;
+}
+
+.welcome-sign-in > button.link-button {
+  align-self: flex-start;
+}
+
+.welcome-sign-in h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.welcome-done {
+  margin: 0;
+  font-weight: 600;
+}

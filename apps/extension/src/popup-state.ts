@@ -96,8 +96,9 @@ export type PopupState =
   | { kind: 'signed-out'; canSignIn: boolean; ended: boolean };
 
 export function decide(facts: PopupFacts): PopupState {
-  // A `chrome://` page, the store, a PDF viewer: nothing is wrong, and nothing can run there.
-  if (facts.origin === undefined) return { kind: 'not-web' };
+  // A `chrome://` page, the store, a PDF viewer, the welcome page: nothing can run there. The sign-in
+  // can, and it is the first thing after the install, on such a page (FRU-482).
+  if (facts.origin === undefined) return notWeb(facts);
   if (facts.pairLink && !facts.editing) return { kind: 'pair-link' };
 
   // A sign-in in progress is what the person came back for, whatever the page.
@@ -131,6 +132,21 @@ export function decide(facts: PopupFacts): PopupState {
   if (facts.sessions === 0) return { kind: 'signed-out', canSignIn: facts.canSignIn, ended: false };
 
   return { kind: 'form' };
+}
+
+function notWeb(facts: PopupFacts): PopupState {
+  if (facts.connect === 'waiting' || facts.connect === 'unavailable') {
+    return { kind: 'connecting', unanswered: facts.connect === 'unavailable' };
+  }
+  if (facts.connect === 'refused' || facts.connect === 'expired') {
+    return { kind: 'sign-in-problem', problem: facts.connect };
+  }
+  if (facts.account === 'ended') return { kind: 'signed-out', canSignIn: facts.canSignIn, ended: true };
+  if (facts.account === 'none' && facts.sessions === 0 && facts.canSignIn) {
+    return { kind: 'signed-out', canSignIn: true, ended: false };
+  }
+
+  return { kind: 'not-web' };
 }
 
 /**

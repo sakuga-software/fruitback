@@ -24,7 +24,7 @@ minutes and no developer tools.
 3. Choose **Load unpacked**, and pick the folder you unzipped.
 4. A Fruitback tab opens by itself: **pin Fruitback**. Open the puzzle piece at the right of the
    address bar, then press the pin beside Fruitback. Its icon stays in the toolbar.
-5. Click the Fruitback icon, then **Sign in with email**: section 2 goes on from there.
+5. On that tab, choose **Sign in with email**, **Google** or **GitHub**: section 2 goes on from there.
 
    ![The page that opens at install: pin Fruitback, then sign in](assets/guide-welcome.png)
 
@@ -53,8 +53,9 @@ run there.
 
 There is nothing to type, and four steps.
 
-1. **Sign in.** Click the Fruitback icon on any page and choose **Sign in with email**, **Google** or
-   **GitHub**: all three open the console in a tab, which signs you in its own way. Invited by a
+1. **Sign in.** On the tab that opens at install, or in the popup of the Fruitback icon on any page,
+   choose **Sign in with email**, **Google** or **GitHub**: all three open the console in a tab, which
+   signs you in its own way. Invited by a
    client or a team? Use the email the invitation was sent to.
 
    ![The popup of a browser that is signed out: Sign in with email, Google, GitHub](assets/guide-sign-in.png)
