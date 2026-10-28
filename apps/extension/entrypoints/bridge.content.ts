@@ -23,6 +23,7 @@ import { BRIDGE_SCRIPT_FLAG } from '../src/page-api.ts';
 import { randomId } from '../src/relay-transport.ts';
 import { captureResponseOf } from '../src/capture-answer.ts';
 import { createPairing } from '../src/copy.ts';
+import { hasGesture } from '../src/panel-request.ts';
 import {
   PANEL_EVENT_TYPE,
   type TabCommandAnswer,
@@ -167,6 +168,28 @@ export default defineContentScript({
       }
 
       if (message?.kind === 'relay-request') void relay(message);
+      // FRU-469: the side panel, asked in the click of the widget. Carried at once: the background
+      // opens it before any `await`, and answers whether it did. Only while the window holds the
+      // activation of a gesture of the person: this world reads it, and no script of the page makes
+      // it (see `panel-request.ts`).
+      if (message?.kind === 'open-panel-request') {
+        if (!hasGesture(navigator)) {
+          post({ channel: CHANNEL, kind: 'open-panel-response', id: message.id, opened: false });
+
+          return;
+        }
+        void browser.runtime
+          .sendMessage(message)
+          .catch(() => undefined)
+          .then((answer: unknown) =>
+            post({
+              channel: CHANNEL,
+              kind: 'open-panel-response',
+              id: message.id,
+              opened: typeof answer === 'object' && answer !== null && (answer as { opened?: unknown }).opened === true,
+            }),
+          );
+      }
       // FRU-470: « All pages », carried across and answered whatever happens, as a relay is.
       if (message?.kind === 'site-notes-request') {
         void browser.runtime

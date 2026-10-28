@@ -230,6 +230,13 @@ export type FruitbackOptions = {
    * note (FRU-253), on the origin of this page only.
    */
   siteNotes?: SiteNotes;
+  /**
+   * Opens the side panel of the browser extension, for a host that has one (FRU-469). Given, the
+   * button of the dock that shows every note asks it first, in its click, and opens the list of the
+   * page only when it answers `false` or fails: what was asked is shown either way. Left out, the
+   * button opens the list of the page, as before.
+   */
+  openSidebar?: () => Promise<boolean>;
   document?: Document;
 };
 
@@ -468,7 +475,7 @@ export function init(options: FruitbackOptions): Fruitback {
     ...(options.theme !== undefined ? { theme: options.theme } : {}),
     ...(dockPosition() !== undefined ? { position: dockPosition() } : {}),
     onConfigure: () => panel.toggle(),
-    onList: () => sidebar.toggle(),
+    onList: () => openList(),
     onSelect: (selected) => {
       // A note is on its way, about the element chosen before: a choice now would point the
       // composer at another element under a send it cannot change. The choice is let go, and the
@@ -959,6 +966,31 @@ export function init(options: FruitbackOptions): Fruitback {
       void read();
     },
   });
+
+  /**
+   * The button of the dock (FRU-469): the side panel of the host when it has one, else the list of
+   * the page. Asked in the click itself, because a browser opens its panel only from a gesture.
+   */
+  function openList(): void {
+    // A session that ended (FRU-315): the list of the page says so and holds « Sign in », the way
+    // back. The panel would read through this widget, which reads nothing now.
+    if (options.openSidebar === undefined || sidebar.isOpen || ended) {
+      sidebar.toggle();
+
+      return;
+    }
+    let asked: Promise<boolean>;
+    try {
+      asked = options.openSidebar();
+    } catch {
+      asked = Promise.resolve(false);
+    }
+    void asked
+      .catch(() => false)
+      .then((opened) => {
+        if (!opened && !destroyed) sidebar.open();
+      });
+  }
 
   panel = createConfigPanel({
     document,

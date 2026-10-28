@@ -51,6 +51,15 @@ test('« All pages » lists the notes of the other pages of the site, and opens 
   await other.close();
 
   await page.bringToFront();
+  // FRU-469: the button opens the side panel of the browser, which has « Whole site ». The list of the
+  // page, and its « All pages », is what a browser that opens no panel shows: such a browser here.
+  await extension.worker.evaluate(() => {
+    const scope = globalThis as unknown as Record<string, { sidePanel?: { open: unknown } } | undefined>;
+    for (const name of ['chrome', 'browser']) {
+      const api = scope[name]?.sidePanel;
+      if (api !== undefined) api.open = () => Promise.reject(new Error('no panel in this browser'));
+    }
+  });
   await page.getByRole('button', { name: /Show every note in a sidebar/ }).click();
   const list = page.getByRole('dialog', { name: 'Notes on this page' });
   await list.getByRole('button', { name: /^All pages/ }).click();

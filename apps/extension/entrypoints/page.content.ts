@@ -3,6 +3,7 @@ import {
   CHANNEL,
   type BridgeMessage,
   type CaptureResponseMessage,
+  type OpenPanelResponseMessage,
   type SiteNotesResponseMessage,
   parseBridgeMessage,
 } from '../src/protocol.ts';
@@ -48,6 +49,8 @@ import { version as VERSION } from '../package.json';
 const CAPTURE_TIMEOUT_MS = 30_000;
 /** As long as a read of the side panel may take, and a little more for the two hops (FRU-470). */
 const SITE_NOTES_TIMEOUT_MS = 15_000;
+/** The panel opens at once or not at all: past this, the widget shows its own list (FRU-469). */
+const OPEN_PANEL_TIMEOUT_MS = 3_000;
 
 export default defineContentScript({
   // Registered by `background.ts` for the origins somebody turned on, never declared. See
@@ -130,6 +133,28 @@ export default defineContentScript({
           ...(area === undefined ? {} : { area }),
         });
       });
+    /** The asks for the side panel not answered yet, by the id of the request (FRU-469). */
+    const panels = new Map<string, (opened: OpenPanelResponseMessage['opened']) => void>();
+
+    /**
+     * The button of the widget that shows every note (FRU-469): the side panel of the browser, asked
+     * in the click. `false` when the background could not open it, or said nothing in three seconds:
+     * the widget then opens its own list.
+     */
+    const openSidebar = (): Promise<boolean> =>
+      new Promise((resolve) => {
+        const id = randomId(window);
+        const timer = setTimeout(() => {
+          panels.delete(id);
+          resolve(false);
+        }, OPEN_PANEL_TIMEOUT_MS);
+        panels.set(id, (opened) => {
+          clearTimeout(timer);
+          resolve(opened);
+        });
+        post({ channel: CHANNEL, kind: 'open-panel-request', id });
+      });
+
     /** The reads of « All pages » asked for and not answered yet, by the id of the request (FRU-470). */
     const siteReads = new Map<string, (answer: SiteNotesResponseMessage['read']) => void>();
 
@@ -231,6 +256,7 @@ export default defineContentScript({
         message.kind === 'relay-request' ||
         message.kind === 'capture-request' ||
         message.kind === 'site-notes-request' ||
+        message.kind === 'open-panel-request' ||
         message.kind === 'command-response' ||
         message.kind === 'sign-in' ||
         message.kind === 'notes-changed'
@@ -371,6 +397,13 @@ export default defineContentScript({
         return;
       }
 
+      if (message.kind === 'open-panel-response') {
+        panels.get(message.id)?.(message.opened);
+        panels.delete(message.id);
+
+        return;
+      }
+
       if (message.kind === 'site-notes-response') {
         siteReads.get(message.id)?.(message.read);
         siteReads.delete(message.id);
@@ -436,6 +469,8 @@ export default defineContentScript({
         // FRU-470: « All pages » of the list, read with the session of the reviewer, for a site of a
         // workspace only. With no relay there is no session here, and the list has « This page » alone.
         ...(message.relay === true ? { siteNotes } : {}),
+        // FRU-469: the button that shows every note opens the side panel of the browser, in both modes.
+        openSidebar,
         // FRU-302: « Name on my notes », for a reporter who kept none on this site.
         ...(message.name !== undefined ? { reporterName: message.name } : {}),
         // FRU-411: the head of the composer writes the selector only with « Show CSS selectors ».

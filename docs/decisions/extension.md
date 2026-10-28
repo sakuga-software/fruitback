@@ -733,6 +733,25 @@ did not change: the fields of 760 px and the file input of the browser are as th
   `e2e/extension-dock-position.spec.ts` chooses a corner over a note being written, reloads, and
   goes back to the default.
 
+## The button of the widget opens the side panel (FRU-469)
+
+### The rules, in short
+
+- **The widget the extension mounts gets `openSidebar`**, in both modes: its button « Show every
+  note in a sidebar » posts `open-panel-request`, and the background opens the panel of the tab of
+  the sender (`src/panel-request.ts`), **at once, before any `await`**, then answers `opened`.
+- **Refused, absent or silent for 3 s, the widget opens its own list**: Firefox's `sidebarAction.open`
+  takes no call from a message, and a browser with no panel has the list of the page.
+- **Only during a gesture of the person**: the bridge carries the request only while
+  `navigator.userActivation.isActive`, which the isolated world reads and no script of the page sets.
+  And a tab is answered once in 2 s. `SECURITY.md` says what this lets a page do.
+- Measured on Chromium 156 (Playwright 1.64.1), with a probe extension and no `evaluate` of Playwright
+  before the page acts (an `evaluate` carries a gesture, and spoiled a first measure): `sidePanel.open`
+  from a message of a content script opens the panel after a click on the page, and is refused after
+  a timer of the page. Google Chrome and Firefox are not measured here.
+- A site that embeds its own widget (team mode, not mounted by the extension) is not covered: its
+  widget does not know the extension, and `FruitbackExtensionApi` offers no way to the panel.
+
 ## « All pages » of the widget it mounts (FRU-470)
 
 ### The rules, in short
