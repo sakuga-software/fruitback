@@ -96,6 +96,10 @@ export function RestPanel({ id, base, connector, sites, manages, onChanged, onRe
           {(late ?? []).map((delivery) => (
             <li key={delivery.id} className="border-b border-line py-[8px] text-small">
               <span className="block font-semibold">{reasonOf(delivery)}</span>
+              {/* FRU-468: the call of a trigger of a site, in the same queue as the notes. */}
+              {delivery.event === 'agent.requested' ? (
+                <span className="block text-hint text-muted">{t('Call of an agent')}</span>
+              ) : null}
               <span className="block text-hint text-muted">
                 {t('Written {when}', { when: moment(delivery.createdAt) })} ·{' '}
                 {delivery.attempts === 1 ? t('1 attempt') : t('{count} attempts', { count: delivery.attempts })}

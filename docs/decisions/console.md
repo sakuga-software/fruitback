@@ -424,6 +424,16 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   (the sites of a key), and `expanded` and `controls` of `Button`. `e2e/console-agents.spec.ts` holds
   the way from the settings, the list and its warning, a key made, shown once, copied and gone, the
   refusals, the writes, the revocation, a member, and 390 px in French, with axe.
+- **« Start an agent » is a section of the page of a site** (FRU-468, `routes/site-agent.tsx`, the
+  board `design/agent-triggers/`), after « Statuses », for an owner or an admin; a member and a guest
+  do not see it, and the page asks them nothing of the trigger. Off by default: the switch alone.
+  On: « Call », an address that receives of the workspace (a `rest` connector; a tracker is not
+  offered), « When » (a note of a known person, or a note moved to To do by a person), and what the
+  call carries, drawn from the site and the moment: ids, never the text. One « Save » writes the
+  three; a refusal keeps what was chosen. With no address that receives, a callout leads to
+  Connectors. Calls that did not arrive are counted there, with a link to the address, whose panel
+  lists them with « Call of an agent » beside the notes. `e2e/console-agent-trigger.spec.ts` holds it,
+  with axe and 390 px in French.
 - **The statuses of a site have a page of their own** (FRU-371, `routes/site-statuses.tsx`), reached
   from « Statuses » in the menu of a card and on the page of a site, for an owner or an admin. It is the board
   `design/site-statuses/`; [statuses.md](statuses.md) says what it does and why. Its crumbs are in the

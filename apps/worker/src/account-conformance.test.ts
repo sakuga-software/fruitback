@@ -94,6 +94,21 @@ const VIOLATIONS: Violation<AccountStore>[] = [
     replace: { from: '              eq(agent_keys.id, key),\n              or(', to: '              or(' },
   },
   {
+    breaks:
+      'writes the trigger of a site to an address that receives of its workspace only, and drops it with its address',
+    by: 'takes any source of the workspace as an address',
+    replace: { from: "              eq(connectors.kind, 'rest'),\n", to: '' },
+  },
+  {
+    breaks:
+      'writes the trigger of a site to an address that receives of its workspace only, and drops it with its address',
+    by: 'reads a trigger through any workspace',
+    replace: {
+      from: '.where(and(eq(site_agent_triggers.workspace_id, workspace), eq(site_agent_triggers.site_id, site))),',
+      to: '.where(eq(site_agent_triggers.site_id, site)),',
+    },
+  },
+  {
     breaks: 'makes one account of two providers that prove the same address',
     by: 'makes an account for each provider',
     wrap: (real) => ({

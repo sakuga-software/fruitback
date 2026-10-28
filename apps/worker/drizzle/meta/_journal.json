@@ -260,6 +260,13 @@
       "when": 1793200593421,
       "tag": "0036_agent_key_last_use",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1793205022828,
+      "tag": "0037_agent_triggers",
+      "breakpoints": true
     }
   ]
 }

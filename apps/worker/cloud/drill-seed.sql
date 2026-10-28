@@ -60,9 +60,13 @@ INSERT INTO domains (id, workspace_id, domain, created_at, verified_at, lost_at,
   ('dom_drill5', 'ws_drill1', 'five.acme.dev', 5, 6, NULL, 6, NULL),
   ('dom_drill6', 'ws_drill1', 'six.acme.dev', 6, NULL, NULL, NULL, NULL);
 
-INSERT INTO deliveries (id, connector_id, body, created_at, next_at) VALUES
-  ('dlv_drill1', 'con_drill1', '{"note":"one"}', 1, 1),
-  ('dlv_drill2', 'con_drill1', '{"note":"two"}', 2, NULL);
+INSERT INTO deliveries (id, connector_id, body, created_at, next_at, event) VALUES
+  ('dlv_drill1', 'con_drill1', '{"note":"one"}', 1, 1, 'note.created'),
+  ('dlv_drill2', 'con_drill1', '{"note":"two"}', 2, NULL, 'agent.requested');
+
+-- The trigger of a site that starts an agent (FRU-468): it calls the address of the workspace.
+INSERT INTO site_agent_triggers (site_id, workspace_id, connector_id, moment, enabled, updated_at) VALUES
+  ('site_drill1', 'ws_drill1', 'con_drill1', 'verified-note', true, 1);
 
 INSERT INTO email_links (code_hash, email, created_at, expires_at) VALUES
   ('drill-not-a-digest', 'alice@acme.dev', 1, 2);

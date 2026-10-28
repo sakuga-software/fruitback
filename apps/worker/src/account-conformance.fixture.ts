@@ -1040,6 +1040,43 @@ export function accountCases(it: Declare<AccountStore>): void {
     assert.equal((await store.domains(other.id)).length, 1);
   });
 
+  // --- The trigger of a site that starts an agent (FRU-468)
+
+  it('writes the trigger of a site to an address that receives of its workspace only, and drops it with its address', async (store) => {
+    const { workspace } = await world(store);
+    const { workspace: other } = await otherWorld(store);
+    const site = await store.addSite(workspace.id, { origin: 'https://acme.dev', visibility: 'everyone' });
+    const hook = await store.addConnector(workspace.id, { kind: 'rest', label: 'Hook', sealed: 'sealed' });
+    const linear = await store.addConnector(workspace.id, { kind: 'linear', label: 'Linear', sealed: 'sealed-l' });
+    const theirs = await store.addConnector(other.id, { kind: 'rest', label: 'Their hook', sealed: 'sealed-t' });
+    const on = { connector: hook.id, moment: 'verified-note' as const, enabled: true };
+    assert.equal(await store.agentTrigger(workspace.id, site.id), undefined);
+
+    assert.equal(
+      await store.setAgentTrigger(workspace.id, site.id, { ...on, connector: linear.id }, 1),
+      'unknown-connector',
+    );
+    assert.equal(
+      await store.setAgentTrigger(workspace.id, site.id, { ...on, connector: theirs.id }, 1),
+      'unknown-connector',
+    );
+    assert.equal(await store.setAgentTrigger(other.id, site.id, { ...on, connector: theirs.id }, 1), 'unknown-site');
+    assert.equal(await store.agentTrigger(workspace.id, site.id), undefined);
+
+    assert.deepEqual(await store.setAgentTrigger(workspace.id, site.id, on, 1), { ...on, waiting: 0 });
+    await store.setAgentTrigger(workspace.id, site.id, { ...on, moment: 'moved-to-todo', enabled: false }, 2);
+    assert.deepEqual(await store.agentTrigger(workspace.id, site.id), {
+      connector: hook.id,
+      moment: 'moved-to-todo',
+      enabled: false,
+      waiting: 0,
+    });
+    assert.equal(await store.agentTrigger(other.id, site.id), undefined, 'read through another workspace');
+
+    await store.removeConnector(workspace.id, hook.id);
+    assert.equal(await store.agentTrigger(workspace.id, site.id), undefined);
+  });
+
   // --- Agent keys (FRU-461)
 
   it('keeps an agent key with the sites it names, and finds it by its digest with the reach of its member', async (store) => {

@@ -8,7 +8,7 @@ import { getTableColumns, getTableName, sql } from 'drizzle-orm';
 import { type PgTable, bigint, foreignKey, index, integer, pgTable, primaryKey, text } from 'drizzle-orm/pg-core';
 import type { Database, Db } from './postgres.ts';
 import { migrate, migrationsFolder } from './postgres-migrate.ts';
-import { deliveries, email_links, note_comments, pairings } from './postgres-schema.ts';
+import { email_links, note_comments, pairings } from './postgres-schema.ts';
 
 /**
  * The `user_version` of each file of the last worker that wrote one: the one version this command
@@ -155,6 +155,26 @@ const site_destinations = pgTable('site_destinations', {
   project_id: text('project_id'),
   label: text('label'),
 });
+
+/**
+ * `deliveries` as `COPY_SCHEMA` has it: FRU-468 added `event`, which no file holds. `0037_agent_triggers`
+ * gives each delivery copied here `note.created`: the worker that wrote the file sent notes only.
+ */
+const deliveries = pgTable(
+  'deliveries',
+  {
+    id: text('id').primaryKey(),
+    connector_id: text('connector_id').notNull(),
+    body: text('body').notNull(),
+    created_at: instant('created_at').notNull(),
+    attempts: integer('attempts').notNull().default(0),
+    next_at: instant('next_at'),
+    last_at: instant('last_at'),
+    last_status: integer('last_status'),
+    last_error: text('last_error'),
+  },
+  (table) => [index('deliveries_due').on(table.next_at), index('deliveries_by_connector').on(table.connector_id)],
+);
 
 /**
  * `sessions` as `COPY_SCHEMA` has it: FRU-238 added three columns to it, for a session of an account,

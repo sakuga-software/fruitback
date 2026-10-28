@@ -125,6 +125,8 @@ export function accountStoreOn(database: Database): AccountStore {
     setDestination: true,
     setDestinations: true,
     enqueueDelivery: true,
+    agentTrigger: true,
+    setAgentTrigger: true,
     dueDeliveries: true,
     settleDelivery: true,
     deliveries: true,

@@ -19,7 +19,7 @@ import {
   routingFailure,
   withoutTracker,
 } from './note-helpers.ts';
-import type { Channel, NoteIndex } from './notes-index.ts';
+import { type Channel, type NoteIndex, authorOf } from './notes-index.ts';
 import { chargeRateLimit, maxBatch } from './rate-limit.ts';
 import { checkedOf, markedAgent } from './reply-text.ts';
 import type { CallerChecks, RequestContext, Served } from './request-context.ts';
@@ -276,6 +276,31 @@ export async function readPage({
   );
 }
 
+/**
+ * A note of a known person arrived (FRU-468): the trigger of its site calls its agent, when it is on
+ * and waits for this moment. A note of a visitor calls nothing. `authorOf` is the reading of the index:
+ * a member, or a reviewer the identity of the site verified.
+ */
+async function verifiedNoteArrived(
+  config: Served,
+  workspace: string,
+  origin: string | undefined,
+  site: string,
+  note: Note,
+  channel: Channel,
+  issue: CreatedIssue,
+): Promise<void> {
+  if (config.requestAgent === undefined || authorOf(note, channel === 'extension').kind === 'visitor') return;
+  await config.requestAgent({
+    workspace,
+    site,
+    ...(origin === undefined ? {} : { origin }),
+    identifier: issue.identifier,
+    note: note.id,
+    reason: 'verified-note',
+  });
+}
+
 export async function postFeedback(
   request: Request,
   config: Served,
@@ -375,6 +400,15 @@ export async function postFeedback(
     if (workspace !== undefined && clientId !== undefined) {
       const entry = noteEntry(workspace, clientId, attributed, identity.channel, target, issue);
       await indexed(noteIndex, (index) => index.record([entry], Date.now()));
+      await verifiedNoteArrived(
+        config,
+        workspace,
+        route.client?.origins?.[0],
+        clientId,
+        attributed,
+        identity.channel,
+        issue,
+      );
     }
 
     const hidden = await hidesTracker(request, config, route.policy);
@@ -548,6 +582,12 @@ async function postBatch(
       return held[index] && issue !== undefined ? [noteEntry(workspace, clientId, note, channel, target, issue)] : [];
     });
     await indexed(noteIndex, (index) => index.record(entries, Date.now()));
+    for (const [index, note] of attributed.entries()) {
+      const result = results[index];
+      if (held[index] && result !== undefined && 'issue' in result && result.issue !== undefined) {
+        await verifiedNoteArrived(config, workspace, route.client?.origins?.[0], clientId, note, channel, result.issue);
+      }
+    }
   }
   await invalidatePages(
     kv,

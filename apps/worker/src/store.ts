@@ -168,7 +168,8 @@ export type NoteStore = {
   /**
    * Puts a note in a status of its site (FRU-367): `key` is the key of the status in the worker's
    * store, `null` for the built-in status of `stage`, and the note takes the stage of that status.
-   * The answer is the stage of the note now, and its page. `status-changed`: the status is gone or
+   * The answer is the stage of the note now, its stage before (`was`, read under the lock of the
+   * write, FRU-468), and its page. `status-changed`: the status is gone or
    * hidden since the caller read it, and nothing is written. `undefined`: this store holds no such
    * note for this client. Absent: the status of a note is its tracker's, and changes there.
    */
@@ -176,7 +177,7 @@ export type NoteStore = {
     target: ReplyTarget,
     status: { key: string | null; stage: NoteStage },
     client: ClientConfig | undefined,
-  ): Promise<{ stage: NoteStage; page: string } | 'status-changed' | undefined>;
+  ): Promise<{ stage: NoteStage; was: NoteStage; page: string } | 'status-changed' | undefined>;
   /** Whether the store of this client takes a status, for a store that routes by client. */
   statusesFor?(client: ClientConfig | undefined): Promise<boolean>;
   /**

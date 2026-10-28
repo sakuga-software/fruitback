@@ -413,6 +413,19 @@ export async function postStatus(
         }),
       );
 
+      // FRU-468: a person moved the note to To do, from another stage: the trigger of its site may call.
+      // `was` is read under the lock of the write: two moves at once call once.
+      if (answer.stage === 'todo' && answer.was !== 'todo') {
+        await config.requestAgent?.({
+          workspace,
+          site: clientId,
+          ...(route.client?.origins?.[0] === undefined ? {} : { origin: route.client.origins[0] }),
+          identifier: found.identifier,
+          note: found.note.id,
+          reason: 'moved-to-todo',
+        });
+      }
+
       return json(200, { status: asked, stage: answer.stage }, corsHeaders);
     }
 

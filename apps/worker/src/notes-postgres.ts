@@ -240,13 +240,23 @@ export function createPostgresNoteStore(database: Database): NoteStore {
             );
           if (row?.hidden === true || (status.key !== null && row === undefined)) return 'status-changed' as const;
           const stage = status.key === null ? status.stage : stageOf(row?.stage ?? status.stage);
+          // The stage before, under a lock of the row: two moves at once read it one after the other,
+          // so only one of them moves the note into To do (FRU-468: one call of its trigger).
+          const [before] = await tx
+            .select({ stage: notes.stage })
+            .from(notes)
+            .where(and(eq(notes.id, id), eq(notes.client_id, target.clientId)))
+            .for('update');
+          if (before === undefined) return undefined;
           const [note] = await tx
             .update(notes)
             .set({ status_key: status.key, stage, updated_at: Date.now() })
             .where(and(eq(notes.id, id), eq(notes.client_id, target.clientId)))
             .returning({ stage: notes.stage, page: notes.page_url });
 
-          return note === undefined ? undefined : { stage: stageOf(note.stage), page: note.page };
+          return note === undefined
+            ? undefined
+            : { stage: stageOf(note.stage), was: stageOf(before.stage), page: note.page };
         }),
       ),
     // The notes of the whole instance, whatever their site: the command of whoever runs the worker.

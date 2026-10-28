@@ -65,6 +65,7 @@ import { PAIRING_TTL_SECONDS, type SessionStore, createPairing } from './session
 import { memberSuspensionView, refusedWhileSuspended } from './workspace-suspension.ts';
 import { handleLogo } from './workspace-logo.ts';
 import { handleAgentKeys } from './agent-keys.ts';
+import { handleAgentTrigger } from './agent-triggers.ts';
 
 /**
  * What the console reads and writes (FRU-99): the account, its workspaces, their sites, and the code
@@ -732,6 +733,19 @@ export async function handleConsoleApi(
     now: context.now ?? Date.now(),
   });
   if (agentKeys !== undefined) return agentKeys;
+
+  // FRU-468: the trigger of a site that starts an agent, for who manages the workspace.
+  const agentTrigger = await handleAgentTrigger(rest, request, {
+    accounts: context.accounts,
+    workspace: workspaceId as string,
+    manages: allowed('manage-workspace'),
+    forbidden,
+    readBody,
+    json,
+    headers,
+    now: context.now ?? Date.now(),
+  });
+  if (agentTrigger !== undefined) return agentTrigger;
 
   // « Last seen » of the members (FRU-249): the day of each, for an owner or an admin only.
   if (rest === '/members/seen') {

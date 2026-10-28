@@ -1,5 +1,6 @@
 import {
   type Account,
+  type AgentTrigger,
   CONNECTOR_KINDS,
   CONNECTOR_TROUBLES,
   type Connector,
@@ -179,10 +180,24 @@ export function pendingDeliveryOf(row: Record<string, unknown>): PendingDelivery
 
   return {
     id: row.id,
+    ...(row.event === 'agent.requested' ? { event: 'agent.requested' as const } : {}),
     createdAt: new Date(typeof row.created_at === 'number' ? row.created_at : 0).toISOString(),
     attempts: typeof row.attempts === 'number' ? row.attempts : 0,
     ...(typeof row.next_at === 'number' ? { nextAt: new Date(row.next_at).toISOString() } : {}),
     ...(typeof row.last_status === 'number' ? { lastStatus: row.last_status } : {}),
     ...(typeof row.last_error === 'string' ? { lastError: row.last_error } : {}),
+  };
+}
+
+/** A row of `site_agent_triggers` (FRU-468). A moment the worker does not know reads as the default. */
+export function agentTriggerOf(row: {
+  connector_id: string;
+  moment: string;
+  enabled: boolean;
+}): Omit<AgentTrigger, 'waiting'> {
+  return {
+    connector: row.connector_id,
+    moment: row.moment === 'moved-to-todo' ? 'moved-to-todo' : 'verified-note',
+    enabled: row.enabled,
   };
 }

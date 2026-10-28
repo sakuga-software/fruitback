@@ -133,6 +133,11 @@ export type ConnectorSettings = { showComments: boolean; stages: Record<string, 
 /** A note that did not reach the address of a connector yet. `nextAt` absent: the worker gave up. */
 export type Delivery = {
   id: string;
+  /**
+   * `agent.requested`: the call of the trigger of a site that starts an agent (FRU-468), with ids
+   * only. Absent: a note, as a worker of before sends it.
+   */
+  event?: 'note.created' | 'agent.requested';
   createdAt: string;
   attempts: number;
   nextAt?: string;
@@ -1290,3 +1295,28 @@ export function agentWrites(workspace: string, key: string): Promise<Answer<{ wr
 
 /** How many writes of one key the worker answers. */
 export const AGENT_WRITES_LISTED = 100;
+
+/** The moments a trigger of a site starts an agent at (FRU-468). */
+export type AgentMoment = 'verified-note' | 'moved-to-todo';
+
+/**
+ * The trigger of a site that starts an agent (FRU-468): the address that receives it calls, the
+ * moment, whether it is on, and how many of its calls wait in the queue of that address.
+ */
+export type AgentTrigger = { connector: string; moment: AgentMoment; enabled: boolean; waiting: number };
+
+const agentTriggerOf = (workspace: string, site: string) =>
+  `/console/workspaces/${workspace}/sites/${encodeURIComponent(site)}/agent-trigger`;
+
+/** The trigger of a site, or `null`: none, so off. */
+export function agentTrigger(workspace: string, site: string): Promise<Answer<{ trigger: AgentTrigger | null }>> {
+  return call('GET', agentTriggerOf(workspace, site));
+}
+
+export function setAgentTrigger(
+  workspace: string,
+  site: string,
+  trigger: Omit<AgentTrigger, 'waiting'>,
+): Promise<Answer<{ trigger: AgentTrigger }>> {
+  return call('POST', agentTriggerOf(workspace, site), trigger);
+}

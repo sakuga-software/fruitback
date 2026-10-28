@@ -1,3 +1,4 @@
+import { requestAgent } from './agent-triggers.ts';
 import { DEFAULT_NOTE_STAGE, NOTE_STAGES, type NoteStage, type NoteStatus } from '@fruitback/shared';
 import type { Action, AccountStore, Reach } from './accounts.ts';
 import type { Kv } from './kv.ts';
@@ -49,7 +50,7 @@ export type NotesContext = {
   /** The role and the sites of the caller, read when a route of the notes is asked (FRU-250). */
   reach: () => Promise<Reach | undefined>;
   noteIndex: NoteIndex | undefined;
-  accounts: Pick<AccountStore, 'retryDelivery' | 'setNoteStatus' | 'siteStatuses'>;
+  accounts: Pick<AccountStore, 'retryDelivery' | 'setNoteStatus' | 'siteStatuses' | 'agentTrigger' | 'enqueueDelivery'>;
   /** The cache of the reads of the pages: a status changed makes the read of its page wrong. */
   kv: Kv | undefined;
   now: number;
@@ -368,6 +369,20 @@ async function setStatus(id: string, request: Request, context: NotesContext): P
     }
   }
   if (context.kv !== undefined) await invalidatePages(context.kv, [answer.page]);
+  // FRU-468: a person moved the note to To do, from another stage: the trigger of its site may call.
+  if (answer.stage === 'todo' && answer.was !== 'todo') {
+    await requestAgent(
+      context.accounts,
+      {
+        workspace: context.workspace,
+        site: note.site,
+        identifier: answer.identifier,
+        note: note.note,
+        reason: 'moved-to-todo',
+      },
+      Date.now(),
+    );
+  }
 
   return json(200, { status: asked, stage: answer.stage }, headers);
 }
