@@ -685,6 +685,15 @@ describe('createComposer', () => {
     at(fixed, { top: 400 });
     scroll(500);
     assert.equal(top(), '320px');
+
+    // An element the page took away: the composer stays where it was, not at the top of the page.
+    scroll(0);
+    opened.open(fixed);
+    assert.equal(top(), '120px');
+    fixed.remove();
+    at(fixed, { top: -40 });
+    scroll(300);
+    assert.equal(top(), '120px', 'the composer followed an element that is gone');
   });
 
   it('opens above its element, 40 px over its top, and below when there is no room above (FRU-258)', () => {

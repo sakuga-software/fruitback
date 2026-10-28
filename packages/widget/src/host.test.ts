@@ -408,6 +408,11 @@ describe('createCaptureHost', () => {
     scroll(250);
     assert.equal(highlight.style.top, '265px');
 
+    // An element the page took away: the frame stays where it was.
+    page.query('#cta').remove();
+    scroll(100);
+    assert.equal(highlight.style.top, '265px', 'the frame followed an element that is gone');
+
     // Let go: a scroll brings no frame back.
     host.release();
     scroll(0);

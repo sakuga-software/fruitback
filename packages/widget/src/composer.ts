@@ -803,7 +803,8 @@ export function createComposer(options: ComposerOptions): Composer {
    * the document keeps the composer where it is: a scroll does not slide it along the window.
    */
   function follow(): void {
-    if (root.hidden || following === null) return;
+    // An element the page took away measures as a box of nothing at 0, 0: the composer stays.
+    if (root.hidden || following === null || !following.isConnected) return;
     const now = boxOf(following);
     if (placedAt !== undefined && Math.abs(now.left - placedAt.left) < 1 && Math.abs(now.top - placedAt.top) < 1)
       return;
@@ -966,6 +967,7 @@ export function createComposer(options: ComposerOptions): Composer {
     }
     session += 1;
     root.hidden = true;
+    following = null;
     setState('idle');
     focus.restore();
     options.onClose?.();

@@ -365,7 +365,8 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
    */
   function onScroll(): void {
     const framed = capturing ? hovered : chosen;
-    if (framed !== null && highlight.style.display === 'block') frame(framed);
+    // An element the page took away measures as a box of nothing at 0, 0: the frame stays.
+    if (framed !== null && framed.isConnected && highlight.style.display === 'block') frame(framed);
   }
 
   function onClick(event: MouseEvent): void {
