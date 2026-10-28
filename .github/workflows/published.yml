@@ -1,0 +1,110 @@
+name: Published
+
+# The last published npm packages and the last released extension, against the worker of this
+# commit (FRU-460). The people who use Fruitback run those copies, and a worker deployed from `main`
+# serves them: a change of the worker that breaks them fails here. See dev-loop.md.
+#
+# Not a job of `ci.yml`: the CI of a pull request has a budget of 4 minutes, and this job boots the
+# servers of the E2E suite again. It runs after each merge, every night (a new release changes what
+# it fetches with no commit here), by hand with a version to pin, and on a pull request that changes
+# the suite itself.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - e2e/published/**
+      - playwright.published.config.ts
+      - .github/workflows/published.yml
+  schedule:
+    # 04:41 UTC: after the night, before the day. The minute is not the one every repository picks.
+    - cron: '41 4 * * *'
+  workflow_dispatch:
+    inputs:
+      npm:
+        description: The npm version to test, for example 0.4.0. Empty is the `latest` tag.
+        required: false
+        default: ''
+      extension:
+        description: The extension version to test, for example 0.4.0. Empty is the latest release.
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+# As in `ci.yml`: a push to a pull request cancels the run before it, a commit of `main` keeps its own.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  published:
+    name: published npm and extension
+    runs-on: ubuntu-latest
+    # The image of `ci.yml`'s `e2e-shard`, for the same reason: no `playwright install`.
+    container:
+      image: mcr.microsoft.com/playwright:v1.64.1-noble
+      options: --user 1001
+    timeout-minutes: 15
+
+    steps:
+      - name: Note when the job starts
+        run: echo "JOB_STARTED_AT=$(date +%s)" >> "$GITHUB_ENV"
+
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> "$GITHUB_ENV"
+
+      - name: Cache pnpm dependencies
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # From npm and from the GitHub release, both public. The token only raises the rate limit of
+      # the GitHub API, and it can read this public repository and nothing more.
+      - name: Fetch the published packages and extension
+        env:
+          FRUITBACK_PUBLISHED_VERSION: ${{ inputs.npm }}
+          FRUITBACK_PUBLISHED_EXTENSION: ${{ inputs.extension }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node e2e/published/fetch.ts
+
+      # The playground, which is the site of the specs, reads the built widget of this commit.
+      - name: Build what the playground reads
+        run: pnpm --filter @fruitback/shared build && pnpm --filter @fruitback/widget build
+
+      - name: Run the published code against this worker
+        run: pnpm exec playwright test -c playwright.published.config.ts
+
+      - name: Keep the traces of a failed run
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-report-published
+          path: test-results/
+          retention-days: 7
+
+      - name: Write the durations
+        if: always()
+        continue-on-error: true
+        run: node tools/ci/durations.ts --name published --timeout 15
