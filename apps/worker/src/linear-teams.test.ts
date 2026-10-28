@@ -29,7 +29,7 @@ function linear(answer: (asked: Asked) => unknown): Asked[] {
 const project = (id: string, status?: { name: string; type: string } | null) => ({ id, name: `Project ${id}`, status });
 const page = (next?: string) => ({ hasNextPage: next !== undefined, endCursor: next ?? null });
 
-describe('listLinearTeams (FRU-458)', () => {
+describe('listLinearTeams (FRU-458, FRU-459)', () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
@@ -47,7 +47,11 @@ describe('listLinearTeams (FRU-458)', () => {
                 name: 'Design',
                 key: 'DES',
                 private: true,
-                projects: { nodes: [project('p1', { name: 'In Progress', type: 'started' })], pageInfo: page('c-p1') },
+                color: '#5E6AD2',
+                projects: {
+                  nodes: [{ ...project('p1', { name: 'In Progress', type: 'started' }), color: '#BEC2C8' }],
+                  pageInfo: page('c-p1'),
+                },
               },
             ],
             pageInfo: page('c-team'),
@@ -58,7 +62,15 @@ describe('listLinearTeams (FRU-458)', () => {
         return {
           teams: {
             nodes: [
-              { id: 'team_b', name: 'Web', key: 'WEB', private: false, projects: { nodes: [], pageInfo: page() } },
+              // A colour that is not `#rrggbb` would reach a style: it is dropped (FRU-459).
+              {
+                id: 'team_b',
+                name: 'Web',
+                key: 'WEB',
+                private: false,
+                color: 'red; background: url(x)',
+                projects: { nodes: [], pageInfo: page() },
+              },
             ],
             pageInfo: page(),
           },
@@ -86,8 +98,9 @@ describe('listLinearTeams (FRU-458)', () => {
         name: 'Design',
         key: 'DES',
         private: true,
+        color: '#5e6ad2',
         projects: [
-          { id: 'p1', name: 'Project p1', status: { name: 'In Progress', type: 'started' } },
+          { id: 'p1', name: 'Project p1', status: { name: 'In Progress', type: 'started' }, color: '#bec2c8' },
           // Linear said no status: the project is offered all the same.
           { id: 'p2', name: 'Project p2' },
           { id: 'p3', name: 'Project p3', status: { name: 'Done', type: 'completed' } },

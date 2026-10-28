@@ -570,6 +570,14 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   query by the nodes it may return, and the status of each project doubles them. The answer of
   `GET …/connectors/<id>/teams` gains `private` and `status`, both optional: a console of before
   ignores them.
+  **Each place shows the mark of its source, and a place of Linear its colour** (FRU-459, Mathieu):
+  the `ConnectorMark` of FRU-435 before its name, then a dot in the colour Linear gives its project,
+  else its team (`color` of the teams answer, `#rrggbb` only: anything else would reach a style, and
+  the worker drops it). The colour is known once the teams of its source are read; GitHub and an
+  address have none. Both are `aria-hidden`: the name says the source. **Linear's `icon` is not
+  shown**: Linear documents it as « an emoji or a decorative icon type », and the icon types are
+  names of Linear's own glyphs (`Rocket`…), with no public set to draw them from; an emoji is the
+  system's font, which `icons.md` turned away.
 - **My account shows the sessions of the console, and ends them, with the routes of FRU-181**
   (FRU-248, `routes/account.tsx`). `GET /console/sessions` lists them by id, with no token: this
   browser first, then the others, each with « Disconnect » (`DELETE /console/sessions/<id>`, one

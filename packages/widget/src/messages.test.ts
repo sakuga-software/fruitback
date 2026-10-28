@@ -19,6 +19,7 @@ import { pickArea } from './area.ts';
 import type { Draft } from './drafts.ts';
 import { createConfigPanel } from './panel.ts';
 import { type ListState, createSidebar } from './sidebar.ts';
+import type { SiteRead } from './site-notes.ts';
 import { feedbackAsText, placementOf } from './export.ts';
 import { createConfigStore } from './config.ts';
 import { type ReplyFailure, createOverlay } from './overlay.ts';
@@ -417,6 +418,48 @@ describe('every word the widget shows', () => {
     snapshots.push(...shown(host.root));
     host.readFailed(false, '');
     sidebar.close();
+    // « All pages » (FRU-470): reading, a note of this page and one of another with more to show,
+    // none, and the three reads that fail.
+    let siteAnswer: (read: SiteRead) => void = () => {};
+    const wide = createSidebar({
+      document: page.document,
+      host: host.root,
+      translator,
+      entries: () => [],
+      onSelect: () => {},
+      onSignIn: () => {},
+      site: {
+        read: () => new Promise<SiteRead>((resolve) => (siteAnswer = resolve)),
+        here: (url) => url.endsWith('/here'),
+      },
+    });
+    cleanup.push(() => wide.destroy());
+    wide.open();
+    const siteScope = () => host.root.querySelector('[data-fruitback-scope="site"]') as HTMLButtonElement;
+    const siteNoteOf = (path: string) => ({
+      note: 'n',
+      excerpt: 'NOTE ONE',
+      page: { url: `https://preview.acme.test${path}`, path },
+      stage: 'new' as const,
+      author: 'REPORTER',
+      createdAt: found.note.createdAt,
+    });
+    for (const answer of [
+      { ok: true, notes: [siteNoteOf('/here'), siteNoteOf('/other')], total: 2, next: 'c' },
+      { ok: true, notes: [], total: 0 },
+      { ok: false, reason: 'failed' },
+      { ok: false, reason: 'signed-out' },
+      { ok: false, reason: 'unavailable' },
+    ] as SiteRead[]) {
+      wide.close();
+      wide.open();
+      siteScope().click();
+      snapshots.push(...shown(host.root));
+      siteAnswer(answer);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      snapshots.push(...shown(host.root));
+    }
+    wide.close();
     // The launch button, while the session of the host has ended (FRU-315).
     host.offerSignIn({ label: translator.text('launch.signIn'), onSignIn: () => {} });
     snapshots.push(...shown(host.root));
@@ -638,6 +681,8 @@ describe('every word the widget shows', () => {
       'preview.acme.test',
       'acme',
       'PLACE ONE',
+      // The path of a note of another page in « All pages » (FRU-470).
+      '/other',
       // What the element says, after « on » in the head of the composer (FRU-258).
       'ELEMENT',
       // The word of the store for a state, which the row of a note shows as the thread does (FRU-259).
