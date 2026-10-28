@@ -388,6 +388,23 @@ describe('the consent of a person (FRU-467)', () => {
     );
   });
 
+  it('offers no suspended workspace, and makes no connection in one', async () => {
+    const { world, alice, workspace, shop } = await acme();
+    const client = await claude(world);
+    const request = await authorize(world, client.client_id);
+    await rowsOf(world.database, `INSERT INTO workspace_suspensions (workspace_id, since) VALUES ('${workspace}', 1)`);
+
+    const shown = (await (
+      await callOn(world, 'GET', `/console/oauth/requests/${request}`, { token: alice.token })
+    ).json()) as any;
+    assert.deepEqual(shown.workspaces, []);
+    const refused = await approve(world, alice.token, alice.id, request, { workspace, sites: [shop.id] });
+    assert.equal(refused.status, 409);
+    assert.equal(((await refused.json()) as any).error, 'workspace-suspended');
+    const [held] = await rowsOf(world.database, 'SELECT count(*)::int AS n FROM agent_keys');
+    assert.equal(held?.n, 0);
+  });
+
   it('sends the client back with access_denied when the person denies', async () => {
     const { world, alice } = await acme();
     const client = await claude(world);

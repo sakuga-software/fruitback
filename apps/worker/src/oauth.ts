@@ -672,8 +672,13 @@ export async function handleConsoleOAuth(
 
   if (action === undefined) {
     if (request.method !== 'GET') return say(405, { error: 'method-not-allowed' });
+    // A suspended workspace takes no write of the console (`refusedWhileSuspended`): it is not offered.
+    const open = [];
+    for (const each of await managed()) {
+      if ((await context.accounts.suspension(each.workspace.id)) === undefined) open.push(each);
+    }
     const workspaces = await Promise.all(
-      (await managed()).map(async ({ workspace, role }) => ({
+      open.map(async ({ workspace, role }) => ({
         id: workspace.id,
         name: workspace.name,
         role,
@@ -721,6 +726,8 @@ export async function handleConsoleOAuth(
   // Every choice is checked before the request is spent: a refusal here leaves it to answer again.
   const workspace = typeof body.workspace === 'string' ? body.workspace : '';
   if (!(await managed()).some((each) => each.workspace.id === workspace)) return say(403, { error: 'forbidden' });
+  // As every write of the console: a connection is a key, and a suspended workspace makes none (review of #662).
+  if ((await context.accounts.suspension(workspace)) !== undefined) return say(409, { error: 'workspace-suspended' });
   const sites = sitesOf(body.sites);
   if (sites === undefined) return say(400, { error: 'invalid-sites' });
   if (body.rights !== 'read' && body.rights !== 'write') return say(400, { error: 'invalid-rights' });

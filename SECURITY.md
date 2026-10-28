@@ -2553,11 +2553,13 @@ of the console.
   whose codes go to `claude.ai` only.
 - **A connection that reaches too much.** It reaches one workspace, chosen on the consent page among
   those where the person is an owner or an admin (`manage-workspace`, as for a key; a member or a
-  guest cannot approve: `403`), only the sites ticked, and only `read` unless the person chose
+  guest cannot approve: `403`; a suspended workspace is not offered, and refuses an approval with
+  `409 workspace-suspended`, as every write of the console), only the sites ticked, and only `read` unless the person chose
   `write` **and** the client asked the scope `write`. `verifiedOnly` is on by default, as for a key.
   The token says the scope granted. A token is for `/mcp` of this worker only: a `resource` (RFC 8707)
   that names another answers `invalid_target`.
-  test:`gives an access token that reads only the sites the person chose, with the rights chosen`.
+  test:`gives an access token that reads only the sites the person chose, with the rights chosen`,
+  test:`offers no suspended workspace, and makes no connection in one`.
 - **A token that leaks.** Every token is 32 random bytes after a prefix (`fba_` access, `fbr_`
   refresh, `fbc_` code, `fbs_` the secret of a client), so that a scanner of secrets finds one; the
   worker keeps the SHA-256 digest of each, never the token. An access token lives **one hour**; a
