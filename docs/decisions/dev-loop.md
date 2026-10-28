@@ -215,7 +215,9 @@ builds `dist` first, because `package.spec.ts` loads the real file.
   against the servers of this commit.** `e2e/published/fetch.ts` takes `fruitback`,
   `@fruitback/widget` and `@fruitback/element` at the `latest` tag of npm, and the archive for Chrome
   of the latest GitHub release (the one `release-extension.yml` gives to the stores). Both are
-  public: no token. `playwright.published.config.ts` runs the specs `e2e/published/*.published.ts`
+  public: no token. The archive is checked against the SHA-256 that the GitHub API gives for it,
+  and the npm packages installed must all carry the version asked for; `versions.json` keeps both.
+  `playwright.published.config.ts` runs the specs `e2e/published/*.published.ts`
   on the servers of `playwright.config.ts`.
 - **What it covers:** the three ways of the README to put the widget on a site (the snippet,
   `import { init } from 'fruitback'`, the tag of `@fruitback/element`), and the extension in private
