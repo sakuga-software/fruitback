@@ -1442,4 +1442,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Votre agent ouvre une pull request à relire, et ne pousse jamais sur une branche qui déploie : le guide dit comment.',
   'Start an agent on a note': 'Lancer un agent sur une note',
   'Saved.': 'Enregistré.',
+  '1 call of an agent did not arrive': '1 appel d’un agent n’est pas arrivé',
+  '{count} calls of an agent did not arrive': '{count} appels d’un agent ne sont pas arrivés',
 };

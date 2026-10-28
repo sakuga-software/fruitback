@@ -139,3 +139,39 @@ test('at 390 px in French, on, nothing scrolls sideways', async ({ page }) => {
   expect(await sideScroll(page)).toBe(0);
   await expectNoViolation(page);
 });
+
+test('the address counts a call of an agent apart from a note, and its panel names it', async ({ page }) => {
+  await stubWorker(page, {
+    workspaces: [ACME],
+    sites: SITES,
+    answer: (pathname, route) => {
+      if (pathname === '/console/workspaces/w1/connectors')
+        return route.fulfill({ json: { connectors: [HOOK], available: true } });
+      if (pathname === '/console/workspaces/w1/connectors/c2/deliveries')
+        return route.fulfill({
+          json: {
+            deliveries: [
+              {
+                id: 'dlv_1',
+                event: 'agent.requested',
+                createdAt: '2026-10-28T10:00:00.000Z',
+                attempts: 2,
+                nextAt: '2026-10-28T11:00:00.000Z',
+                lastStatus: 401,
+              },
+            ],
+          },
+        });
+
+      return undefined;
+    },
+  });
+  await page.goto(`${CONSOLE}/w/w1/connectors`);
+  const row = page.locator('button[aria-expanded]').filter({ hasText: 'REST API' });
+  // The control: no note waits, so the row does not say one does.
+  await expect(row).toContainText('1 call of an agent did not arrive');
+  await expect(row).not.toContainText('note did not arrive');
+  await row.click();
+  await expect(page.locator('[data-deliveries]')).toContainText('Call of an agent');
+  await expect(page.locator('[data-deliveries]')).toContainText('Your receiver answered 401');
+});

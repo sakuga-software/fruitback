@@ -107,7 +107,7 @@ export default function Connectors() {
   const [sites, setSites] = useState<Listed<Site>>('loading');
   // How many notes did not reach each address. An address that is not in it was not read: no list
   // is not an empty list, so its row then says « Connected » and no number.
-  const [late, setLate] = useState<Readonly<Record<string, number>>>({});
+  const [late, setLate] = useState<Readonly<Record<string, Late>>>({});
   // A read that failed is not an empty list (FRU-162): no « 0 site », and a way to read again.
   const [unread, setUnread] = useState(false);
   const [selected, setSelected] = useState<string | undefined>();
@@ -143,9 +143,11 @@ export default function Connectors() {
         addresses.map(async (connector) => {
           const read = await call<{ deliveries: Delivery[] }>('GET', `${base}/connectors/${connector.id}/deliveries`);
 
-          return read.ok && Array.isArray(read.data?.deliveries)
-            ? ([connector.id, read.data.deliveries.length] as const)
-            : undefined;
+          if (!read.ok || !Array.isArray(read.data?.deliveries)) return undefined;
+          // FRU-468: a call of a trigger of a site is counted apart from a note.
+          const calls = read.data.deliveries.filter((delivery) => delivery.event === 'agent.requested').length;
+
+          return [connector.id, { notes: read.data.deliveries.length - calls, calls }] as const;
         }),
       );
       setLate(Object.fromEntries(counts.filter((count) => count !== undefined)));
@@ -482,14 +484,26 @@ function Under({ children }: { children: ReactNode }) {
  *
  * On the row that is chosen the red is the strong accent: the accent is 4.28:1 on its tint.
  */
-function State({ connector, late, chosen }: { connector: Connector; late: number | undefined; chosen: boolean }) {
+/** What did not reach an address yet: notes, and calls of a trigger of a site (FRU-468). */
+type Late = { notes: number; calls: number };
+
+function State({ connector, late, chosen }: { connector: Connector; late: Late | undefined; chosen: boolean }) {
   useLocale();
   const alert = `flex-none text-hint leading-auto font-semibold ${chosen ? 'text-accent-strong' : 'text-accent'}`;
   if (connector.attention !== undefined) return <span className={alert}>{t('Needs attention')}</span>;
-  if (late !== undefined && late > 0) {
+  if (late !== undefined && late.notes > 0) {
     return (
       <span className={alert}>
-        {late === 1 ? t('1 note did not arrive') : t('{count} notes did not arrive', { count: late })}
+        {late.notes === 1 ? t('1 note did not arrive') : t('{count} notes did not arrive', { count: late.notes })}
+      </span>
+    );
+  }
+  if (late !== undefined && late.calls > 0) {
+    return (
+      <span className={alert}>
+        {late.calls === 1
+          ? t('1 call of an agent did not arrive')
+          : t('{count} calls of an agent did not arrive', { count: late.calls })}
       </span>
     );
   }
