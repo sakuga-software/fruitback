@@ -1222,3 +1222,67 @@ export function deleteAccountAsAdmin(
 ): Promise<Answer<{ user: { id: string; email: string }; workspaces: { id: string; name: string }[] }>> {
   return call('POST', `/console/admin/users/${encodeURIComponent(id)}/deletion`, { email });
 }
+
+/**
+ * An agent key of a workspace (FRU-461), as the worker lists it: never the key itself, which the
+ * answer of its creation holds once. `lastUsedAt`: when an agent last opened a request of `/mcp` with
+ * it, to the minute (FRU-462), `null` for a key nobody used; absent from a worker of before.
+ */
+export type AgentKey = {
+  id: string;
+  name: string;
+  sites: SharedSite[];
+  rights: 'read' | 'write';
+  verifiedOnly: boolean;
+  createdBy: string;
+  createdAt: string;
+  expiresAt: string;
+  lastUsedAt?: string | null;
+};
+
+/** What the console sends to make a key: `days` from 1 to `MAX_AGENT_KEY_DAYS`. */
+export type NewAgentKey = {
+  name: string;
+  sites: string[];
+  rights: 'read' | 'write';
+  days: number;
+  verifiedOnly: boolean;
+};
+
+/** The bounds of the worker (FRU-461): keys of a workspace, sites of a key, days of a key. */
+export const MAX_AGENT_KEYS = 20;
+export const MAX_AGENT_KEY_SITES = 20;
+export const MAX_AGENT_KEY_DAYS = 365;
+export const DEFAULT_AGENT_KEY_DAYS = 90;
+
+/** One write of a key through `/mcp` (FRU-464): a reply, or the status it set, on a note of a site. */
+export type AgentWrite = {
+  site: string;
+  note: string;
+  action: 'reply' | 'status';
+  status?: string;
+  at: string;
+};
+
+const agentKeysOf = (workspace: string) => `/console/workspaces/${workspace}/agent-keys`;
+
+export function agentKeys(workspace: string): Promise<Answer<{ keys: AgentKey[] }>> {
+  return call('GET', agentKeysOf(workspace));
+}
+
+/** Makes a key. The answer holds it in `secret`, the one time the worker gives it. */
+export function makeAgentKey(workspace: string, key: NewAgentKey): Promise<Answer<AgentKey & { secret: string }>> {
+  return call('POST', agentKeysOf(workspace), key);
+}
+
+export function revokeAgentKey(workspace: string, key: string): Promise<Answer<unknown>> {
+  return call('DELETE', `${agentKeysOf(workspace)}/${encodeURIComponent(key)}`);
+}
+
+/** The writes of a key, the newest first, `AGENT_WRITES_LISTED` at most. */
+export function agentWrites(workspace: string, key: string): Promise<Answer<{ writes: AgentWrite[] }>> {
+  return call('GET', `${agentKeysOf(workspace)}/${encodeURIComponent(key)}/writes`);
+}
+
+/** How many writes of one key the worker answers. */
+export const AGENT_WRITES_LISTED = 100;

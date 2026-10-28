@@ -121,7 +121,7 @@ function ends(k) {
   return `${k.ends}`;
 }
 
-function row(k, { open = false, writes = '' } = {}) {
+function row(k, { open = false, writes = '', confirm = false } = {}) {
   return `<li class="k-row${open ? ' is-open' : ''}">
     <div class="c-name"><b>${esc(k.name)}</b><small>${t('Made on {day}', 'Créée le {day}', { day: k.made })}</small></div>
     <div class="c-sites"><span class="lbl-m">${t('Sites', 'Sites')}</span><span>${k.sites.map((s) => `<span class="host">${s}</span>`).join('')}</span></div>
@@ -130,9 +130,9 @@ function row(k, { open = false, writes = '' } = {}) {
     <div class="c-ends"><span class="lbl-m">${t('Ends', 'Fin')}</span><span>${ends(k)}</span></div>
     <div class="c-actions">
       <button type="button" class="b-wide sm${open ? ' pressed' : ''}" aria-expanded="${open}">${t('Writes', 'Écritures')}${open ? icon.up : icon.down}</button>
-      <button type="button" class="b-ghost sm danger">${t('Revoke', 'Révoquer')}</button>
+      ${confirm ? '' : `<button type="button" class="b-ghost sm danger">${t('Revoke', 'Révoquer')}</button>`}
     </div>
-    ${open ? writes : ''}
+    ${open ? writes : ''}${confirm ? confirmRow() : ''}
   </li>`;
 }
 
@@ -203,14 +203,14 @@ function form({ error = false } = {}) {
       <label class="radio"><input type="radio" name="r" checked><span><b>${t('Read, reply and set a status', 'Lire, répondre et changer un statut')}</b><small>${t('A reply says it is from an agent. A status is set only on a note that Fruitback keeps.', 'Une réponse dit qu’elle vient d’un agent. Un statut ne change que sur une note que garde Fruitback.')}</small></span></label>
     </fieldset>
     <div class="field days">
-      <label for="kd">${t('Lives for', 'Dure')}</label>
-      <span class="days-row"><input id="kd" inputmode="numeric" value="90"><span>${t('days', 'jours')}</span></span>
+      <label for="kd">${t('Lives for, in days', 'Durée, en jours')}</label>
+      <span class="days-row"><input id="kd" inputmode="numeric" value="90"></span>
       <p class="hint">${t('Ends on {day}. From 1 to 365 days: no key lives with no end.', 'Prend fin le {day}. De 1 à 365 jours : aucune clé ne vit sans fin.', { day: t('26 Jan 2027', '26 janv. 2027') })}</p>
     </div>
-    <label class="check strong"><input type="checkbox" checked><span><b>${t('Only the notes of known people', 'Seulement les notes de personnes connues')}</b><small>${t(
-      'On a site that everyone reads, the agent does not see a note of a visitor: anybody can write one, and an agent can obey its text. Untick it only knowing that.',
-      'Sur un site que tout le monde lit, l’agent ne voit pas la note d’un visiteur : n’importe qui peut en écrire une, et un agent peut obéir à son texte. Décochez-la en le sachant.',
-    )}</small></span></label>
+    <label class="check strong switch-row"><span><b>${t('Only the notes of known people', 'Seulement les notes de personnes connues')}</b><small>${t(
+      'On a site that everyone reads, the agent does not see a note of a visitor: anybody can write one, and an agent can obey its text. Turn it off only knowing that.',
+      'Sur un site que tout le monde lit, l’agent ne voit pas la note d’un visiteur : n’importe qui peut en écrire une, et un agent peut obéir à son texte. Désactivez-le en le sachant.',
+    )}</small></span><span class="switch on" role="switch" aria-checked="true"><span></span></span></label>
     <div class="actions"><button type="button" class="b-accent">${t('Make the key', 'Créer la clé')}</button><button type="button" class="b-ghost">${t('Cancel', 'Annuler')}</button></div>
   </section>`;
 }
@@ -229,15 +229,15 @@ function shownOnce({ copied = false } = {}) {
   </section>`;
 }
 
-const confirmDialog =
-  () => `<div class="scrim"><div class="dialog" role="alertdialog" aria-labelledby="dt" aria-describedby="dd">
-  <h2 id="dt">${t('Revoke « {name} »?', 'Révoquer « {name} » ?', { name: 'Claude on CI' })}</h2>
-  <p id="dd">${t(
+function confirmRow() {
+  return `<div class="confirm" role="group" aria-label="${t('Revoke « {name} »', 'Révoquer « {name} »', { name: 'Claude on CI' })}">
+  <p>${t(
     'An agent that uses this key is refused from its next request, and the key never works again. What it wrote stays in the threads of the notes.',
     'Un agent qui utilise cette clé est refusé dès sa prochaine requête, et la clé ne marche plus jamais. Ce qu’elle a écrit reste dans les fils des notes.',
   )}</p>
-  <div class="actions end"><button type="button" class="b-ghost">${t('Cancel', 'Annuler')}</button><button type="button" class="b-danger">${t('Revoke the key', 'Révoquer la clé')}</button></div>
-</div></div>`;
+  <div class="actions"><button type="button" class="b-wide focus">${t('Keep it', 'Le garder')}</button><button type="button" class="b-danger">${t('Revoke « {name} »', 'Révoquer « {name} »', { name: 'Claude on CI' })}</button></div>
+</div>`;
+}
 
 const empty = () => `<div class="empty-card">
   <h2>${t('No agent key yet', 'Aucune clé d’agent')}</h2>
@@ -279,7 +279,7 @@ frame('b', 1440, 'B · « New key »: the form', [
   'The form opens above the list, in place of nothing: the list does not move under the pointer. « New key » takes focus to « Name ».',
   'Sites: a box per site of the workspace, with who reads its notes, so the switch below reads in context. Past 20 ticked, the others are disabled.',
   'Rights: two choices, read by default. Lives for: a number, 90 by default, and the day it ends, computed as it is typed.',
-  '« Only the notes of known people » is ticked by default (decision 7 of agents.md). It is asked for every key: the sites of a key can change who reads them later.',
+  '« Only the notes of known people » is the switch of the kit, on by default (decision 7 of agents.md). It is asked for every key: the sites of a key can change who reads them later.',
 ]);
 frame('c', 1440, 'C · The form refused: no name, no site', [
   'A press with no name or no site sends nothing: each field says what it needs, and focus goes to the first one (the kit: Field with error, aria-invalid). Nothing typed is cleared.',
@@ -295,8 +295,8 @@ frame('e', 1440, 'E · The writes of a key', [
   'The console has no page for one note: the id is no link. At 100 writes (the bound of the worker) the foot says that only the last 100 are listed.',
   'A key that wrote nothing says so (frame E2, 390 px).',
 ]);
-frame('f', 1440, 'F · Revoke, asked once more', [
-  'The confirmation of the kit (confirm.tsx). Once revoked, the row goes, focus goes to « New key », and a status line says « « Claude on CI » is revoked. ».',
+frame('f', 1440, 'F · Revoke, asked a second time in the row', [
+  'The confirmation of the kit (Confirm of confirm.tsx, FRU-165), in the row: what it costs, « Keep it » with focus, and the button that names the key. Once revoked, the row goes, focus goes to « New key », and a status line says « « Claude on CI » is revoked. ».',
 ]);
 frame('g', 1440, 'G · No key yet', [
   'The empty state of the kit. With no site in the workspace, « New key » is replaced by « Add a site first », a link to Sites.',
@@ -320,7 +320,7 @@ const builders = {
   c: () => page(1440, { body: form({ error: true }) + list(KEYS()), disabled: true }),
   d: () => page(1440, { body: shownOnce({ copied: true }) + list(KEYS()), disabled: true }),
   e: () => page(1440, { body: list(KEYS(), { 0: { open: true, writes: writesPanel() } }) }),
-  f: () => page(1440, { body: list(KEYS()) }) + confirmDialog(),
+  f: () => page(1440, { body: list(KEYS(), { 0: { confirm: true } }) }),
   g: () => page(1440, { body: empty(), button: false }),
   i: () => settingsSection(true),
   j: () => page(390, { body: soonNotice() + list(KEYS()) }),
@@ -430,6 +430,13 @@ main{padding:32px clamp(16px,4vw,48px) 72px}
 .check small{color:var(--muted);font-size:13px}
 .radio span,.check.strong span{display:block}
 .radio small,.check.strong small{display:block;font-size:13px;color:var(--muted);line-height:1.5}
+.switch-row{justify-content:space-between;gap:16px}
+.switch{flex:none;width:44px;height:26px;border-radius:999px;border:1px solid var(--control);background:#fff;position:relative;margin-top:2px}
+.switch span{position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:var(--control)}
+.switch.on{background:var(--ink);border-color:var(--ink)}
+.switch.on span{left:20px;background:#fff}
+.confirm{grid-column:1/-1;margin:8px 0 2px;padding:14px 18px;border-radius:10px;border:1px solid var(--line);background:var(--subtle)}
+.confirm p{margin:0;font-size:15px;line-height:1.5}
 .check.strong{padding:14px 16px;border:1px solid var(--line);border-radius:10px;margin:0 0 18px;max-width:640px}
 .days-row{display:flex;gap:10px;align-items:center}
 .days-row input{max-width:96px!important}

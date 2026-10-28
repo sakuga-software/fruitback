@@ -21,22 +21,17 @@ The owner and the admins of a workspace make its keys. A key names:
 The key is given **once**, in the answer that makes it. Fruitback keeps only its digest: a key you
 lose cannot be shown again, so make another and revoke the first.
 
-The screen « Agents » of the console comes next. Until then, make a key with the call that the console
-makes for its other screens: signed in to the console as an owner or an admin, open the developer
-tools on its page and run, with the id of your workspace and of each site:
+In the console, open **Workspace settings**, then **Agents** and **New key**. Name the key, tick
+its sites, choose what the agent can do and how long the key lives, then **Make the key**. The
+console shows the key once, with the line that connects Claude Code, both ready to copy.
 
-```js
-const answer = await fetch('https://<your worker>/console/workspaces/<workspace id>/agent-keys', {
-  method: 'POST',
-  credentials: 'include',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ name: 'Claude on CI', sites: ['<site id>'], rights: 'read' }),
-});
-console.log((await answer.json()).secret);
-```
+The same screen lists the keys, with when an agent last used each one (to the minute) and when it
+ends; it warns 7 days before the end. **Writes** shows the replies and the statuses a key wrote, and
+**Revoke** stops it at once: its agent is refused from its next request.
 
-`GET` on the same address lists the keys, `DELETE …/agent-keys/<key id>` revokes one at once, and
-`GET …/agent-keys/<key id>/writes` gives what it wrote.
+The console calls `/console/workspaces/<workspace id>/agent-keys` of the worker: `POST` makes a key,
+`GET` lists them, `DELETE …/agent-keys/<key id>` revokes one, and `GET …/agent-keys/<key id>/writes`
+gives what it wrote.
 
 ## Connect Claude Code
 
