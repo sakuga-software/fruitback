@@ -691,7 +691,8 @@ function addAndTurnOn(origin: string, workspace: Workspace, problem: HTMLElement
       ...(Object.keys(wanted).length === 0 ? {} : { settings: wanted }),
     })
     .catch(() => undefined);
-  const forget = (): Promise<void> => pending.forget().catch(() => undefined);
+  // Only the intent of this site: another click may have written another one since (raised in review).
+  const forget = (): Promise<void> => pending.forgetAdd(origin).catch(() => undefined);
   void (async () => {
     const granted = await browser.permissions.request({ origins: [matchPatternFor(origin)] }).catch(() => false);
     if (!granted) {

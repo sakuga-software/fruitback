@@ -126,6 +126,11 @@ export type Pending = {
   /** The values somebody typed for this pattern, while the intent is fresh. */
   draft(pattern: string): Promise<SiteConfig | undefined>;
   forget(): Promise<void>;
+  /**
+   * Forgets the intent to add a site on `pattern` (FRU-454), and no other: the intent of another
+   * site, written since by another click, stays for whoever settles it (raised in review).
+   */
+  forgetAdd(pattern: string): Promise<void>;
 };
 
 export function createPending({
@@ -202,5 +207,9 @@ export function createPending({
       return pending !== undefined && pending.pattern === pattern && 'site' in pending ? pending.site : undefined;
     },
     forget: clear,
+    async forgetAdd(pattern) {
+      const pending = parsePending(await read());
+      if (pending !== undefined && pending.pattern === pattern && 'add' in pending) await clear();
+    },
   };
 }

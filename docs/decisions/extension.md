@@ -1783,7 +1783,8 @@ entry with no `mode` reads as private** — that is every entry a reviewer's bro
   background does it on `permissions.onAdded`, the popup when it opens: nobody clicks « Turn on »
   twice. A worker that did not answer leaves the intent for the next settle; a refusal that holds (a
   role, a session that ended, the count of the hour, a refused setting) drops it. The popup that
-  stays open finishes the add itself and forgets the intent on every outcome, and a refused prompt
+  stays open finishes the add itself and forgets its own intent on every outcome, never the intent of
+  another site that a click wrote since, and a refused prompt
   forgets it too: an access that comes another way later adds no site by surprise. Both contexts can
   add at once: the worker answers the site that exists to a second add.
 - **A site of the reviewer's workspace is turned on in one click** (FRU-101). The popup asks

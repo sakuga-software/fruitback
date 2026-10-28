@@ -204,6 +204,19 @@ describe('a site of no workspace, added when the access arrives (FRU-454)', () =
     assert.equal(await pending.draft(ORIGIN), undefined);
   });
 
+  it('forgets the intent to add this site only, never the intent of another site', async () => {
+    const { state, pending } = world();
+    await pending.remember('https://other.acme.dev', SITE);
+    await pending.forgetAdd(ORIGIN);
+    assert.notEqual(state.value, undefined, 'the intent of another site stays');
+    await pending.rememberAdd('https://other.acme.dev', INTENT);
+    await pending.forgetAdd(ORIGIN);
+    assert.notEqual(state.value, undefined, 'the add of another site stays');
+    await pending.rememberAdd(ORIGIN, INTENT);
+    await pending.forgetAdd(ORIGIN);
+    assert.equal(state.value, undefined);
+  });
+
   it('is parsed field by field: a bad place or visibility is no intent', () => {
     const at = 1;
     assert.deepEqual(parsePending({ pattern: ORIGIN, add: INTENT, at }), { pattern: ORIGIN, add: INTENT, at });
