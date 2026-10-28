@@ -358,6 +358,17 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
     });
   }
 
+  /**
+   * The frame is in document coordinates, and a scroll moves a fixed or sticky element against the
+   * document, or an element inside a box that scrolls. So the frame is measured again at each scroll
+   * and resize, on the element it shows: else it scrolls away from a sidebar that stays (FRU-457).
+   */
+  function onScroll(): void {
+    const framed = capturing ? hovered : chosen;
+    // An element the page took away measures as a box of nothing at 0, 0: the frame stays.
+    if (framed !== null && framed.isConnected && highlight.style.display === 'block') frame(framed);
+  }
+
   function onClick(event: MouseEvent): void {
     if (!capturing) return;
     // Our own launch button is inside the Shadow root, so a click on it arrives here retargeted;
@@ -619,6 +630,9 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   document.addEventListener('mousemove', onMove, true);
   document.addEventListener('click', onClick, true);
   document.addEventListener('keydown', onKeyDown, true);
+  // Capture phase: a scroll event does not bubble, and a box of the page that scrolls must count too.
+  view?.addEventListener('scroll', onScroll, { passive: true, capture: true });
+  view?.addEventListener('resize', onScroll, { passive: true });
 
   return {
     root,
@@ -648,6 +662,8 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
       document.removeEventListener('mousemove', onMove, true);
       document.removeEventListener('click', onClick, true);
       document.removeEventListener('keydown', onKeyDown, true);
+      view?.removeEventListener('scroll', onScroll, true);
+      view?.removeEventListener('resize', onScroll);
       container.remove();
     },
   };

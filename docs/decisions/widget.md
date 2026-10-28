@@ -532,7 +532,14 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
     element.
   - **The frame stays on the chosen element while the composer is open**: `init` calls
     `host.hold(element)` at the choice and `host.release()` at the close. A host that assembles the
-    parts itself and calls neither keeps what it had, a frame that goes at the choice. **The banner does not stay, and one click is still one note.** The mock-up draws
+    parts itself and calls neither keeps what it had, a frame that goes at the choice.
+  - **The frame and the composer follow an element that moves against the document** (FRU-457): a
+    link of a fixed sidebar at a scroll, a row of a box that scrolls. Both are in document
+    coordinates, so the frame is measured again at each scroll and resize (capture phase, which
+    catches the boxes of the page), and the composer opened with the element (`open(element, …)`)
+    is placed again when that element moved. An element that moves with the document keeps the
+    composer where it is: a scroll does not slide it along the window. Held by
+    `e2e/scroll-fixed.spec.ts`. **The banner does not stay, and one click is still one note.** The mock-up draws
     the banner, the pressed button and the composer in one picture; a still does not say whether a
     capture goes on after a note, and a banner that says « click the page » over a modal dialog
     would not be true. Asked in FRU-258.
