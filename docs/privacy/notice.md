@@ -10,5 +10,8 @@ deployment:
 > and is visible to _[our team / anyone who can open this page]_ until we delete it. To have your
 > notes erased, write to _[address]_.
 
+If your team connects an AI agent to Fruitback, add: "An AI assistant of our team may read your note,
+through _[the provider of the model]_, to help us act on it."
+
 If you turned `includeEnv` on, add "and your browser's name, version and language" to the first
 sentence. Remove the picture sentence if you supplied no `captureScreenshot`.

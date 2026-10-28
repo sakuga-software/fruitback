@@ -98,6 +98,16 @@ In the two trackers, the issue description also states the reporter's name and e
 your team reads, and the note below it repeats them. [SECURITY.md](https://github.com/sakuga-software/fruitback/blob/main/SECURITY.md#a-note-is-stored-in-the-clear-in-your-database-or-your-tracker)
 says who can read each store. **On a public GitHub repository, that is everyone.**
 
+### An AI agent of your team (FRU-461 to FRU-464)
+
+A workspace can make **agent keys** (see [Connect an AI agent](agents.md)). An agent with a key reads
+the notes of the sites it names, whole, name and e-mail of the reporter included, through `/mcp`.
+From there the notes go wherever that agent runs, and to **the provider of the model your team
+uses**: a processor of the notes that Fruitback does not choose and does not see. Fruitback calls no
+model itself. With no key, no note leaves this way. On a site that everyone reads, a key reads only
+the notes of a known person unless the team made it otherwise. A reply that an agent writes is
+stored where the note is, under the name of the key and the word « agent ».
+
 ### Who can read a note back
 
 The widget reads the notes of a page to draw their pins, and the answer carries **the whole note**,

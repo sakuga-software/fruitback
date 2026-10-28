@@ -2377,7 +2377,8 @@ session, the `Origin` of the console for a write, `404` for a workspace somebody
 
 ### The remote MCP server, `/mcp` (FRU-463)
 
-An agent reads the notes of the sites of its agent key (FRU-461) through `POST /mcp`, the Streamable
+[docs/agents.md](docs/agents.md) is the guide for a team. An agent reads the notes of the sites of its
+agent key (FRU-461) through `POST /mcp`, the Streamable
 HTTP transport of MCP. Three tools, all reads: `list_feedback`, `get_feedback`, `feedback_as_text`.
 
 - **No valid key, no route.** No key, a key of another shape, a revoked or expired key, a key whose

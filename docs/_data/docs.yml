@@ -48,6 +48,8 @@
       url: /self-hosting/environment-variables.html
     - title: REST connector
       url: /rest-connector.html
+    - title: Connect an AI agent
+      url: /agents.html
     - title: Worker responses
       url: /self-hosting/worker.html
 - title: Privacy and security
