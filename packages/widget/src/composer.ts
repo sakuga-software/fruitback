@@ -799,17 +799,27 @@ export function createComposer(options: ComposerOptions): Composer {
   }
 
   /**
-   * Placed again when its element moved against the document (FRU-457). An element that moves with
-   * the document keeps the composer where it is: a scroll does not slide it along the window.
+   * Moved by as much as its element moved against the document (FRU-457): a fixed sidebar at a scroll,
+   * a row in a box that scrolls. It keeps its side and its offset to the element. Placed again, it
+   * would weigh the room above against the window of now, and jump to the other side of an element
+   * that only shifted by a pixel as the page scrolled. An element that moves with the document keeps
+   * the composer where it is: a scroll does not slide it along the window.
    */
   function follow(): void {
     // An element the page took away measures as a box of nothing at 0, 0: the composer stays.
-    if (root.hidden || following === null || !following.isConnected) return;
+    if (root.hidden || following === null || !following.isConnected || placedAt === undefined) return;
     const now = boxOf(following);
-    if (placedAt !== undefined && Math.abs(now.left - placedAt.left) < 1 && Math.abs(now.top - placedAt.top) < 1)
-      return;
+    const dx = now.left - placedAt.left;
+    const dy = now.top - placedAt.top;
+    if (dx === 0 && dy === 0) return;
     placedAt = now;
-    place(now);
+    shift('--fruitback-composer-left', dx);
+    shift('--fruitback-composer-top', dy);
+  }
+
+  function shift(property: string, by: number): void {
+    const at = Number.parseFloat(root.style.getPropertyValue(property)) || 0;
+    root.style.setProperty(property, `${at + by}px`);
   }
   // Capture phase: a scroll event does not bubble, and a box of the page that scrolls must count too.
   view?.addEventListener('scroll', follow, { passive: true, capture: true });
