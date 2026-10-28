@@ -204,6 +204,28 @@ describe('a site of no workspace, added when the access arrives (FRU-454)', () =
     assert.equal(await pending.draft(ORIGIN), undefined);
   });
 
+  it('keeps the intent of another site that a click wrote while the worker added this one', async () => {
+    for (const outcome of ['entry', 'never'] as const) {
+      let other: (() => Promise<void>) | undefined;
+      const { state, stored, pending } = world({
+        add: async () => {
+          // While the worker answers, a click on another site writes its own intent.
+          await other?.();
+
+          return outcome === 'entry' ? ENTRY : 'never';
+        },
+      });
+      other = () => pending.remember('https://other.acme.dev', SITE);
+      await pending.rememberAdd(ORIGIN, INTENT);
+      state.granted = true;
+      state.now += 1;
+
+      await pending.settle();
+      assert.deepEqual(stored, outcome === 'entry' ? [[ORIGIN, ENTRY]] : [], outcome);
+      assert.equal((state.value as { pattern?: string } | undefined)?.pattern, 'https://other.acme.dev', outcome);
+    }
+  });
+
   it('forgets the intent to add this site only, never the intent of another site', async () => {
     const { state, pending } = world();
     await pending.remember('https://other.acme.dev', SITE);
