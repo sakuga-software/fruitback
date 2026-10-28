@@ -124,6 +124,7 @@ export const FRENCH: Catalog = {
   'thread.replies': 'Réponses',
   'thread.team': 'Équipe',
   'thread.agent': 'Agent',
+  'thread.edited': 'A modifié la note',
   'reply.label': 'Réponse',
   'reply.placeholder': 'Répondre à {name}',
   'reply.placeholderAnonymous': 'Écrire une réponse',

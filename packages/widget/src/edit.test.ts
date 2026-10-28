@@ -2,7 +2,15 @@ import { afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { NoteIssue } from '@fruitback/shared';
 import { noteFixture, noteIssueFixture } from '@fruitback/shared/note.fixture';
-import { type EditAnswer, type EditFailure, type EditSeam, type Overlay, createOverlay } from './overlay.ts';
+import {
+  type EditAnswer,
+  type EditFailure,
+  type EditSeam,
+  type Overlay,
+  createOverlay,
+  editFromPage,
+} from './overlay.ts';
+import { createTranslator } from './messages.ts';
 import { type MountedPage, mountPage, setDocumentSize, setRect } from './dom.fixture.ts';
 
 /**
@@ -148,7 +156,11 @@ describe('the edit of a note in its thread (FRU-475)', () => {
     thread.submit();
     answer({
       note: { ...issue.note, text: 'The price of the Pro plan is wrong' },
-      comment: { id: 'c9', body: 'Edited the note', createdAt: '2026-10-28T10:00:00.000Z' },
+      comment: {
+        id: 'c9',
+        body: '**Camille** via Fruitback · member of Acme\nEdited the note',
+        createdAt: '2026-10-28T10:00:00.000Z',
+      },
     });
     await settle();
     assert.equal(thread.field(), null);
@@ -158,6 +170,7 @@ describe('the edit of a note in its thread (FRU-475)', () => {
       [...page.document.querySelectorAll('.fruitback-thread-reply-body')].map((each) => each.textContent),
       ['Edited the note'],
     );
+    assert.equal(page.document.querySelector('.fruitback-thread-reply-name')?.textContent, 'Camille');
     assert.equal(thread.status(), 'Saved');
     assert.equal(sent.length, 5);
     assert.ok(sent.every((each) => each.text === 'The price of the Pro plan is wrong'));
@@ -192,5 +205,34 @@ describe('the edit of a note in its thread (FRU-475)', () => {
     (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
 
     assert.equal(thread.field()?.value, 'Half way');
+  });
+});
+
+describe('the reply that says a note was edited (FRU-475)', () => {
+  it('reads the line of the worker in either language of a team, in the words of the reader', () => {
+    const french = createTranslator({ language: 'fr' });
+
+    assert.deepEqual(editFromPage('**Ana** via Fruitback · member of Acme\nEdited the note', french), {
+      name: 'Ana',
+      who: 'member of Acme',
+      text: 'A modifié la note',
+    });
+    assert.equal(
+      editFromPage('**Ana** via Fruitback · membre de Acme\nA modifié la note', createTranslator({}))?.text,
+      'Edited the note',
+    );
+  });
+
+  it('is no other comment: a quoted reply, a verdict, or a line typed after it', () => {
+    const t = createTranslator({});
+
+    for (const body of [
+      '**Ana** via Fruitback · member of Acme\n\n> Edited the note',
+      '**Ana** via Fruitback · member of Acme\nChecked: looks fixed',
+      '**Ana** via Fruitback · member of Acme\nEdited the note\nand more',
+      'Edited the note',
+    ]) {
+      assert.equal(editFromPage(body, t), undefined, body);
+    }
   });
 });

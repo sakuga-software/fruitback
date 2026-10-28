@@ -68,6 +68,7 @@ import {
   type ReplyFailure,
   applyEdit,
   createOverlay,
+  editFromPage,
   replyFromPage,
 } from './overlay.ts';
 import { type ConfigPanel, type OfferedStages, createConfigPanel, createOfferedStages } from './panel.ts';
@@ -1140,7 +1141,7 @@ export function init(options: FruitbackOptions): Fruitback {
           updatedAt: issue.updatedAt,
           // A reply written from a page reads as the thread shows it: its name, and its text unquoted.
           replies: (issue.comments ?? []).map((comment) => {
-            const fromPage = replyFromPage(comment.body);
+            const fromPage = replyFromPage(comment.body) ?? editFromPage(comment.body, translator);
             const author = fromPage?.name ?? comment.author;
 
             return {

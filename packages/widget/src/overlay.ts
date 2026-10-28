@@ -1223,7 +1223,7 @@ function replies(document: Document, issue: NoteIssue, t: Translator): HTMLEleme
   for (const comment of issue.comments) {
     const item = document.createElement('li');
     item.className = 'fruitback-thread-reply';
-    const fromPage = replyFromPage(comment.body);
+    const fromPage = replyFromPage(comment.body) ?? editFromPage(comment.body, t);
     const who = fromPage === undefined ? (comment.author ?? t.text('thread.team')) : fromPage.name;
     // FRU-465: the worker says that an agent wrote it. The word is the reader's, not the line's.
     const qualifier = comment.by === 'agent' ? t.text('thread.agent') : fromPage?.who;
@@ -1541,6 +1541,19 @@ export function replyFromPage(body: string): { name: string; who: string; text: 
     .join('\n');
 
   return { name: match[1] ?? '', who: match[2] ?? '', text };
+}
+
+/**
+ * The reply the worker writes when the author edits a note (FRU-475, `editText`): the line of who
+ * wrote it, then « Edited the note » in the language of the team. The page shows the name, and its own
+ * words for the edit. Any other comment is `undefined`.
+ */
+const EDITED = /^\*\*([^*\n]+)\*\* via Fruitback · ([^\n]+)\n(?:Edited the note|A modifié la note)$/u;
+
+export function editFromPage(body: string, t: Translator): { name: string; who: string; text: string } | undefined {
+  const match = EDITED.exec(body);
+
+  return match === null ? undefined : { name: match[1] ?? '', who: match[2] ?? '', text: t.text('thread.edited') };
 }
 
 const REPLY_FAILURES = {

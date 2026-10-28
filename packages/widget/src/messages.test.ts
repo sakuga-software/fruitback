@@ -509,7 +509,15 @@ describe('every word the widget shows', () => {
       snapshots.push(...shown(host.root));
     }
     (host.root.querySelector('.fruitback-thread-edit-form') as HTMLFormElement).requestSubmit();
-    editAnswers.shift()?.({ note: { ...found.note, text: 'EDITED' } });
+    editAnswers.shift()?.({
+      note: { ...found.note, text: 'EDITED' },
+      // The reply the worker writes for it: the thread writes its own words for it.
+      comment: {
+        id: 'c4',
+        body: '**REPORTER** via Fruitback · member of WORKSPACE\nEdited the note',
+        createdAt: '2026-08-01T12:00:00.000Z',
+      },
+    });
     await settleReply();
     snapshots.push(...shown(host.root));
     composer.open({ left: 0, top: 0, bottom: 10, right: 10 }, 'ELEMENT');
@@ -723,6 +731,8 @@ describe('every word the widget shows', () => {
       readableSize(2_048, translator.locale),
       // FRU-475: the text the author typed in the field of an edit.
       'EDITED',
+      // What the worker writes of who edited it, in the language of the team (FRU-475).
+      'member of WORKSPACE',
     ];
     // The short selector the frame of a capture writes (FRU-303), the tag of an element of the page.
     // Matched whole: as a part, « i » would take that letter out of every other text.
@@ -734,6 +744,8 @@ describe('every word the widget shows', () => {
       '#gone',
       '#renamed',
       '[data-testid="checkout-cta"]',
+      // The initial of who edited the note, in its round (FRU-475).
+      'R',
     ]);
     const untranslated = snapshots.filter((text) => {
       if (selectors.has(text)) return false;

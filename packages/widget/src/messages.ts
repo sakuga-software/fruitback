@@ -177,6 +177,8 @@ export const ENGLISH = {
   'thread.team': 'Team',
   /** A reply that an AI agent wrote, beside the name of its key (FRU-465). */
   'thread.agent': 'Agent',
+  /** The reply the worker writes when the author edits their note (FRU-475). */
+  'thread.edited': 'Edited the note',
   'reply.label': 'Reply',
   'reply.placeholder': 'Reply to {name}',
   'reply.placeholderAnonymous': 'Write a reply',
