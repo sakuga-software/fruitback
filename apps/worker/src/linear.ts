@@ -730,7 +730,9 @@ function buildNoteIssueFilter(routing: LinearRouting, { url, clientId }: NoteIss
 function toNoteComments(node: IssueNode): NoteComment[] | undefined {
   if (node.comments == null) return undefined;
 
-  return node.comments.nodes.map(noteCommentOf).sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+  return node.comments.nodes
+    .map(noteCommentOf)
+    .sort((left, right) => left.createdAt.localeCompare(right.createdAt, 'en'));
 }
 
 function noteCommentOf(comment: CommentNode): NoteComment {

@@ -270,7 +270,7 @@ for (const { label, open, skip } of DATABASES) {
       assert.equal(await accounts.suspension(globex.id), undefined);
       // Two workspaces made in one millisecond come in the order of their random ids: sorted here.
       const byName = (await accounts.memberships(ana.id)).sort((a, b) =>
-        a.workspace.name.localeCompare(b.workspace.name),
+        a.workspace.name.localeCompare(b.workspace.name, 'en'),
       );
       assert.deepEqual(byName, [
         { workspace: acme, role: 'owner', suspension: { since: instant, reason: 'impayé' } },

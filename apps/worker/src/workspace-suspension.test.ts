@@ -146,7 +146,7 @@ async function restore(on: Instance, workspace: string): Promise<void> {
 async function bytesOf(answer: Response) {
   return {
     status: answer.status,
-    headers: [...answer.headers].toSorted(([a], [b]) => a.localeCompare(b)),
+    headers: [...answer.headers].toSorted(([a], [b]) => a.localeCompare(b, 'en')),
     body: await answer.text(),
   };
 }

@@ -119,7 +119,7 @@ describe('the deletion of an account by an administrator (FRU-285)', () => {
       workspaces: [
         { id: on.acme, name: 'Acme' },
         { id: on.globex, name: 'Globex' },
-      ].toSorted((a, b) => a.id.localeCompare(b.id)),
+      ].toSorted((a, b) => a.id.localeCompare(b.id, 'en')),
     });
     assert.equal(await count(on, `"user" WHERE id = '${on.carl.id}'`), 0);
     assert.equal(await count(on, `member WHERE "userId" = '${on.carl.id}'`), 0);

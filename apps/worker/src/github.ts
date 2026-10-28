@@ -516,7 +516,7 @@ export function createIssueStore({
 
         return comment.success ? [comment.data] : [];
       })
-      .sort((left, right) => left.created_at.localeCompare(right.created_at))
+      .sort((left, right) => left.created_at.localeCompare(right.created_at, 'en'))
       .slice(-COMMENTS_PER_ISSUE)
       .map((comment) => ({
         id: String(comment.id),
