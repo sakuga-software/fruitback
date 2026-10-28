@@ -73,11 +73,35 @@ export function createSiteNotesRelay(seams: SiteNotesRelaySeams): SiteNotesRelay
 function forThePage(note: SiteNote): PageSiteNote {
   return {
     note: note.note,
-    excerpt: note.excerpt,
+    excerpt: excerptAtMost(note.excerpt),
     page: note.page,
     stage: note.stage,
     ...(note.author === undefined ? {} : { author: note.author }),
     ...(note.reference === undefined ? {} : { reference: note.reference }),
     createdAt: note.createdAt,
   };
+}
+
+/**
+ * The most an excerpt holds when it reaches the page: `EXCERPT_LENGTH` of the worker's index, in code
+ * points. The worker never sends more; this holds the promise of SECURITY.md without trusting it,
+ * since the answer crosses into the page's world (review of #645).
+ */
+export const PAGE_EXCERPT_MAX = 64;
+
+const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+
+/** At most `PAGE_EXCERPT_MAX` code points, cut between two graphemes, as the worker cuts it. */
+export function excerptAtMost(text: string): string {
+  if ([...text].length <= PAGE_EXCERPT_MAX) return text;
+  let kept = '';
+  let length = 0;
+  for (const { segment } of graphemes.segment(text)) {
+    const size = [...segment].length;
+    if (length + size > PAGE_EXCERPT_MAX) break;
+    kept += segment;
+    length += size;
+  }
+
+  return kept.trimEnd();
 }

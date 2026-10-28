@@ -763,7 +763,8 @@ that answer** (FRU-470). In team mode with the widget mounted by the extension, 
 widget asks the background for one page of `GET /session/notes` (FRU-306), the read the side panel
 makes for « Whole site ». The widget lives in the page's world, so a script of the site can post the
 same request and read the answer. What it gets is what the side panel shows the reviewer for that
-site: for each note an excerpt of 64 characters at most, its page, its stage, the name of its author
+site: for each note an excerpt of 64 characters at most (cut by the worker's index, and cut again by the
+background before it reaches the page: test:`gives the page an excerpt of 64 code points at most, whatever the worker sent (review of #645)`), its page, its stage, the name of its author
 and its date, never its text, a reply, the link to the tracker or a token. This is new to the page in
 one way: it learns which pages of its own site have notes, where `GET /feedback` answers one page it
 names. **The condition**: the background reads only for the origin the browser reports, for the
