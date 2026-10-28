@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { build } from 'esbuild';
@@ -26,24 +27,42 @@ function npmLatest(): string {
   return execFileSync('npm', ['view', 'fruitback@latest', 'version'], { encoding: 'utf8' }).trim();
 }
 
-async function latestRelease(): Promise<string> {
+type Release = {
+  tag_name: string;
+  assets: { name: string; browser_download_url: string; digest: string | null }[];
+};
+
+/** The latest release, or the one of `version`. */
+async function release(version: string | undefined): Promise<Release> {
   const headers: Record<string, string> = { Accept: 'application/vnd.github+json' };
   if (process.env.GITHUB_TOKEN) headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
-  const answer = await fetch(`https://api.github.com/repos/${REPOSITORY}/releases/latest`, { headers });
-  if (!answer.ok) throw new Error(`GitHub gave no latest release: ${answer.status} ${await answer.text()}`);
-  const { tag_name: tag } = (await answer.json()) as { tag_name: string };
+  const which = version ? `tags/v${version}` : 'latest';
+  const answer = await fetch(`https://api.github.com/repos/${REPOSITORY}/releases/${which}`, { headers });
+  if (!answer.ok) throw new Error(`GitHub gave no release ${which}: ${answer.status} ${await answer.text()}`);
 
-  return tag.replace(/^v/, '');
+  return (await answer.json()) as Release;
 }
 
-async function download(url: string, to: string): Promise<void> {
-  const answer = await fetch(url);
-  if (!answer.ok) throw new Error(`${url}: ${answer.status}`);
-  fs.writeFileSync(to, Buffer.from(await answer.arrayBuffer()));
+/**
+ * The bytes of an asset, checked against the SHA-256 that GitHub computed when the asset was
+ * uploaded (`digest` of the API). A download that was cut or changed on its way fails here, before
+ * any of it runs. Raised in review.
+ */
+async function downloadChecked(asset: Release['assets'][number], to: string): Promise<void> {
+  if (asset.digest === null || !asset.digest.startsWith('sha256:')) {
+    throw new Error(`GitHub gives no SHA-256 for ${asset.name}: ${asset.digest}`);
+  }
+  const answer = await fetch(asset.browser_download_url);
+  if (!answer.ok) throw new Error(`${asset.browser_download_url}: ${answer.status}`);
+  const bytes = Buffer.from(await answer.arrayBuffer());
+  const found = `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
+  if (found !== asset.digest) throw new Error(`${asset.name} is ${found}, and GitHub says ${asset.digest}`);
+  fs.writeFileSync(to, bytes);
 }
 
 const npmVersion = process.env.FRUITBACK_PUBLISHED_VERSION || npmLatest();
-const extensionVersion = process.env.FRUITBACK_PUBLISHED_EXTENSION || (await latestRelease());
+const extensionRelease = await release(process.env.FRUITBACK_PUBLISHED_EXTENSION || undefined);
+const extensionVersion = extensionRelease.tag_name.replace(/^v/, '');
 
 fs.rmSync(PUBLISHED, { recursive: true, force: true });
 fs.mkdirSync(PUBLISHED);
@@ -81,10 +100,9 @@ await build({
 });
 
 const archive = path.join(PUBLISHED, 'extension-chrome.zip');
-await download(
-  `https://github.com/${REPOSITORY}/releases/download/v${extensionVersion}/fruitback-${extensionVersion}-chrome.zip`,
-  archive,
-);
+const chrome = extensionRelease.assets.find((asset) => asset.name === `fruitback-${extensionVersion}-chrome.zip`);
+if (chrome === undefined) throw new Error(`the release v${extensionVersion} holds no archive for Chrome`);
+await downloadChecked(chrome, archive);
 // Python and not `unzip`: the image of Playwright that CI runs in has no `unzip`. `zipfile` also
 // refuses a name that climbs out of the directory.
 execFileSync('python3', ['-I', '-m', 'zipfile', '-e', archive, path.join(PUBLISHED, 'extension')], {
@@ -97,8 +115,24 @@ if (manifest.version !== extensionVersion) {
   throw new Error(`the archive of v${extensionVersion} holds the extension ${manifest.version}`);
 }
 
+// What npm installed, read from the disk, and not the version it was asked for: `fruitback` names
+// its widget and its contract by an exact version, and a run that mixes two versions fails here.
+// Raised in review.
+const installed = Object.fromEntries(
+  ['fruitback', '@fruitback/widget', '@fruitback/element', '@fruitback/shared'].map((name) => [
+    name,
+    (
+      JSON.parse(fs.readFileSync(path.join(npmDirectory, 'node_modules', name, 'package.json'), 'utf8')) as {
+        version: string;
+      }
+    ).version,
+  ]),
+);
+const mixed = Object.entries(installed).filter(([, version]) => version !== npmVersion);
+if (mixed.length > 0) throw new Error(`npm ${npmVersion} was asked for, and installed ${JSON.stringify(installed)}`);
+
 fs.writeFileSync(
   path.join(PUBLISHED, 'versions.json'),
-  `${JSON.stringify({ npm: npmVersion, extension: extensionVersion }, null, 2)}\n`,
+  `${JSON.stringify({ npm: npmVersion, extension: extensionVersion, installed, archive: chrome.digest }, null, 2)}\n`,
 );
 console.log(`published versions: npm ${npmVersion}, extension ${extensionVersion}`);
