@@ -2401,8 +2401,22 @@ HTTP transport of MCP. Three tools, all reads: `list_feedback`, `get_feedback`, 
   note**: the key, its sites and `verifiedOnly` bound what it reads; what it does with it is the
   team's.
 - **What a read costs a store**: each page of the answer is one read of the page, through the read
-  cache of `GET /feedback`. The rate limit per address applies; a limit per key comes with the write
-  tools (FRU-464).
+  cache of `GET /feedback`. The rate limit per address applies.
+- **A key writes only with the right `write`, and while its member may manage the sites** (FRU-464):
+  `reply_to_feedback` and `set_feedback_status`. A key `read`, or a key whose member no longer has
+  `manage-sites`, is not given them, and `tools/call` refuses them (`-32602`).
+  test:`gives a key read no write tool, and refuses both when it calls them`.
+- **A reply of an agent says that it is one**, and never names the member who made the key: its
+  first line is `**<name of the key>** via Fruitback · agent`, and a read gives it `by: 'agent'`. A
+  person who types that line in a reply of the page does not pass for an agent: what a person typed is
+  quoted under the line of the worker. A person of the team can write the line by hand in the tracker,
+  as for a verdict (FRU-294). test:`never reads a reply that a person typed as a reply of an agent`.
+- **A status is set only on a note that the worker keeps**; a note in a tracker answers
+  `statuses-not-taken`.
+- **Each key writes 30 times a minute at most, and each write is in the log of its key**: the
+  owner and the admins read it at `GET /console/workspaces/<id>/agent-keys/<key>/writes`, the
+  newest 100. The log of a revoked key stays until its workspace goes.
+  test:`stops a key after 30 writes in a minute, and keeps the log of a revoked key`.
 
 ### The administrator of the instance (FRU-261)
 

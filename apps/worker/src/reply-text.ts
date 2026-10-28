@@ -18,8 +18,8 @@ import type { CheckVerdict, NewCheck, NewReply } from './store.ts';
 export const REPLY_NAME_LENGTH = 80;
 
 const WORDS = {
-  en: { visitor: 'Visitor', via: 'via Fruitback', member: 'member of', unverified: 'not verified' },
-  fr: { visitor: 'Visiteur', via: 'via Fruitback', member: 'membre de', unverified: 'non vérifié' },
+  en: { visitor: 'Visitor', via: 'via Fruitback', member: 'member of', unverified: 'not verified', agent: 'agent' },
+  fr: { visitor: 'Visiteur', via: 'via Fruitback', member: 'membre de', unverified: 'non vérifié', agent: 'agent' },
 } as const;
 
 /**
@@ -49,10 +49,15 @@ export function replyText(reply: NewReply, locale?: string): string {
 function whoLine(author: NewReply['author'], locale?: string): string {
   const words = WORDS[locale?.toLowerCase().startsWith('fr') ? 'fr' : 'en'];
   const name = replyName(author.name) ?? words.visitor;
-  const who =
-    author.kind === 'member' ? `${words.member} ${replyName(author.workspace) ?? ''}`.trim() : words.unverified;
 
-  return `**${name}** ${words.via} · ${who}`;
+  return `**${name}** ${words.via} · ${whoWords(author, words)}`;
+}
+
+/** What the line says of the author: a member and their workspace, an agent, or « not verified ». */
+function whoWords(author: NewReply['author'], words: (typeof WORDS)[keyof typeof WORDS]): string {
+  if (author.kind === 'member') return `${words.member} ${replyName(author.workspace) ?? ''}`.trim();
+
+  return author.kind === 'agent' ? words.agent : words.unverified;
 }
 
 /** Every line of what somebody wrote, quoted, the empty ones too. */
@@ -90,6 +95,21 @@ export function checkText(check: NewCheck, locale?: string): string {
 
 /** The first line that the worker writes, and the name in it. */
 const WHO_LINE = /^\*\*([^*\n]+)\*\* via Fruitback · /u;
+
+/** The first line of a reply of an agent (FRU-464): the name of its key, then the word, in every language. */
+const AGENT_LINE = /^\*\*[^*\n]+\*\* via Fruitback · agent$/u;
+
+/**
+ * A comment as a read gives it, with `by: 'agent'` when the worker wrote it for an agent (FRU-464).
+ *
+ * WARNING: this reads a text, as `verdictOf` does. A person of the team can write the line by hand in
+ * the tracker. A reply of the page cannot: what a person typed is quoted under the line of the worker.
+ */
+export function markedAgent(comment: NoteComment): NoteComment {
+  const [first = ''] = comment.body.replace(/\r\n?/gu, '\n').split('\n');
+
+  return AGENT_LINE.test(first) ? { ...comment, by: 'agent' } : comment;
+}
 
 /**
  * The verdict a comment holds, and the name of who gave it, or `undefined` for any other comment.

@@ -35,6 +35,9 @@ first publish made it expensive.
   `GET /session/notes` and each REST delivery (version 2) carry the note under `note`. A refused
   note is `invalid-note`. An answer of the read cache of before is under another prefix of the `Kv`
   (`read-v3`), where no reader looks.
+- **A reply of an AI agent says `by: 'agent'`** (FRU-464): an optional field of `noteCommentSchema`,
+  so `NOTE_VERSION` does not move, and a widget of before shows the name alone. The worker sets it
+  on a read, from the first line it wrote for the agent (`markedAgent` of `reply-text.ts`).
 - **The text of the notes of a page is `feedbackText`** (FRU-109, moved by FRU-463): the widget's
   « Copy as text » and the tool `feedback_as_text` of the worker write it. The contract holds the
   format and no word: the caller gives `FeedbackWords`, in its language. `placement` is absent where

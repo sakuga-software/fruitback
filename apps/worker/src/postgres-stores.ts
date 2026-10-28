@@ -95,6 +95,8 @@ export function accountStoreOn(database: Database): AccountStore {
     agentKeys: true,
     revokeAgentKey: true,
     agentKeyOf: true,
+    recordAgentWrite: true,
+    agentWrites: true,
     markSeen: true,
     lastSeen: true,
     addSite: true,

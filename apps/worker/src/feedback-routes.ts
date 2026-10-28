@@ -21,7 +21,7 @@ import {
 } from './note-helpers.ts';
 import type { Channel, NoteIndex } from './notes-index.ts';
 import { chargeRateLimit, maxBatch } from './rate-limit.ts';
-import { checkedOf } from './reply-text.ts';
+import { checkedOf, markedAgent } from './reply-text.ts';
 import type { CallerChecks, RequestContext, Served } from './request-context.ts';
 import {
   type BatchAnswer,
@@ -265,10 +265,15 @@ export async function readPage({
   // that is read in one place gets what its store answers, as it is: nothing there comes back
   // twice, and two notes can hold one note id.
   const seen = new Set<string>();
+  const issues =
+    found.length < 2
+      ? found.flat()
+      : found.flat().filter((issue) => !seen.has(issue.note.id) && seen.add(issue.note.id));
 
-  return found.length < 2
-    ? found.flat()
-    : found.flat().filter((issue) => !seen.has(issue.note.id) && seen.add(issue.note.id));
+  // FRU-464: a reply of an agent says so, after the cache, from the line that the worker wrote.
+  return issues.map((issue) =>
+    issue.comments === undefined ? issue : { ...issue, comments: issue.comments.map(markedAgent) },
+  );
 }
 
 export async function postFeedback(

@@ -214,7 +214,11 @@ export type CheckAnswer = { comment: NoteComment; stage: NoteStage };
  * Who writes a reply, as the worker knows it (FRU-257). A member is a session of the workspace of the
  * site, named by its account. A visitor is anybody else, and the name they typed is their word.
  */
-export type ReplyAuthor = { kind: 'member'; name: string; workspace: string } | { kind: 'visitor'; name?: string };
+export type ReplyAuthor =
+  | { kind: 'member'; name: string; workspace: string }
+  | { kind: 'visitor'; name?: string }
+  /** An AI agent, by the name of its key (FRU-464). The member who made the key is not named. */
+  | { kind: 'agent'; name: string };
 
 /** The note a reply goes under: the `id` of its issue, and the client whose note it must be. */
 export type ReplyTarget = { issue: string; clientId: string | undefined };

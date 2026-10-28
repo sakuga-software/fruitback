@@ -165,6 +165,11 @@ export const noteCommentSchema = z.object({
   createdAt: z.string(),
   /** Absent when the store returns a comment with no user — an integration, or a deleted account. */
   author: z.string().optional(),
+  /**
+   * `agent`: an AI agent wrote the reply, with an agent key of the workspace (FRU-464). Absent for a
+   * person. A widget of before reads the reply with the name alone.
+   */
+  by: z.literal('agent').optional(),
 });
 
 export type NoteComment = z.infer<typeof noteCommentSchema>;

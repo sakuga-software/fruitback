@@ -396,7 +396,16 @@ async function routed(
       grantOf: (key) => resolveAgentKey(accounts, key, Date.now()),
       suspended: async (workspace) => (await accounts.suspension(workspace)) !== undefined,
       tools: (grant) =>
-        agentTools({ grant, store: storeOfRequest(), kv, noteIndex, route: (site) => routeFor(request, served, site) }),
+        agentTools({
+          grant,
+          // As the routes of the page: each call through a connector is noted on it (FRU-464).
+          store: watchedStore(storeOfRequest(), accounts),
+          accounts,
+          kv,
+          noteIndex,
+          replyLength: REPLY_LENGTH,
+          route: (site) => routeFor(request, served, site),
+        }),
     });
   }
 

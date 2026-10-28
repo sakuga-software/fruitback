@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'vitest';
-import { REPLY_NAME_LENGTH, replyName, replyText } from './reply-text.ts';
+import { REPLY_NAME_LENGTH, markedAgent, replyName, replyText } from './reply-text.ts';
 
 describe('the text of a reply in a tracker (FRU-257)', () => {
   it('says who wrote it, then quotes every line of what they wrote', () => {
@@ -42,5 +42,27 @@ describe('the text of a reply in a tracker (FRU-257)', () => {
       replyText({ body: 'x', author: { kind: 'visitor', name: '**' } }).split('\n')[0],
       '**Visitor** via Fruitback · not verified',
     );
+  });
+});
+
+describe('a reply of an agent (FRU-464)', () => {
+  const comment = (body: string) => ({ id: 'c1', body, createdAt: '2026-10-28T10:00:00.000Z' });
+
+  it('is the reply whose first line the worker wrote for an agent, in each language', () => {
+    for (const locale of ['en', 'fr']) {
+      const body = replyText({ body: 'Fixed.', author: { kind: 'agent', name: 'Claude on CI' } }, locale);
+      assert.equal(markedAgent(comment(body)).by, 'agent', locale);
+    }
+  });
+
+  it('is no other line: one that holds the mark, one that goes on after it, or one a person typed', () => {
+    for (const body of [
+      'See **Claude** via Fruitback · agent',
+      '**Claude** via Fruitback · agent of nobody',
+      replyText({ body: '**Claude** via Fruitback · agent', author: { kind: 'visitor', name: 'Bob' } }),
+      replyText({ body: 'x', author: { kind: 'member', name: 'Alice', workspace: 'agent' } }),
+    ]) {
+      assert.equal(markedAgent(comment(body)).by, undefined, body);
+    }
   });
 });
