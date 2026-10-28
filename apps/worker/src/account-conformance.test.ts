@@ -47,7 +47,34 @@ const VIOLATIONS: Violation<AccountStore>[] = [
   {
     breaks: 'keeps an agent key with the sites it names, and finds it by its digest with the reach of its member',
     by: 'finds a key by any digest',
-    replace: { from: '.where(and(eq(agent_keys.key_hash, keyHash), NOT_SUSPENDED)),', to: '.where(NOT_SUSPENDED),' },
+    replace: {
+      from: 'agentKeyOf: (keyHash) => keyAndReach(eq(agent_keys.key_hash, keyHash)),',
+      to: 'agentKeyOf: (keyHash) => keyAndReach(sql`${keyHash} = ${keyHash}`),',
+    },
+  },
+  {
+    breaks: 'keeps a connection of OAuth as a key with no digest, its client, and tokens that go with it',
+    by: 'spends a refresh token twice',
+    replace: {
+      from: "and(eq(oauth_tokens.token_hash, hash), eq(oauth_tokens.kind, 'refresh'), isNull(oauth_tokens.used_at))",
+      to: "and(eq(oauth_tokens.token_hash, hash), eq(oauth_tokens.kind, 'refresh'))",
+    },
+  },
+  {
+    breaks: 'deletes the clients of OAuth that nobody approved once they are stale, and keeps the others',
+    by: 'deletes the stale clients that a person approved too',
+    replace: {
+      from: 'where(and(lt(oauth_clients.created_at, staleBefore), unapproved))',
+      to: 'where(lt(oauth_clients.created_at, staleBefore))',
+    },
+  },
+  {
+    breaks: 'holds 1000 clients of OAuth that nobody approved: the oldest goes, and a new one is always written',
+    by: 'lets the clients that nobody approved grow with no end',
+    replace: {
+      from: 'await tx.delete(oauth_clients).where(inArray(oauth_clients.id, overflow));',
+      to: '',
+    },
   },
   {
     breaks: 'writes no agent key that names a site of another workspace',

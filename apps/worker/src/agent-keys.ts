@@ -80,7 +80,7 @@ export async function resolveAgentKey(
   return grantOf(found.key, found.reach);
 }
 
-function grantOf(key: AgentKey, reach: Reach): AgentGrant | undefined {
+export function grantOf(key: AgentKey, reach: Reach): AgentGrant | undefined {
   const sites = key.sites.map((site) => site.id).filter((site) => readsSite(reach, site));
   if (!can(reach.role, 'read-feedback') || sites.length === 0) return undefined;
 
@@ -108,11 +108,13 @@ function keyView(key: AgentKey): Record<string, unknown> {
     expiresAt: new Date(key.expiresAt).toISOString(),
     // FRU-462: when an agent last opened a request of `/mcp` with it, to the minute, or `null`.
     lastUsedAt: key.lastUsedAt === undefined ? null : new Date(key.lastUsedAt).toISOString(),
+    // FRU-467: a connection of OAuth names its client, the host a person approved; a key, `null`.
+    client: key.client === undefined ? null : { name: key.client.name, host: key.client.host },
   };
 }
 
 /** The sites of a request: distinct ids, 1 to `MAX_KEY_SITES`, or `undefined`. */
-function sitesOf(value: unknown): string[] | undefined {
+export function sitesOf(value: unknown): string[] | undefined {
   if (!Array.isArray(value) || value.length === 0) return undefined;
   if (!value.every((site) => typeof site === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(site))) return undefined;
   const sites = [...new Set(value as string[])];
@@ -121,7 +123,7 @@ function sitesOf(value: unknown): string[] | undefined {
 }
 
 /** The days of a request: absent is `DEFAULT_KEY_DAYS`, else a whole number from 1 to `MAX_KEY_DAYS`. */
-function daysOf(value: unknown): number | undefined {
+export function daysOf(value: unknown): number | undefined {
   if (value === undefined) return DEFAULT_KEY_DAYS;
 
   return Number.isInteger(value) && (value as number) >= 1 && (value as number) <= MAX_KEY_DAYS

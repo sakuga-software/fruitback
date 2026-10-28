@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fruitback, OAuth for MCP (FRU-467)</title>
+<style>
+:root{--ink:#18181b;--ink-soft:#52525b;--muted:#6b6b74;--page:#fff;--subtle:#fafafa;--chip:#f4f4f5;--line:#e4e4e7;--control:#8a8a93;--accent:#dd2c27;--accent-strong:#b91c1c;--done:#15803d;--rail:#18181b;--rail-active:#27272a;--rail-text:#d4d4d8;--rail-muted:#a1a1aa}
+*{box-sizing:border-box}
+body{margin:0;background:#e9e9ec;color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif;-webkit-font-smoothing:antialiased;overflow-wrap:anywhere}
+button{white-space:nowrap;font:inherit;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+button svg{width:16px;height:16px}
+.board-head{padding:40px 48px 8px;max-width:1200px}
+.board-head h1{font-size:28px;margin:0 0 8px}
+.board-head p{font-size:15px;line-height:1.5;color:var(--ink-soft);margin:0 0 8px}
+.toc{display:flex;flex-wrap:wrap;gap:6px 14px;padding:0 48px 24px;font-size:14px}
+.frame{padding:24px 48px 40px}
+.f-title{font-size:18px;margin:0 0 8px}
+.notes{margin:0 0 14px;padding-left:20px;max-width:1100px;font-size:14px;line-height:1.5;color:var(--ink-soft)}
+.f-box{background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.12),0 8px 24px rgba(0,0,0,.06);border-radius:4px;overflow:hidden}
+code,.snippet,.secret{font:13px ui-monospace,SFMono-Regular,Menlo,monospace}
+.focus{outline:2px solid var(--accent);outline-offset:2px}
+.muted{color:var(--muted)}
+.app{display:flex;min-height:900px;background:#fff}
+.rail{flex:0 0 248px;background:var(--rail);color:#fff;padding:16px 12px;display:flex;flex-direction:column;gap:20px}
+.rail .ws{display:flex;gap:10px;align-items:center;padding:8px;border-radius:10px;color:#fff;text-decoration:none}
+.rail .ws[aria-current]{background:var(--rail-active)}
+.ws-i{width:32px;height:32px;border-radius:8px;background:#fff;color:var(--ink);display:grid;place-items:center;font-weight:700;font-size:14px;flex:none}
+.ws b{display:block;font-size:15px}.ws small{display:block;font-size:12px;color:var(--rail-muted)}
+.rail nav{display:flex;flex-direction:column;gap:2px}
+.rail nav a{display:flex;align-items:center;min-height:40px;padding:0 12px;border-radius:10px;color:var(--rail-text);font-size:15px;text-decoration:none;white-space:nowrap}
+.w390{flex-direction:column;min-height:0}
+.w390 .rail{flex:none;padding:10px 12px;gap:6px}
+.w390 .rail nav{flex-direction:row;overflow:hidden}
+.main-wrap{flex:1;min-width:0}
+main{padding:32px clamp(16px,4vw,48px) 72px}
+.w390 main{padding:20px 16px 48px}
+.crumbs{display:flex;gap:8px;align-items:center;font-size:14px;color:var(--muted);margin-bottom:10px;flex-wrap:wrap}
+.crumbs a{color:var(--ink);font-weight:600;text-underline-offset:3px}
+.pg-head{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:16px 24px;margin-bottom:24px}
+.pg-head h1{margin:0 0 6px;font-size:28px;line-height:1.15;letter-spacing:-.02em}
+.lead{margin:0;font-size:16px;line-height:1.5;color:var(--muted);max-width:760px}
+.lead a,.actions a{color:var(--ink);font-weight:600;text-underline-offset:3px}
+.b-accent{height:44px;padding:0 22px;border:0;border-radius:6px;background:var(--accent);color:#fff;font-size:14px;font-weight:600}
+.b-accent.pill{border-radius:999px}
+.b-accent[aria-disabled]{opacity:.45;cursor:default}
+.b-danger{height:44px;padding:0 18px;border:0;border-radius:6px;background:var(--accent-strong);color:#fff;font-size:14px;font-weight:600}
+.b-wide{height:44px;padding:0 16px;border:1px solid var(--control);border-radius:6px;background:#fff;color:var(--ink);font-size:14px;font-weight:600;text-decoration:none}
+.b-wide.sm,.b-ghost.sm{height:36px;padding:0 12px}
+.b-wide.pressed{background:var(--chip)}
+.b-wide.link{display:inline-flex;align-items:center}
+.b-ghost{height:44px;padding:0 12px;border:0;border-radius:6px;background:transparent;color:var(--ink);font-size:14px;font-weight:600}
+.b-ghost.danger{color:var(--accent-strong)}
+.callout{display:flex;gap:10px;align-items:flex-start;padding:14px 18px;border:1px solid var(--line);border-radius:10px;background:var(--subtle);margin:0 0 20px;max-width:900px;font-size:15px;line-height:1.5}
+.callout p{margin:0}
+.callout svg{flex:none;width:20px;height:20px;margin-top:2px;color:var(--accent-strong)}
+.k-head,.k-row{display:grid;grid-template-columns:minmax(180px,1.2fr) minmax(150px,1fr) minmax(200px,1.3fr) 130px 160px 190px;gap:12px;align-items:center}
+.k-head{padding:0 20px 8px;font-size:13px;font-weight:600;color:var(--muted)}
+.k-list{list-style:none;margin:0;padding:0;border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.k-row{padding:14px 20px;border-bottom:1px solid var(--line);font-size:14px;line-height:1.45}
+.k-row:last-child{border-bottom:0}
+.k-row small{display:block;font-size:13px;color:var(--muted)}
+.k-row b{font-size:15px}
+.host{display:block}
+.c-actions{display:flex;justify-content:flex-end;gap:6px}
+.lbl-m{display:none}
+.soon{display:inline-flex;gap:6px;align-items:center;color:var(--accent-strong);font-weight:600}
+.soon svg{width:16px;height:16px}
+.chip{display:inline-block;padding:2px 8px;border-radius:999px;background:var(--chip);color:var(--ink-soft);font-size:13px;font-weight:600}
+.foot{font-size:13px;color:var(--muted);margin:10px 0 0}
+.writes{grid-column:1/-1;margin:8px 0 2px;padding:16px 18px;border-radius:10px;background:var(--subtle);border:1px solid var(--line)}
+.writes h3{margin:0 0 10px;font-size:15px}
+.writes ol{list-style:none;margin:0;padding:0}
+.writes li{display:grid;grid-template-columns:minmax(220px,1.4fr) minmax(140px,1fr) 120px 110px;gap:12px;padding:8px 0;border-top:1px solid var(--line);font-size:14px}
+.writes li:first-child{border-top:0}
+.w-when{color:var(--muted);text-align:right}
+.writes .hint,.hint{font-size:13px;color:var(--muted);margin:10px 0 0;line-height:1.5}
+.writes .empty{margin:0;font-size:14px;color:var(--muted)}
+.card{border:1px solid var(--line);border-radius:14px;padding:24px 28px;margin:0 0 24px;max-width:760px}
+.card h2{margin:0 0 16px;font-size:18px;display:flex;align-items:center;gap:8px}
+.card h2 svg{width:20px;height:20px;color:var(--done)}
+.card h3{margin:22px 0 4px;font-size:15px}
+.field{border:0;padding:0;margin:0 0 18px}
+.field label,.field legend{display:block;font-size:14px;font-weight:600;margin-bottom:6px;padding:0}
+.field input:not([type]),.field input[inputmode]{height:44px;width:100%;max-width:420px;border:1px solid var(--control);border-radius:8px;padding:0 12px;font:inherit;font-size:15px}
+.field.bad input:not([type]){border-color:var(--accent-strong)}
+.err{margin:6px 0 0;font-size:13px;color:var(--accent-strong);font-weight:600}
+.checks{display:flex;flex-direction:column;gap:2px}
+.check,.radio{display:flex;gap:10px;align-items:flex-start;min-height:44px;padding:8px 0;font-size:15px;cursor:pointer}
+.check input,.radio input{width:18px;height:18px;margin:2px 0 0;accent-color:var(--ink);flex:none}
+.check .host{display:inline;font-weight:600;margin-right:8px}
+.check small{color:var(--muted);font-size:13px}
+.radio span,.check.strong span{display:block}
+.radio small,.check.strong small{display:block;font-size:13px;color:var(--muted);line-height:1.5}
+.switch-row{justify-content:space-between;gap:16px}
+.switch{flex:none;width:44px;height:26px;border-radius:999px;border:1px solid var(--control);background:#fff;position:relative;margin-top:2px}
+.switch span{position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:var(--control)}
+.switch.on{background:var(--ink);border-color:var(--ink)}
+.switch.on span{left:20px;background:#fff}
+.confirm{grid-column:1/-1;margin:8px 0 2px;padding:14px 18px;border-radius:10px;border:1px solid var(--line);background:var(--subtle)}
+.confirm p{margin:0;font-size:15px;line-height:1.5}
+.check.strong{padding:14px 16px;border:1px solid var(--line);border-radius:10px;margin:0 0 18px;max-width:640px}
+.days-row{display:flex;gap:10px;align-items:center}
+.days-row input{max-width:96px!important}
+.actions{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;margin-top:14px}
+.actions.end{justify-content:flex-end}
+.strong-p{font-size:15px;font-weight:600;margin:0 0 10px}
+.secret-row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.secret{flex:1 1 320px;padding:12px 14px;border-radius:6px;background:var(--chip);word-break:break-all;line-height:1.4}
+.snippet{margin:8px 0 0;padding:14px 16px;border-radius:8px;background:var(--rail);color:#f4f4f5;overflow-x:auto;white-space:pre;line-height:1.5}
+.scrim{position:absolute;inset:0;background:rgba(24,24,27,.45);display:grid;place-items:center}
+.dialog{background:#fff;border-radius:14px;padding:24px 28px;max-width:480px;box-shadow:0 20px 50px rgba(0,0,0,.25)}
+.dialog h2{margin:0 0 10px;font-size:18px}
+.dialog p{margin:0 0 6px;font-size:15px;line-height:1.5;color:var(--ink-soft)}
+.empty-card{border:1px dashed var(--control);border-radius:14px;padding:40px 32px;max-width:760px;background:var(--subtle)}
+.empty-card h2{margin:0 0 6px;font-size:18px}.empty-card p{margin:0 0 18px;font-size:15px;line-height:1.5;color:var(--muted)}
+.set-sec{max-width:640px;padding-top:24px}
+.set-sec h2{font-size:18px;margin:0 0 10px}.set-sec p{font-size:15px;line-height:1.5;margin:0 0 10px}
+.w390 .k-head{display:none}
+.w390 .k-row{grid-template-columns:1fr;gap:6px;padding:16px}
+.w390 .lbl-m{display:inline-block;width:110px;flex:none;font-size:13px;color:var(--muted)}
+.w390 .c-sites,.w390 .c-rights,.w390 .c-last,.w390 .c-ends{display:flex}
+.w390 .c-actions{justify-content:flex-start;margin-top:6px}
+.w390 .c-actions .sm{height:44px}
+.w390 .writes li{grid-template-columns:1fr;gap:2px}
+.w390 .w-when{text-align:left}
+.w390 .card{padding:18px 16px}
+.w390 .pg-head .b-accent{width:100%;justify-content:center}
+table.texts{border-collapse:collapse;font-size:14px;line-height:1.45;background:#fff;max-width:1200px}
+table.texts td,table.texts th{border:1px solid var(--line);padding:6px 10px;text-align:left;vertical-align:top}
+.qa{max-width:1100px;font-size:15px;line-height:1.55}
+.qa li{margin-bottom:10px}
+
+.entry{background:#fff;min-height:900px}
+.e-head{padding:20px 32px;border-bottom:1px solid var(--line)}
+.logo{font-weight:700;font-size:18px;letter-spacing:-.01em}
+.e-main{display:flex;justify-content:center;padding:48px 16px 72px}
+.e-col{width:440px;max-width:100%}
+.e-title{margin:0 0 10px;font-size:28px;line-height:1.15;letter-spacing:-.02em}
+.e-lead{margin:0 0 16px;font-size:16px;line-height:1.5;color:var(--ink-soft)}
+.asker{display:flex;flex-direction:column;gap:2px;padding:14px 16px;border:1px solid var(--line);border-radius:10px;background:var(--subtle);margin:0 0 14px}
+.a-host{font-size:18px;font-weight:700}
+.a-name{font-size:13px;color:var(--muted)}
+.who{font-size:14px;color:var(--ink-soft);margin:0 0 22px}
+.who a{color:var(--ink);font-weight:600}
+.select{display:flex;justify-content:space-between;align-items:center;height:44px;border:1px solid var(--control);border-radius:8px;padding:0 12px;font-size:15px}
+.field input[inputmode="email"]{height:44px;width:100%;border:1px solid var(--control);border-radius:8px;padding:0 12px;font:inherit}
+.field label.radio,.field label.check{display:flex;font-weight:400}
+.actions.stack{flex-direction:column;align-items:stretch}
+.actions.stack button{justify-content:center}
+.foot code{font-size:12px}
+.w390 .e-head{padding:14px 16px}.w390 .e-main{padding:24px 16px 48px}
+.w390 .app{flex-direction:column}
+.w390 .rail{flex:none;padding:10px 12px;gap:6px}
+.w390 .rail nav{flex-direction:row;overflow:hidden}
+.w390 main{padding:20px 16px 48px}
+.w390 .k-head{display:none}
+.w390 .k-row{grid-template-columns:1fr;gap:6px;padding:16px}
+.w390 .c-actions{justify-content:flex-start}
+.w390 .pg-head .b-accent{width:100%;justify-content:center}
+.c-name .chip{margin-left:6px}
+</style>
+</head>
+<body>
+<header class="board-head">
+  <h1>An app connects to the MCP server with OAuth (FRU-467)</h1>
+  <p>Board of the consent page of the console and of the connections in « Agents » (agents.md, v2). A connector of claude.ai finds the server of authorization of the worker, registers, sends the person here, and gets short tokens for <code>/mcp</code>. The person chooses the workspace, the sites and the rights, as for an agent key, and revokes the connection in « Agents ». Frames at 1440 px are in English, at 390 px in French; every sentence of both is in the table at the end.</p>
+  <p>Generated by <code>tools/build.mjs</code>: edit the script, not this file. A frame is a picture: its buttons do nothing.</p>
+</header>
+<nav class="toc" aria-label="Frames"><a href="#a">A · The question: an owner or an admin approves claude.ai</a><a href="#b">B · The client asked to read only; no site ticked</a><a href="#c">C · Signed out</a><a href="#d">D · No workspace the person manages</a><a href="#e">E · A request that no longer works</a><a href="#f">F · Allowed: back to the app</a><a href="#g">G · « Agents »: a connection beside a key</a><a href="#h">H · Revoke a connection</a><a href="#i">I · 390 px, French: the question</a><a href="#j">J · 390 px, French: the list</a><a href="#decisions">Decisions</a><a href="#texts">Texts, EN and FR</a></nav>
+<section class="frame" id="a">
+  <h2 class="f-title">A · The question: an owner or an admin approves claude.ai</h2>
+  <ul class="notes"><li>A page of the console outside a workspace, at /authorize/&lt;request>, as « Connect this browser » (FRU-240): the worker sent the browser here from /oauth/authorize, once the client, its redirect_uri and its PKCE challenge were checked.</li><li>Who asks is said by the host of its redirect_uri, in large: claude.ai. The name the client gave itself at its registration is drawn small and said to be its own words: anybody can register a client named « Claude ».</li><li>The choices are those of a key (FRU-461): one workspace, its sites, Read or Read and write, the days, « Only the notes of a known person » on by default. The workspaces listed are those where the person is an owner or an admin (decision 5 of agents.md).</li><li>« Allow » makes the connection: an agent key with no secret, tied to the client. The browser goes back to the redirect_uri with a code of one use, the state, and iss.</li></ul>
+  <div class="f-box w1440" style="width:1440px;position:relative"><div class="entry w1440">
+    <header class="e-head"><span class="logo">fruitback</span></header>
+    <main class="e-main"><div class="e-col"><h1 class="e-title">Connect an agent</h1>
+  <div class="asker">
+    <span class="a-host">claude.ai</span>
+    <span class="a-name">Calls itself « Claude »</span>
+  </div>
+  <p class="e-lead"><b>claude.ai</b> asks to read the notes of your sites through the MCP server of Fruitback, as an agent of your team.</p>
+  <p class="who">Signed in as <b>lea@acme.dev</b> · <a href="#">Not you?</a></p>
+  <div class="field"><label for="ws">Workspace</label>
+    <span class="select" id="ws">Acme<span aria-hidden="true">▾</span></span>
+    <p class="hint">The workspaces where you are an owner or an admin. The agent reaches this one, never another.</p></div>
+  <fieldset class="field"><legend>Sites it reads</legend>
+    <div class="checks"><label class="check"><input type="checkbox" checked><span><span class="host">shop.acme.dev</span><small>Everyone reads its notes</small></span></label><label class="check"><input type="checkbox" checked><span><span class="host">staging.acme.dev</span><small>The team reads its notes</small></span></label><label class="check"><input type="checkbox"><span><span class="host">docs.acme.dev</span><small>The team reads its notes</small></span></label></div>
+    </fieldset>
+  <fieldset class="field"><legend>What it can do</legend>
+    <label class="radio"><input type="radio" name="r1" checked><span><b>Read</b><small>The notes, their replies and their status.</small></span></label>
+    <label class="radio"><input type="radio" name="r1"><span><b>Read and write</b><small>It also replies in a thread, and sets a status. Its replies say « Agent ».</small></span></label>
+  </fieldset>
+  <div class="field"><label for="days">Ends after</label>
+    <div class="days-row"><input id="days" inputmode="numeric" value="90"><span>days, 365 at most</span></div></div>
+  <label class="check strong"><input type="checkbox" checked><span><b>Only the notes of a known person</b><small>On a site that everyone reads, the agent does not read the notes of visitors: anybody can write one.</small></span></label>
+  <p class="hint">You can revoke it at any time in Workspace settings › Agents. It ends at once.</p>
+  <div class="actions stack"><button type="button" class="b-accent">Allow claude.ai</button><button type="button" class="b-wide">Deny</button></div>
+  <p class="foot">You go back to <code>https://claude.ai/api/mcp/auth_callback</code></p></div></main>
+  </div></div>
+</section>
+<section class="frame" id="b">
+  <h2 class="f-title">B · The client asked to read only; no site ticked</h2>
+  <ul class="notes"><li>A scope of read gives no « Read and write »: the consent never gives more than the client asked.</li><li>No site ticked: « Allow » sends nothing, and the field says why.</li></ul>
+  <div class="f-box w1440" style="width:1440px;position:relative"><div class="entry w1440">
+    <header class="e-head"><span class="logo">fruitback</span></header>
+    <main class="e-main"><div class="e-col"><h1 class="e-title">Connect an agent</h1>
+  <div class="asker">
+    <span class="a-host">claude.ai</span>
+    <span class="a-name">Calls itself « Claude »</span>
+  </div>
+  <p class="e-lead"><b>claude.ai</b> asks to read the notes of your sites through the MCP server of Fruitback, as an agent of your team.</p>
+  <p class="who">Signed in as <b>lea@acme.dev</b> · <a href="#">Not you?</a></p>
+  <div class="field"><label for="ws">Workspace</label>
+    <span class="select" id="ws">Acme<span aria-hidden="true">▾</span></span>
+    <p class="hint">The workspaces where you are an owner or an admin. The agent reaches this one, never another.</p></div>
+  <fieldset class="field bad"><legend>Sites it reads</legend>
+    <div class="checks"><label class="check"><input type="checkbox"><span><span class="host">shop.acme.dev</span><small>Everyone reads its notes</small></span></label><label class="check"><input type="checkbox"><span><span class="host">staging.acme.dev</span><small>The team reads its notes</small></span></label><label class="check"><input type="checkbox"><span><span class="host">docs.acme.dev</span><small>The team reads its notes</small></span></label></div>
+    <p class="err" role="alert">Tick at least one site.</p></fieldset>
+  <fieldset class="field"><legend>What it can do</legend>
+    <label class="radio"><input type="radio" name="r2" checked><span><b>Read</b><small>The notes, their replies and their status.</small></span></label>
+    <p class="hint">claude.ai asked to read only.</p>
+  </fieldset>
+  <div class="field"><label for="days">Ends after</label>
+    <div class="days-row"><input id="days" inputmode="numeric" value="90"><span>days, 365 at most</span></div></div>
+  <label class="check strong"><input type="checkbox" checked><span><b>Only the notes of a known person</b><small>On a site that everyone reads, the agent does not read the notes of visitors: anybody can write one.</small></span></label>
+  <p class="hint">You can revoke it at any time in Workspace settings › Agents. It ends at once.</p>
+  <div class="actions stack"><button type="button" class="b-accent">Allow claude.ai</button><button type="button" class="b-wide">Deny</button></div>
+  <p class="foot">You go back to <code>https://claude.ai/api/mcp/auth_callback</code></p></div></main>
+  </div></div>
+</section>
+<section class="frame" id="c">
+  <h2 class="f-title">C · Signed out</h2>
+  <ul class="notes"><li>The sign-in of the console, then back to the question, never to the answer: the same rule as /connect.</li></ul>
+  <div class="f-box w1440" style="width:1440px;position:relative"><div class="entry w1440">
+    <header class="e-head"><span class="logo">fruitback</span></header>
+    <main class="e-main"><div class="e-col"><h1 class="e-title">Connect an agent</h1><p class="e-lead">Sign in to Fruitback to answer <b>claude.ai</b>.</p>
+      <div class="field"><label for="em">Work email</label><input id="em" inputmode="email" value=""></div>
+      <div class="actions stack"><button type="button" class="b-accent">Email me a link</button><button type="button" class="b-wide">Continue with Google</button></div></div></main>
+  </div></div>
+</section>
+<section class="frame" id="d">
+  <h2 class="f-title">D · No workspace the person manages</h2>
+  <ul class="notes"><li>A member or a guest cannot connect an agent: they read the sentence, and « Deny » sends the client back with access_denied.</li></ul>
+  <div class="f-box w1440" style="width:1440px;position:relative"><div class="entry w1440">
+    <header class="e-head"><span class="logo">fruitback</span></header>
+    <main class="e-main"><div class="e-col"><h1 class="e-title">Connect an agent</h1><div class="asker">
+    <span class="a-host">claude.ai</span>
+    <span class="a-name">Calls itself « Claude »</span>
+  </div>
+  <p class="e-lead"><b>claude.ai</b> asks to read the notes of your sites through the MCP server of Fruitback, as an agent of your team.</p><p class="who">Signed in as <b>lea@acme.dev</b> · <a href="#">Not you?</a></p><div class="callout"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3l10 18H2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 10v5M12 18v.01" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg><p>Only an owner or an admin of a workspace can connect an agent. Ask one of them to connect it.</p></div><div class="actions"><button type="button" class="b-wide">Deny</button></div></div></main>
+  </div></div>
+</section>
+<section class="frame" id="e">
+  <h2 class="f-title">E · A request that no longer works</h2>
+  <ul class="notes"><li>A request lives 10 minutes and is answered once. Unknown, expired or answered: the same page.</li></ul>
+  <div class="f-box w1440" style="width:1440px;position:relative"><div class="entry w1440">
+    <header class="e-head"><span class="logo">fruitback</span></header>
+    <main class="e-main"><div class="e-col"><h1 class="e-title">This request no longer works</h1><p class="e-lead">A request works for ten minutes, and is answered once. Start again from the app that asked.</p><div class="actions"><button type="button" class="b-wide">Go to the console</button></div></div></main>
+  </div></div>
+</section>
+<section class="frame" id="f">
+  <h2 class="f-title">F · Allowed: back to the app</h2>
+  <ul class="notes"><li>The page says where the browser goes, then goes. Nothing of the code is shown.</li></ul>
+  <div class="f-box w1440" style="width:1440px;position:relative"><div class="entry w1440">
+    <header class="e-head"><span class="logo">fruitback</span></header>
+    <main class="e-main"><div class="e-col"><h1 class="e-title">claude.ai is connected</h1><p class="e-lead">Going back to <b>claude.ai</b>…</p><p class="hint">It reads shop.acme.dev, staging.acme.dev of Acme until Jan 26. Revoke it in Workspace settings › Agents.</p></div></main>
+  </div></div>
+</section>
+<section class="frame" id="g">
+  <h2 class="f-title">G · « Agents »: a connection beside a key</h2>
+  <ul class="notes"><li>A connection is a row of the same list (it is an agent key with no secret): a chip « OAuth · claude.ai » in place of « Key », who approved it, its sites, its rights, its last use and its end, its writes.</li><li>It counts in the 20 keys of a workspace.</li></ul>
+  <div class="f-box w1440" style="width:1440px;position:relative"><div class="app"><aside class="rail"><a href="#" class="ws"><span class="ws-i">A</span><span><b>Acme</b><small>Cloud workspace</small></span></a><nav><a href="#">Sites</a><a href="#">Notes</a><a href="#">Connectors</a><a href="#">Members</a><a href="#">My account</a></nav></aside><div class="main-wrap"><main>
+    <nav class="crumbs"><a href="#">Workspace settings</a><span aria-hidden="true">›</span><span>Agents</span></nav>
+    <header class="pg-head"><div><h1>Agents</h1><p class="lead">The keys of your agents, and the apps you connected with OAuth, such as a connector of claude.ai. Each one reads only the sites it names.</p></div><button type="button" class="b-accent">New key</button></header>
+    <div class="k-head"><span>Name</span><span>Sites</span><span>Can</span><span>Last used</span><span>Ends</span><span></span></div>
+    <ul class="k-list"><li class="k-row">
+    <div class="c-name"><b>Claude</b> <span class="chip">OAuth · claude.ai</span><small>Approved by Léa on Oct 28</small></div>
+    <div class="c-sites"><span class="host">shop.acme.dev</span><span class="host">staging.acme.dev</span></div>
+    <div>Read and write</div>
+    <div>2 min ago</div>
+    <div>Jan 26</div>
+    <div class="c-actions"><button type="button" class="b-wide sm">Writes<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><button type="button" class="b-ghost sm danger">Revoke</button></div>
+    
+  </li><li class="k-row">
+    <div class="c-name"><b>CI of the website</b> <span class="chip">Key</span><small>Made on Oct 12</small></div>
+    <div class="c-sites"><span class="host">staging.acme.dev</span></div>
+    <div>Read</div>
+    <div>Yesterday</div>
+    <div>Jan 10</div>
+    <div class="c-actions"><button type="button" class="b-wide sm">Writes<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><button type="button" class="b-ghost sm danger">Revoke</button></div>
+    
+  </li></ul>
+    <p class="foot">An app connected with OAuth has no key to copy: it gets short tokens, which it renews. Revoke it here.</p>
+  </main></div></div></div>
+</section>
+<section class="frame" id="h">
+  <h2 class="f-title">H · Revoke a connection</h2>
+  <ul class="notes"><li>Asked a second time in the row, as a key. Revoked, its access and refresh tokens are deleted with it, and /mcp answers 401 to its next request.</li></ul>
+  <div class="f-box w1440" style="width:1440px;position:relative"><div class="app"><aside class="rail"><a href="#" class="ws"><span class="ws-i">A</span><span><b>Acme</b><small>Cloud workspace</small></span></a><nav><a href="#">Sites</a><a href="#">Notes</a><a href="#">Connectors</a><a href="#">Members</a><a href="#">My account</a></nav></aside><div class="main-wrap"><main>
+    <nav class="crumbs"><a href="#">Workspace settings</a><span aria-hidden="true">›</span><span>Agents</span></nav>
+    <header class="pg-head"><div><h1>Agents</h1><p class="lead">The keys of your agents, and the apps you connected with OAuth, such as a connector of claude.ai. Each one reads only the sites it names.</p></div><button type="button" class="b-accent">New key</button></header>
+    <div class="k-head"><span>Name</span><span>Sites</span><span>Can</span><span>Last used</span><span>Ends</span><span></span></div>
+    <ul class="k-list"><li class="k-row">
+    <div class="c-name"><b>Claude</b> <span class="chip">OAuth · claude.ai</span><small>Approved by Léa on Oct 28</small></div>
+    <div class="c-sites"><span class="host">shop.acme.dev</span><span class="host">staging.acme.dev</span></div>
+    <div>Read and write</div>
+    <div>2 min ago</div>
+    <div>Jan 26</div>
+    <div class="c-actions"><button type="button" class="b-wide sm">Writes<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+    <div class="confirm"><p>Revoke the connection of claude.ai? Its tokens stop at once; to connect again, the connector of claude.ai asks you again.</p><div class="actions end"><button type="button" class="b-wide sm">Cancel</button><button type="button" class="b-danger">Revoke</button></div></div>
+  </li><li class="k-row">
+    <div class="c-name"><b>CI of the website</b> <span class="chip">Key</span><small>Made on Oct 12</small></div>
+    <div class="c-sites"><span class="host">staging.acme.dev</span></div>
+    <div>Read</div>
+    <div>Yesterday</div>
+    <div>Jan 10</div>
+    <div class="c-actions"><button type="button" class="b-wide sm">Writes<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><button type="button" class="b-ghost sm danger">Revoke</button></div>
+    
+  </li></ul>
+    <p class="foot">An app connected with OAuth has no key to copy: it gets short tokens, which it renews. Revoke it here.</p>
+  </main></div></div></div>
+</section>
+<section class="frame" id="i">
+  <h2 class="f-title">I · 390 px, French: the question</h2>
+  
+  <div class="f-box w390" style="width:390px;position:relative"><div class="entry w390">
+    <header class="e-head"><span class="logo">fruitback</span></header>
+    <main class="e-main"><div class="e-col"><h1 class="e-title">Connecter un agent</h1>
+  <div class="asker">
+    <span class="a-host">claude.ai</span>
+    <span class="a-name">Se nomme « Claude »</span>
+  </div>
+  <p class="e-lead"><b>claude.ai</b> demande à lire les notes de vos sites par le serveur MCP de Fruitback, comme un agent de votre équipe.</p>
+  <p class="who">Connecté en tant que <b>lea@acme.dev</b> · <a href="#">Pas vous ?</a></p>
+  <div class="field"><label for="ws">Workspace</label>
+    <span class="select" id="ws">Acme<span aria-hidden="true">▾</span></span>
+    <p class="hint">Les workspaces où vous êtes propriétaire ou admin. L’agent atteint celui-ci, jamais un autre.</p></div>
+  <fieldset class="field"><legend>Sites qu’il lit</legend>
+    <div class="checks"><label class="check"><input type="checkbox" checked><span><span class="host">shop.acme.dev</span><small>Tout le monde lit ses notes</small></span></label><label class="check"><input type="checkbox" checked><span><span class="host">staging.acme.dev</span><small>L’équipe lit ses notes</small></span></label><label class="check"><input type="checkbox"><span><span class="host">docs.acme.dev</span><small>L’équipe lit ses notes</small></span></label></div>
+    </fieldset>
+  <fieldset class="field"><legend>Ce qu’il peut faire</legend>
+    <label class="radio"><input type="radio" name="r3" checked><span><b>Lire</b><small>Les notes, leurs réponses et leur statut.</small></span></label>
+    <label class="radio"><input type="radio" name="r3"><span><b>Lire et écrire</b><small>Il répond aussi dans un fil, et change un statut. Ses réponses disent « Agent ».</small></span></label>
+  </fieldset>
+  <div class="field"><label for="days">Prend fin après</label>
+    <div class="days-row"><input id="days" inputmode="numeric" value="90"><span>jours, 365 au plus</span></div></div>
+  <label class="check strong"><input type="checkbox" checked><span><b>Seulement les notes d’une personne connue</b><small>Sur un site que tout le monde lit, l’agent ne lit pas les notes des visiteurs : n’importe qui peut en écrire une.</small></span></label>
+  <p class="hint">Vous pouvez le révoquer à tout moment dans Paramètres du workspace › Agents. Il s’arrête aussitôt.</p>
+  <div class="actions stack"><button type="button" class="b-accent">Autoriser claude.ai</button><button type="button" class="b-wide">Refuser</button></div>
+  <p class="foot">Vous revenez à <code>https://claude.ai/api/mcp/auth_callback</code></p></div></main>
+  </div></div>
+</section>
+<section class="frame" id="j">
+  <h2 class="f-title">J · 390 px, French: the list</h2>
+  
+  <div class="f-box w390" style="width:390px;position:relative"><div class="app"><aside class="rail"><a href="#" class="ws"><span class="ws-i">A</span><span><b>Acme</b><small>Workspace Cloud</small></span></a><nav><a href="#">Sites</a><a href="#">Notes</a><a href="#">Connecteurs</a><a href="#">Membres</a><a href="#">Mon compte</a></nav></aside><div class="main-wrap"><main>
+    <nav class="crumbs"><a href="#">Paramètres du workspace</a><span aria-hidden="true">›</span><span>Agents</span></nav>
+    <header class="pg-head"><div><h1>Agents</h1><p class="lead">Les clés de vos agents, et les applications connectées par OAuth, comme un connecteur de claude.ai. Chacune ne lit que les sites qu’elle nomme.</p></div><button type="button" class="b-accent">Nouvelle clé</button></header>
+    <div class="k-head"><span>Nom</span><span>Sites</span><span>Peut</span><span>Dernier usage</span><span>Fin</span><span></span></div>
+    <ul class="k-list"><li class="k-row">
+    <div class="c-name"><b>Claude</b> <span class="chip">OAuth · claude.ai</span><small>Approuvé par Léa le 28 oct.</small></div>
+    <div class="c-sites"><span class="host">shop.acme.dev</span><span class="host">staging.acme.dev</span></div>
+    <div>Lire et écrire</div>
+    <div>il y a 2 min</div>
+    <div>26 janv.</div>
+    <div class="c-actions"><button type="button" class="b-wide sm">Écritures<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><button type="button" class="b-ghost sm danger">Révoquer</button></div>
+    
+  </li><li class="k-row">
+    <div class="c-name"><b>CI of the website</b> <span class="chip">Clé</span><small>Créée le 12 oct.</small></div>
+    <div class="c-sites"><span class="host">staging.acme.dev</span></div>
+    <div>Lire</div>
+    <div>Hier</div>
+    <div>10 janv.</div>
+    <div class="c-actions"><button type="button" class="b-wide sm">Écritures<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><button type="button" class="b-ghost sm danger">Révoquer</button></div>
+    
+  </li></ul>
+    <p class="foot">Une application connectée par OAuth n’a pas de clé à copier : elle reçoit des jetons courts, qu’elle renouvelle. Révoquez-la ici.</p>
+  </main></div></div></div>
+</section>
+<section class="frame" id="decisions"><h2 class="f-title">Decisions of the board (fru-mcp-oauth, 2026-10-28)</h2>
+<p class="notes">The orchestrator asked the agent to decide the choices itself and to write them down. Each one can be changed by Mathieu. The decisions of the worker are in docs/decisions/agents.md and SECURITY.md.</p>
+<ol class="qa">
+<li><b>Where.</b> A page outside a workspace, <code>/authorize/&lt;request&gt;</code>, as <code>/connect/&lt;request&gt;</code>: the person may not have chosen a workspace yet, and the page chooses one.</li>
+<li><b>Who asks is the host of its redirect_uri</b>, the one thing a client cannot choose freely: the code goes there. Its name is its own words, drawn small.</li>
+<li><b>The choices of a key, with the same defaults</b>: 90 days, « Only the notes of a known person » on. One workspace per connection: to reach two, connect twice.</li>
+<li><b>Never more than asked.</b> A client that asked <code>read</code> is not offered « Read and write ». A client that asked nothing is offered both, Read checked.</li>
+<li><b>Who approves:</b> an owner or an admin (<code>manage-workspace</code>), as for a key. The others read why, and can deny.</li>
+<li><b>In « Agents », a connection is a row of the list</b> with a chip, no secret, and the same « Writes » and « Revoke ». A new list would be a second place to look for what reads the notes.</li>
+<li><b>Deny</b> sends the client back with <code>error=access_denied</code>; closing the tab leaves the request to end in 10 minutes.</li>
+</ol></section>
+<section class="frame" id="texts"><h2 class="f-title">Texts, EN and FR</h2>
+<table class="texts"><thead><tr><th>English</th><th>Français</th></tr></thead><tbody><tr><td>Connect an agent</td><td>Connecter un agent</td></tr><tr><td>Calls itself « {name} »</td><td>Se nomme « {name} »</td></tr><tr><td>{host} asks to read the notes of your sites through the MCP server of Fruitback, as an agent of your team.</td><td>{host} demande à lire les notes de vos sites par le serveur MCP de Fruitback, comme un agent de votre équipe.</td></tr><tr><td>Signed in as {email}</td><td>Connecté en tant que {email}</td></tr><tr><td>Not you?</td><td>Pas vous ?</td></tr><tr><td>Workspace</td><td>Workspace</td></tr><tr><td>The workspaces where you are an owner or an admin. The agent reaches this one, never another.</td><td>Les workspaces où vous êtes propriétaire ou admin. L’agent atteint celui-ci, jamais un autre.</td></tr><tr><td>Sites it reads</td><td>Sites qu’il lit</td></tr><tr><td>Everyone reads its notes</td><td>Tout le monde lit ses notes</td></tr><tr><td>The team reads its notes</td><td>L’équipe lit ses notes</td></tr><tr><td>What it can do</td><td>Ce qu’il peut faire</td></tr><tr><td>Read</td><td>Lire</td></tr><tr><td>The notes, their replies and their status.</td><td>Les notes, leurs réponses et leur statut.</td></tr><tr><td>Read and write</td><td>Lire et écrire</td></tr><tr><td>It also replies in a thread, and sets a status. Its replies say « Agent ».</td><td>Il répond aussi dans un fil, et change un statut. Ses réponses disent « Agent ».</td></tr><tr><td>Ends after</td><td>Prend fin après</td></tr><tr><td>days, 365 at most</td><td>jours, 365 au plus</td></tr><tr><td>Only the notes of a known person</td><td>Seulement les notes d’une personne connue</td></tr><tr><td>On a site that everyone reads, the agent does not read the notes of visitors: anybody can write one.</td><td>Sur un site que tout le monde lit, l’agent ne lit pas les notes des visiteurs : n’importe qui peut en écrire une.</td></tr><tr><td>You can revoke it at any time in Workspace settings › Agents. It ends at once.</td><td>Vous pouvez le révoquer à tout moment dans Paramètres du workspace › Agents. Il s’arrête aussitôt.</td></tr><tr><td>Allow {host}</td><td>Autoriser {host}</td></tr><tr><td>Deny</td><td>Refuser</td></tr><tr><td>You go back to {url}</td><td>Vous revenez à {url}</td></tr><tr><td>Tick at least one site.</td><td>Cochez au moins un site.</td></tr><tr><td>{host} asked to read only.</td><td>{host} a demandé à lire seulement.</td></tr><tr><td>Sign in to Fruitback to answer {host}.</td><td>Connectez-vous à Fruitback pour répondre à {host}.</td></tr><tr><td>Work email</td><td>E-mail professionnel</td></tr><tr><td>Email me a link</td><td>Recevoir un lien</td></tr><tr><td>Continue with Google</td><td>Continuer avec Google</td></tr><tr><td>Only an owner or an admin of a workspace can connect an agent. Ask one of them to connect it.</td><td>Seul un propriétaire ou un admin d’un workspace peut connecter un agent. Demandez-le à l’un d’eux.</td></tr><tr><td>This request no longer works</td><td>Cette demande ne fonctionne plus</td></tr><tr><td>A request works for ten minutes, and is answered once. Start again from the app that asked.</td><td>Une demande fonctionne dix minutes, et reçoit une seule réponse. Recommencez depuis l’application qui l’a faite.</td></tr><tr><td>Go to the console</td><td>Aller à la console</td></tr><tr><td>{host} is connected</td><td>{host} est connecté</td></tr><tr><td>Going back to {host}…</td><td>Retour à {host}…</td></tr><tr><td>Jan 26</td><td>26 janv.</td></tr><tr><td>It reads {sites} of Acme until {day}. Revoke it in Workspace settings › Agents.</td><td>Il lit {sites} d’Acme jusqu’au {day}. Révoquez-le dans Paramètres du workspace › Agents.</td></tr><tr><td>Oct 28</td><td>28 oct.</td></tr><tr><td>2 min ago</td><td>il y a 2 min</td></tr><tr><td>Oct 12</td><td>12 oct.</td></tr><tr><td>Yesterday</td><td>Hier</td></tr><tr><td>Jan 10</td><td>10 janv.</td></tr><tr><td>Sites</td><td>Sites</td></tr><tr><td>Notes</td><td>Notes</td></tr><tr><td>Connectors</td><td>Connecteurs</td></tr><tr><td>Members</td><td>Membres</td></tr><tr><td>My account</td><td>Mon compte</td></tr><tr><td>Cloud workspace</td><td>Workspace Cloud</td></tr><tr><td>Workspace settings</td><td>Paramètres du workspace</td></tr><tr><td>Agents</td><td>Agents</td></tr><tr><td>The keys of your agents, and the apps you connected with OAuth, such as a connector of claude.ai. Each one reads only the sites it names.</td><td>Les clés de vos agents, et les applications connectées par OAuth, comme un connecteur de claude.ai. Chacune ne lit que les sites qu’elle nomme.</td></tr><tr><td>New key</td><td>Nouvelle clé</td></tr><tr><td>Name</td><td>Nom</td></tr><tr><td>Can</td><td>Peut</td></tr><tr><td>Last used</td><td>Dernier usage</td></tr><tr><td>Ends</td><td>Fin</td></tr><tr><td>OAuth · {host}</td><td>OAuth · {host}</td></tr><tr><td>Approved by {who} on {day}</td><td>Approuvé par {who} le {day}</td></tr><tr><td>Writes</td><td>Écritures</td></tr><tr><td>Revoke</td><td>Révoquer</td></tr><tr><td>Key</td><td>Clé</td></tr><tr><td>Made on {day}</td><td>Créée le {day}</td></tr><tr><td>An app connected with OAuth has no key to copy: it gets short tokens, which it renews. Revoke it here.</td><td>Une application connectée par OAuth n’a pas de clé à copier : elle reçoit des jetons courts, qu’elle renouvelle. Révoquez-la ici.</td></tr><tr><td>Revoke the connection of {host}? Its tokens stop at once; to connect again, the connector of {host} asks you again.</td><td>Révoquer la connexion de {host} ? Ses jetons s’arrêtent aussitôt ; pour se reconnecter, le connecteur de {host} vous redemande.</td></tr><tr><td>Cancel</td><td>Annuler</td></tr></tbody></table>
+</section>
+</body>
+</html>

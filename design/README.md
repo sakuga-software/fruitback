@@ -55,6 +55,7 @@ French, and the board ends with its decisions and every text in both languages. 
 tokens of the console below. `tools/build.mjs` writes it (edit the script, not the HTML); `shots/`
 holds a picture of each frame. The agent fru-agents decided its choices, as the orchestrator asked;
 the screen (`apps/console/app/routes/agents.tsx`) follows it.
+
 ## A site starts an agent (FRU-468, 2026-10-28)
 
 `agent-triggers/agent-triggers.html` is the board of the section « Start an agent » of the page of a
@@ -78,6 +79,18 @@ board ends with its decisions, what the build needs, its open questions and ever
 languages. It is drawn on the tokens of the widget (`packages/widget/src/theme.ts`).
 `tools/build.mjs` writes it (edit the script, not the HTML); `shots/` holds a picture of each frame.
 The agent fru-notes-edit decided its choices, as the orchestrator asked. Nothing of it is built yet.
+
+## An app connects to `/mcp` with OAuth (FRU-467, 2026-10-28)
+
+`mcp-oauth/mcp-oauth.html` is the board of the consent page of the console, `/authorize/<request>`
+([agents.md](../docs/decisions/agents.md), « OAuth for MCP »): a connector of claude.ai asks, the
+person reads the host its codes go to and the name it gave itself, chooses the workspace, the sites,
+the rights, the days and « Only the notes of a known person », then allows or denies; a client that
+asked to read only, signed out, a person who manages no workspace, a request that no longer works,
+the way back; and the connection as a row of « Agents », with its revocation, and 390 px in French.
+It ends with its decisions and every text in both languages. `tools/build.mjs` writes it (edit the
+script, not the HTML); `shots/` holds a picture of each frame. The agent fru-mcp-oauth decided its
+choices, as the orchestrator asked.
 
 ## The export of 2026-10-07
 

@@ -112,6 +112,15 @@ INSERT INTO agent_keys (id, workspace_id, name, key_hash, can_write, verified_on
 INSERT INTO agent_key_sites (key_id, site_id) VALUES
   ('agk_drill1', 'site_drill1'),
   ('agk_drill1', 'site_drill2');
+-- A client of OAuth, a connection it was given, and a token of it (FRU-467): fake digests, no secret.
+INSERT INTO oauth_clients (id, name, redirect_uris, secret_hash, created_at) VALUES
+  ('fbo_drill1', 'Claude', '["https://claude.ai/api/mcp/auth_callback"]', NULL, 1);
+INSERT INTO agent_keys (id, workspace_id, name, key_hash, can_write, verified_only, created_by, created_at, expires_at, last_used_at, client_id) VALUES
+  ('agk_drill2', 'ws_drill1', 'Claude', NULL, false, true, 'acc_drill1', 1, 7776000001, NULL, 'fbo_drill1');
+INSERT INTO agent_key_sites (key_id, site_id) VALUES
+  ('agk_drill2', 'site_drill1');
+INSERT INTO oauth_tokens (token_hash, kind, key_id, expires_at, used_at) VALUES
+  ('digest-of-a-drill-refresh-token', 'refresh', 'agk_drill2', 2592000001, NULL);
 -- A write of that key (FRU-464).
 INSERT INTO agent_writes (id, workspace_id, key_id, key_name, site_id, note_id, action, status, at) VALUES
   ('agw_drill1', 'ws_drill1', 'agk_drill1', 'Claude on CI', 'site_drill1', 'sd_drill1', 'status', 'own:done', 1);

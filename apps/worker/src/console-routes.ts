@@ -12,6 +12,7 @@ import { handleEmailRoutes, isEmailRoute } from './account-emails.ts';
 import { handleConsoleApi } from './console-api.ts';
 import { SIGN_IN_PROVIDERS } from './console-cors.ts';
 import { handleConsoleConnect } from './connect-routes.ts';
+import { handleConsoleOAuth, issuerOf } from './oauth.ts';
 import type { CorsDecision } from './cors.ts';
 import { instanceFactsOf } from './instance-admin.ts';
 import { type Kv, KvError } from './kv.ts';
@@ -162,6 +163,24 @@ export async function handleConsole(request: Request, pathname: string, seams: C
         cors.headers,
       );
       if (connected !== undefined) return connected;
+    }
+
+    // A person approves a client of OAuth (FRU-467): the request it made, and the two answers.
+    const issuer = issuerOf(served.publicUrl);
+    if (auth !== undefined && served.consoleUrl !== undefined && issuer !== undefined) {
+      const consented = await handleConsoleOAuth(
+        request,
+        pathname,
+        {
+          accounts,
+          kv,
+          issuer,
+          consoleUrl: served.consoleUrl,
+          cookieSession: async (each: Request) => (await sessionOfCookie(auth, each))?.userId,
+        },
+        cors.headers,
+      );
+      if (consented !== undefined) return consented;
     }
 
     const answer = await handleConsoleApi(

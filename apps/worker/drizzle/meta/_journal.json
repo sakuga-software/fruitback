@@ -267,6 +267,13 @@
       "when": 1793205022828,
       "tag": "0037_agent_triggers",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1793211729885,
+      "tag": "0038_oauth_connections",
+      "breakpoints": true
     }
   ]
 }

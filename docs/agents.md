@@ -71,8 +71,9 @@ repository. In a configuration file of MCP:
 }
 ```
 
-A server answers `404` to a key it does not take: revoked, expired, of a member who left, or of a
-suspended workspace. It answers `403` to a request that a browser sends: a page cannot call it.
+A server answers `401` to a key it does not take: revoked, expired, of a member who left, or of a
+suspended workspace (`404` on a worker where OAuth is off). It answers `403` to a request that a
+browser sends: a page cannot call it.
 
 ## Start an agent on a note
 
