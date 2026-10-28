@@ -29,35 +29,35 @@ The path of a new person who signs in by e-mail, in the order the spec does it. 
 the action happens: `console`, `mail`, `tab` (going back to a tab that is already open), `store`,
 `chrome`, `welcome` (the page of the extension that opens at install), `popup`, `site`.
 
-| #   | Place   | Action                                                             | Becomes          |
-| --- | ------- | ------------------------------------------------------------------ | ---------------- |
-| 1   | console | open fruitback.com, then « Set up »                                | stays            |
-| 2   | console | type the e-mail address                                            | stays            |
-| 3   | console | click « Email me a link »                                          | stays            |
-| 4   | mail    | open the mailbox, then the message                                 | stays            |
-| 5   | mail    | click the link: a new tab opens                                    | stays            |
-| 6   | tab     | go back to the tab of the setup                                    | stays (SPEC P4)  |
-| 7   | console | type the address of the site                                       | stays            |
-| 8   | console | click « Add site »                                                 | stays            |
-| 9   | console | click « Install the extension (beta) »: the store opens in a tab   | stays            |
-| 10  | store   | click « Add to Chrome »                                            | stays            |
-| 11  | chrome  | click « Add extension » in the dialog of Chrome                    | stays            |
-| 12  | welcome | click « Sign in with email »: the console opens in a tab           | stays            |
-| 13  | console | click « Connect Chrome » after the word                            | stays            |
-| 14  | welcome | click « Turn on <site> »: the site opens in a tab                  | stays            |
-| 15  | chrome  | click « Allow » in the prompt of Chrome for the access to the site | stays            |
-| 16  | site    | click « Leave feedback »                                           | removed, FRU-485 |
-| 17  | site    | click the element of the page                                      | stays            |
-| 18  | site    | type the note                                                      | stays            |
-| 19  | site    | click « Send »                                                     | stays            |
+| #   | Place   | Action                                                             | Becomes         |
+| --- | ------- | ------------------------------------------------------------------ | --------------- |
+| 1   | console | open fruitback.com, then « Set up »                                | stays           |
+| 2   | console | type the e-mail address                                            | stays           |
+| 3   | console | click « Email me a link »                                          | stays           |
+| 4   | mail    | open the mailbox, then the message                                 | stays           |
+| 5   | mail    | click the link: a new tab opens                                    | stays           |
+| 6   | tab     | go back to the tab of the setup                                    | stays (SPEC P4) |
+| 7   | console | type the address of the site                                       | stays           |
+| 8   | console | click « Add site »                                                 | stays           |
+| 9   | console | click « Install the extension (beta) »: the store opens in a tab   | stays           |
+| 10  | store   | click « Add to Chrome »                                            | stays           |
+| 11  | chrome  | click « Add extension » in the dialog of Chrome                    | stays           |
+| 12  | welcome | click « Sign in with email »: the console opens in a tab           | stays           |
+| 13  | console | click « Connect Chrome » after the word                            | stays           |
+| 14  | welcome | click « Turn on <site> »: the site opens in a tab                  | stays           |
+| 15  | chrome  | click « Allow » in the prompt of Chrome for the access to the site | stays           |
+| 16  | site    | click the element of the page                                      | stays           |
+| 17  | site    | type the note                                                      | stays           |
+| 18  | site    | click « Send »                                                     | stays           |
 
-**19 actions: 3 in the screens of Chrome and its store, 1 return to a tab that is already open, and
+**18 actions: 3 in the screens of Chrome and its store, 1 return to a tab that is already open, and
 no dead end.** The welcome page signs in itself (FRU-482): it shows the word that the console shows,
 claims the session, closes the tab of the console and says who signed in. It then lists the sites of
 the workspaces of the account, and « Turn on <site> » asks Chrome for that site, writes the rule and
 opens the site with its widget (FRU-483). The popup on a page that is not a site offers the sign-in
 too. Pinning Fruitback (the puzzle menu, then the pin: 2 actions in Chrome) is a tip under the
-sign-in, which no step of the path needs (FRU-484).
+sign-in, which no step of the path needs (FRU-484). The first activation of a site opens the choice
+of an element by itself, once (FRU-485).
 
 ### What was measured first
 
@@ -67,8 +67,9 @@ on http and https pages. » (`notAWebPage`). The person went back to the setup, 
 signed in from the popup there, and went back to the site after the console. FRU-482 removed those
 three actions and the dead end (24 actions). FRU-483 removed the return to the setup, its link to
 the site and the two clicks on the icon, as « Turn on » moved to the welcome page (21 actions).
-FRU-484 made the pin a tip (19 actions). The spec also measured that the setup goes on in its first
-tab after the link, while the tab of the link says « You are signed in … You can close this one »
+FRU-484 made the pin a tip (19 actions). FRU-485 pressed « Leave feedback » for the person at the
+first activation (18 actions). The spec also measured that the setup goes on in its first tab after
+the link, while the tab of the link says « You are signed in … You can close this one »
 (`sign-in.tsx`, the choice P4 of the mockup).
 
 The setup ends by itself at the first note (`setup-install.tsx`). The spec does not check it: the end
@@ -77,8 +78,8 @@ and the worker of the tests has no index (its PostgreSQL is port 1, `cloud-worke
 
 ### The path after the tickets
 
-FRU-482 to FRU-485 give **18 actions**: steps 1 to 11, then on the welcome page « Sign in with
-email » and « Connect Chrome » in the console tab that the extension opens and closes (FRU-482,
+FRU-482 to FRU-485 gave **18 actions**, all done: steps 1 to 11, then on the welcome page « Sign in
+with email » and « Connect Chrome » in the console tab that the extension opens and closes (FRU-482,
 done), « Turn on <site> » on the welcome page (FRU-483, done), « Allow » in Chrome, and on the site
 that opens the element, the text and « Send ». The 3 actions that only Chrome draws stay. One return
 to a tab stays (step 6). No action leads to a dead end.
@@ -129,8 +130,14 @@ page opens, and you click the Fruitback icon there ») and two buttons.
    extension and connects it in place. The cost: the extension trusts a page of the Cloud to ask for
    a session with no word. **Decided by Mathieu on 2026-10-28: yes**, for the console of the Cloud,
    after FRU-482 and FRU-483.
-2. **Does the first activation open the choice of an element by itself?** (FRU-485) The default of
-   the ticket: once, at the first activation of a site, never at a load of a page.
+2. **Does the first activation open the choice of an element by itself?** (FRU-485) Yes, once per
+   origin, when the welcome page turns a site on, never at a load of a page. The extension sends the
+   command of the popup (`leave-feedback`): the widget knows no extension. The origins it opened on
+   are kept in `chrome.storage.local` under `fruitback:first-pick`, a list of origins and nothing
+   else. **Not from the popup**:
+   there « Turn on » is the act of somebody who may come to read the notes first, and « Leave
+   feedback » is one click away on the screen that follows. Measured: pressing it for them there
+   broke fifteen specs that turn a site on from the popup and expect the widget at rest.
 3. **Where does the guide show?** (FRU-486) The default of the ticket: folded under the card
    « Browser extension » of step 3, not on a page of its own.
 
@@ -141,6 +148,6 @@ page opens, and you click the Fruitback icon there ») and two buttons.
 | FRU-482 | The welcome page signs in itself; the popup on a page that is not a site too | Done  |
 | FRU-483 | The welcome page offers « Turn on <site> » and opens the site                | Done  |
 | FRU-484 | The pin is a tip                                                             | Done  |
-| FRU-485 | The first activation opens the choice of an element                          | Todo  |
+| FRU-485 | The first activation opens the choice of an element                          | Done  |
 | FRU-486 | The guide on the setup page, its captures made again at each release         | Todo  |
 | FRU-487 | The console talks to the extension of the same browser                       | Todo  |

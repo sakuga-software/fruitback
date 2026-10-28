@@ -5,12 +5,14 @@ import { storedLanguage } from '../../src/language.ts';
 import { type ConnectState, forgetConnect, pollConnect, startConnect } from '../../src/connect.ts';
 import { type CloudSeams, type Offer, cloudEntry, sitesOf } from '../../src/cloud.ts';
 import { consoleOf, createBrowserConnect, rememberConsole } from '../../src/connect-browser.ts';
+import { firstActivation, pickWhenReady } from '../../src/first-pick.ts';
 import { cloudEndpoint } from '../../src/popup-state.ts';
 import { signInStop } from '../../src/popup-view.ts';
 import { matchPatternFor } from '../../src/registration.ts';
 import { createBrowserSessions } from '../../src/session-browser.ts';
 import { describeIdentity } from '../../src/session.ts';
 import { readAll, rememberPreviews, writeSite } from '../../src/sites.ts';
+import { parseAnswer, tabCommand } from '../../src/tab-command.ts';
 import { type WelcomeSignIn, type WelcomeSite, welcomeScreen } from '../../src/welcome.ts';
 
 /** The page that opens at install (FRU-318), and its sign-in (FRU-482): what `src/welcome.ts` draws. */
@@ -120,7 +122,12 @@ function turnOn(origin: string): void {
   void (async () => {
     if (!(await granted.catch(() => false))) return show(t(NO_ACCESS));
     await writeSite(offer.pattern, cloudEntry(offer));
-    await browser.tabs.create({ url: origin });
+    const opened = await browser.tabs.create({ url: origin });
+    // FRU-485: the first activation opens the choice of an element, once the widget is there.
+    if (opened.id !== undefined && (await firstActivation(browser.storage.local, offer.pattern))) {
+      const tab = opened.id;
+      void pickWhenReady(async () => parseAnswer(await browser.tabs.sendMessage(tab, tabCommand('leave-feedback'))));
+    }
     await show();
   })().catch((error: unknown) => {
     console.error('[fruitback] could not turn the site on', error);
