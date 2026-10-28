@@ -362,4 +362,45 @@ test('a site of no workspace speaks French, with one workspace and no list', asy
   await clean(popup, 'the popup on a site of no workspace, in French');
 });
 
-declare const chrome: { storage: { local: { get(key: string): Promise<Record<string, unknown>> } } };
+declare const chrome: {
+  storage: {
+    local: { get(key: string): Promise<Record<string, unknown>>; set(items: Record<string, unknown>): Promise<void> };
+  };
+};
+
+test('a site whose add the prompt cut short is added and turned on when the popup opens again (FRU-454)', async ({
+  extension,
+}) => {
+  // The prompt of the browser closed the popup after « Turn on »: what it remembered is all there is.
+  // Automation cannot answer the prompt, so the intent is written as the popup writes it.
+  const page = await extension.context.newPage();
+  await openBareSite(page, 'popup-new-site-cut-short');
+  const { posted, settings } = await sitesRoute(extension.context, [
+    { id: 'ws_1', name: 'Sakuga', role: 'owner', canAddSite: true, places: [] },
+  ]);
+  await signedIn(extension, page, 'req_add_7');
+  await extension.worker.evaluate(
+    async ({ origin, endpoint }) => {
+      await chrome.storage.local.set({
+        'fruitback:pending-site': {
+          pattern: origin,
+          add: { endpoint, workspace: { id: 'ws_1', name: 'Sakuga' }, settings: { visibility: 'everyone' } },
+          at: Date.now(),
+        },
+      });
+    },
+    { origin: PLAYGROUND_ORIGIN, endpoint: CLOUD },
+  );
+
+  const popup = await openPopup(extension, page);
+  // No second « Turn on »: screen 3, on, in Sakuga.
+  await expect(popup.getByRole('switch', { name: 'Fruitback on localhost:5177' })).toBeChecked();
+  expect(posted.map((each) => each.body)).toEqual([{ workspace: 'ws_1', origin: PLAYGROUND_ORIGIN }]);
+  expect(settings).toEqual([{ workspace: 'ws_1', site: 'site_1', visibility: 'everyone' }]);
+  expect(
+    await extension.worker.evaluate(
+      async () => (await chrome.storage.local.get('fruitback:pending-site'))['fruitback:pending-site'],
+    ),
+  ).toBeUndefined();
+  await expect(page.locator('[data-fruitback-host]')).toHaveCount(1);
+});

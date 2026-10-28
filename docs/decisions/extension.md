@@ -1747,6 +1747,16 @@ entry with no `mode` reads as private** — that is every entry a reviewer's bro
   again. A refused prompt leaves it as a draft, and the form shows the values again (FRU-117). It is
   ten minutes old at most: an old intent must not turn a site on by surprise. Automation cannot answer
   a prompt, so the E2E copy never met this: the wiring is asserted on the sources.
+- **A site of no workspace that « Turn on » adds is remembered the same way** (FRU-454): the worker,
+  the workspace and what was chosen on the screen (FRU-453), before the prompt and not awaited. Its
+  entry is known only once the worker added the site, so whoever settles it adds it first
+  (`finishAdd` of `cloud.ts`: the add, then the settings, then the entry of the one click). The
+  background does it on `permissions.onAdded`, the popup when it opens: nobody clicks « Turn on »
+  twice. A worker that did not answer leaves the intent for the next settle; a refusal that holds (a
+  role, a session that ended, the count of the hour, a refused setting) drops it. The popup that
+  stays open finishes the add itself and forgets the intent on every outcome, and a refused prompt
+  forgets it too: an access that comes another way later adds no site by surprise. Both contexts can
+  add at once: the worker answers the site that exists to a second add.
 - **A site of the reviewer's workspace is turned on in one click** (FRU-101). The popup asks
   `GET /session/sites` of each session it holds and offers a tab whose origin is listed. The entry is
   team mode with a `mount` field: the extension mounts the widget, `relay: true` on the bridge, and the

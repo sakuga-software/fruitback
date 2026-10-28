@@ -1,7 +1,14 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { PENDING_TTL_MS, type PendingSeams, createPending, parsePending } from './pending-site.ts';
+import {
+  type AddOutcome,
+  PENDING_TTL_MS,
+  type PendingAdd,
+  type PendingSeams,
+  createPending,
+  parsePending,
+} from './pending-site.ts';
 import type { SiteConfig } from './sites.ts';
 
 const SITE: SiteConfig = { mode: 'private', endpoint: 'https://worker.test', clientId: 'acme', enabled: true };
@@ -138,6 +145,84 @@ describe('the values somebody typed, after a prompt they refused (FRU-117)', () 
  * The wiring cannot run under `node --test`: an entrypoint binds `browser` at import. It is read
  * instead, because every case above stays green with either call deleted.
  */
+describe('a site of no workspace, added when the access arrives (FRU-454)', () => {
+  const INTENT: PendingAdd = {
+    endpoint: 'https://api.fruitback.test',
+    workspace: { id: 'ws_1', name: 'Sakuga' },
+    settings: { visibility: 'everyone', place: { connector: 'conn_1', teamId: 'team_1', label: 'Linear · Northwind' } },
+  };
+  const ENTRY: SiteConfig = {
+    endpoint: 'https://api.fruitback.test',
+    enabled: true,
+    mode: 'team',
+    mount: { clientId: 'site_1', workspace: 'Sakuga' },
+  };
+
+  it('adds the site, then stores its entry and turns it on, when the popup is gone', async () => {
+    const asked: [string, PendingAdd][] = [];
+    const { state, stored, activated, pending } = world({
+      add: async (pattern, intent) => {
+        asked.push([pattern, intent]);
+
+        return ENTRY;
+      },
+    });
+    await pending.rememberAdd(ORIGIN, INTENT);
+    assert.equal(await pending.settle(), undefined, 'no access yet: nothing is added');
+    assert.deepEqual(asked, []);
+
+    state.granted = true;
+    assert.equal(await pending.settle(), ORIGIN);
+    assert.deepEqual(asked, [[ORIGIN, INTENT]]);
+    assert.deepEqual(stored, [[ORIGIN, ENTRY]]);
+    assert.deepEqual(activated, [ORIGIN]);
+    assert.equal(state.value, undefined, 'the intent is spent');
+  });
+
+  it('keeps the intent when the worker did not answer, and drops it on a refusal that holds', async () => {
+    let outcome: AddOutcome = 'again';
+    const { state, stored, pending } = world({ add: async () => outcome });
+    await pending.rememberAdd(ORIGIN, INTENT);
+    state.granted = true;
+
+    assert.equal(await pending.settle(), undefined);
+    assert.notEqual(state.value, undefined, 'asked again at the next settle');
+    outcome = 'never';
+    assert.equal(await pending.settle(), undefined);
+    assert.equal(state.value, undefined, 'a refusal is not asked again');
+    assert.deepEqual(stored, []);
+  });
+
+  it('is left for a context that can add, and is no draft of the form', async () => {
+    const { state, stored, pending } = world();
+    await pending.rememberAdd(ORIGIN, INTENT);
+    state.granted = true;
+
+    assert.equal(await pending.settle(), undefined);
+    assert.deepEqual(stored, []);
+    assert.notEqual(state.value, undefined);
+    assert.equal(await pending.draft(ORIGIN), undefined);
+  });
+
+  it('is parsed field by field: a bad place or visibility is no intent', () => {
+    const at = 1;
+    assert.deepEqual(parsePending({ pattern: ORIGIN, add: INTENT, at }), { pattern: ORIGIN, add: INTENT, at });
+    assert.deepEqual(parsePending({ pattern: ORIGIN, add: { ...INTENT, settings: { place: null } }, at }), {
+      pattern: ORIGIN,
+      add: { ...INTENT, settings: { place: null } },
+      at,
+    });
+    for (const add of [
+      { ...INTENT, endpoint: 3 },
+      { ...INTENT, workspace: { name: 'x' } },
+      { ...INTENT, settings: { visibility: 'all' } },
+      { ...INTENT, settings: { place: { connector: 'c' } } },
+    ]) {
+      assert.equal(parsePending({ pattern: ORIGIN, add, at }), undefined, JSON.stringify(add));
+    }
+  });
+});
+
 describe('the wiring of the pending site', () => {
   const popup = readFileSync(new URL('../entrypoints/popup/main.ts', import.meta.url), 'utf8');
   const background = readFileSync(new URL('../entrypoints/background.ts', import.meta.url), 'utf8');
@@ -149,6 +234,17 @@ describe('the wiring of the pending site', () => {
 
     assert.ok(remember !== -1 && request !== -1 && remember < request);
     assert.equal(/await\s+pending\.remember/.test(popup), false, 'an await before the request loses the gesture');
+  });
+
+  it('remembers the site to add before the popup asks for access, and does not wait for it (FRU-454)', () => {
+    const adding = popup.slice(popup.indexOf('function addAndTurnOn('));
+    const remember = adding.indexOf('pending\n    .rememberAdd(');
+    const request = adding.indexOf('browser.permissions.request(');
+
+    assert.ok(remember !== -1 && request !== -1 && remember < request);
+    assert.equal(/await\s+pending\s*\.rememberAdd/.test(popup), false);
+    assert.ok(background.includes('finishAdd(pattern, intent'), 'the background can add the site');
+    assert.ok(popup.includes('finishAdd(pattern, intent'), 'and so can the popup when it opens again');
   });
 
   it('settles in the background when the access arrives, and in the popup when it opens', () => {

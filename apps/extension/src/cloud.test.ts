@@ -6,6 +6,7 @@ import {
   addSite,
   addableWorkspaces,
   cloudEntry,
+  finishAdd,
   offerFor,
   parseWorkspaceSites,
   setSiteSettings,
@@ -646,5 +647,52 @@ describe('who sees the notes and where they go, from the popup (FRU-453)', () =>
         `${status} ${JSON.stringify(body)}`,
       );
     }
+  });
+});
+
+describe('an add that a permission prompt cut short, finished later (FRU-454)', () => {
+  const INTENT = {
+    endpoint: 'https://api.fruitback.test',
+    workspace: { id: 'ws_1', name: 'Sakuga' },
+    settings: { visibility: 'everyone' as const },
+  };
+  const SITE = { id: 'site_9', origin: 'https://preview.client.fr', visibility: 'members', workspace: 'ws_1' };
+  const answering = (add: number, set: number, sent: string[] = []) =>
+    (async (url: string) => {
+      sent.push(url);
+      const settings = url.endsWith('/settings');
+      const status = settings ? set : add;
+
+      return new Response(JSON.stringify({ site: { ...SITE, visibility: settings ? 'everyone' : 'members' } }), {
+        status,
+      });
+    }) as unknown as typeof fetch;
+  const seams = (fetcher: typeof fetch) => ({ ensureAccess: async () => GRANTED, fetcher });
+
+  it('adds the site, writes what was chosen, and answers the entry of the one click', async () => {
+    const sent: string[] = [];
+    assert.deepEqual(await finishAdd('https://preview.client.fr', INTENT, seams(answering(201, 200, sent))), {
+      endpoint: 'https://api.fruitback.test',
+      enabled: true,
+      mode: 'team',
+      mount: { clientId: 'site_9', workspace: 'Sakuga' },
+    });
+    assert.deepEqual(sent, [
+      'https://api.fruitback.test/session/sites',
+      'https://api.fruitback.test/session/sites/settings',
+    ]);
+    // Nothing chosen: no write of the settings.
+    const plain: string[] = [];
+    await finishAdd('https://preview.client.fr', { ...INTENT, settings: {} }, seams(answering(201, 200, plain)));
+    assert.deepEqual(plain, ['https://api.fruitback.test/session/sites']);
+  });
+
+  it('asks again after a worker that did not answer, never after a refusal', async () => {
+    const at = 'https://preview.client.fr';
+    assert.equal(await finishAdd(at, INTENT, seams(answering(502, 200))), 'again');
+    assert.equal(await finishAdd(at, INTENT, seams(answering(403, 200))), 'never');
+    assert.equal(await finishAdd(at, INTENT, seams(answering(401, 200))), 'never');
+    assert.equal(await finishAdd(at, INTENT, seams(answering(201, 502))), 'again');
+    assert.equal(await finishAdd(at, INTENT, seams(answering(201, 403))), 'never');
   });
 });

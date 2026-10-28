@@ -1,6 +1,6 @@
 import { browser } from 'wxt/browser';
 import { readAll, readFreshPreviews, readSite, rememberPreviews, replaceAll } from '../src/sites.ts';
-import { refreshPreviews } from '../src/cloud.ts';
+import { finishAdd, refreshPreviews } from '../src/cloud.ts';
 import { PREVIEWS_REFRESH_MS, touchesPreviews } from '../src/proven-previews.ts';
 import { accessOf, patternsOf } from '../src/access-return.ts';
 import { createBrowserAccessReturn } from '../src/access-return-browser.ts';
@@ -261,7 +261,11 @@ export default defineBackground(() => {
   });
   const extensionRoot = browser.runtime.getURL('/popup.html').replace(/popup\.html$/, '');
   const signInGate = createSignInGate();
-  const pending = createBrowserPending((pattern, site) => ownSites({ kind: 'write', entries: { [pattern]: site } }));
+  // FRU-454: a site of no workspace is added here when the prompt closed the popup that asked.
+  const pending = createBrowserPending(
+    (pattern, site) => ownSites({ kind: 'write', entries: { [pattern]: site } }),
+    (pattern, intent) => finishAdd(pattern, intent, { ensureAccess: (endpoint) => sessions.ensureAccess(endpoint) }),
+  );
 
   // FRU-307: the pins a side panel hid come back when the panel goes, whatever closed it.
   browser.runtime.onConnect.addListener((port) => {
