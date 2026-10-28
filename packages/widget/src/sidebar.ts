@@ -413,16 +413,27 @@ export function createSidebar(options: SidebarOptions): Sidebar {
 
   // The notes of every page (FRU-470), with « Show more » while the host has more.
   const siteList = document.createElement('ul');
-  siteList.className = 'fruitback-sidebar-list';
+  // Classes of its own: the list of the page and « Try again » stay the only ones of theirs.
+  siteList.className = 'fruitback-sidebar-site-list';
   siteList.dataset.fruitbackSiteList = '';
   siteList.hidden = true;
   const more = document.createElement('button');
   more.type = 'button';
-  more.className = 'fruitback-sidebar-retry fruitback-sidebar-more';
+  more.className = 'fruitback-sidebar-more';
   more.textContent = t.text('sidebar.more');
   more.hidden = true;
 
-  panel.append(drafted, sentText, empty, failedText, failed, list, siteList, more, unplaced);
+  // Only for a host that reads the site: the list of any other host is what it was.
+  panel.append(
+    drafted,
+    sentText,
+    empty,
+    failedText,
+    failed,
+    list,
+    ...(site === undefined ? [] : [siteList, more]),
+    unplaced,
+  );
 
   // The thread of a note, in the column of the list and in place of its rows (FRU-312). The thread
   // on the page covered the rows and the head of the list; here the head stays, and « All notes »
@@ -1243,10 +1254,10 @@ const STYLES = `
 .fruitback-sidebar-failed-text:empty { padding: 0; }
 .fruitback-sidebar-failed { padding: 0 10px; }
 .fruitback-sidebar-failed[hidden] { display: none; }
-.fruitback-sidebar-retry[aria-disabled='true'], .fruitback-sidebar-send[aria-disabled='true'] { opacity: 0.6; cursor: progress; }
+.fruitback-sidebar-retry[aria-disabled='true'], .fruitback-sidebar-send[aria-disabled='true'], .fruitback-sidebar-more[aria-disabled='true'] { opacity: 0.6; cursor: progress; }
 .fruitback-sidebar-sent { margin: 0; padding: 0 10px 8px; font-size: 13px; }
 .fruitback-sidebar-sent:empty { padding: 0; }
-.fruitback-sidebar-retry, .fruitback-sidebar-send {
+.fruitback-sidebar-retry, .fruitback-sidebar-send, .fruitback-sidebar-more {
   padding: 6px 12px;
   border: 1px solid var(--fruitback-color-text-muted);
   border-radius: var(--fruitback-radius-sm);
@@ -1259,9 +1270,9 @@ const STYLES = `
 }
 /* FRU-394: no « Try again » on a site that its members read. The reset of the host shows a button. */
 .fruitback-sidebar-retry[hidden] { display: none; }
-.fruitback-sidebar-list { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
-.fruitback-sidebar-list[hidden] { display: none; }
-.fruitback-sidebar-list > li, .fruitback-sidebar-unplaced-list > li { list-style: none; }
+.fruitback-sidebar-list, .fruitback-sidebar-site-list { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.fruitback-sidebar-list[hidden], .fruitback-sidebar-site-list[hidden] { display: none; }
+.fruitback-sidebar-list > li, .fruitback-sidebar-site-list > li, .fruitback-sidebar-unplaced-list > li { list-style: none; }
 .fruitback-sidebar-item {
   display: flex;
   gap: 12px;
@@ -1475,6 +1486,6 @@ const STYLES = `
   .fruitback-sidebar-chip, .fruitback-sidebar-search-field { min-height: 44px; }
   .fruitback-sidebar-search .fruitback-icon { top: 14px; }
   .fruitback-sidebar-pins { min-height: 44px; }
-  .fruitback-sidebar-retry, .fruitback-sidebar-send { min-height: 44px; }
+  .fruitback-sidebar-retry, .fruitback-sidebar-send, .fruitback-sidebar-more { min-height: 44px; }
 }
 `;
