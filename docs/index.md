@@ -18,6 +18,7 @@ layout: landing
 | [Review with the extension](reviewing.md) | The reviewer's side: the browser extension, a rule per site, and pairing.                          |
 | [Translate the widget](translating.md)    | The words a host can replace, and the catalogs the bundle carries.                                 |
 | [REST connector](rest-connector.md)       | The request the Cloud posts for each note, its signature, and what happens when you do not answer. |
+| [Connect an AI agent](agents.md)          | Claude Code or a cloud agent reads, replies and sets a status with a key, and what it cannot stop. |
 | [What the widget collects](privacy.md)    | Every field a note carries, where it goes, how long it stays, and how to delete it.                |
 | [Architecture](architecture.md)           | What the parts are, and the designs that were dropped.                                             |
 
