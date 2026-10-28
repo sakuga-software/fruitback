@@ -241,6 +241,63 @@ describe('« All pages » of the list (FRU-470)', () => {
   });
 });
 
+describe('the button of the list and the side panel of a host (FRU-469)', () => {
+  function mounted(openSidebar?: () => Promise<boolean>) {
+    const page = mountPage('<main><button id="cta">Commander</button></main>');
+    const widget = init({
+      document: page.document,
+      endpoint: 'https://worker.test',
+      clientId: 'acme',
+      ...(openSidebar === undefined ? {} : { openSidebar }),
+    });
+    const root = page.document.querySelector('[data-fruitback-host]')?.shadowRoot as ShadowRoot;
+    const button = root.querySelector('[aria-label="Show every note in a sidebar"]') as HTMLButtonElement;
+    const listOpen = () => (root.querySelector('[data-fruitback-sidebar]') as HTMLElement).hidden === false;
+
+    return { widget, button, listOpen };
+  }
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  it('opens the side panel of the host, in the click, and not the list of the page', async () => {
+    let asked = 0;
+    const { widget, button, listOpen } = mounted(async () => {
+      asked += 1;
+
+      return true;
+    });
+    button.click();
+    assert.equal(asked, 1, 'not asked in the click');
+    await settle();
+    assert.equal(listOpen(), false);
+    widget.destroy();
+  });
+
+  it('opens the list of the page when the host could not open its panel, or failed', async () => {
+    for (const openSidebar of [
+      async () => false,
+      async () => {
+        throw new Error('no gesture');
+      },
+      () => {
+        throw new Error('sync');
+      },
+    ]) {
+      const { widget, button, listOpen } = mounted(openSidebar as () => Promise<boolean>);
+      button.click();
+      await settle();
+      assert.equal(listOpen(), true);
+      widget.destroy();
+    }
+  });
+
+  it('opens the list of the page with no host panel, as before', () => {
+    const { widget, button, listOpen } = mounted();
+    button.click();
+    assert.equal(listOpen(), true);
+    widget.destroy();
+  });
+});
+
 describe('the optional picture', () => {
   const mountable = () => mountPage('<main><button id="cta">Commander</button></main>');
 

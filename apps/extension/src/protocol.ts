@@ -542,7 +542,22 @@ export type BridgeMessage =
   | DockMessage
   | SignInMessage
   | SiteNotesRequestMessage
-  | SiteNotesResponseMessage;
+  | SiteNotesResponseMessage
+  | OpenPanelRequestMessage
+  | OpenPanelResponseMessage;
+
+/**
+ * The button of the widget that shows every note asks for the side panel (FRU-469). The page can
+ * send one too: `panel-request.ts` says what that buys it.
+ */
+export type OpenPanelRequestMessage = { channel: typeof CHANNEL; kind: 'open-panel-request'; id: string };
+
+export type OpenPanelResponseMessage = {
+  channel: typeof CHANNEL;
+  kind: 'open-panel-response';
+  id: string;
+  opened: boolean;
+};
 
 /**
  * « All pages » of the widget the extension mounts asks for one page of the notes of its site
@@ -597,6 +612,18 @@ export function parseBridgeMessage(data: unknown): BridgeMessage | undefined {
   if (data.kind === 'relay-response') return parseRelayResponseMessage(data);
   if (data.kind === 'capture-request') return parseCaptureRequest(data);
   if (data.kind === 'site-notes-request') return parseSiteNotesRequest(data);
+  if (data.kind === 'open-panel-request') {
+    const id = parseId(data.id);
+
+    return id === undefined ? undefined : { channel: CHANNEL, kind: 'open-panel-request', id };
+  }
+  if (data.kind === 'open-panel-response') {
+    const id = parseId(data.id);
+
+    return id === undefined
+      ? undefined
+      : { channel: CHANNEL, kind: 'open-panel-response', id, opened: data.opened === true };
+  }
   if (data.kind === 'site-notes-response') {
     const id = parseId(data.id);
     const read = parsePageSiteRead(data.read);

@@ -2225,9 +2225,18 @@ Chrome, `sidebar_action` on Firefox. It is a page of the extension, `sidepanel.h
   grants no host, no content script and no read of a page. Chrome shows no warning for it: measured
   on the built manifest with `management.getPermissionWarningsByManifest`, the warnings with and
   without the panel are the same (`e2e/side-panel.spec.ts`). `sidebar_action` asks for no permission.
-- **The panel opens only from a gesture of the person**: the button of the popup, which calls the
-  browser in its click. The click on the toolbar icon still opens the popup
-  (`setPanelBehavior({ openPanelOnActionClick: false })`). No page can open the panel.
+- **The panel opens from the button of the popup**, which calls the browser in its click. The click
+  on the toolbar icon still opens the popup (`setPanelBehavior({ openPanelOnActionClick: false })`).
+- **And from the button of the widget the extension mounts that shows every note** (FRU-469): the
+  widget posts `open-panel-request` on the bridge, and the background opens the panel of the tab the
+  browser reports as the sender, before any `await`. **A script of a site the reviewer turned on can
+  post that request too, and open the panel with no gesture of the person**: measured on Chromium 156
+  (Playwright 1.64.1), `sidePanel.open` from a message of a content script needs none. It gains
+  nothing: the panel is a page of the extension that reads nothing of the site, and the answer says
+  only whether it opened. **The condition**: our content scripts run only on a site the reviewer
+  turned on, and a tab is answered once in 2 s, so a page cannot open the panel again and again after
+  the reviewer closed it (test:`answers a tab once in an interval, and each tab apart`). A page where
+  Fruitback is not on cannot reach the bridge, and cannot open the panel.
 - **What it reads.** The address of the active tab of its window, as the popup does: the browser
   gives it only for a site the extension has access to, or after the click on its icon. With it, the
   rule of that site from the extension's storage. It reads no worker and keeps nothing.
