@@ -251,7 +251,12 @@ export type PreferencesOptions = {
    * (FRU-380), which has no page of shortcuts an extension may open.
    */
   shortcutPlace?: 'firefox' | 'safari';
-  synced: boolean;
+  /**
+   * « Keep my rules in the account of this browser ». None: the row is not drawn. Safari keeps
+   * `storage.sync` on the Mac and syncs nothing (FRU-380), so the row would promise a copy that never
+   * reaches another browser.
+   */
+  synced?: boolean;
   onSynced: (on: boolean) => Promise<void> | void;
   /** « Show CSS selectors » (FRU-349). Off by default. */
   selectors: boolean;
@@ -476,25 +481,28 @@ export function preferencesSection(document: Document, options: PreferencesOptio
   }
   card.append(row(document, t('Leave feedback shortcut'), shortcutHelp(options), shortcut));
 
-  card.append(
-    row(
-      document,
-      t('Keep my rules in the account of this browser'),
-      t(
-        'When this is on, your rules (patterns, modes, endpoints, client ids, and the labels and workspace names they hold) are kept by the account of this browser, and reach your other browsers where it is on too. No session and no access travel: on another browser, grant access to each site. Turning it off stops the copy, and removes nothing from the account.',
-      ),
-      (() => {
-        const control: HTMLElement = toggle(document, {
-          checked: options.synced,
-          label: t('Keep my rules in the account of this browser'),
-          size: 'preference',
-          onChange: (on) => save(options.onSynced(on), () => flipBack(control, on)),
-        });
+  const synced = options.synced;
+  if (synced !== undefined) {
+    card.append(
+      row(
+        document,
+        t('Keep my rules in the account of this browser'),
+        t(
+          'When this is on, your rules (patterns, modes, endpoints, client ids, and the labels and workspace names they hold) are kept by the account of this browser, and reach your other browsers where it is on too. No session and no access travel: on another browser, grant access to each site. Turning it off stops the copy, and removes nothing from the account.',
+        ),
+        (() => {
+          const control: HTMLElement = toggle(document, {
+            checked: synced,
+            label: t('Keep my rules in the account of this browser'),
+            size: 'preference',
+            onChange: (on) => save(options.onSynced(on), () => flipBack(control, on)),
+          });
 
-        return control;
-      })(),
-    ),
-  );
+          return control;
+        })(),
+      ),
+    );
+  }
   card.append(problem);
   section.append(title, card);
 

@@ -42,7 +42,7 @@ test('the Safari build asks for no side panel and tells Safari its minimum (FRU-
   expect(manifest.optional_host_permissions).toEqual(['*://*/*', '<all_urls>']);
 });
 
-test('the preferences of the Safari build name Safari, and offer no panel on the icon (FRU-380)', async ({
+test('the preferences of the Safari build name Safari, and offer no panel and no synced rules (FRU-380)', async ({
   extension,
 }) => {
   const options = await extension.context.newPage();
@@ -55,7 +55,6 @@ test('the preferences of the Safari build name Safari, and offer no panel on the
     'Corner of the widget',
     'Allow captures on every site',
     'Leave feedback shortcut',
-    'Keep my rules in the account of this browser',
   ]);
   await expect(prefs.getByText('Change it in Safari Settings, Extensions.')).toBeVisible();
   await expect(prefs.getByText(/^Your browser will ask you to allow Fruitback on every website\./)).toBeVisible();

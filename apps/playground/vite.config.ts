@@ -44,7 +44,8 @@ export default defineConfig({
    * dropped both entries and warned about it on every boot. Naming the parent is what lets it
    * resolve them, and it beats declaring a direct dependency this app does not import.
    *
-   * The suite deliberately runs against `dev` and not a production build: `source` carries the
+   * `pnpm dev` and the demonstration run this server. The E2E suite serves a development build
+   * instead (FRU-488, `playwright.config.ts`): not a production build, because `source` carries the
    * component name and the file, and both come from React's dev-only fiber metadata.
    */
   optimizeDeps: {

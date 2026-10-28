@@ -737,7 +737,8 @@ async function preferences(): Promise<HTMLElement> {
     ...(shortcut === undefined ? {} : { shortcut }),
     ...(onShortcut === undefined ? {} : { onShortcut }),
     ...(FAMILY === 'safari' ? { shortcutPlace: 'safari' as const } : {}),
-    synced: stored[SYNC_SETTING] === true,
+    // FRU-380: Safari syncs nothing of `storage.sync`, so the row is not drawn there.
+    ...(FAMILY === 'safari' ? {} : { synced: stored[SYNC_SETTING] === true }),
     onSynced: (on) => browser.storage.local.set({ [SYNC_SETTING]: on }),
     selectors: stored[SHOW_SELECTORS_KEY] === true,
     // Absent is off: turning it off removes the key rather than keeping a `false`.
