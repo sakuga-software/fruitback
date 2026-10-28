@@ -4484,7 +4484,9 @@ framing; `SECURITY.md` says what is protected.
 - **The limit is per key**, `AGENT_WRITE_LIMIT` a minute, in its own counter of the `Kv`
   (`fruitback:rate:agent:`), counted once the write is one the store would take.
 - **Each write that the store took goes in `agent_writes`** (migration `0035`): the key by its id
-  and its name, with no foreign key, so a revoked key keeps its log. `GET
+  and its name, with no foreign key, so a revoked key keeps its log. A log that fails is said in the
+  log of the worker and never answered to the agent: the write is in the store, and an error would
+  have the agent write it a second time. `GET
   /console/workspaces/<id>/agent-keys/<key>/writes` answers it to `manage-workspace`.
 - **The store of the tools is `watchedStore`**, as for the routes of the page: a call through a
   connector is noted on that connector.

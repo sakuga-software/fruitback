@@ -6,6 +6,7 @@ import { type World, callOn, signInTo, workspaceIn, worlds } from './console-wor
 import { resetMemoryLinear } from './linear-memory.ts';
 import { rowsOf } from './postgres.fixture.ts';
 import { createPairing, redeemPairing } from './session.ts';
+import { StoreError } from './store.ts';
 import { noteFixture } from '@fruitback/shared/note.fixture';
 
 /**
@@ -141,6 +142,29 @@ describe('the write tools of /mcp (FRU-464)', () => {
       [write.action, write.key, write.keyName, write.site, write.note],
       ['reply', keyId, 'Claude on CI', shop.id, 'sd_one'],
     );
+  });
+
+  it('answers a reply as written when its log fails, so that the agent does not write it twice', async () => {
+    const { world, shop, key } = await acme();
+    const { secret } = await key('write');
+    const id = await noteId(world, secret, shop.id);
+    world.accounts.recordAgentWrite = async () => {
+      throw new StoreError('the database went away');
+    };
+
+    const replied = await call(world, secret, 'reply_to_feedback', { id, body: 'Fixed.' });
+    assert.equal(replied.body.result.isError, undefined, JSON.stringify(replied.body));
+    assert.equal((await read(world, shop.id)).comments.length, 1);
+  });
+
+  it('names the status of its own store in the words of set_feedback_status', async () => {
+    const { world, key } = await acme();
+    const { secret } = await key('write');
+    const tools = (await rpc(world, secret, 'tools/list')).body.result.tools;
+    const words = JSON.stringify(tools.find((tool: { name: string }) => tool.name === 'set_feedback_status'));
+
+    assert.ok(words.includes('own:<key>') && words.includes('own:done'), words);
+    assert.ok(!words.includes('${'), words);
   });
 
   it('never reads a reply that a person typed as a reply of an agent', async () => {

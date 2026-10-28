@@ -1,5 +1,5 @@
 import { type FeedbackWords, type NoteIssue, feedbackText } from '@fruitback/shared';
-import { type AccountStore, can } from './accounts.ts';
+import { type AccountStore, type AgentWrite, can } from './accounts.ts';
 import type { AgentGrant } from './agent-keys.ts';
 import type { ClientConfig, ClientPolicy, ClientResolution } from './clients.ts';
 import { cursorOf, noteIdOf, noteKeyOf, queryOf } from './console-notes.ts';
@@ -163,8 +163,7 @@ function writeTools(context: AgentToolsContext): McpTool[] {
     },
     {
       name: 'set_feedback_status',
-      description:
-        'Sets the status of a note that Fruitback keeps: a key of the statuses of its site, as `${OWN_SOURCE}:<key>`. A note in a tracker takes its status from the tracker.',
+      description: `Sets the status of a note that Fruitback keeps: a key of the statuses of its site, as \`${OWN_SOURCE}:<key>\`. A note in a tracker takes its status from the tracker.`,
       inputSchema: {
         type: 'object',
         properties: {
@@ -385,6 +384,20 @@ async function writableNote(
   return { site, note: key.note, page, targets };
 }
 
+/**
+ * Writes a write in the log of its key. The write is in the store by then: a failure of the log is
+ * said in the log of the worker and never answered to the agent, which would write a second time.
+ */
+async function logged(context: AgentToolsContext, workspace: string, write: AgentWrite): Promise<void> {
+  try {
+    await context.accounts.recordAgentWrite(workspace, write);
+  } catch (error) {
+    console.error(
+      `[fruitback] the write of an agent key was not logged: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+}
+
 /** Counts one write of the key. `false`: the key wrote `AGENT_WRITE_LIMIT` times in this minute. */
 function chargeKey(context: AgentToolsContext): Promise<boolean> {
   return chargeRateLimit(context.kv, context.grant.key, 1, {
@@ -422,7 +435,7 @@ function replyToFeedback(context: AgentToolsContext, args: Record<string, unknow
       );
       if (comment === undefined) break;
       await invalidatePages(context.kv, [page]);
-      await context.accounts.recordAgentWrite(site.workspace, {
+      await logged(context, site.workspace, {
         key: context.grant.key,
         keyName: context.grant.name,
         site: site.id,
@@ -478,7 +491,7 @@ function setFeedbackStatus(context: AgentToolsContext, args: Record<string, unkn
           verdicts,
         }),
       );
-      await context.accounts.recordAgentWrite(site.workspace, {
+      await logged(context, site.workspace, {
         key: context.grant.key,
         keyName: context.grant.name,
         site: site.id,
