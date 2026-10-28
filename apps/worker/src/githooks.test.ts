@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { availableParallelism, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'vitest';
 
@@ -24,10 +24,12 @@ const HOOKS = [
 const INSTALLER = new URL('.githooks/install.mjs', ROOT);
 
 /** The `maxWorkers` that a `vitest.config.ts` gives, loaded by Node with the variable set or not. */
-function maxWorkersOf(config: URL, concurrency: string | undefined): number | undefined {
+function maxWorkersOf(config: URL, concurrency: string | undefined, ci?: string): number | undefined {
   const env = { ...process.env };
   delete env.FRUITBACK_TEST_CONCURRENCY;
+  delete env.CI;
   if (concurrency !== undefined) env.FRUITBACK_TEST_CONCURRENCY = concurrency;
+  if (ci !== undefined) env.CI = ci;
   const read = `import(${JSON.stringify(config.href)}).then(({ default: c }) => console.log(JSON.stringify(c.test.maxWorkers ?? null)))`;
   const run = spawnSync(process.execPath, ['--input-type=module', '-e', read], {
     env,
@@ -119,7 +121,7 @@ describe('the git hooks', () => {
    * `FRUITBACK_TEST_CONCURRENCY` to Node. The option goes before the files, because Node ignores
    * it after them (measured). The worker runs `vitest run`, and its `vitest.config.ts` gives the
    * variable to `maxWorkers` (FRU-346). `pre-push` sets the variable. CI does not, so CI keeps
-   * every core.
+   * every core: under `CI`, vitest runs one file for each core, and not one less (FRU-479).
    */
   it(
     'bound the test files that a push runs at a time, and leave CI on every core',
@@ -149,7 +151,13 @@ describe('the git hooks', () => {
       for (const { file } of vitest) {
         const config = new URL(file.replace(/package\.json$/, 'vitest.config.ts'), ROOT);
         assert.deepEqual(maxWorkersOf(config, '2'), 2, `${file}: vitest runs every test file at once`);
-        assert.deepEqual(maxWorkersOf(config, undefined), undefined, `${file}: vitest has a bound in CI`);
+        assert.deepEqual(maxWorkersOf(config, undefined), undefined, `${file}: vitest has a bound outside CI`);
+        assert.deepEqual(
+          maxWorkersOf(config, undefined, 'true'),
+          availableParallelism(),
+          `${file}: vitest has a bound in CI`,
+        );
+        assert.deepEqual(maxWorkersOf(config, '2', 'true'), 2, `${file}: the variable does not bound vitest in CI`);
       }
 
       const hook = readFileSync(new URL('.githooks/pre-push', ROOT), 'utf8');
