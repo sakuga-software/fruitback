@@ -105,6 +105,32 @@ test.describe('the rail', () => {
   });
 });
 
+test.describe('the page of a site (FRU-455)', () => {
+  test('the block of the extension says it is connected, and offers to connect another browser', async ({ page }) => {
+    await stubWorker(page, { answer: browsersAnswer([MAC]) });
+    await page.goto(`${CONSOLE}/w/w1/sites/s1`);
+    const block = page
+      .locator('main div')
+      .filter({ has: page.getByRole('heading', { name: 'Extension', exact: true }) })
+      .last();
+    await expect(block.getByText('Extension connected · Chrome on macOS')).toBeVisible();
+    await expect(block.getByRole('button', { name: 'Connect this browser' })).toHaveCount(0);
+    await expect(block.getByRole('button', { name: 'Connect another browser' })).toBeVisible();
+    await noViolation(page);
+  });
+
+  test('offers to connect this browser when none is connected', async ({ page }) => {
+    await stubWorker(page, { answer: browsersAnswer([]) });
+    await page.goto(`${CONSOLE}/w/w1/sites/s1`);
+    const block = page
+      .locator('main div')
+      .filter({ has: page.getByRole('heading', { name: 'Extension', exact: true }) })
+      .last();
+    await expect(block.getByRole('button', { name: 'Connect this browser' })).toBeVisible();
+    await expect(block.getByText(/Extension connected/)).toHaveCount(0);
+  });
+});
+
 test.describe('step 3 of the setup', () => {
   async function stubSetup(page: Page, browsers: readonly unknown[], locale: 'en' | 'fr' = 'en'): Promise<void> {
     const answer = browsersAnswer(browsers);
