@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { AccessResult } from './session.ts';
-import { createSiteNotesRelay } from './site-notes-relay.ts';
+import { PAGE_EXCERPT_MAX, createSiteNotesRelay, excerptAtMost } from './site-notes-relay.ts';
 import type { SiteConfig } from './sites.ts';
 import { parseBridgeMessage, parsePageSiteRead } from './protocol.ts';
 
@@ -98,6 +98,19 @@ describe('the notes of every page, for the widget the extension mounts (FRU-470)
     const { relay, read } = relayFor(TEAM);
     assert.deepEqual(await relay({}, undefined), { ok: false, reason: 'unavailable' });
     assert.deepEqual(read, [], 'the origin comes from the sender only');
+  });
+
+  it('gives the page an excerpt of 64 code points at most, whatever the worker sent (review of #645)', async () => {
+    const long = `${'é'.repeat(70)} and more`;
+    const body = { ...BODY, notes: [{ ...BODY.notes[0], excerpt: long }] };
+    const answer = await relayFor(TEAM, [{ status: 200, body }]).relay({}, ORIGIN);
+
+    assert.ok(answer.ok);
+    assert.equal([...(answer.notes[0]?.excerpt ?? '')].length, PAGE_EXCERPT_MAX);
+    // Between two graphemes: a family of four people is kept whole or not at all.
+    const family = '👨‍👩‍👧‍👦';
+    assert.equal(excerptAtMost(`${'a'.repeat(60)}${family}`), 'a'.repeat(60));
+    assert.equal(excerptAtMost('short'), 'short');
   });
 
   it('says a session that ended, and a worker that did not answer', async () => {
