@@ -66,6 +66,19 @@ decisions and every text in both languages. `tools/build.mjs` writes it (edit th
 HTML); `shots/` holds a picture of each frame. The agent fru-agents decided its choices, as the
 orchestrator asked.
 
+## Several notes sent together (FRU-474, 2026-10-28)
+
+`batch-notes/batch-notes.html` is the board of the group « Kept for later, not sent yet » of the
+widget (FRU-124), where the person who kept several notes chooses how they arrive in the tracker:
+one issue for each note under one parent (what the worker does today, unsaid), or one issue that
+holds every note. It draws the group of today, the choice on a Linear site, the second choice with a
+title, sending and sent, the pins and the thread of a note in one issue, a place that cannot group,
+a send that half worked, and 390 px. Frames at 1440 px are in English, at 390 px in French, and the
+board ends with its decisions, what the build needs, its open questions and every text in both
+languages. It is drawn on the tokens of the widget (`packages/widget/src/theme.ts`).
+`tools/build.mjs` writes it (edit the script, not the HTML); `shots/` holds a picture of each frame.
+The agent fru-notes-edit decided its choices, as the orchestrator asked. Nothing of it is built yet.
+
 ## The export of 2026-10-07
 
 `fruitback-design-export.html` is the export of the Claude Design project « Application overlay
