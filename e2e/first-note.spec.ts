@@ -139,26 +139,30 @@ test('a first user goes from the setup to a first note (FRU-481)', async ({ exte
   const turnOn = welcome!.getByRole('button', { name: 'Turn on localhost:5177' });
   await expect(turnOn).toBeVisible({ timeout: 15_000 });
   await welcome!.screenshot({ path: test.info().outputPath('08-welcome-turn-on.png') });
+  // The playground mounts a widget of its own unless its address says `widget=off`. Its root, as
+  // the welcome page opens it, says so before the page reads it: only the widget of the extension
+  // is left, and the choice it opens stays open (a reload would close it).
+  await context.addInitScript((origin) => {
+    if (location.origin === origin && location.pathname === '/' && location.search === '') {
+      history.replaceState(null, '', '/?widget=off');
+    }
+  }, PLAYGROUND_ORIGIN);
   const siteOpens = context.waitForEvent('page');
   await turnOn.click();
   did('welcome', 'click « Turn on <site> »: the site opens in a tab');
   did('chrome', 'click « Allow » in the prompt of Chrome for the access to the site');
   const site = await siteOpens;
-  await site.waitForLoadState();
+  await expect(site.getByRole('heading', { name: 'Nos formules' })).toBeVisible({ timeout: 15_000 });
   expect(new URL(site.url()).origin).toBe(PLAYGROUND_ORIGIN);
-  // The playground mounts a widget of its own: `widget=off` keeps only the one of the extension.
-  await site.goto(`${PLAYGROUND_ORIGIN}/?widget=off`);
-  await expect(site.getByRole('heading', { name: 'Nos formules' })).toBeVisible();
   // The welcome page says the site is on now, and offers to open it.
   await expect(welcome!.getByRole('button', { name: 'Open localhost:5177' })).toBeVisible();
 
-  // The widget of the extension appears on the site.
+  // The first activation opens the choice of an element (FRU-485): no « Leave feedback » to press.
   await site.bringToFront();
-  const leave = site.getByRole('button', { name: 'Leave feedback' });
-  await expect(leave).toBeVisible({ timeout: 20_000 });
+  await expect(site.locator('[data-fruitback-host]')).toHaveAttribute('data-fruitback-capturing', '', {
+    timeout: 20_000,
+  });
   await site.screenshot({ path: test.info().outputPath('09-site-on.png') });
-  await leave.click();
-  did('site', 'click « Leave feedback »');
   await site.locator('[data-testid="card-espresso"] .add').click();
   did('site', 'click the element of the page');
   const note = `First note ${Date.now()}: the price is hard to read.`;
@@ -172,6 +176,9 @@ test('a first user goes from the setup to a first note (FRU-481)', async ({ exte
   // The worker keeps the note: the site, loaded again, reads it from the worker and draws its pin.
   await site.reload();
   await expect(badgeFor(site, note)).toBeVisible({ timeout: 20_000 });
+  // A second load does not open the choice again: it opens at the first activation only.
+  await expect(site.getByRole('button', { name: 'Leave feedback' })).toBeVisible();
+  await expect(site.locator('[data-fruitback-host]')).not.toHaveAttribute('data-fruitback-capturing');
 
   fs.writeFileSync(test.info().outputPath('actions.json'), JSON.stringify(actions, null, 2));
   // The table of the page is this list: a change to the path changes both in one pull request.
