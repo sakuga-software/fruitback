@@ -1709,13 +1709,6 @@ function errorOf(body: string): unknown {
   }
 }
 
-/**
- * Whether the element is still on the page where it was chosen (FRU-152).
- *
- * The picture is taken at the send. After a navigation it would show the page of now, or nothing of
- * the element, beside a place and an anchor of the page before. A note with no picture is better
- * than a picture of another page.
- */
 /** Whether an address is this page, as a note keeps it. An address that does not parse is no page. */
 function samePage(url: string, page: string): boolean {
   try {
@@ -1725,6 +1718,13 @@ function samePage(url: string, page: string): boolean {
   }
 }
 
+/**
+ * Whether the element is still on the page where it was chosen (FRU-152).
+ *
+ * The picture is taken at the send. After a navigation it would show the page of now, or nothing of
+ * the element, beside a place and an anchor of the page before. A note with no picture is better
+ * than a picture of another page.
+ */
 function stillThere(element: Element, place: CapturedPlace | undefined): boolean {
   if (!element.isConnected) return false;
   if (place === undefined) return true;

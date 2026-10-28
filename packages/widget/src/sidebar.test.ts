@@ -1148,6 +1148,47 @@ describe('« All pages », when the host reads the site (FRU-470)', () => {
     assert.equal(retry.hidden, true);
   });
 
+  it('drops the answer of a read made before the list closed, when a new one runs (review of #639)', async () => {
+    const answers: ((read: import('./site-notes.ts').SiteRead) => void)[] = [];
+    const read = () =>
+      new Promise<import('./site-notes.ts').SiteRead>((resolve) => {
+        answers.push(resolve);
+      });
+    const { sidebar, root } = mount([], { site: { read, here: () => false } });
+    sidebar.open();
+    scope(root, 'site').click();
+    sidebar.close();
+    sidebar.open();
+    scope(root, 'site').click();
+    // The first read answers last: it is dropped, and the list waits for its own.
+    answers[0]?.({ ok: true, notes: [siteNote('old', '/old')], total: 1 });
+    await settle();
+    assert.equal(siteRows(root).length, 0);
+    assert.equal(scope(root, 'site').textContent, 'All pages');
+    answers[1]?.({ ok: true, notes: [siteNote('new', '/new')], total: 1 });
+    await settle();
+    assert.deepEqual(
+      siteRows(root).map((row) => row.dataset.fruitbackSiteNote),
+      ['new'],
+    );
+  });
+
+  it('gives focus back to the row of a note of this page, opened from « All pages » (review of #639)', async () => {
+    const host = siteHost();
+    const { sidebar, root, page } = mount([{ issue: note('a', 'Here'), placement: 'found', number: 1 }], {
+      site: { read: host.read, here: (url) => url.endsWith('/pricing') },
+    });
+    sidebar.open();
+    scope(root, 'site').click();
+    host.answer({ ok: true, notes: [siteNote('a', '/pricing')], total: 1 });
+    await settle();
+    siteRows(root)[0]?.click();
+    (root.querySelector('[data-fruitback-sidebar-back]') as HTMLButtonElement).focus();
+    (root.querySelector('[data-fruitback-sidebar-back]') as HTMLButtonElement).click();
+
+    assert.equal(deepActiveElement(page.document)?.getAttribute('data-fruitback-note'), 'a');
+  });
+
   it('opens again on « This page », and asks the host again', async () => {
     const host = siteHost();
     const { sidebar, root } = mount([], { site: { read: host.read, here: () => false } });
