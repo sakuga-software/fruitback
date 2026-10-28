@@ -11,6 +11,8 @@
     "build": "wxt build",
     "icons:build": "node build-icons.ts",
     "build:firefox": "wxt build -b firefox",
+    "build:safari": "wxt build -b safari",
+    "safari:xcode": "node safari-xcode.ts",
     "zip": "wxt zip",
     "zip:firefox": "wxt zip -b firefox",
     "format": "oxfmt --check .",

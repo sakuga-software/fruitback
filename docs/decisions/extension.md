@@ -2302,6 +2302,98 @@ try {
 starts its own worker on a free port, so it runs beside `pnpm dev`; it uses the playground on 5177
 when one answers. Node prints a warning about the type of `e2e/bench.ts`, and runs it.
 
+## Safari (FRU-380)
+
+### The rules, in short
+
+- **One source, a third build**: `pnpm --filter @fruitback/extension build:safari` (`wxt build -b
+  safari`, MV3) writes `.output/safari-mv3/`, and `pnpm --filter @fruitback/extension safari:xcode`
+  (`safari-xcode.ts`) wraps it in an Xcode project, `.output/safari-xcode/`, with
+  `xcrun safari-web-extension-converter`. The project is made again from the build each time and is
+  not committed. Safari takes an extension only inside a macOS app, signed, from the Mac App Store or
+  a notarised download: no archive goes to a store as for Chrome and Firefox.
+- **No side panel on Safari.** `entrypoints/sidepanel/` is excluded from the Safari build
+  (`manifest.exclude`), so its manifest has neither `side_panel` nor the `sidePanel` permission. The
+  panel falls back as it does on a browser with no panel: « Show all notes in a sidebar » of the
+  popup and the button of the widget open the list of the page (`openPanelOrPage`,
+  `openPanelForTab`), and « Open notes in the sidebar » is not drawn in the preferences.
+- **The manifest tells Safari its minimum, 16.4** (`browser_specific_settings.safari`, set by the hook
+  `build:manifestGenerated` from `src/browser-family.ts`), and not the keys of Firefox. The app asks
+  for macOS 11, the oldest macOS Safari 16.4 came out for.
+- **The words that name a browser follow the build** (`src/browser-family.ts`): the shortcut row says
+  « Change it in Safari Settings, Extensions. » (Safari has no `commands.openShortcutSettings` and no
+  page an extension may open), the popup names « Safari Settings, Extensions » for another copy, and
+  « Allow captures on every site » quotes no prompt, since Safari's words were not read.
+- **No new permission.** The Safari manifest asks for the permissions of the Firefox one; Chrome's and
+  Firefox's manifests are unchanged.
+- **`e2e/safari-build.spec.ts` loads the Safari build in Chromium**, in `pnpm e2e`: its manifest, its
+  preferences, and the list of the page from the button of the widget. Chromium gives no
+  `chrome.sidePanel` without the permission, the same absence Safari has. It is not Safari.
+
+### What Safari supports of what the extension uses
+
+From `@mdn/browser-compat-data` 8.1.7 (read on 2026-10-28) and from the converter of Xcode 26.6,
+which lists the keys of the manifest Safari does not know. Safari 26.5.2 is on this Mac.
+
+| What the extension uses                                         | Safari                                                                                                                                                                                                                           | What the extension does                                                                                                 |
+| --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `sidePanel`, `side_panel`                                       | No. The converter: « not supported by your current version of Safari: sidePanel, side_panel ». No `sidebarAction` either.                                                                                                        | Not built for Safari; the list of the page instead.                                                                     |
+| `optional_host_permissions`, `permissions.request` of an origin | 15.5 (MV3), 14. Safari asks from its own popover. Asking for `*://*/*` or `<all_urls>` lets the extension ask for an origin, and Safari then asks the person on each new site; a permission given and taken back is asked again. | Unchanged. Not measured in Safari.                                                                                      |
+| `scripting.executeScript` with `world: 'MAIN'`                  | 15.4.                                                                                                                                                                                                                            | Unchanged.                                                                                                              |
+| `scripting.registerContentScripts` with `world`                 | 16.4. A report on the Apple forums (FB16590857, no Apple answer) says Safari ignores `excludeMatches`.                                                                                                                           | Covered if true: the bridge reads the hidden origins itself and posts `unmount` (FRU-444), so a hidden page stays bare. |
+| `storage.session`                                               | 16.4.                                                                                                                                                                                                                            | Unchanged: the pending sign-in stays in it.                                                                             |
+| `navigator.userActivation`                                      | 16.4.                                                                                                                                                                                                                            | Unchanged. The button of the widget never reaches a panel on Safari anyway.                                             |
+| `tabs.captureVisibleTab`                                        | 14. Its default format is JPEG, and `<all_urls>` is optional for it there.                                                                                                                                                       | The call asks for `png`. Whether Safari takes a capture with `activeTab` alone was not measured.                        |
+| `contextMenus`                                                  | 14, as an alias of `menus`.                                                                                                                                                                                                      | Unchanged.                                                                                                              |
+| `commands`                                                      | 14; the person can change the key from Safari 26. No `commands.openShortcutSettings`.                                                                                                                                            | The row names Safari Settings, Extensions.                                                                              |
+| `runtime.getContexts`                                           | No.                                                                                                                                                                                                                              | Already optional (`openPopup` of the background asks without it).                                                       |
+| `action.openPopup`                                              | 16.                                                                                                                                                                                                                              | Unchanged.                                                                                                              |
+| `storage.sync`                                                  | 14, but Safari does not sync it: it acts as `storage.local`.                                                                                                                                                                     | « Keep my rules in the account of this browser » keeps them on this Mac only. Not reworded.                             |
+| `alarms`, `storage.local`, `tabs`, `windows`, `i18n`            | 14.                                                                                                                                                                                                                              | Unchanged.                                                                                                              |
+
+### What was measured, and what was not (2026-10-28)
+
+- **Built**: the three builds; the Chrome and Firefox manifests are the ones of before. The
+  converter of Xcode 26.6 warned of `sidePanel` and `side_panel` only, before they were removed.
+- **`xcodebuild` builds the app**, unsigned (`CODE_SIGN_IDENTITY=-`), in Debug and in Release:
+  `Fruitback.app` holds `Fruitback Extension.appex`, `com.apple.Safari.web-extension`, version 0.4.0,
+  macOS 11. The converter writes three things wrong, which `src/safari-xcode.ts` corrects (tested):
+  the id of the app capitalised (`com.sakuga-software.Fruitback`, and `xcodebuild` stops at
+  `ValidateEmbeddedBinary`), the version `1.0`, and the macOS of the converting Mac (26.5).
+- **Not run in Safari.** Safari loads an unsigned extension only after « Allow unsigned extensions »
+  in its Developer settings, which asks for the password of the Mac and is undone each time Safari
+  quits; this Mac has no signing identity. Playwright's WebKit loads no extension, and `safaridriver`
+  was not tried. So nothing above that says « Safari does » was seen in Safari: the table is what
+  `browser-compat-data` says.
+
+### Signing and publishing: the steps for the owner of the Apple account
+
+The repository signs nothing and uploads nothing to Apple. What it needs, once:
+
+1. **The Apple Developer Program** (99 USD a year) for the organisation, and **Xcode** on a Mac.
+2. **The ids**, in Certificates, Identifiers & Profiles: `com.sakuga-software.fruitback` (the app)
+   and `com.sakuga-software.fruitback.Extension` (the extension). Change `SAFARI_BUNDLE_ID` in
+   `src/safari-xcode.ts` if another id is wanted.
+3. **The app in App Store Connect**, macOS, with that id: its name, its privacy answers (the same
+   data as the Firefox declaration of FRU-333), a privacy policy URL, screenshots of the extension in
+   Safari, and a category.
+
+Then, for each version:
+
+1. `pnpm --filter @fruitback/extension build:safari && pnpm --filter @fruitback/extension safari:xcode`.
+2. Open `.output/safari-xcode/Fruitback/Fruitback.xcodeproj`; in **Signing & Capabilities** of both
+   targets, choose the team, with « Automatically manage signing ».
+3. **Try it first**: Run (⌘R) opens the app; in Safari, Settings, Extensions, turn on Fruitback, and
+   give it access to a site. Then the /tfp of the panel fallback, by hand: the popup's « Show all
+   notes in a sidebar » must open the list in the page.
+4. **Product → Archive**, then **Distribute App → App Store Connect → Upload**. In App Store Connect,
+   add the build to a version, and submit it for review.
+5. Outside the App Store (a notarised download): **Distribute App → Developer ID**, then the
+   notarisation of Apple. Not needed for the App Store.
+
+A job of CI that signs and uploads (`xcodebuild archive` and `xcrun altool` or the App Store Connect
+API, with a certificate and a key in secrets) is a later ticket: a new workflow, so a critical PR.
+
 ## Releasing the extension (FRU-329)
 
 ### The keys, made once
