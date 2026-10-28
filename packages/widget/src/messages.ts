@@ -222,6 +222,17 @@ export const ENGLISH = {
   // The scope of the board, with its one part: no number until a read answered.
   'sidebar.scope': 'This page',
   'sidebar.scopeCount': 'This page · {count}',
+  // FRU-470: the notes of every page, when the host can read them.
+  'sidebar.scopes': 'Which notes',
+  'sidebar.allPages': 'All pages',
+  'sidebar.allPagesCount': 'All pages · {count}',
+  'sidebar.thisPage': 'this page',
+  'sidebar.siteLoading': 'Reading the notes of every page…',
+  'sidebar.siteEmpty': 'No note on this site yet.',
+  'sidebar.siteFailed': 'The notes of the other pages could not be read.',
+  'sidebar.siteSignedOut': 'Sign in to see the notes of every page.',
+  'sidebar.siteUnavailable': 'The notes of the other pages cannot be read here.',
+  'sidebar.more': 'Show more',
   'sidebar.search': 'Search notes',
   // The group of the chips of the statuses, and the chip of every status. A number follows each word.
   'sidebar.stages': 'Status',

@@ -6,6 +6,7 @@ import { createIcon } from './icons.ts';
 import { type Translator, createTranslator, languageOf } from './messages.ts';
 import { statusPaint, statusLabel } from './status-paint.ts';
 import { stageToken } from './theme.ts';
+import { type SiteNote, type SiteNotes, linkToNote } from './site-notes.ts';
 
 /**
  * Every note of the page, in one list (FRU-129).
@@ -101,6 +102,12 @@ export type SidebarOptions = {
    * list is open; the list shows them again when it closes. Left out: no switch.
    */
   pins?: { show(on: boolean): void };
+  /**
+   * The notes of every page (FRU-470). Given, the rail offers « This page » and « All pages »; left
+   * out, « This page » alone, as words. `here` says whether an address is the page open now: its note
+   * opens in the list, and a note of another page opens its page, by its link (FRU-253).
+   */
+  site?: { read: SiteNotes; here: (url: string) => boolean };
   document?: Document;
   /** The widget's words (FRU-37). Left out: English, with dates in this document's language. */
   translator?: Translator;
@@ -111,6 +118,9 @@ export type SidebarEntry = FeedbackEntry & { number?: number };
 
 /** Enough of the note to know it. The whole note is in its thread. */
 const EXCERPT_MAX_LENGTH = 90;
+
+/** How long « All pages » waits after the last key of a search before it asks the host (FRU-470). */
+const SEARCH_PAUSE_MS = 300;
 
 /**
  * The chips of the board, in its order (FRU-308): « All », then a status each. « Closed » is not on
@@ -185,6 +195,22 @@ export function createSidebar(options: SidebarOptions): Sidebar {
   scope.className = 'fruitback-sidebar-scope';
   const scopeWords = document.createElement('span');
   scope.append(scopeWords);
+  // FRU-470: with a way to read the site, the rail has two parts, and each one is a button.
+  const site = options.site;
+  let wide = false;
+  const scopes = document.createElement('div');
+  scopes.className = 'fruitback-sidebar-scope fruitback-sidebar-scopes';
+  scopes.setAttribute('role', 'group');
+  scopes.setAttribute('aria-label', t.text('sidebar.scopes'));
+  const pageScope = document.createElement('button');
+  pageScope.type = 'button';
+  pageScope.dataset.fruitbackScope = 'page';
+  const siteScope = document.createElement('button');
+  siteScope.type = 'button';
+  siteScope.dataset.fruitbackScope = 'site';
+  scopes.append(pageScope, siteScope);
+  pageScope.addEventListener('click', () => choose(false));
+  siteScope.addEventListener('click', () => choose(true));
   const searchBox = document.createElement('label');
   searchBox.className = 'fruitback-sidebar-search';
   const search = document.createElement('input');
@@ -198,6 +224,7 @@ export function createSidebar(options: SidebarOptions): Sidebar {
   let query = '';
   search.addEventListener('input', () => {
     query = search.value.trim();
+    if (wide) askSiteSoon();
     draw();
   });
   // The page must not take the keys typed here: the capture mode and the shortcuts of a site listen
@@ -239,7 +266,7 @@ export function createSidebar(options: SidebarOptions): Sidebar {
     chips.set(name, { button, word, gap, count });
     chipGroup.append(button);
   }
-  actions.append(scope, searchBox, chipGroup);
+  actions.append(site === undefined ? scope : scopes, searchBox, chipGroup);
 
   // The foot of the board: the way to a new note, and the switch of the pins.
   const foot = document.createElement('div');
@@ -301,6 +328,13 @@ export function createSidebar(options: SidebarOptions): Sidebar {
   // finds it where it was. It is busy, not disabled: a disabled button loses focus.
   let retrying = false;
   retry.addEventListener('click', () => {
+    // FRU-470: in « All pages » the button reads the site again, or signs in.
+    if (wide) {
+      if (siteState === 'signed-out') options.onSignIn?.();
+      else askSite(false);
+
+      return;
+    }
     // Signed out, the same place holds « Sign in »: a read again would be refused like the last.
     if ((options.readState?.() ?? 'read') === 'signed-out') {
       options.onSignIn?.();
@@ -377,7 +411,18 @@ export function createSidebar(options: SidebarOptions): Sidebar {
   unplacedList.className = 'fruitback-sidebar-unplaced-list';
   unplaced.append(unplacedTitle, unplacedList);
 
-  panel.append(drafted, sentText, empty, failedText, failed, list, unplaced);
+  // The notes of every page (FRU-470), with « Show more » while the host has more.
+  const siteList = document.createElement('ul');
+  siteList.className = 'fruitback-sidebar-list';
+  siteList.dataset.fruitbackSiteList = '';
+  siteList.hidden = true;
+  const more = document.createElement('button');
+  more.type = 'button';
+  more.className = 'fruitback-sidebar-retry fruitback-sidebar-more';
+  more.textContent = t.text('sidebar.more');
+  more.hidden = true;
+
+  panel.append(drafted, sentText, empty, failedText, failed, list, siteList, more, unplaced);
 
   // The thread of a note, in the column of the list and in place of its rows (FRU-312). The thread
   // on the page covered the rows and the head of the list; here the head stays, and « All notes »
@@ -473,6 +518,17 @@ export function createSidebar(options: SidebarOptions): Sidebar {
   });
 
   function draw(): void {
+    drawScopes();
+    if (wide) {
+      drawSite();
+
+      return;
+    }
+    // No row of the other scope stays in the tree, hidden: a reader of the DOM would still find it.
+    siteList.hidden = true;
+    siteList.replaceChildren();
+    more.hidden = true;
+    chipGroup.hidden = false;
     const entries = options.entries();
     const placed = entries.filter((entry) => entry.placement !== 'detached');
     const detached = entries.filter((entry) => entry.placement === 'detached');
@@ -548,6 +604,192 @@ export function createSidebar(options: SidebarOptions): Sidebar {
       (again ?? close).focus();
     }
   }
+
+  /** What « All pages » knows (FRU-470). `idle`: not asked since the list opened. */
+  let siteState: 'idle' | 'pending' | 'read' | 'failed' | 'signed-out' | 'unavailable' = 'idle';
+  let siteNotes: SiteNote[] = [];
+  let siteTotal = 0;
+  let siteNext: string | undefined;
+  /** The number of the last read: an answer to an older one is dropped, as the search moved on. */
+  let asked = 0;
+  let soon: ReturnType<typeof setTimeout> | undefined;
+
+  function choose(all: boolean): void {
+    if (site === undefined || all === wide) return;
+    wide = all;
+    if (wide) askSite(false);
+    else draw();
+  }
+
+  /**
+   * One page of the notes of the site, or the next one. The host is the one source: nothing is kept
+   * once the list closes, and each search asks again (FRU-306, FRU-307).
+   */
+  function askSite(append: boolean): void {
+    if (site === undefined) return;
+    if (soon !== undefined) clearTimeout(soon);
+    soon = undefined;
+    const number = ++asked;
+    const cursor = append ? siteNext : undefined;
+    if (!append) {
+      siteState = 'pending';
+      siteNotes = [];
+      siteNext = undefined;
+      draw();
+    }
+    void site
+      .read({ ...(query === '' ? {} : { q: query }), ...(cursor === undefined ? {} : { cursor }) })
+      .catch(() => ({ ok: false, reason: 'failed' }) as const)
+      .then((answer) => {
+        if (number !== asked || !wide) return;
+        const before = siteNotes.length;
+        if (answer.ok) {
+          siteNotes = append ? [...siteNotes, ...answer.notes] : [...answer.notes];
+          siteTotal = answer.total;
+          siteNext = answer.next;
+          siteState = 'read';
+        } else if (!append) {
+          siteState = answer.reason;
+        }
+        const active = deepActiveElement(document);
+        draw();
+        // « Show more » gives focus to the first note it brought, and « Try again » that worked to
+        // the first note: a button that goes must not drop focus on the page.
+        const rows = siteList.querySelectorAll<HTMLElement>('[data-fruitback-site-note]');
+        if (active === more && append) (rows[before] ?? (more.hidden ? close : more)).focus();
+        else if (active === retry && failed.hidden) (rows[0] ?? close).focus();
+      });
+  }
+
+  /** A search in « All pages » asks the host once the typing stops. */
+  function askSiteSoon(): void {
+    if (soon !== undefined) clearTimeout(soon);
+    soon = setTimeout(() => askSite(false), SEARCH_PAUSE_MS);
+  }
+
+  function drawScopes(): void {
+    if (site === undefined) return;
+    const state = options.readState?.() ?? 'read';
+    const entries = options.entries();
+    const known = (state === 'read' || entries.length > 0) && state !== 'failed' && state !== 'signed-out';
+    const placed = entries.filter((entry) => entry.placement !== 'detached').length;
+    pageScope.textContent = known ? t.text('sidebar.scopeCount', { count: placed }) : t.text('sidebar.scope');
+    siteScope.textContent =
+      siteState === 'read' ? t.text('sidebar.allPagesCount', { count: siteTotal }) : t.text('sidebar.allPages');
+    pageScope.setAttribute('aria-pressed', String(!wide));
+    siteScope.setAttribute('aria-pressed', String(wide));
+  }
+
+  /** « All pages »: the rows the host gave, and what its read said. */
+  function drawSite(): void {
+    address.textContent = view === null ? '' : `· ${view.location.host}`;
+    chipGroup.hidden = true;
+    drafted.hidden = true;
+    unplaced.hidden = true;
+    list.hidden = true;
+    list.replaceChildren();
+    unplacedList.replaceChildren();
+    const failing = siteState === 'failed' || siteState === 'signed-out' || siteState === 'unavailable';
+    let message = '';
+    if (siteState === 'signed-out') message = t.text('sidebar.siteSignedOut');
+    else if (siteState === 'unavailable') message = t.text('sidebar.siteUnavailable');
+    else if (siteState === 'failed') message = t.text('sidebar.siteFailed');
+    if (failedText.textContent !== message) failedText.textContent = message;
+    const retryWords = t.text(siteState === 'signed-out' ? 'sidebar.signIn' : 'sidebar.retry');
+    if (retry.textContent !== retryWords) retry.textContent = retryWords;
+    retry.setAttribute('aria-disabled', 'false');
+    retry.hidden = siteState === 'unavailable' || (siteState === 'signed-out' && options.onSignIn === undefined);
+    failed.hidden = !failing;
+    let nothing: 'sidebar.siteLoading' | 'sidebar.siteEmpty' | 'sidebar.noMatch' = 'sidebar.noMatch';
+    if (siteState === 'pending') nothing = 'sidebar.siteLoading';
+    else if (query === '') nothing = 'sidebar.siteEmpty';
+    empty.textContent = t.text(nothing);
+    empty.hidden = failing || (siteState === 'read' && siteNotes.length > 0);
+    siteList.hidden = failing || siteNotes.length === 0;
+    siteList.replaceChildren(...(failing ? [] : siteNotes.map(siteItem)));
+    more.hidden = failing || siteState !== 'read' || siteNext === undefined;
+  }
+
+  /**
+   * A note of another page, or of this one. It opens the page of its note by its link (FRU-253), on
+   * the origin of this page only: the address of a note is written by whoever wrote the note.
+   */
+  function siteItem(note: SiteNote): HTMLElement {
+    const row = document.createElement('li');
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'fruitback-sidebar-item';
+    button.dataset.fruitbackSiteNote = note.note;
+    const here = site?.here(note.page.url) === true;
+    const target = here ? undefined : sameOriginLink(note.page.url, note.note);
+    if (!here && target === undefined) button.setAttribute('aria-disabled', 'true');
+    button.addEventListener('click', () => {
+      if (here) {
+        // Its thread opens in the list, as from « This page ».
+        wide = false;
+        draw();
+        showNote(note.note);
+      } else if (target !== undefined) {
+        view?.location.assign(target);
+      }
+    });
+
+    const pin = document.createElement('span');
+    pin.className = 'fruitback-sidebar-pin';
+    pin.setAttribute('aria-hidden', 'true');
+    pin.style.setProperty('--fruitback-sidebar-stage', stageToken(note.stage));
+    pin.append(document.createElement('span'));
+
+    const top = document.createElement('span');
+    top.className = 'fruitback-sidebar-top';
+    const status = document.createElement('span');
+    status.className = 'fruitback-sidebar-status';
+    status.textContent = t.stage(note.stage);
+    top.append(status);
+    if (note.reference !== undefined) {
+      const id = document.createElement('span');
+      id.className = 'fruitback-sidebar-id';
+      id.textContent = note.reference;
+      top.append(id);
+    }
+    const written = new Date(note.createdAt);
+    const known = !Number.isNaN(written.getTime());
+    const age = document.createElement('span');
+    age.className = 'fruitback-sidebar-age';
+    age.textContent = known ? t.relative(written) : '';
+    if (known) age.title = t.date(written);
+    top.append(age);
+
+    const meta = document.createElement('span');
+    meta.className = 'fruitback-sidebar-meta';
+    meta.textContent = [
+      here ? t.text('sidebar.thisPage') : note.page.path,
+      note.author ?? t.text('thread.anonymous'),
+    ].join(' · ');
+
+    const body = document.createElement('span');
+    body.className = 'fruitback-sidebar-body';
+    body.append(top, words(note.excerpt, 'fruitback-sidebar-note'), meta);
+    button.append(pin, body);
+    row.append(button);
+
+    return row;
+  }
+
+  /** The link of a note on a page of this origin, or `undefined` for any other address. */
+  function sameOriginLink(url: string, note: string): string | undefined {
+    if (view === null) return undefined;
+    try {
+      const page = new URL(url);
+      if (page.origin !== view.location.origin) return undefined;
+
+      return linkToNote(page.href, note);
+    } catch {
+      return undefined;
+    }
+  }
+
+  more.addEventListener('click', () => askSite(true));
 
   function drawDrafts(here: boolean): void {
     const kept = here ? (options.drafts?.() ?? []) : [];
@@ -723,6 +965,13 @@ export function createSidebar(options: SidebarOptions): Sidebar {
 
   function shut(): void {
     if (root.hidden) return;
+    // The list opens again on « This page », and « All pages » asks the host again (FRU-470).
+    wide = false;
+    siteState = 'idle';
+    siteNotes = [];
+    asked += 1;
+    if (soon !== undefined) clearTimeout(soon);
+    soon = undefined;
     if (shown !== undefined) {
       options.onBack?.();
       showRows(false);
@@ -780,6 +1029,7 @@ export function createSidebar(options: SidebarOptions): Sidebar {
     },
     destroy() {
       stopFollowing();
+      if (soon !== undefined) clearTimeout(soon);
       document.removeEventListener('pointerdown', outside, true);
       document.removeEventListener('focusin', outside, true);
       shell?.removeAttribute('data-fruitback-listing');
@@ -877,6 +1127,35 @@ const STYLES = `
   border-radius: var(--fruitback-radius-md);
   background: var(--fruitback-color-surface-sunken);
 }
+/*
+  FRU-470: « This page » and « All pages », two halves of the rail. The chosen one is drawn as the
+  chosen tab of the board; the other is words on the sunken rail. 36 px, and 44 px under a thumb.
+*/
+.fruitback-sidebar-scopes { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; }
+.fruitback-sidebar-scopes > button {
+  height: 32px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--fruitback-radius-field);
+  background: none;
+  color: var(--fruitback-color-text-muted);
+  font: 600 12px/1 var(--fruitback-font-sans);
+  cursor: pointer;
+}
+.fruitback-sidebar-scopes > button[aria-pressed='true'] {
+  background: var(--fruitback-color-surface);
+  box-shadow: var(--fruitback-shadow-xs);
+  color: var(--fruitback-color-text);
+}
+@media (pointer: coarse) { .fruitback-sidebar-scopes > button { height: 44px; } }
+@media (forced-colors: active) {
+  .fruitback-sidebar-scopes > button[aria-pressed='true'] { outline: 2px solid Highlight; }
+}
+/* A class that sets a display beats the rule of the browser for hidden: « All pages » hides the chips. */
+.fruitback-sidebar-chips[hidden] { display: none; }
+.fruitback-sidebar-more { align-self: center; margin: 4px auto 12px; display: block; }
+.fruitback-sidebar-more[hidden] { display: none; }
+.fruitback-sidebar-item[aria-disabled='true'] { cursor: default; opacity: 0.7; }
 .fruitback-sidebar-scope > span {
   display: flex;
   align-items: center;

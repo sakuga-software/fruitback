@@ -989,3 +989,177 @@ describe('the list while the session of the host has ended (FRU-315)', () => {
     assert.equal((root.querySelector('[data-fruitback-leave]') as HTMLElement).hidden, false);
   });
 });
+
+describe('« All pages », when the host reads the site (FRU-470)', () => {
+  const siteNote = (id: string, path: string, stage: 'new' | 'done' = 'new') => ({
+    note: id,
+    excerpt: `Note ${id}`,
+    page: { url: `https://preview.acme.test${path}`, path },
+    stage,
+    author: 'Bob',
+    createdAt: '2026-10-09T10:00:00.000Z',
+  });
+
+  /** A host whose answers the test gives, one read at a time. */
+  function siteHost() {
+    const asked: { q?: string; cursor?: string }[] = [];
+    let answer: (read: import('./site-notes.ts').SiteRead) => void = () => {};
+    const read = (query: { q?: string; cursor?: string }) => {
+      asked.push(query);
+
+      return new Promise<import('./site-notes.ts').SiteRead>((resolve) => {
+        answer = resolve;
+      });
+    };
+
+    return { asked, read, answer: (value: import('./site-notes.ts').SiteRead) => answer(value) };
+  }
+
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+  const siteRows = (root: HTMLElement) => [...root.querySelectorAll<HTMLElement>('[data-fruitback-site-note]')];
+  const scope = (root: HTMLElement, which: 'page' | 'site') =>
+    root.querySelector(`[data-fruitback-scope="${which}"]`) as HTMLButtonElement;
+
+  it('is not offered when the host reads one page only: « This page » stays words', () => {
+    const { sidebar, root } = mount([{ issue: note('a', 'Here'), placement: 'found', number: 1 }]);
+    sidebar.open();
+
+    assert.equal(root.querySelector('[data-fruitback-scope]'), null);
+    assert.equal(root.querySelector('p.fruitback-sidebar-scope')?.textContent, 'This page · 1');
+  });
+
+  it('reads the site when chosen, lists its notes with their page, and says how many', async () => {
+    const host = siteHost();
+    const { sidebar, root, items, chips } = mount([{ issue: note('a', 'Here'), placement: 'found', number: 1 }], {
+      site: { read: host.read, here: (url) => url === 'https://preview.acme.test/pricing' },
+    });
+    sidebar.open();
+    assert.equal(scope(root, 'page').getAttribute('aria-pressed'), 'true');
+    assert.equal(scope(root, 'page').textContent, 'This page · 1');
+    assert.equal(scope(root, 'site').textContent, 'All pages');
+
+    scope(root, 'site').click();
+    assert.deepEqual(host.asked, [{}]);
+    assert.equal(scope(root, 'site').getAttribute('aria-pressed'), 'true');
+    assert.equal(
+      (root.querySelector('.fruitback-sidebar-empty') as HTMLElement).textContent,
+      'Reading the notes of every page…',
+    );
+    assert.equal(items().length, 0, 'the rows of this page stay in « All pages »');
+    assert.equal(chips().length > 0 && chips()[0]!.closest('[hidden]') !== null, true, 'the chips of the page stay');
+    // happy-dom does no layout: the rule that makes `hidden` win over the `display` of the class.
+    assert.match(
+      root.parentElement?.querySelector('style')?.textContent ?? '',
+      /\.fruitback-sidebar-chips\[hidden\] \{ display: none; \}/,
+    );
+
+    host.answer({ ok: true, notes: [siteNote('s1', '/about'), siteNote('a', '/pricing', 'done')], total: 2 });
+    await settle();
+    assert.equal(scope(root, 'site').textContent, 'All pages · 2');
+    assert.deepEqual(
+      siteRows(root).map((row) => [
+        row.querySelector('.fruitback-sidebar-status')?.textContent,
+        row.querySelector('.fruitback-sidebar-note')?.textContent,
+        row.querySelector('.fruitback-sidebar-meta')?.textContent,
+      ]),
+      [
+        ['New', 'Note s1', '/about · Bob'],
+        ['Done', 'Note a', 'this page · Bob'],
+      ],
+    );
+  });
+
+  it('opens a note of this page in the list, and refuses an address of another origin', async () => {
+    const host = siteHost();
+    const { sidebar, root, chosen } = mount([{ issue: note('a', 'Here'), placement: 'found', number: 1 }], {
+      site: { read: host.read, here: (url) => url === 'https://preview.acme.test/pricing' },
+    });
+    sidebar.open();
+    scope(root, 'site').click();
+    const away = { ...siteNote('x', '/elsewhere'), page: { url: 'javascript:alert(1)', path: '/elsewhere' } };
+    host.answer({ ok: true, notes: [siteNote('a', '/pricing'), away], total: 2 });
+    await settle();
+
+    const [mine, other] = siteRows(root);
+    assert.equal(other?.getAttribute('aria-disabled'), 'true');
+    mine?.click();
+    assert.deepEqual(chosen, ['a']);
+    assert.equal(scope(root, 'page').getAttribute('aria-pressed'), 'true');
+  });
+
+  it('searches through the host once the typing stops, and drops an older answer', async () => {
+    const host = siteHost();
+    const { sidebar, root, type } = mount([], { site: { read: host.read, here: () => false } });
+    sidebar.open();
+    scope(root, 'site').click();
+    type('price');
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    assert.deepEqual(host.asked, [{}, { q: 'price' }]);
+    host.answer({ ok: true, notes: [siteNote('p', '/pricing')], total: 1 });
+    await settle();
+    assert.deepEqual(
+      siteRows(root).map((row) => row.dataset.fruitbackSiteNote),
+      ['p'],
+    );
+  });
+
+  it('shows more with the cursor of the host, and gives focus to the first note it brought', async () => {
+    const host = siteHost();
+    const { sidebar, root, page } = mount([], { site: { read: host.read, here: () => false } });
+    sidebar.open();
+    scope(root, 'site').click();
+    host.answer({ ok: true, notes: [siteNote('1', '/a')], total: 2, next: 'c2' });
+    await settle();
+    const more = root.querySelector('.fruitback-sidebar-more') as HTMLButtonElement;
+    assert.equal(more.hidden, false);
+    more.focus();
+    more.click();
+    assert.deepEqual(host.asked.at(-1), { cursor: 'c2' });
+    host.answer({ ok: true, notes: [siteNote('2', '/b')], total: 2 });
+    await settle();
+    assert.deepEqual(
+      siteRows(root).map((row) => row.dataset.fruitbackSiteNote),
+      ['1', '2'],
+    );
+    assert.equal(more.hidden, true);
+    assert.equal(deepActiveElement(page.document)?.getAttribute('data-fruitback-site-note'), '2');
+  });
+
+  it('says a failed read, reads again on « Try again », and offers no retry where the host cannot read', async () => {
+    const host = siteHost();
+    const { sidebar, root } = mount([], { site: { read: host.read, here: () => false } });
+    sidebar.open();
+    scope(root, 'site').click();
+    host.answer({ ok: false, reason: 'failed' });
+    await settle();
+    const retry = root.querySelector('.fruitback-sidebar-failed .fruitback-sidebar-retry') as HTMLButtonElement;
+    assert.equal(
+      root.querySelector('.fruitback-sidebar-failed-text')?.textContent,
+      'The notes of the other pages could not be read.',
+    );
+    retry.click();
+    assert.equal(host.asked.length, 2);
+    host.answer({ ok: false, reason: 'unavailable' });
+    await settle();
+    assert.equal(
+      root.querySelector('.fruitback-sidebar-failed-text')?.textContent,
+      'The notes of the other pages cannot be read here.',
+    );
+    assert.equal(retry.hidden, true);
+  });
+
+  it('opens again on « This page », and asks the host again', async () => {
+    const host = siteHost();
+    const { sidebar, root } = mount([], { site: { read: host.read, here: () => false } });
+    sidebar.open();
+    scope(root, 'site').click();
+    host.answer({ ok: true, notes: [siteNote('1', '/a')], total: 1 });
+    await settle();
+    sidebar.close();
+    sidebar.open();
+    assert.equal(scope(root, 'page').getAttribute('aria-pressed'), 'true');
+    assert.equal(siteRows(root).length, 0);
+    scope(root, 'site').click();
+    assert.equal(host.asked.length, 2);
+  });
+});

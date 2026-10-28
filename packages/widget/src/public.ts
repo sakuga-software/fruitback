@@ -36,3 +36,5 @@ export type { FruitbackTransport, TransportRequest, TransportResponse } from './
 export type { DockPosition } from './dock-position.ts';
 // FRU-332: what `captureVisible` is handed and gives back.
 export type { CaptureArea, PickedFile } from './attachments.ts';
+// FRU-470: what `siteNotes` is asked and answers.
+export type { SiteNote, SiteNotes, SiteQuery, SiteRead, SiteStage } from './site-notes.ts';

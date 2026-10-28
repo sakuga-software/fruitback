@@ -192,6 +192,55 @@ describe('the corner a reporter chooses in the settings (FRU-472)', () => {
   });
 });
 
+describe('« All pages » of the list (FRU-470)', () => {
+  it('is offered when the host gives siteNotes, and knows the note of the page open now', async () => {
+    const page = mountPage('<main><button id="cta">Commander</button></main>');
+    const asked: unknown[] = [];
+    const widget = init({
+      document: page.document,
+      endpoint: 'https://worker.test',
+      clientId: 'acme',
+      siteNotes: async (query) => {
+        asked.push(query);
+
+        return {
+          ok: true,
+          notes: [
+            {
+              note: 'n1',
+              excerpt: 'Here',
+              // The address of the page with a fragment and a query in another order: the same page.
+              page: { url: 'https://preview.acme.test/pricing#top', path: '/pricing' },
+              stage: 'new',
+              createdAt: '2026-10-09T10:00:00.000Z',
+            },
+          ],
+          total: 1,
+        };
+      },
+    });
+    const root = page.document.querySelector('[data-fruitback-host]')?.shadowRoot as ShadowRoot;
+    widget.showEveryNote();
+    (root.querySelector('[data-fruitback-scope="site"]') as HTMLButtonElement).click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.deepEqual(asked, [{}]);
+    const row = root.querySelector('[data-fruitback-site-note="n1"]');
+    assert.match(row?.querySelector('.fruitback-sidebar-meta')?.textContent ?? '', /^this page/);
+    widget.destroy();
+  });
+
+  it('is not offered without it', () => {
+    const page = mountPage('<main></main>');
+    const widget = init({ document: page.document, endpoint: 'https://worker.test', clientId: 'acme' });
+    const root = page.document.querySelector('[data-fruitback-host]')?.shadowRoot as ShadowRoot;
+    widget.showEveryNote();
+
+    assert.equal(root.querySelector('[data-fruitback-scope]'), null);
+    widget.destroy();
+  });
+});
+
 describe('the optional picture', () => {
   const mountable = () => mountPage('<main><button id="cta">Commander</button></main>');
 
