@@ -17,17 +17,22 @@ export type FirstPickArea = {
   set(items: Record<string, unknown>): Promise<void>;
 };
 
-/**
- * Whether this activation of `origin` is its first one, and marks it as done. A second activation,
- * after « Turn off », or in another tab, answers `false`: the choice opens once per origin.
- */
-export async function firstActivation(area: FirstPickArea, origin: string): Promise<boolean> {
-  const stored = (await area.get(FIRST_PICK_KEY))[FIRST_PICK_KEY];
-  const done = Array.isArray(stored) ? stored.filter((each): each is string => typeof each === 'string') : [];
-  if (done.includes(origin)) return false;
-  await area.set({ [FIRST_PICK_KEY]: [...done, origin] });
+function picked(stored: unknown): string[] {
+  return Array.isArray(stored) ? stored.filter((each): each is string => typeof each === 'string') : [];
+}
 
-  return true;
+/**
+ * Whether the choice of an element opened on `origin` already. A second activation, after
+ * « Turn off », or in another tab, finds it there: the choice opens once per origin.
+ */
+export async function pickedAlready(area: FirstPickArea, origin: string): Promise<boolean> {
+  return picked((await area.get(FIRST_PICK_KEY))[FIRST_PICK_KEY]).includes(origin);
+}
+
+/** Keeps `origin` as one where the choice opened. Called once the widget answered, not before. */
+export async function markPicked(area: FirstPickArea, origin: string): Promise<void> {
+  const done = picked((await area.get(FIRST_PICK_KEY))[FIRST_PICK_KEY]);
+  if (!done.includes(origin)) await area.set({ [FIRST_PICK_KEY]: [...done, origin] });
 }
 
 /**
@@ -67,12 +72,16 @@ export async function pickOnFirstActivation(
     pick = pickWhenReady,
   } = options;
   try {
-    if (!(await firstActivation(area, origin))) return false;
+    if (await pickedAlready(area, origin)) return false;
   } catch (error) {
     log(error);
 
     return false;
   }
+  // Marked only once the choice opened: a widget that did not load in time, or that was busy, gets
+  // the choice at the next activation.
+  const opened = await pick(ask);
+  if (opened) await markPicked(area, origin).catch(log);
 
-  return pick(ask);
+  return opened;
 }

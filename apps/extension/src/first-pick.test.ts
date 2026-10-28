@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import {
   FIRST_PICK_KEY,
   type FirstPickArea,
-  firstActivation,
+  markPicked,
+  pickedAlready,
   pickOnFirstActivation,
   pickWhenReady,
 } from './first-pick.ts';
@@ -20,17 +21,19 @@ function area(initial: Record<string, unknown> = {}): FirstPickArea & { items: R
 }
 
 describe('the first activation of a site opens the choice of an element (FRU-485)', () => {
-  it('says « first » once per origin, and keeps the others', async () => {
+  it('keeps the origins where the choice opened, once each, and keeps the others', async () => {
     const stored = area();
-    assert.equal(await firstActivation(stored, 'https://staging.acme.dev'), true);
-    assert.equal(await firstActivation(stored, 'https://staging.acme.dev'), false);
-    assert.equal(await firstActivation(stored, 'https://acme.dev'), true);
+    assert.equal(await pickedAlready(stored, 'https://staging.acme.dev'), false);
+    await markPicked(stored, 'https://staging.acme.dev');
+    await markPicked(stored, 'https://staging.acme.dev');
+    await markPicked(stored, 'https://acme.dev');
+    assert.equal(await pickedAlready(stored, 'https://staging.acme.dev'), true);
     assert.deepEqual(stored.items[FIRST_PICK_KEY], ['https://staging.acme.dev', 'https://acme.dev']);
   });
 
   it('reads a stored value that is not a list of origins as none', async () => {
-    assert.equal(await firstActivation(area({ [FIRST_PICK_KEY]: 'broken' }), 'https://acme.dev'), true);
-    assert.equal(await firstActivation(area({ [FIRST_PICK_KEY]: [3, 'https://acme.dev'] }), 'https://acme.dev'), false);
+    assert.equal(await pickedAlready(area({ [FIRST_PICK_KEY]: 'broken' }), 'https://acme.dev'), false);
+    assert.equal(await pickedAlready(area({ [FIRST_PICK_KEY]: [3, 'https://acme.dev'] }), 'https://acme.dev'), true);
   });
 
   it('asks again until the widget of a tab that just opened answers', async () => {
@@ -109,5 +112,20 @@ describe('the first activation of a site opens the choice of an element (FRU-485
       false,
     );
     assert.equal(picks, 1);
+  });
+
+  it('a widget that did not answer in time leaves the origin unmarked: the next activation picks', async () => {
+    const stored = area();
+    const answers = [false, true];
+    let picks = 0;
+    const pick = async () => answers[picks++] ?? false;
+    assert.equal(
+      await pickOnFirstActivation(stored, 'https://acme.dev', async () => ({ done: false }), { pick }),
+      false,
+    );
+    assert.equal(await pickedAlready(stored, 'https://acme.dev'), false);
+    assert.equal(await pickOnFirstActivation(stored, 'https://acme.dev', async () => ({ done: true }), { pick }), true);
+    assert.equal(await pickedAlready(stored, 'https://acme.dev'), true);
+    assert.equal(picks, 2);
   });
 });
