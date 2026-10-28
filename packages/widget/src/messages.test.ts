@@ -250,6 +250,7 @@ describe('every word the widget shows', () => {
       translator,
       screenshotSupported: true,
       exportText: () => exported,
+      dockCorner: () => 'bottom-right',
     });
     cleanup.push(() => panel.destroy());
     let answer: (planted: boolean | SendFailure | SentWithoutPicture | SentAs) => void = () => {};

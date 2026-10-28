@@ -51,6 +51,12 @@ export const ENGLISH = {
   'settings.close': 'Close settings',
   'settings.stages': 'Pins shown',
   'settings.hideResolved': 'Hide resolved feedback',
+  // FRU-472: the corner of the dock, under the statuses.
+  'settings.position': 'Position',
+  'settings.position.topLeft': 'Top left',
+  'settings.position.topRight': 'Top right',
+  'settings.position.bottomLeft': 'Bottom left',
+  'settings.position.bottomRight': 'Bottom right',
   'settings.screenshot': 'Attach a picture of the element',
   'settings.copy': 'Copy the feedback as text',
   'settings.copied': 'Copied',

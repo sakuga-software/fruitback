@@ -1,5 +1,6 @@
 import { NOTE_STAGES, type NoteStage } from '@fruitback/shared';
 import { DESTINATION_ID_MAX } from './destinations.ts';
+import { type DockPosition, parseDockPosition } from './dock-position.ts';
 
 /**
  * What the reporter can change about the widget, and where it is kept (FRU-14).
@@ -41,12 +42,23 @@ export type WidgetConfig = {
    * page that writes this key can do no more than choose first among the places the reader may use.
    */
   destination?: string;
+  /**
+   * The corner the reporter chose for the dock in the settings (FRU-472). Absent until somebody
+   * chooses: the dock then stands where the host put it (FRU-443). It is the reporter's screen, so
+   * their choice beats the `position` of `init`; a later `moveDock` of the host forgets it.
+   */
+  position?: DockPosition;
 };
 
 type Optional = 'reporterName' | 'destination';
 
-/** A change to the config. `reporterName: undefined` forgets the name, and `destination` likewise. */
-export type ConfigPatch = Partial<Omit<WidgetConfig, Optional>> & { [Key in Optional]?: string | undefined };
+/**
+ * A change to the config. `reporterName: undefined` forgets the name, and `destination` and
+ * `position` likewise.
+ */
+export type ConfigPatch = Partial<Omit<WidgetConfig, Optional | 'position'>> & {
+  [Key in Optional]?: string | undefined;
+} & { position?: DockPosition | undefined };
 
 export type ConfigStore = {
   get(): WidgetConfig;
@@ -101,8 +113,13 @@ export function createConfigStore(options: ConfigStoreOptions): ConfigStore {
  * a caller who mutates the config — or the array they passed to `set` — into a `TypeError` here
  * rather than into state that changed without being persisted or announced.
  */
-function seal(config: Omit<WidgetConfig, Optional> & { [Key in Optional]?: string | undefined }): WidgetConfig {
-  const { reporterName, destination, ...rest } = config;
+function seal(
+  config: Omit<WidgetConfig, Optional | 'position'> & { [Key in Optional]?: string | undefined } & {
+    position?: DockPosition | undefined;
+  },
+): WidgetConfig {
+  const { reporterName, destination, position, ...rest } = config;
+  const corner = parseDockPosition(position);
   const name = reporterName?.trim().slice(0, REPORTER_NAME_MAX) ?? '';
   // Longer than an id can be: dropped, never cut, because a cut id is another id.
   const place = destination !== undefined && destination.length <= DESTINATION_ID_MAX ? destination : '';
@@ -113,6 +130,7 @@ function seal(config: Omit<WidgetConfig, Optional> & { [Key in Optional]?: strin
     // Absent, never empty: a key that stays in storage with no value reads as a name that was kept.
     ...(name.length > 0 ? { reporterName: name } : {}),
     ...(place.length > 0 ? { destination: place } : {}),
+    ...(corner !== undefined ? { position: corner } : {}),
   }) as WidgetConfig;
 }
 
@@ -155,6 +173,8 @@ function readStored(storage: Storage | null, key: string): Partial<WidgetConfig>
     if (typeof stored.reporterName === 'string') config.reporterName = stored.reporterName;
     if (typeof stored.destination === 'string') config.destination = stored.destination;
     if (Array.isArray(stored.hiddenStages)) config.hiddenStages = stored.hiddenStages.filter(isStage);
+    const position = parseDockPosition(stored.position);
+    if (position !== undefined) config.position = position;
 
     return config;
   } catch {

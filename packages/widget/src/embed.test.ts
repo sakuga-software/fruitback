@@ -113,6 +113,85 @@ describe('where a second instance keeps its preferences', () => {
   });
 });
 
+describe('the corner a reporter chooses in the settings (FRU-472)', () => {
+  afterEach(() => {
+    mock.restoreAll();
+    Reflect.deleteProperty(globalThis, 'localStorage');
+  });
+
+  function storageHolding(entries: Record<string, string>): Map<string, string> {
+    const store = new Map(Object.entries(entries));
+    const fake = {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => void store.set(key, value),
+      removeItem: (key: string) => void store.delete(key),
+    };
+    Object.defineProperty(globalThis, 'localStorage', { value: fake, configurable: true });
+
+    return store;
+  }
+
+  function mounted(position?: 'top-right' | 'top-left') {
+    const page = mountPage('<main><button id="cta">Commander</button></main>');
+    const widget = init({
+      document: page.document,
+      endpoint: 'https://worker.test',
+      clientId: 'acme',
+      ...(position !== undefined ? { position } : {}),
+    });
+    const container = page.document.querySelector('[data-fruitback-host]') as HTMLElement;
+    const root = container.shadowRoot as ShadowRoot;
+    const radio = (corner: string) =>
+      root.querySelector(`input[name="dock-position"][value="${corner}"]`) as HTMLInputElement;
+    const choose = (corner: string) => {
+      radio(corner).checked = true;
+      radio(corner).dispatchEvent(new page.document.defaultView!.Event('change', { bubbles: true }));
+    };
+
+    return { widget, corner: () => container.dataset.fruitbackPosition, radio, choose };
+  }
+
+  it('offers the corner the dock stands in, and moves the dock to the one chosen', () => {
+    storageHolding({});
+    const { widget, corner, radio, choose } = mounted('top-right');
+    assert.equal(radio('top-right').checked, true, 'the host corner is not the one offered as chosen');
+
+    choose('bottom-left');
+    assert.equal(corner(), 'bottom-left');
+    assert.equal(radio('top-right').checked, false);
+
+    widget.destroy();
+  });
+
+  it('keeps the choice for this site, and it beats the position of init', () => {
+    storageHolding({ 'fruitback:config': JSON.stringify({ position: 'bottom-left' }) });
+    const { widget, corner, radio } = mounted('top-right');
+
+    assert.equal(corner(), 'bottom-left');
+    assert.equal(radio('bottom-left').checked, true);
+
+    widget.destroy();
+  });
+
+  it('is forgotten by a later moveDock of the host, which is the newer word', () => {
+    const stored = storageHolding({});
+    const { widget, corner, radio, choose } = mounted();
+    assert.equal(radio('bottom-right').checked, true, 'left out, the dock is at the bottom right');
+
+    choose('top-left');
+    assert.equal(corner(), 'top-left');
+    widget.moveDock('top-right');
+    assert.equal(corner(), 'top-right');
+    assert.equal(radio('top-right').checked, true);
+    assert.equal(stored.get('fruitback:config')?.includes('position'), false, 'the old choice is still stored');
+
+    widget.moveDock(undefined);
+    assert.equal(corner(), undefined);
+
+    widget.destroy();
+  });
+});
+
 describe('the optional picture', () => {
   const mountable = () => mountPage('<main><button id="cta">Commander</button></main>');
 
