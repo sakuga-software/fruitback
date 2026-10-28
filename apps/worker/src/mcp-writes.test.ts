@@ -205,19 +205,31 @@ describe('the write tools of /mcp (FRU-464)', () => {
     assert.deepEqual(await tracked.writesOf(other.id), []);
   });
 
-  it('takes the write tools away once the member of the key no longer manages the sites', async () => {
-    const { world, workspace, shop, key } = await acme();
-    const { secret } = await key('write');
-    const id = await noteId(world, secret, shop.id);
+  it('takes the write tools away once the member of the key no longer manages the sites, after they were listed', async () => {
+    const { world, workspace, shop, key } = await acme({ kept: true });
     const admin = await signInTo(world, 'admin@acme.dev');
-    await rowsOf(world.database, `UPDATE agent_keys SET created_by = '${admin.id}'`);
     await rowsOf(
       world.database,
-      `INSERT INTO member (id, "organizationId", "userId", role, "createdAt") VALUES ('mem_admin', '${workspace}', '${admin.id}', 'member', now())`,
+      `INSERT INTO member (id, "organizationId", "userId", role, "createdAt") VALUES ('mem_admin', '${workspace}', '${admin.id}', 'admin', now())`,
     );
+    const { secret } = await key('write');
+    await rowsOf(world.database, `UPDATE agent_keys SET created_by = '${admin.id}'`);
+    const id = await noteId(world, secret, shop.id);
+    const listed = (await rpc(world, secret, 'tools/list')).body.result.tools.map(
+      (tool: { name: string }) => tool.name,
+    );
+    assert.ok(listed.includes('set_feedback_status') && listed.includes('reply_to_feedback'), 'the control');
 
-    const refused = await call(world, secret, 'reply_to_feedback', { id, body: 'Done.' });
-    assert.equal(refused.body.error?.code, -32602);
+    // Each call reads the member again: a list of before gives no right.
+    await rowsOf(world.database, `UPDATE member SET role = 'member' WHERE id = 'mem_admin'`);
+    for (const [name, args] of [
+      ['set_feedback_status', { id, status: 'own:done' }],
+      ['reply_to_feedback', { id, body: 'Done.' }],
+    ] as const) {
+      const refused = await call(world, secret, name, args);
+      assert.equal(refused.body.error?.code, -32602, name);
+    }
+    assert.equal((await read(world, shop.id)).stage, 'new');
   });
 
   it('stops a key after 30 writes in a minute, and keeps the log of a revoked key', async () => {
