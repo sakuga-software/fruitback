@@ -77,8 +77,6 @@ second time ends the connection. The worker needs `FRUITBACK_PUBLIC_URL` and
 
 The worker follows the authorization of MCP: `/.well-known/oauth-protected-resource`,
 `/.well-known/oauth-authorization-server`, registration of clients (RFC 7591), and PKCE with S256.
-Claude Code can use it too, with no key: `claude mcp add --transport http fruitback https://<your worker>/mcp`,
-then `/mcp` in Claude Code to authenticate.
 
 ## Connect an agent that runs elsewhere
 
