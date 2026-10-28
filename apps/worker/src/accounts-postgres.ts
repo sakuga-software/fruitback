@@ -29,7 +29,9 @@ import {
 } from './account-rows.ts';
 import {
   type AccountStore,
+  type AgentKey,
   type Connector,
+  MAX_AGENT_KEYS,
   DEFAULT_CONNECTOR_SETTINGS,
   DEFAULT_WRITERS,
   type SharedSite,
@@ -44,6 +46,8 @@ import { migrated } from './postgres-migrate.ts';
 import { account, invitation, member, organization, user } from './auth-schema.ts';
 import {
   account_emails,
+  agent_key_sites,
+  agent_keys,
   connectors,
   deliveries,
   domains,
@@ -326,6 +330,35 @@ export function createPostgresAccountStore(database: Database): AccountStore {
     await migrated(database);
 
     return database.transaction(work);
+  };
+
+  /** Agent keys as the store answers them, each with the sites it names. */
+  const withKeySites = async (rows: (typeof agent_keys.$inferSelect)[]): Promise<AgentKey[]> => {
+    if (rows.length === 0) return [];
+    const named = await run((db) =>
+      db
+        .select({ key: agent_key_sites.key_id, id: sites.id, origin: sites.origin })
+        .from(agent_key_sites)
+        .innerJoin(sites, eq(sites.id, agent_key_sites.site_id))
+        .where(
+          inArray(
+            agent_key_sites.key_id,
+            rows.map((row) => row.id),
+          ),
+        )
+        .orderBy(sites.created_at, sites.id),
+    );
+
+    return rows.map((row) => ({
+      id: row.id,
+      workspaceId: row.workspace_id,
+      name: row.name,
+      sites: named.filter((each) => each.key === row.id).map(({ id, origin }) => ({ id, origin })),
+      write: row.can_write,
+      createdBy: row.created_by,
+      createdAt: row.created_at,
+      expiresAt: row.expires_at,
+    }));
   };
 
   const store: AccountStore = {
@@ -908,6 +941,104 @@ export function createPostgresAccountStore(database: Database): AccountStore {
       await run((db) =>
         db.delete(site_shares).where(and(eq(site_shares.workspace_id, workspace), eq(site_shares.account_id, person))),
       );
+    },
+
+    async createAgentKey(workspace, key) {
+      const named = [...new Set(key.sites)];
+
+      return transaction(async (tx) => {
+        // The workspace row is held, so two keys made at once count each other.
+        await tx.select({ id: organization.id }).from(organization).where(eq(organization.id, workspace)).for('update');
+        const [held] = await tx
+          .select({ count: count() })
+          .from(agent_keys)
+          .where(eq(agent_keys.workspace_id, workspace));
+        if ((held?.count ?? 0) >= MAX_AGENT_KEYS) return 'too-many';
+        const found =
+          named.length === 0
+            ? []
+            : await tx
+                .select({ id: sites.id, origin: sites.origin })
+                .from(sites)
+                .where(and(eq(sites.workspace_id, workspace), inArray(sites.id, named)))
+                .orderBy(sites.created_at, sites.id);
+        if (found.length !== named.length) return 'unknown-site';
+        const id = newId('agk');
+        await tx.insert(agent_keys).values({
+          id,
+          workspace_id: workspace,
+          name: key.name,
+          key_hash: key.keyHash,
+          can_write: key.write,
+          created_by: key.createdBy,
+          created_at: key.createdAt,
+          expires_at: key.expiresAt,
+        });
+        if (found.length > 0) {
+          await tx.insert(agent_key_sites).values(found.map((site) => ({ key_id: id, site_id: site.id })));
+        }
+
+        return {
+          id,
+          workspaceId: workspace,
+          name: key.name,
+          sites: found,
+          write: key.write,
+          createdBy: key.createdBy,
+          createdAt: key.createdAt,
+          expiresAt: key.expiresAt,
+        } satisfies AgentKey;
+      });
+    },
+
+    async agentKeys(workspace) {
+      const rows = await run((db) =>
+        db
+          .select()
+          .from(agent_keys)
+          .where(eq(agent_keys.workspace_id, workspace))
+          .orderBy(agent_keys.created_at, agent_keys.id),
+      );
+
+      return withKeySites(rows);
+    },
+
+    async revokeAgentKey(workspace, key) {
+      const gone = await run((db) =>
+        db
+          .delete(agent_keys)
+          .where(and(eq(agent_keys.id, key), eq(agent_keys.workspace_id, workspace)))
+          .returning({ id: agent_keys.id }),
+      );
+
+      return gone.length > 0;
+    },
+
+    async agentKeyOf(keyHash) {
+      // One statement: the key, and its member as `reach` reads them. A key with no member is no key.
+      const rows = await run((db) =>
+        db
+          .select({ key: agent_keys, role: member.role, shared: site_shares.site_id })
+          .from(agent_keys)
+          .innerJoin(
+            member,
+            and(eq(member.organizationId, agent_keys.workspace_id), eq(member.userId, agent_keys.created_by)),
+          )
+          .innerJoin(user, eq(user.id, member.userId))
+          .leftJoin(
+            site_shares,
+            and(eq(site_shares.workspace_id, member.organizationId), eq(site_shares.account_id, member.userId)),
+          )
+          .where(and(eq(agent_keys.key_hash, keyHash), NOT_SUSPENDED)),
+      );
+      const first = rows[0];
+      const role = roleOf(first?.role);
+      if (first === undefined || role === undefined) return undefined;
+      const [key] = await withKeySites([first.key]);
+      if (key === undefined) return undefined;
+      const shared = rows.flatMap((row) => (row.shared === null ? [] : [row.shared]));
+
+      return { key, reach: role === 'guest' ? { role, sites: shared } : { role, sites: 'every' } };
     },
 
     async addSite(workspace, { origin, visibility, writers }) {

@@ -1413,7 +1413,7 @@ PostgreSQL. Porting them to Drizzle first would be work on code that leaves.
   tables wherever the search path said; the address, the role and the database now have no say.
 - **A store reads a `BIGINT` through the schema, never with a raw statement.** Through the schema it
   is a number. In the answer of a raw statement it is a string, and `account-rows.ts` reads a string
-  as no instant: 1970, with no error. `postgres-numbers.test.ts` holds each of the forty columns.
+  as no instant: 1970, with no error. `postgres-numbers.test.ts` holds each of them.
 - **A transaction is the one of `postgres.ts`, never `db.transaction` of Drizzle on the pool.** A
   store takes `database.transaction`, which gives it Drizzle on one connection.
 - **The words of an error of Drizzle reach no log.** They quote the statement and its values: an
@@ -1516,7 +1516,7 @@ Read on drizzle-orm 0.45.4 and drizzle-kit 0.31.11, the versions of the catalogu
   store of the accounts`, test:`decides a pairing and a session by their instants, on each side of
   2^32`.
 - **better-auth reads no `BIGINT` of its tables on that pool, and a count is one.** Its seven tables
-  have none (test:`knows the forty-two BIGINT columns of the worker, and that better-auth has none`).
+  have none (test:`knows the forty-four BIGINT columns of the worker, and that better-auth has none`).
   `count(*)` is a `BIGINT` whatever the table: the pool now answers it as a string, and better-auth
   reads it as a number, through its adapter and the layer of FRU-181
   (test:`gives better-auth a count as a string, which better-auth reads as a number`).
@@ -3145,7 +3145,7 @@ workspace too: the reason is free text, « impayé » for example.
 - **Why a table of its own, and not two columns of `organization`.** The ticket offered columns on
   `organization`. That table is of better-auth, and two tests hold it: `auth-schema.test.ts` compares
   its columns with the ones that better-auth makes, and
-  test:`knows the forty-two BIGINT columns of the worker, and that better-auth has none` says that
+  test:`knows the forty-four BIGINT columns of the worker, and that better-auth has none` says that
   better-auth reads no `BIGINT`, on a pool with no parser of ours. A `suspended_at` there breaks
   both, or is not a `BIGINT`. A row of the worker keeps the convention, cascades with the workspace,
   and makes « changed » one statement.
@@ -4394,3 +4394,43 @@ at version 3, and no reader takes the payload of before.
 - **`same-site`, not `same-origin`.** The console and the worker are two origins of one site (the
   cookie of the console is `SameSite=Strict`): an `<img>` of the console is a request of another
   origin, which `same-origin` would block.
+
+## The agent keys of a workspace (FRU-461)
+
+The identity of an agent with no browser, for the remote MCP server of FRU-463.
+[agents.md](agents.md) gives the framing and the decisions; `SECURITY.md` says what a key protects.
+
+### The rules, in short
+
+- **`/console/workspaces/<id>/agent-keys`**: `GET` lists, `POST { name, sites, rights, days? }`
+  makes, `DELETE /agent-keys/<id>` revokes, each for `manage-workspace` (owner, admin). The routes
+  are `handleAgentKeys` of `agent-keys.ts`; `handleConsoleApi` sends them there after the guard of
+  a suspended workspace.
+- **The answer of `POST` is the one place the key is.** `secret`, then never again: the worker keeps
+  its digest (`digest` of `session.ts`), in `agent_keys.key_hash`, unique. A revocation deletes the
+  row. No answer holds the digest.
+- **`resolveAgentKey` is the one reader of a key.** It refuses a key of another shape before it asks
+  the database, then reads the key and its member in one statement (`agentKeyOf`, as `reach` reads
+  a member: removed and suspended members join nothing). An expired key, a gone member and a key with
+  no site left give the same `undefined`.
+- **A grant is what the key and its member both allow, now**: the sites the key names that the member
+  reads, and `write` when the key has it and the member has `manage-sites`. A reply needs less than
+  a status, but a key holds one right for both, so the larger one decides. FRU-463 and FRU-464 read
+  the grant at each call of `/mcp`, and keep nothing of it.
+- **The sites of a key are rows of `agent_key_sites`**, `ON DELETE CASCADE` from the site, as
+  `site_shares`: a site that goes leaves its keys. A key whose creator's account goes, goes too.
+- **`createAgentKey` holds the row of the workspace** before it counts its keys: two keys made at
+  once count each other, and the workspace never holds more than `MAX_AGENT_KEYS`.
+- **A key ends.** `DEFAULT_KEY_DAYS` (90) unless the request says `days`, 1 to `MAX_KEY_DAYS` (365).
+  `days: null` is refused, not read as the default: decision 4 says no key lives with no end.
+
+### The reasons
+
+- **The member read again, not copied into the key.** A key copies nothing of its member's role at
+  its creation: the rights of the member at each request are the ceiling, so a person removed from a
+  workspace takes their keys' reach with them at once, with no hook to call.
+- **The ceiling of `write` is `manage-sites`.** The keys are made by the owner and the admins
+  (decision 1), who have it. A creator later made a member keeps a key that reads, and loses the
+  write, rather than a key that sets statuses its member can no longer set.
+- **A prefix.** `fbk_` lets a scanner of secrets (GitHub's push protection, `gitleaks`) be told what
+  a Fruitback key looks like. The rest is 32 bytes of `crypto.getRandomValues`, as a refresh token.
