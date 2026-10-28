@@ -41,12 +41,12 @@ test('« All pages » lists the notes of the other pages of the site, and opens 
   const popup = await openPopup(extension, page);
   await popup.getByRole('button', { name: /^(Turn on|Activer)$/ }).click();
   await expect(page.locator('[data-fruitback-host-launch]')).toBeVisible();
-  await plantOn(page, '[data-testid="card-espresso"] .add', `Here ${tag}`);
+  await plantOn(page, '[data-testid="card-espresso"] .add', `Mine ${tag}`);
 
   const other = await extension.context.newPage();
   await openBareSite(other, 'all-pages-b');
   await expect(other.locator('[data-fruitback-host-launch]')).toBeVisible();
-  await plantOn(other, '[data-testid="card-latte"] .add', `Elsewhere ${tag}`);
+  await plantOn(other, '[data-testid="card-latte"] .add', `Away ${tag}`);
   const otherUrl = other.url();
   await other.close();
 
@@ -57,11 +57,11 @@ test('« All pages » lists the notes of the other pages of the site, and opens 
   await list.getByRole('searchbox', { name: 'Search notes' }).fill(tag);
   const rows = list.locator('[data-fruitback-site-note]');
   await expect(rows).toHaveCount(2, { timeout: 15_000 });
-  await expect(rows.filter({ hasText: `Here ${tag}` })).toContainText('this page');
+  await expect(rows.filter({ hasText: `Mine ${tag}` })).toContainText('this page');
 
-  await rows.filter({ hasText: `Elsewhere ${tag}` }).click();
+  await rows.filter({ hasText: `Away ${tag}` }).click();
   await page.waitForURL((url) => url.href.startsWith(otherUrl.split('#')[0]!));
   // The link opened the thread of the note on its page, then left the address (FRU-253).
-  await expect(page.locator('[data-fruitback-thread]')).toContainText(`Elsewhere ${tag}`, { timeout: 15_000 });
+  await expect(page.locator('[data-fruitback-thread]')).toContainText(`Away ${tag}`, { timeout: 15_000 });
   await expect.poll(() => new URL(page.url()).hash).toBe('');
 });
