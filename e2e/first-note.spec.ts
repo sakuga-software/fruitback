@@ -55,16 +55,14 @@ test('a first user goes from the setup to a first note (FRU-481)', async ({ exte
   await setup.screenshot({ path: test.info().outputPath('01-setup-after-link.png') });
   await link.screenshot({ path: test.info().outputPath('02-link-tab.png') });
 
-  // Where does the setup go on: in the tab of the link, or in the first tab?
+  // The setup goes on in its first tab, and the tab of the link says to close it: step 6 of
+  // `docs/decisions/onboarding.md`. A change here changes that page.
   const siteField = (page: Page) => page.getByRole('textbox', { name: 'Site address' });
-  await expect
-    .poll(async () => (await siteField(setup).isVisible()) || (await siteField(link).isVisible()), { timeout: 15_000 })
-    .toBe(true);
-  const goesOn = (await siteField(setup).isVisible()) ? setup : link;
-  if (goesOn === setup) {
-    did('tab', 'go back to the tab of the setup');
-  }
-  test.info().annotations.push({ type: 'setup goes on in', description: goesOn === setup ? 'first tab' : 'link tab' });
+  await expect(siteField(setup)).toBeVisible({ timeout: 15_000 });
+  await expect(link.getByText(/You can close this one/)).toBeVisible();
+  await expect(siteField(link)).toHaveCount(0);
+  did('tab', 'go back to the tab of the setup');
+  const goesOn = setup;
 
   await siteField(goesOn).fill(PLAYGROUND_ORIGIN);
   did('console', 'type the address of the site');
@@ -98,8 +96,9 @@ test('a first user goes from the setup to a first note (FRU-481)', async ({ exte
   did('popup', 'click the Fruitback icon, as the welcome page says');
   const onWelcome = await openPopup(extension, welcome!);
   await onWelcome.screenshot({ path: test.info().outputPath('05-popup-on-welcome.png') });
-  const deadEnd = await onWelcome.getByRole('button', { name: 'Sign in with email' }).count();
-  test.info().annotations.push({ type: 'sign-in offered on the welcome page', description: String(deadEnd) });
+  // The dead end of step 14. FRU-482 offers the sign-in here: it changes these two lines, and the page.
+  await expect(onWelcome.getByRole('heading', { name: 'Fruitback works on http and https pages.' })).toBeVisible();
+  await expect(onWelcome.getByRole('button', { name: 'Sign in with email' })).toHaveCount(0);
   await onWelcome.close();
 
   // To the site, by the link of the setup.
@@ -157,10 +156,4 @@ test('a first user goes from the setup to a first note (FRU-481)', async ({ exte
 
   fs.writeFileSync(test.info().outputPath('actions.json'), JSON.stringify(actions, null, 2));
   console.log(actions.map((action, index) => `${index + 1}. [${action.place}] ${action.what}`).join('\n'));
-  console.log(
-    test
-      .info()
-      .annotations.map((note) => `${note.type}: ${note.description}`)
-      .join('\n'),
-  );
 });
