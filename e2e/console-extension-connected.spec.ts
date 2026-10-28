@@ -76,7 +76,7 @@ test.describe('the rail', () => {
       // One line each: as high as one line of the rail, and the browser inside the rail.
       for (const line of [said, browser]) {
         const box = await line.boundingBox();
-        expect(box?.height, await line.textContent()).toBeLessThan(24);
+        expect(box?.height, (await line.textContent()) ?? '').toBeLessThan(24);
       }
       const shown = await browser.evaluate((node) => ({ cut: node.scrollWidth > node.clientWidth }));
       expect(shown.cut).toBe(browsers[0] === LONG);
