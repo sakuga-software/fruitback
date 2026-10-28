@@ -55,6 +55,16 @@ French, and the board ends with its decisions and every text in both languages. 
 tokens of the console below. `tools/build.mjs` writes it (edit the script, not the HTML); `shots/`
 holds a picture of each frame. The agent fru-agents decided its choices, as the orchestrator asked;
 the screen (`apps/console/app/routes/agents.tsx`) follows it.
+## A site starts an agent (FRU-468, 2026-10-28)
+
+`agent-triggers/agent-triggers.html` is the board of the section « Start an agent » of the page of a
+site (FRU-468, [agents.md](../docs/decisions/agents.md), « Starting an agent on a note »): off by
+default; on, the address of the workspace that receives, the moment (a note of a known person, or a
+note moved to To do by a person of the team), what the call carries; a workspace with no address,
+the calls that did not arrive, the panel of the address, and 390 px in French. It ends with its
+decisions and every text in both languages. `tools/build.mjs` writes it (edit the script, not the
+HTML); `shots/` holds a picture of each frame. The agent fru-agents decided its choices, as the
+orchestrator asked.
 
 ## The export of 2026-10-07
 
