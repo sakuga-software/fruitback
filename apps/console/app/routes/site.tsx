@@ -1,3 +1,4 @@
+import { SiteAgent } from './site-agent';
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router';
 import { type Connector, type Destination, type Site, call } from '../api';
@@ -227,6 +228,14 @@ export default function SitePage() {
               </Button>
             </div>
           </Section>
+        ) : null}
+
+        {manages ? (
+          <SiteAgent
+            workspace={workspace}
+            site={site}
+            connectors={typeof connectors === 'string' ? undefined : connectors}
+          />
         ) : null}
 
         {manages ? (

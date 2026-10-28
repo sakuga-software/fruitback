@@ -1405,4 +1405,41 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Keys that let an AI agent of your team read the notes of some sites, and reply to them.':
     'Les clés qui permettent à un agent IA de votre équipe de lire les notes de certains sites, et d’y répondre.',
   'Manage the agent keys': 'Gérer les clés d’agent',
+  // FRU-468: a site starts an agent.
+  'Call of an agent': 'Appel d’un agent',
+  'This address is not in the workspace any more. Choose another one.':
+    'Cette adresse n’est plus dans le workspace. Choisissez-en une autre.',
+  'Only an owner or an admin of the workspace starts an agent from a site.':
+    'Seul un propriétaire ou un admin du workspace lance un agent depuis un site.',
+  'The trigger was not saved. Try again.': 'Le déclencheur n’a pas été enregistré. Réessayez.',
+  'Start an agent': 'Lancer un agent',
+  'When a note arrives, Fruitback can call an address of your team, which starts your agent: a receiver that dispatches a workflow of GitHub that runs Claude Code, or a cloud agent. The call carries the id of the note, never its text: the agent reads it through the MCP server, with its agent key.':
+    'Quand une note arrive, Fruitback peut appeler une adresse de votre équipe, qui lance votre agent : un récepteur qui déclenche un workflow GitHub où tourne Claude Code, ou un agent dans le cloud. L’appel porte l’id de la note, jamais son texte : l’agent la lit par le serveur MCP, avec sa clé d’agent.',
+  'The trigger of this site did not load.': 'Le déclencheur de ce site ne s’est pas chargé.',
+  '1 call did not arrive at {host}. Fruitback tries again; you can try now from the address.':
+    '1 appel n’est pas arrivé à {host}. Fruitback réessaie ; vous pouvez réessayer depuis l’adresse.',
+  '{count} calls did not arrive at {host}. Fruitback tries again; you can try now from the address.':
+    '{count} appels ne sont pas arrivés à {host}. Fruitback réessaie ; vous pouvez réessayer depuis l’adresse.',
+  'See the calls': 'Voir les appels',
+  'The workspace has no address that receives yet. Connect one, then come back here.':
+    'Le workspace n’a encore aucune adresse qui reçoit. Connectez-en une, puis revenez ici.',
+  'Connect an address': 'Connecter une adresse',
+  'Start an agent when a note arrives': 'Lancer un agent quand une note arrive',
+  'On. A call waits in the queue of the address when it fails, and is tried again.':
+    'Activé. Un appel qui échoue attend dans la file de l’adresse, et est réessayé.',
+  'Off. Nothing is called.': 'Désactivé. Rien n’est appelé.',
+  Call: 'Appeler',
+  'An address of the workspace that receives (Connectors). Fruitback signs each call with its secret.':
+    'Une adresse du workspace qui reçoit (Connecteurs). Fruitback signe chaque appel avec son secret.',
+  'A note of a known person arrives': 'Une note d’une personne connue arrive',
+  'A member, or a reviewer your site identified. A note of a visitor starts nothing: anybody can write one.':
+    'Un membre, ou un relecteur que votre site a identifié. La note d’un visiteur ne lance rien : n’importe qui peut en écrire une.',
+  'A person of the team moves a note to To do': 'Une personne de l’équipe passe une note en À faire',
+  'Only a note that Fruitback keeps: a note in a tracker takes its status there. An agent that sets a status starts nothing.':
+    'Seulement une note que garde Fruitback : une note dans un tracker y prend son statut. Un agent qui change un statut ne lance rien.',
+  'What the call carries': 'Ce que porte l’appel',
+  'Your agent opens a pull request for review, and never pushes to a branch that deploys: the guide says how.':
+    'Votre agent ouvre une pull request à relire, et ne pousse jamais sur une branche qui déploie : le guide dit comment.',
+  'Start an agent on a note': 'Lancer un agent sur une note',
+  'Saved.': 'Enregistré.',
 };

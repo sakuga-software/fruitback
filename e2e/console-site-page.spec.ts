@@ -76,6 +76,7 @@ test('an owner reads everything of a site on its page, under the crumbs « Sites
     'Extension',
     'Where the notes of staging.acme.dev go',
     'Statuses',
+    'Start an agent',
     'Preview deploys',
     'Remove this site',
   ]);
@@ -135,7 +136,13 @@ test('a member installs, and reads where the notes go nowhere on the page', asyn
   await expect(page.locator('main h1')).toHaveText('staging.acme.dev');
   await expect(page.locator('main h2').first()).toHaveText('Site');
   await expect(page.getByRole('region', { name: 'Install on staging.acme.dev' })).toBeVisible();
-  for (const name of ['Where the notes of staging.acme.dev go', 'Statuses', 'Preview deploys', 'Remove this site'])
+  for (const name of [
+    'Where the notes of staging.acme.dev go',
+    'Statuses',
+    'Start an agent',
+    'Preview deploys',
+    'Remove this site',
+  ])
     await expect(page.getByRole('region', { name })).toHaveCount(0);
   await expectNoViolation(page, 'the page of a site, for a member');
 
