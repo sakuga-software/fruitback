@@ -508,6 +508,20 @@ describe('2 · who sees the notes and where they go, chosen at the turn on (FRU-
     assert.equal(place?.selectedOptions[0]?.textContent, 'GitHub · acme/web');
   });
 
+  it('says a place it does not know as « Not known », never as « Fruitback »', () => {
+    const screen = turnOnScreen(page(), {
+      origin: 'https://preview.northwind.io',
+      workspace: 'Northwind',
+      visibility: 'members',
+      choices: { places: { w1: [DESIGN] }, workspace: 'w1', onVisibility: async () => true, onPlace: async () => true },
+      onTurnOn: nothing,
+      onSettings: nothing,
+    });
+    const place = screen.querySelector<HTMLSelectElement>('select[name="place"]');
+    assert.equal(place?.selectedOptions[0]?.textContent, 'Not known');
+    assert.equal(place?.selectedOptions[0]?.disabled, true);
+  });
+
   it('for a site of no workspace: the places follow the workspace chosen, back to « Fruitback »', async () => {
     const calls: string[] = [];
     const screen = turnOnScreen(page(), {

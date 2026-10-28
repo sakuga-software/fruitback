@@ -144,9 +144,9 @@ export async function setSessionSite(request: Request, context: SiteSettingsCont
     places = [chosen, ...others].slice(0, MAX_DESTINATIONS);
   }
 
-  if (visibility !== undefined && visibility !== site.visibility) {
-    // The same address again is the same site, with this visibility; its places and who writes stay.
-    await context.accounts.addSite(workspace, { origin: site.origin, visibility });
+  // On the site read above only: a site removed since is not made again (raised in review).
+  if (visibility !== undefined && !(await context.accounts.setSiteVisibility(workspace, site.id, visibility))) {
+    return { status: 404, body: { error: 'not-found' } };
   }
   if (places !== undefined && !(await context.accounts.setDestinations(workspace, site.id, places))) {
     return { status: 404, body: { error: 'not-found' } };

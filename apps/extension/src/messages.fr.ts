@@ -24,6 +24,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Notes go to': 'Les notes vont vers',
   'Who sees the notes': 'Qui voit les notes',
   'Fruitback (no tracker)': 'Fruitback (sans outil de suivi)',
+  'Not known': 'Inconnu',
   'Your role in this workspace does not let you change this site.':
     'Votre rôle dans cet espace ne vous permet pas de modifier ce site.',
   'This site sends to several places. Change them in Fruitback.':

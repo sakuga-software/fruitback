@@ -237,6 +237,22 @@ export function accountCases(it: Declare<AccountStore>): void {
     });
   });
 
+  it('changes who reads a site that exists, and makes no site that is gone or of another workspace (FRU-453)', async (store) => {
+    const { workspace } = await world(store);
+    const other = (await otherWorld(store)).workspace;
+    const made = await store.addSite(workspace.id, { origin: 'https://acme.dev', visibility: 'members' });
+
+    assert.equal(await store.setSiteVisibility(workspace.id, made.id, 'everyone'), true);
+    assert.deepEqual(
+      (await store.sites(workspace.id)).map((site) => [site.id, site.visibility]),
+      [[made.id, 'everyone']],
+    );
+    assert.equal(await store.setSiteVisibility(other.id, made.id, 'members'), false);
+    assert.equal(await store.removeSite(workspace.id, made.id), true);
+    assert.equal(await store.setSiteVisibility(workspace.id, made.id, 'members'), false);
+    assert.deepEqual(await store.sites(workspace.id), []);
+  });
+
   it('makes a new site « Members only » when nobody chose, and keeps who writes on a site added again (FRU-330)', async (store) => {
     const { workspace } = await world(store);
 

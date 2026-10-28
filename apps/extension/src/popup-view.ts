@@ -427,8 +427,18 @@ export function fillPlaces(
     option.value = String(index);
     select.append(option);
   });
-  if (current === null || current === undefined) {
+  if (current === null) {
     select.value = NO_PLACE;
+
+    return;
+  }
+  // Not known: shown as such, never as « Fruitback », which would say the notes stay here (raised in review).
+  if (current === undefined) {
+    const unknown = element(document, 'option', t('Not known'));
+    unknown.value = 'unknown';
+    unknown.disabled = true;
+    select.append(unknown);
+    select.value = 'unknown';
 
     return;
   }

@@ -1153,6 +1153,18 @@ export function createPostgresAccountStore(database: Database): AccountStore {
       return sitesFrom(rows);
     },
 
+    async setSiteVisibility(workspace, site, visibility) {
+      const rows = await run((db) =>
+        db
+          .update(sites)
+          .set({ visibility })
+          .where(and(eq(sites.workspace_id, workspace), eq(sites.id, site)))
+          .returning({ id: sites.id }),
+      );
+
+      return rows.length === 1;
+    },
+
     async removeSite(workspace, site) {
       const removed = await transaction(async (db) => {
         const rows = await db

@@ -102,6 +102,7 @@ export function accountStoreOn(database: Database): AccountStore {
     addSite: true,
     sites: true,
     removeSite: true,
+    setSiteVisibility: true,
     siteStatuses: true,
     siteStatusNotes: true,
     siteTrackerColours: true,
