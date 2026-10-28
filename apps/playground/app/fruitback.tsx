@@ -85,17 +85,11 @@ export function Fruitback() {
           return;
         }
         target.current = selected;
-        const rect = selected.element.getBoundingClientRect();
         // Like `init`: the frame stays on the element while the composer is open, and the head of
-        // the composer says what the element is (FRU-258).
+        // the composer says what the element is (FRU-258). The composer follows the element (FRU-457).
         widget.current?.host.hold(selected.element);
         widget.current?.composer.open(
-          {
-            left: rect.left + window.scrollX,
-            top: rect.top + window.scrollY,
-            bottom: rect.bottom + window.scrollY,
-            right: rect.right + window.scrollX,
-          },
+          selected.element,
           // What the note points at, in the head (FRU-305), and what the element says, as its title.
           aboutTarget(selected.element, selected.source),
           readableName(selected.element),

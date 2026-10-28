@@ -386,3 +386,47 @@ describe('the panel as a dialog (FRU-51)', () => {
     assert.ok(page.document.activeElement === close, 'Tab on the last control did not go back to the first');
   });
 });
+
+describe('the corner of the dock (FRU-472)', () => {
+  it('is offered only when the widget can move the dock', () => {
+    const { page } = mount();
+
+    assert.equal(page.document.querySelector('[name="dock-position"]'), null);
+  });
+
+  it('offers the four corners under the statuses, the current one chosen, and writes the choice', () => {
+    const page: MountedPage = mountPage('<main></main>');
+    const store = createConfigStore({ defaults: DEFAULTS, storage: null });
+    panel = createConfigPanel({
+      host: page.document.body,
+      store,
+      document: page.document,
+      dockCorner: () => 'top-right',
+    });
+    const radios = [...page.document.querySelectorAll<HTMLInputElement>('[name="dock-position"]')];
+
+    assert.deepEqual(
+      radios.map((radio) => radio.value),
+      ['top-left', 'top-right', 'bottom-left', 'bottom-right'],
+    );
+    assert.deepEqual(
+      radios.filter((radio) => radio.checked).map((radio) => radio.value),
+      ['top-right'],
+    );
+    const group = page.document.querySelector('[role="radiogroup"]');
+    assert.equal(page.document.getElementById(group?.getAttribute('aria-labelledby') ?? '')?.textContent, 'Position');
+    // Under « Pins shown »: the legend of the statuses comes first in the body.
+    const body = page.document.querySelector('.fruitback-config-body') as HTMLElement;
+    assert.ok(
+      [...body.children].indexOf(group as Element) >
+        [...body.children].indexOf(body.querySelector('.fruitback-config-stages')!),
+    );
+
+    const bottomLeft = radios[2]!;
+    toggle(bottomLeft, true, page.document);
+    assert.equal(store.get().position, 'bottom-left');
+
+    store.set({ position: undefined });
+    assert.equal(radios[1]!.checked, true, 'a forgotten choice shows the corner the dock is back in');
+  });
+});

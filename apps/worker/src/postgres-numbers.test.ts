@@ -100,8 +100,8 @@ async function withEveryTableFilled(open: () => Promise<PgDatabase>): Promise<Pg
   // An agent key, and a site it names (FRU-461).
   await rowsOf(
     database,
-    `INSERT INTO agent_keys (id, workspace_id, name, key_hash, can_write, verified_only, created_by, created_at, expires_at)
-       VALUES ('agk_1', 'ws_acme', 'CI', 'digest-of-a-key', false, true, 'acc_alice', 1, 1)`,
+    `INSERT INTO agent_keys (id, workspace_id, name, key_hash, can_write, verified_only, created_by, created_at, expires_at, last_used_at)
+       VALUES ('agk_1', 'ws_acme', 'CI', 'digest-of-a-key', false, true, 'acc_alice', 1, 1, 1)`,
   );
   await rowsOf(database, `INSERT INTO agent_key_sites (key_id, site_id) VALUES ('agk_1', 'site_acme')`);
   // A write of that key (FRU-464).
@@ -165,7 +165,7 @@ async function write({ table, column }: Bigint, database: PgDatabase, value: num
   await rowsOf(database, `UPDATE "${getTableConfig(table).name}" SET "${column.name}" = ${String(value)}`);
 }
 
-it('knows the forty-five BIGINT columns of the worker, and that better-auth has none', () => {
+it('knows the forty-six BIGINT columns of the worker, and that better-auth has none', () => {
   assert.deepEqual(BIGINTS.map(({ name }) => name).toSorted(), [
     'account_emails.created_at',
     'account_emails.verified_at',
@@ -173,6 +173,7 @@ it('knows the forty-five BIGINT columns of the worker, and that better-auth has 
     'admin_reads.at',
     'agent_keys.created_at',
     'agent_keys.expires_at',
+    'agent_keys.last_used_at',
     'agent_writes.at',
     'connect_requests.answered_at',
     'connect_requests.claimed_at',
@@ -254,7 +255,7 @@ for (const { label, open, skip } of [
         }
       }
 
-      assert.equal(nullable.length, 13);
+      assert.equal(nullable.length, 14);
       assert.deepEqual(wrong, []);
     });
 

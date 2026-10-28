@@ -31,7 +31,11 @@ const GEOMETRY: Record<(typeof FILES)[number], readonly string[]> = {
     ".fruitback-thread[data-fruitback-arrow='right']::before",
   ],
   'composer.ts': ['.fruitback-composer'],
-  'panel.ts': [],
+  // FRU-472: a drawing of the window with a dot in one corner. A corner of the window is physical.
+  'panel.ts': [
+    ".fruitback-config-corner-drawing[data-fruitback-corner$='-left']::after",
+    ".fruitback-config-corner-drawing[data-fruitback-corner$='-right']::after",
+  ],
   'orphans.ts': [],
   'sidebar.ts': [],
 };

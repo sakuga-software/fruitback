@@ -146,6 +146,57 @@ describe('the transport of /mcp (FRU-463)', () => {
     assert.equal((await rpc(world, good, 'ping')).status, 404, 'suspended');
   });
 
+  it('notes the last use of a key once a minute, and not on a request it refuses (FRU-462)', async () => {
+    const { world, alice, workspace, shop, key } = await acme();
+    const good = await key({ sites: [shop.id] });
+    const lastUse = async (): Promise<string | null> => {
+      const listed = await callOn(world, 'GET', `/console/workspaces/${workspace}/agent-keys`, { token: alice.token });
+      const { keys } = (await listed.json()) as { keys: { lastUsedAt: string | null }[] };
+
+      return keys[0]?.lastUsedAt ?? null;
+    };
+    const kept = async (): Promise<number | null> => {
+      const [row] = await rowsOf(world.database, 'SELECT last_used_at FROM agent_keys');
+
+      return row?.last_used_at === null || row?.last_used_at === undefined ? null : Number(row.last_used_at);
+    };
+    assert.equal(await lastUse(), null, 'a key nobody used says so');
+
+    const before = Date.now();
+    assert.equal((await rpc(world, good, 'ping')).status, 200);
+    const first = Date.parse((await lastUse()) as string);
+    assert.ok(first >= before && first <= Date.now(), String(first));
+
+    // A use 30 s old stays: the next request writes nothing.
+    const recent = Date.now() - 30_000;
+    await rowsOf(world.database, `UPDATE agent_keys SET last_used_at = ${recent}`);
+    await rpc(world, good, 'ping');
+    assert.equal(await kept(), recent);
+    // A use 61 s old is replaced.
+    const stale = Date.now() - 61_000;
+    await rowsOf(world.database, `UPDATE agent_keys SET last_used_at = ${stale}`);
+    await rpc(world, good, 'ping');
+    assert.ok(((await kept()) as number) > stale);
+
+    // Refused requests are no use: a browser, a GET, a version it does not speak, a batch, bad JSON,
+    // an expired key, a suspended workspace.
+    await rowsOf(world.database, `UPDATE agent_keys SET last_used_at = 1`);
+    assert.equal((await rpc(world, good, 'ping', {}, { origin: 'https://shop.acme.dev' })).status, 403);
+    assert.equal((await rpc(world, good, 'ping', {}, { httpMethod: 'GET' })).status, 405);
+    assert.equal(
+      (await rpc(world, good, 'ping', {}, { headers: { 'MCP-Protocol-Version': '1999-01-01' } })).status,
+      400,
+    );
+    assert.equal((await rpc(world, good, '', {}, { raw: [{ jsonrpc: '2.0', id: 1, method: 'ping' }] })).status, 400);
+    assert.equal(await kept(), 1);
+    await rowsOf(world.database, `UPDATE agent_keys SET expires_at = 2`);
+    assert.equal((await rpc(world, good, 'ping')).status, 404);
+    await rowsOf(world.database, `UPDATE agent_keys SET expires_at = ${Date.now() + 86_400_000}`);
+    await rowsOf(world.database, `INSERT INTO workspace_suspensions (workspace_id, since) VALUES ('${workspace}', 1)`);
+    assert.equal((await rpc(world, good, 'ping')).status, 404);
+    assert.equal(await kept(), 1);
+  });
+
   it('refuses a request of a browser, and a GET', async () => {
     const { world, shop, key } = await acme();
     const good = await key({ sites: [shop.id] });

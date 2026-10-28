@@ -58,6 +58,8 @@ export function SitePlaces({
   const [reads, setReads] = useState(0);
   const [writing, setWriting] = useState(false);
   const [problem, setProblem] = useState<string | undefined>();
+  /** The team of Linear chosen in the first list: the second list offers its projects (FRU-458). */
+  const [chosen, setChosen] = useState<{ source: string; team: string } | undefined>();
   const sources = typeof connectors === 'string' ? [] : connectors;
   const ids = sources.map((each) => each.id).join();
 
@@ -104,6 +106,7 @@ export function SitePlaces({
     setProblem(undefined);
     const set = await setPlaces(base, site, next, sources);
     if (set.ok) {
+      setChosen(undefined);
       const kept = (set.data as { destinations?: Destination[] } | undefined)?.destinations;
       onPlaced(Array.isArray(kept) ? kept : next);
     } else setProblem(writeProblemOf(set, msg('The destinations of this site did not change. Try again.')));
@@ -177,13 +180,11 @@ export function SitePlaces({
       return [
         {
           heading: named,
-          options: offer.teams.flatMap((team) => [
-            { value: `${source.id}|${team.id}|`, label: t('{team}, no project', { team: team.name }) },
-            ...team.projects.map((project) => ({
-              value: `${source.id}|${team.id}|${project.id}`,
-              label: `${team.name} · ${project.name}`,
-            })),
-          ]),
+          // A team, and not its places: its projects are in a list of their own (FRU-458). A team is
+          // offered while one of its places is free.
+          options: offer.teams
+            .filter((team) => placesOfTeam(source.id, team).some((value) => free(value)))
+            .map((team) => ({ value: `${TEAM}${source.id}|${team.id}`, label: teamLine(team) })),
         },
       ];
     const sorted = [...offer.repositories].sort((one, other) => one.fullName.localeCompare(other.fullName));
@@ -205,8 +206,18 @@ export function SitePlaces({
     ];
   });
   const offered = groups
-    .map((group) => ({ ...group, options: group.options.filter((option) => free(option.value)) }))
+    .map((group) => ({
+      ...group,
+      options: group.options.filter((option) => option.value.startsWith(TEAM) || free(option.value)),
+    }))
     .filter((group) => group.options.length > 0);
+  const chosenOffer = chosen === undefined ? undefined : offers[chosen.source];
+  const chosenTeam =
+    typeof chosenOffer === 'object' && chosenOffer.kind === 'linear'
+      ? chosenOffer.teams.find((team) => team.id === chosen?.team)
+      : undefined;
+  const projectGroups =
+    chosen === undefined || chosenTeam === undefined ? [] : projectGroupsOf(chosen.source, chosenTeam, free);
   const silent = sources.filter((source) => offers[source.id] === 'failed');
   const reading = sources.some((source) => offers[source.id] === 'loading');
   const host = new URL(site.origin).host;
@@ -285,6 +296,38 @@ export function SitePlaces({
             noMatch={t('No destination matches this search.')}
             moreLabel={(more, left) => t('Show {more} more ({left} left)', { more, left })}
             onChoose={(value) => {
+              if (value.startsWith(TEAM)) {
+                const [source = '', team = ''] = value.slice(TEAM.length).split('|');
+                setChosen({ source, team });
+
+                return;
+              }
+              const added = placeOf(value);
+              if (added !== undefined) void place([...places, added]);
+            }}
+          />
+        </div>
+      ) : null}
+      {places.length < MAX_DESTINATIONS && chosenTeam !== undefined && projectGroups.length > 0 ? (
+        <div className="flex max-w-[420px] flex-col gap-[8px]" data-team-projects>
+          <p className="flex flex-wrap items-baseline gap-x-[12px] text-small">
+            <span className="font-semibold">{t('Team {team}', { team: chosenTeam.name })}</span>
+            <LinkButton disabled={writing} onClick={() => setChosen(undefined)}>
+              {t('Choose another team')}
+            </LinkButton>
+          </p>
+          {/* Its key changes with the team: the search and the pages of the team before do not stay. */}
+          <SearchChoice
+            key={`${chosen?.source}|${chosenTeam.id}`}
+            label={t('Add a project of {team}', { team: chosenTeam.name })}
+            searchLabel={t('Search the projects of {team}', { team: chosenTeam.name })}
+            placeholder={t('Choose a project of {team}…', { team: chosenTeam.name })}
+            disabled={writing}
+            groups={projectGroups}
+            clearLabel={t('Clear the search')}
+            noMatch={t('No project matches this search.')}
+            moreLabel={(more, left) => t('Show {more} more ({left} left)', { more, left })}
+            onChoose={(value) => {
               const added = placeOf(value);
               if (added !== undefined) void place([...places, added]);
             }}
@@ -336,4 +379,75 @@ export function SitePlaces({
       {problem === undefined ? null : <Problem>{t(problem)}</Problem>}
     </section>
   );
+}
+
+/** The value of a team in the first list: it opens the list of its projects, and adds nothing. */
+const TEAM = 'team:';
+
+/** The places a team offers: the team itself, and each of its projects. */
+function placesOfTeam(source: string, team: Team): string[] {
+  return [`${source}|${team.id}|`, ...team.projects.map((project) => `${source}|${team.id}|${project.id}`)];
+}
+
+/**
+ * A team in the first list (FRU-458): its name and its key, how many projects it has, and whether it is
+ * private, so a person tells two teams of one name apart and sees which ones are worth opening.
+ */
+function teamLine(team: Team): string {
+  const count = team.projects.length;
+  let projects = t('{count} projects', { count });
+  if (count === 0) projects = t('no project');
+  else if (count === 1) projects = t('{count} project', { count });
+
+  return [
+    team.key === '' ? team.name : `${team.name} (${team.key})`,
+    projects,
+    ...(team.private === true ? [t('private')] : []),
+  ].join(' · ');
+}
+
+/** The kinds of status of Linear, in the order a person looks for them: what is under way first. */
+const STATUS_ORDER = ['started', 'planned', 'backlog', 'paused', 'completed', 'canceled'] as const;
+const STATUS_HEADINGS: Record<(typeof STATUS_ORDER)[number], string> = {
+  started: msg('Started'),
+  planned: msg('Planned'),
+  backlog: msg('Backlog'),
+  paused: msg('Paused'),
+  completed: msg('Completed'),
+  canceled: msg('Canceled'),
+};
+
+/**
+ * The second list (FRU-458): the team itself, then its projects under the kind of their status, what is
+ * under way first, and those with no status last. Each project says the name of its status, as its
+ * workspace of Linear calls it. A place that is already in the list is not offered.
+ */
+function projectGroupsOf(source: string, team: Team, free: (value: string) => boolean): OptionGroup[] {
+  const whole = `${source}|${team.id}|`;
+  const option = (project: Team['projects'][number]) => ({
+    value: `${source}|${team.id}|${project.id}`,
+    label: project.status === undefined ? project.name : `${project.name} · ${project.status.name}`,
+  });
+  const byName = (one: { name: string }, other: { name: string }) => one.name.localeCompare(other.name);
+  const known = new Set<string>(STATUS_ORDER);
+
+  return [
+    { heading: t('The whole team'), options: [{ value: whole, label: t('{team}, no project', { team: team.name }) }] },
+    ...STATUS_ORDER.map((type) => ({
+      heading: t(STATUS_HEADINGS[type]),
+      options: team.projects
+        .filter((project) => project.status?.type === type)
+        .sort(byName)
+        .map(option),
+    })),
+    {
+      heading: t('No status'),
+      options: team.projects
+        .filter((project) => project.status === undefined || !known.has(project.status.type))
+        .sort(byName)
+        .map(option),
+    },
+  ]
+    .map((group) => ({ ...group, options: group.options.filter((each) => free(each.value)) }))
+    .filter((group) => group.options.length > 0);
 }

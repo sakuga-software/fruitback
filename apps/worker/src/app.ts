@@ -395,6 +395,13 @@ async function routed(
     return handleMcp(request, {
       grantOf: (key) => resolveAgentKey(accounts, key, Date.now()),
       suspended: async (workspace) => (await accounts.suspension(workspace)) !== undefined,
+      // The last use of a key is what the console shows (FRU-462): a failure to write it refuses nothing.
+      used: (grant) =>
+        accounts.markAgentKeyUsed(grant.key, Date.now()).catch((error: unknown) => {
+          console.error(
+            `[fruitback] the last use of an agent key was not written: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }),
       tools: (grant) =>
         agentTools({
           grant,

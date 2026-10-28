@@ -97,6 +97,28 @@ test('moveDock moves the dock with no new widget: the note being written stays',
   await expect(page.getByPlaceholder('What should change?')).toHaveValue('Written before the move');
 });
 
+test('the reporter moves the dock from the settings, and the corner is kept on this site (FRU-472)', async ({
+  page,
+}) => {
+  await mount(page, 'dock-settings', 'bottom-right');
+  await page.getByRole('button', { name: 'Open Fruitback settings' }).click();
+  const group = page.getByRole('radiogroup', { name: 'Position' });
+  await expect(group.getByRole('radio', { name: 'Bottom right' })).toBeChecked();
+
+  await group.getByRole('radio', { name: 'Top left' }).check();
+  const moved = gaps(page, await boxOf(page, '[data-fruitback-dock]'));
+  expect([moved.top, moved.left]).toEqual([24, 24]);
+  // The settings follow the dock to its corner, and stay open on the choice.
+  const settings = gaps(page, await boxOf(page, '.fruitback-panel-config'));
+  expect([settings.top, settings.left]).toEqual([84, 16]);
+  await expect(group.getByRole('radio', { name: 'Top left' })).toBeFocused();
+
+  // The page asks for the bottom right again: the reporter's choice wins.
+  await mount(page, 'dock-settings', 'bottom-right');
+  const kept = gaps(page, await boxOf(page, '[data-fruitback-dock]'));
+  expect([kept.top, kept.left]).toEqual([24, 24]);
+});
+
 test('axe finds nothing on the widget in the top left corner, with its settings open', async ({ page }) => {
   await mount(page, 'dock-axe', 'top-left');
   await page.getByRole('button', { name: 'Open Fruitback settings' }).click();

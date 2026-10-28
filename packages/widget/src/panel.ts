@@ -4,6 +4,7 @@ import { RESOLVED_STAGES, type ConfigStore } from './config.ts';
 import { holdFocus } from './focus.ts';
 import { createIcon } from './icons.ts';
 import { stageToken } from './theme.ts';
+import { DOCK_POSITIONS, type DockPosition } from './dock-position.ts';
 
 /**
  * The settings panel, opened from the floating button (FRU-14).
@@ -35,6 +36,13 @@ export type ConfigPanelOptions = {
   document?: Document;
   /** The widget's words (FRU-37). Left out: English, with dates in this document's language. */
   translator?: Translator;
+  /**
+   * The corner the dock stands in while the reporter chose none (FRU-472): the host's, or the
+   * default of the reading direction. Given, the panel offers the four corners under « Pins shown »
+   * and writes the choice to the store, which the widget follows. Left out, no corner is offered:
+   * a choice that moves nothing is worse than no choice.
+   */
+  dockCorner?: () => DockPosition;
 };
 
 export type ConfigPanel = {
@@ -149,9 +157,42 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanel {
   stagesTitle.className = 'fruitback-config-legend';
   stagesTitle.textContent = t.text('settings.stages');
 
+  // FRU-472: the corner of the dock, under the statuses. Four radios in the corners of a square, in
+  // the order of the window whatever the reading direction: a corner is a corner of the window.
+  const corners = new Map<DockPosition, HTMLInputElement>();
+  const cornersTitle = document.createElement('p');
+  cornersTitle.className = 'fruitback-config-legend';
+  cornersTitle.id = 'fruitback-config-position';
+  cornersTitle.textContent = t.text('settings.position');
+  const cornersGroup = document.createElement('div');
+  cornersGroup.className = 'fruitback-config-corners';
+  cornersGroup.setAttribute('role', 'radiogroup');
+  cornersGroup.setAttribute('aria-labelledby', cornersTitle.id);
+  for (const corner of CORNER_ORDER) {
+    const label = document.createElement('label');
+    label.className = 'fruitback-config-corner';
+    const input = document.createElement('input');
+    input.type = 'radio';
+    input.name = 'dock-position';
+    input.value = corner;
+    const drawing = document.createElement('span');
+    drawing.className = 'fruitback-config-corner-drawing';
+    drawing.dataset.fruitbackCorner = corner;
+    drawing.setAttribute('aria-hidden', 'true');
+    const words = document.createElement('span');
+    words.textContent = t.text(CORNER_WORDS[corner]);
+    label.append(input, drawing, words);
+    input.addEventListener('change', () => {
+      if (input.checked) store.set({ position: corner });
+    });
+    corners.set(corner, input);
+    cornersGroup.append(label);
+  }
+
   const body = document.createElement('div');
   body.className = 'fruitback-config-body';
   body.append(stagesTitle, stages, hideResolvedLabel);
+  if (options.dockCorner !== undefined) body.append(cornersTitle, cornersGroup);
   if (options.screenshotSupported === true) body.append(screenshotLabel);
   root.append(head, body);
   if (options.exportText !== undefined) root.append(copySection(options.exportText));
@@ -173,6 +214,10 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanel {
       config.hiddenStages.includes(stage),
     );
     screenshot.checked = config.screenshot;
+    if (options.dockCorner !== undefined) {
+      const current = config.position ?? options.dockCorner();
+      for (const [corner, input] of corners) input.checked = corner === current;
+    }
   }
 
   /**
@@ -311,6 +356,16 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanel {
 
   return panel;
 }
+
+/** In the order of the square they are drawn in: the top row, then the bottom one. */
+const CORNER_ORDER: readonly DockPosition[] = ['top-left', 'top-right', 'bottom-left', 'bottom-right'];
+
+const CORNER_WORDS = {
+  'top-left': 'settings.position.topLeft',
+  'top-right': 'settings.position.topRight',
+  'bottom-left': 'settings.position.bottomLeft',
+  'bottom-right': 'settings.position.bottomRight',
+} as const satisfies Record<(typeof DOCK_POSITIONS)[number], string>;
 
 /**
  * A box and its words. `chip`: a status, drawn as a chip whose box is out of sight (FRU-305).
@@ -497,6 +552,75 @@ const STYLES = `
 }
 @media (prefers-reduced-motion: reduce) {
   .fruitback-config-check input, .fruitback-config-check input::before { transition: none; }
+}
+/*
+  FRU-472: the four corners, in a square laid out left to right whatever the reading direction. Each
+  is a chip of 36 px in a target of 44 px, like a status, with a drawing of the window and its corner.
+*/
+.fruitback-config-legend:not(:first-child) { margin-top: 10px; }
+.fruitback-config-corners {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 8px;
+  direction: ltr;
+}
+.fruitback-config-corner {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 10px;
+  border: 4px solid transparent;
+  border-inline-width: 0;
+  border-radius: var(--fruitback-radius-md);
+  background: var(--fruitback-color-surface) padding-box;
+  box-shadow: inset 0 0 0 1px var(--fruitback-color-border);
+  font: 600 12px/1.2 var(--fruitback-font-sans);
+  cursor: pointer;
+}
+.fruitback-config-corner:has(input:checked) {
+  background: var(--fruitback-color-surface-sunken) padding-box;
+  box-shadow: inset 0 0 0 1px var(--fruitback-color-border-strong);
+}
+.fruitback-config-corner:has(input:focus-visible) { outline: 2px solid var(--fruitback-color-accent); outline-offset: -2px; }
+.fruitback-config-corner input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+/* The window, and a dot in its corner: the ink when chosen, the muted text otherwise. */
+.fruitback-config-corner-drawing {
+  flex: none;
+  position: relative;
+  width: 16px;
+  height: 12px;
+  border: 1.5px solid var(--fruitback-color-text-muted);
+  border-radius: 3px;
+}
+.fruitback-config-corner-drawing::after {
+  content: '';
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--fruitback-color-text-muted);
+}
+.fruitback-config-corner:has(input:checked) .fruitback-config-corner-drawing { border-color: var(--fruitback-color-text); }
+.fruitback-config-corner:has(input:checked) .fruitback-config-corner-drawing::after { background: var(--fruitback-color-accent); }
+.fruitback-config-corner-drawing[data-fruitback-corner^='top-']::after { top: 1px; }
+.fruitback-config-corner-drawing[data-fruitback-corner^='bottom-']::after { bottom: 1px; }
+.fruitback-config-corner-drawing[data-fruitback-corner$='-left']::after { left: 1px; }
+.fruitback-config-corner-drawing[data-fruitback-corner$='-right']::after { right: 1px; }
+@media (forced-colors: active) {
+  .fruitback-config-corner { border-color: Canvas; outline: 1px solid GrayText; outline-offset: -5px; }
+  .fruitback-config-corner:has(input:checked) { outline-color: Highlight; outline-width: 2px; }
+  .fruitback-config-corner-drawing { border-color: CanvasText; }
+  .fruitback-config-corner-drawing::after { background: CanvasText; }
 }
 .fruitback-config-copy {
   display: flex;

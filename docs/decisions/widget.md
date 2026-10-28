@@ -532,7 +532,14 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
     element.
   - **The frame stays on the chosen element while the composer is open**: `init` calls
     `host.hold(element)` at the choice and `host.release()` at the close. A host that assembles the
-    parts itself and calls neither keeps what it had, a frame that goes at the choice. **The banner does not stay, and one click is still one note.** The mock-up draws
+    parts itself and calls neither keeps what it had, a frame that goes at the choice.
+  - **The frame and the composer follow an element that moves against the document** (FRU-457): a
+    link of a fixed sidebar at a scroll, a row of a box that scrolls. Both are in document
+    coordinates, so the frame is measured again at each scroll and resize (capture phase, which
+    catches the boxes of the page), and the composer opened with the element (`open(element, …)`)
+    is placed again when that element moved. An element that moves with the document keeps the
+    composer where it is: a scroll does not slide it along the window. Held by
+    `e2e/scroll-fixed.spec.ts`. **The banner does not stay, and one click is still one note.** The mock-up draws
     the banner, the pressed button and the composer in one picture; a still does not say whether a
     capture goes on after a note, and a banner that says « click the page » over a modal dialog
     would not be true. Asked in FRU-258.
@@ -1696,8 +1703,15 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
   it and the pins stay. `undefined` puts it back where it stands by default. The extension calls it
   when its reviewer changes the corner in its options (FRU-443), so a change never builds the widget
   again over a note being written.
-- **It is a choice of the host, not a preference of the reporter**: the config store of FRU-14 keeps
-  nothing of it.
+- **The reporter can move it too, from the settings (FRU-472)**: « Position », under « Pins shown »,
+  four radios drawn as the corners of a window, in the order of the window whatever the direction.
+  The choice is a preference of this browser on this site, `position` in the config store of FRU-14,
+  and it beats the `position` of `init`: it is the reporter's screen, and a dock that covers what
+  they review is theirs to move. **A later `moveDock` of the host forgets it**: the extension calls
+  `moveDock` when its reviewer changes the corner in its options, and that newer word must move the
+  dock on the page open now. The panel offers no corner when it has no `dockCorner`: a choice that
+  moves nothing is worse than none. The radios are 44 px tall, like a chip of a status.
 - `e2e/dock-position.spec.ts` measures the dock and the settings in the four corners, the default, a
   corner it does not know, a move over a note being written, and axe in the top left corner. Not
   measured: the list of the detached notes in a top corner (a rule of `orphans.ts`, read by no spec).
+  It also chooses a corner in the settings, and reloads to see the choice kept (FRU-472).
