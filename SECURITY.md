@@ -2382,6 +2382,35 @@ session, the `Origin` of the console for a write, `404` for a workspace somebody
 - **What a key does not protect**: whoever holds a key reads what it reaches until it ends or is
   revoked, from anywhere. A workspace holds 20 keys at most.
 
+### The trigger of a site that starts an agent (FRU-468)
+
+A site can call an address of the team when a note arrives, which starts the team's agent; the agent
+then reads the note through `/mcp` with its key. `docs/decisions/agents.md`, « Starting an agent on a
+note », gives the framing.
+
+- **Off by default, and set by the owner and the admins only** (`manage-workspace`), at
+  `/console/workspaces/<id>/sites/<site>/agent-trigger`, under every rule of the console API. A member
+  or a guest: `403`.
+  test:`refuses a member and a guest, and a connector of another workspace`.
+- **The address is an address that receives of the same workspace** (a `rest` connector): the call is
+  a delivery of the REST connector, with every guard above (https, no private address at each
+  attempt, no redirect, `508` on a loop), signed with its secret. A Linear or GitHub source, or an
+  address of another workspace, is refused.
+  test:`writes the trigger of a site to an address that receives of its workspace only, and drops it with its address`.
+- **The call carries ids only**: the workspace, the site, the identifier and the id of the note. Not
+  its text, not its files: an agent reads them through `/mcp`, so its key decides what it reads.
+  test:`queues one call with the ids of a note of a member, and none for a note of a visitor`.
+- **A note of a visitor never calls**: only a note whose reporter the worker verified (a member, or a
+  reviewer the identity of the site signed). Anybody writes the other notes, and a call starts code
+  of the team.
+- **« Moved to To do » calls only for a person**: the console or the extension, with a session, on a
+  note that the worker keeps, at the move into the stage To do. An agent key that sets a status never
+  calls, so an agent cannot start itself.
+  test:`never calls for an agent key that sets a status: an agent cannot start itself`.
+- **What it does not protect**: what the agent does once started is the team's. `docs/agents.md` says
+  to let it open a pull request for review, and never push to a branch that deploys; Fruitback cannot
+  hold that rule. A known person can start the agent as often as they leave notes.
+
 ### The remote MCP server, `/mcp` (FRU-463)
 
 [docs/agents.md](docs/agents.md) is the guide for a team. An agent reads the notes of the sites of its

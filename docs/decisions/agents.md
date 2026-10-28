@@ -122,6 +122,12 @@ with no key, nothing leaves.
 
 ### What exists today
 
+- **A trigger of a site since FRU-468** (`agent-triggers.ts`): off by default, set on the page of
+  the site by the owner and the admins. It names a `rest` connector of the workspace and a moment
+  (`verified-note` or `moved-to-todo`), and queues `agent.requested` with ids only on that
+  connector's queue. The column `deliveries.event` keeps it apart from a note's own delivery: the
+  list of the notes and the count of a site read `note.created` only. GitHub: the team's receiver
+  calls `repository_dispatch` with its own token (`docs/agents.md`); Fruitback holds none.
 - The REST connector (FRU-132) posts `note.created`, signed, with the whole note, to the address of a
   workspace. A receiver of the team can start an agent with it today, with no other change.
 - The GitHub connector makes an issue of a note: a workflow `on: issues: opened` can run Claude Code

@@ -17,6 +17,7 @@ import {
 } from 'drizzle-orm';
 import {
   accountOf,
+  agentTriggerOf,
   connectorOf,
   destinationOf,
   domainOf,
@@ -54,6 +55,7 @@ import {
   agent_writes,
   connectors,
   deliveries,
+  site_agent_triggers,
   domains,
   invitation_sites,
   last_seen,
@@ -365,6 +367,22 @@ export function createPostgresAccountStore(database: Database): AccountStore {
       expiresAt: row.expires_at,
       ...(row.last_used_at === null ? {} : { lastUsedAt: row.last_used_at }),
     }));
+  };
+
+  /** The calls of the trigger of a site that wait in the queue of its address (FRU-468). */
+  const agentCallsWaiting = async (workspace: string, site: string): Promise<number> => {
+    const named = sql`(CASE WHEN pg_input_is_valid(${deliveries.body}, 'jsonb') THEN ${deliveries.body}::jsonb -> 'site' ->> 'id' END)`;
+    const [row] = await run((db) =>
+      db
+        .select({ waiting: count() })
+        .from(deliveries)
+        .innerJoin(connectors, eq(connectors.id, deliveries.connector_id))
+        .where(
+          and(eq(connectors.workspace_id, workspace), eq(deliveries.event, 'agent.requested'), sql`${named} = ${site}`),
+        ),
+    );
+
+    return Number(row?.waiting ?? 0);
   };
 
   const store: AccountStore = {
@@ -1397,7 +1415,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
         if (id === undefined) return refused('not-kept');
         // That row, of this site, and this very note: a tracker can name an issue `FB-12` too.
         const [kept] = await db
-          .select({ payload: notes.payload })
+          .select({ payload: notes.payload, stage: notes.stage })
           .from(notes)
           .where(and(eq(notes.id, id), eq(notes.client_id, site)));
         if (kept === undefined || !isSameNote(kept.payload, noteId)) return refused('not-kept');
@@ -1422,7 +1440,13 @@ export function createPostgresAccountStore(database: Database): AccountStore {
         if (written === undefined) return refused('not-kept');
         await restageIndex(db, site, [id], chosen.stage, now);
 
-        return { set: true as const, stage: chosen.stage, page: written.page };
+        return {
+          set: true as const,
+          stage: chosen.stage,
+          was: kept.stage as NoteStage,
+          identifier: note.reference ?? `FB-${id}`,
+          page: written.page,
+        };
       });
     },
 
@@ -1664,13 +1688,61 @@ export function createPostgresAccountStore(database: Database): AccountStore {
       });
     },
 
-    async enqueueDelivery(connector, body, now) {
+    async enqueueDelivery(connector, body, now, event = 'note.created') {
       const id = newId('dlv');
       await run((db) =>
-        db.insert(deliveries).values({ id, connector_id: connector, body, created_at: now, next_at: now }),
+        db.insert(deliveries).values({ id, connector_id: connector, body, created_at: now, next_at: now, event }),
       );
 
       return id;
+    },
+
+    async agentTrigger(workspace, site) {
+      const [row] = await run((db) =>
+        db
+          .select()
+          .from(site_agent_triggers)
+          .where(and(eq(site_agent_triggers.workspace_id, workspace), eq(site_agent_triggers.site_id, site))),
+      );
+      if (row === undefined) return undefined;
+
+      return { ...agentTriggerOf(row), waiting: await agentCallsWaiting(workspace, site) };
+    },
+
+    async setAgentTrigger(workspace, site, trigger, now) {
+      const outcome = await transaction(async (tx) => {
+        const [ownSite] = await tx
+          .select({ id: sites.id })
+          .from(sites)
+          .where(and(eq(sites.id, site), eq(sites.workspace_id, workspace)));
+        if (ownSite === undefined) return 'unknown-site' as const;
+        const [receiver] = await tx
+          .select({ id: connectors.id })
+          .from(connectors)
+          .where(
+            and(
+              eq(connectors.id, trigger.connector),
+              eq(connectors.workspace_id, workspace),
+              eq(connectors.kind, 'rest'),
+            ),
+          );
+        if (receiver === undefined) return 'unknown-connector' as const;
+        const values = {
+          connector_id: trigger.connector,
+          moment: trigger.moment,
+          enabled: trigger.enabled,
+          updated_at: now,
+        };
+        await tx
+          .insert(site_agent_triggers)
+          .values({ site_id: site, workspace_id: workspace, ...values })
+          .onConflictDoUpdate({ target: site_agent_triggers.site_id, set: values });
+
+        return 'written' as const;
+      });
+      if (outcome !== 'written') return outcome;
+
+      return { ...trigger, waiting: await agentCallsWaiting(workspace, site) };
     },
 
     async dueDeliveries(now, limit) {
@@ -1735,6 +1807,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
         db
           .select({
             id: deliveries.id,
+            event: deliveries.event,
             created_at: deliveries.created_at,
             attempts: deliveries.attempts,
             next_at: deliveries.next_at,

@@ -30,14 +30,14 @@ This page is the contract your receiver is written against.
 }
 ```
 
-| Field        | What it is                                                                                        |
-| ------------ | ------------------------------------------------------------------------------------------------- |
-| `version`    | `2`. It moves when a field changes meaning or goes. A new field does not move it.                 |
-| `event`      | `note.created`, the one event there is.                                                           |
-| `workspace`  | The id of the workspace.                                                                          |
-| `site`       | The id of the site, and its origin.                                                               |
-| `identifier` | What Fruitback calls the note. The thread of its pin shows it.                                    |
-| `note`       | The whole note, as the widget built it. [What the widget collects](privacy.md) lists every field. |
+| Field        | What it is                                                                                         |
+| ------------ | -------------------------------------------------------------------------------------------------- |
+| `version`    | `2`. It moves when a field changes meaning or goes. A new field does not move it.                  |
+| `event`      | `note.created`. An address that a site calls to start an agent gets `agent.requested` too (below). |
+| `workspace`  | The id of the workspace.                                                                           |
+| `site`       | The id of the site, and its origin.                                                                |
+| `identifier` | What Fruitback calls the note. The thread of its pin shows it.                                     |
+| `note`       | The whole note, as the widget built it. [What the widget collects](privacy.md) lists every field.  |
 
 Version 2 came with FRU-378: the note is under `note`, its words in `text`. Version 1 had it under
 another key, in the shape of before: a receiver written for it reads nothing from version 2, and is
@@ -75,6 +75,14 @@ And these headers:
 | `X-Fruitback-Delivery`  | The id of this delivery. It is the same at each attempt for one note.   |
 | `X-Fruitback-Timestamp` | When this attempt was signed, in seconds since 1970.                    |
 | `X-Fruitback-Signature` | `sha256=` and the signature of this attempt, in hexadecimal. See below. |
+
+### A call that starts an agent
+
+A site can call an address of the workspace when a note arrives, to start an agent of the team
+(FRU-468, [Connect an AI agent](agents.md#start-an-agent-on-a-note)). That call is a request of this
+page, with the same headers, signature and attempts, and `event: "agent.requested"`. Its body holds
+`reason`, the workspace, the site, `identifier` and `note.id`, and **no note**: neither its text nor
+its files. Answer it as any other.
 
 ## Check the signature
 

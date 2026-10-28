@@ -121,6 +121,43 @@ export const sites = pgTable(
 );
 
 /**
+ * The trigger of a site that starts an agent (FRU-468, `agent-triggers.ts`): which address of the
+ * workspace it calls, and when. No row: off, as every site starts. A site, its connector or its
+ * workspace that goes takes the row with it.
+ */
+export const site_agent_triggers = pgTable(
+  'site_agent_triggers',
+  {
+    site_id: text('site_id').notNull(),
+    workspace_id: text('workspace_id').notNull(),
+    connector_id: text('connector_id').notNull(),
+    /** `verified-note` or `moved-to-todo`. */
+    moment: text('moment').notNull(),
+    enabled: boolean('enabled').notNull(),
+    updated_at: instant('updated_at').notNull(),
+  },
+  (table) => [
+    primaryKey({ name: 'site_agent_triggers_pkey', columns: [table.site_id] }),
+    foreignKey({
+      name: 'site_agent_triggers_site_id_fkey',
+      columns: [table.site_id],
+      foreignColumns: [sites.id],
+    }).onDelete('cascade'),
+    foreignKey({
+      name: 'site_agent_triggers_workspace_id_fkey',
+      columns: [table.workspace_id],
+      foreignColumns: [organization.id],
+    }).onDelete('cascade'),
+    foreignKey({
+      name: 'site_agent_triggers_connector_id_fkey',
+      columns: [table.connector_id],
+      foreignColumns: [connectors.id],
+    }).onDelete('cascade'),
+    index('site_agent_triggers_by_connector').on(table.connector_id),
+  ],
+);
+
+/**
  * `body` is the request as it is sent. A row goes when its note arrived. `next_at` NULL: the worker
  * gave up, and the console offers a new attempt.
  */
@@ -136,6 +173,9 @@ export const deliveries = pgTable(
     last_at: instant('last_at'),
     last_status: integer('last_status'),
     last_error: text('last_error'),
+    // FRU-468: `note.created`, a note sent to its place, or `agent.requested`, the call of a trigger
+    // of a site that starts an agent. The same queue sends both; only the first is a note's place.
+    event: text('event').notNull().default('note.created'),
   },
   (table) => [
     foreignKey({

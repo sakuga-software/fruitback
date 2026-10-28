@@ -312,9 +312,29 @@ export type DeliveryOutcome =
   /** `attempts` is the count the attempt started from: see `settleDelivery`. */
   | { delivered: false; attempts: number; at: number; status?: number; error?: string; nextAt?: number };
 
+/**
+ * What a delivery sends (FRU-468): a note to its place, or the call of a trigger that starts an
+ * agent, which carries ids only. Only the first is the place of a note.
+ */
+export const DELIVERY_EVENTS = ['note.created', 'agent.requested'] as const;
+export type DeliveryEvent = (typeof DELIVERY_EVENTS)[number];
+
+/** The moments a trigger of a site starts an agent at (FRU-468). */
+export const AGENT_MOMENTS = ['verified-note', 'moved-to-todo'] as const;
+export type AgentMoment = (typeof AGENT_MOMENTS)[number];
+
+/**
+ * The trigger of a site (FRU-468): the address that receives it calls (a `rest` connector of the
+ * workspace), the moment, and whether it is on. `waiting`: the calls of this site that did not arrive
+ * yet, in the queue of that address.
+ */
+export type AgentTrigger = { connector: string; moment: AgentMoment; enabled: boolean; waiting: number };
+
 /** A delivery as the console reads it. The body is not here: it holds a note. */
 export type PendingDelivery = {
   id: string;
+  /** Absent from a worker of before FRU-468: `note.created`. */
+  event?: DeliveryEvent;
   createdAt: string;
   attempts: number;
   /** Absent: the worker gave up, and somebody must ask for a new attempt. */
@@ -615,7 +635,8 @@ export type AccountStore = {
    * - `not-allowed`: the caller neither wrote it nor manages the sites.
    * - `unknown-status`: no such status for this site. `status-hidden`: it is hidden.
    *
-   * `page`: the page of the note, whose cached reads are now wrong.
+   * `page`: the page of the note, whose cached reads are now wrong. `was`: its stage before, and
+   * `identifier` what Fruitback calls it (FRU-468: a move to To do starts the agent of its site).
    */
   setNoteStatus(
     workspace: string,
@@ -624,7 +645,7 @@ export type AccountStore = {
     key: string,
     who: { account: string; manages: boolean },
   ): Promise<
-    | { set: true; stage: NoteStage; page: string }
+    | { set: true; stage: NoteStage; was: NoteStage; identifier: string; page: string }
     | { set: false; reason: 'not-found' | 'not-kept' | 'not-allowed' | 'unknown-status' | 'status-hidden' }
   >;
   /**
@@ -686,7 +707,19 @@ export type AccountStore = {
    * Keeps a note to send to the address of a connector (FRU-122). `body` is the request body, kept
    * as it is sent, so each attempt sends the same bytes.
    */
-  enqueueDelivery(connector: string, body: string, now: number): Promise<string>;
+  enqueueDelivery(connector: string, body: string, now: number, event?: DeliveryEvent): Promise<string>;
+  /** The trigger of a site that starts an agent (FRU-468), or `undefined` for a site that has none. */
+  agentTrigger(workspace: string, site: string): Promise<AgentTrigger | undefined>;
+  /**
+   * Writes the trigger of a site. `unknown-site`: the site is not of this workspace. `unknown-connector`:
+   * the connector is not an address that receives (`rest`) of this workspace.
+   */
+  setAgentTrigger(
+    workspace: string,
+    site: string,
+    trigger: Omit<AgentTrigger, 'waiting'>,
+    now: number,
+  ): Promise<AgentTrigger | 'unknown-site' | 'unknown-connector'>;
   /**
    * The deliveries to attempt now, oldest first. A delivery of a suspended workspace (FRU-282) is not
    * one: it waits, with its count, until the workspace is restored.

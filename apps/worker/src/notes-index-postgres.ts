@@ -211,7 +211,8 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
           .select({ site, waiting: count() })
           .from(deliveries)
           .innerJoin(connectors, eq(connectors.id, deliveries.connector_id))
-          .where(eq(connectors.workspace_id, workspace))
+          // FRU-468: a call of a trigger that starts an agent is no note that waits.
+          .where(and(eq(connectors.workspace_id, workspace), eq(deliveries.event, 'note.created')))
           .groupBy(site),
       );
 
@@ -447,7 +448,8 @@ async function pendingOf(db: Db, workspace: string): Promise<Map<string, Pending
     })
     .from(deliveries)
     .innerJoin(connectors, eq(connectors.id, deliveries.connector_id))
-    .where(eq(connectors.workspace_id, workspace))
+    // FRU-468: a call of a trigger that starts an agent names a note, but is not its place.
+    .where(and(eq(connectors.workspace_id, workspace), eq(deliveries.event, 'note.created')))
     // Oldest first, so that the newest of one note is the one the map keeps.
     .orderBy(deliveries.created_at, deliveries.id);
 

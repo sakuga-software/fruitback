@@ -1516,7 +1516,7 @@ Read on drizzle-orm 0.45.4 and drizzle-kit 0.31.11, the versions of the catalogu
   store of the accounts`, test:`decides a pairing and a session by their instants, on each side of
   2^32`.
 - **better-auth reads no `BIGINT` of its tables on that pool, and a count is one.** Its seven tables
-  have none (test:`knows the forty-six BIGINT columns of the worker, and that better-auth has none`).
+  have none (test:`knows the forty-seven BIGINT columns of the worker, and that better-auth has none`).
   `count(*)` is a `BIGINT` whatever the table: the pool now answers it as a string, and better-auth
   reads it as a number, through its adapter and the layer of FRU-181
   (test:`gives better-auth a count as a string, which better-auth reads as a number`).
@@ -3145,7 +3145,7 @@ workspace too: the reason is free text, « impayé » for example.
 - **Why a table of its own, and not two columns of `organization`.** The ticket offered columns on
   `organization`. That table is of better-auth, and two tests hold it: `auth-schema.test.ts` compares
   its columns with the ones that better-auth makes, and
-  test:`knows the forty-six BIGINT columns of the worker, and that better-auth has none` says that
+  test:`knows the forty-seven BIGINT columns of the worker, and that better-auth has none` says that
   better-auth reads no `BIGINT`, on a pool with no parser of ours. A `suspended_at` there breaks
   both, or is not a `BIGINT`. A row of the worker keeps the convention, cascades with the workspace,
   and makes « changed » one statement.
@@ -4394,6 +4394,30 @@ at version 3, and no reader takes the payload of before.
 - **`same-site`, not `same-origin`.** The console and the worker are two origins of one site (the
   cookie of the console is `SameSite=Strict`): an `<img>` of the console is a request of another
   origin, which `same-origin` would block.
+
+## The trigger of a site that starts an agent (FRU-468)
+
+[agents.md](agents.md), « Starting an agent on a note », gives the framing; `SECURITY.md` what it
+protects.
+
+### The rules, in short
+
+- **A row of `site_agent_triggers` per site, none by default**: the `rest` connector it calls, the
+  moment (`verified-note` or `moved-to-todo`) and `enabled`. A site, its connector or its workspace
+  that goes takes it. `GET` and `POST /console/workspaces/<id>/sites/<site>/agent-trigger`
+  (`handleAgentTrigger` of `agent-triggers.ts`), for `manage-workspace`; `POST` and not `PUT`: the
+  console API takes no `PUT` (`console-cors.ts`).
+- **`requestAgent` is the one writer of a call.** It reads the trigger, and queues
+  `agentRequestBody` on the connector's queue with `event: 'agent.requested'`. It never rejects: the
+  note is kept whatever the trigger does.
+- **`deliveries.event`** tells a call from a note's own delivery. `pendingOf` and `undelivered`
+  read `note.created` only: a call names a note, but is not its place. The panel of the address
+  lists both, each with its `event`.
+- **Where it is called**: `postFeedback` and `postBatch`, after the index, for a note whose
+  `authorOf` is not `visitor`; the status routes of the console (`console-notes.ts`) and of the
+  extension (`reply-routes.ts`), when the stage becomes `todo` from another one. `set_feedback_status`
+  of `/mcp` does not call it.
+- **The body holds ids only**: `note.id` is `noteIdOf(site, note)`, the id that `get_feedback` takes.
 
 ## The agent keys of a workspace (FRU-461)
 

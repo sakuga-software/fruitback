@@ -104,6 +104,13 @@ async function withEveryTableFilled(open: () => Promise<PgDatabase>): Promise<Pg
        VALUES ('agk_1', 'ws_acme', 'CI', 'digest-of-a-key', false, true, 'acc_alice', 1, 1, 1)`,
   );
   await rowsOf(database, `INSERT INTO agent_key_sites (key_id, site_id) VALUES ('agk_1', 'site_acme')`);
+  // The trigger of a site that starts an agent (FRU-468). Its connector is the one of the rows of
+  // before: the database checks no kind.
+  await rowsOf(
+    database,
+    `INSERT INTO site_agent_triggers (site_id, workspace_id, connector_id, moment, enabled, updated_at)
+       VALUES ('site_acme', 'ws_acme', 'con_linear', 'verified-note', false, 1)`,
+  );
   // A write of that key (FRU-464).
   await rowsOf(
     database,
@@ -165,7 +172,7 @@ async function write({ table, column }: Bigint, database: PgDatabase, value: num
   await rowsOf(database, `UPDATE "${getTableConfig(table).name}" SET "${column.name}" = ${String(value)}`);
 }
 
-it('knows the forty-six BIGINT columns of the worker, and that better-auth has none', () => {
+it('knows the forty-seven BIGINT columns of the worker, and that better-auth has none', () => {
   assert.deepEqual(BIGINTS.map(({ name }) => name).toSorted(), [
     'account_emails.created_at',
     'account_emails.verified_at',
@@ -209,6 +216,7 @@ it('knows the forty-six BIGINT columns of the worker, and that better-auth has n
     'sessions.expires_at',
     'sessions.revoked_at',
     'sessions.rotated_at',
+    'site_agent_triggers.updated_at',
     'site_shares.created_at',
     'sites.created_at',
     'workspace_logos.updated_at',
@@ -458,11 +466,12 @@ describe('why the type of an instant matters (FRU-180)', () => {
     // their instants, on each side of 2^32` holds. Read a new one, then change its count here.
     // `sql<number>` too: a type between the tag and its text is still a raw fragment (FRU-238). One
     // more is selected: the key of the status of a note (FRU-386), `COALESCE` of two texts, a text.
-    // Seven more for the other addresses of an account (FRU-450), each in a `where` or a `set`.
+    // Seven more for the other addresses of an account (FRU-450), each in a `where` or a `set`. Two
+    // more for the calls of a trigger of a site that wait (FRU-468): the site of a delivery, in a `where`.
     const fragments = (source: string): number => source.match(/\bsql(<[^>`]*>)?`/g)?.length ?? 0;
     assert.deepEqual(
       { accounts: fragments(stores['accounts-postgres.ts']), sessions: fragments(stores['session-postgres.ts']) },
-      { accounts: 14, sessions: 9 },
+      { accounts: 16, sessions: 9 },
     );
   });
 });

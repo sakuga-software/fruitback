@@ -8,6 +8,7 @@ import {
   originsFromClients,
 } from './clients.ts';
 import type { AccountStore, Reach, Role } from './accounts.ts';
+import { type AgentRequest, requestAgent } from './agent-triggers.ts';
 import type { AttachmentStore } from './attachments.ts';
 import type { ConnectStore } from './connect.ts';
 import type { GithubApp } from './github-connector.ts';
@@ -101,6 +102,7 @@ export async function withSites(config: WorkerConfig, accounts: AccountStore): P
     },
     seenIn: (workspace, account) => seen(accounts, workspace, account),
     suspendedIn: async (workspace) => (await accounts.suspension(workspace)) !== undefined,
+    requestAgent: (request) => requestAgent(accounts, request, Date.now()),
   };
 }
 
@@ -123,6 +125,11 @@ export type Served = WorkerConfig & {
   seenIn?: (workspace: string, account: string) => Promise<void>;
   /** Whether an administrator of the instance suspended a workspace (FRU-282). Absent on a worker with no accounts. */
   suspendedIn?: (workspace: string) => Promise<boolean>;
+  /**
+   * Queues the call of the trigger of a site that starts an agent (FRU-468), when it is on and waits
+   * for this moment. It never rejects. Absent on a worker with no accounts.
+   */
+  requestAgent?: (request: AgentRequest) => Promise<boolean>;
 };
 
 /**
