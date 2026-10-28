@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import { type Page, expect } from '@playwright/test';
 import { CONSOLE, type Worker, cloudWorker, finished, linkIn, served } from './cloud-worker.ts';
 import { PLAYGROUND_ORIGIN, openPopup, test } from './extension.ts';
+import { badgeFor } from './pin.ts';
 import { AUTHENTICATED_WORKER_ORIGIN } from './worker-sessions.ts';
 
 test.use({ keepWelcome: true });
@@ -169,12 +170,17 @@ test('a first user goes from the setup to a first note (FRU-481)', async ({ exte
   did('site', 'click « Leave feedback »');
   await site.locator('[data-testid="card-espresso"] .add').click();
   did('site', 'click the element of the page');
-  await site.getByPlaceholder('What should change?').fill('The price is hard to read.');
+  const note = `First note ${Date.now()}: the price is hard to read.`;
+  await site.getByPlaceholder('What should change?').fill(note);
   did('site', 'type the note');
   await site.getByRole('button', { name: 'Send', exact: true }).click();
   did('site', 'click « Send »');
   await expect(site.getByRole('dialog', { name: 'New note' })).toBeHidden({ timeout: 15_000 });
   await site.screenshot({ path: test.info().outputPath('10-sent.png') });
+
+  // The worker keeps the note: the site, loaded again, reads it from the worker and draws its pin.
+  await site.reload();
+  await expect(badgeFor(site, note)).toBeVisible({ timeout: 20_000 });
 
   fs.writeFileSync(test.info().outputPath('actions.json'), JSON.stringify(actions, null, 2));
   // The table of the page is this list: a change to the path changes both in one pull request.
