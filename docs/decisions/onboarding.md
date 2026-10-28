@@ -36,7 +36,7 @@ already open), `store`, `chrome`, `popup`, `site`.
 | 3   | console | click « Email me a link »                                          | stays               |
 | 4   | mail    | open the mailbox, then the message                                 | stays               |
 | 5   | mail    | click the link: a new tab opens                                    | stays               |
-| 6   | tab     | go back to the tab of the setup                                    | question 2          |
+| 6   | tab     | go back to the tab of the setup                                    | stays (SPEC P4)     |
 | 7   | console | type the address of the site                                       | stays               |
 | 8   | console | click « Add site »                                                 | stays               |
 | 9   | console | click « Install the extension (beta) »: the store opens in a tab   | stays               |
@@ -59,29 +59,30 @@ already open), `store`, `chrome`, `popup`, `site`.
 | 26  | site    | type the note                                                      | stays               |
 | 27  | site    | click « Send »                                                     | stays               |
 
-**27 actions, of which 3 in Chrome, 5 returns to a tab, and 1 dead end.** The spec also measured
-that the setup goes on in its first tab after the link (the tab of the link says « Signing you
-in… »), and that the popup on the welcome page offers no sign-in: it says « Fruitback works on http
-and https pages. » (`notAWebPage`). The « Open Fruitback » button of the welcome page opens that
-same popup.
+**27 actions: 5 in the screens of Chrome and its store (2 of them become tips with FRU-484), 3
+returns to a tab that is already open, and 1 dead end.** The spec also measured that the setup goes
+on in its first tab after the link, while the tab of the link says « You are signed in … You can
+close this one » (`sign-in.tsx`, the choice P4 of the mockup), and that the popup on the welcome page
+offers no sign-in: it says « Fruitback works on http and https pages. » (`notAWebPage`). The « Open
+Fruitback » button of the welcome page opens that same popup.
 
-The setup ends by itself at the first note (`setup-install.tsx`). The spec does not check it: the
-worker of the tests holds no index of the notes, and the end of the setup reads the notes of the
-site from it.
+The setup ends by itself at the first note (`setup-install.tsx`). The spec does not check it: the end
+reads `lastNoteAt` of the site, which comes from the index of the notes (`notes-index-postgres.ts`),
+and the worker of the tests has no index (its PostgreSQL is port 1, `cloud-worker.fixture.ts`).
 
 ### The path after the tickets
 
 FRU-482 to FRU-485 give **18 actions**: steps 1 to 11, then on the welcome page « Sign in with
 email », « Connect Chrome » in the console tab that the extension opens and closes, « Turn on
 <site> » on the welcome page, « Allow » in Chrome, and on the site that opens the element, the text
-and « Send ». The same 3 actions stay in Chrome. One return to a tab stays (question 2). No action
-leads to a dead end.
+and « Send ». The 3 actions that only Chrome draws stay. One return to a tab stays (step 6). No
+action leads to a dead end.
 
 With question 1 answered yes (FRU-487), the console of the Cloud connects the extension of the same
 browser in place, with no word to check and no tab to open: about **15 actions**.
 
-A sign-in with Google or GitHub, where the instance offers it, replaces steps 2 to 6 with one click
-and the consent of the provider.
+A sign-in with Google or GitHub, where the instance offers it, can replace steps 2 to 6 with one click
+and the consent of the provider. **Not measured**: the worker of the tests offers no provider.
 
 ### Why the welcome page carries the path
 
@@ -122,14 +123,9 @@ page opens, and you click the Fruitback icon there ») and two buttons.
    `externally_connectable` limited to the console of the Cloud, step 3 of the setup sees the
    extension and connects it in place. The cost: the extension trusts a page of the Cloud to ask for
    a session with no word. Recommendation: yes, after FRU-482 and FRU-483, which do not wait for it.
-2. **Which tab goes on after the link of the e-mail?** The setup goes on in its first tab, and the
-   tab of the link says « Signing you in… »: the person goes back (step 6). The mockup of 2026-10-13
-   chose it (SPEC P4). The other way, the tab of the link goes on and the first one says so, saves one
-   action and leaves an old tab behind. Recommendation: keep it, and let the tab of the link say
-   « You can close this tab » once it is done.
-3. **Does the first activation open the choice of an element by itself?** (FRU-485) The default of
+2. **Does the first activation open the choice of an element by itself?** (FRU-485) The default of
    the ticket: once, at the first activation of a site, never at a load of a page.
-4. **Where does the guide show?** (FRU-486) The default of the ticket: folded under the card
+3. **Where does the guide show?** (FRU-486) The default of the ticket: folded under the card
    « Browser extension » of step 3, not on a page of its own.
 
 ## The tickets

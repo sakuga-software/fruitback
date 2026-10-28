@@ -51,6 +51,7 @@ test('a first user goes from the setup to a first note (FRU-481)', async ({ exte
   const link = await context.newPage();
   await link.goto(await linkIn(worker));
   did('mail', 'click the link: a new tab opens');
+  await expect(link.getByText('You are signed in')).toBeVisible({ timeout: 15_000 });
   await setup.screenshot({ path: test.info().outputPath('01-setup-after-link.png') });
   await link.screenshot({ path: test.info().outputPath('02-link-tab.png') });
 
@@ -75,8 +76,12 @@ test('a first user goes from the setup to a first note (FRU-481)', async ({ exte
   const card = goesOn
     .locator('.kit-option')
     .filter({ has: goesOn.getByRole('heading', { name: 'Browser extension' }) });
-  await expect(card.getByRole('link', { name: 'Install the extension (beta)' })).toBeVisible();
+  // The store is Chrome's: its tab opens, and goes no further here.
+  await context.route('https://chromewebstore.google.com/**', (route) => route.abort());
+  const storeOpens = context.waitForEvent('page');
+  await card.getByRole('link', { name: 'Install the extension (beta)' }).click();
   did('console', 'click « Install the extension (beta) »: the Chrome Web Store opens in a tab');
+  await (await storeOpens).close();
   did('store', 'click « Add to Chrome »');
   did('chrome', 'click « Add extension » in the dialog of Chrome');
 
