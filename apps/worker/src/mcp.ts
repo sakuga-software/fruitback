@@ -40,6 +40,8 @@ export type McpContext = {
   grantOf(key: string): Promise<AgentGrant | undefined>;
   /** Whether the workspace of a grant is suspended (FRU-282). */
   suspended(workspace: string): Promise<boolean>;
+  /** Notes that the key of a grant opened a request (FRU-462). It never refuses the request. */
+  used(grant: AgentGrant): Promise<void>;
   /** The tools that this grant may call. */
   tools(grant: AgentGrant): McpTool[];
 };
@@ -75,6 +77,7 @@ export async function handleMcp(request: Request, context: McpContext): Promise<
   if (grant === undefined || (await context.suspended(grant.workspace))) {
     return answer(404, { error: 'not-found' });
   }
+  await context.used(grant);
   if (request.method !== 'POST') return answer(405, { error: 'method-not-allowed' }, { Allow: 'POST' });
 
   const asked = request.headers.get('MCP-Protocol-Version');

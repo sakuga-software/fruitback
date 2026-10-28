@@ -106,6 +106,8 @@ function keyView(key: AgentKey): Record<string, unknown> {
     createdBy: key.createdBy,
     createdAt: new Date(key.createdAt).toISOString(),
     expiresAt: new Date(key.expiresAt).toISOString(),
+    // FRU-462: when an agent last opened a request of `/mcp` with it, to the minute, or `null`.
+    lastUsedAt: key.lastUsedAt === undefined ? null : new Date(key.lastUsedAt).toISOString(),
   };
 }
 
