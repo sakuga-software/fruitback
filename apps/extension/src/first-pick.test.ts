@@ -128,4 +128,17 @@ describe('the first activation of a site opens the choice of an element (FRU-485
     assert.equal(await pickedAlready(stored, 'https://acme.dev'), true);
     assert.equal(picks, 2);
   });
+
+  it('a second activation during the pick of the first one opens no second choice', async () => {
+    const stored = area();
+    const pending: Array<(value: boolean) => void> = [];
+    const pick = () => new Promise<boolean>((resolve) => void pending.push(resolve));
+    const first = pickOnFirstActivation(stored, 'https://acme.dev', async () => ({ done: true }), { pick });
+    await new Promise((resolve) => setImmediate(resolve));
+    const second = pickOnFirstActivation(stored, 'https://acme.dev', async () => ({ done: true }), { pick });
+    await new Promise((resolve) => setImmediate(resolve));
+    for (const resolve of pending) resolve(true);
+    assert.deepEqual(await Promise.all([first, second]), [true, false]);
+    assert.equal(pending.length, 1);
+  });
 });
