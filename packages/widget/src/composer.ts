@@ -816,13 +816,14 @@ export function createComposer(options: ComposerOptions): Composer {
     const dy = now.top - placedAt.top;
     if (dx === 0 && dy === 0) return;
     placedAt = now;
-    shift('--fruitback-composer-left', dx);
-    shift('--fruitback-composer-top', dy);
-  }
-
-  function shift(property: string, by: number): void {
-    const at = Number.parseFloat(root.style.getPropertyValue(property)) || 0;
-    root.style.setProperty(property, `${at + by}px`);
+    // Across, it stays inside the window, as `place` keeps it: an element that a box scrolls sideways
+    // out of the window must not take the composer out of reach.
+    const scrollX = view?.scrollX ?? 0;
+    const left = (Number.parseFloat(root.style.getPropertyValue('--fruitback-composer-left')) || 0) + dx;
+    const most = scrollX + (view?.innerWidth ?? 0) - WIDTH - GAP;
+    root.style.setProperty('--fruitback-composer-left', `${Math.max(scrollX + GAP, Math.min(left, most))}px`);
+    const top = (Number.parseFloat(root.style.getPropertyValue('--fruitback-composer-top')) || 0) + dy;
+    root.style.setProperty('--fruitback-composer-top', `${top}px`);
   }
   // Capture phase: a scroll event does not bubble, and a box of the page that scrolls must count too.
   view?.addEventListener('scroll', follow, { passive: true, capture: true });
