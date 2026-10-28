@@ -28,6 +28,9 @@ import { handleConsole } from './console-routes.ts';
 import { handlePairing, handleSessionRoutes } from './session-routes.ts';
 import { CHECK_PATH, REPLY_PATH, STATUS_PATH, postCheck, postReply, postStatus } from './reply-routes.ts';
 import { getFeedback, postFeedback } from './feedback-routes.ts';
+import { MCP_PATH, handleMcp } from './mcp.ts';
+import { resolveAgentKey } from './agent-keys.ts';
+import { agentTools } from './agent-tools.ts';
 import type { SessionIdentity } from './session.ts';
 import { type RequestContext, type Served, type Verified, withSites } from './request-context.ts';
 import { placedAt, routingFailure } from './note-helpers.ts';
@@ -384,6 +387,18 @@ async function routed(
           }),
         );
   };
+
+  // FRU-463: the remote MCP server, for an agent key of a workspace (FRU-461).
+  if (pathname === MCP_PATH) {
+    if (accounts === undefined) return json(404, { error: 'not-found' }, cors.headers);
+
+    return handleMcp(request, {
+      grantOf: (key) => resolveAgentKey(accounts, key, Date.now()),
+      suspended: async (workspace) => (await accounts.suspension(workspace)) !== undefined,
+      tools: (grant) =>
+        agentTools({ grant, store: storeOfRequest(), kv, noteIndex, route: (site) => routeFor(request, served, site) }),
+    });
+  }
 
   if (pathname === ATTACHMENTS_PATH || pathname.startsWith(`${ATTACHMENTS_PATH}/`)) {
     try {

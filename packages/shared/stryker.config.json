@@ -4,7 +4,14 @@
   "testRunner": "tap",
   "plugins": ["../../tools/mutation/node_modules/@stryker-mutator/tap-runner/dist/src/index.js"],
   "tap": { "testFiles": ["src/**/*.test.ts"] },
-  "mutate": ["src/attachments.ts", "src/contrast.ts", "src/issue.ts", "src/markdown-description.ts", "src/note.ts"],
+  "mutate": [
+    "src/attachments.ts",
+    "src/contrast.ts",
+    "src/feedback-text.ts",
+    "src/issue.ts",
+    "src/markdown-description.ts",
+    "src/note.ts"
+  ],
   "inPlace": true,
   "coverageAnalysis": "perTest",
   "reporters": ["clear-text", "json", "html"],

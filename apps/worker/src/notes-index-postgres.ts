@@ -1,6 +1,6 @@
 import type { NoteIssue, NoteStage } from '@fruitback/shared';
 import { NOTE_STAGES } from '@fruitback/shared';
-import { and, count, eq, ilike, inArray, isNull, max, min, or, sql } from 'drizzle-orm';
+import { and, count, eq, gte, ilike, inArray, isNull, max, min, or, sql } from 'drizzle-orm';
 import { member, user } from './auth-schema.ts';
 import {
   type AuthorKind,
@@ -342,6 +342,20 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
         return delivery === undefined ? undefined : { id: delivery.id, connector: delivery.connector };
       });
     },
+
+    async pageOfNote(workspace, site, note) {
+      const rows = await run((db) =>
+        db
+          .select({ page: note_index.page_url })
+          .from(note_index)
+          .where(
+            and(eq(note_index.workspace_id, workspace), eq(note_index.site_id, site), eq(note_index.note_id, note)),
+          )
+          .limit(1),
+      );
+
+      return rows[0]?.page;
+    },
   };
 }
 
@@ -482,6 +496,7 @@ function filtered(workspace: string, query: NoteQuery) {
     query.site === undefined ? undefined : eq(note_index.site_id, query.site),
     query.stage === undefined ? undefined : eq(note_index.stage, query.stage),
     query.author === undefined ? undefined : eq(note_index.author_account_id, query.author),
+    query.since === undefined ? undefined : gte(note_index.created_at, query.since),
     ...wordsOf(query.q).map((word) => {
       const like = `%${word.replace(/[\\%_]/gu, (c) => `\\${c}`)}%`;
 

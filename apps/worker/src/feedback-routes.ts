@@ -4,7 +4,7 @@ import { attachmentIdsOf } from './attachments.ts';
 import { SENT_TTL_MS, batchMemory, createAll, hold, release, sentKey } from './batch.ts';
 import { MAX_BODY_BYTES, readBoundedText } from './bounded-body.ts';
 import { cached } from './cache.ts';
-import { type ClientConfig, normalizeClientId } from './clients.ts';
+import { type ClientConfig, type ClientPolicy, normalizeClientId } from './clients.ts';
 import { type Kv, KvError } from './kv.ts';
 import {
   batchOffer,
@@ -105,36 +105,7 @@ export async function getFeedback(
       route.client === undefined || places.length < 2
         ? [route.client]
         : places.map((place) => placedAt(route.client as ClientConfig, place));
-    const found = await Promise.all(
-      targets.map((target) => {
-        const key = JSON.stringify([store.name, store.scope(target), clientId ?? null, url]);
-
-        return cached(kv, url, key, async () => {
-          const issues = await store.findForPage({ url, clientId }, target, route.policy);
-          // FRU-237: what the store says now is the stage the index keeps. Only a read that asked the
-          // store writes, so a page that many read costs one write for each answer of the cache.
-          const workspace = route.client?.workspace;
-          if (workspace !== undefined && clientId !== undefined) {
-            // FRU-295: the verdicts are kept only where a person can give one, so that a fix to check
-            // is always one that the person can confirm.
-            const verdicts = route.policy.showComments && (await takesChecks(store, target));
-            await indexed(noteIndex, (index) =>
-              index.refresh(workspace, clientId, placeOf(target), issues, Date.now(), { verdicts }),
-            );
-          }
-
-          return issues;
-        });
-      }),
-    );
-    // Two places of one team are one read of the tracker, so a note can come back twice. A site
-    // that is read in one place gets what its store answers, as it is: nothing there comes back
-    // twice, and two notes can hold one note id.
-    const seen = new Set<string>();
-    const all =
-      found.length < 2
-        ? found.flat()
-        : found.flat().filter((issue) => !seen.has(issue.note.id) && seen.add(issue.note.id));
+    const all = await readPage({ store, kv, noteIndex, client: route.client, clientId, url, policy: route.policy });
     // Asked at each request, after the cache, whose answer every reader of the page shares.
     const hidden = await hidesTracker(request, config, route.policy);
     // FRU-294: the notes of this reader, and the confirmation of each note done. Never in the cached
@@ -233,6 +204,71 @@ export async function getFeedback(
     }
     throw error;
   }
+}
+
+/**
+ * The notes of one page as the store answers them, through the read cache (FRU-237): what `GET
+ * /feedback` reads before it decides what this reader sees, and what `/mcp` reads (FRU-463). A read
+ * that asked the store writes what it found in the index of the notes.
+ *
+ * A site that can send to several places is read in each one (FRU-123), and a note that comes back
+ * twice is kept once.
+ */
+export async function readPage({
+  store,
+  kv,
+  noteIndex,
+  client,
+  clientId,
+  url,
+  policy,
+}: {
+  store: NoteStore;
+  kv: Kv;
+  noteIndex: NoteIndex | undefined;
+  client: ClientConfig | undefined;
+  clientId: string | undefined;
+  url: string;
+  policy: ClientPolicy;
+}): Promise<NoteIssue[]> {
+  // The store says what separates one tenant from another — a team for Linear, nothing extra for
+  // the in-memory one. The client id is in the key regardless, so two clients reading the same URL
+  // never share an entry even when they share a team.
+  //
+  // FRU-123: a site that can send to several places is read in each one, because a tracker finds
+  // a note by where it is. Each place has its own entry: the scope of the store names it.
+  const places = client?.destinations ?? [];
+  const targets = client === undefined || places.length < 2 ? [client] : places.map((place) => placedAt(client, place));
+  const found = await Promise.all(
+    targets.map((target) => {
+      const key = JSON.stringify([store.name, store.scope(target), clientId ?? null, url]);
+
+      return cached(kv, url, key, async () => {
+        const issues = await store.findForPage({ url, clientId }, target, policy);
+        // FRU-237: what the store says now is the stage the index keeps. Only a read that asked the
+        // store writes, so a page that many read costs one write for each answer of the cache.
+        const workspace = client?.workspace;
+        if (workspace !== undefined && clientId !== undefined) {
+          // FRU-295: the verdicts are kept only where a person can give one, so that a fix to check
+          // is always one that the person can confirm.
+          const verdicts = policy.showComments && (await takesChecks(store, target));
+          await indexed(noteIndex, (index) =>
+            index.refresh(workspace, clientId, placeOf(target), issues, Date.now(), { verdicts }),
+          );
+        }
+
+        return issues;
+      });
+    }),
+  );
+  // Two places of one team are one read of the tracker, so a note can come back twice. A site
+  // that is read in one place gets what its store answers, as it is: nothing there comes back
+  // twice, and two notes can hold one note id.
+  const seen = new Set<string>();
+
+  return found.length < 2
+    ? found.flat()
+    : found.flat().filter((issue) => !seen.has(issue.note.id) && seen.add(issue.note.id));
 }
 
 export async function postFeedback(

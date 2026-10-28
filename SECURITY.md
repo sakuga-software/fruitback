@@ -2375,6 +2375,35 @@ session, the `Origin` of the console for a write, `404` for a workspace somebody
 - **What a key does not protect**: whoever holds a key reads what it reaches until it ends or is
   revoked, from anywhere. A workspace holds 20 keys at most.
 
+### The remote MCP server, `/mcp` (FRU-463)
+
+An agent reads the notes of the sites of its agent key (FRU-461) through `POST /mcp`, the Streamable
+HTTP transport of MCP. Three tools, all reads: `list_feedback`, `get_feedback`, `feedback_as_text`.
+
+- **No valid key, no route.** No key, a key of another shape, a revoked or expired key, a key whose
+  member left or was suspended, and a key of a suspended workspace: `404`, as a path that does not
+  exist. A worker with no database has no key, and answers `404` too.
+  test:`answers 404 with no key, a key it does not know, an expired one and one of a suspended workspace`.
+- **No browser.** A request with an `Origin` is refused (`403`): a page cannot call `/mcp` with a key
+  it read somewhere, and the transport asks a server to refuse the origins it does not expect.
+  `GET` answers `405`: the server opens no stream and keeps no session.
+- **A key reads the sites it names, and no other.** A site out of the key, of another workspace or that
+  does not exist answers as one that does not exist; so does the id of a note of such a site.
+  test:`never answers a note of a site the key does not name, nor of another workspace`.
+- **On a site that everyone reads, a key reads only the notes of a known person** unless the team
+  made it with `verifiedOnly: false` (FRU-461): `reporter.verified` is `true`, the word of the
+  worker. A site that only its members read is read whole.
+  test:`reads only the notes of a known person on a site that everyone reads, unless the key says otherwise`.
+- **A key whose member does not see the tracker reads no reference of it**, as a guest in the
+  console. test:`gives a key of a guest no reference of the tracker`.
+- **The text of a note is data.** Each note is an object of its own in `structuredContent`, and the
+  text of every answer starts with a fixed line that says so. **Nothing stops an agent from obeying a
+  note**: the key, its sites and `verifiedOnly` bound what it reads; what it does with it is the
+  team's.
+- **What a read costs a store**: each page of the answer is one read of the page, through the read
+  cache of `GET /feedback`. The rate limit per address applies; a limit per key comes with the write
+  tools (FRU-464).
+
 ### The administrator of the instance (FRU-261)
 
 Mathieu, 2026-10-18: « le premier compte utilisateur est forcèment admin lors de sa création sur
