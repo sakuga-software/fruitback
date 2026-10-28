@@ -1165,6 +1165,8 @@ function replies(document: Document, issue: NoteIssue, t: Translator): HTMLEleme
     item.className = 'fruitback-thread-reply';
     const fromPage = replyFromPage(comment.body);
     const who = fromPage === undefined ? (comment.author ?? t.text('thread.team')) : fromPage.name;
+    // FRU-465: the worker says that an agent wrote it. The word is the reader's, not the line's.
+    const qualifier = comment.by === 'agent' ? t.text('thread.agent') : fromPage?.who;
     // The initial of who answers, in a round of 24 px (FRU-304). A drawing: the name follows it.
     const avatar = element(document, 'span', 'fruitback-thread-reply-avatar', initialOf(who));
     avatar.setAttribute('aria-hidden', 'true');
@@ -1180,7 +1182,7 @@ function replies(document: Document, issue: NoteIssue, t: Translator): HTMLEleme
           t,
           // Who answers is what the eye looks for in a conversation: the name is in the ink, the date is not.
           'fruitback-thread-reply-name',
-          fromPage?.who,
+          qualifier,
         ),
         // `textContent`, never markup: this is Linear's markdown, written by whoever can comment on the
         // issue, rendered inside someone else's page. It is text here and nothing more.
