@@ -111,15 +111,30 @@ test('a first user goes from the setup to a first note (FRU-481)', async ({ exte
   did('chrome', 'open the puzzle menu of the toolbar');
   did('chrome', 'click the pin beside Fruitback');
 
-  // The welcome page says: click the icon, then « Sign in with email ». On that page, the popup says
-  // only that Fruitback works on web pages.
-  did('popup', 'click the Fruitback icon, as the welcome page says');
+  // The popup on the welcome page, a page that is not a site, offers the sign-in too (FRU-482).
   const onWelcome = await openPopup(extension, welcome!);
-  await onWelcome.screenshot({ path: test.info().outputPath('05-popup-on-welcome.png') });
-  // The dead end of step 14. FRU-482 offers the sign-in here: it changes these two lines, and the page.
-  await expect(onWelcome.getByRole('heading', { name: 'Fruitback works on http and https pages.' })).toBeVisible();
-  await expect(onWelcome.getByRole('button', { name: 'Sign in with email' })).toHaveCount(0);
+  await expect(onWelcome.getByRole('button', { name: 'Sign in with email' })).toHaveCount(1);
   await onWelcome.close();
+
+  // The welcome page signs in itself: the console opens in a tab, and the word is the same in both.
+  await welcome!.bringToFront();
+  const connectOpens = context.waitForEvent('page', { predicate: (page) => page.url().includes('/connect') });
+  await welcome!.getByRole('button', { name: 'Sign in with email' }).click();
+  did('welcome', 'click « Sign in with email »: the console opens in a tab');
+  const connect = await connectOpens;
+  const word = (await welcome!.locator('.word').innerText()).trim();
+  await expect(connect.getByText(word, { exact: true })).toBeVisible({ timeout: 15_000 });
+  await welcome!.screenshot({ path: test.info().outputPath('05-welcome-word.png') });
+  await connect.screenshot({ path: test.info().outputPath('06-connect.png') });
+  const approve = connect.getByRole('button', { name: /^Connect/ });
+  const approveName = (await approve.innerText()).trim();
+  await approve.click();
+  did('console', `click « ${approveName} » after the word`);
+
+  // The welcome page claims the session, closes the tab of the console, and says who signed in.
+  await expect(welcome!.getByRole('status')).toHaveText('Signed in as ana@acme.dev.', { timeout: 20_000 });
+  await expect.poll(() => connect.isClosed()).toBe(true);
+  await welcome!.screenshot({ path: test.info().outputPath('07-welcome-signed-in.png') });
 
   // To the site, by the link of the setup.
   did('tab', 'go back to the tab of the setup');
@@ -132,26 +147,6 @@ test('a first user goes from the setup to a first note (FRU-481)', async ({ exte
   await site.goto(`${PLAYGROUND_ORIGIN}/?widget=off`);
   await expect(site.getByRole('heading', { name: 'Nos formules' })).toBeVisible();
 
-  did('popup', 'click the Fruitback icon');
-  const popup = await openPopup(extension, site);
-  await popup.screenshot({ path: test.info().outputPath('05-popup-signed-out.png') });
-  const connectOpens = context.waitForEvent('page', { predicate: (page) => page.url().includes('/connect') });
-  // The control of the dead end: on a site, the same locator finds the one button.
-  const signIn = popup.getByRole('button', { name: 'Sign in with email' });
-  await expect(signIn).toHaveCount(1);
-  await signIn.click();
-  did('popup', 'click « Sign in with email »: the console opens in a tab');
-  const connect = await connectOpens;
-  await connect.waitForLoadState();
-  await connect.screenshot({ path: test.info().outputPath('06-connect.png') });
-  const approve = connect.getByRole('button', { name: /^Connect/ });
-  await expect(approve).toBeVisible({ timeout: 15_000 });
-  const approveName = (await approve.innerText()).trim();
-  await approve.click();
-  did('console', `click « ${approveName} » after the word`);
-  await connect.screenshot({ path: test.info().outputPath('07-connected.png') });
-
-  did('tab', 'go back to the tab of the site');
   did('popup', 'click the Fruitback icon');
   const onSite = await openPopup(extension, site);
   await onSite.screenshot({ path: test.info().outputPath('08-popup-on-site.png') });

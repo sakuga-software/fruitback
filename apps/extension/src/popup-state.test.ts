@@ -35,8 +35,21 @@ describe('the screen of the popup (FRU-251)', () => {
     assert.deepEqual(on({ canSignIn: false }), { kind: 'signed-out', canSignIn: false, ended: false });
   });
 
-  it('says a page that is not http or https is none Fruitback runs on, whatever else is true', () => {
-    assert.deepEqual(on({ origin: undefined, connect: 'waiting', rule: true }), { kind: 'not-web' });
+  it('says a page that is not http or https is none Fruitback runs on, for a browser signed in or paired', () => {
+    assert.deepEqual(on({ origin: undefined, account: 'ok', sessions: 1, rule: true }), { kind: 'not-web' });
+    assert.deepEqual(on({ origin: undefined, sessions: 1 }), { kind: 'not-web' });
+    assert.deepEqual(on({ origin: undefined, canSignIn: false }), { kind: 'not-web' });
+  });
+
+  it('offers the sign-in on a page that is not http or https, as the welcome page sends there (FRU-482)', () => {
+    assert.deepEqual(on({ origin: undefined }), { kind: 'signed-out', canSignIn: true, ended: false });
+    assert.deepEqual(on({ origin: undefined, account: 'ended' }), { kind: 'signed-out', canSignIn: true, ended: true });
+    assert.deepEqual(on({ origin: undefined, connect: 'waiting', rule: true }), {
+      kind: 'connecting',
+      unanswered: false,
+    });
+    assert.deepEqual(on({ origin: undefined, connect: 'unavailable' }), { kind: 'connecting', unanswered: true });
+    assert.deepEqual(on({ origin: undefined, connect: 'refused' }), { kind: 'sign-in-problem', problem: 'refused' });
   });
 
   it('shows the screen of a pairing link, until the person says the page is a site', () => {

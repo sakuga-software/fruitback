@@ -1,23 +1,35 @@
 import { t } from './i18n.ts';
-import { head, primaryButton } from './kit.ts';
-import { element } from './popup-view.ts';
+import { alertBox, head, primaryButton, secondaryButton } from './kit.ts';
+import { type SignInStop, element, linkButton } from './popup-view.ts';
 
 /**
  * The page that opens when the extension is installed (FRU-318).
  *
  * At install Chrome hides the icon in the menu of the extensions, and nothing said what comes next.
- * This page says it: pin Fruitback, then sign in from its popup. The sign-in itself stays in the
- * popup (« Sign in to Fruitback », FRU-251): one way in, not a second one here.
+ * This page says it: pin Fruitback, then sign in.
+ *
+ * **The sign-in starts here** (FRU-482). The page is the tab that Chrome shows after the install, and
+ * the popup on it offered no sign-in: the person read « click the icon » and found a dead end. The
+ * way is the one of the popup (`connect.ts`): the extension asks, the console approves, the word is
+ * compared. A build that names no Fruitback keeps the way to the popup.
  *
  * It is an extension page that `tabs.create` opens: no permission, and no entry in the manifest.
  */
 
+/** Where the sign-in of the page is. `who`: the account, as the head of the popup names it. */
+export type WelcomeSignIn =
+  | { kind: 'signed-out'; stop?: SignInStop }
+  | { kind: 'connecting'; word: string; unanswered?: boolean }
+  | { kind: 'signed-in'; who: string };
+
 export type WelcomeOptions = {
   /** Opens the popup of the extension. It rejects where the browser does not let a page open it. */
   openPopup: () => Promise<void>;
+  /** Absent in a build that names no Fruitback: the page then leads to the popup. */
+  signIn?: { state: WelcomeSignIn; onSignIn: () => void; onStartAgain: () => void };
 };
 
-/** The page: two steps, and the way to the popup. */
+/** The page: two steps, and the sign-in. */
 export function welcomeScreen(document: Document, options: WelcomeOptions): HTMLElement {
   document.title = t('Welcome to Fruitback');
   const root = element(document, 'main', '', 'welcome');
@@ -39,7 +51,13 @@ export function welcomeScreen(document: Document, options: WelcomeOptions): HTML
       t('Pin Fruitback'),
       t('Open the puzzle piece at the right of the address bar, then press the pin beside Fruitback.'),
     ),
-    step(document, t('Sign in'), t('Click the Fruitback icon, then Sign in with email.')),
+    step(
+      document,
+      t('Sign in'),
+      options.signIn === undefined
+        ? t('Click the Fruitback icon, then Sign in with email.')
+        : t('Here, with the email of your work.'),
+    ),
   );
 
   const invited = element(
@@ -48,18 +66,73 @@ export function welcomeScreen(document: Document, options: WelcomeOptions): HTML
     t('Invited by a client or a team? Use the email the invitation was sent to.'),
     'welcome-invited',
   );
+  const action =
+    options.signIn === undefined ? toThePopup(document, options.openPopup) : signInPart(document, options.signIn);
+
+  root.append(top, title, lead, steps, ...action, invited);
+
+  return root;
+}
+
+/** A build that names no Fruitback: the popup holds the way in, to a server of one's own. */
+function toThePopup(document: Document, openPopup: () => Promise<void>): HTMLElement[] {
   const said = element(document, 'p', '', 'welcome-hint');
   said.setAttribute('role', 'status');
   const open = primaryButton(document, t('Open Fruitback'), () => {
     said.textContent = '';
-    void options.openPopup().catch(() => {
+    void openPopup().catch(() => {
       said.textContent = t('Your browser did not open it from this page: click the Fruitback icon in the toolbar.');
     });
   });
 
-  root.append(top, title, lead, steps, open, said, invited);
+  return [open, said];
+}
 
-  return root;
+function signInPart(document: Document, signIn: NonNullable<WelcomeOptions['signIn']>): HTMLElement[] {
+  const { state } = signIn;
+  if (state.kind === 'connecting') {
+    const word = element(document, 'p', state.word, 'word');
+    // Read out as it is written: « PLUM 47 », not a word of the language around it.
+    word.lang = 'en';
+    const waiting = element(
+      document,
+      'p',
+      state.unanswered === true
+        ? t('Fruitback did not answer. The page asks again.')
+        : t('Waiting for you to connect in the tab…'),
+      'lead',
+    );
+    waiting.setAttribute('role', 'status');
+    const part = element(document, 'section', '', 'welcome-sign-in');
+    part.append(
+      element(document, 'h2', t('Check that the tab shows the same word')),
+      word,
+      waiting,
+      linkButton(document, t('Start again'), signIn.onStartAgain),
+    );
+
+    return [part];
+  }
+
+  if (state.kind === 'signed-in') {
+    const done = element(document, 'section', '', 'welcome-sign-in');
+    const said = element(document, 'p', t('Signed in as {who}.', { who: state.who }), 'welcome-done');
+    said.setAttribute('role', 'status');
+    done.append(said, element(document, 'p', t('Open a site of your team, then click the Fruitback icon.'), 'lead'));
+
+    return [done];
+  }
+
+  const part = element(document, 'section', '', 'welcome-sign-in');
+  if (state.stop !== undefined) part.append(alertBox(document, state.stop.title, state.stop.text));
+  const others = element(document, 'div', '', 'method-row');
+  others.append(
+    secondaryButton(document, 'Google', signIn.onSignIn),
+    secondaryButton(document, 'GitHub', signIn.onSignIn),
+  );
+  part.append(primaryButton(document, t('Sign in with email'), signIn.onSignIn), others);
+
+  return [part];
 }
 
 function step(document: Document, name: string, text: string): HTMLLIElement {

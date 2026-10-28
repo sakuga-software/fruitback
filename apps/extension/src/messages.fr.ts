@@ -183,6 +183,11 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Your sign-in ended': 'Votre connexion a pris fin',
   'Sign in again to see and leave notes here.': 'Reconnectez-vous pour voir et laisser des notes ici.',
   'Fruitback did not answer. The popup asks again.': 'Fruitback n’a pas répondu. Le popup redemande.',
+  'Fruitback did not answer. The page asks again.': 'Fruitback n’a pas répondu. La page redemande.',
+  'Here, with the email of your work.': 'Ici, avec l’e-mail de votre travail.',
+  'Signed in as {who}.': 'Connecté en tant que {who}.',
+  'Open a site of your team, then click the Fruitback icon.':
+    'Ouvrez un site de votre équipe, puis cliquez sur l’icône Fruitback.',
   'The browser did not give the extension access to Fruitback.':
     'Le navigateur n’a pas donné à l’extension l’accès à Fruitback.',
   'Fruitback works on http and https pages.': 'Fruitback fonctionne sur les pages http et https.',

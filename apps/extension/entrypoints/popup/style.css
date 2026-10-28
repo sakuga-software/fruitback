@@ -380,7 +380,8 @@ body.popup-page {
 }
 
 /* A link that does something here rather than going somewhere: a button that reads as a link. */
-.popup button.link-button {
+.popup button.link-button,
+.welcome button.link-button {
   padding: 0;
   border-radius: 0;
   background: none;
@@ -402,12 +403,14 @@ body.popup-page {
 }
 
 .popup button.link-button:hover,
+.welcome button.link-button:hover,
 .popup-foot a:hover {
   color: var(--accent);
 }
 
 /* The word the console shows too: big, spaced, and in a face where 0 and O differ. */
-.popup .word {
+.popup .word,
+.welcome .word {
   font:
     700 22px/1.3 ui-monospace,
     SFMono-Regular,
@@ -460,7 +463,8 @@ body.popup-page {
   gap: 10px;
 }
 
-.popup .method-row {
+.popup .method-row,
+.welcome .method-row {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
