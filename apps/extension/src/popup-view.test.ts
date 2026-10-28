@@ -547,8 +547,11 @@ describe('2 · who sees the notes and where they go, chosen at the turn on (FRU-
     );
     assert.equal(place.value, '');
     await settle();
+    // The places of the workspace chosen now, not those of the first.
+    change(place, '0');
+    await settle();
     screen.querySelector<HTMLButtonElement>('.action-block button')?.click();
-    assert.deepEqual(calls, ['place:Linear · Northwind', 'place:none', 'turn-on:w2']);
+    assert.deepEqual(calls, ['place:Linear · Northwind', 'place:none', 'place:Linear · Design', 'turn-on:w2']);
   });
 
   it('speaks French', () => {

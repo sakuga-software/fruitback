@@ -371,18 +371,19 @@ function visibilityChoice(
  */
 function placeChoice(
   document: Document,
-  places: ChoicePlace[],
+  places: () => ChoicePlace[],
   current: ChoicePlace | null | undefined,
   onPlace: (place: ChoicePlace | null) => Promise<boolean>,
 ): HTMLSelectElement {
   const select = element(document, 'select', '');
   select.name = 'place';
   select.setAttribute('aria-label', t('Notes go to'));
-  fillPlaces(document, select, places, current);
+  fillPlaces(document, select, places(), current);
   answered(select, () => {
     const index = Number(select.value);
 
-    return onPlace(select.value === NO_PLACE || !Number.isInteger(index) ? null : (places[index] ?? null));
+    // The list of now: a change of workspace draws other places in it.
+    return onPlace(select.value === NO_PLACE || !Number.isInteger(index) ? null : (places()[index] ?? null));
   });
 
   return select;
@@ -519,7 +520,7 @@ export function turnOnScreen(document: Document, options: TurnOnOptions): HTMLEl
   let refill: (() => void) | undefined;
   if (choices !== undefined) {
     const offered = (): ChoicePlace[] => choices.places[chosen ?? choices.workspace ?? ''] ?? [];
-    const places = placeChoice(document, offered(), choices.place, (place) => choices.onPlace(place));
+    const places = placeChoice(document, offered, choices.place, (place) => choices.onPlace(place));
     facts.append(
       field(t('Notes go to'), places),
       field(t('Who sees the notes'), visibilityChoice(document, options.visibility, choices.onVisibility)),
