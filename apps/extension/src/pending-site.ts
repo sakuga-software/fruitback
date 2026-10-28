@@ -134,7 +134,7 @@ export type Pending = {
 };
 
 export function createPending({
-  read,
+  read: readStored,
   write,
   clear,
   granted,
@@ -144,7 +144,7 @@ export function createPending({
   now = Date.now,
 }: PendingSeams): Pending {
   async function fresh(): Promise<PendingSite | undefined> {
-    const pending = parsePending(await read());
+    const pending = parsePending(await readStored());
     if (pending === undefined) return undefined;
     if (now() - pending.at > PENDING_TTL_MS) {
       await clear();
@@ -163,6 +163,15 @@ export function createPending({
    */
   let settling: Promise<string | undefined> | undefined;
 
+  /**
+   * Clears the intent that was read, and not one written since: an add waits for the worker, and a
+   * click on another site in that time writes its own intent in the same key (raised in review).
+   */
+  async function clearIfStill(read: PendingSite): Promise<void> {
+    const now = parsePending(await readStored());
+    if (now !== undefined && now.pattern === read.pattern && now.at === read.at) await clear();
+  }
+
   async function finish(): Promise<string | undefined> {
     const pending = await fresh();
     if (pending === undefined || !(await granted(pending.pattern))) return undefined;
@@ -174,7 +183,7 @@ export function createPending({
       if (outcome === 'again') return undefined;
       // Refused for good (a role, a session that ended): nothing to turn on, and nothing to ask again.
       if (outcome === 'never') {
-        await clear();
+        await clearIfStill(pending);
 
         return undefined;
       }
@@ -185,7 +194,7 @@ export function createPending({
 
     await store(pending.pattern, site);
     // Cleared after the entry is stored: a failure between the two leaves the intent to try again.
-    await clear();
+    await clearIfStill(pending);
     await activate(pending.pattern);
 
     return pending.pattern;
@@ -208,7 +217,7 @@ export function createPending({
     },
     forget: clear,
     async forgetAdd(pattern) {
-      const pending = parsePending(await read());
+      const pending = parsePending(await readStored());
       if (pending !== undefined && pending.pattern === pattern && 'add' in pending) await clear();
     },
   };
