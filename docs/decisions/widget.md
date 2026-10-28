@@ -1435,6 +1435,8 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
   - **The button of the dock opens the side panel of a host that has one** (FRU-469):
     `openSidebar` of `init`, asked in the click. `false`, a rejection or a throw: the list of the page
     opens, so what was asked is shown either way. Left out, the button opens the list, as before.
+    While the session of the host has ended (FRU-315) the button opens the list of the page, which
+    says so and holds « Sign in »: the panel reads through this widget, which then reads nothing.
   - **A row of « All pages » opens its note**: in the list when it is a note of this page; otherwise
     its page, by the link of FRU-253 (`#fruitback-note=<id>`), **on the origin of this page only**.
     The address of a note is written by whoever wrote the note, so any other address, a

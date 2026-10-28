@@ -248,6 +248,7 @@ describe('the button of the list and the side panel of a host (FRU-469)', () => 
       document: page.document,
       endpoint: 'https://worker.test',
       clientId: 'acme',
+      onSignIn: () => {},
       ...(openSidebar === undefined ? {} : { openSidebar }),
     });
     const root = page.document.querySelector('[data-fruitback-host]')?.shadowRoot as ShadowRoot;
@@ -288,6 +289,21 @@ describe('the button of the list and the side panel of a host (FRU-469)', () => 
       assert.equal(listOpen(), true);
       widget.destroy();
     }
+  });
+
+  it('opens the list of the page while the session of the host has ended, which holds « Sign in »', async () => {
+    let asked = 0;
+    const { widget, button, listOpen } = mounted(async () => {
+      asked += 1;
+
+      return true;
+    });
+    widget.signedOut(true);
+    button.click();
+    await settle();
+    assert.equal(asked, 0);
+    assert.equal(listOpen(), true);
+    widget.destroy();
   });
 
   it('opens the list of the page with no host panel, as before', () => {

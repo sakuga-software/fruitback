@@ -972,7 +972,9 @@ export function init(options: FruitbackOptions): Fruitback {
    * the page. Asked in the click itself, because a browser opens its panel only from a gesture.
    */
   function openList(): void {
-    if (options.openSidebar === undefined || sidebar.isOpen) {
+    // A session that ended (FRU-315): the list of the page says so and holds « Sign in », the way
+    // back. The panel would read through this widget, which reads nothing now.
+    if (options.openSidebar === undefined || sidebar.isOpen || ended) {
       sidebar.toggle();
 
       return;
