@@ -1,4 +1,5 @@
 import { type DockPosition, parseDockPosition } from './dock-position.ts';
+import type { SiteNotes } from './site-notes.ts';
 import {
   canonicalizePageUrl,
   offeredStages,
@@ -221,6 +222,14 @@ export type FruitbackOptions = {
    * left. Anything else is ignored. Change it later with `moveDock`.
    */
   position?: DockPosition;
+  /**
+   * The notes of every page of the site (FRU-470), for a host that can read them: the extension, with
+   * the session of its reviewer. Given, the list offers « All pages » beside « This page »; left out,
+   * it has « This page » alone, as before. The widget asks it for one page of notes at a time, and
+   * keeps nothing once the list closes. A row of another page opens that page by the link of its
+   * note (FRU-253), on the origin of this page only.
+   */
+  siteNotes?: SiteNotes;
   document?: Document;
 };
 
@@ -938,6 +947,10 @@ export function init(options: FruitbackOptions): Fruitback {
     closed: () => notesClosed,
     // « Show pins on the page » (FRU-308): the switch hides them while the list is open.
     pins: { show: (on) => overlay.showPins(on) },
+    // FRU-470: « All pages », when the host reads the site.
+    ...(options.siteNotes !== undefined
+      ? { site: { read: options.siteNotes, here: (url: string) => samePage(url, page) } }
+      : {}),
     readState: () => (ended ? 'signed-out' : readState),
     onSignIn: signIn,
     onRetry: () => {
@@ -1693,6 +1706,15 @@ function errorOf(body: string): unknown {
     return (JSON.parse(body) as { error?: unknown }).error;
   } catch {
     return undefined;
+  }
+}
+
+/** Whether an address is this page, as a note keeps it. An address that does not parse is no page. */
+function samePage(url: string, page: string): boolean {
+  try {
+    return canonicalizePageUrl(url) === page;
+  } catch {
+    return false;
   }
 }
 
