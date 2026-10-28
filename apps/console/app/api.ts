@@ -144,13 +144,17 @@ export type Delivery = {
  * `backlog`, `planned`, `started`, `paused`, `completed` or `canceled`. Absent from a worker of before.
  */
 export type ProjectStatus = { name: string; type: string };
-/** `private`: only its members see the team in Linear (FRU-458). Absent from a worker of before. */
+/**
+ * `private`: only its members see the team in Linear (FRU-458). `color`: the one Linear draws the team
+ * or the project with, as `#rrggbb` (FRU-459). Each is absent from a worker of before.
+ */
 export type Team = {
   id: string;
   name: string;
   key: string;
   private?: boolean;
-  projects: { id: string; name: string; status?: ProjectStatus }[];
+  color?: string;
+  projects: { id: string; name: string; status?: ProjectStatus; color?: string }[];
 };
 /** A repository that the installation of a GitHub connector covers (FRU-361). A public one is read by anybody. */
 export type Repository = { fullName: string; private: boolean };
