@@ -10,6 +10,7 @@ import type { ClientPolicy } from './clients.ts';
 import { callOn, signInTo, worlds } from './console-world.fixture.ts';
 import { readConfig } from './env.ts';
 import { rowsOf } from './postgres.fixture.ts';
+import type { PgDatabase } from './postgres.ts';
 import { postgresNoteStore } from './postgres-stores.ts';
 import { createPostgresNoteStore } from './notes-postgres.ts';
 import { StoreError } from './store.ts';
@@ -79,8 +80,10 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
       assert.equal((await rowsOf(database, 'SELECT id FROM note_comments')).length, 1);
     });
 
-    it('answers the stage of before under the lock of the write: of two moves to To do at once, one moves the note (FRU-468)', async () => {
+    it('answers the stage of before as the write finds it, under the lock of the row (FRU-468)', async () => {
       const { database, store } = await opened();
+      // The note first: on a real server, the first call of the store applies the migrations.
+      const note = await store.create(noteFixtureOf('sd_moved', 'site_a'), undefined, POLICY);
       await rowsOf(
         database,
         `INSERT INTO organization (id, name, slug, "createdAt") VALUES ('ws_a', 'A', 'ws_a', now())`,
@@ -89,19 +92,28 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
         database,
         `INSERT INTO sites (id, workspace_id, origin, visibility, created_at) VALUES ('site_a', 'ws_a', '${SITE}', 'everyone', 1)`,
       );
-      const note = await store.create(noteFixtureOf('sd_moved', 'site_a'), undefined, POLICY);
+      const target = { issue: note.id, clientId: 'site_a' };
       const todo = { key: null, stage: 'todo' as const };
 
-      const answers = await Promise.all(
-        [1, 2, 3].map(() => store.setStatus?.({ issue: note.id, clientId: 'site_a' }, todo, undefined)),
-      );
+      assert.deepEqual(await store.setStatus?.(target, todo, undefined), { stage: 'todo', was: 'new', page: PAGE });
+      assert.deepEqual(await store.setStatus?.(target, todo, undefined), { stage: 'todo', was: 'todo', page: PAGE });
+      await store.setStatus?.(target, { key: null, stage: 'done' }, undefined);
 
-      const into = answers.filter((answer) => typeof answer === 'object' && answer.was !== 'todo');
-      assert.equal(into.length, 1, JSON.stringify(answers));
-      assert.deepEqual(
-        answers.map((answer) => (typeof answer === 'object' ? answer.stage : answer)),
-        ['todo', 'todo', 'todo'],
-      );
+      // Another write holds the row and moves the note to To do while this one waits: the stage of
+      // before is the one that write left, never the one before it. PGlite has one connection, where
+      // nothing waits: the case is the real server's.
+      if (label === 'PGlite') return;
+      const client = await (await (database as PgDatabase).pool()).connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(`UPDATE notes SET stage = 'todo' WHERE id = $1`, [Number(note.id)]);
+        const waiting = store.setStatus?.(target, todo, undefined);
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        await client.query('COMMIT');
+        assert.deepEqual(await waiting, { stage: 'todo', was: 'todo', page: PAGE });
+      } finally {
+        client.release();
+      }
     });
 
     it('gives a read that names no site the notes that name none, and never the notes of a site', async () => {

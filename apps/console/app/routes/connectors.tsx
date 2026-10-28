@@ -491,19 +491,25 @@ function State({ connector, late, chosen }: { connector: Connector; late: Late |
   useLocale();
   const alert = `flex-none text-hint leading-auto font-semibold ${chosen ? 'text-accent-strong' : 'text-accent'}`;
   if (connector.attention !== undefined) return <span className={alert}>{t('Needs attention')}</span>;
-  if (late !== undefined && late.notes > 0) {
+  const words = [
+    ...(late !== undefined && late.notes > 0
+      ? [late.notes === 1 ? t('1 note did not arrive') : t('{count} notes did not arrive', { count: late.notes })]
+      : []),
+    // FRU-468: a call that waits is said too, also beside notes that wait: its agent did not start.
+    ...(late !== undefined && late.calls > 0
+      ? [
+          late.calls === 1
+            ? t('1 call of an agent did not arrive')
+            : t('{count} calls of an agent did not arrive', { count: late.calls }),
+        ]
+      : []),
+  ];
+  if (words.length > 0) {
     return (
-      <span className={alert}>
-        {late.notes === 1 ? t('1 note did not arrive') : t('{count} notes did not arrive', { count: late.notes })}
-      </span>
-    );
-  }
-  if (late !== undefined && late.calls > 0) {
-    return (
-      <span className={alert}>
-        {late.calls === 1
-          ? t('1 call of an agent did not arrive')
-          : t('{count} calls of an agent did not arrive', { count: late.calls })}
+      <span className={`${alert} flex flex-col items-end text-right`}>
+        {words.map((each) => (
+          <span key={each}>{each}</span>
+        ))}
       </span>
     );
   }

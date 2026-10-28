@@ -203,3 +203,32 @@ test('a read of the addresses that failed says so, and « Try again » brings th
   await agent.getByRole('button', { name: 'Try again' }).click();
   await expect(agent.getByRole('switch', { name: /Start an agent when a note arrives/ })).toBeChecked();
 });
+
+test('an address with notes and a call that wait says both: the agent did not start either', async ({ page }) => {
+  const waiting = (id: string, event?: string) => ({
+    id,
+    ...(event === undefined ? {} : { event }),
+    createdAt: '2026-10-28T10:00:00.000Z',
+    attempts: 2,
+    nextAt: '2026-10-28T11:00:00.000Z',
+    lastStatus: 500,
+  });
+  await stubWorker(page, {
+    workspaces: [ACME],
+    sites: SITES,
+    answer: (pathname, route) => {
+      if (pathname === '/console/workspaces/w1/connectors')
+        return route.fulfill({ json: { connectors: [HOOK], available: true } });
+      if (pathname === '/console/workspaces/w1/connectors/c2/deliveries')
+        return route.fulfill({
+          json: { deliveries: [waiting('dlv_1'), waiting('dlv_2'), waiting('dlv_3', 'agent.requested')] },
+        });
+
+      return undefined;
+    },
+  });
+  await page.goto(`${CONSOLE}/w/w1/connectors`);
+  const row = page.locator('button[aria-expanded]').filter({ hasText: 'REST API' });
+  await expect(row.getByText('2 notes did not arrive', { exact: true })).toBeVisible();
+  await expect(row.getByText('1 call of an agent did not arrive', { exact: true })).toBeVisible();
+});
