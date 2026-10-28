@@ -1247,6 +1247,8 @@ export type AgentKey = {
   createdAt: string;
   expiresAt: string;
   lastUsedAt?: string | null;
+  /** A connection of OAuth (FRU-467): the client a person approved, by its name and its host. */
+  client?: { name: string; host: string } | null;
 };
 
 /** What the console sends to make a key: `days` from 1 to `MAX_AGENT_KEY_DAYS`. */
@@ -1286,6 +1288,54 @@ export function makeAgentKey(workspace: string, key: NewAgentKey): Promise<Answe
 
 export function revokeAgentKey(workspace: string, key: string): Promise<Answer<unknown>> {
   return call('DELETE', `${agentKeysOf(workspace)}/${encodeURIComponent(key)}`);
+}
+
+/**
+ * A request of OAuth that waits for a person (FRU-467): the client, by the host its code goes to and
+ * the name it gave itself, the scopes it asked, and the workspaces this person may connect it to.
+ */
+export type AuthorizeRequest = {
+  request: string;
+  client: { name: string; host: string };
+  redirectUri: string;
+  scopes: ('read' | 'write')[];
+  expiresAt: string;
+  account: { id: string; email: string; name?: string };
+  workspaces: {
+    id: string;
+    name: string;
+    role: Role;
+    sites: { id: string; origin: string; visibility: Visibility }[];
+  }[];
+  defaultDays: number;
+};
+
+/** What « Allow » sends: the choices of a key. */
+export type AuthorizeChoice = {
+  workspace: string;
+  sites: string[];
+  rights: 'read' | 'write';
+  days: number;
+  verifiedOnly: boolean;
+};
+
+/** The request of the address. Quiet: nobody signed in is a state of the page. 404: unknown, ended or answered. */
+export function authorizeRequest(request: string): Promise<Answer<AuthorizeRequest>> {
+  return call('GET', `/console/oauth/requests/${encodeURIComponent(request)}`, undefined, { quiet: true });
+}
+
+/**
+ * « Allow » with the choices, or « Deny », for the account the page showed. The worker answers the
+ * address the browser goes back to.
+ */
+export function answerAuthorize(
+  request: string,
+  account: string,
+  choice: AuthorizeChoice | undefined,
+): Promise<Answer<{ redirect: string }>> {
+  const path = `/console/oauth/requests/${encodeURIComponent(request)}/${choice === undefined ? 'deny' : 'approve'}`;
+
+  return call('POST', path, { account, ...choice }, { quiet: true });
 }
 
 /** The writes of a key, the newest first, `AGENT_WRITES_LISTED` at most. */
