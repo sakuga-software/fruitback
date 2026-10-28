@@ -39,6 +39,7 @@ import {
   sitesHead,
   sitesTable,
 } from '../../src/site-page.ts';
+import { browserFamily, opensChromiumShortcuts } from '../../src/browser-family.ts';
 import { CAPTURE_EVERYWHERE, browserWarning, setCaptureEverywhere } from '../../src/capture-everywhere.ts';
 import { holdsSiteAccess } from '../../src/site-grant.ts';
 import { storedLanguage } from '../../src/language.ts';
@@ -123,6 +124,8 @@ let setShareCount: (count: number | undefined) => void = () => undefined;
 const sessions = createBrowserSessions();
 /** The Fruitback of this build, whose session is the account of the person (FRU-238). */
 const CLOUD = cloudEndpoint(import.meta.env.WXT_FRUITBACK_CLOUD);
+/** Chromium, Firefox or Safari (FRU-380): only for words and links, never for an API. */
+const FAMILY = browserFamily(import.meta.env);
 const returnAccess = createBrowserAccessReturn(sessions);
 /** The section « Workers and sessions », drawn again at each change of the rules or of a session. */
 const workers = element('div', '', 'workers-slot');
@@ -714,8 +717,9 @@ async function preferences(): Promise<HTMLElement> {
   const commands = browser.commands as typeof browser.commands & { openShortcutSettings?: () => Promise<void> };
   let onShortcut: (() => void) | undefined;
   if (typeof commands.openShortcutSettings === 'function') onShortcut = () => void commands.openShortcutSettings?.();
-  else if (!import.meta.env.FIREFOX) onShortcut = () => void browser.tabs.create({ url: CHROMIUM_SHORTCUTS_URL });
+  else if (opensChromiumShortcuts(FAMILY)) onShortcut = () => void browser.tabs.create({ url: CHROMIUM_SHORTCUTS_URL });
   const panel = (browser as unknown as { sidePanel?: unknown }).sidePanel !== undefined;
+  const captureWarning = browserWarning(FAMILY);
   // FRU-425: `<all_urls>`, asked for here and nowhere else.
   const capturesEverywhere = await browser.permissions
     .contains({ origins: [...CAPTURE_EVERYWHERE.origins] })
@@ -732,6 +736,7 @@ async function preferences(): Promise<HTMLElement> {
         : browser.storage.local.set({ [NOTES_NAME_KEY]: name }),
     ...(shortcut === undefined ? {} : { shortcut }),
     ...(onShortcut === undefined ? {} : { onShortcut }),
+    ...(FAMILY === 'safari' ? { shortcutPlace: 'safari' as const } : {}),
     synced: stored[SYNC_SETTING] === true,
     onSynced: (on) => browser.storage.local.set({ [SYNC_SETTING]: on }),
     selectors: stored[SHOW_SELECTORS_KEY] === true,
@@ -745,7 +750,7 @@ async function preferences(): Promise<HTMLElement> {
         ? browser.storage.local.remove(DOCK_POSITION_KEY)
         : browser.storage.local.set({ [DOCK_POSITION_KEY]: position }),
     capturesEverywhere,
-    captureWarning: browserWarning(import.meta.env.FIREFOX),
+    ...(captureWarning === undefined ? {} : { captureWarning }),
     onCapturesEverywhere: (on) =>
       setCaptureEverywhere(on, {
         request: (wanted) => browser.permissions.request({ origins: [...wanted.origins] }),

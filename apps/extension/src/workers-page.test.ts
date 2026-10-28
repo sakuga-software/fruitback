@@ -454,6 +454,21 @@ describe('« Preferences » (FRU-302)', () => {
     // Chrome on macOS: one sign for each key, with no `+`.
     assert.deepEqual(shortcutKeys('⌥⇧F'), ['⌥', '⇧', 'F']);
   });
+
+  it('names Safari Settings on Safari, which has no page of shortcuts to open (FRU-380)', () => {
+    const text = preferencesSection(page(), options({ shortcutPlace: 'safari' })).textContent ?? '';
+
+    assert.match(text, /Change it in Safari Settings, Extensions\./);
+    assert.doesNotMatch(text, /Manage Extension Shortcuts/);
+  });
+
+  it('quotes no prompt where the words of the browser are not known (Safari, FRU-380)', () => {
+    const { captureWarning: _quoted, ...unquoted } = options();
+    const text = preferencesSection(page(), unquoted).textContent ?? '';
+
+    assert.match(text, /Your browser will ask you to allow Fruitback on every website\./);
+    assert.doesNotMatch(text, /“/);
+  });
 });
 
 describe('« Preferences » whose write failed (raised in review)', () => {

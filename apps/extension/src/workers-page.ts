@@ -246,6 +246,11 @@ export type PreferencesOptions = {
   shortcut?: string;
   /** Opens the shortcut settings of the browser. None: the row says where to look. */
   onShortcut?: () => void;
+  /**
+   * Where to look when there is no `onShortcut`: Firefox's words by default, Safari's on Safari
+   * (FRU-380), which has no page of shortcuts an extension may open.
+   */
+  shortcutPlace?: 'firefox' | 'safari';
   synced: boolean;
   onSynced: (on: boolean) => Promise<void> | void;
   /** « Show CSS selectors » (FRU-349). Off by default. */
@@ -256,14 +261,25 @@ export type PreferencesOptions = {
   onDockPosition: (position: DockPosition) => Promise<void> | void;
   /** « Allow captures on every site » (FRU-425): whether `<all_urls>` is held now. */
   capturesEverywhere: boolean;
-  /** The words of the prompt of this browser, quoted by the row. */
-  captureWarning: string;
+  /**
+   * The words of the prompt of this browser, quoted by the row. None: the row quotes nothing
+   * (Safari, FRU-380: its prompt was not read, so no words are put in its mouth).
+   */
+  captureWarning?: string;
   /**
    * Asks for `<all_urls>`, or gives it back. Called in the click, before anything is awaited.
    * Answers whether it is held after: a refused prompt puts the switch back, with no error.
    */
   onCapturesEverywhere: (on: boolean) => Promise<boolean>;
 };
+
+/** Where the row of the shortcut says the key is changed. */
+function shortcutHelp(options: Pick<PreferencesOptions, 'onShortcut' | 'shortcutPlace'>): string {
+  if (options.onShortcut !== undefined) return t("Set in your browser's extension shortcuts.");
+  if (options.shortcutPlace === 'safari') return t('Change it in Safari Settings, Extensions.');
+
+  return t('Change it in Add-ons, Manage Extension Shortcuts.');
+}
 
 /** What a preference whose write failed says: the control is back where it was. */
 export const PREFERENCE_NOT_SAVED = msg('This preference could not be saved. Try again.');
@@ -415,10 +431,14 @@ export function preferencesSection(document: Document, options: PreferencesOptio
     row(
       document,
       t('Allow captures on every site'),
-      t(
-        'Your browser will say that Fruitback can “{warning}”. Fruitback uses it only for the captures you ask for, so you no longer click its icon before each one. Turning it off gives it back to your browser.',
-        { warning: t(options.captureWarning) },
-      ),
+      options.captureWarning === undefined
+        ? t(
+            'Your browser will ask you to allow Fruitback on every website. Fruitback uses it only for the captures you ask for, so you no longer click its icon before each one. Turning it off gives it back to your browser.',
+          )
+        : t(
+            'Your browser will say that Fruitback can “{warning}”. Fruitback uses it only for the captures you ask for, so you no longer click its icon before each one. Turning it off gives it back to your browser.',
+            { warning: t(options.captureWarning) },
+          ),
       (() => {
         const control: HTMLElement = toggle(document, {
           checked: options.capturesEverywhere,
@@ -454,16 +474,7 @@ export function preferencesSection(document: Document, options: PreferencesOptio
   if (options.onShortcut !== undefined) {
     shortcut.append(button(document, 'pref-link', t('Change'), options.onShortcut));
   }
-  card.append(
-    row(
-      document,
-      t('Leave feedback shortcut'),
-      options.onShortcut === undefined
-        ? t('Change it in Add-ons, Manage Extension Shortcuts.')
-        : t("Set in your browser's extension shortcuts."),
-      shortcut,
-    ),
-  );
+  card.append(row(document, t('Leave feedback shortcut'), shortcutHelp(options), shortcut));
 
   card.append(
     row(

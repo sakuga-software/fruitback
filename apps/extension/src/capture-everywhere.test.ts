@@ -45,8 +45,10 @@ describe('the permission of the captures on every site (FRU-425)', () => {
   });
 
   it('quotes the prompt of each browser', () => {
-    assert.equal(browserWarning(false), BROWSER_WARNING.chrome);
-    assert.equal(browserWarning(true), BROWSER_WARNING.firefox);
+    assert.equal(browserWarning('chromium'), BROWSER_WARNING.chrome);
+    assert.equal(browserWarning('firefox'), BROWSER_WARNING.firefox);
+    // FRU-380: Safari's words were not read, so nothing is quoted for it.
+    assert.equal(browserWarning('safari'), undefined);
     assert.equal(BROWSER_WARNING.chrome, 'Read and change all your data on all websites');
   });
 

@@ -1,3 +1,4 @@
+import type { BrowserFamily } from './browser-family.ts';
 import { msg } from './i18n.ts';
 
 /**
@@ -23,9 +24,14 @@ export const BROWSER_WARNING = {
   firefox: msg('Access your data for all websites'),
 } as const;
 
-/** The browser's prompt for this build. */
-export function browserWarning(firefox: boolean): string {
-  return firefox ? BROWSER_WARNING.firefox : BROWSER_WARNING.chrome;
+/**
+ * The browser's prompt for this build. None on Safari (FRU-380): Safari asks per site from its own
+ * popover, and its words for `<all_urls>` were not read, so the row quotes nothing.
+ */
+export function browserWarning(family: BrowserFamily): string | undefined {
+  if (family === 'safari') return undefined;
+
+  return family === 'firefox' ? BROWSER_WARNING.firefox : BROWSER_WARNING.chrome;
 }
 
 /**

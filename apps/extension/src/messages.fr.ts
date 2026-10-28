@@ -10,6 +10,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Allow captures on every site': 'Autoriser les captures sur tous les sites',
   'Your browser will say that Fruitback can “{warning}”. Fruitback uses it only for the captures you ask for, so you no longer click its icon before each one. Turning it off gives it back to your browser.':
     'Votre navigateur dira que Fruitback peut « {warning} ». Fruitback s’en sert seulement pour les captures que vous demandez : vous n’avez plus à cliquer sur son icône avant chacune. La désactiver la rend à votre navigateur.',
+  'Your browser will ask you to allow Fruitback on every website. Fruitback uses it only for the captures you ask for, so you no longer click its icon before each one. Turning it off gives it back to your browser.':
+    'Votre navigateur vous demandera d’autoriser Fruitback sur tous les sites web. Fruitback s’en sert seulement pour les captures que vous demandez : vous n’avez plus à cliquer sur son icône avant chacune. La désactiver la rend à votre navigateur.',
   // Measured: Chrome in French says it so (`e2e/capture-everywhere.spec.ts`).
   'Read and change all your data on all websites': 'Lire et modifier toutes vos données sur tous les sites Web',
   'Access your data for all websites': 'Accéder à vos données sur tous les sites web',
@@ -229,6 +231,10 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Add rule': 'Ajouter la règle',
   'Change it in Add-ons, Manage Extension Shortcuts.':
     'Changez-le dans Modules complémentaires, Gérer les raccourcis d’extensions.',
+  // FRU-380: Safari has no page of shortcuts an extension may open. The names are those of Safari in
+  // French (Réglages, Extensions), not measured in a French Safari.
+  'Change it in Safari Settings, Extensions.': 'Changez-le dans les Réglages de Safari, Extensions.',
+  'Safari Settings, Extensions': 'Réglages de Safari, Extensions',
   'Add a rule': 'Ajouter une règle',
   'Import a rules file': 'Importer un fichier de règles',
   'Downloaded {file}, with 1 rule.': '{file} téléchargé, avec 1 règle.',

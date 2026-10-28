@@ -4,6 +4,7 @@ import { ICON_SIZES, iconPath } from './src/icon-sizes.ts';
 import { DATA_COLLECTION_PERMISSIONS, FIREFOX_MIN_VERSION } from './src/data-collection.ts';
 import { MANIFEST_COMMANDS } from './src/shortcut.ts';
 import { noEval } from './src/no-eval.ts';
+import { safariManifest } from './src/browser-family.ts';
 
 /** Where the licence lives in the output, and where it is copied from (FRU-82). */
 export const LICENSE_IN_OUTPUT = 'LICENSE';
@@ -18,8 +19,9 @@ export const LICENSE_IN_OUTPUT = 'LICENSE';
  * listing. So nothing is declared: `background.ts` registers the two scripts at runtime, for the
  * origins the reviewer turned on and granted, and unregisters them when they turn one off.
  *
- * MV3 on both browsers. Firefox is not an afterthought here — wxt would default it to MV2, where the
- * main world the widget needs does not exist.
+ * MV3 on every browser. Firefox is not an afterthought here — wxt would default it to MV2, where the
+ * main world the widget needs does not exist. Safari takes the same build, `wxt build -b safari`
+ * (FRU-380), wrapped in an app by Xcode: see `safari-xcode.ts`.
  */
 export default defineConfig({
   // **The licence travels with the build.** This extension is AGPL-3.0-only and what a store hands
@@ -31,6 +33,10 @@ export default defineConfig({
         relativeDest: LICENSE_IN_OUTPUT,
         absoluteSrc: fileURLToPath(new URL('LICENSE', import.meta.url)),
       });
+    },
+    // FRU-380: Safari is told its own minimum, and not Firefox's. See `src/browser-family.ts`.
+    'build:manifestGenerated': (wxt, manifest) => {
+      if (wxt.config.browser === 'safari') safariManifest(manifest);
     },
   },
   manifestVersion: 3,

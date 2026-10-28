@@ -60,6 +60,7 @@ import {
 } from '../../src/popup-state.ts';
 import { type TabCommand } from '../../src/protocol.ts';
 import { type PanelApis, openPanelOrPage } from '../../src/side-panel.ts';
+import { browserFamily, extensionsPlace } from '../../src/browser-family.ts';
 import { type TabCommandAnswer, parseAnswer, tabCommand } from '../../src/tab-command.ts';
 import {
   type Account,
@@ -872,7 +873,8 @@ function otherCopyLine(tab: PopupTab | undefined, on: boolean): HTMLElement {
   if (!on) return line;
   void askTab(tab, 'counts').then(({ otherCopy }) => {
     if (otherCopy === undefined) return;
-    const place = import.meta.env.FIREFOX ? 'about:addons' : 'chrome://extensions';
+    // An address stays as it is (no catalog has it); Safari's words are translated (FRU-380).
+    const place = t(extensionsPlace(browserFamily(import.meta.env)));
     line.textContent =
       otherCopy.version === undefined
         ? t(OTHER_COPY, { place })

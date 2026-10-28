@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <!-- Firefox: the sidebar stays closed at install; it opens from the popup. -->
     <meta name="manifest.open_at_install" content="false" />
+    <!-- Safari has no side panel (FRU-380): no page, no `side_panel`, no `sidePanel` permission. -->
+    <meta name="manifest.exclude" content="['safari']" />
     <title>Fruitback</title>
     <link rel="stylesheet" href="../popup/style.css" />
     <link rel="stylesheet" href="../../src/kit.css" />

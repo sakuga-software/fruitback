@@ -42,6 +42,8 @@ const VIEWS = [
   './workers-page.ts',
   // FRU-425: the prompt of each browser, quoted by « Allow captures on every site ».
   './capture-everywhere.ts',
+  // FRU-380: where Safari keeps its extensions, named by the popup.
+  './browser-family.ts',
 ] as const;
 /** The modules whose constants are sentences a page shows through `showProblem` or `t`. */
 // FRU-423: `context-menu.ts` holds the words of the item of the context menu.
