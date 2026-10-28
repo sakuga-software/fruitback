@@ -84,10 +84,13 @@ export default defineConfig({
     {
       // Vite, not a `node --watch` process: HMR replaces modules instead of restarting the server,
       // which is what stopped a source edit from killing the suite mid-run.
-      command: 'pnpm --filter @fruitback/playground dev',
+      // EXPERIMENT (FRU-488, draft): a development build, bundled, unminified, with client source maps,
+      // served by react-router-serve. Measured against `react-router dev` on CI.
+      command:
+        'pnpm --filter @fruitback/playground exec react-router build --mode development --minify false --sourcemapClient && pnpm --filter @fruitback/playground serve',
       url: PLAYGROUND,
       reuseExistingServer: !process.env.CI,
-      env: { VITE_FRUITBACK_WORKER: WORKER },
+      env: { VITE_FRUITBACK_WORKER: WORKER, NODE_ENV: 'development', PORT: '5177' },
     },
     {
       // The console of the Cloud, on its own fixed port (FRU-159). Its specs measure layout and answer
