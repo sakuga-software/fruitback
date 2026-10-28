@@ -11,6 +11,7 @@ import {
   samePlace,
   setPlaces,
 } from '../api';
+import { ConnectorMark } from '../connector-marks';
 import { msg, t } from '../i18n';
 import type { Listed } from '../listed';
 import { writeProblemOf } from '../problems';
@@ -133,6 +134,21 @@ export function SitePlaces({
     return [t('Linear'), team?.name, project?.name].filter(Boolean).join(' · ');
   }
 
+  /**
+   * The colour Linear draws a place of Linear with (FRU-459): its project's, else its team's. Known once
+   * the teams of its source are read: until then, and when that read failed, the mark of the source shows alone.
+   */
+  function colorOf(each: Destination): string | undefined {
+    const source = sourceOf(each);
+    if (source?.kind !== 'linear') return undefined;
+    const offer = offers[source.id];
+    if (typeof offer !== 'object' || offer.kind !== 'linear') return undefined;
+    const team = offer.teams.find((one) => one.id === each.teamId);
+    const project = team?.projects.find((one) => one.id === each.projectId);
+
+    return project?.color ?? team?.color;
+  }
+
   /** Whether a GitHub place is public: GitHub's list wins once it names the repository (FRU-382). */
   function isPublic(each: Destination): boolean {
     const source = sourceOf(each);
@@ -238,6 +254,20 @@ export function SitePlaces({
             return (
               <li key={valueOf(each)} className="border-b border-line py-[8px] text-small">
                 <span className="flex items-center gap-[8px]">
+                  {/* The mark of the source, and the colour Linear gives the place (FRU-459): the name says both. */}
+                  {sourceOf(each) === undefined ? null : (
+                    <span className="flex flex-none items-center gap-[6px] text-muted" data-place-mark>
+                      <ConnectorMark kind={sourceOf(each)?.kind ?? 'linear'} />
+                      {colorOf(each) === undefined ? null : (
+                        <span
+                          aria-hidden="true"
+                          className="size-[10px] flex-none rounded-full border border-line"
+                          data-place-color={colorOf(each)}
+                          style={{ background: colorOf(each) }}
+                        />
+                      )}
+                    </span>
+                  )}
                   <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{nameOf(each)}</span>
                   {index === 0 ? <Chip>{t('Default')}</Chip> : null}
                 </span>

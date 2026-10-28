@@ -29,7 +29,8 @@ type Team = {
   name: string;
   key: string;
   private?: boolean;
-  projects: { id: string; name: string; status?: { name: string; type: string } }[];
+  color?: string;
+  projects: { id: string; name: string; status?: { name: string; type: string }; color?: string }[];
 };
 const TEAMS: Team[] = [{ id: 't1', name: 'Web', key: 'WEB', projects: [{ id: 'p1', name: 'Site' }] }];
 const REPOSITORIES = [
@@ -619,4 +620,43 @@ test('a team, then one of its projects, under the kind of its status (FRU-458)',
   await panel(page).getByRole('button', { name: 'Choose another team', exact: true }).click();
   await expect(project(page)).toHaveCount(0);
   expect(worker.sent).toHaveLength(1);
+});
+
+test('each place shows the mark of its source, and a place of Linear the colour Linear gives it (FRU-459)', async ({
+  page,
+}) => {
+  const worker = await workerWith(page);
+  worker.teams = [
+    {
+      id: 't1',
+      name: 'Web',
+      key: 'WEB',
+      color: '#5e6ad2',
+      projects: [
+        { id: 'p1', name: 'Site', color: '#26b5ce' },
+        { id: 'p2', name: 'Blog' },
+      ],
+    },
+  ];
+  worker.places = [
+    { connector: 'c1', teamId: 't1', projectId: 'p1' },
+    { connector: 'c1', teamId: 't1', projectId: 'p2' },
+    { connector: 'g1', teamId: 'acme/web' },
+    { connector: 'r1' },
+  ];
+  await openPlaces(page);
+  const rows = panel(page).locator('ol > li');
+  await expect(rows).toHaveCount(4);
+
+  // A mark for every place, drawn and hidden from a screen reader: the name says the source.
+  for (const row of await rows.all()) {
+    await expect(row.locator('[data-place-mark] svg[aria-hidden="true"]')).toHaveCount(1);
+  }
+  // The project's colour, else its team's; none for GitHub and for an address.
+  await expect.poll(() => rows.nth(0).locator('[data-place-color]').getAttribute('data-place-color')).toBe('#26b5ce');
+  await expect(rows.nth(1).locator('[data-place-color]')).toHaveAttribute('data-place-color', '#5e6ad2');
+  await expect(rows.nth(2).locator('[data-place-color]')).toHaveCount(0);
+  await expect(rows.nth(3).locator('[data-place-color]')).toHaveCount(0);
+  await expect(rows.nth(0).locator('[data-place-color]')).toHaveCSS('background-color', 'rgb(38, 181, 206)');
+  await expectNoViolation(page, 'the marks of the places');
 });
