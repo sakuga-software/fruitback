@@ -24,6 +24,7 @@ export default [
   route('verify-email', 'routes/verify-email.tsx'),
   route('connect', 'routes/connect-start.tsx'),
   route('connect/:request', 'routes/connect.tsx'),
+  route('authorize/:request', 'routes/authorize.tsx'),
   layout('routes/workspace.tsx', [
     route('w/:workspace/sites', 'routes/sites.tsx'),
     route('w/:workspace/sites/:site', 'routes/site.tsx'),

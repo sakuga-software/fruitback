@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { type Me, type Site, call, callUntilAnswered, myInvitations } from '../api';
 import { t } from '../i18n';
-import { takeConnect } from '../connect-return';
+import { takeAuthorize, takeConnect } from '../connect-return';
 import { LinkButton, Problem } from '../ui';
 import { useLocale } from '../use-locale';
 
@@ -31,6 +31,9 @@ export default function Home() {
       // A sign-in with a provider that started on « Connect this browser » goes back to its question.
       const connecting = takeConnect();
       if (connecting !== undefined) return navigate(`/connect/${connecting}`, { replace: true });
+      // And one that started on the consent page of a client of OAuth (FRU-467).
+      const authorizing = takeAuthorize();
+      if (authorizing !== undefined) return navigate(`/authorize/${authorizing}`, { replace: true });
       const manages = me.data.workspaces.find((each) => each.role === 'owner' || each.role === 'admin');
       if (unstarted && manages !== undefined) {
         return navigate(`/w/${manages.id}/connectors?github=unstarted`, { replace: true });
