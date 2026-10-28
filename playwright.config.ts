@@ -82,10 +82,11 @@ export default defineConfig({
       },
     },
     {
-      // Vite, not a `node --watch` process: HMR replaces modules instead of restarting the server,
-      // which is what stopped a source edit from killing the suite mid-run.
-      // EXPERIMENT (FRU-488, draft): a development build, bundled, unminified, with client source maps,
-      // served by react-router-serve. Measured against `react-router dev` on CI.
+      // A development build of the playground, bundled, served by `react-router-serve` (FRU-488).
+      // Under `react-router dev` each page compiled its modules on demand, with four browsers on four
+      // cores. A development build, because the widget reads `source` from React's dev metadata:
+      // unminified, so the components keep their names, and with client source maps, so the file is
+      // found. The other specs took about 25 % less time on CI (#665). `pnpm dev` stays as it was.
       command:
         'pnpm --filter @fruitback/playground exec react-router build --mode development --minify false --sourcemapClient && pnpm --filter @fruitback/playground serve',
       url: PLAYGROUND,
