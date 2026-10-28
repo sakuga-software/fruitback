@@ -8,6 +8,7 @@ import {
   DOCK_POSITION_KEY,
   parseBridgeMessage,
   parseDockPosition,
+  parsePageSiteRead,
   parseRelayResponse,
   relayRefusal,
 } from '../src/protocol.ts';
@@ -166,6 +167,20 @@ export default defineContentScript({
       }
 
       if (message?.kind === 'relay-request') void relay(message);
+      // FRU-470: « All pages », carried across and answered whatever happens, as a relay is.
+      if (message?.kind === 'site-notes-request') {
+        void browser.runtime
+          .sendMessage(message)
+          .catch(() => undefined)
+          .then((answer: unknown) =>
+            post({
+              channel: CHANNEL,
+              kind: 'site-notes-response',
+              id: message.id,
+              read: parsePageSiteRead(answer) ?? { ok: false, reason: 'failed' },
+            }),
+          );
+      }
       // FRU-44: carried across, and answered whatever happens, as a relay is.
       if (message?.kind === 'capture-request') {
         void browser.runtime

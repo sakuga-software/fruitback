@@ -14,6 +14,7 @@
  * request and the background attaches the credential, out of the page's reach.
  */
 
+import type { SiteNote, SiteRead } from '@fruitback/widget';
 import { STATUS_COLOR } from '@fruitback/shared';
 import type { DockPosition, TransportRequest, TransportResponse } from '@fruitback/widget';
 import { isWorkerEndpoint } from './endpoint.ts';
@@ -539,7 +540,28 @@ export type BridgeMessage =
   | SessionMessage
   | SelectorsMessage
   | DockMessage
-  | SignInMessage;
+  | SignInMessage
+  | SiteNotesRequestMessage
+  | SiteNotesResponseMessage;
+
+/**
+ * « All pages » of the widget the extension mounts asks for one page of the notes of its site
+ * (FRU-470). The page can send one too: `site-notes-relay.ts` says what that buys it. The words of a
+ * search and a cursor are all the page decides.
+ */
+export type SiteNotesRequestMessage = {
+  channel: typeof CHANNEL;
+  kind: 'site-notes-request';
+  id: string;
+  query: { q?: string; cursor?: string };
+};
+
+export type SiteNotesResponseMessage = {
+  channel: typeof CHANNEL;
+  kind: 'site-notes-response';
+  id: string;
+  read: SiteRead;
+};
 
 /**
  * Recognise one of our messages, or return `undefined`.
@@ -574,6 +596,15 @@ export function parseBridgeMessage(data: unknown): BridgeMessage | undefined {
   if (data.kind === 'relay-request') return parseRelayRequestMessage(data);
   if (data.kind === 'relay-response') return parseRelayResponseMessage(data);
   if (data.kind === 'capture-request') return parseCaptureRequest(data);
+  if (data.kind === 'site-notes-request') return parseSiteNotesRequest(data);
+  if (data.kind === 'site-notes-response') {
+    const id = parseId(data.id);
+    const read = parsePageSiteRead(data.read);
+
+    return id === undefined || read === undefined
+      ? undefined
+      : { channel: CHANNEL, kind: 'site-notes-response', id, read };
+  }
   if (data.kind === 'capture-response') return parseCaptureResponse(data);
   if (data.kind === 'command') return parseCommand(data);
   if (data.kind === 'command-response') return parseCommandResponse(data);
@@ -843,4 +874,82 @@ export const REFUSED_STATUS = 0;
  */
 export function relayRefusal(reason: string): RelayResponse {
   return { ok: false, status: REFUSED_STATUS, body: reason };
+}
+
+/** The words and the cursor, and nothing else (FRU-470). As long as the side panel lets them be. */
+function parseSiteNotesRequest(data: Record<string, unknown>): SiteNotesRequestMessage | undefined {
+  const id = parseId(data.id);
+  const query = isRecord(data.query) ? data.query : undefined;
+  if (id === undefined || query === undefined) return undefined;
+  const { q, cursor } = query;
+  if (q !== undefined && (typeof q !== 'string' || q.length > SITE_QUERY_MAX)) return undefined;
+  if (cursor !== undefined && (typeof cursor !== 'string' || cursor.length === 0 || cursor.length > SITE_CURSOR_MAX)) {
+    return undefined;
+  }
+
+  return {
+    channel: CHANNEL,
+    kind: 'site-notes-request',
+    id,
+    query: { ...(q === undefined || q === '' ? {} : { q }), ...(cursor === undefined ? {} : { cursor }) },
+  };
+}
+
+const SITE_QUERY_MAX = 200;
+const SITE_CURSOR_MAX = 500;
+const SITE_TEXT_MAX = 2_000;
+const SITE_NOTES_MAX = 50;
+const SITE_STAGES = ['new', 'todo', 'progress', 'done', 'closed'] as const;
+
+/**
+ * A page of notes for « All pages », rebuilt field by field (FRU-470): it crossed from the background
+ * to the bridge, and from the bridge to the page. A bad note costs that note.
+ */
+export function parsePageSiteRead(value: unknown): SiteRead | undefined {
+  if (!isRecord(value)) return undefined;
+  if (value.ok === false) {
+    const { reason } = value;
+
+    return reason === 'signed-out' || reason === 'unavailable' || reason === 'failed'
+      ? { ok: false, reason }
+      : undefined;
+  }
+  if (value.ok !== true) return undefined;
+  const { notes, total, next } = value;
+  if (!Array.isArray(notes) || typeof total !== 'number' || !Number.isSafeInteger(total) || total < 0) return undefined;
+  const parsed = notes.slice(0, SITE_NOTES_MAX).flatMap((note) => {
+    const one = parsePageSiteNote(note);
+
+    return one === undefined ? [] : [one];
+  });
+  const cursor = typeof next === 'string' && next.length > 0 && next.length <= SITE_CURSOR_MAX ? next : undefined;
+
+  return { ok: true, notes: parsed, total, ...(cursor === undefined ? {} : { next: cursor }) };
+}
+
+function parsePageSiteNote(value: unknown): SiteNote | undefined {
+  if (!isRecord(value)) return undefined;
+  const short = (field: unknown, max = SITE_TEXT_MAX): string | undefined =>
+    typeof field === 'string' && field.length <= max ? field : undefined;
+  const note = short(value.note, 200);
+  const excerpt = short(value.excerpt);
+  const stage = SITE_STAGES.find((each) => each === value.stage);
+  const createdAt = short(value.createdAt, 64);
+  const page = isRecord(value.page) ? value.page : {};
+  const url = short(page.url);
+  const path = short(page.path);
+  if (note === undefined || note === '' || excerpt === undefined || stage === undefined) return undefined;
+  if (createdAt === undefined || url === undefined || path === undefined) return undefined;
+  const author = short(value.author, 200);
+  const reference = short(value.reference, 200);
+
+  return {
+    note,
+    excerpt,
+    page: { url, path },
+    stage,
+    ...(author === undefined || author === '' ? {} : { author }),
+    ...(reference === undefined || reference === '' ? {} : { reference }),
+    createdAt,
+  };
 }
