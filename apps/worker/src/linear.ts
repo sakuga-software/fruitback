@@ -852,59 +852,137 @@ function attachmentsOf(node: IssueNode): { attachments?: { name: string; url: st
   return ours.length === 0 ? {} : { attachments: ours.map((each) => ({ name: each.title, url: each.url })) };
 }
 
-export type LinearTeam = { id: string; name: string; key: string; projects: { id: string; name: string }[] };
+/**
+ * Where a project stands (FRU-458): the name its workspace gave the status, and the kind Linear files
+ * it under, `backlog`, `planned`, `started`, `paused`, `completed` or `canceled`.
+ */
+export type LinearProjectStatus = { name: string; type: string };
+export type LinearProject = { id: string; name: string; status?: LinearProjectStatus };
+/** `private`: only its members see the team in Linear (FRU-458). Absent when Linear did not say. */
+export type LinearTeam = { id: string; name: string; key: string; private?: boolean; projects: LinearProject[] };
 
+/**
+ * A page of 50 teams with 50 projects each, then the projects that are left, team by team (FRU-458).
+ * Linear prices a query by the nodes it may return: a page of 100 teams with the status of 50
+ * projects each would weigh twice as much as the query of before.
+ */
 const TEAMS_QUERY = `
-  query FruitbackTeams {
+  query FruitbackTeams($after: String) {
     viewer { name }
     organization { name }
-    teams(first: 100) {
-      nodes { id name key projects(first: 50) { nodes { id name } } }
+    teams(first: 50, after: $after) {
+      nodes {
+        id name key private
+        projects(first: 50) { nodes { id name status { name type } } pageInfo { hasNextPage endCursor } }
+      }
+      pageInfo { hasNextPage endCursor }
     }
   }
 `;
 
+const TEAM_PROJECTS_QUERY = `
+  query FruitbackTeamProjects($team: String!, $after: String) {
+    team(id: $team) {
+      projects(first: 100, after: $after) { nodes { id name status { name type } } pageInfo { hasNextPage endCursor } }
+    }
+  }
+`;
+
+/** How many pages a list reads at most: a key that reaches more is cut there, never read without end. */
+const MAX_PAGES = 20;
+
+type PageInfo = { hasNextPage?: unknown; endCursor?: unknown };
+type ProjectNode = { id?: unknown; name?: unknown; status?: { name?: unknown; type?: unknown } | null };
+
+/** The cursor of the next page, or `undefined` when there is none. */
+function nextOf(page: PageInfo | undefined): string | undefined {
+  return page?.hasNextPage === true && typeof page.endCursor === 'string' ? page.endCursor : undefined;
+}
+
+function projectsOf(nodes: ProjectNode[] | undefined): LinearProject[] {
+  return (nodes ?? []).flatMap((project) => {
+    if (typeof project.id !== 'string' || typeof project.name !== 'string') return [];
+    const status = project.status;
+
+    return [
+      {
+        id: project.id,
+        name: project.name,
+        ...(typeof status?.name === 'string' && typeof status.type === 'string'
+          ? { status: { name: status.name, type: status.type } }
+          : {}),
+      },
+    ];
+  });
+}
+
 /**
  * Who this key belongs to and the teams it reaches (FRU-121): what the console needs to offer a
- * destination. Throws a `StoreError` for a key Linear refuses.
+ * destination, every team and every project, page after page (FRU-458). Throws a `StoreError` for a
+ * key Linear refuses.
  */
 export async function listLinearTeams(
   apiKey: string,
 ): Promise<{ viewer: string; organization: string; teams: LinearTeam[] }> {
-  const data = await graphql<{
-    viewer?: { name?: unknown };
-    organization?: { name?: unknown };
-    teams?: {
-      nodes?: {
-        id?: unknown;
-        name?: unknown;
-        key?: unknown;
-        projects?: { nodes?: { id?: unknown; name?: unknown }[] };
-      }[];
-    };
-  }>({ apiKey, teamId: 'none' }, TEAMS_QUERY, {});
+  let viewer = '';
+  let organization = '';
+  const teams: LinearTeam[] = [];
+  /** The teams whose projects go on past the first page, and where. */
+  const more: { team: LinearTeam; after: string }[] = [];
+  let after: string | undefined;
 
-  return {
-    viewer: typeof data.viewer?.name === 'string' ? data.viewer.name : '',
-    // The workspace of Linear. A connector made with OAuth is named after it: its actor is the application.
-    organization: typeof data.organization?.name === 'string' ? data.organization.name : '',
-    teams: (data.teams?.nodes ?? []).flatMap((team) => {
-      if (typeof team.id !== 'string' || typeof team.name !== 'string') return [];
+  for (let page = 0; page < MAX_PAGES; page += 1) {
+    const data = await graphql<{
+      viewer?: { name?: unknown };
+      organization?: { name?: unknown };
+      teams?: {
+        nodes?: {
+          id?: unknown;
+          name?: unknown;
+          key?: unknown;
+          private?: unknown;
+          projects?: { nodes?: ProjectNode[]; pageInfo?: PageInfo };
+        }[];
+        pageInfo?: PageInfo;
+      };
+    }>({ apiKey, teamId: 'none' }, TEAMS_QUERY, after === undefined ? {} : { after });
 
-      return [
-        {
-          id: team.id,
-          name: team.name,
-          key: typeof team.key === 'string' ? team.key : '',
-          projects: (team.projects?.nodes ?? []).flatMap((project) =>
-            typeof project.id === 'string' && typeof project.name === 'string'
-              ? [{ id: project.id, name: project.name }]
-              : [],
-          ),
-        },
-      ];
-    }),
-  };
+    if (page === 0) {
+      viewer = typeof data.viewer?.name === 'string' ? data.viewer.name : '';
+      // The workspace of Linear. A connector made with OAuth is named after it: its actor is the application.
+      organization = typeof data.organization?.name === 'string' ? data.organization.name : '';
+    }
+    for (const node of data.teams?.nodes ?? []) {
+      if (typeof node.id !== 'string' || typeof node.name !== 'string') continue;
+      const team: LinearTeam = {
+        id: node.id,
+        name: node.name,
+        key: typeof node.key === 'string' ? node.key : '',
+        ...(typeof node.private === 'boolean' ? { private: node.private } : {}),
+        projects: projectsOf(node.projects?.nodes),
+      };
+      teams.push(team);
+      const next = nextOf(node.projects?.pageInfo);
+      if (next !== undefined) more.push({ team, after: next });
+    }
+    after = nextOf(data.teams?.pageInfo);
+    if (after === undefined) break;
+  }
+
+  for (const { team, after: first } of more) {
+    let cursor: string | undefined = first;
+    for (let page = 0; page < MAX_PAGES && cursor !== undefined; page += 1) {
+      const data: { team?: { projects?: { nodes?: ProjectNode[]; pageInfo?: PageInfo } } } = await graphql(
+        { apiKey, teamId: team.id },
+        TEAM_PROJECTS_QUERY,
+        { team: team.id, after: cursor },
+      );
+      team.projects.push(...projectsOf(data.team?.projects?.nodes));
+      cursor = nextOf(data.team?.projects?.pageInfo);
+    }
+  }
+
+  return { viewer, organization, teams };
 }
 
 /**

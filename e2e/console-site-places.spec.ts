@@ -24,7 +24,14 @@ const REST = {
   label: 'REST · https://hooks.acme.dev/fruitback',
   createdAt: '2026-10-02T10:00:00.000Z',
 };
-const TEAMS = [{ id: 't1', name: 'Web', key: 'WEB', projects: [{ id: 'p1', name: 'Site' }] }];
+type Team = {
+  id: string;
+  name: string;
+  key: string;
+  private?: boolean;
+  projects: { id: string; name: string; status?: { name: string; type: string } }[];
+};
+const TEAMS: Team[] = [{ id: 't1', name: 'Web', key: 'WEB', projects: [{ id: 'p1', name: 'Site' }] }];
 const REPOSITORIES = [
   { fullName: 'acme/web', private: true },
   { fullName: 'acme/Docs', private: false },
@@ -60,7 +67,7 @@ type Worker = {
   /** The repositories the GitHub source reaches. */
   repositories: { fullName: string; private: boolean }[];
   /** The teams of the Linear source. */
-  teams: typeof TEAMS;
+  teams: Team[];
   /** The read of the sources fails. */
   connectorsFail: boolean;
   /** The places of the one site, as the worker keeps them: a repository is in `teamId`. */
@@ -155,6 +162,9 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
 const card = (page: Page) => page.locator('li[data-site]').first();
 const panel = (page: Page) => page.getByRole('region', { name: `Where the notes of ${SITE} go` });
 const add = (page: Page) => panel(page).getByRole('button', { name: new RegExp(`Add a destination for ${SITE}`) });
+/** The list of the projects of the team chosen in the first list (FRU-458). */
+const project = (page: Page, team = 'Web') =>
+  panel(page).getByRole('button', { name: new RegExp(`Add a project of ${team}`) });
 /** The search above « Add a destination… » (FRU-438). */
 const search = (page: Page) => panel(page).getByRole('searchbox', { name: 'Search the destinations', exact: true });
 
@@ -185,14 +195,18 @@ test('an owner chooses where the notes of a site go, on the page of the site (FR
   await add(page).click();
   await expect(page.getByRole('option')).toHaveText([
     'Add a destination…',
-    'Web, no project',
-    'Web · Site',
+    'Web (WEB) · 1 project',
     'acme/api',
     'acme/web',
     'acme/Docs',
     'hooks.acme.dev/fruitback',
   ]);
   await expect(page.getByText('GitHub, public repositories of acme: their issues are public')).toBeVisible();
+  // A team adds nothing: it opens the list of its projects (FRU-458).
+  await page.getByRole('option', { name: 'Web (WEB) · 1 project', exact: true }).click();
+  expect(worker.sent).toEqual([]);
+  await project(page).click();
+  await expect(page.getByRole('option')).toHaveText(['Choose a project of Web…', 'Web, no project', 'Site']);
   await page.getByRole('option', { name: 'Web, no project', exact: true }).click();
 
   await expect.poll(() => worker.sent).toEqual([[{ connector: 'c1', teamId: 't1' }]]);
@@ -220,9 +234,11 @@ test('the places wait for a list to be kept before the next gesture (FRU-123)', 
   await expect(add(page)).toBeEnabled();
 
   // The first gesture: a second place, whose write the worker holds open.
-  worker.holdNext();
   await add(page).click();
-  await page.getByRole('option', { name: 'Web · Site', exact: true }).click();
+  await page.getByRole('option', { name: 'Web (WEB) · 1 project', exact: true }).click();
+  worker.holdNext();
+  await project(page).click();
+  await page.getByRole('option', { name: 'Site', exact: true }).click();
   await expect.poll(() => worker.sent.length).toBe(1);
 
   // While it is written, every control of the list waits.
@@ -455,7 +471,7 @@ test('the search keeps the places whose name holds what is typed, and a cross em
   // No case and no accent: « equipe » finds « Équipe Web », and the sources with nothing left go.
   await search(page).fill('equipe');
   await add(page).click();
-  await expect(options).toHaveText(['Add a destination…', 'Équipe Web, no project', 'Équipe Web · Site']);
+  await expect(options).toHaveText(['Add a destination…', 'Équipe Web (WEB) · 1 project']);
   await expect(page.getByText('GitHub, private repositories of acme')).toHaveCount(0);
   await close(page);
   await search(page).fill('ACME/D');
@@ -476,7 +492,7 @@ test('the search keeps the places whose name holds what is typed, and a cross em
   await expect(search(page)).toBeFocused();
   await expect(clear).toHaveCount(0);
   await add(page).click();
-  await expect(options).toHaveCount(7);
+  await expect(options).toHaveCount(6);
   await close(page);
 
   // A place chosen from a search is sent.
@@ -541,3 +557,66 @@ for (const locale of ['en', 'fr'] as const) {
     await expectNoViolation(page, `the places at 390 px, ${locale}`);
   });
 }
+
+test('a team, then one of its projects, under the kind of its status (FRU-458)', async ({ page }) => {
+  const worker = await workerWith(page);
+  worker.teams = [
+    {
+      id: 't1',
+      name: 'Web',
+      key: 'WEB',
+      private: true,
+      projects: [
+        { id: 'p1', name: 'Site', status: { name: 'In Progress', type: 'started' } },
+        { id: 'p2', name: 'Archive', status: { name: 'Done', type: 'completed' } },
+        { id: 'p3', name: 'Blog', status: { name: 'Next', type: 'planned' } },
+        { id: 'p4', name: 'App' },
+      ],
+    },
+    { id: 't2', name: 'Ops', key: 'OPS', projects: [] },
+  ];
+  await openPlaces(page);
+  await expect(add(page)).toBeEnabled();
+
+  // Each team says how many projects it has, and whether only its members see it.
+  await add(page).click();
+  await expect(page.getByRole('option', { name: /^Web|^Ops/ })).toHaveText([
+    'Web (WEB) · 4 projects · private',
+    'Ops (OPS) · no project',
+  ]);
+  await page.getByRole('option', { name: 'Web (WEB) · 4 projects · private', exact: true }).click();
+
+  // The whole team first, then what is under way, then what is planned, then what is done; the
+  // project with no status last. Each project says its status as Linear names it.
+  await expect(panel(page).getByText('Team Web', { exact: true })).toBeVisible();
+  await project(page).click();
+  await expect(page.getByRole('option')).toHaveText([
+    'Choose a project of Web…',
+    'Web, no project',
+    'Site · In Progress',
+    'Blog · Next',
+    'Archive · Done',
+    'App',
+  ]);
+  for (const heading of ['The whole team', 'Started', 'Planned', 'Completed', 'No status']) {
+    await expect(page.getByRole('listbox').getByText(heading, { exact: true })).toBeVisible();
+  }
+  await expectNoViolation(page, 'the projects of a team');
+  await page.getByRole('option', { name: 'Blog · Next', exact: true }).click();
+  await expect.poll(() => worker.sent).toEqual([[{ connector: 'c1', teamId: 't1', projectId: 'p3' }]]);
+  // Added: the list of the projects closes, and the first list offers the team again for what is left.
+  await expect(project(page)).toHaveCount(0);
+
+  // The search of the second list keeps the projects whose name holds what is typed.
+  await add(page).click();
+  await page.getByRole('option', { name: 'Web (WEB) · 4 projects · private', exact: true }).click();
+  await panel(page).getByRole('searchbox', { name: 'Search the projects of Web', exact: true }).fill('arch');
+  await project(page).click();
+  await expect(page.getByRole('option')).toHaveText(['Choose a project of Web…', 'Archive · Done']);
+  await close(page);
+
+  // « Choose another team » goes back to the first list, and adds nothing.
+  await panel(page).getByRole('button', { name: 'Choose another team', exact: true }).click();
+  await expect(project(page)).toHaveCount(0);
+  expect(worker.sent).toHaveLength(1);
+});
