@@ -1516,7 +1516,7 @@ Read on drizzle-orm 0.45.4 and drizzle-kit 0.31.11, the versions of the catalogu
   store of the accounts`, test:`decides a pairing and a session by their instants, on each side of
   2^32`.
 - **better-auth reads no `BIGINT` of its tables on that pool, and a count is one.** Its seven tables
-  have none (test:`knows the forty-five BIGINT columns of the worker, and that better-auth has none`).
+  have none (test:`knows the forty-six BIGINT columns of the worker, and that better-auth has none`).
   `count(*)` is a `BIGINT` whatever the table: the pool now answers it as a string, and better-auth
   reads it as a number, through its adapter and the layer of FRU-181
   (test:`gives better-auth a count as a string, which better-auth reads as a number`).
@@ -3145,7 +3145,7 @@ workspace too: the reason is free text, « impayé » for example.
 - **Why a table of its own, and not two columns of `organization`.** The ticket offered columns on
   `organization`. That table is of better-auth, and two tests hold it: `auth-schema.test.ts` compares
   its columns with the ones that better-auth makes, and
-  test:`knows the forty-five BIGINT columns of the worker, and that better-auth has none` says that
+  test:`knows the forty-six BIGINT columns of the worker, and that better-auth has none` says that
   better-auth reads no `BIGINT`, on a pool with no parser of ours. A `suspended_at` there breaks
   both, or is not a `BIGINT`. A row of the worker keeps the convention, cascades with the workspace,
   and makes « changed » one statement.
@@ -4426,6 +4426,12 @@ The identity of an agent with no browser, for the remote MCP server of FRU-463.
   the agent turn it off; decision 7 gives that choice to the team.
 - **A key ends.** `DEFAULT_KEY_DAYS` (90) unless the request says `days`, 1 to `MAX_KEY_DAYS` (365).
   `days: null` is refused, not read as the default: decision 4 says no key lives with no end.
+- **The last use of a key** (FRU-462): `handleMcp` calls `used` once the grant, the method, the version of the protocol
+  and the body pass, and
+  `markAgentKeyUsed` writes `last_used_at` in one `UPDATE` whose `WHERE` holds only when the use kept
+  is `AGENT_KEY_USE_STEP_MS` (a minute) old or more: an agent that calls ten times a second writes
+  once a minute, and most requests change no row. A failure to write it is logged and refuses
+  nothing. The list answers `lastUsedAt`, or `null` for a key nobody used.
 
 ### The reasons
 

@@ -103,8 +103,8 @@ INSERT INTO site_shares (workspace_id, account_id, site_id, created_at) VALUES
   ('ws_drill1', 'acc_drill2', 'site_drill1', 1);
 
 -- An agent key of the workspace and the sites it names (FRU-461): the digest of a key, never a key.
-INSERT INTO agent_keys (id, workspace_id, name, key_hash, can_write, verified_only, created_by, created_at, expires_at) VALUES
-  ('agk_drill1', 'ws_drill1', 'Claude on CI', 'digest-of-a-drill-key', false, true, 'acc_drill1', 1, 7776000001);
+INSERT INTO agent_keys (id, workspace_id, name, key_hash, can_write, verified_only, created_by, created_at, expires_at, last_used_at) VALUES
+  ('agk_drill1', 'ws_drill1', 'Claude on CI', 'digest-of-a-drill-key', false, true, 'acc_drill1', 1, 7776000001, 60001);
 INSERT INTO agent_key_sites (key_id, site_id) VALUES
   ('agk_drill1', 'site_drill1'),
   ('agk_drill1', 'site_drill2');

@@ -253,6 +253,13 @@
       "when": 1793182086905,
       "tag": "0035_agent_writes",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1793200593421,
+      "tag": "0036_agent_key_last_use",
+      "breakpoints": true
     }
   ]
 }

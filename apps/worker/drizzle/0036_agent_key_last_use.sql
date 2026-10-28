@@ -1,0 +1,1 @@
+ALTER TABLE "agent_keys" ADD COLUMN "last_used_at" bigint;
