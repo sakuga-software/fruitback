@@ -462,6 +462,16 @@ describe('« Preferences » (FRU-302)', () => {
     assert.doesNotMatch(text, /Manage Extension Shortcuts/);
   });
 
+  it('offers no copy of the rules where the browser syncs nothing (Safari, FRU-380)', () => {
+    const { synced: _synced, ...unsynced } = options();
+    const titles = (section: HTMLElement) =>
+      [...section.querySelectorAll('.pref-title')].map((title) => title.textContent);
+
+    // The control: the row is there when the browser syncs.
+    assert.ok(titles(preferencesSection(page(), options())).includes('Keep my rules in the account of this browser'));
+    assert.ok(!titles(preferencesSection(page(), unsynced)).includes('Keep my rules in the account of this browser'));
+  });
+
   it('quotes no prompt where the words of the browser are not known (Safari, FRU-380)', () => {
     const { captureWarning: _quoted, ...unquoted } = options();
     const text = preferencesSection(page(), unquoted).textContent ?? '';
