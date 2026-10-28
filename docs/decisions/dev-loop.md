@@ -207,6 +207,45 @@ builds `dist` first, because `package.spec.ts` loads the real file.
   neighbouring card; React 19's `useId` format accepted as a stable id; and the fiber walk throwing on
   the `null` owner React ends every tree with, which stopped a click from planting anything at all.
 
+## The published code against this worker (FRU-460)
+
+### The rules, in short
+
+- **`pnpm e2e:published` runs the last published npm packages and the last released extension
+  against the servers of this commit.** `e2e/published/fetch.ts` takes `fruitback`,
+  `@fruitback/widget` and `@fruitback/element` at the `latest` tag of npm, and the archive for Chrome
+  of the latest GitHub release (the one `release-extension.yml` gives to the stores). Both are
+  public: no token. `playwright.published.config.ts` runs the specs `e2e/published/*.published.ts`
+  on the servers of `playwright.config.ts`.
+- **What it covers:** the three ways of the README to put the widget on a site (the snippet,
+  `import { init } from 'fruitback'`, the tag of `@fruitback/element`), and the extension in private
+  mode and in team mode (a pairing code, then the relay). Each one sends a note and reads it back
+  after a reload. Not covered: `@fruitback/react`, the sign-in of the extension with the console,
+  Firefox.
+- **The workflow `published.yml` runs it, not `ci.yml`**: after each merge to `main`, every night
+  at 04:41 UTC (a release changes what it fetches with no commit here), by hand with a version to
+  pin (`npm`, `extension`), and on a pull request that changes the suite. A red run on `main` means
+  that the worker of `main` breaks a client that people have: fix the worker, or publish a client
+  that follows it before the worker is deployed.
+- **These specs drive the published interface with its own words**, and not with the helpers of
+  `extension.ts` that click through the popup and the options page: those follow `main`. A release
+  that changes these words changes these specs.
+- **The published extension resolves no name but `localhost`** (`--host-resolver-rules`): it holds
+  the address of the real Cloud, and a run must not reach it.
+
+### The reasons, and the history
+
+- **Not on every pull request.** The CI of a pull request has a budget of 4 minutes, and it took 8
+  to 9 minutes in October 2026. This job boots the four servers of the E2E suite again. Measured on
+  2026-10-28 on a Mac: fetch 6 s, the five specs 35 s with the servers. A change that breaks a
+  published client is then found at the merge, before a release of the worker, and not before the
+  merge.
+- **The control.** With `issues` renamed `notes` in the answer of `GET /feedback`, the five specs
+  fail, each on the pin that the published widget no longer draws (measured on 2026-10-28).
+- **The archive of the release, not the store.** A store serves the archive it was given after a
+  review, which can take days: for a short time, people may have the version before. The GitHub
+  release holds the same file, with no key; a download from the stores was not tried.
+
 ## The extension under Playwright (FRU-45)
 
 ### The rules, in short

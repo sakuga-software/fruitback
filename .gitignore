@@ -18,6 +18,8 @@ test-results/
 playwright-report/
 blob-report/
 .playwright/
+# The last published packages and extension, fetched by e2e/published/fetch.ts (FRU-460).
+.published/
 
 # Environment variables
 .env

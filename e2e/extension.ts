@@ -44,6 +44,8 @@ export const test = base.extend<{
   extraPermissions: string[];
   keepWelcome: boolean;
   alongside: string[];
+  build: string;
+  browserArgs: string[];
 }>({
   /**
    * Permissions the copy holds beyond the shipped manifest, for one spec (FRU-297). A popup opened in
@@ -58,8 +60,15 @@ export const test = base.extend<{
    * for the spec under `e2e/fixtures/`. None has a background: the first service worker stays ours.
    */
   alongside: [[], { option: true }],
-  extension: async ({ extraPermissions, keepWelcome, alongside }, use, testInfo) => {
-    const directory = copyWithLocalAccess(testInfo.outputPath('extension'), extraPermissions);
+  /**
+   * The unpacked extension to load. `e2e/published/` gives the last released one (FRU-460), every
+   * other spec the one that `pnpm e2e` built.
+   */
+  build: [BUILT_EXTENSION, { option: true }],
+  /** More flags for Chromium, for one spec. */
+  browserArgs: [[], { option: true }],
+  extension: async ({ extraPermissions, keepWelcome, alongside, build, browserArgs }, use, testInfo) => {
+    const directory = copyWithLocalAccess(testInfo.outputPath('extension'), extraPermissions, undefined, build);
     // Not under test-results: CI uploads that folder when the job fails, and after a pairing the profile
     // holds a refresh token.
     const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'fruitback-e2e-profile-'));
@@ -74,6 +83,7 @@ export const test = base.extend<{
       args: [
         `--disable-extensions-except=${[directory, ...alongside].join(',')}`,
         `--load-extension=${[directory, ...alongside].join(',')}`,
+        ...browserArgs,
       ],
     });
 
@@ -108,10 +118,11 @@ export function copyWithLocalAccess(
   directory: string,
   extraPermissions: string[] = [],
   workers: string[] = [WORKER_ORIGIN, AUTHENTICATED_WORKER_ORIGIN],
+  source: string = BUILT_EXTENSION,
 ): string {
-  const builtPath = path.join(BUILT_EXTENSION, 'manifest.json');
+  const builtPath = path.join(source, 'manifest.json');
   if (!fs.existsSync(builtPath)) {
-    throw new Error(`${BUILT_EXTENSION} is not built. Run pnpm e2e, which builds it first.`);
+    throw new Error(`${source} is not built. Run pnpm e2e, which builds it first.`);
   }
   // The copy gets host access, so no spec can see a shipped manifest that asks for it at install. A
   // static content script asks for its matches at install too.
@@ -128,7 +139,7 @@ export function copyWithLocalAccess(
   }
 
   const manifestPath = path.join(directory, 'manifest.json');
-  fs.cpSync(BUILT_EXTENSION, directory, { recursive: true });
+  fs.cpSync(source, directory, { recursive: true });
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as Record<string, unknown>;
   manifest.host_permissions = [`${PLAYGROUND_ORIGIN}/*`, ...workers.map((worker) => `${worker}/*`)];
   // A host (`<all_urls>`, or a pattern with a scheme) is a host permission in MV3, not a permission.
