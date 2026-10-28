@@ -92,7 +92,13 @@ export default defineConfig({
     {
       // The console of the Cloud, on its own fixed port (FRU-159). Its specs measure layout and answer
       // the worker's calls with stubs, so it needs no worker with accounts.
-      command: 'pnpm --filter @fruitback/console dev',
+      //
+      // Built, then served as static files, as its image serves it (FRU-473). Under `react-router dev`
+      // each navigation compiled its modules on demand: 1.5 to 2.9 s on a CI runner, where four
+      // browsers share four cores with the servers. No spec of the console reads React's dev
+      // metadata: that is the widget on the playground, which stays on `dev` above. The build takes
+      // about 3 s, and the address of the worker goes into it, as for the Cloud.
+      command: 'pnpm --filter @fruitback/console build && pnpm --filter @fruitback/console exec vite preview',
       url: 'http://localhost:5178',
       reuseExistingServer: !process.env.CI,
       env: { VITE_FRUITBACK_API: WORKER },
