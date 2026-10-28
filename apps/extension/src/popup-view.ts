@@ -318,10 +318,131 @@ export type TurnOnOptions = {
   account?: Account;
   /** « Change »: the site in the console. None: no « Change ». */
   onChange?: () => void;
+  /**
+   * FRU-453: the two lines are choices, for a role that changes them. `places` are the places a
+   * workspace offers, by workspace id (for a site of no workspace, the list follows the workspace
+   * chosen). `place` is where the notes go now: `null` for « Fruitback », absent when not known.
+   */
+  choices?: {
+    places: Record<string, ChoicePlace[]>;
+    workspace?: string;
+    place?: ChoicePlace | null;
+    /** Answers whether the change holds: `false` puts the list back as it was. */
+    onVisibility: (visibility: 'members' | 'everyone') => Promise<boolean>;
+    onPlace: (place: ChoicePlace | null) => Promise<boolean>;
+  };
   /** « Turn on », with the workspace chosen for a site of no workspace. */
   onTurnOn: (workspace?: string) => void;
   onSettings: () => void;
 };
+
+/** A place the popup offers: its label, and what the entrypoint sends back to the worker. */
+export type ChoicePlace = { label: string };
+
+/** The value of « Fruitback » in the list of the places: no place, the notes stay in Fruitback. */
+const NO_PLACE = '';
+
+/**
+ * « Who sees the notes » as a list of two (FRU-453). Each change goes to `onVisibility`; the
+ * entrypoint says when the worker refused it.
+ */
+function visibilityChoice(
+  document: Document,
+  visibility: 'members' | 'everyone',
+  onVisibility: (visibility: 'members' | 'everyone') => Promise<boolean>,
+): HTMLSelectElement {
+  const select = element(document, 'select', '');
+  select.name = 'visibility';
+  select.setAttribute('aria-label', t('Who sees the notes'));
+  for (const value of ['members', 'everyone'] as const) {
+    const option = element(document, 'option', visibilityWords(value));
+    option.value = value;
+    option.selected = value === visibility;
+    select.append(option);
+  }
+  answered(select, () => onVisibility(select.value === 'everyone' ? 'everyone' : 'members'));
+
+  return select;
+}
+
+/**
+ * « Notes go to » as a list (FRU-453): « Fruitback », then the places of the workspace. A place the
+ * site sends to that the list does not hold stays shown, chosen, so the screen does not lie.
+ */
+function placeChoice(
+  document: Document,
+  places: ChoicePlace[],
+  current: ChoicePlace | null | undefined,
+  onPlace: (place: ChoicePlace | null) => Promise<boolean>,
+): HTMLSelectElement {
+  const select = element(document, 'select', '');
+  select.name = 'place';
+  select.setAttribute('aria-label', t('Notes go to'));
+  fillPlaces(document, select, places, current);
+  answered(select, () => {
+    const index = Number(select.value);
+
+    return onPlace(select.value === NO_PLACE || !Number.isInteger(index) ? null : (places[index] ?? null));
+  });
+
+  return select;
+}
+
+/**
+ * A list whose change the worker may refuse: it is off while the change is asked, and goes back to
+ * what it was when the answer is `false`.
+ */
+function answered(select: HTMLSelectElement, change: () => Promise<boolean>): void {
+  let held = select.value;
+  select.addEventListener('change', () => {
+    select.disabled = true;
+    void change()
+      .catch(() => false)
+      .then((holds) => {
+        if (holds) held = select.value;
+        else select.value = held;
+        select.disabled = false;
+      });
+  });
+  // The list of the places is drawn again when the workspace changes: what it shows then holds.
+  select.addEventListener('refilled', () => {
+    held = select.value;
+  });
+}
+
+/** The options of the list of the places, with the one chosen now. */
+export function fillPlaces(
+  document: Document,
+  select: HTMLSelectElement,
+  places: ChoicePlace[],
+  current: ChoicePlace | null | undefined,
+): void {
+  select.replaceChildren();
+  const none = element(document, 'option', t('Fruitback (no tracker)'));
+  none.value = NO_PLACE;
+  select.append(none);
+  places.forEach((place, index) => {
+    const option = element(document, 'option', place.label);
+    option.value = String(index);
+    select.append(option);
+  });
+  if (current === null || current === undefined) {
+    select.value = NO_PLACE;
+
+    return;
+  }
+  const index = places.findIndex((place) => place.label === current.label);
+  if (index !== -1) {
+    select.value = String(index);
+
+    return;
+  }
+  const kept = element(document, 'option', current.label);
+  kept.value = 'current';
+  kept.disabled = true;
+  select.append(kept);
+  select.value = 'current';
+}
 
 /**
  * 2 · Signed in, site not added (FRU-298): « Turn Fruitback on for this site? ». A site of a
@@ -364,8 +485,10 @@ export function turnOnScreen(document: Document, options: TurnOnOptions): HTMLEl
 
   const change = (): HTMLButtonElement | undefined =>
     options.onChange === undefined ? undefined : textButton(document, t('Change'), options.onChange);
+  const choices = options.choices;
+  let chosen = first?.id;
   const entries: Definition[] = [];
-  if (options.destination !== undefined) {
+  if (choices === undefined && options.destination !== undefined) {
     const where = change();
     entries.push({
       term: t('Notes go to'),
@@ -373,15 +496,42 @@ export function turnOnScreen(document: Document, options: TurnOnOptions): HTMLEl
       ...(where === undefined ? {} : { action: where }),
     });
   }
-  const who = change();
-  entries.push({
-    term: t('Who sees the notes'),
-    value: visibilityWords(options.visibility),
-    ...(who === undefined ? {} : { action: who }),
-  });
+  if (choices === undefined) {
+    const who = change();
+    entries.push({
+      term: t('Who sees the notes'),
+      value: visibilityWords(options.visibility),
+      ...(who === undefined ? {} : { action: who }),
+    });
+  }
   const facts = definitions(document, entries);
+  /** A line of the list whose value is a field: a `select` in its `dd`. */
+  const field = (term: string, input: HTMLElement): HTMLElement => {
+    const entry = element(document, 'div', '', 'kit-dl-entry');
+    const value = element(document, 'dd', '');
+    value.append(input);
+    entry.append(element(document, 'dt', term), value);
 
-  let chosen = first?.id;
+    return entry;
+  };
+
+  // FRU-453: the place, then who sees the notes, each a list. The places follow the workspace chosen.
+  let refill: (() => void) | undefined;
+  if (choices !== undefined) {
+    const offered = (): ChoicePlace[] => choices.places[chosen ?? choices.workspace ?? ''] ?? [];
+    const places = placeChoice(document, offered(), choices.place, (place) => choices.onPlace(place));
+    facts.append(
+      field(t('Notes go to'), places),
+      field(t('Who sees the notes'), visibilityChoice(document, options.visibility, choices.onVisibility)),
+    );
+    // Another workspace offers other places: the list is drawn again, with « Fruitback » chosen.
+    refill = () => {
+      fillPlaces(document, places, offered(), null);
+      places.dispatchEvent(new (document.defaultView?.Event ?? Event)('refilled'));
+      void choices.onPlace(null);
+    };
+  }
+
   if (addable.length > 1) {
     const select = element(document, 'select', '');
     select.name = 'workspace';
@@ -393,12 +543,9 @@ export function turnOnScreen(document: Document, options: TurnOnOptions): HTMLEl
     }
     select.addEventListener('change', () => {
       chosen = select.value;
+      refill?.();
     });
-    const entry = element(document, 'div', '', 'kit-dl-entry');
-    const value = element(document, 'dd', '');
-    value.append(select);
-    entry.append(element(document, 'dt', t('Workspace')), value);
-    facts.prepend(entry);
+    facts.prepend(field(t('Workspace'), select));
   }
 
   const act = element(document, 'div', '', 'action-block');

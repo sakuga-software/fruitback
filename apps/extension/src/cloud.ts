@@ -22,7 +22,16 @@ export const STAGES = ['new', 'todo', 'progress', 'done', 'closed'] as const;
  * A workspace of the session, and the role the person holds there (an account's session only).
  * `canAddSite`: the role may add a site there from the popup (FRU-255), as the worker read it now.
  */
-export type Workspace = { id: string; name: string; role?: string; canAddSite?: boolean };
+export type Workspace = { id: string; name: string; role?: string; canAddSite?: boolean; places?: Place[] };
+
+/**
+ * A place the sites of a workspace send their notes to (FRU-453), as the worker named it: the popup
+ * offers these when a site is turned on. Listed for a role that may change it only.
+ */
+export type Place = { connector: string; teamId?: string; projectId?: string; label: string };
+
+/** How many places the popup reads from one workspace: a list is bounded by what a screen shows. */
+const MAX_PLACES = 50;
 
 /**
  * `previews`: the wildcards the workspace proved for this site (FRU-103), as the worker lists them now.
@@ -148,14 +157,34 @@ function countOf(value: unknown): number | undefined {
 
 function workspaceOf(value: unknown): Workspace | undefined {
   if (typeof value !== 'object' || value === null) return undefined;
-  const { id, name, role, canAddSite } = value as Record<string, unknown>;
+  const { id, name, role, canAddSite, places } = value as Record<string, unknown>;
   if (typeof id !== 'string' || id === '') return undefined;
+  const offered = Array.isArray(places) ? places.slice(0, MAX_PLACES).flatMap((each) => placeOf(each) ?? []) : [];
 
   return {
     id,
     name: typeof name === 'string' ? name : '',
     ...(typeof role === 'string' && role !== '' ? { role } : {}),
     ...(canAddSite === true ? { canAddSite: true } : {}),
+    ...(Array.isArray(places) ? { places: offered } : {}),
+  };
+}
+
+/** A place the worker listed: a connector, its team and project when it has them, and a label. */
+function placeOf(value: unknown): Place | undefined {
+  if (typeof value !== 'object' || value === null) return undefined;
+  const { connector, teamId, projectId } = value as Record<string, unknown>;
+  const named = destinationOf(value);
+  const short = (field: unknown): field is string => typeof field === 'string' && field !== '' && field.length <= 200;
+  if (!short(connector) || named === undefined) return undefined;
+  if (teamId !== undefined && !short(teamId)) return undefined;
+  if (projectId !== undefined && !short(projectId)) return undefined;
+
+  return {
+    connector,
+    ...(teamId === undefined ? {} : { teamId }),
+    ...(projectId === undefined ? {} : { projectId }),
+    label: named.label,
   };
 }
 
@@ -371,4 +400,66 @@ export function cloudEntry(offer: Offer): SiteConfig {
     mode: 'team',
     mount: { clientId: offer.site.id, ...(offer.workspace.name === '' ? {} : { workspace: offer.workspace.name }) },
   };
+}
+
+/** What the popup changes on a site before it turns it on (FRU-453). `place: null` is « Fruitback ». */
+export type SiteSettings = { visibility?: 'members' | 'everyone'; place?: Place | null };
+
+export type SettingsFailure = 'forbidden' | 'several-places' | 'signed-out' | 'unavailable';
+export type SettingsResult = { ok: true; site: WorkspaceSite } | { ok: false; reason: SettingsFailure };
+
+/**
+ * `POST /session/sites/settings` (FRU-453): who sees the notes of a site of the workspace, and where
+ * they go. The answer is the site as the worker holds it now, so the screen says what is true.
+ */
+export async function setSiteSettings(
+  endpoint: string,
+  workspace: Workspace,
+  site: string,
+  settings: SiteSettings,
+  seams: Pick<CloudSeams, 'ensureAccess' | 'fetcher'>,
+): Promise<SettingsResult> {
+  const access = await seams.ensureAccess(endpoint).catch(() => undefined);
+  if (access === undefined || (!access.ok && access.reason === 'unavailable'))
+    return { ok: false, reason: 'unavailable' };
+  if (!access.ok) return { ok: false, reason: 'signed-out' };
+
+  let response: Response;
+  try {
+    response = await (seams.fetcher ?? fetch)(`${endpoint}/session/sites/settings`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${access.grant.accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        workspace: workspace.id,
+        site,
+        ...(settings.visibility === undefined ? {} : { visibility: settings.visibility }),
+        ...(settings.place === undefined
+          ? {}
+          : {
+              place:
+                settings.place === null
+                  ? null
+                  : {
+                      connector: settings.place.connector,
+                      ...(settings.place.teamId === undefined ? {} : { teamId: settings.place.teamId }),
+                      ...(settings.place.projectId === undefined ? {} : { projectId: settings.place.projectId }),
+                    },
+            }),
+      }),
+      signal: AbortSignal.timeout(ASK_TIMEOUT_MS),
+    });
+  } catch {
+    return { ok: false, reason: 'unavailable' };
+  }
+  if (response.status === 403 || response.status === 404) return { ok: false, reason: 'forbidden' };
+  if (response.status === 409) return { ok: false, reason: 'several-places' };
+  if (response.status === 401) return { ok: false, reason: 'signed-out' };
+  if (response.status !== 200) return { ok: false, reason: 'unavailable' };
+
+  const body: unknown = await response.json().catch(() => undefined);
+  const answered = typeof body === 'object' && body !== null ? (body as { site?: unknown }).site : undefined;
+  const parsed = parseWorkspaceSites({ account: true, workspaces: [workspace], sites: [answered] })?.sites[0];
+  if (parsed === undefined || parsed.id !== site) return { ok: false, reason: 'unavailable' };
+
+  return { ok: true, site: parsed };
 }

@@ -1,6 +1,7 @@
 import { type AccountStore, type Role, type Site, can, readableSites } from './accounts.ts';
 import type { Kv } from './kv.ts';
 import { addSessionSite } from './session-site-add.ts';
+import { placesOf } from './session-site-settings.ts';
 import { previewPattern, proofState } from './domain-proof.ts';
 import { readBearerToken, verifyIdentityToken } from './identity.ts';
 import { type NoteIndex, noNotes } from './notes-index.ts';
@@ -141,14 +142,18 @@ async function sitesOfAccount(accounts: AccountStore, account: string, now: numb
   const memberships = (await accounts.memberships(account)).filter((each) => each.suspension === undefined);
   const locale = (await accounts.account(account))?.locale;
   const sites = [];
-  for (const { workspace } of memberships) {
+  // FRU-453: the places the popup offers, for a role that changes them, by workspace.
+  const placesIn = new Map<string, ReturnType<typeof placesOf>>();
+  for (const { workspace, role } of memberships) {
     // Read again, with the sites of a guest (FRU-250). A membership that ended since reads none.
     const reach = await accounts.reach(workspace.id, account);
     if (reach === undefined) continue;
     const previewsOf = await previewsIn(accounts, workspace.id, now);
     const notes = await notesIn(noteIndex, workspace.id);
     const toCheck = await toCheckIn(noteIndex, workspace.id, account);
-    for (const site of readableSites(await accounts.sites(workspace.id), reach)) {
+    const every = await accounts.sites(workspace.id);
+    if (can(role, 'manage-sites')) placesIn.set(workspace.id, placesOf(every));
+    for (const site of readableSites(every, reach)) {
       const previews = previewsOf(site.id);
       sites.push({
         id: site.id,
@@ -173,6 +178,7 @@ async function sitesOfAccount(accounts: AccountStore, account: string, now: numb
       name: workspace.name,
       role,
       canAddSite: can(role, 'manage-sites'),
+      ...(placesIn.has(workspace.id) ? { places: placesIn.get(workspace.id) } : {}),
     })),
     sites,
   };

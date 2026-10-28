@@ -17,6 +17,7 @@ import {
 } from './session.ts';
 import { SESSION_NOTES_PATH, handleSessionNotes } from './session-notes.ts';
 import { SESSION_SITES_PATH, handleSessionSites } from './session-sites.ts';
+import { SESSION_SITE_SETTINGS_PATH, setSessionSite } from './session-site-settings.ts';
 import { StoreError } from './store.ts';
 import { connectStoreFor, sessionStoreFor } from './worker-stores.ts';
 
@@ -81,6 +82,18 @@ export async function handleSessionRoutes(request: Request, pathname: string, se
         noteIndex,
         writes,
       );
+    }
+
+    // FRU-453: who sees the notes of a site and where they go, changed in the popup. A write: the
+    // session is read again in the store, and it must be a session of an account.
+    if (pathname === SESSION_SITE_SETTINGS_PATH && accounts !== undefined && served.identitySecret !== undefined) {
+      if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, cors.headers);
+      const session = await sessionWrites(request, served, context);
+      if (session === undefined) return json(401, { error: 'identity-required' }, cors.headers);
+      if (session.account !== true) return json(403, { error: 'account-required' }, cors.headers);
+      const set = await setSessionSite(request, { accounts, account: session.subject });
+
+      return json(set.status, set.body, cors.headers);
     }
 
     // FRU-238: the extension asks to be connected, and comes back for its session. Only where a

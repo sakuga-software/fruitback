@@ -680,7 +680,8 @@ cases run on PostgreSQL 17, and a store that reads apart from the statement that
 10 minutes, and nothing reaches a token already minted. So a route that **writes** for an extension
 asks the store, at each call, whether the session of the token is still live, still the same person,
 still a member of its workspace or still an account (`sessionStillValid` of `session-check.ts`). The
-routes that write are a file of a note (FRU-331), the creation of a site of FRU-255, and the note itself,
+routes that write are a file of a note (FRU-331), the creation of a site of FRU-255, the settings of a
+site of FRU-453, and the note itself,
 alone or in a batch, when a session of an account signs it: once per request. A session ended a
 second ago writes nothing (test:`writes nothing for a session that ended, a note or a picture, with
 the access token it still holds, and reads in its window`). That closes the case of a stolen refresh
@@ -1147,6 +1148,20 @@ with the access token it still holds, and a token that names no session (no `sid
 test:`adds no site after a log out: the write reads the session again`,
 test:`adds no site once the browser is disconnected in the console`. The role is read at each call
 too: test:`reads the role at each call: a person removed between two calls adds nothing more`.
+
+**`POST /session/sites/settings` changes who sees the notes of a site and where they go, from the
+extension** (FRU-453): the popup offers it on the screen that turns a site on. It asks what the add
+asks: a session of an **account**, read again in the store (test:`changes nothing after a log out: the write reads the session again`);
+an `Origin` of an extension, or none; `manage-sites` in the workspace named, read at this call (a
+member and a guest get `403`, an account outside the workspace `404`, a site of another workspace
+`404`). **It can make the notes of a site readable by everyone who visits it**, as « Anyone on the
+page » does in the console, for the same roles: an owner or an admin of the workspace. **A place is
+one that a site of the workspace already sends to**, and it is written with the label and the privacy
+the worker stored, never with the words of the body; a place no site sends to is `400`. A site with
+two places or more is not emptied from here (`409`). Each of these guards, taken out, fails a test of
+`session-site-settings.test.ts`. `GET /session/sites` lists those places (`places`, a label and the
+ids of a connector, a team and a project) to a role of `manage-sites` only, which already reads them
+in the console.
 
 ### Signing in to the console (FRU-98)
 

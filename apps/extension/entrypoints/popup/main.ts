@@ -27,11 +27,15 @@ import {
   type AddFailure,
   type CloudSeams,
   type Offer,
+  type Place,
+  type SettingsFailure,
+  type SiteSettings,
   type Workspace,
   addSite,
   addableWorkspaces,
   cloudEntry,
   offerFor,
+  setSiteSettings,
 } from '../../src/cloud.ts';
 import { language, msg, setLanguage, t } from '../../src/i18n.ts';
 import { holdsSiteAccess } from '../../src/site-grant.ts';
@@ -571,6 +575,17 @@ function offered(origin: string, offer: Offer, account: Account | undefined): HT
   const problem = element('p', '', 'problem');
   const turn = (): void => void turnOn(offer.pattern, cloudEntry(offer)).then(refused(problem, turn), failed(problem));
   const change = consoleSites(account, offer.workspace.id);
+  // FRU-453: a role that manages the sites chooses here, and each choice is written at once. Written
+  // before « Turn on » and not by it: the prompt of the browser can close the popup, and a choice
+  // that waited for the click would be lost with it.
+  const places = offer.workspace.places;
+  const save = async (settings: SiteSettings): Promise<boolean> => {
+    problem.replaceChildren();
+    const set = await setSiteSettings(offer.endpoint, offer.workspace, offer.site.id, settings, cloudSeams());
+    if (!set.ok) showProblem(problem, t(SETTINGS_PROBLEM[set.reason]));
+
+    return set.ok;
+  };
   const screen = turnOnScreen(document, {
     origin,
     workspace: offer.workspace.name,
@@ -578,6 +593,17 @@ function offered(origin: string, offer: Offer, account: Account | undefined): HT
     visibility: offer.site.visibility,
     ...(account === undefined ? {} : { account }),
     ...(change === undefined ? {} : { onChange: change }),
+    ...(places === undefined
+      ? {}
+      : {
+          choices: {
+            places: { [offer.workspace.id]: places },
+            workspace: offer.workspace.id,
+            ...currentPlace(offer.site.destination),
+            onVisibility: (visibility) => save({ visibility }),
+            onPlace: (place) => save({ place: place as Place | null }),
+          },
+        }),
     onTurnOn: turn,
     onSettings: openSettings,
   });
@@ -585,6 +611,23 @@ function offered(origin: string, offer: Offer, account: Account | undefined): HT
 
   return screen;
 }
+
+/**
+ * Where the notes of a site go now, as the list of the places reads it: « Fruitback » is no place.
+ * A label the worker did not give is not known, and the list then shows « Fruitback » chosen.
+ */
+function currentPlace(destination: { label: string } | undefined): { place?: { label: string } | null } {
+  if (destination === undefined) return {};
+
+  return { place: destination.label === 'Fruitback' ? null : destination };
+}
+
+const SETTINGS_PROBLEM: Record<SettingsFailure, string> = {
+  forbidden: msg('Your role in this workspace does not let you change this site.'),
+  'several-places': msg('This site sends to several places. Change them in Fruitback.'),
+  'signed-out': msg('Fruitback did not answer. Try again.'),
+  unavailable: msg('Fruitback did not answer. Try again.'),
+};
 
 /**
  * 2 (FRU-298, FRU-255): a site of no workspace of the account. The workspaces where it may add one
@@ -596,15 +639,31 @@ async function siteOfNoWorkspace(origin: string, account: Account | undefined): 
   if (listed === undefined) return unreachableScreen(account);
   const workspaces = listed;
   const problem = element('p', '', 'problem');
+  // FRU-453: what is chosen here is written once the site is added, before it is turned on.
+  const wanted: SiteSettings = {};
   const screen = turnOnScreen(document, {
     origin,
     // A site is added for the members of its workspace: the worker's default.
     visibility: 'members',
     workspaces,
+    choices: {
+      places: Object.fromEntries(workspaces.map((each) => [each.id, each.places ?? []])),
+      place: null,
+      onVisibility: async (visibility) => {
+        wanted.visibility = visibility;
+
+        return true;
+      },
+      onPlace: async (place) => {
+        wanted.place = place as Place | null;
+
+        return true;
+      },
+    },
     ...(account === undefined ? {} : { account }),
     onTurnOn: (id) => {
       const workspace = workspaces.find((each) => each.id === id);
-      if (workspace !== undefined) addAndTurnOn(origin, workspace, problem);
+      if (workspace !== undefined) addAndTurnOn(origin, workspace, problem, wanted);
     },
     onSettings: openSettings,
   });
@@ -618,10 +677,10 @@ async function siteOfNoWorkspace(origin: string, account: Account | undefined): 
  * the site is created after, so a refusal creates nothing, and « Grant access » asks again. Then the
  * site, then the rule, as the one click of 06 stores it.
  */
-function addAndTurnOn(origin: string, workspace: Workspace, problem: HTMLElement): void {
+function addAndTurnOn(origin: string, workspace: Workspace, problem: HTMLElement, wanted: SiteSettings = {}): void {
   if (CLOUD === undefined) return;
   const endpoint = CLOUD;
-  const again = (): void => addAndTurnOn(origin, workspace, problem);
+  const again = (): void => addAndTurnOn(origin, workspace, problem, wanted);
   for (const button of app?.querySelectorAll('button') ?? []) button.disabled = true;
   const done = (): void => {
     for (const button of app?.querySelectorAll('button') ?? []) button.disabled = false;
@@ -648,6 +707,17 @@ function addAndTurnOn(origin: string, workspace: Workspace, problem: HTMLElement
       showProblem(problem, t(ADD_PROBLEM[added.reason]));
 
       return;
+    }
+    // FRU-453: what was chosen on the screen, before the rule. A refusal stops here: the site is in
+    // the workspace, as members only and with no place, and « Turn on » again adds nothing more.
+    if (wanted.visibility === 'everyone' || (wanted.place !== undefined && wanted.place !== null)) {
+      const set = await setSiteSettings(endpoint, workspace, added.offer.site.id, wanted, cloudSeams());
+      if (!set.ok) {
+        done();
+        showProblem(problem, t(SETTINGS_PROBLEM[set.reason]));
+
+        return;
+      }
     }
     try {
       await writeSite(origin, cloudEntry(added.offer));

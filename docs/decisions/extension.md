@@ -1047,10 +1047,32 @@ which replaced the fields of before for a person signed in on a site of no rule.
   site the worker answers must be the origin of the tab, in the workspace chosen, or nothing is stored.
 - A refused add says why: the role does not allow it, too many sites in the hour, Fruitback did not
   answer; a session that ended draws the screen of a sign-in that ended.
-- **This screen has no fields.** A site of no workspace that one browser alone should cover (a private
+- **This screen has no fields to type in.** A site of no workspace that one browser alone should cover (a private
   site, a worker of its own) is set in the settings, one click away, as the person with no account
-  reaches it. It is drawn only signed in to the build's Fruitback, so a build without one never asks
+  reaches it. Its lists of « Notes go to » and « Who sees the notes » are FRU-453's. It is drawn only signed in to the build's Fruitback, so a build without one never asks
   for the workspaces.
+
+## Who sees the notes and where they go, chosen at the turn on (FRU-453)
+
+### The rules, in short
+
+- **Screen 2 shows two lists in place of « Change »**, for a role that manages the sites of the
+  workspace (owner, admin: the worker lists `places` for it in `GET /session/sites`): « Notes go to »
+  (« Fruitback (no tracker) », then the places of the workspace) and « Who sees the notes » (the
+  team, or everyone who visits the site). Another role keeps the lines and their « Change », which
+  opens the console.
+- **The places are the ones a site of the workspace already sends to.** A new place asks the tracker
+  for its teams or its repositories, which needs the keys of the connectors: the routes of a session
+  hold none, so a new place is set in the console (decided on 2026-10-28, FRU-453). The worker writes
+  the place with the label it stored, and puts it first: the default of the site. The other places
+  of the site stay after it.
+- **A site of a workspace: each choice is written at once** (`POST /session/sites/settings`), before
+  « Turn on » and not by it: the prompt of the browser can close the popup, and a choice that waited
+  for the click would be lost with it. A refusal says why and puts the list back.
+- **A site of no workspace: the choices are written once the site is added**, before its rule. The
+  places follow the workspace chosen, and go back to « Fruitback » when it changes. A refusal stops
+  before the rule: the site is in the workspace as members only, and « Turn on » again adds nothing
+  more (the add answers the site that exists).
 
 ## A session that ended, met by the relay (FRU-238)
 

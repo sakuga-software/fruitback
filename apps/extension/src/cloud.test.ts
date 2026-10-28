@@ -1,7 +1,15 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { createApply } from './bridge.ts';
-import { accountLanguage, addSite, addableWorkspaces, cloudEntry, offerFor, parseWorkspaceSites } from './cloud.ts';
+import {
+  accountLanguage,
+  addSite,
+  addableWorkspaces,
+  cloudEntry,
+  offerFor,
+  parseWorkspaceSites,
+  setSiteSettings,
+} from './cloud.ts';
 import { type LanguageArea, storedLanguage } from './language.ts';
 import { rememberLanguage } from './language-sync.ts';
 import { CHANNEL, type BridgeMessage, parseBridgeMessage } from './protocol.ts';
@@ -527,5 +535,116 @@ describe('adding the site of the tab to a workspace (FRU-255)', () => {
         reason: 'unavailable',
       },
     );
+  });
+});
+
+describe('who sees the notes and where they go, from the popup (FRU-453)', () => {
+  const PLACE = { connector: 'conn_1', teamId: 'team_1', label: 'Linear · Northwind' };
+  const SAKUGA = { id: 'ws_1', name: 'Sakuga', role: 'owner', canAddSite: true };
+  const seamsWith = (fetcher: typeof fetch) => ({ ensureAccess: async () => GRANTED, fetcher });
+
+  it('reads the places a workspace offers, and drops a place with no label or no connector', () => {
+    const listed = parseWorkspaceSites({
+      account: true,
+      workspaces: [
+        {
+          id: 'ws_1',
+          name: 'Sakuga',
+          canAddSite: true,
+          places: [
+            PLACE,
+            { connector: 'conn_2' },
+            { label: 'No connector' },
+            { connector: 'conn_3', label: 'REST API · Hook' },
+          ],
+        },
+        { id: 'ws_2', name: 'Northwind' },
+      ],
+      sites: [],
+    });
+    assert.deepEqual(listed?.workspaces, [
+      {
+        id: 'ws_1',
+        name: 'Sakuga',
+        canAddSite: true,
+        places: [PLACE, { connector: 'conn_3', label: 'REST API · Hook' }],
+      },
+      { id: 'ws_2', name: 'Northwind' },
+    ]);
+  });
+
+  it('posts the site, the visibility and the place without its label, and gives the site back', async () => {
+    const sent: { url: string; init?: RequestInit }[] = [];
+    const fetcher = (async (url: string, init?: RequestInit) => {
+      sent.push({ url, ...(init === undefined ? {} : { init }) });
+
+      return new Response(
+        JSON.stringify({
+          site: {
+            id: 'site_9',
+            origin: 'https://preview.client.fr',
+            visibility: 'everyone',
+            workspace: 'ws_1',
+            destination: { label: 'Linear · Northwind' },
+          },
+        }),
+        { status: 200 },
+      );
+    }) as typeof fetch;
+
+    const set = await setSiteSettings(
+      'https://api.fruitback.test',
+      SAKUGA,
+      'site_9',
+      { visibility: 'everyone', place: PLACE },
+      seamsWith(fetcher),
+    );
+
+    assert.deepEqual(set, {
+      ok: true,
+      site: {
+        id: 'site_9',
+        origin: 'https://preview.client.fr',
+        visibility: 'everyone',
+        workspace: SAKUGA,
+        destination: { label: 'Linear · Northwind' },
+      },
+    });
+    assert.equal(sent[0]?.url, 'https://api.fruitback.test/session/sites/settings');
+    assert.equal(sent[0]?.init?.method, 'POST');
+    assert.equal(new Headers(sent[0]?.init?.headers).get('Authorization'), 'Bearer tok');
+    assert.deepEqual(JSON.parse(String(sent[0]?.init?.body)), {
+      workspace: 'ws_1',
+      site: 'site_9',
+      visibility: 'everyone',
+      place: { connector: 'conn_1', teamId: 'team_1' },
+    });
+
+    await setSiteSettings('https://api.fruitback.test', SAKUGA, 'site_9', { place: null }, seamsWith(fetcher));
+    assert.deepEqual(JSON.parse(String(sent[1]?.init?.body)), { workspace: 'ws_1', site: 'site_9', place: null });
+  });
+
+  it('says why it changed nothing, and believes no answer about another site', async () => {
+    for (const [status, body, reason] of [
+      [403, { error: 'forbidden', role: 'member' }, 'forbidden'],
+      [404, { error: 'not-found' }, 'forbidden'],
+      [409, { error: 'site-has-destinations' }, 'several-places'],
+      [401, { error: 'identity-required' }, 'signed-out'],
+      [502, {}, 'unavailable'],
+      [200, { site: { id: 'other', origin: 'https://x.fr', visibility: 'members', workspace: 'ws_1' } }, 'unavailable'],
+    ] as const) {
+      const fetcher = (async () => new Response(JSON.stringify(body), { status })) as unknown as typeof fetch;
+      assert.deepEqual(
+        await setSiteSettings(
+          'https://api.fruitback.test',
+          SAKUGA,
+          'site_9',
+          { visibility: 'members' },
+          seamsWith(fetcher),
+        ),
+        { ok: false, reason },
+        `${status} ${JSON.stringify(body)}`,
+      );
+    }
   });
 });

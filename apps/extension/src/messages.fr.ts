@@ -23,6 +23,11 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Turn Fruitback on for this site?': 'Activer Fruitback sur ce site ?',
   'Notes go to': 'Les notes vont vers',
   'Who sees the notes': 'Qui voit les notes',
+  'Fruitback (no tracker)': 'Fruitback (sans outil de suivi)',
+  'Your role in this workspace does not let you change this site.':
+    'Votre rôle dans cet espace ne vous permet pas de modifier ce site.',
+  'This site sends to several places. Change them in Fruitback.':
+    'Ce site envoie vers plusieurs endroits. Modifiez-les dans Fruitback.',
   'Turn on': 'Activer',
   'Your browser will ask to allow this site once.': 'Votre navigateur demandera une fois l’accès à ce site.',
   'Your team and invited guests': 'Votre équipe et les invités',
