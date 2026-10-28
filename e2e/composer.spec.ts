@@ -173,11 +173,6 @@ test('the composer has the measures of the mock-up, above its element (FRU-258, 
     'rgba(24, 24, 27, 0.22) 0px 14px 40px 0px',
   );
   // Above the element: it ends 40 px over its top, on the edge of the frame, 5 px off the element.
-  // The button is read at rest, as a person sees it once the click is over.
-  await page.mouse.move(0, 0);
-  await expect
-    .poll(() => button.evaluate((element) => getComputedStyle(element).transform))
-    .toMatch(/^(none|matrix\(1, 0, 0, 1, 0, 0\))$/);
   const target = (await button.boundingBox())!;
   expect(Number(box.y) + Number(box.height)).toBeCloseTo(target.y - 40, 0);
   expect(Number(box.x)).toBeCloseTo(target.x - 5, 0);

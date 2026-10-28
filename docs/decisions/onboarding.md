@@ -134,7 +134,9 @@ page opens, and you click the Fruitback icon there ») and two buttons.
    origin, when the welcome page turns a site on, never at a load of a page. The extension sends the
    command of the popup (`leave-feedback`): the widget knows no extension. The origins it opened on
    are kept in `chrome.storage.local` under `fruitback:first-pick`, a list of origins and nothing
-   else. **Not from the popup**:
+   else. An origin is written before the choice is asked, so a second activation meanwhile does not ask
+   again, and taken out if the widget did not answer: a widget that did not load within 10 s, or that
+   was busy, gets the choice at the next activation. **Not from the popup**:
    there « Turn on » is the act of somebody who may come to read the notes first, and « Leave
    feedback » is one click away on the screen that follows. Measured: pressing it for them there
    broke fifteen specs that turn a site on from the popup and expect the widget at rest.

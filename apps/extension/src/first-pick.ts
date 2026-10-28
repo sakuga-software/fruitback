@@ -17,17 +17,28 @@ export type FirstPickArea = {
   set(items: Record<string, unknown>): Promise<void>;
 };
 
-/**
- * Whether this activation of `origin` is its first one, and marks it as done. A second activation,
- * after « Turn off », or in another tab, answers `false`: the choice opens once per origin.
- */
-export async function firstActivation(area: FirstPickArea, origin: string): Promise<boolean> {
-  const stored = (await area.get(FIRST_PICK_KEY))[FIRST_PICK_KEY];
-  const done = Array.isArray(stored) ? stored.filter((each): each is string => typeof each === 'string') : [];
-  if (done.includes(origin)) return false;
-  await area.set({ [FIRST_PICK_KEY]: [...done, origin] });
+function picked(stored: unknown): string[] {
+  return Array.isArray(stored) ? stored.filter((each): each is string => typeof each === 'string') : [];
+}
 
-  return true;
+/**
+ * Whether the choice of an element opened on `origin` already. A second activation, after
+ * « Turn off », or in another tab, finds it there: the choice opens once per origin.
+ */
+export async function pickedAlready(area: FirstPickArea, origin: string): Promise<boolean> {
+  return picked((await area.get(FIRST_PICK_KEY))[FIRST_PICK_KEY]).includes(origin);
+}
+
+/** Keeps `origin` as one where the choice opened, or is opening. */
+export async function markPicked(area: FirstPickArea, origin: string): Promise<void> {
+  const done = picked((await area.get(FIRST_PICK_KEY))[FIRST_PICK_KEY]);
+  if (!done.includes(origin)) await area.set({ [FIRST_PICK_KEY]: [...done, origin] });
+}
+
+/** Gives `origin` back: the choice did not open there, so the next activation tries again. */
+export async function unmarkPicked(area: FirstPickArea, origin: string): Promise<void> {
+  const done = picked((await area.get(FIRST_PICK_KEY))[FIRST_PICK_KEY]);
+  if (done.includes(origin)) await area.set({ [FIRST_PICK_KEY]: done.filter((each) => each !== origin) });
 }
 
 /**
@@ -66,13 +77,20 @@ export async function pickOnFirstActivation(
     log = (error) => console.error('[fruitback] could not read the first activation', error),
     pick = pickWhenReady,
   } = options;
+  // Marked before the pick, so that a second activation during the pick (another tab) does not
+  // open the choice a second time.
   try {
-    if (!(await firstActivation(area, origin))) return false;
+    if (await pickedAlready(area, origin)) return false;
+    await markPicked(area, origin);
   } catch (error) {
     log(error);
 
     return false;
   }
+  // Given back when the choice did not open: a widget that did not load in time, or that was busy,
+  // gets the choice at the next activation.
+  const opened = await pick(ask);
+  if (!opened) await unmarkPicked(area, origin).catch(log);
 
-  return pick(ask);
+  return opened;
 }
