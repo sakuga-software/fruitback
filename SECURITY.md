@@ -2336,6 +2336,45 @@ A workspace can have a logo, which the console shows in its rail and on the scre
   test:`lets the owner and an admin send it, and every member reads it with the headers that run nothing`.
 - **How long: until it is replaced or removed, or its workspace is deleted**, which takes it with it.
 
+### The agent keys of a workspace (FRU-461)
+
+An agent key lets an agent with no browser (Claude Code in CI, a cloud agent) reach the notes of some
+sites of one workspace. It is the identity of the remote MCP server that FRU-463 adds; this slice
+makes, lists and revokes the keys, and reads what a key reaches. `docs/decisions/agents.md` gives the
+framing. `/console/workspaces/<id>/agent-keys`, under every rule of the console API (the cookie of a
+session, the `Origin` of the console for a write, `404` for a workspace somebody is not of):
+
+- **Who makes, lists and revokes a key: the owner and the admins of the workspace**
+  (`manage-workspace`). A member or a guest: `403`. A suspended workspace refuses a new key and a
+  revocation, as every write (`409 workspace-suspended`).
+  test:`refuses a member and a guest, as every route of who manages a workspace, and writes nothing`.
+- **The worker keeps the SHA-256 digest of a key, never the key.** The key is 32 random bytes after
+  the prefix `fbk_`, so that a scanner of secrets finds one that leaked. The answer of its creation
+  holds it, once; the list and every later answer hold its name, its sites, its rights and its dates
+  only. A key is found by its digest, on a unique index. Somebody who reads the database does not
+  get a key from it.
+  test:`lets the owner and an admin make a key, shown once, and lists it with no key and no digest`.
+- **A key reaches one workspace, and only the sites it names**, 20 at most, each a site of that
+  workspace (`400 unknown-site` otherwise). A site that goes leaves the keys that name it, and a key
+  with no site left reaches nothing.
+  test:`never reaches a site it does not name, nor one of another workspace, and nothing once its sites are gone`.
+- **A key never does more than the member who made it, read again at each request.** That member
+  removed, or their account suspended: the key reaches nothing. Made a guest: the key reads only the
+  sites it names that are shared with them. The right `write` holds only while that member may
+  manage the sites (`manage-sites`).
+  test:`reaches nothing once its member is removed, or their account is suspended`,
+  test:`writes no more once its member is a member, and reads only the sites shared once they are a guest`.
+- **On a site that everyone reads, a key reads only the notes of a known person by default**
+  (`verifiedOnly`, decision 7 of `agents.md`): a member, or a reviewer the site's identity
+  verified. Anybody writes the other notes, and an agent can obey their text. The owner or an admin
+  turns it off at the creation of the key, knowing it; an agent cannot turn it off. `/mcp` (FRU-463)
+  applies it.
+- **A key ends.** It lives 90 days unless its creator chooses from 1 to 365 days; no key lives with
+  no end. At its date it reaches nothing. A revocation deletes it at once.
+  test:`ends at its date, and not before`.
+- **What a key does not protect**: whoever holds a key reads what it reaches until it ends or is
+  revoked, from anywhere. A workspace holds 20 keys at most.
+
 ### The administrator of the instance (FRU-261)
 
 Mathieu, 2026-10-18: « le premier compte utilisateur est forcèment admin lors de sa création sur

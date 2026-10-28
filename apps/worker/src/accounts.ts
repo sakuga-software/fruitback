@@ -142,6 +142,37 @@ export function readableSites<T extends { id: string }>(sites: readonly T[], rea
 /** A site as the invitations and the members name it (FRU-250): its id and its address. */
 export type SharedSite = { id: string; origin: string };
 
+/** How many agent keys one workspace holds (FRU-461). */
+export const MAX_AGENT_KEYS = 20;
+
+/**
+ * An agent key of a workspace (FRU-461), as the store reads it: never the key, which the worker does
+ * not keep. `write`: the key may reply and set a status, beside the reads. `agent-keys.ts` says what
+ * a key reaches.
+ */
+export type AgentKey = {
+  id: string;
+  workspaceId: string;
+  name: string;
+  sites: SharedSite[];
+  write: boolean;
+  /**
+   * On a site that everyone reads, the key reads only the notes of a known person: decision 7 of
+   * `agents.md`. The team turns it off at the creation of the key, knowing it.
+   */
+  verifiedOnly: boolean;
+  /** The account of the member who made the key. */
+  createdBy: string;
+  createdAt: number;
+  expiresAt: number;
+};
+
+/** A key to write: its digest, never the key. */
+export type NewAgentKey = Omit<AgentKey, 'id' | 'workspaceId' | 'sites'> & {
+  keyHash: string;
+  sites: readonly string[];
+};
+
 /**
  * Who reads the notes of a site: the two words of the design (P2) in place of the three modes.
  *
@@ -447,6 +478,23 @@ export type AccountStore = {
   sharedIn(workspace: string): Promise<Map<string, SharedSite[]>>;
   /** Removes what was shared with `account` in `workspace`: they left, or were removed. */
   unshare(workspace: string, account: string): Promise<void>;
+  /**
+   * A new agent key of `workspace` (FRU-461), with the sites it names. Nothing is written when:
+   *
+   * - `unknown-site`: one of the sites is not a site of this workspace;
+   * - `too-many`: the workspace holds `MAX_AGENT_KEYS` keys.
+   */
+  createAgentKey(workspace: string, key: NewAgentKey): Promise<AgentKey | 'unknown-site' | 'too-many'>;
+  /** The agent keys of a workspace, oldest first. A key that expired is still there. */
+  agentKeys(workspace: string): Promise<AgentKey[]>;
+  /** Deletes an agent key. `false` when it is not a key of this workspace. */
+  revokeAgentKey(workspace: string, key: string): Promise<boolean>;
+  /**
+   * The agent key of this digest and the reach of the member who made it, read now in one
+   * statement. `undefined`: no key has this digest, or its member left, was removed or is suspended.
+   * An expired key is answered: `agent-keys.ts` refuses it.
+   */
+  agentKeyOf(keyHash: string): Promise<{ key: AgentKey; reach: Reach } | undefined>;
   /**
    * The address of every person who owns a workspace, each once (FRU-221). Empty: the instance has
    * no owner yet. A role that is not one of the four is no role, as for `role`.

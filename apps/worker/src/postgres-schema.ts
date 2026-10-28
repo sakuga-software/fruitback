@@ -333,6 +333,66 @@ export const site_shares = pgTable(
 );
 
 /**
+ * The agent keys of a workspace (FRU-461): `agent-keys.ts` says what a key reaches. The worker keeps
+ * the SHA-256 digest of the key only, as it keeps a refresh token. A revoked key is deleted.
+ *
+ * `created_by` is the member who made the key. Their account that goes takes the key with it.
+ * `verified_only`: on a site that everyone reads, the key reads only the notes of a known person.
+ */
+export const agent_keys = pgTable(
+  'agent_keys',
+  {
+    id: text('id').notNull(),
+    workspace_id: text('workspace_id').notNull(),
+    name: text('name').notNull(),
+    key_hash: text('key_hash').notNull(),
+    can_write: boolean('can_write').notNull(),
+    verified_only: boolean('verified_only').notNull(),
+    created_by: text('created_by').notNull(),
+    created_at: instant('created_at').notNull(),
+    expires_at: instant('expires_at').notNull(),
+  },
+  (table) => [
+    primaryKey({ name: 'agent_keys_pkey', columns: [table.id] }),
+    unique('agent_keys_key_hash_key').on(table.key_hash),
+    foreignKey({
+      name: 'agent_keys_workspace_id_fkey',
+      columns: [table.workspace_id],
+      foreignColumns: [organization.id],
+    }).onDelete('cascade'),
+    foreignKey({
+      name: 'agent_keys_created_by_fkey',
+      columns: [table.created_by],
+      foreignColumns: [user.id],
+    }).onDelete('cascade'),
+    index('agent_keys_by_workspace').on(table.workspace_id),
+  ],
+);
+
+/** The sites an agent key names. A site that goes takes its rows: the key reaches nothing of it. */
+export const agent_key_sites = pgTable(
+  'agent_key_sites',
+  {
+    key_id: text('key_id').notNull(),
+    site_id: text('site_id').notNull(),
+  },
+  (table) => [
+    primaryKey({ name: 'agent_key_sites_pkey', columns: [table.key_id, table.site_id] }),
+    foreignKey({
+      name: 'agent_key_sites_key_id_fkey',
+      columns: [table.key_id],
+      foreignColumns: [agent_keys.id],
+    }).onDelete('cascade'),
+    foreignKey({
+      name: 'agent_key_sites_site_id_fkey',
+      columns: [table.site_id],
+      foreignColumns: [sites.id],
+    }).onDelete('cascade'),
+    index('agent_key_sites_by_site').on(table.site_id),
+  ],
+);
+
+/**
  * The pairing codes and the sessions (FRU-142). Every code and every token is a SHA-256 digest: a
  * copy of the database is not a way in.
  */

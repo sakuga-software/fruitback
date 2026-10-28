@@ -34,6 +34,8 @@ import { SUSPENSION_REASON_LENGTH } from './instance-admin.ts';
 import { MAX_LISTED_REPOSITORIES } from './github-connector.ts';
 import { SUSPENDED_ERROR, SUSPENDED_STATUS } from './workspace-suspension.ts';
 import { LOGO_TYPES, MAX_LOGO_BYTES, MAX_LOGO_SIDE } from './workspace-logo.ts';
+import { DEFAULT_KEY_DAYS, KEY_PREFIX, MAX_KEY_DAYS, MAX_KEY_SITES } from './agent-keys.ts';
+import { MAX_AGENT_KEYS } from './accounts.ts';
 import { handleRequest } from './app.ts';
 import { beforePostgres } from './before-postgres.fixture.ts';
 
@@ -187,6 +189,18 @@ describe('SECURITY.md states what the code does', () => {
     for (const sentence of [
       `a PNG, a JPEG or a WebP of ${MAX_LOGO_BYTES / 1_024} KB at most, and no SVG`,
       `a size of ${MAX_LOGO_SIDE} pixels at most on each side`,
+    ]) {
+      assert.ok(loose.includes(sentence), `SECURITY.md does not say: ${sentence}`);
+    }
+  });
+
+  it('quotes the prefix, the sites, the days and the number of the agent keys (FRU-461)', () => {
+    const loose = SECURITY.replace(/\s+/g, ' ');
+    for (const sentence of [
+      `32 random bytes after the prefix \`${KEY_PREFIX}\``,
+      `only the sites it names**, ${MAX_KEY_SITES} at most`,
+      `It lives ${DEFAULT_KEY_DAYS} days unless its creator chooses from 1 to ${MAX_KEY_DAYS} days`,
+      `A workspace holds ${MAX_AGENT_KEYS} keys at most`,
     ]) {
       assert.ok(loose.includes(sentence), `SECURITY.md does not say: ${sentence}`);
     }

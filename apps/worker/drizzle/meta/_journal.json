@@ -239,6 +239,13 @@
       "when": 1792953981212,
       "tag": "0033_one_owner_per_address",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1793179938899,
+      "tag": "0034_agent_keys",
+      "breakpoints": true
     }
   ]
 }

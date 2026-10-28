@@ -4,6 +4,8 @@ import {
   type Account,
   type AccountStore,
   DEFAULT_CONNECTOR_SETTINGS,
+  MAX_AGENT_KEYS,
+  type NewAgentKey,
   type Workspace,
   destinationId,
 } from './accounts.ts';
@@ -1020,4 +1022,107 @@ export function accountCases(it: Declare<AccountStore>): void {
     assert.deepEqual(await store.domains(workspace.id), []);
     assert.equal((await store.domains(other.id)).length, 1);
   });
+
+  // --- Agent keys (FRU-461)
+
+  it('keeps an agent key with the sites it names, and finds it by its digest with the reach of its member', async (store) => {
+    const { alice, workspace } = await world(store);
+    // A site is answered oldest first: the pauses give each one its own instant.
+    const one = await store.addSite(workspace.id, { origin: 'https://one.acme.dev', visibility: 'members' });
+    await pause();
+    const two = await store.addSite(workspace.id, { origin: 'https://two.acme.dev', visibility: 'members' });
+    await store.addSite(workspace.id, { origin: 'https://three.acme.dev', visibility: 'members' });
+
+    const made = await store.createAgentKey(workspace.id, agentKey(alice.id, [two.id, one.id, one.id]));
+    assert.ok(typeof made === 'object');
+    assert.deepEqual(made.sites, [
+      { id: one.id, origin: 'https://one.acme.dev' },
+      { id: two.id, origin: 'https://two.acme.dev' },
+    ]);
+    assert.deepEqual(await store.agentKeys(workspace.id), [made]);
+
+    assert.deepEqual(await store.agentKeyOf('digest-of-the-key'), {
+      key: made,
+      reach: { role: 'owner', sites: 'every' },
+    });
+    assert.equal(await store.agentKeyOf('digest-of-another-key'), undefined);
+  });
+
+  it('writes no agent key that names a site of another workspace', async (store) => {
+    const { alice, workspace } = await world(store);
+    const { workspace: other } = await otherWorld(store);
+    const ours = await store.addSite(workspace.id, { origin: 'https://acme.dev', visibility: 'members' });
+    const theirs = await store.addSite(other.id, { origin: 'https://globex.dev', visibility: 'members' });
+
+    assert.equal(await store.createAgentKey(workspace.id, agentKey(alice.id, [ours.id, theirs.id])), 'unknown-site');
+    assert.equal(await store.createAgentKey(workspace.id, agentKey(alice.id, ['site_none'])), 'unknown-site');
+    assert.deepEqual(await store.agentKeys(workspace.id), []);
+    assert.equal(await store.agentKeyOf('digest-of-the-key'), undefined);
+  });
+
+  it(`holds ${MAX_AGENT_KEYS} agent keys in a workspace, and writes no more`, async (store) => {
+    const { alice, workspace } = await world(store);
+    const site = await store.addSite(workspace.id, { origin: 'https://acme.dev', visibility: 'members' });
+    for (let index = 0; index < MAX_AGENT_KEYS; index += 1) {
+      const made = await store.createAgentKey(workspace.id, {
+        ...agentKey(alice.id, [site.id]),
+        keyHash: `digest-${index}`,
+      });
+      assert.ok(typeof made === 'object', `key ${index}`);
+    }
+
+    assert.equal(
+      await store.createAgentKey(workspace.id, { ...agentKey(alice.id, [site.id]), keyHash: 'one-too-many' }),
+      'too-many',
+    );
+    assert.equal((await store.agentKeys(workspace.id)).length, MAX_AGENT_KEYS);
+    assert.equal(await store.agentKeyOf('one-too-many'), undefined);
+  });
+
+  it('revokes an agent key of its workspace only', async (store) => {
+    const { alice, workspace } = await world(store);
+    const { bob, workspace: other } = await otherWorld(store);
+    const site = await store.addSite(workspace.id, { origin: 'https://acme.dev', visibility: 'members' });
+    const theirSite = await store.addSite(other.id, { origin: 'https://globex.dev', visibility: 'members' });
+    const ours = await store.createAgentKey(workspace.id, agentKey(alice.id, [site.id]));
+    const theirs = await store.createAgentKey(other.id, { ...agentKey(bob.id, [theirSite.id]), keyHash: 'theirs' });
+    assert.ok(typeof ours === 'object' && typeof theirs === 'object');
+
+    assert.equal(await store.revokeAgentKey(workspace.id, theirs.id), false);
+    assert.notEqual(await store.agentKeyOf('theirs'), undefined);
+
+    assert.equal(await store.revokeAgentKey(workspace.id, ours.id), true);
+    assert.equal(await store.agentKeyOf('digest-of-the-key'), undefined);
+    assert.deepEqual(await store.agentKeys(workspace.id), []);
+    assert.equal(await store.revokeAgentKey(workspace.id, ours.id), false);
+  });
+
+  it('takes a site out of the agent keys that name it when it goes, and the keys with their workspace', async (store) => {
+    const { alice, workspace } = await world(store);
+    const kept = await store.addSite(workspace.id, { origin: 'https://kept.acme.dev', visibility: 'members' });
+    const gone = await store.addSite(workspace.id, { origin: 'https://gone.acme.dev', visibility: 'members' });
+    await store.createAgentKey(workspace.id, agentKey(alice.id, [kept.id, gone.id]));
+
+    await store.removeSite(workspace.id, gone.id);
+    assert.deepEqual((await store.agentKeyOf('digest-of-the-key'))?.key.sites, [
+      { id: kept.id, origin: 'https://kept.acme.dev' },
+    ]);
+
+    await store.deleteWorkspace(workspace.id);
+    assert.equal(await store.agentKeyOf('digest-of-the-key'), undefined);
+  });
+}
+
+/** A key of `account` on these sites, under the digest `digest-of-the-key`. */
+function agentKey(account: string, sites: readonly string[]): NewAgentKey {
+  return {
+    name: 'Claude on CI',
+    sites,
+    write: true,
+    verifiedOnly: true,
+    createdBy: account,
+    keyHash: 'digest-of-the-key',
+    createdAt: 1_000,
+    expiresAt: 2_000,
+  };
 }

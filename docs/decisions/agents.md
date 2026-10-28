@@ -3,8 +3,8 @@
 FRU-110 asks that a team can hand its notes to an AI agent. This page is the framing, written before
 any code. It replaces the page of decision attached to the ticket in Linear (2026-10-08) and the
 framing of 2026-10-12: the Cloud has accounts, workspaces and sessions of an account since then, and
-Mathieu answered three questions on 2026-10-26 (_The decisions_, at the end). Four questions stay
-open (_What is still to decide_).
+Mathieu answered three questions on 2026-10-26, and took the four recommendations that stayed open on
+2026-10-28 (_The decisions_, at the end).
 
 ## Agents
 
@@ -45,14 +45,14 @@ open (_What is still to decide_).
 
 Read on `main` on 2026-10-26.
 
-| Need of an agent                                             | Today                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| The notes of a whole site, with their content                | **Missing.** `GET /session/notes` lists a whole site but never the text nor the replies (FRU-306, on purpose: the side panel). `GET /feedback` gives the whole note, but for one page. The console list (FRU-244) gives an excerpt of 64 characters. No read filters by date.                                                                                                                                                |
-| An identity with no browser                                  | **Missing.** The console takes the cookie of better-auth only (FRU-202). A session of the extension comes from the connect flow (FRU-238), which a client with no `Origin` can start, but a person approves each one with a word, and its refresh dies after 30 days unused. better-auth refuses `bearer`, `jwt` and `device-authorization` (`REFUSED_PLUGINS` of `auth.ts`), and has no API key and no OAuth provider here. |
-| A reply                                                      | `POST /feedback/<id>/replies` (FRU-257): a session of the workspace replies as a named member.                                                                                                                                                                                                                                                                                                                               |
-| A status                                                     | `POST /feedback/<id>/status` (FRU-367): the author of the note, or a member with `manage-sites`; notes kept by the worker only.                                                                                                                                                                                                                                                                                              |
-| The text of a page                                           | `feedbackAsText` (FRU-109), in the widget only: each line of a reviewer quoted with `>`.                                                                                                                                                                                                                                                                                                                                     |
-| MCP, `docs/agents.md`, a model provider in `docs/privacy.md` | **None.**                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Need of an agent                                             | Today                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The notes of a whole site, with their content                | **Missing.** `GET /session/notes` lists a whole site but never the text nor the replies (FRU-306, on purpose: the side panel). `GET /feedback` gives the whole note, but for one page. The console list (FRU-244) gives an excerpt of 64 characters. No read filters by date.                                                                                                                                                                                                                                                                     |
+| An identity with no browser                                  | **An agent key of a workspace since FRU-461** (`agent-keys.ts`), which nothing reads before `/mcp` (FRU-463). Before it, nothing: the console takes the cookie of better-auth only (FRU-202). A session of the extension comes from the connect flow (FRU-238), which a client with no `Origin` can start, but a person approves each one with a word, and its refresh dies after 30 days unused. better-auth refuses `bearer`, `jwt` and `device-authorization` (`REFUSED_PLUGINS` of `auth.ts`), and has no API key and no OAuth provider here. |
+| A reply                                                      | `POST /feedback/<id>/replies` (FRU-257): a session of the workspace replies as a named member.                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| A status                                                     | `POST /feedback/<id>/status` (FRU-367): the author of the note, or a member with `manage-sites`; notes kept by the worker only.                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| The text of a page                                           | `feedbackAsText` (FRU-109), in the widget only: each line of a reviewer quoted with `>`.                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| MCP, `docs/agents.md`, a model provider in `docs/privacy.md` | **None.**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 
 ### The tools of the server
 
@@ -138,20 +138,20 @@ On 2026-10-26 Mathieu answered:
 4. **An agent can start when a note arrives** (« on pourra spawn un agent quand on fait une note ? » :
    yes), with the two guards of _Starting an agent on a note_.
 
-## What is still to decide
+On 2026-10-28 Mathieu took the four recommendations that this page left open:
 
-Each one has a recommendation; the tickets follow it until Mathieu says otherwise.
-
-1. **Who makes a key.** Recommended: the owner and the admins of the workspace (`manage-workspace`).
-   Not a member alone: a key reaches every note of its sites, past the person.
-2. **How a reply of an agent shows.** Recommended: an optional field `by: 'agent'` on a reply
+5. **Who makes a key: the owner and the admins of the workspace** (`manage-workspace`). Not a member
+   alone: a key reaches every note of its sites, past the person. FRU-461 holds it.
+6. **A reply of an agent shows as one.** An optional field `by: 'agent'` on a reply
    (`noteCommentSchema`, `packages/shared`), which the widget draws as « Agent » beside the name of
    the key. Tolerant: a widget from before shows the name alone. The name of the member who made the
-   key is not shown to the reviewer.
-3. **`verified_only` by default on a site that reads `public`.** Recommended: yes. The cost: an
-   agent on such a site sees no note of a visitor until the team turns it off, knowing it.
-4. **How long a key lives.** Recommended: 90 days by default, a date chosen at creation, no key with
-   no end, and the console warns 7 days before.
+   key is not shown to the reviewer. FRU-464 and FRU-465.
+7. **`verified_only` by default on a site that reads `public`.** The cost: an agent on such a site
+   sees no note of a visitor until the team turns it off, knowing it. The switch is a field of the
+   key (`verifiedOnly`, FRU-461), never an argument of a tool: the agent cannot turn it off. FRU-463
+   applies it.
+8. **A key lives 90 days by default.** Its creator chooses another number of days at its creation,
+   365 at most, and no key lives with no end. The console warns 7 days before (FRU-462).
 
 ## The tickets
 

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'vitest';
 import { accountCases } from './account-conformance.fixture.ts';
-import type { AccountStore, Site } from './accounts.ts';
+import { type AccountStore, MAX_AGENT_KEYS, type Site } from './accounts.ts';
 import { createPostgresAccountStore } from './accounts-postgres.ts';
 import type { ClientMap } from './clients.ts';
 import {
@@ -44,6 +44,42 @@ for (const subject of SUBJECTS) describeConformance('AccountStore', accountCases
 
 /** One change to `accounts-postgres.ts`, or one store around it, for each case: the case must fail. */
 const VIOLATIONS: Violation<AccountStore>[] = [
+  {
+    breaks: 'keeps an agent key with the sites it names, and finds it by its digest with the reach of its member',
+    by: 'finds a key by any digest',
+    replace: { from: '.where(and(eq(agent_keys.key_hash, keyHash), NOT_SUSPENDED)),', to: '.where(NOT_SUSPENDED),' },
+  },
+  {
+    breaks: 'writes no agent key that names a site of another workspace',
+    by: 'writes a key whatever the sites it names',
+    replace: { from: "if (found.length !== named.length) return 'unknown-site';", to: '' },
+  },
+  {
+    breaks: 'writes no agent key that names a site of another workspace',
+    by: 'reads the sites in every workspace',
+    replace: {
+      from: '.where(and(eq(sites.workspace_id, workspace), inArray(sites.id, named)))\n                .orderBy',
+      to: '.where(inArray(sites.id, named))\n                .orderBy',
+    },
+  },
+  {
+    breaks: `holds ${MAX_AGENT_KEYS} agent keys in a workspace, and writes no more`,
+    by: 'writes a key past the bound',
+    replace: { from: "if ((held?.count ?? 0) >= MAX_AGENT_KEYS) return 'too-many';", to: '' },
+  },
+  {
+    breaks: 'takes a site out of the agent keys that name it when it goes, and the keys with their workspace',
+    by: 'says that a site is removed, and keeps it',
+    wrap: (real) => ({ ...real, removeSite: async () => true }),
+  },
+  {
+    breaks: 'revokes an agent key of its workspace only',
+    by: 'revokes a key of any workspace',
+    replace: {
+      from: '.where(and(eq(agent_keys.id, key), eq(agent_keys.workspace_id, workspace)))',
+      to: '.where(eq(agent_keys.id, key))',
+    },
+  },
   {
     breaks: 'makes one account of two providers that prove the same address',
     by: 'makes an account for each provider',
