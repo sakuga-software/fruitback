@@ -42,23 +42,22 @@ the action happens: `console`, `mail`, `tab` (going back to a tab that is alread
 | 9   | console | click « Install the extension (beta) »: the store opens in a tab   | stays            |
 | 10  | store   | click « Add to Chrome »                                            | stays            |
 | 11  | chrome  | click « Add extension » in the dialog of Chrome                    | stays            |
-| 12  | chrome  | open the puzzle menu of the toolbar                                | a tip, FRU-484   |
-| 13  | chrome  | click the pin beside Fruitback                                     | a tip, FRU-484   |
-| 14  | welcome | click « Sign in with email »: the console opens in a tab           | stays            |
-| 15  | console | click « Connect Chrome » after the word                            | stays            |
-| 16  | welcome | click « Turn on <site> »: the site opens in a tab                  | stays            |
-| 17  | chrome  | click « Allow » in the prompt of Chrome for the access to the site | stays            |
-| 18  | site    | click « Leave feedback »                                           | removed, FRU-485 |
-| 19  | site    | click the element of the page                                      | stays            |
-| 20  | site    | type the note                                                      | stays            |
-| 21  | site    | click « Send »                                                     | stays            |
+| 12  | welcome | click « Sign in with email »: the console opens in a tab           | stays            |
+| 13  | console | click « Connect Chrome » after the word                            | stays            |
+| 14  | welcome | click « Turn on <site> »: the site opens in a tab                  | stays            |
+| 15  | chrome  | click « Allow » in the prompt of Chrome for the access to the site | stays            |
+| 16  | site    | click « Leave feedback »                                           | removed, FRU-485 |
+| 17  | site    | click the element of the page                                      | stays            |
+| 18  | site    | type the note                                                      | stays            |
+| 19  | site    | click « Send »                                                     | stays            |
 
-**21 actions: 5 in the screens of Chrome and its store (2 of them become tips with FRU-484), 1
-return to a tab that is already open, and no dead end.** The welcome page signs in itself (FRU-482):
-it shows the word that the console shows, claims the session, closes the tab of the console and says
-who signed in. It then lists the sites of the workspaces of the account, and « Turn on <site> » asks
-Chrome for that site, writes the rule and opens the site with its widget (FRU-483). The popup on a
-page that is not a site offers the sign-in too.
+**19 actions: 3 in the screens of Chrome and its store, 1 return to a tab that is already open, and
+no dead end.** The welcome page signs in itself (FRU-482): it shows the word that the console shows,
+claims the session, closes the tab of the console and says who signed in. It then lists the sites of
+the workspaces of the account, and « Turn on <site> » asks Chrome for that site, writes the rule and
+opens the site with its widget (FRU-483). The popup on a page that is not a site offers the sign-in
+too. Pinning Fruitback (the puzzle menu, then the pin: 2 actions in Chrome) is a tip under the
+sign-in, which no step of the path needs (FRU-484).
 
 ### What was measured first
 
@@ -67,9 +66,10 @@ On `main` at `389ac285` the path counted **27 actions**, with **1 dead end**: th
 on http and https pages. » (`notAWebPage`). The person went back to the setup, opened the site,
 signed in from the popup there, and went back to the site after the console. FRU-482 removed those
 three actions and the dead end (24 actions). FRU-483 removed the return to the setup, its link to
-the site and the two clicks on the icon, as « Turn on » moved to the welcome page (21 actions). The
-spec also measured that the setup goes on in its first tab after the link, while the tab of the link
-says « You are signed in … You can close this one » (`sign-in.tsx`, the choice P4 of the mockup).
+the site and the two clicks on the icon, as « Turn on » moved to the welcome page (21 actions).
+FRU-484 made the pin a tip (19 actions). The spec also measured that the setup goes on in its first
+tab after the link, while the tab of the link says « You are signed in … You can close this one »
+(`sign-in.tsx`, the choice P4 of the mockup).
 
 The setup ends by itself at the first note (`setup-install.tsx`). The spec does not check it: the end
 reads `lastNoteAt` of the site, which comes from the index of the notes (`notes-index-postgres.ts`),
@@ -140,7 +140,7 @@ page opens, and you click the Fruitback icon there ») and two buttons.
 | ------- | ---------------------------------------------------------------------------- | ----- |
 | FRU-482 | The welcome page signs in itself; the popup on a page that is not a site too | Done  |
 | FRU-483 | The welcome page offers « Turn on <site> » and opens the site                | Done  |
-| FRU-484 | The pin is a tip                                                             | Todo  |
+| FRU-484 | The pin is a tip                                                             | Done  |
 | FRU-485 | The first activation opens the choice of an element                          | Todo  |
 | FRU-486 | The guide on the setup page, its captures made again at each release         | Todo  |
 | FRU-487 | The console talks to the extension of the same browser                       | Todo  |

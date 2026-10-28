@@ -116,3 +116,12 @@ body {
 .welcome-sign-in .problem {
   margin: 0;
 }
+
+/* The pin, a tip under the sign-in (FRU-484): what helps later, said after what is done now. */
+.welcome-tip {
+  margin: 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  color: var(--subtle);
+  font-size: 13px;
+}

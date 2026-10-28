@@ -46,7 +46,11 @@ export type WelcomeOptions = {
   };
 };
 
-/** The page: two steps, and the sign-in. */
+/**
+ * The page. With the sign-in, the sign-in comes first and the pin is a tip (FRU-484): nothing
+ * between the install and the first note needs the pin. With no Fruitback to sign in to, the two
+ * steps of before stay, as the popup is the way in.
+ */
 export function welcomeScreen(document: Document, options: WelcomeOptions): HTMLElement {
   document.title = t('Welcome to Fruitback');
   const root = element(document, 'main', '', 'welcome');
@@ -54,13 +58,31 @@ export function welcomeScreen(document: Document, options: WelcomeOptions): HTML
   top.classList.add('welcome-head');
 
   const title = element(document, 'h1', t('Fruitback is installed'));
+  const invited = element(
+    document,
+    'p',
+    t('Invited by a client or a team? Use the email the invitation was sent to.'),
+    'welcome-invited',
+  );
+
+  if (options.signIn !== undefined) {
+    const lead = element(document, 'p', t('Sign in, then turn on a site your team reviews.'), 'lead');
+    const tip = element(document, 'p', '', 'welcome-tip');
+    tip.append(
+      element(document, 'strong', t('Tip:')),
+      ` ${t('Pin Fruitback to find it in the toolbar later: open the puzzle piece at the right of the address bar, then press the pin beside Fruitback.')}`,
+    );
+    root.append(top, title, lead, ...signInPart(document, options.signIn), invited, tip);
+
+    return root;
+  }
+
   const lead = element(
     document,
     'p',
     t('Pin Fruitback, then sign in. It then works on every site your team reviews.'),
     'lead',
   );
-
   const steps = element(document, 'ol', '', 'welcome-steps');
   steps.append(
     step(
@@ -68,25 +90,9 @@ export function welcomeScreen(document: Document, options: WelcomeOptions): HTML
       t('Pin Fruitback'),
       t('Open the puzzle piece at the right of the address bar, then press the pin beside Fruitback.'),
     ),
-    step(
-      document,
-      t('Sign in'),
-      options.signIn === undefined
-        ? t('Click the Fruitback icon, then Sign in with email.')
-        : t('Here, with the email of your work.'),
-    ),
+    step(document, t('Sign in'), t('Click the Fruitback icon, then Sign in with email.')),
   );
-
-  const invited = element(
-    document,
-    'p',
-    t('Invited by a client or a team? Use the email the invitation was sent to.'),
-    'welcome-invited',
-  );
-  const action =
-    options.signIn === undefined ? toThePopup(document, options.openPopup) : signInPart(document, options.signIn);
-
-  root.append(top, title, lead, steps, ...action, invited);
+  root.append(top, title, lead, steps, ...toThePopup(document, options.openPopup), invited);
 
   return root;
 }

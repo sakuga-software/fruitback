@@ -72,8 +72,17 @@ describe('the page that opens at install (FRU-318)', () => {
       );
       for (const button of buttons) button.click();
       assert.equal(asked, 3);
-      assert.match(screen.textContent ?? '', /Here, with the email of your work\./);
       assert.doesNotMatch(screen.textContent ?? '', /Click the Fruitback icon/);
+    });
+
+    it('puts the sign-in first, and the pin in a tip under it, with no step to follow (FRU-484)', () => {
+      const screen = signIn({ kind: 'signed-out' });
+      assert.equal(screen.querySelector('.lead')?.textContent, 'Sign in, then turn on a site your team reviews.');
+      assert.equal(screen.querySelectorAll('ol').length, 0);
+      const tip = screen.querySelector('.welcome-tip');
+      assert.match(tip?.textContent ?? '', /^Tip: Pin Fruitback to find it in the toolbar later: /);
+      const order = [...screen.children].map((child) => child.className || child.tagName);
+      assert.ok(order.indexOf('welcome-sign-in') < order.indexOf('welcome-tip'), order.join(', '));
     });
 
     it('says what stopped a sign-in above the ways to sign in again', () => {
