@@ -23,11 +23,20 @@ let worker: Worker | undefined;
 /** The rows of the table « What was measured » of `docs/decisions/onboarding.md`, in their order. */
 function measuredInThePage(): Action[] {
   const page = fs.readFileSync('docs/decisions/onboarding.md', 'utf8');
-  const rows = [...page.matchAll(/^\| (\d+) +\| ([a-z]+) +\| (.+?) +\| .+\|$/gm)];
+  const rows = page
+    .split('\n')
+    .filter((line) => /^\|\s*\d+\s*\|/.test(line))
+    .map((line) =>
+      line
+        .split('|')
+        .slice(1, -1)
+        .map((cell) => cell.trim()),
+    );
   // A control: the reading found the table, so an equal list is a result.
   expect(rows.length, 'rows read from the page').toBeGreaterThan(20);
+  for (const row of rows) expect(row, 'a row of the table: #, place, action, becomes').toHaveLength(4);
 
-  return rows.map((row) => ({ place: row[2] as Place, what: row[3] ?? '' }));
+  return rows.map(([, place, what]) => ({ place: place as Place, what: what ?? '' }));
 }
 
 test.afterEach(async ({ extension }) => finished(extension.context, worker));
