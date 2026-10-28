@@ -178,9 +178,17 @@ describe('the transport of /mcp (FRU-463)', () => {
     await rpc(world, good, 'ping');
     assert.ok(((await kept()) as number) > stale);
 
-    // Refused requests are no use: a browser, an expired key, a suspended workspace.
+    // Refused requests are no use: a browser, a GET, a version it does not speak, a batch, bad JSON,
+    // an expired key, a suspended workspace.
     await rowsOf(world.database, `UPDATE agent_keys SET last_used_at = 1`);
     assert.equal((await rpc(world, good, 'ping', {}, { origin: 'https://shop.acme.dev' })).status, 403);
+    assert.equal((await rpc(world, good, 'ping', {}, { httpMethod: 'GET' })).status, 405);
+    assert.equal(
+      (await rpc(world, good, 'ping', {}, { headers: { 'MCP-Protocol-Version': '1999-01-01' } })).status,
+      400,
+    );
+    assert.equal((await rpc(world, good, '', {}, { raw: [{ jsonrpc: '2.0', id: 1, method: 'ping' }] })).status, 400);
+    assert.equal(await kept(), 1);
     await rowsOf(world.database, `UPDATE agent_keys SET expires_at = 2`);
     assert.equal((await rpc(world, good, 'ping')).status, 404);
     await rowsOf(world.database, `UPDATE agent_keys SET expires_at = ${Date.now() + 86_400_000}`);

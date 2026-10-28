@@ -77,7 +77,6 @@ export async function handleMcp(request: Request, context: McpContext): Promise<
   if (grant === undefined || (await context.suspended(grant.workspace))) {
     return answer(404, { error: 'not-found' });
   }
-  await context.used(grant);
   if (request.method !== 'POST') return answer(405, { error: 'method-not-allowed' }, { Allow: 'POST' });
 
   const asked = request.headers.get('MCP-Protocol-Version');
@@ -96,6 +95,8 @@ export async function handleMcp(request: Request, context: McpContext): Promise<
   if (typeof message !== 'object' || message === null || Array.isArray(message)) {
     return failure(null, INVALID_REQUEST, 'One JSON-RPC message per request', 400);
   }
+  // A request the server takes counts as a use of its key (FRU-462); one it refuses above does not.
+  await context.used(grant);
   const { id, method, params } = message as { id?: unknown; method?: unknown; params?: unknown };
   // A notification, or an answer of the client: nothing to answer.
   if (id === undefined) return new Response(null, { status: 202 });

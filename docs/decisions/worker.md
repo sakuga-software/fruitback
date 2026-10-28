@@ -4426,7 +4426,8 @@ The identity of an agent with no browser, for the remote MCP server of FRU-463.
   the agent turn it off; decision 7 gives that choice to the team.
 - **A key ends.** `DEFAULT_KEY_DAYS` (90) unless the request says `days`, 1 to `MAX_KEY_DAYS` (365).
   `days: null` is refused, not read as the default: decision 4 says no key lives with no end.
-- **The last use of a key** (FRU-462): `handleMcp` calls `used` once the grant passes, and
+- **The last use of a key** (FRU-462): `handleMcp` calls `used` once the grant, the method, the version of the protocol
+  and the body pass, and
   `markAgentKeyUsed` writes `last_used_at` in one `UPDATE` whose `WHERE` holds only when the use kept
   is `AGENT_KEY_USE_STEP_MS` (a minute) old or more: an agent that calls ten times a second writes
   once a minute, and most requests change no row. A failure to write it is logged and refuses

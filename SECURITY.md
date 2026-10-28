@@ -2375,7 +2375,8 @@ session, the `Origin` of the console for a write, `404` for a workspace somebody
 - **The last use of a key is kept, to the minute** (FRU-462), so that the owner and the admins see a
   key that is still used, and one that nobody uses any more. A request of `/mcp` that the key opens
   writes its instant in `agent_keys.last_used_at` when the one kept is a minute old or more; a
-  request it refuses (a browser, an expired key, a suspended workspace) writes nothing. It holds no
+  request it refuses (a browser, a method or a version of the protocol it does not take, a body it
+  cannot read, an expired key, a suspended workspace) writes nothing. It holds no
   address, no tool and no argument: the writes of a key are its log (FRU-464).
   test:`notes the last use of a key once a minute, and not on a request it refuses (FRU-462)`.
 - **What a key does not protect**: whoever holds a key reads what it reaches until it ends or is
