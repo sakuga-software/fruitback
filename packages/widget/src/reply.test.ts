@@ -230,6 +230,27 @@ describe('the field to reply to a note (FRU-257)', () => {
     assert.equal(bodies[1], '**Ana Martin** via Fruitback · member of Acme\nNo quote.');
   });
 
+  it('says « Agent » beside the name of the key for a reply of an agent, and never for a member (FRU-465)', () => {
+    const page = mounted();
+    const at = new Date().toISOString();
+    open(
+      page,
+      anIssue({
+        comments: [
+          { id: 'c1', body: '**Claude on CI** via Fruitback · agent\n\n> Fixed in #42.', createdAt: at, by: 'agent' },
+          { id: 'c2', body: '**Ana Martin** via Fruitback · member of Acme\n\n> Thanks.', createdAt: at },
+        ],
+      }),
+    );
+
+    const who = [...page.document.querySelectorAll('.fruitback-thread-reply-who')].map(
+      (each) => each.textContent ?? '',
+    );
+    assert.match(who[0] ?? '', /^Claude on CI · Agent · /);
+    assert.match(who[1] ?? '', /^Ana Martin · member of Acme · /);
+    assert.doesNotMatch(who[1] ?? '', /Agent/);
+  });
+
   it('takes no second send while a reply is in flight under a thread built again, and shows it there', async () => {
     const page = mounted();
     const issue = anIssue();

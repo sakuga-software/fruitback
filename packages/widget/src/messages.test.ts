@@ -327,8 +327,8 @@ describe('every word the widget shows', () => {
     const placedByPosition = noteIssueFixture({
       identifier: 'ID-3',
       stateName: '',
-      // One reply, so its row of the list says how many (FRU-259).
-      comments: [{ id: 'c2', body: 'BODY', createdAt: '2026-08-01T12:00:00.000Z' }],
+      // One reply, so its row of the list says how many (FRU-259). An agent wrote it (FRU-465).
+      comments: [{ id: 'c2', body: 'BODY', createdAt: '2026-08-01T12:00:00.000Z', by: 'agent' }],
       note: noteFixture({
         id: 'sd_near',
         text: '',

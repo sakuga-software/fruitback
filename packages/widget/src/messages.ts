@@ -169,6 +169,8 @@ export const ENGLISH = {
   'thread.stateSince': '{state} since {date}',
   'thread.replies': 'Replies',
   'thread.team': 'Team',
+  /** A reply that an AI agent wrote, beside the name of its key (FRU-465). */
+  'thread.agent': 'Agent',
   'reply.label': 'Reply',
   'reply.placeholder': 'Reply to {name}',
   'reply.placeholderAnonymous': 'Write a reply',

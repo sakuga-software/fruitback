@@ -118,6 +118,7 @@ export const FRENCH: Catalog = {
   'thread.stateSince': '{state} depuis le {date}',
   'thread.replies': 'Réponses',
   'thread.team': 'Équipe',
+  'thread.agent': 'Agent',
   'reply.label': 'Réponse',
   'reply.placeholder': 'Répondre à {name}',
   'reply.placeholderAnonymous': 'Écrire une réponse',
