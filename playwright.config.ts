@@ -27,7 +27,7 @@ export default defineConfig({
   // tests (`e2e/shards.ts`). Not `--shard`: it gave one part twice the time of another.
   ...(process.env.E2E_SHARD === undefined
     ? {}
-    : { testMatch: filesOfShard(process.env.E2E_SHARD, 'e2e', WORKERS).map((file) => `**/e2e/${file}`) }),
+    : { testMatch: filesOfShard(process.env.E2E_SHARD, 'e2e').map((file) => `**/e2e/${file}`) }),
   // Runs after the servers are up and before the first spec: see `warm-up.ts` for what it absorbs.
   globalSetup: './e2e/warm-up.ts',
   // The worker's fake Linear is one process-wide store, so the specs share state. They stay apart by

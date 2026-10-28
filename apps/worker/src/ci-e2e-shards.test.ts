@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, it } from 'vitest';
-import { filesOfShard, partSeconds, partsOf, shardOf } from '../../../e2e/shards.ts';
+import { CI_WORKERS, filesOfShard, partSeconds, partsOf, shardOf } from '../../../e2e/shards.ts';
 import { durationsOf, median, secondsOf } from '../../../tools/ci/e2e-durations.ts';
 
 /**
@@ -17,9 +17,14 @@ const DURATIONS = JSON.parse(readFileSync(`${E2E}durations.json`, 'utf8')) as Re
 
 describe('the parts of the E2E suite', () => {
   it('runs every spec file of e2e/ in exactly one of the three parts of CI', () => {
-    const parts = [1, 2, 3].map((index) => filesOfShard(`${index}/3`, E2E, 4));
+    const parts = [1, 2, 3].map((index) => filesOfShard(`${index}/3`, E2E));
     assert.deepEqual(parts.flat().toSorted(), SPECS.toSorted());
     for (const part of parts) assert.ok(part.length > 0);
+  });
+
+  it('cuts the parts of CI on any machine: the count of workers there does not change them', () => {
+    assert.equal(CI_WORKERS, 4);
+    assert.deepEqual(filesOfShard('2/3', E2E), partsOf(SPECS, DURATIONS, 3, CI_WORKERS)[1]);
   });
 
   it('gives the parts about the same time, where --shard gave one twice the time of another', () => {

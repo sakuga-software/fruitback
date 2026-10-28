@@ -13,12 +13,23 @@ import { join } from 'node:path';
  * order of the paths, and a file stays on one worker. The time of a part is the time of its busiest
  * worker in that order, and each file goes, longest first, to the part where that time grows least.
  *
+ * WARNING: this is a model. A file takes longer on a runner that runs heavier files beside it, and
+ * one runner is slower than another. The first run of these parts took 6.0, 4.1 and 5.8 min of tests
+ * for 4.9 min each in the model (run 40729487712). Write `durations.json` again from recent runs
+ * when one part stays the longest over several runs.
+ *
  * A new spec file is not in `durations.json`: it counts as the mean of the files that are. Every spec
  * file of the folder is in exactly one part, whatever the file holds. `pnpm e2e:durations` writes
  * the file again from the log of a run (`tools/ci/e2e-durations.ts`).
  */
 
 export const SPEC = /\.spec\.ts$/;
+
+/**
+ * The workers of a part on CI. The parts are cut for this count wherever they are computed, so
+ * `E2E_SHARD=2/3` on a machine runs the files of the second part of CI, on any count of workers.
+ */
+export const CI_WORKERS = 4;
 
 /** The time of a part: its files, in the order of their paths, each on the first free worker. */
 export function partSeconds(files: readonly string[], seconds: (file: string) => number, workers: number): number {
@@ -75,7 +86,7 @@ export function shardOf(value: string): { index: number; total: number } {
 }
 
 /** The spec files of the part `value` (`2/3`) of `dir`, as names in that folder. */
-export function filesOfShard(value: string, dir: string, workers: number): string[] {
+export function filesOfShard(value: string, dir: string, workers = CI_WORKERS): string[] {
   const { index, total } = shardOf(value);
   const files = readdirSync(dir).filter((name) => SPEC.test(name));
   const durations = JSON.parse(readFileSync(join(dir, 'durations.json'), 'utf8')) as Record<string, number>;
