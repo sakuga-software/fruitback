@@ -1,5 +1,5 @@
 import { type Page, expect, test } from '@playwright/test';
-import { WORKER_ORIGIN } from './pin.ts';
+import { caseOf, WORKER_ORIGIN } from './pin.ts';
 import { AUTHENTICATED_WORKER_ORIGIN } from './worker-sessions.ts';
 
 /**
@@ -12,7 +12,7 @@ import { AUTHENTICATED_WORKER_ORIGIN } from './worker-sessions.ts';
 const IIFE = 'packages/widget/dist/fruitback.iife.js';
 
 async function mount(page: Page, testCase: string, locale: string, endpoint = WORKER_ORIGIN): Promise<void> {
-  await page.goto(`/?widget=off&case=${testCase}-${test.info().retry}`);
+  await page.goto(`/?widget=off&case=${caseOf(testCase)}`);
   await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
   await page.addScriptTag({ path: IIFE });
   await page.evaluate(

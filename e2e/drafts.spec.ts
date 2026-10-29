@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { type Page, expect, test } from '@playwright/test';
-import { WORKER_ORIGIN, storedNotes } from './pin.ts';
+import { caseOf, WORKER_ORIGIN, storedNotes } from './pin.ts';
 
 /**
  * Several notes sent together (FRU-124), on the widget as `init` assembles it, against the worker of
@@ -13,7 +13,7 @@ import { WORKER_ORIGIN, storedNotes } from './pin.ts';
 const IIFE = 'packages/widget/dist/fruitback.iife.js';
 
 async function mount(page: Page, testCase: string, locale = 'en-US'): Promise<void> {
-  await page.goto(`/?widget=off&case=${testCase}-${test.info().retry}`);
+  await page.goto(`/?widget=off&case=${caseOf(testCase)}`);
   await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
   await page.addScriptTag({ path: IIFE });
   await page.evaluate(

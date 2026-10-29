@@ -1,5 +1,5 @@
 import { type Page, type Route, expect, test } from '@playwright/test';
-import { WORKER_ORIGIN } from './pin.ts';
+import { caseOf, WORKER_ORIGIN } from './pin.ts';
 
 /**
  * The list of the notes when the worker does not answer the read (FRU-153).
@@ -13,7 +13,7 @@ import { WORKER_ORIGIN } from './pin.ts';
 const IIFE = 'packages/widget/dist/fruitback.iife.js';
 
 async function mount(page: Page, testCase: string): Promise<void> {
-  await page.goto(`/?widget=off&case=${testCase}-${test.info().retry}`);
+  await page.goto(`/?widget=off&case=${caseOf(testCase)}`);
   await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
   await page.addScriptTag({ path: IIFE });
   await page.evaluate((endpoint) => {
@@ -114,7 +114,7 @@ test('a read that fails puts a dot on the button of the list, and the network ba
   page,
   context,
 }) => {
-  await page.goto(`/?widget=off&case=read-failure-dot-${test.info().retry}`);
+  await page.goto(`/?widget=off&case=${caseOf('read-failure-dot')}`);
   await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
   await page.addScriptTag({ path: IIFE });
   await context.setOffline(true);

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { WORKER_ORIGIN, storedNotes } from './pin.ts';
+import { caseOf, WORKER_ORIGIN, storedNotes } from './pin.ts';
 
 /**
  * The built widget on a page, mounted the way a client site mounts it (FRU-16).
@@ -40,7 +40,7 @@ async function mountFromScriptTag(page: import('@playwright/test').Page): Promis
 
 test('a script tag mounts the widget, with no build step on the page', async ({ page }) => {
   // A bare page: no playground glue, no React, nothing but what the snippet brings.
-  await page.goto('/?widget=off&case=script-tag');
+  await page.goto(`/?widget=off&case=${caseOf('script-tag')}`);
   await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
 
   await mountFromScriptTag(page);
@@ -51,7 +51,7 @@ test('a script tag mounts the widget, with no build step on the page', async ({ 
 });
 
 test('the tag mounts the widget, follows its attributes, and takes it away with itself (FRU-126)', async ({ page }) => {
-  await page.goto('/?widget=off&case=element');
+  await page.goto(`/?widget=off&case=${caseOf('element')}`);
   await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
   // The script a page with no build step loads: it holds the widget and registers the tag.
   await page.addScriptTag({ path: 'packages/element/dist/fruitback-element.iife.js' });
@@ -77,7 +77,7 @@ test('the tag mounts the widget, follows its attributes, and takes it away with 
 });
 
 test('the tag keeps the options a page set before its script ran (FRU-126)', async ({ page }) => {
-  await page.goto('/?widget=off&case=element-early-options');
+  await page.goto(`/?widget=off&case=${caseOf('element-early-options')}`);
   await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
   // The tag is in the page first, as with a deferred script, and the page already gave it options.
   await page.evaluate((endpoint) => {
@@ -95,7 +95,7 @@ test('the tag keeps the options a page set before its script ran (FRU-126)', asy
 });
 
 test('a host catalog reaches the built widget, over the bundled one, key by key (FRU-37, FRU-38)', async ({ page }) => {
-  await page.goto('/?widget=off&case=script-tag-locale');
+  await page.goto(`/?widget=off&case=${caseOf('script-tag-locale')}`);
   await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
   await page.addScriptTag({ path: IIFE });
   await page.evaluate(
@@ -119,7 +119,7 @@ test('a host catalog reaches the built widget, over the bundled one, key by key 
 test('the snippet plants a note and reads it back, through its own transport', async ({ page }) => {
   // `init` owns the two fetches now. This is the only test that exercises them: everywhere else the
   // playground does the posting.
-  await page.goto('/?widget=off&case=script-tag-write');
+  await page.goto(`/?widget=off&case=${caseOf('script-tag-write')}`);
   await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
   await mountFromScriptTag(page);
 
@@ -141,7 +141,7 @@ test('the snippet plants a note and reads it back, through its own transport', a
 test('a client-side navigation changes which pins are on screen', async ({ page }) => {
   // No framework to ask: `init` patches `history` and listens for `popstate`, because a pin belongs
   // to a URL and `pushState` fires no event of its own.
-  await page.goto('/?widget=off&case=script-tag-nav');
+  await page.goto(`/?widget=off&case=${caseOf('script-tag-nav')}`);
   await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
   await mountFromScriptTag(page);
 
@@ -173,7 +173,7 @@ async function plantFromTheDocumentedTag(
     route.fulfill({ path: IIFE, contentType: 'application/javascript' }),
   );
 
-  await page.goto(`/?widget=off&case=${testCase}`);
+  await page.goto(`/?widget=off&case=${caseOf(testCase)}`);
   await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
 
   await page.evaluate(
@@ -226,7 +226,7 @@ test('a half-configured tag leaves the page alone', async ({ page }) => {
     route.fulfill({ path: IIFE, contentType: 'application/javascript' }),
   );
 
-  await page.goto('/?widget=off&case=snippet-bare');
+  await page.goto(`/?widget=off&case=${caseOf('snippet-bare')}`);
   await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
 
   await page.evaluate((endpoint) => {

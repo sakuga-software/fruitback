@@ -1,5 +1,5 @@
 import { type Page, expect, test } from '@playwright/test';
-import { WORKER_ORIGIN, badgeFor } from './pin.ts';
+import { caseOf, WORKER_ORIGIN, badgeFor } from './pin.ts';
 
 /**
  * A reply of an AI agent in the thread of a note (FRU-465): the agent replies through `/mcp` with a
@@ -10,7 +10,7 @@ const IIFE = 'packages/widget/dist/fruitback.iife.js';
 const PLAYGROUND = 'http://localhost:5177';
 
 async function mount(page: Page, locale: string): Promise<void> {
-  await page.goto(`/?widget=off&case=agent-reply-${locale}-${test.info().retry}`);
+  await page.goto(`/?widget=off&case=${caseOf(`agent-reply-${locale}`)}`);
   await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
   await page.addScriptTag({ path: IIFE });
   await page.evaluate(
