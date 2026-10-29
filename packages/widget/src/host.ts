@@ -9,6 +9,7 @@ import { type FruitbackTheme, THEME_STYLES, applyTheme } from './theme.ts';
 import { type CaptureEngine, reactGrabEngine } from './engine.ts';
 import { createIcon } from './icons.ts';
 import { type Translator, createTranslator, languageOf } from './messages.ts';
+import { framesOf, settle } from './settle.ts';
 
 /**
  * The widget's own patch of DOM, and the selection mode that runs inside it.
@@ -276,6 +277,8 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   let hovered: Element | null = null;
   /** The element the frame is held on after a choice, from `hold` to `release`. */
   let chosen: Element | null = null;
+  const frames = framesOf(view);
+  let stopSettling: () => void = () => {};
   /**
    * What the engine said of each element, asked once. The pointer crosses an element many times, and
    * the choice asks for the same answer. Emptied at each start: a page hot-reloads between two notes.
@@ -389,6 +392,7 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
     // A choice ends what was held: the frame of the element before must not come back under a
     // note that is about this one. The caller holds the new element if it wants its frame.
     chosen = null;
+    stopSettling();
     stop();
     void sourceOf(element).then((source) => options.onSelect({ element, source }));
   }
@@ -397,10 +401,25 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
     chosen = element;
     frame(element);
     name(element);
+    // Chosen at a click, so maybe on a box that the press made smaller (FRU-489): the frame follows
+    // the box for the few frames after, until it stays the same.
+    stopSettling();
+    stopSettling = settle(
+      frames,
+      () => {
+        const bounds = engine.boundsOf(element);
+
+        return { ...bounds, right: bounds.left + bounds.width, bottom: bounds.top + bounds.height };
+      },
+      () => {
+        if (chosen === element && element.isConnected && highlight.style.display === 'block') frame(element);
+      },
+    );
   }
 
   function release(): void {
     chosen = null;
+    stopSettling();
     if (!capturing) highlight.style.display = 'none';
   }
 
@@ -664,6 +683,7 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
       document.removeEventListener('keydown', onKeyDown, true);
       view?.removeEventListener('scroll', onScroll, true);
       view?.removeEventListener('resize', onScroll);
+      stopSettling();
       container.remove();
     },
   };
