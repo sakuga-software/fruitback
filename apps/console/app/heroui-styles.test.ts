@@ -62,6 +62,16 @@ function importedByKit(): string[] {
   return importedBy(readFileSync(join(app, 'app', 'ui.tsx'), 'utf8'));
 }
 
+/** The files that may import HeroUI: the kit, and the stylesheet that imports its styles. */
+const KIT_FILES = ['ui.tsx', 'app.css'];
+
+/** Whether `source` imports anything of `@heroui/react` or `@heroui/styles`, in any form of import. */
+function namesHeroUI(source: string): boolean {
+  return /(?:\bfrom\s*|\bimport\s*\(?\s*|\brequire\s*\(\s*|@import\s+(?:url\(\s*)?)['"]@heroui\/(?:react|styles)\b/.test(
+    source,
+  );
+}
+
 /** The component styles that `app.css` imports, in its order. */
 const imported = [
   ...css.matchAll(/^@import '@heroui\/styles\/components\/([a-z-]+)\.css' layer\(components\);$/gm),
@@ -71,13 +81,34 @@ describe('the styles of HeroUI in the console (FRU-492)', () => {
   it('reads the components of ui.tsx only, because no other file of the console imports HeroUI', () => {
     // A component imported elsewhere would get no style, and the list above would not name it.
     const files = (readdirSync(join(app, 'app'), { recursive: true }) as string[]).filter(
-      (file) => /\.tsx?$/.test(file) && !file.endsWith('.test.ts'),
+      (file) => /\.(tsx?|css)$/.test(file) && !file.endsWith('.test.ts'),
     );
     const others = files.filter(
-      (file) => file !== 'ui.tsx' && /from '@heroui\/(react|styles)/.test(readFileSync(join(app, 'app', file), 'utf8')),
+      (file) => !KIT_FILES.includes(file) && namesHeroUI(readFileSync(join(app, 'app', file), 'utf8')),
     );
     assert.ok(files.includes('ui.tsx') && files.includes(join('routes', 'home.tsx')), 'the walk found no screen');
+    assert.ok(files.includes('app.css'), 'the walk found no stylesheet');
     assert.deepEqual(others, []);
+  });
+
+  it('finds HeroUI in every form of import, and not in a word that only looks like it (the control)', () => {
+    for (const form of [
+      "import { Tabs } from '@heroui/react';",
+      'import { Tabs } from "@heroui/react";',
+      "import '@heroui/styles/components/tabs.css';",
+      'import "@heroui/react";',
+      "const hero = await import('@heroui/react');",
+      "const hero = require('@heroui/react');",
+      "export { Tabs } from '@heroui/react';",
+      "import {\n  Tabs,\n} from\n  '@heroui/react';",
+      "@import '@heroui/styles/components/tabs.css' layer(components);",
+      '@import url("@heroui/styles");',
+    ]) {
+      assert.ok(namesHeroUI(form), form);
+    }
+    for (const word of ["const docs = 'see @heroui/react';", "import { Link } from 'react-router';"]) {
+      assert.equal(namesHeroUI(word), false, word);
+    }
   });
 
   it('imports the style of each component the kit draws, and of no other', () => {
