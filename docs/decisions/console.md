@@ -146,7 +146,10 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   Safari, no extension, a self-hosted console): the
   card of before. A failure says « This browser was not connected. Try again. »; a session of the
   console that ended says « Your session ended. Sign in again, then connect this browser. »
-  (`hereProblemOf`).
+  (`hereProblemOf`). Approved and not claimed after eight asks (44 s): « Approved. The extension
+  finishes connecting within a minute, or press again to finish now. » The alarm of the extension
+  claims it, and a new press takes the same request (`startConnect` gives it back) with no second
+  approval.
 - **Nothing offers to install or to connect the extension once a browser of the account is
   connected** (FRU-441, decided by Mathieu on 2026-10-24). `useConnectedExtension`
   (`extension-connected.ts`) reads `GET /console/me/browsers` once, and again when the tab is shown

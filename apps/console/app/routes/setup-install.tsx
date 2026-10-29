@@ -45,9 +45,11 @@ export function PutOnSite({ workspace, site }: { workspace: Workspace; site: Sit
     if (hereBusy) return;
     setHereBusy(true);
     setHereProblem(undefined);
-    const result = await connectHere();
-    setHereBusy(false);
-    setHereProblem(hereProblemOf(result));
+    try {
+      setHereProblem(hereProblemOf(await connectHere()));
+    } finally {
+      setHereBusy(false);
+    }
   };
   const inPlace = here !== undefined && !here.signedIn;
   // FRU-441: with a browser of the account connected, the way on is « Connect another browser », a

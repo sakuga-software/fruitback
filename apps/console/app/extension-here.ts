@@ -100,8 +100,13 @@ export async function findHere(ids: readonly string[], chrome?: Runtime): Promis
   return undefined;
 }
 
-/** What `connectHere` ended with. `signed-out`: the console has no session to approve with. */
-export type HereResult = 'connected' | 'failed' | 'signed-out';
+/**
+ * What `connectHere` ended with. `signed-out`: the console has no session to approve with.
+ * `approved`: approved, and the extension had not claimed it yet when the page stopped asking: its
+ * alarm claims it within a minute, and a new press claims the same request (`startConnect` gives it
+ * back while it waits), with no second approval.
+ */
+export type HereResult = 'connected' | 'approved' | 'failed' | 'signed-out';
 
 export type HereSeams = {
   chrome?: Runtime;
@@ -115,6 +120,9 @@ export function hereProblemOf(result: HereResult): string | undefined {
   if (result === 'connected') return undefined;
   // The session of the console ended: the extension is fine, and « Try again » would fail the same way.
   if (result === 'signed-out') return msg('Your session ended. Sign in again, then connect this browser.');
+  if (result === 'approved') {
+    return msg('Approved. The extension finishes connecting within a minute, or press again to finish now.');
+  }
 
   return msg('This browser was not connected. Try again.');
 }
@@ -132,6 +140,11 @@ const CLAIMS = 8;
  * reads a claim or a token: the extension keeps both.
  */
 export async function connectHere(id: string, seams: HereSeams = {}): Promise<HereResult> {
+  // A read or an approval that rejects is a failure said on the card, never a button left busy.
+  return connectSteps(id, seams).catch((): HereResult => 'failed');
+}
+
+async function connectSteps(id: string, seams: HereSeams): Promise<HereResult> {
   const { read = connectRequest, approve = answerConnect } = seams;
   const wait = seams.wait ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
   const started = (await ask(id, { type: 'fruitback:connect', v: 1 }, seams.chrome)) as Record<string, unknown>;
@@ -159,7 +172,8 @@ export async function connectHere(id: string, seams: HereSeams = {}): Promise<He
     await wait(CLAIM_EVERY_MS);
   }
 
-  return 'failed';
+  // Approved by the worker, not claimed yet: not a failure, and the card says so.
+  return 'approved';
 }
 
 /**

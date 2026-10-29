@@ -165,6 +165,45 @@ describe('connecting the extension in place (FRU-487)', () => {
     }
   });
 
+  it('says « approved », not a failure, when the extension has not claimed yet, and a new press claims without a second approval', async () => {
+    const { chrome, sent } = chromeWith((message) =>
+      message.type === 'fruitback:connect'
+        ? { v: 1, ok: true, request: 'req_1' }
+        : { v: 1, ok: true, state: 'waiting' },
+    );
+    let approvals = 0;
+    const seams = {
+      chrome,
+      wait: async () => undefined,
+      read: async () => ({
+        ok: true as const,
+        data: approvals === 0 ? pending : { ...pending, state: 'approved' as const },
+      }),
+      approve: async () => {
+        approvals += 1;
+
+        return { ok: true as const, data: {} };
+      },
+    };
+    assert.equal(await connectHere(ID, seams), 'approved');
+    assert.equal(sent.filter((each) => each.type === 'fruitback:claim').length, 8);
+    assert.equal(await connectHere(ID, seams), 'approved');
+    assert.equal(approvals, 1);
+  });
+
+  it('says a failure when a read or an approval rejects, and never throws', async () => {
+    const { chrome } = chromeWith(() => ({ v: 1, ok: true, request: 'req_1' }));
+    assert.equal(
+      await connectHere(ID, {
+        chrome,
+        read: async () => {
+          throw new Error('network');
+        },
+      }),
+      'failed',
+    );
+  });
+
   it('stops when the request ends otherwise', async () => {
     const { chrome } = chromeWith((message) =>
       message.type === 'fruitback:connect'
@@ -186,5 +225,6 @@ describe('what the card says after a try (FRU-487)', () => {
     assert.equal(hereProblemOf('connected'), undefined);
     assert.equal(hereProblemOf('signed-out'), 'Your session ended. Sign in again, then connect this browser.');
     assert.equal(hereProblemOf('failed'), 'This browser was not connected. Try again.');
+    assert.match(hereProblemOf('approved') ?? '', /^Approved\./);
   });
 });
