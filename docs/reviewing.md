@@ -27,8 +27,6 @@ minutes and no developer tools.
 5. To find Fruitback in the toolbar later, pin it: open the puzzle piece at the right of the address
    bar, then press the pin beside Fruitback. Nothing needs it to leave a first note.
 
-   ![The page that opens at install: pin Fruitback, then sign in](assets/guide-welcome.png)
-
 **In Firefox:** download `fruitback-<version>-firefox.zip` from the same release, open
 `about:debugging#/runtime/this-firefox`, choose **Load Temporary Add-on…** and pick the archive.
 Firefox keeps such an add-on until it restarts.
@@ -52,43 +50,57 @@ run there.
 
 ### With Fruitback Cloud
 
-There is nothing to type, and four steps.
+There is nothing to type. Step 3 of the setup of the console shows the same steps, with the same
+captures.
 
-1. **Sign in.** On the tab that opens at install, or in the popup of the Fruitback icon on any page,
-   choose **Sign in with email**, **Google** or **GitHub**: all three open the console in a tab, which
-   signs you in its own way. Invited by a
-   client or a team? Use the email the invitation was sent to.
+<!-- guide:start: written from apps/console/app/guide-steps.ts by `node apps/console/guide-docs.ts`. -->
 
-   ![The popup of a browser that is signed out: Sign in with email, Google, GitHub](assets/guide-sign-in.png)
+1. Install the extension. A Fruitback tab opens: choose **Sign in with email** there.
 
-2. **Check the word.** The tab of the console shows a word, and the popup shows the same one. Approve
-   in the console; the popup picks the sign-in up by itself, even when it was closed meanwhile. The
-   console's **Connect this browser** button leads here too: a page that says to click the Fruitback
-   icon and sign in.
+   ![The tab that opens at install, with Sign in with email](assets/guide/welcome.png)
 
-   ![The word in the console, to check against the popup, with Connect](assets/guide-word.png)
+2. A tab of the console opens with a word. Check that the Fruitback tab shows the same word, then press **Connect Chrome**.
 
-3. **Turn it on.** Signed in on the tab that opened at install, that tab lists the sites of your
-   workspaces: **Turn on** beside one asks the browser for that site, and opens it with the widget.
-   Later, on a site of one of your workspaces, the popup asks **Turn Fruitback on for this
-   site?**, says where its notes go and who sees them, and offers **Turn on**. One click: the browser
-   asks for access to that site only, and the widget appears, reading and writing as you. On a site
-   of none of your workspaces, an owner or an admin gets the same question with **Turn on**, and a
-   list of the workspaces when there are several: the browser asks for access to the site, the site
-   is added to that workspace, for its members only, and the widget appears.
+   ![The console shows the word to check, and Connect Chrome](assets/guide/word.png)
 
-   ![The popup on a site of the workspace, with Turn on](assets/guide-turn-on.png)
+3. Back on the Fruitback tab, press **Turn on your site**. Chrome asks once for access to that site: allow it.
 
-4. **Leave a note.** Once it is on, the popup has a switch to turn it off and on, **Leave feedback**
-   with its keys, the fixes the team marked done for you to check and the open notes of the site, and
-   **Show all notes in a sidebar**; a click on a line opens the side panel too. The side panel opens
-   beside the page: **Notes on this page**, with **Open** and **Done**, the replies of
-   a note, **Show on the page**, and **Reply** where your role may reply. A click on a pin opens its
-   row; the panel follows the tab you look at. **Alt+Shift+F**
-   (Option+Shift+F on a Mac) starts a note too, on a site that is on: the page of the extension shows
-   the key under Preferences, and opens the settings of your browser to change it.
+   ![The Fruitback tab, signed in, with Turn on and the address of the site](assets/guide/turn-on.png)
 
-   ![A note written on an element of the page](assets/step-write.png)
+4. The site opens, ready for a note: click the part of the page it is about, write what should change, then send it.
+
+   ![A note written on an element of the site](assets/guide/note.png)
+
+5. Later, the Fruitback icon in the toolbar opens the same tools on any site of your team: **Leave feedback** starts a note.
+
+   ![The popup on a site that is on, with Leave feedback](assets/guide/popup.png)
+
+The captures are of the extension 0.4.0, taken by `e2e/first-note.spec.ts`.
+
+<!-- guide:end -->
+
+**On any other page**, the popup of the Fruitback icon offers the same sign-in while the browser is
+signed out: **Sign in with email**, **Google** or **GitHub**. All three open the console in a tab,
+which signs you in its own way, and the popup shows the word that the console shows. Invited by a
+client or a team? Use the email the invitation was sent to.
+
+![The popup of a browser that is signed out: Sign in with email, Google, GitHub](assets/guide/popup-sign-in.png)
+
+**On a site of one of your workspaces that is not on yet**, the popup asks
+**Turn Fruitback on for this site?**, says where its notes go and who sees them, and offers **Turn on**. One click: the
+browser asks for access to that site only, and the widget appears, reading and writing as you. On a
+site of none of your workspaces, an owner or an admin gets the same question with **Turn on**, and a
+list of the workspaces when there are several: the browser asks for access to the site, the site is
+added to that workspace, for its members only, and the widget appears.
+
+**Once a site is on**, the popup has a switch to turn it off and on, **Leave feedback** with its
+keys, the fixes the team marked done for you to check and the open notes of the site, and
+**Show all notes in a sidebar**; a click on a line opens the side panel too. The side panel opens
+beside the page: **Notes on this page**, with **Open** and **Done**, the replies of a note,
+**Show on the page**, and **Reply** where your role may reply. A click on a pin opens its row; the panel follows
+the tab you look at. **Alt+Shift+F** (Option+Shift+F on a Mac) starts a note too, on a site that is
+on: the page of the extension shows the key under Preferences, and opens the settings of your
+browser to change it.
 
 To set a site up by hand, the button at the top right of the popup, **Account and settings**, opens
 the options page.

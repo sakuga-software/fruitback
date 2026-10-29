@@ -10,6 +10,7 @@
     "e2e:durations": "node tools/ci/e2e-durations.ts",
     "e2e:ui": "pnpm --filter @fruitback/shared build && pnpm --filter @fruitback/widget build && WXT_FRUITBACK_CLOUD=http://localhost:8789 pnpm --filter @fruitback/extension build && playwright test --ui",
     "e2e:published": "node e2e/published/fetch.ts && pnpm --filter @fruitback/shared build && pnpm --filter @fruitback/widget build && playwright test -c playwright.published.config.ts",
+    "guide:captures": "pnpm --filter @fruitback/shared build && pnpm --filter @fruitback/widget build && pnpm --filter @fruitback/element build && WXT_FRUITBACK_CLOUD=http://localhost:8789 pnpm --filter @fruitback/extension build && playwright test -c playwright.guide.config.ts",
     "ext:bench": "pnpm --filter @fruitback/shared build && pnpm --filter @fruitback/widget build && pnpm --filter @fruitback/extension build && node e2e/bench.ts",
     "changeset": "changeset",
     "lint": "nx run-many -t lint",

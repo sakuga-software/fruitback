@@ -114,7 +114,7 @@ For a site with no build step. `endpoint` and `client` are required and are the 
 `label` is optional. The console gives this tag, with the address of its own copy of the script and
 the id of the site.
 
-![The card « Script tag » of the console, with Copy script](assets/guide-script.png)
+![The card « Script tag » of the console, with Copy script](assets/guide/script.png)
 
 ```html
 <script
