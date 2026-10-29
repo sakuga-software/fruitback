@@ -166,12 +166,18 @@ export function PutOnSite({ workspace, site }: { workspace: Workspace; site: Sit
       </AutoGrid>
       {/* The guide walks the sign-in of Fruitback Cloud, which a self-hosted console does not use. */}
       {BY_SIGN_IN ? <SetupGuide /> : null}
-      <p role="status" className="mt-4.5 text-small">
-        <strong className="font-semibold">{t('Waiting for your first note.')}</strong>{' '}
-        <span className="text-muted">{t('Open the site, click Leave feedback, then any part of the page.')}</span>{' '}
-        <LinkButton space="inline" href={site.origin} newTab>
-          {t('Open {site}', { site: host })}
-        </LinkButton>
+      {/* The drop beats while the page reads the site again. It hangs in the gutter: the words stay on the column. */}
+      <p role="status" className="mt-4.5 -ml-4.5 grid grid-cols-[auto_minmax(0,1fr)] gap-x-2.5 text-small">
+        <span aria-hidden="true" className="setup-waiting" />
+        <span>
+          <strong className="font-semibold">{t('Waiting for your first note.')}</strong>{' '}
+          <span className="text-muted">{t('Open the site, click Leave feedback, then any part of the page.')}</span>{' '}
+          <span className="mt-1 block wrap-anywhere">
+            <LinkButton space="inline" href={site.origin} newTab>
+              {t('Open {site}', { site: host })}
+            </LinkButton>
+          </span>
+        </span>
       </p>
       <div className="mt-6">
         <Button to={`/w/${workspace.id}/sites`}>{t('Open the console')}</Button>

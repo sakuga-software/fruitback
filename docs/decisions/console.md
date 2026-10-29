@@ -214,6 +214,15 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   will do. »: the mockup goes on with a pattern for the previews, which a domain that is proven
   covers (FRU-103, decided on 2026-10-13), and the worker takes no pattern as an address. So what is
   under the hint is 19.5 px higher than on the mockup.
+- **What the setup adds to the mockup** (FRU-491, measured at 1440 and 390 px; the boxes of the mockup
+  are unchanged). The preview is `sticky`: the last step is longer than a screen, and the site stays
+  beside it. On a phone the header keeps « Self-hosting guide » beside the logo, and « Running your own
+  server? » is for a screen reader only: on two lines the question sat on the rule of the header. With
+  no site yet, the empty frame is 280 px high under 640 px, not 620. « Fruitback did not answer » is a
+  `Problem`, as every other refusal of the setup, not grey text. While the step waits for the first
+  note, a red drop beats in the gutter (still under `prefers-reduced-motion`), and « Open <site> » has
+  its own line. A script in a `Snippet` breaks at any character (`word-break: break-all`): an indented
+  address moved whole to the next line and left a blank line above it.
 - **The last step is two cards, and the preview is the site itself** (FRU-242, FRU-354). « Browser
   extension » and « Script tag » share the logic of the Sites screen (`useCopy`, `useConnect` in
   `install-options.tsx`). **The preview frames the site the person added, in their browser**
