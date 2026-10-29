@@ -501,7 +501,9 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   whose count was not read says « Connected » and no number. On the chosen row the red is the
   strong accent: the accent is 4.28:1 on its tint. **The panel keeps what the mockup does not
   draw**: « Sites sending here », the sites that send there and their places in it, read only, with
-  a link to the Sites screen, where a site chooses them (FRU-399); the notes that did not arrive;
+  a link to the Sites screen, where a site chooses them (FRU-399), and for an owner or an admin of a
+  Linear, « Statuses » on the row of each site, to its statuses page (FRU-478: it was a block of its
+  own, « Status of the pins », which listed the same sites a second time); the notes that did not arrive;
   « Use an API key ». It does not show « Attach a picture of the element » (FRU-198), a count of
   notes by site nor « Last issue created » (FRU-237). **The drop of a status is beside its list**,
   where the
