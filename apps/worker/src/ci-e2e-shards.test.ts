@@ -15,25 +15,41 @@ const E2E = fileURLToPath(new URL('../../../e2e/', import.meta.url));
 const SPECS = readdirSync(E2E).filter((name) => name.endsWith('.spec.ts'));
 const DURATIONS = JSON.parse(readFileSync(`${E2E}durations.json`, 'utf8')) as Record<string, number>;
 
+/** The count of parts of the matrix of `e2e-shard` in `ci.yml` (FRU-480: six, three before). */
+const PARTS = (() => {
+  const workflow = readFileSync(fileURLToPath(new URL('../../../.github/workflows/ci.yml', import.meta.url)), 'utf8');
+  const shards = /^ {8}shard: \[([\d, ]+)\]$/m.exec(workflow)?.[1]?.split(',').map(Number) ?? [];
+  assert.deepEqual(
+    shards,
+    Array.from({ length: shards.length }, (_, index) => index + 1),
+    'the parts are 1 to n',
+  );
+  assert.ok(shards.length > 1, 'ci.yml cuts the E2E suite in parts');
+
+  return shards.length;
+})();
+
 describe('the parts of the E2E suite', () => {
-  it('runs every spec file of e2e/ in exactly one of the three parts of CI', () => {
-    const parts = [1, 2, 3].map((index) => filesOfShard(`${index}/3`, E2E));
+  it('runs every spec file of e2e/ in exactly one of the parts of CI', () => {
+    const parts = Array.from({ length: PARTS }, (_, index) => filesOfShard(`${index + 1}/${PARTS}`, E2E));
     assert.deepEqual(parts.flat().toSorted(), SPECS.toSorted());
     for (const part of parts) assert.ok(part.length > 0);
   });
 
   it('cuts the parts of CI on any machine: the count of workers there does not change them', () => {
     assert.equal(CI_WORKERS, 4);
-    assert.deepEqual(filesOfShard('2/3', E2E), partsOf(SPECS, DURATIONS, 3, CI_WORKERS)[1]);
+    assert.deepEqual(filesOfShard(`2/${PARTS}`, E2E), partsOf(SPECS, DURATIONS, PARTS, CI_WORKERS)[1]);
   });
 
   it('gives the parts about the same time, where --shard gave one twice the time of another', () => {
     const seconds = (file: string) => DURATIONS[file] ?? 0;
-    const times = partsOf(SPECS, DURATIONS, 3, 4).map((part) => partSeconds(part, seconds, 4));
+    const times = partsOf(SPECS, DURATIONS, PARTS, 4).map((part) => partSeconds(part, seconds, 4));
     // The control: by the count of files, in the order of the paths, as `--shard` cuts by count.
     const sorted = SPECS.toSorted();
-    const third = Math.ceil(sorted.length / 3);
-    const byCount = [0, 1, 2].map((i) => partSeconds(sorted.slice(i * third, (i + 1) * third), seconds, 4));
+    const size = Math.ceil(sorted.length / PARTS);
+    const byCount = Array.from({ length: PARTS }, (_, i) =>
+      partSeconds(sorted.slice(i * size, (i + 1) * size), seconds, 4),
+    );
     assert.ok(Math.max(...times) / Math.min(...times) < 1.1, `parts of ${times.map(Math.round).join(', ')} s`);
     assert.ok(Math.max(...times) < Math.max(...byCount), `${Math.max(...times)} s against ${Math.max(...byCount)} s`);
   });
@@ -50,8 +66,8 @@ describe('the parts of the E2E suite', () => {
   });
 
   it('computes the same parts in every job of the matrix, whatever the order of the folder', () => {
-    const forward = partsOf(SPECS, DURATIONS, 3, 4);
-    assert.deepEqual(partsOf(SPECS.toReversed(), DURATIONS, 3, 4), forward);
+    const forward = partsOf(SPECS, DURATIONS, PARTS, 4);
+    assert.deepEqual(partsOf(SPECS.toReversed(), DURATIONS, PARTS, 4), forward);
   });
 
   it('names no file that e2e/ no longer has', () => {
