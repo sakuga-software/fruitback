@@ -42,6 +42,36 @@ describe('the parts of the tests of the worker', () => {
     assert.ok(files.length > 100, `only ${files.length} test files`);
   });
 
+  it('keeps the reporters of vitest beside the list of files, the annotations of GitHub with them', () => {
+    // `configDefaults.reporters` holds `github-actions` when `GITHUB_ACTIONS` is `true`, read when
+    // vitest loads: the list of files is added to the default reporters, not put in their place.
+    const reporters = (githubActions: string) => {
+      const run = spawnSync(
+        process.execPath,
+        [
+          '--input-type=module',
+          '-e',
+          "const { test } = (await import('./vitest.config.ts')).default;" +
+            "console.log(JSON.stringify(test.reporters.map((r) => (typeof r === 'string' ? r : 'files'))));",
+        ],
+        {
+          cwd: WORKER,
+          encoding: 'utf8',
+          env: { ...process.env, GITHUB_ACTIONS: githubActions, FRUITBACK_TEST_FILES: 'x' },
+        },
+      );
+      assert.equal(run.status, 0, run.stderr);
+
+      return JSON.parse(run.stdout) as string[];
+    };
+
+    const onCi = reporters('true');
+    assert.ok(onCi.includes('github-actions'), JSON.stringify(onCi));
+    assert.equal(onCi.at(-1), 'files');
+    // The control: off GitHub Actions, no such reporter.
+    assert.ok(!reporters('').includes('github-actions'));
+  });
+
   it('passes when each file ran in one part, and names each file lost, run twice or unknown', () => {
     const files = ['src/a.test.ts', 'src/b.test.ts', 'src/c.test.ts'];
     assert.ok(passes(verdictOf(files, [['src/a.test.ts', 'src/c.test.ts'], ['src/b.test.ts']])));
