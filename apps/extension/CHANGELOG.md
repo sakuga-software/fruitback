@@ -1,5 +1,30 @@
 # @fruitback/extension
 
+## 0.5.0
+
+### Minor Changes
+
+- 91e55ad: On Fruitback Cloud, step 3 of the setup connects the extension of the same browser in place: one click, no `/connect` tab, no word to compare. The Chrome and Edge build declares `externally_connectable` for `https://app.fruitback.com` alone, and answers three strict messages from the top frame of a tab of that origin; no secret crosses that channel. Firefox, Safari and a self-hosted console keep the sign-in with the word.
+- 3059d18: The widget the extension mounts on a site of a workspace offers « All pages » in its list: the notes of every page of the site, read with the session of the reviewer, as « Whole site » of the side panel.
+- c14db05: `init` takes `openSidebar`: the button of the dock that shows every note asks the host for its side panel first, and opens the list of the page when the host cannot. The widget the extension mounts opens the side panel of the browser with it.
+
+### Patch Changes
+
+- 803f0b1: « All pages » of the widget the extension mounts gives the page an excerpt of 64 characters at most, whatever the worker sent.
+- Updated dependencies [106f528]
+- Updated dependencies [aa1688d]
+- Updated dependencies [c17cb4e]
+- Updated dependencies [389ac28]
+- Updated dependencies [b702ee6]
+- Updated dependencies [ec76366]
+- Updated dependencies [5e1e3a0]
+- Updated dependencies [7cce931]
+- Updated dependencies [fde538c]
+- Updated dependencies [d0216b5]
+- Updated dependencies [c14db05]
+  - @fruitback/shared@0.5.0
+  - @fruitback/widget@0.5.0
+
 ## 0.4.0
 
 ### Minor Changes
