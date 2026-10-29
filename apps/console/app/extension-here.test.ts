@@ -191,6 +191,38 @@ describe('connecting the extension in place (FRU-487)', () => {
     assert.equal(approvals, 1);
   });
 
+  it('reads a claim with no answer after the approval as « not yet », and never as a failure', async () => {
+    let claims = 0;
+    const { chrome } = chromeWith((message) => {
+      if (message.type === 'fruitback:connect') return { v: 1, ok: true, request: 'req_1' };
+      claims += 1;
+
+      // The extension did not answer in time, then did.
+      return claims === 1 ? undefined : { v: 1, ok: true, state: 'signed-in' };
+    });
+    const result = await connectHere(ID, {
+      chrome,
+      wait: async () => undefined,
+      read: async () => ({ ok: true, data: pending }),
+      approve: async () => ({ ok: true, data: {} }),
+    });
+    assert.equal(result, 'connected');
+    assert.equal(claims, 2);
+  });
+
+  it('says « approved » when no claim is ever answered after the approval', async () => {
+    const { chrome } = chromeWith((message) =>
+      message.type === 'fruitback:connect' ? { v: 1, ok: true, request: 'req_1' } : undefined,
+    );
+    const result = await connectHere(ID, {
+      chrome,
+      wait: async () => undefined,
+      read: async () => ({ ok: true, data: pending }),
+      approve: async () => ({ ok: true, data: {} }),
+    });
+    assert.equal(result, 'approved');
+  });
+
   it('says a failure when a read or an approval rejects, and never throws', async () => {
     const { chrome } = chromeWith(() => ({ v: 1, ok: true, request: 'req_1' }));
     assert.equal(

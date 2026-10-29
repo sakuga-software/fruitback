@@ -60,12 +60,23 @@ function runtime(): Runtime | undefined {
 /** How long an extension has to answer. An absent one answers at once, with an error. */
 const ASK_TIMEOUT_MS = 3_000;
 
+/**
+ * How long `connect` and `claim` may take: the extension calls the worker before it answers, and
+ * its own calls stop after 5 s (`session.ts`). Longer, so a slow worker is not read as a failure.
+ */
+const WORKER_ASK_TIMEOUT_MS = 15_000;
+
 /** One message to one extension: its answer, or `undefined` when none came. Never throws. */
-export function ask(id: string, message: unknown, chrome: Runtime | undefined = runtime()): Promise<unknown> {
+export function ask(
+  id: string,
+  message: unknown,
+  chrome: Runtime | undefined = runtime(),
+  timeoutMs: number = ASK_TIMEOUT_MS,
+): Promise<unknown> {
   if (chrome === undefined) return Promise.resolve(undefined);
 
   return new Promise((resolve) => {
-    const timer = setTimeout(() => resolve(undefined), ASK_TIMEOUT_MS);
+    const timer = setTimeout(() => resolve(undefined), timeoutMs);
     try {
       chrome.sendMessage(id, message, (response) => {
         clearTimeout(timer);
@@ -147,7 +158,10 @@ export async function connectHere(id: string, seams: HereSeams = {}): Promise<He
 async function connectSteps(id: string, seams: HereSeams): Promise<HereResult> {
   const { read = connectRequest, approve = answerConnect } = seams;
   const wait = seams.wait ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
-  const started = (await ask(id, { type: 'fruitback:connect', v: 1 }, seams.chrome)) as Record<string, unknown>;
+  const started = (await ask(id, { type: 'fruitback:connect', v: 1 }, seams.chrome, WORKER_ASK_TIMEOUT_MS)) as Record<
+    string,
+    unknown
+  >;
   if (started?.v !== 1 || started.ok !== true || typeof started.request !== 'string') {
     // Signed in since the screen asked: it is connected.
     return started?.reason === 'signed-in' ? 'connected' : 'failed';
@@ -166,7 +180,14 @@ async function connectSteps(id: string, seams: HereSeams): Promise<HereResult> {
   }
 
   for (let claim = 0; claim < CLAIMS; claim += 1) {
-    const answer = (await ask(id, { type: 'fruitback:claim', v: 1, request }, seams.chrome)) as Record<string, unknown>;
+    const answer = (await ask(id, { type: 'fruitback:claim', v: 1, request }, seams.chrome, WORKER_ASK_TIMEOUT_MS)) as
+      | Record<string, unknown>
+      | undefined;
+    // Approved already: no answer this time is not a failure. The next ask, or the alarm, finishes it.
+    if (answer === undefined) {
+      await wait(CLAIM_EVERY_MS);
+      continue;
+    }
     if (answer?.v === 1 && answer.ok === true && answer.state === 'signed-in') return 'connected';
     if (answer?.ok !== true || (answer.state !== 'waiting' && answer.state !== 'unavailable')) return 'failed';
     await wait(CLAIM_EVERY_MS);
