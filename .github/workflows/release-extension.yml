@@ -229,7 +229,24 @@ jobs:
           fi
           git -c user.name="${APP}[bot]" -c user.email="${id}+${APP}[bot]@users.noreply.github.com" \
             commit -m "docs: the guide of $TAG (FRU-486)" -m "Taken by pnpm guide:captures on the tag, in release-extension.yml."
-          git push "https://x-access-token:${GH_TOKEN}@github.com/${GH_REPO}.git" "HEAD:refs/heads/$branch"
+          # A run of the tag started again writes `guide/<tag>` again from the tag. It replaces the
+          # branch only when every commit on it since the tag is this job's own, and only from the head
+          # it read (`--force-with-lease`). A commit that a person pushed there stops the job, and
+          # stays. The pull request is opened once: an open one follows the new head.
+          remote="https://x-access-token:${GH_TOKEN}@github.com/${GH_REPO}.git"
+          email="${id}+${APP}[bot]@users.noreply.github.com"
+          held=$(git ls-remote "$remote" "refs/heads/$branch" | cut -f1)
+          if [ -z "$held" ]; then
+            git push "$remote" "HEAD:refs/heads/$branch"
+          else
+            git fetch --quiet --no-tags --depth=50 "$remote" "refs/heads/$branch"
+            others=$(git log --format='%ae' HEAD~1..FETCH_HEAD | grep -vFx "$email" || true)
+            if [ -n "$others" ] || [ "$(git rev-parse FETCH_HEAD)" != "$held" ]; then
+              echo "$branch holds commits that this job did not write ($others): left as it is." >&2
+              exit 1
+            fi
+            git push --force-with-lease="refs/heads/$branch:$held" "$remote" "HEAD:refs/heads/$branch"
+          fi
           {
             echo "The captures of the guide that changed with the extension $TAG, taken by \`pnpm guide:captures\` on the tag (release-extension.yml, FRU-486). Check each capture against the screen it shows before the merge."
             echo
@@ -237,7 +254,12 @@ jobs:
             cat "$RUNNER_TEMP/guide/changed.txt"
             echo '```'
           } > "$RUNNER_TEMP/guide/body.md"
-          gh pr create --base main --head "$branch" --title "docs: the guide of $TAG" --body-file "$RUNNER_TEMP/guide/body.md"
+          open=$(gh pr list --head "$branch" --state open --json number --jq length)
+          if [ "$open" = "0" ]; then
+            gh pr create --base main --head "$branch" --title "docs: the guide of $TAG" --body-file "$RUNNER_TEMP/guide/body.md"
+          else
+            echo "The pull request of $branch is open: the push updated it."
+          fi
 
   publish:
     name: attach to the release
