@@ -1457,7 +1457,7 @@ Read on drizzle-orm 0.45.4 and drizzle-kit 0.31.11, the versions of the catalogu
   - `postgres-journal.test.ts` refuses the folder before the merge: the dates only go up
     (test:`refuses a migration dated before the one before it: the one a rebase leaves behind`), and
     against the base of the pull request the migrations of the base are first and unchanged
-    (test:`refuses a migration of the base that was edited`). The job `test` gives it `HEAD^1`, with
+    (test:`refuses a migration of the base that was edited`). The jobs `test-part` give it `HEAD^1`, with
     a checkout of two commits: for a pull request that is the head of the base.
   - `postgres-migrate.ts` refuses the folder when the worker starts: it reads every row before
     Drizzle does (test:`is refused, and named`). The worker then answers `502` and says which
