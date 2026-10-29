@@ -242,6 +242,11 @@ type LinkButtonProps = Destination & {
    */
   space?: 'tight' | 'flush' | 'normal' | 'loose' | 'inline';
   autoFocus?: boolean;
+  /**
+   * The name a screen reader says, where the words are not enough alone: « Statuses » of a row is
+   * « Statuses of acme.dev » (FRU-478). It starts with the words shown, as `label` of `Button`.
+   */
+  label?: string;
   children: ReactNode;
 };
 
@@ -254,9 +259,10 @@ export function LinkButton({
   to,
   href,
   newTab,
+  label,
   children,
 }: LinkButtonProps) {
-  const data = { 'data-space': space };
+  const data = { 'data-space': space, ...(label === undefined ? {} : { 'aria-label': label }) };
   if (to !== undefined || href !== undefined) return anchor({ to, href, newTab }, 'kit-link', data, children);
 
   return (

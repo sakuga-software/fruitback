@@ -597,7 +597,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Done: 'Terminé',
   Closed: 'Fermé',
   'This setting did not change. Try again.': 'Ce réglage n’a pas changé. Réessayez.',
-  'Status of the pins': 'État des pins',
   'Show Linear comments as replies': 'Montrer les commentaires de Linear comme réponses',
   'The destinations of this site did not change. Try again.':
     'Les destinations de ce site n’ont pas changé. Réessayez.',
