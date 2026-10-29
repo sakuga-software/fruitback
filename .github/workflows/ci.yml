@@ -87,11 +87,12 @@ jobs:
 
   test-part:
     # FRU-480. The tests of every package, in two parts on two runners. The vitest suite of the
-    # worker is most of the time: alone on one runner it took 3.2 to 6.8 minutes (5 to 7.5 minutes
-    # of job), and its PGlite databases are CPU. Each part runs half of its files (`shard` in
-    # `apps/worker/vitest.config.ts`), and the other packages are shared between the parts. Part 2
-    # takes the widget and the extension, which read the locale: so the probe of each part finds a
-    # file, and an empty probe still means a probe that did not load. A new package runs in part 1.
+    # worker is most of the time, and its PGlite databases are CPU: in one job on `main` it took
+    # 3.2 to 6.8 minutes, and the job 3:44 to 7:30. Each part runs half of its files (`shard` in
+    # `apps/worker/vitest.config.ts`): 2.2 to 2.6 minutes, and the parts 2:48 to 3:13 of job. The
+    # other packages are shared between the parts. Part 2 takes the widget and the extension,
+    # which read the locale: so the probe of each part finds a file, and an empty probe still means
+    # a probe that did not load. A new package runs in part 1.
     # `test` below is the one check that says whether every part passed and no file was lost.
     name: test (${{ matrix.part }}/${{ strategy.job-total }})
     runs-on: ubuntu-latest
