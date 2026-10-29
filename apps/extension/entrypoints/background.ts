@@ -45,6 +45,8 @@ import {
 } from '../src/side-panel.ts';
 import { tabCommand } from '../src/tab-command.ts';
 import { WELCOME_PATH, opensWelcome } from '../src/welcome-install.ts';
+import { type ExternalAnswer, acceptedExternal, cloudConsole, createExternalConsole } from '../src/external-console.ts';
+import { browserFamily } from '../src/browser-family.ts';
 
 /** Named once: the alarm is created, cleared and answered in three different places. */
 const SESSION_ALARM = 'fruitback-session-refresh';
@@ -370,6 +372,37 @@ export default defineBackground(() => {
     // The answer comes later, and returning `false` here would close the channel before it does.
     return true;
   });
+
+  // FRU-487: the console of the Cloud, in a tab of this browser, starts and claims a sign-in. Only the
+  // Chromium build declares `externally_connectable`; the others listen to nothing here. A message
+  // that is not answered gets no `sendResponse`: the page reads that no extension answered.
+  const externalConsole = (() => {
+    if (browserFamily(import.meta.env) !== 'chromium') return undefined;
+    try {
+      return cloudConsole(import.meta.env.WXT_FRUITBACK_CONSOLE, import.meta.env.WXT_FRUITBACK_CLOUD);
+    } catch {
+      // The build stops on such a value (`wxt.config.ts`): a build that did not is not trusted either.
+      return undefined;
+    }
+  })();
+  const cloud = cloudEndpoint(import.meta.env.WXT_FRUITBACK_CLOUD);
+  if (externalConsole !== undefined && cloud !== undefined) {
+    const seams = { console: externalConsole, cloud, connect };
+    const answerConsole = createExternalConsole(seams);
+    browser.runtime.onMessageExternal.addListener((message, sender, sendResponse) => {
+      const asked = acceptedExternal(message, sender, seams);
+      if (asked === undefined) return false;
+      void answerConsole(asked)
+        .catch((error: unknown): ExternalAnswer => {
+          console.error('[fruitback] could not answer the console', error);
+
+          return { v: 1, ok: false, reason: 'unavailable' };
+        })
+        .then(sendResponse);
+
+      return true;
+    });
+  }
 
   // FRU-302: « Open notes in the sidebar ». The icon opens the panel on a site that is on, and the
   // popup elsewhere: set again for the active tab when it changes, and when the preference does.

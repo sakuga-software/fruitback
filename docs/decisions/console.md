@@ -128,10 +128,21 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   opened (two minutes of margin for the clocks). A `401` there ends no session: the person may sign
   in from the other tab. The console cannot tell that it is this browser, and cannot see that the
   extension is installed: that would take a content script on the console or `externally_connectable`
-  in the manifest (`extension.md`), and neither is wanted. The worker's page
+  in the manifest (`extension.md`). **Since FRU-487, the console of the Cloud does** (below); a
+  self-hosted console still cannot. The worker's page
   `/pair` held a session of one workspace, in the words of a worker. **A self-hosted console keeps
   the pairing link** (`useConnect`): the extension of the store signs in to the Cloud alone
   (`WXT_FRUITBACK_CLOUD`), so it cannot sign in to that worker.
+- **On the console of the Cloud, step 3 connects the extension of this browser in place** (FRU-487,
+  decided by Mathieu on 2026-10-28). `useExtensionHere` (`extension-here.ts`) asks the extension of
+  the store (`STORE_EXTENSION_ID`, or the ids of `/config.js`) with `chrome.runtime.sendMessage`,
+  which Chrome gives to `https://app.fruitback.com` alone (`externally_connectable`, see
+  `extension.md`). Installed and signed out: the card says « Fruitback is installed in this
+  browser. » and « Connect this browser » connects it in this tab: the extension starts the request,
+  the page reads its word from the worker and approves it, the extension claims. No `/connect` tab,
+  no word to compare, no click on the icon. Installed and signed in: « Extension connected in this
+  browser ». No answer (another browser, Firefox, Safari, no extension, a self-hosted console): the
+  card of before. A failure says « This browser was not connected. Try again. »
 - **Nothing offers to install or to connect the extension once a browser of the account is
   connected** (FRU-441, decided by Mathieu on 2026-10-24). `useConnectedExtension`
   (`extension-connected.ts`) reads `GET /console/me/browsers` once, and again when the tab is shown

@@ -1031,6 +1031,70 @@ What is not done here: the account's own shape of `GET /session/sites` (several 
 counts and the switch of the site are FRU-254 (screen 3 of FRU-298); adding a site from the popup is FRU-255 (screen 2 of FRU-298),
 which replaced the fields of before for a person signed in on a site of no rule.
 
+## The console of the Cloud connects the extension of its browser (FRU-487)
+
+Decided by Mathieu on 2026-10-28: yes, for the console of the Cloud only, after FRU-482 and FRU-483.
+It reverses the « not wanted » of `console.md` for that console. The threat model is in
+`SECURITY.md` (« The console of the Cloud talks to the extension of the same browser »).
+
+### The rules, in short
+
+- **`externally_connectable` names one exact origin: the console of the Cloud.** `cloudConsole` of
+  `src/external-console.ts` reads `WXT_FRUITBACK_CONSOLE` and `WXT_FRUITBACK_CLOUD` at build:
+  `https://app.fruitback.com` when both are absent, none when the Cloud is empty (a build for a
+  self-hosted instance) or the console is empty, none for another Cloud that names no console. A
+  joker, a path, a query, plain http away from loopback, or a host outside the site of the Cloud
+  (the rule of `approvalPage`) stops the build. The manifest gets `matches: ["<origin>/*"]`: the path
+  must be written in a match pattern, and `/*` is the only one. No `ids`: the key closes the
+  extension to the messages of other extensions too.
+- **Chromium only.** The hook `build:manifestGenerated` writes the key for Chrome and Edge, and not
+  for `-b firefox` nor `-b safari`. Firefox does not implement the key (`browser-compat-data`:
+  `version_added: false`, bug 1319168). Safari has it since 15.4, `matches` only, marked partial; the
+  id of the Safari extension is not the one of the store, and nobody measured it here: it keeps the
+  flow with the word. The background listens to `runtime.onMessageExternal` only in the Chromium build.
+- **The background answers three messages, and no other** (`acceptedExternal`, decided before any
+  `await`): `{type: 'fruitback:hello', v: 1}`, `{type: 'fruitback:connect', v: 1}`,
+  `{type: 'fruitback:claim', v: 1, request}`, with exactly those keys, from `sender.origin` equal to
+  the console, a URL of the same origin, the top frame of a tab. A message not answered gets no
+  `sendResponse`: the page reads `lastError`, as if no extension were there.
+- **`connect` starts the request of the popup, with the Cloud of the build** (`startConnect`), and
+  answers its id only. The claim and the word stay in `storage.session`. The page names no worker.
+  The request must be approved by the same console (`consoleAt` of the worker's answer), or the
+  answer is `unavailable`. Refused (`signed-in`) while a session of the Cloud is held.
+- **`claim` claims at once**, the request that waits only, once per `interval` (5 s): the person
+  waits seconds, not the minute of the alarm. The alarm of the background stays, for a page that
+  closes before.
+- **The console asks the id of the store** (`STORE_EXTENSION_ID`, from `CHROME_WEB_STORE`) on the
+  Cloud, or the ids `/config.js` names (`extensionIds`), and none on a self-hosted console. It
+  approves with the word it reads from the worker: the worker is unchanged.
+- `pnpm e2e` builds with `WXT_FRUITBACK_CONSOLE=http://localhost:5178`, the console of the suite.
+  `e2e/console-extension-here.spec.ts` routes `/config.js` to name the id of the unpacked copy,
+  whose id depends on its folder.
+
+### The reasons, and what was measured
+
+The word answers one question: is the request I approve the one of the popup of this browser? Here
+the browser answers it. Chrome delivers the message from a tab of this browser, and tells its origin
+(`sender.origin`); the request id comes back from the extension of this browser; nothing the person
+types or reads is involved. An attacker who wants a victim to approve their request needs to put
+their id in front of the victim: this path approves only an id that the extension of the victim's
+browser gave.
+
+What it costs: the extension now trusts every page of `https://app.fruitback.com`. A script there
+connects the extension of that browser to the account of the console of that browser, when the
+extension is signed out. It reads no secret, and it cannot sign in a browser that holds a session.
+
+Measured in Chromium with the built extension (`console-extension-here.spec.ts`): the manifest of the
+e2e build holds `{"matches": ["http://localhost:5178/*"]}`; a page of the playground has no
+`chrome.runtime` at all; the console has it, and its `hello` is answered; a message with an extra key
+is not answered; one click on « Connect this browser » at step 3 connects the extension, with no new
+tab, and the extension holds the session of the Cloud; a second `connect` is refused with
+`signed-in`.
+
+Not measured: the build of the store against `https://app.fruitback.com` (the id of the store is
+fixed by the store, and only the published extension has it), Edge with the extension of the Chrome
+Web Store (it installs from there, so its id is the same), and Safari.
+
 ## A site of a workspace in the popup (FRU-254, FRU-298)
 
 ### The rules, in short
@@ -1189,12 +1253,12 @@ which replaced the fields of before for a person signed in on a site of no rule.
 A reviewer was handed `ABCD-EFGH-JKMN`, opened the popup on the right site and copied it in. The
 ticket asked for a link, and left the path to be measured. Four were on the table.
 
-| Path                                                           | What stops it                                                                                                                           |
-| -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| A content script on the worker's page                          | It needs a host permission on the worker, and the first pairing is where that permission is asked for.                                  |
-| `externally_connectable`                                       | The origins are declared in the manifest. A self-hosted worker is not known at build time, and Firefox has no such key.                 |
-| A page of the extension, `chrome-extension://<id>/pair.html#…` | The worker cannot know the id, which differs between an unpacked build and a store build. A web page cannot link to that scheme either. |
-| **The popup reads the address of the tab**                     | Nothing. No new permission, the same on Firefox, and any self-hosted worker.                                                            |
+| Path                                                           | What stops it                                                                                                                                                                |
+| -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A content script on the worker's page                          | It needs a host permission on the worker, and the first pairing is where that permission is asked for.                                                                       |
+| `externally_connectable`                                       | The origins are declared in the manifest. A self-hosted worker is not known at build time, and Firefox has no such key. (FRU-487 uses it for the console of the Cloud only.) |
+| A page of the extension, `chrome-extension://<id>/pair.html#…` | The worker cannot know the id, which differs between an unpacked build and a store build. A web page cannot link to that scheme either.                                      |
+| **The popup reads the address of the tab**                     | Nothing. No new permission, the same on Firefox, and any self-hosted worker.                                                                                                 |
 
 - **Measured, in Chromium 1234, on the built extension.** A tab on
   `http://localhost:<port>/fruitback/pair#ABCD-EFGH-JKMN`, then `tabs.query({ active: true })`:

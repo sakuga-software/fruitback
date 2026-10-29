@@ -129,7 +129,9 @@ page opens, and you click the Fruitback icon there ») and two buttons.
    `externally_connectable` limited to the console of the Cloud, step 3 of the setup sees the
    extension and connects it in place. The cost: the extension trusts a page of the Cloud to ask for
    a session with no word. **Decided by Mathieu on 2026-10-28: yes**, for the console of the Cloud,
-   after FRU-482 and FRU-483.
+   after FRU-482 and FRU-483. Done in FRU-487: Chrome and Edge with the extension of the store, one
+   click at step 3; Firefox, Safari and a self-hosted console keep the way of FRU-482. The path that
+   « What was measured » counts is the way of FRU-482, which every browser has.
 2. **Does the first activation open the choice of an element by itself?** (FRU-485) Yes, once per
    origin, when the welcome page turns a site on, never at a load of a page. The extension sends the
    command of the popup (`leave-feedback`): the widget knows no extension. The origins it opened on
@@ -152,4 +154,4 @@ page opens, and you click the Fruitback icon there ») and two buttons.
 | FRU-484 | The pin is a tip                                                             | Done  |
 | FRU-485 | The first activation opens the choice of an element                          | Done  |
 | FRU-486 | The guide on the setup page, its captures made again at each release         | Todo  |
-| FRU-487 | The console talks to the extension of the same browser                       | Todo  |
+| FRU-487 | The console talks to the extension of the same browser                       | Done  |

@@ -1,0 +1,196 @@
+import { useCallback, useEffect, useState } from 'react';
+import { API, answerConnect, connectRequest } from './api.ts';
+import { CHROME_WEB_STORE } from './extension-store.ts';
+import { instanceOf } from './instance.ts';
+
+/**
+ * The extension of this browser, asked by the console of Fruitback Cloud (FRU-487).
+ *
+ * The extension of the store declares `externally_connectable` for `https://app.fruitback.com` alone
+ * (`apps/extension/src/external-console.ts`). On that origin, Chrome gives the page
+ * `chrome.runtime.sendMessage(id, …)` to the extensions that declare it, and nothing on any other.
+ * Step 3 of the setup asks whether Fruitback is here, and connects it in place: the extension starts
+ * a request with the Cloud and answers its id, this page approves it with the session of the person,
+ * and the extension claims the session with the secret it kept. No word to compare: the request came
+ * from this browser, through the browser.
+ *
+ * Firefox and Safari have no such way here (`docs/decisions/extension.md`): `chrome.runtime` is not
+ * there, every ask answers `undefined`, and the screen offers the flow of before.
+ */
+
+/** The id of the extension on the Chrome Web Store, out of its address. Edge installs from there too. */
+export const STORE_EXTENSION_ID = CHROME_WEB_STORE.split('/').at(-1) ?? '';
+
+/** An id of Chrome: 32 letters from `a` to `p`. */
+const EXTENSION_ID = /^[a-p]{32}$/;
+
+/**
+ * The extensions to ask: those `/config.js` names (`extensionIds`), or the one of the store on the
+ * console of the Cloud, or none. A self-hosted console asks none by default: the extension of the
+ * store answers no other console, and a build for that instance has no console at all.
+ */
+export function extensionIdsFrom(written: unknown, api: string): string[] {
+  const listed = (written as { extensionIds?: unknown } | null | undefined)?.extensionIds;
+  if (Array.isArray(listed)) {
+    return listed.filter((id): id is string => typeof id === 'string' && EXTENSION_ID.test(id)).slice(0, 4);
+  }
+
+  return instanceOf(api).cloud ? [STORE_EXTENSION_ID] : [];
+}
+
+/** The extensions this console asks, read once when the bundle starts. */
+export const EXTENSION_IDS: readonly string[] = extensionIdsFrom(
+  (globalThis as { __FRUITBACK__?: unknown }).__FRUITBACK__,
+  API,
+);
+
+/** The only part of `chrome` this page uses. */
+type Runtime = {
+  sendMessage(id: string, message: unknown, answer: (response: unknown) => void): void;
+  lastError?: unknown;
+};
+
+function runtime(): Runtime | undefined {
+  const found = (globalThis as { chrome?: { runtime?: Partial<Runtime> } }).chrome?.runtime;
+
+  return typeof found?.sendMessage === 'function' ? (found as Runtime) : undefined;
+}
+
+/** How long an extension has to answer. An absent one answers at once, with an error. */
+const ASK_TIMEOUT_MS = 3_000;
+
+/** One message to one extension: its answer, or `undefined` when none came. Never throws. */
+export function ask(id: string, message: unknown, chrome: Runtime | undefined = runtime()): Promise<unknown> {
+  if (chrome === undefined) return Promise.resolve(undefined);
+
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(undefined), ASK_TIMEOUT_MS);
+    try {
+      chrome.sendMessage(id, message, (response) => {
+        clearTimeout(timer);
+        // Read, so Chrome does not log it as unchecked: no such extension, or it did not answer.
+        resolve(chrome.lastError === undefined || chrome.lastError === null ? response : undefined);
+      });
+    } catch {
+      clearTimeout(timer);
+      resolve(undefined);
+    }
+  });
+}
+
+/** The extension in this browser: which id answered, and whether it holds a session of the Cloud. */
+export type Here = { id: string; signedIn: boolean };
+
+/** The answer to `hello`, key by key. */
+export function parseHello(answer: unknown): boolean | undefined {
+  if (typeof answer !== 'object' || answer === null) return undefined;
+  const { v, ok, signedIn } = answer as Record<string, unknown>;
+
+  return v === 1 && ok === true && typeof signedIn === 'boolean' ? signedIn : undefined;
+}
+
+/** The first extension of `ids` that answers, or `undefined`. */
+export async function findHere(ids: readonly string[], chrome?: Runtime): Promise<Here | undefined> {
+  for (const id of ids) {
+    const signedIn = parseHello(await ask(id, { type: 'fruitback:hello', v: 1 }, chrome));
+    if (signedIn !== undefined) return { id, signedIn };
+  }
+
+  return undefined;
+}
+
+/** What `connectHere` ended with. `signed-out`: the console has no session to approve with. */
+export type HereResult = 'connected' | 'failed' | 'signed-out';
+
+export type HereSeams = {
+  chrome?: Runtime;
+  read?: typeof connectRequest;
+  approve?: typeof answerConnect;
+  wait?: (ms: number) => Promise<void>;
+};
+
+/** How often, and how many times, the page asks the extension to claim after the approval. */
+const CLAIM_EVERY_MS = 5_500;
+const CLAIMS = 8;
+
+/**
+ * Connects the extension `id` of this browser to the account of this console: the extension starts
+ * the request, this page approves it, the extension claims it.
+ *
+ * The word and the account are read from the worker, as `/connect` reads them, and sent back with
+ * the approval: the worker takes an answer for that word and that account only. The page never
+ * reads a claim or a token: the extension keeps both.
+ */
+export async function connectHere(id: string, seams: HereSeams = {}): Promise<HereResult> {
+  const { read = connectRequest, approve = answerConnect } = seams;
+  const wait = seams.wait ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+  const started = (await ask(id, { type: 'fruitback:connect', v: 1 }, seams.chrome)) as Record<string, unknown>;
+  if (started?.v !== 1 || started.ok !== true || typeof started.request !== 'string') {
+    // Signed in since the screen asked: it is connected.
+    return started?.reason === 'signed-in' ? 'connected' : 'failed';
+  }
+  const request = started.request;
+
+  const asked = await read(request);
+  if (!asked.ok) return asked.status === 401 ? 'signed-out' : 'failed';
+  const { word, account, state } = asked.data;
+  if (state === 'pending') {
+    if (word === undefined || account === undefined) return 'failed';
+    const approved = await approve(request, { word, account }, true);
+    if (!approved.ok) return approved.status === 401 ? 'signed-out' : 'failed';
+  } else if (state !== 'approved' && state !== 'claimed') {
+    return 'failed';
+  }
+
+  for (let claim = 0; claim < CLAIMS; claim += 1) {
+    const answer = (await ask(id, { type: 'fruitback:claim', v: 1, request }, seams.chrome)) as Record<string, unknown>;
+    if (answer?.v === 1 && answer.ok === true && answer.state === 'signed-in') return 'connected';
+    if (answer?.ok !== true || (answer.state !== 'waiting' && answer.state !== 'unavailable')) return 'failed';
+    await wait(CLAIM_EVERY_MS);
+  }
+
+  return 'failed';
+}
+
+/**
+ * The extension of this browser, for step 3 of the setup: `undefined` while it is asked, and when no
+ * extension answered. Asked again when the tab is shown again: the person comes back from the store.
+ */
+export function useExtensionHere(ids: readonly string[]): {
+  here: Here | undefined;
+  connect: () => Promise<HereResult>;
+} {
+  const [here, setHere] = useState<Here | undefined>();
+  const key = ids.join(',');
+  const look = useCallback(async () => {
+    const found = await findHere(key === '' ? [] : key.split(','));
+    setHere(found);
+
+    return found;
+  }, [key]);
+
+  useEffect(() => {
+    if (key === '') return undefined;
+    let stopped = false;
+    const shown = () => {
+      if (document.visibilityState === 'visible' && !stopped) void look();
+    };
+    void look();
+    document.addEventListener('visibilitychange', shown);
+
+    return () => {
+      stopped = true;
+      document.removeEventListener('visibilitychange', shown);
+    };
+  }, [key, look]);
+
+  const connect = useCallback(async (): Promise<HereResult> => {
+    if (here === undefined) return 'failed';
+    const result = await connectHere(here.id);
+    await look();
+
+    return result;
+  }, [here, look]);
+
+  return { here, connect };
+}

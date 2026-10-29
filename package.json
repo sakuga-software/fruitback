@@ -6,9 +6,9 @@
   "license": "MIT",
   "scripts": {
     "dev": "bash -c 'trap \"kill 0\" EXIT; pnpm --filter @fruitback/worker dev:pglite & pnpm --filter @fruitback/playground dev; wait'",
-    "e2e": "pnpm --filter @fruitback/shared build && pnpm --filter @fruitback/widget build && pnpm --filter @fruitback/element build && WXT_FRUITBACK_CLOUD=http://localhost:8789 pnpm --filter @fruitback/extension build && pnpm --filter @fruitback/extension build:firefox && pnpm --filter @fruitback/extension build:safari && playwright test",
+    "e2e": "pnpm --filter @fruitback/shared build && pnpm --filter @fruitback/widget build && pnpm --filter @fruitback/element build && WXT_FRUITBACK_CLOUD=http://localhost:8789 WXT_FRUITBACK_CONSOLE=http://localhost:5178 pnpm --filter @fruitback/extension build && pnpm --filter @fruitback/extension build:firefox && pnpm --filter @fruitback/extension build:safari && playwright test",
     "e2e:durations": "node tools/ci/e2e-durations.ts",
-    "e2e:ui": "pnpm --filter @fruitback/shared build && pnpm --filter @fruitback/widget build && WXT_FRUITBACK_CLOUD=http://localhost:8789 pnpm --filter @fruitback/extension build && playwright test --ui",
+    "e2e:ui": "pnpm --filter @fruitback/shared build && pnpm --filter @fruitback/widget build && WXT_FRUITBACK_CLOUD=http://localhost:8789 WXT_FRUITBACK_CONSOLE=http://localhost:5178 pnpm --filter @fruitback/extension build && playwright test --ui",
     "e2e:published": "node e2e/published/fetch.ts && pnpm --filter @fruitback/shared build && pnpm --filter @fruitback/widget build && playwright test -c playwright.published.config.ts",
     "ext:bench": "pnpm --filter @fruitback/shared build && pnpm --filter @fruitback/widget build && pnpm --filter @fruitback/extension build && node e2e/bench.ts",
     "changeset": "changeset",
