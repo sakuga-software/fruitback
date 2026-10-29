@@ -56,13 +56,25 @@ async function around(page: Page, parts: Locator[], pad: number) {
   if (found.length !== parts.length) throw new Error('a part of a capture of the guide is not on the page');
   const viewport = page.viewportSize() ?? { width: 1440, height: 900 };
   // A part can sit a fraction of a pixel apart from a run to the next, and a capture of another size
-  // is another capture: the edges are rounded, and the size is a multiple of 8 pixels.
-  const left = Math.max(0, Math.round(Math.min(...found.map((box) => box.x)) - pad));
-  const top = Math.max(0, Math.round(Math.min(...found.map((box) => box.y)) - pad));
-  const right = Math.max(...found.map((box) => box.x + box.width)) + pad;
-  const bottom = Math.max(...found.map((box) => box.y + box.height)) + pad;
-  const width = Math.min(viewport.width - left, Math.ceil((right - left) / 8) * 8);
-  const height = Math.min(viewport.height - top, Math.ceil((bottom - top) / 8) * 8);
+  // is another capture: the edges are rounded, and the size is a multiple of 8 pixels. A box that
+  // would cross an edge of the viewport is moved back inside it, never cut: its size stays the same.
+  const fit = (start: number, end: number, room: number) => {
+    const size = Math.min(Math.floor(room / 8) * 8, Math.ceil((end - Math.max(0, start)) / 8) * 8);
+    const from = Math.min(Math.max(0, Math.round(start)), room - size);
+
+    return { from, size };
+  };
+  const across = fit(
+    Math.min(...found.map((box) => box.x)) - pad,
+    Math.max(...found.map((box) => box.x + box.width)) + pad,
+    viewport.width,
+  );
+  const down = fit(
+    Math.min(...found.map((box) => box.y)) - pad,
+    Math.max(...found.map((box) => box.y + box.height)) + pad,
+    viewport.height,
+  );
+  const [left, top, width, height] = [across.from, down.from, across.size, down.size];
 
   return { x: left, y: top, width, height };
 }
