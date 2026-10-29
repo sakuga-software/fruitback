@@ -236,23 +236,35 @@ export async function createRealDatabase(schema = 'public'): Promise<PgDatabase>
  */
 let migratedTemplate: Promise<{ name: string; drop(): Promise<void> }> | undefined;
 
-async function makeMigratedTemplate(): Promise<{ name: string; drop(): Promise<void> }> {
+/**
+ * A new database on the real server with `apply` done on it (the migrations of the worker), and
+ * nothing connected to it. On a failure it drops that database before it throws: nothing else holds
+ * its name (review of #683).
+ */
+export async function makeMigratedTemplate(
+  apply: (database: Database) => Promise<void> = migrated,
+): Promise<{ name: string; drop(): Promise<void> }> {
   const own = await ownDatabase();
   const name = new URL(own.url).pathname.slice(1);
-  const database = createPgDatabase(own.url, 'public');
   try {
-    await migrated(database);
-  } finally {
-    await database.close();
-  }
-  // The pool has ended, and its connections may still be on the server for a moment (FRU-196). A
-  // copy refuses a template that has one, after it waited up to 5 s for it to go. So the first copy
-  // starts when they are gone, and depends on no wait of PostgreSQL.
-  const admin = createPgDatabase(TEST_DATABASE_URL as string, 'public', { max: 1 });
-  try {
-    await noClientLeftOn(admin, name, LEFT_PATIENCE_MS);
-  } finally {
-    await admin.close();
+    const database = createPgDatabase(own.url, 'public');
+    try {
+      await apply(database);
+    } finally {
+      await database.close();
+    }
+    // The pool has ended, and its connections may still be on the server for a moment (FRU-196). A
+    // copy refuses a template that has one, after it waited up to 5 s for it to go. So the first copy
+    // starts when they are gone, and depends on no wait of PostgreSQL.
+    const admin = createPgDatabase(TEST_DATABASE_URL as string, 'public', { max: 1 });
+    try {
+      await noClientLeftOn(admin, name, LEFT_PATIENCE_MS);
+    } finally {
+      await admin.close();
+    }
+  } catch (error) {
+    await own.dropAtOnce();
+    throw error;
   }
 
   return { name, drop: own.drop };
