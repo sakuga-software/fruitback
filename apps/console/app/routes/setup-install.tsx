@@ -50,7 +50,9 @@ export function PutOnSite({ workspace, site }: { workspace: Workspace; site: Sit
     setHereProblem(hereProblemOf(result));
   };
   const inPlace = here !== undefined && !here.signedIn;
-  const connectLabel = connected === undefined || inPlace ? t('Connect this browser') : t('Connect another browser');
+  // FRU-441: with a browser of the account connected, the way on is « Connect another browser », a
+  // quiet link, whatever it does. In place (FRU-487) it connects the extension of this browser.
+  const connectLabel = connected === undefined ? t('Connect this browser') : t('Connect another browser');
   let connectLink = <LinkButton onClick={connect}>{connectLabel}</LinkButton>;
   if (inPlace) {
     connectLink = (

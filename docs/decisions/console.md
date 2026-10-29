@@ -141,7 +141,9 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   browser. » and « Connect this browser » connects it in this tab: the extension starts the request,
   the page reads its word from the worker and approves it, the extension claims. No `/connect` tab,
   no word to compare, no click on the icon. Installed and signed in: « Extension connected in this
-  browser ». No answer (another browser, Firefox, Safari, no extension, a self-hosted console): the
+  browser ». With another browser of the account connected already, the quiet link stays « Connect
+  another browser » (FRU-441) and connects this one in place. No answer (another browser, Firefox,
+  Safari, no extension, a self-hosted console): the
   card of before. A failure says « This browser was not connected. Try again. »; a session of the
   console that ended says « Your session ended. Sign in again, then connect this browser. »
   (`hereProblemOf`).
