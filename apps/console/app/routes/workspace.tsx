@@ -16,6 +16,7 @@ import { extensionInstallFor } from '../extension-store';
 import { useConnectedExtension } from '../extension-connected';
 import { BY_SIGN_IN, CONNECT_PAGE } from '../install-options';
 import { PageHead as KitPageHead, Logo, Menu } from '../ui';
+import { RailIcon, type RailIconName } from '../rail-icons';
 import { useLocale } from '../use-locale';
 
 /**
@@ -54,6 +55,15 @@ export const SECTIONS: readonly Section[] = [
   { path: 'members', label: msg('Members'), built: true },
   { path: 'account', label: msg('My account'), built: true },
 ];
+
+/** The icon of each section of the rail (FRU-477). */
+const SECTION_ICONS: Readonly<Record<string, RailIconName>> = {
+  sites: 'sites',
+  notes: 'notes',
+  connectors: 'connectors',
+  members: 'members',
+  account: 'account',
+};
 
 const ROLE_WORDS: Readonly<Record<Role, string>> = {
   owner: msg('Owner'),
@@ -242,8 +252,11 @@ type RailProps = {
   admin?: boolean;
 };
 
-/** An entry of the rail: where it leads, its words, and whether its screen is the one shown. */
-export type RailEntry = { to: string; label: string; current: boolean };
+/**
+ * An entry of the rail: where it leads, its words, whether its screen is the one shown, and its icon
+ * (FRU-477).
+ */
+export type RailEntry = { to: string; label: string; current: boolean; icon?: RailIconName };
 
 /** The item of the menu of the workspaces that opens the settings: no workspace id has a space. */
 const SETTINGS = 'workspace settings';
@@ -385,10 +398,14 @@ export function Rail({
           to: `/w/${workspace.id}/${section.path}`,
           label: t(section.label),
           current: section.path === current,
+          ...(SECTION_ICONS[section.path] === undefined ? {} : { icon: SECTION_ICONS[section.path] }),
         }))}
       />
       {admin ? (
-        <RailNav label={t('Instance')} entries={[{ to: '/admin', label: t('Administration'), current: false }]} />
+        <RailNav
+          label={t('Instance')}
+          entries={[{ to: '/admin', label: t('Administration'), current: false, icon: 'admin' }]}
+        />
       ) : null}
     </RailFrame>
   );
@@ -547,6 +564,8 @@ export function RailNav({ label, entries }: { label: string; entries: readonly R
             {active ? (
               <span aria-hidden="true" className="kit-drop kit-rail-drop bg-rail-accent" data-size="9" />
             ) : null}
+            {/* After the drop, so the icons of the entries stay in one column (FRU-477). */}
+            {entry.icon === undefined ? null : <RailIcon name={entry.icon} />}
             {entry.label}
           </Link>
         );
