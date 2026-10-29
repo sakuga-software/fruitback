@@ -2,6 +2,7 @@
 // code under test is written against and what `MountedPage` hands back.
 import { mock } from 'node:test';
 import { Window as HappyDomWindow } from 'happy-dom';
+import type { Frames } from './settle.ts';
 
 /**
  * A real DOM for the tests.
@@ -122,4 +123,50 @@ export function pressKey(page: MountedPage, key: string): void {
   const KeyboardEventCtor = (page.view as unknown as { KeyboardEvent: typeof KeyboardEvent }).KeyboardEvent;
 
   page.document.dispatchEvent(new KeyboardEventCtor('keydown', { key, bubbles: true }));
+}
+
+/** Frames that the test runs by hand, at a clock it sets: 16 ms a frame unless it says otherwise. */
+export function handFrames(): Frames & { next(ms?: number): boolean; pending(): number; clock: number } {
+  const queue = new Map<number, () => void>();
+  let id = 0;
+  const frames = {
+    clock: 0,
+    request(callback: () => void) {
+      id += 1;
+      queue.set(id, callback);
+
+      return id;
+    },
+    cancel(handle: number) {
+      queue.delete(handle);
+    },
+    now: () => frames.clock,
+    /** Run the frames that wait, after `ms`. False when none waited. */
+    next(ms = 16) {
+      frames.clock += ms;
+      const waiting = [...queue.values()];
+      queue.clear();
+      for (const callback of waiting) callback();
+
+      return waiting.length > 0;
+    },
+    pending: () => queue.size,
+  };
+
+  return frames;
+}
+
+/**
+ * Give a window the frames of `handFrames`: its `requestAnimationFrame`, `cancelAnimationFrame` and
+ * clock are then the test's. happy-dom runs a frame at the next turn, at no time a test can choose.
+ */
+export function useHandFrames(view: Window): ReturnType<typeof handFrames> {
+  const frames = handFrames();
+  Object.assign(view, {
+    requestAnimationFrame: (callback: FrameRequestCallback) => frames.request(() => callback(frames.clock)),
+    cancelAnimationFrame: (handle: number) => frames.cancel(handle),
+  });
+  Object.defineProperty(view.performance, 'now', { value: () => frames.clock, configurable: true });
+
+  return frames;
 }

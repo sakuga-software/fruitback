@@ -539,7 +539,16 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
     catches the boxes of the page), and the composer opened with the element (`open(element, …)`)
     is placed again when that element moved. An element that moves with the document keeps the
     composer where it is: a scroll does not slide it along the window. Held by
-    `e2e/scroll-fixed.spec.ts`. **The banner does not stay, and one click is still one note.** The mock-up draws
+    `e2e/scroll-fixed.spec.ts`.
+  - **They follow an element that the press made smaller** (FRU-489). The choice is a click, so the
+    box read then can be the pressed one: a HeroUI button is at `scale(0.97)` under `[data-pressed]`,
+    and React Aria takes the press off up to 80 ms after a click the widget stopped. No scroll or
+    resize fires, and a ResizeObserver does not see a transform. So `settle.ts` reads the box at each
+    frame after the choice, until it stays the same for 200 ms, never after 1 s. The composer moves
+    by the edges it was placed against: its start edge (the right in a right-to-left language), and
+    the top or the bottom by its side. Measured in Chromium: 0.7 to 0.9 ms of script over 310 ms
+    under reduced motion, 3.1 to 3.7 ms over 560 ms with the transition of the button; nothing after.
+    Held by `e2e/pressed-target.spec.ts`, which fails at 2.4 px without it. **The banner does not stay, and one click is still one note.** The mock-up draws
     the banner, the pressed button and the composer in one picture; a still does not say whether a
     capture goes on after a note, and a banner that says « click the page » over a modal dialog
     would not be true. Asked in FRU-258.
