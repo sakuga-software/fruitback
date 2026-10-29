@@ -75,7 +75,7 @@ captures.
 
    ![The popup on a site that is on, with Leave feedback](assets/guide/popup.png)
 
-The captures are of the extension 0.4.0, taken by `e2e/first-note.spec.ts`.
+The captures are of the extension 0.5.0, taken by `e2e/first-note.spec.ts`.
 
 <!-- guide:end -->
 
