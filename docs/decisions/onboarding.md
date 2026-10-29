@@ -137,7 +137,10 @@ Cloud, and a self-hosted console connects a browser by a pairing link.
 **What varies is replaced before a capture**: the word of the sign-in (`PLUM 42`), the id of the site
 in the script tag and its addresses (those of the Cloud, `app.` and `api.fruitback.com`, for the ones
 of the test), and the text of the note. Each box is read until it stops moving: the composer opens
-with a motion, and a box read in its middle cut the capture short in some runs. A capture then changes only when a screen does. A
+with a motion, and a box read in its middle cut the capture short in some runs. The composer still
+sits a fraction of a pixel apart from a run to the next (x from 267.05 to 267.34 in four runs), so
+the edges of a capture are rounded and its size is a multiple of 8 pixels. React's text nodes are
+changed in place (`nodeValue`), never replaced, so a later render finds the nodes it made. A capture then changes only when a screen does. A
 capture that differs by at most 0.2 % of its pixels is the same capture (`maxDiffPixelRatio` of
 `toHaveScreenshot`).
 

@@ -105,7 +105,10 @@ test('a first user goes from the setup to a first note (FRU-481)', async ({ exte
   // addresses are the ones of the test: the capture shows those of Fruitback Cloud.
   const scriptCard = goesOn.locator('.kit-option').filter({ has: goesOn.getByRole('heading', { name: 'Script tag' }) });
   await scriptCard.getByRole('region', { name: 'Script tag' }).evaluate((snippet) => {
-    snippet.textContent = (snippet.textContent ?? '')
+    const [only] = snippet.childNodes;
+    if (snippet.childNodes.length !== 1 || only?.nodeType !== Node.TEXT_NODE)
+      throw new Error('the script is not one text');
+    only.nodeValue = (only.nodeValue ?? '')
       .replaceAll(/site_[\w-]+/g, 'site_8f3k2m')
       .replaceAll('http://localhost:5178', 'https://app.fruitback.com')
       .replaceAll('http://localhost:8788', 'https://api.fruitback.com');
@@ -144,8 +147,13 @@ test('a first user goes from the setup to a first note (FRU-481)', async ({ exte
   await expect(connect.getByText(word, { exact: true })).toBeVisible({ timeout: 15_000 });
   await welcome!.screenshot({ path: test.info().outputPath('05-welcome-word.png') });
   await connect.screenshot({ path: test.info().outputPath('06-connect.png') });
-  // The word is drawn at random: the capture shows the same one at each run.
-  await connect.getByText(word, { exact: true }).evaluate((shown) => (shown.textContent = 'PLUM 42'));
+  // The word is drawn at random: the capture shows the same one at each run. The value of React's
+  // own text node changes, and no node is replaced: a later render of React finds the node it made.
+  await connect.getByText(word, { exact: true }).evaluate((shown) => {
+    const [only] = shown.childNodes;
+    if (shown.childNodes.length !== 1 || only?.nodeType !== Node.TEXT_NODE) throw new Error('the word is not one text');
+    only.nodeValue = 'PLUM 42';
+  });
   await capture(connect, 'word', [
     connect.getByRole('heading', { name: 'Connect this browser' }),
     connect.getByText('PLUM 42', { exact: true }),
