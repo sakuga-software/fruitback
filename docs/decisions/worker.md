@@ -4097,7 +4097,8 @@ call, a write that changes no row when the day is the same.
   and `MIGRATED_DATABASES` of `auth.fixture.ts` take it. On the real server of the CI job `postgres`,
   the same suites take `createMigratedRealDatabase` (FRU-480): a copy (`CREATE DATABASE … TEMPLATE`)
   of one database that the process migrated once, instead of an empty one where each case applied
-  every migration again.
+  every migration again. The first copy waits until no connection is left on that template
+  (`noClientLeftOn`, FRU-196): a copy refuses a template that one is still on.
 - Between two cases it empties every table but the journal (`DELETE` with the triggers off, and each
   owned sequence back to its first value, as `TRUNCATE … RESTART IDENTITY` did), and sets the session
   back (`RESET ALL`, temporary tables, advisory locks). When a case changed the schema (an event
