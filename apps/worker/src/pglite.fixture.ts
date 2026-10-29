@@ -213,7 +213,7 @@ const migratedOf = new WeakMap<PGlite, Migrated>();
 
 /**
  * The setting that says the schema of an instance is still the one `migrate` made (FRU-480). Its
- * value is a token that only this file writes: the event trigger of `UNTOUCHED_ON_DDL` sets it to
+ * value is a token that only this file writes: the event triggers of `UNTOUCHED_ON_DDL` set it to
  * `''` at the end of any command that changes the schema, and `RESET ALL` sets it back to nothing.
  * Each of the two then reads as « changed ».
  */
@@ -221,22 +221,34 @@ const UNTOUCHED = 'fruitback_test.untouched';
 const UNTOUCHED_TOKEN = 'migrated';
 
 /**
- * The event trigger that marks the schema as changed, on any instance it is created on.
+ * The event triggers that mark the schema as changed, on any instance they are created on.
  *
- * It fires at the end of every command that an event trigger sees: `CREATE`, `ALTER`, `DROP`,
- * `COMMENT`, `GRANT` and `REVOKE`, on any object of the database. Not on `TRUNCATE`, which changes
- * no schema. `ENABLE ALWAYS`: it fires under `session_replication_role = replica` too. A setting set
- * in a transaction that rolls back goes back with it, as the change of the schema does. Its function
- * is in `pg_catalog`, which no `DROP SCHEMA` of a case removes and no catalogue of `public` reads.
+ * They fire at the end of every command that an event trigger sees (`CREATE`, `ALTER`, `COMMENT`,
+ * `GRANT`, `REVOKE`) and on every `DROP`, on any object of the database. Not on `TRUNCATE`, which
+ * changes no schema, and not on a command that changed nothing: `migrated` sends
+ * `CREATE TABLE IF NOT EXISTS` for its journal at each call, and that must not undo the next reset
+ * (measured: each case of a file then applied every migration again). `ENABLE ALWAYS`: they fire
+ * under `session_replication_role = replica` too. A setting set in a transaction that rolls back goes
+ * back with it, as the change of the schema does. Their functions are in `pg_catalog`, which no
+ * `DROP SCHEMA` of a case removes and no catalogue of `public` reads.
  */
 const UNTOUCHED_ON_DDL = `
-  CREATE OR REPLACE FUNCTION pg_catalog.fruitback_test_untouched_no_more() RETURNS event_trigger
+  CREATE OR REPLACE FUNCTION pg_catalog.fruitback_test_changed() RETURNS event_trigger
+    LANGUAGE plpgsql AS $$ BEGIN
+      IF EXISTS (SELECT FROM pg_event_trigger_ddl_commands()) THEN
+        PERFORM set_config('${UNTOUCHED}', '', false);
+      END IF;
+    END $$;
+  CREATE OR REPLACE FUNCTION pg_catalog.fruitback_test_dropped() RETURNS event_trigger
     LANGUAGE plpgsql AS $$ BEGIN PERFORM set_config('${UNTOUCHED}', '', false); END $$;
   DO $$ BEGIN
-    IF NOT EXISTS (SELECT FROM pg_event_trigger WHERE evtname = 'fruitback_test_untouched_no_more') THEN
-      CREATE EVENT TRIGGER fruitback_test_untouched_no_more ON ddl_command_end
-        EXECUTE FUNCTION pg_catalog.fruitback_test_untouched_no_more();
-      ALTER EVENT TRIGGER fruitback_test_untouched_no_more ENABLE ALWAYS;
+    IF NOT EXISTS (SELECT FROM pg_event_trigger WHERE evtname = 'fruitback_test_changed') THEN
+      CREATE EVENT TRIGGER fruitback_test_changed ON ddl_command_end
+        EXECUTE FUNCTION pg_catalog.fruitback_test_changed();
+      ALTER EVENT TRIGGER fruitback_test_changed ENABLE ALWAYS;
+      CREATE EVENT TRIGGER fruitback_test_dropped ON sql_drop
+        EXECUTE FUNCTION pg_catalog.fruitback_test_dropped();
+      ALTER EVENT TRIGGER fruitback_test_dropped ENABLE ALWAYS;
     END IF;
   END $$;`;
 
