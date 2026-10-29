@@ -1,6 +1,6 @@
 {
   "name": "@fruitback/react",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "The Fruitback widget as a React component: <Fruitback endpoint clientId />.",
   "homepage": "https://github.com/sakuga-software/fruitback#readme",
   "bugs": "https://github.com/sakuga-software/fruitback/issues",

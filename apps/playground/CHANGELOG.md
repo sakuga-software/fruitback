@@ -1,5 +1,23 @@
 # @fruitback/playground
 
+## 0.5.0
+
+### Patch Changes
+
+- Updated dependencies [106f528]
+- Updated dependencies [aa1688d]
+- Updated dependencies [c17cb4e]
+- Updated dependencies [389ac28]
+- Updated dependencies [b702ee6]
+- Updated dependencies [ec76366]
+- Updated dependencies [5e1e3a0]
+- Updated dependencies [7cce931]
+- Updated dependencies [fde538c]
+- Updated dependencies [d0216b5]
+- Updated dependencies [c14db05]
+  - @fruitback/shared@0.5.0
+  - @fruitback/widget@0.5.0
+
 ## 0.4.0
 
 ### Patch Changes
