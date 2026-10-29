@@ -238,14 +238,24 @@ let migratedTemplate: Promise<{ name: string; drop(): Promise<void> }> | undefin
 
 async function makeMigratedTemplate(): Promise<{ name: string; drop(): Promise<void> }> {
   const own = await ownDatabase();
+  const name = new URL(own.url).pathname.slice(1);
   const database = createPgDatabase(own.url, 'public');
   try {
     await migrated(database);
   } finally {
     await database.close();
   }
+  // The pool has ended, and its connections may still be on the server for a moment (FRU-196). A
+  // copy refuses a template that has one, after it waited up to 5 s for it to go. So the first copy
+  // starts when they are gone, and depends on no wait of PostgreSQL.
+  const admin = createPgDatabase(TEST_DATABASE_URL as string, 'public', { max: 1 });
+  try {
+    await noClientLeftOn(admin, name, LEFT_PATIENCE_MS);
+  } finally {
+    await admin.close();
+  }
 
-  return { name: new URL(own.url).pathname.slice(1), drop: own.drop };
+  return { name, drop: own.drop };
 }
 
 afterAll(async () => {
