@@ -348,9 +348,10 @@ export async function migratedDatabaseOn(instance: PGlite): Promise<PgDatabase> 
   const fresh = await databaseOn(instance);
   await migrate(fresh);
   const tables = await tablesOf(instance);
-  if (tables.length > 0 && !(await anyRow(instance, tables))) {
+  const journal = await journalOf(instance);
+  if (journal !== undefined && tables.length > 0 && !(await anyRow(instance, tables))) {
     await instance.exec(UNTOUCHED_ON_DDL);
-    migratedOf.set(instance, { empty: await emptyingOf(instance, tables), journal: await journalOf(instance) });
+    migratedOf.set(instance, { empty: await emptyingOf(instance, tables), journal });
     await instance.exec(`SELECT set_config('${UNTOUCHED}', '${UNTOUCHED_TOKEN}', false);`);
   }
 
