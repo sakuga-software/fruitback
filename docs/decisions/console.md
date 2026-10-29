@@ -315,7 +315,12 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   workspace, its sections as links with `aria-current="page"` on the one on screen, and the way to
   the documentation. **The rail shows a section only when its screen exists**: `SECTIONS` lists the
   five of the mockup in its order, each with `built`, and
-  `frame.test.ts` holds `built` to the routes of a build, so no entry leads nowhere. « Notes » is
+  `frame.test.ts` holds `built` to the routes of a build, so no entry leads nowhere. **Each entry of
+  both rails has an icon** (FRU-477, Mathieu; no board draws them): `rail-icons.tsx` draws them as
+  every icon of the console is drawn, inline on a grid of 24, a stroke of 2 in `currentColor`, no
+  icon set and no request; 18 px, `aria-hidden`, after the drop of the entry on screen so they stay in
+  one column. « My workspaces » of the rail of the instance has an arrow to the start of the line
+  (FRU-476): it leaves the administration. « Notes » is
   there with `built: false`; `/kit/frame`, a page of the development server, mounts the rail with
   the five. **The name of the workspace opens a menu only when the person has several workspaces**:
   with one it is no button, and draws no chevrons. **The name of the workspace leads to its settings**
