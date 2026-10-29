@@ -621,8 +621,8 @@ did not change: the fields of 760 px and the file input of the browser are as th
   (`noteLink`, the link of FRU-253, after the fragment of the site), in a new tab, `noreferrer`; the
   widget there scrolls to the note and opens its thread. A note of the page of the tab: a button that
   does what a click on its row does, a scroll to the pin and its thread, in that tab. The row of
-  « This page » keeps its « Show on the page » in the row it opens. `e2e/side-panel.spec.ts` follows
-  both links.
+  « This page » keeps its « Show on the page » in the row it opens. `e2e/side-panel-search.spec.ts`
+  follows both links.
 - **« Show pins on the page »** sends `hide-pins` or `show-pins` to the widget of the tab
   (`showPins`), the same switch as the list of the page (FRU-308): the pins are hidden but the pin
   of an open thread, and the notes are still read and listed. The tab the panel leaves gets its pins back. **The pins come back when the panel closes,
