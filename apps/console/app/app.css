@@ -1,6 +1,41 @@
+/*
+  HeroUI 3 has no provider: its theme is this stylesheet (FRU-125). Its index, `@heroui/styles`,
+  less the components the kit does not draw (FRU-492): the 85 of them were 386 kB of the 478 kB of
+  this file. The list is the components that `ui.tsx` imports and the ones they import, in the order
+  of HeroUI's own index: `heroui-styles.test.ts` holds it to `ui.tsx`.
+*/
+@layer theme, base, components, utilities;
 @import 'tailwindcss';
-/* HeroUI 3 has no provider: its theme is this stylesheet (FRU-125). */
-@import '@heroui/react/styles';
+@import 'tw-animate-css';
+@import '@heroui/styles/base' layer(base);
+@import '@heroui/styles/base/scrollbar.css' layer(base);
+@import '@heroui/styles/components/description.css' layer(components);
+@import '@heroui/styles/components/field-error.css' layer(components);
+@import '@heroui/styles/components/label.css' layer(components);
+@import '@heroui/styles/components/button.css' layer(components);
+@import '@heroui/styles/components/button-group.css' layer(components);
+@import '@heroui/styles/components/dropdown.css' layer(components);
+@import '@heroui/styles/components/list-box-item.css' layer(components);
+@import '@heroui/styles/components/list-box-section.css' layer(components);
+@import '@heroui/styles/components/list-box.css' layer(components);
+@import '@heroui/styles/components/menu-item.css' layer(components);
+@import '@heroui/styles/components/menu-section.css' layer(components);
+@import '@heroui/styles/components/switch.css' layer(components);
+@import '@heroui/styles/components/chip.css' layer(components);
+@import '@heroui/styles/components/alert.css' layer(components);
+@import '@heroui/styles/components/checkbox-group.css' layer(components);
+@import '@heroui/styles/components/checkbox.css' layer(components);
+@import '@heroui/styles/components/input.css' layer(components);
+@import '@heroui/styles/components/radio-group.css' layer(components);
+@import '@heroui/styles/components/radio.css' layer(components);
+@import '@heroui/styles/components/textfield.css' layer(components);
+@import '@heroui/styles/components/header.css' layer(components);
+@import '@heroui/styles/components/surface.css' layer(components);
+@import '@heroui/styles/components/combo-box.css' layer(components);
+@import '@heroui/styles/components/select.css' layer(components);
+@import '@heroui/styles/themes/default' layer(theme);
+@import '@heroui/styles/utilities';
+@import '@heroui/styles/variants';
 
 /*
   HeroUI takes the theme, it does not set it: its variables get the tokens of design/README.md. It
