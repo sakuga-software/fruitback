@@ -14,7 +14,12 @@ import {
   turn,
 } from './conformance.fixture.ts';
 import type { Database } from './postgres.ts';
-import { NO_REAL_POSTGRES, createMigratedPgliteDatabase, createRealDatabase, onDatabase } from './postgres.fixture.ts';
+import {
+  NO_REAL_POSTGRES,
+  createMigratedPgliteDatabase,
+  createMigratedRealDatabase,
+  onDatabase,
+} from './postgres.fixture.ts';
 
 /**
  * Each `AccountStore` against the conformance suite (FRU-140). A new implementation adds a subject
@@ -34,7 +39,7 @@ const SUBJECTS: Subject<AccountStore>[] = [
   onDatabase(
     'the PostgreSQL account store, on a real server',
     'createPostgresAccountStore',
-    createRealDatabase,
+    createMigratedRealDatabase,
     createPostgresAccountStore,
     NO_REAL_POSTGRES,
   ),

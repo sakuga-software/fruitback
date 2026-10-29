@@ -4097,18 +4097,20 @@ call, a write that changes no row when the day is the same.
   and `MIGRATED_DATABASES` of `auth.fixture.ts` take it. The real server of `MIGRATED_DATABASES` is the
   one of `DATABASES`: in the CI job `postgres`, each case still applies every migration on an empty
   database.
-- Between two cases it empties every table but the journal (`TRUNCATE … RESTART IDENTITY`), and
-  sets the session back (`RESET ALL`, temporary tables, advisory locks). When the shape of `public`
-  (tables, columns, defaults, indexes, constraints, triggers and their state, functions, types,
-  schemas, rows of the journal) is not the one `migrate` made, it empties `public` and applies the
-  migrations again. test:`gives no row of the case before, in any table, and the identities start again`
+- Between two cases it empties every table but the journal (`DELETE` with the triggers off, and each
+  owned sequence back to its first value, as `TRUNCATE … RESTART IDENTITY` did), and sets the session
+  back (`RESET ALL`, temporary tables, advisory locks). When a case changed the schema (an event
+  trigger sees any `CREATE`, `ALTER`, `DROP`, `GRANT` of the case) or a row of the journal, it
+  empties `public` and applies the migrations again. test:`gives no row of the case before, in any table, and the identities start again`
   test:`gives no state of the session of the case before: settings, temporary tables, advisory locks`
 
 ### Why
 
 Applying the migrations on PGlite took 50 ms a case, and emptying `public` 14 ms more: a third of the
 time of the suite, and the dry run of the mutation pass runs every test file in a process of its own
-(FRU-336). The store under test still calls `migrated`, and the first case of each process applies
+(FRU-336). FRU-480: `TRUNCATE` of the 36 tables took 20 ms a case, and the read of the
+whole catalogue of `public` that told whether a case changed it 7 ms: 34 s of CPU of the suite. A
+`DELETE` takes 1 ms, and reading the setting of the event trigger and the journal well under 1 ms. The store under test still calls `migrated`, and the first case of each process applies
 every migration on an empty database with `migrate` of `postgres-migrate.ts`. test:`is the database that migrate makes on an empty one, with every migration in its journal`
 
 ## The files of a note, in transit (FRU-331)
