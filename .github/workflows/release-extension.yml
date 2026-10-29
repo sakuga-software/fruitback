@@ -95,7 +95,7 @@ jobs:
   # leaves it as a patch, the artifact `guide-captures`, and `guide-pr` opens the pull request.
   #
   # On a Mac of GitHub, not the `sakuga-mac` pool: this repository is public, and the self-hosted
-  # runners serve the private repositories only (see `sakuga-review.yml`). The fonts are those of
+  # runners serve the private repositories only. The fonts are those of
   # macOS. A run that is not from a tag `v*` stops at the artifact: that is the release of test.
   # The release does not wait for these two jobs.
   guide:
