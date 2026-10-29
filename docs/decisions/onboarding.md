@@ -110,9 +110,20 @@ site is fixed too (FRU-482): signed out, it offers the sign-in there as well.
   walks the path above and captures each step on the way, under the name of the step:
   `docs/assets/guide/<step>.png`. No second walk: the guide shows the path that is measured, and CI
   pays no second run of it. `pnpm guide:captures` writes the captures that changed, and only those.
-- **The captures are taken on a Mac of the `sakuga-mac` pool**: their fonts are the fonts of the
-  mockups, and of the machine of the person who reads the guide most. On another system the fonts
-  differ, and so would the captures.
+- **The captures are taken on a Mac**: their fonts are the fonts of the mockups, and of the machine of
+  the person who reads the guide most. On another system the fonts differ, and so would the
+  captures. The release takes them on `macos-latest` of GitHub, not on the `sakuga-mac` pool: this
+  repository is public, and the self-hosted runners serve the private repositories only.
+- **The release takes them again** (`release-extension.yml`): on a tag `v*`, after the checks of
+  `ci.yml`, the job `guide` runs `pnpm guide:captures` on the tagged commit. It holds no secret and
+  only reads: what changed, added, changed or removed, leaves it as a binary patch (the artifact
+  `guide-captures`). When nothing changed, there is no patch and no pull request. The job
+  `guide-pr` runs no code of the repository: it applies the patch to the tag, and a token of the App,
+  minted there only, pushes `guide/<tag>` and opens « docs: the guide of <tag> » on `main`. The
+  token of the App, and not the one of the run: GitHub starts no workflow for a pull request that
+  the token of a run opened, and that pull request needs `ci.yml`. A run from a branch
+  (`workflow_dispatch`) is the release of test: it stops at the artifact. The release does not wait
+  for these jobs: a capture that fails publishes the extension all the same.
 - **One source for the words**: `apps/console/app/guide-steps.ts`. Step 3 of the setup shows it, in
   English and in French; `docs/reviewing.md` holds a copy of it in English, between
   `<!-- guide:start -->` and `<!-- guide:end -->`, that `guide-steps.test.ts` holds to the source.

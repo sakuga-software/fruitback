@@ -90,6 +90,155 @@ jobs:
           # A run that uploads nothing is a run that built nothing, and it would pass in silence.
           if-no-files-found: error
 
+  # The captures of the guide, taken again on the tagged commit (FRU-486). `pnpm guide:captures`
+  # writes only the captures that changed. This job holds no secret and only reads: what changed
+  # leaves it as a patch, the artifact `guide-captures`, and `guide-pr` opens the pull request.
+  #
+  # On a Mac of GitHub, not the `sakuga-mac` pool: this repository is public, and the self-hosted
+  # runners serve the private repositories only (see `sakuga-review.yml`). The fonts are those of
+  # macOS. A run that is not from a tag `v*` stops at the artifact: that is the release of test.
+  # The release does not wait for these two jobs.
+  guide:
+    name: captures of the guide
+    needs: [ci]
+    runs-on: macos-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    outputs:
+      changed: ${{ steps.changed.outputs.any }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # No cache, as in `package`: what this job writes goes to a pull request of the repository.
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The full Chromium: the headless shell loads no extension (`e2e/extension.ts`).
+      - name: Install Chromium
+        run: pnpm exec playwright install chromium
+
+      - name: Take the captures of the guide
+        run: pnpm guide:captures
+
+      # Every change under the paths that the capture writes, added, changed or removed, as one patch
+      # that `git apply` takes back: binary, and staged with `-A` so a removed file is in it too.
+      - name: Write what changed as a patch
+        id: changed
+        run: |
+          set -euo pipefail
+          paths=(docs/assets/guide apps/console/public/guide apps/console/app/guide-captured.ts docs/reviewing.md)
+          # A file that .gitignore hides there would be left out in silence: none may exist.
+          ignored=$(git ls-files --others --ignored --exclude-standard -- "${paths[@]}")
+          if [ -n "$ignored" ]; then
+            echo "files that .gitignore hides under the paths of the guide: $ignored" >&2
+            exit 1
+          fi
+          git add -A -- "${paths[@]}"
+          if git diff --cached --quiet -- "${paths[@]}"; then
+            echo "No capture of the guide changed."
+            echo "any=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff --cached --name-status --no-renames -- "${paths[@]}"
+          mkdir -p "$RUNNER_TEMP/guide"
+          git diff --cached --binary --no-renames -- "${paths[@]}" > "$RUNNER_TEMP/guide/guide.patch"
+          git diff --cached --name-status --no-renames -- "${paths[@]}" > "$RUNNER_TEMP/guide/changed.txt"
+          echo "any=true" >> "$GITHUB_OUTPUT"
+
+      - name: Keep the patch
+        if: steps.changed.outputs.any == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: guide-captures
+          path: ${{ runner.temp }}/guide/
+          if-no-files-found: error
+
+  # Opens « docs: the guide of <tag> » with the patch of `guide`, on a tag only. It runs no code of
+  # the repository: a checkout of the tag, `git apply`, `git push` and `gh`. The branch and the pull
+  # request are written with a token of the App, minted here and nowhere else, so that `ci.yml` runs
+  # on that pull request: GitHub starts no workflow for an event made with the token of a run.
+  guide-pr:
+    name: pull request of the guide
+    needs: [ci, guide]
+    if: needs.guide.outputs.changed == 'true' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Take the patch
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: guide-captures
+          path: ${{ runner.temp }}/guide
+
+      - name: Token of the App
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          # The Client ID of the App: not a secret.
+          client-id: Iv23liesB1xzywavcnv2
+          private-key: ${{ secrets.PR_AGENT_APP_PRIVATE_KEY }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Open the pull request of the captures
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+          APP: ${{ steps.app-token.outputs.app-slug }}
+        run: |
+          set -euo pipefail
+          branch="guide/$TAG"
+          id=$(gh api "/users/${APP}%5Bbot%5D" --jq .id)
+          # The patch comes from a job that ran the code of the tag: it may touch the paths of the
+          # guide and nothing else.
+          outside=$(git apply --numstat "$RUNNER_TEMP/guide/guide.patch" | cut -f3 |
+            grep -Ev '^(docs/assets/guide/[^/]+\.png|apps/console/public/guide/[^/]+\.png|apps/console/app/guide-captured\.ts|docs/reviewing\.md)$' || true)
+          if [ -n "$outside" ]; then
+            echo "the patch touches files out of the guide: $outside" >&2
+            exit 1
+          fi
+          git switch -c "$branch"
+          git apply --index --binary "$RUNNER_TEMP/guide/guide.patch"
+          if git diff --cached --quiet; then
+            echo "The patch changes nothing on the tag." >&2
+            exit 1
+          fi
+          git -c user.name="${APP}[bot]" -c user.email="${id}+${APP}[bot]@users.noreply.github.com" \
+            commit -m "docs: the guide of $TAG (FRU-486)" -m "Taken by pnpm guide:captures on the tag, in release-extension.yml."
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${GH_REPO}.git" "HEAD:refs/heads/$branch"
+          {
+            echo "The captures of the guide that changed with the extension $TAG, taken by \`pnpm guide:captures\` on the tag (release-extension.yml, FRU-486). Check each capture against the screen it shows before the merge."
+            echo
+            echo '```'
+            cat "$RUNNER_TEMP/guide/changed.txt"
+            echo '```'
+          } > "$RUNNER_TEMP/guide/body.md"
+          gh pr create --base main --head "$branch" --title "docs: the guide of $TAG" --body-file "$RUNNER_TEMP/guide/body.md"
+
   publish:
     name: attach to the release
     needs: [ci, package]
