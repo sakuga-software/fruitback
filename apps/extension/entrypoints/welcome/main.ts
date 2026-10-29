@@ -13,6 +13,8 @@ import { createBrowserSessions } from '../../src/session-browser.ts';
 import { describeIdentity } from '../../src/session.ts';
 import { readAll, rememberPreviews, writeSite } from '../../src/sites.ts';
 import { parseAnswer, tabCommand } from '../../src/tab-command.ts';
+import { injectIntoOpenTabs, tabLoaded } from '../../src/tab-injection.ts';
+import { browserTabScripting } from '../../src/tab-scripting-browser.ts';
 import { type WelcomeSignIn, type WelcomeSite, welcomeScreen } from '../../src/welcome.ts';
 
 /** The page that opens at install (FRU-318), and its sign-in (FRU-482): what `src/welcome.ts` draws. */
@@ -123,15 +125,18 @@ function turnOn(origin: string): void {
     if (!(await granted.catch(() => false))) return show(t(NO_ACCESS));
     await writeSite(offer.pattern, cloudEntry(offer));
     const opened = await browser.tabs.create({ url: origin });
+    await show();
+    if (opened.id === undefined) return;
+    const tab = opened.id;
+    // The site can load before the background registers the scripts: as the popup does, the tab
+    // gets them after its load. Both files refuse to run twice in one frame.
+    await tabLoaded(browser.tabs, tab);
+    await injectIntoOpenTabs(browserTabScripting, offer.pattern);
     // FRU-485: the first activation opens the choice of an element, once the widget is there.
     // It never rejects: the site is on, whatever the storage of the first activation does.
-    if (opened.id !== undefined) {
-      const tab = opened.id;
-      void pickOnFirstActivation(browser.storage.local, offer.pattern, async () =>
-        parseAnswer(await browser.tabs.sendMessage(tab, tabCommand('leave-feedback'))),
-      );
-    }
-    await show();
+    void pickOnFirstActivation(browser.storage.local, offer.pattern, async () =>
+      parseAnswer(await browser.tabs.sendMessage(tab, tabCommand('leave-feedback'))),
+    );
   })().catch((error: unknown) => {
     console.error('[fruitback] could not turn the site on', error);
     void show(t(NOT_TURNED_ON));

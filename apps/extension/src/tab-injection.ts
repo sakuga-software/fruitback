@@ -39,3 +39,36 @@ export async function injectIntoOpenTabs(scripting: TabScripting, pattern: strin
     }),
   );
 }
+
+export type TabLoads = {
+  get: (tabId: number) => Promise<{ status?: string }>;
+  onUpdated: {
+    addListener: (listener: (tabId: number, change: { status?: string }) => void) => void;
+    removeListener: (listener: (tabId: number, change: { status?: string }) => void) => void;
+  };
+};
+
+/**
+ * Resolves when the tab finished its load, or after `within` ms. Never rejects.
+ *
+ * A tab that `tabs.create` opened right after a rule was written can load before the background
+ * registers the scripts: the answer to a write comes when the rule is stored, not registered (FRU-486).
+ */
+export function tabLoaded(tabs: TabLoads, tabId: number, within = 15_000): Promise<void> {
+  return new Promise((resolve) => {
+    const done = () => {
+      clearTimeout(timer);
+      tabs.onUpdated.removeListener(updated);
+      resolve();
+    };
+    const updated = (id: number, change: { status?: string }) => {
+      if (id === tabId && change.status === 'complete') done();
+    };
+    const timer = setTimeout(done, within);
+    tabs.onUpdated.addListener(updated);
+    void tabs.get(tabId).then(
+      (tab) => (tab.status === 'complete' ? done() : undefined),
+      () => done(),
+    );
+  });
+}

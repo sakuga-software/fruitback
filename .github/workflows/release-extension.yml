@@ -134,6 +134,17 @@ jobs:
       - name: Take the captures of the guide
         run: pnpm guide:captures
 
+      # The run of v0.5.0 failed on this runner and kept nothing to read (FRU-486).
+      - name: Keep the report of a failed capture
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: guide-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+
       # Every change under the paths that the capture writes, added, changed or removed, as one patch
       # that `git apply` takes back: binary, and staged with `-A` so a removed file is in it too.
       - name: Write what changed as a patch
