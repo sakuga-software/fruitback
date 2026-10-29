@@ -4094,9 +4094,10 @@ call, a write that changes no row when the day is the same.
   migrations, the catalogue, or a database of before takes it.
 - `createMigratedPgliteDatabase` (and `migratedDatabaseOn`) gives `public` with every migration
   applied and no row. `worlds()`, the conformance suites of the stores, the sessions and the accounts,
-  and `MIGRATED_DATABASES` of `auth.fixture.ts` take it. The real server of `MIGRATED_DATABASES` is the
-  one of `DATABASES`: in the CI job `postgres`, each case still applies every migration on an empty
-  database.
+  and `MIGRATED_DATABASES` of `auth.fixture.ts` take it. On the real server of the CI job `postgres`,
+  the same suites take `createMigratedRealDatabase` (FRU-480): a copy (`CREATE DATABASE … TEMPLATE`)
+  of one database that the process migrated once, instead of an empty one where each case applied
+  every migration again.
 - Between two cases it empties every table but the journal (`DELETE` with the triggers off, and each
   owned sequence back to its first value, as `TRUNCATE … RESTART IDENTITY` did), and sets the session
   back (`RESET ALL`, temporary tables, advisory locks). When a case changed the schema (an event
