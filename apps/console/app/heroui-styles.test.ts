@@ -68,6 +68,18 @@ const imported = [
 ].map((found) => found[1] as string);
 
 describe('the styles of HeroUI in the console (FRU-492)', () => {
+  it('reads the components of ui.tsx only, because no other file of the console imports HeroUI', () => {
+    // A component imported elsewhere would get no style, and the list above would not name it.
+    const files = (readdirSync(join(app, 'app'), { recursive: true }) as string[]).filter(
+      (file) => /\.tsx?$/.test(file) && !file.endsWith('.test.ts'),
+    );
+    const others = files.filter(
+      (file) => file !== 'ui.tsx' && /from '@heroui\/(react|styles)/.test(readFileSync(join(app, 'app', file), 'utf8')),
+    );
+    assert.ok(files.includes('ui.tsx') && files.includes(join('routes', 'home.tsx')), 'the walk found no screen');
+    assert.deepEqual(others, []);
+  });
+
   it('imports the style of each component the kit draws, and of no other', () => {
     assert.deepEqual([...imported].sort(), needed(importedByKit()));
   });
