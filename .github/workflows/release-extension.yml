@@ -141,16 +141,22 @@ jobs:
         run: |
           set -euo pipefail
           paths=(docs/assets/guide apps/console/public/guide apps/console/app/guide-captured.ts docs/reviewing.md)
+          # A file that .gitignore hides there would be left out in silence: none may exist.
+          ignored=$(git ls-files --others --ignored --exclude-standard -- "${paths[@]}")
+          if [ -n "$ignored" ]; then
+            echo "files that .gitignore hides under the paths of the guide: $ignored" >&2
+            exit 1
+          fi
           git add -A -- "${paths[@]}"
           if git diff --cached --quiet -- "${paths[@]}"; then
             echo "No capture of the guide changed."
             echo "any=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          git diff --cached --name-status -- "${paths[@]}"
+          git diff --cached --name-status --no-renames -- "${paths[@]}"
           mkdir -p "$RUNNER_TEMP/guide"
-          git diff --cached --binary -- "${paths[@]}" > "$RUNNER_TEMP/guide/guide.patch"
-          git diff --cached --name-status -- "${paths[@]}" > "$RUNNER_TEMP/guide/changed.txt"
+          git diff --cached --binary --no-renames -- "${paths[@]}" > "$RUNNER_TEMP/guide/guide.patch"
+          git diff --cached --name-status --no-renames -- "${paths[@]}" > "$RUNNER_TEMP/guide/changed.txt"
           echo "any=true" >> "$GITHUB_OUTPUT"
 
       - name: Keep the patch
@@ -207,6 +213,14 @@ jobs:
           set -euo pipefail
           branch="guide/$TAG"
           id=$(gh api "/users/${APP}%5Bbot%5D" --jq .id)
+          # The patch comes from a job that ran the code of the tag: it may touch the paths of the
+          # guide and nothing else.
+          outside=$(git apply --numstat "$RUNNER_TEMP/guide/guide.patch" | cut -f3 |
+            grep -Ev '^(docs/assets/guide/[^/]+\.png|apps/console/public/guide/[^/]+\.png|apps/console/app/guide-captured\.ts|docs/reviewing\.md)$' || true)
+          if [ -n "$outside" ]; then
+            echo "the patch touches files out of the guide: $outside" >&2
+            exit 1
+          fi
           git switch -c "$branch"
           git apply --index --binary "$RUNNER_TEMP/guide/guide.patch"
           if git diff --cached --quiet; then
