@@ -89,6 +89,7 @@
   "popup-rule-address.spec.ts": 8.7,
   "popup-sign-in.spec.ts": 63.4,
   "popup-workspace.spec.ts": 27.3,
+  "pressed-target.spec.ts": 1.7,
   "read-failure.spec.ts": 14.2,
   "reanchor.spec.ts": 15.9,
   "screenshot.spec.ts": 31.4,
