@@ -755,6 +755,14 @@ export const FRENCH: Readonly<Record<string, string>> = {
   // The extension is already connected to the account (FRU-441).
   'Extension connected · {browser}': 'Extension connectée · {browser}',
   'Extension connected': 'Extension connectée',
+  // The extension of this browser, connected in place by the console of the Cloud (FRU-487).
+  'Extension connected in this browser': 'Extension connectée dans ce navigateur',
+  'Approved. The extension finishes connecting within a minute, or press again to finish now.':
+    'Approuvé. L’extension termine sa connexion dans la minute, ou appuyez de nouveau pour terminer maintenant.',
+  'Your session ended. Sign in again, then connect this browser.':
+    'Votre session a pris fin. Reconnectez-vous, puis connectez ce navigateur.',
+  'Fruitback is installed in this browser. Connect it to your account here: no word to check.':
+    'Fruitback est installé dans ce navigateur. Connectez-le à votre compte ici : aucun mot à vérifier.',
   'Connect another browser': 'Connecter un autre navigateur',
   'Your extension shows the notes on the sites of {workspace} and lets you leave yours.':
     'Votre extension affiche les notes sur les sites de {workspace} et vous permet de laisser les vôtres.',
