@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { WORKER_ORIGIN } from './pin.ts';
+import { caseOf, WORKER_ORIGIN } from './pin.ts';
 
 /**
  * The widget in a right-to-left language (FRU-38).
@@ -22,8 +22,7 @@ const ARABIC = {
 test('in Arabic the dock and the popover move, and the pin stays on its element', async ({ page }) => {
   // The popover scales in from 96%, which moves its right edge by up to six pixels mid-animation.
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  const attempt = test.info().retry;
-  await page.goto(`/?widget=off&case=${attempt === 0 ? 'rtl' : `rtl-retry${attempt}`}`);
+  await page.goto(`/?widget=off&case=${caseOf('rtl')}`);
   await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
   await page.addScriptTag({ path: IIFE });
   await page.evaluate(
@@ -48,14 +47,19 @@ test('in Arabic the dock and the popover move, and the pin stays on its element'
   expect(dock!.x + dock!.width).toBeLessThan(viewport!.width / 2);
 
   const target = page.locator('[data-testid="card-latte"] .add');
+  // HeroUI scales a pressed button to 0.97: its right edge moves 1.2 px left during the press. The
+  // composer is placed during the click, so on the pressed box, and React Aria ends the press at a
+  // time this spec does not control. The box read later was pressed or not, and the check failed on
+  // main at 2.16 px (as `composer.spec.ts` did). Without the scale, there is one box.
+  await target.evaluate((element) => (element as HTMLElement).style.setProperty('transform', 'none', 'important'));
   await launch.click();
   await target.click();
 
   await expect(page.getByPlaceholder(ARABIC['composer.placeholder']), 'the popover did not open').toBeVisible();
 
-  // Polled: the popover is placed after it opens. The popover's right edge meets the frame's, which
-  // stands 6 px off the element (FRU-258), unless the viewport clamps it. Two pixels absorb rounding; a left-to-right placement would miss by the
-  // popover's width less the element's.
+  // Polled: the popover is placed after it opens. Its right edge meets the frame's, which stands 5 px
+  // off the element (FRU-303), unless the viewport clamps it. A left-to-right placement would miss by
+  // the popover's width less the element's. Half a pixel absorbs the rounding of layout to 1/64 px.
   await expect
     .poll(
       async () => {
@@ -66,14 +70,14 @@ test('in Arabic the dock and the popover move, and the pin stays on its element'
         if (element === null || composer === null) return Number.POSITIVE_INFINITY;
         const expectedRight = Math.max(
           10 + composer.width,
-          Math.min(element.x + element.width + 6, viewport!.width - 10),
+          Math.min(element.x + element.width + 5, viewport!.width - 10),
         );
 
         return Math.abs(composer.x + composer.width - expectedRight);
       },
       { message: 'the popover never met the element on its right edge' },
     )
-    .toBeLessThanOrEqual(2);
+    .toBeLessThanOrEqual(0.5);
 
   await page.getByPlaceholder(ARABIC['composer.placeholder']).fill('يمين إلى يسار');
   await page.getByRole('button', { name: ARABIC['composer.send'], exact: true }).click();
