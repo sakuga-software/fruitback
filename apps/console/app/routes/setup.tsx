@@ -13,7 +13,7 @@ import {
   siteNow,
   siteStage,
 } from '../setup-stage';
-import { BrowserFrame, Button, EntryPage, Lead, Step, type StepState, Steps, Title } from '../ui';
+import { BrowserFrame, Button, EntryPage, Lead, Problem, Step, type StepState, Steps, Title } from '../ui';
 import { useLocale } from '../use-locale';
 import { Account, Ask, Sent, Unnamed } from './setup-account';
 import { PutDone, PutOnSite } from './setup-install';
@@ -173,7 +173,8 @@ export default function Setup() {
       width="full"
       aside={
         <p>
-          {t('Running your own server?')}{' '}
+          {/* On a phone the question is for a screen reader only: the link fits beside the logo, on one line. */}
+          <span className="max-sm:sr-only">{t('Running your own server?')}</span>{' '}
           <a
             href={`${SITE}/self-hosting.html`}
             className="text-ink underline decoration-1 underline-offset-3 hover:text-accent-strong"
@@ -209,10 +210,8 @@ export default function Setup() {
               />
             ) : null}
             {stage.kind === 'unchecked' ? (
-              <div className="mt-3 flex flex-col items-start gap-3">
-                <p role="alert" className="text-body text-muted">
-                  {t('Fruitback did not answer. Try again.')}
-                </p>
+              <div className="mt-3 flex flex-col items-start gap-3 [&>[role=alert]]:self-stretch">
+                <Problem>{t('Fruitback did not answer. Try again.')}</Problem>
                 <Button tone="outline" onClick={() => void resolveOnce().then(setStage)}>
                   {t('Try again')}
                 </Button>
@@ -240,10 +239,8 @@ export default function Setup() {
               <p className="mt-0.5 text-small text-muted">{t('The address you review.')}</p>
             ) : null}
             {stage.kind === 'unread' ? (
-              <div className="mt-3 flex flex-col items-start gap-3">
-                <p role="alert" className="text-body text-muted">
-                  {t('Fruitback did not answer. Your sites are not lost.')}
-                </p>
+              <div className="mt-3 flex flex-col items-start gap-3 [&>[role=alert]]:self-stretch">
+                <Problem>{t('Fruitback did not answer. Your sites are not lost.')}</Problem>
                 <Button
                   tone="outline"
                   onClick={() => void siteStage(CALLS, stage.account, stage.workspace).then(setStage)}
@@ -310,7 +307,8 @@ export default function Setup() {
         ) : null}
       </section>
 
-      <section aria-label={t('Preview of your site')} className="min-w-0 flex-999 basis-130">
+      {/* Sticky: the steps grow longer than a screen, and the site stays in view beside them. */}
+      <section aria-label={t('Preview of your site')} className="sticky top-8 min-w-0 flex-999 basis-130">
         {stage.kind === 'install' ? (
           // The site itself, live (FRU-354): `key` gives a site that changed a frame of its own.
           <SitePreview key={stage.site.origin} origin={stage.site.origin} />
