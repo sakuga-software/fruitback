@@ -44,12 +44,19 @@ function send(page: Page, id: string, message: unknown): Promise<{ answer?: unkn
   );
 }
 
-/** The sessions the extension holds, by the address of their worker. */
+/**
+ * The sessions the extension holds, by the address of their worker: the keys
+ * `fruitback:session-run:<epoch>:<endpoint>` of `session-storage.ts`.
+ */
 async function sessionsOf(serviceWorker: import('@playwright/test').Worker): Promise<string[]> {
   return serviceWorker.evaluate(async () =>
     Object.keys(await chrome.storage.local.get(null))
-      .filter((key) => key.startsWith('fruitback:session:'))
-      .map((key) => key.slice('fruitback:session:'.length)),
+      .filter((key) => key.startsWith('fruitback:session-run:'))
+      .map((key) => {
+        const rest = key.slice('fruitback:session-run:'.length);
+
+        return rest.slice(rest.indexOf(':') + 1);
+      }),
   );
 }
 
