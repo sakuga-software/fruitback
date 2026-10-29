@@ -132,6 +132,39 @@ describe('connecting the extension in place (FRU-487)', () => {
     assert.equal(result, 'signed-out');
   });
 
+  it('approves nothing more when the worker refuses the approval: another account, a word, an expiry', async () => {
+    for (const status of [409, 410, 422, 404]) {
+      const { chrome, sent } = chromeWith(() => ({ v: 1, ok: true, request: 'req_1' }));
+      const result = await connectHere(ID, {
+        chrome,
+        wait: async () => undefined,
+        read: async () => ({ ok: true, data: pending }),
+        approve: async () => ({ ok: false, status, error: 'refused' }),
+      });
+      assert.equal(result, 'failed', String(status));
+      // No claim follows a refused approval.
+      assert.deepEqual(sent, [{ type: 'fruitback:connect', v: 1 }]);
+    }
+  });
+
+  it('approves nothing for a request that is not waiting', async () => {
+    for (const state of ['refused', 'expired'] as const) {
+      const { chrome } = chromeWith(() => ({ v: 1, ok: true, request: 'req_1' }));
+      let approved = false;
+      const result = await connectHere(ID, {
+        chrome,
+        read: async () => ({ ok: true, data: { ...pending, state } }),
+        approve: async () => {
+          approved = true;
+
+          return { ok: true, data: {} };
+        },
+      });
+      assert.equal(result, 'failed');
+      assert.equal(approved, false);
+    }
+  });
+
   it('stops when the request ends otherwise', async () => {
     const { chrome } = chromeWith((message) =>
       message.type === 'fruitback:connect'

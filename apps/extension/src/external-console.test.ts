@@ -190,7 +190,7 @@ function fakes({
   };
   const answerConsole = createExternalConsole({ console: CONSOLE, cloud: CLOUD, connect, now: () => state.now });
 
-  return { answerConsole, state, posted, claimed };
+  return { answerConsole, state, posted, claimed, ended };
 }
 
 describe('the answers to the console (FRU-487)', () => {
@@ -274,5 +274,43 @@ describe('the answers to the console (FRU-487)', () => {
       reason: 'unknown-request',
     });
     assert.deepEqual(claimed, []);
+  });
+});
+
+describe('a claim of a request that ended (FRU-487)', () => {
+  it('is « signed in » only for the request this channel started, and never for another id', async () => {
+    const { answerConsole, state } = fakes();
+    // A session held, from the popup: no request of the console is confirmed by it.
+    state.held = { [CLOUD]: { refreshToken: 'r', identity: { subject: 'u' }, epoch: 'e' } };
+    assert.deepEqual(await answerConsole({ kind: 'claim', request: 'req_1' }), {
+      v: 1,
+      ok: false,
+      reason: 'unknown-request',
+    });
+  });
+
+  it('says how the background ended this request, and only this one', async () => {
+    const { answerConsole, state, ended } = fakes();
+    await answerConsole({ kind: 'connect' });
+    state.pending = undefined;
+    ended.value = { request: 'req_1', outcome: 'refused', at: NOW };
+    assert.deepEqual(await answerConsole({ kind: 'claim', request: 'req_1' }), { v: 1, ok: true, state: 'refused' });
+    assert.deepEqual(await answerConsole({ kind: 'claim', request: 'req_9' }), {
+      v: 1,
+      ok: false,
+      reason: 'unknown-request',
+    });
+  });
+
+  it('is « signed in » when the popup claimed the request this channel started', async () => {
+    const { answerConsole, state } = fakes();
+    await answerConsole({ kind: 'connect' });
+    state.pending = undefined;
+    state.held = { [CLOUD]: { refreshToken: 'r', identity: { subject: 'u' }, epoch: 'e2' } };
+    assert.deepEqual(await answerConsole({ kind: 'claim', request: 'req_1' }), {
+      v: 1,
+      ok: true,
+      state: 'signed-in',
+    });
   });
 });

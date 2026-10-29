@@ -174,10 +174,13 @@ export function acceptedExternal(
  *   swap the account of a browser that is signed in. The popup signs out first.
  * - `claim`: claims the request now, rather than at the next alarm, and says where it is. Only the
  *   request that waits, and once per interval of the worker: a page cannot make the extension call
- *   the worker in a loop.
+ *   the worker in a loop. A request that ended is said for that request only: never « signed in »
+ *   for an id this channel did not start.
  */
 export function createExternalConsole(seams: ExternalSeams & { cloud: string }) {
   let lastClaim = Number.NEGATIVE_INFINITY;
+  /** The requests `connect` answered to the console, since this service worker started. */
+  const answered = new Set<string>();
 
   return async (asked: ExternalMessage): Promise<ExternalAnswer> => {
     const { console: consoleOrigin, cloud, connect } = seams;
@@ -192,13 +195,23 @@ export function createExternalConsole(seams: ExternalSeams & { cloud: string }) 
         return { v: 1, ok: false, reason: 'unavailable' };
       }
 
+      answered.add(started.pending.request);
+
       return { v: 1, ok: true, request: started.pending.request };
     }
 
     const pending = await connect.pending.read();
     if (pending === undefined || pending.request !== asked.request) {
-      // Ended already, by the popup or the alarm: a session held is this request's.
-      return signedIn ? { v: 1, ok: true, state: 'signed-in' } : { v: 1, ok: false, reason: 'unknown-request' };
+      // Ended already, by the popup or the alarm. Said only for this request: how the background
+      // ended it, or a session held for a request that this channel started. Any other id, or a
+      // session that came from elsewhere, is not this request's.
+      const ended = await connect.ended?.read();
+      if (ended?.request === asked.request) return { v: 1, ok: true, state: ended.outcome };
+      if (signedIn && pending === undefined && answered.has(asked.request)) {
+        return { v: 1, ok: true, state: 'signed-in' };
+      }
+
+      return { v: 1, ok: false, reason: 'unknown-request' };
     }
     const now = seams.now?.() ?? Date.now();
     if (now - lastClaim < pending.interval * 1000) return { v: 1, ok: true, state: 'waiting' };
