@@ -301,18 +301,20 @@ test('the list of the sources and the panel of a Linear are the ones of the mock
   await expect(card.getByText('Each site chooses where its notes go, on the Sites screen.')).toBeVisible();
   await expect(card.getByRole('link', { name: 'Open the sites' })).toHaveAttribute('href', '/w/w1/sites');
 
-  // The statuses: since FRU-368 they are set per site, on its statuses page, which this block links to.
+  // The statuses: since FRU-368 they are set per site, on its statuses page. Since FRU-478 each site
+  // of « Sites sending here » links there on its own row: no second block lists the same sites again.
   await expect(
     card.getByText('The stage and the colour of each state of Linear are set for each site, on its statuses page.'),
   ).toBeVisible();
-  await expect(card.getByRole('link', { name: /^Statuses of / })).toHaveText([
-    'Statuses of https://staging.acme.dev',
-    'Statuses of https://acme.dev',
-  ]);
-  await expect(card.getByRole('link', { name: 'Statuses of https://acme.dev' })).toHaveAttribute(
+  await expect(card.getByRole('heading', { level: 3 })).toHaveText(['Sites sending here']);
+  await expect(card.getByRole('link', { name: /^Statuses of / })).toHaveText(['Statuses', 'Statuses']);
+  await expect(sender.getByRole('link', { name: 'Statuses of https://staging.acme.dev' })).toHaveAttribute(
     'href',
-    '/w/w1/sites/s2/statuses',
+    '/w/w1/sites/s1/statuses',
   );
+  await expect(
+    card.locator('[data-site="acme.dev"]').getByRole('link', { name: 'Statuses of https://acme.dev' }),
+  ).toHaveAttribute('href', '/w/w1/sites/s2/statuses');
   // The list of FRU-102 is gone from the panel: no state of Linear is chosen here any more.
   await expect(card.getByRole('button', { name: /^Status for / })).toHaveCount(0);
 
@@ -564,6 +566,7 @@ test('a member reads the sources and changes none', async ({ page }) => {
   await expect(panel(page).locator('[data-site]')).toHaveCount(2);
   // No list of the other sites, no status to set, nothing to disconnect.
   await expect(panel(page).getByRole('heading', { level: 3, name: 'Other sites' })).toHaveCount(0);
+  await expect(panel(page).getByRole('link', { name: /^Statuses of / })).toHaveCount(0);
   await expect(panel(page).getByRole('button')).toHaveCount(0);
   await expect(panel(page).getByRole('switch')).toHaveCount(0);
 });

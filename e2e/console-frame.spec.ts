@@ -46,6 +46,9 @@ async function open(page: Page, screen = 'sites', workspace = 'w1'): Promise<voi
 }
 
 /** The rail with the five sections of the mockup, « Notes » on screen: a page of the development server. */
+/** What the icon of an entry adds to its width (FRU-477): 18 px, and the gap of 10 px after it. */
+const ICON = 28;
+
 async function openProbe(page: Page): Promise<void> {
   // The rail asks the worker which browsers of the extension are connected (FRU-441): with no worker,
   // the console says it cannot reach it, above the rail.
@@ -146,6 +149,17 @@ test('at 1440 px the rail has the values of the mockup', async ({ page }) => {
   });
   expect.soft(await painted(resting, 'color')).toEqual(rgb(RAIL_TEXT));
   await expect(resting.locator('span[aria-hidden="true"]')).toHaveCount(0);
+
+  // Each section has its icon (FRU-477): 18 px, in the colour of its words, after the drop of the one
+  // on screen, so the icons stay in one column. A picture only: the words name the entry.
+  await expect(sections(page).locator('a > svg[aria-hidden="true"]')).toHaveCount(5);
+  const icon = resting.locator('svg');
+  await expect(icon).toHaveAttribute('data-rail-icon', 'members');
+  expect.soft(await styles(icon, ['width', 'height'])).toEqual({ width: '18px', height: '18px' });
+  expect.soft(await painted(icon, 'color')).toEqual(rgb(RAIL_TEXT));
+  expect.soft(await painted(active.locator('svg'), 'color')).toEqual(rgb(WHITE));
+  const iconX = async (link: Locator) => (await box(link.locator('svg'))).x;
+  expect.soft(await iconX(active)).toBeCloseTo(await iconX(resting), 0);
 
   // The foot: the way to the documentation, and the logo.
   const help = rail(page).getByRole('link', { name: 'Help and docs' });
@@ -530,12 +544,13 @@ test('at 390 px the row of sections is where the mockup draws it', async ({ page
   await page.setViewportSize({ width: 390, height: 844 });
   await stubWorker(page);
   await open(page);
-  // The render of the mockup at 390 px: the rail is 141 px high, and its row starts at 12, 85.
+  // The render of the mockup at 390 px: the rail is 141 px high, and its row starts at 12, 85. Each
+  // entry is wider than the mockup by its icon and the gap after it (FRU-477): the mockup draws none.
   expectBox(await box(rail(page)), { x: 0, y: 0, width: 390, height: 141 }, 4, 'the rail');
   expectBox(await box(switcher(page)), { x: 12, y: 16, height: 49 }, 4, 'the workspace');
   expectBox(
     await box(sections(page).getByRole('link', { name: 'Sites' })),
-    { x: 12, y: 85, width: 78.9, height: 40 },
+    { x: 12, y: 85, width: 78.9 + ICON, height: 40 },
     4,
     '« Sites »',
   );
@@ -545,11 +560,11 @@ test('at 390 px the row of sections is where the mockup draws it', async ({ page
   // With the five sections of the mockup, each one is where it draws it.
   await openProbe(page);
   const mockup = [
-    { x: 12, width: 78.9 },
-    { x: 92.9, width: 83.6 },
-    { x: 178.5, width: 122.5 },
-    { x: 303, width: 107.3 },
-    { x: 412.3, width: 123 },
+    { x: 12, width: 78.9 + ICON },
+    { x: 92.9 + ICON, width: 83.6 + ICON },
+    { x: 178.5 + 2 * ICON, width: 122.5 + ICON },
+    { x: 303 + 3 * ICON, width: 107.3 + ICON },
+    { x: 412.3 + 4 * ICON, width: 123 + ICON },
   ];
   const links = sections(page).getByRole('link');
   for (const [index, entry] of mockup.entries()) {

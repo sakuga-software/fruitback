@@ -3,6 +3,7 @@ import { Outlet, useLocation, useNavigate, useOutletContext } from 'react-router
 import { API, type Me, callUntilAnswered, knownMe, saveLanguage } from '../api';
 import { adoptLanguage, msg, t } from '../i18n';
 import { instanceOf } from '../instance';
+import { type RailIconName } from '../rail-icons';
 import { useLocale } from '../use-locale';
 import { Frame, RAIL_HEAD, RailFrame, RailNav, Screen, useExtensionLink } from './workspace';
 
@@ -26,11 +27,11 @@ export function useAdmin(): AdminContext {
  * screen that exists. `layout` is a whole class name, so Tailwind finds it. It sets no width: a
  * screen is as wide as its column (FRU-398).
  */
-const SCREENS = [
-  { path: '/admin', label: msg('Instance'), layout: 'flex flex-col gap-[44px]' },
-  { path: '/admin/workspaces', label: msg('Workspaces'), layout: '' },
-  { path: '/admin/users', label: msg('Users'), layout: '' },
-  { path: '/admin/notes', label: msg('Notes'), layout: '' },
+const SCREENS: readonly { path: string; label: string; layout: string; icon: RailIconName }[] = [
+  { path: '/admin', label: msg('Instance'), layout: 'flex flex-col gap-[44px]', icon: 'instance' },
+  { path: '/admin/workspaces', label: msg('Workspaces'), layout: '', icon: 'workspaces' },
+  { path: '/admin/users', label: msg('Users'), layout: '', icon: 'members' },
+  { path: '/admin/notes', label: msg('Notes'), layout: '', icon: 'notes' },
 ];
 
 const GUIDE = 'https://fruitback.com/self-hosting.html';
@@ -106,9 +107,20 @@ function AdminRail({ current, back }: { current: string | undefined; back: strin
       <RailNav
         label={t('Instance')}
         entries={[
-          ...SCREENS.map((screen) => ({ to: screen.path, label: t(screen.label), current: screen.path === current })),
+          ...SCREENS.map((screen) => ({
+            to: screen.path,
+            label: t(screen.label),
+            current: screen.path === current,
+            icon: screen.icon,
+          })),
           // Straight to the first workspace: the front door asked three questions before it went there.
-          { to: back === undefined ? '/' : `/w/${back}/sites`, label: t('My workspaces'), current: false },
+          // The arrow says the link leaves the administration (FRU-476).
+          {
+            to: back === undefined ? '/' : `/w/${back}/sites`,
+            label: t('My workspaces'),
+            current: false,
+            icon: 'back',
+          },
         ]}
       />
     </RailFrame>

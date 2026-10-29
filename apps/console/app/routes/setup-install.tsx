@@ -9,6 +9,7 @@ import { BY_SIGN_IN, CONNECT_PAGE, snippetFor, useConnect, useCopy } from '../in
 import { AutoGrid, Button, LinkButton, OptionCard, Problem, Snippet, StatusDot } from '../ui';
 import { useLocale } from '../use-locale';
 import { siteLabel } from '../site-address';
+import { SetupGuide } from '../setup-guide';
 
 /** Step 3 of the setup, « Put it on the site » (FRU-242). */
 
@@ -27,6 +28,8 @@ import { siteLabel } from '../site-address';
  * On the console of the Cloud, the extension of this browser answers the page (FRU-487,
  * `extension-here.ts`): installed and signed out, « Connect this browser » connects it in place, with
  * no tab and no word. Installed and signed in, the card says so. Elsewhere, nothing changes.
+ *
+ * On Fruitback Cloud, the guide of the extension is folded under the cards (FRU-486).
  */
 export function PutOnSite({ workspace, site }: { workspace: Workspace; site: Site }) {
   useLocale();
@@ -157,6 +160,8 @@ export function PutOnSite({ workspace, site }: { workspace: Workspace; site: Sit
           ) : null}
         </OptionCard>
       </AutoGrid>
+      {/* The guide walks the sign-in of Fruitback Cloud, which a self-hosted console does not use. */}
+      {BY_SIGN_IN ? <SetupGuide /> : null}
       <p role="status" className="mt-4.5 text-small">
         <strong className="font-semibold">{t('Waiting for your first note.')}</strong>{' '}
         <span className="text-muted">{t('Open the site, click Leave feedback, then any part of the page.')}</span>{' '}

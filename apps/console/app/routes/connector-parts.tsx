@@ -213,12 +213,16 @@ export function Disconnect({
 /**
  * The sites that send their notes to a source, and where in it (FRU-399): read only. A site chooses
  * its places on the Sites screen, which the last line leads to.
+ *
+ * With `statuses`, each site also leads to its statuses page (FRU-478). That list was a block of its
+ * own, « Status of the pins », under this one: the same sites twice, one above the other.
  */
 export function SendersList({
   connector,
   sites,
   workspaceId,
   repositories,
+  statuses,
 }: {
   connector: Connector;
   sites: Listed<Site>;
@@ -228,6 +232,8 @@ export function SendersList({
    * word wins over the worker's, which can be older (FRU-382). Absent: not read, or not GitHub.
    */
   repositories?: readonly Repository[];
+  /** The words that say where the stage of each state is set. Present: each site links to its statuses. */
+  statuses?: string;
 }) {
   useLocale();
   const isPublic = (each: Destination): boolean => {
@@ -257,7 +263,22 @@ export function SendersList({
                 className="border-b border-line py-[8px] text-small"
                 data-site={new URL(site.origin).host}
               >
-                <p className="font-semibold [overflow-wrap:anywhere]">{siteLabel(site.origin)}</p>
+                <p className="flex items-baseline gap-[12px]">
+                  <span className="min-w-0 flex-1 font-semibold [overflow-wrap:anywhere]">
+                    {siteLabel(site.origin)}
+                  </span>
+                  {statuses === undefined ? null : (
+                    // The site is written just before: the link says « Statuses », and a screen reader
+                    // hears which site, the visible word first (WCAG 2.5.3).
+                    <LinkButton
+                      space="flush"
+                      to={`/w/${workspaceId}/sites/${site.id}/statuses`}
+                      label={t('Statuses of {site}', { site: siteLabel(site.origin) })}
+                    >
+                      {t('Statuses')}
+                    </LinkButton>
+                  )}
+                </p>
                 <ul className="flex flex-col">
                   {places.map((each, index) =>
                     each.connector === connector.id ? (
@@ -288,6 +309,7 @@ export function SendersList({
           })}
         </ul>
       </div>
+      {statuses === undefined ? null : <p className="mt-[8px] text-hint text-muted">{statuses}</p>}
       <p className="mt-[8px] text-hint text-muted">
         {t('Each site chooses where its notes go, on the Sites screen.')}{' '}
         <LinkButton space="inline" to={`/w/${workspaceId}/sites`}>

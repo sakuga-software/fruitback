@@ -16,5 +16,10 @@
     "skipLibCheck": true,
     "noEmit": true
   },
-  "include": ["./**/*.ts", "../playwright.config.ts", "../playwright.published.config.ts"]
+  "include": [
+    "./**/*.ts",
+    "../playwright.config.ts",
+    "../playwright.published.config.ts",
+    "../playwright.guide.config.ts"
+  ]
 }

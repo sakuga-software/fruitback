@@ -328,7 +328,12 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   workspace, its sections as links with `aria-current="page"` on the one on screen, and the way to
   the documentation. **The rail shows a section only when its screen exists**: `SECTIONS` lists the
   five of the mockup in its order, each with `built`, and
-  `frame.test.ts` holds `built` to the routes of a build, so no entry leads nowhere. « Notes » is
+  `frame.test.ts` holds `built` to the routes of a build, so no entry leads nowhere. **Each entry of
+  both rails has an icon** (FRU-477, Mathieu; no board draws them): `rail-icons.tsx` draws them as
+  every icon of the console is drawn, inline on a grid of 24, a stroke of 2 in `currentColor`, no
+  icon set and no request; 18 px, `aria-hidden`, after the drop of the entry on screen so they stay in
+  one column. « My workspaces » of the rail of the instance has an arrow to the start of the line
+  (FRU-476): it leaves the administration. « Notes » is
   there with `built: false`; `/kit/frame`, a page of the development server, mounts the rail with
   the five. **The name of the workspace opens a menu only when the person has several workspaces**:
   with one it is no button, and draws no chevrons. **The name of the workspace leads to its settings**
@@ -514,7 +519,9 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   whose count was not read says « Connected » and no number. On the chosen row the red is the
   strong accent: the accent is 4.28:1 on its tint. **The panel keeps what the mockup does not
   draw**: « Sites sending here », the sites that send there and their places in it, read only, with
-  a link to the Sites screen, where a site chooses them (FRU-399); the notes that did not arrive;
+  a link to the Sites screen, where a site chooses them (FRU-399), and for an owner or an admin of a
+  Linear, « Statuses » on the row of each site, to its statuses page (FRU-478: it was a block of its
+  own, « Status of the pins », which listed the same sites a second time); the notes that did not arrive;
   « Use an API key ». It does not show « Attach a picture of the element » (FRU-198), a count of
   notes by site nor « Last issue created » (FRU-237). **The drop of a status is beside its list**,
   where the

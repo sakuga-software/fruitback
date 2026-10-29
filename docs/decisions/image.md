@@ -397,14 +397,10 @@ What it took was mostly measuring, because four things the documentation said we
 
 ### The rules, in short
 
-- **A step a reader acts on has its picture**, taken from the build of the day, in the light scheme.
-  `docs/reviewing.md` shows the welcome page, the signed-out popup, the word on both sides, the popup
-  that asks to turn a site on, and a note being written; `docs/install.md` shows the card of the
-  script. The captures are cut from the e2e specs that already reach each state (`popup-sign-in`, `console-connect`,
-  `popup-new-site` for « Turn Fruitback on for this site? » with an account, `extension-welcome`, and
-  the composer of the playground for the note): take them again from there when a screen changes.
-  Before a capture, move the pointer off what was pressed: a button under it is drawn in its hover
-  colour.
+- **A step a reader acts on has its picture**, in the light scheme. Since FRU-486 the pictures of
+  `docs/reviewing.md` and `docs/install.md` are taken by `e2e/first-note.spec.ts`, never by hand:
+  `pnpm guide:captures`, and [onboarding.md](onboarding.md) « The guide » says how. The spec moves
+  the pointer off the page before a capture: a button under it is drawn in its hover colour.
 - **The colours of code blocks and quotes are ours, not the theme's.** Since FRU-417 the guides use
   no theme: `docs/assets/docs.css` draws the code on `#1c1917` with its own Rouge palette, and each
   colour holds 4.5:1 at least on it. `docs-site.test.ts` computes each ratio. Before FRU-417,
