@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { type Locator, type Page, expect, test } from '@playwright/test';
-import { WORKER_ORIGIN, openPlayground, plantPin } from './pin.ts';
+import { caseOf, WORKER_ORIGIN, openPlayground, plantPin } from './pin.ts';
 
 /**
  * The dock of the mock-up of 2026-10-20 (FRU-303): one capsule that holds the detached notes, the
@@ -16,8 +16,7 @@ const IIFE = 'packages/widget/dist/fruitback.iife.js';
 
 /** The widget as `init` assembles it, from the built script: the playground has no button of the list. */
 async function mount(page: Page, testCase: string, locale = 'en-US', messages?: Record<string, string>) {
-  const attempt = test.info().retry;
-  await page.goto(`/?widget=off&case=${attempt === 0 ? testCase : `${testCase}-retry${attempt}`}`);
+  await page.goto(`/?widget=off&case=${caseOf(testCase)}`);
   await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
   await page.addScriptTag({ path: IIFE });
   await page.evaluate(

@@ -1,5 +1,5 @@
 import { type Page, expect, test } from '@playwright/test';
-import { WORKER_ORIGIN } from './pin.ts';
+import { caseOf, WORKER_ORIGIN } from './pin.ts';
 
 /**
  * The widget on a touch screen (FRU-157), as `init` assembles it, at 390 px.
@@ -16,7 +16,7 @@ const MINIMUM = 24;
 const COMFORTABLE = 44;
 
 async function mount(page: Page, testCase: string, locale = 'en-US'): Promise<void> {
-  await page.goto(`/?widget=off&case=${testCase}-${test.info().retry}`);
+  await page.goto(`/?widget=off&case=${caseOf(testCase)}`);
   await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
   await page.addScriptTag({ path: IIFE });
   await page.evaluate(

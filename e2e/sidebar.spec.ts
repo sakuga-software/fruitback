@@ -163,7 +163,7 @@ test('the list is the board « Sidebar mode »: its measures, its chips, its sea
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await statesOfTheMockUp(page);
-  await mount(page, `sidebar-measures-${test.info().retry}`);
+  await mount(page, 'sidebar-measures');
   await eightNotes(page);
   const dock = page.locator('.fruitback-dock');
   await page.getByRole('button', { name: 'Show every note in a sidebar' }).click();

@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { type Page, expect, test } from '@playwright/test';
-import { WORKER_ORIGIN } from './pin.ts';
+import { caseOf, WORKER_ORIGIN } from './pin.ts';
 
 /**
  * Where a note goes (FRU-123), on the widget as `init` assembles it: the line at the foot of the
@@ -66,8 +66,7 @@ async function asMember(
 }
 
 async function mount(page: Page, testCase: string): Promise<void> {
-  const attempt = test.info().retry;
-  await page.goto(`/?widget=off&case=${attempt === 0 ? testCase : `${testCase}-retry${attempt}`}`);
+  await page.goto(`/?widget=off&case=${caseOf(testCase)}`);
   await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
   await page.addScriptTag({ path: IIFE });
   const read = page.waitForResponse((response) => response.url().startsWith(`${WORKER_ORIGIN}/feedback?url=`));

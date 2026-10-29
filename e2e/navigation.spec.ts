@@ -1,5 +1,5 @@
 import { type Page, expect, test } from '@playwright/test';
-import { WORKER_ORIGIN } from './pin.ts';
+import { caseOf, WORKER_ORIGIN } from './pin.ts';
 
 /**
  * A note written on one page and sent after the page changed its address (FRU-152).
@@ -38,7 +38,7 @@ async function navigateTo(page: Page, path: string): Promise<void> {
 }
 
 test('a note sent after a navigation goes to the page where it was written', async ({ page }) => {
-  const testCase = `navigation-${test.info().retry}`;
+  const testCase = caseOf('navigation');
   await mount(page, testCase);
   const note = 'Written on the pricing page';
 
