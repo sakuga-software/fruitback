@@ -41,14 +41,25 @@ function needed(names: readonly string[]): string[] {
   return [...directories].filter((directory) => existsSync(join(styles, `${directory}.css`))).sort();
 }
 
-function importedByKit(): string[] {
-  const kit = readFileSync(join(app, 'app', 'ui.tsx'), 'utf8');
-  const list = /import \{([^}]*)\} from '@heroui\/react';/.exec(kit)?.[1] ?? '';
+/**
+ * The components that `source` imports from `@heroui/react`, from every import statement of the
+ * package. Any other form of import from it (default, namespace, `export … from`) throws: its
+ * components could not be listed.
+ */
+function importedBy(source: string): string[] {
+  const statements = [...source.matchAll(/^import (type )?\{([^}]*)\} from '@heroui\/react';$/gm)];
+  const mentions = source.match(/from '@heroui\/react'/g)?.length ?? 0;
+  assert.equal(mentions, statements.length, 'ui.tsx imports @heroui/react in a form this guard cannot list');
 
-  return list
-    .split(',')
+  return statements
+    .filter((statement) => statement[1] === undefined)
+    .flatMap((statement) => (statement[2] as string).split(','))
     .map((each) => each.trim().split(/\s+as\s+/)[0] as string)
     .filter((each) => each !== '' && !each.startsWith('type '));
+}
+
+function importedByKit(): string[] {
+  return importedBy(readFileSync(join(app, 'app', 'ui.tsx'), 'utf8'));
 }
 
 /** The component styles that `app.css` imports, in its order. */
@@ -85,6 +96,23 @@ describe('the styles of HeroUI in the console (FRU-492)', () => {
       JSON.parse(readFileSync(join(app, 'package.json'), 'utf8')) as { dependencies: Record<string, string> }
     ).dependencies['@heroui/styles'];
     assert.equal(ours, wanted);
+  });
+
+  it('lists the components of every import statement of @heroui/react, not of the first only', () => {
+    const two =
+      "import { Button, Input } from '@heroui/react';\nimport { x } from 'react';\nimport {\n  Tabs as HeroTabs,\n  type Key,\n} from '@heroui/react';\n";
+    assert.deepEqual(importedBy(two), ['Button', 'Input', 'Tabs']);
+    assert.deepEqual(importedBy("import type { Key } from '@heroui/react';"), []);
+  });
+
+  it('refuses a form of import of @heroui/react that it cannot list', () => {
+    for (const form of [
+      "import * as Hero from '@heroui/react';",
+      "import Hero from '@heroui/react';",
+      "export { Tabs } from '@heroui/react';",
+    ]) {
+      assert.throws(() => importedBy(`import { Button } from '@heroui/react';\n${form}`), /cannot list/);
+    }
   });
 
   it('asks for the style of a component that the kit would start to import (the control)', () => {
