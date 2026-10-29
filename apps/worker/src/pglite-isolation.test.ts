@@ -4,7 +4,7 @@ import { afterAll, describe, it } from 'vitest';
 import { PGlite, types } from '@electric-sql/pglite';
 import { INITDB_FILE, databaseOn, migratedDatabaseOn, newPglite, shapeOf, startPglite } from './pglite.fixture.ts';
 import { type Row, journalDates, rowsOf, withoutOwnerRule } from './postgres.fixture.ts';
-import { migrate } from './postgres-migrate.ts';
+import { migrate, migrated } from './postgres-migrate.ts';
 import type { PgDatabase } from './postgres.ts';
 
 /**
@@ -135,11 +135,15 @@ describe('a migrated database of PGlite, from one case to the next (FRU-339)', (
       'DELETE FROM __drizzle_migrations WHERE id = (SELECT max(id) FROM __drizzle_migrations)',
     ],
     ['a row in the journal that is changed', `UPDATE __drizzle_migrations SET hash = 'other' WHERE id = 1`],
+    [
+      'a change with the triggers off',
+      ['SET session_replication_role = replica', 'ALTER TABLE kv ADD COLUMN extra text'],
+    ],
   ] as const) {
     it(`gives the migrated schema again after ${what}`, async () => {
       const changed = await migratedDatabaseOn(instance);
       await writeSomething(changed);
-      await rowsOf(changed, change);
+      for (const statement of typeof change === 'string' ? [change] : change) await rowsOf(changed, statement);
       assert.notEqual(await shapeOf(instance), reference, 'the shape sees the change');
       await changed.close();
 
@@ -149,6 +153,26 @@ describe('a migrated database of PGlite, from one case to the next (FRU-339)', (
       assert.deepEqual(await writeSomething(next), [{ id: 1 }]);
     });
   }
+
+  // FRU-480. A store calls `migrated`, which sends `CREATE TABLE IF NOT EXISTS` for its journal: no
+  // change. The next case empties the tables, and the tables are the same ones.
+  it('keeps the same tables from one case to the next, when a case applied what was already applied', async () => {
+    const oidOfKv = async (database: PgDatabase) =>
+      (await rowsOf(database, `SELECT 'kv'::regclass::oid::int AS oid`))[0]?.oid;
+    const first = await migratedDatabaseOn(instance);
+    await migrated(first);
+    await writeSomething(first);
+    const before = await oidOfKv(first);
+
+    const next = await migratedDatabaseOn(instance);
+    assert.equal(await oidOfKv(next), before);
+    assert.deepEqual((await rowsOf(next, 'SELECT id FROM "user"')).length, 0);
+    assert.deepEqual(await writeSomething(next), [{ id: 1 }]);
+
+    // The control: a change of the schema gives new tables.
+    await rowsOf(next, 'ALTER TABLE kv ADD COLUMN extra text');
+    assert.notEqual(await oidOfKv(await migratedDatabaseOn(instance)), before);
+  });
 
   it('keeps the trigger of the last owner on, as the migrations leave it', async () => {
     const database = await migratedDatabaseOn(instance);

@@ -10,7 +10,12 @@ import {
   turn,
 } from './conformance.fixture.ts';
 import type { Database } from './postgres.ts';
-import { NO_REAL_POSTGRES, createMigratedPgliteDatabase, createRealDatabase, onDatabase } from './postgres.fixture.ts';
+import {
+  NO_REAL_POSTGRES,
+  createMigratedPgliteDatabase,
+  createMigratedRealDatabase,
+  onDatabase,
+} from './postgres.fixture.ts';
 import type { RotationOutcome, SessionIdentity, SessionStore } from './session.ts';
 import { sessionCases } from './session-conformance.fixture.ts';
 import { createPostgresSessionStore } from './session-postgres.ts';
@@ -33,7 +38,7 @@ const SUBJECTS: Subject<SessionStore>[] = [
   onDatabase(
     'the PostgreSQL session store, on a real server',
     'createPostgresSessionStore',
-    createRealDatabase,
+    createMigratedRealDatabase,
     createPostgresSessionStore,
     NO_REAL_POSTGRES,
   ),

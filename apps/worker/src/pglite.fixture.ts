@@ -203,10 +203,85 @@ const SHAPE = `
     SELECT format('migration:%s:%s', m.hash, m.created_at) FROM public.__drizzle_migrations m
   ) AS lines`;
 
-/** What `migratedDatabaseOn` knows of the migrated database of an instance. */
-type Migrated = { shape: string; tables: string[] };
+/**
+ * What `migratedDatabaseOn` knows of the migrated database of an instance: the statements that empty
+ * its tables, and the rows of its journal.
+ */
+type Migrated = { empty: string; journal: string };
 
 const migratedOf = new WeakMap<PGlite, Migrated>();
+
+/**
+ * The setting that says the schema of an instance is still the one `migrate` made (FRU-480). Its
+ * value is a token that only this file writes: the event triggers of `UNTOUCHED_ON_DDL` set it to
+ * `''` at the end of any command that changes the schema, and `RESET ALL` sets it back to nothing.
+ * Each of the two then reads as « changed ».
+ */
+const UNTOUCHED = 'fruitback_test.untouched';
+const UNTOUCHED_TOKEN = 'migrated';
+
+/**
+ * The event triggers that mark the schema as changed, on any instance they are created on.
+ *
+ * They fire at the end of every command that an event trigger sees (`CREATE`, `ALTER`, `COMMENT`,
+ * `GRANT`, `REVOKE`) and on every `DROP`, on any object of the database. Not on `TRUNCATE`, which
+ * changes no schema, and not on a command that changed nothing: `migrated` sends
+ * `CREATE TABLE IF NOT EXISTS` for its journal at each call, and that must not undo the next reset
+ * (measured: each case of a file then applied every migration again). `ENABLE ALWAYS`: they fire
+ * under `session_replication_role = replica` too. A setting set in a transaction that rolls back goes
+ * back with it, as the change of the schema does. Their functions are in `pg_catalog`, which no
+ * `DROP SCHEMA` of a case removes and no catalogue of `public` reads.
+ */
+const UNTOUCHED_ON_DDL = `
+  CREATE OR REPLACE FUNCTION pg_catalog.fruitback_test_changed() RETURNS event_trigger
+    LANGUAGE plpgsql AS $$ BEGIN
+      IF EXISTS (SELECT FROM pg_event_trigger_ddl_commands()) THEN
+        PERFORM set_config('${UNTOUCHED}', '', false);
+      END IF;
+    END $$;
+  CREATE OR REPLACE FUNCTION pg_catalog.fruitback_test_dropped() RETURNS event_trigger
+    LANGUAGE plpgsql AS $$ BEGIN PERFORM set_config('${UNTOUCHED}', '', false); END $$;
+  DO $$ BEGIN
+    IF NOT EXISTS (SELECT FROM pg_event_trigger WHERE evtname = 'fruitback_test_changed') THEN
+      CREATE EVENT TRIGGER fruitback_test_changed ON ddl_command_end
+        EXECUTE FUNCTION pg_catalog.fruitback_test_changed();
+      ALTER EVENT TRIGGER fruitback_test_changed ENABLE ALWAYS;
+      CREATE EVENT TRIGGER fruitback_test_dropped ON sql_drop
+        EXECUTE FUNCTION pg_catalog.fruitback_test_dropped();
+      ALTER EVENT TRIGGER fruitback_test_dropped ENABLE ALWAYS;
+    END IF;
+  END $$;`;
+
+/** The rows of the journal of the migrations, in one line. */
+const JOURNAL = `SELECT coalesce(string_agg(format('%s:%s:%s', id, hash, created_at), ',' ORDER BY id), '') AS journal
+  FROM public.__drizzle_migrations`;
+
+/**
+ * The statements that empty `tables` and start their identities again, as
+ * `TRUNCATE … RESTART IDENTITY CASCADE` does, in 1 ms instead of 20 (measured on PGlite 0.5.11, 36
+ * tables). `TRUNCATE` gives each table a new file; `DELETE` of a few rows writes little.
+ *
+ * The triggers are off while it runs (`session_replication_role = replica`): every table is emptied,
+ * so no foreign key and no rule of the last owner has a row to hold. Each sequence that a table owns
+ * starts again from its first value; `setval` changes no catalogue.
+ */
+async function emptyingOf(instance: PGlite, tables: string[]): Promise<string> {
+  const { rows } = await instance.query<{ restart: string }>(
+    `SELECT format('SELECT setval(%L, %s, false);', s.seqrelid::regclass, s.seqstart) AS restart
+       FROM pg_sequence s
+       JOIN pg_depend d ON d.classid = 'pg_class'::regclass AND d.objid = s.seqrelid AND d.deptype IN ('a', 'i')
+       JOIN pg_class t ON t.oid = d.refobjid
+      WHERE t.relnamespace = 'public'::regnamespace AND t.relname <> '__drizzle_migrations'
+      ORDER BY 1`,
+  );
+
+  return [
+    'SET session_replication_role = replica;',
+    ...tables.map((table) => `DELETE FROM ${table};`),
+    'SET session_replication_role = DEFAULT;',
+    ...rows.map((row) => row.restart),
+  ].join(' ');
+}
 
 /** The tables of `public` but the journal, quoted. */
 async function tablesOf(instance: PGlite): Promise<string[]> {
@@ -245,21 +320,26 @@ async function anyRow(instance: PGlite, tables: string[]): Promise<boolean> {
  *
  * Applying the migrations takes 50 ms on PGlite, and emptying `public` 14 ms more (measured): most
  * of a case on a store. So the first call applies them with `migrate` of `postgres-migrate.ts`, on an
- * empty `public`, and keeps the shape of the result. Each call after empties the tables
- * (`TRUNCATE … RESTART IDENTITY`) and keeps the journal: about 15 ms with the read of the shape.
+ * empty `public`. Each call after empties the tables (`emptyingOf`) and keeps the journal: about 1 ms.
  *
- * A case may change the schema: add a constraint, rename or drop a table, turn a trigger off. The
- * next call reads the shape again, and when it is not the kept one, it empties `public` and applies
- * the migrations again. The same when a migration leaves a row in a table: no call then truncates.
+ * A case may change the schema: add a constraint, rename or drop a table, turn a trigger off. An
+ * event trigger then marks the instance (`UNTOUCHED_ON_DDL`), and the next call empties `public` and
+ * applies the migrations again. The same when a case changes a row of the journal, which no event
+ * trigger sees: the call reads the journal and compares it. And when a migration leaves a row in a
+ * table: no call then empties the tables alone. FRU-480: the check read the whole catalogue of
+ * `public` before (`shapeOf`, 7 ms a call); the tests of `pglite-isolation.test.ts` still compare it.
  *
  * The state of the session goes back too: `RESET ALL`, its temporary tables, its advisory locks.
  * `close` leaves the tables as they are: the next call empties them, whichever kind it is.
  */
 export async function migratedDatabaseOn(instance: PGlite): Promise<PgDatabase> {
-  await instance.exec('RESET ALL; DISCARD TEMP; SELECT pg_advisory_unlock_all(); SET search_path TO "public";');
   const known = migratedOf.get(instance);
-  if (known !== undefined && (await shapeOf(instance)) === known.shape) {
-    await instance.exec(`TRUNCATE ${known.tables.join(', ')} RESTART IDENTITY CASCADE`);
+  const { rows } = await instance.query<{ untouched: boolean }>(
+    `SELECT current_setting('${UNTOUCHED}', true) IS NOT DISTINCT FROM '${UNTOUCHED_TOKEN}' AS untouched`,
+  );
+  await instance.exec('RESET ALL; DISCARD TEMP; SELECT pg_advisory_unlock_all(); SET search_path TO "public";');
+  if (known !== undefined && rows[0]?.untouched === true && (await journalOf(instance)) === known.journal) {
+    await instance.exec(`${known.empty} SELECT set_config('${UNTOUCHED}', '${UNTOUCHED_TOKEN}', false);`);
 
     return wrap(instance, 'public', async () => {});
   }
@@ -268,10 +348,21 @@ export async function migratedDatabaseOn(instance: PGlite): Promise<PgDatabase> 
   const fresh = await databaseOn(instance);
   await migrate(fresh);
   const tables = await tablesOf(instance);
-  const shape = await shapeOf(instance);
-  if (shape !== undefined && tables.length > 0 && !(await anyRow(instance, tables))) {
-    migratedOf.set(instance, { shape, tables });
+  const journal = await journalOf(instance);
+  if (journal !== undefined && tables.length > 0 && !(await anyRow(instance, tables))) {
+    await instance.exec(UNTOUCHED_ON_DDL);
+    migratedOf.set(instance, { empty: await emptyingOf(instance, tables), journal });
+    await instance.exec(`SELECT set_config('${UNTOUCHED}', '${UNTOUCHED_TOKEN}', false);`);
   }
 
   return wrap(instance, 'public', async () => {});
+}
+
+/** The rows of the journal of `instance`, in one line, or `undefined` when it has no journal. */
+async function journalOf(instance: PGlite): Promise<string | undefined> {
+  try {
+    return (await instance.query<{ journal: string }>(JOURNAL)).rows[0]?.journal;
+  } catch {
+    return undefined;
+  }
 }

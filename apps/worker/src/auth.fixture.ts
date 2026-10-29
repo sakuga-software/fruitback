@@ -8,6 +8,7 @@ import {
   NO_REAL_POSTGRES,
   createMigratedPgliteDatabase,
   createPgliteDatabase,
+  createMigratedRealDatabase,
   createRealDatabase,
   rowsOf,
 } from './postgres.fixture.ts';
@@ -166,12 +167,12 @@ export const DATABASES: readonly { label: string; open: () => Promise<PgDatabase
 ];
 
 /**
- * `DATABASES`, with the PGlite one migrated before the case (FRU-339): for a case whose subject is
- * not the migrations. The real server is the same: there each case still applies every migration.
+ * `DATABASES`, migrated before the case (FRU-339, FRU-480): for a case whose subject is not the
+ * migrations. On the real server, each case gets a copy of a migrated database.
  */
 export const MIGRATED_DATABASES: typeof DATABASES = [
   { label: 'PGlite', open: createMigratedPgliteDatabase, skip: false },
-  ...DATABASES.slice(1),
+  { label: 'a real server', open: createMigratedRealDatabase, skip: NO_REAL_POSTGRES },
 ];
 
 /**

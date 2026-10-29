@@ -26,6 +26,7 @@ import {
   TEST_DATABASE_URL,
   createPgliteDatabase,
   createRealDatabase,
+  makeMigratedTemplate,
   ownDatabase,
   rowsOf,
 } from './postgres.fixture.ts';
@@ -895,5 +896,38 @@ describe('the PostgreSQL of the tests', () => {
       TEST_DATABASE_URL !== undefined,
       'FRUITBACK_TEST_POSTGRES=required, and FRUITBACK_TEST_DATABASE_URL is not set',
     );
+  });
+});
+
+/** The databases of this process on the server, by the names that `databaseName` gives. */
+async function databasesOfThisProcess(): Promise<string[]> {
+  const admin = createPgDatabase(TEST_DATABASE_URL as string, 'public', { max: 1 });
+  try {
+    const rows = await rowsOf(admin, sql`SELECT datname FROM pg_database WHERE datname ~ ${`^t_${process.pid}_`}`);
+
+    return rows.map((row) => String(row.datname)).toSorted();
+  } finally {
+    await admin.close();
+  }
+}
+
+describe('the migrated template of a process (FRU-480)', { skip: NO_REAL_POSTGRES !== false }, () => {
+  it('drops its database when the migrations fail on it, and leaves none behind', async () => {
+    const before = await databasesOfThisProcess();
+    await assert.rejects(
+      makeMigratedTemplate(async () => {
+        throw new Error('a migration that fails');
+      }),
+      /a migration that fails/,
+    );
+    assert.deepEqual(await databasesOfThisProcess(), before);
+  });
+
+  it('gives a database with every migration, and its drop removes it', async () => {
+    const before = await databasesOfThisProcess();
+    const template = await makeMigratedTemplate();
+    assert.deepEqual(await databasesOfThisProcess(), [...before, template.name].toSorted());
+    await template.drop();
+    assert.deepEqual(await databasesOfThisProcess(), before);
   });
 });
