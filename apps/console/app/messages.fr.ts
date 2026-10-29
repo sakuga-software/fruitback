@@ -1445,4 +1445,30 @@ export const FRENCH: Readonly<Record<string, string>> = {
   '1 call of an agent did not arrive': '1 appel d’un agent n’est pas arrivé',
   '{count} calls of an agent did not arrive': '{count} appels d’un agent ne sont pas arrivés',
   'The addresses of the workspace did not load.': 'Les adresses du workspace ne se sont pas chargées.',
+
+  // The guide of the extension, under step 3 of the setup (FRU-486). The names of the controls of the
+  // extension read as the extension draws them in French: `guide-steps.test.ts` compares them.
+  'The extension, step by step': 'L’extension, pas à pas',
+  'Captures of the extension {version}': 'Captures de l’extension {version}',
+  'Install the extension. A Fruitback tab opens: choose {signIn} there.':
+    'Installez l’extension. Un onglet Fruitback s’ouvre : choisissez-y {signIn}.',
+  'The tab that opens at install, with Sign in with email':
+    'L’onglet qui s’ouvre à l’installation, avec Se connecter par e-mail',
+  'A tab of the console opens with a word. Check that the Fruitback tab shows the same word, then press {connect}.':
+    'Un onglet de la console s’ouvre avec un mot. Vérifiez que l’onglet Fruitback affiche le même mot, puis appuyez sur {connect}.',
+  'The console shows the word to check, and Connect Chrome':
+    'La console affiche le mot à vérifier, et Connecter Chrome',
+  'Back on the Fruitback tab, press {turnOn}. Chrome asks once for access to that site: allow it.':
+    'De retour sur l’onglet Fruitback, appuyez sur {turnOn}. Chrome demande une fois l’accès à ce site : autorisez-le.',
+  'The Fruitback tab, signed in, with Turn on and the address of the site':
+    'L’onglet Fruitback, connecté, avec Activer sur et l’adresse du site',
+  'The site opens, ready for a note: click the part of the page it is about, write what should change, then send it.':
+    'Le site s’ouvre, prêt pour une note : cliquez sur la partie de la page qu’elle concerne, écrivez ce qui doit changer, puis envoyez-la.',
+  'A note written on an element of the site': 'Une note écrite sur un élément du site',
+  'Later, the Fruitback icon in the toolbar opens the same tools on any site of your team: {leave} starts a note.':
+    'Plus tard, l’icône Fruitback de la barre d’outils ouvre les mêmes outils sur tout site de votre équipe : {leave} commence une note.',
+  'The popup on a site that is on, with Leave feedback':
+    'La fenêtre de Fruitback sur un site activé, avec Laisser une note',
+  'Sign in with email': 'Se connecter par e-mail',
+  'Turn on {site}': 'Activer sur {site}',
 };

@@ -106,21 +106,51 @@ site is fixed too (FRU-482): signed out, it offers the sign-in there as well.
 
 ### The rules, in short
 
-- **The captures of the guide come from a spec, never from a hand** (FRU-486). The spec walks the
-  real path and writes each capture under a stable name. The release of the extension runs it on the
-  tag and opens a pull request with the captures that changed.
-- **The captures are taken on the `sakuga-mac` runners**: their fonts are the fonts of the mockups,
-  and of the machine of the person who reads the guide most.
-- **One source for the words**: step 3 of the setup and `docs/reviewing.md` show the same steps.
-- **A guard holds the names**: a test fails when a step of the guide names a control that the built
-  extension no longer draws. `reviewing-doc.test.ts` holds the words of the popup that the guide
-  quotes today; the images have no guard.
+- **The captures of the guide come from a spec, never from a hand** (FRU-486). `first-note.spec.ts`
+  walks the path above and captures each step on the way, under the name of the step:
+  `docs/assets/guide/<step>.png`. No second walk: the guide shows the path that is measured, and CI
+  pays no second run of it. `pnpm guide:captures` writes the captures that changed, and only those.
+- **The captures are taken on a Mac of the `sakuga-mac` pool**: their fonts are the fonts of the
+  mockups, and of the machine of the person who reads the guide most. On another system the fonts
+  differ, and so would the captures.
+- **One source for the words**: `apps/console/app/guide-steps.ts`. Step 3 of the setup shows it, in
+  English and in French; `docs/reviewing.md` holds a copy of it in English, between
+  `<!-- guide:start -->` and `<!-- guide:end -->`, that `guide-steps.test.ts` holds to the source.
+- **A guard holds the names**: before each capture, the spec finds each control that the step names,
+  by its role and its accessible name, on the built extension or the console. A renamed button fails
+  the spec in every run of CI, where the captures go to the output of the test and not to the
+  repository. `guide-steps.test.ts` checks the same names in the sources, and that the French of the
+  guide is the French of the extension.
 
-### What exists today
+### What the guide is
 
-`docs/reviewing.md` shows five captures (`docs/assets/guide-*.png`), made by hand for FRU-322 on
-2026-10-20. Step 3 of the setup shows no guide: one sentence (« Add it, then connect this browser: a
-page opens, and you click the Fruitback icon there ») and two buttons.
+**Five steps, folded under the two cards of step 3** (`setup-guide.tsx`), with the version of the
+extension that took the captures: the welcome page and « Sign in with email », the word in the console
+and « Connect Chrome », « Turn on <site> », the note on the site, and the popup on a site that is on
+with « Leave feedback ». Folded, as the ticket proposed: the cards stay the first thing of the step,
+and the guide is one click away for who wants it. Under the cards and not inside the card « Browser
+extension »: the column of the setup is narrow, and a capture inside the card would be smaller still.
+Measured at 1440 px: the column draws a capture 292 px wide, about half of its size, so a click on a
+capture opens it whole in a tab. **On Fruitback Cloud only**: the guide walks the sign-in of the
+Cloud, and a self-hosted console connects a browser by a pairing link.
+
+**What varies is replaced before a capture**: the word of the sign-in (`PLUM 42`), the id of the site
+in the script tag and its addresses (those of the Cloud, `app.` and `api.fruitback.com`, for the ones
+of the test), and the text of the note. Each box is read until it stops moving: the composer opens
+with a motion, and a box read in its middle cut the capture short in some runs. A capture then changes only when a screen does. A
+capture that differs by at most 0.2 % of its pixels is the same capture (`maxDiffPixelRatio` of
+`toHaveScreenshot`).
+
+**The console serves a copy of the captures**, `apps/console/public/guide/`, because its image is
+built from `apps/` and `packages/` alone: a `COPY` of `docs/` would change its Dockerfile and the
+paths that build the images in CI. `guide-steps.test.ts` holds the copy to the docs byte for byte. The
+version is in their address, so a browser reads the captures of a new release.
+
+**The captures in French**: none. The captures are of the extension in English, and the French guide
+names the controls in French, as the extension draws them for a French browser.
+
+Before FRU-486, `docs/reviewing.md` showed five captures made by hand for FRU-322 on 2026-10-20
+(`docs/assets/guide-*.png`, removed), and step 3 of the setup showed no guide.
 
 ## The questions
 
@@ -140,8 +170,8 @@ page opens, and you click the Fruitback icon there ») and two buttons.
    there « Turn on » is the act of somebody who may come to read the notes first, and « Leave
    feedback » is one click away on the screen that follows. Measured: pressing it for them there
    broke fifteen specs that turn a site on from the popup and expect the widget at rest.
-3. **Where does the guide show?** (FRU-486) The default of the ticket: folded under the card
-   « Browser extension » of step 3, not on a page of its own.
+3. **Where does the guide show?** (FRU-486) Folded under the cards of step 3, not on a page of its
+   own: see « What the guide is ».
 
 ## The tickets
 
@@ -151,5 +181,5 @@ page opens, and you click the Fruitback icon there ») and two buttons.
 | FRU-483 | The welcome page offers « Turn on <site> » and opens the site                | Done  |
 | FRU-484 | The pin is a tip                                                             | Done  |
 | FRU-485 | The first activation opens the choice of an element                          | Done  |
-| FRU-486 | The guide on the setup page, its captures made again at each release         | Todo  |
+| FRU-486 | The guide on the setup page, its captures made again at each release         | Doing |
 | FRU-487 | The console talks to the extension of the same browser                       | Todo  |

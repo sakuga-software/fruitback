@@ -1,7 +1,8 @@
 import fs from 'node:fs';
 import { type Page, expect } from '@playwright/test';
 import { CONSOLE, type Worker, cloudWorker, finished, linkIn, served } from './cloud-worker.ts';
-import { PLAYGROUND_ORIGIN, openPopup, test } from './extension.ts';
+import { BUILT_EXTENSION, PLAYGROUND_ORIGIN, openPopup, test } from './extension.ts';
+import { capture, capturesNow, recordCaptures } from './guide.ts';
 import { badgeFor } from './pin.ts';
 import { AUTHENTICATED_WORKER_ORIGIN } from './worker-sessions.ts';
 
@@ -14,6 +15,11 @@ test.use({ keepWelcome: true });
  * Each action of the person is written down with the place it happens. The steps that only Chrome
  * draws (the store, the pin, the prompt for the access to a site) cannot be driven: they are written
  * down as `chrome`, and counted, not done.
+ *
+ * The same walk takes the captures of the guide (FRU-486, `guide.ts`): each control that a step of
+ * the guide names is checked on its page, then the part of the page it shows is captured. What
+ * varies from a run to the next (the word, the id of the site) is replaced on the page before a
+ * capture, so a capture changes only when a screen does.
  */
 
 type Place = 'console' | 'mail' | 'store' | 'chrome' | 'welcome' | 'popup' | 'site' | 'tab';
@@ -46,6 +52,7 @@ test('a first user goes from the setup to a first note (FRU-481)', async ({ exte
   // In the test: a retry starts from an empty list.
   const actions: Action[] = [];
   const did = (place: Place, what: string): void => void actions.push({ place, what });
+  const before = capturesNow();
   test.setTimeout(120_000);
   worker = await cloudWorker();
   const { context } = extension;
@@ -94,6 +101,16 @@ test('a first user goes from the setup to a first note (FRU-481)', async ({ exte
   const card = goesOn
     .locator('.kit-option')
     .filter({ has: goesOn.getByRole('heading', { name: 'Browser extension' }) });
+  // The card of the script tag, for `docs/install.md`. The id of the site is new at each run, and the
+  // addresses are the ones of the test: the capture shows those of Fruitback Cloud.
+  const scriptCard = goesOn.locator('.kit-option').filter({ has: goesOn.getByRole('heading', { name: 'Script tag' }) });
+  await scriptCard.getByRole('region', { name: 'Script tag' }).evaluate((snippet) => {
+    snippet.textContent = (snippet.textContent ?? '')
+      .replaceAll(/site_[\w-]+/g, 'site_8f3k2m')
+      .replaceAll('http://localhost:5178', 'https://app.fruitback.com')
+      .replaceAll('http://localhost:8788', 'https://api.fruitback.com');
+  });
+  await capture(goesOn, 'script', [scriptCard], 12);
   // The store is Chrome's: its tab opens, and goes no further here.
   await context.route('https://chromewebstore.google.com/**', (route) => route.abort());
   const storeOpens = context.waitForEvent('page');
@@ -108,11 +125,13 @@ test('a first user goes from the setup to a first note (FRU-481)', async ({ exte
   const welcome = context.pages().find((page) => page.url() === welcomeUrl);
   expect(welcome, 'the welcome page').toBeDefined();
   await welcome!.screenshot({ path: test.info().outputPath('04-welcome.png') });
+  await capture(welcome!, 'welcome', [welcome!.locator('main.welcome')]);
   // Pinning Fruitback is a tip of the page, and no step of this path needs it (FRU-484).
 
   // The popup on the welcome page, a page that is not a site, offers the sign-in too (FRU-482).
   const onWelcome = await openPopup(extension, welcome!);
   await expect(onWelcome.getByRole('button', { name: 'Sign in with email' })).toHaveCount(1);
+  await capture(onWelcome, 'popup-sign-in', [onWelcome.locator('.popup')], 0);
   await onWelcome.close();
 
   // The welcome page signs in itself: the console opens in a tab, and the word is the same in both.
@@ -125,6 +144,15 @@ test('a first user goes from the setup to a first note (FRU-481)', async ({ exte
   await expect(connect.getByText(word, { exact: true })).toBeVisible({ timeout: 15_000 });
   await welcome!.screenshot({ path: test.info().outputPath('05-welcome-word.png') });
   await connect.screenshot({ path: test.info().outputPath('06-connect.png') });
+  // The word is drawn at random: the capture shows the same one at each run.
+  await connect.getByText(word, { exact: true }).evaluate((shown) => (shown.textContent = 'PLUM 42'));
+  await capture(connect, 'word', [
+    connect.getByRole('heading', { name: 'Connect this browser' }),
+    connect.getByText('PLUM 42', { exact: true }),
+    connect
+      .getByRole('button', { name: 'Use another address' })
+      .or(connect.getByRole('link', { name: 'Use another address' })),
+  ]);
   const approve = connect.getByRole('button', { name: /^Connect/ });
   const approveName = (await approve.innerText()).trim();
   await approve.click();
@@ -139,6 +167,7 @@ test('a first user goes from the setup to a first note (FRU-481)', async ({ exte
   const turnOn = welcome!.getByRole('button', { name: 'Turn on localhost:5177' });
   await expect(turnOn).toBeVisible({ timeout: 15_000 });
   await welcome!.screenshot({ path: test.info().outputPath('08-welcome-turn-on.png') });
+  await capture(welcome!, 'turn-on', [welcome!.locator('main.welcome')]);
   // The playground mounts a widget of its own unless its address says `widget=off`. Its root, as
   // the welcome page opens it, says so before the page reads it: only the widget of the extension
   // is left, and the choice it opens stays open (a reload would close it).
@@ -165,9 +194,14 @@ test('a first user goes from the setup to a first note (FRU-481)', async ({ exte
   await site.screenshot({ path: test.info().outputPath('09-site-on.png') });
   await site.locator('[data-testid="card-espresso"] .add').click();
   did('site', 'click the element of the page');
-  const note = `First note ${Date.now()}: the price is hard to read.`;
+  // The worker of this test is its own: the text needs no mark of the run.
+  const note = 'The price is hard to read.';
   await site.getByPlaceholder('What should change?').fill(note);
   did('site', 'type the note');
+  await capture(site, 'note', [
+    site.locator('[data-testid="card-espresso"]'),
+    site.getByRole('dialog', { name: 'New note' }),
+  ]);
   await site.getByRole('button', { name: 'Send', exact: true }).click();
   did('site', 'click « Send »');
   await expect(site.getByRole('dialog', { name: 'New note' })).toBeHidden({ timeout: 15_000 });
@@ -179,6 +213,14 @@ test('a first user goes from the setup to a first note (FRU-481)', async ({ exte
   // A second load does not open the choice again: it opens at the first activation only.
   await expect(site.getByRole('button', { name: 'Leave feedback' })).toBeVisible();
   await expect(site.locator('[data-fruitback-host]')).not.toHaveAttribute('data-fruitback-capturing');
+
+  // The popup on the site that is on, for the last step of the guide: after the path, which it is not part of.
+  const popup = await openPopup(extension, site);
+  await capture(popup, 'popup', [popup.locator('.popup')], 0);
+  await popup.close();
+  const manifest = JSON.parse(fs.readFileSync(`${BUILT_EXTENSION}/manifest.json`, 'utf8')) as { version: string };
+  const changed = recordCaptures(before, manifest.version);
+  if (changed.length > 0) console.log(`The captures of the guide that changed: ${changed.join(', ')}`);
 
   fs.writeFileSync(test.info().outputPath('actions.json'), JSON.stringify(actions, null, 2));
   // The table of the page is this list: a change to the path changes both in one pull request.
