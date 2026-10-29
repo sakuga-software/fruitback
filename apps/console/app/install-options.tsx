@@ -27,7 +27,7 @@ export function snippetFor(site: Site): string {
 
 // Every role connects a browser, so no code of the worker has a sentence of its own here.
 const CONNECT_PROBLEMS: Readonly<Record<string, string>> = {};
-export const BROWSER_NOT_CONNECTED = msg('This browser was not connected. Try again.');
+const BROWSER_NOT_CONNECTED = msg('This browser was not connected. Try again.');
 
 /** A text put in the clipboard: whether the browser took it. « refused »: it stays on screen to select. */
 export function useCopy(text: string): { copied: 'no' | 'yes' | 'refused'; copy: () => void } {

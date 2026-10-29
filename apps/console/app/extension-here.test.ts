@@ -1,6 +1,14 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { STORE_EXTENSION_ID, ask, connectHere, extensionIdsFrom, findHere, parseHello } from './extension-here.ts';
+import {
+  STORE_EXTENSION_ID,
+  ask,
+  connectHere,
+  extensionIdsFrom,
+  findHere,
+  hereProblemOf,
+  parseHello,
+} from './extension-here.ts';
 
 const ID = 'abcdefghijklmnopabcdefghijklmnop';
 
@@ -137,5 +145,13 @@ describe('connecting the extension in place (FRU-487)', () => {
       approve: async () => ({ ok: true, data: {} }),
     });
     assert.equal(result, 'failed');
+  });
+});
+
+describe('what the card says after a try (FRU-487)', () => {
+  it('names a session of the console that ended apart from a browser that was not connected', () => {
+    assert.equal(hereProblemOf('connected'), undefined);
+    assert.equal(hereProblemOf('signed-out'), 'Your session ended. Sign in again, then connect this browser.');
+    assert.equal(hereProblemOf('failed'), 'This browser was not connected. Try again.');
   });
 });

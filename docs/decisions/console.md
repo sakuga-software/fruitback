@@ -142,7 +142,9 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   the page reads its word from the worker and approves it, the extension claims. No `/connect` tab,
   no word to compare, no click on the icon. Installed and signed in: « Extension connected in this
   browser ». No answer (another browser, Firefox, Safari, no extension, a self-hosted console): the
-  card of before. A failure says « This browser was not connected. Try again. »
+  card of before. A failure says « This browser was not connected. Try again. »; a session of the
+  console that ended says « Your session ended. Sign in again, then connect this browser. »
+  (`hereProblemOf`).
 - **Nothing offers to install or to connect the extension once a browser of the account is
   connected** (FRU-441, decided by Mathieu on 2026-10-24). `useConnectedExtension`
   (`extension-connected.ts`) reads `GET /console/me/browsers` once, and again when the tab is shown

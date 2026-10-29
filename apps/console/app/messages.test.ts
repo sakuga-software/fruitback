@@ -20,6 +20,7 @@ const APP = new URL('./', import.meta.url);
 // `writers-pick.tsx` holds « Who can leave a note? », for the Sites screen and the setup (FRU-330).
 // `site-preview.tsx` holds the site itself in the preview of the setup, or why it cannot show (FRU-354).
 // `workspace-logo.ts` says why a logo of a workspace is refused, for its settings (FRU-428).
+// `extension-here.ts` says why the extension of this browser was not connected, at step 3 (FRU-487).
 const screens = [
   ...readdirSync(new URL('routes/', APP))
     .map((name) => `routes/${name}`)
@@ -37,6 +38,7 @@ const screens = [
   'site-preview.tsx',
   'note-status.ts',
   'workspace-logo.ts',
+  'extension-here.ts',
 ];
 const sources = new Map(screens.map((name) => [name, readFileSync(new URL(name, APP), 'utf8')]));
 

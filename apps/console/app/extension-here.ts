@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { API, answerConnect, connectRequest } from './api.ts';
 import { CHROME_WEB_STORE } from './extension-store.ts';
 import { instanceOf } from './instance.ts';
+import { msg } from './i18n.ts';
 
 /**
  * The extension of this browser, asked by the console of Fruitback Cloud (FRU-487).
@@ -108,6 +109,15 @@ export type HereSeams = {
   approve?: typeof answerConnect;
   wait?: (ms: number) => Promise<void>;
 };
+
+/** What the card says after `connectHere`, or `undefined` once connected. */
+export function hereProblemOf(result: HereResult): string | undefined {
+  if (result === 'connected') return undefined;
+  // The session of the console ended: the extension is fine, and « Try again » would fail the same way.
+  if (result === 'signed-out') return msg('Your session ended. Sign in again, then connect this browser.');
+
+  return msg('This browser was not connected. Try again.');
+}
 
 /** How often, and how many times, the page asks the extension to claim after the approval. */
 const CLAIM_EVERY_MS = 5_500;
