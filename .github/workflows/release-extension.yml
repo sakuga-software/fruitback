@@ -229,7 +229,10 @@ jobs:
           fi
           git -c user.name="${APP}[bot]" -c user.email="${id}+${APP}[bot]@users.noreply.github.com" \
             commit -m "docs: the guide of $TAG (FRU-486)" -m "Taken by pnpm guide:captures on the tag, in release-extension.yml."
-          git push "https://x-access-token:${GH_TOKEN}@github.com/${GH_REPO}.git" "HEAD:refs/heads/$branch"
+          # A run of the tag started again writes the branch again, from the tag: `guide/<tag>` is
+          # this job's own branch, so it is replaced rather than refused. The pull request is opened
+          # once: an open one follows the new head.
+          git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GH_REPO}.git" "HEAD:refs/heads/$branch"
           {
             echo "The captures of the guide that changed with the extension $TAG, taken by \`pnpm guide:captures\` on the tag (release-extension.yml, FRU-486). Check each capture against the screen it shows before the merge."
             echo
@@ -237,7 +240,12 @@ jobs:
             cat "$RUNNER_TEMP/guide/changed.txt"
             echo '```'
           } > "$RUNNER_TEMP/guide/body.md"
-          gh pr create --base main --head "$branch" --title "docs: the guide of $TAG" --body-file "$RUNNER_TEMP/guide/body.md"
+          open=$(gh pr list --head "$branch" --state open --json number --jq length)
+          if [ "$open" = "0" ]; then
+            gh pr create --base main --head "$branch" --title "docs: the guide of $TAG" --body-file "$RUNNER_TEMP/guide/body.md"
+          else
+            echo "The pull request of $branch is open: the push updated it."
+          fi
 
   publish:
     name: attach to the release
