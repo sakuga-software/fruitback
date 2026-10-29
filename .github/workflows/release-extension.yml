@@ -90,6 +90,104 @@ jobs:
           # A run that uploads nothing is a run that built nothing, and it would pass in silence.
           if-no-files-found: error
 
+  # The captures of the guide, taken again on the tagged commit (FRU-486). `pnpm guide:captures`
+  # writes only the captures that changed; when one did, a pull request « docs: the guide of <tag> »
+  # carries them, and when none did, nothing is opened. The release does not wait for this job.
+  #
+  # On a Mac of GitHub, not the `sakuga-mac` pool: this repository is public, and the self-hosted
+  # runners serve the private repositories only (see `sakuga-review.yml`). The fonts are those of
+  # macOS. A run that is not from a tag `v*` takes the captures and keeps what changed as an
+  # artifact, and opens nothing: that is the release of test.
+  #
+  # The job's own token only reads. The branch and the pull request are written with a token of the
+  # App, so that `ci.yml` runs on that pull request: GitHub starts no workflow for an event made with
+  # the token of a run.
+  guide:
+    name: captures of the guide
+    needs: [ci]
+    runs-on: macos-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # No cache, as in `package`: what this job writes goes to a pull request of the repository.
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The full Chromium: the headless shell loads no extension (`e2e/extension.ts`).
+      - name: Install Chromium
+        run: pnpm exec playwright install chromium
+
+      - name: Take the captures of the guide
+        run: pnpm guide:captures
+
+      - name: List the captures that changed
+        id: changed
+        run: |
+          set -euo pipefail
+          git add --intent-to-add docs/assets/guide apps/console/public/guide
+          files=$(git diff --name-only -- docs/assets/guide apps/console/public/guide apps/console/app/guide-captured.ts docs/reviewing.md)
+          if [ -z "$files" ]; then
+            echo "No capture of the guide changed."
+            echo "any=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "$files"
+            echo "any=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Keep the captures that changed
+        if: steps.changed.outputs.any == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: guide-captures
+          path: docs/assets/guide/
+          if-no-files-found: error
+
+      - name: Token of the App
+        if: steps.changed.outputs.any == 'true' && startsWith(github.ref, 'refs/tags/v')
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          # The Client ID of the App: not a secret.
+          client-id: Iv23liesB1xzywavcnv2
+          private-key: ${{ secrets.PR_AGENT_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Open the pull request of the captures
+        if: steps.changed.outputs.any == 'true' && startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+          APP: ${{ steps.app-token.outputs.app-slug }}
+        run: |
+          set -euo pipefail
+          branch="guide/$TAG"
+          id=$(gh api "/users/${APP}%5Bbot%5D" --jq .id)
+          git switch -c "$branch"
+          git add docs/assets/guide apps/console/public/guide apps/console/app/guide-captured.ts docs/reviewing.md
+          git -c user.name="${APP}[bot]" -c user.email="${id}+${APP}[bot]@users.noreply.github.com" \
+            commit -m "docs: the guide of $TAG (FRU-486)" -m "Taken by pnpm guide:captures on the tag, in release-extension.yml."
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${GH_REPO}.git" "HEAD:refs/heads/$branch"
+          gh pr create --base main --head "$branch" --title "docs: the guide of $TAG" \
+            --body "The captures of the guide that changed with the extension $TAG, taken by \`pnpm guide:captures\` on the tag (release-extension.yml, FRU-486). Check each capture against the screen it shows before the merge."
+
   publish:
     name: attach to the release
     needs: [ci, package]
