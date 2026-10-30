@@ -173,7 +173,7 @@ test('2 then 3: a site of the workspace turns on in one click, then the switch, 
   await expect(popup.locator('.shortcut-line')).toHaveText(/^or press .+ on the page$/);
   expect(await popup.locator('.shortcut-line kbd').count()).toBeGreaterThanOrEqual(2);
   // A session of a pairing keeps its row.
-  await expect(popup.getByText(`Paired as ${NAME}`)).toBeVisible();
+  await expect(popup.getByText(`Connected as ${NAME}`)).toBeVisible();
   // The keyboard: the gear, the switch, « Show Fruitback on this page » (FRU-444), the line of what
   // waits, then « Leave a note » and the side panel at the bottom (FRU-529).
   await popup.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());

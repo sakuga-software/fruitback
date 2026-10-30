@@ -375,7 +375,9 @@ test('private mode on a site whose notes are « Members only »: the widget offe
 
   const popup = await openPopup(extension, page);
 
-  await expect(popup.getByText(/takes notes from its members only, and private mode carries no session/)).toBeVisible();
+  await expect(
+    popup.getByText(/takes notes from its members only, and in private mode the extension holds no session/),
+  ).toBeVisible();
   await expect(popup.getByText(/answers a signed-in reader only/)).toHaveCount(0);
   await expect(popup.getByRole('link', { name: 'Which mode can read it' })).toBeVisible();
 });
@@ -474,11 +476,11 @@ test('a session held with the worker of a private-mode site stays on the popup, 
   await popup.getByRole('button', { name: 'Save' }).click();
 
   await expect(popup.getByText('On · playground', { exact: false })).toBeVisible();
-  await expect(popup.getByText(`Paired as ${REVIEWER}`)).toBeVisible();
+  await expect(popup.getByText(`Connected as ${REVIEWER}`)).toBeVisible();
   await expect(popup.getByLabel('Connection code')).toHaveCount(0);
 
   await popup.getByRole('button', { name: 'Sign out' }).click();
-  await expect(popup.getByText(`Paired as ${REVIEWER}`)).toHaveCount(0);
+  await expect(popup.getByText(`Connected as ${REVIEWER}`)).toHaveCount(0);
   await expect(popup.getByLabel('Connection code')).toHaveCount(0);
   await expect(popup.getByText('On · playground', { exact: false })).toBeVisible();
 });
@@ -520,7 +522,7 @@ test('a failed pairing offers the one thing to do about it, and Try again pairs 
   await shot('worker-down');
 
   await popup.getByRole('button', { name: 'Try again' }).click();
-  await expect(popup.getByText(`Paired as ${REVIEWER}`)).toBeVisible();
+  await expect(popup.getByText(`Connected as ${REVIEWER}`)).toBeVisible();
   expect(refused, 'the first attempt did not reach the route, so nothing was retried').toBe(2);
 });
 
@@ -545,7 +547,7 @@ test('a pairing link pairs with one click, and the site then works through that 
   expect(requests.join('\n')).not.toContain(code);
 
   const popup = await openPopup(extension, linkPage, AUTHENTICATED_WORKER_ORIGIN);
-  await expect(popup.getByText(`This page is a pairing link for ${AUTHENTICATED_WORKER_ORIGIN}.`)).toBeVisible();
+  await expect(popup.getByText(`This page is a connection link for ${AUTHENTICATED_WORKER_ORIGIN}.`)).toBeVisible();
   // No field to fill in, and no form to switch the worker's own page on as a site.
   await expect(popup.getByLabel('Connection code')).toHaveCount(0);
   await expect(popup.getByRole('button', { name: 'Turn on for this site' })).toHaveCount(0);
@@ -553,7 +555,7 @@ test('a pairing link pairs with one click, and the site then works through that 
   await popup.getByRole('button', { name: 'This is a site to review' }).click();
   await expect(popup.getByRole('button', { name: 'Turn on for this site' })).toBeVisible();
   await popup.reload();
-  await expect(popup.getByText(`This page is a pairing link for ${AUTHENTICATED_WORKER_ORIGIN}.`)).toBeVisible();
+  await expect(popup.getByText(`This page is a connection link for ${AUTHENTICATED_WORKER_ORIGIN}.`)).toBeVisible();
   const shot = test.info().outputPath('pair-link.png');
   await popup.screenshot({ path: shot, clip: { x: 0, y: 0, width: 520, height: 220 } });
   await test.info().attach('pair-link', { path: shot, contentType: 'image/png' });
@@ -562,7 +564,7 @@ test('a pairing link pairs with one click, and the site then works through that 
   await test.info().attach('pair-page', { path: pageShot, contentType: 'image/png' });
 
   await popup.getByRole('button', { name: 'Connect to this server' }).click();
-  await expect(popup.getByText(`Paired as ${REVIEWER}`)).toBeVisible();
+  await expect(popup.getByText(`Connected as ${REVIEWER}`)).toBeVisible();
 
   // The session is stored under the endpoint the rule names, so the site's widget is served.
   await plantOnTheLatteCard(site, 'Team feedback', 'Planté après un lien');

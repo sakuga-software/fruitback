@@ -316,7 +316,7 @@ export async function pairFromPopup(extension: LoadedExtension, site: Page, code
   await popup.getByRole('button', { name: 'I have a code' }).click();
   await popup.getByLabel('Connection code').fill(code);
   await popup.getByRole('button', { name: 'Connect to this server' }).click();
-  await expect(popup.getByText(`Paired as ${name}`)).toBeVisible();
+  await expect(popup.getByText(`Connected as ${name}`)).toBeVisible();
   await popup.close();
 }
 

@@ -45,7 +45,7 @@ test('the settings copy the notes on screen as text', async ({ page, context }) 
   for (const stage of new Set(stages)) await page.locator(`[name="stage-${stage}"]`).uncheck();
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(0);
   await page.getByRole('button', { name: 'Copy the notes as text' }).click();
-  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toMatch(/No feedback on this page\.\n$/);
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toMatch(/No note on this page\.\n$/);
 });
 
 // FRU-288: when the clipboard refuses, the field to copy from opens on the title, not on the last note.

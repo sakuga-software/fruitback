@@ -370,7 +370,7 @@ test('« Servers and sessions » pairs with a code, says who, logs out, and take
   await expect(card).toContainText(
     'Not connected. Private-mode sites read without a session; a team site would show nothing.',
   );
-  await expect(card).toContainText('Plain http on localhost. Pairing works here');
+  await expect(card).toContainText('Plain http on localhost. Connecting works here');
   await expect(card).toContainText('1 site');
 
   // A code nobody minted: the card says why, and keeps the code.
