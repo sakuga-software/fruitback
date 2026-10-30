@@ -45,6 +45,7 @@
           "default",
           "^production",
           "{workspaceRoot}/apps/console/app/app.css",
+          "{workspaceRoot}/apps/console/app/provider-icons.tsx",
           "{workspaceRoot}/apps/console/app/routes/connect.tsx",
           "{workspaceRoot}/docs/install.md",
           "{workspaceRoot}/docs/reviewing.md",

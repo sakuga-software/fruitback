@@ -52,6 +52,7 @@
   "console-workspace-logo.spec.ts": 5.1,
   "console-workspace-settings.spec.ts": 5.5,
   "context-menu.spec.ts": 12,
+  "csp.spec.ts": 1,
   "deep-link.spec.ts": 23.1,
   "destination.spec.ts": 41.9,
   "dev-toolbar.spec.ts": 6,

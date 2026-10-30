@@ -214,6 +214,52 @@ describe('POST /session/revoke', () => {
   });
 });
 
+/**
+ * A proxy or a shared cache between the extension and the worker keeps nothing of these answers
+ * (FRU-506). `/session/pair` and `/session/refresh` carry an access token and a refresh token; the
+ * refusals and the logout are of the same session, and say so too.
+ */
+describe('no cache keeps an answer of a session (FRU-506)', () => {
+  const ip = '198.51.100.70';
+
+  it('answers POST /session/pair with Cache-Control: no-store', async () => {
+    const response = await call(envWith(), '/session/pair', { code: await codeFor() }, 'POST', ip);
+
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('Cache-Control'), 'no-store');
+  });
+
+  it('answers POST /session/refresh with Cache-Control: no-store', async () => {
+    const env = envWith();
+    const paired = (await (await call(env, '/session/pair', { code: await codeFor() }, 'POST', ip)).json()) as {
+      refreshToken: string;
+    };
+
+    const response = await call(env, '/session/refresh', { refreshToken: paired.refreshToken }, 'POST', ip);
+
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('Cache-Control'), 'no-store');
+  });
+
+  it('answers POST /session/revoke with Cache-Control: no-store', async () => {
+    const response = await call(envWith(), '/session/revoke', { refreshToken: 'invented' }, 'POST', ip);
+
+    assert.equal(response.status, 204);
+    assert.equal(response.headers.get('Cache-Control'), 'no-store');
+  });
+
+  it('answers a refusal of these routes with Cache-Control: no-store', async () => {
+    const env = envWith();
+    const refused = await call(env, '/session/refresh', { refreshToken: 'invented' }, 'POST', ip);
+    const malformed = await call(env, '/session/pair', ['a-code'], 'POST', ip);
+
+    assert.equal(refused.status, 401);
+    assert.equal(refused.headers.get('Cache-Control'), 'no-store');
+    assert.equal(malformed.status, 400);
+    assert.equal(malformed.headers.get('Cache-Control'), 'no-store');
+  });
+});
+
 describe('GET /pair, the page a pairing link opens (FRU-92)', () => {
   const page = (env: WorkerEnv, path = '/pair', init: RequestInit = {}) =>
     // An address of its own: the limiter of this process counts every test of this file together.

@@ -2132,8 +2132,8 @@ may change, and who », says what is protected; this section says how to change 
   names, then `can`. It then writes the request that better-auth reads, with those fields and no
   other. Never forward the request of the caller: `organizationSlug` names another workspace than
   the one whose role was read, and `filterField` reads any column of `member`. The body is read
-  under the cap of the worker (`bounded-body.ts`, `413` over it). The other routes of the console
-  still read theirs with `request.text()`: that is older than this slice, and not changed by it.
+  under the cap of the worker (`bounded-body.ts`, `413` over it). Every other route of the console
+  reads its body with `readJsonObject` of the same file, under the same cap (FRU-506).
 - **Every open route names its workspace in `organizationId`.** No call of the worker reads the
   « active » workspace of a session, and nothing writes one: `createWorkspaceWithPlugin` passes
   `keepCurrentActiveOrganization`. Do not open `set-active`.

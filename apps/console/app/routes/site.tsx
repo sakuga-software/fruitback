@@ -1,7 +1,15 @@
 import { SiteAgent } from './site-agent';
-import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import { type FormEvent, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router';
-import { type Connector, type Destination, type Site, call } from '../api';
+import {
+  type Connector,
+  type Destination,
+  type Site,
+  type Visibility,
+  type Workspace,
+  type Writers,
+  call,
+} from '../api';
 import { Confirmation } from '../confirm';
 import { Domains } from '../domains';
 import { msg, t } from '../i18n';
@@ -9,8 +17,9 @@ import { InstallOptions } from '../install-options';
 import { type Listed, edited, listedOf } from '../listed';
 import { problemOf } from '../problems';
 import { siteLabel, siteName } from '../site-address';
-import { Button, KeyValue, LinkButton, LoadFailed, Problem } from '../ui';
+import { Button, KeyValue, LinkButton, LoadFailed, Pick, Problem } from '../ui';
 import { useLocale } from '../use-locale';
+import { WritersPick } from '../writers-pick';
 import { SitePlaces } from './site-places';
 import { PageHead, useWorkspace } from './workspace';
 
@@ -18,6 +27,13 @@ const REMOVAL_PROBLEMS: Readonly<Record<string, string>> = {
   forbidden: msg('Only an owner or an admin of the workspace removes a site.'),
 };
 const SITE_NOT_REMOVED = msg('This site is still here. Try again.');
+const ACCESS_PROBLEMS: Readonly<Record<string, string>> = {
+  forbidden: msg('Only an owner or an admin of the workspace changes who sees the notes.'),
+};
+const ACCESS_NOT_CHANGED = msg('Nothing was changed. Try again.');
+
+/** Who sees the notes of a site, and who leaves them. */
+type Access = { visibility: Visibility; writers?: Writers };
 
 /** The sections of the page that an address reaches with its hash: `…/sites/<site>#install`. */
 export const SITE_SECTIONS = ['install', 'destinations', 'statuses', 'previews', 'remove'] as const;
@@ -89,6 +105,23 @@ export default function SitePage() {
                 ...each,
                 destinations: places,
                 ...(places[0] === undefined ? { destination: undefined } : { destination: places[0] }),
+              }
+            : each,
+        ),
+      ),
+    );
+  }
+
+  /** Who sees the notes and who writes, as the worker answered them: no read again. */
+  function changed(answered: Access) {
+    setSites((current) =>
+      edited(current, (items) =>
+        items.map((each) =>
+          each.id === siteId
+            ? {
+                ...each,
+                visibility: answered.visibility,
+                ...(answered.writers === undefined ? {} : { writers: answered.writers }),
               }
             : each,
         ),
@@ -186,10 +219,7 @@ export default function SitePage() {
               },
             ]}
           />
-          {/* The worker has no route that changes them: a control that does nothing is not drawn. */}
-          <p className="text-hint text-muted">
-            {t('Who sees the notes and who leaves them are set when the site is added.')}
-          </p>
+          {manages ? <AccessForm workspace={workspace} site={site} base={base} onChanged={changed} /> : null}
         </Section>
 
         <Section id="install" title={t('Install')} label={t('Install on {site}', { site: host })}>
@@ -284,5 +314,130 @@ function Section({ id, title, label, children }: { id: string; title: string; la
       </h2>
       {children}
     </section>
+  );
+}
+
+/**
+ * Who sees the notes of a site and who leaves them (FRU-504), changed on its page as the popup of the
+ * extension changes them (FRU-453).
+ *
+ * `POST …/sites` with the address of a site that exists changes that site: the same id, the same
+ * script, the places it had (`addSite` of the store). So no route of the worker is new, and the
+ * answer is checked to be the same site.
+ */
+function AccessForm({
+  workspace,
+  site,
+  base,
+  onChanged,
+}: {
+  workspace: Workspace;
+  site: Site;
+  base: string;
+  onChanged: (answered: Access) => void;
+}) {
+  useLocale();
+  const [open, setOpen] = useState(false);
+  const [visibility, setVisibility] = useState<Visibility>(site.visibility);
+  // A site of a worker of before has no `writers`: it takes a note from anybody (FRU-330).
+  const [writers, setWriters] = useState<Writers>(site.writers ?? 'anyone');
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | undefined>();
+  const [saved, setSaved] = useState(false);
+  const change = useRef<HTMLDivElement>(null);
+  // The way back gives focus to « Change », which the form replaced.
+  const back = () => requestAnimationFrame(() => change.current?.querySelector('button')?.focus());
+
+  function start() {
+    setVisibility(site.visibility);
+    setWriters(site.writers ?? 'anyone');
+    setProblem(undefined);
+    setSaved(false);
+    setOpen(true);
+  }
+  function close() {
+    setOpen(false);
+    back();
+  }
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setProblem(undefined);
+    // Nothing changed: nothing is asked of the worker.
+    if (visibility === site.visibility && (visibility !== 'members' || writers === (site.writers ?? 'anyone'))) {
+      return close();
+    }
+    setBusy(true);
+    const answer = await call<Site>('POST', `${base}/sites`, {
+      url: site.origin,
+      visibility,
+      ...(visibility === 'members' ? { writers } : {}),
+    });
+    setBusy(false);
+    // Another id would be another site: this one was not changed.
+    if (!answer.ok || answer.data?.id !== site.id) {
+      return setProblem(answer.ok ? ACCESS_NOT_CHANGED : problemOf(answer, ACCESS_PROBLEMS, ACCESS_NOT_CHANGED));
+    }
+    onChanged({
+      visibility: answer.data.visibility,
+      ...(answer.data.writers === undefined ? {} : { writers: answer.data.writers }),
+    });
+    setSaved(true);
+    close();
+  }
+
+  if (!open)
+    return (
+      <div ref={change} className="flex flex-wrap items-center gap-x-[16px] gap-y-[8px]">
+        <Button
+          tone="outline"
+          label={t('Change who sees the notes of {site}', { site: siteName(site.origin) })}
+          onClick={start}
+        >
+          {t('Change')}
+        </Button>
+        {saved ? (
+          <p role="status" className="text-small text-muted">
+            {t('Saved. The script on the site stays the same.')}
+          </p>
+        ) : null}
+      </div>
+    );
+
+  return (
+    <form
+      noValidate
+      aria-label={t('Who sees the notes of {site}', { site: siteName(site.origin) })}
+      onSubmit={(event) => void submit(event)}
+      className="flex flex-col gap-[20px]"
+    >
+      <Pick
+        label={t('Who sees the notes?')}
+        value={visibility}
+        onChange={setVisibility}
+        options={[
+          {
+            value: 'members',
+            label: t('Members of {workspace}', { workspace: workspace.name }),
+            detail: t("Visitors of the site see nothing. Right for staging and for a client's site."),
+          },
+          {
+            value: 'everyone',
+            label: t('Everyone who visits'),
+            detail: t('A public way to report a problem on a live site.'),
+          },
+        ]}
+      />
+      <WritersPick visibility={visibility} value={writers} onChange={setWriters} />
+      {problem === undefined ? null : <Problem>{t(problem)}</Problem>}
+      <div className="flex flex-wrap items-center gap-x-[20px] gap-y-[10px]">
+        <Button type="submit" disabled={busy}>
+          {t('Save')}
+        </Button>
+        <LinkButton space="loose" onClick={close}>
+          {t('Cancel')}
+        </LinkButton>
+      </div>
+    </form>
   );
 }

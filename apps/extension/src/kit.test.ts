@@ -10,6 +10,7 @@ import {
   keys,
   listRow,
   primaryButton,
+  providerButton,
   secondaryButton,
   segmentedTabs,
   siteLine,
@@ -247,5 +248,45 @@ describe('the kit of the extension (FRU-293)', () => {
       [...sheet.matchAll(/#[0-9a-f]{3,8}\b|rgba?\(/gi)].map(([colour]) => colour),
       [],
     );
+  });
+
+  it('draws the mark of Google and of GitHub before the word, and names the button by the word (FRU-525)', () => {
+    const document = page();
+    let pressed = 0;
+    for (const [provider, word] of [
+      ['google', 'Google'],
+      ['github', 'GitHub'],
+    ] as const) {
+      const node = providerButton(document, provider, () => (pressed += 1));
+      isNativeButton(node);
+      assert.ok(node.classList.contains('kit-secondary'));
+      // The mark comes first, a drawing a screen reader skips; the name is the word alone.
+      const mark = node.firstElementChild;
+      assert.equal(mark?.tagName.toLowerCase(), 'svg');
+      assert.equal(mark?.getAttribute('aria-hidden'), 'true');
+      assert.equal(mark?.getAttribute('focusable'), 'false');
+      assert.equal((mark as SVGElement).dataset.provider, provider);
+      assert.equal(node.textContent, word);
+      assert.equal(node.getAttribute('aria-label'), null);
+      node.click();
+    }
+    assert.equal(pressed, 2);
+  });
+
+  it('paints the « G » in the four colours of Google, and the GitHub mark in the colour of its word', () => {
+    const fills = (provider: 'google' | 'github') =>
+      [...providerButton(page(), provider).querySelectorAll('path')].map((path) => path.getAttribute('fill'));
+    assert.deepEqual(fills('google'), ['#EA4335', '#4285F4', '#FBBC05', '#34A853']);
+    assert.deepEqual(fills('github'), ['currentColor']);
+  });
+
+  it('draws the same paths as the buttons of the console, so the two marks cannot drift apart', () => {
+    const console = readFileSync(new URL('../../console/app/provider-icons.tsx', import.meta.url), 'utf8');
+    const theirs = [...console.matchAll(/(?:d="|')(M[^"']+)["']/g)].map(([, d]) => d);
+    const ours = (['google', 'github'] as const).flatMap((provider) =>
+      [...providerButton(page(), provider).querySelectorAll('path')].map((path) => path.getAttribute('d')),
+    );
+    assert.equal(theirs.length, 5, `read ${theirs.length} paths of provider-icons.tsx`);
+    assert.deepEqual(ours, theirs);
   });
 });
