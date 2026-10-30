@@ -1375,39 +1375,34 @@ export function createPostgresAccountStore(database: Database): AccountStore {
 
     async sitePage(workspace, { q, offset, limit, only }) {
       const where = and(eq(sites.workspace_id, workspace), onlySites(only), hostHolds(q));
-      const [page, counted] = await Promise.all([
-        run((db) =>
-          db
-            .select({ id: sites.id })
+      // The page and its destinations in one statement, and the total beside it: two round trips at
+      // the same time, not three one after the other.
+      const [rows, counted] = await Promise.all([
+        run((db) => {
+          const page = db
+            .$with('page')
+            .as(
+              db
+                .select({ id: sites.id })
+                .from(sites)
+                .where(where)
+                .orderBy(sites.created_at, sites.id)
+                .offset(offset)
+                .limit(limit),
+            );
+
+          return db
+            .with(page)
+            .select(SITE_WITH_DESTINATION)
             .from(sites)
-            .where(where)
-            .orderBy(sites.created_at, sites.id)
-            .offset(offset)
-            .limit(limit),
-        ),
+            .innerJoin(page, eq(page.id, sites.id))
+            .leftJoin(site_destinations, eq(site_destinations.site_id, sites.id))
+            .orderBy(sites.created_at, sites.id, asc(site_destinations.position));
+        }),
         run((db) => db.select({ total: count() }).from(sites).where(where)),
       ]);
-      const total = counted[0]?.total ?? 0;
-      if (page.length === 0) return { sites: [], total };
 
-      const rows = await run((db) =>
-        db
-          .select(SITE_WITH_DESTINATION)
-          .from(sites)
-          .leftJoin(site_destinations, eq(site_destinations.site_id, sites.id))
-          .where(
-            and(
-              eq(sites.workspace_id, workspace),
-              inArray(
-                sites.id,
-                page.map((row) => row.id),
-              ),
-            ),
-          )
-          .orderBy(sites.created_at, sites.id, asc(site_destinations.position)),
-      );
-
-      return { sites: sitesFrom(rows), total };
+      return { sites: sitesFrom(rows), total: counted[0]?.total ?? 0 };
     },
 
     async siteChoices(workspace, { q, after, limit, only }) {

@@ -781,11 +781,14 @@ export async function handleConsoleApi(
    * not arrive (FRU-237). The index reads the notes of these sites only (FRU-497). An index that does
    * not answer costs the counts, never the sites.
    */
-  const sitesWithNotes = async (sites: readonly Site[], counts = true) => {
+  const sitesWithNotes = async (sites: readonly Site[], options: { counts?: boolean; every?: boolean } = {}) => {
+    const { counts = true, every = false } = options;
     const seesTracker = allowed('see-tracker');
-    const ids = sites.map((site) => site.id);
+    // Every site of the workspace: the index counts them all with no list, which is faster than a list
+    // of hundreds of ids (measured on the bench, FRU-497). Otherwise only the sites of the answer.
+    const ids = every ? undefined : sites.map((site) => site.id);
     const [notes, undelivered] =
-      counts && ids.length > 0
+      counts && sites.length > 0
         ? await Promise.all([
             counted(() => context.noteIndex?.summary(workspaceId as string, ids)),
             seesTracker ? counted(() => context.noteIndex?.undelivered(workspaceId as string, ids)) : undefined,
@@ -830,11 +833,11 @@ export async function handleConsoleApi(
           ...onlyOf(reach),
         });
 
-        return json(200, { sites: await sitesWithNotes(sites, counts), total }, headers);
+        return json(200, { sites: await sitesWithNotes(sites, { counts }), total }, headers);
       }
       const sites = readableSites(await context.accounts.sites(workspaceId as string), reach);
 
-      return json(200, { sites: await sitesWithNotes(sites, counts) }, headers);
+      return json(200, { sites: await sitesWithNotes(sites, { counts, every: reach.sites === 'every' }) }, headers);
     }
     if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
     if (!allowed('manage-sites')) return forbidden();
