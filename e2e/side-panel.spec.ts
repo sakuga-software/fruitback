@@ -66,7 +66,7 @@ test('a click in the popup opens the panel on the tab, and the panel follows the
   const popup = await openPopup(extension, page);
   await popup.getByRole('button', { name: /^(Turn on|Activer)$/ }).click();
   await expect(popup.getByRole('switch', { name: 'Fruitback on localhost:5177' })).toBeChecked();
-  await expect(page.getByRole('button', { name: 'Leave feedback' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Leave a note' })).toBeVisible();
 
   // No panel before the click: the icon opens the popup, and nothing opens a panel by itself.
   const panels = () =>
@@ -114,7 +114,7 @@ test('« Open Fruitback » of a panel on a page Fruitback is not on opens the po
   await openBareSite(page, 'side-panel-open-popup');
   const popup = await openPopup(extension, page);
   await popup.getByRole('button', { name: /^(Turn on|Activer)$/ }).click();
-  await expect(page.getByRole('button', { name: 'Leave feedback' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Leave a note' })).toBeVisible();
   await clickThatClosesPopup(
     popup,
     popup.getByRole('button', { name: /^(Show all notes in a sidebar|Voir toutes les notes dans un panneau)$/ }),

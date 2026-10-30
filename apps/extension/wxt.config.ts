@@ -84,8 +84,11 @@ export default defineConfig({
     excludeSources: ['**/node_modules/**', '**/dist/**', '**/.output/**', '**/.wxt/**', '**/.nx/**'],
   },
   manifest: {
-    name: 'Fruitback',
-    description: 'Leave visual feedback on any site you are allowed to review.',
+    // FRU-555: the name, the description and the shortcut come from `public/_locales`, in English and
+    // in French: the browser picks the language of the person. `locales.test.ts` holds both files.
+    default_locale: 'en',
+    name: '__MSG_extensionName__',
+    description: '__MSG_extensionDescription__',
     // `activeTab` is what lets the popup read the URL of the tab it was opened on. `tabs.query`
     // answers without it, but withholds `url` — so the popup would decide there is no origin and
     // offer nothing, on every site, forever. Raised in review, and it made a fresh install useless.

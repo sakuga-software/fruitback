@@ -9,10 +9,10 @@ import { KINDS, connectorName } from './connector-parts';
 /** What a refused name means for the person. */
 const RENAME_PROBLEMS: Readonly<Record<string, string>> = {
   'invalid-name': msg('A name of one line, up to 80 characters.'),
-  forbidden: msg('Only an owner or an admin of the workspace renames a source.'),
+  forbidden: msg('Only an owner or an admin of the workspace renames a connector.'),
   'not-found': msg('This connector is not connected any more. Reload the page.'),
 };
-const NOT_RENAMED = msg('The source was not renamed. Try again.');
+const NOT_RENAMED = msg('The connector was not renamed. Try again.');
 
 /**
  * The name of a source, at the top of its panel (FRU-404). Several sources can reach one tracker, so
@@ -82,7 +82,7 @@ export function ConnectorName({
         <div className="flex flex-wrap items-end gap-x-[20px] gap-y-[10px]">
           <div className="min-w-0 flex-1 basis-60">
             <Field
-              label={t('Name of this source')}
+              label={t('Name of this connector')}
               hint={t('Empty, it is named {kind}.', { kind })}
               value={name}
               placeholder={kind}

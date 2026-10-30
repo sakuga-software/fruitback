@@ -206,7 +206,7 @@ const RETURNS = {
     'Another workspace already receives the notes of this installation. Disconnect it there, or install the App on another account.',
   refused:
     'GitHub was not connected: your GitHub account does not reach this installation. Ask an owner of the organisation to connect it.',
-  forbidden: 'Only an owner or an admin of the workspace connects a source.',
+  forbidden: 'Only an owner or an admin of the workspace adds a connector.',
   suspended: 'This workspace is suspended, so nothing in it can change. Contact the administrator of this instance.',
   'unauthorized-app':
     'GitHub was not connected: the GitHub App of this Fruitback is not set up correctly. Contact the operator of this Fruitback.',

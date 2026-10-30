@@ -254,7 +254,7 @@ describe('the page of the panel (FRU-296, FRU-299)', () => {
       [...root.querySelectorAll('p')].map((line) => line.textContent),
       [
         'app.acme.dev runs its own Fruitback.',
-        'Its notes are on the page, in its own list. This panel lists the notes of a site Fruitback mounts.',
+        'Its notes are on the page, in its own list. This panel lists the notes of a site where the extension shows Fruitback.',
       ],
     );
     assert.equal(root.querySelector('[role="alert"]'), null, 'said as a failure');
@@ -272,10 +272,10 @@ describe('the page of the panel (FRU-296, FRU-299)', () => {
     assert.equal(root.querySelector<HTMLTextAreaElement>('textarea')?.maxLength, 2000);
   });
 
-  it('offers « Leave feedback », and names the site and its workspace at the foot with « Settings »', () => {
+  it('offers « Leave a note », and names the site and its workspace at the foot with « Settings »', () => {
     const options = handlers();
     const root = panelPage(page(), { ...options, state: on([]), tab: 'open' });
-    const leave = [...root.querySelectorAll('button')].find((each) => each.textContent === 'Leave feedback');
+    const leave = [...root.querySelectorAll('button')].find((each) => each.textContent === 'Leave a note');
 
     assert.ok(leave?.classList.contains('kit-primary'));
     assert.equal(leave?.dataset.size, 'panel');
@@ -587,7 +587,7 @@ describe('« Ready to check » (FRU-300)', () => {
     assert.deepEqual([READY, NOBODY, OTHERS, CHECKED, OPEN].map(toCheck), [true, true, false, false, false]);
   });
 
-  it('shows them between « Leave feedback » and the tabs, with who fixed them, and takes them out of « Done »', () => {
+  it('shows them between « Leave a note » and the tabs, with who fixed them, and takes them out of « Done »', () => {
     const root = panelPage(page(), options());
     const block = root.querySelector('section.ready');
 

@@ -58,7 +58,7 @@ describe('the builders every screen shares (FRU-511)', () => {
     isNativeButton(node);
     node.click();
     assert.equal(pressed, 1);
-    assert.equal(linkButton(document, 'Log out', () => undefined).className, 'link-button');
+    assert.equal(linkButton(document, 'Sign out', () => undefined).className, 'link-button');
     assert.equal(linkButton(document, 'Reply', () => undefined, 'panel-link').className, 'panel-link');
   });
 
@@ -104,7 +104,7 @@ describe('the kit of the extension (FRU-293)', () => {
     const document = page();
     const pressed: string[] = [];
     const main = primaryButton(document, 'Turn on', () => pressed.push('main'));
-    const tall = primaryButton(document, 'Leave feedback', () => pressed.push('tall'), { size: 'tall' });
+    const tall = primaryButton(document, 'Leave a note', () => pressed.push('tall'), { size: 'tall' });
     const second = secondaryButton(document, 'Turn off for this site', () => pressed.push('second'));
     const change = textButton(document, 'Change', () => pressed.push('change'));
     for (const node of [main, tall, second, change]) {
@@ -116,7 +116,7 @@ describe('the kit of the extension (FRU-293)', () => {
     assert.equal(main.querySelector('svg'), null);
     // The tall action draws the drop before its words; the drop says nothing.
     assert.equal(tall.dataset.size, 'tall');
-    assert.equal(tall.textContent, 'Leave feedback');
+    assert.equal(tall.textContent, 'Leave a note');
     assert.equal(tall.querySelector('svg')?.getAttribute('aria-hidden'), 'true');
     assert.equal(primaryButton(document, 'Add', undefined, { type: 'submit' }).type, 'submit');
   });

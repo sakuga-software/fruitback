@@ -8,7 +8,7 @@ import { caseOf, hydrated, openPlayground, WORKER_ORIGIN } from './pin.ts';
  */
 
 async function selectTheCta(page: import('@playwright/test').Page) {
-  await page.getByRole('button', { name: /Leave feedback/ }).click();
+  await page.getByRole('button', { name: /Leave a note/ }).click();
   await page.locator('#checkout-cta').click();
   await expect(page.getByPlaceholder('What should change?')).toBeVisible();
 }
@@ -78,7 +78,7 @@ test('it stays inside the viewport when the element is against the right edge', 
   // The popover is clamped against its declared width, so the rendered box has to match it — with
   // content-box the padding sat outside and the popover overhung the edge by that much.
   await openPlayground(page, 'composer-edge');
-  await page.getByRole('button', { name: /Leave feedback/ }).click();
+  await page.getByRole('button', { name: /Leave a note/ }).click();
   await page.locator('main header button').click();
   await expect(page.getByPlaceholder('What should change?')).toBeVisible();
 
@@ -134,7 +134,7 @@ test('the composer has the measures of the mock-up, above its element (FRU-258, 
   // is placed during the click, so on the pressed box. The test read the box later, pressed or not
   // depending on the timing, and failed on main at 663.53 for 663. Without the scale, there is one box.
   await button.evaluate((element) => element.style.setProperty('transform', 'none', 'important'));
-  await page.getByRole('button', { name: /Leave feedback/ }).click();
+  await page.getByRole('button', { name: /Leave a note/ }).click();
   await button.click();
   const composer = page.getByRole('dialog', { name: 'New note', exact: true });
   await expect(composer).toBeVisible();
@@ -215,7 +215,7 @@ test('the composer has the measures of the mock-up, above its element (FRU-258, 
   await expect(page.getByRole('button', { name: 'Close without sending' })).toHaveCount(0);
 
   expect(await read('.fruitback-composer-body', ['padding', 'gap'])).toMatchObject({ padding: '14px', gap: '12px' });
-  await expect(page.getByLabel('Your comment')).toBeVisible();
+  await expect(page.getByLabel('Your note')).toBeVisible();
   expect(await read('[data-fruitback-note-label]', ['font-size', 'color'])).toMatchObject({
     'font-size': '12px',
     color: 'rgb(107, 107, 116)',
@@ -309,7 +309,7 @@ test('« Choose another element » keeps the text and moves the composer to the 
   page,
 }) => {
   await openPlayground(page, 'composer-pick-again');
-  await page.getByRole('button', { name: /Leave feedback/ }).click();
+  await page.getByRole('button', { name: /Leave a note/ }).click();
   await page.locator('[data-testid="card-latte"] .add').click();
   const field = page.getByPlaceholder('What should change?');
   await field.fill('Written before picking again');
@@ -360,7 +360,7 @@ test('it rises from the corner nearest to its element, with no fade', async ({ p
   await page.setViewportSize({ width: 1440, height: 900 });
   await openPlayground(page, 'composer-rise');
   await page.locator('#checkout-cta').scrollIntoViewIfNeeded();
-  await page.getByRole('button', { name: /Leave feedback/ }).click();
+  await page.getByRole('button', { name: /Leave a note/ }).click();
   await page.locator('#checkout-cta').click();
   await expect(page.getByPlaceholder('What should change?')).toBeVisible();
 
@@ -398,7 +398,7 @@ test('a second capture while a note is on its way loses nothing, and the failure
     await held;
     await route.fulfill({ status: 502, contentType: 'application/json', body: '{"error":"store-unavailable"}' });
   });
-  await page.getByRole('button', { name: /Leave feedback/ }).click();
+  await page.getByRole('button', { name: /Leave a note/ }).click();
   await page.locator('[data-testid="card-latte"] .add').click();
   const about = page.locator('.fruitback-composer-about');
   await expect(about).toHaveText(/^button\.add/);

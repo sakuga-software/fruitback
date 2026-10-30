@@ -95,7 +95,7 @@ test('pointing at the settings button never captures it', async ({ page }) => {
   await openPlayground(page, 'config-ignore');
   const gear = page.getByLabel('Open Fruitback settings');
 
-  await page.getByRole('button', { name: /Leave feedback/ }).click();
+  await page.getByRole('button', { name: /Leave a note/ }).click();
   await expect(gear).toBeHidden();
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   await gear.click();
@@ -142,7 +142,7 @@ test('the checkboxes are actually drawn, and the gear does not sit on the launch
   // The gear sits beside the launch button, whose width is the embedder's label. An offset computed
   // from the gear's own size cannot know that, and it covered the label.
   const gear = await page.getByLabel('Open Fruitback settings').boundingBox();
-  const launch = await page.getByRole('button', { name: /Leave feedback/ }).boundingBox();
+  const launch = await page.getByRole('button', { name: /Leave a note/ }).boundingBox();
 
   expect(gear, 'the gear should be on screen').not.toBeNull();
   expect(launch).not.toBeNull();
@@ -208,13 +208,13 @@ test('the settings have the chips and the switches of the mock-up of 2026-10-20 
   await expect(page.locator('[name="stage-closed"]')).toBeChecked();
 
   // The switches: 36 × 20, a role that says on and off, the whole row of 44 px toggles them.
-  const hide = page.getByRole('switch', { name: 'Hide resolved feedback' });
+  const hide = page.getByRole('switch', { name: 'Hide resolved notes' });
   await expect(hide).toBeVisible();
   expect(
     await hide.evaluate((node) => [node.getBoundingClientRect().width, node.getBoundingClientRect().height]),
   ).toEqual([36, 20]);
   expect(await read('.fruitback-config-check', [])).toMatchObject({ height: 44 });
-  await root.locator('.fruitback-config-check').filter({ hasText: 'Hide resolved feedback' }).click();
+  await root.locator('.fruitback-config-check').filter({ hasText: 'Hide resolved notes' }).click();
   await expect(hide).toBeChecked();
   expect(await hide.evaluate((node) => getComputedStyle(node).backgroundColor)).toBe('rgb(24, 24, 27)');
   await hide.click();

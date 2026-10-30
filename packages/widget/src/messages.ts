@@ -25,14 +25,14 @@ import { frenchCatalog } from './typography.ts';
 export type PluralMessage = { readonly [Category in Intl.LDMLPluralRule]?: string } & { readonly other: string };
 
 export const ENGLISH = {
-  'launch.label': 'Leave feedback',
+  'launch.label': 'Leave a note',
   // The launch button while the session of the extension has ended (FRU-315): it opens the sign-in.
   'launch.signIn': 'Sign in to leave notes',
   // The launch button on a site whose notes are « Members only », for a reader with no session
   // (FRU-330), and what a press of it says. No note starts there.
   'launch.closed': 'Notes from members only',
   'launch.closedSentence': 'Only members of this site leave notes here. Ask its team to invite you.',
-  'widget.label': 'Fruitback feedback',
+  'widget.label': 'Fruitback notes',
   // The banner of a capture, in the dark capsule (FRU-258, FRU-303). `capture.bannerTouch` is the
   // same sentence on a touch screen, which has no Escape key and no arrows (FRU-157): it then stands
   // alone beside `capture.stop`.
@@ -50,8 +50,8 @@ export const ENGLISH = {
   'settings.dialog': 'Fruitback settings',
   'settings.title': 'Settings',
   'settings.close': 'Close settings',
-  'settings.stages': 'Pins shown',
-  'settings.hideResolved': 'Hide resolved feedback',
+  'settings.stages': 'Statuses shown',
+  'settings.hideResolved': 'Hide resolved notes',
   // FRU-472: the corner of the dock, under the statuses.
   'settings.position': 'Position',
   'settings.position.topLeft': 'Top left',
@@ -59,7 +59,7 @@ export const ENGLISH = {
   'settings.position.bottomLeft': 'Bottom left',
   'settings.position.bottomRight': 'Bottom right',
   'settings.screenshot': 'Attach a picture of the element',
-  'settings.copy': 'Copy the feedback as text',
+  'settings.copy': 'Copy the notes as text',
   'settings.copied': 'Copied',
   'settings.copyManually': 'Copy the text from here',
 
@@ -101,7 +101,7 @@ export const ENGLISH = {
   'area.cancel': 'Cancel',
   'composer.placeholder': 'What should change?',
   // The label above the field of the note (FRU-305), which names it.
-  'composer.label': 'Your comment',
+  'composer.label': 'Your note',
   // The name of the dialog.
   'composer.dialog': 'New note',
   // The button of the head that starts a capture again, keeping the text (FRU-305).
@@ -281,8 +281,8 @@ export const ENGLISH = {
   'sidebar.showPins': 'Show pins on the page',
 
   // The words of the text a reviewer copies (FRU-109). They are labels in front of a value.
-  'export.title': 'Feedback on {url}',
-  'export.empty': 'No feedback on this page.',
+  'export.title': 'Notes on {url}',
+  'export.empty': 'No note on this page.',
   'export.element': 'Element: {element}',
   'export.component': 'Component: {component}',
   'export.by': 'By: {name}',
