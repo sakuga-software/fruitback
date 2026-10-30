@@ -558,8 +558,12 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Address: 'Adresse',
   'Who sees the notes': 'Qui voit les notes',
   'Who can leave a note': 'Qui peut laisser une note',
-  'Who sees the notes and who leaves them are set when the site is added.':
-    'Qui voit les notes et qui les laisse sont fixés quand le site est ajouté.',
+  'Change who sees the notes of {site}': 'Modifier qui voit les notes de {site}',
+  'Who sees the notes of {site}': 'Qui voit les notes de {site}',
+  'Saved. The script on the site stays the same.': 'Enregistré. Le script du site reste le même.',
+  'Only an owner or an admin of the workspace changes who sees the notes.':
+    'Seul un propriétaire ou un admin de l’espace de travail change qui voit les notes.',
+  'Nothing was changed. Try again.': 'Rien n’a changé. Réessayez.',
   'Edit the statuses': 'Modifier les statuts',
   'Remove this site': 'Retirer ce site',
   'The widget stops on this site, and the notes that Fruitback keeps for it are deleted.':
