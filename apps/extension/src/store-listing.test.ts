@@ -16,14 +16,22 @@ describe('the store listing says where the notes go', () => {
   const loose = listing.replace(/\s+/g, ' ');
 
   it('names the Cloud of this build as the default destination', () => {
-    assert.ok(loose.includes(`By default, to Fruitback Cloud (${new URL(DEFAULT_CLOUD).host})`));
+    const host = new URL(DEFAULT_CLOUD).host;
+    assert.ok(
+      loose.includes(`By default, to Fruitback Cloud (${host})`),
+      `the listing does not say that the notes go to ${host} by default, the Cloud of this build`,
+    );
   });
 
   it('does not say that the publisher receives no note, or that a reviewer needs a server of their own', () => {
-    assert.ok(!loose.includes('runs no server that receives your notes'));
-    assert.ok(!loose.includes('YOU NEED A WORKER'));
-    assert.ok(!loose.includes('the Fruitback worker your team runs'));
-    assert.ok(!loose.includes("the feedback server that the reviewer's own team runs"));
+    for (const sentence of [
+      'runs no server that receives your notes',
+      'YOU NEED A WORKER',
+      'the Fruitback worker your team runs',
+      "the feedback server that the reviewer's own team runs",
+    ]) {
+      assert.ok(!loose.includes(sentence), `the listing still says « ${sentence} »`);
+    }
   });
 
   it('offers the button that the popup draws for a server of its own', () => {
