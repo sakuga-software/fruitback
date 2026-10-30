@@ -31,6 +31,10 @@ minutes and no developer tools.
 `about:debugging#/runtime/this-firefox`, choose **Load Temporary Add-on…** and pick the archive.
 Firefox keeps such an add-on until it restarts.
 
+An extension installed by hand does not update itself. Its popup and its page say so when a newer
+release is out, **Fruitback 0.6.0 is out. Update**, with a link to that release: install its archive
+the same way. One from the Chrome Web Store updates on its own, and says nothing.
+
 **From the sources**, if you work on the extension:
 
 ```bash

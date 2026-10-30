@@ -503,3 +503,26 @@ button.kit-tab[aria-selected='true'] {
   color: var(--text);
   box-shadow: var(--shadow-xs);
 }
+
+/* « Fruitback 0.6.0 is out. Update » (FRU-519): a line of 13 px, the link a target of 44 px. */
+.kit-update {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0 4px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+a.kit-update-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+a.kit-update-link:hover {
+  color: var(--accent-strong);
+}
