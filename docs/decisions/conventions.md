@@ -178,6 +178,55 @@ How this repository is formatted, tested and documented, and which test holds ea
   session, it needs to be approved and authorized (`/mcp` in an interactive session) — it cannot be
   authorized from a non-interactive one.
 
+### The words of the screens (FRU-517)
+
+#### The rules, in short
+
+- **One thing has one word, in the console, the extension and the widget.** The table below is the
+  glossary. A word of the last column never appears in a French catalogue:
+  `apps/console/app/messages.fr.ts`, `apps/extension/src/messages.fr.ts` and
+  `packages/widget/src/locale-fr.ts`. `apps/extension/src/glossary.test.ts` reads this table, and
+  fails on such a word. A placeholder (`{workspace}`) and a product name (« GitHub Issues ») are not
+  words of a sentence, and the test skips them.
+- **A new word goes into this table first**, then into the catalogues.
+- **French writes the typographic apostrophe** (’), never the straight one. The same test holds it.
+- **French typography is set where the French is rendered, not in the catalogues.** A narrow no-break
+  space (U+202F) goes before `: ; ? !` and `»`, and after `«`: `frenchSpaces` of the widget
+  (`packages/widget/src/typography.ts`), used for the widget and the extension, and its copy in
+  `apps/console/app/typography.ts`. It changes only a space that is there, so a catalogue is written
+  with plain spaces, and « https:// » or « 14:02 » keep none.
+- **English follows the same table.** The English screens still say « worker », « Pair », « Leave
+  feedback » and « source » in places: those renames change the specs that find a control by its
+  name, and they come in a pull request of their own (FRU-555).
+
+| What it is                                                            | English       | French                | Never in French                        |
+| --------------------------------------------------------------------- | ------------- | --------------------- | -------------------------------------- |
+| What a person leaves on a page                                        | note          | note                  | feedback                               |
+| A team, its members, its sites and its connectors                     | workspace     | espace de travail     | workspace, workspaces                  |
+| What the Connectors screen lists: a tracker, an address that receives | connector     | connecteur            | source, sources                        |
+| A connector that makes an issue of each note: Linear, GitHub, Jira…   | tracker       | outil de suivi        | tracker, trackers                      |
+| What a tracker makes of a note                                        | issue         | ticket                | issue, issues                          |
+| The server of Fruitback, the Cloud or one that a team runs            | server        | serveur               | worker, workers                        |
+| Give a browser, an extension or a tracker access to an account        | connect       | connecter             | appairer, appairé, appairage           |
+| End a session                                                         | sign out      | se déconnecter        | —                                      |
+| A session that ended                                                  | session ended | la session a pris fin | session a expiré, session est terminée |
+| The mark of a note on the page                                        | pin           | repère                | pin, pins, épingles                    |
+| Something that works                                                  | works         | fonctionne            | marche                                 |
+| The Linear group of states that are not planned yet                   | Backlog       | Non planifiés         | backlog                                |
+
+« Épingler » stays for the browser's own button that pins an extension to the toolbar: that is the
+word of the browser, not of Fruitback.
+
+#### The reasons
+
+The audit of 2026-10-30 found one connector called « tracker », « source » and « connector » on one
+screen, « workspace » untranslated 139 times in the French console beside 7 « espace de travail »,
+« worker » 26 times in the French extension, and no narrow no-break space in the three catalogues. A
+person who reads two words thinks of two things. « Source » said where a note comes from, when it is
+where a note goes. « Worker » is the name of the code, not of anything a person runs. « Connecteur »
+covers an address that receives as well as a tracker; « outil de suivi » is kept for the ones that
+make tickets.
+
 ## The checks, and where each one runs
 
 ### The rules, in short

@@ -59,7 +59,7 @@ async function mount(page: Page, testCase: string): Promise<void> {
 async function plant(page: Page, note: string): Promise<void> {
   await page.getByRole('button', { name: 'Laisser une note' }).click();
   await page.locator('[data-testid="card-espresso"] .add').click();
-  await page.getByPlaceholder('Que faut-il changer ?').fill(note);
+  await page.getByPlaceholder('Que faut-il changer\u202F?').fill(note);
   await page.getByRole('button', { name: 'Envoyer', exact: true }).click();
   await expect(page.getByRole('dialog', { name: 'Nouvelle note' })).toBeHidden({ timeout: 10_000 });
 }
