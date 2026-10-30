@@ -1539,12 +1539,12 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'A request works for ten minutes, and is answered once. Start again from the app that asked.':
     'Une demande fonctionne dix minutes, et reçoit une seule réponse. Recommencez depuis l’application qui l’a faite.',
   'This workspace holds 20 agents already. Revoke one in Agents, then start again.':
-    'Ce workspace a déjà 20 agents. Révoquez-en un dans Agents, puis recommencez.',
+    'Cet espace de travail a déjà 20 agents. Révoquez-en un dans Agents, puis recommencez.',
   'A site you ticked is gone. Read the page again.': 'Un site que vous avez coché n’existe plus. Rechargez la page.',
   'Only an owner or an admin of this workspace can connect an agent to it.':
-    'Seul un propriétaire ou un admin de ce workspace peut y connecter un agent.',
+    'Seul un propriétaire ou un admin de cet espace de travail peut y connecter un agent.',
   'It ends on {day}. Revoke it at any time in Workspace settings › Agents.':
-    'Il prend fin le {day}. Révoquez-le à tout moment dans Paramètres du workspace › Agents.',
+    'Il prend fin le {day}. Révoquez-le à tout moment dans Réglages de l’espace de travail › Agents.',
   'Tick at least one site.': 'Cochez au moins un site.',
   'Calls itself « {name} »': 'Se nomme « {name} »',
   '{host} asks to read the notes of your sites through the MCP server of Fruitback, as an agent of your team.':
@@ -1552,9 +1552,9 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Signed in as {email}.': 'Connecté en tant que {email}.',
   'Not you?': 'Pas vous ?',
   'Only an owner or an admin of a workspace can connect an agent. Ask one of them to connect it.':
-    'Seul un propriétaire ou un admin d’un workspace peut connecter un agent. Demandez-le à l’un d’eux.',
+    'Seul un propriétaire ou un admin d’un espace de travail peut connecter un agent. Demandez-le à l’un d’eux.',
   Deny: 'Refuser',
-  'The agent reaches this workspace, never another.': 'L’agent atteint ce workspace, jamais un autre.',
+  'The agent reaches this workspace, never another.': 'L’agent atteint cet espace de travail, jamais un autre.',
   'Sites it reads': 'Sites qu’il lit',
   'What it can do': 'Ce qu’il peut faire',
   Read: 'Lire',
@@ -1569,7 +1569,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'On a site that everyone reads, the agent does not read the notes of visitors: anybody can write one.':
     'Sur un site que tout le monde lit, l’agent ne lit pas les notes des visiteurs : n’importe qui peut en écrire une.',
   'You can revoke it at any time in Workspace settings › Agents. It stops at once.':
-    'Vous pouvez le révoquer à tout moment dans Paramètres du workspace › Agents. Il s’arrête aussitôt.',
+    'Vous pouvez le révoquer à tout moment dans Réglages de l’espace de travail › Agents. Il s’arrête aussitôt.',
   'Allowing…': 'Autorisation…',
   'Allow {host}': 'Autoriser {host}',
   'You go back to {address}': 'Vous revenez à {address}',
