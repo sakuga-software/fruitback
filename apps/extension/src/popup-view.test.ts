@@ -409,7 +409,7 @@ describe('2 · a site of a workspace, not on here (FRU-298)', () => {
     setLanguage('fr');
     const screen = offer();
 
-    assert.equal(screen.querySelector('h1')?.textContent, 'Activer Fruitback sur ce site ?');
+    assert.equal(screen.querySelector('h1')?.textContent, 'Activer Fruitback sur ce site\u202F?');
     assert.equal(screen.querySelector('.action-block button')?.textContent, 'Activer');
     assert.equal(screen.querySelector('dt')?.textContent, 'Les notes vont vers');
   });

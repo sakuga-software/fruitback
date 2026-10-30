@@ -245,8 +245,9 @@ describe('the words of the copied text', () => {
 
     assert.match(output, /^# Notes sur https:\/\/staging\.acme\.dev\/pricing$/m);
     assert.match(output, /^## 1\. FB-12 — À faire$/m);
-    assert.match(output, /^- Par : Camille · 2026-10-06$/m);
-    assert.match(output, /^- Position : approximative/m);
+    // FRU-517: French is set with a narrow no-break space before the colon.
+    assert.match(output, /^- Par\u202F: Camille · 2026-10-06$/m);
+    assert.match(output, /^- Position\u202F: approximative/m);
     assert.match(output, /^Réponse de Équipe · 2026-10-07$/m);
   });
 
