@@ -18,6 +18,7 @@ import {
   TextField,
 } from '@heroui/react';
 import {
+  type CSSProperties,
   type ChangeEvent,
   type FocusEvent,
   type KeyboardEvent,
@@ -687,6 +688,40 @@ export function Problem({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * A read that failed (FRU-508): what did not load, that nothing is lost, and one way to read again.
+ * Never « Nothing yet »: the screen does not know. The box of the mockup is 760 px inside its padding.
+ */
+export function LoadFailed({
+  title,
+  detail,
+  retry,
+  onRetry,
+}: {
+  /** « The notes did not load ». */
+  title: string;
+  /** « Fruitback did not answer. Your notes are safe. » */
+  detail: string;
+  /** The words of the button: « Try again ». */
+  retry: string;
+  onRetry: () => void;
+}) {
+  return (
+    <div
+      role="alert"
+      className="box-content flex max-w-[760px] flex-wrap items-center justify-between gap-[16px] rounded-frame border border-control px-[32px] py-[28px]"
+    >
+      <div>
+        <h2 className="mb-[4px] text-step leading-auto font-semibold">{title}</h2>
+        <p className="text-body text-muted">{detail}</p>
+      </div>
+      <Button tone="outline" size="page" inset={18} onClick={onRetry}>
+        {retry}
+      </Button>
+    </div>
+  );
+}
+
 /** A name and its initial, in the round chip of the mockup. `pending`: somebody invited who has not come. */
 export function Initial({
   name,
@@ -802,6 +837,11 @@ type DataTableProps = {
   dense?: boolean;
   /** A row is tinted under the pointer: the rows that open something. */
   hover?: boolean;
+  /**
+   * Under 640 px each row is a card, its cells one under the other, and the heads are for a screen
+   * reader only (FRU-505). For a table whose first cell must stay on screen with the others.
+   */
+  stack?: boolean;
   /** `<thead>` and `<tbody>`. A cell with `data-align="end"` is aligned to the right. */
   children: ReactNode;
 };
@@ -810,10 +850,21 @@ type DataTableProps = {
  * A table in its frame. A table wider than the screen scrolls in the frame, and the page does not.
  * The frame takes focus, so a keyboard can scroll it (WCAG 2.1.1).
  */
-export function DataTable({ label, minWidth, dense = false, hover = false, children }: DataTableProps) {
+export function DataTable({ label, minWidth, dense = false, hover = false, stack = false, children }: DataTableProps) {
+  // A stacked table takes its width from the style sheet, which drops it under 640 px.
+  const width = stack ? ({ '--table-min-width': `${minWidth}px` } as CSSProperties) : { minWidth };
+
   return (
-    <div role="region" aria-label={label} tabIndex={0} className="kit-table" data-dense={dense} data-hover={hover}>
-      <table style={{ minWidth }}>{children}</table>
+    <div
+      role="region"
+      aria-label={label}
+      tabIndex={0}
+      className="kit-table"
+      data-dense={dense}
+      data-hover={hover}
+      data-stack={stack}
+    >
+      <table style={width}>{children}</table>
     </div>
   );
 }

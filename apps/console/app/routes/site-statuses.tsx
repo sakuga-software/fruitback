@@ -26,7 +26,7 @@ import {
   rowOf,
   statusesOf,
 } from '../site-statuses';
-import { Button, Choice, Field, IconButton, LinkButton, Problem, Radios, StatusDot, Toggle } from '../ui';
+import { Button, Choice, Field, IconButton, LinkButton, LoadFailed, Problem, Radios, StatusDot, Toggle } from '../ui';
 import { useLocale } from '../use-locale';
 import { STAGE_NAMES, placeLabel } from './connector-parts';
 import { PageHead, useWorkspace } from './workspace';
@@ -331,18 +331,12 @@ export default function SiteStatuses() {
         <p className="text-body text-muted">{t('This site is not in the workspace any more.')}</p>
       ) : null}
       {read === 'failed' ? (
-        <div
-          role="alert"
-          className="box-content flex max-w-[760px] flex-wrap items-center justify-between gap-[16px] rounded-frame border border-control px-[32px] py-[28px]"
-        >
-          <div>
-            <h2 className="mb-[4px] text-step leading-auto font-semibold">{t('The statuses did not load')}</h2>
-            <p className="text-body text-muted">{t('Fruitback did not answer. Your statuses are safe.')}</p>
-          </div>
-          <Button tone="outline" size="page" inset={18} onClick={() => void load()}>
-            {t('Try again')}
-          </Button>
-        </div>
+        <LoadFailed
+          title={t('The statuses did not load')}
+          detail={t('Fruitback did not answer. Your statuses are safe.')}
+          retry={t('Try again')}
+          onRetry={() => void load()}
+        />
       ) : null}
       {typeof read === 'string' ? null : (
         <div className="flex flex-col gap-[36px]">

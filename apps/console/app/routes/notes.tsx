@@ -11,6 +11,7 @@ import {
   Field,
   FilterChip,
   LinkButton,
+  LoadFailed,
   PageHead,
   Problem,
   StatusDot,
@@ -367,7 +368,7 @@ export default function Notes() {
                 />
               ) : (
                 <div aria-busy={reading}>
-                  <DataTable label={t('Notes')} minWidth={960} hover>
+                  <DataTable label={t('Notes')} minWidth={960} hover stack>
                     <thead>
                       <tr>
                         <th scope="col">{t('Note')}</th>
@@ -817,18 +818,12 @@ export function NotesFailed({ onRetry }: { onRetry: () => void }) {
   useLocale();
 
   return (
-    <div
-      role="alert"
-      className="box-content flex max-w-[760px] flex-wrap items-center justify-between gap-[16px] rounded-frame border border-control px-[32px] py-[28px]"
-    >
-      <div>
-        <h2 className="mb-[4px] text-step leading-auto font-semibold">{t('The notes did not load')}</h2>
-        <p className="text-body text-muted">{t('Fruitback did not answer. Your notes are safe.')}</p>
-      </div>
-      <Button tone="outline" size="page" inset={18} onClick={onRetry}>
-        {t('Try again')}
-      </Button>
-    </div>
+    <LoadFailed
+      title={t('The notes did not load')}
+      detail={t('Fruitback did not answer. Your notes are safe.')}
+      retry={t('Try again')}
+      onRetry={onRetry}
+    />
   );
 }
 

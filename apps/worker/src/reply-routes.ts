@@ -68,7 +68,7 @@ export async function postReply(
   if (name !== undefined && typeof name !== 'string') return json(400, { error: 'invalid-name' }, corsHeaders);
 
   const clientId = normalizeClientId(new URL(request.url).searchParams.get('client'));
-  const route = routeFor(request, config, clientId);
+  const route = await routeFor(request, config, clientId);
   if (!route.ok) return routingFailure(route, corsHeaders);
 
   if (!route.policy.showComments) return json(403, { error: 'replies-not-taken' }, corsHeaders);
@@ -191,7 +191,7 @@ export async function postCheck(
   }
 
   const clientId = normalizeClientId(new URL(request.url).searchParams.get('client'));
-  const route = routeFor(request, config, clientId);
+  const route = await routeFor(request, config, clientId);
   if (!route.ok) return routingFailure(route, corsHeaders);
 
   try {
@@ -353,7 +353,7 @@ export async function postStatus(
   }
 
   const clientId = normalizeClientId(new URL(request.url).searchParams.get('client'));
-  const route = routeFor(request, config, clientId);
+  const route = await routeFor(request, config, clientId);
   if (!route.ok) return routingFailure(route, corsHeaders);
 
   try {

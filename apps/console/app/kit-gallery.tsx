@@ -18,6 +18,7 @@ import {
   Logo,
   OptionCard,
   LinkButton,
+  LoadFailed,
   Menu,
   PageHead,
   Pick,
@@ -317,6 +318,15 @@ export default function KitGallery() {
           <Chip tone="done">Invited</Chip>
         </p>
         <Initial name="Marie" size="small" />
+      </section>
+
+      <section aria-label="A read that failed" className="flex flex-col gap-3" data-kit="load-failed">
+        <LoadFailed
+          title="The notes did not load"
+          detail="Fruitback did not answer. Your notes are safe."
+          retry="Try again"
+          onRetry={() => undefined}
+        />
       </section>
 
       <section aria-label="Menus" className="flex flex-wrap items-center gap-6" data-kit="menus">

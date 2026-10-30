@@ -13,11 +13,11 @@ extension mounts it, and the reviewer's side is [reviewing.md](reviewing.md). [m
 the page that picks between the three, and it is worth reading first: **who may read a site is the
 visibility you choose at step 2, and the mode decides who can satisfy it.**
 
-> **The packages are not on npm yet.** Everything below describes the shape of the install; the
-> `npm i` lines will work once the first release is published. Until then, the `<script>` route works:
-> the console serves the script of the widget at `/v/<version>/fruitback.iife.js` (the snippet of the
-> console gives it) and at `/fruitback.iife.js`, and
-> `pnpm --filter @fruitback/widget build` produces the same file.
+> The packages are on npm: `fruitback`, `@fruitback/react`, `@fruitback/element`, `@fruitback/widget`
+> and `@fruitback/shared`. A site with no bundler takes the `<script>` route instead. The console
+> serves the script of the widget at `/v/<version>/fruitback.iife.js`, which its snippet gives, and at
+> `/fruitback.iife.js`. `pnpm --filter @fruitback/widget build` produces the same file from this
+> repository.
 
 ---
 
@@ -50,10 +50,11 @@ written to anyone's workspace.
 
 In the console, add the address of the site, and choose **who sees the notes**:
 
-- **Members of the workspace** — the default. A read needs the session of a member, which the
-  extension gets when the reviewer connects it: this is the team mode. « Who can leave a note » is
-  « Members only » on a new site (FRU-330): a visitor with no session is refused. With « Anyone on
-  the page », a visitor can send a note, and sees no pin, theirs included.
+- **Members of the workspace**, the default. A read needs the session of a member. The visibility
+  does not pick the mode: in team mode the extension supplies the session once the reviewer connects
+  it, and private mode carries none ([modes.md](modes.md)). « Who can leave a note » is « Members
+  only » on a new site (FRU-330): a visitor with no session is refused. With « Anyone on the page »,
+  a visitor can send a note, and sees no pin, theirs included.
 - **Everyone who visits** — a read needs nothing: this is the public mode. Every note, the name its
   reporter typed and the replies are readable by anybody who knows a page address and the id of the
   site, with or without the widget.

@@ -67,7 +67,7 @@ export async function postEdit(
   }
 
   const clientId = normalizeClientId(new URL(request.url).searchParams.get('client'));
-  const route = routeFor(request, config, clientId);
+  const route = await routeFor(request, config, clientId);
   if (!route.ok) return routingFailure(route, corsHeaders);
 
   try {

@@ -830,10 +830,21 @@ export type AccountStore = {
   /** Removes the workspace, its members and its sites. Notes already in a tracker stay there. */
   deleteWorkspace(workspace: string): Promise<void>;
   /**
-   * Every site, as the client map the routing reads. A site of a suspended workspace (FRU-282) is not
-   * in it: the widget and the extension find it as a site that does not exist.
+   * Every site, as a client map. A site of a suspended workspace (FRU-282) is not in it. The routing
+   * does not read it: it reads `client` and `servesOrigin` (FRU-495).
    */
   clientMap(): Promise<ClientMap>;
+  /**
+   * One site as the routing reads it, the same entry as in `clientMap`. `undefined` for a site that
+   * does not exist or whose workspace is suspended (FRU-282): the widget and the extension find it as
+   * a site that does not exist.
+   */
+  client(site: string): Promise<ClientMap[string] | undefined>;
+  /**
+   * Whether a site of a workspace that is not suspended has this origin: the CORS of the routes of
+   * the widget (FRU-495).
+   */
+  servesOrigin(origin: string): Promise<boolean>;
 };
 
 /**

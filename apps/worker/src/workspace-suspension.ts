@@ -5,8 +5,9 @@ import type { AccountStore, WorkspaceSuspension } from './accounts.ts';
  * A workspace that an administrator of the instance suspended (FRU-282). D3 of FRU-260, and the
  * decision 4 of 2026-10-19: « Lecture seule, avec un bandeau ».
  *
- * - **Its sites answer as unknown.** `clientMap` of the store leaves them out, so the widget and the
- *   extension find each of them as a site that does not exist: the same status, and the same body.
+ * - **Its sites answer as unknown.** `client`, `servesOrigin` and `clientMap` of the store leave them
+ *   out, so the widget and the extension find each of them as a site that does not exist: the same
+ *   status, and the same body.
  *   The notes stay in the database.
  * - **Its members read.** They sign in, and the console reads everything as before. `/console/me`
  *   says `suspended` and `suspendedAt` for each workspace, for the banner. **Never the reason**

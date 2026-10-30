@@ -13,8 +13,8 @@ import {
 import { Confirmation } from '../confirm';
 import { INVITED, type Message, messageOf } from '../invitation-message';
 import { type Listed, edited, listedOf } from '../listed';
-import { DID_NOT_ANSWER, copyText, problemOf } from '../problems';
-import { Button, Choice, DataTable, Field, Initial, LinkButton, PageHead, Problem } from '../ui';
+import { copyText, problemOf } from '../problems';
+import { Button, Choice, DataTable, Field, Initial, LinkButton, LoadFailed, PageHead, Problem } from '../ui';
 import { useWorkspace } from './workspace';
 import { locale, msg, t } from '../i18n';
 import { useLocale } from '../use-locale';
@@ -336,14 +336,12 @@ export default function Members() {
 
       {/* The box of a read that failed is the one of the Sites screen: the mockup draws no other. */}
       {people !== 'loading' && (people === 'failed' || waiting === 'failed') ? (
-        <div className="box-content flex max-w-[760px] flex-wrap items-center justify-between gap-[16px] rounded-frame border border-control px-[32px] py-[28px]">
-          <p role="alert" className="text-body text-muted">
-            {t(DID_NOT_ANSWER)}
-          </p>
-          <Button tone="outline" size="page" inset={18} onClick={() => void read()}>
-            {t('Try again')}
-          </Button>
-        </div>
+        <LoadFailed
+          title={t('The members did not load')}
+          detail={t('Fruitback did not answer. Your members are safe.')}
+          retry={t('Try again')}
+          onRetry={() => void read()}
+        />
       ) : null}
 
       {typeof people !== 'string' && waiting !== 'failed' ? (
@@ -566,7 +564,7 @@ function Row({
             </span>
           </span>
         </td>
-        <td>{t(ROLE_WORDS[role])}</td>
+        <td className="whitespace-nowrap">{t(ROLE_WORDS[role])}</td>
         <td className="[overflow-wrap:anywhere]">{sites}</td>
         {last}
       </tr>

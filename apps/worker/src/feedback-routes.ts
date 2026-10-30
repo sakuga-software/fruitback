@@ -78,7 +78,7 @@ export async function getFeedback(
   // Linear label the filter matches on, and it keys the cache. Normalising for only one of them is
   // how a note becomes unreadable by the client that wrote it.
   const clientId = normalizeClientId(params.get('client'));
-  const route = routeFor(request, config, clientId);
+  const route = await routeFor(request, config, clientId);
   if (!route.ok) return routingFailure(route, corsHeaders);
 
   // **Before the cache, and that ordering is the guarantee.** The cached entry is per
@@ -356,7 +356,7 @@ export async function postFeedback(
   const note = canonicalNote(parsed.note);
   const clientId = note.client?.id;
 
-  const route = routeFor(request, config, clientId);
+  const route = await routeFor(request, config, clientId);
   if (!route.ok) return routingFailure(route, corsHeaders);
 
   // Whose word the attribution is (FRU-9). The claimed reporter loses `verified` whatever it said,
@@ -497,7 +497,7 @@ async function postBatch(
   }
   if (!allowed) return json(429, { error: 'rate-limited' }, corsHeaders);
 
-  const route = routeFor(request, config, clientId);
+  const route = await routeFor(request, config, clientId);
   if (!route.ok) return routingFailure(route, corsHeaders);
 
   // One request is one caller: the identity is checked once, and written on every note it signs.

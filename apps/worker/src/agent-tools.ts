@@ -49,7 +49,7 @@ export type AgentToolsContext = {
   kv: Kv;
   noteIndex: NoteIndex | undefined;
   /** The client of a site and what was decided for it, as `GET /feedback` resolves it. */
-  route(site: string): ClientResolution;
+  route(site: string): Promise<ClientResolution>;
 };
 
 /** The most notes `feedback_as_text` writes for a whole site. */
@@ -188,9 +188,9 @@ type Site = {
 };
 
 /** The site of the grant that `id` names, or `undefined`. */
-function siteOf(context: AgentToolsContext, id: unknown): Site | undefined {
+async function siteOf(context: AgentToolsContext, id: unknown): Promise<Site | undefined> {
   if (typeof id !== 'string' || !context.grant.sites.includes(id)) return undefined;
-  const route = context.route(id);
+  const route = await context.route(id);
   if (!route.ok) return undefined;
 
   return {
@@ -257,7 +257,7 @@ function listFeedback(
   args: Record<string, unknown>,
 ): Promise<ToolAnswer> {
   return guarded(async () => {
-    const site = siteOf(context, args.site);
+    const site = await siteOf(context, args.site);
     const index = context.noteIndex;
     if (site === undefined || index === undefined) return { ok: false, error: NO_SITE };
     const params = new URLSearchParams();
@@ -302,7 +302,7 @@ function getFeedback(
 ): Promise<ToolAnswer> {
   return guarded(async () => {
     const key = typeof args.id === 'string' ? noteKeyOf(args.id) : undefined;
-    const site = key === undefined ? undefined : siteOf(context, key.site);
+    const site = key === undefined ? undefined : await siteOf(context, key.site);
     if (key === undefined || site === undefined || context.noteIndex === undefined)
       return { ok: false, error: NO_NOTE };
     const page = await context.noteIndex.pageOfNote(site.workspace, site.id, key.note);
@@ -319,7 +319,7 @@ function feedbackAsText(
   args: Record<string, unknown>,
 ): Promise<ToolAnswer> {
   return guarded(async () => {
-    const site = siteOf(context, args.site);
+    const site = await siteOf(context, args.site);
     const index = context.noteIndex;
     if (site === undefined || index === undefined) return { ok: false, error: NO_SITE };
     const shown = (issue: NoteIssue): NoteIssue =>
@@ -371,7 +371,7 @@ async function writableNote(
   id: unknown,
 ): Promise<{ site: Site; note: string; page: string; targets: (ClientConfig | undefined)[] } | undefined> {
   const key = typeof id === 'string' ? noteKeyOf(id) : undefined;
-  const site = key === undefined ? undefined : siteOf(context, key.site);
+  const site = key === undefined ? undefined : await siteOf(context, key.site);
   if (key === undefined || site === undefined || context.noteIndex === undefined) return undefined;
   const page = await context.noteIndex.pageOfNote(site.workspace, site.id, key.note);
   if (page === undefined) return undefined;
