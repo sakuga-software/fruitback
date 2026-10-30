@@ -2,7 +2,6 @@ import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { type Page, expect, test } from '@playwright/test';
 import { DEMO_FILES, DEMO_FRAMES } from '../apps/extension/src/demo-video.ts';
 import { CAPTURING } from './guide.ts';
@@ -23,12 +22,18 @@ import { CAPTURING } from './guide.ts';
  */
 
 /**
- * Where the frames are: beside the captures of the guide, as the configuration of the guide writes
- * them. Read from this file, not from the directory Playwright runs in (raised in review).
+ * A path of the repository, read from the `testDir` of the configuration (`e2e/`) and not from the
+ * directory Playwright runs in (raised in review). A spec has no `import.meta.url`: Playwright loads
+ * it as CommonJS.
  */
-const FRAMES = fileURLToPath(new URL('../docs/assets/video/', import.meta.url));
+function fromRoot(relative: string): string {
+  return path.resolve(test.info().config.rootDir, '..', relative);
+}
+
+/** Where the frames are: beside the captures of the guide, as the configuration of the guide writes them. */
+const FRAMES = 'docs/assets/video';
 /** Where the extension serves the video from. */
-const PUBLIC = fileURLToPath(new URL('../apps/extension/public/', import.meta.url));
+const PUBLIC = 'apps/extension/public';
 /** The size of the video: twice the width the welcome page draws it at. */
 const SIZE = { width: 960, height: 540 };
 
@@ -78,7 +83,7 @@ export async function demoFrame(page: Page, name: string, box: DemoBox): Promise
 export function framesNow(): Map<string, string> {
   return new Map(
     DEMO_FRAMES.map(({ name }) => {
-      const file = path.join(FRAMES, `${name}.png`);
+      const file = path.join(fromRoot(FRAMES), `${name}.png`);
 
       return [name, fs.existsSync(file) ? createHash('sha256').update(fs.readFileSync(file)).digest('hex') : ''];
     }),
@@ -93,7 +98,7 @@ export function recordDemo(before: Map<string, string>): string[] {
   if (!CAPTURING) return [];
   const after = framesNow();
   const changed = DEMO_FRAMES.some(({ name }) => before.get(name) !== after.get(name));
-  const missing = Object.values(DEMO_FILES).some((file) => !fs.existsSync(path.join(PUBLIC, file)));
+  const missing = Object.values(DEMO_FILES).some((file) => !fs.existsSync(path.join(fromRoot(PUBLIC), file)));
   if (!changed && !missing) return [];
   // Said before the first call, with what to do: an `ENOENT` of `spawnSync` names no tool.
   try {
@@ -104,7 +109,7 @@ export function recordDemo(before: Map<string, string>): string[] {
     );
   }
 
-  return joinFrames(FRAMES, PUBLIC);
+  return joinFrames(fromRoot(FRAMES), fromRoot(PUBLIC));
 }
 
 /**
