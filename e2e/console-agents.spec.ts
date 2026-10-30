@@ -275,7 +275,8 @@ test('the form says what it needs and sends nothing, and keeps what was typed th
   await form.getByRole('textbox', { name: 'Name' }).fill('Reader');
   await form.getByRole('textbox', { name: 'Lives for, in days' }).fill('400');
   await form.getByRole('button', { name: 'Make the key' }).click();
-  await expect(form.getByRole('checkbox', { name: /shop\.acme\.dev/ })).toBeFocused();
+  // The first box: the sites come by address (FRU-497), so docs.acme.dev before shop.acme.dev.
+  await expect(form.getByRole('checkbox', { name: /docs\.acme\.dev/ })).toBeFocused();
   await form.getByText('shop.acme.dev', { exact: true }).click();
   await form.getByRole('button', { name: 'Make the key' }).click();
   await expect(form).toContainText('Choose from 1 to 365 days.');
