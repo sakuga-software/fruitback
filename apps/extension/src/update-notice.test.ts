@@ -231,4 +231,25 @@ describe('the line of a new release (FRU-519)', () => {
     );
     observer.disconnect();
   });
+
+  it('shows what it knew when GitHub never answers, and aborts the request (review of #731)', async () => {
+    const kept = { checkedAt: 0, release: { version: '0.6.0', url: RELEASE.html_url } };
+    let aborted = false;
+    const { deps: given, calls } = deps({
+      stored: kept,
+      timeoutMs: 20,
+      // A request that never ends: no answer, no error.
+      fetchLatest: (signal) => {
+        signal.addEventListener('abort', () => {
+          aborted = true;
+        });
+
+        return new Promise(() => undefined);
+      },
+    });
+
+    assert.equal((await availableUpdate(given))?.version, '0.6.0');
+    assert.equal(aborted, true);
+    assert.deepEqual(calls.written, []);
+  });
 });

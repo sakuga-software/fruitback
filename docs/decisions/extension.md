@@ -2580,8 +2580,8 @@ before you push the next tag.
   update on their own, and ask nothing. `getSelf` needs no permission, in Chromium and in Firefox.
 - **The source is the last release on GitHub**, `releases/latest`, the page `reviewing.md` sends a
   reviewer to for the archive. Its API answers any origin, so the request needs no host permission.
-  Once a day at most, kept in `storage.local` under `latestRelease`; an error of the network keeps
-  what was known and shows nothing new. A link that is not a page of the releases of the repository
+  Once a day at most, kept in `storage.local` under `latestRelease`; an error of the network, or no
+  answer in 5 s (the request is aborted), keeps what was known and shows nothing new. A link that is not a page of the releases of the repository
   is not shown. `src/update-notice.ts`, held by `update-notice.test.ts`.
 - **Not the worker:** `/health` and the routes of a session say no version, and the private mode has
   no worker. **Not `runtime.requestUpdateCheck`:** it asks the store of the install, which a folder

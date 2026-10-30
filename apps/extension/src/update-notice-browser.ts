@@ -11,8 +11,9 @@ export function browserAvailableUpdate(): ReturnType<typeof availableUpdate> {
     read: async () =>
       ((await browser.storage.local.get(LATEST_RELEASE_KEY)) as Record<string, unknown>)[LATEST_RELEASE_KEY],
     write: (checked: Checked) => browser.storage.local.set({ [LATEST_RELEASE_KEY]: checked }),
-    fetchLatest: async () => {
+    fetchLatest: async (signal) => {
       const response = await fetch(LATEST_RELEASE_API, {
+        signal,
         headers: { Accept: 'application/vnd.github+json' },
         credentials: 'omit',
         referrerPolicy: 'no-referrer',

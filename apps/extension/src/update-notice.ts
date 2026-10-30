@@ -29,6 +29,9 @@ export const LATEST_RELEASE_KEY = 'latestRelease';
 /** One request a day at most: GitHub allows 60 an hour to an address, and a release is rare. */
 export const CHECK_EVERY_MS = 24 * 60 * 60 * 1000;
 
+/** How long GitHub has to answer. After it, the line shows what was known, and the request stops. */
+export const FETCH_TIMEOUT_MS = 5000;
+
 /** The install types that no store updates. `normal` and `admin` update on their own. */
 const UPDATED_BY_HAND: ReadonlySet<string> = new Set(['development', 'sideload', 'other']);
 
@@ -88,6 +91,27 @@ function parseChecked(value: unknown): Checked | undefined {
   return parsed === undefined ? { checkedAt } : { checkedAt, release: parsed };
 }
 
+/**
+ * Runs `fetch` with a signal that aborts after `ms`, and rejects then even when `fetch` ignores the
+ * signal. Without it, a GitHub that never answers keeps the line from showing what was known.
+ * Raised in review of #731.
+ */
+async function withTimeout<T>(fetch: (signal: AbortSignal) => Promise<T>, ms: number): Promise<T> {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const expired = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      reject(new Error(`no answer in ${ms} ms`));
+    }, ms);
+  });
+  try {
+    return await Promise.race([fetch(controller.signal), expired]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export type UpdateDeps = {
   /** The version of this extension, from its manifest. */
   installed: string;
@@ -95,9 +119,14 @@ export type UpdateDeps = {
   installType: () => Promise<string | undefined>;
   read: () => Promise<unknown>;
   write: (checked: Checked) => Promise<void>;
-  /** The answer of `LATEST_RELEASE_API`, already read as JSON. Throws when there is none. */
-  fetchLatest: () => Promise<unknown>;
+  /**
+   * The answer of `LATEST_RELEASE_API`, already read as JSON. Throws when there is none. The signal
+   * aborts the request once `timeoutMs` has passed.
+   */
+  fetchLatest: (signal: AbortSignal) => Promise<unknown>;
   now: () => number;
+  /** `FETCH_TIMEOUT_MS`, shorter in a test. */
+  timeoutMs?: number;
 };
 
 /**
@@ -110,7 +139,7 @@ export async function availableUpdate(deps: UpdateDeps): Promise<Release | undef
   let checked = parseChecked(await deps.read().catch(() => undefined));
   if (checked === undefined || !(deps.now() - checked.checkedAt < CHECK_EVERY_MS)) {
     try {
-      const release = parseRelease(await deps.fetchLatest());
+      const release = parseRelease(await withTimeout(deps.fetchLatest, deps.timeoutMs ?? FETCH_TIMEOUT_MS));
       checked = release === undefined ? { checkedAt: deps.now() } : { checkedAt: deps.now(), release };
       await deps.write(checked);
     } catch {
