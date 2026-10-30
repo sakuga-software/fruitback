@@ -386,7 +386,9 @@ crosses the cap, and no further.
 
 Before FRU-506 the routes of the console read their body with no cap: the sign-in by a link, the
 routes of better-auth that the worker forwards, the account, the workspaces and the administrator.
-Three of them answer a person who is not signed in. What the cap protects: the memory of the worker
+Three of them answer a person who is not signed in. The routes of OAuth (`/oauth/register`,
+`/oauth/token`, `/oauth/revoke`) and of the connection of the extension read under the cap already,
+and answered `400` over it: they answer the same `413` now. What the cap protects: the memory of the worker
 against one large request. It is not a limit of rate: see the section above.
 test:`is refused over the cap on the routes of the sign-in, which need no session`, and the guard
 test:`is read by bounded-body.ts and by nothing else`, which fails on a route that reads its body
