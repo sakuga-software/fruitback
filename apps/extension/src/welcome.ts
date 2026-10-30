@@ -1,3 +1,4 @@
+import { DEMO_FILES, DEMO_SECONDS, demoLength } from './demo-video.ts';
 import { t } from './i18n.ts';
 import { alertBox, head, primaryButton, secondaryButton } from './kit.ts';
 import { type SignInStop, element, linkButton } from './popup-view.ts';
@@ -32,6 +33,8 @@ export type WelcomeSignIn =
 export type WelcomeOptions = {
   /** Opens the popup of the extension. It rejects where the browser does not let a page open it. */
   openPopup: () => Promise<void>;
+  /** `prefers-reduced-motion: reduce`: the demonstration waits for a press on « play » (FRU-531). */
+  reducedMotion?: boolean;
   /** Absent in a build that names no Fruitback: the page then leads to the popup. */
   signIn?: {
     state: WelcomeSignIn;
@@ -72,7 +75,7 @@ export function welcomeScreen(document: Document, options: WelcomeOptions): HTML
       element(document, 'strong', t('Tip:')),
       ` ${t('Pin Fruitback to find it in the toolbar later: open the puzzle piece at the right of the address bar, then press the pin beside Fruitback.')}`,
     );
-    root.append(top, title, lead, ...signInPart(document, options.signIn), invited, tip);
+    root.append(top, title, lead, ...signInPart(document, options.signIn), demo(document, options), invited, tip);
 
     return root;
   }
@@ -92,7 +95,7 @@ export function welcomeScreen(document: Document, options: WelcomeOptions): HTML
     ),
     step(document, t('Sign in'), t('Click the Fruitback icon, then Sign in with email.')),
   );
-  root.append(top, title, lead, steps, ...toThePopup(document, options.openPopup), invited);
+  root.append(top, title, lead, steps, ...toThePopup(document, options.openPopup), demo(document, options), invited);
 
   return root;
 }
@@ -208,6 +211,44 @@ function sitesPart(
   }
 
   return part;
+}
+
+/**
+ * The demonstration (FRU-531): a first note in 16/9, under what the page asks to do now, at the same
+ * place in every state. It plays muted and in a loop, and waits behind its poster when the person
+ * asked for less motion. The files are in the extension: nothing is fetched.
+ */
+function demo(document: Document, options: WelcomeOptions): HTMLElement {
+  const figure = element(document, 'figure', '', 'welcome-demo');
+  const video = document.createElement('video');
+  video.setAttribute('poster', DEMO_FILES.poster);
+  video.muted = true;
+  // The attribute too: autoplay is allowed for a video that is muted from its markup.
+  video.setAttribute('muted', '');
+  video.loop = true;
+  // The attribute, which every engine reads: Safari plays a video with none full screen.
+  video.setAttribute('playsinline', '');
+  video.controls = true;
+  video.preload = options.reducedMotion === true ? 'none' : 'auto';
+  video.autoplay = options.reducedMotion !== true;
+  video.width = 480;
+  video.height = 270;
+  for (const [source, type] of [
+    [DEMO_FILES.webm, 'video/webm'],
+    [DEMO_FILES.mp4, 'video/mp4'],
+  ] as const) {
+    const each = document.createElement('source');
+    each.src = source;
+    each.type = type;
+    video.append(each);
+  }
+  const caption = element(document, 'figcaption', t('A first note, from the click to the pin'));
+  const length = element(document, 'span', demoLength(DEMO_SECONDS), 'welcome-demo-length');
+  length.setAttribute('aria-label', t('{seconds} seconds', { seconds: DEMO_SECONDS }));
+  caption.append(' · ', length);
+  figure.append(video, caption);
+
+  return figure;
 }
 
 function step(document: Document, name: string, text: string): HTMLLIElement {

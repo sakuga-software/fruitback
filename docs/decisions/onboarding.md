@@ -124,6 +124,18 @@ site is fixed too (FRU-482): signed out, it offers the sign-in there as well.
   the token of a run opened, and that pull request needs `ci.yml`. A run from a branch
   (`workflow_dispatch`) is the release of test: it stops at the artifact. The release does not wait
   for these jobs: a capture that fails publishes the extension all the same.
+- **The video of the welcome page comes from the same walk** (FRU-531). From the site to the pin,
+  `first-note.spec.ts` takes a frame at each step (`DEMO_FRAMES` of `apps/extension/src/demo-video.ts`,
+  `docs/assets/video/<frame>.png`), in one box of 16/9 around the element, with a pointer drawn on
+  the page. When a frame changed, `e2e/demo.ts` joins the frames with `ffmpeg` into
+  `apps/extension/public/demo/first-note.{webm,mp4,jpg}`: each frame held for its seconds, one
+  thread, `bitexact`. A recording of the browser would differ at each run by its timing, and a
+  release would open a pull request for a video that shows the same thing; frames compared like the
+  captures write nothing when the screens did not change. Measured on 2026-10-30: two joins of the
+  same frames give the same bytes, and a second capture run wrote no frame and no video. The job
+  `guide` installs `ffmpeg` where the runner has none, and `guide-pr` takes those paths too. The
+  extension serves the files: the welcome page fetches nothing, and a capture of the guide pauses the
+  video on its first frame.
 - **One source for the words**: `apps/console/app/guide-steps.ts`. Step 3 of the setup shows it, in
   English and in French; `docs/reviewing.md` holds a copy of it in English, between
   `<!-- guide:start -->` and `<!-- guide:end -->`, that `guide-steps.test.ts` holds to the source.
