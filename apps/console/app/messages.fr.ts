@@ -558,8 +558,16 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Address: 'Adresse',
   'Who sees the notes': 'Qui voit les notes',
   'Who can leave a note': 'Qui peut laisser une note',
-  'Who sees the notes and who leaves them are set when the site is added.':
-    'Qui voit les notes et qui les laisse sont fixés quand le site est ajouté.',
+  'See its notes': 'Voir ses notes',
+  'See its note': 'Voir sa note',
+  'See its {count} notes': 'Voir ses {count} notes',
+  'Open its page': 'Ouvrir sa page',
+  'Change who sees the notes of {site}': 'Modifier qui voit les notes de {site}',
+  'Who sees the notes of {site}': 'Qui voit les notes de {site}',
+  'Saved. The script on the site stays the same.': 'Enregistré. Le script du site reste le même.',
+  'Only an owner or an admin of the workspace changes who sees the notes.':
+    'Seul un propriétaire ou un admin de l’espace de travail change qui voit les notes.',
+  'Nothing was changed. Try again.': 'Rien n’a changé. Réessayez.',
   'Edit the statuses': 'Modifier les statuts',
   'Remove this site': 'Retirer ce site',
   'The widget stops on this site, and the notes that Fruitback keeps for it are deleted.':
@@ -1265,8 +1273,12 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Reset {name}': 'Rétablir {name}',
   Reset: 'Rétablir',
   Auto: 'Auto',
-  'reads well': 'se lit bien',
-  'under 4.5:1': 'sous 4,5:1',
+  Readable: 'Lisible',
+  'Low contrast': 'Contraste faible',
+  'Contrast {ratio}': 'Contraste {ratio}',
+  'Contrast {ratio}, text colour Auto': 'Contraste {ratio}, couleur du texte Auto',
+  'A swatch with no code is the colour of the stage of its status.':
+    'Une pastille sans code est la couleur de la phase de son statut.',
   'Type a colour to see how its text reads.': 'Saisissez une couleur pour voir comment son texte se lit.',
   'Text on this colour: {ratio}. It reads well.': 'Texte sur cette couleur : {ratio}. Il se lit bien.',
   'Text on this colour: {ratio}. Text needs 4.5:1 at least: choose Auto, or a darker or lighter text.':

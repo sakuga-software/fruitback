@@ -457,6 +457,21 @@ body.popup-page {
   color: var(--subtle);
 }
 
+/* The steps of a page of the browser (FRU-526): what to do, one line each, the keys in the text. */
+.popup .not-web-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding-inline-start: 20px;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.popup .not-web-steps .kit-keys {
+  white-space: nowrap;
+}
+
 .popup .methods {
   display: flex;
   flex-direction: column;

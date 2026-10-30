@@ -89,6 +89,11 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
     same rule on `body`. `e2e/wrap-widget.spec.ts`, `wrap-extension.spec.ts` and `wrap-console.spec.ts`
     measure each surface at 320, 390 and 1280 px, in English and in French, with long data, through
     `e2e/overflow.ts`; `overflow.spec.ts` plants each fault it must find.
+- **A module gives its CSS through `adoptStyles` (`stylesheet.ts`), never a `<style>` element**
+  (FRU-522). A page whose CSP says `style-src 'self'` refuses a `<style>` element, Shadow root
+  included, and the widget draws with the browser's own buttons. A root without `adoptedStyleSheets`
+  gets a `<style>` element, so `style, script { display: none }` stays. Tests read the CSS with
+  `stylesIn` of `dom.fixture.ts`; `e2e/csp.spec.ts` measures the page under that policy.
 
 ### The reasons, and the history
 
@@ -104,6 +109,17 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
   are covered by E2E tests, because neither is visible to a DOM emulator. The reset on every element
   inside stops inheritance too, so it declares `color` and `font` as `inherit` (FRU-51, in _The
   keyboard, the screen reader and the contrast_).
+- **Adopted stylesheets, because a CSP refuses a `<style>` element in a Shadow root** (FRU-522). On
+  Kentō (`style-src 'self'`), the dock was grey native buttons and the pin a black drop: each of the
+  seven `<style>` elements was refused. Measured in Chromium 2026-10-30, page served with
+  `style-src 'self'`: a `<style>` in a Shadow root does not apply, a sheet built by `new
+  CSSStyleSheet()` and `replaceSync` and set in `adoptedStyleSheets` applies, and `style.cssText`
+  applies — the CSP covers markup, not the CSSOM. The extension's calls to the worker go through its
+  service worker, so the `connect-src 'self'` of the same page refuses none of them. The sheet comes
+  from the window of the host's document, because a sheet of another window throws at the adoption.
+  happy-dom writes `outline` back as its three longhands, so `stylesIn` reads the text given to
+  `replaceSync`, not `cssRules`. In `e2e/csp.spec.ts`, Local Network Access refuses the calls of a
+  document that `route.fulfill` wrote to the loopback worker, so it reads the dock and no pin.
 - **The host sits at the document origin, absolutely positioned, with no size.** The overlay places
   pins in document coordinates, and absolute positions resolve against the nearest positioned
   ancestor — move or offset the host and every pin moves with it.
@@ -125,8 +141,8 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
 - **`theme.ts` owns every colour, shadow, radius, font family and duration** (FRU-35, FRU-36). They were
   hexadecimals spread across five `STYLES` literals — `host.ts`, `overlay.ts`, `composer.ts`,
   `panel.ts`, `orphans.ts` — plus the stage colours, which travelled in the _published contract_.
-- **Custom properties, because inheritance is what crosses the modules.** Each module injects its own
-  `<style>` into the one Shadow root, so a token on `:host` reaches all of them with nobody importing
+- **Custom properties, because inheritance is what crosses the modules.** Each module adopts its own
+  stylesheet into the one Shadow root, so a token on `:host` reaches all of them with nobody importing
   anything. `THEME_STYLES` is concatenated ahead of `host.ts`'s reset for that reason.
 - **The prefix is `--fruitback-`, and it is the whole defence.** A custom property inherits _into_ the
   Shadow root from the client's page — the root blocks their selectors, never their inherited
@@ -138,8 +154,8 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
 
 ### The rules, in short
 
-- **`theme.ts` owns every colour, shadow, radius, font family and duration.** Each module injects its
-  own `<style>` into the one Shadow root, so a token on `:host` reaches all of them. **The base
+- **`theme.ts` owns every colour, shadow, radius, font family and duration.** Each module adopts its
+  own stylesheet into the one Shadow root, so a token on `:host` reaches all of them. **The base
   `:host` block must declare every settable token** — a token declared only under
   `prefers-color-scheme: dark` is undefined in light mode, and the test that checks this is scoped to
   that block for exactly that reason.

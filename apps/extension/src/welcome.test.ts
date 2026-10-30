@@ -7,6 +7,7 @@ import { DEMO_FILES, DEMO_FRAMES, DEMO_SECONDS, demoLength } from './demo-video.
 import { setLanguage } from './i18n.ts';
 import { WELCOME_PATH, opensWelcome } from './welcome-install.ts';
 import { type WelcomeSignIn, welcomeScreen } from './welcome.ts';
+import { signInStop } from './popup-view.ts';
 
 type WelcomeSign = Extract<WelcomeSignIn, { kind: 'signed-in' }>;
 
@@ -76,6 +77,20 @@ describe('the page that opens at install (FRU-318)', () => {
       for (const button of buttons) button.click();
       assert.equal(asked, 3);
       assert.doesNotMatch(screen.textContent ?? '', /Click the Fruitback icon/);
+    });
+
+    it('draws the mark of its provider in « Google » and « GitHub », signed out and after a stop (FRU-525)', () => {
+      for (const state of [{ kind: 'signed-out' }, { kind: 'signed-out', stop: signInStop('refused') }] as const) {
+        const screen = signIn(state);
+        const marked = [...screen.querySelectorAll('.method-row button')].map((button) => [
+          button.textContent,
+          button.querySelector('svg.kit-provider-mark[aria-hidden="true"]')?.getAttribute('data-provider'),
+        ]);
+        assert.deepEqual(marked, [
+          ['Google', 'google'],
+          ['GitHub', 'github'],
+        ]);
+      }
     });
 
     it('puts the sign-in first, and the pin in a tip under it, with no step to follow (FRU-484)', () => {

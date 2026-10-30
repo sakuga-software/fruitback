@@ -75,7 +75,16 @@ function popupStates(): GalleryState[] {
       title: 'Connecting · Fruitback did not answer',
       build: (d) => connecting(d, { ...base, word: 'PLUM 42', unanswered: true, onStartAgain: nothing }),
     },
-    { id: 'not-web', title: 'Not a web page', build: (d) => notAWebPage(d, { ...base, account }) },
+    {
+      id: 'not-web',
+      title: 'Not a web page',
+      build: (d) => notAWebPage(d, { ...base, account, shortcut: ['⌥', '⇧', 'F'] }),
+    },
+    {
+      id: 'not-web-no-keys',
+      title: 'Not a web page · no keys set',
+      build: (d) => notAWebPage(d, { ...base, account }),
+    },
     {
       id: 'unreachable',
       title: 'Fruitback cannot be reached',

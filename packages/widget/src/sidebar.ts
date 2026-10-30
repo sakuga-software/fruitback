@@ -7,6 +7,7 @@ import { type Translator, createTranslator, languageOf } from './messages.ts';
 import { statusPaint, statusLabel } from './status-paint.ts';
 import { stageToken } from './theme.ts';
 import { type SiteNote, type SiteNotes, linkToNote } from './site-notes.ts';
+import { adoptStyles } from './stylesheet.ts';
 
 /**
  * Every note of the page, in one list (FRU-129).
@@ -144,9 +145,6 @@ function matches(entry: SidebarEntry, query: string): boolean {
 export function createSidebar(options: SidebarOptions): Sidebar {
   const document = options.document ?? options.host.ownerDocument ?? globalThis.document;
   const t = options.translator ?? createTranslator({ language: languageOf(document) });
-
-  const style = document.createElement('style');
-  style.textContent = STYLES;
 
   const view = document.defaultView;
 
@@ -457,7 +455,8 @@ export function createSidebar(options: SidebarOptions): Sidebar {
   detail.append(back, home);
 
   root.append(head, actions, panel, detail, foot);
-  options.host.append(style, root);
+  const style = adoptStyles(options.host, STYLES);
+  options.host.append(root);
 
   /** The shadow host, which the dock reads: it stands aside while the list is open. */
   const shell = 'host' in options.host ? options.host.host : null;

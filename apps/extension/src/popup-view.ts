@@ -7,6 +7,7 @@ import {
   keys,
   listRow,
   primaryButton,
+  providerButton,
   secondaryButton,
   siteLine,
   textButton,
@@ -172,8 +173,8 @@ export function signedOut(document: Document, options: SignedOutOptions): HTMLEl
   const methods = element(document, 'div', '', 'methods');
   const others = element(document, 'div', '', 'method-row');
   others.append(
-    secondaryButton(document, 'Google', options.onSignIn),
-    secondaryButton(document, 'GitHub', options.onSignIn),
+    providerButton(document, 'google', options.onSignIn),
+    providerButton(document, 'github', options.onSignIn),
   );
   methods.append(primaryButton(document, t('Sign in with email'), options.onSignIn), others);
   const invited = element(document, 'div', '', 'invited');
@@ -279,8 +280,46 @@ export function problem(document: Document, options: ProblemOptions): HTMLElemen
   );
 }
 
-/** 4, with nothing wrong: a `chrome://` page, the store, a PDF. Nothing can run there, and no button. */
-export function notAWebPage(document: Document, options: { onSettings: () => void; account?: Account }): HTMLElement {
+export type NotAWebPageOptions = {
+  onSettings: () => void;
+  account?: Account;
+  /** The keys of « Leave feedback », as the browser has them. None: the step names the icon alone. */
+  shortcut?: string[];
+};
+
+/**
+ * 4, with nothing wrong (FRU-526): a page of the browser, the store, a PDF. No extension draws there,
+ * so the screen says why, and what to do: open a site, then the icon or the keys of the person. It
+ * says too that the sites and the notes did not change, since a person who sees « can't » fears so.
+ */
+export function notAWebPage(document: Document, options: NotAWebPageOptions): HTMLElement {
+  const intro = element(document, 'div', '', 'intro');
+  intro.append(
+    element(document, 'h1', t("Fruitback can't run on this page")),
+    element(
+      document,
+      'p',
+      t(
+        'This is a page of the browser, like a new tab, the settings, the extension store or a PDF. No extension can draw on it.',
+      ),
+      'lead',
+    ),
+  );
+  const steps = element(document, 'ul', '', 'not-web-steps');
+  const keyNames = options.shortcut ?? [];
+  const press = element(document, 'li', '');
+  if (keyNames.length > 0) {
+    const [before, after] = t('There, click the Fruitback icon, or press {keys}.').split('{keys}');
+    press.append(before ?? '', keys(document, keyNames), after ?? '');
+  } else {
+    press.textContent = t('There, click the Fruitback icon.');
+  }
+  steps.append(
+    element(document, 'li', t('Open a site your team reviews.')),
+    press,
+    element(document, 'li', t('Nothing changed for your sites and your notes.')),
+  );
+
   return shell(
     document,
     {
@@ -288,7 +327,8 @@ export function notAWebPage(document: Document, options: { onSettings: () => voi
       screen: 4,
       ...(options.account === undefined ? {} : { account: options.account }),
     },
-    element(document, 'h1', t('Fruitback works on http and https pages.')),
+    intro,
+    steps,
   );
 }
 

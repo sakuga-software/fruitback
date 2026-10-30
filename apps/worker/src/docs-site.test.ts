@@ -139,8 +139,28 @@ describe('the landing (FRU-418)', () => {
       ([page, fragment]) => page === 'reviewing' && fragment === '1-install-it',
     );
 
-    // Firefox, by hand: the card « Sites you cannot touch », and the question about a site with no script.
+    // A browser that reaches no store: the card « Sites you cannot touch », and the question about a
+    // site with no script.
     assert.equal(links.length, 2, 'the landing lost a link to « 1. Install it » of the reviewer’s guide');
+  });
+
+  it('leads Firefox to addons.mozilla.org, not to an install by hand (FRU-521)', () => {
+    const landing = readFileSync(new URL('_layouts/landing.html', DOCS), 'utf8');
+    const guide = readFileSync(new URL('reviewing.md', DOCS), 'utf8');
+    const amo = 'https://addons.mozilla.org/en-US/firefox/addon/fruitback/';
+
+    // The card, the question, and the footer.
+    assert.equal(landing.split(`href="${amo}"`).length - 1, 3, 'the landing lost a link to addons.mozilla.org');
+    assert.doesNotMatch(
+      landing,
+      /Firefox, by hand|In Firefox you load it by hand/,
+      'the landing sends Firefox to an install by hand',
+    );
+    assert.ok(guide.includes(`(${amo})`), 'step 1 of the reviewer’s guide does not link addons.mozilla.org');
+    assert.ok(
+      !guide.includes('not on the add-ons site of Firefox'),
+      'the reviewer’s guide says the extension is not on AMO',
+    );
   });
 
   it('leads Chrome and Edge to the Chrome Web Store', () => {

@@ -284,10 +284,17 @@ async function draw(state: PopupState, facts: Found): Promise<HTMLElement> {
     shell(document, { onSettings: openSettings, ...(account === undefined ? {} : { account }) }, ...body);
 
   switch (state.kind) {
-    case 'not-web':
-      // A `chrome://` page, the store, a PDF viewer. Nothing is wrong, and saying so is better than an
-      // enabled-looking switch that silently does nothing.
-      return notAWebPage(document, { onSettings: openSettings, ...(account === undefined ? {} : { account }) });
+    case 'not-web': {
+      // A `chrome://` page, the store, a PDF viewer. Nothing is wrong: the screen says why nothing
+      // runs here, and the keys the person set (FRU-526).
+      const shortcut = currentShortcut(await browser.commands.getAll().catch(() => []));
+
+      return notAWebPage(document, {
+        onSettings: openSettings,
+        ...(account === undefined ? {} : { account }),
+        ...(shortcut === undefined ? {} : { shortcut: keysOfShortcut(shortcut) }),
+      });
+    }
 
     case 'pair-link': {
       // A pairing link is about a worker, not about a site to review, so it gets a screen of its own:
