@@ -241,7 +241,7 @@ test('a key is made, shown once with the line for Claude Code, copied, then gone
   expect(worker.made).toEqual([
     { name: 'Claude on my laptop', sites: ['s2'], rights: 'write', days: 30, verifiedOnly: false },
   ]);
-  const once = page.getByRole('region', { name: '« Claude on my laptop » is made' });
+  const once = page.getByRole('region', { name: '« Claude on my laptop » is created' });
   await expect(once.locator('[data-secret]')).toHaveText(SECRET);
   const line = `claude mcp add --transport http fruitback ${WORKER_ORIGIN}/mcp \\\n  --header "Authorization: Bearer ${SECRET}"`;
   await expect(once.getByRole('region', { name: 'The line that connects Claude Code' })).toHaveText(line);
