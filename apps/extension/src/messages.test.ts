@@ -183,7 +183,7 @@ describe('a word on a page of the extension', () => {
 
     setLanguage('fr');
     try {
-      showProblem(target, 'The worker did not answer. Try again.', { retry: () => {} });
+      showProblem(target, 'The server did not answer. Try again.', { retry: () => {} });
     } finally {
       setLanguage('en');
     }
@@ -203,8 +203,8 @@ describe('the language of a reviewer', () => {
   });
 
   it('fills the values, and shows a sentence with no French in English', () => {
-    assert.equal(translate('fr', 'Paired as {identity}', { identity: 'Alice' }), 'Connecté en tant que Alice');
-    assert.equal(translate('en', 'Paired as {identity}', { identity: 'Alice' }), 'Paired as Alice');
+    assert.equal(translate('fr', 'Connected as {identity}', { identity: 'Alice' }), 'Connecté en tant que Alice');
+    assert.equal(translate('en', 'Connected as {identity}', { identity: 'Alice' }), 'Connected as Alice');
     assert.equal(translate('fr', 'A sentence nobody translated'), 'A sentence nobody translated');
   });
 });

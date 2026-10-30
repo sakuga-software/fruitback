@@ -86,7 +86,7 @@ test('a read that fails after a good one leaves the pins and the list as they we
   );
   await mount(page, 'read-failure-later');
 
-  await page.getByRole('button', { name: 'Leave feedback' }).click();
+  await page.getByRole('button', { name: 'Leave a note' }).click();
   await page.locator('[data-testid="card-espresso"] .add').click();
   await page.getByPlaceholder('What should change?').fill('Kept through an outage');
   await page.getByRole('button', { name: 'Send', exact: true }).click();

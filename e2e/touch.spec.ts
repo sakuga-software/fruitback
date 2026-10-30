@@ -83,11 +83,11 @@ test.describe('on a touch screen at 390 px', () => {
     await mount(page, 'touch-label');
     const launch = page.locator('[data-fruitback-host-launch]');
     const banner = page.locator('[data-fruitback-host-banner]');
-    await expect(launch).toHaveText('Leave feedback');
+    await expect(launch).toHaveText('Leave a note');
     await launch.tap();
     // The button keeps its name (FRU-258), and stands aside in the dark capsule (FRU-303): the
     // banner holds the words, and the way out.
-    await expect(launch).toHaveText('Leave feedback');
+    await expect(launch).toHaveText('Leave a note');
     await expect(launch).toHaveAttribute('aria-pressed', 'true');
     await expect(banner).toHaveText('Tap the part of the page your note is about' + 'Cancel');
     await expect(banner).not.toHaveText(/Esc|arrow/);
@@ -132,12 +132,12 @@ test.describe('on a touch screen at 390 px', () => {
 
     // The dock.
     await measure();
-    await expectAtLeast(page, 'Leave feedback', COMFORTABLE);
+    await expectAtLeast(page, 'Leave a note', COMFORTABLE);
     await expectAtLeast(page, 'Show every note in a sidebar', COMFORTABLE);
     await expectAtLeast(page, 'Open Fruitback settings', COMFORTABLE);
 
     // The composer, with the name open.
-    await page.getByRole('button', { name: 'Leave feedback' }).tap();
+    await page.getByRole('button', { name: 'Leave a note' }).tap();
     await page.locator('[data-testid="card-espresso"] .add').tap();
     await measure();
     expect(await fontSize(page, 'What should change?')).toBe('16px');
@@ -179,6 +179,6 @@ test('with a mouse and a keyboard, the way out shows the key that does the same'
   await mount(page, 'touch-desktop');
   const launch = page.locator('[data-fruitback-host-launch]');
   await launch.click();
-  await expect(launch).toHaveText('Leave feedback');
+  await expect(launch).toHaveText('Leave a note');
   await expect(page.locator('[data-fruitback-host-banner]')).toContainText('Esc' + 'Cancel');
 });
