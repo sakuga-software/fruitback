@@ -429,8 +429,11 @@ export async function addableWorkspaces(endpoint: string, seams: CloudSeams): Pr
 
 export type AddFailure = 'forbidden' | 'rate-limited' | 'signed-out' | 'unavailable' | 'insecure-origin';
 
-/** The hosts the worker lets the popup add over http (`LOOPBACK` of `session-site-add.ts`). */
-const ADDABLE_OVER_HTTP = new Set(['localhost', '127.0.0.1', '[::1]']);
+/**
+ * The hosts the worker lets the popup add over http (`LOOPBACK` of `session-site-add.ts`).
+ * `cloud.test.ts` reads the worker's list and fails when the two differ.
+ */
+export const ADDABLE_OVER_HTTP: ReadonlySet<string> = new Set(['localhost', '127.0.0.1', '[::1]']);
 
 /**
  * Whether the worker adds this origin from the popup (FRU-537): https, or the loopback over http, as

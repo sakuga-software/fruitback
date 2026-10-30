@@ -1,8 +1,10 @@
+import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { createApply } from './bridge.ts';
 import {
   accountLanguage,
+  ADDABLE_OVER_HTTP,
   addSite,
   addableFromPopup,
   addableWorkspaces,
@@ -594,6 +596,15 @@ describe('the sites the popup may add (FRU-537)', () => {
     ]) {
       assert.equal(addableFromPopup(origin), false, origin);
     }
+  });
+
+  it('holds the same loopback hosts as the worker that adds the site (review of #754)', () => {
+    const worker = readFileSync(new URL('../../worker/src/session-site-add.ts', import.meta.url), 'utf8');
+    const listed = /const LOOPBACK = new Set\(\[(.*?)\]\);/.exec(worker)?.[1] ?? '';
+    const hosts = [...listed.matchAll(/'([^']+)'/g)].map(([, host]) => host);
+
+    assert.ok(hosts.length >= 3, `read ${hosts.length} hosts of LOOPBACK in session-site-add.ts`);
+    assert.deepEqual([...ADDABLE_OVER_HTTP].sort(), hosts.sort());
   });
 
   it('asks nothing of the worker for an http site, and says why', async () => {
