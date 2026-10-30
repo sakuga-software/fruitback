@@ -122,7 +122,7 @@ export function AccountDeletion({
             type="email"
             compact
             autoFocus
-            autoComplete="off"
+            someoneElse
             onChange={(event) => {
               setTyped(event.target.value);
               setProblem(undefined);

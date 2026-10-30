@@ -133,6 +133,7 @@ export function ListBar({
           labelHidden
           compact
           type="search"
+          someoneElse
           placeholder={placeholder}
           value={typed}
           onChange={(event) => onType(event.target.value)}
