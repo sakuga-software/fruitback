@@ -170,8 +170,8 @@ const rows = (page: Page) => page.locator('button[id^="source-row-"]');
 const panel = (page: Page) => page.locator('#source-panel');
 const sources = (page: Page) => page.getByRole('region', { name: 'Add a source' }).getByRole('listitem');
 
-/** FRU-542: with a source connected, « New source » opens the list of the sources to add. */
-async function openCatalogue(page: Page, name = 'New source'): Promise<void> {
+/** FRU-542: with a source connected, « New connector » opens the list of the sources to add. */
+async function openCatalogue(page: Page, name = 'New connector'): Promise<void> {
   await page.getByRole('button', { name, exact: true }).click();
   await expect(sources(page)).toHaveCount(8);
 }
@@ -223,9 +223,12 @@ test('the list of the sources and the panel of a Linear are the ones of the mock
     'flex-direction': 'column',
     'row-gap': '12px',
   });
-  // No list of the sources to add while one is connected: « New source » opens it.
+  // No list of the sources to add while one is connected: « New connector » opens it.
   await expect(sources(page)).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'New source', exact: true })).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.getByRole('button', { name: 'New connector', exact: true })).toHaveAttribute(
+    'aria-expanded',
+    'false',
+  );
   const chosen = rows(page).first();
   const resting = rows(page).nth(1);
   await expect(chosen).toHaveAttribute('aria-expanded', 'true');
@@ -448,10 +451,10 @@ test('with no source, and with a read that failed, the screen says which of the 
   await expect(page.getByRole('alert')).toHaveCount(0);
   await expectNoViolation(page, 'no source');
 
-  // With no source, the screen is the list of the sources to add (FRU-542), and no « New source ».
+  // With no source, the screen is the list of the sources to add (FRU-542), and no « New connector ».
   await expect(sources(page)).toHaveCount(8);
   await expect(page.getByRole('heading', { level: 2, name: 'Your connectors', exact: true })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'New source', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'New connector', exact: true })).toHaveCount(0);
 
   // A read that failed is not « no tracker »: it says so, and reads again.
   worker.down = true;
@@ -480,11 +483,14 @@ test('« Add a source » lists what connects, and what does not yet with a butto
   // The list opens over the sources that are connected, its title takes focus, and « Close » closes it.
   const title = page.getByRole('heading', { level: 2, name: 'Add a source', exact: true });
   await expect(title).toBeFocused();
-  await expect(page.getByRole('button', { name: 'New source', exact: true })).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.getByRole('button', { name: 'New connector', exact: true })).toHaveAttribute(
+    'aria-expanded',
+    'true',
+  );
   expect((await box(title)).y).toBeLessThan((await box(rows(page).first())).y);
   await page.getByRole('button', { name: 'Close', exact: true }).click();
   await expect(sources(page)).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'New source', exact: true })).toBeFocused();
+  await expect(page.getByRole('button', { name: 'New connector', exact: true })).toBeFocused();
   await openCatalogue(page);
   // Each source has the mark of its tracker (FRU-543).
   for (const [index, kind] of ['linear', 'github', 'rest', 'jira', 'gitlab', 'trello', 'notion', 'webhook'].entries()) {
@@ -562,7 +568,7 @@ test('« Add a source » lists what connects, and what does not yet with a butto
   await expect(page.getByText('made-by-fruitback-0123456789')).toHaveCount(0);
 });
 
-test('« Close » gives focus to « Your connectors » when a read took « New source » away (FRU-542)', async ({
+test('« Close » gives focus to « Your connectors » when a read took « New connector » away (FRU-542)', async ({
   page,
 }) => {
   const worker = await workerWith(page);
@@ -572,7 +578,7 @@ test('« Close » gives focus to « Your connectors » when a read took « New s
   await openCatalogue(page);
   worker.unavailable = true;
   await panel(page).getByRole('button', { name: 'Try now' }).first().click();
-  await expect(page.getByRole('button', { name: 'New source', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'New connector', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Close', exact: true }).click();
   await expect(sources(page)).toHaveCount(0);
   await expect(page.getByRole('heading', { level: 2, name: 'Your connectors', exact: true })).toBeFocused();
@@ -626,7 +632,7 @@ test('a worker with no Linear application connects Linear by a key, under its ro
   await expect(page.getByRole('button', { name: 'Connect Linear', exact: true })).toBeVisible();
 });
 
-test('a Linear connected by a key from « New source » opens its panel with focus (FRU-542)', async ({ page }) => {
+test('a Linear connected by a key from « New connector » opens its panel with focus (FRU-542)', async ({ page }) => {
   const worker = await workerWith(page);
   worker.oauth = false;
   await open(page);
@@ -641,6 +647,30 @@ test('a Linear connected by a key from « New source » opens its panel with foc
   await expect(panel(page)).toBeFocused();
 });
 
+test('a first address takes focus in its panel, also when its read ends after « I kept it » (FRU-542)', async ({
+  page,
+}) => {
+  const worker = await workerWith(page);
+  worker.connectors = [];
+  await open(page);
+  await page.getByRole('button', { name: 'Connect REST API', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Address of your receiver' }).fill('https://hooks.client.fr/notes');
+  // The read of the list that follows the address is held until the secret is kept.
+  let release: () => void = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route(`${WORKER_ORIGIN}/console/workspaces/w1/connectors`, async (route) => {
+    if (route.request().method() === 'GET') await held;
+    await route.fallback();
+  });
+  await page.getByRole('button', { name: 'Connect', exact: true }).click();
+  await expect(page.locator('[data-secret]')).toHaveText('made-by-fruitback-0123456789');
+  await page.getByRole('button', { name: 'I kept it', exact: true }).click();
+  await expect(rows(page)).toHaveCount(0);
+  release();
+  await expect(rows(page)).toHaveCount(1);
+  await expect(panel(page)).toBeFocused();
+});
+
 test('a member reads the sources and changes none', async ({ page }) => {
   const worker = await workerWith(page, 'member');
   worker.connectors = [];
@@ -652,7 +682,7 @@ test('a member reads the sources and changes none', async ({ page }) => {
   worker.connectors = [LINEAR, ADDRESS];
   await open(page);
   await expect(rows(page)).toHaveCount(2);
-  await expect(page.getByRole('button', { name: 'New source', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'New connector', exact: true })).toHaveCount(0);
   await expect(sources(page)).toHaveCount(0);
   await rows(page).first().click();
   await expect(panel(page).getByRole('heading', { level: 3, name: 'Sites sending here' })).toBeVisible();
@@ -713,7 +743,9 @@ for (const locale of ['en', 'fr'] as const) {
       await expectNoViolation(page, `the panel of source ${index + 1} at 390 px`);
       await rows(page).nth(index).click();
     }
-    await page.getByRole('button', { name: locale === 'en' ? 'New source' : 'Nouvelle source', exact: true }).click();
+    await page
+      .getByRole('button', { name: locale === 'en' ? 'New connector' : 'Nouveau connecteur', exact: true })
+      .click();
     expect.soft(await sideScroll(page), 'the list of the sources to add').toBe(0);
     await expectNoViolation(page, `the list of the sources to add at 390 px`);
     await page
@@ -745,7 +777,7 @@ for (const { width, height, locale, words } of [
     locale: 'fr',
     words: {
       rename: 'Renommer Linear',
-      field: 'Nom de cette source',
+      field: 'Nom de ce connecteur',
       save: 'Enregistrer',
       refused: 'Un nom d’une ligne, de 80 caractères au plus.',
     },

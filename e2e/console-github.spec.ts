@@ -127,9 +127,9 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
 
 const card = (page: Page) => page.locator('[data-source="GitHub Issues"]');
 
-/** FRU-542: with a source connected, « New source » opens the list where the card of GitHub is. */
+/** FRU-542: with a source connected, « New connector » opens the list where the card of GitHub is. */
 async function openCatalogue(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'New source', exact: true }).click();
+  await page.getByRole('button', { name: 'New connector', exact: true }).click();
   await expect(card(page)).toBeVisible();
 }
 const rows = (page: Page) => page.locator('button[id^="source-row-"]');
@@ -244,7 +244,7 @@ test('a way back that went wrong opens the list, and its sentence is there again
   await expect(card(page).getByRole('alert')).toHaveText(RETURNS.requested);
   await page.getByRole('button', { name: 'Close', exact: true }).click();
   await expect(card(page)).toHaveCount(0);
-  // Closed is not forgotten: « New source » shows the same sentence under GitHub.
+  // Closed is not forgotten: « New connector » shows the same sentence under GitHub.
   await openCatalogue(page);
   await expect(card(page).getByRole('alert')).toHaveText(RETURNS.requested);
 });

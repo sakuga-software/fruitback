@@ -146,7 +146,7 @@ test('in French and at 390 px, the banner and the refusal are French, and nothin
   await open(page);
 
   await expect(banner(page)).toHaveText(
-    `Ce workspace est suspendu depuis le ${DAY_FR}.Un administrateur de cette instance l’a suspendu. Vous pouvez toujours le lire, mais rien ne peut y changer, et ses sites ne prennent aucune note. Pour le rétablir, contactez l’administrateur de cette instance.`,
+    `Cet espace de travail est suspendu depuis le ${DAY_FR}.Un administrateur de cette instance l’a suspendu. Vous pouvez toujours le lire, mais rien ne peut y changer, et ses sites ne prennent aucune note. Pour le rétablir, contactez l’administrateur de cette instance.`,
   );
   await expect(page.locator('body')).not.toContainText(REASON);
   expect(await sideScroll(page)).toBe(0);
@@ -157,7 +157,7 @@ test('in French and at 390 px, the banner and the refusal are French, and nothin
   await form.getByRole('textbox', { name: 'Adresse du site' }).fill('docs.acme.dev');
   await form.getByRole('button', { name: 'Ajouter le site', exact: true }).click();
   await expect(form.getByRole('alert')).toHaveText(
-    'Ce workspace est suspendu : rien ne peut y changer. Contactez l’administrateur de cette instance.',
+    'Cet espace de travail est suspendu : rien ne peut y changer. Contactez l’administrateur de cette instance.',
   );
   expect(posted).toEqual(['POST /console/workspaces/w1/sites']);
   expect(await sideScroll(page)).toBe(0);

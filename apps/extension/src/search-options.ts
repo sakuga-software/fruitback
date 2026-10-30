@@ -1,5 +1,5 @@
 import { msg, t } from './i18n.ts';
-import { type DropOptions, listSelect, segmentedTabs, statusDrop, toggle } from './kit.ts';
+import { type DropOptions, linkButton, listSelect, make, segmentedTabs, statusDrop, toggle } from './kit.ts';
 import { notePaint, stateWord } from './note-status.ts';
 import type { PanelNote } from './protocol.ts';
 import type { SiteNote, SiteStage } from './site-notes.ts';
@@ -178,19 +178,6 @@ export function statusFilter(state: SearchState, scope: readonly Statused[]): (n
   const chosen = statuses.some((status) => status.key === state.status) ? state.status : undefined;
 
   return (note) => chosen === undefined || statusKey(note) === chosen;
-}
-
-function make<K extends keyof HTMLElementTagNameMap>(
-  document: Document,
-  tag: K,
-  className: string,
-  text = '',
-): HTMLElementTagNameMap[K] {
-  const node = document.createElement(tag);
-  if (className !== '') node.className = className;
-  if (text !== '') node.textContent = text;
-
-  return node;
 }
 
 /**
@@ -491,7 +478,7 @@ export function siteList(
         problem.setAttribute('role', 'alert');
         more.append(problem);
       }
-      more.append(linkButton(document, t('Show more'), handlers.onMore));
+      more.append(linkButton(document, t('Show more'), handlers.onMore, 'panel-link'));
     }
     parts.push(more);
   }
@@ -504,18 +491,10 @@ function failed(document: Document, onRetry: () => void): HTMLElement {
   box.setAttribute('role', 'alert');
   box.append(
     make(document, 'p', '', t('The notes of the whole site could not be read. They are not lost.')),
-    linkButton(document, t('Try again'), onRetry),
+    linkButton(document, t('Try again'), onRetry, 'panel-link'),
   );
 
   return box;
-}
-
-function linkButton(document: Document, label: string, onClick: () => void): HTMLButtonElement {
-  const node = make(document, 'button', 'panel-link', label);
-  node.type = 'button';
-  node.addEventListener('click', onClick);
-
-  return node;
 }
 
 /** The index keeps 64 characters: a note that long was cut, and says so. */

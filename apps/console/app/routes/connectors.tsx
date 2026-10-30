@@ -90,10 +90,10 @@ const PANELS: Record<Connector['kind'], (props: PanelProps) => ReactNode> = {
 /** The id of the title of the open panel. */
 const PANEL_TITLE = 'source-panel-title';
 
-/** The id of the list of the sources to add, which « New source » names in `aria-controls`. */
+/** The id of the list of the sources to add, which « New connector » names in `aria-controls`. */
 const CATALOGUE = 'source-catalogue';
 
-/** The id of the title « Your connectors », where focus goes back when « New source » is not there. */
+/** The id of the title « Your connectors », where focus goes back when « New connector » is not there. */
 const CONNECTED_TITLE = 'connected-title';
 
 export default function Connectors() {
@@ -122,7 +122,7 @@ export default function Connectors() {
   // Whether the panel that is about to appear was opened by a press of its row: see `Opened`.
   const opening = useRef(false);
   const [adding, setAdding] = useState<Connector['kind'] | undefined>();
-  // FRU-542: whether « New source » opened the list of the sources to add. A way back from Linear or
+  // FRU-542: whether « New connector » opened the list of the sources to add. A way back from Linear or
   // GitHub that went wrong opens it: its sentence is under the source, in that list.
   const [catalogue, setCatalogue] = useState(problem !== undefined || githubProblem !== undefined);
   const catalogueTitle = useRef<HTMLHeadingElement>(null);
@@ -131,7 +131,7 @@ export default function Connectors() {
   const restAdded = useRef(false);
   const toPanel = useRef(false);
   useEffect(() => {
-    // The list that « New source » opens takes focus on its title: a screen reader says where it is.
+    // The list that « New connector » opens takes focus on its title: a screen reader says where it is.
     if (catalogue && newSource.current) catalogueTitle.current?.focus();
     newSource.current = false;
   }, [catalogue]);
@@ -195,7 +195,7 @@ export default function Connectors() {
   }, [load]);
 
   /**
-   * « Close » of the list of the sources to add: the keyboard goes back to « New source ». A read
+   * « Close » of the list of the sources to add: the keyboard goes back to « New connector ». A read
    * since the list opened can take that button away (a role, or a worker that cannot keep a key any
    * more): focus then goes to the title « Your connectors », never to the page.
    */
@@ -278,18 +278,22 @@ export default function Connectors() {
   const answered = connectors !== undefined;
   const connected = connectors !== undefined && connectors.length > 0;
   // FRU-542: with no source, the screen is the list of the sources to add. With one, it is the
-  // sources that are connected, and « New source » opens the list above them. A form open in the
+  // sources that are connected, and « New connector » opens the list above them. A form open in the
   // list keeps it open: the secret of an address is shown there once, after the address is connected.
   const listed = answered && (!connected || catalogue || adding !== undefined);
   // A person who cannot connect a source is not offered a button that opens disabled ones.
   const offersNew = connected && !cannot;
   // Once « I kept it » closed the list, focus goes to the panel of the new address: the button had it.
+  // It waits for the list to close and for the panel to be there: the read that brings the new
+  // address can end after « I kept it ».
   useEffect(() => {
     if (listed || !toPanel.current) return;
+    const opened = document.getElementById(PANEL);
+    if (opened === null) return;
     toPanel.current = false;
     restAdded.current = false;
-    document.getElementById(PANEL)?.focus({ preventScroll: true });
-  }, [listed]);
+    opened.focus({ preventScroll: true });
+  }, [listed, open?.id]);
 
   return (
     <>
@@ -309,7 +313,7 @@ export default function Connectors() {
                     setCatalogue(!listed);
                   }}
                 >
-                  {t('New source')}
+                  {t('New connector')}
                 </Button>
               ),
             }

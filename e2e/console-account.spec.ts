@@ -1388,7 +1388,7 @@ test('a refusal of an address says why, in French too (FRU-450)', async ({ page 
   await expect(addresses.getByRole('listitem')).toHaveCount(3);
   worker.addressRefuses = 'sign-in-again';
   await addresses.getByRole('listitem').nth(2).getByRole('button', { name: 'Rendre principale' }).click();
-  await expect(addresses.getByText(/Reconnectez-vous d’abord : l’adresse principale/)).toBeVisible();
+  await expect(addresses.getByText(/Reconnectez-vous d’abord\u202F: l’adresse principale/)).toBeVisible();
   await expect(addresses.getByRole('listitem').nth(0)).toContainText('ana@acme.dev');
 });
 

@@ -561,15 +561,15 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   Notion and Webhook are listed with the sentence of the mockup and a disabled « After the beta »,
   where the mockup draws « Connect ». **With no source connected, the screen is « Add a source »**,
   its eight sources and « No tracker yet. The notes stay in Fruitback. » (FRU-542, Mathieu). **With
-  one, it is « Your connectors », a card for each source, one under the other, and « New source » at the
+  one, it is « Your connectors », a card for each source, one under the other, and « New connector » at the
   top right** opens « Add a source » above the cards, in a frame of its own, its title focused,
-  with « Close », which gives focus back to « New source ». Linear and an address stay in it: a
+  with « Close », which gives focus back to « New connector ». Linear and an address stay in it: a
   workspace can connect a second one. The cards are not a grid: the panel of a source opens inside
   its card (FRU-403), and a panel between two rows of cards reads as a stray card (FRU-433). The list
   stays open while a form in it is open (the secret of an address is shown there once, after it is
   connected), and a way back from Linear or GitHub that went wrong opens it, since its sentence is
   under its source. A person who cannot connect (a member, a worker that cannot keep a key) gets no
-  « New source »: it would open buttons that do nothing. **Each source has the logo of its tracker**
+  « New connector »: it would open buttons that do nothing. **Each source has the logo of its tracker**
   (FRU-543, `connector-marks.tsx`: simple-icons, CC0, and the GitHub mark of `provider-icons.tsx`),
   18 px in the white box of 34 px where the mockup writes a letter, in the colour of the text: no logo
   is louder than the state of its row. **« Add a source » waits for the list to be read**

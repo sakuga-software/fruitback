@@ -1,3 +1,4 @@
+import { frenchCatalog } from '@fruitback/widget';
 import { FRENCH } from './messages.fr.ts';
 
 /**
@@ -11,7 +12,8 @@ import { FRENCH } from './messages.fr.ts';
 export const LANGUAGES = ['en', 'fr'] as const;
 export type Language = (typeof LANGUAGES)[number];
 
-const CATALOGS: Record<Language, Readonly<Record<string, string>>> = { en: {}, fr: FRENCH };
+// French is set with its narrow no-break spaces once, here (FRU-517).
+const CATALOGS: Record<Language, Readonly<Record<string, string>>> = { en: {}, fr: frenchCatalog(FRENCH) };
 
 /** The language of the catalog for a locale tag: `fr-CA` reads French, an unknown tag reads English. */
 export function nearest(tag: string | undefined): Language {

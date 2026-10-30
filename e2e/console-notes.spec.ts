@@ -437,21 +437,25 @@ test('the page is the one of the mockup: chips, filters, the table and its pages
   const drop = await box(first.locator('td').nth(2).locator('[aria-hidden="true"]'));
   expect.soft({ width: drop.width, height: drop.height }).toEqual({ width: 10, height: 10 });
 
-  // Who left it (FRU-553): the icon of their role, then the name; the role is in the tooltip and in
-  // the name a screen reader says.
-  const author = (text: string) => row(page, text).locator('td').nth(3).getByRole('img');
-  await expect(first.locator('td').nth(3)).toHaveText('Ana');
-  await expect(author('The headline runs')).toHaveAccessibleName('Ana, You');
+  // Who left it (FRU-553): the icon of their role, then the name; the role is in the tooltip, and
+  // in the cell for a screen reader only. The cell holds no control: nothing of it is in the order of
+  // the keyboard (review of #748).
+  const author = (text: string) => row(page, text).locator('td').nth(3);
+  await expect(author('The headline runs')).toHaveText('Ana, You');
+  await expect(author('The headline runs').locator('.sr-only')).toHaveText(', You');
   await expect(author('The headline runs').locator('[data-note-icon="you"]')).toHaveCount(1);
-  await expect(author('The order form')).toHaveAccessibleName('Visitor, Anonymous');
-  await expect(author('The checkout button')).toHaveAccessibleName('Visitor, Verified by acme.dev');
-  await expect(author('cream')).toHaveAccessibleName('Camille Durand, Guest');
-  await expect(author('yearly toggle')).toHaveAccessibleName('Marc Petit, Admin');
+  await expect(author('The order form')).toHaveText('Visitor, Anonymous');
+  await expect(author('The checkout button')).toHaveText('Visitor, Verified by acme.dev');
+  await expect(author('cream')).toHaveText('Camille Durand, Guest');
+  await expect(author('yearly toggle')).toHaveText('Marc Petit, Admin');
   await expect(author('yearly toggle').locator('[data-note-icon="admin"]')).toHaveCount(1);
-  // The keyboard reaches it, and the tooltip says the name whole and the role.
-  await author('cream').focus();
+  await expect(author('cream').locator('[tabindex="0"], button, a')).toHaveCount(0);
+  await expect(author('cream').getByRole('button')).toHaveCount(0);
+  // Under the pointer, the tooltip says the name whole and the role.
+  await author('cream').locator('.kit-tip-trigger').hover();
   await expect(page.getByRole('tooltip')).toHaveText('Camille Durand · Guest');
-  await author('cream').blur();
+  await page.mouse.move(0, 0);
+  await expect(page.getByRole('tooltip')).toHaveCount(0);
 
   // Where it went (FRU-552): the mark of the tracker and its reference on one line, the name of the
   // tracker for a screen reader only; the reference a link at 400 with an arrow.

@@ -1,6 +1,6 @@
 import { language, msg, t } from './i18n.ts';
 import { leaveAndFollow, whenNotAnswering } from './guide.ts';
-import { dropMark, helpLink, primaryButton, segmentedTabs, statusDrop } from './kit.ts';
+import { dropMark, helpLink, linkButton, make, primaryButton, segmentedTabs, statusDrop } from './kit.ts';
 import type { CheckVerdict, NotesReading, PanelNote, ReplyOutcome } from './protocol.ts';
 import { notePaint, stateWord } from './note-status.ts';
 import {
@@ -280,27 +280,6 @@ function popupButton(document: Document, onOpenPopup: () => void): HTMLButtonEle
   return open;
 }
 
-function make<K extends keyof HTMLElementTagNameMap>(
-  document: Document,
-  tag: K,
-  className: string,
-  text = '',
-): HTMLElementTagNameMap[K] {
-  const node = document.createElement(tag);
-  if (className !== '') node.className = className;
-  if (text !== '') node.textContent = text;
-
-  return node;
-}
-
-function linkButton(document: Document, label: string, onClick: () => void): HTMLButtonElement {
-  const node = make(document, 'button', 'panel-link', label);
-  node.type = 'button';
-  node.addEventListener('click', onClick);
-
-  return node;
-}
-
 const SVG = 'http://www.w3.org/2000/svg';
 
 /** The cross of « Close the sidebar », 15 px, in the colour of its button. */
@@ -470,7 +449,7 @@ export function panelPage(document: Document, options: PanelOptions): HTMLElemen
   const line = make(document, 'div', 'panel-foot-line');
   line.append(
     make(document, 'span', 'panel-where', state.where === undefined ? state.host : `${state.host} · ${state.where}`),
-    linkButton(document, t('Settings'), options.onSettings),
+    linkButton(document, t('Settings'), options.onSettings, 'panel-link'),
   );
   foot.append(line);
   root.append(foot);
@@ -505,7 +484,7 @@ function notesPart(document: Document, options: PanelOptions, notes: PanelNotes)
     const box = make(document, 'div', 'panel-failed');
     box.append(
       make(document, 'p', '', t('This page was open before Fruitback was on. Reload it to see its notes.')),
-      linkButton(document, t('Reload the page'), options.onReload),
+      linkButton(document, t('Reload the page'), options.onReload, 'panel-link'),
       helpLink(document, whenNotAnswering()),
     );
 
@@ -515,7 +494,7 @@ function notesPart(document: Document, options: PanelOptions, notes: PanelNotes)
     const box = make(document, 'div', 'panel-failed');
     box.append(
       make(document, 'p', '', t('Fruitback did not start on this page. Reload it to see its notes.')),
-      linkButton(document, t('Reload the page'), options.onReload),
+      linkButton(document, t('Reload the page'), options.onReload, 'panel-link'),
       helpLink(document, whenNotAnswering()),
     );
 
@@ -526,7 +505,7 @@ function notesPart(document: Document, options: PanelOptions, notes: PanelNotes)
     box.setAttribute('role', 'alert');
     box.append(
       make(document, 'p', '', t('The notes of this page could not be read. They are not lost.')),
-      linkButton(document, t('Try again'), options.onRetry),
+      linkButton(document, t('Try again'), options.onRetry, 'panel-link'),
       helpLink(document, whenNotAnswering()),
     );
 
@@ -671,10 +650,10 @@ function noteRow(document: Document, options: PanelOptions, note: PanelNote): HT
     more.append(replies);
   }
   const links = make(document, 'div', 'panel-row-links');
-  links.append(linkButton(document, t('Show on the page'), () => options.onShow(note.id)));
+  links.append(linkButton(document, t('Show on the page'), () => options.onShow(note.id), 'panel-link'));
   const replying = options.replying?.id === note.id ? options.replying : undefined;
   if (note.canReply && replying === undefined) {
-    const reply = linkButton(document, t('Reply'), () => options.onReplyOpen(note.id));
+    const reply = linkButton(document, t('Reply'), () => options.onReplyOpen(note.id), 'panel-link');
     // The panel gives the focus back here once a reply is sent.
     reply.dataset.action = 'reply';
     links.append(reply);
