@@ -482,9 +482,11 @@ degradation the ticket asked to have written down rather than discovered.
   people who triage. The client is also looked for in the
   description, as a substring, so the notes of another client of the team do not fill the pages a
   read walks; the exact comparison is in the code.
-- **A GitHub read lists the client's issues by label and re-checks `note.page.url`; it never
-  searches.** Search is 30 requests a minute. Every page read walks the client's list, newest first,
-  stopped at 1,000 issues, and the read cache is what protects the hourly budget.
+- **A GitHub read lists the client's newest 100 issues by label, and searches only past them**
+  (FRU-500), then re-checks `note.page.url`. A site with fewer issues costs one call, as before; a
+  larger one costs a second call, a search for the page, whatever its number of issues. Search is 30
+  requests a minute: the read cache stands in front of it, and a search GitHub refuses for its rate
+  keeps the newest notes and says so in the log.
 - **A label that cannot be created stops a GitHub write.** A read finds a note by its labels, so an
   issue without them is a note nobody sees again. A `502` keeps the note in the widget.
 - **No parameter properties in the worker.** `constructor(readonly status: number)` is TypeScript that
@@ -698,17 +700,23 @@ degradation the ticket asked to have written down rather than discovered.
   failed mint leaves the map before any waiter sees it, and a `401` drops the token. The installation
   is found from the repository (`GET /repos/{owner}/{repo}/installation`), so a client repository in
   another organisation needs no variable of its own.
-- **The read lists by label; it does not search.** The search API allows 30 requests a minute and 1,000
-  results, shared by every page read of every client. Listing
-  `labels=fruitback,fruitback:<client>&state=all` spends the ordinary budget, and the exact
-  `note.page.url` re-check does the job the re-check after `contains` does on Linear.
+- **The read lists by label, and searches only when the list is full** (FRU-500). Listing
+  `labels=fruitback,fruitback:<client>&state=all`, the newest 100, spends the ordinary budget and
+  reaches a note the moment it is made. When those 100 are full, older issues exist, and a search
+  `repo:… is:issue label:"…" "<page URL>" in:body` reaches the notes of the page among them in one
+  call: measured on `cli/cli`, 2026-10-30, a URL written only inside a fenced JSON block, as the note
+  is, is found by its exact phrase and by a prefix of it, and a URL one character off finds nothing.
+  The exact `note.page.url` re-check does the rest. The search API allows 30 requests a minute and
+  1,000 results; a page with more than 1,000 notes keeps its newest. A URL longer than the 256
+  characters a search holds is searched by a prefix ending on a `/`.
 - **`labels` is AND, and that is the client isolation.** Measured on `cli/cli`, 2026-09-14: `bug` alone
   filled a page of 100, `gh-codespace` gave 42, and `bug,gh-codespace` gave 22, every row carrying
   both. The first comparison proved nothing: three labels, three counts of 100, each one the page size.
-- **The cost of listing is stated rather than hidden.** Every page read walks the client's issues,
-  newest first, a hundred a page, stopped at ten pages; a client with more than 1,000 Fruitback issues
-  loses its oldest pins. Comments cost one or two calls for each pin of that page that has any. The
-  read cache is what stands between this and the hourly budget.
+- **The cost of a read is stated rather than hidden.** One list call, plus one search when the site
+  has more than 100 Fruitback issues; before FRU-500 the store walked ten pages and lost the pins
+  past the 1,000th. Comments cost one or two calls for each pin of that page that has any. The read
+  cache is what stands between this and the budgets. A read gives up after 10 seconds
+  (`READ_TIMEOUT_MS`), a write never: a note GitHub makes after the worker gave up would be made twice.
 - **Conditional requests were planned and taken out before a line was written.** A `304` costs no quota,
   but how GitHub's ETags behave across an hourly token change was not measurable here, and a second
   cache under `cached()` is one more thing to keep in step with the page version. It is the next lever
