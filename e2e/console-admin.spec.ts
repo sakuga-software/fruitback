@@ -287,8 +287,8 @@ test('an administrator sees the frame and the instance, with the values of the m
   expect.soft(await painted(code, 'backgroundColor')).toEqual(rgb(SUBTLE));
   await expect(ways.nth(2).getByRole('button', { name: 'Copy' })).toBeVisible();
 
-  // Who can make an account: the policy of the worker, read-only, with the variable that sets it.
-  const policy = page.getByRole('radiogroup', { name: 'Who can make an account' });
+  // Who can create an account: the policy of the worker, read-only, with the variable that sets it.
+  const policy = page.getByRole('radiogroup', { name: 'Who can create an account' });
   const radios = policy.getByRole('radio');
   await expect(radios).toHaveCount(2);
   await expect(policy.getByRole('radio', { name: 'Only people invited to a workspace' })).toBeChecked();
@@ -459,7 +459,7 @@ test('a worker that does not answer the read says so, keeps the frame, and reads
   });
   await open(page);
 
-  await expect(main(page).getByRole('alert')).toHaveText('The instance could not be read. Fruitback did not answer.');
+  await expect(main(page).getByRole('alert')).toHaveText('The instance did not load. Fruitback hit an error.');
   await expect(health(page)).toHaveCount(0);
   await expect(page.getByRole('navigation', { name: 'Instance' })).toBeVisible();
   await expect(main(page).getByRole('button', { name: 'Show the workspaces' })).toBeVisible();
@@ -529,7 +529,7 @@ test('in French, every sentence of the screen is French', async ({ page }) => {
     'How people get into',
     'Set by',
     'Redirect address',
-    'Who can make an account',
+    'Who can create an account',
     'Only people invited',
     'Public address',
     'Created',
@@ -627,7 +627,7 @@ test('« Deleted workspaces » says when there is none, and when the read failed
 
   await stub(page, { deleted: 503 });
   await page.reload();
-  await expect(section).toContainText('The deleted workspaces could not be read. Fruitback did not answer.');
+  await expect(section).toContainText('The deleted workspaces did not load. Fruitback hit an error.');
   await stub(page, { deleted: DELETED });
   await section.getByRole('button', { name: 'Try again' }).click();
   await expect(section.getByRole('table')).toBeVisible();

@@ -3,7 +3,7 @@ import { useParams } from 'react-router';
 import { type ConnectRequest, type Me, answerConnect, call, connectRequest, signOut } from '../api';
 import { keepConnect } from '../connect-return';
 import { locale, msg, t } from '../i18n';
-import { DID_NOT_ANSWER } from '../problems';
+import { SERVER_CAUSE, UNREACHABLE_CAUSE, failureOf } from '../problems';
 import {
   AnotherAddress,
   EmailForm,
@@ -30,7 +30,8 @@ import { useLocale } from '../use-locale';
 type Stage =
   | { kind: 'loading' }
   /** The worker did not answer. Nothing was decided: the same reading again. */
-  | { kind: 'silent' }
+  /** `status` 0: no answer at all. Any other: an answer that is an error. */
+  | { kind: 'silent'; status: number }
   | { kind: 'signed-out' }
   | { kind: 'sent'; email: string }
   | { kind: 'ask'; request: Asked }
@@ -92,13 +93,13 @@ async function resolve(request: string): Promise<Stage> {
     const me = await call<Me>('GET', '/console/me', undefined, { quiet: true });
     // Workspaces that could not be read are not « none »: the page reads again rather than send the
     // person to the setup.
-    if (!me.ok) return me.status === 401 ? { kind: 'signed-out' } : { kind: 'silent' };
+    if (!me.ok) return me.status === 401 ? { kind: 'signed-out' } : { kind: 'silent', status: me.status };
 
     return stageOf({ ...read.data, workspaces: me.data.workspaces });
   }
   if (read.ok) return stageOf(read.data);
   if (read.status === 401) return { kind: 'signed-out' };
-  if (read.status === 0 || read.status === 429 || read.status >= 500) return { kind: 'silent' };
+  if (read.status === 0 || read.status === 429 || read.status >= 500) return { kind: 'silent', status: read.status };
 
   // 404: unknown, or answered by another account. 410: expired. Nothing to do here any more.
   return { kind: 'gone' };
@@ -143,7 +144,7 @@ export default function Connect() {
             <Title>{t('Connect this browser')}</Title>
           </div>
           <p role="alert" className="mb-6 text-lead text-muted">
-            {t(DID_NOT_ANSWER)}
+            {t(stage.status === 0 ? UNREACHABLE_CAUSE : SERVER_CAUSE)}
           </p>
           <div>
             <Button tone="outline" size="page" onClick={read}>
@@ -237,7 +238,7 @@ function Ask({ request, asked, onAnswered, onRead, onSignedOut }: AskProps) {
     // word the worker does not take: the page reads what the request is now, for this session.
     if ([404, 409, 410, 422].includes(answered.status)) return onRead();
     if (answered.status === 401) return onSignedOut();
-    setProblem(DID_NOT_ANSWER);
+    setProblem(failureOf(answered));
   }
 
   async function another() {

@@ -230,12 +230,12 @@ with **Change the worker** beside it, which opens the fields of the rule.
 
 Otherwise, what a failed attempt answers. Each message has the one thing to do about it beside it:
 
-| The popup says                                               | Why                                                                                                                                                                              | Beside it                                     |
-| ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
-| `That code has been used or has expired. Ask for a new one.` | Codes are single-use, and expire 15 minutes after they are minted.                                                                                                               | **How to get a code**, a link to this section |
-| `The worker did not answer. Try again.`                      | The worker is down or unreachable — the code is still good.                                                                                                                      | **Try again**, with the same code             |
-| `Fruitback needs permission to reach that worker.`           | The prompt for the **worker's** origin was refused. It is not the site's.                                                                                                        | **Grant access**, which asks again            |
-| `That worker is on plain http. A session must not cross it.` | The same rule as the disabled button above, answered by `session.ts` rather than by the popup. You reach it only if something else asks for a pairing — the popup refuses first. | **Change the worker**                         |
+| The popup says                                                                          | Why                                                                                                                                                                              | Beside it                                     |
+| --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| `That code has been used or has expired. Ask for a new one.`                            | Codes are single-use, and expire 15 minutes after they are minted.                                                                                                               | **How to get a code**, a link to this section |
+| `The worker did not answer. Try again.`                                                 | The worker is down or unreachable — the code is still good.                                                                                                                      | **Try again**, with the same code             |
+| `Fruitback needs permission to reach that worker.`                                      | The prompt for the **worker's** origin was refused. It is not the site's.                                                                                                        | **Grant access**, which asks again            |
+| `That worker is on plain http, and a session must not cross it. Use its https address.` | The same rule as the disabled button above, answered by `session.ts` rather than by the popup. You reach it only if something else asks for a pairing — the popup refuses first. | **Change the worker**                         |
 
 Pairing asks for a permission on the worker's origin, which is a different grant from the site's. It
 is asked for at the click, so nothing is awaited before the prompt — a browser drops the gesture
@@ -337,12 +337,12 @@ then what to do.
 
 The popup shows the sign-in buttons again, with the reason above them.
 
-| The popup says                                                | What to do                                                                                                                               |
-| ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `It was refused in the console.`                              | Someone pressed **Not now** in the tab of the console. Sign in again, then press **Connect Chrome**, or the name of your browser, there. |
-| `The tab was not approved in time.`                           | The request expired before the console connected it. Sign in again.                                                                      |
-| `Check the connection, then try again.`                       | Fruitback did not answer. Check that the browser is online, then sign in again.                                                          |
-| `The browser did not give the extension access to Fruitback.` | You refused the browser's prompt for Fruitback itself. Sign in again, and allow it this time.                                            |
+| The popup says                                                                                                   | Why                                                                 |
+| ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `Someone declined it in the console. Sign in again to retry.`                                                    | Someone pressed **Not now** in the tab of the console.              |
+| `The console did not approve it within 15 minutes. Sign in again.`                                               | The request expired before anyone pressed **Connect Chrome** there. |
+| `Check the connection, then try again.`                                                                          | Fruitback could not be reached. Check that the browser is online.   |
+| `The browser did not give the extension access to Fruitback. Sign in again, and allow it when the browser asks.` | You refused the browser's prompt for Fruitback itself.              |
 
 While the popup waits for the console, it shows the word to check. If it reads
 `Fruitback did not answer. The popup asks again.`, it asks again by itself. **Start again** makes a
@@ -358,8 +358,8 @@ The popup reads `Fruitback can't reach` and the address of Fruitback, with
 `Check the connection, then try again.` Your session is kept. Check that the browser is online,
 then press **Try again**.
 
-A note that does not go through stays in the widget, under `Did not go through`:
-`Your text is kept. Try again, or copy it before closing the page.`
+A note that does not go through stays in the widget, under `Not sent`:
+`Your text is still here. Try again, or copy it before you close the page.`
 
 ### Your own server does not answer
 
@@ -369,7 +369,7 @@ On a site that uses a worker you run yourself:
   answered at that address, and it was not a worker. Correct the **Worker endpoint** of the rule on
   the options page.
 - When the worker is down or slow, the popup says nothing about it. The widget keeps the note you
-  send and says `Did not go through`. Ask the person who runs the worker to check it. Their side is
+  send and says `Not sent`. Ask the person who runs the worker to check it. Their side is
   in [self-hosting/troubleshooting.md](self-hosting/troubleshooting.md).
 - A pairing that gets no answer reads `The worker did not answer. Try again.` The code stays good
   until it expires. Press **Try again** once the worker is back.

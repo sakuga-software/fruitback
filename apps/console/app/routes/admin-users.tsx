@@ -24,6 +24,7 @@ import { useAdmin } from './admin';
 import { AccountDeletion, DELETION_HOLDS } from './admin-account-deletion';
 import { AddToWorkspace, ChangeRole } from './admin-user-workspaces';
 import { seenOn } from './members';
+import { ReadProblem } from '../read-problem';
 
 /**
  * The people of the instance, as screen 19 of the mockup of 2026-10-13 draws them (FRU-263): their
@@ -132,7 +133,8 @@ const SUSPENSION_PROBLEMS: Readonly<Record<string, string>> = {
   'self-suspension': SUSPENSION_HOLDS.self,
   'last-admin': SUSPENSION_HOLDS.last,
 };
-const NOTHING_CHANGED = msg('Nothing changed. Try again.');
+const NOT_SUSPENDED = msg('The account was not suspended. Try again.');
+const NOT_RESTORED = msg('The access of the account was not restored. Try again.');
 
 /**
  * Why a control of a person is held, before the worker is asked. `admins` is the count of
@@ -260,7 +262,9 @@ export default function AdminUsers() {
       {shown === 'loading' ? <p className="text-small text-muted">{t('Loading…')}</p> : null}
       {shown === 'failed' ? (
         <div className="flex flex-col items-start gap-[12px]">
-          <Problem>{t('The people could not be read. Fruitback did not answer.')}</Problem>
+          <Problem>
+            {t('The people did not load.')} <ReadProblem />
+          </Problem>
           <Button tone="outline" onClick={again}>
             {t('Try again')}
           </Button>
@@ -599,7 +603,7 @@ function useSuspension(user: AdminUser, onSuspended: (suspended: boolean) => voi
     const answer = await setSuspended(user.id, !user.suspended);
     sending.current = false;
     if (answer.ok) onSuspended(answer.data.user.suspended);
-    else setProblem(problemOf(answer, SUSPENSION_PROBLEMS, NOTHING_CHANGED));
+    else setProblem(problemOf(answer, SUSPENSION_PROBLEMS, user.suspended ? NOT_RESTORED : NOT_SUSPENDED));
     back.current = true;
     setAsking(false);
     setBusy(false);

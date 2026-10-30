@@ -20,6 +20,7 @@ import { PutDone, PutOnSite } from './setup-install';
 import { SiteForm, SiteSummary } from './setup-site';
 import { SitePreview } from '../site-preview';
 import { instanceOf } from '../instance';
+import { ReadProblem } from '../read-problem';
 
 /** Whether this console calls Fruitback Cloud: the build holds no flag, the host of the worker decides. */
 const CLOUD = instanceOf(API).cloud;
@@ -212,7 +213,9 @@ export default function Setup() {
             ) : null}
             {stage.kind === 'unchecked' ? (
               <div className="mt-3 flex flex-col items-start gap-3 [&>[role=alert]]:self-stretch">
-                <Problem>{t('Fruitback did not answer. Try again.')}</Problem>
+                <Problem>
+                  <ReadProblem />
+                </Problem>
                 <Button tone="outline" onClick={() => void resolveOnce().then(setStage)}>
                   {t('Try again')}
                 </Button>
@@ -241,7 +244,9 @@ export default function Setup() {
             ) : null}
             {stage.kind === 'unread' ? (
               <div className="mt-3 flex flex-col items-start gap-3 [&>[role=alert]]:self-stretch">
-                <Problem>{t('Fruitback did not answer. Your sites are not lost.')}</Problem>
+                <Problem>
+                  <ReadProblem /> {t('Your sites are safe.')}
+                </Problem>
                 <Button
                   tone="outline"
                   onClick={() => void siteStage(CALLS, stage.account, stage.workspace).then(setStage)}

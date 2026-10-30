@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { type SiteChoice, type Workspace, siteChoices } from '../api';
 import { t } from '../i18n';
 import { type Listed, listedOf } from '../listed';
+import { ReadProblem } from '../read-problem';
 import { manages } from '../setup-stage';
 import { siteName } from '../site-address';
 import { Button, LinkButton } from '../ui';
@@ -99,7 +100,9 @@ function SiteTriggers({ base, sites, onRetry }: { base: string; sites: Listed<Si
   if (sites === 'failed')
     return (
       <div role="alert" className="flex flex-wrap items-center gap-[12px]">
-        <p className="text-small">{t('The sites of the workspace did not load.')}</p>
+        <p className="text-small">
+          {t('The sites of the workspace did not load.')} <ReadProblem />
+        </p>
         <Button tone="outline" onClick={onRetry}>
           {t('Try again')}
         </Button>

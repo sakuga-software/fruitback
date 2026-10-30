@@ -1247,8 +1247,8 @@ Web Store (it installs from there, so its id is the same), and Safari.
   ended (in « My account », by a log out) is refused its refresh too, and forgotten there. Never a
   second renewal: a worker that refuses every token is answered.
 - **No session, or one that ended, answers `401` to the widget** (`relay.ts`), not the refusal of
-  status `0`. The widget then keeps the text and says « Your session has ended. Your text is kept:
-  sign in again, then send it. », where it said « try again » before. A worker that does not answer
+  status `0`. The widget then keeps the text and says « Your session has ended. Your text is still here. Sign in
+  again, then send it. », where it said « try again » before. A worker that does not answer
   is the moment, and stays a refusal.
 - **A rule of a site of the workspace of the build's Fruitback, whose session is gone, draws the
   screen of a sign-in** (`ruleWantsSession` in `popup-state.ts`): the switch of a site that reads and

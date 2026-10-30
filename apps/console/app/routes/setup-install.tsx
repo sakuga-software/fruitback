@@ -1,6 +1,6 @@
 import type { Site, Workspace } from '../api';
-import { ago } from '../ago';
-import { locale, t } from '../i18n';
+import { agoInSentence } from '../ago';
+import { t } from '../i18n';
 import { extensionInstallFor } from '../extension-store';
 import { useConnectedExtension } from '../extension-connected';
 import { EXTENSION_IDS, hereProblemOf, useExtensionHere } from '../extension-here';
@@ -213,9 +213,8 @@ export function PutDone({ site }: { site: Site }) {
 /** When the first note came. A worker that counts the notes and gives no day says no moment. */
 function received(at: string | undefined): string {
   if (at === undefined) return t('First note received');
-  if (Date.now() - new Date(at).getTime() < 60_000) return t('First note received just now');
 
-  return t('First note received {when}', { when: ago(at).toLocaleLowerCase(locale()) });
+  return t('First note received {when}', { when: agoInSentence(at) });
 }
 
 /** The arrow of a link that leaves the console. */

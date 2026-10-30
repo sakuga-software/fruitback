@@ -10,7 +10,7 @@ import { KINDS, connectorName } from './connector-parts';
 const RENAME_PROBLEMS: Readonly<Record<string, string>> = {
   'invalid-name': msg('A name of one line, up to 80 characters.'),
   forbidden: msg('Only an owner or an admin of the workspace renames a source.'),
-  'not-found': msg('This source is not connected any more.'),
+  'not-found': msg('This connector is not connected any more. Reload the page.'),
 };
 const NOT_RENAMED = msg('The source was not renamed. Try again.');
 

@@ -573,7 +573,7 @@ test.describe('the four states of the sign-in page, against the mockup (FRU-235)
     await page.goto(`${CONSOLE}/sign-in#a-code`);
 
     await expect(page.getByRole('heading', { name: 'You are not signed in yet' })).toBeVisible();
-    await expect(page.getByText('Fruitback did not answer. Your link still works.')).toBeVisible();
+    await expect(page.getByText('Fruitback hit an error. Your link still works.')).toBeVisible();
     expect(page.url()).toBe(`${CONSOLE}/sign-in`);
     const before = asked.filter((each) => each === 'POST /console/auth/email/redeem').length;
     await page.getByRole('button', { name: 'Try again' }).click();

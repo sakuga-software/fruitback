@@ -48,7 +48,7 @@ async function sendFailing(page: Page, note: string): Promise<string> {
   const field = page.locator('[data-fruitback-note]');
   await field.fill(note);
   await page.locator('[data-fruitback-send]').click();
-  // The sentence of the cause, under « Did not go through », in the card of a failed send (FRU-305).
+  // The sentence of the cause, under « Not sent », in the card of a failed send (FRU-305).
   const status = page.locator('[data-fruitback-failed-text]');
   await expect(page.locator('[data-fruitback-state="failed"]')).toBeVisible();
   await expect(page.locator('[data-fruitback-failed-title]')).not.toHaveText('');
@@ -62,13 +62,13 @@ test('a 503 and a 403 say two different things, and both keep the note', async (
   await refuseWrites(page, 503, 'store-unavailable');
   await mount(page, 'send-failure-503', 'en-US');
   const unavailable = await sendFailing(page, 'Kept through a 503');
-  expect(unavailable).toBe('Your text is kept. Try again, or copy it before closing the page.');
+  expect(unavailable).toBe('Your text is still here. Try again, or copy it before you close the page.');
 
   await page.unrouteAll();
   await refuseWrites(page, 403, 'origin-not-allowed');
   await mount(page, 'send-failure-403', 'en-US');
   const refused = await sendFailing(page, 'Kept through a 403');
-  expect(refused).toMatch(/tell the team of the site/);
+  expect(refused).toMatch(/Tell the site’s team/);
   expect(refused).not.toBe(unavailable);
 
   // Still announced: the card of a failure is an alert (FRU-305).
@@ -90,8 +90,8 @@ test('in French, at 360 px of composer, the failure has a line of its own above 
 });
 
 for (const [locale, sentence] of [
-  ['en-US', 'Your session has ended. Your text is kept: sign in again, then send it.'],
-  ['fr-FR', 'Votre session a expiré. Le texte est gardé : reconnectez-vous, puis renvoyez-le.'],
+  ['en-US', 'Your session has ended. Your text is still here. Sign in again, then send it.'],
+  ['fr-FR', 'Votre session a pris fin. Votre texte est toujours là. Reconnectez-vous, puis renvoyez-le.'],
 ] as const) {
   test(`a 401 says to sign in again, in ${locale}, and Send stays ready (FRU-193)`, async ({ page }) => {
     // It said « tell the team of the site », and that team can do nothing about a session that ended.
@@ -118,11 +118,11 @@ for (const [locale, sentence] of [
 for (const [locale, sentence] of [
   [
     'en-US',
-    'This site is for members only. Your text is kept: sign in to Fruitback from the extension, then send it again.',
+    'This site is for members only. Your text is still here. Sign in to Fruitback from the extension, then send it again.',
   ],
   [
     'fr-FR',
-    'Ce site est réservé aux membres. Le texte est gardé : connectez-vous à Fruitback depuis l’extension, puis envoyez à nouveau.',
+    'Ce site est réservé aux membres. Votre texte est toujours là. Connectez-vous à Fruitback depuis l’extension, puis renvoyez-le.',
   ],
 ] as const) {
   test(`a note with no session on a site for members says to sign in, not to try again, in ${locale} (FRU-394)`, async ({

@@ -25,7 +25,15 @@ type ReachListener = (reachable: boolean) => void;
 const reachListeners = new Set<ReachListener>();
 let reachable = true;
 
-/** Tells the listener each time the worker stops or starts to answer. Returns how to stop. */
+/** Whether the last call got an answer, error or not. */
+export function isReachable(): boolean {
+  return reachable;
+}
+
+/**
+ * Tells the listener the current state at once, then each time the worker stops or starts to answer.
+ * Returns how to stop.
+ */
 export function onReachability(listener: ReachListener): () => void {
   reachListeners.add(listener);
   listener(reachable);
