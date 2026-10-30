@@ -1,5 +1,5 @@
 import { type AccountStore, can, siteOrigin } from './accounts.ts';
-import { readBoundedBytes } from './bounded-body.ts';
+import { parseJsonObject, readBoundedBytes } from './bounded-body.ts';
 import { isExtensionOrigin } from './cors.ts';
 import type { Kv } from './kv.ts';
 
@@ -88,13 +88,5 @@ function viewOf(site: { id: string; origin: string; visibility: string }, worksp
 async function bodyOf(request: Request): Promise<Record<string, unknown> | undefined> {
   const bytes = await readBoundedBytes(request, MAX_BODY_BYTES);
   if (bytes === null) return undefined;
-  try {
-    const parsed: unknown = JSON.parse(new TextDecoder().decode(bytes));
-
-    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : undefined;
-  } catch {
-    return undefined;
-  }
+  return parseJsonObject(new TextDecoder().decode(bytes));
 }

@@ -115,6 +115,16 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   for the time of the read, so what is under it jumped and no action of a row was there to press.
   `e2e/console-members.spec.ts` reads the values and the boxes of the mockup at 1440 and 390 px,
   the keyboard, the contrasts and axe.
+  **Two lists, in pages of 50, and a search** (FRU-496): « Members » and « Pending invitations »,
+  each under its heading with its count, as the mockup draws one table for both. The table stopped
+  at a hundred members and a hundred invitations and said nothing: a 101ᵗʰ member could not be
+  found nor removed. The worker gives the members a page at a time (`limit`, `offset`, `total`) and
+  searches them (`q`, the name or the address); it gives every invitation that waits, which the
+  screen cuts in pages and searches by address itself (`invitationsFound`, no case, no accent).
+  « 1 to 50 of 501 » and « Previous », « Next » are those of the Notes screen (`NotePages`), under a
+  list longer than a page. The search is not in the address. A member removed is read again with
+  its page: the next member moves into it. `e2e/console-members-many.spec.ts` holds it, on a
+  workspace of 501 members and 300 invitations.
 - **« Connect this browser » of a site leads to the sign-in of the popup, on the Cloud** (FRU-313).
   On a console of Fruitback Cloud (`connectsBySignIn` of `instance.ts`, the host of the worker) the
   button opens `/connect`, a page that says the three steps of the popup: the icon, « Sign in with
@@ -263,13 +273,14 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   invites (the worker lists the workspace of an invitation, not its sender: the line says
   « {workspace} invited you »); « It signs in with this account. » about the extension, which a
   browser still joins with a code from the console (Q8).
-  **« Install the extension (beta) » leads Chrome and Edge on a computer to the Chrome Web Store, and
-  every other browser to the guide** (`extensionInstallFor` of `extension-store.ts`): the foot of both
-  rails (FRU-406), `/connect`, the invitation and the step « Put it on your site » (FRU-409). The
-  extension is on the Chrome Web Store since 0.3.0, and not on AMO yet: « Install it in Firefox
-  (beta) » (FRU-318) keeps the page of the documentation that installs the archive of the release.
-  A guard of `extension-store.test.ts` reads each screen for it; `e2e/console-extension-store.spec.ts`
-  holds the rail and `/connect` in Edge and Firefox.
+  **« Install the extension (beta) » leads Chrome and Edge on a computer to the Chrome Web Store,
+  Firefox on a computer to addons.mozilla.org, and every other browser to the guide**
+  (`extensionInstallFor` of `extension-store.ts`): the foot of both rails (FRU-406), `/connect`, the
+  invitation and the step « Put it on your site » (FRU-409). The extension is on the Chrome Web Store
+  since 0.3.0 and public on AMO (FRU-536, after FRU-521 for the guide and the landing): « Install it
+  in Firefox (beta) » (FRU-318) leads to its AMO listing too. A phone keeps the guide. A guard of
+  `extension-store.test.ts` reads each screen for it; `e2e/console-extension-store.spec.ts` holds the
+  rail and `/connect` in Edge and Firefox.
 - **The address of a site is read by `site-address.ts`, on every screen that asks for one**
   (FRU-167). A host with no scheme is `http://` when it is local (`localhost`, `*.localhost`,
   `*.local`, `127.0.0.0/8`, `[::1]`, `10/8`, `172.16/12`, `192.168/16`) and `https://` otherwise,
@@ -309,7 +320,7 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   a value set elsewhere; the value of a `Choice` in the type of its button, so its words sit on the
   baseline of a field beside it (FRU-412: HeroUI writes it at 14 px on a line of 20); `status` on a `Choice` draws the drop of the chosen status in a list of 38 px), `Pick` (radio cards), `Toggle`, `FilterChip` (`aria-pressed`), `StatusDot`
   and `StatusBar`, `DataTable` (`stack`: under 640 px one card per row, its cells one under the other, FRU-505), `SidePanel` (named by its title, or by `label`; `panelId` for `aria-controls`; `flush` for an accordion under its row), `KeyValue`, `SuccessMark`, `Title`, `Lead`, `PageHead`,
-  `Initial`, `Card`, `Chip`, `Problem`, `LoadFailed` (a read that failed: a title, a sentence that nothing is lost, and one « Try again », FRU-508), `Logo` (the name as outlines, in tokens: `logo.tsx`), `EntryPage`
+  `Initial`, `Card`, `Chip`, `Disclosure` (sections folded under one line, a `<details>`: Enter and Space open it, a screen reader hears it expanded or collapsed, and its line is 44 px between two rules, FRU-538), `Problem`, `LoadFailed` (a read that failed: a title, a sentence that nothing is lost, and one « Try again », FRU-508), `Logo` (the name as outlines, in tokens: `logo.tsx`), `EntryPage`
   (the header and the column of a page outside a workspace; `/kit/entry` mounts it), `Divider`, `Menu`
   (a button that opens a menu, on the dropdown of HeroUI: the menu is named after its button, a
   `chosen` item makes it a choice of radios, and it is drawn as a page wherever its button is; the
@@ -440,13 +451,16 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   of the statuses, and its title is the name of the site, at the place of every title (FRU-405). Its
   sections, in this order: the site (its address, who sees its notes, who can leave one, read only);
   « Install », for every role; where its notes go (`site-places.tsx`) for who manages the sites and
-  sees the tracker; « Statuses », a link to the page of the statuses (FRU-371), which is too large
-  to be a section, and whose crumbs lead back here; the preview builds (`domains.tsx`); « Remove
-  this site ». A member and a guest read the first two only. **It reads the list of the sites**, as
+  sees the tracker; « Advanced », folded by default (FRU-538), which holds « Statuses », a link to
+  the page of the statuses (FRU-371), which is too large to be a section, and whose crumbs lead back
+  here, « Start an agent » and the preview builds (`domains.tsx`); « Remove this site ». The page
+  shows first who sees and who writes, the install and where the notes go: the rest is set once.
+  A member and a guest read the first two only, and have no « Advanced ». **It reads the list of the sites**, as
   the page of the statuses does: the worker has no route for one site, and no route of the worker
   is new. A site that is not in the list says « This site is not in the workspace any more. », and
   a read that failed is the alert of the Sites screen, with « Try again ». A hash of the address
-  scrolls to its section once the site is drawn. `e2e/console-site-page.spec.ts` holds the
+  scrolls to its section once the site is drawn, and a hash of a section under « Advanced »
+  (`#statuses`, `#agent`, `#previews`) opens it first. `e2e/console-site-page.spec.ts` holds the
   sections, the roles, the hash, the two failures, 390 px in English and in French, and axe.
 - **The agent keys of a workspace have a page of their own** (FRU-462, `routes/agents.tsx`, the
   board `design/agents/`), `/w/<workspace>/settings/agents`, with the crumbs « Workspace settings ›

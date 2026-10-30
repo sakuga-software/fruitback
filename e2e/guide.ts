@@ -87,6 +87,29 @@ async function around(page: Page, parts: Locator[], pad: number) {
 export async function capture(page: Page, name: CaptureName, parts: Locator[], pad = 24): Promise<void> {
   if (GUIDE_STEPS.some((step) => step.id === name)) await controlsOf(page, name);
   await page.mouse.move(0, 0);
+  // The video of the welcome page plays in a loop (FRU-531): a capture shows its first frame, at
+  // each run the same.
+  await page.evaluate(() =>
+    Promise.all(
+      [...document.querySelectorAll('video')].map(async (video) => {
+        video.pause();
+        // Its first frame is drawn from `HAVE_CURRENT_DATA` on; a file that fails leaves the poster.
+        if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+          await new Promise((resolve) => {
+            video.addEventListener('loadeddata', resolve, { once: true });
+            video.addEventListener('error', resolve, { once: true, capture: true });
+            setTimeout(resolve, 5_000);
+          });
+          video.pause();
+        }
+        if (video.currentTime === 0) return;
+        await new Promise((resolve) => {
+          video.addEventListener('seeked', resolve, { once: true });
+          video.currentTime = 0;
+        });
+      }),
+    ),
+  );
   // A part that is still moving gives another box at each read: the composer opens with a motion, and
   // a box read in its middle cut the capture 11 by 15 px short in some runs. The box is read until
   // two reads 100 ms apart agree.
@@ -106,7 +129,7 @@ export async function capture(page: Page, name: CaptureName, parts: Locator[], p
   if (CAPTURING) {
     // A capture is the same when at most 0.2 % of its pixels differ by more than the default threshold:
     // an edge of a glyph drawn one pixel off is not a new screen.
-    await expect(page).toHaveScreenshot(`${name}.png`, { clip, maxDiffPixelRatio: 0.002 });
+    await expect(page).toHaveScreenshot(['guide', `${name}.png`], { clip, maxDiffPixelRatio: 0.002 });
   } else {
     await page.screenshot({ clip, path: test.info().outputPath(`guide-${name}.png`) });
   }

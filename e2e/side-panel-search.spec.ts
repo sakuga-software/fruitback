@@ -1,5 +1,6 @@
 import { expect } from '@playwright/test';
 import { openBareSite, openPopup, test } from './extension.ts';
+import { AUTHENTICATED_WORKER_ORIGIN } from './worker-sessions.ts';
 import {
   paired,
   inPanel,
@@ -279,4 +280,139 @@ test('a new search during « Show more » draws no page of the words of before (
   await expect
     .poll(async () => (await searchRows(page)).map((row) => row.note), { timeout: 10_000 })
     .toEqual(['The note of the new words']);
+});
+
+test('beyond five statuses, the filter of the search is a list over the notes, chosen with the keyboard (FRU-535)', async ({
+  extension,
+}) => {
+  test.slow();
+  await paired(extension);
+  const page = await extension.context.newPage();
+  await openBareSite(page, 'side-panel-status-list');
+  const popup = await openPopup(extension, page);
+  await popup.getByRole('button', { name: /^(Turn on|Activer)$/ }).click();
+  await expect(page.locator('[data-fruitback-host-launch]')).toBeVisible();
+  await popup.close();
+  await plantOn(page, '[data-testid="card-espresso"] .add', 'Seven statuses');
+
+  // The worker of the suite sends no status of a team (FRU-368): its read is given what a site with
+  // seven statuses of Linear sends, the note planted copied once for each status.
+  const SEVEN = [
+    ['new', 'Triage', '#e0f2fe'],
+    ['todo', 'Backlog', '#e4e4e7'],
+    ['todo', 'Ready', '#fde68a'],
+    ['progress', 'In Progress', '#f97316'],
+    ['progress', 'In Review', '#7c3aed'],
+    ['done', 'Shipped', '#16a34a'],
+    ['closed', 'Canceled', '#a1a1aa'],
+  ] as const;
+  await extension.context.route(
+    (url) => url.origin === AUTHENTICATED_WORKER_ORIGIN && url.pathname === '/feedback',
+    async (route) => {
+      if (route.request().method() !== 'GET') return route.continue();
+      const response = await route.fetch();
+      const body = (await response.json()) as { issues: { id: string; note: { text: string } }[] };
+      const planted = body.issues.find((issue) => issue.note.text === 'Seven statuses');
+      if (planted === undefined) return route.fulfill({ response, json: body });
+      const issues = SEVEN.map(([stage, name], index) => ({
+        ...planted,
+        id: `${planted.id}-s${index}`,
+        stage,
+        status: `e2e:${index}`,
+        note: { ...planted.note, text: `Status ${name}` },
+      }));
+      const statuses = SEVEN.map(([stage, name, color], index) => ({ key: `e2e:${index}`, name, stage, color }));
+      await route.fulfill({ response, json: { ...body, issues, statuses } });
+    },
+  );
+  await page.reload();
+  await expect(page.locator('[data-fruitback-pin]')).toHaveCount(7);
+
+  const again = await openPopup(extension, page);
+  await again
+    .getByRole('button', { name: /^(Show all notes in a sidebar|Voir toutes les notes dans un panneau)$/ })
+    .click();
+  await expect
+    .poll(async () => (await panelRows(page).catch(() => ({ tabs: [], rows: [] }))).rows.length)
+    .toBeGreaterThan(0);
+  expect(await clickPanel(page, 'button.panel-search')).toBe(true);
+
+  const read = () =>
+    inPanel<{
+      chips: number;
+      trigger: string | null;
+      expanded: string | null;
+      options: string[];
+      focus: string;
+      notesTop: number;
+      listBottom: number | null;
+      rows: string[];
+    }>(
+      page,
+      `(() => {
+        const list = document.querySelector('.search-status [role="listbox"]');
+        const active = document.activeElement;
+        return {
+          chips: document.querySelectorAll('button.search-chip').length,
+          trigger: document.querySelector('.search-status .kit-select-trigger')?.textContent ?? null,
+          expanded: document.querySelector('.search-status .kit-select-trigger')?.getAttribute('aria-expanded') ?? null,
+          options: [...(list?.querySelectorAll('[role="option"]') ?? [])].map((option) => option.querySelector('.kit-select-name')?.textContent ?? ''),
+          focus: active?.classList.contains('kit-select-trigger') ? 'button' : active?.getAttribute('role') ?? active?.tagName ?? '',
+          notesTop: document.querySelector('.panel-notes')?.getBoundingClientRect().top ?? -1,
+          listBottom: list?.getBoundingClientRect().bottom ?? null,
+          rows: [...document.querySelectorAll('.panel-notes li[data-note] .panel-row-note')].map((row) => row.textContent),
+        };
+      })()`,
+    );
+  /** A key, as the keyboard sends it to what has the focus in the panel. */
+  const press = (key: string) =>
+    inPanel(
+      page,
+      `(document.activeElement ?? document.body).dispatchEvent(new KeyboardEvent('keydown', { key: ${JSON.stringify(key)}, bubbles: true, cancelable: true }))`,
+    );
+
+  // Seven statuses: no chip, the button says every status and how many notes.
+  await expect.poll(async () => (await read()).trigger).toMatch(/^(Status · All · 7|Statut · Toutes · 7)▾$/);
+  const closed = await read();
+  expect(closed.chips).toBe(0);
+  expect(closed.rows).toHaveLength(7);
+
+  // The arrow on the button opens the list over the notes: the notes do not move.
+  await inPanel(page, `document.querySelector('.search-status .kit-select-trigger').focus()`);
+  await press('ArrowDown');
+  const open = await read();
+  expect(open.expanded).toBe('true');
+  expect(open.focus).toBe('listbox');
+  expect(open.options.slice(1)).toEqual([
+    'Triage',
+    'Backlog',
+    'Ready',
+    'In Progress',
+    'In Review',
+    'Shipped',
+    'Canceled',
+  ]);
+  expect(open.notesTop).toBe(closed.notesTop);
+  expect(open.listBottom).toBeGreaterThan(open.notesTop);
+
+  // Escape closes it, and the focus is back on its button.
+  await press('Escape');
+  expect(await read()).toMatchObject({ expanded: 'false', options: [], focus: 'button' });
+
+  // Down five times from « All »: « In Review », chosen with Enter.
+  await press('ArrowDown');
+  for (let step = 0; step < 5; step += 1) await press('ArrowDown');
+  await press('Enter');
+  await expect.poll(async () => (await read()).rows).toEqual(['Status In Review']);
+  expect(await read()).toMatchObject({ expanded: 'false', focus: 'button' });
+  expect((await read()).trigger).toMatch(/^(Status|Statut) · In Review · 1▾$/);
+
+  // A click outside closes an open list.
+  await press('ArrowDown');
+  expect((await read()).expanded).toBe('true');
+  await inPanel(
+    page,
+    `document.querySelector('.panel-notes').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))`,
+  );
+  expect((await read()).expanded).toBe('false');
 });

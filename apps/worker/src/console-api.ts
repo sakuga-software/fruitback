@@ -1,3 +1,4 @@
+import { json } from './http.ts';
 import { handleNotes } from './console-notes.ts';
 import { readJsonObject } from './bounded-body.ts';
 import {
@@ -154,13 +155,6 @@ function domainView(domain: Domain, now: number): DomainView {
     ...(domain.previewsSite === undefined ? {} : { previewsSite: domain.previewsSite }),
     ...Object.fromEntries(Object.entries(at).filter(([, value]) => value !== undefined)),
   };
-}
-
-function json(status: number, body: unknown, headers: Record<string, string>): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...headers },
-  });
 }
 
 /**

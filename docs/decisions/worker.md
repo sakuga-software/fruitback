@@ -436,6 +436,11 @@ degradation the ticket asked to have written down rather than discovered.
 - **`store.ts` is the interface.** `findForPage` states the _intention_, not the method — Linear
   filters by substring, SQL does a `WHERE`, and exposing a `contains` filter would have made
   Linear's trick the contract.
+- **A write reads one note, through `findNote` of `store.ts`** (FRU-499): a reply, a verdict, an edit,
+  a status, and the MCP writes. The worker's store reads one row and its newest replies; a store with
+  no `findNote` reads the page and picks the note. Never `findForPage` and a `find` in a route.
+- **The cap of the replies is in the SQL** (FRU-499): a `LATERAL … LIMIT COMMENTS_PER_ISSUE` on
+  `note_comments_by_note`, so a long thread sends twenty rows, not all of them.
 - **Every state the deprecated flag can be in says something at boot** (FRU-54).
   `fakeLinearIgnoredReason` answers when the flag lost — to `NODE_ENV=production`, or to an explicit
   `FRUITBACK_STORE`. `fakeLinearDeprecationNotice` answers when it selected the memory store, and
@@ -2134,6 +2139,19 @@ may change, and who », says what is protected; this section says how to change 
   the one whose role was read, and `filterField` reads any column of `member`. The body is read
   under the cap of the worker (`bounded-body.ts`, `413` over it). Every other route of the console
   reads its body with `readJsonObject` of the same file, under the same cap (FRU-506).
+- **The two lists of the Members screen are read by the worker, not by the plugin** (FRU-496), after
+  the same checks: `list-members` from `AccountStore.membersOf`, a page in the order the members
+  joined (`createdAt`, then `id`), with `total` and a search `q` (1 to 100 characters) of the name
+  or the address, `ILIKE` with `%`, `_` and `\` escaped, and no accent on either side
+  (`normalize(…, NFD)` less the marks U+0300 to U+036F, as `folded` of the console reads the
+  invitations: « zoe » finds « Zoé »); `list-invitations` from
+  `waitingInvitations`, the `pending` ones that did not end, oldest first. Each answer keeps the
+  shape of the plugin's. The plugin's `listMembers` has no order, so a page could repeat a member
+  and skip another, and its filter reads `member` only, never a name. Its `listInvitations` reads
+  every invitation the workspace ever had and stops at its default of 100 rows: with 100 answered
+  invitations, one that waits was not listed. No index was added: `member_organizationId_idx` and
+  `invitation_organizationId_idx` take both reads to their workspace (measured on 501 members and
+  300 invitations in the PR of FRU-496).
 - **Every open route names its workspace in `organizationId`.** No call of the worker reads the
   « active » workspace of a session, and nothing writes one: `createWorkspaceWithPlugin` passes
   `keepCurrentActiveOrganization`. Do not open `set-active`.

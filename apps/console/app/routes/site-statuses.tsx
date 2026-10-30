@@ -694,8 +694,12 @@ function StatusList({
           ))}
         </ol>
       </div>
+      {/* FRU-538: the « 3 » of each pin is a sample, and the list says so once. */}
+      <p className="mt-[8px] text-hint text-muted">
+        {t('Each pin shows how a note in that status looks on the page. The 3 is an example number.')}
+      </p>
       {statuses.some(stageColoured) ? (
-        <p className="mt-[8px] text-hint text-muted">
+        <p className="mt-[4px] text-hint text-muted">
           {t('A swatch with no code is the colour of the stage of its status.')}
         </p>
       ) : null}

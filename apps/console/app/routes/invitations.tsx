@@ -11,7 +11,7 @@ import {
   signOut,
 } from '../api';
 import { msg, t } from '../i18n';
-import { EXTENSION_GUIDE, extensionInstallFor } from '../extension-store';
+import { FIREFOX_ADDONS, extensionInstallFor } from '../extension-store';
 import { useConnectedExtension } from '../extension-connected';
 import { BY_SIGN_IN, CONNECT_PAGE } from '../install-options';
 import { problemOf } from '../problems';
@@ -413,7 +413,7 @@ function Joined({ workspace, name, site }: { workspace: string; name: string; si
       {connected === undefined ? (
         <p className="mt-7 border-t border-line pt-4.5 text-small text-muted">
           {t('Using Firefox?')}{' '}
-          <LinkButton space="inline" href={EXTENSION_GUIDE} newTab>
+          <LinkButton space="inline" href={FIREFOX_ADDONS} newTab>
             {t('Install it in Firefox (beta)')}
           </LinkButton>
         </p>

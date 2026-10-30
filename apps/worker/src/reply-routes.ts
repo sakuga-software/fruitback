@@ -1,3 +1,4 @@
+import { json } from './http.ts';
 import { type AccountStore, can } from './accounts.ts';
 import { MAX_BODY_BYTES, readBoundedText } from './bounded-body.ts';
 import { type ClientConfig, normalizeClientId } from './clients.ts';
@@ -14,7 +15,15 @@ import type { NoteIndex } from './notes-index.ts';
 import { checkReplyLimit } from './rate-limit.ts';
 import { checkedOf } from './reply-text.ts';
 import type { CallerChecks, RequestContext, Served } from './request-context.ts';
-import { type CheckVerdict, type NoteStore, StoreError, takesChecks, takesReplies, takesStatuses } from './store.ts';
+import {
+  type CheckVerdict,
+  type NoteStore,
+  StoreError,
+  findNote,
+  takesChecks,
+  takesReplies,
+  takesStatuses,
+} from './store.ts';
 import { OWN_SOURCE, isBuiltIn, readSiteStatus } from './site-statuses.ts';
 import { DEFAULT_NOTE_STAGE, type NoteStage } from '@fruitback/shared';
 
@@ -87,8 +96,8 @@ export async function postReply(
         ? [route.client]
         : places.map((place) => placedAt(route.client as ClientConfig, place));
     for (const target of targets) {
-      const found = await store.findForPage({ url, clientId }, target, route.policy);
-      if (!found.some((each) => each.id === issue)) continue;
+      const found = await findNote(store, { url, clientId, id: issue, by: 'issue' }, target, route.policy);
+      if (found === undefined) continue;
       if (!(await takesReplies(store, target))) return json(403, { error: 'replies-not-taken' }, corsHeaders);
       // Counted once the reply is one the worker would take: a refusal costs no reply of the minute.
       if (who.author.kind === 'visitor' && !(await checkReplyLimit(kv, context.clientIp))) {
@@ -224,8 +233,11 @@ export async function postCheck(
         : places.map((place) => placedAt(route.client as ClientConfig, place));
     for (const target of targets) {
       // Read now in the store, never in the cache: the stage that decides is the store's.
-      const found = (await store.findForPage({ url, clientId }, target, route.policy)).find((each) =>
-        hidden ? each.note.id === issue : each.id === issue,
+      const found = await findNote(
+        store,
+        { url, clientId, id: issue, by: hidden ? 'note' : 'issue' },
+        target,
+        route.policy,
       );
       if (found === undefined) continue;
 
@@ -245,9 +257,7 @@ export async function postCheck(
       try {
         // Read again under the key: a request that read the note before another wrote its verdict
         // takes the key after it, and must see that verdict.
-        const now = (await store.findForPage({ url, clientId }, target, route.policy)).find(
-          (each) => each.id === found.id,
-        );
+        const now = await findNote(store, { url, clientId, id: found.id, by: 'issue' }, target, route.policy);
         if (now === undefined) break;
         if (now.stage !== 'done') return json(409, { error: 'not-done', stage: now.stage }, corsHeaders);
         if (checkedOf(now.comments) !== undefined) return json(409, { error: 'already-checked' }, corsHeaders);
@@ -390,8 +400,11 @@ export async function postStatus(
         : places.map((place) => placedAt(route.client as ClientConfig, place));
     for (const target of targets) {
       // Read now in the store, never in the cache: the author and the place are the store's.
-      const found = (await store.findForPage({ url, clientId }, target, route.policy)).find((each) =>
-        hidden ? each.note.id === issue : each.id === issue,
+      const found = await findNote(
+        store,
+        { url, clientId, id: issue, by: hidden ? 'note' : 'issue' },
+        target,
+        route.policy,
       );
       if (found === undefined) continue;
 
@@ -435,11 +448,4 @@ export async function postStatus(
     if (error instanceof KvError) return json(503, { error: 'limiter-unavailable' }, corsHeaders);
     throw error;
   }
-}
-
-function json(status: number, body: unknown, headers: Record<string, string> = {}): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...headers },
-  });
 }

@@ -1,3 +1,4 @@
+import { json } from './http.ts';
 import type { NoteStage } from '@fruitback/shared';
 import { readJsonObject } from './bounded-body.ts';
 import {
@@ -655,13 +656,6 @@ export type InstanceAdminContext = {
   facts?: InstanceFacts;
   now?: number;
 };
-
-function json(status: number, body: unknown, headers: Record<string, string>): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...headers },
-  });
-}
 
 /** `q` and `show` of a list, or `undefined` for a value that the list does not take. */
 function queryOf<Show extends string>(url: URL, filters: readonly Show[]): AdminQuery<Show> | undefined {

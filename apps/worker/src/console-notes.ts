@@ -1,3 +1,4 @@
+import { json } from './http.ts';
 import { requestAgent } from './agent-triggers.ts';
 import { readJsonObject } from './bounded-body.ts';
 import { DEFAULT_NOTE_STAGE, NOTE_STAGES, type NoteStage, type NoteStatus } from '@fruitback/shared';
@@ -401,13 +402,6 @@ async function answered<T>(read: () => Promise<T>): Promise<T | typeof failed> {
 
     return failed;
   }
-}
-
-function json(status: number, body: unknown, headers: Record<string, string>): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...headers },
-  });
 }
 
 function forbidden(context: NotesContext): Response {

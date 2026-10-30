@@ -17,8 +17,10 @@ import {
   keepPopupOnActionClick,
   setPanelOnClick,
   notesOf,
+  offersPopup,
   openOnRead,
   openPanel,
+  openPopupFrom,
   openPanelOrPage,
   panelPage,
   parsePinsMessage,
@@ -153,7 +155,7 @@ describe('the page of the panel (FRU-296, FRU-299)', () => {
       onVerdict: (id, verdict) => calls.push(`verdict:${id}:${verdict}`),
     };
   };
-  const on = (notes: PanelNote[] | 'reading' | 'failed' | 'not-started'): PanelState => ({
+  const on = (notes: PanelNote[] | 'reading' | 'failed' | 'not-started' | 'signed-out'): PanelState => ({
     kind: 'on',
     host: 'staging.acme.dev',
     where: 'Acme',
@@ -189,6 +191,54 @@ describe('the page of the panel (FRU-296, FRU-299)', () => {
       ['Fruitback is not on for this page.', 'Turn it on from the Fruitback button in the toolbar.'],
     );
     assert.equal(root.querySelectorAll('button').length, 1, 'only « Close the sidebar »');
+  });
+
+  it('offers « Open Fruitback » in place of the sentence, where the popup can open on the page (FRU-532)', () => {
+    const options = handlers();
+    const root = panelPage(page(), {
+      ...options,
+      state: { kind: 'not-on' },
+      tab: 'open',
+      onOpenPopup: () => options.calls.push('popup'),
+    });
+
+    assert.deepEqual(
+      [...root.querySelectorAll('p')].map((line) => line.textContent),
+      ['Fruitback is not on for this page.'],
+    );
+    const open = root.querySelector<HTMLButtonElement>('.panel-state button.kit-primary');
+    assert.equal(open?.textContent, 'Open Fruitback');
+    assert.equal(open?.type, 'button');
+    open?.click();
+    assert.deepEqual(options.calls, ['popup']);
+  });
+
+  it('offers « Open Fruitback » under a session that ended: the popup signs in again (FRU-532)', () => {
+    const options = handlers();
+    const root = panelPage(page(), {
+      ...options,
+      state: on('signed-out'),
+      tab: 'open',
+      onOpenPopup: () => options.calls.push('popup'),
+    });
+
+    assert.equal(
+      root.querySelector('[role="status"]')?.textContent,
+      'Your session ended. Sign in again from the Fruitback button.',
+    );
+    root.querySelector<HTMLButtonElement>('.panel-notes button.kit-primary')?.click();
+    assert.deepEqual(options.calls, ['popup']);
+  });
+
+  it('has no « Open Fruitback » on a site that runs its own Fruitback: the action is on the page (FRU-532)', () => {
+    const root = panelPage(page(), {
+      ...handlers(),
+      state: { kind: 'site-widget', host: 'app.acme.dev' },
+      tab: 'open',
+      onOpenPopup: () => undefined,
+    });
+
+    assert.equal(root.querySelector('.panel-open-popup'), null);
   });
 
   // Raised in review: on a site that embeds its own widget, the panel waited for notes nobody sends.
@@ -286,6 +336,45 @@ describe('the page of the panel (FRU-296, FRU-299)', () => {
     // The stage stays on the drop, and a note with no colour keeps the class of its stage.
     assert.equal(painted?.dataset.stage, 'progress');
     assert.equal(plain?.style.background, '');
+  });
+
+  it('gives each note its whole text in `title`, where the sheet cuts it to one line (FRU-534)', () => {
+    const long = 'The price on the dark card is hard to read, and the button under it jumps when the cart opens.';
+    const notes = [
+      note({ id: 'p', number: 2, stage: 'new', note: long }),
+      note({ id: 'r', number: 5, stage: 'done', mine: true, note: `${long} Ready.` }),
+      note({ id: 'd', stage: 'todo', placement: 'detached', note: `${long} Detached.` }),
+    ];
+    const root = panelPage(page(), { ...handlers(), state: on(notes), tab: 'open' });
+    const row = root.querySelector('li[data-note="p"] .panel-row-note');
+    assert.equal(row?.textContent, long, 'the text is cut by the sheet, never in the DOM');
+    assert.equal(row?.getAttribute('title'), long);
+    // The name of the button of the row holds the whole note.
+    assert.ok(root.querySelector('li[data-note="p"] button.panel-row-head')?.textContent?.includes(long));
+    assert.equal(root.querySelector('.ready-item .ready-note')?.getAttribute('title'), `${long} Ready.`);
+
+    const searched = panelPage(page(), {
+      ...handlers(),
+      state: on(notes),
+      tab: 'open',
+      search: {
+        state: { scope: 'page', q: '', stage: 'all', pinsShown: true },
+        handlers: {
+          onScope: () => undefined,
+          onQuery: () => undefined,
+          onStage: () => undefined,
+          onSiteNote: () => undefined,
+          onSiteRetry: () => undefined,
+          onMore: () => undefined,
+          onPins: () => undefined,
+          onStatus: () => undefined,
+          onStatusOpen: () => undefined,
+          onStatusActive: () => undefined,
+        },
+      },
+    });
+    assert.equal(searched.querySelector('li[data-note="p"] .panel-row-note')?.getAttribute('title'), long);
+    assert.equal(searched.querySelector('.search-detached-note')?.getAttribute('title'), `${long} Detached.`);
   });
 
   it('lists done and closed notes under « Done »', () => {
@@ -589,6 +678,53 @@ describe('the tab of a note, and its age', () => {
   });
 });
 
+describe('« Open Fruitback », the popup from the panel (FRU-532)', () => {
+  const opens = { action: { openPopup: async () => undefined } };
+
+  it('is offered where the panel reads the address of the tab, which the popup reads the same way', () => {
+    assert.equal(offersPopup(opens, 'https://staging.acme.dev/cart', false), true);
+    // No address: the popup opened from here would get none either, and say « web pages only ».
+    assert.equal(offersPopup(opens, undefined, false), false);
+    assert.equal(offersPopup(opens, 'chrome://extensions/', false), false);
+  });
+
+  it('is not offered by a browser with no `action.openPopup`, nor after a refusal', () => {
+    assert.equal(offersPopup({}, 'https://staging.acme.dev/', false), false);
+    assert.equal(offersPopup({ action: {} }, 'https://staging.acme.dev/', false), false);
+    assert.equal(offersPopup(opens, 'https://staging.acme.dev/', true), false);
+  });
+
+  it('asks for the popup at once, in the click, before any `await`', () => {
+    const calls: string[] = [];
+    openPopupFrom({ action: { openPopup: async () => void calls.push('open') } }, () => calls.push('refused'));
+
+    assert.deepEqual(calls, ['open']);
+  });
+
+  it('says so when the browser refuses, or throws', async () => {
+    const said: string[] = [];
+    const quiet = mock.method(console, 'error', () => undefined);
+    try {
+      openPopupFrom({ action: { openPopup: () => Promise.reject(new Error('no gesture')) } }, () => said.push('a'));
+      openPopupFrom(
+        {
+          action: {
+            openPopup: () => {
+              throw new Error('not here');
+            },
+          },
+        },
+        () => said.push('b'),
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    } finally {
+      quiet.mock.restore();
+    }
+
+    assert.deepEqual(said.sort(), ['a', 'b']);
+  });
+});
+
 describe('the host the panel shows', () => {
   it('is the host of a web address, and nothing for a page of the browser', () => {
     assert.equal(webHost('https://staging.acme.dev/cart?x=1'), 'staging.acme.dev');
@@ -724,5 +860,73 @@ describe('the pins a panel hid come back when it goes (FRU-307, review of #419)'
     assert.deepEqual(parsePinsMessage({ shown: 3 }), { shown: 3 });
     assert.equal(parsePinsMessage({ hidden: 1.5 }), undefined);
     assert.equal(parsePinsMessage('hidden'), undefined);
+  });
+});
+
+describe('the margins of the panel (FRU-533)', () => {
+  const sheet = readFileSync(fileURLToPath(new URL('../entrypoints/sidepanel/style.css', import.meta.url)), 'utf8');
+  /** The declarations of the rule whose selector is `selector`, alone on its line. */
+  const rule = (selector: string): string =>
+    new RegExp(`\\n${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} \\{([^}]*)\\}`).exec(sheet)?.[1] ?? '';
+
+  it('takes off the padding of the body of the popup, whose sheet the panel links first', () => {
+    assert.match(rule('body.side-panel-page'), /\bpadding: 0;/);
+  });
+
+  it('declares the gutter once, at 12 px', () => {
+    assert.deepEqual(
+      [...sheet.matchAll(/--panel-gutter:\s*([^;]+);/g)].map((match) => match[1]),
+      ['12px'],
+    );
+  });
+
+  it('gives every block its side margin from the gutter, not a value of its own', () => {
+    for (const selector of [
+      '.panel-head',
+      '.panel-state',
+      '.panel-action',
+      '.panel-tabs',
+      '.panel-list',
+      '.panel-failed',
+      '.panel-foot',
+      '.ready',
+      '.search-options',
+      '.site-more',
+      '.search-detached',
+    ]) {
+      const declarations = rule(selector);
+      assert.notEqual(declarations, '', `no rule for ${selector}: this guard reads nothing`);
+      assert.match(declarations, /(padding|margin):[^;]*var\(--panel-gutter\)/, `${selector} has a margin of its own`);
+    }
+  });
+
+  it('keeps no side margin of 18 or 20 px, the margins of before', () => {
+    // The side values of a shorthand: the second, and the fourth when there is one.
+    const sides = [...sheet.matchAll(/\b(?:padding|margin):\s*([^;]+);/g)].flatMap((match) => {
+      const values = (match[1] ?? '').trim().split(/\s+(?![^(]*\))/);
+
+      return values.length === 1 ? values : [values[1], values[3] ?? values[1]];
+    });
+    assert.ok(sides.length > 20, 'this guard reads no margin');
+    assert.deepEqual(
+      sides.filter((value) => value === '18px' || value === '20px'),
+      [],
+    );
+  });
+});
+
+describe('one line for each note (FRU-534)', () => {
+  const sheet = readFileSync(fileURLToPath(new URL('../entrypoints/sidepanel/style.css', import.meta.url)), 'utf8');
+
+  it('cuts the words of a note to one line, with « … », in each list of the panel', () => {
+    const rule = /\.panel-row-note,\s*\.ready-note,\s*\.search-detached-note \{([^}]*)\}/.exec(sheet)?.[1] ?? '';
+    for (const declaration of ['overflow: hidden', 'white-space: nowrap', 'text-overflow: ellipsis']) {
+      assert.ok(rule.includes(declaration), `no « ${declaration} » for the words of a note`);
+    }
+  });
+
+  it('shows the whole note in an open row', () => {
+    const rule = /\.panel-row\[data-open='true'\] \.panel-row-note \{([^}]*)\}/.exec(sheet)?.[1] ?? '';
+    assert.ok(rule.includes('white-space: normal'), 'an open row cuts its note');
   });
 });

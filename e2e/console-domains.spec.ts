@@ -174,10 +174,10 @@ test('a member who is no admin has no way to the domain section', async ({ page 
   await open(page);
   await expect(page.getByRole('heading', { name: 'acme.dev', exact: true })).toBeVisible();
 
-  // The menu of a site has « Settings » and « Install » for a member, and the page of the site no
-  // proof of a domain.
+  // The menu of a site has « Open its page » and « See the notes » for a member (FRU-504), and the
+  // page of the site no proof of a domain.
   await page.getByRole('button', { name: 'More for acme.dev' }).click();
-  await expect(page.getByRole('menuitem')).toHaveText(['Settings', 'Install']);
+  await expect(page.getByRole('menuitem')).toHaveText(['Open its page', 'See the notes']);
   await page.keyboard.press('Escape');
   await page.goto(`${CONSOLE}/w/w1/sites/s1#previews`);
   await expect(page.getByRole('region', { name: 'Install on acme.dev' })).toBeVisible();

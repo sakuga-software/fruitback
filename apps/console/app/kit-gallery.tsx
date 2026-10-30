@@ -9,6 +9,7 @@ import {
   Choice,
   Divider,
   DataTable,
+  Disclosure,
   Field,
   FilterChip,
   IconButton,
@@ -54,6 +55,7 @@ export default function KitGallery() {
   const [text, setText] = useState('');
   const [picked, setPicked] = useState('nothing');
   const [workspace, setWorkspace] = useState('acme');
+  const [unfolded, setUnfolded] = useState(false);
 
   return (
     <main className="mx-auto flex max-w-[1120px] flex-col gap-10 px-8 py-10">
@@ -401,6 +403,18 @@ export default function KitGallery() {
             <WideButton>Continue with GitHub</WideButton>
           </AutoGrid>
         </div>
+      </section>
+
+      <section aria-label="Folded sections" className="w-[760px] max-w-full" data-kit="disclosure">
+        <Disclosure
+          id="kit-advanced"
+          title="Advanced"
+          hint="Statuses, starting an agent, preview deploys"
+          open={unfolded}
+          onToggle={setUnfolded}
+        >
+          <p className="text-small text-muted">What the page keeps folded.</p>
+        </Disclosure>
       </section>
 
       <section aria-label="Preview of your site" className="w-[760px] max-w-full" data-kit="browser">

@@ -59,6 +59,13 @@ test('off by default; turned on, it calls an address that receives at the moment
   const worker = await workerWith(page);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`${CONSOLE}/w/w1/sites/s1`);
+  // The section is folded under « Advanced » (FRU-538): a keyboard opens it.
+  const advanced = page.locator('details#advanced');
+  await expect(advanced).not.toHaveAttribute('open');
+  await expect(section(page)).toBeHidden();
+  await advanced.locator('summary').focus();
+  await page.keyboard.press('Enter');
+  await expect(advanced).toHaveAttribute('open');
   const agent = section(page);
   const toggle = agent.getByRole('switch', { name: /Start an agent when a note arrives/ });
   await expect(toggle).not.toBeChecked();
@@ -86,8 +93,8 @@ test('off by default; turned on, it calls an address that receives at the moment
   await expect(agent.getByRole('status')).toHaveText('Saved.');
   expect(worker.written).toEqual([{ connector: 'c2', moment: 'moved-to-todo', enabled: true }]);
 
-  // Read again: what was saved is what is drawn.
-  await page.reload();
+  // Read again: what was saved is what is drawn. The address of the section opens « Advanced ».
+  await page.goto(`${CONSOLE}/w/w1/sites/s1#agent`);
   await expect(section(page).getByRole('switch', { name: /Start an agent when a note arrives/ })).toBeChecked();
   await expect(section(page).getByRole('radio', { name: 'A person of the team moves a note to To do' })).toBeChecked();
 });
@@ -96,7 +103,7 @@ test('a refusal keeps what was chosen, and calls that did not arrive lead to the
   const worker = await workerWith(page, {
     trigger: { connector: 'c2', moment: 'verified-note', enabled: true, waiting: 2 },
   });
-  await page.goto(`${CONSOLE}/w/w1/sites/s1`);
+  await page.goto(`${CONSOLE}/w/w1/sites/s1#agent`);
   const agent = section(page);
   await expect(agent).toContainText('2 calls did not arrive at hooks.acme.dev.');
   await expect(agent.getByRole('link', { name: 'See the calls' })).toHaveAttribute('href', '/w/w1/connectors');
@@ -112,7 +119,7 @@ test('a refusal keeps what was chosen, and calls that did not arrive lead to the
 
 test('with no address that receives, the section leads to the connectors and turns nothing on', async ({ page }) => {
   const worker = await workerWith(page, { connectors: [LINEAR] });
-  await page.goto(`${CONSOLE}/w/w1/sites/s1`);
+  await page.goto(`${CONSOLE}/w/w1/sites/s1#agent`);
   const agent = section(page);
   await expect(agent).toContainText('The workspace has no address that receives yet.');
   await expect(agent.getByRole('link', { name: 'Connect an address' })).toHaveAttribute('href', '/w/w1/connectors');
@@ -122,8 +129,10 @@ test('with no address that receives, the section leads to the connectors and tur
 
 test('a member does not see the section, and the page asks nothing of the trigger', async ({ page }) => {
   const worker = await workerWith(page, { role: 'member' });
-  await page.goto(`${CONSOLE}/w/w1/sites/s1`);
+  await page.goto(`${CONSOLE}/w/w1/sites/s1#agent`);
   await expect(page.locator('main h1')).toHaveText('staging.acme.dev');
+  // No « Advanced » either: every section in it is for an owner or an admin (FRU-538).
+  await expect(page.locator('details#advanced')).toHaveCount(0);
   await expect(section(page)).toHaveCount(0);
   expect(worker.asked).toBe(0);
 });
@@ -134,7 +143,7 @@ test('at 390 px in French, on, nothing scrolls sideways', async ({ page }) => {
     trigger: { connector: 'c2', moment: 'verified-note', enabled: true, waiting: 0 },
   });
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto(`${CONSOLE}/w/w1/sites/s1`);
+  await page.goto(`${CONSOLE}/w/w1/sites/s1#agent`);
   const agent = section(page, 'Lancer un agent');
   await expect(agent.getByRole('radio', { name: 'Une note d’une personne connue arrive' })).toBeChecked();
   expect(await sideScroll(page)).toBe(0);
@@ -196,7 +205,7 @@ test('a read of the addresses that failed says so, and « Try again » brings th
       return undefined;
     },
   });
-  await page.goto(`${CONSOLE}/w/w1/sites/s1`);
+  await page.goto(`${CONSOLE}/w/w1/sites/s1#agent`);
   const agent = section(page);
   await expect(agent.getByRole('alert')).toContainText('The addresses of the workspace did not load.');
   // The control: no switch is drawn on a list that was not read.

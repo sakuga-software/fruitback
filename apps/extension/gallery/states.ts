@@ -199,6 +199,11 @@ function welcomeStates(): GalleryState[] {
   return [
     { id: 'signed-out', title: 'Signed out', build: (d) => welcomeScreen(d, signIn({ kind: 'signed-out' })) },
     {
+      id: 'signed-out-less-motion',
+      title: 'Signed out · less motion: the video waits behind its poster (FRU-531)',
+      build: (d) => welcomeScreen(d, { ...signIn({ kind: 'signed-out' }), reducedMotion: true }),
+    },
+    {
       id: 'sign-in-refused',
       title: 'Sign-in stopped · refused',
       build: (d) => welcomeScreen(d, signIn({ kind: 'signed-out', stop: signInStop('refused') })),
@@ -295,7 +300,12 @@ function note(id: string, more: Partial<PanelNote>): PanelNote {
 }
 
 const NOTES: PanelNote[] = [
-  note('n1', { number: 12, note: 'The price is hard to read on the dark card.', author: 'Ana Duval', mine: true }),
+  note('n1', {
+    number: 12,
+    note: 'The price is hard to read on the dark card, and the discount badge covers it on mobile.',
+    author: 'Ana Duval',
+    mine: true,
+  }),
   note('n2', {
     number: 9,
     stage: 'progress',
@@ -330,6 +340,28 @@ const NOTES: PanelNote[] = [
   }),
 ];
 
+/** A team with seven statuses of its own (FRU-535): the filter of the search is a list. */
+const SEVEN: [PanelNote['stage'], string, string][] = [
+  ['new', 'Triage', '#e0f2fe'],
+  ['todo', 'Backlog', '#e4e4e7'],
+  ['todo', 'Ready', '#fde68a'],
+  ['progress', 'In Progress', '#f97316'],
+  ['progress', 'In Review', '#7c3aed'],
+  ['done', 'Done', '#16a34a'],
+  ['closed', 'Canceled', '#a1a1aa'],
+];
+const STATUSED: PanelNote[] = SEVEN.flatMap(([stage, name, color], index) =>
+  Array.from({ length: (index % 3) + 1 }, (_, copy) =>
+    note(`s${index}-${copy}`, {
+      number: 20 + index * 3 + copy,
+      stage,
+      status: { name, stage, color },
+      note: `${name}: ${['The menu overlaps the cart.', 'The total is off by a cent.', 'The date picker opens twice.'][copy]}`,
+      author: copy === 0 ? 'Ana Duval' : 'Marc Petit',
+    }),
+  ),
+);
+
 function panelStates(): GalleryState[] {
   const handlers = {
     onClose: nothing,
@@ -362,6 +394,9 @@ function panelStates(): GalleryState[] {
     onScope: nothing,
     onQuery: nothing,
     onStage: nothing,
+    onStatus: nothing,
+    onStatusOpen: nothing,
+    onStatusActive: nothing,
     onSiteNote: nothing,
     onSiteRetry: nothing,
     onMore: nothing,
@@ -369,7 +404,16 @@ function panelStates(): GalleryState[] {
   } as unknown as NonNullable<PanelOptions['search']>['handlers'];
 
   return [
-    { id: 'not-on', title: 'Not on for this page', build: panel({ kind: 'not-on' }) },
+    {
+      id: 'not-on',
+      title: 'Not on for this page',
+      build: panel({ kind: 'not-on' }, { onOpenPopup: nothing }),
+    },
+    {
+      id: 'not-on-toolbar',
+      title: 'Not on for this page · the popup cannot open from here',
+      build: panel({ kind: 'not-on' }),
+    },
     {
       id: 'site-widget',
       title: 'The site runs its own Fruitback',
@@ -379,7 +423,11 @@ function panelStates(): GalleryState[] {
     { id: 'failed', title: 'The read failed', build: panel(onWith('failed')) },
     { id: 'reload', title: 'The page must be reloaded', build: panel(onWith('reload')) },
     { id: 'not-started', title: 'The widget did not start', build: panel(onWith('not-started')) },
-    { id: 'signed-out', title: 'The session of the site ended', build: panel(onWith('signed-out')) },
+    {
+      id: 'signed-out',
+      title: 'The session of the site ended',
+      build: panel(onWith('signed-out'), { onOpenPopup: nothing }),
+    },
     { id: 'empty', title: 'No note on this page', build: panel(onWith([])) },
     { id: 'open', title: 'Open notes', build: panel(onWith(NOTES)) },
     { id: 'open-row', title: 'Open notes · a row open', build: panel(onWith(NOTES), { open: 'n2' }) },
@@ -393,6 +441,25 @@ function panelStates(): GalleryState[] {
       id: 'search',
       title: 'Search and options',
       build: panel(onWith(NOTES), { search: { state: search, handlers: searchHandlers } }),
+    },
+    {
+      id: 'search-statuses',
+      title: 'Search and options · seven statuses, the list closed',
+      build: panel(onWith(STATUSED), { search: { state: search, handlers: searchHandlers } }),
+    },
+    {
+      id: 'search-statuses-open',
+      title: 'Search and options · seven statuses, the list open',
+      build: panel(onWith(STATUSED), {
+        search: { state: { ...search, statusOpen: true }, handlers: searchHandlers },
+      }),
+    },
+    {
+      id: 'search-status-chosen',
+      title: 'Search and options · seven statuses, « In Review » chosen',
+      build: panel(onWith(STATUSED), {
+        search: { state: { ...search, status: 'name:In Review' }, handlers: searchHandlers },
+      }),
     },
   ];
 }

@@ -1,3 +1,4 @@
+import { json } from './http.ts';
 import { type AccountStore, mailboxOf, normalizeEmail, readLocaleTag } from './accounts.ts';
 import { MAX_BODY_BYTES, readBoundedBytes, readJsonObject } from './bounded-body.ts';
 import {
@@ -112,13 +113,6 @@ export function isAuthRoute(pathname: string): boolean {
 const LINK_TOKEN = /^[A-Za-z0-9_-]{16,128}$/;
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
-
-function json(status: number, body: unknown, headers: Record<string, string>): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...headers },
-  });
-}
 
 /**
  * Whether a request that carries the cookie of a session may change something.

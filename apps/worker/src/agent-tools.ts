@@ -20,7 +20,7 @@ import { OWN_SOURCE, isBuiltIn } from './site-statuses.ts';
 import type { NoteStage } from '@fruitback/shared';
 import type { ListedNote, NoteIndex } from './notes-index.ts';
 import { withoutTrackerStatus } from './site-statuses.ts';
-import { type NoteStore, StoreError, takesChecks, takesReplies, takesStatuses } from './store.ts';
+import { type NoteStore, StoreError, findNote, takesChecks, takesReplies, takesStatuses } from './store.ts';
 
 /**
  * The read tools of `/mcp` (FRU-463): the notes of the sites of an agent key, with their whole
@@ -420,8 +420,11 @@ function replyToFeedback(context: AgentToolsContext, args: Record<string, unknow
     if (!site.policy.showComments) return { ok: false, error: 'This site takes no reply.' };
 
     for (const target of found.targets) {
-      const issue = (await context.store.findForPage({ url: page, clientId: site.id }, target, site.policy)).find(
-        (each) => each.note.id === note,
+      const issue = await findNote(
+        context.store,
+        { url: page, clientId: site.id, id: note, by: 'note' },
+        target,
+        site.policy,
       );
       if (issue === undefined) continue;
       if (!readable(context, site, issue)) return { ok: false, error: NO_NOTE };
@@ -472,8 +475,11 @@ function setFeedbackStatus(context: AgentToolsContext, args: Record<string, unkn
     else return { ok: false, error: 'No status of this site has this key.' };
 
     for (const target of found.targets) {
-      const issue = (await context.store.findForPage({ url: page, clientId: site.id }, target, site.policy)).find(
-        (each) => each.note.id === note,
+      const issue = await findNote(
+        context.store,
+        { url: page, clientId: site.id, id: note, by: 'note' },
+        target,
+        site.policy,
       );
       if (issue === undefined) continue;
       if (!readable(context, site, issue)) return { ok: false, error: NO_NOTE };

@@ -107,13 +107,20 @@ export type OrganizationRule = {
 /** How many members one call lists. The plugin stops a workspace at a hundred members. */
 export const MEMBERS_PAGE = 100;
 
+/** How long a search of the members is, in characters (FRU-496): a name or an address. */
+export const MEMBERS_SEARCH = 100;
+
+/** A search of the members: text of 1 to `MEMBERS_SEARCH` characters. */
+const search: Reader = (value) =>
+  typeof value === 'string' && value.length >= 1 && value.length <= MEMBERS_SEARCH ? value : undefined;
+
 export const ORGANIZATION_PATHS: Readonly<Record<string, OrganizationRule>> = {
   '/organization/list-members': {
     method: 'GET',
     needs: 'read-members',
-    fields: { organizationId: id, limit: count(1, MEMBERS_PAGE), offset: count(0, 100_000) },
+    fields: { organizationId: id, limit: count(1, MEMBERS_PAGE), offset: count(0, 100_000), q: search },
     required: ['organizationId'],
-    why: 'the screen of the members. The plugin asks no permission of a member, so a guest would read it: the worker asks `can`',
+    why: 'the screen of the members, a page at a time, and the ones whose name or address holds `q`. The worker reads them itself (FRU-496). The plugin asks no permission of a member, so a guest would read it: the worker asks `can`',
   },
   '/organization/update-member-role': {
     method: 'POST',
@@ -163,7 +170,7 @@ export const ORGANIZATION_PATHS: Readonly<Record<string, OrganizationRule>> = {
     needs: 'manage-members',
     fields: { organizationId: id },
     required: ['organizationId'],
-    why: 'whoever invites sees what waits, to send it again or to cancel it. The plugin answers it to any member, a guest included: the worker asks `can`',
+    why: 'whoever invites sees what waits, to send it again or to cancel it. The worker reads the ones that wait itself (FRU-496): the plugin reads every invitation ever made, and stops at a hundred. The plugin answers it to any member, a guest included: the worker asks `can`',
   },
   '/organization/cancel-invitation': {
     method: 'POST',

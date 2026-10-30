@@ -133,6 +133,18 @@ describe('the status of a note that the worker keeps (FRU-367)', () => {
     ]);
   });
 
+  it('reads the one note it moves, never the whole page (FRU-499)', async () => {
+    const { world, store, site, tokens, note } = await aNote();
+    const onePage: NoteStore = {
+      ...store,
+      findForPage: () => Promise.reject(new Error('a status read the whole page')),
+    };
+
+    const set = await setStatus(world, site, note, 'own:waiting', tokens.bob, onePage);
+
+    assert.deepEqual(set, { status: 200, body: { status: 'own:waiting', stage: TODO } });
+  });
+
   it('lets a role that manages the sites put the note of somebody else in a built-in status', async () => {
     const { world, store, site, tokens, note } = await aNote();
     await setStatus(world, site, note, 'own:waiting', tokens.bob, store);

@@ -577,14 +577,17 @@ type CheckboxProps = { label: string; checked: boolean; onChange: (checked: bool
 /**
  * A box to tick, as the checkbox of HeroUI: the box of 16 px, then its words, on a line of 40 px at
  * the least, so that it stands in a row of filters (« Only my notes »). Ink when it is ticked.
+ *
+ * The box is inside `Checkbox.Content`: in HeroUI 3 that is the label that takes the press. A box
+ * drawn outside it does not tick (FRU-550).
  */
 export function Checkbox({ label, checked, onChange }: CheckboxProps) {
   return (
     <HeroCheckbox isSelected={checked} onChange={onChange} className="kit-checkbox">
-      <HeroCheckbox.Control>
-        <HeroCheckbox.Indicator />
-      </HeroCheckbox.Control>
       <HeroCheckbox.Content>
+        <HeroCheckbox.Control>
+          <HeroCheckbox.Indicator />
+        </HeroCheckbox.Control>
         <Label>{label}</Label>
       </HeroCheckbox.Content>
     </HeroCheckbox>
@@ -624,12 +627,14 @@ export function Checks({ label, value, onChange, options, hint, error, groupRef 
           isDisabled={option.disabled === true}
           className="kit-checkbox"
         >
-          <HeroCheckbox.Control>
-            <HeroCheckbox.Indicator />
-          </HeroCheckbox.Control>
-          <HeroCheckbox.Content className="flex flex-wrap items-baseline gap-x-[10px]">
-            <Label>{option.label}</Label>
-            {option.detail === undefined ? null : <span className="text-hint text-muted">{option.detail}</span>}
+          <HeroCheckbox.Content>
+            <HeroCheckbox.Control>
+              <HeroCheckbox.Indicator />
+            </HeroCheckbox.Control>
+            <span className="flex flex-wrap items-baseline gap-x-[10px]">
+              <Label>{option.label}</Label>
+              {option.detail === undefined ? null : <span className="text-hint text-muted">{option.detail}</span>}
+            </span>
           </HeroCheckbox.Content>
         </HeroCheckbox>
       ))}
@@ -1225,6 +1230,50 @@ export function Callout({
     <div {...(status ? { role: 'status' as const } : {})} className={`kit-callout ${className}`}>
       {children}
     </div>
+  );
+}
+
+/**
+ * Sections that a page keeps folded under one line (FRU-538): a `<details>`, so the keyboard opens it
+ * with Enter or Space, and a screen reader hears a button that is expanded or collapsed. `hint` says
+ * what is inside while it is folded. `open` and `onToggle` let the page open it for an address with
+ * the hash of a section inside it.
+ */
+export function Disclosure({
+  id,
+  title,
+  hint,
+  open,
+  onToggle,
+  children,
+}: {
+  id: string;
+  title: string;
+  hint?: string;
+  open: boolean;
+  onToggle: (open: boolean) => void;
+  children: ReactNode;
+}) {
+  return (
+    <details id={id} open={open} onToggle={(event) => onToggle(event.currentTarget.open)} className="kit-disclosure">
+      <summary className="kit-disclosure__summary">
+        <svg aria-hidden="true" viewBox="0 0 24 24" className="kit-disclosure__chevron">
+          <path
+            d="M9 6l6 6-6 6"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+        <span className="flex min-w-0 flex-col">
+          <span className="text-section font-bold">{title}</span>
+          {hint === undefined ? null : <span className="text-small text-muted">{hint}</span>}
+        </span>
+      </summary>
+      <div className="kit-disclosure__body">{children}</div>
+    </details>
   );
 }
 
