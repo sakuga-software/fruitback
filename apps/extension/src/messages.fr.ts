@@ -56,6 +56,9 @@ export const FRENCH: Readonly<Record<string, string>> = {
   // The page that opens at install (FRU-318).
   'Welcome to Fruitback': 'Bienvenue dans Fruitback',
   'Fruitback is installed': 'Fruitback est installé',
+  // The demonstration under the action of the page (FRU-531).
+  'A first note, from the click to the pin': 'Une première note, du clic au repère',
+  '{seconds} seconds': '{seconds} secondes',
   'Pin Fruitback, then sign in. It then works on every site your team reviews.':
     'Épinglez Fruitback, puis connectez-vous. Il marche ensuite sur chaque site que votre équipe relit.',
   'Pin Fruitback': 'Épinglez Fruitback',

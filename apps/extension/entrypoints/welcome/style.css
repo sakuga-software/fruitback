@@ -125,3 +125,30 @@ body {
   color: var(--subtle);
   font-size: 13px;
 }
+
+/* The demonstration (FRU-531): 16/9 at the width of the column, its poster until it plays. */
+.welcome-demo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+}
+
+.welcome-demo video {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.welcome-demo figcaption {
+  color: var(--subtle);
+  font-size: 13px;
+}
+
+.welcome-demo-length {
+  font-variant-numeric: tabular-nums;
+}

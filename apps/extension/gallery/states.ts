@@ -199,6 +199,11 @@ function welcomeStates(): GalleryState[] {
   return [
     { id: 'signed-out', title: 'Signed out', build: (d) => welcomeScreen(d, signIn({ kind: 'signed-out' })) },
     {
+      id: 'signed-out-less-motion',
+      title: 'Signed out · less motion: the video waits behind its poster (FRU-531)',
+      build: (d) => welcomeScreen(d, { ...signIn({ kind: 'signed-out' }), reducedMotion: true }),
+    },
+    {
       id: 'sign-in-refused',
       title: 'Sign-in stopped · refused',
       build: (d) => welcomeScreen(d, signIn({ kind: 'signed-out', stop: signInStop('refused') })),
