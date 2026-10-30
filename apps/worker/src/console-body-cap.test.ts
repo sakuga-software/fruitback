@@ -19,11 +19,11 @@ const world = () => envOf();
 /** One byte over the cap, once in JSON. */
 const OVER = { name: 'x'.repeat(MAX_BODY_BYTES) };
 
-async function assertTooLarge(answer: Response, what: string): Promise<void> {
+async function assertTooLarge(answer: Response, what: string, origin: string | null = CONSOLE): Promise<void> {
   assert.equal(answer.status, 413, `${what} answered ${answer.status}`);
   assert.deepEqual(await answer.json(), { error: 'payload-too-large', maxBytes: MAX_BODY_BYTES }, what);
-  // The console reads the answer: it carries the headers of CORS, as every answer of these routes.
-  assert.equal(answer.headers.get('Access-Control-Allow-Origin'), CONSOLE, what);
+  // The caller reads the answer: it carries the headers of CORS, as every answer of these routes.
+  if (origin !== null) assert.equal(answer.headers.get('Access-Control-Allow-Origin'), origin, what);
   assert.equal(answer.headers.get('Cache-Control'), 'no-store', what);
 }
 
@@ -86,6 +86,35 @@ describe('the body of a route of the console (FRU-506)', () => {
       await assertTooLarge(await callOn(on, 'POST', path, { token: ana.token, body: OVER }), path);
     }
     assert.deepEqual(await rowsOf(on.database, 'SELECT id FROM admin_actions'), []);
+  });
+
+  /**
+   * The routes of OAuth and of the connection of the extension read under the same cap, and answered
+   * `400` over it: the review of #713 asked for one answer everywhere.
+   */
+  it('is refused with the same 413 on the routes of OAuth and of the connection of the extension', async () => {
+    const on = await world();
+    const extension = 'chrome-extension://abcdefghijklmnopabcdefghijklmnop';
+    const form = new TextEncoder().encode(`grant_type=${'x'.repeat(MAX_BODY_BYTES)}`);
+
+    await assertTooLarge(
+      await callOn(on, 'POST', '/oauth/register', { origin: null, body: OVER }),
+      'a registration',
+      null,
+    );
+    await assertTooLarge(
+      await callOn(on, 'POST', '/oauth/token', {
+        origin: null,
+        raw: { bytes: form, type: 'application/x-www-form-urlencoded' },
+      }),
+      'the token endpoint',
+      null,
+    );
+    await assertTooLarge(
+      await callOn(on, 'POST', '/session/connect', { origin: extension, body: OVER }),
+      'a connection',
+      extension,
+    );
   });
 
   /** A guard, with its control: a new route that reads its body with no cap fails here. */
