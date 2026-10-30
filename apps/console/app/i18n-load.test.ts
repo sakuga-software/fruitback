@@ -70,6 +70,23 @@ describe('the French map, loaded when French is asked for (FRU-494)', () => {
     assert.equal(told, 0);
   });
 
+  it('starts in English when the map does not load, and loads it at the next ask', async (context) => {
+    const i18n = await fresh('en-US');
+    const load = i18n.LOADERS.fr;
+    context.mock.method(console, 'error', () => {});
+    i18n.LOADERS.fr = () => Promise.reject(new Error('the chunk is gone'));
+
+    // Resolves: the root waits for `ready()`, and a rejection would leave the console with no screen.
+    await i18n.setLocale('fr', false);
+    await i18n.ready();
+    assert.equal(i18n.locale(), 'en');
+    assert.equal(i18n.t('Try again'), 'Try again');
+
+    i18n.LOADERS.fr = load;
+    await i18n.setLocale('fr', false);
+    assert.equal(i18n.locale(), 'fr');
+  });
+
   it('waits for nothing in an English browser', async () => {
     const i18n = await fresh('en-GB');
 

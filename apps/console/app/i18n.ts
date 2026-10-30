@@ -25,9 +25,9 @@ type Catalog = Readonly<Record<string, string>>;
 
 /**
  * WARNING: `import()` only. A static import puts the map in the chunk that every page loads, and
- * `catalog-chunk.test.ts` fails on it.
+ * `catalog-chunk.test.ts` fails on it. Exported for `i18n-load.test.ts`, which makes a load fail.
  */
-const LOADERS: Record<LocaleTag, (() => Promise<Catalog>) | undefined> = {
+export const LOADERS: Record<LocaleTag, (() => Promise<Catalog>) | undefined> = {
   en: undefined,
   // French is set with its narrow no-break spaces once, here (FRU-517).
   fr: () =>
@@ -101,8 +101,11 @@ export function setLocale(tag: string, remember = true): Promise<void> {
     () => {
       if (wanted === next) show(next);
     },
-    () => {
-      // Shown again in English. The next `setLocale` asks for the map again.
+    (error: unknown) => {
+      // English stays on the screens, and `ready()` resolves: the console starts with words. The
+      // next `setLocale` asks for the map again, and `adoptLanguage` calls it each time a workspace
+      // reads `/console/me`. A map gone with a deploy loads after a reload.
+      console.error(`[fruitback] the words in ${next} did not load, so the console shows English`, error);
     },
   );
 
