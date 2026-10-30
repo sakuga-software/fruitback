@@ -572,6 +572,15 @@ test('each filter writes the address and reads again, and a reload keeps the vie
   await page.locator('.kit-checkbox .checkbox__control').click();
   await expect(mine).toBeChecked();
   await expect(page).toHaveURL(/[?&]mine=1(&|$)/);
+  // Ticked, the box is ink, as the mockups draw it: HeroUI lays its accent over it in a `::before`.
+  await page.mouse.move(0, 0);
+  await expect
+    .poll(() =>
+      page
+        .locator('.kit-checkbox .checkbox__control')
+        .evaluate((control) => getComputedStyle(control, '::before').backgroundColor),
+    )
+    .toBe(`rgb(${rgb(INK).join(', ')})`);
   await expect(rows(page)).toHaveCount(1);
   await expect.poll(() => worker.asked.at(-1)).toEqual({ mine: '1' });
   await page.keyboard.press('Space');

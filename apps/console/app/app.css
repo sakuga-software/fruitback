@@ -679,6 +679,11 @@ textarea {
   color: var(--surface);
 }
 
+/* HeroUI paints a ticked box with a layer in its accent, over the background: ink here too. */
+.kit-checkbox .checkbox__control::before {
+  background: var(--color-ink);
+}
+
 .kit-checkbox .checkbox__content {
   flex-flow: row nowrap;
   align-items: center;
@@ -693,6 +698,21 @@ textarea {
   white-space: nowrap;
   font-size: var(--text-small);
   font-weight: 400;
+}
+
+/*
+ * A box of a list (`Checks`) takes the width of the list, and its words wrap: a long site name goes
+ * to the next line, and never past the edge of a phone.
+ */
+.kit-checks .kit-checkbox,
+.kit-checks .kit-checkbox .checkbox__content {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.kit-checks .kit-checkbox .label {
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 /* The switch: ink when on, the border of a control when off, and one movement of 220 ms. */

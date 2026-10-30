@@ -631,7 +631,7 @@ export function Checks({ label, value, onChange, options, hint, error, groupRef 
             <HeroCheckbox.Control>
               <HeroCheckbox.Indicator />
             </HeroCheckbox.Control>
-            <span className="flex flex-wrap items-baseline gap-x-[10px]">
+            <span className="flex min-w-0 flex-wrap items-baseline gap-x-[10px]">
               <Label>{option.label}</Label>
               {option.detail === undefined ? null : <span className="text-hint text-muted">{option.detail}</span>}
             </span>
