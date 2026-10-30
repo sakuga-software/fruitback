@@ -216,7 +216,7 @@ export default defineContentScript({
     /** The commands of the popup posted to the main world and not answered yet (FRU-254). */
     const commands = new Map<string, (answer: TabCommandAnswer) => void>();
 
-    // FRU-254: « Leave feedback », « Show every note of the page », and the counts of « On this
+    // FRU-254: « Leave a note », « Show every note of the page », and the counts of « On this
     // page ». Taken from a page of this extension only: see `acceptedCommand`.
     browser.runtime.onMessage.addListener((message: unknown, sender) => {
       const request = acceptedRequest(message, sender, browser.runtime.id, browser.runtime.getURL('/'));

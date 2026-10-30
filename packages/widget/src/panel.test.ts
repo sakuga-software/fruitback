@@ -175,7 +175,7 @@ describe('copying the feedback as text (FRU-109)', () => {
     const written: string[] = [];
     const { button, status, manual } = mountCopying({ writeText: async (text) => void written.push(text) });
 
-    assert.equal(button.textContent, 'Copy the feedback as text');
+    assert.equal(button.textContent, 'Copy the notes as text');
     button.click();
     await settle();
 

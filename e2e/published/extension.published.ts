@@ -101,10 +101,10 @@ test(`extension ${VERSION}, private mode: the note goes to this worker and comes
   // The background registers the scripts of the origin after the rule is stored: poll by reloading.
   await expect(async () => {
     await openBareSite(page, 'published-ext-private');
-    await expect(page.getByRole('button', { name: /Leave feedback/ })).toBeVisible({ timeout: 2_000 });
+    await expect(page.getByRole('button', { name: /Leave feedback|Leave a note/ })).toBeVisible({ timeout: 2_000 });
   }).toPass();
 
-  await plantOnTheLatteCard(page, /Leave feedback/, 'Publiée, mode privé');
+  await plantOnTheLatteCard(page, /Leave feedback|Leave a note/, 'Publiée, mode privé');
   const [note] = await notesOn(page);
   expect(note?.text).toBe('Publiée, mode privé');
 

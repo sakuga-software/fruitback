@@ -279,7 +279,7 @@ export type Fruitback = {
   settings: ConfigPanel;
   /**
    * Starts choosing an element, as the launch button does (FRU-254): the extension's popup offers
-   * « Leave feedback ». Nothing happens while a note is being written: nothing takes the place of
+   * « Leave a note ». Nothing happens while a note is being written: nothing takes the place of
    * what somebody types, and it answers `false`. A composer that only says « sent » closes. Already
    * choosing, it answers `true` and starts nothing over.
    */

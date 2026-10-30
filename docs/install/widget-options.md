@@ -24,12 +24,12 @@ nor changed, and `#pricing&fruitback-note=<id>` leaves `#pricing`.
 
 ## The feedback of a page, as text
 
-The settings panel has a button, **Copy the feedback as text**. It puts the notes of the page in the
+The settings panel has a button, **Copy the notes as text**. It puts the notes of the page in the
 clipboard, as Markdown: one block per note, with its status, the element it points at, the component
 and the file behind it when your build exposes them, who wrote it, and the team's replies.
 
 ```md
-# Feedback on https://staging.acme.dev/pricing
+# Notes on https://staging.acme.dev/pricing
 
 ## 1. FB-12 — To do
 

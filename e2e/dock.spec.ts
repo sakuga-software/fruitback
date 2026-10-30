@@ -56,7 +56,7 @@ test('the capsule has the measures of the mock-up, and every control in it is 44
   const viewport = page.viewportSize()!;
   const list = page.getByRole('button', { name: 'Show every note in a sidebar' });
   const gear = page.getByRole('button', { name: 'Open Fruitback settings' });
-  const launch = page.getByRole('button', { name: 'Leave feedback' });
+  const launch = page.getByRole('button', { name: 'Leave a note' });
   await expect(launch).toBeVisible();
 
   const capsule = await painted(dockOf(page), [
@@ -144,7 +144,7 @@ test('a capture plays end to end inside the capsule, with the mouse and then wit
 }) => {
   await mount(page, 'dock-capture-path');
   const host = page.locator('[data-fruitback-host]');
-  const launch = page.getByRole('button', { name: 'Leave feedback' });
+  const launch = page.getByRole('button', { name: 'Leave a note' });
   const dock = dockOf(page);
   const banner = page.locator('[data-fruitback-host-banner]');
   const frame = page.locator('[data-fruitback-host-highlight]');
@@ -203,7 +203,7 @@ test('a capture plays end to end inside the capsule, with the mouse and then wit
 
 test('a capture turns the capsule dark, and Escape gives it back with focus on the launch button', async ({ page }) => {
   await mount(page, 'dock-capturing');
-  const launch = page.getByRole('button', { name: 'Leave feedback' });
+  const launch = page.getByRole('button', { name: 'Leave a note' });
   const dock = dockOf(page);
   const viewport = page.viewportSize()!;
 
@@ -286,7 +286,7 @@ test('a capture turns the capsule dark, and Escape gives it back with focus on t
 test('in the dark scheme the capsule is on the dark surface, and the capture keeps its ink', async ({ page }) => {
   await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
   await mount(page, 'dock-dark');
-  const launch = page.getByRole('button', { name: 'Leave feedback' });
+  const launch = page.getByRole('button', { name: 'Leave a note' });
   expect(await painted(dockOf(page), ['background-color', 'border-top-color'])).toMatchObject({
     'background-color': 'rgb(24, 24, 27)',
     'border-top-color': 'rgb(63, 63, 70)',
@@ -334,7 +334,7 @@ test('in a right-to-left language the capsule sits 24 px from the left', async (
 test('a narrow window keeps the capture capsule inside it, and every control at 44 px', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await mount(page, 'dock-narrow');
-  await page.getByRole('button', { name: 'Leave feedback' }).click();
+  await page.getByRole('button', { name: 'Leave a note' }).click();
   const capsule = await painted(dockOf(page), []);
   expect(Number(capsule.x)).toBeGreaterThanOrEqual(0);
   expect(Number(capsule.x) + Number(capsule.width)).toBeLessThanOrEqual(390 - 24);
@@ -462,7 +462,7 @@ test('the detached notes are the first control of the capsule, and overlap nothi
 test('in a forced palette every control of the capsule is drawn by the system colours', async ({ page }) => {
   await page.emulateMedia({ forcedColors: 'active', reducedMotion: 'reduce' });
   await mount(page, 'dock-forced');
-  const launch = page.getByRole('button', { name: 'Leave feedback' });
+  const launch = page.getByRole('button', { name: 'Leave a note' });
   // The shape of the launch button is a line of the system: its fill is dropped.
   expect(await painted(launch, ['outline-style', 'outline-width', 'outline-offset'])).toMatchObject({
     'outline-style': 'solid',

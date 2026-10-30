@@ -153,7 +153,7 @@ async function open(page: Page): Promise<void> {
 
 const rows = (page: Page) => page.locator('button[id^="source-row-"]');
 const panel = (page: Page) => page.locator('#source-panel');
-const sources = (page: Page) => page.getByRole('region', { name: 'Add a source' }).getByRole('listitem');
+const sources = (page: Page) => page.getByRole('region', { name: 'Add a connector' }).getByRole('listitem');
 
 async function expectNoViolation(page: Page, name: string): Promise<void> {
   const results = await new AxeBuilder({ page }).include('main').analyze();
@@ -441,10 +441,12 @@ test('with no source, and with a read that failed, the screen says which of the 
   await expect(page.getByRole('button', { name: 'Use an API key', exact: true })).toBeVisible();
 });
 
-test('« Add a source » lists what connects, and what does not yet with a button that says when', async ({ page }) => {
+test('« Add a connector » lists what connects, and what does not yet with a button that says when', async ({
+  page,
+}) => {
   const worker = await workerWith(page);
   await open(page);
-  const title = page.getByRole('heading', { level: 2, name: 'Add a source', exact: true });
+  const title = page.getByRole('heading', { level: 2, name: 'Add a connector', exact: true });
   expect.soft(await styles(title, ['font-size', 'font-weight'])).toEqual({ 'font-size': '15px', 'font-weight': '600' });
   await expect(sources(page)).toHaveCount(8);
   const row = sources(page).nth(3);
@@ -512,7 +514,7 @@ test('« Add a source » lists what connects, and what does not yet with a butto
   await expect(page.getByText('made-by-fruitback-0123456789')).toHaveCount(0);
 });
 
-test('« Add a source » waits for the list of the sources, and its buttons do not move under a press', async ({
+test('« Add a connector » waits for the list of the sources, and its buttons do not move under a press', async ({
   page,
 }) => {
   await workerWith(page);
@@ -560,7 +562,7 @@ test('a worker with no Linear application connects Linear by a key, under its ro
 test('a member reads the sources and changes none', async ({ page }) => {
   await workerWith(page, 'member');
   await open(page);
-  await expect(page.getByText('An owner or an admin connects a source')).toBeVisible();
+  await expect(page.getByText('An owner or an admin adds a connector')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Connect Linear', exact: true })).toBeDisabled();
   await expect(page.getByRole('button', { name: 'Connect REST API', exact: true })).toBeDisabled();
   await rows(page).first().click();
@@ -640,7 +642,7 @@ for (const { width, height, locale, words } of [
     locale: 'en',
     words: {
       rename: 'Rename Linear',
-      field: 'Name of this source',
+      field: 'Name of this connector',
       save: 'Save',
       refused: 'A name of one line, up to 80 characters.',
     },
@@ -718,7 +720,7 @@ test('« Rename » starts from the name of the last read, not the one of when th
   await panel(page).getByRole('button', { name: 'Try now' }).first().click();
   await expect(row.locator('span.font-semibold').first()).toHaveText('Support');
   await panel(page).getByRole('button', { name: 'Rename Support', exact: true }).click();
-  await expect(panel(page).getByRole('textbox', { name: 'Name of this source' })).toHaveValue('Support');
+  await expect(panel(page).getByRole('textbox', { name: 'Name of this connector' })).toHaveValue('Support');
 });
 
 test('a member reads the name of a source, and renames none', async ({ page }) => {

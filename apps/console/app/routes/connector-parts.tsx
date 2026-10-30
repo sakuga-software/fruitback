@@ -28,7 +28,7 @@ export const KEY_PROBLEMS: Record<string, string> = {
   'key-lacks-access': msg(
     'Linear knows this key, and it may not list your teams. Create a key with read and write access, then try again.',
   ),
-  forbidden: msg('Only an owner or an admin of the workspace connects a source.'),
+  forbidden: msg('Only an owner or an admin of the workspace adds a connector.'),
   'store-unavailable': msg('Linear did not answer just now. Your key is not kept: try again in a minute.'),
 };
 

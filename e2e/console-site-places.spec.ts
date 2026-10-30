@@ -443,7 +443,7 @@ test('with no source, and with a read of the sources that failed, the panel says
   const worker = await workerWith(page);
   worker.connectors = [];
   await openPlaces(page);
-  await expect(panel(page)).toContainText('No source is connected. Connect a tracker');
+  await expect(panel(page)).toContainText('No connector is added. Connect a tracker');
   await expect(panel(page).getByRole('link', { name: 'Connect a tracker' })).toHaveAttribute(
     'href',
     '/w/w1/connectors',

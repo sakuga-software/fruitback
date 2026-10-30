@@ -95,7 +95,7 @@ describe('the chrome the reporter sees (FRU-36)', () => {
     mount(() => null);
     const button = launchButton();
 
-    assert.equal(button.textContent, 'Leave feedback');
+    assert.equal(button.textContent, 'Leave a note');
     assert.ok(button.querySelector('svg.fruitback-icon'), 'the launch button lost its mark');
   });
 
@@ -120,11 +120,11 @@ describe('the chrome the reporter sees (FRU-36)', () => {
     assert.equal(launchButton().getAttribute('aria-pressed'), 'false');
 
     host?.start();
-    assert.equal(launchButton().textContent, 'Leave feedback');
+    assert.equal(launchButton().textContent, 'Leave a note');
     assert.equal(launchButton().getAttribute('aria-pressed'), 'true');
 
     host?.stop();
-    assert.equal(launchButton().textContent, 'Leave feedback');
+    assert.equal(launchButton().textContent, 'Leave a note');
     assert.equal(launchButton().getAttribute('aria-pressed'), 'false');
     assert.ok(launchButton().querySelector('svg.fruitback-icon'), 'stopping a capture removed the mark');
   });
@@ -190,7 +190,7 @@ describe('the chrome the reporter sees (FRU-36)', () => {
     host.start();
     // No key to name, and no arrows: the sentence and the button, which is the only way out.
     assert.deepEqual(said(), ['Tap the part of the page your note is about', 'span Cancel']);
-    assert.equal(launchButton().textContent, 'Leave feedback');
+    assert.equal(launchButton().textContent, 'Leave a note');
     assert.equal(announcer?.textContent, '');
     host.stop();
 
@@ -913,7 +913,7 @@ describe('selecting an element without a pointer (FRU-51)', () => {
     const container = page.document.querySelector('[data-fruitback-host]');
 
     assert.equal(container?.getAttribute('role'), 'region');
-    assert.equal(container?.getAttribute('aria-label'), 'Fruitback feedback');
+    assert.equal(container?.getAttribute('aria-label'), 'Fruitback notes');
   });
 });
 
@@ -932,7 +932,7 @@ describe('the capsule of the dock (FRU-303)', () => {
     );
     // No second landmark: the host element is the region, and it has the name.
     assert.equal(dock.getAttribute('role'), null);
-    assert.equal(host?.root.host.getAttribute('aria-label'), 'Fruitback feedback');
+    assert.equal(host?.root.host.getAttribute('aria-label'), 'Fruitback notes');
     assert.equal(dock.querySelector('.fruitback-listing')?.getAttribute('aria-label'), 'Show every note in a sidebar');
     assert.equal(dock.querySelector('.fruitback-configure')?.getAttribute('aria-label'), 'Open Fruitback settings');
   });
@@ -1045,7 +1045,7 @@ describe('the launch button while the session of the host has ended (FRU-315)', 
     assert.equal(host?.capturing(), false);
 
     host?.offerSignIn(undefined);
-    assert.equal(launchButton().textContent, 'Leave feedback');
+    assert.equal(launchButton().textContent, 'Leave a note');
     assert.equal(launchButton().getAttribute('aria-pressed'), 'false');
     launchButton().click();
     assert.equal(host?.capturing(), true);

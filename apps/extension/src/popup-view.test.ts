@@ -696,13 +696,13 @@ describe('3 · a site on (FRU-298)', () => {
     assert.equal(named?.getAttribute('aria-label'), 'Show Fruitback on this page');
     assert.equal(named?.getAttribute('aria-checked'), 'true');
     assert.equal(shown.querySelector('.visibility-words')?.textContent, 'Show Fruitback on this page');
-    assert.ok(stops(shown).includes('button: Leave feedback'));
+    assert.ok(stops(shown).includes('button: Leave a note'));
     (named as HTMLElement).click();
     assert.deepEqual(calls, ['shown:false']);
 
     const hidden = on({ visibility: { shown: false, onChange: nothing } });
     assert.equal(hidden.querySelectorAll('[role="switch"]')[1]?.getAttribute('aria-checked'), 'false');
-    assert.equal(stops(hidden).includes('button: Leave feedback'), false);
+    assert.equal(stops(hidden).includes('button: Leave a note'), false);
     assert.equal(
       stops(hidden).some((stop) => stop.includes('sidebar')),
       false,
@@ -721,7 +721,7 @@ describe('3 · a site on (FRU-298)', () => {
     );
   });
 
-  it('has the site and its named switch, « Leave feedback » with its keys, and the side panel', () => {
+  it('has the site and its named switch, « Leave a note » with its keys, and the side panel', () => {
     const calls: string[] = [];
     const screen = on({}, calls);
 
@@ -742,7 +742,7 @@ describe('3 · a site on (FRU-298)', () => {
     assert.deepEqual(stops(screen), [
       'button: Account and settings',
       'button: Fruitback on staging.acme.dev',
-      'button: Leave feedback',
+      'button: Leave a note',
       'button: Show all notes in a sidebar',
     ]);
 
@@ -752,12 +752,12 @@ describe('3 · a site on (FRU-298)', () => {
     assert.deepEqual(calls, ['leave', 'panel', 'toggle:false']);
   });
 
-  it('puts « Leave feedback » at the bottom, the side panel beside it as an icon, the keys under both (FRU-529)', () => {
+  it('puts « Leave a note » at the bottom, the side panel beside it as an icon, the keys under both (FRU-529)', () => {
     const screen = on({ visibility: { shown: true, onChange: nothing } });
     showSiteFacts(screen, { workspace: 'Acme', on: true, onOpenPanel: nothing }, { toCheck: 2, open: 3 });
     const body = screen.querySelector('.popup-body') as HTMLElement;
 
-    // The site, then what waits under it, then the block of « Leave feedback », last of the body.
+    // The site, then what waits under it, then the block of « Leave a note », last of the body.
     assert.deepEqual(
       [...body.children].map((child) => child.className),
       ['site-row', 'kit-dl site-destination', 'visibility-row', 'site-lines', 'leave-block'],
@@ -768,7 +768,7 @@ describe('3 · a site on (FRU-298)', () => {
       ['leave-row', 'shortcut-line'],
     );
     const [feedback, panel] = [...leave.querySelectorAll('.leave-row > button')];
-    assert.equal(feedback?.textContent, 'Leave feedback');
+    assert.equal(feedback?.textContent, 'Leave a note');
     // The side panel: one icon, no word; its name in aria-label and in the tooltip.
     assert.equal(panel?.textContent, '');
     assert.equal(panel?.getAttribute('aria-label'), 'Show all notes in a sidebar');

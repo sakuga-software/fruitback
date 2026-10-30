@@ -104,10 +104,10 @@ describe('what the popover looks like (FRU-36)', () => {
       (label) => label.textContent,
     );
     // « Attachments » is in the tree, hidden while no host offers files (FRU-332).
-    assert.deepEqual(labels, ['Your comment', 'Name (optional)', 'Attachments']);
+    assert.deepEqual(labels, ['Your note', 'Name (optional)', 'Attachments']);
     assert.equal(composer?.element.querySelector('[data-fruitback-attach]')?.hasAttribute('hidden'), true);
     // A label wraps its field: it is the name of the field.
-    assert.equal(field().closest('label')?.querySelector('.fruitback-composer-label')?.textContent, 'Your comment');
+    assert.equal(field().closest('label')?.querySelector('.fruitback-composer-label')?.textContent, 'Your note');
     const name = composer?.element.querySelector('[data-fruitback-name]') as HTMLInputElement;
     assert.equal(name.closest('[data-fruitback-who]')?.hasAttribute('hidden'), false);
     assert.equal(composer?.element.querySelector('[data-fruitback-identify]'), null);
@@ -557,7 +557,7 @@ describe('createComposer', () => {
     // A failure is said at once, in the card that holds it (FRU-305).
     assert.equal(composer?.element.querySelector('[data-fruitback-failed]')?.getAttribute('role'), 'alert');
     // Named by its label, « Your comment »; the placeholder says what to write.
-    assert.equal(field().closest('label')?.textContent?.trim(), 'Your comment');
+    assert.equal(field().closest('label')?.textContent?.trim(), 'Your note');
     assert.equal(field().placeholder, 'What should change?');
   });
 
