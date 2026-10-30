@@ -56,8 +56,7 @@
           "{workspaceRoot}/apps/worker/src/app.ts",
           "{workspaceRoot}/apps/worker/src/pair-page.ts",
           "{workspaceRoot}/apps/worker/src/session-site-add.ts",
-          "{workspaceRoot}/apps/worker/src/session.ts",
-          "{workspaceRoot}/apps/worker/src/session-site-add.ts"
+          "{workspaceRoot}/apps/worker/src/session.ts"
         ]
       }
     }
