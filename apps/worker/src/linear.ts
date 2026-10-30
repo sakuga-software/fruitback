@@ -879,6 +879,9 @@ export type LinearTeam = {
  * Linear prices a query by the nodes it may return: a page of 100 teams with the status of 50
  * projects each would weigh twice as much as the query of before.
  */
+// WARNING: Linear refuses a query whose complexity goes past its limit, with `400 Query too complex`.
+// 50 teams with 50 projects each went past it. 20 projects a team cost about 4,700; the projects
+// after the first 20 come from TEAM_PROJECTS_QUERY, one team at a time.
 const TEAMS_QUERY = `
   query FruitbackTeams($after: String) {
     viewer { name }
@@ -886,7 +889,7 @@ const TEAMS_QUERY = `
     teams(first: 50, after: $after) {
       nodes {
         id name key private color
-        projects(first: 50) { nodes { id name color status { name type } } pageInfo { hasNextPage endCursor } }
+        projects(first: 20) { nodes { id name color status { name type } } pageInfo { hasNextPage endCursor } }
       }
       pageInfo { hasNextPage endCursor }
     }

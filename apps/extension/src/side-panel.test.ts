@@ -672,7 +672,7 @@ describe('« Ready to check » (FRU-300)', () => {
     );
     assert.equal(
       root.querySelector('.ready-item[data-note="r1"] .ready-meta')?.textContent,
-      'Corrigé par Sakuga team · il y a 2 heures',
+      'Corrigée par Sakuga team · il y a 2 heures',
     );
   });
 });

@@ -426,7 +426,7 @@ describe('2 · a site of a workspace, not on here (FRU-298)', () => {
     setLanguage('fr');
     const screen = offer();
 
-    assert.equal(screen.querySelector('h1')?.textContent, 'Activer Fruitback sur ce site ?');
+    assert.equal(screen.querySelector('h1')?.textContent, 'Activer Fruitback sur ce site\u202F?');
     assert.equal(screen.querySelector('.action-block button')?.textContent, 'Activer');
     assert.equal(screen.querySelector('dt')?.textContent, 'Les notes vont vers');
   });
@@ -481,6 +481,27 @@ describe('2 · a site of no workspace (FRU-298, FRU-255)', () => {
       screen.querySelector<HTMLAnchorElement>('.kit-help a')?.href,
       'https://fruitback.com/reviewing.html#who-can-add-a-site-to-a-workspace',
     );
+  });
+});
+
+describe('2 · a site on http, which the popup does not add (FRU-537)', () => {
+  it('says to add it from the console, and has nothing to press but the account', () => {
+    const screen = turnOnScreen(page(), {
+      origin: 'http://staging.acme.dev',
+      visibility: 'members',
+      workspaces: [],
+      unaddable: 'This site is on http. Add it to a workspace from the console, then turn it on here.',
+      onTurnOn: nothing,
+      onSettings: nothing,
+    });
+
+    assert.equal(screen.querySelector('h1')?.textContent, 'staging.acme.dev');
+    assert.equal(
+      screen.querySelector('.lead')?.textContent,
+      'This site is on http. Add it to a workspace from the console, then turn it on here.',
+    );
+    assert.doesNotMatch(screen.textContent ?? '', /Ask an admin/);
+    assert.deepEqual(stops(screen), ['button: Account and settings']);
   });
 });
 

@@ -609,7 +609,7 @@ test('the popup, the options page and the mounted widget speak the language of t
     .poll(() => extension.worker.evaluate(() => chrome.storage.local.get('language')))
     .toEqual({ language: 'fr' });
   expect(asked[0]).toMatch(/^Bearer .+/);
-  await expect(learner.getByText(`Appairé en tant que ${REVIEWER}`)).toBeVisible();
+  await expect(learner.getByText(`Connecté en tant que ${REVIEWER}`)).toBeVisible();
   expect(await learner.evaluate(() => document.documentElement.lang)).toBe('fr');
   await learner.close();
 
@@ -617,7 +617,7 @@ test('the popup, the options page and the mounted widget speak the language of t
   await expect(page.getByRole('button', { name: 'Laisser une note' })).toBeVisible();
 
   const popup = await openPopup(extension, page);
-  await expect(popup.getByText(`Appairé en tant que ${REVIEWER}`)).toBeVisible();
+  await expect(popup.getByText(`Connecté en tant que ${REVIEWER}`)).toBeVisible();
   await expect(popup.getByText('Activé · playground', { exact: false })).toBeVisible();
   await expect(popup.getByRole('button', { name: 'Compte et réglages' })).toBeVisible();
   expect(await popup.evaluate(() => document.documentElement.lang)).toBe('fr');

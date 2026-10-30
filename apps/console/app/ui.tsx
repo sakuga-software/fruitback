@@ -351,24 +351,24 @@ export function IconLink({ label, href, tip, children }: IconLinkProps) {
 }
 
 type TipProps = {
-  /** What a screen reader says of the whole: the words cut on screen, and what the picture means. */
-  label: string;
   /** What the tooltip shows: the words whole, and what the picture means. */
   tip: string;
   className?: string;
-  /** What is drawn: a picture and words cut to their room. */
+  /** What is drawn: a picture and words cut to their room, and what a screen reader says of them. */
   children: ReactNode;
 };
 
 /**
- * Words cut to their room, whole in a tooltip of HeroUI (FRU-553): the author of a note, with the
- * icon of their role. The trigger takes focus, so a keyboard shows the tooltip too, and it is one
- * picture to a screen reader, named by `label`: nothing to press.
+ * Words cut to their room, whole in a tooltip of HeroUI under the pointer (FRU-553): the author of a
+ * note, with the icon of their role. The words are in the page whole (a cut is CSS), so a screen
+ * reader says them all; the children give it what the picture means. The trigger is no control:
+ * out of the order of the keyboard, and a `group`, where HeroUI makes it a button that does nothing
+ * (review of the columns, FRU-553).
  */
-export function Tip({ label, tip, className = '', children }: TipProps) {
+export function Tip({ tip, className = '', children }: TipProps) {
   return (
     <Tooltip delay={300} closeDelay={0}>
-      <Tooltip.Trigger role="img" aria-label={label} className={`kit-tip-trigger ${className}`}>
+      <Tooltip.Trigger role="group" tabIndex={-1} className={`kit-tip-trigger ${className}`}>
         {children}
       </Tooltip.Trigger>
       <Tooltip.Content placement="top" className="kit-tip">

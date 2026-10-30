@@ -1,5 +1,6 @@
 import type { NoteStage } from '@fruitback/shared';
 import { FRENCH } from './locale-fr.ts';
+import { frenchCatalog } from './typography.ts';
 
 /**
  * Every word the widget shows, and the catalogs the bundle carries (FRU-37, FRU-38).
@@ -312,7 +313,8 @@ export type FruitbackMessages = { readonly [Key in TextKey]?: string } & {
 };
 
 /** The catalogs in the bundle, by locale tag. */
-export const BUNDLED_CATALOGS: Readonly<Record<string, Catalog>> = { en: ENGLISH, fr: FRENCH };
+// French is set with its narrow no-break spaces once, here (FRU-517).
+export const BUNDLED_CATALOGS: Readonly<Record<string, Catalog>> = { en: ENGLISH, fr: frenchCatalog(FRENCH) };
 
 export type Direction = 'ltr' | 'rtl';
 
