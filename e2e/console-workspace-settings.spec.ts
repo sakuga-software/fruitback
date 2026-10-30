@@ -148,6 +148,13 @@ test('« Settings » is an entry of the rail for an owner and an admin, under «
     await expect(entries, role).toHaveText(['Sites', 'Notes', 'Connectors', 'Members', 'My account']);
     await rail(page).getByRole('link', { name: 'Acme Cloud workspace Workspace settings' }).click();
     await expect(page).toHaveURL(/\/w\/w1\/settings$/);
+    // The name stays the one on screen on the page « AI » of the settings (FRU-544).
+    await page.getByRole('main').getByRole('link', { name: 'AI', exact: true }).click();
+    await expect(page).toHaveURL(/\/w\/w1\/settings\/ai$/);
+    await expect(
+      rail(page).getByRole('link', { name: 'Acme Cloud workspace Workspace settings' }),
+      role,
+    ).toHaveAttribute('aria-current', 'page');
   }
 });
 
