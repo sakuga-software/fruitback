@@ -1413,6 +1413,15 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Keys that let an AI agent of your team read the notes of some sites, and reply to them.':
     'Les clés qui permettent à un agent IA de votre équipe de lire les notes de certains sites, et d’y répondre.',
   'Manage the agent keys': 'Gérer les clés d’agent',
+  // FRU-503: the settings of a workspace hold what an agent needs.
+  'A key for each agent.': 'Une clé pour chaque agent.',
+  'To start an agent when a note arrives: an address of your team that receives the call.':
+    'Pour lancer un agent quand une note arrive : une adresse de votre équipe qui reçoit l’appel.',
+  'Then, site by site, when to call it.': 'Puis, site par site, quand l’appeler.',
+  'The sites of the workspace did not load.': 'Les sites du workspace ne se sont pas chargés.',
+  'The workspace has no site yet.': 'Le workspace n’a pas encore de site.',
+  'Start an agent, by site': 'Lancer un agent, par site',
+  'Start an agent on {site}': 'Lancer un agent sur {site}',
   // FRU-468: a site starts an agent.
   'Call of an agent': 'Appel d’un agent',
   'This address is not in the workspace any more. Choose another one.':

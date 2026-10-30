@@ -17,6 +17,7 @@ import { useConnectedExtension } from '../extension-connected';
 import { BY_SIGN_IN, CONNECT_PAGE } from '../install-options';
 import { PageHead as KitPageHead, Logo, Menu } from '../ui';
 import { RailIcon, type RailIconName } from '../rail-icons';
+import { manages } from '../setup-stage';
 import { useLocale } from '../use-locale';
 
 /**
@@ -53,8 +54,18 @@ export const SECTIONS: readonly Section[] = [
   { path: 'notes', label: msg('Notes'), built: true },
   { path: 'connectors', label: msg('Connectors'), built: true },
   { path: 'members', label: msg('Members'), built: true },
+  { path: 'settings', label: msg('Settings'), built: true },
   { path: 'account', label: msg('My account'), built: true },
 ];
+
+/**
+ * The settings of the workspace are an entry of the rail for whoever manages it (FRU-503): an owner
+ * or an admin renames it, changes its logo and makes its agent keys there, and the owner deletes it.
+ * Another role still reads them from the name of the workspace, at the top of the rail.
+ */
+export function sectionsFor(workspace: Workspace): readonly Section[] {
+  return SECTIONS.filter((section) => section.built && (section.path !== 'settings' || manages(workspace)));
+}
 
 /** The icon of each section of the rail (FRU-477). */
 const SECTION_ICONS: Readonly<Record<string, RailIconName>> = {
@@ -62,6 +73,7 @@ const SECTION_ICONS: Readonly<Record<string, RailIconName>> = {
   notes: 'notes',
   connectors: 'connectors',
   members: 'members',
+  settings: 'settings',
   account: 'account',
 };
 
@@ -146,7 +158,7 @@ export default function WorkspaceFrame() {
     logoChanged: (logo) => changed({ logo }),
   };
 
-  const sections = SECTIONS.filter((section) => section.built);
+  const sections = sectionsFor(context.workspace);
   const current = sections.find((section) => pathname.startsWith(`/w/${context.workspace.id}/${section.path}`));
 
   return (
@@ -159,7 +171,8 @@ export default function WorkspaceFrame() {
           current={current?.path}
           onWorkspace={(chosen) => navigate(`/w/${chosen}/sites`, { viewTransition: true })}
           onSettings={() => navigate(`/w/${context.workspace.id}/settings`, { viewTransition: true })}
-          settings={pathname === `/w/${context.workspace.id}/settings`}
+          // The entry « Settings » is the one on screen when the rail has it: the name is not a second one.
+          settings={current?.path !== 'settings' && pathname === `/w/${context.workspace.id}/settings`}
           admin={context.me.instanceAdmin === true}
         />
       }
