@@ -1,6 +1,6 @@
 import { afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { keepConnect, takeConnect } from './connect-return.ts';
+import { keepAuthorize, keepConnect, takeAuthorize, takeConnect } from './connect-return.ts';
 
 /** A `sessionStorage` of the test: the console has no DOM under `node --test`. */
 function storage(): Map<string, string> {
@@ -54,5 +54,21 @@ describe('the request a sign-in with a provider comes back to (FRU-240)', () => 
   it('does nothing in a browser with no storage', () => {
     keepConnect('Ab3', 0);
     assert.equal(takeConnect(0), undefined);
+  });
+});
+
+describe('the request of a client of OAuth a sign-in comes back to (FRU-467)', () => {
+  it('keeps it apart from a request of the extension, for ten minutes, once', () => {
+    storage();
+    keepConnect('connect_1', 0);
+    keepAuthorize('authorize_1', 0);
+    assert.equal(takeAuthorize(1000), 'authorize_1');
+    assert.equal(takeAuthorize(1000), undefined, 'taken once');
+    assert.equal(takeConnect(1000), 'connect_1', 'the request of the extension is still there');
+
+    keepAuthorize('authorize_2', 0);
+    assert.equal(takeAuthorize(10 * 60 * 1000 + 1), undefined, 'past its ten minutes');
+    keepAuthorize('not a request/../x', 0);
+    assert.equal(takeAuthorize(1), undefined);
   });
 });

@@ -53,6 +53,31 @@ on the pricing page. » It has these tools:
 
 A key writes 30 times a minute at most.
 
+## Connect claude.ai, or another app, with OAuth
+
+An app that connects from a page, as a **custom connector of claude.ai**, needs no key: it asks you
+in the console, and gets tokens that it renews itself.
+
+1. In claude.ai, open **Settings**, then **Connectors**, and **Add custom connector**. Name it
+   Fruitback, and give the address `https://<your worker>/mcp`. Leave the fields of OAuth empty:
+   claude.ai registers itself with your worker.
+2. **Connect**. claude.ai sends you to the console of Fruitback, at **Connect an agent**. Sign in if
+   you are not.
+3. Read **who asks**: the host in large is where the answer goes, `claude.ai`. The name under it is
+   the one the app gave itself; anybody can choose any name, so trust the host.
+4. Choose the **workspace** (one where you are an owner or an admin), the **sites**, **Read** or
+   **Read and write** (never more than the app asked), the days it lives, and **Only the notes of
+   known people**, as for a key. Then **Allow claude.ai**. You go back to claude.ai, connected.
+
+The connection is a row of **Agents**, with the chip **OAuth · claude.ai**, its last use, its end and
+its writes. **Revoke** ends it at once: its tokens stop, and claude.ai must ask you again. claude.ai
+holds a token of one hour, and renews it with a token that works once: a copy of that token used a
+second time ends the connection. The worker needs `FRUITBACK_PUBLIC_URL` and
+`FRUITBACK_CONSOLE_URL`, and claude.ai must reach it over `https`.
+
+The worker follows the authorization of MCP: `/.well-known/oauth-protected-resource`,
+`/.well-known/oauth-authorization-server`, registration of clients (RFC 7591), and PKCE with S256.
+
 ## Connect an agent that runs elsewhere
 
 The server needs no browser and nobody to approve a session: an agent in CI, or a cloud agent,
