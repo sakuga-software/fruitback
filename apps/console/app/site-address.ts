@@ -96,3 +96,32 @@ export function siteName(origin: string): string {
 
   return url.protocol.slice(0, -1) === defaultScheme(url.host) ? url.host : url.origin;
 }
+
+/**
+ * The second-level labels under which a country code sells names (FRU-547): `acme.co.uk` is the
+ * domain, not `co.uk`. A short list, not the public suffix list: a name it does not know reads with
+ * two labels, `shop.acme.example` as `acme.example`.
+ */
+const SECOND_LEVELS = new Set(['ac', 'co', 'com', 'edu', 'gov', 'net', 'org', 'ne', 'or', 'gob', 'gouv']);
+
+/**
+ * The domain of a site as the column « Site » of the notes shows it (FRU-547): the name and its
+ * extension, with no subdomain, no scheme and no port. `https://app.fruitback.com` is
+ * `fruitback.com`, `https://staging.acme.co.uk` is `acme.co.uk`. A host that has no domain stays
+ * whole: `localhost:5177` is `localhost`, an address IP is itself.
+ */
+export function domainOf(origin: string): string {
+  let hostname: string;
+  try {
+    hostname = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(origin) ? origin : `https://${origin}`).hostname;
+  } catch {
+    return origin;
+  }
+  if (hostname.startsWith('[') || /^\d+(\.\d+){3}$/.test(hostname)) return hostname;
+  const labels = hostname.replace(/\.$/, '').split('.');
+  if (labels.length <= 2) return labels.join('.');
+  const [second = '', top = ''] = labels.slice(-2);
+  const kept = top.length === 2 && SECOND_LEVELS.has(second) ? 3 : 2;
+
+  return labels.slice(-kept).join('.');
+}

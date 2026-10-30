@@ -389,25 +389,36 @@ test('the page is the one of the mockup: chips, filters, the table and its pages
   });
   expect.soft(await styles(page.locator('.kit-checkbox .label'), ['font-size'])).toEqual({ 'font-size': '14px' });
 
-  // The table: 960 px at the least, the five columns.
+  // The table: 960 px at the least, the seven columns. The last one is the link to the page
+  // (FRU-546): its head is for a screen reader.
   const headers = table(page).locator('thead th');
-  await expect(headers).toHaveText(['Note', 'Status', 'Left by', 'Went to', 'When']);
+  await expect(headers).toHaveText(['Note', 'Site', 'Status', 'Left by', 'Went to', 'When', 'Page']);
   expect.soft(await styles(table(page).locator('table'), ['min-width', 'font-size'])).toEqual({
     'min-width': '960px',
     'font-size': '14px',
   });
   expectBox(await box(table(page).locator('table')), { x: 298, y: 233 }, 2, 'the table');
-  expect.soft(await styles(headers.last(), ['text-align'])).toEqual({ 'text-align': 'right' });
+  expect.soft(await styles(headers.nth(5), ['text-align'])).toEqual({ 'text-align': 'right' });
 
-  // A note: its 64 characters on two lines at most, its page, and the way to see it there.
+  // A note: its 64 characters on two lines at most, and nothing else (FRU-546).
   const first = row(page, 'The headline runs');
   const excerpt = first.locator('td').first().locator('span').first();
   expect.soft(await styles(excerpt, ['-webkit-line-clamp', 'overflow'])).toEqual({
     '-webkit-line-clamp': '2',
     overflow: 'hidden',
   });
-  await expect(first.locator('td').first()).toContainText('staging.acme.dev/');
+  await expect(first.locator('td').first()).not.toContainText('staging.acme.dev/');
+  // Its site: the domain and its extension, no subdomain (FRU-547).
+  await expect(first.locator('td').nth(1)).toHaveText('acme.dev');
+  await expect(row(page, 'cream').locator('td').nth(1)).toHaveText('acme.dev');
+  // The way to see it on its page: an icon in the last column, the address in its tooltip (FRU-546).
   const show = first.getByRole('link', { name: 'Show on the page' });
+  await expect(first.locator('td').last().getByRole('link')).toHaveCount(1);
+  await expect(show.locator('svg')).toHaveAttribute('aria-hidden', 'true');
+  await show.hover();
+  await expect(page.getByRole('tooltip')).toHaveText('https://staging.acme.dev/');
+  await page.mouse.move(0, 0);
+  await expect(page.getByRole('tooltip')).toHaveCount(0);
   // The link of the widget (FRU-253) opens the note by the id the widget gave it, by its issue when
   // the worker does not send that id, and opens the page alone with neither.
   await expect(show).toHaveAttribute('href', 'https://staging.acme.dev/#fruitback-note=note-n2');
@@ -422,21 +433,33 @@ test('the page is the one of the mockup: chips, filters, the table and its pages
   await expect(show).toHaveAttribute('target', '_blank');
 
   // Its status: a drop of 10 px, and the word.
-  await expect(first.locator('td').nth(1)).toHaveText('New');
-  const drop = await box(first.locator('td').nth(1).locator('[aria-hidden="true"]'));
+  await expect(first.locator('td').nth(2)).toHaveText('New');
+  const drop = await box(first.locator('td').nth(2).locator('[aria-hidden="true"]'));
   expect.soft({ width: drop.width, height: drop.height }).toEqual({ width: 10, height: 10 });
 
-  // Who left it.
-  await expect(first.locator('td').nth(2)).toHaveText('AnaYou');
-  await expect(row(page, 'The order form').locator('td').nth(2)).toHaveText('VisitorAnonymous');
-  await expect(row(page, 'The checkout button').locator('td').nth(2)).toHaveText('VisitorVerified by https://acme.dev');
-  await expect(row(page, 'cream').locator('td').nth(2)).toHaveText('Camille DurandGuest');
-  await expect(row(page, 'yearly toggle').locator('td').nth(2)).toHaveText('Marc PetitAdmin');
+  // Who left it (FRU-553): the icon of their role, then the name; the role is in the tooltip and in
+  // the name a screen reader says.
+  const author = (text: string) => row(page, text).locator('td').nth(3).getByRole('img');
+  await expect(first.locator('td').nth(3)).toHaveText('Ana');
+  await expect(author('The headline runs')).toHaveAccessibleName('Ana, You');
+  await expect(author('The headline runs').locator('[data-note-icon="you"]')).toHaveCount(1);
+  await expect(author('The order form')).toHaveAccessibleName('Visitor, Anonymous');
+  await expect(author('The checkout button')).toHaveAccessibleName('Visitor, Verified by acme.dev');
+  await expect(author('cream')).toHaveAccessibleName('Camille Durand, Guest');
+  await expect(author('yearly toggle')).toHaveAccessibleName('Marc Petit, Admin');
+  await expect(author('yearly toggle').locator('[data-note-icon="admin"]')).toHaveCount(1);
+  // The keyboard reaches it, and the tooltip says the name whole and the role.
+  await author('cream').focus();
+  await expect(page.getByRole('tooltip')).toHaveText('Camille Durand · Guest');
+  await author('cream').blur();
 
-  // Where it went: the tracker at 600, its reference as a link at 400 with an arrow.
-  const went = first.locator('td').nth(3);
-  await expect(went.locator('span').first()).toHaveText('Linear');
-  expect.soft(await styles(went.locator('span').first(), ['font-weight'])).toEqual({ 'font-weight': '600' });
+  // Where it went (FRU-552): the mark of the tracker and its reference on one line, the name of the
+  // tracker for a screen reader only; the reference a link at 400 with an arrow.
+  const went = first.locator('td').nth(4);
+  await expect(went).toHaveText('LinearACM-151');
+  await expect(went.locator('.sr-only')).toHaveText('Linear');
+  const line = await box(went.locator('[data-place]'));
+  expect.soft(line.height).toBeLessThan(24);
   const ref = went.getByRole('link', { name: 'ACM-151' });
   await expect(ref).toHaveAttribute('href', 'https://linear.app/acme/issue/ACM-151');
   expect.soft(await styles(ref, ['font-size', 'font-weight', 'column-gap'])).toEqual({
@@ -446,9 +469,9 @@ test('the page is the one of the mockup: chips, filters, the table and its pages
   });
   const arrow = await box(ref.locator('svg'));
   expect.soft({ width: arrow.width, height: arrow.height }).toEqual({ width: 12, height: 12 });
-  await expect(row(page, 'chat bubble').locator('td').nth(3)).toHaveText('REST APIDelivered to hooks.acme.dev');
-  // A note an address did not take does not say it was delivered.
-  await expect(row(page, 'The order form').locator('td').nth(3)).toHaveText('REST APINot delivered yetSend again');
+  await expect(row(page, 'chat bubble').locator('td').nth(4)).toHaveText('REST APIhooks.acme.dev');
+  // A note an address did not take does not name its host.
+  await expect(row(page, 'The order form').locator('td').nth(4)).toHaveText('REST APINot delivered yetSend again');
   // An excerpt of 64 characters was cut: it says so.
   await expect(row(page, 'cream').locator('td').first().locator('span').first()).toHaveText(
     'The button is hard to read on the green. Could it take the cream…',
@@ -456,18 +479,21 @@ test('the page is the one of the mockup: chips, filters, the table and its pages
   await expect(first.locator('td').first().locator('span').first()).toHaveText(
     'The headline runs to three lines on a phone. Can it be shorter?',
   );
-  await expect(row(page, 'checkout button').locator('td').nth(3)).toHaveText('Kept in Fruitback');
-  // Each source has its mark before its name, 14 px, hidden from a screen reader (FRU-435).
-  // A note kept in Fruitback went to no source, and has none.
-  for (const cell of [went, row(page, 'chat bubble').locator('td').nth(3)]) {
-    const mark = cell.locator('span').first().locator('svg');
+  await expect(row(page, 'checkout button').locator('td').nth(4)).toHaveText('In Fruitback');
+  // Each place has its mark first, 14 px, hidden from a screen reader (FRU-435): the pin of
+  // Fruitback for a note it keeps.
+  for (const cell of [
+    went,
+    row(page, 'chat bubble').locator('td').nth(4),
+    row(page, 'checkout button').locator('td').nth(4),
+  ]) {
+    const mark = cell.locator('svg').first();
     await expect(mark).toHaveAttribute('aria-hidden', 'true');
     const size = await box(mark);
     expect.soft({ width: size.width, height: size.height }).toEqual({ width: 14, height: 14 });
   }
-  await expect(row(page, 'checkout button').locator('td').nth(3).locator('svg')).toHaveCount(0);
   // Not delivered: the words in the accent, and « Send again » at 32 px.
-  const late = row(page, 'The order form').locator('td').nth(3);
+  const late = row(page, 'The order form').locator('td').nth(4);
   const words = late.getByText('Not delivered yet', { exact: true });
   expect.soft(await styles(words, ['font-size', 'font-weight'])).toEqual({ 'font-size': '13px', 'font-weight': '600' });
   expect.soft(await painted(words, 'color')).toEqual(rgb(ACCENT));
@@ -483,9 +509,9 @@ test('the page is the one of the mockup: chips, filters, the table and its pages
     });
 
   // When: aligned to the right, muted, tabular.
-  const when = first.locator('td').nth(4);
+  const when = first.locator('td').nth(5);
   await expect(when).toHaveText('1 h ago');
-  await expect(row(page, 'The mug').locator('td').nth(4)).toHaveText('6 days ago');
+  await expect(row(page, 'The mug').locator('td').nth(5)).toHaveText('6 days ago');
   expect.soft(await styles(when, ['text-align', 'font-variant-numeric', 'white-space'])).toEqual({
     'text-align': 'right',
     'font-variant-numeric': 'tabular-nums',
@@ -689,7 +715,7 @@ test('a delivery the worker gave up says so, and « Send again » still sends it
   await open(page);
   await pages(page).getByRole('button', { name: 'Next' }).click();
   const given = row(page, 'The contact form');
-  await expect(given.locator('td').nth(3)).toHaveText('REST APINot delivered: Fruitback stopped tryingSend again');
+  await expect(given.locator('td').nth(4)).toHaveText('REST APINot delivered: Fruitback stopped tryingSend again');
   const words = given.getByText('Not delivered: Fruitback stopped trying', { exact: true });
   expect.soft(await painted(words, 'color')).toEqual(rgb(ACCENT));
   // One that the worker still tries says « yet ».
@@ -795,7 +821,7 @@ test('a guest reads no place, no reference, no chip and no « Send again »', as
   // The route does not search a reference for a guest, and the field does not say it does.
   await expect(search(page)).toHaveAttribute('placeholder', 'Search the text or the page');
   // The worker tells a guest nothing of where a note went: no column for it.
-  await expect(table(page).locator('thead th')).toHaveText(['Note', 'Status', 'Left by', 'When']);
+  await expect(table(page).locator('thead th')).toHaveText(['Note', 'Site', 'Status', 'Left by', 'When', 'Page']);
   await expect(page.getByText('Not delivered yet')).toHaveCount(0);
 });
 

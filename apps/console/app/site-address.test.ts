@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { defaultScheme, siteAddress, siteLabel, siteName } from './site-address.ts';
+import { defaultScheme, domainOf, siteAddress, siteLabel, siteName } from './site-address.ts';
 
 /** The table `apps/extension/src/site-patterns.test.ts` holds too: both apps read a host alike. */
 const SCHEMES: ReadonlyArray<readonly [string, 'http' | 'https']> = [
@@ -92,5 +92,26 @@ describe('a site as the Sites screen names it (FRU-408)', () => {
 
   it('writes what is not an origin as it came', () => {
     assert.equal(siteName('not an origin'), 'not an origin');
+  });
+});
+
+describe('the domain of a site, in the column « Site » of the notes (FRU-547)', () => {
+  it('keeps the name and its extension, and drops the subdomains, the scheme and the port', () => {
+    const cases: ReadonlyArray<readonly [string, string]> = [
+      ['https://app.fruitback.com', 'fruitback.com'],
+      ['https://fruitback.com', 'fruitback.com'],
+      ['https://staging.eu.acme.dev:8443', 'acme.dev'],
+      ['https://staging.acme.co.uk', 'acme.co.uk'],
+      ['https://www.shop.com.au', 'shop.com.au'],
+      ['https://acme.co', 'acme.co'],
+      ['https://docs.acme.io', 'acme.io'],
+      ['http://localhost:5177', 'localhost'],
+      ['http://shop.localhost:3000', 'shop.localhost'],
+      ['http://192.168.1.20:5173', '192.168.1.20'],
+      ['http://[::1]:5177', '[::1]'],
+      ['staging.acme.dev', 'acme.dev'],
+      ['not a url', 'not a url'],
+    ];
+    for (const [origin, domain] of cases) assert.equal(domainOf(origin), domain, origin);
   });
 });
