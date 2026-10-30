@@ -2134,6 +2134,17 @@ may change, and who », says what is protected; this section says how to change 
   the one whose role was read, and `filterField` reads any column of `member`. The body is read
   under the cap of the worker (`bounded-body.ts`, `413` over it). The other routes of the console
   still read theirs with `request.text()`: that is older than this slice, and not changed by it.
+- **The two lists of the Members screen are read by the worker, not by the plugin** (FRU-496), after
+  the same checks: `list-members` from `AccountStore.membersOf`, a page in the order the members
+  joined (`createdAt`, then `id`), with `total` and a search `q` (1 to 100 characters) of the name
+  or the address, `ILIKE` with `%`, `_` and `\` escaped; `list-invitations` from
+  `waitingInvitations`, the `pending` ones that did not end, oldest first. Each answer keeps the
+  shape of the plugin's. The plugin's `listMembers` has no order, so a page could repeat a member
+  and skip another, and its filter reads `member` only, never a name. Its `listInvitations` reads
+  every invitation the workspace ever had and stops at its default of 100 rows: with 100 answered
+  invitations, one that waits was not listed. No index was added: `member_organizationId_idx` and
+  `invitation_organizationId_idx` take both reads to their workspace (measured on 501 members and
+  300 invitations in the PR of FRU-496).
 - **Every open route names its workspace in `organizationId`.** No call of the worker reads the
   « active » workspace of a session, and nothing writes one: `createWorkspaceWithPlugin` passes
   `keepCurrentActiveOrganization`. Do not open `set-active`.

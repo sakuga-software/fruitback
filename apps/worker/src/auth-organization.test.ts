@@ -329,6 +329,101 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
       }
     });
 
+    it('lists the members a page at a time, oldest first, and the ones whose name or address holds a search (FRU-496)', async () => {
+      const worker = await workerOn(open);
+      const acme = await team(worker);
+      // 120 members past the four of the team, as the seed of the bench writes them: past the hundred
+      // the plugin stops at.
+      await rowsOf(
+        worker.database,
+        `INSERT INTO "user" (id, name, email, "emailVerified", "createdAt", "updatedAt")
+           SELECT 'u' || n, 'Person ' || n, 'p' || n || '@client.dev', true, now(), now() FROM generate_series(1, 120) n`,
+      );
+      await rowsOf(
+        worker.database,
+        `INSERT INTO member (id, "organizationId", "userId", role, "createdAt")
+           SELECT 'm' || n, '${acme.workspace}', 'u' || n, 'member', now() + n * interval '1 second'
+           FROM generate_series(1, 120) n`,
+      );
+      await rowsOf(worker.database, `UPDATE "user" SET name = 'Zoé 100%' WHERE id = 'u7'`);
+      const list = async (query: string) => {
+        const answer = await as(worker, acme.admin, `${ORG}/list-members?organizationId=${acme.workspace}&${query}`);
+        assert.equal(answer.status, 200, await answer.clone().text());
+
+        return (await answer.json()) as { members: { userId: string; user: { email: string } }[]; total: number };
+      };
+
+      // Three pages of 50 hold each member once, in the order they joined.
+      const pages = [await list('limit=50'), await list('limit=50&offset=50'), await list('limit=50&offset=100')];
+      assert.deepEqual(
+        pages.map((page) => [page.total, page.members.length]),
+        [
+          [124, 50],
+          [124, 50],
+          [124, 24],
+        ],
+      );
+      const everybody = pages.flatMap((page) => page.members.map((each) => each.userId));
+      assert.equal(new Set(everybody).size, 124);
+      assert.deepEqual(everybody.slice(4, 7), ['u1', 'u2', 'u3']);
+      assert.equal(everybody.at(-1), 'u120');
+
+      // A search reads the name and the address, whatever the case, and counts what it finds.
+      const twelve = await list('limit=50&q=P12');
+      assert.deepEqual(
+        twelve.members.map((each) => each.user.email),
+        ['p12@client.dev', 'p120@client.dev'],
+      );
+      assert.equal(twelve.total, 2);
+      assert.deepEqual(
+        (await list('q=ADMIN%40acme')).members.map((each) => each.user.email),
+        ['admin@acme.dev'],
+      );
+      // `%` and `_` are characters of the search, not wildcards.
+      assert.deepEqual(
+        (await list('q=100%25')).members.map((each) => each.userId),
+        ['u7'],
+      );
+      assert.deepEqual(await list('q=_'), { members: [], total: 0 });
+      // A search of the members of another workspace finds nothing here.
+      const other = await team(worker, 'globex');
+      assert.equal((await list('q=globex')).total, 0);
+      assert.equal(other.owner.email, 'owner@globex.dev');
+      // A search longer than a name or an address is refused.
+      const long = await as(
+        worker,
+        acme.admin,
+        `${ORG}/list-members?organizationId=${acme.workspace}&q=${'a'.repeat(101)}`,
+      );
+      assert.equal(long.status, 400);
+      assert.deepEqual(await long.json(), { error: 'invalid-request', field: 'q' });
+    });
+
+    it('lists every invitation that waits, and none that was accepted, cancelled or ended, past a hundred of them (FRU-496)', async () => {
+      const worker = await workerOn(open);
+      const acme = await team(worker);
+      // 150 invitations of before, answered or ended, written first: the plugin read the hundred
+      // first rows of the workspace, so the ones that wait were not listed.
+      await rowsOf(
+        worker.database,
+        `INSERT INTO invitation (id, "organizationId", email, role, status, "expiresAt", "createdAt", "inviterId")
+           SELECT 'old' || n, '${acme.workspace}', 'old' || n || '@client.dev', 'member',
+                  (ARRAY['accepted', 'canceled', 'rejected', 'pending'])[1 + n % 4],
+                  now() + CASE WHEN n % 4 = 3 THEN interval '-1 day' ELSE interval '7 days' END,
+                  now() - interval '30 days', '${acme.owner.id}'
+           FROM generate_series(0, 149) n`,
+      );
+      const waits = await invited(worker, acme, 'paul@client.dev');
+
+      const answer = await as(worker, acme.admin, `${ORG}/list-invitations?organizationId=${acme.workspace}`);
+      assert.equal(answer.status, 200);
+      const listed = (await answer.json()) as { id: string; status: string }[];
+      assert.deepEqual(
+        listed.map((each) => [each.id, each.status]),
+        [[waits, 'pending']],
+      );
+    });
+
     it('does not let a guest read the members or the invitations, on the API', async () => {
       const worker = await workerOn(open);
       const acme = await team(worker);

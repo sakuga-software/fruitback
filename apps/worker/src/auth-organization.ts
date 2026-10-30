@@ -12,6 +12,7 @@ import {
 } from './auth-routes.ts';
 import { MAX_BODY_BYTES, readBoundedText } from './bounded-body.ts';
 import {
+  MEMBERS_PAGE,
   ORGANIZATION_PATHS,
   type OrganizationRule,
   type OrganizationValue,
@@ -62,6 +63,8 @@ export type OrganizationRouteContext = Pick<AuthRouteContext, 'consoleUrl' | 'cl
     | 'sites'
     | 'shareByInvitation'
     | 'sitesOfInvitations'
+    | 'waitingInvitations'
+    | 'membersOf'
     | 'shareOnAcceptance'
     | 'sharedIn'
     | 'unshare'
@@ -546,6 +549,47 @@ async function answerOrganizationCall(
     }
   }
 
+  // FRU-496: the two lists of the screen of the members are read by the worker, and not by the
+  // plugin. Its `list-invitations` reads every invitation the workspace ever had, accepted, declined
+  // and cancelled too, and stops at the hundred first rows: past them, an invitation that waits was
+  // not listed. Its `list-members` gives the rows in no order, so a page could repeat a member and
+  // skip another, and searches no name. Each answer keeps the shape of the plugin's.
+  if (path === '/organization/list-invitations' && workspace !== undefined) {
+    const pending = await context.accounts.waitingInvitations(workspace, new Date());
+    // The sites an invitation of a guest names (FRU-250): whoever invites sees them in the list.
+    const named = await context.accounts.sitesOfInvitations(pending.map((each) => each.id));
+
+    return json(
+      200,
+      pending.map((each) => {
+        const sites = named.get(each.id);
+
+        return sites === undefined ? each : { ...each, sites };
+      }),
+      headers,
+    );
+  }
+  if (path === '/organization/list-members' && workspace !== undefined) {
+    const page = await context.accounts.membersOf(workspace, {
+      limit: typeof read.input.limit === 'number' ? read.input.limit : MEMBERS_PAGE,
+      offset: typeof read.input.offset === 'number' ? read.input.offset : 0,
+      ...(typeof read.input.q === 'string' ? { search: read.input.q } : {}),
+    });
+    // The sites of each guest (FRU-250), for « Sites » of the screen of the members.
+    const shares = await context.accounts.sharedIn(workspace);
+
+    return json(
+      200,
+      {
+        members: page.members.map((each) =>
+          each.role === 'guest' ? { ...each, sites: shares.get(each.userId) ?? [] } : each,
+        ),
+        total: page.total,
+      },
+      headers,
+    );
+  }
+
   // The guard of the writes of a suspended workspace (FRU-282), after the role is read. An acceptance
   // names no workspace, so no role is read: the guard tells the suspension to the person of the
   // invitation only. Anybody else who holds its id gets the refusal of better-auth, as before.
@@ -718,7 +762,7 @@ async function answerOrganizationCall(
 
   // An invitation past its end waits no more: better-auth refuses it at the acceptance, and still
   // lists it as `pending` (1.7.7). The screens showed it, and « Join » failed.
-  if ((path === '/organization/list-invitations' || path === '/organization/list-user-invitations') && answer.ok) {
+  if (path === '/organization/list-user-invitations' && answer.ok) {
     const read: unknown = await answer
       .clone()
       .json()
@@ -727,27 +771,24 @@ async function answerOrganizationCall(
     // FRU-450: the invitations sent to the other addresses of the person too. better-auth lists the
     // ones of an address that a call in the process names, and the ones of the session otherwise.
     const listed: unknown[] = [...read];
-    if (path === '/organization/list-user-invitations') {
-      const account = await context.accounts.account(mine.userId);
-      const others = (await context.accounts.addresses(mine.userId)).filter((each) => each.email !== account?.email);
-      const api = auth.api as unknown as { listUserInvitations(input: object): Promise<unknown> };
-      for (const other of others) {
-        // A list of another address that fails leaves the others, said in the log: never a `502` for
-        // the invitations of the primary address.
-        try {
-          const more = await api.listUserInvitations({ query: { email: other.email } });
-          if (Array.isArray(more)) listed.push(...more);
-        } catch (error) {
-          console.error(`[fruitback] the invitations of another address of a person were not read: ${String(error)}`);
-        }
+    const account = await context.accounts.account(mine.userId);
+    const others = (await context.accounts.addresses(mine.userId)).filter((each) => each.email !== account?.email);
+    const api = auth.api as unknown as { listUserInvitations(input: object): Promise<unknown> };
+    for (const other of others) {
+      // A list of another address that fails leaves the others, said in the log: never a `502` for
+      // the invitations of the primary address.
+      try {
+        const more = await api.listUserInvitations({ query: { email: other.email } });
+        if (Array.isArray(more)) listed.push(...more);
+      } catch (error) {
+        console.error(`[fruitback] the invitations of another address of a person were not read: ${String(error)}`);
       }
     }
     const now = Date.now();
     const waiting = (listed as { id?: unknown; status?: unknown; expiresAt?: unknown }[]).filter(
       (each) => each.status !== 'pending' || new Date(String(each.expiresAt)).getTime() > now,
     );
-    // The sites an invitation of a guest names (FRU-250): the person sees where they are invited,
-    // and whoever invites sees it in the list.
+    // The sites an invitation of a guest names (FRU-250): the person sees where they are invited.
     const named = await context.accounts.sitesOfInvitations(
       waiting.flatMap((each) => (typeof each.id === 'string' ? [each.id] : [])),
     );
@@ -758,23 +799,6 @@ async function answerOrganizationCall(
         return sites === undefined ? each : { ...each, sites };
       }),
     );
-  }
-
-  // The sites of each guest (FRU-250), for « Sites » of the screen of the members. Only a role that
-  // reads the members gets here.
-  if (path === '/organization/list-members' && answer.ok && workspace !== undefined) {
-    const listed = (await answer
-      .clone()
-      .json()
-      .catch(() => undefined)) as { members?: unknown } | undefined;
-    if (!Array.isArray(listed?.members)) throw new AuthUnavailable('better-auth answered no members');
-    const shares = await context.accounts.sharedIn(workspace);
-    told = JSON.stringify({
-      ...listed,
-      members: (listed.members as { userId?: unknown; role?: unknown }[]).map((each) =>
-        each.role === 'guest' ? { ...each, sites: shares.get(String(each.userId)) ?? [] } : each,
-      ),
-    });
   }
 
   const merged = new Headers(answer.headers);

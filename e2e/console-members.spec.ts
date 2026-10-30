@@ -197,9 +197,10 @@ const email = (page: Page) => form(page).getByRole('textbox', { name: 'Email', e
 const roles = (page: Page) => form(page).getByRole('button', { name: /Role$/ });
 const invite = (page: Page) => form(page).getByRole('button', { name: 'Invite', exact: true });
 const table = (page: Page) => page.getByRole('region', { name: /^(Members|Membres)$/ });
+/** The row of a person, or of an invitation: each is in its own list (FRU-496). */
 const row = (page: Page, name: string) =>
-  table(page)
-    .locator('tbody tr')
+  page
+    .locator('main tbody tr')
     .filter({ has: page.getByText(name, { exact: true }) })
     .first();
 const cells = (page: Page, name: string) => row(page, name).locator('td');

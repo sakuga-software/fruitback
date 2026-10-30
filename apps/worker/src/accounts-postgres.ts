@@ -5,6 +5,8 @@ import {
   desc,
   eq,
   exists,
+  gt,
+  ilike,
   inArray,
   isNotNull,
   isNull,
@@ -216,8 +218,8 @@ function given<T>(value: T | undefined, what: string): T {
 }
 
 /** `limit`, when it is a whole number of rows of at least one. Drizzle leaves out a `LIMIT` that is not. */
-function rowLimit(limit: number): number {
-  if (!Number.isSafeInteger(limit) || limit < 1) throw new TypeError(`dueDeliveries: limit must be a positive integer`);
+function rowLimit(limit: number, what: string): number {
+  if (!Number.isSafeInteger(limit) || limit < 1) throw new TypeError(`${what}: limit must be a positive integer`);
 
   return limit;
 }
@@ -993,6 +995,51 @@ export function createPostgresAccountStore(database: Database): AccountStore {
         found.set(row.invitation, [...(found.get(row.invitation) ?? []), { id: row.id, origin: row.origin }]);
 
       return found;
+    },
+
+    async waitingInvitations(workspace, now) {
+      return run((db) =>
+        db
+          .select()
+          .from(invitation)
+          .where(
+            and(
+              eq(invitation.organizationId, workspace),
+              eq(invitation.status, 'pending'),
+              gt(invitation.expiresAt, now),
+            ),
+          )
+          .orderBy(asc(invitation.createdAt), asc(invitation.id)),
+      );
+    },
+
+    async membersOf(workspace, page) {
+      const search = page.search?.trim() ?? '';
+      const like = `%${search.replace(/[\\%_]/g, (character) => `\\${character}`)}%`;
+      const which = and(
+        eq(member.organizationId, workspace),
+        search === '' ? undefined : or(ilike(user.name, like), ilike(user.email, like)),
+      );
+      const [rows, counted] = await Promise.all([
+        run((db) =>
+          db
+            .select({
+              member,
+              user: { id: user.id, name: user.name, email: user.email, image: user.image },
+            })
+            .from(member)
+            .innerJoin(user, eq(user.id, member.userId))
+            .where(which)
+            .orderBy(asc(member.createdAt), asc(member.id))
+            .limit(rowLimit(page.limit, 'membersOf'))
+            .offset(page.offset),
+        ),
+        run((db) =>
+          db.select({ total: count() }).from(member).innerJoin(user, eq(user.id, member.userId)).where(which),
+        ),
+      ]);
+
+      return { members: rows.map((row) => ({ ...row.member, user: row.user })), total: counted[0]?.total ?? 0 };
     },
 
     async shareOnAcceptance(person, invited) {
@@ -1911,7 +1958,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
 
     async dueDeliveries(now, limit) {
       given(now, 'dueDeliveries: now');
-      rowLimit(limit);
+      rowLimit(limit, 'dueDeliveries');
       const rows = await run((db) =>
         db
           .select({
@@ -2094,7 +2141,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
 
     async domainsToCheck(before, limit) {
       given(before, 'domainsToCheck: before');
-      rowLimit(limit);
+      rowLimit(limit, 'domainsToCheck');
       const rows = await run((db) =>
         db
           .select(DOMAIN)
