@@ -124,6 +124,8 @@ test('an owner changes who sees the notes and who writes on the page, and the si
   const worker = await workerWith(page);
   await page.goto(`${CONSOLE}/w/w1/sites/s1`);
   const about = page.getByRole('region', { name: 'Site', exact: true });
+  // The first read of the list has landed: the page is drawn.
+  await expect(about.locator('dd').first()).toHaveText('https://staging.acme.dev');
   const reads = worker.reads;
 
   // Cancel changes nothing, asks nothing, and gives the focus back to « Change ».
