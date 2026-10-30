@@ -7,14 +7,14 @@ import {
   DEFAULT_AGENT_KEY_DAYS,
   MAX_AGENT_KEYS,
   MAX_AGENT_KEY_SITES,
-  type Site,
+  type SiteChoice,
   type Stage,
   STAGES,
   agentKeys,
   agentWrites,
-  call,
   makeAgentKey,
   revokeAgentKey,
+  siteChoices,
 } from '../api';
 import { ago, dayOf } from '../ago';
 import { claudeLine, daysOf, endOf, keyEnd, statusKey } from '../agent-keys';
@@ -28,6 +28,7 @@ import { Button, Callout, Checks, Field, LinkButton, Pick, Problem, Snippet, Tog
 import { useLocale } from '../use-locale';
 import { STAGE_NAMES } from './connector-parts';
 import { PageHead, useWorkspace } from './workspace';
+import { ReadProblem } from '../read-problem';
 
 /**
  * The agent keys of a workspace (FRU-462), the board `design/agents/`: make a key, shown once with
@@ -57,7 +58,7 @@ function AgentsScreen() {
   const { workspace } = useWorkspace();
   const may = manages(workspace);
   const [keys, setKeys] = useState<Listed<AgentKey>>('loading');
-  const [sites, setSites] = useState<Listed<Site>>('loading');
+  const [sites, setSites] = useState<Listed<SiteChoice>>('loading');
   const [forming, setForming] = useState(false);
   const [made, setMade] = useState<Made | undefined>();
   // The name of the key revoked last: its sentence is translated where it is shown.
@@ -68,7 +69,8 @@ function AgentsScreen() {
     setKeys('loading');
     const [listed, read] = await Promise.all([
       agentKeys(workspace.id),
-      call<{ sites: Site[] }>('GET', `/console/workspaces/${workspace.id}/sites`),
+      // Their id, address and visibility (FRU-497): no count of the notes of every site.
+      siteChoices(workspace.id),
     ]);
     setKeys(listedOf(listed, (data) => data.keys));
     setSites(listedOf(read, (data) => data.sites));
@@ -115,7 +117,7 @@ function AgentsScreen() {
     );
 
   const listed = Array.isArray(keys) ? (keys as readonly AgentKey[]) : undefined;
-  const workspaceSites = Array.isArray(sites) ? (sites as readonly Site[]) : undefined;
+  const workspaceSites = Array.isArray(sites) ? (sites as readonly SiteChoice[]) : undefined;
   const full = listed !== undefined && listed.length >= MAX_AGENT_KEYS;
   const busy = forming || made !== undefined;
   let action = null;
@@ -160,7 +162,9 @@ function AgentsScreen() {
       {keys === 'loading' ? <p className="text-small text-muted">{t('Loading…')}</p> : null}
       {keys === 'failed' || (listed !== undefined && sites === 'failed') ? (
         <div role="alert" className="flex flex-wrap items-center gap-[16px]">
-          <p className="text-body">{t('The agent keys did not load.')}</p>
+          <p className="text-body">
+            {t('The agent keys did not load.')} <ReadProblem />
+          </p>
           <Button tone="outline" onClick={() => void load()}>
             {t('Try again')}
           </Button>
@@ -214,17 +218,17 @@ const MAKE_PROBLEMS: Readonly<Record<string, string>> = {
   'invalid-sites': msg('Choose from 1 to 20 sites.'),
   'unknown-site': msg('A site you chose is not in the workspace any more. Reload the page.'),
   'invalid-days': msg('Choose from 1 to 365 days.'),
-  'too-many-keys': msg('A workspace holds 20 keys at most. Revoke one to make another.'),
+  'too-many-keys': msg('A workspace holds 20 keys at most. Revoke one to create another.'),
   forbidden: msg('Only an owner or an admin of the workspace manages its agent keys.'),
 };
-const KEY_NOT_MADE = msg('The key was not made. Try again.');
+const KEY_NOT_MADE = msg('The key was not created. Try again.');
 
 function KeyForm({
   sites,
   onCancel,
   onMade,
 }: {
-  sites: readonly Site[];
+  sites: readonly SiteChoice[];
   onCancel: () => void;
   onMade: (made: Made) => void;
 }) {
@@ -331,7 +335,7 @@ function KeyForm({
         />
         <div className="max-w-[240px]">
           <Field
-            label={t('Lives for, in days')}
+            label={t('Expires after (days)')}
             value={days}
             inputMode="numeric"
             inputRef={daysRef}
@@ -340,8 +344,8 @@ function KeyForm({
               ? {
                   hint:
                     lives === undefined
-                      ? t('From 1 to 365 days: no key lives with no end.')
-                      : t('Ends on {day}. From 1 to 365 days: no key lives with no end.', {
+                      ? t('Between 1 and 365 days. Every key expires.')
+                      : t('Expires on {day}. Between 1 and 365 days. Every key expires.', {
                           day: dayOf(endOf(lives, Date.now())),
                         }),
                 }
@@ -362,7 +366,7 @@ function KeyForm({
         {problem === undefined ? null : <Problem>{t(problem)}</Problem>}
         <div className="flex flex-wrap items-center gap-x-[16px] gap-y-[8px]">
           <Button type="submit" disabled={busy}>
-            {busy ? t('Making…') : t('Make the key')}
+            {busy ? t('Creating…') : t('Create the key')}
           </Button>
           <LinkButton onClick={onCancel}>{t('Cancel')}</LinkButton>
         </div>
@@ -389,7 +393,7 @@ function ShownOnce({ made, onKept }: { made: Made; onKept: () => void }) {
       className="mb-[24px] flex max-w-[760px] flex-col gap-[10px] rounded-frame border border-line p-[clamp(16px,3vw,28px)]"
     >
       <h2 id="key-made-title" ref={title} tabIndex={-1} className="text-section font-bold">
-        {t('« {name} » is made', { name: made.key.name })}
+        {t('« {name} » is created', { name: made.key.name })}
       </h2>
       <p className="text-body font-semibold">
         {t('Copy the key now: Fruitback shows it only once, and keeps only its digest.')}
@@ -452,7 +456,7 @@ function KeyList({
         <h2 className="mb-[6px] text-section font-bold">{t('No agent key yet')}</h2>
         <p className="mb-[18px] text-body text-muted">
           {t(
-            'Make one for each agent: Claude Code on a laptop, a job of your CI, a cloud agent. Revoking one stops that agent alone.',
+            'Create one for each agent: Claude Code on a laptop, a job of your CI, a cloud agent. Revoking one stops that agent alone.',
           )}
         </p>
         {action}
@@ -472,11 +476,11 @@ function KeyList({
           <p className="text-body">
             {soon.length === 1
               ? t(
-                  '« {name} » ends in {count} days. Its agent stops then: make a new key, give it to the agent, then revoke this one.',
+                  '« {name} » ends in {count} days. Its agent stops then: create a new key, give it to the agent, then revoke this one.',
                   { name: soon[0]?.key.name ?? '', count: soon[0]?.days ?? 0 },
                 )
               : t(
-                  '{count} keys end within 7 days. Their agents stop then: make new keys, give them to the agents, then revoke the old ones.',
+                  '{count} keys end within 7 days. Their agents stop then: create new keys, give them to the agents, then revoke the old ones.',
                   { count: soon.length },
                 )}
           </p>
@@ -489,7 +493,7 @@ function KeyList({
       </ul>
       <p className="mt-[10px] text-hint text-muted">
         {keys.length >= MAX_AGENT_KEYS
-          ? t('A workspace holds 20 keys at most. Revoke one to make another.')
+          ? t('A workspace holds 20 keys at most. Revoke one to create another.')
           : t('{count} of 20 keys.', { count: keys.length })}{' '}
         {t('An app connected with OAuth, as a connector of claude.ai, is listed here too: it has no key to copy.')}
       </p>
@@ -531,7 +535,7 @@ function KeyRow({ agentKey: key, now, onRevoked }: { agentKey: AgentKey; now: nu
           <p className="text-hint text-muted">
             {key.client
               ? t('Approved on {day}', { day: dayOf(key.createdAt) })
-              : t('Made on {day}', { day: dayOf(key.createdAt) })}
+              : t('Created on {day}', { day: dayOf(key.createdAt) })}
           </p>
         </div>
         <dl className="contents">
@@ -660,7 +664,9 @@ function Writes({ id, agentKey: key }: { id: string; agentKey: AgentKey }) {
       {writes === 'loading' ? <p className="text-small text-muted">{t('Loading…')}</p> : null}
       {writes === 'failed' ? (
         <div role="alert" className="flex flex-wrap items-center gap-[12px]">
-          <p className="text-small">{t('The writes of this key did not load.')}</p>
+          <p className="text-small">
+            {t('The writes of this key did not load.')} <ReadProblem />
+          </p>
           <Button tone="outline" onClick={() => void read()}>
             {t('Try again')}
           </Button>

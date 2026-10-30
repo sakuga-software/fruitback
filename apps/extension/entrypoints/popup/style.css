@@ -892,3 +892,9 @@ body.popup-page {
   font-size: 14px;
   font-weight: 400;
 }
+
+/* FRU-519: the line of a new release, above the foot. */
+.popup > .kit-update {
+  padding: 0 16px;
+  border-top: 1px solid var(--line);
+}

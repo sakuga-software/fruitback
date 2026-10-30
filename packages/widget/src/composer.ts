@@ -107,7 +107,7 @@ export type ComposerOptions = {
   ) => Promise<boolean | void | SendFailure | SentWithoutPicture | SentAs>;
   onClose?: () => void;
   /**
-   * « Pick again » in the head (FRU-305): the host starts a capture over the open composer, which
+   * « Choose another element » in the head (FRU-305): the host starts a capture over the open composer, which
    * keeps its text and moves to the element chosen. Left out: no such button.
    */
   onPickAgain?: () => void;
@@ -616,7 +616,7 @@ export function createComposer(options: ComposerOptions): Composer {
       dropZone.hidden = true;
     }
     field.readOnly = next === 'sending';
-    // A failure is a card of its own above the foot (FRU-305): « Did not go through », then what to
+    // A failure is a card of its own above the foot (FRU-305): « Not sent », then what to
     // do. The sentence is the one of its cause (FRU-156).
     failedText.textContent = next === 'failed' ? t.text(FAILURES[failure]) : '';
     failedCard.hidden = next !== 'failed';
@@ -1223,7 +1223,7 @@ export function failureText(t: Translator, failure: SendFailure): string {
   return t.text(failure === 'retry' ? 'composer.failed' : FAILURES[failure]);
 }
 
-/** What a failed send says under « Did not go through », by its cause (FRU-156, FRU-305). */
+/** What a failed send says under « Not sent », by its cause (FRU-156, FRU-305). */
 const FAILURES = {
   retry: 'composer.failedRetry',
   wait: 'composer.failedWait',
@@ -1636,7 +1636,7 @@ const STYLES = `
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* « Pick again »: a word in a chip, 44 px to press, the margins give the difference back to the head. */
+/* « Choose another element »: a word in a chip, 44 px to press, the margins give the difference back to the head. */
 .fruitback-composer-pick {
   flex: none;
   margin-block: -9px;
@@ -1847,7 +1847,7 @@ const STYLES = `
   background: var(--fruitback-color-surface);
 }
 .fruitback-composer-who input[type="text"]:focus-visible { outline: 2px solid var(--fruitback-color-accent); outline-offset: 2px; }
-/* « Did not go through », and what to do (FRU-305). The text stays in the field above. */
+/* « Not sent », and what to do (FRU-305). The text stays in the field above. */
 .fruitback-composer-failed {
   display: flex;
   flex-direction: column;
@@ -1921,7 +1921,7 @@ const STYLES = `
 .fruitback-composer-status { flex: 1 1 100%; min-width: 0; font-size: 12px; color: var(--fruitback-color-text-muted); }
 .fruitback-composer-status:empty { display: none; }
 /*
-  « Lands in Linear as a new issue »: where the note goes, before the buttons. At least 4.5em wide
+  « Creates a new issue in Linear »: where the note goes, before the buttons. At least 4.5em wide
   (FRU-350): beside the buttons, which stay on one line, its words wrap; with less room than that,
   they take a line of their own above them, never a column of letters beside them.
 */

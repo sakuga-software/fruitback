@@ -1,5 +1,5 @@
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
-import { type Domain, type Site, type Workspace, call } from './api';
+import { type Domain, type SiteChoice, type Workspace, call } from './api';
 import { Confirm } from './confirm';
 import { locale, msg, t } from './i18n';
 import { type Listed, edited, known } from './listed';
@@ -7,6 +7,7 @@ import { copyText, problemOf } from './problems';
 import { Button, Card, Chip, Choice, Field, Problem } from './ui';
 import { useLocale } from './use-locale';
 import { siteLabel } from './site-address';
+import { ReadProblem } from './read-problem';
 
 /**
  * The domains a workspace proves it owns, to cover the previews of a site (FRU-103).
@@ -24,7 +25,9 @@ const DOMAIN_PROBLEMS: Readonly<Record<string, string>> = {
   'domain-not-proven': msg('This domain is not proven, so it covers no preview yet.'),
 };
 const NOT_ADDED = msg('This domain was not added. Try again.');
-const NOT_CHANGED = msg('This did not change. Try again.');
+const NOT_CHECKED = msg('The DNS was not checked. Try again.');
+const SITE_NOT_CHANGED = msg('The site of this domain did not change. Try again.');
+const NOT_REMOVED = msg('The domain was not removed. Try again.');
 /** The value of the choice « no site ». */
 const NONE = 'none';
 
@@ -34,7 +37,7 @@ function moment(iso: string | undefined): string {
   return Number.isNaN(date.getTime()) ? '' : date.toLocaleString(locale(), { dateStyle: 'medium', timeStyle: 'short' });
 }
 
-export function Domains({ workspace, sites }: { workspace: Workspace; sites: Listed<Site> }) {
+export function Domains({ workspace, sites }: { workspace: Workspace; sites: Listed<SiteChoice> }) {
   useLocale();
   const base = `/console/workspaces/${workspace.id}/domains`;
   const [domains, setDomains] = useState<Listed<Domain>>('loading');
@@ -108,7 +111,7 @@ export function Domains({ workspace, sites }: { workspace: Workspace; sites: Lis
         {domains === 'failed' ? (
           <div className="flex flex-wrap items-center gap-3 p-5">
             <p role="alert" className="flex-1 text-sm text-muted">
-              {t('Fruitback did not answer. Your domains are not lost.')}
+              <ReadProblem /> {t('Your domains are safe.')}
             </p>
             <Button tone="outline" onClick={() => void read()}>
               {t('Try again')}
@@ -147,7 +150,7 @@ function DomainRow({
 }: {
   base: string;
   domain: Domain;
-  sites: Listed<Site>;
+  sites: Listed<SiteChoice>;
   onChanged: (domain: Domain) => void;
   onRemoved: () => void;
 }) {
@@ -164,7 +167,7 @@ function DomainRow({
     setSilent(false);
     const checked = await call<Domain & { unanswered?: boolean }>('POST', `${base}/${domain.id}/check`);
     setBusy(false);
-    if (!checked.ok) return setProblem(problemOf(checked, DOMAIN_PROBLEMS, NOT_CHANGED));
+    if (!checked.ok) return setProblem(problemOf(checked, DOMAIN_PROBLEMS, NOT_CHECKED));
     const { unanswered, ...now } = checked.data;
     setSilent(unanswered === true);
     onChanged(now);
@@ -176,14 +179,14 @@ function DomainRow({
     const site = value === NONE ? null : value;
     const set = await call<Domain>('POST', `${base}/${domain.id}/previews`, { site });
     setBusy(false);
-    if (!set.ok) return setProblem(problemOf(set, DOMAIN_PROBLEMS, NOT_CHANGED));
+    if (!set.ok) return setProblem(problemOf(set, DOMAIN_PROBLEMS, SITE_NOT_CHANGED));
     onChanged(set.data);
   }
 
   async function remove() {
     setProblem(undefined);
     const removed = await call('DELETE', `${base}/${domain.id}`);
-    if (!removed.ok) return setProblem(problemOf(removed, DOMAIN_PROBLEMS, NOT_CHANGED));
+    if (!removed.ok) return setProblem(problemOf(removed, DOMAIN_PROBLEMS, NOT_REMOVED));
     onRemoved();
   }
 

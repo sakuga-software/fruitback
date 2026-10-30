@@ -134,11 +134,11 @@ test('the author chooses the status of a note kept in Fruitback, among the shown
   // Ben's note: Ana may not change it. Its status is named, hidden as it is, with no select.
   const bens = row(page, 'The price');
   await expect(bens.getByRole('button', { name: /Status of this note/ })).toHaveCount(0);
-  await expect(bens.locator('td').nth(1)).toHaveText('Parked');
+  await expect(bens.locator('td').nth(2)).toHaveText('Parked');
   // The note in Linear shows its stage: its status changes in Linear.
   const tracked = row(page, 'The returns policy');
   await expect(tracked.getByRole('button', { name: /Status of this note/ })).toHaveCount(0);
-  await expect(tracked.locator('td').nth(1)).toHaveText('In progress');
+  await expect(tracked.locator('td').nth(2)).toHaveText('In progress');
 
   await expectNoViolation(page, 'the list with a select');
 });
@@ -182,7 +182,7 @@ for (const [error, sentence] of [
     await open(page);
 
     const select = row(page, 'The headline').getByRole('button', { name: /Status of this note/ });
-    const cell = row(page, 'The headline').locator('td').nth(1);
+    const cell = row(page, 'The headline').locator('td').nth(2);
     const width = (await cell.boundingBox())?.width;
     await select.click();
     await page.getByRole('option', { name: 'Shipped', exact: true }).click();

@@ -648,3 +648,21 @@ export function helpLink(document: Document, help: Help): HTMLElement {
 
   return row;
 }
+
+export type UpdateLineOptions = { version: string; url: string };
+
+/**
+ * « Fruitback 0.6.0 is out. Update » (FRU-519): one line in the muted grey, and the link to the
+ * release in the accent, in a target of 44 px. A status and not an alert: nothing is wrong.
+ */
+export function updateLine(document: Document, options: UpdateLineOptions): HTMLElement {
+  const root = make(document, 'p', 'kit-update', t('Fruitback {version} is out.', { version: options.version }));
+  root.setAttribute('role', 'status');
+  const link = make(document, 'a', 'kit-update-link', t('Update'));
+  link.href = options.url;
+  link.target = '_blank';
+  link.rel = 'noreferrer';
+  root.append(' ', link);
+
+  return root;
+}

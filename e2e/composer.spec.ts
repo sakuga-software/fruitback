@@ -41,7 +41,7 @@ test('a failed send keeps the note and stays open', async ({ page }) => {
   await page.getByPlaceholder('What should change?').fill(note);
   await page.getByRole('button', { name: 'Send', exact: true }).click();
 
-  await expect(page.locator('[data-fruitback-composer]')).toContainText(/Did not go through/);
+  await expect(page.locator('[data-fruitback-composer]')).toContainText(/Not sent/);
   await expect(page.locator('[data-fruitback-composer]')).toBeVisible();
   await expect(page.getByPlaceholder('What should change?')).toHaveValue(note);
   // Retrying is one click, not one more typing session.
@@ -182,7 +182,7 @@ test('the composer has the measures of the mock-up, above its element (FRU-258, 
   // The capture is over: one click, one note.
   await expect(page.locator('[data-fruitback-host-launch]')).toHaveAttribute('aria-pressed', 'false');
 
-  // The head (FRU-305): the drop of a new note, what the note points at in mono, « Pick again ».
+  // The head (FRU-305): the drop of a new note, what the note points at in mono, « Choose another element ».
   expect(
     await read('.fruitback-composer-head', ['padding', 'gap', 'background-color', 'border-bottom-width']),
   ).toMatchObject({
@@ -201,7 +201,7 @@ test('the composer has the measures of the mock-up, above its element (FRU-258, 
       .locator('.fruitback-composer-drop')
       .evaluate((node) => [(node as HTMLElement).offsetWidth, getComputedStyle(node).backgroundColor]),
   ).toEqual([10, 'rgb(190, 194, 200)']);
-  const pick = page.getByRole('button', { name: 'Pick again' });
+  const pick = page.getByRole('button', { name: 'Choose another element' });
   await expect(pick).toBeVisible();
   expect(await read('.fruitback-composer-pick', ['font-size', 'font-weight', 'color', 'padding'])).toMatchObject({
     // 44 px to press: a chip of 26 px inside a transparent border of 9 px.
@@ -305,13 +305,15 @@ test('the composer has the measures of the mock-up, above its element (FRU-258, 
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(0);
 });
 
-test('« Pick again » keeps the text and moves the composer to the element chosen (FRU-305)', async ({ page }) => {
+test('« Choose another element » keeps the text and moves the composer to the element chosen (FRU-305)', async ({
+  page,
+}) => {
   await openPlayground(page, 'composer-pick-again');
   await page.getByRole('button', { name: /Leave feedback/ }).click();
   await page.locator('[data-testid="card-latte"] .add').click();
   const field = page.getByPlaceholder('What should change?');
   await field.fill('Written before picking again');
-  await page.getByRole('button', { name: 'Pick again' }).click();
+  await page.getByRole('button', { name: 'Choose another element' }).click();
   await page.locator('[data-testid="card-mocha"] .add').click();
   await expect(page.locator('.fruitback-composer-about')).toHaveText(/^button\.add · <Button>$/);
   await expect(field).toHaveValue('Written before picking again');
@@ -414,7 +416,7 @@ test('a second capture while a note is on its way loses nothing, and the failure
   await expect(page.getByPlaceholder('What should change?')).toHaveValue(note);
 
   release();
-  await expect(page.locator('[data-fruitback-composer]')).toContainText(/Did not go through/);
+  await expect(page.locator('[data-fruitback-composer]')).toContainText(/Not sent/);
   await expect(page.getByPlaceholder('What should change?')).toHaveValue(note);
 });
 

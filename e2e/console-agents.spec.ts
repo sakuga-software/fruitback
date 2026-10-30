@@ -236,19 +236,19 @@ test('a key is made, shown once with the line for Claude Code, copied, then gone
   await expect(docs).toBeChecked();
   await form.getByText('Read, reply and set a status', { exact: true }).click();
   await expect(form.getByRole('radio', { name: 'Read, reply and set a status' })).toBeChecked();
-  await form.getByRole('textbox', { name: 'Lives for, in days' }).fill('30');
-  await expect(form).toContainText('Ends on');
+  await form.getByRole('textbox', { name: 'Expires after (days)' }).fill('30');
+  await expect(form).toContainText('Expires on');
   // On by default, and turned off here, knowing it.
   const known = form.getByRole('switch', { name: /Only the notes of known people/ });
   await expect(known).toBeChecked();
   await form.getByText('Only the notes of known people', { exact: true }).click();
   await expect(known).not.toBeChecked();
-  await form.getByRole('button', { name: 'Make the key' }).click();
+  await form.getByRole('button', { name: 'Create the key' }).click();
 
   expect(worker.made).toEqual([
     { name: 'Claude on my laptop', sites: ['s2'], rights: 'write', days: 30, verifiedOnly: false },
   ]);
-  const once = page.getByRole('region', { name: '« Claude on my laptop » is made' });
+  const once = page.getByRole('region', { name: '« Claude on my laptop » is created' });
   await expect(once.locator('[data-secret]')).toHaveText(SECRET);
   const line = `claude mcp add --transport http fruitback ${WORKER_ORIGIN}/mcp \\\n  --header "Authorization: Bearer ${SECRET}"`;
   await expect(once.getByRole('region', { name: 'The line that connects Claude Code' })).toHaveText(line);
@@ -275,23 +275,24 @@ test('the form says what it needs and sends nothing, and keeps what was typed th
   await page.goto(`${CONSOLE}/w/w1/settings/agents`);
   await page.getByRole('button', { name: 'New key' }).click();
   const form = page.getByRole('region', { name: 'New agent key' });
-  await form.getByRole('button', { name: 'Make the key' }).click();
+  await form.getByRole('button', { name: 'Create the key' }).click();
   await expect(form).toContainText('Give the key a name.');
   await expect(form).toContainText('Choose at least one site.');
   await expect(form.getByRole('textbox', { name: 'Name' })).toBeFocused();
   await form.getByRole('textbox', { name: 'Name' }).fill('Reader');
-  await form.getByRole('textbox', { name: 'Lives for, in days' }).fill('400');
-  await form.getByRole('button', { name: 'Make the key' }).click();
-  await expect(form.getByRole('checkbox', { name: /shop\.acme\.dev/ })).toBeFocused();
+  await form.getByRole('textbox', { name: 'Expires after (days)' }).fill('400');
+  await form.getByRole('button', { name: 'Create the key' }).click();
+  // The first box: the sites come by address (FRU-497), so docs.acme.dev before shop.acme.dev.
+  await expect(form.getByRole('checkbox', { name: /docs\.acme\.dev/ })).toBeFocused();
   await form.getByText('shop.acme.dev', { exact: true }).click();
-  await form.getByRole('button', { name: 'Make the key' }).click();
+  await form.getByRole('button', { name: 'Create the key' }).click();
   await expect(form).toContainText('Choose from 1 to 365 days.');
   expect(worker.made).toEqual([]);
 
   worker.refuses = { status: 409, error: 'too-many-keys' };
-  await form.getByRole('textbox', { name: 'Lives for, in days' }).fill('7');
-  await form.getByRole('button', { name: 'Make the key' }).click();
-  await expect(form.getByRole('alert')).toHaveText('A workspace holds 20 keys at most. Revoke one to make another.');
+  await form.getByRole('textbox', { name: 'Expires after (days)' }).fill('7');
+  await form.getByRole('button', { name: 'Create the key' }).click();
+  await expect(form.getByRole('alert')).toHaveText('A workspace holds 20 keys at most. Revoke one to create another.');
   await expect(form.getByRole('textbox', { name: 'Name' })).toHaveValue('Reader');
   expect(worker.made).toHaveLength(1);
 

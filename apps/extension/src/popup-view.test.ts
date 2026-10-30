@@ -214,11 +214,19 @@ describe('1, while the sign-in waits for the console', () => {
 
 describe('1, after a sign-in that did not finish', () => {
   for (const [stopped, title, sentence] of [
-    ['refused', 'The sign-in did not finish.', 'It was refused in the console.'],
-    ['expired', 'The sign-in did not finish.', 'The tab was not approved in time.'],
-    ['unavailable', 'Fruitback did not answer.', 'Check the connection, then try again.'],
-    ['untrusted', 'The sign-in did not start.', 'Fruitback named a console that is not its own.'],
-    ['blocked', 'The sign-in did not start.', 'The browser did not give the extension access to Fruitback.'],
+    ['refused', 'The sign-in did not finish.', 'Someone declined it in the console. Sign in again to retry.'],
+    ['expired', 'The sign-in did not finish.', 'The console did not approve it within 15 minutes. Sign in again.'],
+    ['unavailable', 'Fruitback could not be reached.', 'Check the connection, then try again.'],
+    [
+      'untrusted',
+      'The sign-in did not start.',
+      'Fruitback named a console that is not its own. Tell the person who runs your Fruitback.',
+    ],
+    [
+      'blocked',
+      'The sign-in did not start.',
+      'The browser did not give the extension access to Fruitback. Sign in again, and allow it when the browser asks.',
+    ],
   ] as const) {
     it(`says why in an alert when it was ${stopped}, above the ways to sign in again`, () => {
       let again = 0;

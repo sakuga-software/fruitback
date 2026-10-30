@@ -438,7 +438,7 @@ describe('the page of the panel (FRU-296, FRU-299)', () => {
     assert.equal(field?.getAttribute('aria-label'), 'Your reply');
     assert.equal(
       root.querySelector('.panel-reply-problem')?.textContent,
-      'The reply did not go through. Your text is kept. Try again.',
+      'The reply was not sent. Your text is still here. Try again.',
     );
     root
       .querySelector('form')
@@ -638,7 +638,7 @@ describe('« Ready to check » (FRU-300)', () => {
     const failed = panelPage(page(), options({ checking: { id: 'r1', problem: CHECK_PROBLEM.retry } }));
     assert.equal(
       failed.querySelector('.ready-item[data-note="r1"] [role="alert"]')?.textContent,
-      'Did not go through. Try again.',
+      'Your answer was not sent. Try again.',
     );
     assert.equal(failed.querySelector<HTMLButtonElement>('.ready-item[data-note="r1"] button')?.disabled, false);
   });

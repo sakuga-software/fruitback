@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
-import { type Answer, type Connector, type Site, STAGES, type Stage, call } from '../api';
+import { type Answer, type Connector, type SiteChoice, STAGES, type Stage, call, siteChoices } from '../api';
 import { ago } from '../ago';
 import { type Listed, listedOf } from '../listed';
 import {
@@ -10,23 +10,28 @@ import {
   DataTable,
   Field,
   FilterChip,
+  IconLink,
   LinkButton,
   LoadFailed,
+  Mark,
   PageHead,
   Problem,
   StatusDot,
+  Tip,
 } from '../ui';
 import { KINDS, STAGE_NAMES, connectorName } from './connector-parts';
 import { ConnectorMark } from '../connector-marks';
 import { useWorkspace } from './workspace';
 import { msg, t } from '../i18n';
-import { DID_NOT_ANSWER, writeProblemOf } from '../problems';
+import { failureOf, writeProblemOf } from '../problems';
 import { useTypedSearch } from '../typed-search';
 import { useLocale } from '../use-locale';
-import { siteLabel } from '../site-address';
+import { domainOf, siteLabel } from '../site-address';
+import { NoteIcon } from '../note-icons';
 import { type StatusChoice, offeredFor, statusName, statusProblemOf } from '../note-status';
 import { boardColumns } from '../board-columns';
 import { NotesBoard } from './notes-board';
+import { ReadProblem } from '../read-problem';
 
 /** Who left a note, as the index of the notes says it (FRU-244). A name only for an account of the workspace. */
 export type NoteAuthor = {
@@ -121,17 +126,16 @@ export default function Notes() {
 
   // The sites name the filter « Site » and the site of a verified author; the connectors name the
   // chips. Both are read once, with the first page.
-  const [sites, setSites] = useState<Listed<Site>>('loading');
+  // Their id and address only, by address (FRU-497): no count of the notes of every site.
+  const [sites, setSites] = useState<Listed<SiteChoice>>('loading');
   const [connectors, setConnectors] = useState<Connector[]>([]);
   useEffect(() => {
-    void call<{ sites: Site[] }>('GET', `${base}/sites`).then((answer) =>
-      setSites(listedOf(answer, (data) => data.sites)),
-    );
+    void siteChoices(workspace.id).then((answer) => setSites(listedOf(answer, (data) => data.sites)));
     if (seesTracker)
       void call<{ connectors: Connector[] }>('GET', `${base}/connectors`).then((answer) => {
         if (answer.ok) setConnectors(answer.data.connectors);
       });
-  }, [base, seesTracker]);
+  }, [base, seesTracker, workspace.id]);
 
   const filters = useMemo(
     () =>
@@ -222,11 +226,8 @@ export default function Notes() {
 
   const [typed, setTyped] = useTypedSearch(filters.q, (q) => filter({ q }, true));
 
-  const hostOf = (id: string) => {
-    const origin = typeof sites === 'string' ? undefined : sites.find((site) => site.id === id)?.origin;
-
-    return origin === undefined ? undefined : siteLabel(origin);
-  };
+  const originOf = (id: string) =>
+    typeof sites === 'string' ? undefined : sites.find((site) => site.id === id)?.origin;
   const filtered = FILTERS.some((name) => filters[name] !== '');
   const listed = typeof shown === 'object' && (shown.counts.all > 0 || filtered);
   // The site whose statuses make the columns of the board: the one chosen, or the only one there is.
@@ -372,12 +373,17 @@ export default function Notes() {
                     <thead>
                       <tr>
                         <th scope="col">{t('Note')}</th>
+                        <th scope="col">{t('Site')}</th>
                         <th scope="col">{t('Status')}</th>
                         <th scope="col">{t('Left by')}</th>
                         {/* The worker tells a guest nothing of where a note went (FRU-244). */}
                         {seesTracker ? <th scope="col">{t('Went to')}</th> : null}
                         <th scope="col" data-align="end">
                           {t('When')}
+                        </th>
+                        {/* The column of the link to the page (FRU-546): its head is for a screen reader. */}
+                        <th scope="col" className="w-[56px]">
+                          <span className="sr-only">{t('Page')}</span>
                         </th>
                       </tr>
                     </thead>
@@ -386,7 +392,7 @@ export default function Notes() {
                         <NoteRow
                           key={note.id}
                           note={note}
-                          site={hostOf(note.site.id)}
+                          origin={originOf(note.site.id)}
                           source={sourceOf(note)}
                           manages={manages}
                           retry={() => call('POST', `${base}/notes/${encodeURIComponent(note.id)}/retry`)}
@@ -493,7 +499,7 @@ function hostOfLabel(label: string | undefined): string | undefined {
 
 function NoteRow({
   note,
-  site,
+  origin,
   source,
   manages,
   retry,
@@ -502,12 +508,12 @@ function NoteRow({
   choose,
 }: {
   note: IndexedNote;
-  /** The host of the site of the note, when the sites were read. */
-  site: string | undefined;
+  /** The origin of the site of the note, when the sites were read. */
+  origin: string | undefined;
   /** The connector the note went to, when the connectors were read: it may have a name (FRU-404). */
   source: Connector | undefined;
   manages: boolean;
-  retry: () => Promise<{ ok: true } | { ok: false; error: string }>;
+  retry: () => Promise<{ ok: true } | { ok: false; status: number; error: string }>;
   onSent: () => void;
   statuses: readonly StatusChoice[] | undefined;
   choose: (status: string) => Promise<Answer<{ status: string; stage: Stage }>>;
@@ -519,39 +525,32 @@ function NoteRow({
   // The link of the widget opens the note by the id it gave it, or by its issue (FRU-253).
   const opened = note.note ?? note.ref;
   const show = opened === undefined ? note.page.url : `${note.page.url}#fruitback-note=${encodeURIComponent(opened)}`;
-  const visitor = author.kind === 'verified' || author.kind === 'anonymous';
-  const who = visitor ? t('Visitor') : (author.name ?? t('Somebody of the workspace'));
-  const detail =
-    author.kind === 'verified'
-      ? t(AUTHOR_WORDS.verified, { site: site ?? note.page.host })
-      : t(AUTHOR_WORDS[author.kind]);
+  // FRU-547: the site is its domain and its extension, `fruitback.com` for `app.fruitback.com`.
+  const domain = domainOf(origin ?? note.page.host);
 
   async function send() {
     setSending(true);
     setRefused(undefined);
     const sent = await retry();
     setSending(false);
-    if (!sent.ok) return setRefused(writeProblemOf(sent, DID_NOT_ANSWER));
+    if (!sent.ok) return setRefused(writeProblemOf(sent, failureOf(sent)));
     onSent();
   }
 
   return (
     <tr>
-      <td className="max-w-[380px]">
+      {/* The note keeps 240 px of the row: the columns beside it are short words. */}
+      <td className="max-w-[380px] min-[640px]:min-w-[240px]">
         <span className="line-clamp-2 [overflow-wrap:anywhere]">{excerptOf(note.excerpt)}</span>
-        <span className="mt-[2px] flex flex-wrap gap-x-[12px] gap-y-[2px] text-hint text-muted">
-          <span className="[overflow-wrap:anywhere]">{`${note.page.host}${note.page.path}`}</span>
-          <LinkButton space="inline" href={show} newTab>
-            {t('Show on the page')}
-          </LinkButton>
-        </span>
+      </td>
+      <td className="whitespace-nowrap">
+        <span className="block max-w-[140px] truncate">{domain}</span>
       </td>
       <td className="whitespace-nowrap">
         <NoteStatus note={note} statuses={statuses} choose={choose} />
       </td>
-      <td>
-        <span className="block [overflow-wrap:anywhere]">{who}</span>
-        <span className="block text-hint leading-[inherit] text-muted">{detail}</span>
+      <td className="max-w-[160px]">
+        <Author author={author} site={domain} />
       </td>
       {place === undefined ? null : (
         <td>
@@ -584,7 +583,33 @@ function NoteRow({
       <td data-align="end" className="whitespace-nowrap text-muted tabular-nums">
         {ago(note.createdAt)}
       </td>
+      <td data-align="end">
+        {/* FRU-546: the page of the note, in a new tab, its address in the tooltip. */}
+        <IconLink label={t('Show on the page')} href={show} tip={note.page.url}>
+          <NoteIcon name="open" />
+        </IconLink>
+      </td>
     </tr>
+  );
+}
+
+/**
+ * Who left a note (FRU-553): the icon of their role, then their name cut to its room. The tooltip,
+ * under the pointer and under the focus, says the name whole and the role.
+ */
+function Author({ author, site }: { author: NoteAuthor; site: string }) {
+  useLocale();
+  const visitor = author.kind === 'verified' || author.kind === 'anonymous';
+  const who = visitor ? t('Visitor') : (author.name ?? t('Somebody of the workspace'));
+  const role = author.kind === 'verified' ? t(AUTHOR_WORDS.verified, { site }) : t(AUTHOR_WORDS[author.kind]);
+
+  return (
+    <Tip label={`${who}, ${role}`} tip={`${who} · ${role}`}>
+      <span className="text-muted">
+        <NoteIcon name={author.kind} />
+      </span>
+      <span className="min-w-0 truncate">{who}</span>
+    </Tip>
   );
 }
 
@@ -765,23 +790,36 @@ function Place({
   late: boolean;
 }) {
   useLocale();
-  if (place.kind === 'fruitback') return <span className="block font-semibold">{t('Kept in Fruitback')}</span>;
   if (place.kind === 'removed') return <span className="block font-semibold">{t('A source that was removed')}</span>;
+  // FRU-552: the mark of the place, then its reference, on one line. The name of the place is said to
+  // a screen reader only, where a reference or an address follows it.
+  if (place.kind === 'fruitback') {
+    return (
+      <span className="flex items-center gap-[6px] whitespace-nowrap">
+        <Mark size={14} />
+        {t('In Fruitback')}
+      </span>
+    );
+  }
   const name = source === undefined ? t(KINDS[place.kind].name) : connectorName(source);
-  // An address that did not take the note yet does not read « Delivered to » above « Not delivered yet ».
+  // An address that did not take the note yet shows no host beside « Not delivered yet ».
   const host = place.kind === 'rest' && !late ? hostOfLabel(place.label) : undefined;
+  let after: ReactNode = null;
+  if (reference !== undefined) after = <Reference reference={reference} address={address} />;
+  else if (host !== undefined) after = <span className="text-muted">{host}</span>;
 
   return (
-    <>
-      <span className="flex items-center gap-[6px] font-semibold">
-        <ConnectorMark kind={place.kind} />
-        {name}
-      </span>
-      <Reference reference={reference} address={address} />
-      {host === undefined ? null : (
-        <span className="block text-hint text-muted">{t('Delivered to {host}', { host })}</span>
+    <span className="flex items-center gap-[6px]" data-place={place.kind}>
+      <ConnectorMark kind={place.kind} />
+      {after === null ? (
+        <span className="font-semibold">{name}</span>
+      ) : (
+        <>
+          <span className="sr-only">{name}</span>
+          {after}
+        </>
       )}
-    </>
+    </span>
   );
 }
 
@@ -820,7 +858,11 @@ export function NotesFailed({ onRetry }: { onRetry: () => void }) {
   return (
     <LoadFailed
       title={t('The notes did not load')}
-      detail={t('Fruitback did not answer. Your notes are safe.')}
+      detail={
+        <>
+          <ReadProblem /> {t('Your notes are safe.')}
+        </>
+      }
       retry={t('Try again')}
       onRetry={onRetry}
     />

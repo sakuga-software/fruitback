@@ -198,11 +198,11 @@ describe('the page that opens at install (FRU-318)', () => {
 
       it('says what stopped a « Turn on », and keeps the button', () => {
         const { screen, buttons } = signedIn([{ origin: 'https://staging.acme.dev', on: false }], {
-          problem: 'The browser did not give access to this site.',
+          problem: 'The browser did not give access to this site. Press Turn on again, then allow it.',
         });
         assert.equal(
           screen.querySelector('[role="alert"]')?.textContent,
-          'The browser did not give access to this site.',
+          'The browser did not give access to this site. Press Turn on again, then allow it.',
         );
         assert.equal(buttons()[0]?.textContent, 'Turn on staging.acme.dev');
       });

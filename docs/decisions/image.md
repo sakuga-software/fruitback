@@ -471,3 +471,8 @@ no `production` branch.
   `failure` while `submit to the stores` and `attach to the release` passed. Read the job, not
   the run. A release run uses the workflow and the code **of the tag**: running it again does
   not pick up a fix merged after the tag.
+- **v0.6.0**: the Chrome Web Store refused the upload with `FAILED_PRECONDITION`, « You may not
+  edit or publish an item that is in review »: v0.5.0 was still in review. AMO took v0.6.0 in
+  the same job, so running the job again sends Firefox a version it already has, and fails.
+  Before the tag, look in the dashboard that no version is in review. If one is, wait, or cancel
+  its review. After a refusal, upload the Chrome archive of the release by hand in the dashboard.

@@ -217,7 +217,7 @@ test('the section « Agents » leads to the keys, the addresses that receive, an
   await workerWith(page, [{ ...ACME, role: 'member' }]);
   const asked: string[] = [];
   page.on('request', (request) => {
-    if (request.url().endsWith('/console/workspaces/w1/sites')) asked.push(request.url());
+    if (/\/console\/workspaces\/w1\/sites(\/choices)?(\?|$)/.test(request.url())) asked.push(request.url());
   });
   await page.goto(`${CONSOLE}/w/w1/settings/ai`);
   await expect(page.getByRole('region', { name: 'Agents' })).toContainText(

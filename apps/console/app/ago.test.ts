@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { ago } from './ago.ts';
+import { ago, agoInSentence } from './ago.ts';
 import { setLocale } from './i18n.ts';
 
 // Noon of a day, in the time zone of the machine: « Yesterday » is the day before, whatever the zone.
@@ -56,5 +56,22 @@ describe('how long ago something happened, in the words of the mockup', () => {
     assert.equal(ago(before(10_000), NOW), 'À l’instant');
     assert.equal(ago(new Date(2026, 9, 10, 9, 0).toISOString(), NOW), 'il y a 3 jours');
     assert.equal(ago(new Date(2026, 9, 3, 9, 0).toISOString(), NOW), '3 oct.');
+  });
+
+  // FRU-516: « Connected 30 Oct · used Just now » had a capital in the middle of a sentence.
+  it('says it in small letters inside a sentence, and the day with its preposition', () => {
+    assert.equal(agoInSentence(before(20_000), NOW), 'just now');
+    assert.equal(agoInSentence(before(12 * MIN), NOW), '12 min ago');
+    assert.equal(agoInSentence(new Date(2026, 9, 12, 9, 0).toISOString(), NOW), 'yesterday');
+    assert.equal(agoInSentence(new Date(2026, 9, 3, 9, 0).toISOString(), NOW), 'on Oct 3');
+    // The cell of a table keeps its capital.
+    assert.equal(ago(before(20_000), NOW), 'Just now');
+  });
+
+  it('says it inside a French sentence too', () => {
+    setLocale('fr', false);
+    assert.equal(agoInSentence(before(20_000), NOW), 'à l’instant');
+    assert.equal(agoInSentence(new Date(2026, 9, 12, 9, 0).toISOString(), NOW), 'hier');
+    assert.equal(agoInSentence(new Date(2026, 9, 3, 9, 0).toISOString(), NOW), 'le 3 oct.');
   });
 });

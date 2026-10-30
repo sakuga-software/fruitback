@@ -6,6 +6,7 @@ import {
   eq,
   exists,
   gt,
+  ilike,
   inArray,
   isNotNull,
   isNull,
@@ -186,6 +187,24 @@ function oauthClientOf(row: typeof oauth_clients.$inferSelect): OAuthClient {
 }
 
 const NOT_SUSPENDED = or(isNull(user.banned), eq(user.banned, false));
+
+/** The sites a guest reads (FRU-250), for a page of sites: none when they read none. Absent: every site. */
+function onlySites(only: readonly string[] | undefined): SQL | undefined {
+  if (only === undefined) return undefined;
+
+  return only.length === 0 ? sql`false` : inArray(sites.id, [...only]);
+}
+
+/**
+ * The sites whose host holds `q`, with no case (FRU-497): the host is what the console shows of an
+ * address, so `https` finds no site. Empty or absent: every site.
+ */
+function hostHolds(q: string | undefined): SQL | undefined {
+  const wanted = q?.trim() ?? '';
+  if (wanted === '') return undefined;
+
+  return ilike(sql`split_part(${sites.origin}, '://', 2)`, `%${wanted.replace(/[\\%_]/gu, (c) => `\\${c}`)}%`);
+}
 
 /** The sites of these rows in the order of the rows, each with its destinations in that order. */
 function sitesFrom(rows: readonly Record<string, unknown>[]): Site[] {
@@ -1398,6 +1417,83 @@ export function createPostgresAccountStore(database: Database): AccountStore {
       );
 
       return sitesFrom(rows);
+    },
+
+    async site(workspace, site) {
+      const rows = await run((db) =>
+        db
+          .select(SITE_WITH_DESTINATION)
+          .from(sites)
+          .leftJoin(site_destinations, eq(site_destinations.site_id, sites.id))
+          .where(and(eq(sites.workspace_id, workspace), eq(sites.id, site)))
+          .orderBy(site_destinations.position),
+      );
+
+      return sitesFrom(rows)[0];
+    },
+
+    async sitePage(workspace, { q, offset, limit, only }) {
+      const where = and(eq(sites.workspace_id, workspace), onlySites(only), hostHolds(q));
+      // The page and its destinations in one statement, and the total beside it: two round trips at
+      // the same time, not three one after the other.
+      const [rows, counted] = await Promise.all([
+        run((db) => {
+          const page = db
+            .$with('page')
+            .as(
+              db
+                .select({ id: sites.id })
+                .from(sites)
+                .where(where)
+                .orderBy(sites.created_at, sites.id)
+                .offset(offset)
+                .limit(limit),
+            );
+
+          return db
+            .with(page)
+            .select(SITE_WITH_DESTINATION)
+            .from(sites)
+            .innerJoin(page, eq(page.id, sites.id))
+            .leftJoin(site_destinations, eq(site_destinations.site_id, sites.id))
+            .orderBy(sites.created_at, sites.id, asc(site_destinations.position));
+        }),
+        run((db) => db.select({ total: count() }).from(sites).where(where)),
+      ]);
+
+      return { sites: sitesFrom(rows), total: counted[0]?.total ?? 0 };
+    },
+
+    async siteChoices(workspace, { q, after, limit, only }) {
+      const rows = await run((db) =>
+        db
+          .select({
+            id: sites.id,
+            workspace_id: sites.workspace_id,
+            origin: sites.origin,
+            visibility: sites.visibility,
+            writers: sites.writers,
+          })
+          .from(sites)
+          .where(
+            and(
+              eq(sites.workspace_id, workspace),
+              onlySites(only),
+              hostHolds(q),
+              after === undefined ? undefined : gt(sites.origin, after),
+            ),
+          )
+          // The key `sites_workspace_id_origin_key` (workspace_id, origin) reads them in this order.
+          .orderBy(sites.origin)
+          .limit(limit),
+      );
+
+      // A row is parsed as the other reads of a site parse it: a row that is no site is left out.
+      return rows.flatMap((row) => {
+        const site = siteOf(row, []);
+
+        return site === undefined ? [] : [{ id: site.id, origin: site.origin, visibility: site.visibility }];
+      });
     },
 
     async setSiteVisibility(workspace, site, visibility) {
