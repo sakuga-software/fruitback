@@ -7,6 +7,7 @@ import {
   alertBox,
   definitions,
   head,
+  helpLink,
   keys,
   listRow,
   listSelect,
@@ -289,6 +290,21 @@ describe('the kit of the extension (FRU-293)', () => {
     );
     assert.equal(theirs.length, 5, `read ${theirs.length} paths of provider-icons.tsx`);
     assert.deepEqual(ours, theirs);
+  });
+
+  it('leads to a page of the guide in a new tab: a link with the book, centred in its line (FRU-528)', () => {
+    const row = helpLink(page(), { label: 'How Fruitback works', href: 'https://fruitback.com/reviewing.html#x' });
+    assert.ok(row.classList.contains('kit-help'));
+    const link = row.querySelector('a');
+    assert.equal(row.children.length, 1);
+    assert.equal(link?.getAttribute('href'), 'https://fruitback.com/reviewing.html#x');
+    assert.equal(link?.target, '_blank');
+    assert.equal(link?.rel, 'noreferrer');
+    assert.ok(link?.classList.contains('kit-secondary'));
+    assert.equal(link?.textContent, 'How Fruitback works');
+    const book = link?.firstElementChild;
+    assert.equal(book?.tagName.toLowerCase(), 'svg');
+    assert.equal(book?.getAttribute('aria-hidden'), 'true');
   });
 });
 

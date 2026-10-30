@@ -1,3 +1,4 @@
+import { whenNotAnswering } from '../src/guide.ts';
 import type { PanelNote } from '../src/protocol.ts';
 import {
   type Account,
@@ -95,6 +96,7 @@ function popupStates(): GalleryState[] {
           title: "Fruitback can't reach api.fruitback.com",
           text: 'Check the connection, then try again.',
           primary: { label: 'Try again', onClick: nothing },
+          help: whenNotAnswering(),
         }),
     },
     {
@@ -109,6 +111,7 @@ function popupStates(): GalleryState[] {
           text: 'Access to staging.acme.dev was removed in your browser settings. Your notes are safe.',
           primary: { label: 'Allow access again', onClick: nothing },
           secondary: { label: 'Turn off for this site', onClick: nothing },
+          help: whenNotAnswering(),
         }),
     },
     {

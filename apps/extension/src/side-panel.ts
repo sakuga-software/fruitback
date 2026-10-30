@@ -1,5 +1,6 @@
 import { language, msg, t } from './i18n.ts';
-import { dropMark, primaryButton, segmentedTabs, statusDrop } from './kit.ts';
+import { leaveAndFollow, whenNotAnswering } from './guide.ts';
+import { dropMark, helpLink, primaryButton, segmentedTabs, statusDrop } from './kit.ts';
 import type { CheckVerdict, NotesReading, PanelNote, ReplyOutcome } from './protocol.ts';
 import { notePaint, stateWord } from './note-status.ts';
 import {
@@ -505,6 +506,7 @@ function notesPart(document: Document, options: PanelOptions, notes: PanelNotes)
     box.append(
       make(document, 'p', '', t('This page was open before Fruitback was on. Reload it to see its notes.')),
       linkButton(document, t('Reload the page'), options.onReload),
+      helpLink(document, whenNotAnswering()),
     );
 
     return [box];
@@ -514,6 +516,7 @@ function notesPart(document: Document, options: PanelOptions, notes: PanelNotes)
     box.append(
       make(document, 'p', '', t('Fruitback did not start on this page. Reload it to see its notes.')),
       linkButton(document, t('Reload the page'), options.onReload),
+      helpLink(document, whenNotAnswering()),
     );
 
     return [box];
@@ -524,6 +527,7 @@ function notesPart(document: Document, options: PanelOptions, notes: PanelNotes)
     box.append(
       make(document, 'p', '', t('The notes of this page could not be read. They are not lost.')),
       linkButton(document, t('Try again'), options.onRetry),
+      helpLink(document, whenNotAnswering()),
     );
 
     return [box];
@@ -543,6 +547,7 @@ function notesPart(document: Document, options: PanelOptions, notes: PanelNotes)
           'Press Leave feedback, click anything that looks wrong and write what you expected. The team gets it right away.',
         ),
       ),
+      helpLink(document, leaveAndFollow()),
     );
 
     return [empty];

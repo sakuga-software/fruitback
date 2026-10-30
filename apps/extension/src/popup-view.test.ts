@@ -277,7 +277,23 @@ describe('4 · a problem, with its fix (FRU-297)', () => {
     assert.deepEqual(stops(root), ['button: Account and settings']);
   });
 
-  it('says why nothing runs on a page of the browser, and what to do, with no button (FRU-526)', () => {
+  it('leads to the guide under its actions when it is given one (FRU-528)', () => {
+    const root = problem(page(), {
+      onSettings: nothing,
+      title: "Fruitback can't reach api.fruitback.com",
+      primary: { label: 'Try again', onClick: nothing },
+      help: { label: 'What to check when Fruitback does not answer', href: 'https://fruitback.com/reviewing.html#a' },
+    });
+    assert.deepEqual(stops(root), [
+      'button: Account and settings',
+      'button: Try again',
+      'link: What to check when Fruitback does not answer',
+    ]);
+    assert.equal(root.querySelector('.popup-body > .kit-help a')?.getAttribute('target'), '_blank');
+    assert.equal(problem(page(), { onSettings: nothing, title: 'x' }).querySelector('.kit-help'), null);
+  });
+
+  it('says why nothing runs on a page of the browser, and what to do, and leads to the guide (FRU-526)', () => {
     const root = notAWebPage(page(), { onSettings: nothing });
 
     assert.ok(root.classList.contains('popup-screen-4'));
@@ -294,7 +310,7 @@ describe('4 · a problem, with its fix (FRU-297)', () => {
         'Nothing changed for your sites and your notes.',
       ],
     );
-    assert.deepEqual(stops(root), ['button: Account and settings']);
+    assert.deepEqual(stops(root), ['button: Account and settings', 'link: How Fruitback works']);
   });
 
   it('names the keys the person set, each in its kbd, and no key written in the code (FRU-526)', () => {
@@ -448,11 +464,15 @@ describe('2 · a site of no workspace (FRU-298, FRU-255)', () => {
     assert.deepEqual(calls, ['turn-on:w2']);
   });
 
-  it('with none: says who can add it, and has nothing to press but the account', () => {
+  it('with none: says who can add it, and leads to the guide that says who can (FRU-528)', () => {
     const screen = fresh([]);
 
     assert.equal(screen.querySelector('.lead')?.textContent, 'Ask an admin of your workspace to add this site.');
-    assert.deepEqual(stops(screen), ['button: Account and settings']);
+    assert.deepEqual(stops(screen), ['button: Account and settings', 'link: Who can add a site to a workspace?']);
+    assert.equal(
+      screen.querySelector<HTMLAnchorElement>('.kit-help a')?.href,
+      'https://fruitback.com/reviewing.html#who-can-add-a-site-to-a-workspace',
+    );
   });
 });
 
