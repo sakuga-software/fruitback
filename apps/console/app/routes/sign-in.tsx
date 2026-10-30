@@ -17,6 +17,7 @@ import {
 import { announceSignIn } from '../tab-signal';
 import { Button, EntryPage, Lead, LinkButton, Problem, SuccessMark, Title } from '../ui';
 import { useLocale } from '../use-locale';
+import { ReadProblem } from '../read-problem';
 
 /**
  * The sign-in page (FRU-235, screen 02 of the mockup of 2026-10-13), and where a sign-in link lands.
@@ -147,7 +148,9 @@ export default function SignIn() {
           <div className="mb-2">
             <Title>{t('You are not signed in yet')}</Title>
           </div>
-          <Lead className="mb-7">{t('Fruitback did not answer. Your link still works.')}</Lead>
+          <Lead className="mb-7">
+            <ReadProblem /> {t('Your link still works.')}
+          </Lead>
           <div>
             <Button onClick={() => redeem(stage.code)}>{t('Try again')}</Button>
           </div>

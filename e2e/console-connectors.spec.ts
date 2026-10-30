@@ -184,7 +184,7 @@ test('the list of the sources and the panel of a Linear are the ones of the mock
   });
 
   // « Connected »: one frame, a row for each source, a rule between two rows.
-  const title = page.getByRole('heading', { level: 2, name: 'Connected', exact: true });
+  const title = page.getByRole('heading', { level: 2, name: 'Your connectors', exact: true });
   expect.soft(await styles(title, ['font-size', 'font-weight', 'margin-bottom'])).toEqual({
     'font-size': '15px',
     'font-weight': '600',
@@ -391,7 +391,7 @@ test('a list of late notes that was not read is no number, and not « every note
   await expect(address.getByText('Connected', { exact: true })).toBeVisible();
   await expect(address.getByText(/did not arrive/)).toHaveCount(0);
   await address.click();
-  await expect(panel(page).getByText('Fruitback did not answer. Try again.')).toBeVisible();
+  await expect(panel(page).getByText('Fruitback hit an error. Try again in a moment.')).toBeVisible();
   await expect(panel(page).getByText('Every note arrived.')).toHaveCount(0);
 });
 
@@ -425,7 +425,7 @@ test('with no source, and with a read that failed, the screen says which of the 
   worker.down = true;
   await open(page);
   await expect(page.getByRole('alert')).toHaveText(
-    'Fruitback did not answer. The sources and their sites could not be read.',
+    'The connectors and their sites did not load. Fruitback hit an error.',
   );
   await expect(page.getByText('No tracker yet. The notes stay in Fruitback.')).toHaveCount(0);
   // Nothing to add while the list is not read: the screen does not know how this worker connects
@@ -525,7 +525,7 @@ test('« Add a source » waits for the list of the sources, and its buttons do n
   });
   await open(page);
   const connect = page.getByRole('button', { name: 'Connect REST API', exact: true });
-  await expect(page.getByRole('region', { name: 'Connected' }).getByText('Loading…')).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Your connectors' }).getByText('Loading…')).toBeVisible();
   // Nothing to press yet: the list arrives above these buttons, and what « Connect Linear » does
   // (the consent at Linear, or a key) is said by the same read.
   await expect(sources(page)).toHaveCount(0);
@@ -651,7 +651,7 @@ for (const { width, height, locale, words } of [
     locale: 'fr',
     words: {
       rename: 'Renommer Linear',
-      field: 'Nom de cette source',
+      field: 'Nom de ce connecteur',
       save: 'Enregistrer',
       refused: 'Un nom d’une ligne, de 80 caractères au plus.',
     },

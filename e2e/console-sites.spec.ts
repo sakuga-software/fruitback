@@ -102,7 +102,7 @@ type Worker = {
   /** What the console sent that changes something. */
   sent: Sent[];
   /** How the worker answers the read of the sites. `waits` holds it until `release` is called. */
-  read: 'list' | 'fails' | 'waits';
+  read: 'list' | 'fails' | 'unreachable' | 'waits';
   release: () => void;
   /** What the worker answers to a site that is added, and to one that is removed. */
   refuses?: { status: number; error: string };
@@ -131,6 +131,7 @@ async function workerWith(
       const answered = () => fulfillSites(route, kept) || route.fulfill({ json: { sites: kept } });
       if (worker.read === 'waits') return held.then(answered);
       if (worker.read === 'fails') return route.fulfill({ status: 500, json: { error: 'unknown' } });
+      if (worker.read === 'unreachable') return route.abort('connectionfailed');
 
       return answered();
     }
@@ -551,6 +552,23 @@ test('a workspace with no site shows the card of the mockup, and its form adds t
   await expect(empty).toHaveCount(0);
 });
 
+// FRU-516: « Fruitback did not answer » was said for a 500 too. A read with no answer at all asks to
+// check the connection, and one answered with an error does not.
+test('a read with no answer asks to check the connection, and an error answered says so', async ({ page }) => {
+  const worker = await workerWith(page);
+  worker.read = 'unreachable';
+  await open(page);
+  const card = page.getByRole('alert').filter({ has: page.getByRole('heading', { name: 'The sites did not load' }) });
+  await expect(
+    card.getByText('Fruitback could not be reached. Check your connection. Your sites and notes are safe.'),
+  ).toBeVisible();
+
+  worker.read = 'fails';
+  await card.getByRole('button', { name: 'Try again' }).click();
+  await expect(card.getByText('Fruitback hit an error. Your sites and notes are safe.')).toBeVisible();
+  await expect(card).not.toContainText('connection');
+});
+
 test('a read that failed is the alert of the mockup, and never « No site yet » (FRU-162)', async ({ page }) => {
   const worker = await workerWith(page);
   worker.read = 'fails';
@@ -558,7 +576,7 @@ test('a read that failed is the alert of the mockup, and never « No site yet »
 
   const alert = page.getByRole('alert');
   await expect(alert.getByRole('heading', { level: 2, name: 'The sites did not load' })).toBeVisible();
-  await expect(alert.getByText('Fruitback did not answer. Your sites and notes are safe.')).toBeVisible();
+  await expect(alert.getByText('Fruitback hit an error. Your sites and notes are safe.')).toBeVisible();
   expect
     .soft(
       await styles(alert, ['padding-top', 'padding-left', 'border-top-left-radius', 'border-top-width', 'max-width']),

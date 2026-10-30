@@ -28,6 +28,7 @@ import { showProblem } from '../../src/problem-view.ts';
 import { IMPORT_PROBLEM } from '../../src/remedy.ts';
 import { language, setLanguage, t } from '../../src/i18n.ts';
 import { createBrowserSessions } from '../../src/session-browser.ts';
+import { showUpdateLine } from '../../src/update-notice-browser.ts';
 import { PAIR_UNAVAILABLE, type StoredSession, describeIdentity, failedPairing } from '../../src/session.ts';
 import {
   type PanelOptions,
@@ -57,6 +58,7 @@ import { cloudEndpoint } from '../../src/popup-state.ts';
 import { createBrowserAccessReturn } from '../../src/access-return-browser.ts';
 import { touchesARefreshToken } from '../../src/session-storage.ts';
 import { PAIRING_CODE_REQUIRED, PAIRING_PROBLEM } from '../../src/remedy.ts';
+import { button, hostOf, make } from '../../src/kit.ts';
 import { DOCK_POSITION_KEY, NOTES_NAME_KEY, SHOW_SELECTORS_KEY, parseDockPosition } from '../../src/protocol.ts';
 import { PANEL_ON_CLICK_KEY } from '../../src/side-panel.ts';
 
@@ -104,7 +106,7 @@ table.className = 'sites-table-slot';
 const panel = document.createElement('div');
 panel.className = 'sites-panel-slot';
 /** Where a change made from a row reports that it was not confirmed. */
-const notice = element('p', '', 'problem');
+const notice = make(document, 'p', 'problem');
 /** The rule whose panel is open, `add` for the form of a new one, or nothing. */
 let chosen: string | undefined;
 let filter = '';
@@ -129,16 +131,16 @@ const CLOUD = cloudEndpoint(import.meta.env.WXT_FRUITBACK_CLOUD);
 const FAMILY = browserFamily(import.meta.env);
 const returnAccess = createBrowserAccessReturn(sessions);
 /** The section « Workers and sessions », drawn again at each change of the rules or of a session. */
-const workers = element('div', '', 'workers-slot');
+const workers = make(document, 'div', 'workers-slot');
 /** A code a pairing link brought here from the popup: `#workers?worker=<endpoint>&code=<code>`. */
 let linked = linkedPairing(window.location.hash);
 /** The pairing link whose card already took the focus. */
 let focusedLink: typeof linked;
 
 if (app !== null) {
-  const sites = element('section', '', 'page-section');
+  const sites = make(document, 'section', 'page-section');
   sites.id = 'sites';
-  const body = element('div', '', 'sites-body');
+  const body = make(document, 'div', 'sites-body');
   body.append(table, panel);
   sites.append(
     sitesHead(document, {
@@ -154,9 +156,9 @@ if (app !== null) {
   );
   const share = transfer();
   const prefs = await preferences();
-  const content = element('main', '', 'page-content');
+  const content = make(document, 'main', 'page-content');
   content.append(sites, workers, share, prefs);
-  const frame = element('div', '', 'page');
+  const frame = make(document, 'div', 'page');
   frame.append(
     menu(document, {
       version: browser.runtime.getManifest().version,
@@ -171,6 +173,8 @@ if (app !== null) {
     content,
   );
   app.append(frame);
+  // FRU-519: « Fruitback 0.6.0 is out », under the version in the menu.
+  void showUpdateLine((line) => frame.querySelector('.page-brand')?.after(line));
 }
 
 void renderList();
@@ -242,7 +246,9 @@ function drawTable(): void {
         }
       : undefined;
   if (rows.length === 0) {
-    table.replaceChildren(element('p', t('No rules yet. Add one, or turn a site on from the toolbar.'), 'state'));
+    table.replaceChildren(
+      make(document, 'p', 'state', t('No rules yet. Add one, or turn a site on from the toolbar.')),
+    );
 
     return;
   }
@@ -257,7 +263,7 @@ function drawTable(): void {
         ),
     }),
   );
-  if (visible.length === 0) table.append(element('p', t('No rule matches this filter.'), 'state'));
+  if (visible.length === 0) table.append(make(document, 'p', 'state', t('No rule matches this filter.')));
   if (focused?.pattern !== undefined) {
     const line = [...table.querySelectorAll<HTMLElement>('tr.rule-row')].find(
       (candidate) => candidate.dataset.pattern === focused.pattern,
@@ -296,7 +302,7 @@ function choose(pattern: string | undefined): void {
   if (row === undefined) return;
   void pairedAs(row.site).then((name) => {
     if (mine !== choice) return;
-    const said = element('p', '', 'problem');
+    const said = make(document, 'p', 'problem');
     const aside = rulePanel(document, {
       ...panelOptions(row, name),
       onSave: (fields) =>
@@ -431,11 +437,11 @@ function addForm(): HTMLElement {
         if (text === '') choose(added);
       });
   };
-  const add = button(t('Add rule'), submit);
+  const add = button(document, '', t('Add rule'), submit);
   // The form opens at a click, often after the first list: it is ready if that list is drawn.
   add.disabled = !listed;
   if (!listed) needsList.push(add);
-  const problem = element('p', '', 'problem');
+  const problem = make(document, 'p', 'problem');
 
   const showFields = (): void => {
     clientId.label.hidden = mode.select.value === 'team';
@@ -443,11 +449,19 @@ function addForm(): HTMLElement {
   mode.select.addEventListener('change', showFields);
   showFields();
 
-  const wrapper = element('aside', '', 'rule-panel');
+  const wrapper = make(document, 'aside', 'rule-panel');
   wrapper.classList.add('add-panel');
   wrapper.setAttribute('aria-label', t('Add a rule'));
-  const body = element('div', '', 'panel-body');
-  body.append(element('h2', t('Add a rule')), sites.label, mode.label, endpoint.label, clientId.label, add, problem);
+  const body = make(document, 'div', 'panel-body');
+  body.append(
+    make(document, 'h2', '', t('Add a rule')),
+    sites.label,
+    mode.label,
+    endpoint.label,
+    clientId.label,
+    add,
+    problem,
+  );
   wrapper.append(body);
 
   return wrapper;
@@ -560,13 +574,6 @@ function field(label: string, placeholder: string): { label: HTMLLabelElement; i
   return { label: wrapper, input };
 }
 
-function button(text: string, onClick: () => void, className?: string): HTMLButtonElement {
-  const node = element('button', text, className);
-  node.addEventListener('click', onClick);
-
-  return node;
-}
-
 /**
  * FRU-395: a pairing link typed where the worker goes. « Pair with this link » takes it to its
  * worker's card, in « Workers and sessions », with the code filled in.
@@ -590,14 +597,6 @@ function pairingOf(endpoint: string): Pairing {
   if (!isSecureWorkerEndpoint(endpoint)) return 'insecure';
 
   return endpoint.startsWith('http://') ? 'local' : 'https';
-}
-
-function hostOf(endpoint: string): string {
-  try {
-    return new URL(endpoint).host;
-  } catch {
-    return endpoint;
-  }
 }
 
 /**
@@ -646,7 +645,7 @@ async function renderWorkers(): Promise<void> {
   const entry = document.querySelector('.page-entry[href="#workers"]');
   let menuCount = entry?.querySelector('.page-count') ?? null;
   if (entry !== null && menuCount === null) {
-    menuCount = element('span', '', 'page-count');
+    menuCount = make(document, 'span', 'page-count');
     entry.append(menuCount);
   }
   if (menuCount !== null) menuCount.textContent = String(cards.length);
@@ -768,16 +767,4 @@ async function preferences(): Promise<HTMLElement> {
         remove: (given) => browser.permissions.remove({ origins: [...given.origins] }),
       }),
   });
-}
-
-function element<K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  text: string,
-  className?: string,
-): HTMLElementTagNameMap[K] {
-  const node = document.createElement(tag);
-  node.textContent = text;
-  if (className !== undefined) node.className = className;
-
-  return node;
 }

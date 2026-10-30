@@ -13,6 +13,8 @@ import {
 } from '../src/popup-view.ts';
 import { STAGE_FILTERS, type SearchState } from '../src/search-options.ts';
 import { type PanelNotes, type PanelOptions, type PanelState, panelPage } from '../src/side-panel.ts';
+import { updateLine } from '../src/kit.ts';
+import { intoPopup } from '../src/update-notice.ts';
 import { type WelcomeSignIn, welcomeScreen } from '../src/welcome.ts';
 
 /**
@@ -154,6 +156,17 @@ function popupStates(): GalleryState[] {
         }),
     },
     {
+      id: 'turn-on-http',
+      title: 'Turn on · a site on http, added from the console (FRU-537)',
+      build: (d) =>
+        turnOnScreen(d, {
+          ...turnOn,
+          origin: 'http://staging.acme.dev',
+          workspaces: [],
+          unaddable: 'This site is on http. Add it to a workspace from the console, then turn it on here.',
+        }),
+    },
+    {
       id: 'turn-on-ask-admin',
       title: 'Turn on · nobody here can add the site',
       build: (d) => turnOnScreen(d, { ...turnOn, workspaces: [] }),
@@ -212,6 +225,25 @@ function popupStates(): GalleryState[] {
       build: (d) => siteOn(d, { ...on, on: true, visibility: { shown: false, onChange: nothing } }),
     },
     { id: 'site-off', title: 'Site off', build: (d) => siteOn(d, { ...on, on: false }) },
+    {
+      // FRU-519: an install by hand, behind the last release.
+      id: 'update-available',
+      title: 'A newer release is out',
+      build: (d) => {
+        const screen = siteOn(d, {
+          ...on,
+          on: true,
+          visibility: { shown: true, onChange: nothing },
+          facts: { open: 0 },
+        });
+        intoPopup(
+          screen,
+          updateLine(d, { version: '0.6.0', url: 'https://github.com/sakuga-software/fruitback/releases/tag/v0.6.0' }),
+        );
+
+        return screen;
+      },
+    },
   ];
 }
 

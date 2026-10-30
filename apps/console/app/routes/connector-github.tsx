@@ -101,7 +101,7 @@ export function GithubPanel({ id, base, connector, sites, manages, onRemoved }: 
       {/* A list that failed leaves the worker's word on each repository, and says so. */}
       {silent ? (
         <div className="flex flex-col items-start gap-[8px]">
-          <Problem>{t('GitHub did not answer with the repositories of this installation.')}</Problem>
+          <Problem>{t('GitHub did not send the repositories of this installation. Try again in a moment.')}</Problem>
           <Button tone="outline" onClick={() => setReads((count) => count + 1)}>
             {t('Try again')}
           </Button>

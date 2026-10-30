@@ -23,6 +23,7 @@ import { SiteIcon } from '../site-icon';
 import { ConnectorMark, type MarkedKind } from '../connector-marks';
 import { useTypedSearch } from '../typed-search';
 import { WritersPick } from '../writers-pick';
+import { ReadProblem } from '../read-problem';
 
 /** What somebody is typing in the form that adds a site. */
 type Draft = { url: string; visibility: Visibility; writers: Writers };
@@ -158,7 +159,11 @@ export default function Sites() {
       {read === 'failed' ? (
         <LoadFailed
           title={t('The sites did not load')}
-          detail={t('Fruitback did not answer. Your sites and notes are safe.')}
+          detail={
+            <>
+              <ReadProblem /> {t('Your sites and notes are safe.')}
+            </>
+          }
           retry={t('Try again')}
           onRetry={() => void load()}
         />

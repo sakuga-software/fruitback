@@ -6,8 +6,11 @@ import {
   dropMark,
   head,
   helpLink,
+  hostOf,
   keys,
+  linkButton,
   listRow,
+  make,
   primaryButton,
   providerButton,
   secondaryButton,
@@ -45,22 +48,9 @@ export type ShellOptions = {
   screen?: 1 | 2 | 3 | 4;
 };
 
-export function element<K extends keyof HTMLElementTagNameMap>(
-  document: Document,
-  tag: K,
-  text: string,
-  className?: string,
-): HTMLElementTagNameMap[K] {
-  const node = document.createElement(tag);
-  node.textContent = text;
-  if (className !== undefined) node.className = className;
-
-  return node;
-}
-
 /** Every screen of the popup, in its shell. */
 export function shell(document: Document, options: ShellOptions, ...body: Node[]): HTMLElement {
-  const root = element(document, 'div', '', 'popup');
+  const root = make(document, 'div', 'popup');
   if (options.screen !== undefined) root.classList.add(`popup-screen-${options.screen}`);
 
   const top = head(
@@ -74,7 +64,7 @@ export function shell(document: Document, options: ShellOptions, ...body: Node[]
   );
   top.classList.add('popup-head');
 
-  const main = element(document, 'div', '', 'popup-body');
+  const main = make(document, 'div', 'popup-body');
   main.append(...body);
   root.append(top, main);
 
@@ -86,12 +76,12 @@ export function shell(document: Document, options: ShellOptions, ...body: Node[]
 
 /** The foot of a popup that is signed in: the address of the account, and the way to the console. */
 export function accountFoot(document: Document, account: Account): HTMLElement {
-  const foot = element(document, 'div', '', 'popup-foot');
+  const foot = make(document, 'div', 'popup-foot');
   foot.classList.add('popup-foot-account');
   // A person signed in by a name only has no address: the name says who it is.
-  foot.append(element(document, 'span', account.email ?? account.name, 'who'));
+  foot.append(make(document, 'span', 'who', account.email ?? account.name));
   if (account.console !== undefined) {
-    const link = element(document, 'a', t('Open the console'));
+    const link = make(document, 'a', '', t('Open the console'));
     link.href = account.console;
     link.target = '_blank';
     link.rel = 'noreferrer';
@@ -101,28 +91,10 @@ export function accountFoot(document: Document, account: Account): HTMLElement {
   return foot;
 }
 
-/** The host of the tab, which every screen of a site starts with. */
-export function hostOf(origin: string): string {
-  try {
-    return new URL(origin).host;
-  } catch {
-    return origin;
-  }
-}
-
 /** A main action of the popup: the main button of the kit (FRU-293), 46 px, the corner of 10 px. */
 export function action(document: Document, label: string, onClick: () => void): HTMLButtonElement {
   const button = primaryButton(document, label, onClick);
   button.classList.add('action');
-
-  return button;
-}
-
-/** A link that reads as a link and is a button: it does something here, it opens no page. */
-export function linkButton(document: Document, label: string, onClick: () => void): HTMLButtonElement {
-  const button = element(document, 'button', label, 'link-button');
-  button.type = 'button';
-  button.addEventListener('click', onClick);
 
   return button;
 }
@@ -146,20 +118,21 @@ export type SignedOutOptions = {
  * offers its own methods: the extension has no surface of authentication of its own.
  */
 export function signedOut(document: Document, options: SignedOutOptions): HTMLElement {
-  const intro = element(document, 'div', '', 'intro');
+  const intro = make(document, 'div', 'intro');
   intro.append(
-    element(
+    make(
       document,
       'h1',
+      '',
       options.ended === true ? t('Your sign-in ended') : t('Comment on any website, right on the page'),
     ),
-    element(
+    make(
       document,
       'p',
+      'lead',
       options.ended === true
         ? t('Sign in again to see and leave notes here.')
         : t('Sign in once. Fruitback then works on every site your team reviews.'),
-      'lead',
     ),
   );
   const body: Node[] = [intro];
@@ -173,21 +146,21 @@ export function signedOut(document: Document, options: SignedOutOptions): HTMLEl
     return shell(document, { onSettings: options.onSettings, accountButton: false, screen: 1 }, ...body);
   }
 
-  const methods = element(document, 'div', '', 'methods');
-  const others = element(document, 'div', '', 'method-row');
+  const methods = make(document, 'div', 'methods');
+  const others = make(document, 'div', 'method-row');
   others.append(
     providerButton(document, 'google', options.onSignIn),
     providerButton(document, 'github', options.onSignIn),
   );
   methods.append(primaryButton(document, t('Sign in with email'), options.onSignIn), others);
-  const invited = element(document, 'div', '', 'invited');
+  const invited = make(document, 'div', 'invited');
   invited.append(
-    element(document, 'span', t('Invited by a client or a team?')),
-    element(document, 'span', t('Use the email the invitation was sent to.')),
+    make(document, 'span', '', t('Invited by a client or a team?')),
+    make(document, 'span', '', t('Use the email the invitation was sent to.')),
   );
   body.push(methods, invited);
 
-  const foot = element(document, 'div', '', 'popup-foot');
+  const foot = make(document, 'div', 'popup-foot');
   foot.append(linkButton(document, own, options.onSettings));
 
   return shell(document, { onSettings: options.onSettings, accountButton: false, foot, screen: 1 }, ...body);
@@ -203,16 +176,16 @@ export type ConnectingOptions = {
 
 /** 1, while the console has not answered: the word to check, and the way to start again. */
 export function connecting(document: Document, options: ConnectingOptions): HTMLElement {
-  const word = element(document, 'p', options.word, 'word');
+  const word = make(document, 'p', 'word', options.word);
   // Read out as it is written: « PLUM 47 », not a word of the language around it.
   word.lang = 'en';
-  const waiting = element(
+  const waiting = make(
     document,
     'p',
+    'lead',
     options.unanswered === true
       ? t('Fruitback did not answer. The popup asks again.')
       : t('Waiting for you to connect in the tab…'),
-    'lead',
   );
   // Said once, when the screen comes: a screen reader is not told the same sentence at every claim.
   waiting.setAttribute('role', 'status');
@@ -220,7 +193,7 @@ export function connecting(document: Document, options: ConnectingOptions): HTML
   return shell(
     document,
     { onSettings: options.onSettings, accountButton: false, screen: 1 },
-    element(document, 'h1', t('Check that the tab shows the same word')),
+    make(document, 'h1', '', t('Check that the tab shows the same word')),
     word,
     waiting,
     linkButton(document, t('Start again'), options.onStartAgain),
@@ -232,11 +205,19 @@ export type SignInProblem = 'refused' | 'expired' | 'unavailable' | 'untrusted' 
 /** What stopped a sign-in, in two sentences: the title of the alert, and its words. */
 export function signInStop(problem: SignInProblem): SignInStop {
   const said: Record<SignInProblem, [string, string]> = {
-    refused: [t('The sign-in did not finish.'), t('It was refused in the console.')],
-    expired: [t('The sign-in did not finish.'), t('The tab was not approved in time.')],
-    unavailable: [t('Fruitback did not answer.'), t('Check the connection, then try again.')],
-    untrusted: [t('The sign-in did not start.'), t('Fruitback named a console that is not its own.')],
-    blocked: [t('The sign-in did not start.'), t('The browser did not give the extension access to Fruitback.')],
+    refused: [t('The sign-in did not finish.'), t('Someone declined it in the console. Sign in again to retry.')],
+    expired: [t('The sign-in did not finish.'), t('The console did not approve it within 15 minutes. Sign in again.')],
+    unavailable: [t('Fruitback could not be reached.'), t('Check the connection, then try again.')],
+    untrusted: [
+      t('The sign-in did not start.'),
+      t('Fruitback named a console that is not its own. Tell the person who runs your Fruitback.'),
+    ],
+    blocked: [
+      t('The sign-in did not start.'),
+      t(
+        'The browser did not give the extension access to Fruitback. Sign in again, and allow it when the browser asks.',
+      ),
+    ],
   };
   const [title, text] = said[problem];
 
@@ -264,7 +245,7 @@ export function problem(document: Document, options: ProblemOptions): HTMLElemen
   }
   body.push(alertBox(document, options.title, options.text ?? ''));
   if (options.primary !== undefined || options.secondary !== undefined) {
-    const act = element(document, 'div', '', 'action-block');
+    const act = make(document, 'div', 'action-block');
     if (options.primary !== undefined) {
       act.append(primaryButton(document, options.primary.label, options.primary.onClick));
     }
@@ -299,21 +280,21 @@ export type NotAWebPageOptions = {
  * says too that the sites and the notes did not change, since a person who sees « can't » fears so.
  */
 export function notAWebPage(document: Document, options: NotAWebPageOptions): HTMLElement {
-  const intro = element(document, 'div', '', 'intro');
+  const intro = make(document, 'div', 'intro');
   intro.append(
-    element(document, 'h1', t("Fruitback can't run on this page")),
-    element(
+    make(document, 'h1', '', t("Fruitback can't run on this page")),
+    make(
       document,
       'p',
+      'lead',
       t(
         'This is a page of the browser, like a new tab, the settings, the extension store or a PDF. No extension can draw on it.',
       ),
-      'lead',
     ),
   );
-  const steps = element(document, 'ul', '', 'not-web-steps');
+  const steps = make(document, 'ul', 'not-web-steps');
   const keyNames = options.shortcut ?? [];
-  const press = element(document, 'li', '');
+  const press = make(document, 'li', '');
   if (keyNames.length > 0) {
     const [before, after] = t('There, click the Fruitback icon, or press {keys}.').split('{keys}');
     press.append(before ?? '', keys(document, keyNames), after ?? '');
@@ -321,9 +302,9 @@ export function notAWebPage(document: Document, options: NotAWebPageOptions): HT
     press.textContent = t('There, click the Fruitback icon.');
   }
   steps.append(
-    element(document, 'li', t('Open a site your team reviews.')),
+    make(document, 'li', '', t('Open a site your team reviews.')),
     press,
-    element(document, 'li', t('Nothing changed for your sites and your notes.')),
+    make(document, 'li', '', t('Nothing changed for your sites and your notes.')),
   );
 
   return shell(
@@ -341,7 +322,7 @@ export function notAWebPage(document: Document, options: NotAWebPageOptions): HT
 
 /** While the popup reads what it needs: nothing to press yet, and a screen reader is told why. */
 export function loading(document: Document, options: { onSettings: () => void }): HTMLElement {
-  const said = element(document, 'p', t('Loading…'), 'lead');
+  const said = make(document, 'p', 'lead', t('Loading…'));
   said.setAttribute('role', 'status');
 
   return shell(document, { onSettings: options.onSettings }, said);
@@ -381,6 +362,11 @@ export type TurnOnOptions = {
     onVisibility: (visibility: 'members' | 'everyone') => Promise<boolean>;
     onPlace: (place: PlaceIds | null) => Promise<boolean>;
   };
+  /**
+   * A site of no workspace that the popup cannot add (FRU-537): why, in place of « ask an admin »,
+   * and nothing to press.
+   */
+  unaddable?: string;
   /** « Turn on », with the workspace chosen for a site of no workspace. */
   onTurnOn: (workspace?: string) => void;
   onSettings: () => void;
@@ -395,7 +381,7 @@ function visibilityChoice(
   visibility: 'members' | 'everyone',
   onVisibility: (visibility: 'members' | 'everyone') => Promise<boolean>,
 ): HTMLSelectElement {
-  const select = element(document, 'select', '');
+  const select = make(document, 'select', '');
   select.name = 'visibility';
   select.setAttribute('aria-label', t('Who sees the notes'));
   select.append(
@@ -458,10 +444,13 @@ export function turnOnScreen(document: Document, options: TurnOnOptions): HTMLEl
   const addable = options.workspaces ?? [];
   const [first] = addable;
   // A site of no workspace, and no workspace where the account may add it: who can, and nothing to press.
+  if (options.workspace === undefined && options.unaddable !== undefined) {
+    return frame(hostAsTitle(site), make(document, 'p', 'lead', options.unaddable));
+  }
   if (options.workspace === undefined && first === undefined) {
     return frame(
       hostAsTitle(site),
-      element(document, 'p', t('Ask an admin of your workspace to add this site.'), 'lead'),
+      make(document, 'p', 'lead', t('Ask an admin of your workspace to add this site.')),
       helpLink(document, whoCanAdd()),
     );
   }
@@ -488,10 +477,10 @@ export function turnOnScreen(document: Document, options: TurnOnOptions): HTMLEl
   if (destination !== undefined) facts.prepend(destination);
   /** A line of the list whose value is a field: a `select` in its `dd`. */
   const field = (term: string, input: HTMLElement): HTMLElement => {
-    const entry = element(document, 'div', '', 'kit-dl-entry');
-    const value = element(document, 'dd', '');
+    const entry = make(document, 'div', 'kit-dl-entry');
+    const value = make(document, 'dd', '');
     value.append(input);
-    entry.append(element(document, 'dt', term), value);
+    entry.append(make(document, 'dt', '', term), value);
 
     return entry;
   };
@@ -515,7 +504,7 @@ export function turnOnScreen(document: Document, options: TurnOnOptions): HTMLEl
   }
 
   if (addable.length > 1) {
-    const select = element(document, 'select', '');
+    const select = make(document, 'select', '');
     select.name = 'workspace';
     select.setAttribute('aria-label', t('Workspace'));
     select.append(shownChoice(document), ...addable.map((workspace) => option(document, workspace.id, workspace.name)));
@@ -526,13 +515,13 @@ export function turnOnScreen(document: Document, options: TurnOnOptions): HTMLEl
     facts.prepend(field(t('Workspace'), select));
   }
 
-  const act = element(document, 'div', '', 'action-block');
+  const act = make(document, 'div', 'action-block');
   act.append(
     action(document, t('Turn on'), () => options.onTurnOn(options.workspace === undefined ? chosen : undefined)),
-    element(document, 'p', t('Your browser will ask to allow this site once.'), 'note'),
+    make(document, 'p', 'note', t('Your browser will ask to allow this site once.')),
   );
 
-  return frame(site, element(document, 'h1', t('Turn Fruitback on for this site?')), facts, act);
+  return frame(site, make(document, 'h1', '', t('Turn Fruitback on for this site?')), facts, act);
 }
 
 /** A provider of a destination, by the mark that draws it: a source, or Fruitback with no tracker. */
@@ -563,20 +552,20 @@ export function readDestination(label: string): { kind?: DestinationKind; provid
  * The provider is said to a screen reader in words, since the mark is a drawing it skips.
  */
 export function destinationEntry(document: Document, label: string, action?: HTMLElement): HTMLElement {
-  const entry = element(document, 'div', '', 'kit-dl-entry');
+  const entry = make(document, 'div', 'kit-dl-entry');
   entry.classList.add('destination-entry');
   const { kind, provider, place } = readDestination(label);
-  const value = element(document, 'dd', '', 'destination-value');
+  const value = make(document, 'dd', 'destination-value');
   if (kind === 'fruitback') {
     const drop = dropMark(document, 'source-mark');
     drop.dataset.kind = 'fruitback';
     value.append(drop);
   } else if (kind !== undefined) value.append(sourceMark(document, kind));
-  if (provider !== undefined) value.append(element(document, 'span', `${provider} · `, 'visually-hidden'));
-  value.append(element(document, 'span', place, 'destination-place'));
-  entry.append(element(document, 'dt', t('Notes go to')), value);
+  if (provider !== undefined) value.append(make(document, 'span', 'visually-hidden', `${provider} · `));
+  value.append(make(document, 'span', 'destination-place', place));
+  entry.append(make(document, 'dt', '', t('Notes go to')), value);
   if (action !== undefined) {
-    const holder = element(document, 'dd', '', 'kit-dl-action');
+    const holder = make(document, 'dd', 'kit-dl-action');
     holder.append(action);
     entry.append(holder);
   }
@@ -656,8 +645,8 @@ export function visibilityRow(
   document: Document,
   options: { shown: boolean; onChange: (shown: boolean) => void },
 ): HTMLElement {
-  const row = element(document, 'div', '', 'visibility-row');
-  const words = element(document, 'span', t('Show Fruitback on this page'), 'visibility-words');
+  const row = make(document, 'div', 'visibility-row');
+  const words = make(document, 'span', 'visibility-words', t('Show Fruitback on this page'));
   // The visible words are the name of the switch, so a voice command says what it reads.
   words.setAttribute('aria-hidden', 'true');
   row.append(
@@ -675,7 +664,7 @@ export function visibilityRow(
 /** 3 · Site on (FRU-298): the switch, « Leave feedback », what waits, and the side panel. */
 export function siteOn(document: Document, options: SiteOnOptions): HTMLElement {
   const host = hostOf(options.origin);
-  const row = element(document, 'div', '', 'site-row');
+  const row = make(document, 'div', 'site-row');
   row.append(
     hostAsTitle(
       siteLine(document, {
@@ -695,7 +684,7 @@ export function siteOn(document: Document, options: SiteOnOptions): HTMLElement 
   const body: Node[] = [row];
   // FRU-530: where the notes go, under the site, once the worker says it (`showSiteFacts`).
   if (options.on) {
-    const where = element(document, 'dl', '', 'kit-dl');
+    const where = make(document, 'dl', 'kit-dl');
     where.classList.add('site-destination');
     body.push(where);
   }
@@ -704,9 +693,9 @@ export function siteOn(document: Document, options: SiteOnOptions): HTMLElement 
   if (options.on && options.visibility?.shown !== false) {
     // FRU-529: what waits stays under the site; « Leave feedback » goes to the bottom of the body,
     // with the side panel beside it as a square button of one icon, and the keys under both.
-    const waiting = element(document, 'div', '', 'site-lines');
-    const leave = element(document, 'div', '', 'leave-block');
-    const actions = element(document, 'div', '', 'leave-row');
+    const waiting = make(document, 'div', 'site-lines');
+    const leave = make(document, 'div', 'leave-block');
+    const actions = make(document, 'div', 'leave-row');
     const panel = secondaryButton(document, '', options.onOpenPanel);
     panel.classList.add('panel-button');
     panel.setAttribute('aria-label', t('Show all notes in a sidebar'));
@@ -717,7 +706,7 @@ export function siteOn(document: Document, options: SiteOnOptions): HTMLElement 
     const keyNames = options.shortcut ?? [];
     if (keyNames.length > 0) {
       const [before, after] = t('or press {keys} on the page').split('{keys}');
-      const line = element(document, 'p', '', 'shortcut-line');
+      const line = make(document, 'p', 'shortcut-line');
       line.append(before ?? '', keys(document, keyNames), after ?? '');
       leave.append(line);
     }

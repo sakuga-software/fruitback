@@ -36,7 +36,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'This place is not in the tracker any more. Choose another one.':
     'Cet endroit n’est plus dans l’outil de suivi. Choisissez-en un autre.',
   'Your role in this workspace does not let you change this site.':
-    'Votre rôle dans cet espace ne vous permet pas de modifier ce site.',
+    'Votre rôle dans cet espace de travail ne vous permet pas de modifier ce site.',
   'This site sends to several places. Change them in Fruitback.':
     'Ce site envoie vers plusieurs endroits. Modifiez-les dans Fruitback.',
   'Turn on': 'Activer',
@@ -59,7 +59,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'A first note, from the click to the pin': 'Une première note, du clic au repère',
   '{seconds} seconds': '{seconds} secondes',
   'Pin Fruitback, then sign in. It then works on every site your team reviews.':
-    'Épinglez Fruitback, puis connectez-vous. Il marche ensuite sur chaque site que votre équipe relit.',
+    'Épinglez Fruitback, puis connectez-vous. Il fonctionne ensuite sur chaque site que votre équipe relit.',
   'Pin Fruitback': 'Épinglez Fruitback',
   'Open the puzzle piece at the right of the address bar, then press the pin beside Fruitback.':
     'Ouvrez la pièce de puzzle à droite de la barre d’adresse, puis appuyez sur l’épingle à côté de Fruitback.',
@@ -87,7 +87,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'L’accès à {host} a été retiré dans les réglages de votre navigateur. Vos notes sont en sécurité.',
   'Allow access again': 'Autoriser à nouveau',
   'Turn off for this site': 'Désactiver pour ce site',
-  "Fruitback can't reach {worker}": 'Fruitback ne joint pas {worker}',
+  "Fruitback can't reach {server}": 'Fruitback ne joint pas {server}',
   // The page of the extension (FRU-301).
   Preferences: 'Préférences',
   'No rules yet. Add one, or turn a site on from the toolbar.':
@@ -97,7 +97,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Reviewer guide': 'Guide de relecture',
   'Which mode?': 'Quel mode ?',
   'A rule says which worker, and which client, a site belongs to. A site no rule covers mounts nothing.':
-    'Une règle dit à quel worker, et à quel client, appartient un site. Un site qu’aucune règle ne couvre ne monte rien.',
+    'Une règle dit à quel serveur, et à quel client, appartient un site. Un site qu’aucune règle ne couvre ne monte rien.',
   'Filter sites': 'Filtrer les sites',
   'Add a site': 'Ajouter un site',
   'Every site this pattern covers': 'Chaque site que couvre ce motif',
@@ -108,7 +108,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Runs nowhere': 'Ne tourne nulle part',
   'No access': 'Pas d’accès',
   Site: 'Site',
-  Worker: 'Worker',
+  Worker: 'Serveur',
   Access: 'Accès',
   'Fruitback on {pattern}': 'Fruitback sur {pattern}',
   'Site details': 'Détails du site',
@@ -119,18 +119,18 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'The site ships nothing; the extension mounts the widget of {workspace} and carries your session.':
     'Le site n’embarque rien ; l’extension monte le widget de {workspace} et porte votre session.',
   'The site ships nothing; the extension mounts the widget of your workspace and carries your session.':
-    'Le site n’embarque rien ; l’extension monte le widget de votre workspace et porte votre session.',
+    'Le site n’embarque rien ; l’extension monte le widget de votre espace de travail et porte votre session.',
   'The site embeds a dormant widget; the extension wakes it and carries your session.':
     'Le site embarque un widget endormi ; l’extension le réveille et porte votre session.',
   'Access does not travel with a rule, and it can be removed in the settings of the browser. Nothing is mounted until you grant it.':
     'L’accès ne voyage pas avec une règle, et il peut être retiré dans les réglages du navigateur. Rien n’est monté tant que vous ne l’accordez pas.',
   'Turning the rule on asks the browser for its sites.': 'Activer la règle demande ses sites au navigateur.',
-  'Paired as {name}': 'Appairé en tant que {name}',
+  'Paired as {name}': 'Connecté en tant que {name}',
   'Your session with {worker} is attached in the background, never in the page.':
     'Votre session avec {worker} est jointe en arrière-plan, jamais dans la page.',
-  'Not paired': 'Pas appairé',
+  'Not paired': 'Pas connecté',
   'A team site stays asleep until this browser holds a session of its worker.':
-    'Un site d’équipe reste endormi tant que ce navigateur n’a pas de session de son worker.',
+    'Un site d’équipe reste endormi tant que ce navigateur n’a pas de session de son serveur.',
   'Notes on this site are readable by anyone who can build the URL.':
     'Les notes de ce site sont lisibles par quiconque sait construire l’adresse.',
   // The kit (FRU-293).
@@ -140,12 +140,15 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Waiting for you to connect in the tab…': 'En attente de votre connexion dans l’onglet…',
   'Start again': 'Recommencer',
   'The sign-in did not finish.': 'La connexion n’a pas abouti.',
-  'It was refused in the console.': 'Elle a été refusée dans la console.',
-  'The tab was not approved in time.': 'L’onglet n’a pas été approuvé à temps.',
-  'Fruitback did not answer.': 'Fruitback n’a pas répondu.',
+  'Someone declined it in the console. Sign in again to retry.':
+    'Quelqu’un l’a refusée dans la console. Reconnectez-vous pour réessayer.',
+  'The console did not approve it within 15 minutes. Sign in again.':
+    'La console ne l’a pas approuvée dans les 15 minutes. Reconnectez-vous.',
+  'Fruitback could not be reached.': 'Fruitback est injoignable.',
   'Check the connection, then try again.': 'Vérifiez la connexion, puis réessayez.',
   'The sign-in did not start.': 'La connexion n’a pas commencé.',
-  'Fruitback named a console that is not its own.': 'Fruitback a indiqué une console qui n’est pas la sienne.',
+  'Fruitback named a console that is not its own. Tell the person who runs your Fruitback.':
+    'Fruitback a indiqué une console qui n’est pas la sienne. Prévenez la personne qui gère votre Fruitback.',
   'Loading…': 'Chargement…',
   // A site of a workspace (FRU-254). The words of the stages are the widget's.
   New: 'Nouveau',
@@ -163,25 +166,27 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'The page did not answer. Reload it, then try again.': 'La page n’a pas répondu. Rechargez-la, puis réessayez.',
   // FRU-395: a pairing link where the worker goes, and a worker that is not at the address of a rule.
   'This is a pairing link, not the address of a worker. Use it to pair, and give the rule the address before /pair.':
-    'Ceci est un lien d’appairage, pas l’adresse d’un worker. Utilisez-le pour vous appairer, et donnez à la règle l’adresse avant /pair.',
+    'Ceci est un lien de connexion, pas l’adresse d’un serveur. Utilisez-le pour vous connecter, et donnez à la règle l’adresse avant /pair.',
   'An address that ends in /pair, or that carries a #, is a pairing link, not a worker. Give the address before /pair.':
-    'Une adresse qui finit par /pair, ou qui porte un #, est un lien d’appairage, pas un worker. Donnez l’adresse avant /pair.',
-  'Pair with this link': 'S’appairer avec ce lien',
+    'Une adresse qui finit par /pair, ou qui porte un #, est un lien de connexion, pas un serveur. Donnez l’adresse avant /pair.',
+  'Pair with this link': 'Se connecter avec ce lien',
   'The worker of this rule does not answer. Check its address in the options.':
-    'Le worker de cette règle ne répond pas. Vérifiez son adresse dans les options.',
+    'Le serveur de cette règle ne répond pas. Vérifiez son adresse dans les options.',
   // FRU-397: another copy of Fruitback on the page of the tab.
   'Another copy of Fruitback runs on this page, or the version of before of this one. Reload the page. If this stays, remove the other copy in {place}.':
     'Une autre copie de Fruitback tourne sur cette page, ou la version précédente de celle-ci. Rechargez la page. Si cela reste, retirez l’autre copie dans {place}.',
   'Another copy of Fruitback ({version}) runs on this page. Reload the page. If this stays, remove that copy in {place}.':
     'Une autre copie de Fruitback ({version}) tourne sur cette page. Rechargez la page. Si cela reste, retirez cette copie dans {place}.',
   // A site of no workspace (FRU-255).
-  'Ask an admin of your workspace to add this site.': 'Demandez à un admin de votre workspace d’ajouter ce site.',
-  Workspace: 'Workspace',
+  'Ask an admin of your workspace to add this site.':
+    'Demandez à un admin de votre espace de travail d’ajouter ce site.',
+  Workspace: 'Espace de travail',
   'Your role in this workspace does not let you add a site.':
-    'Votre rôle dans ce workspace ne permet pas d’ajouter un site.',
+    'Votre rôle dans cet espace de travail ne permet pas d’ajouter un site.',
   'Too many sites were added in the last hour. Try again later.':
     'Trop de sites ont été ajoutés dans l’heure. Réessayez plus tard.',
-  'Fruitback did not answer. Try again.': 'Fruitback n’a pas répondu. Réessayez.',
+  'This site did not change. Try again in a moment.': 'Ce site n’a pas changé. Réessayez dans un instant.',
+  'The site was not added. Try again in a moment.': 'Le site n’a pas été ajouté. Réessayez dans un instant.',
   'Your sign-in ended': 'Votre connexion a pris fin',
   'Sign in again to see and leave notes here.': 'Reconnectez-vous pour voir et laisser des notes ici.',
   'Fruitback did not answer. The popup asks again.': 'Fruitback n’a pas répondu. Le popup redemande.',
@@ -193,20 +198,24 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Tip:': 'Astuce :',
   'Pin Fruitback to find it in the toolbar later: open the puzzle piece at the right of the address bar, then press the pin beside Fruitback.':
     'Épinglez Fruitback pour le retrouver ensuite dans la barre d’outils : ouvrez la pièce de puzzle à droite de la barre d’adresse, puis appuyez sur l’épingle à côté de Fruitback.',
-  'No site in your workspaces yet.': 'Aucun site dans vos workspaces pour l’instant.',
+  'No site in your workspaces yet.': 'Aucun site dans vos espaces de travail pour l’instant.',
   'Open {site}': 'Ouvrir {site}',
   'Turn on {site}': 'Activer sur {site}',
-  'Turn on a site of your workspaces:': 'Activez un site de vos workspaces :',
+  'Turn on a site of your workspaces:': 'Activez un site de vos espaces de travail :',
   'Chrome asks for access to this site only.': 'Chrome demande l’accès à ce site seulement.',
-  'The browser did not give access to this site.': 'Le navigateur n’a pas donné l’accès à ce site.',
+  'The browser did not give access to this site. Press Turn on again, then allow it.':
+    'Le navigateur n’a pas donné l’accès à ce site. Appuyez de nouveau sur Activer, puis autorisez-le.',
   'The site could not be turned on. Try again.': 'Le site n’a pas pu être activé. Réessayez.',
-  'The browser did not give the extension access to Fruitback.':
-    'Le navigateur n’a pas donné à l’extension l’accès à Fruitback.',
+  'The browser did not give the extension access to Fruitback. Sign in again, and allow it when the browser asks.':
+    'Le navigateur n’a pas donné à l’extension l’accès à Fruitback. Reconnectez-vous, et autorisez-le quand le navigateur le demande.',
   // FRU-528: the buttons that open the guide.
   'How Fruitback works': 'Comment fonctionne Fruitback',
   'What to check when Fruitback does not answer': 'Que vérifier quand Fruitback ne répond pas',
-  'Who can add a site to a workspace?': 'Qui peut ajouter un site à un espace ?',
+  'Who can add a site to a workspace?': 'Qui peut ajouter un site à un espace de travail ?',
   'How to leave and follow notes': 'Laisser et suivre des notes',
+  // FRU-537: an http site, which the popup does not add.
+  'This site is on http. Add it to a workspace from the console, then turn it on here.':
+    'Ce site est en http. Ajoutez-le à un espace depuis la console, puis activez-le ici.',
   // FRU-526: a page of the browser, where no extension draws.
   "Fruitback can't run on this page": 'Fruitback ne peut pas fonctionner sur cette page',
   'This is a page of the browser, like a new tab, the settings, the extension store or a PDF. No extension can draw on it.':
@@ -219,22 +228,22 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Aucune règle ne couvre cette origine, donc Fruitback ne fait rien ici.',
   'Rule: {pattern}': 'Règle : {pattern}',
   'Which mode can read it': 'Quel mode peut les lire',
-  'Pair with this worker': 'Appairer avec ce worker',
-  'This page is a pairing link for {worker}.': 'Cette page est un lien d’appairage pour {worker}.',
+  'Pair with this worker': 'Se connecter à ce serveur',
+  'This page is a pairing link for {worker}.': 'Cette page est un lien de connexion pour {worker}.',
   'This is a site to review': 'C’est un site à relire',
   'Paired. This browser reads and writes the notes of this worker.':
-    'Appairé. Ce navigateur lit et écrit les notes de ce worker.',
+    'Connecté. Ce navigateur lit et écrit les notes de ce serveur.',
   'This browser is already paired with that worker, so the link is not needed.':
-    'Ce navigateur est déjà appairé avec ce worker, donc le lien n’est pas nécessaire.',
+    'Ce navigateur est déjà connecté à ce serveur, donc le lien n’est pas nécessaire.',
   'Log out': 'Se déconnecter',
-  'Paired as {identity}': 'Appairé en tant que {identity}',
-  'Pairing code': 'Code d’appairage',
+  'Paired as {identity}': 'Connecté en tant que {identity}',
+  'Pairing code': 'Code de connexion',
   'I have a code': 'J’ai un code',
   'Not paired — this site cannot reach the worker until you do':
-    'Non appairé — ce site ne peut pas joindre le worker tant que vous ne l’êtes pas',
+    'Pas connecté. Ce site ne peut pas joindre le serveur tant que vous ne l’êtes pas.',
   'Open the pairing link you were sent, then click this icon on that page.':
-    'Ouvrez le lien d’appairage que vous avez reçu, puis cliquez sur cette icône sur cette page.',
-  'Worker endpoint': 'Adresse du worker',
+    'Ouvrez le lien de connexion que vous avez reçu, puis cliquez sur cette icône sur cette page.',
+  'Worker endpoint': 'Adresse du serveur',
   'Client id': 'Identifiant du client',
   'Turn on for this site': 'Activer pour ce site',
   Save: 'Enregistrer',
@@ -244,7 +253,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Change: 'Modifier',
   On: 'Activé',
   Off: 'Désactivé',
-  'workspace · {name}': 'workspace · {name}',
+  'workspace · {name}': 'espace de travail · {name}',
   // A straight apostrophe: the guide quotes this line as the popup writes it.
   "team mode · the site's own widget": 'mode équipe · le widget du site',
   'Private · the extension mounts the widget': 'Privé · l’extension monte le widget',
@@ -273,29 +282,29 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Skipped, because they are not valid: {patterns}.': 'Ignorées, parce qu’elles ne sont pas valides : {patterns}.',
   'Keep my rules in the account of this browser': 'Garder mes règles dans le compte de ce navigateur',
   'When this is on, your rules (patterns, modes, endpoints, client ids, and the labels and workspace names they hold) are kept by the account of this browser, and reach your other browsers where it is on too. No session and no access travel: on another browser, grant access to each site. Turning it off stops the copy, and removes nothing from the account.':
-    'Quand c’est activé, vos règles (motifs, modes, adresses de worker, identifiants de client, et les libellés et noms de workspace qu’elles portent) sont gardées par le compte de ce navigateur, et arrivent dans vos autres navigateurs où c’est activé aussi. Aucune session et aucun accès ne voyagent : sur un autre navigateur, donnez l’accès à chaque site. Désactiver arrête la copie, et ne retire rien du compte.',
+    'Quand c’est activé, vos règles (motifs, modes, adresses de serveur, identifiants de client, et les libellés et noms d’espace de travail qu’elles portent) sont gardées par le compte de ce navigateur, et arrivent dans vos autres navigateurs où c’est activé aussi. Aucune session et aucun accès ne voyagent : sur un autre navigateur, donnez l’accès à chaque site. Désactiver arrête la copie, et ne retire rien du compte.',
   'Share rules': 'Partager les règles',
   // FRU-302: « Workers and sessions » and « Preferences ».
-  'Workers and sessions': 'Workers et sessions',
-  'Pair in the page of the extension': 'Appairer dans la page de l’extension',
+  'Workers and sessions': 'Serveurs et sessions',
+  'Pair in the page of the extension': 'Se connecter dans la page de l’extension',
   '1 site': '1 site',
   '{count} sites': '{count} sites',
   'You pair with a worker, not with a site: one session covers every site that reports to it. Only team mode needs one.':
-    'On s’appaire avec un worker, pas avec un site : une session couvre tous les sites qui lui rendent compte. Seul le mode équipe en a besoin.',
-  'No worker yet. A rule names one.': 'Aucun worker pour l’instant. Une règle en nomme un.',
+    'On se connecte à un serveur, pas à un site : une session couvre tous les sites qui lui rendent compte. Seul le mode équipe en a besoin.',
+  'No worker yet. A rule names one.': 'Aucun serveur pour l’instant. Une règle en nomme un.',
   'Not paired. Private-mode sites read without a session; a team site would stay asleep.':
-    'Pas appairé. Les sites en mode privé lisent sans session ; un site d’équipe resterait endormi.',
-  Pair: 'Appairer',
+    'Pas connecté. Les sites en mode privé lisent sans session ; un site d’équipe resterait endormi.',
+  Pair: 'Se connecter',
   'Plain http on localhost. Pairing works here; anywhere else a session must not cross http.':
-    'http simple sur localhost. L’appairage marche ici ; ailleurs, une session ne doit pas passer par http.',
+    'http simple sur localhost. La connexion fonctionne ici ; ailleurs, une session ne doit pas passer par http.',
   'Signed in as {name}': 'Connecté en tant que {name}',
   'Signed in': 'Connecté',
-  Paired: 'Appairé',
+  Paired: 'Connecté',
   'One account for the console and this extension': 'Un seul compte pour la console et cette extension',
-  'Verified by the worker · renews on its own': 'Vérifié par le worker · se renouvelle seul',
+  'Verified by the worker · renews on its own': 'Vérifié par le serveur · se renouvelle seul',
   'Open notes in the sidebar': 'Ouvrir les notes dans le panneau',
   'Instead of floating pins only, on every site you review.':
-    'Plutôt que les seules épingles, sur chaque site que vous relisez.',
+    'Plutôt que les seuls repères flottants, sur chaque site que vous relisez.',
   'Name on my notes': 'Nom sur mes notes',
   // FRU-349.
   'Show CSS selectors': 'Afficher les sélecteurs CSS',
@@ -308,7 +317,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Top right': 'En haut à droite',
   'Top left': 'En haut à gauche',
   'In the head of a note you write, and in the note of a pin. The issue in your tracker keeps the selector either way.':
-    'Dans l’en-tête d’une note que vous écrivez, et dans la note d’une épingle. Le ticket de votre outil de suivi garde le sélecteur dans tous les cas.',
+    'Dans l’en-tête d’une note que vous écrivez, et dans la note d’un repère. Le ticket de votre outil de suivi garde le sélecteur dans tous les cas.',
   'Prefilled in private mode. Team mode signs with your session.':
     'Prérempli en mode privé. Le mode équipe signe avec votre session.',
   'Not set': 'Aucun',
@@ -355,10 +364,10 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Cancel: 'Annuler',
   'Sending…': 'Envoi…',
   Send: 'Envoyer',
-  'The reply did not go through. Your text is kept. Try again.':
-    'La réponse n’est pas partie. Votre texte est gardé. Réessayez.',
-  'Too many replies just now. Your text is kept. Try again in a minute.':
-    'Trop de réponses à l’instant. Votre texte est gardé. Réessayez dans une minute.',
+  'The reply was not sent. Your text is still here. Try again.':
+    'La réponse n’est pas partie. Votre texte est toujours là. Réessayez.',
+  'Too many replies just now. Your text is still here. Try again in a minute.':
+    'Trop de réponses en ce moment. Votre texte est toujours là. Réessayez dans une minute.',
   'Your session ended. Sign in again from the Fruitback button, then send.':
     'Votre session a pris fin. Reconnectez-vous depuis le bouton Fruitback, puis envoyez.',
   'You cannot reply to this note any more.': 'Vous ne pouvez plus répondre à cette note.',
@@ -377,13 +386,13 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Checked by you · {age}': 'Vérifiée par vous · {age}',
   'Checked by {name} · {age}': 'Vérifiée par {name} · {age}',
   'Reopened by you · {age}': 'Rouverte par vous · {age}',
-  'Fixed by {name} · {age}': 'Corrigé par {name} · {age}',
+  'Fixed by {name} · {age}': 'Corrigée par {name} · {age}',
   'Marked done · {age}': 'Marquée terminée · {age}',
   'Ready to check · {count}': 'À vérifier · {count}',
   'The team says these are fixed. Do they look right to you?': 'L’équipe dit que c’est corrigé. Est-ce bon pour vous ?',
   'Looks fixed': 'C’est corrigé',
   'Still wrong': 'Toujours pas',
-  'Did not go through. Try again.': 'Ça n’est pas parti. Réessayez.',
+  'Your answer was not sent. Try again.': 'Votre réponse n’est pas partie. Réessayez.',
   'Too many requests just now. Try again in a minute.': 'Trop de demandes à l’instant. Réessayez dans une minute.',
   'Your session ended. Sign in again from the Fruitback button, then try again.':
     'Votre session a pris fin. Reconnectez-vous depuis le bouton Fruitback, puis réessayez.',
@@ -393,19 +402,21 @@ export const FRENCH: Readonly<Record<string, string>> = {
   // The problems, and what to do about each (`remedy.ts`).
   'That code has been used or has expired. Ask for a new one.':
     'Ce code a déjà servi ou a expiré. Demandez-en un nouveau.',
-  'The worker did not answer. Try again.': 'Le worker n’a pas répondu. Réessayez.',
-  'That worker is on plain http. A session must not cross it.':
-    'Ce worker est en http simple. Une session ne doit pas y passer.',
-  'Fruitback needs permission to reach that worker.': 'Fruitback a besoin de la permission de joindre ce worker.',
+  'The worker did not answer. Try again.': 'Le serveur n’a pas répondu. Réessayez.',
+  'That worker is on plain http, and a session must not cross it. Use its https address.':
+    'Ce serveur est en http simple, et une session ne doit pas y passer. Utilisez son adresse https.',
+  'Fruitback needs permission to reach that worker.': 'Fruitback a besoin de la permission de joindre ce serveur.',
   'Pairing needs https (localhost excepted): a session must not cross http.':
-    'L’appairage demande https (sauf localhost) : une session ne doit pas passer en http.',
-  'The pairing code is required.': 'Le code d’appairage est requis.',
-  'That file is not JSON.': 'Ce fichier n’est pas du JSON.',
-  'That file is not a Fruitback rules file.': 'Ce fichier n’est pas un fichier de règles Fruitback.',
+    'La connexion demande https (sauf localhost) : une session ne doit pas passer en http.',
+  'The pairing code is required.': 'Le code de connexion est requis.',
+  'That file is not JSON. Choose the file that Export downloaded.':
+    'Ce fichier n’est pas du JSON. Choisissez le fichier téléchargé par Exporter.',
+  'That file is not a Fruitback rules file. Choose the file that Export downloaded.':
+    'Ce fichier n’est pas un fichier de règles Fruitback. Choisissez le fichier téléchargé par Exporter.',
   'That file comes from a newer Fruitback. Update the extension, then import it again.':
     'Ce fichier vient d’un Fruitback plus récent. Mettez l’extension à jour, puis importez-le de nouveau.',
   'Try again': 'Réessayer',
-  'Change the worker': 'Changer le worker',
+  'Change the worker': 'Changer le serveur',
   'Check the list': 'Vérifier la liste',
   'How to get a code': 'Comment obtenir un code',
   'A rule for that pattern already exists. Remove it first.':
@@ -417,9 +428,9 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'This site takes notes from its members only, and private mode carries no session: no note can be sent from here. To review it in private mode, an admin of the site sets « Who can leave a note » to « Anyone on the page » in the console.':
     'Ce site prend les notes de ses membres seulement, et le mode privé ne porte aucune session : aucune note ne peut partir d’ici. Pour le relire en mode privé, un admin du site choisit « Toute personne sur la page » sous « Qui peut laisser une note ? » dans la console.',
   'This worker answers a signed-in reader only, and private mode carries no session. Notes do not show on this site.':
-    'Ce worker ne répond qu’à un lecteur connecté, et le mode privé ne porte aucune session. Les notes ne s’affichent pas sur ce site.',
+    'Ce serveur ne répond qu’à un lecteur connecté, et le mode privé ne porte aucune session. Les notes ne s’affichent pas sur ce site.',
   'The workspace does not prove this domain now, so this rule runs nowhere. It runs again when the worker says the domain is proven.':
-    'Le workspace ne prouve pas ce domaine en ce moment, donc cette règle ne s’applique nulle part. Elle s’appliquera à nouveau quand le worker dira que le domaine est prouvé.',
+    'L’espace de travail ne prouve pas ce domaine en ce moment, donc cette règle ne s’applique nulle part. Elle s’appliquera à nouveau quand le serveur dira que le domaine est prouvé.',
   'This rule is too large for the account of this browser, which keeps at most 8 KB for one rule. It is not copied there, and it stays and works in this browser.':
     'Cette règle est trop grande pour le compte de ce navigateur, qui garde au plus 8 Ko pour une règle. Elle n’y est pas copiée, et elle reste et fonctionne dans ce navigateur.',
   'A wildcard cannot serve team mode, so this rule runs nowhere. Remove it, and add one rule for each origin.':
@@ -430,10 +441,10 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Utilisez une origine comme https://acme.dev, ou un joker comme https://*.staging.acme.dev.',
   'The endpoint must be a full http:// or https:// URL.':
     'L’adresse doit être une URL complète en http:// ou https://.',
-  'The worker endpoint is required.': 'L’adresse du worker est requise.',
+  'The worker endpoint is required.': 'L’adresse du serveur est requise.',
   'The client id is required.': 'L’identifiant du client est requis.',
   'A team-mode worker must be on https (localhost excepted).':
-    'Un worker en mode équipe doit être en https (sauf localhost).',
+    'Un serveur en mode équipe doit être en https (sauf localhost).',
   // FRU-307: « Search and options ».
   'Search and options': 'Recherche et options',
   Scope: 'Portée',
@@ -446,7 +457,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Status: 'Statut',
   'Status · {choice} · {count}': 'Statut · {choice} · {count}',
   All: 'Toutes',
-  'Show pins on the page': 'Afficher les épingles sur la page',
+  'Show pins on the page': 'Afficher les repères sur la page',
   '1 detached note': '1 note détachée',
   '{count} detached notes': '{count} notes détachées',
   '{stage} · the element it pointed at is gone': '{stage} · l’élément qu’elle visait n’existe plus',
@@ -464,4 +475,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Shows the note on this page': 'Montre la note sur cette page',
   'Opens {path} in a new tab': 'Ouvre {path} dans un nouvel onglet',
   'Open {reference} →': 'Ouvrir {reference} →',
+  // FRU-519: the line of a new release, in the popup and the page.
+  'Fruitback {version} is out.': 'Fruitback {version} est disponible.',
+  Update: 'Mettre à jour',
 };

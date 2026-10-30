@@ -214,11 +214,19 @@ describe('1, while the sign-in waits for the console', () => {
 
 describe('1, after a sign-in that did not finish', () => {
   for (const [stopped, title, sentence] of [
-    ['refused', 'The sign-in did not finish.', 'It was refused in the console.'],
-    ['expired', 'The sign-in did not finish.', 'The tab was not approved in time.'],
-    ['unavailable', 'Fruitback did not answer.', 'Check the connection, then try again.'],
-    ['untrusted', 'The sign-in did not start.', 'Fruitback named a console that is not its own.'],
-    ['blocked', 'The sign-in did not start.', 'The browser did not give the extension access to Fruitback.'],
+    ['refused', 'The sign-in did not finish.', 'Someone declined it in the console. Sign in again to retry.'],
+    ['expired', 'The sign-in did not finish.', 'The console did not approve it within 15 minutes. Sign in again.'],
+    ['unavailable', 'Fruitback could not be reached.', 'Check the connection, then try again.'],
+    [
+      'untrusted',
+      'The sign-in did not start.',
+      'Fruitback named a console that is not its own. Tell the person who runs your Fruitback.',
+    ],
+    [
+      'blocked',
+      'The sign-in did not start.',
+      'The browser did not give the extension access to Fruitback. Sign in again, and allow it when the browser asks.',
+    ],
   ] as const) {
     it(`says why in an alert when it was ${stopped}, above the ways to sign in again`, () => {
       let again = 0;
@@ -418,7 +426,7 @@ describe('2 · a site of a workspace, not on here (FRU-298)', () => {
     setLanguage('fr');
     const screen = offer();
 
-    assert.equal(screen.querySelector('h1')?.textContent, 'Activer Fruitback sur ce site ?');
+    assert.equal(screen.querySelector('h1')?.textContent, 'Activer Fruitback sur ce site\u202F?');
     assert.equal(screen.querySelector('.action-block button')?.textContent, 'Activer');
     assert.equal(screen.querySelector('dt')?.textContent, 'Les notes vont vers');
   });
@@ -473,6 +481,27 @@ describe('2 · a site of no workspace (FRU-298, FRU-255)', () => {
       screen.querySelector<HTMLAnchorElement>('.kit-help a')?.href,
       'https://fruitback.com/reviewing.html#who-can-add-a-site-to-a-workspace',
     );
+  });
+});
+
+describe('2 · a site on http, which the popup does not add (FRU-537)', () => {
+  it('says to add it from the console, and has nothing to press but the account', () => {
+    const screen = turnOnScreen(page(), {
+      origin: 'http://staging.acme.dev',
+      visibility: 'members',
+      workspaces: [],
+      unaddable: 'This site is on http. Add it to a workspace from the console, then turn it on here.',
+      onTurnOn: nothing,
+      onSettings: nothing,
+    });
+
+    assert.equal(screen.querySelector('h1')?.textContent, 'staging.acme.dev');
+    assert.equal(
+      screen.querySelector('.lead')?.textContent,
+      'This site is on http. Add it to a workspace from the console, then turn it on here.',
+    );
+    assert.doesNotMatch(screen.textContent ?? '', /Ask an admin/);
+    assert.deepEqual(stops(screen), ['button: Account and settings']);
   });
 });
 

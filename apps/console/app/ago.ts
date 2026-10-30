@@ -16,25 +16,40 @@ function calendarDayOf(at: Date): number {
  *
  * A moment that the browser cannot read is shown as the worker wrote it, and one in the future (a
  * clock of the worker ahead of the browser) reads as now.
+ *
+ * This is the word of a cell, which starts with a capital. Inside a sentence, use `agoInSentence`.
  */
 export function ago(iso: string, now: number = Date.now()): string {
+  return said(iso, now, false);
+}
+
+/**
+ * `ago` in the middle of a sentence (FRU-516): « used just now », « used yesterday », « used on Oct 3 ».
+ * `ago` there read « used Just now », and French « utilisée le il y a 2 h ».
+ */
+export function agoInSentence(iso: string, now: number = Date.now()): string {
+  return said(iso, now, true);
+}
+
+function said(iso: string, now: number, inSentence: boolean): string {
   const at = new Date(iso);
   if (Number.isNaN(at.getTime())) return iso;
   const past = Math.max(0, now - at.getTime());
-  if (past < MINUTE) return t('Just now');
+  if (past < MINUTE) return inSentence ? t('just now') : t('Just now');
   if (past < HOUR) return t('{count} min ago', { count: Math.floor(past / MINUTE) });
   // Hours for a whole day: a note of 22:30 read at 00:30 is « 2 h ago », not « Yesterday ».
   if (past < 24 * HOUR) return t('{count} h ago', { count: Math.floor(past / HOUR) });
   const today = new Date(now);
   const days = Math.round((calendarDayOf(today) - calendarDayOf(at)) / (24 * HOUR));
-  if (days <= 1) return t('Yesterday');
+  if (days <= 1) return inSentence ? t('yesterday') : t('Yesterday');
   if (days < 7) return t('{count} days ago', { count: days });
-
-  return at.toLocaleDateString(locale(), {
+  const day = at.toLocaleDateString(locale(), {
     day: 'numeric',
     month: 'short',
     ...(at.getFullYear() === today.getFullYear() ? {} : { year: 'numeric' }),
   });
+
+  return inSentence ? t('on {day}', { day }) : day;
 }
 
 const DAYS = { en: 'en-GB', fr: 'fr' } as const;

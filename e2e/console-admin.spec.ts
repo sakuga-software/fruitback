@@ -287,8 +287,8 @@ test('an administrator sees the frame and the instance, with the values of the m
   expect.soft(await painted(code, 'backgroundColor')).toEqual(rgb(SUBTLE));
   await expect(ways.nth(2).getByRole('button', { name: 'Copy' })).toBeVisible();
 
-  // Who can make an account: the policy of the worker, read-only, with the variable that sets it.
-  const policy = page.getByRole('radiogroup', { name: 'Who can make an account' });
+  // Who can create an account: the policy of the worker, read-only, with the variable that sets it.
+  const policy = page.getByRole('radiogroup', { name: 'Who can create an account' });
   const radios = policy.getByRole('radio');
   await expect(radios).toHaveCount(2);
   await expect(policy.getByRole('radio', { name: 'Only people invited to a workspace' })).toBeChecked();
@@ -459,7 +459,7 @@ test('a worker that does not answer the read says so, keeps the frame, and reads
   });
   await open(page);
 
-  await expect(main(page).getByRole('alert')).toHaveText('The instance could not be read. Fruitback did not answer.');
+  await expect(main(page).getByRole('alert')).toHaveText('The instance did not load. Fruitback hit an error.');
   await expect(health(page)).toHaveCount(0);
   await expect(page.getByRole('navigation', { name: 'Instance' })).toBeVisible();
   await expect(main(page).getByRole('button', { name: 'Show the workspaces' })).toBeVisible();
@@ -495,8 +495,10 @@ test('in French, every sentence of the screen is French', async ({ page }) => {
   await stub(page, { locale: 'fr' });
   await page.goto(`${CONSOLE}/admin`);
   await expect(main(page).getByRole('heading', { level: 1, name: 'Instance' })).toBeVisible();
-  await expect(main(page)).toContainText('Les propriétaires de chaque workspace voient que vous avez lu sa liste');
-  await main(page).getByRole('button', { name: 'Afficher les workspaces' }).click();
+  await expect(main(page)).toContainText(
+    'Les propriétaires de chaque espace de travail voient que vous avez lu sa liste',
+  );
+  await main(page).getByRole('button', { name: 'Afficher les espaces de travail' }).click();
   await expect(page.getByRole('table')).toBeVisible();
 
   await expect(main(page).locator('header p')).toHaveText(
@@ -504,10 +506,10 @@ test('in French, every sentence of the screen is French', async ({ page }) => {
   );
   await expect(page.getByRole('navigation', { name: 'Instance' }).getByRole('link')).toHaveText([
     'Instance',
-    'Workspaces',
+    'Espaces de travail',
     'Utilisateurs',
     'Notes',
-    'Mes workspaces',
+    'Mes espaces de travail',
   ]);
   await expect(rail(page)).toContainText('Instance auto-hébergée');
   await expect(page.getByRole('textbox', { name: 'Adresse publique' })).toHaveAccessibleDescription(
@@ -516,8 +518,10 @@ test('in French, every sentence of the screen is French', async ({ page }) => {
   await expect(main(page)).toContainText(
     'Réglé par FRUITBACK_MAIL_FROM et FRUITBACK_SCALEWAY_TEM dans l’environnement.',
   );
-  await expect(main(page)).toContainText('En marche depuis 12 jours');
-  await expect(page.getByRole('radio', { name: 'Seulement les personnes invitées dans un workspace' })).toBeChecked();
+  await expect(main(page)).toContainText('En service depuis 12 jours');
+  await expect(
+    page.getByRole('radio', { name: 'Seulement les personnes invitées dans un espace de travail' }),
+  ).toBeChecked();
 
   const english = [
     'Health',
@@ -529,7 +533,7 @@ test('in French, every sentence of the screen is French', async ({ page }) => {
     'How people get into',
     'Set by',
     'Redirect address',
-    'Who can make an account',
+    'Who can create an account',
     'Only people invited',
     'Public address',
     'Created',
@@ -627,16 +631,16 @@ test('« Deleted workspaces » says when there is none, and when the read failed
 
   await stub(page, { deleted: 503 });
   await page.reload();
-  await expect(section).toContainText('The deleted workspaces could not be read. Fruitback did not answer.');
+  await expect(section).toContainText('The deleted workspaces did not load. Fruitback hit an error.');
   await stub(page, { deleted: DELETED });
   await section.getByRole('button', { name: 'Try again' }).click();
   await expect(section.getByRole('table')).toBeVisible();
 
   await stub(page, { locale: 'fr', deleted: DELETED });
   await page.reload();
-  const french = page.getByRole('region', { name: 'Workspaces supprimés', exact: true });
+  const french = page.getByRole('region', { name: 'Espaces de travail supprimés', exact: true });
   await expect(french).toContainText(
-    'Supprimés par un administrateur de l’instance. Leurs propriétaires ne peuvent pas le lire : le workspace n’existe plus.',
+    'Supprimés par un administrateur de l’instance. Leurs propriétaires ne peuvent pas le lire : l’espace de travail n’existe plus.',
   );
   await expect(french.getByRole('columnheader')).toHaveText(['Nom', 'Supprimé par', 'Ce qui a disparu', 'Supprimé le']);
   await expect(french.getByRole('row').nth(1).getByRole('cell').nth(2)).toHaveText(

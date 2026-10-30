@@ -22,6 +22,7 @@ import { useWorkspace } from './workspace';
 import { locale, msg, t } from '../i18n';
 import { useLocale } from '../use-locale';
 import { siteLabel } from '../site-address';
+import { ReadProblem } from '../read-problem';
 
 const ROLE_WORDS: Readonly<Record<Role, string>> = {
   owner: msg('Owner'),
@@ -54,7 +55,8 @@ const INVITE_PROBLEMS: Readonly<Record<string, string>> = {
 const NOT_INVITED = msg('The invitation was not sent. Try again.');
 /** The worker refused the site of a guest: it is no site of the workspace any more (FRU-250). */
 const NO_SUCH_SITE = msg('This site is no longer one of the workspace. Choose another one.');
-const NOT_CHANGED = msg('That did not go through. Try again.');
+const NOT_CANCELLED = msg('The invitation was not cancelled. Try again.');
+const NOT_REMOVED = msg('This member was not removed. Try again.');
 const MEMBER_PROBLEMS: Readonly<Record<string, string>> = {
   YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER: msg('The last owner of a workspace stays in it.'),
   YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_MEMBER: msg('Only an owner removes an owner.'),
@@ -312,7 +314,7 @@ export default function Members() {
       // It was accepted, declined or cancelled in the meantime: the list is read again.
       if (cancelled.error === 'INVITATION_NOT_FOUND') return readAll();
 
-      return setStuck({ row: invitation.id, problem: problemOf(cancelled, {}, NOT_CHANGED) });
+      return setStuck({ row: invitation.id, problem: problemOf(cancelled, {}, NOT_CANCELLED) });
     }
     setInvitations((current) => edited(current, (items) => items.filter((each) => each.id !== invitation.id)));
   }
@@ -323,7 +325,7 @@ export default function Members() {
       organizationId: workspace.id,
       memberIdOrEmail: member.id,
     });
-    if (!removed.ok) return setStuck({ row: member.id, problem: problemOf(removed, MEMBER_PROBLEMS, NOT_CHANGED) });
+    if (!removed.ok) return setStuck({ row: member.id, problem: problemOf(removed, MEMBER_PROBLEMS, NOT_REMOVED) });
     // The last row of a page past the first: the page before it is read, and the row stays until it
     // comes with its count. Taken away at once, the empty page said « Nobody matches this search. »
     // for the time of the read.
@@ -420,7 +422,11 @@ export default function Members() {
       {people !== 'loading' && (people === 'failed' || waiting === 'failed') ? (
         <LoadFailed
           title={t('The members did not load')}
-          detail={t('Fruitback did not answer. Your members are safe.')}
+          detail={
+            <>
+              <ReadProblem /> {t('Your members are safe.')}
+            </>
+          }
           retry={t('Try again')}
           onRetry={readAll}
         />

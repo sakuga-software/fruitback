@@ -19,25 +19,49 @@ const DROP = 'M12 19.9 L7.05 14.95 A7 7 0 1 1 16.95 14.95 Z';
 /** The five stages of a note, the names of the contract. */
 export type Stage = 'new' | 'todo' | 'progress' | 'done' | 'closed';
 
-function make<K extends keyof HTMLElementTagNameMap>(
+/** An element with its class and its text. The one builder of every screen of the extension. */
+export function make<K extends keyof HTMLElementTagNameMap>(
   document: Document,
   tag: K,
   className: string,
   text = '',
 ): HTMLElementTagNameMap[K] {
   const node = document.createElement(tag);
-  node.className = className;
+  if (className !== '') node.className = className;
   if (text !== '') node.textContent = text;
 
   return node;
 }
 
-function button(document: Document, className: string, onClick?: () => void): HTMLButtonElement {
-  const node = make(document, 'button', className);
+/** A native `button` that submits nothing, with its class, its words and what a click does. */
+export function button(document: Document, className: string, text = '', onClick?: () => void): HTMLButtonElement {
+  const node = make(document, 'button', className, text);
   node.type = 'button';
   if (onClick !== undefined) node.addEventListener('click', onClick);
 
   return node;
+}
+
+/**
+ * A link that reads as a link and is a button: it does something here, it opens no page. The popup
+ * and the welcome page draw it as `link-button`, the side panel as `panel-link`.
+ */
+export function linkButton(
+  document: Document,
+  label: string,
+  onClick: () => void,
+  className: 'link-button' | 'panel-link' = 'link-button',
+): HTMLButtonElement {
+  return button(document, className, label, onClick);
+}
+
+/** The host of an address, with its port: `acme.dev:8443`. An address that does not parse stays as it is. */
+export function hostOf(address: string): string {
+  try {
+    return new URL(address).host;
+  } catch {
+    return address;
+  }
 }
 
 /** The drop of the mark, as a drawing a screen reader skips. Its colour is the `color` of its parent. */
@@ -77,7 +101,7 @@ export function head(document: Document, options: HeadOptions = {}): HTMLElement
   const root = make(document, 'div', 'kit-head');
   root.append(dropMark(document), make(document, 'span', 'kit-brand', 'Fruitback'));
   if (options.onAccount !== undefined) {
-    const avatar = button(document, 'kit-avatar', options.onAccount);
+    const avatar = button(document, 'kit-avatar', '', options.onAccount);
     avatar.setAttribute('aria-label', t('Account and settings'));
     const dot = make(document, 'span', 'kit-avatar-dot');
     dot.setAttribute('aria-hidden', 'true');
@@ -114,7 +138,7 @@ export function primaryButton(
   onClick?: () => void,
   options: PrimaryOptions = {},
 ): HTMLButtonElement {
-  const node = button(document, 'kit-primary', onClick);
+  const node = button(document, 'kit-primary', '', onClick);
   if (options.type !== undefined) node.type = options.type;
   const size = options.size ?? 'default';
   node.dataset.size = size;
@@ -126,16 +150,14 @@ export function primaryButton(
 
 /** A second action, on the surface with a border: 44 px. */
 export function secondaryButton(document: Document, label: string, onClick?: () => void): HTMLButtonElement {
-  const node = button(document, 'kit-secondary', onClick);
-  node.textContent = label;
+  const node = button(document, 'kit-secondary', label, onClick);
 
   return node;
 }
 
 /** « Change »: a word in the accent, in a target of 44 px. */
 export function textButton(document: Document, label: string, onClick?: () => void): HTMLButtonElement {
-  const node = button(document, 'kit-text', onClick);
-  node.textContent = label;
+  const node = button(document, 'kit-text', label, onClick);
 
   return node;
 }
@@ -234,7 +256,7 @@ export type RowOptions = { title: string; subtitle?: string; stage?: Stage; onCl
 
 /** A row of a list that leads somewhere: the drop, the title and its line, the chevron. */
 export function listRow(document: Document, options: RowOptions): HTMLButtonElement {
-  const row = button(document, 'kit-row', options.onClick);
+  const row = button(document, 'kit-row', '', options.onClick);
   if (options.stage !== undefined) row.append(statusDrop(document, { stage: options.stage }));
   const words = make(document, 'span', 'kit-row-words');
   words.append(make(document, 'span', 'kit-row-title', options.title));
@@ -647,4 +669,22 @@ export function helpLink(document: Document, help: Help): HTMLElement {
   row.append(link);
 
   return row;
+}
+
+export type UpdateLineOptions = { version: string; url: string };
+
+/**
+ * « Fruitback 0.6.0 is out. Update » (FRU-519): one line in the muted grey, and the link to the
+ * release in the accent, in a target of 44 px. A status and not an alert: nothing is wrong.
+ */
+export function updateLine(document: Document, options: UpdateLineOptions): HTMLElement {
+  const root = make(document, 'p', 'kit-update', t('Fruitback {version} is out.', { version: options.version }));
+  root.setAttribute('role', 'status');
+  const link = make(document, 'a', 'kit-update-link', t('Update'));
+  link.href = options.url;
+  link.target = '_blank';
+  link.rel = 'noreferrer';
+  root.append(' ', link);
+
+  return root;
 }

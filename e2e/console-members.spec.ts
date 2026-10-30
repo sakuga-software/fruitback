@@ -645,7 +645,7 @@ test('an invitation that is refused says its cause, and clears nothing that was 
       'This address is invited already. Send the invitation again from its row.',
     ],
     [403, 'forbidden', 'Only an owner or an admin of the workspace invites.'],
-    [500, 'unknown', 'Fruitback did not answer. Try again.'],
+    [500, 'unknown', 'Fruitback hit an error. Try again in a moment.'],
     [418, 'something-new', 'The invitation was not sent. Try again.'],
   ];
   await roles(page).click();
@@ -808,7 +808,7 @@ test('a read that failed says so with « Try again », and is never a table with
   // The box of the kit (FRU-508): a title, a sentence, and « Try again » once.
   const alert = page.getByRole('alert');
   await expect(alert.getByRole('heading', { level: 2, name: 'The members did not load' })).toBeVisible();
-  await expect(alert.locator('p')).toHaveText('Fruitback did not answer. Your members are safe.');
+  await expect(alert.locator('p')).toHaveText('Fruitback hit an error. Your members are safe.');
   await expect(page.getByText('Try again')).toHaveCount(1);
   const frame = alert;
   expect

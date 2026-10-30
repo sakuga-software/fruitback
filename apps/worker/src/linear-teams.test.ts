@@ -143,4 +143,16 @@ describe('listLinearTeams (FRU-458, FRU-459)', () => {
 
     assert.equal(asked.length, 20);
   });
+
+  it('asks Linear for at most 50 teams with 20 projects each, under the limit of complexity of Linear', async () => {
+    let query = '';
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
+      query = (JSON.parse(String(init?.body)) as { query: string }).query;
+
+      return Response.json({ data: { teams: { nodes: [], pageInfo: page() } } });
+    });
+    await listLinearTeams('lin_api_x');
+    assert.match(query, /teams\(first: 50\b/);
+    assert.match(query, /projects\(first: 20\)/);
+  });
 });

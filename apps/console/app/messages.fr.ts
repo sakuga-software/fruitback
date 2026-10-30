@@ -13,7 +13,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Your session ended. Sign in again in another tab: what you wrote here stays.':
     'Votre session a pris fin. Reconnectez-vous dans un autre onglet : ce que vous avez écrit ici reste.',
   'You are still signed out. Sign in in the other tab, then continue.':
-    "Vous n'êtes toujours pas connecté. Connectez-vous dans l'autre onglet, puis continuez.",
+    'Vous n’êtes toujours pas connecté. Connectez-vous dans l’autre onglet, puis continuez.',
   'Loading…': 'Chargement…',
 
   'My account': 'Mon compte',
@@ -35,7 +35,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Un fournisseur lié fournit cette adresse. Déliez-le dans « Comment vous vous connectez » pour la retirer.',
   'Sign in again first: the primary address changes only in the day after a sign-in.':
     'Reconnectez-vous d’abord : l’adresse principale ne change que dans la journée qui suit une connexion.',
-  'This address is no longer one of your account.': 'Cette adresse n’est plus liée à votre compte.',
+  'This address is no longer one of your account. Reload the page.':
+    'Cette adresse n’est plus liée à votre compte. Rechargez la page.',
   'Primary · on your notes and in the messages of Fruitback':
     'Principale · sur vos notes et dans les messages de Fruitback',
   'From {provider}': 'Fournie par {provider}',
@@ -45,8 +46,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Un lien de connexion envoyé à l’une d’elles ouvre votre compte, et leurs invitations sont les vôtres. Vos notes et les messages de Fruitback utilisent l’adresse principale.',
   '{email} is your primary address now. Fruitback sent a message to both addresses.':
     '{email} est désormais votre adresse principale. Fruitback a envoyé un message aux deux adresses.',
-  'Fruitback did not answer. The addresses of your account could not be read.':
-    'Fruitback n’a pas répondu. Les adresses de votre compte n’ont pas pu être lues.',
+  'The addresses of your account did not load.': 'Les adresses de votre compte ne se sont pas chargées.',
   'Make primary': 'Rendre principale',
   'Remove {email}': 'Retirer {email}',
   'A sign-in link sent there no longer opens your account.':
@@ -77,8 +77,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Always on': 'Toujours actif',
   'Disconnect a browser you no longer use. It stops showing notes at once.':
     'Déconnectez un navigateur que vous n’utilisez plus. Il cesse aussitôt d’afficher les notes.',
-  'Fruitback did not answer. The browsers where you are signed in could not be read.':
-    'Fruitback n’a pas répondu. Les navigateurs où vous êtes connecté n’ont pas pu être lus.',
+  'The browsers where you are signed in did not load.': 'Les navigateurs où vous êtes connecté ne se sont pas chargés.',
   'This browser': 'Ce navigateur',
   'Console · another browser': 'Console · un autre navigateur',
   'Signed in {since} · used {last}': 'Connecté le {since} · utilisé le {last}',
@@ -102,7 +101,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Votre compte n’a pas encore pris cette langue. Elle est gardée dans ce navigateur, et renvoyée la prochaine fois que vous ouvrez la console.',
   'Fruitback cannot send to this address. Use a full https:// address that the internet can reach.':
     'Fruitback ne peut pas envoyer à cette adresse. Utilisez une adresse https:// complète, joignable depuis internet.',
-  'A secret is 16 to 256 characters, with no space. Leave it empty and Fruitback makes one.':
+  'A secret is 16 to 256 characters, with no space. Leave it empty and Fruitback creates one.':
     'Un secret fait 16 à 256 caractères, sans espace. Laissez-le vide et Fruitback en crée un.',
   'REST API': 'API REST',
   'The address could not be kept just now. Try again.': 'L’adresse n’a pas pu être gardée pour le moment. Réessayez.',
@@ -115,7 +114,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Each note is posted there, signed. The notes stay in Fruitback too.':
     'Chaque note y est envoyée, signée. Les notes restent aussi dans Fruitback.',
   'Secret (optional)': 'Secret (facultatif)',
-  'Leave it empty and Fruitback makes one, shown once.':
+  'Leave it empty and Fruitback creates one, shown once.':
     'Laissez-le vide et Fruitback en crée un, montré une seule fois.',
   'Your receiver answered {status}': 'Votre récepteur a répondu {status}',
   'No answer: {error}': 'Pas de réponse : {error}',
@@ -132,15 +131,15 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Next attempt {when}': 'Prochaine tentative {when}',
   'Try now': 'Essayer maintenant',
   'Its sites keep their notes in the workspace, and the notes that waited are not sent.':
-    'Ses sites gardent leurs notes dans le workspace, et les notes qui attendaient ne sont pas envoyées.',
-  'Linear was not connected: the consent was refused there.':
-    'Linear n’a pas été connecté : le consentement y a été refusé.',
+    'Ses sites gardent leurs notes dans l’espace de travail, et les notes qui attendaient ne sont pas envoyées.',
+  'You declined access in Linear, so it is not connected. Press Connect to try again.':
+    'Vous avez refusé l’accès dans Linear : il n’est donc pas connecté. Appuyez sur Connecter pour réessayer.',
   'Fruitback could not start the connection to Linear. Try again.':
     'Fruitback n’a pas pu démarrer la connexion à Linear. Réessayez.',
   'Going to Linear…': 'Direction Linear…',
   'Use an API key': 'Utiliser une clé d’API',
-  'Workspace {name}': 'Workspace {name}',
-  'Connected to the workspace {name}': 'Connecté au workspace {name}',
+  'Workspace {name}': 'Espace de travail {name}',
+  'Connected to the workspace {name}': 'Connecté à l’espace de travail {name}',
   'Google did not sign you in: the access was declined. Try again, or use an email link.':
     'Google ne vous a pas connecté : l’accès a été refusé. Réessayez, ou utilisez un lien par e-mail.',
   'Google has no verified address for this account. Use an email link.':
@@ -148,12 +147,12 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'The sign-in with Google did not finish. Try again, or use an email link.':
     'La connexion avec Google n’a pas abouti. Réessayez, ou utilisez un lien par e-mail.',
   'Not set up': 'Non configuré',
-  'Could not check': 'Vérification impossible',
+  'Not known: reload the page': 'Inconnu : rechargez la page',
   'Where you are signed in': 'Où vous êtes connecté',
   'Console · this browser': 'Console · ce navigateur',
   'Active now': 'Actif maintenant',
   'Sign out': 'Se déconnecter',
-  'This Fruitback sends no sign-in link by e-mail. Only its owner signs in for now, with a link that the person who runs it makes. Everybody else can sign in once it sends e-mail, or offers GitHub or Google.':
+  'This Fruitback sends no sign-in link by e-mail. For now only its owner signs in, with a link that the person who runs it creates. Everybody else can sign in once it sends e-mail, or offers GitHub or Google.':
     'Ce Fruitback n’envoie pas de lien de connexion par e-mail. Seul son propriétaire se connecte pour l’instant, avec un lien que crée la personne qui l’exploite. Les autres pourront se connecter quand il enverra des e-mails, ou proposera GitHub ou Google.',
   'Nobody can sign in to this Fruitback yet: its sign-in is not set up. The person who runs it has one setting to add.':
     'Personne ne peut encore se connecter à ce Fruitback : sa connexion n’est pas configurée. La personne qui l’exploite a un réglage à ajouter.',
@@ -162,37 +161,37 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'This tab was open for another account, so it stopped: nothing was sent from it. Load it again to go on.':
     'Cet onglet était ouvert pour un autre compte, il s’est donc arrêté : rien n’en est parti. Rechargez-le pour continuer.',
   'Your session ended while this tab was away, so it stopped: nothing was sent from it.':
-    'Votre session s’est terminée pendant que cet onglet était de côté, il s’est donc arrêté : rien n’en est parti.',
+    'Votre session a pris fin pendant que cet onglet était de côté, il s’est donc arrêté : rien n’en est parti.',
   'What you were writing, to copy:': 'Ce que vous étiez en train d’écrire, à copier :',
   'Load the console again': 'Recharger la console',
   'You are still signed in: Fruitback did not confirm the sign-out. Try again.':
     'Vous êtes toujours connecté : Fruitback n’a pas confirmé la déconnexion. Réessayez.',
-  'Delete the workspace': 'Supprimer le workspace',
+  'Delete the workspace': 'Supprimer l’espace de travail',
   '{workspace} was deleted. Every instance admin reads it on the page Instance.':
     '{workspace} a été supprimé. Chaque administrateur de l’instance le lit sur la page Instance.',
   'This is not the name of the workspace. Type it as it is written, capitals included.':
-    'Ce n’est pas le nom du workspace. Tapez-le tel qu’il est écrit, majuscules comprises.',
-  'This workspace no longer exists. Another admin or its owner may have deleted it.':
-    'Ce workspace n’existe plus. Un autre administrateur ou son propriétaire l’a peut-être supprimé.',
-  '{workspace} is deleted at once, and nothing brings it back. Its sites, its members, its invitations, its connectors and the notes that Fruitback keeps for it go. The issues already sent to its sources stay there, and its people keep their accounts. Every instance admin reads that you did it.':
-    '{workspace} est supprimé tout de suite, et rien ne le fait revenir. Ses sites, ses membres, ses invitations, ses connecteurs et les notes que Fruitback garde pour lui disparaissent. Les tickets déjà envoyés à ses sources y restent, et ses membres gardent leur compte. Chaque administrateur de l’instance lit que vous l’avez fait.',
+    'Ce n’est pas le nom de l’espace de travail. Tapez-le tel qu’il est écrit, majuscules comprises.',
+  'This workspace no longer exists. Another admin or its owner may have deleted it. Reload the page.':
+    'Cet espace de travail n’existe plus. Un autre administrateur ou son propriétaire l’a peut-être supprimé. Rechargez la page.',
+  'This deletes {workspace} for good: its sites, members, invitations, connectors and the notes Fruitback keeps. Issues already in its trackers stay, and its people keep their accounts. Every instance admin sees that you did it.':
+    'Cela supprime {workspace} définitivement : ses sites, ses membres, ses invitations, ses connecteurs et les notes que Fruitback garde. Les tickets déjà dans ses outils de suivi y restent, et ses membres gardent leur compte. Chaque administrateur de l’instance voit que vous l’avez fait.',
   'Type {workspace} to confirm': 'Tapez {workspace} pour confirmer',
   'This person owns a workspace alone now. Read Users again, and change its owner first.':
-    'Cette personne possède maintenant seule un workspace. Rouvrez Utilisateurs, et changez d’abord son propriétaire.',
+    'Cette personne possède maintenant seule un espace de travail. Rouvrez Utilisateurs, et changez d’abord son propriétaire.',
   'This is not the address of the account. Type it as it is written.':
     'Ce n’est pas l’adresse du compte. Tapez-la telle qu’elle est écrite.',
   'You cannot delete your own account. Another instance admin can.':
     'Vous ne pouvez pas supprimer votre propre compte. Un autre administrateur de l’instance le peut.',
   'The last instance admin cannot be deleted. Name another admin first.':
     'Le dernier administrateur de l’instance ne peut pas être supprimé. Nommez d’abord un autre administrateur.',
-  'This account no longer exists.': 'Ce compte n’existe plus.',
+  'This account no longer exists. Reload the page.': 'Ce compte n’existe plus. Rechargez la page.',
   'The account was not deleted. Try again.': 'Le compte n’a pas été supprimé. Réessayez.',
   '{name} owns these workspaces alone. Change the owner of each, or delete it, before the account.':
-    '{name} possède seul ces workspaces. Changez le propriétaire de chacun, ou supprimez-le, avant le compte.',
+    '{name} possède seul ces espaces de travail. Changez le propriétaire de chacun, ou supprimez-le, avant le compte.',
   'Type {email} to confirm': 'Tapez {email} pour confirmer',
   "Delete {name}'s account": 'Supprimer le compte de {name}',
-  "{name}'s account is deleted at once, and nothing brings it back. Their sessions in the console and in the extension end, and they leave every workspace. Their notes stay, signed as a former member. The owners of each of their workspaces see that you did it.":
-    'Le compte de {name} est supprimé tout de suite, et rien ne le fait revenir. Ses sessions dans la console et dans l’extension prennent fin, et cette personne quitte chaque workspace. Ses notes restent, signées comme ancien membre. Les propriétaires de chacun de ses workspaces voient que vous l’avez fait.',
+  "This deletes {name}'s account for good. They are signed out everywhere and leave every workspace. Their notes stay, signed as a former member. The owners of their workspaces see that you did it.":
+    'Cela supprime le compte de {name} définitivement. Cette personne est déconnectée partout et quitte chaque espace de travail. Ses notes restent, signées comme ancien membre. Les propriétaires de ses espaces de travail voient que vous l’avez fait.',
   "{name}'s account was deleted. Their notes stay.": 'Le compte de {name} a été supprimé. Ses notes restent.',
   'Change a role': 'Changer un rôle',
   'Change the role of {name}': 'Changer le rôle de {name}',
@@ -201,19 +200,20 @@ export const FRENCH: Readonly<Record<string, string>> = {
     '{name} devient {role} de {workspace} tout de suite. Les propriétaires de {workspace} voient que vous l’avez fait.',
   'Change the role': 'Changer le rôle',
   'This is the last owner of the workspace. Make somebody else its owner first.':
-    'C’est le dernier propriétaire du workspace. Nommez d’abord un autre propriétaire.',
-  'This person is no longer a member of the workspace.': 'Cette personne n’est plus membre du workspace.',
-  'This person is in every workspace already.': 'Cette personne est déjà dans chaque workspace.',
+    'C’est le dernier propriétaire de l’espace de travail. Nommez d’abord un autre propriétaire.',
+  'This person is no longer a member of the workspace. Reload the page.':
+    'Cette personne n’est plus membre de l’espace de travail. Rechargez la page.',
+  'This person is in every workspace already.': 'Cette personne est déjà dans chaque espace de travail.',
   'The owners of each workspace listed here see that you read the list.':
-    'Les propriétaires de chaque workspace de cette liste voient que vous l’avez lue.',
-  'Add to a workspace': 'Ajouter à un workspace',
-  'Add {name} to a workspace': 'Ajouter {name} à un workspace',
+    'Les propriétaires de chaque espace de travail de cette liste voient que vous l’avez lue.',
+  'Add to a workspace': 'Ajouter à un espace de travail',
+  'Add {name} to a workspace': 'Ajouter {name} à un espace de travail',
   '{name} joins {workspace} as {role} at once. The owners of {workspace} see that you did it.':
     '{name} rejoint {workspace} comme {role} tout de suite. Les propriétaires de {workspace} voient que vous l’avez fait.',
-  'Add to the workspace': 'Ajouter au workspace',
-  'This person is a member of the workspace already.': 'Cette personne est déjà membre du workspace.',
+  'Add to the workspace': 'Ajouter à l’espace de travail',
+  'This person is a member of the workspace already.': 'Cette personne est déjà membre de l’espace de travail.',
   'Nobody was added. Try again.': 'Personne n’a été ajouté. Réessayez.',
-  '{workspace} was made, owned by {email}.': '{workspace} a été créé, et appartient à {email}.',
+  '{workspace} was created, owned by {email}.': '{workspace} a été créé, et appartient à {email}.',
   'Add someone': 'Ajouter quelqu’un',
   'Add someone to {workspace}': 'Ajouter quelqu’un à {workspace}',
   'Address of their account': 'Adresse de son compte',
@@ -223,7 +223,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Add to {workspace}': 'Ajouter à {workspace}',
   'No account has this address. Use « Invite someone » for a person with no account.':
     'Aucun compte n’a cette adresse. Utilisez « Inviter quelqu’un » pour une personne sans compte.',
-  'This is not an e-mail address.': 'Ce n’est pas une adresse e-mail.',
+  'This is not an e-mail address. Type one like name@company.com.':
+    'Ce n’est pas une adresse e-mail. Saisissez-en une comme nom@entreprise.com.',
   '{email} was added to {workspace}.': '{email} a été ajouté à {workspace}.',
   'Invite someone to {workspace}': 'Inviter quelqu’un dans {workspace}',
   'Their e-mail address': 'Son adresse e-mail',
@@ -232,7 +233,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Send the invitation': 'Envoyer l’invitation',
   'This address has an account. Use « Add someone » instead.':
     'Cette adresse a un compte. Utilisez plutôt « Ajouter quelqu’un ».',
-  'This address is invited to the workspace already.': 'Cette adresse est déjà invitée dans le workspace.',
+  'This address is invited to the workspace already.': 'Cette adresse est déjà invitée dans l’espace de travail.',
   'Nobody was invited. Try again.': 'Personne n’a été invité. Réessayez.',
   'An invitation was sent to {email}.': 'Une invitation a été envoyée à {email}.',
   '{email} is invited. No message left: send them {link}':
@@ -241,7 +242,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Change the owner of {workspace}': 'Changer le propriétaire de {workspace}',
   'Address of the new owner': 'Adresse du nouveau propriétaire',
   '{email} becomes the owner of {workspace} at once. The owners of before become admins: they keep the workspace. The owners see that you did it.':
-    '{email} devient propriétaire de {workspace} tout de suite. Les propriétaires d’avant deviennent administrateurs : ils gardent le workspace. Les propriétaires voient que vous l’avez fait.',
+    '{email} devient propriétaire de {workspace} tout de suite. Les propriétaires d’avant deviennent administrateurs : ils gardent l’espace de travail. Les propriétaires voient que vous l’avez fait.',
   'Make them the owner': 'En faire le propriétaire',
   'No account has this address. Invite them first, then make them the owner.':
     'Aucun compte n’a cette adresse. Invitez d’abord cette personne, puis faites-en le propriétaire.',
@@ -249,36 +250,34 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'The owner did not change. Try again.': 'Le propriétaire n’a pas changé. Réessayez.',
   '{email} owns {workspace} now.': '{email} est maintenant propriétaire de {workspace}.',
   '{email} owned {workspace} already.': '{email} était déjà propriétaire de {workspace}.',
-  'New workspace': 'Nouveau workspace',
-  'Name of the workspace': 'Nom du workspace',
+  'New workspace': 'Nouvel espace de travail',
+  'Name of the workspace': 'Nom de l’espace de travail',
   'Address of its owner': 'Adresse de son propriétaire',
-  'The workspace is made at once, and {email} owns it. They see that you made it.':
-    'Le workspace est créé tout de suite, et appartient à {email}. Cette personne voit que vous l’avez créé.',
+  'The workspace is created at once, and {email} owns it. They see that you created it.':
+    'L’espace de travail est créé tout de suite, et appartient à {email}. Cette personne voit que vous l’avez créé.',
   'its owner': 'son propriétaire',
-  'Make the workspace': 'Créer le workspace',
+  'Create the workspace': 'Créer l’espace de travail',
   'No account has this address. The owner signs in once first.':
     'Aucun compte n’a cette adresse. Le propriétaire se connecte d’abord une fois.',
-  'The workspace was not made. Try again.': 'Le workspace n’a pas été créé. Réessayez.',
-  'This workspace is suspended. Restore it first.': 'Ce workspace est suspendu. Rétablissez-le d’abord.',
-  'This workspace no longer exists, or you are no longer an instance admin.':
-    'Ce workspace n’existe plus, ou vous n’êtes plus administrateur de l’instance.',
-  'Deleted workspaces': 'Workspaces supprimés',
+  'This workspace is suspended. Restore it first.': 'Cet espace de travail est suspendu. Rétablissez-le d’abord.',
+  'This workspace no longer exists, or you are no longer an instance admin. Reload the page.':
+    'Cet espace de travail n’existe plus, ou vous n’êtes plus administrateur de l’instance. Rechargez la page.',
+  'Deleted workspaces': 'Espaces de travail supprimés',
   'Deleted by an instance admin. Their owners cannot read this: the workspace is gone.':
-    'Supprimés par un administrateur de l’instance. Leurs propriétaires ne peuvent pas le lire : le workspace n’existe plus.',
-  'The deleted workspaces could not be read. Fruitback did not answer.':
-    'Les workspaces supprimés n’ont pas pu être lus. Fruitback n’a pas répondu.',
-  'No workspace was deleted.': 'Aucun workspace n’a été supprimé.',
-  'Workspaces deleted by an instance admin': 'Workspaces supprimés par un administrateur de l’instance',
+    'Supprimés par un administrateur de l’instance. Leurs propriétaires ne peuvent pas le lire : l’espace de travail n’existe plus.',
+  'The deleted workspaces did not load.': 'Les espaces de travail supprimés ne se sont pas chargés.',
+  'No workspace was deleted.': 'Aucun espace de travail n’a été supprimé.',
+  'Workspaces deleted by an instance admin': 'Espaces de travail supprimés par un administrateur de l’instance',
   'Deleted by': 'Supprimé par',
   'What went': 'Ce qui a disparu',
   Deleted: 'Supprimé le',
-  'A workspace': 'Un workspace',
+  'A workspace': 'Un espace de travail',
   '1 kept note': '1 note gardée',
   '{count} kept notes': '{count} notes gardées',
   'Sites, members and pin positions go. Items already in your sources stay there.':
-    'Les sites, les membres et la position des pins disparaissent. Les éléments déjà dans vos sources y restent.',
+    'Les sites, les membres et la position des repères disparaissent. Les éléments déjà dans vos outils de suivi y restent.',
   'Keep it': 'Le garder',
-  'Delete workspace': 'Supprimer le workspace',
+  'Delete workspace': 'Supprimer l’espace de travail',
   'Delete {workspace}': 'Supprimer {workspace}',
 
   'An issue per note, in one repository. The files of a note do not go: GitHub takes none by its API.':
@@ -293,7 +292,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'GitHub was not connected yet: an owner of the organisation must approve the App. After the approval, connect GitHub again.':
     'GitHub n’est pas encore connecté : un propriétaire de l’organisation doit approuver l’application. Après l’approbation, connectez GitHub de nouveau.',
   'Another workspace already receives the notes of this installation. Disconnect it there, or install the App on another account.':
-    'Un autre workspace reçoit déjà les notes de cette installation. Déconnectez-la là-bas, ou installez l’application sur un autre compte.',
+    'Un autre espace de travail reçoit déjà les notes de cette installation. Déconnectez-la là-bas, ou installez l’application sur un autre compte.',
   'GitHub was not connected: your GitHub account does not reach this installation. Ask an owner of the organisation to connect it.':
     'GitHub n’a pas été connecté : votre compte GitHub n’a pas accès à cette installation. Demandez à un propriétaire de l’organisation de la connecter.',
   'GitHub was not connected: the GitHub App of this Fruitback is not set up correctly. Contact the operator of this Fruitback.':
@@ -301,9 +300,9 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'GitHub was not connected. Start again from « Connect ».':
     'GitHub n’a pas été connecté. Recommencez depuis « Connecter ».',
   'GitHub sent you back without a start from this workspace, so nothing was connected. If you installed the App on github.com, press « Connect » here and choose the same account.':
-    'GitHub vous a renvoyé ici sans départ depuis ce workspace : rien n’a été connecté. Si vous avez installé l’application sur github.com, appuyez ici sur « Connecter » et choisissez le même compte.',
+    'GitHub vous a renvoyé ici sans départ depuis cet espace de travail : rien n’a été connecté. Si vous avez installé l’application sur github.com, appuyez ici sur « Connecter » et choisissez le même compte.',
   'GitHub sent you back, but nothing was connected. Only an owner or an admin of a workspace connects GitHub, from the Connectors of that workspace.':
-    'GitHub vous a renvoyé ici, mais rien n’a été connecté. Seul un propriétaire ou un administrateur d’un workspace connecte GitHub, depuis les Connecteurs de ce workspace.',
+    'GitHub vous a renvoyé ici, mais rien n’a été connecté. Seul un propriétaire ou un administrateur d’un espace de travail connecte GitHub, depuis les Connecteurs de cet espace de travail.',
   'This Fruitback has no GitHub App. Its operator must set one up.':
     'Ce Fruitback n’a pas d’application GitHub. Son opérateur doit en configurer une.',
   'Fruitback could not start the connection to GitHub. Try again.':
@@ -319,7 +318,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
     '{repository} est public : chaque note de ce site devient un ticket que tout le monde peut lire.',
   'The GitHub App, installed on {account}': 'L’application GitHub, installée sur {account}',
   'Its sites keep their notes in the workspace again. The issues already on GitHub stay there, and the App stays installed until you remove it on GitHub.':
-    'Ses sites gardent de nouveau leurs notes dans le workspace. Les tickets déjà dans GitHub y restent, et l’application reste installée tant que vous ne la retirez pas sur GitHub.',
+    'Ses sites gardent de nouveau leurs notes dans l’espace de travail. Les tickets déjà dans GitHub y restent, et l’application reste installée tant que vous ne la retirez pas sur GitHub.',
   'The App reaches no repository of {account}. On GitHub, give it access to one.':
     'L’application n’a accès à aucun dépôt de {account}. Sur GitHub, donnez-lui accès à l’un d’eux.',
   'Each note becomes an issue of the repository. Its files do not go: GitHub takes none by its API.':
@@ -333,16 +332,21 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Linear knows this key, and it may not list your teams. Create a key with read and write access, then try again.':
     'Linear connaît cette clé, mais elle ne peut pas lister vos équipes. Créez une clé avec accès en lecture et en écriture, puis réessayez.',
   'Only an owner or an admin of the workspace connects a source.':
-    'Seul un propriétaire ou un administrateur du workspace connecte une source.',
-  'Fruitback did not answer. Try again.': 'Fruitback n’a pas répondu. Réessayez.',
+    'Seul un propriétaire ou un administrateur de l’espace de travail ajoute un connecteur.',
+  'Fruitback hit an error. Try again in a moment.': 'Fruitback a rencontré une erreur. Réessayez dans un instant.',
+  'Fruitback could not be reached. Check your connection, then try again.':
+    'Fruitback est injoignable. Vérifiez votre connexion, puis réessayez.',
+  'Fruitback could not be reached. Check your connection.': 'Fruitback est injoignable. Vérifiez votre connexion.',
+  'Fruitback hit an error.': 'Fruitback a rencontré une erreur.',
   'Linear did not answer just now. Your key is not kept: try again in a minute.':
     'Linear n’a pas répondu. Votre clé n’est pas gardée : réessayez dans une minute.',
   Connectors: 'Connecteurs',
-  Connected: 'Connectées',
+  'Your connectors': 'Vos connecteurs',
+  Connected: 'Connecté',
   'Key of {person}': 'Clé de {person}',
-  'Add a source': 'Ajouter une source',
+  'Add a source': 'Ajouter un connecteur',
   'An issue per note, in the team you choose.': 'Un ticket par note, dans l’équipe que vous choisissez.',
-  'An owner or an admin connects a source': 'Un propriétaire ou un administrateur connecte une source',
+  'An owner or an admin connects a source': 'Un propriétaire ou un administrateur ajoute un connecteur',
   'The key could not be kept just now. Try again.': 'La clé n’a pas pu être gardée. Réessayez.',
   'Linear API key': 'Clé d’API Linear',
   'A personal API key, from Linear, Settings, Security and access. Fruitback keeps it encrypted.':
@@ -359,9 +363,9 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Linear a mis fin à cette connexion, et depuis {when} les notes de ses sites n’arrivent pas dans Linear. Déconnectez-la, puis connectez Linear de nouveau.',
   '{count} site': '{count} site',
   '{count} sites': '{count} sites',
-  'This source is still connected. Try again.': 'Cette source est toujours connectée. Réessayez.',
-  'Connected with the key of {person}': 'Connectée avec la clé de {person}',
-  'This workspace has no site yet.': 'Ce workspace n’a pas encore de site.',
+  'This source is still connected. Try again.': 'Ce connecteur est toujours connecté. Réessayez.',
+  'Connected with the key of {person}': 'Connecté avec la clé de {person}',
+  'This workspace has no site yet.': 'Cet espace de travail n’a pas encore de site.',
   '{team}, no project': '{team}, sans projet',
 
   Owner: 'Propriétaire',
@@ -370,7 +374,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Guest: 'Invité',
   Members: 'Membres',
   'Who sees and leaves notes, and who changes the workspace.':
-    'Qui voit et laisse des notes, et qui modifie le workspace.',
+    'Qui voit et laisse des notes, et qui modifie l’espace de travail.',
   'Invite someone': 'Inviter quelqu’un',
   Email: 'E-mail',
   Invite: 'Inviter',
@@ -378,7 +382,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Invitation envoyée à {email}. Vous pouvez aussi lui envoyer ce lien :',
   'Invitation kept for {email}. Send them this link:': 'Invitation gardée pour {email}. Envoyez-lui ce lien :',
   'They open it, sign in with {email}, and join. The link alone opens nothing.':
-    'La personne l’ouvre, se connecte avec {email}, et rejoint l’espace. Le lien seul n’ouvre rien.',
+    'La personne l’ouvre, se connecte avec {email}, et rejoint l’espace de travail. Le lien seul n’ouvre rien.',
   'Copy the link': 'Copier le lien',
   'The browser refused the copy. Select the link above and copy it by hand.':
     'Le navigateur a refusé la copie. Sélectionnez le lien ci-dessus et copiez-le à la main.',
@@ -401,7 +405,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Resend: 'Renvoyer',
   'Cancel the invitation of {email}': 'Annuler l’invitation de {email}',
   'The message already sent no longer lets {email} join.':
-    'Le message déjà envoyé ne permet plus à {email} de rejoindre l’espace.',
+    'Le message déjà envoyé ne permet plus à {email} de rejoindre l’espace de travail.',
   'Type the full address of the person, like name@company.com.':
     'Tapez l’adresse complète de la personne, comme nom@entreprise.com.',
   'This person is already a member of the workspace.': 'Cette personne est déjà membre de l’espace de travail.',
@@ -416,7 +420,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Only an owner or an admin of the workspace invites.':
     'Seul un propriétaire ou un administrateur de l’espace de travail invite.',
   'The invitation was not sent. Try again.': 'L’invitation n’a pas été envoyée. Réessayez.',
-  'That did not go through. Try again.': 'Cela n’a pas abouti. Réessayez.',
+  'The invitation was not cancelled. Try again.': 'L’invitation n’a pas été annulée. Réessayez.',
+  'This member was not removed. Try again.': 'Ce membre n’a pas été retiré. Réessayez.',
   'The last owner of a workspace stays in it.': 'Le dernier propriétaire d’un espace de travail y reste.',
   'Only an owner removes an owner.': 'Seul un propriétaire retire un propriétaire.',
   'Only an owner or an admin of the workspace changes its members.':
@@ -425,11 +430,10 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Invitations: 'Invitations',
   'This invitation was cancelled, or it ended. Ask for another one.':
     'Cette invitation a été annulée, ou elle a pris fin. Demandez-en une autre.',
-  'The invitation could not be answered. Try again.': 'L’invitation n’a pas pu recevoir de réponse. Réessayez.',
+  'Your answer was not sent. Try again.': 'Votre réponse n’est pas partie. Réessayez.',
   'Sign in with the address the invitation was sent to, and it shows here.':
     'Connectez-vous avec l’adresse à laquelle l’invitation a été envoyée, et elle s’affiche ici.',
-  'Fruitback did not answer. Your invitations are not lost.':
-    'Fruitback n’a pas répondu. Vos invitations ne sont pas perdues.',
+  'Your invitations are safe.': 'Vos invitations ne sont pas perdues.',
   'No invitation waits for {email}. An invitation sent to another address shows to that address only.':
     'Aucune invitation n’attend {email}. Une invitation envoyée à une autre adresse ne s’affiche qu’à cette adresse.',
   'Go to the console': 'Aller à la console',
@@ -441,7 +445,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Sites: 'Sites',
   'Every site': 'Tous les sites',
 
-  Workspace: 'Workspace',
+  Workspace: 'Espace de travail',
   Install: 'Installer',
   'That is not an e-mail address. Check it and send again.':
     'Ce n’est pas une adresse e-mail. Vérifiez-la et renvoyez.',
@@ -454,19 +458,19 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'The sign-in with GitHub did not finish. Try again, or use an email link.':
     'La connexion avec GitHub n’a pas abouti. Réessayez, ou utilisez un lien par e-mail.',
   'The access was declined. Try again, or use an email link.':
-    "L'accès a été refusé. Réessayez, ou utilisez un lien par e-mail.",
+    'L’accès a été refusé. Réessayez, ou utilisez un lien par e-mail.',
   'The sign-in started in another browser, or too long ago. Start it again from here.':
     'La connexion a commencé dans un autre navigateur, ou il y a trop longtemps. Recommencez-la depuis cette page.',
   'This Fruitback accepts invited people only. Ask an owner of a workspace for an invitation, then sign in with the address it went to.':
     'Ce Fruitback n’accepte que les personnes invitées. Demandez une invitation au propriétaire d’un espace de travail, puis connectez-vous avec l’adresse qui l’a reçue.',
   'The provider has no verified address for this account. Verify it there, or use an email link.':
-    "Le fournisseur n'a pas d'adresse vérifiée pour ce compte. Vérifiez-la chez lui, ou utilisez un lien par e-mail.",
+    'Le fournisseur n’a pas d’adresse vérifiée pour ce compte. Vérifiez-la chez lui, ou utilisez un lien par e-mail.',
   'The provider gave no address for this account. Use an email link.':
-    "Le fournisseur n'a donné aucune adresse pour ce compte. Utilisez un lien par e-mail.",
+    'Le fournisseur n’a donné aucune adresse pour ce compte. Utilisez un lien par e-mail.',
   'This way to sign in is not set up on this Fruitback. Use an email link.':
-    "Cette façon de se connecter n'est pas configurée sur ce Fruitback. Utilisez un lien par e-mail.",
+    'Cette façon de se connecter n’est pas configurée sur ce Fruitback. Utilisez un lien par e-mail.',
   'The sign-in did not finish. Try again, or use an email link.':
-    "La connexion n'a pas abouti. Réessayez, ou utilisez un lien par e-mail.",
+    'La connexion n’a pas abouti. Réessayez, ou utilisez un lien par e-mail.',
   'The link could not be sent just now. Try again in a minute.':
     'Le lien n’a pas pu être envoyé. Réessayez dans une minute.',
   'Sending…': 'Envoi…',
@@ -474,11 +478,11 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Continue with Google': 'Continuer avec Google',
   'Continue with GitHub': 'Continuer avec GitHub',
   'Work email': 'E-mail professionnel',
-  'Workspace name': 'Nom du workspace',
+  'Workspace name': 'Nom de l’espace de travail',
   'Check your inbox': 'Regardez votre boîte de réception',
   'Use another address': 'Utiliser une autre adresse',
   'A workspace needs a name of one line, up to 80 characters.':
-    'Un workspace a besoin d’un nom d’une ligne, de 80 caractères au plus.',
+    'Un espace de travail a besoin d’un nom d’une ligne, de 80 caractères au plus.',
   'Paste the full address of the site, starting with https://.':
     'Collez l’adresse complète du site, en commençant par https://.',
   'Site address': 'Adresse du site',
@@ -496,41 +500,41 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'This browser was not connected. Try again.': 'Ce navigateur n’a pas été connecté. Réessayez.',
 
   'You are not signed in yet': 'Vous n’êtes pas encore connecté',
-  'Fruitback did not answer. Your link still works.': 'Fruitback n’a pas répondu. Votre lien fonctionne toujours.',
+  'Your link still works.': 'Votre lien fonctionne toujours.',
   'This link no longer works': 'Ce lien ne fonctionne plus',
   'Signing you in…': 'Connexion en cours…',
 
-  'Fruitback did not answer. The sources and their sites could not be read.':
-    'Fruitback n’a pas répondu. Les sources et leurs sites n’ont pas pu être lus.',
+  'The connectors and their sites did not load.': 'Les connecteurs et leurs sites ne se sont pas chargés.',
+  'The sites did not load.': 'Les sites ne se sont pas chargés.',
+  'This list did not load.': 'Cette liste ne s’est pas chargée.',
   Remove: 'Retirer',
   'Only an owner or an admin of the workspace adds a site.':
-    'Seul un propriétaire ou un administrateur du workspace ajoute un site.',
+    'Seul un propriétaire ou un administrateur de l’espace de travail ajoute un site.',
   'The site was not added. Try again.': 'Le site n’a pas été ajouté. Réessayez.',
-  'The workspace was not created. Try again.': 'Le workspace n’a pas été créé. Réessayez.',
+  'The workspace was not created. Try again.': 'L’espace de travail n’a pas été créé. Réessayez.',
   'Only an owner or an admin of the workspace removes a site.':
-    'Seul un propriétaire ou un administrateur du workspace retire un site.',
+    'Seul un propriétaire ou un administrateur de l’espace de travail retire un site.',
   'This site is still here. Try again.': 'Ce site est toujours là. Réessayez.',
   'The browser refused the copy. Select the script above and copy it by hand.':
     'Le navigateur a refusé la copie. Sélectionnez le script ci-dessus et copiez-le à la main.',
   'The browser refused the copy. Select the secret above and copy it by hand.':
     'Le navigateur a refusé la copie. Sélectionnez le secret ci-dessus et copiez-le à la main.',
-  'Only the owner of the workspace deletes it.': 'Seul le propriétaire du workspace le supprime.',
-  'The workspace was not deleted. Try again.': 'Le workspace n’a pas été supprimé. Réessayez.',
+  'Only the owner of the workspace deletes it.': 'Seul le propriétaire de l’espace de travail le supprime.',
+  'The workspace was not deleted. Try again.': 'L’espace de travail n’a pas été supprimé. Réessayez.',
   'Remove {site}': 'Retirer {site}',
   'Where {workspace} collects notes, and where they stand.':
     'Là où {workspace} recueille des notes, et où elles en sont.',
   'Add a site': 'Ajouter un site',
   'The sites did not load': 'Les sites ne se sont pas chargés',
-  'Fruitback did not answer. Your sites and notes are safe.':
-    'Fruitback n’a pas répondu. Vos sites et vos notes sont en sécurité.',
+  'Your sites and notes are safe.': 'Vos sites et vos notes ne sont pas perdus.',
   'No site yet': 'Aucun site pour l’instant',
   "Paste the address of a site you review. Staging, a preview build or a client's live site: any page of it will do.":
     'Collez l’adresse d’un site que vous relisez. Un staging, une preview ou le site en ligne d’un client : n’importe laquelle de ses pages convient.',
   'An owner or an admin of {workspace} adds its first site.':
     'Un propriétaire ou un admin de {workspace} ajoute son premier site.',
   'Notes go to': 'Les notes vont vers',
-  'A site with no tracker keeps its notes in Fruitback.': 'Un site sans tracker garde ses notes dans Fruitback.',
-  'Connect a tracker': 'Connecter un tracker',
+  'A site with no tracker keeps its notes in Fruitback.': 'Un site sans outil de suivi garde ses notes dans Fruitback.',
+  'Connect a tracker': 'Connecter un outil de suivi',
   'Add site': 'Ajouter le site',
   'Who sees the notes?': 'Qui voit les notes ?',
   'Who can leave a note?': 'Qui peut laisser une note ?',
@@ -546,10 +550,10 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Les visiteurs du site ne voient rien. Convient à un staging et au site d’un client.',
   'Everyone who visits': 'Tous les visiteurs',
   'A public way to report a problem on a live site.': 'Un moyen public de signaler un problème sur un site en ligne.',
-  'A tracker': 'Un tracker',
+  'A tracker': 'Un outil de suivi',
   'Team {team}': 'Équipe {team}',
   'Kept in Fruitback': 'Gardées dans Fruitback',
-  'No tracker yet': 'Pas encore de tracker',
+  'No tracker yet': 'Pas encore d’outil de suivi',
   '{place} and {count} more': '{place} et {count} de plus',
   'More for {site}': 'Plus pour {site}',
   Settings: 'Réglages',
@@ -573,22 +577,22 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Saved. The script on the site stays the same.': 'Enregistré. Le script du site reste le même.',
   'Only an owner or an admin of the workspace changes who sees the notes.':
     'Seul un propriétaire ou un admin de l’espace de travail change qui voit les notes.',
-  'Nothing was changed. Try again.': 'Rien n’a changé. Réessayez.',
+  'Who sees the notes did not change. Try again.': 'Qui voit les notes n’a pas changé. Réessayez.',
   'Edit the statuses': 'Modifier les statuts',
   'Remove this site': 'Retirer ce site',
   'The widget stops on this site, and the notes that Fruitback keeps for it are deleted.':
     'Le widget s’arrête sur ce site, et les notes que Fruitback garde pour lui sont supprimées.',
   'Install on {site}': 'Installer sur {site}',
   'The widget stops on {site}, and the script pasted there no longer works: adding the site again gives it a new script. The notes that Fruitback keeps for it are deleted. The notes already in a tracker stay there.':
-    'Le widget s’arrête sur {site}, et le script collé là ne marche plus : ajouter le site à nouveau lui donne un nouveau script. Les notes que Fruitback garde pour lui sont supprimées. Les notes déjà dans un tracker y restent.',
+    'Le widget s’arrête sur {site}, et le script collé là ne fonctionne plus : ajouter le site à nouveau lui donne un nouveau script. Les notes que Fruitback garde pour lui sont supprimées. Les notes déjà dans un outil de suivi y restent.',
   'Disconnect {source}': 'Déconnecter {source}',
   'Connect a tracker once. Every site of {workspace} can then send its notes there.':
-    'Connectez un tracker une fois. Chaque site de {workspace} peut alors y envoyer ses notes.',
-  'No tracker yet. The notes stay in Fruitback.': 'Pas encore de tracker. Les notes restent dans Fruitback.',
+    'Connectez un outil de suivi une fois. Chaque site de {workspace} peut alors y envoyer ses notes.',
+  'No tracker yet. The notes stay in Fruitback.': 'Pas encore d’outil de suivi. Les notes restent dans Fruitback.',
   '1 note did not arrive': '1 note n’est pas arrivée',
   '{count} notes did not arrive': '{count} notes ne sont pas arrivées',
-  'An issue in a Jira Cloud project.': 'Une issue dans un projet Jira Cloud.',
-  'An issue in a project, cloud or self-managed.': 'Une issue dans un projet, cloud ou auto-hébergé.',
+  'An issue in a Jira Cloud project.': 'Un ticket dans un projet Jira Cloud.',
+  'An issue in a project, cloud or self-managed.': 'Un ticket dans un projet, cloud ou auto-hébergé.',
   'A card in the list you choose.': 'Une carte dans la liste que vous choisissez.',
   'A row in a database.': 'Une ligne dans une base de données.',
   'Tells Slack or any address when a note arrives.':
@@ -600,8 +604,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Fruitback could not read the states of Linear. The statuses you set are not lost.':
     'Fruitback n’a pas pu lire les états de Linear. Les statuts que vous avez réglés ne sont pas perdus.',
   'Its sites keep their notes in the workspace again. The issues already in Linear stay there.':
-    'Ses sites gardent de nouveau leurs notes dans le workspace. Les issues déjà dans Linear y restent.',
-  'Cloud workspace': 'Workspace Cloud',
+    'Ses sites gardent de nouveau leurs notes dans l’espace de travail. Les tickets déjà dans Linear y restent.',
+  'Cloud workspace': 'Espace de travail Cloud',
   Notes: 'Notes',
   'Help and docs': 'Aide et documentation',
 
@@ -614,7 +618,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Show Linear comments as replies': 'Montrer les commentaires de Linear comme réponses',
   'The destinations of this site did not change. Try again.':
     'Les destinations de ce site n’ont pas changé. Réessayez.',
-  'Its notes stay in Fruitback, in this workspace.': 'Ses notes restent dans Fruitback, dans ce workspace.',
+  'Its notes stay in Fruitback, in this workspace.': 'Ses notes restent dans Fruitback, dans cet espace de travail.',
   Default: 'Par défaut',
   'Make it the default': 'Mettre par défaut',
   'Add a destination for {site}': 'Ajouter une destination pour {site}',
@@ -631,11 +635,11 @@ export const FRENCH: Readonly<Record<string, string>> = {
   private: 'privée',
   Started: 'En cours',
   Planned: 'Planifiés',
-  Backlog: 'Backlog',
+  Backlog: 'Non planifiés',
   Paused: 'En pause',
   Completed: 'Terminés',
   Canceled: 'Annulés',
-  'The whole team': "Toute l'équipe",
+  'The whole team': 'Toute l’équipe',
   'No status': 'Sans statut',
   'A site sends to {count} places at most.': 'Un site envoie vers {count} destinations au plus.',
   'A note goes to the default place. With two places or more, a member chooses one in the widget when they write.':
@@ -644,19 +648,21 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'This is not a domain. Type the name alone, like preview.acme.dev.':
     'Ce n’est pas un domaine. Tapez le nom seul, comme preview.acme.dev.',
   'A workspace holds 20 domains at most. Remove one first.':
-    'Un workspace garde 20 domaines au plus. Retirez-en un d’abord.',
+    'Un espace de travail garde 20 domaines au plus. Retirez-en un d’abord.',
   'Only an owner or an admin of the workspace proves a domain.':
-    'Seul un propriétaire ou un admin du workspace prouve un domaine.',
+    'Seul un propriétaire ou un admin de l’espace de travail prouve un domaine.',
   'This domain is not proven, so it covers no preview yet.':
     'Ce domaine n’est pas prouvé : il ne couvre encore aucune preview.',
   'This domain was not added. Try again.': 'Ce domaine n’a pas été ajouté. Réessayez.',
-  'This did not change. Try again.': 'Rien n’a changé. Réessayez.',
+  'The DNS was not checked. Try again.': 'Le DNS n’a pas été vérifié. Réessayez.',
+  'The site of this domain did not change. Try again.': 'Le site de ce domaine n’a pas changé. Réessayez.',
+  'The domain was not removed. Try again.': 'Le domaine n’a pas été retiré. Réessayez.',
   'Preview deploys': 'Previews',
   'Each preview has an address of its own. Prove that a domain is yours, and every address under it counts as a preview of the site you choose.':
     'Chaque preview a sa propre adresse. Prouvez qu’un domaine est à vous, et chaque adresse sous ce domaine compte comme une preview du site que vous choisissez.',
   Domain: 'Domaine',
   'Add the domain': 'Ajouter le domaine',
-  'Fruitback did not answer. Your domains are not lost.': 'Fruitback n’a pas répondu. Vos domaines ne sont pas perdus.',
+  'Your domains are safe.': 'Vos domaines ne sont pas perdus.',
   'No domain yet. A site covers its own address only.':
     'Aucun domaine pour l’instant. Un site ne couvre que sa propre adresse.',
   'The DNS did not confirm this domain for three days. Its previews are not covered until it does.':
@@ -687,7 +693,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Email me a link': 'Recevoir un lien par e-mail',
   or: 'ou',
   'New to Fruitback?': 'Nouveau sur Fruitback ?',
-  'Set up a workspace': 'Créer un workspace',
+  'Set up a workspace': 'Créer un espace de travail',
   'A sign-in link is on its way to {email}.': 'Un lien de connexion est en route vers {email}.',
   'Open it in this browser and this tab signs in by itself. The link works once, for fifteen minutes.':
     'Ouvrez-le dans ce navigateur, et cet onglet se connecte tout seul. Le lien fonctionne une fois, pendant quinze minutes.',
@@ -700,7 +706,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Ce statut est désormais masqué : aucune note n’y entre. Choisissez-en un autre.',
   'Only the person who left this note, or an owner or an admin, changes its status.':
     'Seule la personne qui a laissé cette note, ou un propriétaire ou un administrateur, change son statut.',
-  'The status of this note changes in its tracker.': 'Le statut de cette note change dans son tracker.',
+  'The status of this note changes in its tracker.': 'Le statut de cette note change dans son outil de suivi.',
   'This note is no longer in Fruitback. Reload the page.': 'Cette note n’est plus dans Fruitback. Rechargez la page.',
   'The status was not saved. Try again.': 'Le statut n’a pas été enregistré. Réessayez.',
   'You are signed in': 'Vous êtes connecté',
@@ -725,26 +731,27 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'The extension, or a script tag.': 'L’extension, ou une balise de script.',
   'Preview of your site': 'Aperçu de votre site',
   'your site': 'votre site',
-  'Your site shows here once you add it, with its pins.': 'Votre site s’affiche ici une fois ajouté, avec ses pins.',
+  'Your site shows here once you add it, with its pins.': 'Votre site s’affiche ici une fois ajouté, avec ses repères.',
   'A preview of your site. Pins show the same way on the real page.':
-    'Un aperçu de votre site. Les pins s’affichent de la même façon sur la vraie page.',
+    'Un aperçu de votre site. Les repères s’affichent de la même façon sur la vraie page.',
   'We send you a sign-in link. No password to make up.':
     'Nous vous envoyons un lien de connexion. Aucun mot de passe à inventer.',
   'Your workspace takes the name of your domain. Rename it whenever you like.':
-    'Votre workspace prend le nom de votre domaine. Renommez-le quand vous voulez.',
+    'Votre espace de travail prend le nom de votre domaine. Renommez-le quand vous voulez.',
   'A sign-in link is on its way to {email}. Open it in this browser: this page carries on by itself.':
     'Un lien de connexion est en route vers {email}. Ouvrez-le dans ce navigateur : cette page continue toute seule.',
   'The link works once, for fifteen minutes. Nothing in it asks for a password.':
     'Le lien fonctionne une fois, pendant quinze minutes. Rien n’y demande un mot de passe.',
   'Signed in as {email}': 'Connecté en tant que {email}',
-  'The workspace was not renamed. Try again.': 'Le workspace n’a pas été renommé. Réessayez.',
-  'Only an owner or an admin of the workspace renames it.': 'Seul un propriétaire ou un admin du workspace le renomme.',
+  'The workspace was not renamed. Try again.': 'L’espace de travail n’a pas été renommé. Réessayez.',
+  'Only an owner or an admin of the workspace renames it.':
+    'Seul un propriétaire ou un admin de l’espace de travail le renomme.',
   Save: 'Enregistrer',
   Rename: 'Renommer',
   'Any page of it will do.': 'N’importe laquelle de ses pages convient.',
   'Members of {workspace} see the notes': 'Les membres de {workspace} voient les notes',
   'Everyone who visits sees the notes': 'Tous les visiteurs voient les notes',
-  'Fruitback did not answer. Your sites are not lost.': 'Fruitback n’a pas répondu. Vos sites ne sont pas perdus.',
+  'Your sites are safe.': 'Vos sites ne sont pas perdus.',
   Site: 'Site',
   Change: 'Modifier',
   '{site} is still in your sites, with its notes. Remove it in Sites if you no longer review it.':
@@ -794,9 +801,9 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Show its address instead': 'Afficher son adresse à la place',
   '{site}, live': '{site}, en direct',
   'Many sites refuse to show inside another page: their X-Frame-Options or Content-Security-Policy header says so. Fruitback does not ask your site, so it cannot tell. Pins show on the page itself.':
-    'Beaucoup de sites refusent de s’afficher dans une autre page : leur en-tête X-Frame-Options ou Content-Security-Policy le dit. Fruitback n’interroge pas votre site, il ne peut donc pas le savoir. Les pins s’affichent sur la page elle-même.',
+    'Beaucoup de sites refusent de s’afficher dans une autre page : leur en-tête X-Frame-Options ou Content-Security-Policy le dit. Fruitback n’interroge pas votre site, il ne peut donc pas le savoir. Les repères s’affichent sur la page elle-même.',
   'Your site is on http and this console on https: a browser does not show an http page inside an https one. Pins show on the page itself.':
-    'Votre site est en http et cette console en https : un navigateur n’affiche pas une page http dans une page https. Les pins s’affichent sur la page elle-même.',
+    'Votre site est en http et cette console en https : un navigateur n’affiche pas une page http dans une page https. Les repères s’affichent sur la page elle-même.',
   'This is the address of the console itself: it cannot show inside itself.':
     'C’est l’adresse de la console elle-même : elle ne peut pas s’afficher en elle-même.',
   'Open {site} in a new tab': 'Ouvrir {site} dans un nouvel onglet',
@@ -804,7 +811,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Show an example': 'Voir un exemple',
   // The example page of before (FRU-242), on demand when the site cannot show (FRU-354).
   'An example page. Pins show the same way on your site.':
-    'Une page d’exemple. Les pins s’affichent de la même façon sur votre site.',
+    'Une page d’exemple. Les repères s’affichent de la même façon sur votre site.',
   'Leave feedback': 'Laisser une note',
   'Click Leave feedback, then any part of the page.':
     'Cliquez sur Laisser une note, puis sur n’importe quelle partie de la page.',
@@ -828,9 +835,9 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'No extension in this browser yet?': 'Pas encore d’extension dans ce navigateur ?',
   'Script tag': 'Balise de script',
   'Before the closing body tag. Members see their pins on every visit.':
-    'Avant la balise body fermante. Les membres voient leurs pins à chaque visite.',
+    'Avant la balise body fermante. Les membres voient leurs repères à chaque visite.',
   'Before the closing body tag. Every visitor sees the pins.':
-    'Avant la balise body fermante. Chaque visiteur voit les pins.',
+    'Avant la balise body fermante. Chaque visiteur voit les repères.',
   'Copy script': 'Copier le script',
   'Open the site, click Leave feedback, then any part of the page.':
     'Ouvrez le site, cliquez sur Laisser une note, puis sur n’importe quelle partie de la page.',
@@ -841,11 +848,13 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Script on the site': 'Script sur le site',
   'Fruitback on the site': 'Fruitback sur le site',
   'First note received': 'Première note reçue',
-  'First note received just now': 'Première note reçue à l’instant',
+  'just now': 'à l’instant',
+  yesterday: 'hier',
+  'on {day}': 'le {day}',
   'First note received {when}': 'Première note reçue {when}',
   'Your first note is in': 'Votre première note est arrivée',
   'It waits in the {workspace} workspace. Send your notes to a tracker or your own API whenever you like.':
-    'Elle vous attend dans le workspace {workspace}. Envoyez vos notes vers un outil de suivi ou votre propre API quand vous voulez.',
+    'Elle vous attend dans l’espace de travail {workspace}. Envoyez vos notes vers un outil de suivi ou votre propre API quand vous voulez.',
   // How long ago (ago.ts).
   'Just now': 'À l’instant',
   '{count} min ago': 'il y a {count} min',
@@ -871,7 +880,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Where the notes went': 'Où sont parties les notes',
   All: 'Toutes',
   'In Fruitback': 'Dans Fruitback',
-  'A source that was removed': 'Une source retirée',
+  'A source that was removed': 'Un connecteur retiré',
   'Search notes': 'Chercher dans les notes',
   'Search the text, the page or the reference': 'Chercher le texte, la page ou la référence',
   'Search the text or the page': 'Chercher le texte ou la page',
@@ -896,7 +905,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Verified by {site}': 'Vérifié par {site}',
   Anonymous: 'Anonyme',
   Visitor: 'Visiteur',
-  'Somebody of the workspace': 'Quelqu’un du workspace',
+  'Somebody of the workspace': 'Quelqu’un de l’espace de travail',
   'Not delivered yet': 'Pas encore livrée',
   'Not delivered: Fruitback stopped trying': 'Non livrée : Fruitback a cessé d’essayer',
   'Pages of notes': 'Pages de notes',
@@ -905,8 +914,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'No site matches « {search} ».': 'Aucun site ne correspond à « {search} ».',
   'Clear the search': 'Effacer la recherche',
   'Pages of sites': 'Pages de sites',
-  'GitHub did not answer with the repositories of this installation.':
-    'GitHub n’a pas répondu avec les dépôts de cette installation.',
+  'GitHub did not send the repositories of this installation. Try again in a moment.':
+    'GitHub n’a pas envoyé les dépôts de cette installation. Réessayez dans un instant.',
   'Each site chooses where its notes go, on the Sites screen.':
     'Chaque site choisit où vont ses notes, dans l’écran Sites.',
   'Open the sites': 'Ouvrir les sites',
@@ -914,17 +923,19 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'GitHub, public repositories of {account}: their issues are public':
     'GitHub, dépôts publics de {account} : leurs tickets sont publics',
   'Where the notes of {site} go': 'Où vont les notes de {site}',
-  'The sources of this workspace did not load.': 'Les sources de cet espace ne se sont pas chargées.',
-  'No source is connected.': 'Aucune source n’est connectée.',
-  '{source} did not answer with its places.': '{source} n’a pas répondu avec ses destinations.',
-  'Some sources did not answer with their places.': 'Des sources n’ont pas répondu avec leurs destinations.',
+  'The connectors of this workspace did not load.': 'Les connecteurs de cet espace de travail ne se sont pas chargés.',
+  'No source is connected.': 'Aucun connecteur n’est ajouté.',
+  '{source} did not send its places. Try again in a moment.':
+    '{source} n’a pas envoyé ses destinations. Réessayez dans un instant.',
+  'Some connectors did not send their places. Try again in a moment.':
+    'Des connecteurs n’ont pas envoyé leurs destinations. Réessayez dans un instant.',
   '{from} to {to} of {total}': '{from} à {to} sur {total}',
   Previous: 'Précédentes',
   Next: 'Suivantes',
   'The notes did not load': 'Les notes ne se sont pas chargées',
   'The members did not load': 'Les membres ne se sont pas chargés',
-  'Fruitback did not answer. Your members are safe.': 'Fruitback n’a pas répondu. Vos membres sont en sécurité.',
-  'Fruitback did not answer. Your notes are safe.': 'Fruitback n’a pas répondu. Vos notes sont en sécurité.',
+  'Your members are safe.': 'Vos membres ne sont pas perdus.',
+  'Your notes are safe.': 'Vos notes ne sont pas perdues.',
   'No note yet. Notes show here as soon as someone leaves one on a site of {workspace}.':
     'Pas encore de note. Les notes s’affichent ici dès que quelqu’un en laisse une sur un site de {workspace}.',
   'No note matches.': 'Aucune note ne correspond.',
@@ -938,13 +949,13 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'A request works for fifteen minutes, and is answered once. Open the popup again, and sign in from there.':
     'Une demande fonctionne quinze minutes, et reçoit une seule réponse. Rouvrez la fenêtre de l’extension, et connectez-vous depuis celle-ci.',
   'The Fruitback extension asks to sign in as you. It reads and leaves notes on the sites of your workspaces, and nothing else.':
-    'L’extension Fruitback demande à se connecter en votre nom. Elle lit et laisse des notes sur les sites de vos workspaces, et rien d’autre.',
+    'L’extension Fruitback demande à se connecter en votre nom. Elle lit et laisse des notes sur les sites de vos espaces de travail, et rien d’autre.',
   'Check that the popup shows the same word': 'Vérifiez que la fenêtre de l’extension affiche le même mot',
   Account: 'Compte',
   Browser: 'Navigateur',
-  Workspaces: 'Workspaces',
+  Workspaces: 'Espaces de travail',
   // Workspace settings, FRU-414.
-  'Workspace settings': 'Réglages du workspace',
+  'Workspace settings': 'Réglages de l’espace de travail',
   'Settings that every member of {name} sees.': 'Les réglages que voit chaque membre de {name}.',
   'The name is saved.': 'Le nom est enregistré.',
   // The pages of the settings, FRU-544.
@@ -961,9 +972,9 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'The logo is saved.': 'Le logo est enregistré.',
   'The logo is removed.': 'Le logo est retiré.',
   'PNG, JPEG or WebP, up to 512 KB. It shows beside the name of the workspace, in the rail.':
-    'PNG, JPEG ou WebP, 512 Ko au plus. Il s’affiche à côté du nom du workspace, dans la barre latérale.',
+    'PNG, JPEG ou WebP, 512 Ko au plus. Il s’affiche à côté du nom de l’espace de travail, dans la barre latérale.',
   'Only an owner or an admin of the workspace changes its logo.':
-    'Seul un propriétaire ou un admin du workspace change son logo.',
+    'Seul un propriétaire ou un admin de l’espace de travail change son logo.',
   'Choose a PNG, JPEG or WebP image. SVG is not accepted.':
     'Choisissez une image PNG, JPEG ou WebP. Le SVG n’est pas accepté.',
   'The image is over 512 KB. Choose a smaller one.': 'L’image dépasse 512 Ko. Choisissez-en une plus légère.',
@@ -982,7 +993,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'You can disconnect it at any time from My account.': 'Vous pouvez le déconnecter à tout moment depuis Mon compte.',
   '{browser} is connected': '{browser} est connecté',
   'It reads the sites of your workspaces, and you have none yet. Set one up, and the popup finds its site.':
-    'Elle lit les sites de vos workspaces, et vous n’en avez encore aucun. Créez-en un, et la fenêtre de l’extension trouvera son site.',
+    'Elle lit les sites de vos espaces de travail, et vous n’en avez encore aucun. Créez-en un, et la fenêtre de l’extension trouvera son site.',
   'Open the popup on any site of {workspaces}. You can close this tab.':
     'Ouvrez la fenêtre de l’extension sur n’importe quel site de {workspaces}. Vous pouvez fermer cet onglet.',
   'Sign in to connect this browser': 'Connectez-vous pour connecter ce navigateur',
@@ -1007,7 +1018,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   '{provider} did not say that its address is verified. Verify it at {provider}, then link again.':
     '{provider} n’a pas dit que son adresse est vérifiée. Vérifiez-la chez {provider}, puis liez à nouveau.',
   'Your session ended before {provider} was linked. Sign in, then link again.':
-    'Votre session s’est terminée avant que {provider} soit lié. Connectez-vous, puis liez à nouveau.',
+    'Votre session a pris fin avant que {provider} soit lié. Connectez-vous, puis liez à nouveau.',
   '{provider} was not linked.': '{provider} n’a pas été lié.',
   '{provider} was not linked. If {provider} has not verified the address of that account, verify it there. Then link again.':
     '{provider} n’a pas été lié. Si {provider} n’a pas vérifié l’adresse de ce compte, vérifiez-la chez lui. Puis liez à nouveau.',
@@ -1048,8 +1059,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Disconnect the extension in {browser}': 'Déconnecter l’extension dans {browser}',
   'It stops showing notes at once. It connects again from its popup, with your approval here.':
     'Elle cesse d’afficher les notes tout de suite. Elle se reconnecte depuis son popup, avec votre accord ici.',
-  'Fruitback did not answer. The browsers of the extension could not be read.':
-    'Fruitback n’a pas répondu. Les navigateurs de l’extension n’ont pas pu être lus.',
+  'The browsers of the extension did not load.': 'Les navigateurs de l’extension ne se sont pas chargés.',
   'This extension is still connected: Fruitback did not end its session. Try again.':
     'Cette extension est toujours connectée : Fruitback n’a pas mis fin à sa session. Réessayez.',
   // The link of an invitation whose message did not leave, on its row (FRU-269).
@@ -1058,32 +1068,31 @@ export const FRENCH: Readonly<Record<string, string>> = {
   // The guest of one site (FRU-250).
   'Guest, one site': 'Invité, un site',
   'This site is no longer one of the workspace. Choose another one.':
-    'Ce site ne fait plus partie de l’espace. Choisissez-en un autre.',
+    'Ce site ne fait plus partie de l’espace de travail. Choisissez-en un autre.',
   'Review {site} with {workspace}': 'Relisez {site} avec {workspace}',
   'You join as a guest: you see and leave notes on this site only. Guests are free and never see the tracker.':
-    'Vous rejoignez en tant qu’invité : vous voyez et laissez des notes sur ce site seulement. Les invités sont gratuits et ne voient jamais le tracker.',
+    'Vous rejoignez en tant qu’invité : vous voyez et laissez des notes sur ce site seulement. Les invités sont gratuits et ne voient jamais l’outil de suivi.',
   Instance: 'Instance',
   Administration: 'Administration',
-  'My workspaces': 'Mes workspaces',
+  'My workspaces': 'Mes espaces de travail',
   'Fruitback Cloud': 'Fruitback Cloud',
   'Self-hosted instance': 'Instance auto-hébergée',
   'Everything this server runs. Each setting comes from the environment of the server.':
     'Tout ce que fait tourner ce serveur. Chaque réglage vient de l’environnement du serveur.',
-  'The instance could not be read. Fruitback did not answer.':
-    'L’instance n’a pas pu être lue. Fruitback n’a pas répondu.',
+  'The instance did not load.': 'L’instance ne s’est pas chargée.',
   Health: 'État',
-  Worker: 'Worker',
+  Worker: 'Serveur',
   Answering: 'Répond',
   'Started just now': 'Démarré à l’instant',
-  'Up for {count} min': 'En marche depuis {count} min',
-  'Up for {count} h': 'En marche depuis {count} h',
-  'Up for 1 day': 'En marche depuis 1 jour',
-  'Up for {count} days': 'En marche depuis {count} jours',
+  'Up for {count} min': 'En service depuis {count} min',
+  'Up for {count} h': 'En service depuis {count} h',
+  'Up for 1 day': 'En service depuis 1 jour',
+  'Up for {count} days': 'En service depuis {count} jours',
   Database: 'Base de données',
   'Not reported': 'Non signalé',
   Mail: 'E-mail',
   'No sign-in link goes out by e-mail.': 'Aucun lien de connexion ne part par e-mail.',
-  'No link sent since the worker started.': 'Aucun lien envoyé depuis le démarrage du worker.',
+  'No link sent since the worker started.': 'Aucun lien envoyé depuis le démarrage du serveur.',
   'Last link sent {when}': 'Dernier lien envoyé {when}',
   'All working': 'Tous fonctionnent',
   '{count} needs a look': '{count} à vérifier',
@@ -1097,45 +1106,44 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Not set up yet': 'Pas encore configuré',
   'Set by {variables} in the environment.': 'Réglé par {variables} dans l’environnement.',
   'Redirect address to give Google:': 'Adresse de redirection à donner à Google :',
-  'Who can make an account': 'Qui peut créer un compte',
-  'Only people invited to a workspace': 'Seulement les personnes invitées dans un workspace',
+  'Who can create an account': 'Qui peut créer un compte',
+  'Only people invited to a workspace': 'Seulement les personnes invitées dans un espace de travail',
   Anyone: 'Tout le monde',
   'Public address': 'Adresse publique',
   'Not set': 'Non défini',
-  'The workspaces could not be read. Fruitback did not answer.':
-    'Les workspaces n’ont pas pu être lus. Fruitback n’a pas répondu.',
-  'No workspace on this instance yet.': 'Aucun workspace sur cette instance pour l’instant.',
+  'The workspaces did not load.': 'Les espaces de travail ne se sont pas chargés.',
+  'No workspace on this instance yet.': 'Aucun espace de travail sur cette instance pour l’instant.',
   Created: 'Créé',
-  'Every workspace of the instance': 'Tous les workspaces de l’instance',
-  'The first {count} of {total} workspaces.': 'Les {count} premiers des {total} workspaces.',
+  'Every workspace of the instance': 'Tous les espaces de travail de l’instance',
+  'The first {count} of {total} workspaces.': 'Les {count} premiers des {total} espaces de travail.',
   'The owners of each workspace see that you read its list, with your address and the day.':
-    'Les propriétaires de chaque workspace voient que vous avez lu sa liste, avec votre adresse et le jour.',
-  'Show the workspaces': 'Afficher les workspaces',
+    'Les propriétaires de chaque espace de travail voient que vous avez lu sa liste, avec votre adresse et le jour.',
+  'Show the workspaces': 'Afficher les espaces de travail',
   // Notes of the instance (FRU-273).
   'Every note left on this instance, and where it is stored now.':
     'Chaque note laissée sur cette instance, et où elle est gardée maintenant.',
   'The owners of each workspace see that you read its notes, with your address and the day.':
-    'Les propriétaires de chaque workspace voient que vous avez lu ses notes, avec votre adresse et le jour.',
+    'Les propriétaires de chaque espace de travail voient que vous avez lu ses notes, avec votre adresse et le jour.',
   'No note on this instance yet.': 'Aucune note sur cette instance pour l’instant.',
   'Search the text, the page, the site, the workspace, the status or the reference':
-    'Chercher le texte, la page, le site, le workspace, le statut ou la référence',
-  'Every workspace': 'Tous les workspaces',
+    'Chercher le texte, la page, le site, l’espace de travail, le statut ou la référence',
+  'Every workspace': 'Tous les espaces de travail',
   'Notes of the instance': 'Notes de l’instance',
   'Stored in': 'Gardée dans',
   Verified: 'Vérifié',
   'Kept in {tool}. Fruitback keeps the first 64 characters.':
     'Gardée dans {tool}. Fruitback garde les 64 premiers caractères.',
   'Kept in a source that was removed. Fruitback keeps the first 64 characters.':
-    'Gardée dans une source retirée. Fruitback garde les 64 premiers caractères.',
+    'Gardée dans un connecteur retiré. Fruitback garde les 64 premiers caractères.',
   'Every workspace on this instance, who owns it and where its notes go.':
-    'Chaque workspace de cette instance, qui en est propriétaire et où vont ses notes.',
-  'Search workspaces': 'Chercher un workspace',
+    'Chaque espace de travail de cette instance, qui en est propriétaire et où vont ses notes.',
+  'Search workspaces': 'Chercher un espace de travail',
   'Search by name or owner': 'Chercher par nom ou propriétaire',
   Show: 'Afficher',
-  'All workspaces': 'Tous les workspaces',
+  'All workspaces': 'Tous les espaces de travail',
   'Needs a look': 'À regarder',
-  'No workspace matches this search.': 'Aucun workspace ne correspond à cette recherche.',
-  'Workspaces of the instance': 'Workspaces de l’instance',
+  'No workspace matches this search.': 'Aucun espace de travail ne correspond à cette recherche.',
+  'Workspaces of the instance': 'Espaces de travail de l’instance',
   '1 person': '1 personne',
   '{count} people': '{count} personnes',
   '1 site': '1 site',
@@ -1143,8 +1151,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   '{count} notes not delivered': '{count} notes non livrées',
   'Created {day}': 'Créé le {day}',
   'Owned by {owner} · created {day}': 'Propriétaire : {owner} · créé le {day}',
-  'This workspace could not be read. Fruitback did not answer.':
-    'Ce workspace n’a pas pu être lu. Fruitback n’a pas répondu.',
+  'This workspace did not load.': 'Cet espace de travail ne s’est pas chargé.',
   'Where notes go': 'Où vont les notes',
   '1 note not delivered.': '1 note non livrée.',
   '{count} notes not delivered.': '{count} notes non livrées.',
@@ -1155,16 +1162,15 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'No owner': 'Aucun propriétaire',
   Users: 'Utilisateurs',
   'Everyone who can sign in to this instance, and in which workspaces.':
-    'Toutes les personnes qui peuvent se connecter à cette instance, et dans quels workspaces.',
+    'Toutes les personnes qui peuvent se connecter à cette instance, et dans quels espaces de travail.',
   'The owners of each workspace see that you read its people, with your address and the day.':
-    'Les propriétaires de chaque workspace voient que vous avez lu ses personnes, avec votre adresse et le jour.',
+    'Les propriétaires de chaque espace de travail voient que vous avez lu ses personnes, avec votre adresse et le jour.',
   'Search people': 'Chercher une personne',
   'Search by name or address': 'Chercher par nom ou adresse',
   'All people': 'Toutes les personnes',
   'Instance admins': 'Administrateurs de l’instance',
-  'In no workspace': 'Dans aucun workspace',
-  'The people could not be read. Fruitback did not answer.':
-    'Les personnes n’ont pas pu être lues. Fruitback n’a pas répondu.',
+  'In no workspace': 'Dans aucun espace de travail',
+  'The people did not load.': 'Les personnes ne se sont pas chargées.',
   'Nobody has an account on this instance yet.': 'Personne n’a de compte sur cette instance pour l’instant.',
   'Nobody matches this search.': 'Personne ne correspond à cette recherche.',
   'People of the instance': 'Personnes de l’instance',
@@ -1175,8 +1181,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Invited: 'Invité',
   None: 'Aucun',
   'Not signed in yet': 'Jamais connecté',
-  'In no workspace.': 'Dans aucun workspace.',
-  'Sees this admin and every workspace.': 'Voit cette administration et chaque workspace.',
+  'In no workspace.': 'Dans aucun espace de travail.',
+  'Sees this admin and every workspace.': 'Voit cette administration et chaque espace de travail.',
   'You cannot take this role from yourself. Another instance admin can.':
     'Vous ne pouvez pas vous retirer ce rôle. Un autre administrateur de l’instance le peut.',
   'The last instance admin keeps the role. Name another admin first.':
@@ -1185,9 +1191,9 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Name {name} admin': 'Nommer {name} administrateur',
   'Remove {name} as admin': 'Retirer le rôle à {name}',
   '{name} sees this admin and every workspace, and can name and remove admins. Every instance admin reads that you made this change.':
-    '{name} voit cette administration et chaque workspace, et peut nommer et retirer des administrateurs. Chaque administrateur de l’instance lit que vous avez fait ce changement.',
+    '{name} voit cette administration et chaque espace de travail, et peut nommer et retirer des administrateurs. Chaque administrateur de l’instance lit que vous avez fait ce changement.',
   '{name} no longer sees this admin, nor the workspaces they are not a member of. Every instance admin reads that you made this change.':
-    '{name} ne voit plus cette administration, ni les workspaces dont cette personne n’est pas membre. Chaque administrateur de l’instance lit que vous avez fait ce changement.',
+    '{name} ne voit plus cette administration, ni les espaces de travail dont cette personne n’est pas membre. Chaque administrateur de l’instance lit que vous avez fait ce changement.',
   Suspended: 'Suspendu',
   'Its role shows when you open Users again.': 'Son rôle s’affiche quand vous rouvrez Utilisateurs.',
   'A suspended account is not an instance admin. Restore access first.':
@@ -1196,7 +1202,14 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Vous ne pouvez pas suspendre votre propre compte. Un autre administrateur de l’instance le peut.',
   'The last instance admin cannot be suspended. Name another admin first.':
     'Le dernier administrateur de l’instance ne peut pas être suspendu. Nommez d’abord un autre administrateur.',
-  'Nothing changed. Try again.': 'Rien n’a changé. Réessayez.',
+  'The account was not suspended. Try again.': 'Le compte n’a pas été suspendu. Réessayez.',
+  'The access of the account was not restored. Try again.': 'L’accès du compte n’a pas été rétabli. Réessayez.',
+  'The workspace was not suspended. Try again.': 'L’espace de travail n’a pas été suspendu. Réessayez.',
+  'The workspace was not restored. Try again.': 'L’espace de travail n’a pas été rétabli. Réessayez.',
+  'The workspace did not change. Reload the page, then try again.':
+    'L’espace de travail n’a pas changé. Rechargez la page, puis réessayez.',
+  'The primary address did not change. Try again.': 'L’adresse principale n’a pas changé. Réessayez.',
+  'The address was not removed. Try again.': 'L’adresse n’a pas été retirée. Réessayez.',
   '{name} cannot sign in, and every session they had ended.':
     '{name} ne peut plus se connecter, et chacune de ses sessions a pris fin.',
   Suspend: 'Suspendre',
@@ -1204,9 +1217,9 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Suspend {name}': 'Suspendre {name}',
   'Restore access for {name}': 'Rétablir l’accès de {name}',
   '{name} cannot sign in by any method, and their sessions of the console and of the extension end at once. Their notes stay. The owners of each of their workspaces see that you did it.':
-    '{name} ne peut plus se connecter d’aucune façon, et ses sessions de la console et de l’extension prennent fin aussitôt. Ses notes restent. Les propriétaires de chacun de ses workspaces voient que vous l’avez fait.',
+    '{name} ne peut plus se connecter d’aucune façon, et ses sessions de la console et de l’extension prennent fin aussitôt. Ses notes restent. Les propriétaires de chacun de ses espaces de travail voient que vous l’avez fait.',
   '{name} can sign in again. Their old sessions stay ended. The owners of each of their workspaces see that you did it.':
-    '{name} peut de nouveau se connecter. Ses anciennes sessions restent fermées. Les propriétaires de chacun de ses workspaces voient que vous l’avez fait.',
+    '{name} peut de nouveau se connecter. Ses anciennes sessions restent fermées. Les propriétaires de chacun de ses espaces de travail voient que vous l’avez fait.',
 
   // « Suspend » and « Restore » of a workspace (FRU-323).
   'Suspended since {day}': 'Suspendu depuis le {day}',
@@ -1218,8 +1231,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Reason: {reason}': 'Raison : {reason}',
   'Reason (optional)': 'Raison (facultative)',
   'Suspend {workspace}': 'Suspendre {workspace}',
-  '{workspace} is suspended at once. Its sites answer as unknown to the widget and the extension, every change in it is refused, and its notes wait to be delivered. Its members still sign in and read it. Nothing is deleted. Its owners see that you did it.':
-    '{workspace} est suspendu aussitôt. Ses sites répondent comme inconnus au widget et à l’extension, chaque changement y est refusé, et ses notes attendent d’être livrées. Ses membres se connectent toujours et le lisent. Rien n’est supprimé. Ses propriétaires voient que vous l’avez fait.',
+  '{workspace} stops at once: its sites take no notes, nothing in it can change, and its notes wait to be delivered. Its members can still read it. Nothing is deleted. Its owners see that you did it.':
+    '{workspace} s’arrête aussitôt : ses sites ne prennent plus de notes, rien n’y change, et ses notes attendent d’être livrées. Ses membres peuvent toujours le lire. Rien n’est supprimé. Ses propriétaires voient que vous l’avez fait.',
   Restore: 'Rétablir',
   'Restore {workspace}': 'Rétablir {workspace}',
   '{workspace} works again at once: its sites answer, its members change it again, and the notes that waited are delivered. Its owners see that you did it.':
@@ -1227,12 +1240,12 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'A reason is one line of 200 characters at most.': 'Une raison tient sur une ligne de 200 caractères au plus.',
 
   // A suspended workspace, as its members read it (FRU-328), and the filter of the administrator.
-  'This workspace is suspended.': 'Ce workspace est suspendu.',
-  'This workspace has been suspended since {day}.': 'Ce workspace est suspendu depuis le {day}.',
+  'This workspace is suspended.': 'Cet espace de travail est suspendu.',
+  'This workspace has been suspended since {day}.': 'Cet espace de travail est suspendu depuis le {day}.',
   'An administrator of this instance suspended it. You can still read it, but nothing in it can change, and its sites take no notes. To restore it, contact the administrator of this instance.':
     'Un administrateur de cette instance l’a suspendu. Vous pouvez toujours le lire, mais rien ne peut y changer, et ses sites ne prennent aucune note. Pour le rétablir, contactez l’administrateur de cette instance.',
   'This workspace is suspended, so nothing in it can change. Contact the administrator of this instance.':
-    'Ce workspace est suspendu : rien ne peut y changer. Contactez l’administrateur de cette instance.',
+    'Cet espace de travail est suspendu : rien ne peut y changer. Contactez l’administrateur de cette instance.',
 
   // The statuses of a site (FRU-371). « Stage » is « Phase »: « Étape » is the step of the setup.
   Open: 'Ouverte',
@@ -1241,14 +1254,14 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Closed as duplicate': 'Fermée, doublon',
   'This status did not change. Try again.': 'Ce statut n’a pas changé. Réessayez.',
   'Only an owner or an admin of the workspace sets the statuses of a site.':
-    'Seul un propriétaire ou un administrateur du workspace règle les statuts d’un site.',
+    'Seul un propriétaire ou un administrateur de l’espace de travail règle les statuts d’un site.',
   'A site holds {count} statuses at most.': 'Un site a {count} statuts au plus.',
   Breadcrumb: 'Fil d’Ariane',
   'The name and the colour of each status, and the stage it belongs to. The stage decides the filters and the counts.':
     'Le nom et la couleur de chaque statut, et la phase à laquelle il appartient. La phase décide des filtres et des comptes.',
-  'This site is not in the workspace any more.': 'Ce site n’est plus dans le workspace.',
+  'This site is not in the workspace any more.': 'Ce site n’est plus dans l’espace de travail.',
   'The statuses did not load': 'Les statuts n’ont pas été chargés',
-  'Fruitback did not answer. Your statuses are safe.': 'Fruitback n’a pas répondu. Vos statuts ne sont pas perdus.',
+  'Your statuses are safe.': 'Vos statuts ne sont pas perdus.',
   'The order did not change. Try again.': 'L’ordre n’a pas changé. Réessayez.',
   '{name} is now {position} of {total}.': '{name} est maintenant en position {position} sur {total}.',
   '{name} is back to what it was.': '{name} est revenu à son état d’origine.',
@@ -1261,7 +1274,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Five statuses are built in, one for each stage. Rename them, recolour them, or add your own.':
     'Cinq statuts sont intégrés, un par phase. Renommez-les, changez leur couleur, ou ajoutez les vôtres.',
   'A GitHub issue has four states. Rename them, recolour them, or change their stage.':
-    'Une issue GitHub a quatre états. Renommez-les, changez leur couleur ou leur phase.',
+    'Un ticket GitHub a quatre états. Renommez-les, changez leur couleur ou leur phase.',
   'Add a status': 'Ajouter un statut',
   Order: 'Ordre',
   Stage: 'Phase',
@@ -1339,17 +1352,17 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Une couleur de texte à vous va avec une couleur de fond à vous.',
   'A name of one line, up to 80 characters.': 'Un nom d’une ligne, de 80 caractères au plus.',
   'Only an owner or an admin of the workspace renames a source.':
-    'Seul un propriétaire ou un admin du workspace renomme une source.',
-  'This source is not connected any more.': 'Cette source n’est plus connectée.',
-  'The source was not renamed. Try again.': 'La source n’a pas été renommée. Réessayez.',
-  'Name of this source': 'Nom de cette source',
+    'Seul un propriétaire ou un admin de l’espace de travail renomme un connecteur.',
+  'This connector is not connected any more. Reload the page.': 'Ce connecteur n’est plus connecté. Rechargez la page.',
+  'The source was not renamed. Try again.': 'Le connecteur n’a pas été renommé. Réessayez.',
+  'Name of this source': 'Nom de ce connecteur',
   'Empty, it is named {kind}.': 'Vide, elle s’appelle {kind}.',
   // FRU-462: the agent keys of a workspace.
   Agents: 'Agents',
   'A key lets an AI agent of your team read the notes of some sites through the MCP server of Fruitback, and reply to them when you allow it. Fruitback calls no model: the agent is yours.':
     'Une clé permet à un agent IA de votre équipe de lire les notes de certains sites par le serveur MCP de Fruitback, et d’y répondre si vous l’autorisez. Fruitback n’appelle aucun modèle : l’agent est le vôtre.',
   'Only an owner or an admin of the workspace manages its agent keys.':
-    'Seul un propriétaire ou un admin du workspace gère ses clés d’agent.',
+    'Seul un propriétaire ou un admin de l’espace de travail gère ses clés d’agent.',
   'Add a site first': 'Ajoutez d’abord un site',
   'New key': 'Nouvelle clé',
   'Connect an AI agent': 'Connecter un agent IA',
@@ -1359,11 +1372,11 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Donnez à la clé un nom d’une ligne, de 80 caractères au plus.',
   'Choose from 1 to 20 sites.': 'Choisissez de 1 à 20 sites.',
   'A site you chose is not in the workspace any more. Reload the page.':
-    'Un site que vous avez choisi n’est plus dans le workspace. Rechargez la page.',
+    'Un site que vous avez choisi n’est plus dans l’espace de travail. Rechargez la page.',
   'Choose from 1 to 365 days.': 'Choisissez de 1 à 365 jours.',
-  'A workspace holds 20 keys at most. Revoke one to make another.':
-    'Un workspace a 20 clés au plus. Révoquez-en une pour en créer une autre.',
-  'The key was not made. Try again.': 'La clé n’a pas été créée. Réessayez.',
+  'A workspace holds 20 keys at most. Revoke one to create another.':
+    'Un espace de travail a 20 clés au plus. Révoquez-en une pour en créer une autre.',
+  'The key was not created. Try again.': 'La clé n’a pas été créée. Réessayez.',
   'Give the key a name.': 'Donnez un nom à la clé.',
   'Choose at least one site.': 'Choisissez au moins un site.',
   'New agent key': 'Nouvelle clé d’agent',
@@ -1378,16 +1391,16 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Read, reply and set a status': 'Lire, répondre et changer un statut',
   'A reply says it is from an agent. A status is set only on a note that Fruitback keeps.':
     'Une réponse dit qu’elle vient d’un agent. Un statut ne change que sur une note que garde Fruitback.',
-  'Lives for, in days': 'Durée, en jours',
-  'From 1 to 365 days: no key lives with no end.': 'De 1 à 365 jours : aucune clé ne vit sans fin.',
-  'Ends on {day}. From 1 to 365 days: no key lives with no end.':
-    'Prend fin le {day}. De 1 à 365 jours : aucune clé ne vit sans fin.',
+  'Expires after (days)': 'Expire après (jours)',
+  'Between 1 and 365 days. Every key expires.': 'Entre 1 et 365 jours. Toute clé expire.',
+  'Expires on {day}. Between 1 and 365 days. Every key expires.':
+    'Expire le {day}. Entre 1 et 365 jours. Toute clé expire.',
   'Only the notes of known people': 'Seulement les notes de personnes connues',
   'On a site that everyone reads, the agent does not see a note of a visitor: anybody can write one, and an agent can obey its text. Turn it off only knowing that.':
     'Sur un site que tout le monde lit, l’agent ne voit pas la note d’un visiteur : n’importe qui peut en écrire une, et un agent peut obéir à son texte. Désactivez-le en le sachant.',
-  'Making…': 'Création…',
-  'Make the key': 'Créer la clé',
-  '« {name} » is made': '« {name} » est créée',
+  'Creating…': 'Création…',
+  'Create the key': 'Créer la clé',
+  '« {name} » is created': '« {name} » est créée',
   'Copy the key now: Fruitback shows it only once, and keeps only its digest.':
     'Copiez la clé maintenant : Fruitback ne la montre qu’une fois, et n’en garde que l’empreinte.',
   'Copy the key': 'Copier la clé',
@@ -1400,16 +1413,16 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'The browser refused the copy. Select the key above and copy it by hand.':
     'Le navigateur a refusé la copie. Sélectionnez la clé ci-dessus et copiez-la à la main.',
   'No agent key yet': 'Aucune clé d’agent',
-  'Make one for each agent: Claude Code on a laptop, a job of your CI, a cloud agent. Revoking one stops that agent alone.':
+  'Create one for each agent: Claude Code on a laptop, a job of your CI, a cloud agent. Revoking one stops that agent alone.':
     'Créez-en une par agent : Claude Code sur un portable, un job de votre CI, un agent dans le cloud. En révoquer une n’arrête que cet agent.',
-  '« {name} » ends in {count} days. Its agent stops then: make a new key, give it to the agent, then revoke this one.':
+  '« {name} » ends in {count} days. Its agent stops then: create a new key, give it to the agent, then revoke this one.':
     '« {name} » prend fin dans {count} jours. Son agent s’arrête alors : créez une nouvelle clé, donnez-la à l’agent, puis révoquez celle-ci.',
-  '{count} keys end within 7 days. Their agents stop then: make new keys, give them to the agents, then revoke the old ones.':
+  '{count} keys end within 7 days. Their agents stop then: create new keys, give them to the agents, then revoke the old ones.':
     '{count} clés prennent fin dans 7 jours ou moins. Leurs agents s’arrêtent alors : créez de nouvelles clés, donnez-les aux agents, puis révoquez les anciennes.',
   'Agent keys': 'Clés d’agent',
   '{count} of 20 keys.': '{count} clés sur 20.',
   'The key was not revoked. Try again.': 'La clé n’a pas été révoquée. Réessayez.',
-  'Made on {day}': 'Créée le {day}',
+  'Created on {day}': 'Créée le {day}',
   Can: 'Peut',
   'Notes of known people only': 'Notes de personnes connues seulement',
   'Every note, a visitor’s too': 'Toutes les notes, celles des visiteurs aussi',
@@ -1423,7 +1436,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Revoke: 'Révoquer',
   'Revoke « {name} »': 'Révoquer « {name} »',
   'An agent that uses this key is refused from its next request, and the key never works again. What it wrote stays in the threads of the notes.':
-    'Un agent qui utilise cette clé est refusé dès sa prochaine requête, et la clé ne marche plus jamais. Ce qu’elle a écrit reste dans les fils des notes.',
+    'Un agent qui utilise cette clé est refusé dès sa prochaine requête, et la clé ne fonctionne plus jamais. Ce qu’elle a écrit reste dans les fils des notes.',
   'Replied to a note': 'A répondu à une note',
   'Set the status to « {status} »': 'A passé le statut à « {status} »',
   'Writes of {name}': 'Écritures de {name}',
@@ -1442,20 +1455,20 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'To start an agent when a note arrives: an address of your team that receives the call.':
     'Pour lancer un agent quand une note arrive : une adresse de votre équipe qui reçoit l’appel.',
   'Then, site by site, when to call it.': 'Puis, site par site, quand l’appeler.',
-  'The sites of the workspace did not load.': 'Les sites du workspace ne se sont pas chargés.',
-  'The workspace has no site yet.': 'Le workspace n’a pas encore de site.',
+  'The sites of the workspace did not load.': 'Les sites de l’espace de travail ne se sont pas chargés.',
+  'The workspace has no site yet.': 'L’espace de travail n’a pas encore de site.',
   'Start an agent, by site': 'Lancer un agent, par site',
   'Start an agent on {site}': 'Lancer un agent sur {site}',
   // FRU-468: a site starts an agent.
   'Call of an agent': 'Appel d’un agent',
   'This address is not in the workspace any more. Choose another one.':
-    'Cette adresse n’est plus dans le workspace. Choisissez-en une autre.',
+    'Cette adresse n’est plus dans l’espace de travail. Choisissez-en une autre.',
   'Only an owner or an admin of the workspace starts an agent from a site.':
-    'Seul un propriétaire ou un admin du workspace lance un agent depuis un site.',
+    'Seul un propriétaire ou un admin de l’espace de travail lance un agent depuis un site.',
   'The trigger was not saved. Try again.': 'Le déclencheur n’a pas été enregistré. Réessayez.',
   'Start an agent': 'Lancer un agent',
-  'When a note arrives, Fruitback can call an address of your team, which starts your agent: a receiver that dispatches a workflow of GitHub that runs Claude Code, or a cloud agent. The call carries the id of the note, never its text: the agent reads it through the MCP server, with its agent key.':
-    'Quand une note arrive, Fruitback peut appeler une adresse de votre équipe, qui lance votre agent : un récepteur qui déclenche un workflow GitHub où tourne Claude Code, ou un agent dans le cloud. L’appel porte l’id de la note, jamais son texte : l’agent la lit par le serveur MCP, avec sa clé d’agent.',
+  'When a note arrives, Fruitback can call an address of your team that starts your agent, such as a GitHub workflow that runs Claude Code, or a cloud agent. The call carries the id of the note, never its text: the agent reads the note through the MCP server, with its key.':
+    'Quand une note arrive, Fruitback peut appeler une adresse de votre équipe qui lance votre agent, comme un workflow GitHub où tourne Claude Code, ou un agent dans le cloud. L’appel porte l’id de la note, jamais son texte : l’agent lit la note par le serveur MCP, avec sa clé.',
   'The trigger of this site did not load.': 'Le déclencheur de ce site ne s’est pas chargé.',
   '1 call did not arrive at {host}. Fruitback tries again; you can try now from the address.':
     '1 appel n’est pas arrivé à {host}. Fruitback réessaie ; vous pouvez réessayer depuis l’adresse.',
@@ -1463,7 +1476,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
     '{count} appels ne sont pas arrivés à {host}. Fruitback réessaie ; vous pouvez réessayer depuis l’adresse.',
   'See the calls': 'Voir les appels',
   'The workspace has no address that receives yet. Connect one, then come back here.':
-    'Le workspace n’a encore aucune adresse qui reçoit. Connectez-en une, puis revenez ici.',
+    'L’espace de travail n’a encore aucune adresse qui reçoit. Connectez-en une, puis revenez ici.',
   'Connect an address': 'Connecter une adresse',
   'Start an agent when a note arrives': 'Lancer un agent quand une note arrive',
   'On. A call waits in the queue of the address when it fails, and is tried again.':
@@ -1471,13 +1484,13 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Off. Nothing is called.': 'Désactivé. Rien n’est appelé.',
   Call: 'Appeler',
   'An address of the workspace that receives (Connectors). Fruitback signs each call with its secret.':
-    'Une adresse du workspace qui reçoit (Connecteurs). Fruitback signe chaque appel avec son secret.',
+    'Une adresse de l’espace de travail qui reçoit (Connecteurs). Fruitback signe chaque appel avec son secret.',
   'A note of a known person arrives': 'Une note d’une personne connue arrive',
   'A member, or a reviewer your site identified. A note of a visitor starts nothing: anybody can write one.':
     'Un membre, ou un relecteur que votre site a identifié. La note d’un visiteur ne lance rien : n’importe qui peut en écrire une.',
   'A person of the team moves a note to To do': 'Une personne de l’équipe passe une note en À faire',
   'Only a note that Fruitback keeps: a note in a tracker takes its status there. An agent that sets a status starts nothing.':
-    'Seulement une note que garde Fruitback : une note dans un tracker y prend son statut. Un agent qui change un statut ne lance rien.',
+    'Seulement une note que garde Fruitback : une note dans un outil de suivi y prend son statut. Un agent qui change un statut ne lance rien.',
   'What the call carries': 'Ce que porte l’appel',
   'Your agent opens a pull request for review, and never pushes to a branch that deploys: the guide says how.':
     'Votre agent ouvre une pull request à relire, et ne pousse jamais sur une branche qui déploie : le guide dit comment.',
@@ -1485,7 +1498,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Saved.': 'Enregistré.',
   '1 call of an agent did not arrive': '1 appel d’un agent n’est pas arrivé',
   '{count} calls of an agent did not arrive': '{count} appels d’un agent ne sont pas arrivés',
-  'The addresses of the workspace did not load.': 'Les adresses du workspace ne se sont pas chargées.',
+  'The addresses of the workspace did not load.': 'Les adresses de l’espace de travail ne se sont pas chargées.',
 
   // The guide of the extension, under step 3 of the setup (FRU-486). The names of the controls of the
   // extension read as the extension draws them in French: `guide-steps.test.ts` compares them.
@@ -1526,12 +1539,12 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'A request works for ten minutes, and is answered once. Start again from the app that asked.':
     'Une demande fonctionne dix minutes, et reçoit une seule réponse. Recommencez depuis l’application qui l’a faite.',
   'This workspace holds 20 agents already. Revoke one in Agents, then start again.':
-    'Ce workspace a déjà 20 agents. Révoquez-en un dans Agents, puis recommencez.',
+    'Cet espace de travail a déjà 20 agents. Révoquez-en un dans Agents, puis recommencez.',
   'A site you ticked is gone. Read the page again.': 'Un site que vous avez coché n’existe plus. Rechargez la page.',
   'Only an owner or an admin of this workspace can connect an agent to it.':
-    'Seul un propriétaire ou un admin de ce workspace peut y connecter un agent.',
+    'Seul un propriétaire ou un admin de cet espace de travail peut y connecter un agent.',
   'It ends on {day}. Revoke it at any time in Workspace settings › Agents.':
-    'Il prend fin le {day}. Révoquez-le à tout moment dans Paramètres du workspace › Agents.',
+    'Il prend fin le {day}. Révoquez-le à tout moment dans Réglages de l’espace de travail › Agents.',
   'Tick at least one site.': 'Cochez au moins un site.',
   'Calls itself « {name} »': 'Se nomme « {name} »',
   '{host} asks to read the notes of your sites through the MCP server of Fruitback, as an agent of your team.':
@@ -1539,9 +1552,9 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Signed in as {email}.': 'Connecté en tant que {email}.',
   'Not you?': 'Pas vous ?',
   'Only an owner or an admin of a workspace can connect an agent. Ask one of them to connect it.':
-    'Seul un propriétaire ou un admin d’un workspace peut connecter un agent. Demandez-le à l’un d’eux.',
+    'Seul un propriétaire ou un admin d’un espace de travail peut connecter un agent. Demandez-le à l’un d’eux.',
   Deny: 'Refuser',
-  'The agent reaches this workspace, never another.': 'L’agent atteint ce workspace, jamais un autre.',
+  'The agent reaches this workspace, never another.': 'L’agent atteint cet espace de travail, jamais un autre.',
   'Sites it reads': 'Sites qu’il lit',
   'What it can do': 'Ce qu’il peut faire',
   Read: 'Lire',
@@ -1556,7 +1569,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'On a site that everyone reads, the agent does not read the notes of visitors: anybody can write one.':
     'Sur un site que tout le monde lit, l’agent ne lit pas les notes des visiteurs : n’importe qui peut en écrire une.',
   'You can revoke it at any time in Workspace settings › Agents. It stops at once.':
-    'Vous pouvez le révoquer à tout moment dans Paramètres du workspace › Agents. Il s’arrête aussitôt.',
+    'Vous pouvez le révoquer à tout moment dans Réglages de l’espace de travail › Agents. Il s’arrête aussitôt.',
   'Allowing…': 'Autorisation…',
   'Allow {host}': 'Autoriser {host}',
   'You go back to {address}': 'Vous revenez à {address}',
@@ -1567,5 +1580,5 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Advanced: 'Avancé',
   'Statuses, starting an agent, preview deploys': 'Statuts, lancement d’un agent, previews',
   'Each pin shows how a note in that status looks on the page. The 3 is an example number.':
-    'Chaque pin montre à quoi ressemble une note de ce statut sur la page. Le 3 est un numéro d’exemple.',
+    'Chaque repère montre à quoi ressemble une note de ce statut sur la page. Le 3 est un numéro d’exemple.',
 };
