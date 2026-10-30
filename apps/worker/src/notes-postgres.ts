@@ -356,8 +356,7 @@ function forgetWhere(which: ForgetSelector): SQL | undefined | 'none' {
   if (narrowing === undefined) return undefined;
   if ('rows' in narrowing) return narrowing.rows.length === 0 ? 'none' : inArray(notes.id, narrowing.rows);
 
-  // `İ` and the Kelvin sign are `i` and `k`, as JavaScript writes them in lower case.
-  return sql`(strpos(translate(lower(${notes.payload} COLLATE "C"), ${'\u0130\u212a'}, 'ik'), ${narrowing.text}) > 0 OR strpos(${notes.payload}, ${'\\u'}) > 0)`;
+  return sql`(strpos(lower(${notes.payload} COLLATE "C"), ${narrowing.text}) > 0 OR strpos(${notes.payload}, ${'\\u'}) > 0)`;
 }
 
 /** The rows that `forget` reads, and deletes, in one statement. */

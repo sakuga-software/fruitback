@@ -182,11 +182,11 @@ export function forgetSelectorFor(which: ForgetSelector): (row: { id: number; pa
  *
  * The text is the longest part of the address or the name, in lower case, that is the same in the
  * JSON of the row and in its lower case:
- * - ASCII only. The query folds ASCII only, in the collation `C`, whatever the locale. In JavaScript
- *   only U+0130 (`İ`) and U+212A (the Kelvin sign) have a lower case in ASCII, and the query writes
- *   them `i` and `k`.
- * - No `"`, `\` or `/`, which JSON can escape. A row that escapes a character with `\u` is kept by
- *   the query, whatever it holds.
+ * - ASCII only, and no `i` or `k`. The query folds ASCII only, in the collation `C`, whatever the
+ *   locale. In JavaScript, U+0130 (`İ`) and U+212A (the Kelvin sign) have the lower case `i` and `k`,
+ *   which a fold of ASCII does not give.
+ * - No `"`, `\` or `/`, which JSON can escape. The query keeps every row that escapes a character
+ *   with `\u`.
  *
  * `undefined` for a value with no such text: every row is parsed.
  */
@@ -196,7 +196,7 @@ export function forgetNarrowingOf(which: ForgetSelector): { rows: number[] } | {
   }
   const value = ('email' in which ? which.email : which.name).trim().toLowerCase();
   const longest = (value.match(/[\x20-\x7e]+/g) ?? [])
-    .flatMap((run) => run.split(/["\\/]/))
+    .flatMap((run) => run.split(/["\\/ik]/))
     .reduce((best, part) => (part.length > best.length ? part : best), '');
 
   return longest === '' ? undefined : { text: longest };
