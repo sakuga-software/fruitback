@@ -68,6 +68,8 @@ type Worker = { sent: { path: string; body: unknown }[]; refuse: { status: numbe
 
 async function workerWith(page: Page, role: Role = 'member', locale: 'en' | 'fr' = 'en'): Promise<Worker> {
   const worker: Worker = { sent: [], refuse: undefined };
+  // A status saved is read back (FRU-551): the table reads the notes again, and the row goes to its group.
+  const notes = NOTES.map((note) => ({ ...note }));
   const answer = (pathname: string, route: Route) => {
     const request = route.request();
     if (pathname === '/console/workspaces/w1/connectors') {
@@ -79,13 +81,16 @@ async function workerWith(page: Page, role: Role = 'member', locale: 'en' | 'fr'
       worker.sent.push({ path: pathname, body });
       if (worker.refuse !== undefined) return route.fulfill({ status: worker.refuse.status, json: worker.refuse });
       const chosen = STATUSES.find((one) => one.key === body.status);
+      const saved = notes.find((note) => note.id === status[1]);
+      if (saved !== undefined && chosen !== undefined)
+        Object.assign(saved, { status: body.status, stage: chosen.stage });
 
       return route.fulfill({ json: { status: body.status, stage: chosen?.stage } });
     }
     if (pathname !== '/console/workspaces/w1/notes') return undefined;
 
     return route.fulfill({
-      json: { notes: NOTES, total: NOTES.length, counts: { all: NOTES.length }, statuses: { s1: STATUSES } },
+      json: { notes, total: notes.length, counts: { all: notes.length }, statuses: { s1: STATUSES } },
     });
   };
   await stubWorker(page, { locale, workspaces: [{ ...ACME, role }], sites: SITES, answer });
@@ -95,10 +100,12 @@ async function workerWith(page: Page, role: Role = 'member', locale: 'en' | 'fr'
 
 async function open(page: Page): Promise<void> {
   await page.goto(`${CONSOLE}/w/w1/notes`);
-  await expect(page.locator('tbody tr')).toHaveCount(NOTES.length);
+  await expect(rows(page)).toHaveCount(NOTES.length);
 }
 
-const row = (page: Page, excerpt: string) => page.locator('tbody tr').filter({ hasText: excerpt });
+/** The rows of the notes, not the heads of their groups (FRU-551). */
+const rows = (page: Page) => page.locator('tbody tr:not(.kit-table-group)');
+const row = (page: Page, excerpt: string) => rows(page).filter({ hasText: excerpt });
 
 async function expectNoViolation(page: Page, name: string): Promise<void> {
   // A list of HeroUI fades in: axe reads it once it is there.
@@ -129,16 +136,18 @@ test('the author chooses the status of a note kept in Fruitback, among the shown
 
   await expect(select).toContainText('Waiting');
   expect(worker.sent).toEqual([{ path: '/console/workspaces/w1/notes/n1/status', body: { status: 'own:waiting' } }]);
+  // Saved, the list is read again, and the note is in the group of its stage: « To do » (FRU-551).
+  await expect(page.locator('tbody[data-group="todo"]')).toContainText('The headline');
   await expect(row(page, 'The headline').getByRole('alert')).toHaveCount(0);
 
   // Ben's note: Ana may not change it. Its status is named, hidden as it is, with no select.
   const bens = row(page, 'The price');
   await expect(bens.getByRole('button', { name: /Status of this note/ })).toHaveCount(0);
-  await expect(bens.locator('td').nth(2)).toHaveText('Parked');
+  await expect(bens.locator('[data-status-of-note]')).toHaveText('Parked');
   // The note in Linear shows its stage: its status changes in Linear.
   const tracked = row(page, 'The returns policy');
   await expect(tracked.getByRole('button', { name: /Status of this note/ })).toHaveCount(0);
-  await expect(tracked.locator('td').nth(2)).toHaveText('In progress');
+  await expect(tracked.locator('[data-status-of-note]')).toHaveText('In progress');
 
   await expectNoViolation(page, 'the list with a select');
 });
@@ -182,14 +191,16 @@ for (const [error, sentence] of [
     await open(page);
 
     const select = row(page, 'The headline').getByRole('button', { name: /Status of this note/ });
-    const cell = row(page, 'The headline').locator('td').nth(2);
-    const width = (await cell.boundingBox())?.width;
+    const frame = page.locator('.kit-table');
+    const scrolls = () => frame.evaluate((element) => element.scrollWidth - element.clientWidth);
+    expect(await scrolls()).toBe(0);
     await select.click();
     await page.getByRole('option', { name: 'Shipped', exact: true }).click();
 
-    await expect(row(page, 'The headline').getByRole('alert')).toHaveText(sentence);
-    // The sentence wraps under the select: the column keeps its width.
-    expect((await cell.boundingBox())?.width).toBe(width);
+    // FRU-551: the select is the drop of the status, before the note; the sentence is said under the
+    // note, and wraps there: the table does not grow past its frame.
+    await expect(row(page, 'The headline').locator('td').first().getByRole('alert')).toHaveText(sentence);
+    expect(await scrolls()).toBe(0);
     // What the person chose stays chosen: nothing is undone behind their back.
     await expect(select).toContainText('Shipped');
     await expect(select).toBeEnabled();

@@ -44,7 +44,7 @@ type Answer = {
     checkedAt: string;
   }[];
   total: number;
-  counts: { all: number; byPlace?: Record<string, number>; undelivered?: number };
+  counts: { all: number; byPlace?: Record<string, number>; byStage?: Record<string, number>; undelivered?: number };
   searched: string[];
   next?: string;
 };
@@ -206,7 +206,12 @@ describe('the notes of a workspace (FRU-244)', () => {
         .map((note) => noteIdOf(note.site, note.id)),
     );
     assert.equal(answer.total, 60);
-    assert.deepEqual(answer.counts, { all: 60, byPlace: { [linear.id]: 30, [rest.id]: 30 }, undelivered: 0 });
+    assert.deepEqual(answer.counts, {
+      all: 60,
+      byPlace: { [linear.id]: 30, [rest.id]: 30 },
+      byStage: { new: 12, todo: 12, progress: 12, done: 12, closed: 12 },
+      undelivered: 0,
+    });
     assert.deepEqual(answer.searched, ['excerpt', 'page', 'site', 'stage', 'reference']);
     assert.equal(typeof answer.next, 'string');
 
@@ -349,6 +354,107 @@ describe('the notes of a workspace (FRU-244)', () => {
   });
 });
 
+/** The planted notes in the order of a list by status (FRU-551): the rank of the stage, then the date. */
+function byStatus(planted: readonly Planted[]): Planted[] {
+  const ranks = ['progress', 'todo', 'new', 'closed', 'done'];
+  const dated = ordered(planted);
+
+  return [...dated].sort(
+    (a, b) => ranks.indexOf(a.stage) - ranks.indexOf(b.stage) || dated.indexOf(a) - dated.indexOf(b),
+  );
+}
+
+describe('the notes of a workspace by status (FRU-551)', () => {
+  it('reads in progress, to do, new, closed then done, the newest first in each, and counts each stage', async () => {
+    const { world, alice, workspace, planted } = await sixtyNotes();
+
+    const answer = await listOf(world, workspace, alice.token, '?order=status&limit=50');
+
+    assert.deepEqual(
+      answer.notes.map((note) => note.id),
+      byStatus(planted)
+        .slice(0, 50)
+        .map((note) => noteIdOf(note.site, note.id)),
+    );
+    assert.deepEqual(
+      [...new Set(answer.notes.map((note) => note.stage))],
+      ['progress', 'todo', 'new', 'closed', 'done'],
+    );
+    assert.equal(answer.total, 60);
+    assert.deepEqual(answer.counts.byStage, { new: 12, todo: 12, progress: 12, done: 12, closed: 12 });
+  });
+
+  it('walks every note once with its cursor, across the stages, a note that arrives between two pages included', async () => {
+    const { world, index, alice, workspace, sites, planted } = await sixtyNotes();
+    const site = (sites[0] as { id: string }).id;
+    const seen = await walk(world, workspace, alice.token, 'order=status&limit=8', async (page) => {
+      // After the second page, which ends in « in progress »: an old note « to do », which the walk
+      // still owes, and a new one « in progress », which it does not.
+      if (page === 2) {
+        for (const [id, stage, at] of [
+          ['sd_late_todo', 'todo', BASE + 500],
+          ['sd_late_progress', 'progress', BASE + 10_000_000],
+        ] as const) {
+          await index.record(
+            [
+              {
+                workspace,
+                site,
+                note: noteFixture({ id, text: 'Late' }),
+                channel: 'script',
+                author: { kind: 'visitor' },
+                place: { kind: 'fruitback' },
+                issue: { identifier: id },
+                stage,
+              },
+            ],
+            at,
+          );
+        }
+      }
+    });
+
+    const ids = seen.map((note) => note.id);
+    assert.equal(new Set(ids).size, ids.length, 'no note twice');
+    const expected = byStatus([...planted, { site, id: 'sd_late_todo', stage: 'todo', at: BASE + 500 } as Planted]).map(
+      (note) => noteIdOf(note.site, note.id),
+    );
+    assert.deepEqual(ids, expected, 'every note, in order, the late one « to do » too');
+  });
+
+  it('keeps the filters, and the counts of each stage follow the place', async () => {
+    const { world, alice, workspace, rest, planted } = await sixtyNotes();
+
+    const answer = await listOf(world, workspace, alice.token, `?order=status&place=${rest.id}&stage=todo&limit=50`);
+
+    const kept = planted.filter((note) => note.place === rest.id && note.stage === 'todo');
+    assert.deepEqual(
+      answer.notes.map((note) => note.id),
+      byStatus(kept).map((note) => noteIdOf(note.site, note.id)),
+    );
+    assert.deepEqual(answer.counts.byStage, { todo: kept.length });
+  });
+
+  it('refuses another order, and a cursor of the other order', async () => {
+    const { world, alice, workspace } = await sixtyNotes();
+    const dated = (await listOf(world, workspace, alice.token, '?limit=8')).next as string;
+    const ranked = (await listOf(world, workspace, alice.token, '?order=status&limit=8')).next as string;
+    for (const query of [
+      'order=date',
+      'order=',
+      `order=status&cursor=${dated}`,
+      `cursor=${ranked}`,
+      `order=status&cursor=${Buffer.from(JSON.stringify([BASE, 'a', 'b', 5])).toString('base64url')}`,
+      `order=status&cursor=${Buffer.from(JSON.stringify([BASE, 'a', 'b', 1.5])).toString('base64url')}`,
+    ]) {
+      const answer = await callOn(world, 'GET', `/console/workspaces/${workspace}/notes?${query}`, {
+        token: alice.token,
+      });
+      assert.equal(answer.status, 400, query);
+    }
+  });
+});
+
 describe('who reads the notes (FRU-244)', () => {
   it('gives a guest the notes, and nothing of where they went', async () => {
     const { world, alice, gina, workspace, rest } = await sixtyNotes();
@@ -356,7 +462,8 @@ describe('who reads the notes (FRU-244)', () => {
     const answer = await listOf(world, workspace, gina.token, '?limit=50');
 
     assert.equal(answer.total, 60);
-    assert.deepEqual(answer.counts, { all: 60 });
+    // The stages of a note are no secret of the tracker: a guest reads them on each row too (FRU-551).
+    assert.deepEqual(answer.counts, { all: 60, byStage: { new: 12, todo: 12, progress: 12, done: 12, closed: 12 } });
     for (const note of answer.notes) {
       assert.deepEqual(
         Object.keys(note).filter((key) => ['place', 'ref', 'url', 'delivery'].includes(key)),

@@ -15,6 +15,7 @@ import {
   QUERY_LENGTH,
   SEARCHED,
   SEARCHED_WITHOUT_TRACKER,
+  STAGE_ORDER,
 } from './notes-index.ts';
 
 /**
@@ -97,7 +98,8 @@ export async function handleNotes(
   if (index === undefined) return json(404, { error: 'not-found' }, headers);
 
   const seesTracker = context.allowed('see-tracker');
-  const query = queryOf(new URL(request.url).searchParams, context.account);
+  // The table of the console reads its notes by status (FRU-551): `order` is for this route only.
+  const query = queryOf(new URL(request.url).searchParams, context.account, { orders: true });
   if (!query.ok) return json(400, { error: query.error }, headers);
   if (query.query.place !== undefined && !seesTracker) return forbidden(context);
 
@@ -121,6 +123,8 @@ export async function handleNotes(
       total: list.total,
       counts: {
         all: [...list.byPlace.values()].reduce((sum, notes) => sum + notes, 0),
+        // FRU-551: the notes of the list by stage, for the heads of the groups of the table.
+        byStage: Object.fromEntries(list.byStage),
         ...(seesTracker ? { byPlace: Object.fromEntries(list.byPlace), undelivered: list.undelivered } : {}),
       },
       searched: seesTracker ? SEARCHED : SEARCHED_WITHOUT_TRACKER,
@@ -133,8 +137,12 @@ export async function handleNotes(
 
 type Parsed = { ok: true; query: NoteQuery } | { ok: false; error: string };
 
-/** The query of the list, from the address. Any field that is not what it should be is refused. */
-export function queryOf(params: URLSearchParams, account: string): Parsed {
+/**
+ * The query of the list, from the address. Any field that is not what it should be is refused.
+ * `orders`: the caller reads `order=status` (FRU-551), the route of the console only. Elsewhere the
+ * list is the newest first, and a cursor of a list by status is refused.
+ */
+export function queryOf(params: URLSearchParams, account: string, options: { orders?: boolean } = {}): Parsed {
   const site = params.get('site') ?? undefined;
   if (site !== undefined && !ID.test(site)) return { ok: false, error: 'invalid-site' };
   const stage = params.get('stage') ?? undefined;
@@ -147,9 +155,15 @@ export function queryOf(params: URLSearchParams, account: string): Parsed {
   if (mine !== undefined && mine !== '1' && mine !== 'true') return { ok: false, error: 'invalid-mine' };
   const q = params.get('q')?.trim() || undefined;
   if (q !== undefined && q.length > QUERY_LENGTH) return { ok: false, error: 'invalid-q' };
+  const order = options.orders === true ? (params.get('order') ?? undefined) : undefined;
+  if (order !== undefined && order !== 'status') return { ok: false, error: 'invalid-order' };
   const cursor = params.get('cursor') ?? undefined;
   const after = cursor === undefined ? undefined : readCursor(cursor);
   if (cursor !== undefined && after === undefined) return { ok: false, error: 'invalid-cursor' };
+  // A cursor belongs to one order: one with a rank is of a list by status, one without of the other.
+  if (after !== undefined && (after.rank !== undefined) !== (order === 'status')) {
+    return { ok: false, error: 'invalid-cursor' };
+  }
   const asked = params.get('limit') ?? undefined;
   const limit = asked === undefined ? PAGE_SIZES.default : Number(asked);
   if (!Number.isInteger(limit) || limit < PAGE_SIZES.min || limit > PAGE_SIZES.max) {
@@ -166,6 +180,7 @@ export function queryOf(params: URLSearchParams, account: string): Parsed {
       ...(mine === undefined ? {} : { author: account }),
       ...(q === undefined ? {} : { q }),
       ...(after === undefined ? {} : { after }),
+      ...(order === undefined ? {} : { order }),
     },
   };
 }
@@ -266,20 +281,30 @@ export function noteKeyOf(id: string): { site: string; note: string } | undefine
 
 /** Where the next page starts, opaque: the screen gives it back as it got it. */
 export function cursorOf(cursor: NoteCursor): string {
-  return Buffer.from(JSON.stringify([cursor.at, cursor.site, cursor.note])).toString('base64url');
+  const read = [cursor.at, cursor.site, cursor.note, ...(cursor.rank === undefined ? [] : [cursor.rank])];
+
+  return Buffer.from(JSON.stringify(read)).toString('base64url');
 }
 
 function readCursor(text: string): NoteCursor | undefined {
   if (!ID.test(text)) return undefined;
   const read = readJson(text);
 
-  return Array.isArray(read) &&
-    read.length === 3 &&
-    Number.isSafeInteger(read[0]) &&
-    typeof read[1] === 'string' &&
-    typeof read[2] === 'string'
-    ? { at: read[0] as number, site: read[1], note: read[2] }
-    : undefined;
+  if (
+    !Array.isArray(read) ||
+    (read.length !== 3 && read.length !== 4) ||
+    !Number.isSafeInteger(read[0]) ||
+    typeof read[1] !== 'string' ||
+    typeof read[2] !== 'string'
+  ) {
+    return undefined;
+  }
+  if (read.length === 3) return { at: read[0] as number, site: read[1], note: read[2] };
+  const rank = read[3] as unknown;
+  // The rank of a stage of `STAGE_ORDER` (FRU-551).
+  if (!Number.isInteger(rank) || (rank as number) < 0 || (rank as number) >= STAGE_ORDER.length) return undefined;
+
+  return { at: read[0] as number, site: read[1], note: read[2], rank: rank as number };
 }
 
 function readJson(base64url: string): unknown {

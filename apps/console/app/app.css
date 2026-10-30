@@ -568,6 +568,41 @@ textarea {
   font-size: var(--text-small);
 }
 
+/*
+ * A list that is the drop of its status alone (FRU-551): 28 px, no border, the chosen words at 0 px
+ * so that a screen reader still says them, and no chevron. Tinted under the pointer, as an icon button.
+ */
+.kit-field[data-bare='true'] {
+  width: auto;
+}
+
+.kit-field[data-bare='true'] .select__trigger {
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+}
+
+.kit-field[data-bare='true'] .select__trigger:hover,
+.kit-field[data-bare='true'] .select__trigger[data-hovered='true'] {
+  background: var(--color-chip);
+}
+
+.kit-field[data-bare='true'] .select__value {
+  flex: none;
+  font-size: 0;
+}
+
+.kit-field[data-bare='true'] .select__value > span {
+  gap: 0;
+}
+
+.kit-field[data-bare='true'] .select__indicator {
+  display: none;
+}
+
 /* A value the person reads and cannot change: the address of an instance, a name set elsewhere. */
 .kit-field[data-locked='true'] .input {
   border-color: var(--color-line);
@@ -1179,6 +1214,22 @@ textarea {
 }
 
 /*
+  The head of a group of rows (FRU-551, the notes by status): a band of the subtle tint, the words of
+  the group in ink at 600, its count muted. Its tint stays under the pointer: it opens nothing.
+*/
+.kit-table .kit-table-group th {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  background: var(--color-subtle);
+  color: var(--color-ink);
+  font-size: var(--text-small);
+}
+
+.kit-table[data-hover='true'] tbody tr.kit-table-group:hover {
+  background: transparent;
+}
+
+/*
   A stacked table (FRU-505): from 640 px a table, under it one card per row, so that no cell is
   past the screen. The heads stay for a screen reader.
 */
@@ -1220,6 +1271,21 @@ textarea {
 
   .kit-table[data-stack='true'] td[data-align='end'] {
     text-align: left;
+  }
+
+  /* The head of a group stays on screen: it is no column, but the words above its cards. */
+  .kit-table[data-stack='true'] .kit-table-group {
+    padding: 0;
+  }
+
+  .kit-table[data-stack='true'] .kit-table-group th {
+    position: static;
+    display: block;
+    width: auto;
+    height: auto;
+    padding: 8px 20px;
+    overflow: visible;
+    clip-path: none;
   }
 }
 

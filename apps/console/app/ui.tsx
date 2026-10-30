@@ -473,6 +473,11 @@ type ChoiceProps = {
    * of a row of « Status of the pins ». The drop is a picture: the word beside it says the status.
    */
   status?: Status;
+  /**
+   * The button is the drop of the chosen status alone, 28 px, with no border (FRU-551): the status of
+   * a row of the notes, whose group already says it in words. Its name still says the status.
+   */
+  bare?: boolean;
 };
 
 function item(option: Option) {
@@ -502,6 +507,7 @@ export function Choice({
   disabled = false,
   compact = false,
   status,
+  bare = false,
 }: ChoiceProps) {
   // An option with its own drop shows it in the button too, as the value: the button draws no second one.
   const chosen = options
@@ -509,10 +515,11 @@ export function Choice({
     .find((each) => each.value === value);
   return (
     <Select
-      fullWidth
+      fullWidth={!bare}
       isDisabled={disabled}
       className="kit-field"
       data-compact={compact}
+      data-bare={bare}
       data-status={status !== undefined}
       value={value}
       onChange={(chosen) => {

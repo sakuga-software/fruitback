@@ -77,7 +77,13 @@ export type NotesAnswer = {
   notes: IndexedNote[];
   total: number;
   /** `byPlace` and `undelivered` go to whoever sees the tracker: not to a guest. */
-  counts: { all: number; byPlace?: Readonly<Record<string, number>>; undelivered?: number };
+  counts: {
+    all: number;
+    byPlace?: Readonly<Record<string, number>>;
+    /** The notes of the list by stage, every page (FRU-551): the counts of the groups of the table. */
+    byStage?: Readonly<Partial<Record<Stage, number>>>;
+    undelivered?: number;
+  };
   next?: string;
   /** The statuses of the worker's store of each site with a note it keeps on this page (FRU-384). */
   statuses?: Readonly<Record<string, StatusChoice[]>>;
@@ -88,6 +94,19 @@ const FILTERS = ['place', 'site', 'stage', 'mine', 'q'] as const;
 
 /** How the notes are drawn (FRU-436): the table, or the board, as `?view=board` keeps it. */
 type View = 'table' | 'board';
+
+/**
+ * The groups of the table, in the order the worker reads them by status (FRU-551, as Linear): what
+ * is being done, what is to do, what is new, what was closed without being done, then what is done.
+ */
+export const GROUPS: readonly Stage[] = ['progress', 'todo', 'new', 'closed', 'done'];
+
+/** The notes of a page in their groups, each group in the order of the page. An empty group is not drawn. */
+export function groupsOf<T extends { stage: Stage }>(notes: readonly T[]): { stage: Stage; notes: T[] }[] {
+  return GROUPS.map((stage) => ({ stage, notes: notes.filter((note) => note.stage === stage) })).filter(
+    (group) => group.notes.length > 0,
+  );
+}
 
 const AUTHOR_WORDS: Readonly<Record<NoteAuthor['kind'], string>> = {
   you: msg('You'),
@@ -166,12 +185,15 @@ export default function Notes() {
     const query = new URLSearchParams();
     for (const name of FILTERS) if (filters[name] !== '') query.set(name, filters[name]);
     if (cursor !== '') query.set('cursor', cursor);
+    // The table groups the notes by status (FRU-551): the worker reads them in that order, so that a
+    // group goes on from one page to the next. The board draws a page by date in its columns.
+    if (view === 'table') query.set('order', 'status');
     const answer = await call<NotesAnswer>('GET', `${base}/notes?${query.toString()}`);
     // An answer to a question that is no longer asked is dropped: the filters moved on.
     if (mine !== asked.current) return;
     setReading(false);
     setShown(answer.ok && Array.isArray(answer.data?.notes) ? answer.data : 'failed');
-  }, [base, filters, cursor]);
+  }, [base, filters, cursor, view]);
   useEffect(() => void read(), [read]);
   // Only the read that follows the move: once it is drawn, a list emptied later takes no focus.
   useEffect(() => {
@@ -214,11 +236,17 @@ export default function Notes() {
     setParams(next);
   }
 
-  /** Shows the table or the board. The filters and the page stay: the board draws the same notes. */
+  /**
+   * Shows the table or the board. The filters stay; the list starts again on its first page, as the
+   * table reads by status and the board by date (FRU-551): a cursor of one is no place in the other.
+   */
   function show(next: View) {
     const changed = new URLSearchParams(latest.current);
     if (next === 'board') changed.set('view', 'board');
     else changed.delete('view');
+    changed.delete('cursor');
+    changed.delete('from');
+    setBefore([]);
     latest.current = changed;
     setParams(changed);
   }
@@ -373,7 +401,6 @@ export default function Notes() {
                       <tr>
                         <th scope="col">{t('Note')}</th>
                         <th scope="col">{t('Site')}</th>
-                        <th scope="col">{t('Status')}</th>
                         <th scope="col">{t('Left by')}</th>
                         {/* The worker tells a guest nothing of where a note went (FRU-244). */}
                         {seesTracker ? <th scope="col">{t('Went to')}</th> : null}
@@ -386,21 +413,36 @@ export default function Notes() {
                         </th>
                       </tr>
                     </thead>
-                    <tbody>
-                      {shown.notes.map((note) => (
-                        <NoteRow
-                          key={note.id}
-                          note={note}
-                          origin={originOf(note.site.id)}
-                          source={sourceOf(note)}
-                          manages={manages}
-                          retry={() => call('POST', `${base}/notes/${encodeURIComponent(note.id)}/retry`)}
-                          statuses={shown.statuses?.[note.site.id]}
-                          choose={(status) => choose(note, status)}
-                          onSent={() => void read()}
-                        />
-                      ))}
-                    </tbody>
+                    {/* FRU-551: a group per status, its head the drop, the name and the notes of the
+                      whole list in it. A group that goes on to the next page has its head there too. */}
+                    {groupsOf(shown.notes).map((group) => (
+                      <tbody key={group.stage} data-group={group.stage}>
+                        <tr className="kit-table-group">
+                          <th scope="colgroup" colSpan={seesTracker ? 6 : 5}>
+                            <span className="inline-flex items-center gap-[8px]">
+                              <StatusDot status={group.stage} size={10} />
+                              {t(STAGE_NAMES[group.stage])}
+                              <span className="font-normal text-muted tabular-nums">
+                                {shown.counts.byStage?.[group.stage] ?? group.notes.length}
+                              </span>
+                            </span>
+                          </th>
+                        </tr>
+                        {group.notes.map((note) => (
+                          <NoteRow
+                            key={`${note.id} ${note.status ?? note.stage}`}
+                            note={note}
+                            origin={originOf(note.site.id)}
+                            source={sourceOf(note)}
+                            manages={manages}
+                            retry={() => call('POST', `${base}/notes/${encodeURIComponent(note.id)}/retry`)}
+                            statuses={shown.statuses?.[note.site.id]}
+                            choose={(status) => choose(note, status)}
+                            onSent={() => void read()}
+                          />
+                        ))}
+                      </tbody>
+                    ))}
                   </DataTable>
                 </div>
               )}
@@ -520,6 +562,8 @@ function NoteRow({
   useLocale();
   const [sending, setSending] = useState(false);
   const [refused, setRefused] = useState<string | undefined>();
+  // A status the worker did not save (FRU-551): said under the note, the select keeps the choice.
+  const [statusRefused, setStatusRefused] = useState<string | undefined>();
   const { author, place } = note;
   // The link of the widget opens the note by the id it gave it, or by its issue (FRU-253).
   const opened = note.note ?? note.ref;
@@ -540,13 +584,29 @@ function NoteRow({
     <tr>
       {/* The note keeps 240 px of the row: the columns beside it are short words. */}
       <td className="max-w-[380px] min-[640px]:min-w-[240px]">
-        <span className="line-clamp-2 [overflow-wrap:anywhere]">{excerptOf(note.excerpt)}</span>
+        {/* FRU-551: the status is its drop before the note, a list of the statuses for whoever may
+          change it; the group above says it in words. */}
+        <span className="flex items-start gap-[8px]">
+          <span className="-my-[4px] flex h-[28px] w-[28px] flex-none items-center justify-center">
+            <NoteStatus
+              note={note}
+              statuses={statuses}
+              choose={choose}
+              onSaved={onSent}
+              onRefused={setStatusRefused}
+              bare
+            />
+          </span>
+          <span className="line-clamp-2 [overflow-wrap:anywhere]">{excerptOf(note.excerpt)}</span>
+        </span>
+        {statusRefused === undefined ? null : (
+          <span className="mt-[6px] block pl-[36px]">
+            <Problem>{t(statusRefused)}</Problem>
+          </span>
+        )}
       </td>
       <td className="whitespace-nowrap">
         <span className="block max-w-[140px] truncate">{domain}</span>
-      </td>
-      <td className="whitespace-nowrap">
-        <NoteStatus note={note} statuses={statuses} choose={choose} />
       </td>
       <td className="max-w-[160px]">
         <Author author={author} site={domain} />
@@ -625,12 +685,18 @@ function NoteStatus({
   statuses,
   choose,
   onSaved,
+  bare = false,
+  onRefused,
 }: {
   note: IndexedNote;
   statuses: readonly StatusChoice[] | undefined;
   choose: (status: string) => Promise<Answer<{ status: string; stage: Stage }>>;
   /** Saved: the board reads the notes again, and the card goes to its column (FRU-436). */
   onSaved?: () => void;
+  /** The drop alone, its words for a screen reader (FRU-551): the status of a row of the table. */
+  bare?: boolean;
+  /** Where a refusal is said, for a bare select: under the note, where there is room for it. */
+  onRefused?: (refusal: string | undefined) => void;
 }) {
   useLocale();
   const [chosen, setChosen] = useState(note.status);
@@ -640,42 +706,46 @@ function NoteStatus({
   const stageName = (of: Stage) => t(STAGE_NAMES[of]);
   const current = chosen === undefined ? undefined : statuses?.find((status) => status.key === chosen);
 
+  const refuse = (refusal: string | undefined) => (onRefused === undefined ? setRefused(refusal) : onRefused(refusal));
+
   async function save(status: string) {
     setChosen(status);
     setSaving(true);
-    setRefused(undefined);
+    refuse(undefined);
     const answer = await choose(status);
     setSaving(false);
-    if (!answer.ok) return setRefused(statusProblemOf(answer));
+    if (!answer.ok) return refuse(statusProblemOf(answer));
     setStage(answer.data.stage);
     onSaved?.();
   }
 
+  const words = (text: string) => (bare ? <span className="sr-only">{text}</span> : text);
   // A note of a tracker, or a list read without the statuses of the site: the stage.
   if (chosen === undefined || statuses === undefined || (current === undefined && note.canSetStatus !== true)) {
     return (
-      <span className="inline-flex items-center gap-[8px]">
+      <span className="inline-flex items-center gap-[8px]" data-status-of-note>
         <StatusDot status={stage} size={10} />
-        {stageName(stage)}
+        {words(stageName(stage))}
       </span>
     );
   }
   if (note.canSetStatus !== true) {
     return (
-      <span className="inline-flex items-center gap-[8px]">
+      <span className="inline-flex items-center gap-[8px]" data-status-of-note>
         <StatusDot status={current?.stage ?? stage} size={10} color={current?.color} />
-        {current === undefined ? stageName(stage) : statusName(current, stageName)}
+        {words(current === undefined ? stageName(stage) : statusName(current, stageName))}
       </span>
     );
   }
 
   return (
     // A fixed width: a refusal wraps under the select and never widens the column.
-    <div className="w-[200px]">
+    <div className={bare ? '' : 'w-[200px]'}>
       <Choice
         label={t('Status of this note')}
         labelHidden
         compact
+        bare={bare}
         disabled={saving}
         status={current?.stage ?? stage}
         value={chosen}
