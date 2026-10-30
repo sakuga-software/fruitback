@@ -17,8 +17,15 @@ const SITES = [
     writers: 'anyone',
     destinations: [{ connector: 'c1', teamId: 't1', label: 'Linear · Web' }],
     via: ['script', 'extension'],
+    notes: { new: 3, todo: 4, progress: 2, done: 1, closed: 2 },
   },
   { id: 's2', origin: 'https://acme.dev', visibility: 'everyone' },
+  {
+    id: 's3',
+    origin: 'https://docs.acme.dev',
+    visibility: 'members',
+    notes: { new: 0, todo: 0, progress: 0, done: 0, closed: 0 },
+  },
 ];
 
 type Worker = { reads: number; fails: boolean; deleted: string[]; posted: unknown[]; refuses?: string };
@@ -78,6 +85,8 @@ test('an owner reads everything of a site on its page, under the crumbs « Sites
 
   await expect(page.locator('main h1')).toHaveText('staging.acme.dev');
   await expect(crumbs(page)).toHaveText('Sites›staging.acme.dev');
+  // Its notes, from its head: the Notes screen with the site chosen (FRU-504).
+  await expect(page.getByRole('link', { name: 'See its 12 notes' })).toHaveAttribute('href', '/w/w1/notes?site=s1');
   await expect(crumbs(page).getByRole('link', { name: 'Sites' })).toHaveAttribute('href', '/w/w1/sites');
 
   // Its sections, in this order: nothing is unfolded under a card any more.
@@ -181,6 +190,21 @@ test('a refusal keeps the form open and says why, and a member has nothing to ch
     'Members of Acme',
   );
   await expect(page.getByRole('button', { name: /Change who sees the notes/ })).toHaveCount(0);
+});
+
+test('the head leads to the notes of the site, says how many, and says nothing of none (FRU-504)', async ({ page }) => {
+  await workerWith(page, 'guest');
+  await page.goto(`${CONSOLE}/w/w1/sites/s1`);
+  await page.getByRole('link', { name: 'See its 12 notes' }).click();
+  await expect(page).toHaveURL(`${CONSOLE}/w/w1/notes?site=s1`);
+
+  // A site with no note: no link to an empty list.
+  await page.goto(`${CONSOLE}/w/w1/sites/s3`);
+  await expect(page.locator('main h1')).toHaveText('docs.acme.dev');
+  await expect(page.getByRole('link', { name: /^See its/ })).toHaveCount(0);
+  // A worker of before sends no count: the link has no number.
+  await page.goto(`${CONSOLE}/w/w1/sites/s2`);
+  await expect(page.getByRole('link', { name: 'See its notes' })).toHaveAttribute('href', '/w/w1/notes?site=s2');
 });
 
 test('a site that everyone reads takes a note from anybody, and says so', async ({ page }) => {
