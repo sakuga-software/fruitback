@@ -1,4 +1,5 @@
 import { type Page, expect, test } from '@playwright/test';
+import { fulfillSites } from './console-workspace.ts';
 import { WORKER_ORIGIN } from './pin.ts';
 
 /**
@@ -38,7 +39,8 @@ async function stubWorker(page: Page, locale: Locale): Promise<string[]> {
     }
     if (pathname === '/console/me') return json(me);
     if (pathname === '/console/workspaces/w1/domains') return json({ domains: [] });
-    if (pathname === '/console/workspaces/w1/sites') return json({ sites: [site] });
+    const read = fulfillSites(route, [site]);
+    if (read !== false) return read;
     if (pathname === '/console/workspaces/w1/connectors') return json({ connectors: [connector], available: true });
     if (pathname === '/console/workspaces/w1/connectors/c1/teams') return json({ teams: [] });
 

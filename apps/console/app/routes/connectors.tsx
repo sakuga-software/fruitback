@@ -121,7 +121,8 @@ export default function Connectors() {
         'GET',
         `${base}/connectors`,
       ),
-      call<{ sites: Site[] }>('GET', `${base}/sites`),
+      // The sites and where they send, with no count of their notes (FRU-497).
+      call<{ sites: Site[] }>('GET', `${base}/sites?counts=none`),
     ]);
     // A failed read keeps what the screen already showed, and says it could not read.
     if (listed.ok) {

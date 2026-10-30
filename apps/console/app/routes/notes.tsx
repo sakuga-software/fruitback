@@ -1,6 +1,6 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
-import { type Answer, type Connector, type Site, STAGES, type Stage, call } from '../api';
+import { type Answer, type Connector, type SiteChoice, STAGES, type Stage, call, siteChoices } from '../api';
 import { ago } from '../ago';
 import { type Listed, listedOf } from '../listed';
 import {
@@ -125,17 +125,16 @@ export default function Notes() {
 
   // The sites name the filter « Site » and the site of a verified author; the connectors name the
   // chips. Both are read once, with the first page.
-  const [sites, setSites] = useState<Listed<Site>>('loading');
+  // Their id and address only, by address (FRU-497): no count of the notes of every site.
+  const [sites, setSites] = useState<Listed<SiteChoice>>('loading');
   const [connectors, setConnectors] = useState<Connector[]>([]);
   useEffect(() => {
-    void call<{ sites: Site[] }>('GET', `${base}/sites`).then((answer) =>
-      setSites(listedOf(answer, (data) => data.sites)),
-    );
+    void siteChoices(workspace.id).then((answer) => setSites(listedOf(answer, (data) => data.sites)));
     if (seesTracker)
       void call<{ connectors: Connector[] }>('GET', `${base}/connectors`).then((answer) => {
         if (answer.ok) setConnectors(answer.data.connectors);
       });
-  }, [base, seesTracker]);
+  }, [base, seesTracker, workspace.id]);
 
   const filters = useMemo(
     () =>

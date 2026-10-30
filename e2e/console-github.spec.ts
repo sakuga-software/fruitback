@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { type Page, type Route, expect, test } from '@playwright/test';
-import { ACME, type Role, sideScroll, stubWorker } from './console-workspace.ts';
+import { ACME, type Role, sideScroll, stubWorker, fulfillSites } from './console-workspace.ts';
 
 /**
  * GitHub on the Connectors screen (FRU-361): « Connect » goes to the App by the start of the worker,
@@ -95,18 +95,15 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
     if (pathname.endsWith('/connectors')) {
       return json({ connectors: worker.connectors, available: true, linearOAuth: true, githubApp: worker.githubApp });
     }
-    if (pathname.endsWith('/sites')) {
-      return json({
-        sites: [
-          {
-            id: 's1',
-            origin: 'https://staging.acme.dev',
-            visibility: 'members',
-            destinations: worker.places.map((each) => labelled(each, worker.privacy)),
-          },
-        ],
-      });
-    }
+    const read = fulfillSites(route, [
+      {
+        id: 's1',
+        origin: 'https://staging.acme.dev',
+        visibility: 'members',
+        destinations: worker.places.map((each) => labelled(each, worker.privacy)),
+      },
+    ]);
+    if (read !== false) return read;
     if (pathname.endsWith('/g1/repositories')) {
       worker.listed += 1;
       if (worker.repositoriesWait) return new Promise<void>(() => {});
@@ -300,7 +297,7 @@ test('in the panel, once the list names the repository, it wins over an older wo
   worker.places = [{ connector: 'g1', teamId: 'acme/web' }];
   worker.repositoriesWait = true;
   const stale = { connector: 'g1', teamId: 'acme/web', label: 'GitHub · acme/web', private: false };
-  await page.route('**/console/workspaces/w1/sites', (route) =>
+  await page.route(/\/console\/workspaces\/w1\/sites(\?|$)/, (route) =>
     route.fulfill({
       json: { sites: [{ id: 's1', origin: 'https://staging.acme.dev', visibility: 'members', destinations: [stale] }] },
     }),

@@ -46,7 +46,10 @@ export default function Home() {
       // The invitations and the sites are read side by side (FRU-492): one after the other, they
       // were a third round trip before the first screen, 160 ms on a phone. The sites are read for
       // nothing when an invitation waits.
-      const listing = adds ? call<{ sites: Site[] }>('GET', `/console/workspaces/${workspace.id}/sites`) : undefined;
+      // One site is enough to know there is one, and no note is counted (FRU-497).
+      const listing = adds
+        ? call<{ sites: Site[] }>('GET', `/console/workspaces/${workspace.id}/sites?limit=1&counts=none`)
+        : undefined;
       void Promise.all([myInvitations(), listing]).then(([invitations, listed]) => {
         if (stopped) return;
         // An invitation that could not be read does not hold the front door: it is on its own page.
