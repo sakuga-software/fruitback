@@ -425,8 +425,8 @@ export default function Members() {
               />
             </div>
           ) : null}
-          <section aria-labelledby="members-title">
-            <h2 id="members-title" className="mb-[12px] text-section font-bold">
+          <div>
+            <h2 className="mb-[12px] text-section font-bold">
               {t('Members')}
               {reads && total !== undefined ? (
                 <>
@@ -504,10 +504,10 @@ export default function Members() {
                 onPage={(to) => setOffset((at) => (to === 'next' ? at + PAGE : Math.max(0, at - PAGE)))}
               />
             ) : null}
-          </section>
+          </div>
           {found === undefined || (found.length === 0 && search === '') ? null : (
-            <section aria-labelledby="invitations-title" className="mt-[32px]">
-              <h2 id="invitations-title" className="mb-[12px] text-section font-bold">
+            <div className="mt-[32px]">
+              <h2 className="mb-[12px] text-section font-bold">
                 {t('Pending invitations')} <span className="font-normal text-muted tabular-nums">{found.length}</span>
               </h2>
               {found.length === 0 ? (
@@ -574,7 +574,7 @@ export default function Members() {
                   }
                 />
               ) : null}
-            </section>
+            </div>
           )}
         </>
       ) : null}

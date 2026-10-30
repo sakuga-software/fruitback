@@ -1,4 +1,5 @@
 import { createServer } from 'node:http';
+import { sql } from 'drizzle-orm';
 import { createPostgresAccountStore } from './accounts-postgres.ts';
 import { handleRequest } from './app.ts';
 import { authConfigOf, authOptions, startAuth } from './auth.ts';
@@ -108,26 +109,23 @@ export async function cloudWorker(options: {
      * `invitee<n>@client.test`.
      */
     async crowd(workspace: string, members: number, invitations: number): Promise<void> {
-      const pool = await database.pool();
-      await pool.query(
-        `INSERT INTO "user" (id, name, email, "emailVerified", "createdAt", "updatedAt")
-           SELECT 'crowd' || n, 'Person ' || n, 'p' || n || '@crowd.test', true, now(), now()
-           FROM generate_series(1, $1::int) n`,
-        [members],
+      await database.run((db) =>
+        db.execute(sql`INSERT INTO "user" (id, name, email, "emailVerified", "createdAt", "updatedAt")
+          SELECT 'crowd' || n, 'Person ' || n, 'p' || n || '@crowd.test', true, now(), now()
+          FROM generate_series(1, ${members}::int) n`),
       );
-      await pool.query(
-        `INSERT INTO member (id, "organizationId", "userId", role, "createdAt")
-           SELECT 'crowd' || n, $2, 'crowd' || n, 'member', now() + n * interval '1 second'
-           FROM generate_series(1, $1::int) n`,
-        [members, workspace],
+      await database.run((db) =>
+        db.execute(sql`INSERT INTO member (id, "organizationId", "userId", role, "createdAt")
+          SELECT 'crowd' || n, ${workspace}, 'crowd' || n, 'member', now() + n * interval '1 second'
+          FROM generate_series(1, ${members}::int) n`),
       );
-      await pool.query(
-        `INSERT INTO invitation (id, "organizationId", email, role, status, "expiresAt", "createdAt", "inviterId", mailed)
-           SELECT 'crowd' || n, $2, 'invitee' || n || '@client.test', 'member', 'pending',
-                  now() + interval '7 days', now() + n * interval '1 second',
-                  (SELECT "userId" FROM member WHERE "organizationId" = $2 AND role = 'owner' LIMIT 1), true
-           FROM generate_series(1, $1::int) n`,
-        [invitations, workspace],
+      await database.run((db) =>
+        db.execute(sql`INSERT INTO invitation
+            (id, "organizationId", email, role, status, "expiresAt", "createdAt", "inviterId", mailed)
+          SELECT 'crowd' || n, ${workspace}, 'invitee' || n || '@client.test', 'member', 'pending',
+                 now() + interval '7 days', now() + n * interval '1 second',
+                 (SELECT "userId" FROM member WHERE "organizationId" = ${workspace} AND role = 'owner' LIMIT 1), true
+          FROM generate_series(1, ${invitations}::int) n`),
       );
     },
     async close(): Promise<void> {
