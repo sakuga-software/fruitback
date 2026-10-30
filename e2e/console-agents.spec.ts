@@ -344,6 +344,20 @@ test('with no key, the screen says what a key is for; at 390 px in French nothin
   await workerWith(page, { keys: [] });
   await page.goto(`${CONSOLE}/w/w1/settings/agents`);
   await expect(page.getByRole('heading', { name: 'No agent key yet' })).toBeVisible();
+  // FRU-503: one « New key », in the card. The head had a second one above it.
+  const card = page
+    .locator('div')
+    .filter({ has: page.getByRole('heading', { name: 'No agent key yet' }) })
+    .last();
+  await expect(page.getByRole('button', { name: 'New key' })).toHaveCount(1);
+  await expect(card.getByRole('button', { name: 'New key' })).toBeVisible();
+  // Opened and cancelled from the card, the form gives the focus back to it.
+  await card.getByRole('button', { name: 'New key' }).click();
+  const form = page.getByRole('region', { name: 'New agent key' });
+  await form.getByRole('button', { name: 'Cancel' }).click();
+  await expect(form).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'New key' })).toHaveCount(1);
+  await expect(page.getByRole('button', { name: 'New key' })).toBeFocused();
   await expectNoViolation(page);
 
   await page.unrouteAll();
