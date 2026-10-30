@@ -374,6 +374,23 @@ describe('more than five statuses: a list in place of the chips (FRU-535)', () =
     );
   });
 
+  it('keeps the list, and the status chosen, when the search finds five statuses or fewer (review of #730)', () => {
+    // « In » finds three statuses: the list stays, with every status of the page, and still filters.
+    const { root } = draw({ status: 'name:In Review', q: 'In' }, on(statused));
+
+    assert.equal(root.querySelectorAll('button.search-chip').length, 0);
+    assert.deepEqual(rows(root), ['s4', 'twice']);
+    assert.equal(
+      root.querySelector('.search-status .kit-select-trigger')?.textContent?.includes('Status · In Review · 2'),
+      true,
+    );
+    root.querySelector<HTMLButtonElement>('.search-status .kit-select-trigger')?.click();
+    assert.deepEqual(
+      [...root.querySelectorAll('.search-status [role="option"]')].map((option) => option.textContent),
+      ['All3', 'Triage0', 'Backlog0', 'Ready0', 'In Progress1', 'In Review2', 'Done0', 'Canceled0'],
+    );
+  });
+
   it('is drawn open over the notes when the panel kept it open', () => {
     const { root } = draw({ statusOpen: true }, on(statused));
 

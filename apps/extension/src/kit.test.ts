@@ -300,7 +300,7 @@ describe('a list to choose from (FRU-535)', () => {
     trigger?.click();
 
     assert.equal(trigger?.getAttribute('aria-expanded'), 'true');
-    assert.equal(document.activeElement, list());
+    assert.ok(document.activeElement === list());
     assert.equal(list()?.getAttribute('aria-label'), 'Status');
     const options = [...(list()?.querySelectorAll('[role="option"]') ?? [])];
     assert.deepEqual(
@@ -318,7 +318,7 @@ describe('a list to choose from (FRU-535)', () => {
   it('moves with the arrows, chooses with Enter, and gives the focus back to its button', () => {
     const { document, trigger, said, key, list } = build();
     key(trigger, 'ArrowDown');
-    assert.equal(document.activeElement, list(), 'an arrow on the button opens the list');
+    assert.ok(document.activeElement === list(), 'an arrow on the button opens the list');
     key(list(), 'ArrowDown');
     key(list(), 'ArrowDown');
     key(list(), 'ArrowDown');
@@ -332,7 +332,7 @@ describe('a list to choose from (FRU-535)', () => {
     assert.deepEqual(said, ['open:true', 'open:false', 'select:name:Triage']);
     assert.equal(list(), null);
     assert.equal(trigger?.getAttribute('aria-expanded'), 'false');
-    assert.equal(document.activeElement, trigger);
+    assert.ok(document.activeElement === trigger);
   });
 
   it('closes on Escape with nothing chosen, and on a click outside', () => {
@@ -340,11 +340,13 @@ describe('a list to choose from (FRU-535)', () => {
     trigger?.click();
     key(list(), 'Escape');
     assert.equal(list(), null);
-    assert.equal(document.activeElement, trigger);
+    assert.ok(document.activeElement === trigger);
 
     trigger?.click();
     document.body.dispatchEvent(new document.defaultView!.Event('pointerdown', { bubbles: true }) as unknown as Event);
     assert.equal(list(), null);
+    // The focus was in the list: it goes back to the button, not to the body (review of #730).
+    assert.ok(document.activeElement === trigger);
     assert.deepEqual(said, ['open:true', 'open:false', 'open:true', 'open:false']);
   });
 

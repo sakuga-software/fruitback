@@ -452,7 +452,8 @@ export function listSelect(document: Document, options: ListSelectOptions): HTML
       return;
     }
     // `contains`, not `instanceof Node`: the test reads the kit on happy-dom, with no global `Node`.
-    if (!root.contains(event.target as Node | null)) close(false);
+    // The focus in the list goes back to the button; a click on a field takes it from there.
+    if (!root.contains(event.target as Node | null)) close(root.contains(document.activeElement));
   };
   const show = (focus: boolean): void => {
     root.dataset.open = 'true';

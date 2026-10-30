@@ -594,7 +594,7 @@ function searchedPart(
   if (!Array.isArray(notes) || notes.length === 0) return notesPart(document, options, notes);
 
   const matching = notes.filter((note) => matchesPage(note, state.q));
-  const keeps = statusFilter(state, matching);
+  const keeps = statusFilter(state, notes);
   const found = matching.filter(keeps).sort(byNumber);
   const placed = found.filter((note) => note.placement !== 'detached');
   const parts: Node[] = [];

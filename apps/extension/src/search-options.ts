@@ -164,11 +164,12 @@ export function statusesOf(notes: readonly Statused[]): StatusChoice[] {
 
 /**
  * Which notes the filter keeps (FRU-535): the chips filter by stage while there are `MAX_CHIPS`
- * statuses or fewer; beyond, the list filters by status. `among` are the notes the filter is drawn
- * for: the notes of the scope that match the search.
+ * statuses or fewer; beyond, the list filters by status. `scope` are all the notes of the scope,
+ * before the search: words typed never switch the list to chips, nor hide a status chosen in it
+ * (review of #730).
  */
-export function statusFilter(state: SearchState, among: readonly Statused[]): (note: Statused) => boolean {
-  const statuses = statusesOf(among);
+export function statusFilter(state: SearchState, scope: readonly Statused[]): (note: Statused) => boolean {
+  const statuses = statusesOf(scope);
   if (statuses.length <= MAX_CHIPS) return (note) => passes(note.stage, state.stage);
   // A status no note wears any more (a note moved, another search) is every status, as the list says.
   const chosen = statuses.some((status) => status.key === state.status) ? state.status : undefined;
@@ -279,9 +280,16 @@ export function searchControls(
   }
 
   const among = chipNotes(state, pageNotes);
-  const statuses = statusesOf(among);
+  // The list or the chips: decided on the notes of the scope, before the search (review of #730).
+  const statuses = statusesOf(scopeNotes(state, pageNotes));
   if (statuses.length > MAX_CHIPS) {
-    root.append(statusList(document, state, handlers, statuses, among.length));
+    // Every status of the scope stays offered; its number counts what the search found.
+    const found = statusesOf(among);
+    const counted = statuses.map((status) => ({
+      ...status,
+      count: found.find((each) => each.key === status.key)?.count ?? 0,
+    }));
+    root.append(statusList(document, state, handlers, counted, among.length));
 
     return root;
   }
@@ -341,6 +349,13 @@ function statusList(
   select.classList.add('search-status');
 
   return select;
+}
+
+/** Every note of the scope, before the search: the page's, or the site's that were read. */
+export function scopeNotes(state: SearchState, pageNotes: readonly PanelNote[] | undefined): readonly Statused[] {
+  if (state.scope === 'site') return typeof state.site === 'object' ? state.site.notes : [];
+
+  return pageNotes ?? [];
 }
 
 /** The notes the chips count: the page's that match the search, or the site's that were read. */
