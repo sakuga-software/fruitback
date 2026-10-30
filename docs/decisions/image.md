@@ -421,3 +421,53 @@ The failures were the Rouge builtins (`#0086b3`, 3.89:1), comments (`#999988`, 2
 `#f4f4f4`, 4.37:1), and the address in the drawn browser bar of the landing (`#78716c` on `#ece7e1`,
 3.9:1, now `#57534e`). « With the override » is the same run with the stylesheet injected into the
 published pages: Jekyll did not run locally.
+
+## Publish a version (FRU-556)
+
+The skill `release` sends an agent here: this repository releases by tag and GitHub release, with
+no `production` branch.
+
+### The rules, in short
+
+1. **Everything moves together.** `.changeset/config.json` holds the extension, the worker, the
+   console, the playground and the five packages in one `fixed` group: one bump moves the ten
+   `package.json`, the root included by hand.
+2. **The extension asks for no changeset, so its features are in no changelog until the release
+   adds them.** List them with `git log <last tag>..origin/main --oneline -- apps/extension`. If
+   any is a `feat` or a `style` a person sees, write `.changeset/<name>.md` with
+   `'@fruitback/extension': minor` and one line for each. The bump of the group is then a minor
+   one: a release of only patch changesets would hide them behind `x.y.z+1`.
+3. **The version PR.** Work in a worktree from `origin/main`, never in the main checkout, which
+   holds work that is not committed. Then:
+   - `pnpm changeset version`, then the root `package.json` by hand;
+   - `oxfmt` on the changelogs, and `git checkout -- pnpm-lock.yaml tools/mutation/pnpm-lock.yaml`;
+   - `ci-changeset.test.ts` and `test-inputs.test.ts` (vitest, `apps/worker`).
+
+   The commit and the PR are `chore: version X.Y.Z`. The body names the open PRs of the extension
+   that stay out, and the result of the next rule.
+
+4. **The permissions of the manifest.** Build the extension of `main`
+   (`WXT_FRUITBACK_CLOUD=https://api.fruitback.com npx wxt build` in `apps/extension`). Compare
+   `permissions`, `optional_host_permissions` and `externally_connectable` of
+   `.output/chrome-mv3/manifest.json` with the last tag. A new permission needs a reason in the
+   dashboard of each store before the submission: say so to the person who approves.
+5. **After the merge, by a person.** The tag is annotated, on the merge commit of the version PR,
+   then the release:
+   `git tag -a vX.Y.Z <merge sha> -m vX.Y.Z && git push origin vX.Y.Z`, then
+   `gh release create vX.Y.Z --verify-tag --generate-notes --title vX.Y.Z`. The **published
+   release** starts `release-extension.yml`, `release-npm.yml` and `release-image.yml`: a tag alone
+   starts none of them.
+6. **Two approvals stay a person's**: the environments `stores` (Chrome Web Store and AMO) and
+   `npm`. `release-image.yml` publishes with no approval. The variable `CHROME_PUBLISH_TYPE` of
+   `stores` decides the Chrome Web Store:
+   - `DEFAULT_PUBLISH`: the version goes out when the review of Google passes;
+   - absent or `STAGED_PUBLISH`: the version waits for « Publish » in the dashboard.
+
+### What was met
+
+- **v0.4.0**: the Chrome Web Store refused the submission (`INVALID_ITEM_METADATA`, « Check the
+  Developer Dashboard »), while AMO took it. The fix is in the dashboard, not in the repository.
+- **v0.5.0**: the job `captures of the guide` failed on `macos-latest`, which marked the run
+  `failure` while `submit to the stores` and `attach to the release` passed. Read the job, not
+  the run. A release run uses the workflow and the code **of the tag**: running it again does
+  not pick up a fix merged after the tag.
