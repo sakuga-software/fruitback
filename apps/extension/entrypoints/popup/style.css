@@ -725,8 +725,12 @@ body.popup-page {
   display: none;
 }
 
-/* A line that appears, the team after the provider, the project after the team: it fades in. */
-:is(.popup-screen-2, .popup-site-on) .kit-dl-entry {
+/*
+  A line that appears, the team after the provider, the project after the team: it fades in. Screen 2
+  only: on a site that is on, « Notes go to » comes when the worker answers, and a line that fades
+  in then is read half-drawn (axe measured its contrast mid-fade).
+*/
+.popup-screen-2 .kit-dl-entry {
   transition:
     opacity 0.18s ease,
     translate 0.18s ease;
@@ -749,7 +753,7 @@ body.popup-page {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  :is(.popup-screen-2, .popup-site-on) .kit-dl-entry,
+  .popup-screen-2 .kit-dl-entry,
   :is(.popup-screen-2, .popup-site-on) .kit-dl select,
   :is(.popup-screen-2, .popup-site-on) .kit-dl select::picker-icon,
   :is(.popup-screen-2, .popup-site-on) .kit-dl select::picker(select) {
