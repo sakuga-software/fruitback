@@ -97,9 +97,8 @@ export function setLocale(tag: string, remember = true): Promise<void> {
 
     return loading;
   }
-  loading = (LOADERS[next] as () => Promise<Catalog>)().then(
-    (catalog) => {
-      CATALOGS[next] = catalog;
+  loading = loadLocale(next).then(
+    () => {
       if (wanted === next) show(next);
     },
     () => {
@@ -108,6 +107,16 @@ export function setLocale(tag: string, remember = true): Promise<void> {
   );
 
   return loading;
+}
+
+/**
+ * Loads the map of a language, and changes nothing on the screens. `translate(tag, …)` reads a map
+ * that is not loaded as English: a reader outside the screens (a test, a guide) awaits this first.
+ */
+export async function loadLocale(tag: string): Promise<void> {
+  const next = nearest(tag);
+  if (loaded(next)) return;
+  CATALOGS[next] = await (LOADERS[next] as () => Promise<Catalog>)();
 }
 
 /** Done when the map of the language asked for last has loaded, or failed to. */
@@ -211,6 +220,11 @@ export function t(sentence: string, values: Readonly<Record<string, string | num
   return translate(current, sentence, values);
 }
 
+/**
+ * The sentence in the language `tag`. WARNING: the map of `tag` must be loaded (`loadLocale`). A map
+ * that is not reads English, as a screen would rather show English than no words. A screen passes
+ * `locale()` or `useLocale()`, whose map is loaded.
+ */
 export function translate(
   tag: LocaleTag,
   sentence: string,

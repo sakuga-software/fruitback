@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
-import { type Kept, adoptLanguage, chooseLanguage, locale, nearest, setLocale, translate } from './i18n.ts';
+import { type Kept, adoptLanguage, chooseLanguage, loadLocale, locale, nearest, setLocale, translate } from './i18n.ts';
 import { FRENCH } from './messages.fr.ts';
 
 /**
@@ -297,8 +297,7 @@ describe('the language of a person', () => {
   });
 
   it('fills the values of a sentence, and shows English for a sentence with no French', async () => {
-    await setLocale('fr', false);
-    void setLocale('en', false);
+    await loadLocale('fr');
     assert.equal(translate('fr', 'Key of {person}', { person: 'Camille' }), 'Clé de Camille');
     assert.equal(translate('en', 'Key of {person}', { person: 'Camille' }), 'Key of Camille');
     assert.equal(translate('fr', 'A sentence nobody translated'), 'A sentence nobody translated');

@@ -57,6 +57,19 @@ describe('the French map, loaded when French is asked for (FRU-494)', () => {
     assert.equal(i18n.t('Try again'), 'Réessayer');
   });
 
+  it('loads a map for a reader outside the screens, and changes no screen', async () => {
+    const i18n = await fresh('en-US');
+    let told = 0;
+    i18n.onLocale(() => (told += 1));
+    // Not loaded: English, as a screen would show.
+    assert.equal(i18n.translate('fr', 'Try again'), 'Try again');
+
+    await i18n.loadLocale('fr');
+    assert.equal(i18n.translate('fr', 'Try again'), 'Réessayer');
+    assert.equal(i18n.locale(), 'en');
+    assert.equal(told, 0);
+  });
+
   it('waits for nothing in an English browser', async () => {
     const i18n = await fresh('en-GB');
 
