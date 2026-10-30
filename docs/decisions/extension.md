@@ -2499,3 +2499,21 @@ The job `submit` reads these from the GitHub environment `stores` (**Settings â†
 
 WARNING: a new archive during a review starts the review again. Wait for the end of one review
 before you push the next tag.
+
+## The gallery of the extension (FRU-523)
+
+### The rules, in short
+
+- **`apps/extension/gallery/` draws every state of the popup, the welcome page and the side panel**,
+  each with its own view of `src/` and the sheets of its entrypoint, on made-up data
+  (`gallery/states.ts`). `pnpm --filter @fruitback/extension gallery` serves it on
+  http://localhost:5179/gallery/. A page shows all the states of its surface; `?state=<id>` shows
+  one alone, as the page of the extension draws it.
+- **It is served at https://gallery.fruitback.com**, so the widget of Fruitback can run on it: the
+  pages of the extension are `chrome-extension://`, where no widget runs, and a note cannot be left on
+  them. The extension mounts the widget there, as on any site of a workspace: the gallery embeds
+  nothing. Dokploy builds `apps/extension/gallery/Dockerfile` from `main`.
+- **A new screen, or a new state of a screen, gets an entry in `gallery/states.ts`.**
+  `src/gallery.test.ts` builds each entry; it does not see a state that has no entry.
+- **Not there:** the options page and the rule editor of the popup, which their entrypoints build
+  with no function to call, and the widget itself.
