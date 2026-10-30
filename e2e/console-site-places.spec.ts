@@ -853,3 +853,22 @@ test('a page of teams that arrives after « Try again » is dropped, not added t
   await expect(options.filter({ hasText: /^Team \d/ })).toHaveText(['Team 1 (T1) · no project']);
   await expect(page.getByRole('option', { name: 'More teams of Linear · Key of Ana…', exact: true })).toBeVisible();
 });
+
+test('« Try again » takes away the message of a page of teams that failed (FRU-501)', async ({ page }) => {
+  const worker = await workerWith(page);
+  const team = (index: number): Team => ({ id: `t${index}`, name: `Team ${index}`, key: `T${index}`, projects: [] });
+  worker.connectors = [LINEAR, GITHUB];
+  worker.teams = [team(1)];
+  worker.laterTeams = [team(2)];
+  worker.silentReads = 1;
+  worker.nextTeams = 'fail';
+  await openPlaces(page);
+  await expect(panel(page).getByRole('button', { name: 'Try again' })).toBeVisible();
+
+  await add(page).click();
+  await page.getByRole('option', { name: 'More teams of Linear · Key of Ana…', exact: true }).click();
+  await expect(panel(page)).toContainText('Linear · Key of Ana did not answer with more teams. Try again.');
+  await panel(page).getByRole('button', { name: 'Try again' }).click();
+  await expect(panel(page).getByRole('button', { name: 'Try again' })).toHaveCount(0);
+  await expect(panel(page)).not.toContainText('did not answer with more teams');
+});

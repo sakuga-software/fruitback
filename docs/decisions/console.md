@@ -655,19 +655,23 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   …/connectors/<id>/teams` answers one page of 50 teams, each with all its projects, and `next`
   while Linear has more; `?after=<next>` reads the next page, and `?q=<words>` (100 characters at
   most) only the teams whose name holds them, as Linear compares them with no case
-  (`containsIgnoreCase`). The picker shows the first page; « More teams of <source>… », after every
-  other option, never paged and never searched (`tail` of `SearchChoice`), reads the next one while
-  the search is empty. A search still filters what the console holds, and, 300 ms after the last
-  key, asks each Linear that has not given every team for the ones that hold it, which join the
-  list. The popup of the extension still reads every team (`GET /session/sites/places`,
-  `listLinearTeams`). **A place is labelled from its own team and project**, read by their ids in
-  one call for each connector (`readLinearPlaces`), never from the list of the teams; a new
-  connector reads only who the key belongs to (`readLinearViewer`). These reads, and the states,
-  give up after 10 s (`READ_TIMEOUT_MS`), as the calls of `linear-oauth.ts`: a Linear that hangs is
-  then a Linear that is down. The write of a note has no such limit, as a write Linear finishes
-  after the worker gave up would be written twice when the widget tries again. Measured with a fake
-  Linear of 300 teams of 60 projects, 40 ms a call: see the description of the pull request of
-  FRU-501.
+  (`containsIgnoreCase`). The list of each Linear is one state, `team-list.ts`: its teams, the
+  cursor of the next page (`null` once Linear says there is no other), the search, and the one
+  request it waits for. Each answer carries the id of its request, and any other answer is dropped:
+  a slow page that a search replaced, or a page of a list that « Try again » read again. A search
+  filters what the console holds, and, 300 ms after the last key, asks the worker for its words
+  once, only while the list is not complete. « More teams of <source>… », after every other option,
+  never paged and never searched (`tail` of `SearchChoice`), shows while there is a next page, no
+  search and no page on its way. `team-list.test.ts` crosses the shapes of a list, the moments of a
+  search, « Try again » after an error, and a slow answer. The popup of the extension still reads
+  every team (`GET /session/sites/places`, `listLinearTeams`). **A place is labelled from its own
+  team and project**, read by their ids in one call for each connector (`readLinearPlaces`), never
+  from the list of the teams; a new connector reads only who the key belongs to
+  (`readLinearViewer`). These reads, and the states, give up after 10 s (`READ_TIMEOUT_MS`), as the
+  calls of `linear-oauth.ts`: a Linear that hangs is then a Linear that is down. The write of a note
+  has no such limit, as a write Linear finishes after the worker gave up would be written twice when
+  the widget tries again. Measured with a fake Linear of 300 teams of 60 projects, 40 ms a call: see
+  the description of the pull request of FRU-501.
   **Each place shows the mark of its source, and a place of Linear its colour** (FRU-459, Mathieu):
   the `ConnectorMark` of FRU-435 before its name, then a dot in the colour Linear gives its project,
   else its team (`color` of the teams answer, `#rrggbb` only: anything else would reach a style, and

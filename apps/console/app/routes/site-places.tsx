@@ -16,17 +16,18 @@ import { msg, t } from '../i18n';
 import type { Listed } from '../listed';
 import { writeProblemOf } from '../problems';
 import { Button, Chip, LinkButton, type OptionGroup, Problem, SearchChoice } from '../ui';
+import { type TeamList, type TeamListEvent, offersMore, searchToAsk, stepTeamList, teamListOf } from '../team-list';
 import { useLocale } from '../use-locale';
 import { KINDS, accountOf, hostOf, sourceLine } from './connector-parts';
 import { GITHUB_APP_PAGE } from './connector-github';
 import { ReadProblem } from '../read-problem';
 
 /**
- * What a source offers: its teams, its repositories, or nothing to choose for an address. A Linear
- * gives a page of its teams at a time (FRU-501): `next` is where the next page starts, while there is one.
+ * What a source offers: its teams, its repositories, or nothing to choose for an address. The teams of
+ * a Linear come a page at a time, and a search asks the worker (FRU-501): `team-list.ts` holds them.
  */
 type Offer =
-  | { kind: 'linear'; teams: Team[]; next?: string }
+  | { kind: 'linear'; list: TeamList }
   | { kind: 'github'; repositories: Repository[] }
   | { kind: 'rest' }
   | 'loading'
@@ -68,14 +69,28 @@ export function SitePlaces({
   const sources = typeof connectors === 'string' ? [] : connectors;
   const ids = sources.map((each) => each.id).join();
 
-  /** The reads of the sources so far: a read of more teams that a newer one replaced is dropped. */
-  const generation = useRef(0);
+  /**
+   * The id of the last request of a list of teams (FRU-501). Each answer carries the id of its
+   * request, and a list drops an answer to any other: see `team-list.ts`.
+   */
+  const requests = useRef(0);
+  /** The search typed so far, for a list whose first page comes after it. */
+  const typed = useRef('');
+
+  /** Moves the list of teams of `source` on, when it has one. */
+  function step(source: string, event: TeamListEvent) {
+    setOffers((current) => {
+      const offer = current[source];
+      if (typeof offer !== 'object' || offer.kind !== 'linear') return current;
+
+      return { ...current, [source]: { kind: 'linear', list: stepTeamList(offer.list, event) } };
+    });
+  }
 
   // The teams of each Linear and the repositories of each GitHub are read when the page draws them, and
-  // again on « Try again ». An address has nothing to choose.
+  // again on « Try again », which starts each list of teams again. An address has nothing to choose.
   useEffect(() => {
     let stale = false;
-    generation.current += 1;
     for (const source of sources) {
       if (source.kind === 'rest') {
         setOffers((current) => ({ ...current, [source.id]: { kind: 'rest' } }));
@@ -83,13 +98,16 @@ export function SitePlaces({
       }
       setOffers((current) => ({ ...current, [source.id]: 'loading' }));
       const path = source.kind === 'linear' ? 'teams' : 'repositories';
+      requests.current += 1;
+      const asked = requests.current;
       void call<{ teams?: Team[]; next?: string; repositories?: Repository[] }>(
         'GET',
         `${base}/connectors/${source.id}/${path}`,
       ).then((answer) => {
         if (stale) return;
         let offer: Offer = 'failed';
-        if (answer.ok && source.kind === 'linear') offer = withTeams({ kind: 'linear', teams: [] }, answer.data);
+        if (answer.ok && source.kind === 'linear')
+          offer = { kind: 'linear', list: teamListOf(answer.data, asked, typed.current) };
         if (answer.ok && source.kind === 'github')
           offer = { kind: 'github', repositories: answer.data.repositories ?? [] };
         setOffers((current) => ({ ...current, [source.id]: offer }));
@@ -103,57 +121,43 @@ export function SitePlaces({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [base, ids, reads]);
 
-  /** The sources that did not answer the last read of more teams (FRU-501): the panel says so. */
-  const [moreFailed, setMoreFailed] = useState<readonly string[]>([]);
-
-  /** Asks a Linear for more of its teams (FRU-501), and adds those it did not give yet. */
-  function readTeams(source: string, query: string, keepsNext: boolean) {
-    const asked = generation.current;
-    void call<{ teams?: Team[]; next?: string }>('GET', `${base}/connectors/${source}/teams?${query}`).then(
-      (answer) => {
-        // The sources were read again since: this page belongs to a list that is gone (raised in review).
-        if (asked !== generation.current) return;
-        setMoreFailed((current) => {
-          const others = current.filter((each) => each !== source);
-
-          return answer.ok ? others : [...others, source];
-        });
-        if (!answer.ok) return;
-        setOffers((current) => {
-          const offer = current[source];
-          if (typeof offer !== 'object' || offer.kind !== 'linear') return current;
-          // A page moves `next` on; a search leaves it where the pages are.
-          const next = keepsNext ? answer.data.next : offer.next;
-
-          return { ...current, [source]: withTeams(offer, { teams: answer.data.teams ?? [], next }) };
-        });
-      },
+  /** Asks the worker for teams of a Linear, and gives the answer to its list with the id of the request. */
+  function readTeams(source: string, query: URLSearchParams, ask: 'ask-page' | 'ask-search') {
+    requests.current += 1;
+    const requestId = requests.current;
+    step(source, { type: ask, requestId });
+    void call<{ teams?: Team[]; next?: string }>('GET', `${base}/connectors/${source}/teams?${query}`).then((answer) =>
+      step(
+        source,
+        answer.ok
+          ? { type: 'answer', requestId, teams: answer.data.teams ?? [], next: answer.data.next }
+          : { type: 'fail', requestId },
+      ),
     );
   }
 
-  // A search asks each Linear that has not given every team yet for the teams that hold it (FRU-501),
-  // once the person stops typing.
-  const searching = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  /** The offers and the sources of the last render: a search reads them when it starts, not when the key was typed. */
-  const latest = useRef({ offers, sources });
-  latest.current = { offers, sources };
-  /** What is typed in the search: the next page of the teams is offered while it is empty. */
-  const [searched, setSearched] = useState('');
-  useEffect(() => () => clearTimeout(searching.current), []);
-  function searchTeams(search: string) {
-    clearTimeout(searching.current);
-    const wanted = search.trim();
-    setSearched(wanted);
-    if (wanted === '') return;
-    searching.current = setTimeout(() => {
-      const { offers: now, sources: listed } = latest.current;
-      for (const source of listed) {
-        const offer = now[source.id];
-        if (typeof offer === 'object' && offer.kind === 'linear' && offer.next !== undefined) {
-          readTeams(source.id, new URLSearchParams({ q: wanted }).toString(), false);
-        }
-      }
-    }, SEARCH_PAUSE_MS);
+  // A list that is not complete asks the worker for the words of the search, once for each words.
+  useEffect(() => {
+    for (const [source, offer] of Object.entries(offers)) {
+      if (typeof offer !== 'object' || offer.kind !== 'linear') continue;
+      const words = searchToAsk(offer.list);
+      if (words !== undefined) readTeams(source, new URLSearchParams({ q: words }), 'ask-search');
+    }
+    // `readTeams` is a new function at each render; the offers are what a search depends on.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [offers]);
+
+  // What is typed goes to the lists once the person stops typing; an empty search at once.
+  const pause = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(pause.current), []);
+  function type(search: string) {
+    clearTimeout(pause.current);
+    const give = () => {
+      typed.current = search.trim();
+      for (const source of Object.keys(offers)) step(source, { type: 'type', query: search });
+    };
+    if (search.trim() === '') give();
+    else pause.current = setTimeout(give, SEARCH_PAUSE_MS);
   }
 
   const places = placesOf(site);
@@ -189,7 +193,7 @@ export function SitePlaces({
     const offer = offers[source.id];
     const team =
       typeof offer === 'object' && offer.kind === 'linear'
-        ? offer.teams.find((one) => one.id === each.teamId)
+        ? offer.list.items.find((one) => one.id === each.teamId)
         : undefined;
     const project = team?.projects.find((one) => one.id === each.projectId);
 
@@ -205,7 +209,7 @@ export function SitePlaces({
     if (source?.kind !== 'linear') return undefined;
     const offer = offers[source.id];
     if (typeof offer !== 'object' || offer.kind !== 'linear') return undefined;
-    const team = offer.teams.find((one) => one.id === each.teamId);
+    const team = offer.list.items.find((one) => one.id === each.teamId);
     const project = team?.projects.find((one) => one.id === each.projectId);
 
     return project?.color ?? team?.color;
@@ -260,7 +264,7 @@ export function SitePlaces({
           heading: named,
           // A team, and not its places: its projects are in a list of their own (FRU-458). A team is
           // offered while one of its places is free.
-          options: offer.teams
+          options: offer.list.items
             .filter((team) => placesOfTeam(source.id, team).some((value) => free(value)))
             .map((team) => ({ value: `${TEAM}${source.id}|${team.id}`, label: teamLine(team) })),
         },
@@ -293,7 +297,7 @@ export function SitePlaces({
   const moreTeams = sources.flatMap((source) => {
     const offer = offers[source.id];
 
-    return typeof offer === 'object' && offer.kind === 'linear' && offer.next !== undefined
+    return typeof offer === 'object' && offer.kind === 'linear' && offersMore(offer.list)
       ? [
           {
             value: `${MORE_TEAMS}${source.id}`,
@@ -302,10 +306,16 @@ export function SitePlaces({
         ]
       : [];
   });
+  /** The Linears whose last read of more teams failed: a new read, or « Try again », takes it away. */
+  const teamsFailed = sources.filter((source) => {
+    const offer = offers[source.id];
+
+    return typeof offer === 'object' && offer.kind === 'linear' && offer.list.status === 'error';
+  });
   const chosenOffer = chosen === undefined ? undefined : offers[chosen.source];
   const chosenTeam =
     typeof chosenOffer === 'object' && chosenOffer.kind === 'linear'
-      ? chosenOffer.teams.find((team) => team.id === chosen?.team)
+      ? chosenOffer.list.items.find((team) => team.id === chosen?.team)
       : undefined;
   const projectGroups =
     chosen === undefined || chosenTeam === undefined ? [] : projectGroupsOf(chosen.source, chosenTeam, free);
@@ -399,17 +409,17 @@ export function SitePlaces({
             placeholder={reading && offered.length === 0 ? t('Loading…') : t('Add a destination…')}
             disabled={writing || (offered.length === 0 && moreTeams.length === 0)}
             groups={offered}
-            tail={searched === '' ? moreTeams : []}
+            tail={moreTeams}
             clearLabel={t('Clear the search')}
             noMatch={t('No destination matches this search.')}
             moreLabel={(more, left) => t('Show {more} more ({left} left)', { more, left })}
-            onSearch={searchTeams}
+            onSearch={type}
             onChoose={(value) => {
               if (value.startsWith(MORE_TEAMS)) {
                 const source = value.slice(MORE_TEAMS.length);
                 const offer = offers[source];
-                if (typeof offer === 'object' && offer.kind === 'linear' && offer.next !== undefined) {
-                  readTeams(source, new URLSearchParams({ after: offer.next }).toString(), true);
+                if (typeof offer === 'object' && offer.kind === 'linear' && offer.list.cursor !== null) {
+                  readTeams(source, new URLSearchParams({ after: offer.list.cursor }), 'ask-page');
                 }
 
                 return;
@@ -473,15 +483,10 @@ export function SitePlaces({
             </LinkButton>
           </p>
         ))}
-      {moreFailed.length === 0 ? null : (
+      {teamsFailed.length === 0 ? null : (
         <Problem>
           {t('{source} did not answer with more teams. Try again.', {
-            source: moreFailed
-              .map((id) => sources.find((each) => each.id === id))
-              .flatMap((source) =>
-                source === undefined ? [] : [`${t(KINDS[source.kind].name)} · ${sourceLine(source)}`],
-              )
-              .join(', '),
+            source: teamsFailed.map((source) => `${t(KINDS[source.kind].name)} · ${sourceLine(source)}`).join(', '),
           })}
         </Problem>
       )}
@@ -519,17 +524,6 @@ const MORE_TEAMS = 'more-teams:';
 
 /** How long a search waits for the person to stop typing before it asks Linear. */
 const SEARCH_PAUSE_MS = 300;
-
-/** The offer of a Linear with these teams added, each once, and the `next` of what was read. */
-function withTeams(
-  offer: { kind: 'linear'; teams: Team[] },
-  read: { teams?: Team[]; next?: string | undefined },
-): { kind: 'linear'; teams: Team[]; next?: string } {
-  const known = new Set(offer.teams.map((team) => team.id));
-  const teams = [...offer.teams, ...(read.teams ?? []).filter((team) => !known.has(team.id))];
-
-  return read.next === undefined ? { kind: 'linear', teams } : { kind: 'linear', teams, next: read.next };
-}
 
 /** The places a team offers: the team itself, and each of its projects. */
 function placesOfTeam(source: string, team: Team): string[] {
