@@ -119,6 +119,10 @@ async function workerWith(page: Page, world: World = {}): Promise<Worker> {
       worker.read.push(call);
       if (worker.members === 'waits') return new Promise<void>(() => {});
       if (worker.members === 'fails') return json({ error: 'unknown' }, 500);
+      // As the worker: a search past 100 characters is refused (FRU-496).
+      if ((new URL(request.url()).searchParams.get('q') ?? '').length > 100) {
+        return json({ error: 'invalid-request', field: 'q' }, 400);
+      }
 
       return json({ members });
     }
@@ -159,6 +163,9 @@ async function workerWith(page: Page, world: World = {}): Promise<Worker> {
 
       return json(refused, status);
     }
+    // A member removed is no longer listed: the screen reads its page again (FRU-496).
+    const removed = members.findIndex((each) => (each as { id?: unknown }).id === body.memberIdOrEmail);
+    if (call === 'remove-member' && removed >= 0) members.splice(removed, 1);
     if (call !== 'invite-member') return json({});
     const again = invitations.find((each) => each.email === body.email);
     const invitation = again ?? {
@@ -197,9 +204,10 @@ const email = (page: Page) => form(page).getByRole('textbox', { name: 'Email', e
 const roles = (page: Page) => form(page).getByRole('button', { name: /Role$/ });
 const invite = (page: Page) => form(page).getByRole('button', { name: 'Invite', exact: true });
 const table = (page: Page) => page.getByRole('region', { name: /^(Members|Membres)$/ });
+/** The row of a person, or of an invitation: each is in its own list (FRU-496). */
 const row = (page: Page, name: string) =>
-  table(page)
-    .locator('tbody tr')
+  page
+    .locator('main tbody tr')
     .filter({ has: page.getByText(name, { exact: true }) })
     .first();
 const cells = (page: Page, name: string) => row(page, name).locator('td');
@@ -215,6 +223,14 @@ async function expectNoViolation(page: Page, name: string): Promise<void> {
 }
 
 const CELL = ['padding-top', 'padding-right', 'padding-bottom', 'padding-left'];
+
+/**
+ * What is above the table and not in the mockup (FRU-496): the search, and the heading « Members »
+ * with its count. A box under them is compared this much lower than the mockup draws it.
+ */
+const LISTS = 93;
+/** The table of the mockup holds Paul's invitation too: the members alone are one row shorter. */
+const MEMBERS_FRAME = 302.4;
 
 test('the list is the table of the mockup, with what the worker of today says of a person', async ({ page }) => {
   await workerWith(page);
@@ -281,10 +297,20 @@ test('the list is the table of the mockup, with what the worker of today says of
     });
   expect.soft(await painted(tom.nth(3), 'color')).toEqual(rgb(MUTED));
   // The screen is as wide as its column (FRU-398): 71.5 px wider than the 1120 px of the mockup.
-  expectBox(await box(table(page)), { x: 296.5, y: 216.2, width: 1095.5, height: 366.5 }, 2, 'the frame of the table');
+  expectBox(
+    await box(table(page)),
+    { x: 296.5, y: 216.2 + LISTS, width: 1095.5, height: MEMBERS_FRAME },
+    2,
+    'the frame of the table',
+  );
   expectBox(await box(table(page).locator('thead tr')), { height: 43.3 }, 2, 'the header row');
   // A row of the mockup is 64 px: two lines of 14 px and 13 px at 1.45, and 12 px above and under.
-  expectBox(await box(row(page, 'Tom')), { x: 297.5, y: 324.7, width: 1093.5, height: 64.1 }, 2, 'the second row');
+  expectBox(
+    await box(row(page, 'Tom')),
+    { x: 297.5, y: 324.7 + LISTS, width: 1093.5, height: 64.1 },
+    2,
+    'the second row',
+  );
 
   // A person: the round chip with the initial, the name at 600, the address under it.
   const chip = tom.nth(0).locator('.kit-avatar');
@@ -299,12 +325,12 @@ test('the list is the table of the mockup, with what the worker of today says of
   });
   expect.soft(await painted(chip, 'backgroundColor')).toEqual(rgb(AVATAR));
   expect.soft(await painted(chip, 'color')).toEqual(rgb(WHITE));
-  expectBox(await box(chip), { x: 317.5, y: 340.7, width: 32, height: 32 }, 2, 'the chip of the second row');
+  expectBox(await box(chip), { x: 317.5, y: 340.7 + LISTS, width: 32, height: 32 }, 2, 'the chip of the second row');
   expect.soft(await styles(tom.nth(0).locator('> span'), ['column-gap'])).toEqual({ 'column-gap': '12px' });
   const name = tom.nth(0).getByText('Tom', { exact: true });
   expect.soft(await styles(name, ['font-weight', 'font-size'])).toEqual({ 'font-weight': '600', 'font-size': '14px' });
   expect.soft(await painted(name, 'color')).toEqual(rgb(INK));
-  expectBox(await box(name), { x: 361.5, y: 337.1, height: 20.3 }, 2, 'the name of the second row');
+  expectBox(await box(name), { x: 361.5, y: 337.1 + LISTS, height: 20.3 }, 2, 'the name of the second row');
   const address = tom.nth(0).getByText('tom@acme.dev', { exact: true });
   expect.soft(await styles(address, ['font-size', 'line-height'])).toEqual({
     'font-size': '13px',
@@ -342,8 +368,9 @@ test('the list is the table of the mockup, with what the worker of today says of
   });
   expect.soft(await painted(resend, 'color')).toEqual(rgb(INK));
   // The link of the kit is 33 px high where the mockup has 36.3: its line is `normal`, not 1.45.
-  expectBox(await box(resend), { x: 1258.5, y: 531, width: 50.2 }, 2, '« Resend »');
-  expectBox(await box(cancel), { x: 1324.7, y: 531, width: 46.3 }, 2, '« Cancel »');
+  // The invitation is in the list under the members (FRU-496): 203.9 px lower than the mockup.
+  expectBox(await box(resend), { x: 1258.5, y: 531 + 203.9, width: 50.2 }, 2, '« Resend »');
+  expectBox(await box(cancel), { x: 1324.7, y: 531 + 203.9, width: 46.3 }, 2, '« Cancel »');
   await resend.hover();
   expect.soft(await painted(resend, 'color')).toEqual(rgb(ACCENT_STRONG));
   await page.mouse.move(700, 800);
@@ -709,11 +736,13 @@ test('Tab goes from the form to each action of the table, and each stop shows it
   const stops: [string, Locator][] = [
     ['the list of roles', roles(page)],
     ['« Invite »', invite(page)],
+    ['the search', page.getByRole('searchbox', { name: 'Search members' })],
     // The frame takes focus, so a keyboard scrolls a table wider than its screen.
     ['the frame of the table', table(page)],
     ['« Remove » of the second row', row(page, 'Tom').getByRole('button', { name: 'Remove', exact: true })],
     ['« Remove » of the third row', row(page, 'Nora').getByRole('button', { name: 'Remove', exact: true })],
     ['« Remove » of the fourth row', row(page, 'Inès Morel').getByRole('button', { name: 'Remove', exact: true })],
+    ['the frame of the invitations', page.getByRole('region', { name: 'Pending invitations' })],
     ['« Resend »', row(page, 'paul@client.fr').getByRole('button', { name: 'Resend', exact: true })],
     ['« Cancel »', row(page, 'paul@client.fr').getByRole('button', { name: 'Cancel', exact: true })],
   ];
@@ -795,6 +824,35 @@ test('a read that failed says so with « Try again », and is never a table with
   await expect(row(page, 'Tom')).toBeVisible();
   await expect(alert).toHaveCount(0);
   await expect(email(page)).toHaveValue('zoe@client.fr');
+});
+
+test('a search longer than the worker reads is cut at 100 characters, and never fails the list (FRU-496)', async ({
+  page,
+}) => {
+  await workerWith(page);
+  await open(page);
+  const search = page.getByRole('searchbox', { name: 'Search members' });
+  await search.fill('a'.repeat(120));
+  await expect(search).toHaveValue('a'.repeat(100));
+  // The stub finds the four members whatever the search: the table is there, and no « Try again ».
+  await expect.poll(async () => (await table(page).locator('tbody tr').count()) > 0).toBe(true);
+  await page.waitForTimeout(500);
+  await expect(page.getByRole('button', { name: 'Try again' })).toHaveCount(0);
+  await expect(row(page, 'Tom')).toBeVisible();
+});
+
+test('a member removed stays removed when the read of their page after it fails (FRU-496)', async ({ page }) => {
+  const worker = await workerWith(page);
+  await open(page);
+  await row(page, 'Tom').getByRole('button', { name: 'Remove', exact: true }).click();
+  worker.members = 'fails';
+  await page.getByRole('button', { name: 'Remove Tom' }).click();
+  await expect.poll(() => worker.sent.map((each) => each.call)).toEqual(['remove-member']);
+  await expect.poll(() => worker.read.filter((each) => each === 'list-members').length).toBeGreaterThan(1);
+  await page.waitForTimeout(500);
+  await expect(page.getByText('tom@acme.dev', { exact: true })).toHaveCount(0);
+  await expect(row(page, 'Nora')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Try again' })).toHaveCount(0);
 });
 
 test('a day that the worker did not give, or that is no date, is not drawn', async ({ page }) => {
@@ -916,12 +974,17 @@ test('at 390 px the form stacks, and each part is where the mockup draws it', as
   // The last list and the button share a line, as « Site » and « Invite » do in the mockup.
   expectBox(await box(roles(page)), { x: 16, y: top + 324.2 - less, width: 262.8, height: 44 }, 4, 'the list of roles');
   expectBox(await box(invite(page)), { x: 288.8, y: top + 324.2 - less, width: 85.2, height: 44 }, 4, '« Invite »');
-  expectBox(await box(table(page)), { x: 16, y: top + 392.2 - less, width: 358, height: 366.5 }, 4, 'the frame');
+  expectBox(
+    await box(table(page)),
+    { x: 16, y: top + 392.2 - less + LISTS, width: 358, height: MEMBERS_FRAME },
+    4,
+    'the frame',
+  );
   expectBox(await box(table(page).locator('table')), { x: 17, width: 760 }, 4, 'the table');
-  expectBox(await box(row(page, 'Tom')), { x: 17, y: top + 500.7 - less, height: 64.1 }, 4, 'the second row');
+  expectBox(await box(row(page, 'Tom')), { x: 17, y: top + 500.7 - less + LISTS, height: 64.1 }, 4, 'the second row');
   expectBox(
     await box(row(page, 'Tom').locator('.kit-avatar')),
-    { x: 37, y: top + 516.7 - less, width: 32, height: 32 },
+    { x: 37, y: top + 516.7 - less + LISTS, width: 32, height: 32 },
     4,
     'the chip of the second row',
   );
@@ -994,8 +1057,10 @@ test('an owner reads « Last seen »: a day, never an hour, and « Not seen yet 
   await expect(last('nora@acme.dev')).toContainText('3 days ago');
   // Nobody saw this one since « Last seen » came: the screen says so, and not a date.
   await expect(last('ines@client.fr')).toContainText('Not seen yet');
-  // An invitation still says when it was sent.
-  await expect(last('paul@client.fr')).toContainText('Sent 3 Oct');
+  // An invitation still says when it was sent, in its own list (FRU-496).
+  await expect(
+    page.getByRole('region', { name: 'Pending invitations' }).locator('tbody tr').first().locator('td').last(),
+  ).toContainText('Sent 3 Oct');
   expect(worker.read).toContain('seen');
 });
 
@@ -1004,11 +1069,12 @@ test('the table does not wait for « Last seen », and nothing of a row moves wh
   const worker = await workerWith(page, { seen: 'waits', released: SEEN });
   await open(page);
   const table = page.getByRole('region', { name: 'Members' });
-  // The members are there while the days are on their way.
-  await expect(table.locator('tbody tr')).toHaveCount(5);
+  // The members are there while the days are on their way, and the invitation in its own list.
+  await expect(table.locator('tbody tr')).toHaveCount(4);
   await expect(table.locator('thead th').last()).toHaveText('Last seen');
   const remove = table.locator('tbody tr').filter({ hasText: 'nora@acme.dev' }).getByRole('button', { name: 'Remove' });
-  const cancel = table
+  const cancel = page
+    .getByRole('region', { name: 'Pending invitations' })
     .locator('tbody tr')
     .filter({ hasText: 'paul@client.fr' })
     .getByRole('button', { name: 'Cancel' });

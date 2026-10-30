@@ -1,10 +1,11 @@
-import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm';
-import { DEFAULT_NOTE_STAGE, type Note, type NoteIssue, noteSchema } from '@fruitback/shared';
+import { type SQL, and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { DEFAULT_NOTE_STAGE, type Note, type NoteComment, type NoteIssue, noteSchema } from '@fruitback/shared';
 import type { Database, Db } from './postgres.ts';
 import { migrated } from './postgres-migrate.ts';
 import { note_comments, notes, sites, statuses } from './postgres-schema.ts';
 import { OWN_SOURCE } from './site-statuses.ts';
 import {
+  COMMENTS_PER_ISSUE,
   forgetSelectorFor,
   identifierFor,
   readJson,
@@ -15,7 +16,14 @@ import {
   widgetIdOf,
 } from './note-rows.ts';
 import { checkText, editText, replyText } from './reply-text.ts';
-import { type BatchAnswer, type CreatedIssue, type NoteStore, StoreError } from './store.ts';
+import {
+  type BatchAnswer,
+  type CreatedIssue,
+  type NoteIssueQuery,
+  type NoteStore,
+  StoreError,
+  isLookedUp,
+} from './store.ts';
 
 /**
  * The notes in the database of the worker (FRU-218): `FRUITBACK_STORE=postgres`.
@@ -85,73 +93,57 @@ export function createPostgresNoteStore(database: Database): NoteStore {
       ),
     findForPage: (query, _client, policy) =>
       through('read the notes', async ({ run }) => {
-        const rows = await run((db) =>
-          db
-            .select({
-              id: notes.id,
-              page_url: notes.page_url,
-              stage: notes.stage,
-              status_key: notes.status_key,
-              payload: notes.payload,
-              at: notes.updated_at,
-            })
-            .from(notes)
-            .where(
-              and(
-                eq(notes.page_url, query.url),
-                // WARNING: without this clause a site reads the notes of every workspace of the worker.
-                query.clientId === undefined ? isNull(notes.client_id) : eq(notes.client_id, query.clientId),
-              ),
-            )
-            .orderBy(asc(notes.id)),
-        );
+        const rows = await run((db) => db.select(NOTE_COLUMNS).from(notes).where(onPage(query)).orderBy(asc(notes.id)));
         // One statement for the replies of every note of the page, and none when the client hides them.
-        const threads =
-          policy.showComments && rows.length > 0
-            ? threadsOf(
-                (
-                  await run((db) =>
-                    db
-                      .select()
-                      .from(note_comments)
-                      .where(
-                        inArray(
-                          note_comments.note_id,
-                          rows.map((row) => row.id),
-                        ),
-                      )
-                      // The newest first for one note: the cap of `threadsOf` keeps the newest.
-                      .orderBy(asc(note_comments.note_id), desc(note_comments.created_at), desc(note_comments.id)),
-                  )
-                ).map((row) => ({
-                  id: row.id,
-                  note_id: row.note_id,
-                  author: row.author,
-                  body: row.body,
-                  createdAt: new Date(row.created_at).toISOString(),
-                })),
-              )
-            : undefined;
+        const threads = policy.showComments ? await repliesOf(run, rows) : undefined;
 
         return (
           rows
             // `undefined` when the worker was not asked for replies: the field is left out, and the
             // widget says nothing rather than that the team never answered.
-            .map((row) =>
-              toNoteIssue(
-                {
-                  id: row.id,
-                  page_url: row.page_url,
-                  stage: row.stage,
-                  status_key: row.status_key,
-                  payload: row.payload,
-                  updatedAt: new Date(row.at).toISOString(),
-                },
-                policy.showComments ? (threads?.get(row.id) ?? []) : undefined,
-              ),
-            )
+            .map((row) => issueOf(row, threads === undefined ? undefined : (threads.get(row.id) ?? [])))
             .filter((issue): issue is NoteIssue => issue !== null)
         );
+      }),
+    // FRU-499: one note of the page, for a write. The issue `findForPage` answers for it, with the
+    // same replies, from its row and its newest replies only.
+    findNote: (lookup, _client, policy) =>
+      through('read the note', async ({ run }) => {
+        // The rows of the page that `which` keeps, and the first of them that is the note asked for,
+        // as `findForPage` finds it.
+        const first = async (which: SQL | undefined) =>
+          (
+            await run((db) =>
+              db
+                .select(NOTE_COLUMNS)
+                .from(notes)
+                .where(and(onPage(lookup), which))
+                .orderBy(asc(notes.id)),
+            )
+          ).find((each) => {
+            const issue = issueOf(each, undefined);
+
+            return issue !== null && isLookedUp(lookup, issue);
+          });
+        let row: NoteRow | undefined;
+        if (lookup.by === 'issue') {
+          const id = Number(lookup.id);
+          // `findForPage` answers `String(row.id)`: `01` or `1.0` is no id of a row.
+          if (!Number.isSafeInteger(id) || String(id) !== lookup.id) return undefined;
+          row = await first(eq(notes.id, id));
+        } else {
+          // The id the widget gave is in `payload`, which is text: the rows whose text holds it, and the
+          // parse says which one is the note. A query on the JSON would throw for every row on one row
+          // that is not JSON. A row can write the id escaped (`\u00e9` for `é`, by a restore or an
+          // operator): when no row holds it as it is, every note of the page is parsed, and still
+          // none of their replies is read (review of #733).
+          row = (await first(sql`strpos(${notes.payload}, ${lookup.id}) > 0`)) ?? (await first(undefined));
+        }
+        if (row === undefined) return undefined;
+        if (!policy.showComments) return issueOf(row, undefined) ?? undefined;
+        const threads = await repliesOf(run, [row]);
+
+        return issueOf(row, threads.get(row.id) ?? []) ?? undefined;
       }),
     // A reply in the table of the replies, under a note of this client only (FRU-257). The table has
     // no author for it: the name is in the text, as in a tracker.
@@ -343,4 +335,88 @@ export function createPostgresNoteStore(database: Database): NoteStore {
         }),
       ),
   };
+}
+
+/** The columns of a note that a read hands to `toNoteIssue`. */
+const NOTE_COLUMNS = {
+  id: notes.id,
+  page_url: notes.page_url,
+  stage: notes.stage,
+  status_key: notes.status_key,
+  payload: notes.payload,
+  at: notes.updated_at,
+};
+
+type NoteRow = { id: number; page_url: string; stage: string; status_key: string | null; payload: string; at: number };
+
+/** The notes of one page, for one client. */
+function onPage(query: NoteIssueQuery): SQL | undefined {
+  return and(
+    eq(notes.page_url, query.url),
+    // WARNING: without this clause a site reads the notes of every workspace of the worker.
+    query.clientId === undefined ? isNull(notes.client_id) : eq(notes.client_id, query.clientId),
+  );
+}
+
+function issueOf(row: NoteRow, comments: NoteComment[] | undefined): NoteIssue | null {
+  return toNoteIssue(
+    {
+      id: row.id,
+      page_url: row.page_url,
+      stage: row.stage,
+      status_key: row.status_key,
+      payload: row.payload,
+      updatedAt: new Date(row.at).toISOString(),
+    },
+    comments,
+  );
+}
+
+/**
+ * The newest `COMMENTS_PER_ISSUE` replies of each of these notes, in one statement (FRU-499). The
+ * database stops at the cap of each note on `note_comments_by_note`: a note with a thousand replies
+ * sends twenty, and not a thousand for `threadsOf` to drop.
+ */
+async function repliesOf(run: Database['run'], rows: readonly { id: number }[]): Promise<Map<number, NoteComment[]>> {
+  if (rows.length === 0) return new Map();
+  const newest = (db: Db) =>
+    db
+      .select()
+      .from(note_comments)
+      .where(eq(note_comments.note_id, notes.id))
+      // The newest first for one note: the cap keeps the newest.
+      .orderBy(desc(note_comments.created_at), desc(note_comments.id))
+      .limit(COMMENTS_PER_ISSUE)
+      .as('newest');
+  const found = await run((db) => {
+    const reply = newest(db);
+
+    return db
+      .select({
+        id: reply.id,
+        note_id: reply.note_id,
+        author: reply.author,
+        body: reply.body,
+        created_at: reply.created_at,
+      })
+      .from(notes)
+      .crossJoinLateral(reply)
+      .where(
+        inArray(
+          notes.id,
+          rows.map((row) => row.id),
+        ),
+      )
+      .orderBy(asc(reply.note_id), desc(reply.created_at), desc(reply.id));
+  });
+
+  return threadsOf(
+    found.map((row) => ({
+      id: row.id,
+      note_id: row.note_id,
+      author: row.author,
+      body: row.body,
+      createdAt: new Date(row.created_at).toISOString(),
+    })),
+  );
 }

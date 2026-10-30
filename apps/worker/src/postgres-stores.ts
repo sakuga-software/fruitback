@@ -88,6 +88,8 @@ export function accountStoreOn(database: Database): AccountStore {
     reach: true,
     shareByInvitation: true,
     sitesOfInvitations: true,
+    waitingInvitations: true,
+    membersOf: true,
     shareOnAcceptance: true,
     sharedIn: true,
     unshare: true,
@@ -294,7 +296,10 @@ export function postgresInstanceAdmin(url: string, schema: string): InstanceAdmi
 export function postgresNoteStore(url: string, schema: string): NoteStore {
   const database = databaseFor(url, schema);
   type Calls = Required<
-    Pick<NoteStore, 'create' | 'createBatch' | 'findForPage' | 'forget' | 'reply' | 'check' | 'setStatus' | 'edit'>
+    Pick<
+      NoteStore,
+      'create' | 'createBatch' | 'findForPage' | 'findNote' | 'forget' | 'reply' | 'check' | 'setStatus' | 'edit'
+    >
   >;
   const store = later<Calls>(
     async () => (await import('./notes-postgres.ts')).createPostgresNoteStore(database) as Calls,
@@ -302,6 +307,7 @@ export function postgresNoteStore(url: string, schema: string): NoteStore {
       create: true,
       createBatch: true,
       findForPage: true,
+      findNote: true,
       forget: true,
       reply: true,
       check: true,

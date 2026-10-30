@@ -374,8 +374,9 @@ type SiteCardProps = {
 };
 
 /**
- * The card of a site (FRU-408). Its name and « Settings » lead to the page of the site (FRU-433),
- * where everything else is: the grid unfolds nothing under a card.
+ * The card of a site (FRU-408). Its name and « Open its page » lead to the page of the site (FRU-433), where
+ * everything else is: the grid unfolds nothing under a card. « See the notes » is the Notes screen
+ * with this site chosen (FRU-504).
  */
 function SiteCard({ workspace, site, manages, seesTracker }: SiteCardProps) {
   useLocale();
@@ -384,8 +385,8 @@ function SiteCard({ workspace, site, manages, seesTracker }: SiteCardProps) {
   const page = `/w/${workspace.id}/sites/${site.id}`;
   // Every role reads the page of a site and installs Fruitback on it. The rest is of who manages them.
   const items: MenuItem[] = [
-    { id: 'settings', label: t('Settings') },
-    { id: 'install', label: t('Install') },
+    { id: 'open', label: t('Open its page') },
+    { id: 'notes', label: t('See the notes') },
     ...(manages
       ? [
           { id: 'statuses', label: t('Statuses') },
@@ -396,7 +397,8 @@ function SiteCard({ workspace, site, manages, seesTracker }: SiteCardProps) {
   ];
   const go = (id: string) => {
     if (id === 'statuses') navigate(`${page}/statuses`);
-    else if (id === 'settings') navigate(page);
+    else if (id === 'open') navigate(page);
+    else if (id === 'notes') navigate(notesOf(workspace.id, site.id));
     else navigate(`${page}#${id}`);
   };
 
@@ -493,6 +495,11 @@ function SiteCard({ workspace, site, manages, seesTracker }: SiteCardProps) {
         : null}
     </li>
   );
+}
+
+/** The Notes screen with one site chosen in its filter « Site ». */
+export function notesOf(workspace: string, site: string): string {
+  return `/w/${workspace}/notes?${new URLSearchParams({ site }).toString()}`;
 }
 
 /** The sites whose name holds the search, in the order of the list: the search is the address typed. */

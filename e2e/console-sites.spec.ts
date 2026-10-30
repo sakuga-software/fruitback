@@ -737,9 +737,10 @@ test('the menu of a card is walked with the keyboard, and leads to the page of t
   await button.focus();
   await page.keyboard.press('Enter');
   const menu = page.getByRole('menu', { name: 'More for staging.acme.dev' });
-  // « Settings » is the page of the site; « Statuses » the page of its statuses (FRU-371).
-  await expect(menu.getByRole('menuitem')).toHaveText(['Settings', 'Install', 'Statuses', 'Remove']);
-  await expect(menu.getByRole('menuitem', { name: 'Settings' })).toBeFocused();
+  // « Open its page » is the page of the site; « See the notes » the Notes screen with the site chosen
+  // (FRU-504); « Statuses » the page of its statuses (FRU-371).
+  await expect(menu.getByRole('menuitem')).toHaveText(['Open its page', 'See the notes', 'Statuses', 'Remove']);
+  await expect(menu.getByRole('menuitem', { name: 'Open its page' })).toBeFocused();
   await page.waitForTimeout(250);
   const opened = await new AxeBuilder({ page }).include('.kit-menu').analyze();
   expect
@@ -749,20 +750,18 @@ test('the menu of a card is walked with the keyboard, and leads to the page of t
   await expect(menu).toBeHidden();
   await expect(button).toBeFocused();
 
-  // The grid unfolds nothing under a card: « Install » is a section of the page of the site.
+  // « See the notes »: the Notes screen, with this site chosen.
   await page.keyboard.press('Enter');
   await page.keyboard.press('ArrowDown');
   await page.keyboard.press('Enter');
-  await expect(page).toHaveURL(`${CONSOLE}/w/w1/sites/s1#install`);
-  const install = page.getByRole('region', { name: 'Install on staging.acme.dev' });
-  await expect(install.getByRole('button', { name: 'Copy the script' })).toBeVisible();
-  await expect(grid(page)).toHaveCount(0);
+  await expect(page).toHaveURL(`${CONSOLE}/w/w1/notes?site=s1`);
 
-  // « Settings » is the top of the same page, and the name of the card a link to it.
+  // « Open its page » is the page of the site, and the name of the card a link to it.
   await page.goBack();
   await button.click();
-  await menu.getByRole('menuitem', { name: 'Settings' }).click();
+  await menu.getByRole('menuitem', { name: 'Open its page' }).click();
   await expect(page).toHaveURL(`${CONSOLE}/w/w1/sites/s1`);
+  await expect(grid(page)).toHaveCount(0);
   await page.goBack();
   await card(page, 'acme.dev').getByRole('link', { name: 'acme.dev', exact: true }).click();
   await expect(page).toHaveURL(`${CONSOLE}/w/w1/sites/s2`);
@@ -857,7 +856,7 @@ test('a member installs and changes nothing; a guest does not read where the not
   await expect(page.getByRole('button', { name: 'Add a site', exact: true })).toHaveCount(0);
   await expect(card(page, 'staging.acme.dev').locator('dt')).toHaveText(['Notes go to', 'Last note']);
   await more(page, 'staging.acme.dev').click();
-  await expect(page.getByRole('menuitem')).toHaveText(['Settings', 'Install']);
+  await expect(page.getByRole('menuitem')).toHaveText(['Open its page', 'See the notes']);
   await page.keyboard.press('Escape');
 
   // The worker sends a guest no destination, and a card says nothing of one.

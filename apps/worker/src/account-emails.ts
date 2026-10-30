@@ -1,3 +1,4 @@
+import { json } from './http.ts';
 import { randomBytes } from 'node:crypto';
 import { readJsonObject } from './bounded-body.ts';
 import { mailboxOf, normalizeEmail } from './accounts.ts';
@@ -90,13 +91,6 @@ type SessionAdapter = {
 /** Whether this path is one of this file. */
 export function isEmailRoute(pathname: string): boolean {
   return pathname === EMAILS_PATH || ONE_EMAIL.test(pathname);
-}
-
-function json(status: number, body: unknown, headers: Record<string, string>): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...headers },
-  });
 }
 
 /** An address that waits: the account that asked, and the address. */

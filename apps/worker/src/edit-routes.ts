@@ -1,3 +1,4 @@
+import { json } from './http.ts';
 import { NOTE_MAX_LENGTH } from '@fruitback/shared';
 import type { AccountStore } from './accounts.ts';
 import { MAX_BODY_BYTES, readBoundedText } from './bounded-body.ts';
@@ -7,7 +8,7 @@ import { canonicalizeRequestedPage, indexed, invalidatePages, routingFailure } f
 import type { NoteIndex } from './notes-index.ts';
 import { indexedAuthorOf } from './reply-routes.ts';
 import type { CallerChecks, RequestContext, Served } from './request-context.ts';
-import { type NoteStore, StoreError, takesEdits } from './store.ts';
+import { type NoteStore, StoreError, findNote, takesEdits } from './store.ts';
 
 /** `POST /feedback/<id>/text`: the text of a note, edited by the person who left it (FRU-475). */
 export const EDIT_PATH = /^\/feedback\/([A-Za-z0-9_-]{1,100})\/text$/;
@@ -93,8 +94,11 @@ export async function postEdit(
     // A guest reads a note by the id the widget gave it, never by the id of the tracker (FRU-250).
     const hidden = await hidesTracker(request, config, route.policy);
     // Read now in the store, never in the cache: the stage that decides is the store's.
-    const found = (await store.findForPage({ url, clientId }, target, route.policy)).find((each) =>
-      hidden ? each.note.id === issue : each.id === issue,
+    const found = await findNote(
+      store,
+      { url, clientId, id: issue, by: hidden ? 'note' : 'issue' },
+      target,
+      route.policy,
     );
     if (found === undefined) return json(404, { error: 'not-found' }, corsHeaders);
 
@@ -130,11 +134,4 @@ export async function postEdit(
     if (error instanceof KvError) return json(503, { error: 'limiter-unavailable' }, corsHeaders);
     throw error;
   }
-}
-
-function json(status: number, body: unknown, headers: Record<string, string> = {}): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...headers },
-  });
 }

@@ -1,3 +1,4 @@
+import { json } from './http.ts';
 import type { AgentGrant } from './agent-keys.ts';
 import { readBoundedText } from './bounded-body.ts';
 import { readBearerToken } from './identity.ts';
@@ -54,10 +55,8 @@ export type McpContext = {
 /** The version of the tools of this server: it changes when a tool changes what it takes or answers. */
 export const TOOLS_VERSION = '1';
 
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
 function answer(status: number, body: unknown, headers: Record<string, string> = {}): Response {
-  return new Response(JSON.stringify(body), { status, headers: { ...JSON_HEADERS, ...headers } });
+  return json(status, body, headers);
 }
 
 type Id = string | number;

@@ -1,6 +1,7 @@
+import { json } from './http.ts';
 import { type AccountStore, MAX_AGENT_KEYS, type OAuthClient, can } from './accounts.ts';
 import { type AgentGrant, DEFAULT_KEY_DAYS, daysOf, grantOf, sitesOf } from './agent-keys.ts';
-import { MAX_BODY_BYTES, readBoundedText } from './bounded-body.ts';
+import { MAX_BODY_BYTES, parseJsonObject, readBoundedText } from './bounded-body.ts';
 import type { Kv } from './kv.ts';
 import { MCP_PATH } from './mcp.ts';
 import { digest } from './session.ts';
@@ -99,15 +100,13 @@ export function resourceMetadataUrl(issuer: string): string {
 
 const NO_STORE = { 'Cache-Control': 'no-store', Pragma: 'no-cache' };
 
-function json(status: number, body: unknown, headers: Record<string, string>): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json', ...NO_STORE, ...headers },
-  });
+/** RFC 6749 §5.1: an answer of the authorization server also says `Pragma: no-cache`. */
+function oauthJson(status: number, body: unknown, headers: Record<string, string>): Response {
+  return json(status, body, { ...NO_STORE, ...headers });
 }
 
 function oauthError(status: number, error: string, description: string, headers: Record<string, string>): Response {
-  return json(status, { error, error_description: description }, headers);
+  return oauthJson(status, { error, error_description: description }, headers);
 }
 
 /** A refusal of `/oauth/authorize` that must not go back to an address nobody checked: a page. */
@@ -212,9 +211,9 @@ export async function handleOAuth(
   const { issuer } = context;
 
   if (pathname === PROTECTED_RESOURCE_PATH || pathname === `${PROTECTED_RESOURCE_PATH}${MCP_PATH}`) {
-    if (request.method !== 'GET') return json(405, { error: 'method-not-allowed' }, { ...headers, Allow: 'GET' });
+    if (request.method !== 'GET') return oauthJson(405, { error: 'method-not-allowed' }, { ...headers, Allow: 'GET' });
 
-    return json(
+    return oauthJson(
       200,
       {
         resource: `${issuer}${MCP_PATH}`,
@@ -228,9 +227,9 @@ export async function handleOAuth(
   }
 
   if (pathname === AUTHORIZATION_SERVER_PATH) {
-    if (request.method !== 'GET') return json(405, { error: 'method-not-allowed' }, { ...headers, Allow: 'GET' });
+    if (request.method !== 'GET') return oauthJson(405, { error: 'method-not-allowed' }, { ...headers, Allow: 'GET' });
 
-    return json(
+    return oauthJson(
       200,
       {
         issuer,
@@ -257,12 +256,12 @@ export async function handleOAuth(
     return authorize(new URL(request.url).searchParams, context, now);
   }
 
-  if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, { ...headers, Allow: 'POST' });
+  if (request.method !== 'POST') return oauthJson(405, { error: 'method-not-allowed' }, { ...headers, Allow: 'POST' });
   if (pathname === REGISTER_PATH) return register(request, context, now, headers);
 
   const form = await formOf(request);
   // Over the cap: the answer of every route of the worker (FRU-506), not an error of OAuth.
-  if (form === 'too-large') return json(413, { error: 'payload-too-large', maxBytes: MAX_BODY_BYTES }, headers);
+  if (form === 'too-large') return oauthJson(413, { error: 'payload-too-large', maxBytes: MAX_BODY_BYTES }, headers);
   if (form === undefined) return oauthError(400, 'invalid_request', 'The body is a form, and is short.', headers);
   if (pathname === TOKEN_PATH) return token(request, form, context, now, headers);
 
@@ -282,17 +281,8 @@ async function register(
   if (made > REGISTRATIONS_PER_ADDRESS) return oauthError(429, 'rate_limited', 'Too many registrations.', headers);
 
   const text = await readBoundedText(request);
-  if (text === null) return json(413, { error: 'payload-too-large', maxBytes: MAX_BODY_BYTES }, headers);
-  let body: Record<string, unknown> | undefined;
-  try {
-    const parsed: unknown = JSON.parse(text);
-    body =
-      typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
-        ? (parsed as Record<string, unknown>)
-        : undefined;
-  } catch {
-    body = undefined;
-  }
+  if (text === null) return oauthJson(413, { error: 'payload-too-large', maxBytes: MAX_BODY_BYTES }, headers);
+  const body = parseJsonObject(text);
   if (body === undefined) return oauthError(400, 'invalid_client_metadata', 'The body is one JSON object.', headers);
 
   const asked = body.redirect_uris;
@@ -342,7 +332,7 @@ async function register(
   };
   await context.accounts.registerOAuthClient(client, now - UNAPPROVED_CLIENT_MS);
 
-  return json(
+  return oauthJson(
     201,
     {
       client_id: client.id,
@@ -456,7 +446,7 @@ async function token(
 ): Promise<Response> {
   const client = await clientOfRequest(request, form, context.accounts);
   if (client === 'invalid') {
-    return json(
+    return oauthJson(
       401,
       { error: 'invalid_client', error_description: 'The client is unknown, or did not authenticate.' },
       { ...headers, 'WWW-Authenticate': 'Basic realm="fruitback"' },
@@ -548,7 +538,7 @@ async function issue(
   ]);
   if (!written) return invalidGrant(headers);
 
-  return json(
+  return oauthJson(
     200,
     {
       access_token: access,
@@ -570,7 +560,7 @@ async function revoke(
 ): Promise<Response> {
   const client = await clientOfRequest(request, form, context.accounts);
   if (client === 'invalid') {
-    return json(401, { error: 'invalid_client' }, { ...headers, 'WWW-Authenticate': 'Basic realm="fruitback"' });
+    return oauthJson(401, { error: 'invalid_client' }, { ...headers, 'WWW-Authenticate': 'Basic realm="fruitback"' });
   }
   const presented = form.get('token') ?? '';
   if (TOKEN_SHAPE.test(presented)) {
@@ -621,15 +611,7 @@ export type ConsoleOAuthContext = {
 async function bodyOf(request: Request): Promise<Record<string, unknown> | 'too-large' | undefined> {
   const text = await readBoundedText(request);
   if (text === null) return 'too-large';
-  try {
-    const parsed: unknown = JSON.parse(text);
-
-    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : undefined;
-  } catch {
-    return undefined;
-  }
+  return parseJsonObject(text);
 }
 
 /**
@@ -647,7 +629,7 @@ export async function handleConsoleOAuth(
   const matched = CONSOLE_REQUEST.exec(pathname);
   if (matched === null) return undefined;
   const now = context.now ?? Date.now();
-  const say = (status: number, body: unknown) => json(status, body, headers);
+  const say = (status: number, body: unknown) => oauthJson(status, body, headers);
 
   const subject = await context.cookieSession(request);
   if (subject === undefined) return say(401, { error: 'identity-required' });

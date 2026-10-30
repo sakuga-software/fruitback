@@ -1,3 +1,4 @@
+import { json } from './http.ts';
 import type { AccountStore, WorkspaceSuspension } from './accounts.ts';
 
 /**
@@ -103,8 +104,5 @@ export async function refusedWhileSuspended(
   const { suspended: _, ...since } = memberSuspensionView(suspension);
   const told = asker === 'member' ? since : {};
 
-  return new Response(JSON.stringify({ error: SUSPENDED_ERROR, ...told }), {
-    status: SUSPENDED_STATUS,
-    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...headers },
-  });
+  return json(SUSPENDED_STATUS, { error: SUSPENDED_ERROR, ...told }, headers);
 }

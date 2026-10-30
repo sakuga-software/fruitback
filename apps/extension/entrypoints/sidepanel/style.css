@@ -5,6 +5,8 @@
 body.side-panel-page {
   min-width: 0;
   margin: 0;
+  /* The 14 px of the body of the popup put every block 14 px further in (FRU-533). */
+  padding: 0;
   background: var(--surface);
   color: var(--text);
   font: 14px/1.5 var(--font-sans);
@@ -13,6 +15,14 @@ body.side-panel-page {
 }
 
 .side-panel {
+  /*
+    The side margin of every block of the panel (FRU-533): the head, « Leave feedback », « Ready to
+    check », the tabs, the rows, the search and the foot. One value, so the blocks stay aligned.
+  */
+  --panel-gutter: 12px;
+  /* The inset of the words in a row, inside the box an open row draws. */
+  --panel-row-inset: 8px;
+
   display: flex;
   flex-direction: column;
   min-height: 100vh;
@@ -27,7 +37,8 @@ body.side-panel-page {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 10px 8px 10px 20px;
+  /* The cross of « Close the sidebar » sits in its target of 44 px, 14 px from the edge of it. */
+  padding: 4px 0 4px var(--panel-gutter);
 }
 
 .panel-title {
@@ -65,7 +76,7 @@ button.panel-close:hover {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 8px 20px 20px;
+  padding: 4px var(--panel-gutter) 16px;
 }
 
 .panel-state-title {
@@ -76,12 +87,28 @@ button.panel-close:hover {
   color: var(--subtle);
 }
 
+/* « Open Fruitback » (FRU-532): the main button, on the whole width, under the sentence. */
+.panel-state .panel-open-popup,
+.panel-signed-out .panel-open-popup {
+  margin-top: 12px;
+}
+
+.panel-signed-out {
+  display: flex;
+  flex-direction: column;
+  padding: 16px var(--panel-gutter);
+}
+
+.panel-signed-out .panel-reading {
+  padding: 0;
+}
+
 /* « Leave feedback », and what to do next. */
 .panel-action {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 0 20px 16px;
+  gap: 4px;
+  padding: 0 var(--panel-gutter) 12px;
   border-bottom: 1px solid var(--line);
 }
 
@@ -107,7 +134,7 @@ button.panel-close:hover {
 }
 
 .panel-tabs {
-  margin: 16px 20px 6px;
+  margin: 12px var(--panel-gutter) 6px;
 }
 
 .panel-list {
@@ -115,12 +142,13 @@ button.panel-close:hover {
   flex-direction: column;
   gap: 2px;
   margin: 0;
-  padding: 4px 8px 16px;
+  /* The words of a row are at the gutter: the list gives what the row does not. */
+  padding: 4px calc(var(--panel-gutter) - var(--panel-row-inset)) 16px;
   list-style: none;
 }
 
 .panel-row {
-  padding: 12px;
+  padding: 12px var(--panel-row-inset);
   border-radius: var(--radius-action);
 }
 
@@ -141,7 +169,10 @@ button.panel-row-head {
   color: inherit;
   font: inherit;
   text-align: start;
-  /* The note wraps: the buttons of popup/style.css stay on one line, and a long note was cut. */
+  /*
+    The meta line wraps: the buttons of popup/style.css stay on one line. The note holds one line by
+    its own rule, with « … », and wraps in an open row.
+  */
   white-space: normal;
 }
 
@@ -153,9 +184,26 @@ button.panel-row-head {
   min-width: 0;
 }
 
+/*
+  The words of a note hold one line, cut with « … » (FRU-534): in a closed row, « Ready to check »,
+  the rows of the search and the detached notes. The text stays whole in the DOM and in `title`.
+*/
+.panel-row-note,
+.ready-note,
+.search-detached-note {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 .panel-row-note {
   font-size: 14px;
   line-height: 1.45;
+}
+
+/* An open row shows the whole note. */
+.panel-row[data-open='true'] .panel-row-note {
+  white-space: normal;
   overflow-wrap: anywhere;
 }
 
@@ -274,7 +322,7 @@ button.panel-send:disabled {
 /* Reading, a failed read, a tab with no note. */
 .panel-reading,
 .panel-none {
-  padding: 16px 20px;
+  padding: 16px var(--panel-gutter);
   color: var(--subtle);
 }
 
@@ -283,7 +331,7 @@ button.panel-send:disabled {
   flex-direction: column;
   align-items: flex-start;
   gap: 6px;
-  margin: 16px 20px;
+  margin: 16px var(--panel-gutter);
 }
 
 /* No note on the page. */
@@ -292,7 +340,7 @@ button.panel-send:disabled {
   flex-direction: column;
   align-items: center;
   gap: 12px;
-  padding: 48px 32px;
+  padding: 40px calc(var(--panel-gutter) * 2);
   text-align: center;
 }
 
@@ -322,7 +370,7 @@ button.panel-send:disabled {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 12px 20px;
+  padding: 10px var(--panel-gutter);
   border-top: 1px solid var(--line);
   background: var(--surface);
   color: var(--subtle);
@@ -345,7 +393,7 @@ button.panel-send:disabled {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 18px 20px 6px;
+  padding: 14px var(--panel-gutter) 6px;
   border-bottom: 1px solid var(--ready-line);
   background: var(--ready-surface);
 }
@@ -391,7 +439,6 @@ button.panel-send:disabled {
 .ready-note {
   font-size: 14px;
   line-height: 1.45;
-  overflow-wrap: anywhere;
 }
 
 .ready-meta {
@@ -475,7 +522,7 @@ button.panel-search[aria-expanded='true'] {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 0 18px 12px;
+  padding: 0 var(--panel-gutter) 12px;
   border-bottom: 1px solid var(--line);
 }
 
@@ -624,7 +671,7 @@ button.site-row-ref {
   flex-direction: column;
   align-items: flex-start;
   gap: 4px;
-  padding: 0 20px 16px;
+  padding: 0 var(--panel-gutter) 16px;
 }
 
 .site-more-count {
@@ -637,7 +684,7 @@ button.site-row-ref {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 14px 20px 18px;
+  padding: 14px var(--panel-gutter) 18px;
   border-top: 1px solid var(--line);
 }
 
@@ -681,7 +728,6 @@ button.site-row-ref {
 
 .search-detached-note {
   font-size: 14px;
-  overflow-wrap: anywhere;
 }
 
 .search-detached-meta {

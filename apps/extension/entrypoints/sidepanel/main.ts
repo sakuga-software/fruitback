@@ -12,7 +12,9 @@ import {
   PANEL_PORT,
   REPLY_PROBLEM,
   notesOf,
+  offersPopup,
   openOnRead,
+  openPopupFrom,
   panelPage,
   tabOf,
   webHost,
@@ -92,6 +94,10 @@ let focusOnOpen: string | undefined;
 const sessions = createBrowserSessions();
 /** The background shows again the pins this panel hid, once the panel is gone (review of #419). */
 const pinsPort = browser.runtime.connect({ name: PANEL_PORT });
+/** The address of the active tab, when the browser gives it: the popup reads it the same way (FRU-532). */
+let tabAddress: string | undefined;
+/** The browser refused to open the popup from the panel once: the panel says to use the toolbar. */
+let popupRefused = false;
 
 async function ask(command: TabCommand, args: TabCommandArguments = {}): Promise<TabCommandAnswer> {
   return (await askOrNothing(command, args)) ?? { done: false };
@@ -121,6 +127,7 @@ async function look(): Promise<void> {
   if (mine !== looks) return;
   const source = await sourceOf(site);
   if (mine !== looks) return;
+  tabAddress = active?.url;
   const before = followed?.tabId;
   if (active?.id === undefined || active.url === undefined || host === undefined || site?.enabled !== true) {
     followed = undefined;
@@ -221,6 +228,10 @@ function focusKey(): string | undefined {
   // FRU-307: the search, its chips, the magnifier and the switch of the pins.
   if (active.classList.contains('search-input')) return 'search';
   if (active.classList.contains('search-chip')) return `chip:${active.dataset.stage ?? ''}`;
+  // FRU-535: the button of the list of the statuses, and the list while it is open.
+  if (active.closest('.search-status') !== null) {
+    return active.classList.contains('kit-select-list') ? 'status-list' : 'status';
+  }
   if (active.classList.contains('panel-search')) return 'magnifier';
   if (active.closest('.search-pins') !== null) return 'pins';
   const row = active.closest<HTMLElement>('li[data-note]')?.dataset.note;
@@ -238,7 +249,11 @@ function refocus(key: string | undefined, caret: [number, number] | undefined): 
   else if (key === 'search') target = app.querySelector('.search-input');
   else if (key === 'magnifier') target = app.querySelector('.panel-search');
   else if (key === 'pins') target = app.querySelector('.search-pins [role="switch"]');
-  else if (key.startsWith('chip:'))
+  else if (key === 'status-list' || key === 'status') {
+    target =
+      (key === 'status-list' ? app.querySelector('.search-status .kit-select-list') : null) ??
+      app.querySelector('.search-status .kit-select-trigger');
+  } else if (key.startsWith('chip:'))
     target = app.querySelector(`.search-chip[data-stage="${CSS.escape(key.slice(5))}"]`);
   else if (key.startsWith('row:')) {
     target = app.querySelector(`li[data-note="${CSS.escape(key.slice(4))}"] .panel-row-head`);
@@ -310,6 +325,15 @@ function draw(): void {
       },
       onSettings: () => void browser.runtime.openOptionsPage(),
       onVerdict: (id, verdict) => void sendVerdict(id, verdict),
+      ...(offersPopup(browser, tabAddress, popupRefused)
+        ? {
+            onOpenPopup: () =>
+              openPopupFrom(browser, () => {
+                popupRefused = true;
+                draw();
+              }),
+          }
+        : {}),
       onSearch: () => toggleSearch(),
       ...(search === undefined ? {} : { search: { state: search, handlers: searchHandlers } }),
     }),
@@ -451,6 +475,24 @@ const searchHandlers: SearchHandlers = {
     if (search === undefined) return;
     search = { ...search, stage };
     draw();
+  },
+  // FRU-535: the list of more than five statuses. The list closed itself and gave the focus back to
+  // its button before this draw, which puts it back on the new one.
+  onStatus: (status: string | undefined) => {
+    if (search === undefined) return;
+    const { status: _before, statusActive: _active, ...rest } = search;
+    search = { ...rest, statusOpen: false, ...(status === undefined ? {} : { status }) };
+    draw();
+  },
+  onStatusOpen: (open: boolean) => {
+    if (search === undefined) return;
+    // A list opened again starts on the option selected.
+    const { statusActive: _active, ...rest } = search;
+    search = { ...rest, statusOpen: open };
+  },
+  // The option the keyboard is on: a draw while the list is open puts it back (review of #730).
+  onStatusActive: (id: string) => {
+    if (search !== undefined) search = { ...search, statusActive: id };
   },
   onSiteNote: (note) => void openSiteNote(note),
   onSiteRetry: () => void readWholeSite(),
