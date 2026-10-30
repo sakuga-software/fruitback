@@ -693,6 +693,11 @@ function StatusList({
           ))}
         </ol>
       </div>
+      {statuses.some(stageColoured) ? (
+        <p className="mt-[8px] text-hint text-muted">
+          {t('A swatch with no code is the colour of the stage of its status.')}
+        </p>
+      ) : null}
       {problem === undefined ? null : (
         <div className="mt-[12px]">
           <Problem>{t(problem, { count: MAX_STATUSES })}</Problem>
@@ -888,7 +893,12 @@ function StatusItem({
         <span className="flex min-w-0 items-center gap-[8px]">
           <span className={`${label} w-[64px]`}>{t('Colour')}</span>
           <span aria-hidden="true" className="kit-swatch" style={{ background: style.background }} />
-          {status.color === null ? t(defaultColourOf(status)) : <code className="font-mono">{status.color}</code>}
+          {/* FRU-504: the colour of the stage is said once, under the list; a screen reader hears it here. */}
+          {status.color === null ? (
+            <span className={stageColoured(status) ? 'sr-only' : ''}>{t(defaultColourOf(status))}</span>
+          ) : (
+            <code className="font-mono">{status.color}</code>
+          )}
         </span>
         <span className="flex min-w-0 items-center gap-[8px]">
           <span className={`${label} w-[64px]`}>{t('Text')}</span>
@@ -950,33 +960,44 @@ function notesOf(value: unknown): Record<string, number> | undefined {
   return Object.fromEntries(entries);
 }
 
+/** A status drawn in the colour of its stage: no colour of the team, and none of a tracker. */
+function stageColoured(status: ScreenStatus): boolean {
+  return status.color === null && status.defaultColor === undefined;
+}
+
 /** The words of the colour a status has when the team chose none: the tracker's, or its stage's. */
 function defaultColourOf(status: ScreenStatus): string {
   return status.defaultColor === undefined ? msg('Colour of the stage') : msg("Linear's colour");
 }
 
-/** The contrast of a text on its status, in words and with a mark, never by its colour alone. */
+/**
+ * The contrast of a text on its status, in words and with a mark, never by its colour alone (FRU-504):
+ * « Readable » or « Low contrast ». The ratio and whether the text is Auto are in the tooltip and for a
+ * screen reader; the editor says the ratio in a sentence.
+ */
 function Ratio({ ratio, auto }: { ratio: number | undefined; auto: boolean }) {
   useLocale();
   if (ratio === undefined) return <span className="text-muted">{auto ? t('Auto') : '·'}</span>;
-  const words = auto ? `${t('Auto')} · ${ratioText(ratio)}` : ratioText(ratio);
+  const detail = auto
+    ? t('Contrast {ratio}, text colour Auto', { ratio: ratioText(ratio) })
+    : t('Contrast {ratio}', { ratio: ratioText(ratio) });
 
   return reads(ratio) ? (
-    <span className="inline-flex items-center gap-[5px] text-done tabular-nums">
+    <span title={detail} className="inline-flex items-center gap-[5px] text-done">
       <svg aria-hidden="true" viewBox="0 0 24 24" className="h-[16px] w-[16px] flex-none">
         <path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
       </svg>
-      {words}
-      <span className="sr-only">{t('reads well')}</span>
+      {t('Readable')}
+      <span className="sr-only">, {detail}</span>
     </span>
   ) : (
-    <span className="inline-flex items-center gap-[5px] font-semibold text-accent-strong tabular-nums">
+    <span title={detail} className="inline-flex items-center gap-[5px] font-semibold text-accent-strong">
       <svg aria-hidden="true" viewBox="0 0 24 24" className="h-[16px] w-[16px] flex-none">
         <path d="M12 3l10 18H2z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
         <path d="M12 10v5M12 18v.01" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
       </svg>
-      {words}
-      <span className="sr-only">{t('under 4.5:1')}</span>
+      {t('Low contrast')}
+      <span className="sr-only">, {detail}</span>
     </span>
   );
 }

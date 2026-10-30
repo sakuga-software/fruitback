@@ -45,7 +45,10 @@ async function open(page: Page, screen = 'sites', workspace = 'w1'): Promise<voi
   await expect(page.locator('main h1')).toBeVisible();
 }
 
-/** The rail with the five sections of the mockup, « Notes » on screen: a page of the development server. */
+/**
+ * The rail with every section, « Notes » on screen: a page of the development server. The five of the
+ * mockup, and « Settings » before « My account » (FRU-503), which no board draws.
+ */
 /** What the icon of an entry adds to its width (FRU-477): 18 px, and the gap of 10 px after it. */
 const ICON = 28;
 
@@ -152,7 +155,7 @@ test('at 1440 px the rail has the values of the mockup', async ({ page }) => {
 
   // Each section has its icon (FRU-477): 18 px, in the colour of its words, after the drop of the one
   // on screen, so the icons stay in one column. A picture only: the words name the entry.
-  await expect(sections(page).locator('a > svg[aria-hidden="true"]')).toHaveCount(5);
+  await expect(sections(page).locator('a > svg[aria-hidden="true"]')).toHaveCount(6);
   const icon = resting.locator('svg');
   await expect(icon).toHaveAttribute('data-rail-icon', 'members');
   expect.soft(await styles(icon, ['width', 'height'])).toEqual({ width: '18px', height: '18px' });
@@ -252,31 +255,39 @@ test('the rail is as high as the window and stays while the screen scrolls; unde
 
 test('one section, and one alone, is the section on screen', async ({ page }) => {
   await stubWorker(page);
-  const names = { sites: 'Sites', notes: 'Notes', connectors: 'Connectors', members: 'Members', account: 'My account' };
+  const names = {
+    sites: 'Sites',
+    notes: 'Notes',
+    connectors: 'Connectors',
+    members: 'Members',
+    settings: 'Settings',
+    account: 'My account',
+  };
   for (const [screen, name] of Object.entries(names)) {
     await open(page, screen);
     const current = sections(page).locator('[aria-current="page"]');
     await expect(current, screen).toHaveCount(1);
     await expect(current, screen).toHaveText(name);
   }
-  // The five sections, in the order of the mockup (« Notes » has its screen since FRU-245).
+  // The sections, in the order of the mockup (« Notes » has its screen since FRU-245), and « Settings »
+  // for an owner (FRU-503).
   await expect(sections(page).getByRole('link')).toHaveText(Object.values(names));
 });
 
-test('the five sections of the mockup are in its order, and « Notes » can be the one on screen', async ({ page }) => {
+test('the sections are in the order of the mockup, and « Notes » can be the one on screen', async ({ page }) => {
   await openProbe(page);
   const links = sections(page).getByRole('link');
-  await expect(links).toHaveText(['Sites', 'Notes', 'Connectors', 'Members', 'My account']);
+  await expect(links).toHaveText(['Sites', 'Notes', 'Connectors', 'Members', 'Settings', 'My account']);
   const current = sections(page).locator('[aria-current="page"]');
   await expect(current).toHaveCount(1);
   await expect(current).toHaveText('Notes');
   expect.soft(await painted(current, 'backgroundColor')).toEqual(rgb(RAIL_ACTIVE));
 
-  // The boxes of the five entries of the mockup, 42 px apart.
-  for (const [index, name] of ['Sites', 'Notes', 'Connectors', 'Members', 'My account'].entries()) {
+  // The boxes of the entries, 42 px apart as the mockup draws its five.
+  for (const [index, name] of ['Sites', 'Notes', 'Connectors', 'Members', 'Settings', 'My account'].entries()) {
     expectBox(await box(links.nth(index)), { x: 12, y: 85 + 42 * index, width: 224.5, height: 40 }, 2, name);
   }
-  expectBox(await box(sections(page)), { x: 12, y: 85, width: 224.5, height: 208 }, 2, 'the sections');
+  expectBox(await box(sections(page)), { x: 12, y: 85, width: 224.5, height: 250 }, 2, 'the sections');
 });
 
 test('a section under the pointer, and a control with focus, read on the rail', async ({ page }) => {
@@ -292,7 +303,7 @@ test('a section under the pointer, and a control with focus, read on the rail', 
   // was pressed on the page, so the first Tab is the first control of the page.
   const order = [
     switcher(page),
-    ...['Sites', 'Notes', 'Connectors', 'Members', 'My account'].map((name) =>
+    ...['Sites', 'Notes', 'Connectors', 'Members', 'Settings', 'My account'].map((name) =>
       sections(page).getByRole('link', { name, exact: true }),
     ),
     rail(page).getByRole('link', { name: 'Install the extension (beta)' }),
@@ -557,18 +568,23 @@ test('at 390 px the row of sections is where the mockup draws it', async ({ page
   expectBox(await box(page.locator('main')), { x: 0, y: 141, width: 390 }, 4, 'the room of the screen');
   expectBox(await box(page.locator('main h1')), { x: 16, y: 181, height: 32.2 }, 4, 'the title');
 
-  // With the five sections of the mockup, each one is where it draws it.
+  // The first four sections of the mockup are where it draws them. « Settings » (FRU-503), which it does
+  // not draw, comes next, then « My account », each 2 px after the one before, on the same line.
   await openProbe(page);
   const mockup = [
     { x: 12, width: 78.9 + ICON },
     { x: 92.9 + ICON, width: 83.6 + ICON },
     { x: 178.5 + 2 * ICON, width: 122.5 + ICON },
     { x: 303 + 3 * ICON, width: 107.3 + ICON },
-    { x: 412.3 + 4 * ICON, width: 123 + ICON },
   ];
   const links = sections(page).getByRole('link');
   for (const [index, entry] of mockup.entries()) {
     expectBox(await box(links.nth(index)), { ...entry, y: 85, height: 40 }, 4, `entry ${index + 1}`);
+  }
+  for (const index of [4, 5]) {
+    const before = await box(links.nth(index - 1));
+    const entry = await box(links.nth(index));
+    expectBox(entry, { x: before.x + before.width + 2, y: 85, height: 40 }, 1, `entry ${index + 1}`);
   }
   expect(await sideScroll(page)).toBe(0);
 });

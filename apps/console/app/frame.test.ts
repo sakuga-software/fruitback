@@ -38,10 +38,10 @@ function sections(source: string): { path: string; label: string; built: boolean
 }
 
 describe('the sections of the rail (FRU-234)', () => {
-  it('are the five of the mockup, in its order', () => {
+  it('are the five of the mockup, in its order, with « Settings » before « My account » (FRU-503)', () => {
     assert.deepEqual(
       sections(frame).map(({ label }) => label),
-      ['Sites', 'Notes', 'Connectors', 'Members', 'My account'],
+      ['Sites', 'Notes', 'Connectors', 'Members', 'Settings', 'My account'],
     );
   });
 
@@ -57,12 +57,11 @@ describe('the sections of the rail (FRU-234)', () => {
     assert.deepEqual(dead([{ path: 'reports', built: true }], built), ['reports']);
     assert.deepEqual(dead([{ path: 'sites', built: false }], built), ['sites']);
     // Every screen of a workspace is a section: a route the rail does not know has no entry. The
-    // settings are the one exception: the name of the workspace, at the top of the rail, opens them
-    // (FRU-414), and the frame names their path.
+    // settings are one since FRU-503, and the name of the workspace still leads to them (FRU-414).
     const screens = built.filter((path) => path.startsWith('w/:workspace/')).map((path) => path.split('/')[2]);
-    assert.ok(frame.includes('/settings`'), 'the rail leads to the settings');
+    assert.ok(frame.includes('/settings`'), 'the name of the workspace leads to the settings');
     assert.deepEqual(
-      screens.filter((path) => path !== 'settings' && !sections(frame).some((section) => section.path === path)),
+      screens.filter((path) => !sections(frame).some((section) => section.path === path)),
       [],
     );
     assert.ok(screens.length >= 4, built.join(', '));
