@@ -137,10 +137,10 @@ test.describe('an invited reviewer (FRU-104)', () => {
     await expect(owner.getByText('Invitation sent', { exact: true })).toHaveCount(0);
 
     // Paul connects his browser: the pairing page opens with a code after the `#`.
-    // « Install » is in the menu of the card of the site, for a member too (FRU-243), and leads to
-    // that section of the page of the site (FRU-433).
+    // « Open its page » is in the menu of the card of the site, for a member too (FRU-504): its page
+    // says how to install Fruitback (FRU-243, FRU-433).
     await paul.getByRole('button', { name: 'More for staging.acme.dev' }).click();
-    await paul.getByRole('menuitem', { name: 'Install' }).click();
+    await paul.getByRole('menuitem', { name: 'Open its page' }).click();
     const opened = pauls.waitForEvent('page');
     await paul.getByRole('button', { name: 'Connect this browser' }).click();
     const pairing = await opened;

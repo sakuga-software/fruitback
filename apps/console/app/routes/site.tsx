@@ -4,6 +4,7 @@ import { useLocation, useNavigate, useParams } from 'react-router';
 import {
   type Connector,
   type Destination,
+  STAGES,
   type Site,
   type Visibility,
   type Workspace,
@@ -21,6 +22,7 @@ import { Button, KeyValue, LinkButton, LoadFailed, Pick, Problem } from '../ui';
 import { useLocale } from '../use-locale';
 import { WritersPick } from '../writers-pick';
 import { SitePlaces } from './site-places';
+import { notesOf } from './sites';
 import { PageHead, useWorkspace } from './workspace';
 
 const REMOVAL_PROBLEMS: Readonly<Record<string, string>> = {
@@ -189,7 +191,11 @@ export default function SitePage() {
     <>
       {crumbs}
       {/* The title is where the title of every page is (FRU-405): no icon pushes it. */}
-      <PageHead title={host} lead={t('Its address, where its notes go, and how to install Fruitback on it.')} />
+      <PageHead
+        title={host}
+        lead={t('Its address, where its notes go, and how to install Fruitback on it.')}
+        action={<NotesLink workspace={workspace.id} site={site} />}
+      />
 
       <div className="flex max-w-[760px] flex-col gap-[40px]">
         <Section id="about" title={t('Site')}>
@@ -291,6 +297,27 @@ export default function SitePage() {
         ) : null}
       </div>
     </>
+  );
+}
+
+/**
+ * The notes of the site, on the Notes screen with the site chosen (FRU-504): the select of the Notes
+ * screen lists every site, and the count is on the card only. No link to a list that is empty.
+ */
+function NotesLink({ workspace, site }: { workspace: string; site: Site }) {
+  useLocale();
+  const notes = site.notes;
+  // A worker of before sends no count: the link is there, with no number.
+  const total = notes === undefined ? undefined : STAGES.reduce((sum, stage) => sum + notes[stage], 0);
+  if (total === 0) return null;
+  let words = t('See its notes');
+  if (total === 1) words = t('See its note');
+  else if (total !== undefined) words = t('See its {count} notes', { count: total });
+
+  return (
+    <Button tone="outline" to={notesOf(workspace, site.id)}>
+      {words}
+    </Button>
   );
 }
 
