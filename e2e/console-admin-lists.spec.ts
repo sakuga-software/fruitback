@@ -1970,7 +1970,7 @@ test('Users: « Change a role » and « Add to a workspace » stand under the ro
     await page.setViewportSize({ width, height: width > 500 ? 1000 : 844 });
     await page.goto(`${CONSOLE}/admin/users?open=a2`);
     const change = panel(page).getByRole('button', { name: 'Changer un rôle' });
-    const add = panel(page).getByRole('button', { name: 'Ajouter à un workspace' });
+    const add = panel(page).getByRole('button', { name: 'Ajouter à un espace de travail' });
     await expect(add).toBeVisible();
     const rows = await box(panel(page).getByRole('list').first());
     const [first, second] = [await box(change), await box(add)];
@@ -1989,7 +1989,7 @@ test('Users: « Change a role » and « Add to a workspace » stand under the ro
   await expect(asking).toBeVisible();
   const rows = await box(panel(page).getByRole('list').first());
   expect(Math.round((await box(asking)).width)).toBe(Math.round(rows.width));
-  await expect(panel(page).getByRole('button', { name: 'Ajouter à un workspace' })).toBeVisible();
+  await expect(panel(page).getByRole('button', { name: 'Ajouter à un espace de travail' })).toBeVisible();
   expect(await sideScroll(page)).toBe(0);
   await axe(page, 'the writes of a person at 390 px');
 });

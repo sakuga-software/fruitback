@@ -211,7 +211,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   // FRU-528: the buttons that open the guide.
   'How Fruitback works': 'Comment fonctionne Fruitback',
   'What to check when Fruitback does not answer': 'Que vérifier quand Fruitback ne répond pas',
-  'Who can add a site to a workspace?': 'Qui peut ajouter un site à un espace ?',
+  'Who can add a site to a workspace?': 'Qui peut ajouter un site à un espace de travail ?',
   'How to leave and follow notes': 'Laisser et suivre des notes',
   // FRU-526: a page of the browser, where no extension draws.
   "Fruitback can't run on this page": 'Fruitback ne peut pas fonctionner sur cette page',
