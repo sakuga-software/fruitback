@@ -179,6 +179,16 @@ export default function Notes() {
   // A select of the board moved a note (FRU-436). If the read after it leaves no note under the
   // filters, the board is gone with the select that had the focus: « Clear the filters » takes it.
   const [movedOut, setMovedOut] = useState(false);
+  // A status saved in the table (FRU-551): the row goes to the group of its status once the list is
+  // read again, and the keyboard finds its select there, where it left it.
+  const [refocus, setRefocus] = useState<string | undefined>();
+  useEffect(() => {
+    if (refocus === undefined || reading) return;
+    setRefocus(undefined);
+    document
+      .querySelector<HTMLElement>(`tr[data-note="${CSS.escape(refocus)}"] .select__trigger`)
+      ?.focus({ preventScroll: false });
+  }, [refocus, reading, shown]);
 
   const read = useCallback(async () => {
     const mine = (asked.current += 1);
@@ -444,6 +454,10 @@ export default function Notes() {
                             statuses={shown.statuses?.[note.site.id]}
                             choose={(status) => choose(note, status)}
                             onSent={() => void read()}
+                            onStatusSaved={() => {
+                              setRefocus(note.id);
+                              void read();
+                            }}
                           />
                         ))}
                       </tbody>
@@ -550,6 +564,7 @@ function NoteRow({
   manages,
   retry,
   onSent,
+  onStatusSaved,
   statuses,
   choose,
 }: {
@@ -561,6 +576,8 @@ function NoteRow({
   manages: boolean;
   retry: () => Promise<{ ok: true } | { ok: false; status: number; error: string }>;
   onSent: () => void;
+  /** A status saved from the drop: the list is read again, and the focus follows the row. */
+  onStatusSaved: () => void;
   statuses: readonly StatusChoice[] | undefined;
   choose: (status: string) => Promise<Answer<{ status: string; stage: Stage }>>;
 }) {
@@ -586,7 +603,7 @@ function NoteRow({
   }
 
   return (
-    <tr>
+    <tr data-note={note.id}>
       {/* The note keeps 240 px of the row: the columns beside it are short words. */}
       <td className="max-w-[380px] min-[640px]:min-w-[240px]">
         {/* FRU-551: the status is its drop before the note, a list of the statuses for whoever may
@@ -597,7 +614,7 @@ function NoteRow({
               note={note}
               statuses={statuses}
               choose={choose}
-              onSaved={onSent}
+              onSaved={onStatusSaved}
               onRefused={setStatusRefused}
               bare
             />

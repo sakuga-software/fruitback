@@ -137,7 +137,9 @@ test('the author chooses the status of a note kept in Fruitback, among the shown
   await expect(select).toContainText('Waiting');
   expect(worker.sent).toEqual([{ path: '/console/workspaces/w1/notes/n1/status', body: { status: 'own:waiting' } }]);
   // Saved, the list is read again, and the note is in the group of its stage: « To do » (FRU-551).
+  // The focus follows it there: the keyboard is where it left the select (review of #764).
   await expect(page.locator('tbody[data-group="todo"]')).toContainText('The headline');
+  await expect(select).toBeFocused();
   await expect(row(page, 'The headline').getByRole('alert')).toHaveCount(0);
 
   // Ben's note: Ana may not change it. Its status is named, hidden as it is, with no select.
