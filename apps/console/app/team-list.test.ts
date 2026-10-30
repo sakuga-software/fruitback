@@ -176,6 +176,16 @@ describe('the list of teams of a Linear, one rule at a time (FRU-501)', () => {
     assert.equal(searchToAsk(list), 'pays');
   });
 
+  it('a first page that comes after the search was typed takes the search, and asks for it once', () => {
+    // The picker builds the list with the words typed by the time the first page answers.
+    const list = teamListOf({ teams: [team(1)], next: '50' }, 1, ' pay ');
+    assert.equal(list.query, 'pay');
+    assert.equal(searchToAsk(list), 'pay');
+    assert.equal(offersMore(list), false, 'no next page while a search is typed');
+    // A complete first page filters what it holds, with no request.
+    assert.equal(searchToAsk(teamListOf({ teams: [team(1)] }, 2, 'pay')), undefined);
+  });
+
   it('keeps an error until the person types again or asks again, and asks nothing on its own', () => {
     let list = teamListOf({ teams: [team(1)], next: '50' }, 1);
     list = stepTeamList(list, { type: 'type', query: 'pay' });
