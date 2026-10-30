@@ -155,7 +155,7 @@ test('at 1440 px the rail has the values of the mockup', async ({ page }) => {
 
   // Each section has its icon (FRU-477): 18 px, in the colour of its words, after the drop of the one
   // on screen, so the icons stay in one column. A picture only: the words name the entry.
-  await expect(sections(page).locator('a > svg[aria-hidden="true"]')).toHaveCount(5);
+  await expect(sections(page).locator('a > svg[aria-hidden="true"]')).toHaveCount(6);
   const icon = resting.locator('svg');
   await expect(icon).toHaveAttribute('data-rail-icon', 'members');
   expect.soft(await styles(icon, ['width', 'height'])).toEqual({ width: '18px', height: '18px' });
