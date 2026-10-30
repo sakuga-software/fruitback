@@ -1,5 +1,5 @@
 import { type Page, type Route, expect, test } from '@playwright/test';
-import { stubWorker } from './console-workspace.ts';
+import { stubWorker, sitesRead } from './console-workspace.ts';
 
 /**
  * The front door (`/`) reads the invitations of the person and the sites of their first workspace
@@ -25,7 +25,9 @@ async function frontDoor(page: Page, answers: { invitations: unknown[]; sites: u
   await stubWorker(page, {
     answer: (pathname, route) => {
       if (pathname.endsWith('/list-user-invitations')) return held(route, 'invitations', answers.invitations);
-      if (pathname === '/console/workspaces/w1/sites') return held(route, 'sites', { sites: answers.sites });
+      // The front door reads one site; the screen it opens reads its own page (FRU-497).
+      if (pathname === '/console/workspaces/w1/sites')
+        return held(route, 'sites', sitesRead(new URL(route.request().url()), answers.sites));
 
       return undefined;
     },

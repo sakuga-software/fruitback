@@ -1,4 +1,5 @@
 import { type Page, expect, test } from '@playwright/test';
+import { fulfillSites } from './console-workspace.ts';
 import { WORKER_ORIGIN } from './pin.ts';
 
 /**
@@ -29,9 +30,8 @@ async function stubWorker(page: Page, locale: 'en' | 'fr'): Promise<void> {
     const { pathname } = new URL(route.request().url());
     const json = (body: unknown) => route.fulfill({ json: body });
     if (pathname === '/console/me') return json(me);
-    if (pathname === '/console/workspaces/w1/sites') {
-      return json({ sites: [{ id: 's1', origin: 'https://staging.acme.dev', visibility: 'members' }] });
-    }
+    const read = fulfillSites(route, [{ id: 's1', origin: 'https://staging.acme.dev', visibility: 'members' }]);
+    if (read !== false) return read;
     if (pathname === '/console/workspaces/w1/connectors') return json({ connectors, available: true });
     if (/^\/console\/workspaces\/w1\/connectors\/c\d\/teams$/.test(pathname)) {
       // One team, so the panel holds a list to open: Escape in it must close the list, not the panel.

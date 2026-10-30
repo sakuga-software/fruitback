@@ -38,6 +38,7 @@
   "console-note-status.spec.ts": 12.2,
   "console-notes-board.spec.ts": 13.2,
   "console-notes.spec.ts": 24.1,
+  "console-oauth-worker.spec.ts": 15.5,
   "console-rail-drop.spec.ts": 2.4,
   "console-setup.spec.ts": 70.6,
   "console-sign-in.spec.ts": 52.8,

@@ -120,13 +120,17 @@ export type NoteIndex = {
    * edit cannot put the text of before back. A note the index does not hold is left absent.
    */
   reword(workspace: string, site: string, note: string, text: string): Promise<void>;
-  /** The notes of each site of a workspace that has some. A site with none is absent. */
-  summary(workspace: string): Promise<Map<string, SiteNotes>>;
+  /**
+   * The notes of each site of a workspace that has some. A site with none is absent. `sites`: only
+   * those sites (FRU-497), so a page of sites reads the notes of its sites and no other.
+   */
+  summary(workspace: string, sites?: readonly string[]): Promise<Map<string, SiteNotes>>;
   /**
    * The deliveries of each site of a workspace that are not delivered: waiting for an attempt, or
-   * given up (FRU-122). A delivery that arrived is removed, so it is not counted.
+   * given up (FRU-122). A delivery that arrived is removed, so it is not counted. `sites`: only those
+   * sites (FRU-497).
    */
-  undelivered(workspace: string): Promise<Map<string, number>>;
+  undelivered(workspace: string, sites?: readonly string[]): Promise<Map<string, number>>;
   /**
    * Removes the rows of these notes, and answers what they held. `notes`: the notes `forget` deleted
    * from the worker's store, each by its reference **and** the id the widget gave it. `notes`: notes

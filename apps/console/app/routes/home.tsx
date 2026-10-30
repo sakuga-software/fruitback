@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { type Me, type Site, call, callUntilAnswered, myInvitations } from '../api';
 import { t } from '../i18n';
-import { takeConnect } from '../connect-return';
+import { takeAuthorize, takeConnect } from '../connect-return';
 import { LinkButton, Problem } from '../ui';
 import { useLocale } from '../use-locale';
 
@@ -31,6 +31,9 @@ export default function Home() {
       // A sign-in with a provider that started on « Connect this browser » goes back to its question.
       const connecting = takeConnect();
       if (connecting !== undefined) return navigate(`/connect/${connecting}`, { replace: true });
+      // And one that started on the consent page of a client of OAuth (FRU-467).
+      const authorizing = takeAuthorize();
+      if (authorizing !== undefined) return navigate(`/authorize/${authorizing}`, { replace: true });
       const manages = me.data.workspaces.find((each) => each.role === 'owner' || each.role === 'admin');
       if (unstarted && manages !== undefined) {
         return navigate(`/w/${manages.id}/connectors?github=unstarted`, { replace: true });
@@ -43,7 +46,10 @@ export default function Home() {
       // The invitations and the sites are read side by side (FRU-492): one after the other, they
       // were a third round trip before the first screen, 160 ms on a phone. The sites are read for
       // nothing when an invitation waits.
-      const listing = adds ? call<{ sites: Site[] }>('GET', `/console/workspaces/${workspace.id}/sites`) : undefined;
+      // One site is enough to know there is one, and no note is counted (FRU-497).
+      const listing = adds
+        ? call<{ sites: Site[] }>('GET', `/console/workspaces/${workspace.id}/sites?limit=1&counts=none`)
+        : undefined;
       void Promise.all([myInvitations(), listing]).then(([invitations, listed]) => {
         if (stopped) return;
         // An invitation that could not be read does not hold the front door: it is on its own page.

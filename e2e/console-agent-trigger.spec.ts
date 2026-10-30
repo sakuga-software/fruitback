@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { type Page, type Route, expect, test } from '@playwright/test';
-import { ACME, type Role, sideScroll, stubWorker } from './console-workspace.ts';
+import { ACME, type Role, sideScroll, stubWorker, fulfillSites } from './console-workspace.ts';
 
 /**
  * « Start an agent », a section of the page of a site (FRU-468, the board `design/agent-triggers/`):
@@ -23,7 +23,8 @@ async function workerWith(
   const worker: Worker = { trigger: options.trigger ?? null, written: [], asked: 0 };
   const answer = (pathname: string, route: Route) => {
     const json = (body: unknown, status = 200) => route.fulfill({ status, json: body });
-    if (pathname === '/console/workspaces/w1/sites') return json({ sites: SITES });
+    const read = fulfillSites(route, SITES);
+    if (read !== false) return read;
     if (pathname === '/console/workspaces/w1/connectors')
       return json({ connectors: options.connectors ?? [LINEAR, HOOK], available: true });
     if (pathname !== '/console/workspaces/w1/sites/s1/agent-trigger') return undefined;
@@ -190,7 +191,8 @@ test('a read of the addresses that failed says so, and « Try again » brings th
   await stubWorker(page, {
     workspaces: [ACME],
     answer: (pathname, route) => {
-      if (pathname === '/console/workspaces/w1/sites') return route.fulfill({ json: { sites: SITES } });
+      const read = fulfillSites(route, SITES);
+      if (read !== false) return read;
       if (pathname === '/console/workspaces/w1/connectors')
         return fails
           ? route.fulfill({ status: 500, json: { error: 'unknown' } })

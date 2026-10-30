@@ -31,7 +31,12 @@ describe('the marks of the sources (FRU-435)', () => {
   });
 
   it('sit before the name of the source, in the column of where a note went', () => {
-    assert.match(notes, /<ConnectorMark kind=\{place\.kind\} \/>\s*\{name\}/);
+    // FRU-552: the name is said to a screen reader only where a reference or a host follows the mark.
+    assert.match(
+      notes,
+      /<ConnectorMark kind=\{place\.kind\} \/>\s*\{after === null \? \(\s*<span className="font-semibold">\{name\}<\/span>/,
+    );
+    assert.match(notes, /<span className="sr-only">\{name\}<\/span>\s*\{after\}/);
   });
 
   it('has one for each source of the Connectors screen, connected or to add (FRU-543)', () => {

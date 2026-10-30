@@ -126,6 +126,9 @@ export default function Connectors() {
   const [catalogue, setCatalogue] = useState(problem !== undefined || githubProblem !== undefined);
   const catalogueTitle = useRef<HTMLHeadingElement>(null);
   const newSource = useRef(false);
+  // An address connected from the list, whose secret is still on the screen (see `AddRest`).
+  const restAdded = useRef(false);
+  const toPanel = useRef(false);
   useEffect(() => {
     // The list that « New source » opens takes focus on its title: a screen reader says where it is.
     if (catalogue && newSource.current) catalogueTitle.current?.focus();
@@ -138,7 +141,8 @@ export default function Connectors() {
         'GET',
         `${base}/connectors`,
       ),
-      call<{ sites: Site[] }>('GET', `${base}/sites`),
+      // The sites and where they send, with no count of their notes (FRU-497).
+      call<{ sites: Site[] }>('GET', `${base}/sites?counts=none`),
     ]);
     // A failed read keeps what the screen already showed, and says it could not read.
     if (listed.ok) {
@@ -278,6 +282,13 @@ export default function Connectors() {
   const listed = answered && (!connected || catalogue || adding !== undefined);
   // A person who cannot connect a source is not offered a button that opens disabled ones.
   const offersNew = connected && !cannot;
+  // Once « I kept it » closed the list, focus goes to the panel of the new address: the button had it.
+  useEffect(() => {
+    if (listed || !toPanel.current) return;
+    toPanel.current = false;
+    restAdded.current = false;
+    document.getElementById(PANEL)?.focus({ preventScroll: true });
+  }, [listed]);
 
   return (
     <>
@@ -376,6 +387,8 @@ export default function Connectors() {
                         setAdding(undefined);
                         if (connector !== undefined) {
                           setCatalogue(false);
+                          // The list goes with the form that had focus: the panel of the new source takes it.
+                          opening.current = true;
                           setSelected(connector.id);
                           void load();
                         }
@@ -430,12 +443,17 @@ export default function Connectors() {
                     <AddRest
                       base={base}
                       onAdded={(connector) => {
+                        // Its panel opens now, and takes focus only once the secret was kept.
+                        restAdded.current = true;
                         setSelected(connector.id);
                         void load();
                       }}
                       onDone={() => {
                         setAdding(undefined);
+                        // « Cancel » closes the form only. « I kept it » closes the list too.
+                        if (!restAdded.current) return;
                         setCatalogue(false);
+                        toPanel.current = true;
                       }}
                     />
                   </Under>

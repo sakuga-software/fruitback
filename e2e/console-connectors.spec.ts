@@ -12,6 +12,7 @@ import {
   sideScroll,
   stubWorker,
   styles,
+  fulfillSites,
 } from './console-workspace.ts';
 
 /**
@@ -127,7 +128,8 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
     if (worker.down && (pathname.endsWith('/connectors') || pathname.endsWith('/sites'))) return json({}, 500);
     if (pathname.endsWith('/connectors'))
       return json({ connectors: worker.connectors, available: worker.unavailable !== true, linearOAuth: worker.oauth });
-    if (pathname.endsWith('/sites')) return json({ sites: SITES });
+    const read = fulfillSites(route, SITES);
+    if (read !== false) return read;
     if (pathname.endsWith('/c1/teams'))
       return json({ teams: [{ id: 't1', name: 'Acme web', key: 'ACM', projects: [{ id: 'p1', name: 'Website' }] }] });
     if (pathname.endsWith('/c1/states')) return json({ states: STATES, settings: SETTINGS });
@@ -541,6 +543,9 @@ test('« Add a source » lists what connects, and what does not yet with a butto
   await expect(page.locator('[data-secret]')).toHaveCount(0);
   // The secret was kept: the list of the sources to add closes, over the new source.
   await expect(sources(page)).toHaveCount(0);
+  // The button that had focus went with the list: the panel of the new address takes it.
+  await expect(panel(page)).toBeFocused();
+  await expect(panel(page)).toHaveAttribute('aria-label', /hooks\.client\.fr\/notes/);
   await expect(page.getByText('made-by-fruitback-0123456789')).toHaveCount(0);
 });
 
