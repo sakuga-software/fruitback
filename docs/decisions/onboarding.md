@@ -20,8 +20,8 @@ becomes, and the tickets. The table of the path follows each ticket that changes
   the extension said « click the icon, then Sign in with email », and the popup on that page offered
   no sign-in. Since FRU-482 the page signs in itself, and the popup offers the sign-in on any page.
 - **The pin is a tip, not a step** (FRU-484). Nothing between the install and the first note needs it.
-- **Firefox is not on AMO yet**: its path installs an archive by hand (`reviewing.md`). It is named
-  here, and not measured.
+- **Firefox installs from addons.mozilla.org** (FRU-521 for the guide, FRU-536 for the console): its
+  path is the Chrome path with AMO as the store. It is named here, and not measured.
 
 ### The path today
 

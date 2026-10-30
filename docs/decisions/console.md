@@ -273,13 +273,14 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   invites (the worker lists the workspace of an invitation, not its sender: the line says
   « {workspace} invited you »); « It signs in with this account. » about the extension, which a
   browser still joins with a code from the console (Q8).
-  **« Install the extension (beta) » leads Chrome and Edge on a computer to the Chrome Web Store, and
-  every other browser to the guide** (`extensionInstallFor` of `extension-store.ts`): the foot of both
-  rails (FRU-406), `/connect`, the invitation and the step « Put it on your site » (FRU-409). The
-  extension is on the Chrome Web Store since 0.3.0, and not on AMO yet: « Install it in Firefox
-  (beta) » (FRU-318) keeps the page of the documentation that installs the archive of the release.
-  A guard of `extension-store.test.ts` reads each screen for it; `e2e/console-extension-store.spec.ts`
-  holds the rail and `/connect` in Edge and Firefox.
+  **« Install the extension (beta) » leads Chrome and Edge on a computer to the Chrome Web Store,
+  Firefox on a computer to addons.mozilla.org, and every other browser to the guide**
+  (`extensionInstallFor` of `extension-store.ts`): the foot of both rails (FRU-406), `/connect`, the
+  invitation and the step « Put it on your site » (FRU-409). The extension is on the Chrome Web Store
+  since 0.3.0 and public on AMO (FRU-536, after FRU-521 for the guide and the landing): « Install it
+  in Firefox (beta) » (FRU-318) leads to its AMO listing too. A phone keeps the guide. A guard of
+  `extension-store.test.ts` reads each screen for it; `e2e/console-extension-store.spec.ts` holds the
+  rail and `/connect` in Edge and Firefox.
 - **The address of a site is read by `site-address.ts`, on every screen that asks for one**
   (FRU-167). A host with no scheme is `http://` when it is local (`localhost`, `*.localhost`,
   `*.local`, `127.0.0.0/8`, `[::1]`, `10/8`, `172.16/12`, `192.168/16`) and `https://` otherwise,
