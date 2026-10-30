@@ -9,6 +9,7 @@ import {
   mountPage,
   pressKey,
   useHandFrames,
+  stylesIn,
 } from './dom.fixture.ts';
 import { deepActiveElement } from './focus.ts';
 import { createTranslator } from './messages.ts';
@@ -258,9 +259,9 @@ describe('the chrome the reporter sees (FRU-36)', () => {
     // nothing logs, and every icon in the widget is an empty box. happy-dom draws nothing, so this
     // asserts the selector; `e2e/host.spec.ts` asserts the pixels.
     const { page } = mount(() => null);
-    const sheet = page.document.querySelector('[data-fruitback-host]')?.shadowRoot?.querySelector('style');
+    const root = page.document.querySelector('[data-fruitback-host]')?.shadowRoot;
 
-    assert.match(sheet?.textContent ?? '', /\*:not\(svg, svg \*\) \{ all: initial;/);
+    assert.match(root ? stylesIn(root) : '', /\*:not\(svg, svg \*\) \{ all: initial;/);
   });
 });
 
@@ -902,7 +903,7 @@ describe('selecting an element without a pointer (FRU-51)', () => {
 
   it('shows a focus ring on the controls the keyboard reaches', () => {
     mountKeyboard();
-    const styles = host?.root.querySelector('style')?.textContent ?? '';
+    const styles = host ? stylesIn(host.root) : '';
 
     assert.match(styles, /button:focus-visible, a:focus-visible[^{]*\{\s*outline: 2px solid/);
   });
@@ -1076,8 +1077,7 @@ describe('the corner of the dock (FRU-443)', () => {
 
   it('has a rule for each corner, for the dock, the settings and the list of the detached notes', () => {
     mount(() => null);
-    const sheets = host?.root.querySelectorAll('style') ?? [];
-    const styles = [...sheets].map((style) => style.textContent).join('\n');
+    const styles = host ? stylesIn(host.root) : '';
     for (const selector of [
       ":host([data-fruitback-position^='top-']) .fruitback-dock",
       ":host([data-fruitback-position$='-left']) .fruitback-dock",

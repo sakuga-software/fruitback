@@ -5,6 +5,7 @@ import { holdFocus } from './focus.ts';
 import { createIcon } from './icons.ts';
 import { stageToken } from './theme.ts';
 import { DOCK_POSITIONS, type DockPosition } from './dock-position.ts';
+import { adoptStyles } from './stylesheet.ts';
 
 /**
  * The settings panel, opened from the floating button (FRU-14).
@@ -88,9 +89,6 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanel {
   const store = options.store;
   const offered = options.stages ?? createOfferedStages();
   const t = options.translator ?? createTranslator({ language: languageOf(document) });
-
-  const style = document.createElement('style');
-  style.textContent = STYLES;
 
   const root = document.createElement('div');
   root.className = 'fruitback-panel-config';
@@ -196,7 +194,8 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanel {
   if (options.screenshotSupported === true) body.append(screenshotLabel);
   root.append(head, body);
   if (options.exportText !== undefined) root.append(copySection(options.exportText));
-  options.host.append(style, root);
+  const style = adoptStyles(options.host, STYLES);
+  options.host.append(root);
   const focus = holdFocus(root, () => panel.close());
 
   /** The store is the truth; the inputs only ever mirror it. */

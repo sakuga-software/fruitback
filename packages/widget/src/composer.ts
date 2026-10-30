@@ -13,6 +13,7 @@ import {
   readableSize,
   refusalBefore,
 } from './attachments.ts';
+import { adoptStyles } from './stylesheet.ts';
 
 /**
  * The note popover: what the reporter actually writes in.
@@ -285,9 +286,6 @@ export function createComposer(options: ComposerOptions): Composer {
   const view = document.defaultView;
   const t = options.translator ?? createTranslator({ language: languageOf(document) });
 
-  const style = document.createElement('style');
-  style.textContent = STYLES;
-
   const root = document.createElement('div');
   root.className = 'fruitback-composer';
   root.dataset.fruitbackComposer = '';
@@ -298,7 +296,8 @@ export function createComposer(options: ComposerOptions): Composer {
   root.setAttribute('aria-modal', 'true');
   root.setAttribute('aria-label', t.text('composer.dialog'));
 
-  options.host.append(style, root);
+  const style = adoptStyles(options.host, STYLES);
+  options.host.append(root);
   const focus = holdFocus(root, close);
 
   const field = root.querySelector('[data-fruitback-note]') as HTMLTextAreaElement;

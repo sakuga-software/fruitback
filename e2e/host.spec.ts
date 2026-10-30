@@ -149,14 +149,20 @@ test('the widget does not print its own stylesheets onto the page', async ({ pag
 
   const leaked = await page.evaluate(() => {
     const root = document.querySelector('[data-fruitback-host]')?.shadowRoot;
-    if (!root) return 'no shadow root';
+    if (!root) return { adopted: 0, shown: ['no shadow root'] };
 
-    return [...root.querySelectorAll('style')]
-      .map((node) => getComputedStyle(node).display)
-      .filter((display) => display !== 'none');
+    return {
+      adopted: root.adoptedStyleSheets.length,
+      shown: [...root.querySelectorAll('style')]
+        .map((node) => getComputedStyle(node).display)
+        .filter((display) => display !== 'none'),
+    };
   });
 
-  expect(leaked).toEqual([]);
+  // The styles are adopted (FRU-522): with no <style> element, the list below is empty by design.
+  // `style, script { display: none }` stays for a browser without `adoptedStyleSheets`.
+  expect(leaked.adopted).toBeGreaterThan(0);
+  expect(leaked.shown).toEqual([]);
 });
 
 test('the widget cannot restyle the page either', async ({ page }) => {
