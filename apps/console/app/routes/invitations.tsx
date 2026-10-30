@@ -121,7 +121,10 @@ export default function Invitations() {
     }
     // The first site of the workspace, to name it in what comes next. A list that could not be
     // read names none: the screen then speaks of the sites of the workspace.
-    const sites = await call<{ sites: Site[] }>('GET', `/console/workspaces/${invitation.organizationId}/sites`);
+    const sites = await call<{ sites: Site[] }>(
+      'GET',
+      `/console/workspaces/${invitation.organizationId}/sites?limit=1&counts=none`,
+    );
     const site = sites.ok ? sites.data.sites[0] : undefined;
     setBusy(undefined);
     setRead({

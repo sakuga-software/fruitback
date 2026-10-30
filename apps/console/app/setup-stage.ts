@@ -47,7 +47,10 @@ export type SetupCalls = {
   /** `GET /console/me`, quiet: a person who is not signed in is no notice. */
   me: () => Promise<Answer<Me>>;
   invitations: () => Promise<Answer<Invitation[]>>;
+  /** The first site of the workspace, or none: one page of one site (FRU-497). */
   sites: (workspace: Workspace) => Promise<Answer<{ sites: Site[] }>>;
+  /** One site by its id (FRU-497), with its notes. */
+  site: (workspace: Workspace, site: string) => Promise<Answer<Site>>;
   createWorkspace: (name: string) => Promise<Answer<Workspace>>;
   /** Runs `task` alone in every tab of the browser, when the browser has a lock. */
   alone: <T>(task: () => Promise<T>) => Promise<T>;
@@ -126,12 +129,12 @@ export function noted(site: Site): boolean {
 
 /**
  * The site as the worker reads it now, to see whether its first note came: the same site by its id,
- * or `undefined` when the list was not read or no longer holds it.
+ * or `undefined` when it was not read or is gone.
  */
 export async function siteNow(calls: SetupCalls, workspace: Workspace, site: Site): Promise<Site | undefined> {
-  const listed = await calls.sites(workspace);
+  const read = await calls.site(workspace, site.id);
 
-  return listed.ok ? listed.data.sites.find((each) => each.id === site.id) : undefined;
+  return read.ok && read.data?.id === site.id ? read.data : undefined;
 }
 
 /** Where a stage sends the person, away from the setup: none for a stage the setup shows. */

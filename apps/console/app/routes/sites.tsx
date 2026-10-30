@@ -11,7 +11,7 @@ import {
   placesOf,
 } from '../api';
 import { SITE_NOT_ADDED, SITE_PROBLEMS, problemOf } from '../problems';
-import { type Listed, listedOf } from '../listed';
+import { listedOf } from '../listed';
 import { Button, Field, LinkButton, LoadFailed, Menu, type MenuItem, Pick, Problem, StatusBar } from '../ui';
 import { ago } from '../ago';
 import { NotePages } from './notes';
@@ -29,6 +29,9 @@ type Draft = { url: string; visibility: Visibility; writers: Writers };
 /** A new site: read by its members, and « Members only » (FRU-330), as the worker makes it. */
 const EMPTY_DRAFT: Draft = { url: '', visibility: 'members', writers: 'members' };
 
+/** One page of the sites, as the worker answers it (FRU-497): its sites, and how many hold the search. */
+type Page = { sites: readonly Site[]; total: number };
+
 /** How many cards a page shows: 12 fills rows of 1, 2, 3 or 4 cards. */
 const SITES_PER_PAGE = 12;
 
@@ -44,7 +47,8 @@ const SITES_PER_PAGE = 12;
 export default function Sites() {
   useLocale();
   const { workspace } = useWorkspace();
-  const [sites, setSites] = useState<Listed<Site>>('loading');
+  // One page of the grid, and how many sites hold the search (FRU-497). `loading` only before the first answer.
+  const [read, setRead] = useState<Page | 'loading' | 'failed'>('loading');
   const [adding, setAdding] = useState(false);
   // What is typed in the form that adds a site is kept here, above every state of the list: the
   // form goes when the list is read again, and what somebody typed must not go with it.
@@ -54,7 +58,7 @@ export default function Sites() {
   const seesTracker = workspace.role !== 'guest';
 
   // The search and the page live in the address (FRU-408): a reload keeps the view. The worker
-  // answers every site at once, so both are done here, on the list that was read.
+  // answers the page and searches (FRU-497): the screen reads 12 sites, and their notes only.
   const [params, setParams] = useSearchParams();
   const latest = useRef(params);
   useEffect(() => {
@@ -71,11 +75,11 @@ export default function Sites() {
     setParams(next, { replace: true });
   };
   const [typed, setTyped] = useTypedSearch(q, search);
-  const found = typeof sites === 'string' ? [] : matching(sites, q);
-  const pages = Math.max(1, Math.ceil(found.length / SITES_PER_PAGE));
-  // A page past the last one (a site removed, an address typed) shows the last one.
-  const at = Math.min(pages, Math.max(1, Math.trunc(Number(params.get('page'))) || 1));
-  const shown = found.slice((at - 1) * SITES_PER_PAGE, at * SITES_PER_PAGE);
+  const asked = Math.max(1, Math.trunc(Number(params.get('page'))) || 1);
+  const total = typeof read === 'string' ? 0 : read.total;
+  const pages = Math.max(1, Math.ceil(total / SITES_PER_PAGE));
+  const at = Math.min(pages, asked);
+  const shown = typeof read === 'string' ? [] : read.sites;
   const turn = (to: number) => {
     const next = new URLSearchParams(latest.current);
     if (to <= 1) next.delete('page');
@@ -84,14 +88,37 @@ export default function Sites() {
     setParams(next);
   };
 
-  // A read that failed says so, and is asked again: it never reads as « No site yet » (FRU-162).
-  const read = useCallback(async () => {
-    setSites('loading');
-    const answer = await call<{ sites: Site[] }>('GET', `/console/workspaces/${workspace.id}/sites`);
-    setSites(listedOf(answer, (data) => data.sites));
-  }, [workspace.id]);
+  // A read that failed says so, and is asked again: it never reads as « No site yet » (FRU-162). A
+  // read again keeps the cards on the screen until its answer replaces them, and the answer of a read
+  // that is no longer the last one is dropped.
+  const asks = useRef(0);
+  const load = useCallback(async () => {
+    const ask = (asks.current += 1);
+    setRead((current) => (current === 'failed' ? 'loading' : current));
+    const query = new URLSearchParams({
+      limit: String(SITES_PER_PAGE),
+      offset: String((asked - 1) * SITES_PER_PAGE),
+      ...(q === '' ? {} : { q }),
+    });
+    const answer = await call<Page>('GET', `/console/workspaces/${workspace.id}/sites?${query}`);
+    if (ask !== asks.current) return;
+    const sites = listedOf(answer, (data) => data.sites);
+    const counted = answer.ok ? answer.data?.total : undefined;
+    setRead(sites === 'failed' || typeof counted !== 'number' ? 'failed' : { sites, total: counted });
+  }, [workspace.id, q, asked]);
 
-  useEffect(() => void read(), [read]);
+  useEffect(() => void load(), [load]);
+
+  // A page past the last one (a site removed, an address typed) shows the last one, in place of it.
+  const past = typeof read !== 'string' && read.total > 0 && read.sites.length === 0 && asked > pages;
+  useEffect(() => {
+    if (!past) return;
+    const next = new URLSearchParams(latest.current);
+    if (pages <= 1) next.delete('page');
+    else next.set('page', String(pages));
+    latest.current = next;
+    setParams(next, { replace: true });
+  }, [past, pages, setParams]);
 
   // A new site opens its page, at how to put Fruitback on it (FRU-433): the grid unfolds nothing.
   const navigate = useNavigate();
@@ -104,7 +131,7 @@ export default function Sites() {
   // when the last site went, so a keyboard does not start again from the top of the page.
   const { state } = useLocation();
   const removed = typeof state === 'object' && state !== null && 'removed' in state ? String(state.removed) : '';
-  const drawn = typeof sites !== 'string';
+  const drawn = typeof read !== 'string';
   useEffect(() => {
     if (removed === '' || !drawn) return;
     const next =
@@ -113,7 +140,8 @@ export default function Sites() {
     next?.focus();
   }, [removed, drawn]);
 
-  const listed = typeof sites !== 'string' && sites.length > 0;
+  // The workspace has sites: some hold the search, or a search hides them. No search and none is « No site yet ».
+  const listed = typeof read !== 'string' && (read.total > 0 || q !== '');
 
   return (
     <>
@@ -123,19 +151,19 @@ export default function Sites() {
         {...(listed && manages ? { action: <Button onClick={() => setAdding(true)}>{t('Add a site')}</Button> } : {})}
       />
 
-      {sites === 'loading' ? <p className="text-small text-muted">{t('Loading…')}</p> : null}
+      {read === 'loading' ? <p className="text-small text-muted">{t('Loading…')}</p> : null}
 
       {/* The mockup sizes the two boxes below by their content: 760 px and 640 px inside the padding. */}
-      {sites === 'failed' ? (
+      {read === 'failed' ? (
         <LoadFailed
           title={t('The sites did not load')}
           detail={t('Fruitback did not answer. Your sites and notes are safe.')}
           retry={t('Try again')}
-          onRetry={() => void read()}
+          onRetry={() => void load()}
         />
       ) : null}
 
-      {typeof sites !== 'string' && sites.length === 0 ? (
+      {typeof read !== 'string' && !listed ? (
         <div className="box-content flex max-w-[640px] flex-col items-start gap-[14px] rounded-frame border border-line bg-subtle px-[clamp(20px,5vw,56px)] py-[48px]">
           <svg aria-hidden="true" viewBox="16 6 96 116" className="h-[48px] w-[40px] fill-accent">
             <path
@@ -190,7 +218,7 @@ export default function Sites() {
               onChange={(event) => setTyped(event.target.value)}
             />
           </div>
-          {found.length === 0 ? (
+          {total === 0 ? (
             <p className="text-body text-muted">
               {t('No site matches « {search} ».', { search: q })}{' '}
               <LinkButton space="inline" onClick={() => search('')}>
@@ -212,7 +240,7 @@ export default function Sites() {
               label={t('Pages of sites')}
               from={(at - 1) * SITES_PER_PAGE + 1}
               shown={shown.length}
-              total={found.length}
+              total={total}
               first={at === 1}
               last={at === pages}
               onPage={(to) => turn(to === 'next' ? at + 1 : at - 1)}
@@ -500,14 +528,6 @@ function SiteCard({ workspace, site, manages, seesTracker }: SiteCardProps) {
 /** The Notes screen with one site chosen in its filter « Site ». */
 export function notesOf(workspace: string, site: string): string {
   return `/w/${workspace}/notes?${new URLSearchParams({ site }).toString()}`;
-}
-
-/** The sites whose name holds the search, in the order of the list: the search is the address typed. */
-function matching(sites: readonly Site[], q: string): readonly Site[] {
-  const wanted = q.trim().toLowerCase();
-  if (wanted === '') return sites;
-
-  return sites.filter((site) => siteName(site.origin).toLowerCase().includes(wanted));
 }
 
 /** A cell with nothing to say yet: a dot for the eye, and words for a screen reader. */

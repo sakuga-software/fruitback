@@ -12,6 +12,7 @@ import {
   sideScroll,
   stubWorker,
   styles,
+  fulfillSites,
 } from './console-workspace.ts';
 
 /**
@@ -125,7 +126,8 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
     if (worker.down && (pathname.endsWith('/connectors') || pathname.endsWith('/sites'))) return json({}, 500);
     if (pathname.endsWith('/connectors'))
       return json({ connectors: worker.connectors, available: true, linearOAuth: worker.oauth });
-    if (pathname.endsWith('/sites')) return json({ sites: SITES });
+    const read = fulfillSites(route, SITES);
+    if (read !== false) return read;
     if (pathname.endsWith('/c1/teams'))
       return json({ teams: [{ id: 't1', name: 'Acme web', key: 'ACM', projects: [{ id: 'p1', name: 'Website' }] }] });
     if (pathname.endsWith('/c1/states')) return json({ states: STATES, settings: SETTINGS });

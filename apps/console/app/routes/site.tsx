@@ -6,16 +6,19 @@ import {
   type Destination,
   STAGES,
   type Site,
+  type SiteChoice,
   type Visibility,
   type Workspace,
   type Writers,
   call,
+  readSite,
+  siteChoices,
 } from '../api';
 import { Confirmation } from '../confirm';
 import { Domains } from '../domains';
 import { msg, t } from '../i18n';
 import { InstallOptions } from '../install-options';
-import { type Listed, edited, listedOf } from '../listed';
+import { type Listed, listedOf } from '../listed';
 import { problemOf } from '../problems';
 import { siteLabel, siteName } from '../site-address';
 import { Button, Disclosure, KeyValue, LinkButton, LoadFailed, Pick, Problem } from '../ui';
@@ -59,8 +62,8 @@ const ADVANCED: readonly string[] = ['statuses', 'agent', 'previews'];
  * « Advanced » folds the statuses, « Start an agent » and the preview builds (FRU-538): the page shows
  * first the notes, the install, and who sees and who writes. A hash of a section inside opens it.
  *
- * The page reads the list of the sites, as the page of the statuses does: the worker has no route for
- * one site, and no route of the worker is new.
+ * The page reads its one site (`GET …/sites/<id>`, FRU-497): the notes of the other sites are not
+ * counted for it.
  *
  * `#remove` in the address opens the confirmation: « Remove » in the menu of a card is the first time
  * the removal is asked, and the page asks the second.
@@ -75,14 +78,33 @@ export default function SitePage() {
   const manages = workspace.role === 'owner' || workspace.role === 'admin';
   // The worker says where the notes of a site go to whoever sees the tracker: not to a guest.
   const seesTracker = workspace.role !== 'guest';
-  const [sites, setSites] = useState<Listed<Site>>('loading');
+  // `gone`: the worker answered 404, a site removed or of another workspace. Not a read that failed.
+  const [read, setRead] = useState<Site | 'loading' | 'failed' | 'gone'>('loading');
 
-  const read = useCallback(async () => {
-    setSites('loading');
-    const answer = await call<{ sites: Site[] }>('GET', `${base}/sites`);
-    setSites(listedOf(answer, (data) => data.sites));
-  }, [base]);
-  useEffect(() => void read(), [read]);
+  const readOne = useCallback(async () => {
+    setRead('loading');
+    const answer = await readSite(workspace.id, siteId);
+    if (!answer.ok) return setRead(answer.status === 404 ? 'gone' : 'failed');
+    // An answer that is no site is no site (FRU-162): the page says it did not load.
+    setRead(typeof answer.data?.id === 'string' && typeof answer.data.origin === 'string' ? answer.data : 'failed');
+  }, [workspace.id, siteId]);
+  useEffect(() => void readOne(), [readOne]);
+
+  // The sites to name in « Previews » (FRU-103): their id and address, and no count (FRU-497).
+  const [choices, setChoices] = useState<Listed<SiteChoice>>('loading');
+  useEffect(() => {
+    if (!manages) return;
+    // Another workspace: its sites are read, and the answer for the one before is dropped.
+    let current = true;
+    setChoices('loading');
+    void siteChoices(workspace.id).then((answer) => {
+      if (current) setChoices(listedOf(answer, (data) => data.sites));
+    });
+
+    return () => {
+      current = false;
+    };
+  }, [manages, workspace.id]);
 
   // The sources of the workspace, for who sets where the notes of the site go (FRU-399).
   const [connectors, setConnectors] = useState<Listed<Connector>>('loading');
@@ -95,8 +117,8 @@ export default function SitePage() {
     if (manages && seesTracker) void readConnectors();
   }, [manages, seesTracker, readConnectors]);
 
-  const site = typeof sites === 'string' ? undefined : sites.find((each) => each.id === siteId);
-  const gone = typeof sites !== 'string' && site === undefined;
+  const site = typeof read === 'string' ? undefined : read;
+  const gone = read === 'gone';
   const name = site === undefined ? undefined : siteName(site.origin);
 
   // An address with a hash goes to its section once the site is drawn: the page is empty before.
@@ -122,35 +144,27 @@ export default function SitePage() {
 
   /** The places the worker kept, in place of the ones of the list: no read again. */
   function placed(places: Destination[]) {
-    setSites((current) =>
-      edited(current, (items) =>
-        items.map((each) =>
-          each.id === siteId
-            ? {
-                ...each,
-                destinations: places,
-                ...(places[0] === undefined ? { destination: undefined } : { destination: places[0] }),
-              }
-            : each,
-        ),
-      ),
+    setRead((current) =>
+      typeof current === 'string'
+        ? current
+        : {
+            ...current,
+            destinations: places,
+            ...(places[0] === undefined ? { destination: undefined } : { destination: places[0] }),
+          },
     );
   }
 
   /** Who sees the notes and who writes, as the worker answered them: no read again. */
   function changed(answered: Access) {
-    setSites((current) =>
-      edited(current, (items) =>
-        items.map((each) =>
-          each.id === siteId
-            ? {
-                ...each,
-                visibility: answered.visibility,
-                ...(answered.writers === undefined ? {} : { writers: answered.writers }),
-              }
-            : each,
-        ),
-      ),
+    setRead((current) =>
+      typeof current === 'string'
+        ? current
+        : {
+            ...current,
+            visibility: answered.visibility,
+            ...(answered.writers === undefined ? {} : { writers: answered.writers }),
+          },
     );
   }
 
@@ -195,14 +209,14 @@ export default function SitePage() {
       <>
         {crumbs}
         <PageHead title={t('Site')} lead={t('Its address, where its notes go, and how to install Fruitback on it.')} />
-        {sites === 'loading' ? <p className="text-small text-muted">{t('Loading…')}</p> : null}
+        {read === 'loading' ? <p className="text-small text-muted">{t('Loading…')}</p> : null}
         {gone ? <p className="text-body text-muted">{t('This site is not in the workspace any more.')}</p> : null}
-        {sites === 'failed' ? (
+        {read === 'failed' ? (
           <LoadFailed
             title={t('The site did not load')}
             detail={t('Fruitback did not answer. Your sites and notes are safe.')}
             retry={t('Try again')}
-            onRetry={() => void read()}
+            onRetry={() => void readOne()}
           />
         ) : null}
       </>
@@ -295,7 +309,7 @@ export default function SitePage() {
               onRetry={() => void readConnectors()}
             />
             <div id="previews" className="scroll-mt-[24px] [&>section]:mt-0">
-              <Domains workspace={workspace} sites={sites} />
+              <Domains workspace={workspace} sites={choices} />
             </div>
           </Disclosure>
         ) : null}

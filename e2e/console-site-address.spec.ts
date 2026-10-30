@@ -1,4 +1,5 @@
 import { type Page, expect, test } from '@playwright/test';
+import { fulfillSites } from './console-workspace.ts';
 import { WORKER_ORIGIN } from './pin.ts';
 
 /**
@@ -25,13 +26,14 @@ async function stubWorker(page: Page): Promise<string[]> {
     const json = (body: unknown, status = 200) => route.fulfill({ status, json: body });
     if (pathname === '/console/me') return json(me);
     if (pathname === '/console/workspaces/w1/domains') return json({ domains: [] });
+    const sites = sent.map((url, index) => ({
+      id: `s${index + 1}`,
+      origin: new URL(url).origin,
+      visibility: 'members',
+    }));
+    const read = fulfillSites(route, sites);
+    if (read !== false) return read;
     if (pathname === '/console/workspaces/w1/sites') {
-      const sites = sent.map((url, index) => ({
-        id: `s${index + 1}`,
-        origin: new URL(url).origin,
-        visibility: 'members',
-      }));
-      if (request.method() === 'GET') return json({ sites });
       const { url } = request.postDataJSON() as { url: string };
       sent.push(url);
 
