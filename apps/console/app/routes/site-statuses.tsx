@@ -30,6 +30,7 @@ import { Button, Choice, Field, IconButton, LinkButton, LoadFailed, Problem, Rad
 import { useLocale } from '../use-locale';
 import { STAGE_NAMES, placeLabel } from './connector-parts';
 import { PageHead, useWorkspace } from './workspace';
+import { ReadProblem } from '../read-problem';
 
 /**
  * The statuses of a site (FRU-371), as the board `design/site-statuses/` draws them: the list of the
@@ -333,7 +334,11 @@ export default function SiteStatuses() {
       {read === 'failed' ? (
         <LoadFailed
           title={t('The statuses did not load')}
-          detail={t('Fruitback did not answer. Your statuses are safe.')}
+          detail={
+            <>
+              <ReadProblem /> {t('Your statuses are safe.')}
+            </>
+          }
           retry={t('Try again')}
           onRetry={() => void load()}
         />
@@ -419,7 +424,9 @@ function LinearUnread({
       {colours}
       <div className="mt-[8px] flex flex-wrap items-center gap-[12px]">
         <p role="alert" className="min-w-0 flex-1 text-small text-muted">
-          {t('Fruitback could not read the states of Linear. The statuses you set are not lost.')}
+          {t(
+            'Fruitback could not read the states of Linear. The statuses you set are not lost. Reload the page to try again.',
+          )}
         </p>
         <Button tone="outline" onClick={onRetry}>
           {t('Try again')}

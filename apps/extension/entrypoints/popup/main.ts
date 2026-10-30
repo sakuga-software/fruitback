@@ -374,7 +374,7 @@ async function draw(state: PopupState, facts: Found): Promise<HTMLElement> {
 /** 4 (FRU-297): the account is kept, and its Fruitback did not answer. */
 function unreachableScreen(account: Account | undefined): HTMLElement {
   return problem(document, {
-    title: t("Fruitback can't reach {worker}", { worker: hostOf(CLOUD ?? '') }),
+    title: t("Fruitback can't reach {server}", { server: hostOf(CLOUD ?? '') }),
     text: t('Check the connection, then try again.'),
     primary: { label: t('Try again'), onClick: () => void render() },
     onSettings: openSettings,
@@ -642,8 +642,8 @@ const SETTINGS_PROBLEM: Record<SettingsFailure, string> = {
   forbidden: msg('Your role in this workspace does not let you change this site.'),
   'several-places': msg('This site sends to several places. Change them in Fruitback.'),
   'unknown-place': msg('This place is not in the tracker any more. Choose another one.'),
-  'signed-out': msg('Fruitback did not answer. Try again.'),
-  unavailable: msg('Fruitback did not answer. Try again.'),
+  'signed-out': msg('Your session ended. Sign in again from the Fruitback button, then try again.'),
+  unavailable: msg('This site did not change. Try again in a moment.'),
 };
 
 /**
@@ -779,7 +779,7 @@ function addAndTurnOn(origin: string, workspace: Workspace, problem: HTMLElement
 const ADD_PROBLEM: Record<Exclude<AddFailure, 'signed-out'>, string> = {
   forbidden: msg('Your role in this workspace does not let you add a site.'),
   'rate-limited': msg('Too many sites were added in the last hour. Try again later.'),
-  unavailable: msg('Fruitback did not answer. Try again.'),
+  unavailable: msg('The site was not added. Try again in a moment.'),
 };
 
 /**

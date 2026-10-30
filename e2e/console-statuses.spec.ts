@@ -728,7 +728,7 @@ test('a Linear team that the worker could not read says so, and is read again', 
 
   const section = page.getByRole('region', { name: 'Linear · Acme web' });
   await expect(section.getByRole('alert')).toHaveText(
-    'Fruitback could not read the states of Linear. The statuses you set are not lost.',
+    'Fruitback could not read the states of Linear. The statuses you set are not lost. Reload the page to try again.',
   );
   answers = true;
   await section.getByRole('button', { name: 'Try again' }).click();

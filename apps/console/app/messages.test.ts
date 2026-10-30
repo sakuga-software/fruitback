@@ -22,6 +22,7 @@ const APP = new URL('./', import.meta.url);
 // `workspace-logo.ts` says why a logo of a workspace is refused, for its settings (FRU-428).
 // `guide-steps.ts` holds the steps of the guide of the extension, that `setup-guide.tsx` shows (FRU-486).
 // `extension-here.ts` says why the extension of this browser was not connected, at step 3 (FRU-487).
+// `read-problem.tsx` says why a read failed, for every screen that reads (FRU-516).
 const screens = [
   ...readdirSync(new URL('routes/', APP))
     .map((name) => `routes/${name}`)
@@ -42,6 +43,7 @@ const screens = [
   'guide-steps.ts',
   'setup-guide.tsx',
   'extension-here.ts',
+  'read-problem.tsx',
 ];
 const sources = new Map(screens.map((name) => [name, readFileSync(new URL(name, APP), 'utf8')]));
 
@@ -307,5 +309,16 @@ describe('the French of the console says « note »', () => {
       Object.values(FRENCH).filter((sentence) => /feedback/i.test(sentence)),
       [],
     );
+  });
+});
+
+// FRU-516: the heading of the list and the state of one row shared the key `Connected`, so the state
+// of one connector read « Connectées ».
+describe('the state of one connector', () => {
+  it('is singular in French, and the heading of the list has a key of its own', () => {
+    assert.equal(FRENCH['Connected'], 'Connecté');
+    const connectors = sources.get('routes/connectors.tsx') ?? '';
+    assert.equal(connectors.match(/t\('Connected'\)/g)?.length, 1);
+    assert.ok(connectors.includes("t('Your connectors')"));
   });
 });

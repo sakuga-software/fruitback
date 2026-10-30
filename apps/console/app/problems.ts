@@ -8,8 +8,19 @@ import { msg } from './i18n.ts';
  * right. Each error says its own cause, and what to do: the proposition P7 of the first board.
  */
 
-/** The worker did not answer, or it failed. Trying again can work. */
-export const DID_NOT_ANSWER = msg('Fruitback did not answer. Try again.');
+/**
+ * No answer at all (FRU-516): no network, a server that is down, or no answer in time. The banner of
+ * the root says the same while it lasts.
+ */
+export const UNREACHABLE_PROBLEM = msg('Fruitback could not be reached. Check your connection, then try again.');
+
+/** An answer that is an error, a `5xx`: the server answered, so the connection is not the cause. */
+export const SERVER_PROBLEM = msg('Fruitback hit an error. Try again in a moment.');
+
+/** The sentence for a call that got no answer, or an error. Trying again can work in both cases. */
+export function failureOf(failed: { status: number }): string {
+  return failed.status === 0 ? UNREACHABLE_PROBLEM : SERVER_PROBLEM;
+}
 
 /** What the worker answers to a write of a suspended workspace (FRU-282), with `409`. */
 export const WORKSPACE_SUSPENDED_ERROR = 'workspace-suspended';
@@ -31,8 +42,8 @@ export function writeProblemOf(failed: { error: string }, otherwise: string): st
  * The sentence for a refused call.
  *
  * `named` holds a sentence for each code of the worker this screen knows. No answer (`status` 0) and
- * a `5xx` say that Fruitback did not answer: the person did nothing wrong. Any other refusal says
- * `otherwise`, a sentence of the screen that blames no field.
+ * a `5xx` say what failed, not the person: see `failureOf`. Any other refusal says `otherwise`, a
+ * sentence of the screen that blames no field.
  */
 export function problemOf(
   failed: { status: number; error: string },
@@ -41,7 +52,7 @@ export function problemOf(
 ): string {
   // Own keys only: a code named `constructor` must not find a method of `Object`.
   if (Object.hasOwn(named, failed.error)) return named[failed.error] as string;
-  if (failed.status === 0 || failed.status >= 500) return DID_NOT_ANSWER;
+  if (failed.status === 0 || failed.status >= 500) return failureOf(failed);
 
   return writeProblemOf(failed, otherwise);
 }

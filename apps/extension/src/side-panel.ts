@@ -788,7 +788,7 @@ function readyBlock(document: Document, options: PanelOptions, ready: PanelNote[
 
 /** What a verdict that did not go says (FRU-300). Nothing moved. */
 export const CHECK_PROBLEM: Record<Exclude<ReplyOutcome, 'sent'>, string> = {
-  retry: msg('Did not go through. Try again.'),
+  retry: msg('Your answer was not sent. Try again.'),
   wait: msg('Too many requests just now. Try again in a minute.'),
   'signed-out': msg('Your session ended. Sign in again from the Fruitback button, then try again.'),
   refused: msg('This note can no longer be checked here. The list is read again.'),
@@ -836,8 +836,8 @@ export const REPLY_MAX_LENGTH = 2000;
 
 /** What a reply that did not go says. The text stays in the field. */
 export const REPLY_PROBLEM: Record<Exclude<ReplyOutcome, 'sent'>, string> = {
-  retry: msg('The reply did not go through. Your text is kept. Try again.'),
-  wait: msg('Too many replies just now. Your text is kept. Try again in a minute.'),
+  retry: msg('The reply was not sent. Your text is still here. Try again.'),
+  wait: msg('Too many replies just now. Your text is still here. Try again in a minute.'),
   'signed-out': msg('Your session ended. Sign in again from the Fruitback button, then send.'),
   refused: msg('You cannot reply to this note any more.'),
 };

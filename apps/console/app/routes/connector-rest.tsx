@@ -15,6 +15,7 @@ import {
   shortHost,
 } from './connector-parts';
 import { useWorkspace } from './workspace';
+import { ReadProblem } from '../read-problem';
 
 /** Where the contract of the request is written, for whoever writes the receiver. */
 const REST_GUIDE = 'https://fruitback.com/rest-connector.html';
@@ -89,7 +90,9 @@ export function RestPanel({ id, base, connector, sites, manages, onChanged, onRe
       <section className="flex flex-col gap-[8px]" data-deliveries>
         <BlockTitle>{t('Notes that did not arrive')}</BlockTitle>
         {late === undefined ? (
-          <p className="text-small text-muted">{t('Fruitback did not answer. Try again.')}</p>
+          <p className="text-small text-muted">
+            {t('This list did not load.')} <ReadProblem />
+          </p>
         ) : null}
         {late?.length === 0 ? <p className="text-small text-muted">{t('Every note arrived.')}</p> : null}
         <ul className="flex flex-col">

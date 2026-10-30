@@ -585,7 +585,9 @@ test.describe('the screen of an invitation, against the mockup (FRU-241)', () =>
     await page.context().unrouteAll({ behavior: 'ignoreErrors' });
     await stubWorker(page, { invitations: 'failed' });
     await page.goto(`${CONSOLE}/invitations`);
-    await expect(page.getByRole('alert')).toHaveText('Fruitback did not answer. Your invitations are not lost.');
+    await expect(page.getByRole('alert')).toHaveText(
+      'Fruitback hit an error. Try again in a moment. Your invitations are safe.',
+    );
     await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible();
   });
 

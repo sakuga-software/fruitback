@@ -21,6 +21,7 @@ import {
   sourceLine,
 } from './connector-parts';
 import { RestPanel } from './connector-rest';
+import { ReadProblem } from '../read-problem';
 
 /**
  * The sources of a workspace, as screen 11 of the mockup of 2026-10-13 draws them (FRU-246): the
@@ -42,7 +43,7 @@ const LATER = [
 
 /** What the way back from Linear says, as the worker words it in the address (FRU-134). */
 const LINEAR_RETURNS: Record<string, string> = {
-  declined: msg('Linear was not connected: the consent was refused there.'),
+  declined: msg('You declined access in Linear, so it is not connected. Press Connect to try again.'),
   forbidden: msg('Only an owner or an admin of the workspace connects a source.'),
   failed: msg('Linear was not connected. Start again from « Connect ».'),
 };
@@ -254,12 +255,12 @@ export default function Connectors() {
       <div className="flex min-w-0 flex-col gap-[32px]">
         <section aria-labelledby="connected-title">
           <h2 id="connected-title" className="mb-[10px] text-body leading-auto font-semibold">
-            {t('Connected')}
+            {t('Your connectors')}
           </h2>
           {unread ? (
             <div className="mb-[12px] flex flex-wrap items-center gap-[12px]">
               <p role="alert" className="min-w-0 flex-1 text-small text-muted">
-                {t('Fruitback did not answer. The sources and their sites could not be read.')}
+                {t('The connectors and their sites did not load.')} <ReadProblem />
               </p>
               <Button tone="outline" onClick={() => void reload()}>
                 {t('Try again')}

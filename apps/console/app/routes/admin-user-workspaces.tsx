@@ -4,6 +4,7 @@ import { msg, t } from '../i18n';
 import { Choice } from '../ui';
 import { useLocale } from '../use-locale';
 import { AdminWrite, GIVEN_ROLES } from './admin-writes';
+import { ReadProblem } from '../read-problem';
 
 /**
  * The writes of an administrator on the workspaces of one person, in the panel of « Users »
@@ -64,7 +65,7 @@ export function ChangeRole({ user, onChanged }: { user: AdminUser; onChanged: (w
       send={() => setMemberRoleAsAdmin(workspace, user.id, role)}
       problems={{
         'last-owner': msg('This is the last owner of the workspace. Make somebody else its owner first.'),
-        'not-a-member': msg('This person is no longer a member of the workspace.'),
+        'not-a-member': msg('This person is no longer a member of the workspace. Reload the page.'),
       }}
       notDone={msg('The role did not change. Try again.')}
       onDone={(data) => {
@@ -113,7 +114,11 @@ function WorkspaceChoice({
 
   if (found === 'loading') return <p className="text-muted">{t('Loading…')}</p>;
   if (found === 'failed')
-    return <p className="text-muted">{t('The workspaces could not be read. Fruitback did not answer.')}</p>;
+    return (
+      <p className="text-muted">
+        {t('The workspaces did not load.')} <ReadProblem />
+      </p>
+    );
   if (found.length === 0) return <p className="text-muted">{t('This person is in every workspace already.')}</p>;
 
   return (

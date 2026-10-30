@@ -20,13 +20,14 @@ import { KINDS, STAGE_NAMES, connectorName } from './connector-parts';
 import { ConnectorMark } from '../connector-marks';
 import { useWorkspace } from './workspace';
 import { msg, t } from '../i18n';
-import { DID_NOT_ANSWER, writeProblemOf } from '../problems';
+import { failureOf, writeProblemOf } from '../problems';
 import { useTypedSearch } from '../typed-search';
 import { useLocale } from '../use-locale';
 import { siteLabel } from '../site-address';
 import { type StatusChoice, offeredFor, statusName, statusProblemOf } from '../note-status';
 import { boardColumns } from '../board-columns';
 import { NotesBoard } from './notes-board';
+import { ReadProblem } from '../read-problem';
 
 /** Who left a note, as the index of the notes says it (FRU-244). A name only for an account of the workspace. */
 export type NoteAuthor = {
@@ -507,7 +508,7 @@ function NoteRow({
   /** The connector the note went to, when the connectors were read: it may have a name (FRU-404). */
   source: Connector | undefined;
   manages: boolean;
-  retry: () => Promise<{ ok: true } | { ok: false; error: string }>;
+  retry: () => Promise<{ ok: true } | { ok: false; status: number; error: string }>;
   onSent: () => void;
   statuses: readonly StatusChoice[] | undefined;
   choose: (status: string) => Promise<Answer<{ status: string; stage: Stage }>>;
@@ -531,7 +532,7 @@ function NoteRow({
     setRefused(undefined);
     const sent = await retry();
     setSending(false);
-    if (!sent.ok) return setRefused(writeProblemOf(sent, DID_NOT_ANSWER));
+    if (!sent.ok) return setRefused(writeProblemOf(sent, failureOf(sent)));
     onSent();
   }
 
@@ -820,7 +821,11 @@ export function NotesFailed({ onRetry }: { onRetry: () => void }) {
   return (
     <LoadFailed
       title={t('The notes did not load')}
-      detail={t('Fruitback did not answer. Your notes are safe.')}
+      detail={
+        <>
+          <ReadProblem /> {t('Your notes are safe.')}
+        </>
+      }
       retry={t('Try again')}
       onRetry={onRetry}
     />

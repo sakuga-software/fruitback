@@ -108,7 +108,7 @@ describe('where the setup takes a person (FRU-239)', () => {
       problem: 'A workspace needs a name of one line, up to 80 characters.',
     });
     const silent = await resolveStage(fake({ creates: no(503) }).calls);
-    assert.equal(silent.kind === 'unnamed' && silent.problem, 'Fruitback did not answer. Try again.');
+    assert.equal(silent.kind === 'unnamed' && silent.problem, 'Fruitback hit an error. Try again in a moment.');
   });
 
   it('finds the workspace a tab before it made, under the lock, and makes none', async () => {

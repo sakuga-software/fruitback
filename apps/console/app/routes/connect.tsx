@@ -3,7 +3,7 @@ import { useParams } from 'react-router';
 import { type ConnectRequest, type Me, answerConnect, call, connectRequest, signOut } from '../api';
 import { keepConnect } from '../connect-return';
 import { locale, msg, t } from '../i18n';
-import { DID_NOT_ANSWER } from '../problems';
+import { failureOf } from '../problems';
 import {
   AnotherAddress,
   EmailForm,
@@ -16,6 +16,7 @@ import {
 } from '../sign-in-form';
 import { Button, EntryPage, KeyValue, Lead, LinkButton, Problem, SuccessMark, Title, VerifyWord } from '../ui';
 import { useLocale } from '../use-locale';
+import { ReadProblem } from '../read-problem';
 
 /**
  * « Connect this browser » (FRU-240, screen 04 of the mockup of 2026-10-13): the extension asked to
@@ -143,7 +144,7 @@ export default function Connect() {
             <Title>{t('Connect this browser')}</Title>
           </div>
           <p role="alert" className="mb-6 text-lead text-muted">
-            {t(DID_NOT_ANSWER)}
+            <ReadProblem />
           </p>
           <div>
             <Button tone="outline" size="page" onClick={read}>
@@ -237,7 +238,7 @@ function Ask({ request, asked, onAnswered, onRead, onSignedOut }: AskProps) {
     // word the worker does not take: the page reads what the request is now, for this session.
     if ([404, 409, 410, 422].includes(answered.status)) return onRead();
     if (answered.status === 401) return onSignedOut();
-    setProblem(DID_NOT_ANSWER);
+    setProblem(failureOf(answered));
   }
 
   async function another() {

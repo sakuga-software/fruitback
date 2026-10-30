@@ -529,7 +529,7 @@ type RadiosProps<Value extends string> = {
   hint?: string;
 };
 
-/** One choice among a few, as a plain list of radios: « Who can make an account ». */
+/** One choice among a few, as a plain list of radios: « Who can create an account ». */
 export function Radios<Value extends string>({
   label,
   value,
@@ -700,8 +700,8 @@ export function LoadFailed({
 }: {
   /** « The notes did not load ». */
   title: string;
-  /** « Fruitback did not answer. Your notes are safe. » */
-  detail: string;
+  /** Why, with what to do, then what is not lost: « Fruitback hit an error. Try again in a moment. Your notes are safe. » */
+  detail: ReactNode;
   /** The words of the button: « Try again ». */
   retry: string;
   onRetry: () => void;

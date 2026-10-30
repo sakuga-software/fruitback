@@ -923,7 +923,9 @@ test('the states of a list: loading, a read that failed and « Try again », and
   await visit(page, '/admin/workspaces', 'Workspaces');
   await expect(main(page).getByText('Loading…')).toBeVisible();
   release();
-  await expect(main(page).getByRole('alert')).toHaveText('The workspaces could not be read. Fruitback did not answer.');
+  await expect(main(page).getByRole('alert')).toHaveText(
+    'The workspaces did not load. Fruitback hit an error. Try again in a moment.',
+  );
   await expect(page.getByRole('table')).toHaveCount(0);
   await axe(page, 'a read that failed');
   failing.status = undefined;
@@ -933,7 +935,9 @@ test('the states of a list: loading, a read that failed and « Try again », and
 
   failing.status = 503;
   await page.goto(`${CONSOLE}/admin/users`);
-  await expect(main(page).getByRole('alert')).toHaveText('The people could not be read. Fruitback did not answer.');
+  await expect(main(page).getByRole('alert')).toHaveText(
+    'The people did not load. Fruitback hit an error. Try again in a moment.',
+  );
 });
 
 test('an instance with no workspace and nobody says so', async ({ page }) => {
@@ -1222,7 +1226,7 @@ test('Users: each refusal of the worker is said, and the switch shows the role i
   options.refusing = { status: 409, error: 'self-removal' };
   await refused(SELF_REMOVAL);
   options.refusing = { status: 500, error: 'down' };
-  await refused('Fruitback did not answer. Try again.');
+  await refused('Fruitback hit an error. Try again in a moment.');
   options.refusing = { status: 404, error: 'not-found' };
   await refused('The role did not change. Try again.');
   expect(posted).toHaveLength(4);
@@ -1546,11 +1550,11 @@ test('Users: each refusal of a suspension is said, and the row keeps its true st
   options.refusingSuspension = { status: 409, error: 'self-suspension' };
   await refused(SELF_SUSPENSION);
   options.refusingSuspension = { status: 500, error: 'down' };
-  await refused('Fruitback did not answer. Try again.');
+  await refused('Fruitback hit an error. Try again in a moment.');
   options.refusingSuspension = { status: 404, error: 'not-found' };
-  await refused('Nothing changed. Try again.');
+  await refused('The account was not suspended. Try again.');
   options.refusingSuspension = { status: 400, error: 'invalid-suspended' };
-  await refused('Nothing changed. Try again.');
+  await refused('The account was not suspended. Try again.');
   expect(posted).toHaveLength(5);
 
   // A refused restoration leaves the account suspended.
@@ -1559,14 +1563,14 @@ test('Users: each refusal of a suspension is said, and the row keeps its true st
   await expect(panel(page)).toHaveAccessibleName('Hugo Petit');
   await restore(page).click();
   await confirmation(page, RESTORES_HUGO).getByRole('button', { name: RESTORES_HUGO }).click();
-  await expect(panel(page).getByRole('alert')).toHaveText('Fruitback did not answer. Try again.');
+  await expect(panel(page).getByRole('alert')).toHaveText('Fruitback hit an error. Try again in a moment.');
   await expect(statusOf(page, 4)).toHaveText('Suspended');
   await expect(restore(page)).toBeFocused();
 
   options.refusingSuspension = undefined;
   await restore(page).click();
   // The sentence of the refusal stays until the next answer: no error path clears what it says.
-  await expect(panel(page).getByRole('alert')).toHaveText('Fruitback did not answer. Try again.');
+  await expect(panel(page).getByRole('alert')).toHaveText('Fruitback hit an error. Try again in a moment.');
   await confirmation(page, RESTORES_HUGO).getByRole('button', { name: RESTORES_HUGO }).click();
   await expect(statusOf(page, 4)).toHaveText('Active');
   await expect(panel(page).getByRole('alert')).toHaveCount(0);
@@ -1734,9 +1738,9 @@ test('Workspaces: each refusal of a deletion is said, the typed name stays, and 
     ],
     [
       { status: 404, error: 'not-found' },
-      'This workspace no longer exists. Another admin or its owner may have deleted it.',
+      'This workspace no longer exists. Another admin or its owner may have deleted it. Reload the page.',
     ],
-    [{ status: 500, error: 'down' }, 'Fruitback did not answer. Try again.'],
+    [{ status: 500, error: 'down' }, 'Fruitback hit an error. Try again in a moment.'],
     [{ status: 403, error: 'forbidden' }, 'The workspace was not deleted. Try again.'],
   ] as const) {
     options.refusingDeletion = refusal;
@@ -1859,7 +1863,7 @@ test('Workspaces: « Keep it » and Escape send nothing and keep the panel; a re
     ],
     [{ status: 409, error: 'already-member' }, 'This person is a member of the workspace already.'],
     [{ status: 409, error: 'workspace-suspended' }, 'This workspace is suspended. Restore it first.'],
-    [{ status: 500, error: 'down' }, 'Fruitback did not answer. Try again.'],
+    [{ status: 500, error: 'down' }, 'Fruitback hit an error. Try again in a moment.'],
   ] as const) {
     options.refusingWrite = refusal;
     if ((await group(page, 'Add someone to Acme support').count()) === 0) await first.click();
@@ -1907,12 +1911,12 @@ test('Workspaces: « New workspace » makes one for an account, and its panel op
   const asking = group(page, 'New workspace');
   await expect(asking.getByRole('textbox', { name: 'Name of the workspace' })).toBeFocused();
   await asking.getByRole('textbox', { name: 'Name of the workspace' }).fill('  Ines   studio ');
-  await expect(asking.getByRole('button', { name: 'Make the workspace' })).toBeDisabled();
+  await expect(asking.getByRole('button', { name: 'Create the workspace' })).toBeDisabled();
   await asking.getByRole('textbox', { name: 'Address of its owner' }).fill('ines@acme.dev');
   await expect(asking).toContainText(
     'The workspace is made at once, and ines@acme.dev owns it. They see that you made it.',
   );
-  await asking.getByRole('button', { name: 'Make the workspace' }).click();
+  await asking.getByRole('button', { name: 'Create the workspace' }).click();
 
   await expect(main(page).getByRole('status').first()).toHaveText('Ines studio was made, owned by ines@acme.dev.');
   await expect(page).toHaveURL(/[?&]open=w20(&|$)/);
@@ -2057,7 +2061,7 @@ test('Users: each refusal of a deletion is said and keeps the address; yourself 
       'This person owns a workspace alone now. Read Users again, and change its owner first.',
     ],
     [{ status: 409, error: 'email-mismatch' }, 'This is not the address of the account. Type it as it is written.'],
-    [{ status: 500, error: 'down' }, 'Fruitback did not answer. Try again.'],
+    [{ status: 500, error: 'down' }, 'Fruitback hit an error. Try again in a moment.'],
   ] as const) {
     options.refusingAccountDeletion = refusal;
     await asking.getByRole('button', { name: "Delete Inès Roux's account" }).click();
@@ -2252,10 +2256,13 @@ test('Workspaces: each refusal of a suspension is said, the reason stays, and th
   await asking.getByRole('textbox').fill('Unpaid');
 
   for (const [refusal, sentence] of [
-    [{ status: 404, error: 'not-found' }, 'This workspace no longer exists, or you are no longer an instance admin.'],
+    [
+      { status: 404, error: 'not-found' },
+      'This workspace no longer exists, or you are no longer an instance admin. Reload the page.',
+    ],
     [{ status: 400, error: 'invalid-reason' }, 'A reason is one line of 200 characters at most.'],
-    [{ status: 500, error: 'down' }, 'Fruitback did not answer. Try again.'],
-    [{ status: 409, error: 'something-else' }, 'Nothing changed. Try again.'],
+    [{ status: 500, error: 'down' }, 'Fruitback hit an error. Try again in a moment.'],
+    [{ status: 409, error: 'something-else' }, 'The workspace was not suspended. Try again.'],
   ] as const) {
     options.refusingWorkspaceSuspension = refusal;
     await asking.getByRole('button', { name: 'Suspend Acme support' }).click();

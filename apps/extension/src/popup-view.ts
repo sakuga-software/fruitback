@@ -229,11 +229,19 @@ export type SignInProblem = 'refused' | 'expired' | 'unavailable' | 'untrusted' 
 /** What stopped a sign-in, in two sentences: the title of the alert, and its words. */
 export function signInStop(problem: SignInProblem): SignInStop {
   const said: Record<SignInProblem, [string, string]> = {
-    refused: [t('The sign-in did not finish.'), t('It was refused in the console.')],
-    expired: [t('The sign-in did not finish.'), t('The tab was not approved in time.')],
-    unavailable: [t('Fruitback did not answer.'), t('Check the connection, then try again.')],
-    untrusted: [t('The sign-in did not start.'), t('Fruitback named a console that is not its own.')],
-    blocked: [t('The sign-in did not start.'), t('The browser did not give the extension access to Fruitback.')],
+    refused: [t('The sign-in did not finish.'), t('Someone declined it in the console. Sign in again to retry.')],
+    expired: [t('The sign-in did not finish.'), t('The console did not approve it within 15 minutes. Sign in again.')],
+    unavailable: [t('Fruitback could not be reached.'), t('Check the connection, then try again.')],
+    untrusted: [
+      t('The sign-in did not start.'),
+      t('Fruitback named a console that is not its own. Tell the person who runs your Fruitback.'),
+    ],
+    blocked: [
+      t('The sign-in did not start.'),
+      t(
+        'The browser did not give the extension access to Fruitback. Sign in again, and allow it when the browser asks.',
+      ),
+    ],
   };
   const [title, text] = said[problem];
 

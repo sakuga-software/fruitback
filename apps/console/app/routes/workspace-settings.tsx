@@ -19,6 +19,7 @@ import { useLocale } from '../use-locale';
 import { LOGO_NOT_REMOVED, LOGO_NOT_SAVED, LOGO_PROBLEMS, logoRefusal } from '../workspace-logo';
 import { RENAME_PROBLEMS, WORKSPACE_NOT_RENAMED } from './setup-account';
 import { PageHead, WorkspaceMark, useWorkspace } from './workspace';
+import { ReadProblem } from '../read-problem';
 
 /**
  * The settings of a workspace (FRU-414): « Settings » in the rail for an owner or an admin (FRU-503),
@@ -177,7 +178,9 @@ function SiteTriggers({ base, sites, onRetry }: { base: string; sites: Listed<Si
   if (sites === 'failed')
     return (
       <div role="alert" className="flex flex-wrap items-center gap-[12px]">
-        <p className="text-small">{t('The sites of the workspace did not load.')}</p>
+        <p className="text-small">
+          {t('The sites of the workspace did not load.')} <ReadProblem />
+        </p>
         <Button tone="outline" onClick={onRetry}>
           {t('Try again')}
         </Button>

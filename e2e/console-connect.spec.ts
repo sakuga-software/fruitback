@@ -362,7 +362,7 @@ test.describe('Connect this browser (FRU-240)', () => {
       route.fulfill({ status: 503, json: { error: 'unavailable' } }),
     );
     await open(page);
-    await expect(page.getByRole('alert')).toHaveText('Fruitback did not answer. Try again.');
+    await expect(page.getByRole('alert')).toHaveText('Fruitback hit an error. Try again in a moment.');
     await expect(page.getByRole('link', { name: 'Set up a workspace' })).toHaveCount(0);
     // The control: once the account is read, the page says where the extension reads.
     await page.unroute(`${WORKER_ORIGIN}/console/me`);
@@ -411,7 +411,7 @@ test.describe('Connect this browser (FRU-240)', () => {
   test('a worker that does not answer: no question, no answer, and « Try again »', async ({ page }) => {
     const worker = await workerWith(page, { silent: true });
     await open(page);
-    await expect(page.getByRole('alert')).toHaveText('Fruitback did not answer. Try again.');
+    await expect(page.getByRole('alert')).toHaveText('Fruitback hit an error. Try again in a moment.');
     await expect(connect(page)).toHaveCount(0);
     worker.silent = false;
     await page.getByRole('button', { name: 'Try again', exact: true }).click();
@@ -420,7 +420,7 @@ test.describe('Connect this browser (FRU-240)', () => {
     // A press that gets no answer says so, and the question stays.
     worker.silent = true;
     await connect(page).click();
-    await expect(page.getByRole('alert')).toHaveText('Fruitback did not answer. Try again.');
+    await expect(page.getByRole('alert')).toHaveText('Fruitback hit an error. Try again in a moment.');
     await expect(connect(page)).toBeEnabled();
   });
 

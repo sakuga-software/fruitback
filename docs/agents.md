@@ -22,7 +22,7 @@ The key is given **once**, in the answer that makes it. Fruitback keeps only its
 lose cannot be shown again, so make another and revoke the first.
 
 In the console, open **Workspace settings**, then **Agents** and **New key**. Name the key, tick
-its sites, choose what the agent can do and how long the key lives, then **Make the key**. The
+its sites, choose what the agent can do and how long the key lives, then **Create the key**. The
 console shows the key once, with the line that connects Claude Code, both ready to copy.
 
 The same screen lists the keys, with when an agent last used each one (to the minute) and when it

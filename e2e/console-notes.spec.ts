@@ -651,7 +651,7 @@ test('« Send again » waits, then the row loses its alert; a refusal says so on
 
   worker.retry = 'refused';
   await again.click();
-  await expect(late.getByRole('alert')).toHaveText('Fruitback did not answer. Try again.');
+  await expect(late.getByRole('alert')).toHaveText('Fruitback hit an error. Try again in a moment.');
   await expect(late.getByText('Not delivered yet')).toBeVisible();
 
   worker.retry = 'ok';
@@ -706,7 +706,7 @@ test('a workspace with no note says so, and a read that failed is an alert, neve
   await open(page);
   const alert = page.getByRole('alert');
   await expect(alert.getByRole('heading', { name: 'The notes did not load' })).toBeVisible();
-  await expect(alert).toContainText('Fruitback did not answer. Your notes are safe.');
+  await expect(alert).toContainText('Fruitback hit an error. Try again in a moment. Your notes are safe.');
   await expect(page.getByText(/No note yet/)).toHaveCount(0);
   await expectNoViolation(page, 'the alert');
 

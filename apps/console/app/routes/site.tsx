@@ -24,6 +24,7 @@ import { WritersPick } from '../writers-pick';
 import { SitePlaces } from './site-places';
 import { notesOf } from './sites';
 import { PageHead, useWorkspace } from './workspace';
+import { ReadProblem } from '../read-problem';
 
 const REMOVAL_PROBLEMS: Readonly<Record<string, string>> = {
   forbidden: msg('Only an owner or an admin of the workspace removes a site.'),
@@ -32,7 +33,7 @@ const SITE_NOT_REMOVED = msg('This site is still here. Try again.');
 const ACCESS_PROBLEMS: Readonly<Record<string, string>> = {
   forbidden: msg('Only an owner or an admin of the workspace changes who sees the notes.'),
 };
-const ACCESS_NOT_CHANGED = msg('Nothing was changed. Try again.');
+const ACCESS_NOT_CHANGED = msg('Who sees the notes did not change. Try again.');
 
 /** Who sees the notes of a site, and who leaves them. */
 type Access = { visibility: Visibility; writers?: Writers };
@@ -200,7 +201,11 @@ export default function SitePage() {
         {sites === 'failed' ? (
           <LoadFailed
             title={t('The site did not load')}
-            detail={t('Fruitback did not answer. Your sites and notes are safe.')}
+            detail={
+              <>
+                <ReadProblem /> {t('Your sites and notes are safe.')}
+              </>
+            }
             retry={t('Try again')}
             onRetry={() => void read()}
           />
