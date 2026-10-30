@@ -481,10 +481,11 @@ describe('why the type of an instant matters (FRU-180)', () => {
     // more is selected: the key of the status of a note (FRU-386), `COALESCE` of two texts, a text.
     // Seven more for the other addresses of an account (FRU-450), each in a `where` or a `set`. Two
     // more for the calls of a trigger of a site that wait (FRU-468): the site of a delivery, in a `where`.
+    // Three more for the search of the members (FRU-496): a name and an address with no accent, in a `where`.
     const fragments = (source: string): number => source.match(/\bsql(<[^>`]*>)?`/g)?.length ?? 0;
     assert.deepEqual(
       { accounts: fragments(stores['accounts-postgres.ts']), sessions: fragments(stores['session-postgres.ts']) },
-      { accounts: 16, sessions: 9 },
+      { accounts: 19, sessions: 9 },
     );
   });
 });
