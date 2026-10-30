@@ -820,3 +820,34 @@ test('a search reads the teams as they are when it starts, not as they were at t
   // Every team is read: the search asks Linear nothing.
   expect(worker.teamReads.filter((query) => query.startsWith('q='))).toEqual([]);
 });
+
+test('a page of teams that arrives after « Try again » is dropped, not added to the new list (FRU-501)', async ({
+  page,
+}) => {
+  const worker = await workerWith(page);
+  const team = (index: number, name = `Team ${index}`): Team => ({
+    id: `t${index}`,
+    name,
+    key: `T${index}`,
+    projects: [],
+  });
+  worker.connectors = [LINEAR, GITHUB];
+  worker.teams = [team(1)];
+  worker.laterTeams = [team(2)];
+  worker.silentReads = 1;
+  worker.nextTeams = 'hold';
+  await openPlaces(page);
+  await expect(panel(page).getByRole('button', { name: 'Try again' })).toBeVisible();
+
+  // A page is on its way when the sources are read again: it belongs to the list of before.
+  await add(page).click();
+  await page.getByRole('option', { name: 'More teams of Linear · Key of Ana…', exact: true }).click();
+  await panel(page).getByRole('button', { name: 'Try again' }).click();
+  await expect(panel(page).getByRole('button', { name: 'Try again' })).toHaveCount(0);
+  worker.releaseTeams();
+  await page.waitForTimeout(500);
+  await add(page).click();
+  const options = page.getByRole('option');
+  await expect(options.filter({ hasText: /^Team \d/ })).toHaveText(['Team 1 (T1) · no project']);
+  await expect(page.getByRole('option', { name: 'More teams of Linear · Key of Ana…', exact: true })).toBeVisible();
+});

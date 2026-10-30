@@ -67,10 +67,14 @@ export function SitePlaces({
   const sources = typeof connectors === 'string' ? [] : connectors;
   const ids = sources.map((each) => each.id).join();
 
+  /** The reads of the sources so far: a read of more teams that a newer one replaced is dropped. */
+  const generation = useRef(0);
+
   // The teams of each Linear and the repositories of each GitHub are read when the page draws them, and
   // again on « Try again ». An address has nothing to choose.
   useEffect(() => {
     let stale = false;
+    generation.current += 1;
     for (const source of sources) {
       if (source.kind === 'rest') {
         setOffers((current) => ({ ...current, [source.id]: { kind: 'rest' } }));
@@ -103,8 +107,11 @@ export function SitePlaces({
 
   /** Asks a Linear for more of its teams (FRU-501), and adds those it did not give yet. */
   function readTeams(source: string, query: string, keepsNext: boolean) {
+    const asked = generation.current;
     void call<{ teams?: Team[]; next?: string }>('GET', `${base}/connectors/${source}/teams?${query}`).then(
       (answer) => {
+        // The sources were read again since: this page belongs to a list that is gone (raised in review).
+        if (asked !== generation.current) return;
         setMoreFailed((current) => {
           const others = current.filter((each) => each !== source);
 
