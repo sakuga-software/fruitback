@@ -129,6 +129,8 @@ async function sitesRoute(
       sites.push({
         ...site,
         destination: { label: 'Linear · Northwind' },
+        // FRU-530: where the notes go by ids, for a role that changes it from screen 3.
+        place: { connector: 'conn_1', teamId: 'team_1', projectId: 'proj_1' },
         toCheck: 2,
         notes: { new: 1, todo: 1, progress: 1, done: 2, closed: 0 },
       });
@@ -212,7 +214,11 @@ test('a site of no workspace: added to one and turned on, in one click, then scr
   // 3: on, in Northwind. The site was asked for with the token, as one of the workspace chosen.
   await expect(popup.getByRole('switch', { name: 'Fruitback on localhost:5177' })).toBeChecked();
   // What the worker says of the site (FRU-295), once it answers: the tracker, and what waits.
-  await expect(popup.locator('.kit-site-state')).toHaveText('On · notes go to Linear');
+  // FRU-530: the state line names the workspace; where the notes go has its own line, with its mark.
+  await expect(popup.locator('.kit-site-state')).toHaveText('On · Northwind');
+  const destination = popup.locator('.site-destination .destination-entry');
+  await expect(destination.locator('.destination-place')).toHaveText('Northwind');
+  await expect(destination.locator('svg.source-mark')).toHaveAttribute('data-kind', 'linear');
   await expect(popup.locator('.site-lines .kit-row-title')).toHaveText(['2 fixes to check', '3 open notes']);
   await expect(popup.locator('.site-lines .kit-row-subtitle')).toHaveText([
     'Marked done by the team',
@@ -257,6 +263,17 @@ test('a site of no workspace: added to one and turned on, in one click, then scr
       place: { connector: 'conn_1', teamId: 'team_1', projectId: 'proj_1' },
     },
   ]);
+
+  // FRU-530: the site is on, and its destination changes from here: « Change » opens the lists of
+  // « Turn on », at the place of now, and a new provider is written at once.
+  await destination.getByRole('button', { name: 'Change' }).click();
+  const provider = popup.locator('.site-destination').getByRole('combobox', { name: 'Notes go to' });
+  await expect(provider).toHaveValue('conn_1');
+  await expect(popup.locator('.site-destination').getByRole('combobox', { name: 'Team' })).toHaveValue('team_1');
+  await provider.selectOption({ label: 'Fruitback (no tracker)' });
+  await expect.poll(() => settings.length).toBe(2);
+  expect(settings[1]).toEqual({ workspace: 'ws_2', site: 'site_1', place: null });
+  await expect(provider).toBeEnabled();
   const rules = await extension.worker.evaluate(async () => (await chrome.storage.local.get('sites')).sites);
   expect(rules).toEqual({
     [PLAYGROUND_ORIGIN]: {

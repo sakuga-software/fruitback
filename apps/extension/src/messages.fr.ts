@@ -43,7 +43,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Your browser will ask to allow this site once.': 'Votre navigateur demandera une fois l’accès à ce site.',
   'Your team and invited guests': 'Votre équipe et les invités',
   'Everyone who visits the site': 'Tous ceux qui visitent le site',
-  'On · notes go to {tracker}': 'Activé · les notes vont vers {tracker}',
   'or press {keys} on the page': 'ou appuyez sur {keys} sur la page',
   '1 fix to check': '1 correction à vérifier',
   '{count} fixes to check': '{count} corrections à vérifier',
