@@ -39,4 +39,16 @@ test('the widget keeps its styles on a page whose CSP refuses inline styles', as
   expect(refused).toContain('style-src-elem');
   // The browser's own button is 13.33 px with an outset border.
   expect(styles).toEqual({ fontSize: '13px', borderStyle: 'solid' });
+
+  // The composer comes after the mount. A host outside the Shadow root at that time gets the
+  // fallback <style>, which this policy refuses.
+  await launch.click();
+  await page.locator('#checkout-cta').click();
+  const send = page.getByRole('button', { name: 'Send', exact: true });
+  await expect(send).toBeVisible();
+  expect(await send.evaluate((node) => getComputedStyle(node).borderStyle)).toBe('solid');
+  const elements = await page.evaluate(
+    () => document.querySelector('[data-fruitback-host]')?.shadowRoot?.querySelectorAll('style').length,
+  );
+  expect(elements).toBe(0);
 });
