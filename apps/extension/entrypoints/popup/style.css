@@ -739,8 +739,9 @@ body.popup-page {
 }
 
 /*
-  3 · Site on (FRU-298): 20 px above, 24 around, 20 between the blocks. The site and its switch,
-  « Leave feedback » and its keys, the lines of what waits, and the side panel at the foot.
+  3 · Site on (FRU-298): 20 px above, 24 around, 20 between the blocks. The site and its switch, the
+  lines of what waits under it; at the bottom (FRU-529), « Leave feedback » with the side panel
+  beside it as a square of one icon, and the keys under both.
 */
 .popup-screen-3 .popup-body {
   gap: 20px;
@@ -775,6 +776,26 @@ body.popup-page {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  margin-top: auto;
+}
+
+.popup .leave-row {
+  display: flex;
+  gap: 8px;
+}
+
+.popup .leave-row .kit-primary {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* « Show all notes in a sidebar »: a square as high as « Leave feedback », its name in aria-label. */
+.popup .leave-row .panel-button {
+  flex: none;
+  width: 56px;
+  height: 56px;
+  padding: 0;
+  border-radius: var(--radius-card);
 }
 
 /* The host as the title of screen 3: the size of the host of the kit, not of a title. */
@@ -810,8 +831,8 @@ body.popup-page {
 }
 
 .popup .panel-icon {
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
 }
 
 /* A line that says nothing takes no gap of the column: the boxes stay where the mock-up has them. */
