@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { type Page, type Route, expect, test } from '@playwright/test';
+import { WORKER_ORIGIN } from './pin.ts';
 import {
   ACME,
   type Role,
@@ -879,6 +880,81 @@ for (const locale of ['en', 'fr'] as const) {
       )
       .toBe('flex');
     await expectNoViolation(page, `390 px, ${locale}`);
+  });
+}
+
+/** The notes of a workspace whose notes all went to one place, and a site with a long address. */
+async function onePlace(page: Page): Promise<void> {
+  const long = {
+    id: 's9',
+    origin: 'https://staging.a-very-long-client-name-for-the-select.co.uk',
+    visibility: 'everyone',
+  };
+  await page.route(`${WORKER_ORIGIN}/**`, (route) => {
+    const { pathname } = new URL(route.request().url());
+    if (pathname === '/console/workspaces/w1/sites/choices')
+      return route.fulfill({ json: { sites: [...SITES, long] } });
+    if (pathname !== '/console/workspaces/w1/notes') return route.fallback();
+    const notes = FIRST.slice(0, 3).map((note) => ({
+      ...note,
+      place: LINEAR,
+      ref: 'ACM-1',
+      url: 'https://linear.app/acme/issue/ACM-1',
+    }));
+
+    return route.fulfill({ json: { notes, total: 3, counts: { all: 3, byPlace: { c1: 3 }, undelivered: 0 } } });
+  });
+}
+
+test('with one place, no chip says where the notes went; a place in the address keeps them (FRU-548)', async ({
+  page,
+}) => {
+  await workerWith(page);
+  await onePlace(page);
+  await open(page);
+  await expect(rows(page)).toHaveCount(3);
+  // « All 3 » and « Linear 3 » are the same notes: the chips are not drawn.
+  await expect(page.getByRole('group', { name: 'Where the notes went' })).toHaveCount(0);
+  await expect(search(page)).toBeVisible();
+  // A place chosen by a link keeps its chips, so that « All » takes it back.
+  await open(page, '?place=c1');
+  const chips = page.getByRole('group', { name: 'Where the notes went' });
+  await expect(chips.getByRole('button')).toHaveText([/^All/, /^Linear/]);
+  await chips.getByRole('button', { name: /^All/ }).click();
+  await expect(page).not.toHaveURL(/place=/);
+  await expect(chips).toHaveCount(0);
+});
+
+for (const width of [1440, 390]) {
+  test(`a long site is cut with « … » in the select and in its list, at ${width} px (FRU-549)`, async ({ page }) => {
+    await page.setViewportSize({ width, height: width > 500 ? 900 : 844 });
+    await workerWith(page);
+    await onePlace(page);
+    await open(page);
+    const select = page.getByRole('button', { name: /Every site/ });
+    await select.click();
+    const option = page.getByRole('option', { name: /a-very-long-client-name/ });
+    const label = option.locator('.kit-option-label');
+    // Cut to the list, whole under the pointer; the list is no wider than 360 px nor than the screen.
+    await expect(label).toHaveAttribute('title', 'https://staging.a-very-long-client-name-for-the-select.co.uk');
+    expect(await label.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+    expect(await label.evaluate((element) => getComputedStyle(element).textOverflow)).toBe('ellipsis');
+    const list = await box(page.getByRole('listbox'));
+    expect(list.width).toBeLessThanOrEqual(Math.min(360, width - 32) + 0.5);
+    expect(list.x + list.width).toBeLessThanOrEqual(width);
+    await option.click();
+    await expect(page).toHaveURL(/[?&]site=s9(&|$)/);
+
+    // Chosen, the value is cut before the chevron, in its button, and the page does not scroll sideways.
+    const trigger = page.locator('.select__trigger').filter({ hasText: 'a-very-long-client-name' });
+    const value = trigger.locator('.select__value');
+    const cut = value.locator('.kit-option-label');
+    expect(await cut.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+    expect(await cut.evaluate((element) => getComputedStyle(element).textOverflow)).toBe('ellipsis');
+    const button = await box(trigger);
+    const words = await box(value);
+    expect(words.x + words.width).toBeLessThanOrEqual(button.x + button.width - 20);
+    expect(await sideScroll(page)).toBe(0);
   });
 }
 
