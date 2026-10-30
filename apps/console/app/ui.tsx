@@ -577,14 +577,17 @@ type CheckboxProps = { label: string; checked: boolean; onChange: (checked: bool
 /**
  * A box to tick, as the checkbox of HeroUI: the box of 16 px, then its words, on a line of 40 px at
  * the least, so that it stands in a row of filters (« Only my notes »). Ink when it is ticked.
+ *
+ * The box is inside `Checkbox.Content`: in HeroUI 3 that is the label that takes the press. A box
+ * drawn outside it does not tick (FRU-550).
  */
 export function Checkbox({ label, checked, onChange }: CheckboxProps) {
   return (
     <HeroCheckbox isSelected={checked} onChange={onChange} className="kit-checkbox">
-      <HeroCheckbox.Control>
-        <HeroCheckbox.Indicator />
-      </HeroCheckbox.Control>
       <HeroCheckbox.Content>
+        <HeroCheckbox.Control>
+          <HeroCheckbox.Indicator />
+        </HeroCheckbox.Control>
         <Label>{label}</Label>
       </HeroCheckbox.Content>
     </HeroCheckbox>
@@ -624,12 +627,14 @@ export function Checks({ label, value, onChange, options, hint, error, groupRef 
           isDisabled={option.disabled === true}
           className="kit-checkbox"
         >
-          <HeroCheckbox.Control>
-            <HeroCheckbox.Indicator />
-          </HeroCheckbox.Control>
-          <HeroCheckbox.Content className="flex flex-wrap items-baseline gap-x-[10px]">
-            <Label>{option.label}</Label>
-            {option.detail === undefined ? null : <span className="text-hint text-muted">{option.detail}</span>}
+          <HeroCheckbox.Content>
+            <HeroCheckbox.Control>
+              <HeroCheckbox.Indicator />
+            </HeroCheckbox.Control>
+            <span className="flex min-w-0 flex-wrap items-baseline gap-x-[10px]">
+              <Label>{option.label}</Label>
+              {option.detail === undefined ? null : <span className="text-hint text-muted">{option.detail}</span>}
+            </span>
           </HeroCheckbox.Content>
         </HeroCheckbox>
       ))}
@@ -1013,6 +1018,34 @@ export function PageHead({
       </div>
       {action ?? null}
     </header>
+  );
+}
+
+/**
+ * The pages of one screen, as a row of links under its head (FRU-544): the settings of a workspace
+ * and their page « AI ». The page on screen has `aria-current="page"` and is underlined. The row
+ * scrolls in its frame on a narrow screen, and the page does not.
+ */
+export function SubNav({
+  label,
+  entries,
+}: {
+  /** What the row of links is, for a screen reader: « Workspace settings ». */
+  label: string;
+  entries: readonly { to: string; label: string; current: boolean }[];
+}) {
+  return (
+    <nav aria-label={label} className="kit-subnav">
+      <ul>
+        {entries.map((entry) => (
+          <li key={entry.to}>
+            <Link to={entry.to} {...(entry.current ? { 'aria-current': 'page' as const } : {})}>
+              {entry.label}
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </nav>
   );
 }
 

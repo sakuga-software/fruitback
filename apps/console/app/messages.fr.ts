@@ -601,8 +601,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Linear n’a pas été connecté. Recommencez depuis « Connecter ».',
   'Sites sending here': 'Sites qui envoient ici',
   'No site sends its notes here yet.': 'Aucun site n’envoie encore ses notes ici.',
-  'Fruitback could not read the states of Linear. The statuses you set are not lost. Reload the page to try again.':
-    'Fruitback n’a pas pu lire les états de Linear. Les statuts que vous avez réglés ne sont pas perdus. Rechargez la page pour réessayer.',
+  'Fruitback could not read the states of Linear. The statuses you set are not lost.':
+    'Fruitback n’a pas pu lire les états de Linear. Les statuts que vous avez réglés ne sont pas perdus.',
   'Its sites keep their notes in the workspace again. The issues already in Linear stay there.':
     'Ses sites gardent de nouveau leurs notes dans le workspace. Les issues déjà dans Linear y restent.',
   'Cloud workspace': 'Workspace Cloud',
@@ -957,6 +957,10 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Workspace settings': 'Réglages du workspace',
   'Settings that every member of {name} sees.': 'Les réglages que voit chaque membre de {name}.',
   'The name is saved.': 'Le nom est enregistré.',
+  // The pages of the settings, FRU-544.
+  'Pages of the settings': 'Pages des réglages',
+  General: 'Général',
+  AI: 'IA',
   // The logo of a workspace, FRU-428.
   Logo: 'Logo',
   'Upload a logo': 'Envoyer un logo',
@@ -1520,6 +1524,58 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'La fenêtre de Fruitback sur un site activé, avec Laisser une note',
   'Sign in with email': 'Se connecter par e-mail',
   'Turn on {site}': 'Activer sur {site}',
+  // Connect an agent with OAuth (FRU-467).
+  'An app connected with OAuth, as a connector of claude.ai, is listed here too: it has no key to copy.':
+    'Une application connectée par OAuth, comme un connecteur de claude.ai, est listée ici aussi : elle n’a pas de clé à copier.',
+  'OAuth · {host}': 'OAuth · {host}',
+  'Approved on {day}': 'Approuvée le {day}',
+  '{host} is refused from its next request, and its tokens never work again. To connect it again, its connector asks you again. What it wrote stays in the threads of the notes.':
+    '{host} est refusé dès sa prochaine requête, et ses jetons ne fonctionnent plus jamais. Pour se reconnecter, son connecteur vous redemande. Ce qu’il a écrit reste dans les fils des notes.',
+  'Connect an agent': 'Connecter un agent',
+  '{host} is connected': '{host} est connecté',
+  '{host} is not connected': '{host} n’est pas connecté',
+  'Going back to {host}…': 'Retour à {host}…',
+  'A request works for ten minutes, and is answered once. Start again from the app that asked.':
+    'Une demande fonctionne dix minutes, et reçoit une seule réponse. Recommencez depuis l’application qui l’a faite.',
+  'This workspace holds 20 agents already. Revoke one in Agents, then start again.':
+    'Ce workspace a déjà 20 agents. Révoquez-en un dans Agents, puis recommencez.',
+  'A site you ticked is gone. Read the page again.': 'Un site que vous avez coché n’existe plus. Rechargez la page.',
+  'Only an owner or an admin of this workspace can connect an agent to it.':
+    'Seul un propriétaire ou un admin de ce workspace peut y connecter un agent.',
+  'It ends on {day}. Revoke it at any time in Workspace settings › Agents.':
+    'Il prend fin le {day}. Révoquez-le à tout moment dans Paramètres du workspace › Agents.',
+  'Tick at least one site.': 'Cochez au moins un site.',
+  'Calls itself « {name} »': 'Se nomme « {name} »',
+  '{host} asks to read the notes of your sites through the MCP server of Fruitback, as an agent of your team.':
+    '{host} demande à lire les notes de vos sites par le serveur MCP de Fruitback, comme un agent de votre équipe.',
+  'Signed in as {email}.': 'Connecté en tant que {email}.',
+  'Not you?': 'Pas vous ?',
+  'Only an owner or an admin of a workspace can connect an agent. Ask one of them to connect it.':
+    'Seul un propriétaire ou un admin d’un workspace peut connecter un agent. Demandez-le à l’un d’eux.',
+  Deny: 'Refuser',
+  'The agent reaches this workspace, never another.': 'L’agent atteint ce workspace, jamais un autre.',
+  'Sites it reads': 'Sites qu’il lit',
+  'What it can do': 'Ce qu’il peut faire',
+  Read: 'Lire',
+  'The notes, their replies and their status.': 'Les notes, leurs réponses et leur statut.',
+  'Read and write': 'Lire et écrire',
+  'It also replies in a thread, and sets a status. Its replies say « Agent ».':
+    'Il répond aussi dans un fil, et change un statut. Ses réponses disent « Agent ».',
+  '{host} asked to read only: the notes, their replies and their status.':
+    '{host} a demandé à lire seulement : les notes, leurs réponses et leur statut.',
+  'Ends after, in days': 'Prend fin après, en jours',
+  'From 1 to 365 days, as an agent key.': 'De 1 à 365 jours, comme une clé d’agent.',
+  'On a site that everyone reads, the agent does not read the notes of visitors: anybody can write one.':
+    'Sur un site que tout le monde lit, l’agent ne lit pas les notes des visiteurs : n’importe qui peut en écrire une.',
+  'You can revoke it at any time in Workspace settings › Agents. It stops at once.':
+    'Vous pouvez le révoquer à tout moment dans Paramètres du workspace › Agents. Il s’arrête aussitôt.',
+  'Allowing…': 'Autorisation…',
+  'Allow {host}': 'Autoriser {host}',
+  'You go back to {address}': 'Vous revenez à {address}',
+  'An app asks to connect to Fruitback as an agent of your team. Sign in to answer it.':
+    'Une application demande à se connecter à Fruitback comme agent de votre équipe. Connectez-vous pour lui répondre.',
+  'Open it in this browser: this page comes back to the question. The link works once, for fifteen minutes.':
+    'Ouvrez-le dans ce navigateur : cette page revient à la question. Le lien fonctionne une fois, pendant quinze minutes.',
   Advanced: 'Avancé',
   'Statuses, starting an agent, preview deploys': 'Statuts, lancement d’un agent, previews',
   'Each pin shows how a note in that status looks on the page. The 3 is an example number.':

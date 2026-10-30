@@ -35,7 +35,7 @@ import { ReadProblem } from '../read-problem';
  * the line that connects Claude Code; list the keys with their last use and their end, and a warning
  * 7 days before it; the writes of each key; revoke one. The routes are those of FRU-461 and FRU-464.
  *
- * Reached from the section « Agents » of the workspace settings, for an owner or an admin: the worker
+ * Reached from the section « Agents » of the page « AI » of the settings (FRU-544), for an owner or an admin: the worker
  * answers `403` to anybody else, so the page asks it nothing for them.
  */
 export default function Agents() {
@@ -90,6 +90,11 @@ function AgentsScreen() {
     >
       <LinkButton space="inline" to={`/w/${workspace.id}/settings`}>
         {t('Workspace settings')}
+      </LinkButton>
+      <span aria-hidden="true">›</span>
+      {/* The keys are reached from the page « AI » of the settings (FRU-544). */}
+      <LinkButton space="inline" to={`/w/${workspace.id}/settings/ai`}>
+        {t('AI')}
       </LinkButton>
       <span aria-hidden="true">›</span>
       <span>{t('Agents')}</span>
@@ -488,7 +493,8 @@ function KeyList({
       <p className="mt-[10px] text-hint text-muted">
         {keys.length >= MAX_AGENT_KEYS
           ? t('A workspace holds 20 keys at most. Revoke one to create another.')
-          : t('{count} of 20 keys.', { count: keys.length })}
+          : t('{count} of 20 keys.', { count: keys.length })}{' '}
+        {t('An app connected with OAuth, as a connector of claude.ai, is listed here too: it has no key to copy.')}
       </p>
     </>
   );
@@ -519,7 +525,17 @@ function KeyRow({ agentKey: key, now, onRevoked }: { agentKey: AgentKey; now: nu
       <div className="grid grid-cols-1 gap-[6px] xl:grid-cols-[minmax(160px,1.2fr)_minmax(140px,1fr)_minmax(190px,1.3fr)_minmax(110px,0.7fr)_minmax(130px,0.8fr)_auto] xl:items-center xl:gap-[12px]">
         <div className="min-w-0">
           <h2 className="text-body font-bold [overflow-wrap:anywhere]">{key.name}</h2>
-          <p className="text-hint text-muted">{t('Created on {day}', { day: dayOf(key.createdAt) })}</p>
+          {/* A connection of OAuth (FRU-467): the host its codes went to, the name a person approved. */}
+          {key.client ? (
+            <span className="mt-[2px] inline-block rounded-full bg-chip px-[8px] py-[2px] text-hint font-semibold text-ink-soft">
+              {t('OAuth · {host}', { host: key.client.host })}
+            </span>
+          ) : null}
+          <p className="text-hint text-muted">
+            {key.client
+              ? t('Approved on {day}', { day: dayOf(key.createdAt) })
+              : t('Created on {day}', { day: dayOf(key.createdAt) })}
+          </p>
         </div>
         <dl className="contents">
           <div className="flex min-w-0 gap-[8px]">
@@ -583,9 +599,16 @@ function KeyRow({ agentKey: key, now, onRevoked }: { agentKey: AgentKey; now: nu
           <Confirm
             label={t('Revoke')}
             confirmLabel={t('Revoke « {name} »', { name: key.name })}
-            consequence={t(
-              'An agent that uses this key is refused from its next request, and the key never works again. What it wrote stays in the threads of the notes.',
-            )}
+            consequence={
+              key.client
+                ? t(
+                    '{host} is refused from its next request, and its tokens never work again. To connect it again, its connector asks you again. What it wrote stays in the threads of the notes.',
+                    { host: key.client.host },
+                  )
+                : t(
+                    'An agent that uses this key is refused from its next request, and the key never works again. What it wrote stays in the threads of the notes.',
+                  )
+            }
             onConfirm={() => void revoke()}
           />
         </div>

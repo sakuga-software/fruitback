@@ -1,6 +1,9 @@
 import { afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { statSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { Window as HappyDomWindow } from 'happy-dom';
+import { DEMO_FILES, DEMO_FRAMES, DEMO_SECONDS, demoLength } from './demo-video.ts';
 import { setLanguage } from './i18n.ts';
 import { WELCOME_PATH, opensWelcome } from './welcome-install.ts';
 import { type WelcomeSignIn, welcomeScreen } from './welcome.ts';
@@ -199,6 +202,95 @@ describe('the page that opens at install (FRU-318)', () => {
       const screen = signIn({ kind: 'signed-in', who: 'ana@acme.dev' });
       assert.equal(screen.querySelector('[role="status"]')?.textContent, 'Signed in as ana@acme.dev.');
       assert.equal(screen.querySelectorAll('button').length, 0);
+    });
+  });
+
+  describe('the demonstration (FRU-531)', () => {
+    const noop = () => {};
+    const signIn = (state: WelcomeSignIn) => ({
+      openPopup: async () => {},
+      signIn: { state, onSignIn: noop, onStartAgain: noop, onTurnOn: noop, onOpen: noop, onAddSite: noop },
+    });
+    /** Every state of the page, as the gallery lists them. */
+    const states: [string, Parameters<typeof welcomeScreen>[1]][] = [
+      ['signed out', signIn({ kind: 'signed-out' })],
+      ['connecting', signIn({ kind: 'connecting', word: 'PLUM 42' })],
+      ['signed in, reading', signIn({ kind: 'signed-in', who: 'ana@acme.dev' })],
+      [
+        'one site',
+        signIn({ kind: 'signed-in', who: 'ana@acme.dev', sites: [{ origin: 'https://acme.dev', on: false }] }),
+      ],
+      ['no site', signIn({ kind: 'signed-in', who: 'ana@acme.dev', sites: [] })],
+      ['unavailable', signIn({ kind: 'signed-in', who: 'ana@acme.dev', sites: 'unavailable' })],
+      ['a build with no Cloud', { openPopup: async () => {} }],
+    ];
+
+    it('shows the video in every state, under what the page asks to do', () => {
+      for (const [name, options] of states) {
+        const screen = welcomeScreen(page(), options);
+        const figures = screen.querySelectorAll('figure.welcome-demo');
+        assert.equal(figures.length, 1, name);
+        const figure = figures[0] as Element;
+        // Under the action: the sign-in, or the button to the popup, is before it, and nothing to press is after it.
+        const action = screen.querySelector('.welcome-sign-in') ?? screen.querySelector('button');
+        assert.ok(action !== null, name);
+        assert.ok(action.compareDocumentPosition(figure) & 4, `${name}: the video is above the action`);
+        for (const button of screen.querySelectorAll('button')) {
+          assert.ok(
+            button.compareDocumentPosition(figure) & 4,
+            `${name}: « ${button.textContent} » is under the video`,
+          );
+        }
+        assert.ok(figure.compareDocumentPosition(screen.querySelector('.welcome-invited') as Element) & 4, name);
+      }
+    });
+
+    it('plays muted, in a loop and inline, from files of the extension, with a poster', () => {
+      const video = welcomeScreen(page(), states[0]![1]).querySelector('video') as HTMLVideoElement;
+      assert.equal(video.autoplay, true);
+      assert.equal(video.muted, true);
+      assert.ok(video.hasAttribute('muted'));
+      assert.equal(video.loop, true);
+      assert.ok(video.hasAttribute('playsinline'));
+      assert.equal(video.getAttribute('poster'), DEMO_FILES.poster);
+      assert.deepEqual(
+        [...video.querySelectorAll('source')].map((source) => [
+          source.getAttribute('src'),
+          source.getAttribute('type'),
+        ]),
+        [
+          [DEMO_FILES.webm, 'video/webm'],
+          [DEMO_FILES.mp4, 'video/mp4'],
+        ],
+      );
+      for (const file of Object.values(DEMO_FILES)) assert.match(file, /^\/demo\//, 'a file of the extension');
+    });
+
+    it('stays still when the person asked for less motion', () => {
+      const video = welcomeScreen(page(), { ...states[0]![1], reducedMotion: true }).querySelector(
+        'video',
+      ) as HTMLVideoElement;
+      assert.equal(video.autoplay, false);
+      assert.equal(video.preload, 'none');
+      assert.equal(video.controls, true);
+    });
+
+    it('says what it shows, and how long it lasts', () => {
+      const caption = welcomeScreen(page(), states[0]![1]).querySelector('figcaption');
+      assert.equal(caption?.textContent, `A first note, from the click to the pin · ${demoLength()}`);
+      assert.equal(DEMO_SECONDS, 18);
+      assert.equal(demoLength(18), '0:18');
+      assert.equal(demoLength(75), '1:15');
+    });
+
+    it('ships its files, under 1.5 MB together', () => {
+      const publicDir = new URL('../public', import.meta.url);
+      const sizes = Object.values(DEMO_FILES).map(
+        (file) => statSync(fileURLToPath(new URL(`.${file}`, `${publicDir.href}/`))).size,
+      );
+      const total = sizes.reduce((sum, size) => sum + size, 0);
+      assert.ok(total < 1.5 * 1024 * 1024, `the video weighs ${total} bytes`);
+      assert.equal(new Set(DEMO_FRAMES.map((frame) => frame.name)).size, DEMO_FRAMES.length);
     });
   });
 

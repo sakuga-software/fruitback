@@ -5,14 +5,15 @@ import { WORKER_ORIGIN } from './pin.ts';
 /**
  * Where the console sends somebody to install the extension: the foot of the rail, and `/connect`
  * (FRU-409). Where the foot of the rail sends somebody to install the extension. Since 0.3.0 the extension is on
- * the Chrome Web Store, which Chrome and Edge install from. Firefox is not on AMO yet: it keeps the
- * guide that installs the archive of the release. The browser is told apart by its user agent
+ * the Chrome Web Store, which Chrome and Edge install from; Firefox installs it from addons.mozilla.org
+ * (FRU-536). The browser is told apart by its user agent
  * (`extension-store.ts`), so each case runs in Chromium with the user agent of that browser.
  */
 
 const CONSOLE = 'http://localhost:5178';
 const STORE = 'https://chromewebstore.google.com/detail/fruitback/jjjemdloknmggncbickofjgbodplekoa';
-const GUIDE = 'https://fruitback.com/reviewing.html#1-install-it';
+const AMO = 'https://addons.mozilla.org/en-US/firefox/addon/fruitback/';
+const NAMES: Record<string, string> = { [STORE]: 'the Chrome Web Store', [AMO]: 'addons.mozilla.org' };
 
 const BROWSERS = [
   {
@@ -24,7 +25,7 @@ const BROWSERS = [
   {
     name: 'Firefox',
     userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:145.0) Gecko/20100101 Firefox/145.0',
-    href: GUIDE,
+    href: AMO,
   },
 ];
 
@@ -32,7 +33,7 @@ for (const browser of BROWSERS) {
   test.describe(`in ${browser.name}`, () => {
     test.use({ userAgent: browser.userAgent });
 
-    test(`the rail leads to ${browser.href === STORE ? 'the Chrome Web Store' : 'the guide'}`, async ({ page }) => {
+    test(`the rail leads to ${NAMES[browser.href]}`, async ({ page }) => {
       await stubWorker(page);
       await page.goto(`${CONSOLE}/w/w1/sites`);
       await expect(page.locator('main h1')).toBeVisible();
@@ -41,9 +42,7 @@ for (const browser of BROWSERS) {
       await expect(extension).toHaveAttribute('target', '_blank');
     });
 
-    test(`/connect leads to ${browser.href === STORE ? 'the Chrome Web Store' : 'the guide'} (FRU-409)`, async ({
-      page,
-    }) => {
+    test(`/connect leads to ${NAMES[browser.href]} (FRU-409)`, async ({ page }) => {
       // The page asks the worker nothing: whatever it would ask is refused.
       await page.route(`${WORKER_ORIGIN}/**`, (route) =>
         route.fulfill({ status: 401, json: { error: 'unauthorized' } }),

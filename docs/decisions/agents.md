@@ -68,6 +68,10 @@ Read on `main` on 2026-10-26.
 A key with the right `read` only gets the first three: a write tool is not listed to it, and is
 refused if called.
 
+A store that does not answer during a call, the accounts that read its site included, fails that
+call only: the tool answers `isError: true` with « The store of the notes did not answer », and the
+request stays `200` (FRU-524). An agent tries the call again; the other calls of its session stand.
+
 ### Injection, with write tools
 
 A note is text that anybody writes on a site that reads `public`. An agent that obeys it can now write

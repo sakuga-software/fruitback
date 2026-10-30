@@ -1,6 +1,6 @@
 {
   "name": "fruitback",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Visual feedback widget: click an element, write a note, get a Linear issue.",
   "homepage": "https://github.com/sakuga-software/fruitback#readme",
   "bugs": "https://github.com/sakuga-software/fruitback/issues",

@@ -19,6 +19,7 @@ import { PageHead as KitPageHead, Logo, Menu } from '../ui';
 import { RailIcon, type RailIconName } from '../rail-icons';
 import { manages } from '../setup-stage';
 import { useLocale } from '../use-locale';
+import { underSettings } from '../settings-path';
 
 /**
  * The frame of a workspace, as the mockup of 2026-10-13 draws it (FRU-234): a dark rail with the
@@ -172,7 +173,8 @@ export default function WorkspaceFrame() {
           onWorkspace={(chosen) => navigate(`/w/${chosen}/sites`, { viewTransition: true })}
           onSettings={() => navigate(`/w/${context.workspace.id}/settings`, { viewTransition: true })}
           // The entry « Settings » is the one on screen when the rail has it: the name is not a second one.
-          settings={current?.path !== 'settings' && pathname === `/w/${context.workspace.id}/settings`}
+          // Every page of the settings is the settings: « General » and « AI » (FRU-544).
+          settings={current?.path !== 'settings' && underSettings(pathname, context.workspace.id)}
           admin={context.me.instanceAdmin === true}
         />
       }
@@ -464,8 +466,8 @@ export type RailLink = { href: string; label: string; status?: string; detail?: 
 
 /**
  * The way to the browser extension, at the foot of both rails (FRU-406). Chrome and Edge go to the
- * Chrome Web Store, where 0.3.0 is public. Firefox is not on AMO yet: it, and every other browser,
- * goes to the page that installs the archive of the release.
+ * Chrome Web Store, where 0.3.0 is public, and Firefox to addons.mozilla.org (FRU-536). Every other
+ * browser goes to the page that installs the archive of the release.
  *
  * With a browser of the extension connected to the account, the rail says so and names it, and the
  * link is « Connect another browser » (FRU-441): `/connect` on Fruitback Cloud, the page that installs

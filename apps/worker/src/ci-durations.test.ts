@@ -211,6 +211,7 @@ function jobsOf(file: string): Record<string, Job> {
 describe('the long jobs of CI', () => {
   const LONG: [file: string, job: string][] = [
     ['ci.yml', 'check'],
+    ['ci.yml', 'test-part'],
     ['ci.yml', 'e2e-shard'],
     ['ci.yml', 'postgres'],
     ['ci.yml', 'image'],

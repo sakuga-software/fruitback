@@ -36,6 +36,7 @@ export function ChangeRole({ user, onChanged }: { user: AdminUser; onChanged: (w
   return (
     <AdminWrite
       label={t('Change a role')}
+      wide
       name={t('Change the role of {name}', { name })}
       fields={
         <>
@@ -143,6 +144,7 @@ export function AddToWorkspace({ user, onChanged }: { user: AdminUser; onChanged
   return (
     <AdminWrite
       label={t('Add to a workspace')}
+      wide
       name={t('Add {name} to a workspace', { name })}
       fields={
         <>

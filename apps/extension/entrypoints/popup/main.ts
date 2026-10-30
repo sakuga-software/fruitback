@@ -33,6 +33,7 @@ import {
   type AddFailure,
   type CloudSeams,
   type Offer,
+  type PlaceIds,
   type SettingsFailure,
   type SiteSettings,
   type Workspace,
@@ -861,11 +862,37 @@ async function siteOfWorkspaceOn(
       .then((listed) => {
         if (listed === undefined || screenNow !== drawn) return;
         const { notes, destination, toCheck } = listed.site;
+        // FRU-530: a role that may change where the notes go gets the sources of the workspace, and
+        // « Change » writes through the route of « Turn on » (FRU-453): no route of its own.
+        const sources = listed.workspace.sources;
+        const change =
+          sources === undefined
+            ? undefined
+            : {
+                sources,
+                ...(listed.site.place === undefined ? {} : { place: listed.site.place }),
+                loadOffer: (connector: string) =>
+                  sourceOffer(listed.endpoint, listed.workspace.id, connector, cloudSeams()),
+                onPlace: async (place: PlaceIds | null) => {
+                  problem.replaceChildren();
+                  const set = await setSiteSettings(
+                    listed.endpoint,
+                    listed.workspace,
+                    listed.site.id,
+                    { place },
+                    cloudSeams(),
+                  );
+                  if (!set.ok) showProblem(problem, t(SETTINGS_PROBLEM[set.reason]));
+
+                  return set.ok;
+                },
+              };
         showSiteFacts(
           screen,
           { workspace, on: site.enabled, onOpenPanel: openPanel },
           {
             ...(destination === undefined ? {} : { destination: destination.label }),
+            ...(change === undefined ? {} : { change }),
             ...(toCheck === undefined ? {} : { toCheck }),
             ...(notes === undefined ? {} : { open: notes.new + notes.todo + notes.progress }),
           },

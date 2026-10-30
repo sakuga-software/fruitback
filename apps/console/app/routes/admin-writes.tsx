@@ -34,6 +34,7 @@ export function AdminWrite<T>({
   notDone,
   onDone,
   onClose,
+  wide = false,
 }: {
   /** The first button: « Change the owner ». */
   label: string;
@@ -53,6 +54,8 @@ export function AdminWrite<T>({
   onDone: (data: T) => void;
   /** Called when the fields close without a write: the caller empties them. */
   onClose?: () => void;
+  /** One of several writes of `PanelActions` (FRU-545): its first button is as wide as the panel. */
+  wide?: boolean;
 }) {
   useLocale();
   const [asking, setAsking] = useState(false);
@@ -125,7 +128,7 @@ export function AdminWrite<T>({
         </div>
       ) : (
         <div>
-          <Button tone="outline" onClick={() => setAsking(true)}>
+          <Button tone="outline" wide={wide} onClick={() => setAsking(true)}>
             {label}
           </Button>
         </div>

@@ -384,7 +384,9 @@ test('the page is the one of the mockup: chips, filters, the table and its pages
   const tick = await box(page.locator('.kit-checkbox .checkbox__control'));
   expect.soft({ width: tick.width, height: tick.height }).toEqual({ width: 16, height: 16 });
   expectBox(await box(page.locator('.kit-checkbox')), { x: 1276, y: 176, height: 40 }, 2, '« Only my notes »');
-  expect.soft(await styles(page.locator('.kit-checkbox'), ['column-gap'])).toEqual({ 'column-gap': '8px' });
+  expect.soft(await styles(page.locator('.kit-checkbox .checkbox__content'), ['column-gap'])).toEqual({
+    'column-gap': '8px',
+  });
   expect.soft(await styles(page.locator('.kit-checkbox .label'), ['font-size'])).toEqual({ 'font-size': '14px' });
 
   // The table: 960 px at the least, the five columns.
@@ -564,13 +566,31 @@ test('each filter writes the address and reads again, and a reload keeps the vie
   await page.getByRole('option', { name: 'Any status', exact: true }).click();
   await expect(page).not.toHaveURL(/stage=/);
   await expect(rows(page)).toHaveCount(8);
-  // The box is pressed where it is drawn: the input of HeroUI is hidden under it.
-  await page.getByText('Only my notes', { exact: true }).click();
+  // FRU-550: the box itself ticks, where it is drawn, and not only its words. The input of HeroUI is
+  // hidden under it. Before, the box was outside the label that takes the press, and a press on it
+  // did nothing.
+  await page.locator('.kit-checkbox .checkbox__control').click();
   await expect(mine).toBeChecked();
   await expect(page).toHaveURL(/[?&]mine=1(&|$)/);
+  // Ticked, the box is ink, as the mockups draw it: HeroUI lays its accent over it in a `::before`.
+  await page.mouse.move(0, 0);
+  await expect
+    .poll(() =>
+      page
+        .locator('.kit-checkbox .checkbox__control')
+        .evaluate((control) => getComputedStyle(control, '::before').backgroundColor),
+    )
+    .toBe(`rgb(${rgb(INK).join(', ')})`);
   await expect(rows(page)).toHaveCount(1);
   await expect.poll(() => worker.asked.at(-1)).toEqual({ mine: '1' });
   await page.keyboard.press('Space');
+  await expect(mine).not.toBeChecked();
+  await expect(rows(page)).toHaveCount(8);
+  // Its words tick it too, and so does the gap of 8 px between the box and them.
+  await page.getByText('Only my notes', { exact: true }).click();
+  await expect(mine).toBeChecked();
+  const control = await box(page.locator('.kit-checkbox .checkbox__control'));
+  await page.mouse.click(control.x + control.width + 4, control.y + control.height / 2);
   await expect(mine).not.toBeChecked();
   await expect(rows(page)).toHaveCount(8);
   await search(page).fill('mug');

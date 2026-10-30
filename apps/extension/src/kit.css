@@ -604,3 +604,13 @@ button.kit-select-trigger {
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
+
+/* Words for a screen reader alone: the provider beside its mark (FRU-530). */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
