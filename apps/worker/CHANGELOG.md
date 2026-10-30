@@ -1,5 +1,14 @@
 # @fruitback/worker
 
+## 0.6.0
+
+### Patch Changes
+
+- c4b647d: A tool of `/mcp` whose site the accounts do not read answers an error of the tool (`isError: true`) in place of a `502` for the whole request.
+- 7f7edfc: A request reads the one site it names, and asks whether a site has the origin of its page, in place of reading every site of the instance: at 10,500 sites a request of the widget or the console takes 2 to 6 ms in place of 23 to 27. With the database down, a route that reads no site answers `503 limiter-unavailable` where it answered `502 store-unavailable`.
+- a8b4b72: Migration `0039_sites_by_origin`: an index on the origin of the sites, so that the worker can find the site of a request by its origin without reading every site.
+- @fruitback/shared@0.6.0
+
 ## 0.5.0
 
 ### Minor Changes

@@ -265,6 +265,15 @@ export function PanelSection({ title, children }: { title: string; children: Rea
   );
 }
 
+/**
+ * The writes under the rows of a section of a panel (FRU-545): « Change a role » and « Add to a
+ * workspace ». They were stuck to the last row and to each other, each as wide as its words. Here
+ * they are 12 px under the rows, 8 px apart, and their buttons are as wide as the panel.
+ */
+export function PanelActions({ children }: { children: ReactNode }) {
+  return <div className="mt-[12px] flex flex-col gap-[8px]">{children}</div>;
+}
+
 /** The rows of a section of a panel: a name, and a word about it at the end of the line. */
 export function PanelRows({ rows }: { rows: readonly { key: string; name: ReactNode; value: ReactNode }[] }) {
   return (

@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { type Page, type Route, expect, test } from '@playwright/test';
-import { ACME, type StubbedWorkspace, sideScroll, stubWorker } from './console-workspace.ts';
+import { ACME, type StubbedWorkspace, box, sideScroll, stubWorker } from './console-workspace.ts';
 import { WORKER_ORIGIN } from './pin.ts';
 
 /**
@@ -81,13 +81,13 @@ type Worker = {
 
 async function workerWith(
   page: Page,
-  options: { workspace?: StubbedWorkspace; keys?: Key[]; locale?: 'en' | 'fr' } = {},
+  options: { workspace?: StubbedWorkspace; keys?: Key[]; locale?: 'en' | 'fr'; sites?: typeof SITES } = {},
 ): Promise<Worker> {
   const worker: Worker = { keys: options.keys ?? KEYS(), made: [], revoked: [], asked: [] };
   const workspace = options.workspace ?? ACME;
   await stubWorker(page, {
     workspaces: [workspace],
-    sites: SITES,
+    sites: options.sites ?? SITES,
     ...(options.locale === undefined ? {} : { locale: options.locale }),
     answer: (pathname, route: Route) => {
       const request = route.request();
@@ -183,14 +183,15 @@ test('the settings lead an owner to the keys, listed with their last use, their 
 }) => {
   await workerWith(page);
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto(`${CONSOLE}/w/w1/settings`);
+  await page.goto(`${CONSOLE}/w/w1/settings/ai`);
   const section = page.getByRole('region', { name: 'Agents' });
   await section.getByRole('link', { name: 'Manage the agent keys' }).click();
   await expect(page).toHaveURL(`${CONSOLE}/w/w1/settings/agents`);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Agents');
-  await expect(
-    page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'Workspace settings' }),
-  ).toBeVisible();
+  // The crumbs lead back to the settings, and to their page « AI » (FRU-544).
+  const crumbs = page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link');
+  await expect(crumbs).toHaveText(['Workspace settings', 'AI']);
+  await expect(crumbs.last()).toHaveAttribute('href', '/w/w1/settings/ai');
 
   await expect(list(page).getByRole('listitem')).toHaveCount(3);
   const ci = row(page, 'Claude on CI');
@@ -335,7 +336,7 @@ test('the writes of a key unfold under its row, and a key revoked after a second
 
 test('a member reads why there is no way to the keys, and the page asks the worker nothing', async ({ page }) => {
   const worker = await workerWith(page, { workspace: { ...ACME, role: 'member' } });
-  await page.goto(`${CONSOLE}/w/w1/settings`);
+  await page.goto(`${CONSOLE}/w/w1/settings/ai`);
   const section = page.getByRole('region', { name: 'Agents' });
   await expect(section).toContainText('Only an owner or an admin of the workspace manages its agent keys.');
   await expect(section.getByRole('link')).toHaveCount(0);
@@ -380,7 +381,13 @@ test('with no key, the screen says what a key is for; at 390 px in French nothin
   await expectNoViolation(page);
 
   await page.unrouteAll();
-  await workerWith(page, { locale: 'fr' });
+  // A site with a long name: its box wraps in the list of the form, and never past the edge (#742).
+  const long = {
+    id: 's3',
+    origin: 'https://staging.a-very-long-client-name-for-the-select.co.uk',
+    visibility: 'everyone',
+  };
+  await workerWith(page, { locale: 'fr', sites: [...SITES, long] });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${CONSOLE}/w/w1/settings/agents`);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Agents');
@@ -388,4 +395,11 @@ test('with no key, the screen says what a key is for; at 390 px in French nothin
   await expect(row(page, 'Old reader')).toContainText('Jamais utilisée');
   expect(await sideScroll(page)).toBe(0);
   await expectNoViolation(page);
+  await page.getByRole('button', { name: 'Nouvelle clé' }).first().click();
+  const wide = page.getByRole('checkbox', { name: /a-very-long-client-name/ });
+  await expect(wide).toBeAttached();
+  expect(await sideScroll(page)).toBe(0);
+  const field = await box(page.locator('.kit-checks .kit-checkbox').filter({ hasText: 'a-very-long-client-name' }));
+  const list = await box(page.locator('.kit-checks'));
+  expect(field.x + field.width).toBeLessThanOrEqual(list.x + list.width + 0.5);
 });
