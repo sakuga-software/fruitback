@@ -109,31 +109,36 @@ export function createPostgresNoteStore(database: Database): NoteStore {
     // same replies, from its row and its newest replies only.
     findNote: (lookup, _client, policy) =>
       through('read the note', async ({ run }) => {
-        let which: SQL | undefined;
+        // The rows of the page that `which` keeps, and the first of them that is the note asked for,
+        // as `findForPage` finds it.
+        const first = async (which: SQL | undefined) =>
+          (
+            await run((db) =>
+              db
+                .select(NOTE_COLUMNS)
+                .from(notes)
+                .where(and(onPage(lookup), which))
+                .orderBy(asc(notes.id)),
+            )
+          ).find((each) => {
+            const issue = issueOf(each, undefined);
+
+            return issue !== null && isLookedUp(lookup, issue);
+          });
+        let row: NoteRow | undefined;
         if (lookup.by === 'issue') {
           const id = Number(lookup.id);
           // `findForPage` answers `String(row.id)`: `01` or `1.0` is no id of a row.
           if (!Number.isSafeInteger(id) || String(id) !== lookup.id) return undefined;
-          which = eq(notes.id, id);
-        } else if (PLAIN_ID.test(lookup.id)) {
-          // The id the widget gave is in `payload`, which is text: the rows whose text holds it, and
-          // the parse below says which one is the note. A query on the JSON would throw for every row
-          // on one row that is not JSON.
-          which = sql`strpos(${notes.payload}, ${lookup.id}) > 0`;
+          row = await first(eq(notes.id, id));
+        } else {
+          // The id the widget gave is in `payload`, which is text: the rows whose text holds it, and the
+          // parse says which one is the note. A query on the JSON would throw for every row on one row
+          // that is not JSON. A row can write the id escaped (`\u00e9` for `é`, by a restore or an
+          // operator): when no row holds it as it is, every note of the page is parsed, and still
+          // none of their replies is read (review of #733).
+          row = (await first(sql`strpos(${notes.payload}, ${lookup.id}) > 0`)) ?? (await first(undefined));
         }
-        const rows = await run((db) =>
-          db
-            .select(NOTE_COLUMNS)
-            .from(notes)
-            .where(and(onPage(lookup), which))
-            .orderBy(asc(notes.id)),
-        );
-        // The first that is a note of the page and the one asked for, as `findForPage` finds it.
-        const row = rows.find((each) => {
-          const issue = issueOf(each, undefined);
-
-          return issue !== null && isLookedUp(lookup, issue);
-        });
         if (row === undefined) return undefined;
         if (!policy.showComments) return issueOf(row, undefined) ?? undefined;
         const threads = await repliesOf(run, [row]);
@@ -331,13 +336,6 @@ export function createPostgresNoteStore(database: Database): NoteStore {
       ),
   };
 }
-
-/**
- * An id that every JSON writer writes as it is, never escaped: what the routes take, `[A-Za-z0-9_-]`.
- * Any other id (from MCP) can be written escaped, `é` as `\u00e9` by a restore or an operator: its
- * note is found by the parse of every note of the page, as `findForPage` finds it (review of #733).
- */
-const PLAIN_ID = /^[A-Za-z0-9_-]+$/;
 
 /** The columns of a note that a read hands to `toNoteIssue`. */
 const NOTE_COLUMNS = {
