@@ -893,12 +893,15 @@ export type LinearTeam = {
  * projects each would weigh twice as much as the query of before. `filter` holds the words a person
  * looks for (FRU-501): Linear compares them with the name of each team, with no case.
  */
+// WARNING: Linear refuses a query whose complexity goes past its limit, with `400 Query too complex`.
+// 50 teams with 50 projects each went past it. 20 projects a team cost about 4,700; the projects
+// after the first 20 come from TEAM_PROJECTS_QUERY, one team at a time.
 const TEAMS_QUERY = `
   query FruitbackTeams($after: String, $filter: TeamFilter) {
     teams(first: 50, after: $after, filter: $filter) {
       nodes {
         id name key private color
-        projects(first: 50) { nodes { id name color status { name type } } pageInfo { hasNextPage endCursor } }
+        projects(first: 20) { nodes { id name color status { name type } } pageInfo { hasNextPage endCursor } }
       }
       pageInfo { hasNextPage endCursor }
     }
@@ -927,20 +930,22 @@ const VIEWER_QUERY = `
 /**
  * Some teams, and some of their projects, by their ids (FRU-501): what the labels of the places of a
  * site need, in one call. A filter, and not `team(id:)`: Linear answers an id it does not know with
- * an error, and a filter with no node, which is how a place the key does not reach reads.
+ * an error, and a filter with no node, which is how a place the key does not reach reads. Each
+ * `first` is the number of ids asked: Linear prices a query by the nodes it may return (see the
+ * warning above `TEAMS_QUERY`), and a site has 5 places at most.
  */
 const PLACES_QUERY = `
-  query FruitbackPlaces($teams: [ID!]!, $projects: [ID!]!) {
-    teams(first: 50, filter: { id: { in: $teams } }) {
-      nodes { id name projects(first: 50, filter: { id: { in: $projects } }) { nodes { id name } } }
+  query FruitbackPlaces($teams: [ID!]!, $projects: [ID!]!, $teamCount: Int!, $projectCount: Int!) {
+    teams(first: $teamCount, filter: { id: { in: $teams } }) {
+      nodes { id name projects(first: $projectCount, filter: { id: { in: $projects } }) { nodes { id name } } }
     }
   }
 `;
 
 /** As `PLACES_QUERY`, for places with no project. */
 const TEAM_PLACES_QUERY = `
-  query FruitbackPlaces($teams: [ID!]!) {
-    teams(first: 50, filter: { id: { in: $teams } }) { nodes { id name } }
+  query FruitbackPlaces($teams: [ID!]!, $teamCount: Int!) {
+    teams(first: $teamCount, filter: { id: { in: $teams } }) { nodes { id name } }
   }
 `;
 
@@ -1026,7 +1031,9 @@ export async function readLinearPlaces(
   }>(
     { apiKey, teamId: 'none' },
     projectIds.length === 0 ? TEAM_PLACES_QUERY : PLACES_QUERY,
-    projectIds.length === 0 ? { teams: teamIds } : { teams: teamIds, projects: projectIds },
+    projectIds.length === 0
+      ? { teams: teamIds, teamCount: teamIds.length }
+      : { teams: teamIds, projects: projectIds, teamCount: teamIds.length, projectCount: projectIds.length },
     READ_TIMEOUT_MS,
   );
   const nodes = data.teams?.nodes ?? [];

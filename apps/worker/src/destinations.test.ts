@@ -257,7 +257,10 @@ describe('a site that can send to several places (FRU-123)', () => {
 
     assert.equal(set.status, 200, await set.clone().text());
     assert.deepEqual(linear.asked, [
-      { operation: 'FruitbackPlaces', variables: { teams: [SUPPORT, DESIGN], projects: ['proj_site'] } },
+      {
+        operation: 'FruitbackPlaces',
+        variables: { teams: [SUPPORT, DESIGN], projects: ['proj_site'], teamCount: 2, projectCount: 1 },
+      },
     ]);
   });
 

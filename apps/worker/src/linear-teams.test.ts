@@ -165,6 +165,9 @@ describe('the reads of Linear for one choice (FRU-501)', () => {
     assert.deepEqual(asked[0]?.variables, { after: 'c-before', filter: { name: { containsIgnoreCase: 'pay' } } });
     // With no search, no filter: Linear answers every team.
     assert.deepEqual(asked[1]?.variables, {});
+    // Under the limit of complexity of Linear: 50 teams of 20 projects a page (see #765).
+    assert.match(asked[0]?.query ?? '', /teams\(first: 50, after/);
+    assert.match(asked[0]?.query ?? '', /projects\(first: 20\)/);
     assert.equal(first.next, 'c-next');
     assert.equal(asked.length, 2);
   });
@@ -189,7 +192,13 @@ describe('the reads of Linear for one choice (FRU-501)', () => {
     assert.deepEqual(named, [{ team: 'Design', project: 'Site' }, { team: 'Web' }, undefined, undefined]);
     assert.equal(asked.length, 1);
     assert.equal(asked[0]?.operation, 'FruitbackPlaces');
-    assert.deepEqual(asked[0]?.variables, { teams: ['team_a', 'team_b', 'team_gone'], projects: ['p1'] });
+    // Each page holds the ids asked, and no more: Linear prices a query by the nodes it may return.
+    assert.deepEqual(asked[0]?.variables, {
+      teams: ['team_a', 'team_b', 'team_gone'],
+      projects: ['p1'],
+      teamCount: 3,
+      projectCount: 1,
+    });
     assert.ok(!asked[0]?.query.includes('teams(first: 50, after'), 'never the list of the teams');
   });
 
@@ -197,7 +206,7 @@ describe('the reads of Linear for one choice (FRU-501)', () => {
     const asked = linear(() => ({ teams: { nodes: [{ id: 'team_a', name: 'Design' }] } }));
 
     assert.deepEqual(await readLinearPlaces('lin_api_key', [{ teamId: 'team_a' }]), [{ team: 'Design' }]);
-    assert.deepEqual(asked[0]?.variables, { teams: ['team_a'] });
+    assert.deepEqual(asked[0]?.variables, { teams: ['team_a'], teamCount: 1 });
     assert.ok(!asked[0]?.query.includes('projects'));
   });
 
