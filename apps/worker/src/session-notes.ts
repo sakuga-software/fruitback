@@ -32,7 +32,7 @@ const FIELDS = ['site', 'stage', 'q', 'cursor', 'limit'] as const;
 const ID = /^[A-Za-z0-9_-]+$/;
 
 export type SessionNotesContext = {
-  accounts: Pick<AccountStore, 'memberships' | 'reach' | 'sites' | 'suspension'>;
+  accounts: Pick<AccountStore, 'memberships' | 'reach' | 'site' | 'suspension'>;
   noteIndex: NoteIndex | undefined;
   /** `sessionWrites` of `app.ts`, bound to this request: the person of the session, now, or `undefined`. */
   session: () => Promise<SessionIdentity | undefined>;
@@ -108,7 +108,7 @@ async function siteOf(
   for (const workspace of await workspacesOf(accounts, session)) {
     const reach = await accounts.reach(workspace, session.subject);
     if (reach === undefined || !readsSite(reach, site)) continue;
-    if ((await accounts.sites(workspace)).some((each) => each.id === site)) return { workspace, reach };
+    if ((await accounts.site(workspace, site)) !== undefined) return { workspace, reach };
   }
 
   return undefined;

@@ -50,6 +50,34 @@ for (const subject of SUBJECTS) describeConformance('AccountStore', accountCases
 /** One change to `accounts-postgres.ts`, or one store around it, for each case: the case must fail. */
 const VIOLATIONS: Violation<AccountStore>[] = [
   {
+    breaks: 'reads one site by its id with its destinations, only in its own workspace',
+    by: 'reads a site of any workspace',
+    replace: {
+      after: 'async site(workspace, site) {',
+      from: '.where(and(eq(sites.workspace_id, workspace), eq(sites.id, site)))',
+      to: '.where(eq(sites.id, site))',
+    },
+  },
+  {
+    breaks: 'answers a page of the sites oldest first, with the total of its search and the sites it is given',
+    by: 'answers every site to a guest',
+    replace: {
+      after: 'async sitePage(workspace,',
+      from: 'onlySites(only), hostHolds(q))',
+      to: 'hostHolds(q))',
+    },
+  },
+  {
+    breaks: 'answers a page of the sites oldest first, with the total of its search and the sites it is given',
+    by: 'searches the whole address',
+    replace: { from: "split_part(${sites.origin}, '://', 2)", to: '${sites.origin}' },
+  },
+  {
+    breaks: 'answers the sites to choose from by address, after an address, and only the sites it is given',
+    by: 'starts every page at the first address',
+    replace: { from: 'after === undefined ? undefined : gt(sites.origin, after),', to: 'undefined,' },
+  },
+  {
     breaks: 'keeps an agent key with the sites it names, and finds it by its digest with the reach of its member',
     by: 'finds a key by any digest',
     replace: {

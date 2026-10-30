@@ -776,6 +776,54 @@ describe('the guest of one site (FRU-250)', () => {
       }
     });
 
+    it('lets the guest read a site not shared with them in the reads of FRU-497 without their filter', async () => {
+      const team = await acme();
+      const reach = await team.world.accounts.reach(team.workspace, team.gina.id);
+      const one = await mutatedModule('console-sites.ts', {
+        from: 'if (!readsSite(reach, site)) return undefined;',
+        to: '',
+      });
+      try {
+        const read = one.module.readableSite as (...values: unknown[]) => Promise<{ id: string } | undefined>;
+        assert.equal((await read(team.world.accounts, team.workspace, reach, team.other))?.id, team.other);
+      } finally {
+        one.remove();
+      }
+      const choices = await mutatedModule('console-sites.ts', {
+        from: 'limit: query.limit + 1, ...onlyOf(reach) }',
+        to: 'limit: query.limit + 1 }',
+      });
+      try {
+        const read = choices.module.siteChoicesPage as (...values: unknown[]) => Promise<{ sites: { id: string }[] }>;
+        const { sites } = await read(team.world.accounts, team.workspace, reach, { limit: 100 });
+        assert.ok(sites.some((site) => site.id === team.other));
+      } finally {
+        choices.remove();
+      }
+      const page = await mutatedModule('console-api.ts', {
+        from: '          ...page.query,\n          ...onlyOf(reach),\n',
+        to: '          ...page.query,\n',
+      });
+      try {
+        const handle = page.module.handleConsoleApi as (...values: unknown[]) => Promise<Response>;
+        const answer = await handle(
+          new Request(`https://api.fruitback.test/console/workspaces/${team.workspace}/sites?limit=12`),
+          `/console/workspaces/${team.workspace}/sites`,
+          {
+            accounts: team.world.accounts,
+            sessions: team.world.sessions,
+            cookieSession: async () => team.gina.id,
+            consoleUrl: CONSOLE,
+          },
+          {},
+        );
+        const ids = ((await answer.json()) as { sites: { id: string }[] }).sites.map((site) => site.id);
+        assert.ok(ids.includes(team.other));
+      } finally {
+        page.remove();
+      }
+    });
+
     it('lets the guest read the notes of every site in GET /console/workspaces/<id>/notes without its filter', async () => {
       const team = await acme();
       await plantNotes(team);
