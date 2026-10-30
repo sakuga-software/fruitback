@@ -28,7 +28,7 @@ import { showProblem } from '../../src/problem-view.ts';
 import { IMPORT_PROBLEM } from '../../src/remedy.ts';
 import { language, setLanguage, t } from '../../src/i18n.ts';
 import { createBrowserSessions } from '../../src/session-browser.ts';
-import { type StoredSession, describeIdentity } from '../../src/session.ts';
+import { PAIR_UNAVAILABLE, type StoredSession, describeIdentity, failedPairing } from '../../src/session.ts';
 import {
   type PanelOptions,
   type RuleRow,
@@ -43,6 +43,7 @@ import { browserFamily, opensChromiumShortcuts } from '../../src/browser-family.
 import { CAPTURE_EVERYWHERE, browserWarning, setCaptureEverywhere } from '../../src/capture-everywhere.ts';
 import { holdsSiteAccess } from '../../src/site-grant.ts';
 import { storedLanguage } from '../../src/language.ts';
+import { rememberLanguage } from '../../src/language-sync.ts';
 import { CHROMIUM_SHORTCUTS_URL, currentShortcut } from '../../src/shortcut.ts';
 import {
   DEFAULT_DOCK_POSITION,
@@ -668,8 +669,11 @@ function pair(endpoint: string, code: string, said: HTMLElement, submit: HTMLBut
   submit.disabled = true;
   const again = (): void => pair(endpoint, code, said, submit);
   void (async () => {
-    const granted = await browser.permissions.request({ origins: [matchPatternFor(workerOrigin(endpoint))] });
-    const result = granted ? await sessions.pair(endpoint, value) : undefined;
+    // A call that throws is a failure like the others (FRU-510): it must not leave « Pair » off.
+    const granted = await browser.permissions
+      .request({ origins: [matchPatternFor(workerOrigin(endpoint))] })
+      .catch(failedPairing(false));
+    const result = granted ? await sessions.pair(endpoint, value).catch(failedPairing(PAIR_UNAVAILABLE)) : undefined;
     // The button is turned back on first: a card with a button off is not drawn again (`redrawWorkers`).
     submit.disabled = false;
     if (result?.ok === true) {
@@ -697,6 +701,12 @@ function logout(endpoint: string, out: HTMLButtonElement): void {
     .catch((error: unknown) => console.error('[fruitback] could not give back the access to the worker', error))
     .then(() => {
       out.disabled = false;
+      // The account of that session spoke for the language, as in the popup (FRU-510). Ask who is
+      // left to speak for it.
+      void rememberLanguage(browser.storage.local, {
+        endpoints: async () => Object.keys(await sessions.list()),
+        ensureAccess: (each) => sessions.ensureAccess(each),
+      }).catch(() => undefined);
 
       return renderWorkers();
     });

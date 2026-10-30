@@ -7,9 +7,11 @@ import {
   type SessionResponse,
   type SessionSeams,
   type StoredSession,
+  PAIR_UNAVAILABLE,
   REFRESH_MARGIN_MS,
   RETRY_DELAY_MS,
   createSessions,
+  failedPairing,
   nextWakeAt,
   parseIssued,
   parseStoredSession,
@@ -1345,5 +1347,18 @@ describe('a logout that lands inside a refresh', () => {
     const repaired = { [ENDPOINT]: { refreshToken: 'refresh.1', epoch: 'pop.epo.2' } };
     assert.partialDeepStrictEqual(await background.list(), repaired);
     assert.partialDeepStrictEqual(await popup.list(), repaired);
+  });
+});
+
+describe('a step of a pairing that throws (FRU-510)', () => {
+  it('ends as an ordinary failure, so the page gives « Pair » back with a message', async (t) => {
+    const logged = t.mock.method(console, 'error', () => undefined);
+
+    assert.equal(await Promise.reject(new Error('request threw')).catch(failedPairing(false)), false);
+    assert.deepEqual(await Promise.reject(new Error('pair threw')).catch(failedPairing(PAIR_UNAVAILABLE)), {
+      ok: false,
+      reason: 'unavailable',
+    });
+    assert.equal(logged.mock.callCount(), 2);
   });
 });

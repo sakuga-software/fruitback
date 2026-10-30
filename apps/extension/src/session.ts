@@ -179,6 +179,24 @@ export type AccessFailure = 'not-paired' | 'session-revoked-or-expired' | 'unava
 
 export type PairResult = { ok: true; identity: SessionIdentity } | { ok: false; reason: PairFailure };
 
+/** A pairing whose call to the worker threw (FRU-510): what the reviewer reads is « try again ». */
+export const PAIR_UNAVAILABLE: PairResult = { ok: false, reason: 'unavailable' };
+
+/**
+ * The `catch` of a step of a pairing (FRU-510): logs what threw, and answers `answer`.
+ *
+ * Both pages turn « Pair » off while a code is spent and on again at the end of the attempt. A step
+ * that threw skipped that end, and the button stayed off with no message. Caught, the throw takes the
+ * path of an ordinary failure: the button comes back, and the message says what to do.
+ */
+export function failedPairing<T>(answer: T): (error: unknown) => T {
+  return (error) => {
+    console.error('[fruitback] a step of the pairing threw', error);
+
+    return answer;
+  };
+}
+
 /**
  * What a claim of a sign-in answered (FRU-251). `waiting`: nobody approved it in the console yet.
  * `refused` and `expired` end the request; `unavailable` is the moment, and the next claim may work.
