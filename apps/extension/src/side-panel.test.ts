@@ -17,8 +17,10 @@ import {
   keepPopupOnActionClick,
   setPanelOnClick,
   notesOf,
+  offersPopup,
   openOnRead,
   openPanel,
+  openPopupFrom,
   openPanelOrPage,
   panelPage,
   parsePinsMessage,
@@ -153,7 +155,7 @@ describe('the page of the panel (FRU-296, FRU-299)', () => {
       onVerdict: (id, verdict) => calls.push(`verdict:${id}:${verdict}`),
     };
   };
-  const on = (notes: PanelNote[] | 'reading' | 'failed' | 'not-started'): PanelState => ({
+  const on = (notes: PanelNote[] | 'reading' | 'failed' | 'not-started' | 'signed-out'): PanelState => ({
     kind: 'on',
     host: 'staging.acme.dev',
     where: 'Acme',
@@ -189,6 +191,54 @@ describe('the page of the panel (FRU-296, FRU-299)', () => {
       ['Fruitback is not on for this page.', 'Turn it on from the Fruitback button in the toolbar.'],
     );
     assert.equal(root.querySelectorAll('button').length, 1, 'only « Close the sidebar »');
+  });
+
+  it('offers « Open Fruitback » in place of the sentence, where the popup can open on the page (FRU-532)', () => {
+    const options = handlers();
+    const root = panelPage(page(), {
+      ...options,
+      state: { kind: 'not-on' },
+      tab: 'open',
+      onOpenPopup: () => options.calls.push('popup'),
+    });
+
+    assert.deepEqual(
+      [...root.querySelectorAll('p')].map((line) => line.textContent),
+      ['Fruitback is not on for this page.'],
+    );
+    const open = root.querySelector<HTMLButtonElement>('.panel-state button.kit-primary');
+    assert.equal(open?.textContent, 'Open Fruitback');
+    assert.equal(open?.type, 'button');
+    open?.click();
+    assert.deepEqual(options.calls, ['popup']);
+  });
+
+  it('offers « Open Fruitback » under a session that ended: the popup signs in again (FRU-532)', () => {
+    const options = handlers();
+    const root = panelPage(page(), {
+      ...options,
+      state: on('signed-out'),
+      tab: 'open',
+      onOpenPopup: () => options.calls.push('popup'),
+    });
+
+    assert.equal(
+      root.querySelector('[role="status"]')?.textContent,
+      'Your session ended. Sign in again from the Fruitback button.',
+    );
+    root.querySelector<HTMLButtonElement>('.panel-notes button.kit-primary')?.click();
+    assert.deepEqual(options.calls, ['popup']);
+  });
+
+  it('has no « Open Fruitback » on a site that runs its own Fruitback: the action is on the page (FRU-532)', () => {
+    const root = panelPage(page(), {
+      ...handlers(),
+      state: { kind: 'site-widget', host: 'app.acme.dev' },
+      tab: 'open',
+      onOpenPopup: () => undefined,
+    });
+
+    assert.equal(root.querySelector('.panel-open-popup'), null);
   });
 
   // Raised in review: on a site that embeds its own widget, the panel waited for notes nobody sends.
@@ -586,6 +636,53 @@ describe('the tab of a note, and its age', () => {
     assert.equal(ageOf('2026-10-20T11:59:50Z', now), 'just now');
     assert.equal(ageOf('2026-10-20T10:00:00Z', now), '2 hours ago');
     assert.equal(ageOf('not a date', now), '');
+  });
+});
+
+describe('« Open Fruitback », the popup from the panel (FRU-532)', () => {
+  const opens = { action: { openPopup: async () => undefined } };
+
+  it('is offered where the panel reads the address of the tab, which the popup reads the same way', () => {
+    assert.equal(offersPopup(opens, 'https://staging.acme.dev/cart', false), true);
+    // No address: the popup opened from here would get none either, and say « web pages only ».
+    assert.equal(offersPopup(opens, undefined, false), false);
+    assert.equal(offersPopup(opens, 'chrome://extensions/', false), false);
+  });
+
+  it('is not offered by a browser with no `action.openPopup`, nor after a refusal', () => {
+    assert.equal(offersPopup({}, 'https://staging.acme.dev/', false), false);
+    assert.equal(offersPopup({ action: {} }, 'https://staging.acme.dev/', false), false);
+    assert.equal(offersPopup(opens, 'https://staging.acme.dev/', true), false);
+  });
+
+  it('asks for the popup at once, in the click, before any `await`', () => {
+    const calls: string[] = [];
+    openPopupFrom({ action: { openPopup: async () => void calls.push('open') } }, () => calls.push('refused'));
+
+    assert.deepEqual(calls, ['open']);
+  });
+
+  it('says so when the browser refuses, or throws', async () => {
+    const said: string[] = [];
+    const quiet = mock.method(console, 'error', () => undefined);
+    try {
+      openPopupFrom({ action: { openPopup: () => Promise.reject(new Error('no gesture')) } }, () => said.push('a'));
+      openPopupFrom(
+        {
+          action: {
+            openPopup: () => {
+              throw new Error('not here');
+            },
+          },
+        },
+        () => said.push('b'),
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    } finally {
+      quiet.mock.restore();
+    }
+
+    assert.deepEqual(said.sort(), ['a', 'b']);
   });
 });
 

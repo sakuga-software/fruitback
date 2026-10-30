@@ -369,7 +369,16 @@ function panelStates(): GalleryState[] {
   } as unknown as NonNullable<PanelOptions['search']>['handlers'];
 
   return [
-    { id: 'not-on', title: 'Not on for this page', build: panel({ kind: 'not-on' }) },
+    {
+      id: 'not-on',
+      title: 'Not on for this page',
+      build: panel({ kind: 'not-on' }, { onOpenPopup: nothing }),
+    },
+    {
+      id: 'not-on-toolbar',
+      title: 'Not on for this page · the popup cannot open from here',
+      build: panel({ kind: 'not-on' }),
+    },
     {
       id: 'site-widget',
       title: 'The site runs its own Fruitback',
@@ -379,7 +388,11 @@ function panelStates(): GalleryState[] {
     { id: 'failed', title: 'The read failed', build: panel(onWith('failed')) },
     { id: 'reload', title: 'The page must be reloaded', build: panel(onWith('reload')) },
     { id: 'not-started', title: 'The widget did not start', build: panel(onWith('not-started')) },
-    { id: 'signed-out', title: 'The session of the site ended', build: panel(onWith('signed-out')) },
+    {
+      id: 'signed-out',
+      title: 'The session of the site ended',
+      build: panel(onWith('signed-out'), { onOpenPopup: nothing }),
+    },
     { id: 'empty', title: 'No note on this page', build: panel(onWith([])) },
     { id: 'open', title: 'Open notes', build: panel(onWith(NOTES)) },
     { id: 'open-row', title: 'Open notes · a row open', build: panel(onWith(NOTES), { open: 'n2' }) },

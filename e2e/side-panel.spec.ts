@@ -3,7 +3,9 @@ import { PLAYGROUND_ORIGIN, clickThatClosesPopup, openBareSite, openPopup, test 
 import { pinFor } from './pin.ts';
 import {
   paired,
+  clickPanel,
   inPanel,
+  inTarget,
   words,
   panelWords,
   plantOn,
@@ -88,9 +90,58 @@ test('a click in the popup opens the panel on the tab, and the panel follows the
   const other = await extension.context.newPage();
   await other.goto(`${AUTHENTICATED_WORKER_ORIGIN}/health`);
   await other.bringToFront();
-  await expect.poll(() => panelWords(page)).toMatchObject({ site: null, lines: [...said.notOn] });
+  // FRU-532: the copy may read that page, so the popup may too: « Open Fruitback » in place of the
+  // sentence.
+  await expect
+    .poll(() => panelWords(page))
+    .toMatchObject({ site: null, lines: [said.notOn[0]], openPopup: said.openPopup });
   await page.bringToFront();
   await expect.poll(() => panelWords(page)).toMatchObject({ site: new URL(PLAYGROUND_ORIGIN).host });
+});
+
+test('« Open Fruitback » of a panel on a page Fruitback is not on opens the popup on that page (FRU-532)', async ({
+  extension,
+}) => {
+  await paired(extension);
+  const page = await extension.context.newPage();
+  await openBareSite(page, 'side-panel-open-popup');
+  const popup = await openPopup(extension, page);
+  await popup.getByRole('button', { name: /^(Turn on|Activer)$/ }).click();
+  await expect(page.getByRole('button', { name: 'Leave feedback' })).toBeVisible();
+  await clickThatClosesPopup(
+    popup,
+    popup.getByRole('button', { name: /^(Show all notes in a sidebar|Voir toutes les notes dans un panneau)$/ }),
+  );
+  await expect.poll(async () => (await panelWords(page)).site).toBe(new URL(PLAYGROUND_ORIGIN).host);
+  const said = await words(page);
+  const popups = () =>
+    extension.worker.evaluate(async () =>
+      (await chrome.runtime.getContexts({ contextTypes: ['POPUP'] })).map((context) => context.documentUrl),
+    );
+
+  // A page the extension may not read (the control): the panel knows no address, nor would the popup.
+  // The sentence stays, with no button.
+  const blank = await extension.context.newPage();
+  await blank.goto('about:blank');
+  await blank.bringToFront();
+  await expect.poll(() => panelWords(page)).toMatchObject({ site: null, lines: [...said.notOn], openPopup: null });
+
+  // A page of a site with no rule that the copy may read: the button, and the popup opens on it.
+  const other = await extension.context.newPage();
+  await other.goto(`${AUTHENTICATED_WORKER_ORIGIN}/health`);
+  await other.bringToFront();
+  await expect.poll(() => panelWords(page)).toMatchObject({ openPopup: said.openPopup });
+  expect(await popups()).toEqual([]);
+  expect(await clickPanel(page, 'button.panel-open-popup')).toBe(true);
+  await expect.poll(popups).toEqual([`chrome-extension://${extension.id}/popup.html`]);
+  // The popup reads the page the panel was on, so it shows that site, not « http and https pages ».
+  expect(
+    await inTarget<string | undefined>(
+      page,
+      '/popup.html',
+      `chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => tab?.url)`,
+    ),
+  ).toBe(`${AUTHENTICATED_WORKER_ORIGIN}/health`);
 });
 
 test('« Notes on this page » lists the pins of the page, opens a row from a pin, shows a note, and replies (FRU-299)', async ({

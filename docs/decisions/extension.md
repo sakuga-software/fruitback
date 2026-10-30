@@ -527,6 +527,35 @@ did not change: the fields of 760 px and the file input of the browser are as th
   on ». It keeps nothing. It reads the worker for one thing only, the scope « Whole site » of
   « Search and options » (FRU-307, see below).
 - **The panel lists the notes of the page (FRU-299)**: see the next section.
+- **« Open Fruitback » opens the popup from the panel (FRU-532)**, under « Fruitback is not on for
+  this page. » and under a session that ended: the popup is where a site is turned on and a session
+  signed in again. It calls `action.openPopup()` in the click, before any `await`
+  (`openPopupFrom`). **It is offered only where the panel reads the address of the tab**
+  (`offersPopup`): the popup that `openPopup` opens gets no `activeTab`, so on a site the extension
+  has no access to it reads no address, and would say « Fruitback works on http and https pages. »
+  on an https page. There, and after the browser refused the popup once, the sentence stays: « Turn
+  it on from the Fruitback button in the toolbar. » A site that runs its own Fruitback has no button:
+  the action is on its page.
+
+### What was measured for « Open Fruitback » (FRU-532), and what was not
+
+Chromium 156 of Playwright, headless, on the shipped build (no host permission) and on a copy that
+holds `http://127.0.0.1/*`; a page of `http://127.0.0.1` with no rule, the panel open on it, then
+`action.openPopup()` evaluated in the panel.
+
+|                                            | shipped build            | copy with access to the page |
+| ------------------------------------------ | ------------------------ | ---------------------------- |
+| the popup opens (`getContexts` `POPUP`)    | yes, with no gesture too | yes                          |
+| the address of the tab, read by that popup | withheld                 | read                         |
+| the address of the tab, read by the panel  | withheld                 | read                         |
+
+- So the button shows where the extension may read the page: a rule that is off but whose access
+  is still held, a site covered by « Allow captures on every site » (`<all_urls>`), a tab whose icon
+  was clicked (`activeTab`), and every page of the E2E copies. On a site with no access, the most
+  common « not on », it does not show. `e2e/side-panel.spec.ts` clicks it and reads the address from
+  the popup, with a page the extension may not read as the control.
+- **Firefox was not measured.** MDN documents `action.openPopup()` from a user action; a refusal
+  takes the button away, and the sentence comes back.
 
 ### What was measured, and what was not
 

@@ -76,6 +76,22 @@ button.panel-close:hover {
   color: var(--subtle);
 }
 
+/* « Open Fruitback » (FRU-532): the main button, on the whole width, under the sentence. */
+.panel-state .panel-open-popup,
+.panel-signed-out .panel-open-popup {
+  margin-top: 12px;
+}
+
+.panel-signed-out {
+  display: flex;
+  flex-direction: column;
+  padding: 16px 20px;
+}
+
+.panel-signed-out .panel-reading {
+  padding: 0;
+}
+
 /* « Leave feedback », and what to do next. */
 .panel-action {
   display: flex;
