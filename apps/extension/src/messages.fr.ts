@@ -430,6 +430,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Search notes': 'Chercher dans les notes',
   'Searches the first words of each note': 'Cherche dans les premiers mots de chaque note',
   Status: 'Statut',
+  'Status · {choice} · {count}': 'Statut · {choice} · {count}',
   All: 'Toutes',
   'Show pins on the page': 'Afficher les épingles sur la page',
   '1 detached note': '1 note détachée',

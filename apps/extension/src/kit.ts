@@ -357,3 +357,167 @@ export function segmentedTabs(document: Document, options: TabsOptions): HTMLEle
 
   return rail;
 }
+
+/** The keys that open the list from its button. */
+const OPENS = { ArrowDown: true, ArrowUp: true };
+
+/** What a key does in the open list, beside the moves. */
+const LIST_KEYS: Record<string, 'choose' | 'close' | 'leave'> = {
+  Enter: 'choose',
+  ' ': 'choose',
+  Escape: 'close',
+  Tab: 'leave',
+};
+
+export type ListSelectOption = {
+  id: string;
+  label: string;
+  /** The number of notes of this option, after its name. */
+  count?: number;
+  /** The drop before the name: a status of a team wears its colour (FRU-370). */
+  drop?: DropOptions;
+};
+
+export type ListSelectOptions = {
+  /** The name of the list, and of its button with the choice: « Status ». */
+  label: string;
+  /** What the button says: « Status · In review · 3 ». */
+  trigger: string;
+  options: ListSelectOption[];
+  selected: string;
+  /** Drawn open: a page that draws again keeps the list open (`onOpenChange`). */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  onSelect?: (id: string) => void;
+};
+
+/**
+ * A list to choose one option from, drawn over what follows it (FRU-535): a button, and a `listbox`
+ * under it, never a native `select`. The keyboard of a list box: the arrows, Home and End move,
+ * Enter and Space choose, Escape and Tab close; the focus goes back to the button when it closes. A
+ * click outside closes it. Its place over the content is `kit.css`'s.
+ */
+export function listSelect(document: Document, options: ListSelectOptions): HTMLElement {
+  const root = make(document, 'div', 'kit-select');
+  const id = `kit-select-${options.label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+  const trigger = button(document, 'kit-select-trigger');
+  trigger.setAttribute('aria-haspopup', 'listbox');
+  trigger.setAttribute('aria-controls', `${id}-list`);
+  const chosen = options.options.find((option) => option.id === options.selected);
+  if (chosen?.drop !== undefined) trigger.append(statusDrop(document, chosen.drop));
+  trigger.append(make(document, 'span', 'kit-select-words', options.trigger));
+  const caret = make(document, 'span', 'kit-select-caret', '▾');
+  caret.setAttribute('aria-hidden', 'true');
+  trigger.append(caret);
+
+  const list = make(document, 'ul', 'kit-select-list');
+  list.id = `${id}-list`;
+  list.setAttribute('role', 'listbox');
+  list.setAttribute('aria-label', options.label);
+  list.tabIndex = -1;
+  const items = options.options.map((option, index) => {
+    const item = make(document, 'li', 'kit-select-option');
+    item.id = `${id}-${index}`;
+    item.dataset.option = option.id;
+    item.setAttribute('role', 'option');
+    item.setAttribute('aria-selected', String(option.id === options.selected));
+    if (option.drop !== undefined) item.append(statusDrop(document, option.drop));
+    item.append(make(document, 'span', 'kit-select-name', option.label));
+    if (option.count !== undefined) item.append(make(document, 'span', 'kit-select-count', String(option.count)));
+    item.addEventListener('click', () => choose(index));
+    // The pointer must not take the focus off the list before the click chooses.
+    item.addEventListener('mousedown', (event) => event.preventDefault());
+    list.append(item);
+
+    return item;
+  });
+
+  let active = Math.max(
+    0,
+    items.findIndex((item) => item.dataset.option === options.selected),
+  );
+  const mark = (index: number): void => {
+    active = Math.min(Math.max(index, 0), items.length - 1);
+    for (const [at, item] of items.entries()) item.dataset.active = String(at === active);
+    const item = items[active];
+    if (item !== undefined) {
+      list.setAttribute('aria-activedescendant', item.id);
+      item.scrollIntoView?.({ block: 'nearest' });
+    }
+  };
+  const outside = (event: Event): void => {
+    if (!root.isConnected) {
+      document.removeEventListener('pointerdown', outside, true);
+
+      return;
+    }
+    // `contains`, not `instanceof Node`: the test reads the kit on happy-dom, with no global `Node`.
+    if (!root.contains(event.target as Node | null)) close(false);
+  };
+  const show = (focus: boolean): void => {
+    root.dataset.open = 'true';
+    trigger.setAttribute('aria-expanded', 'true');
+    if (!list.isConnected) root.append(list);
+    mark(active);
+    document.addEventListener('pointerdown', outside, true);
+    if (focus) list.focus();
+  };
+  const close = (focus: boolean): void => {
+    document.removeEventListener('pointerdown', outside, true);
+    if (root.dataset.open !== 'true') return;
+    root.dataset.open = 'false';
+    trigger.setAttribute('aria-expanded', 'false');
+    list.remove();
+    if (focus) trigger.focus();
+    options.onOpenChange?.(false);
+  };
+  function choose(index: number): void {
+    const option = options.options[index];
+    close(true);
+    if (option !== undefined) options.onSelect?.(option.id);
+  }
+
+  trigger.addEventListener('click', () => {
+    if (root.dataset.open === 'true') close(true);
+    else {
+      show(true);
+      options.onOpenChange?.(true);
+    }
+  });
+  trigger.addEventListener('keydown', (event) => {
+    if (!(event.key in OPENS)) return;
+    event.preventDefault();
+    show(true);
+    options.onOpenChange?.(true);
+  });
+  list.addEventListener('keydown', (event) => {
+    const moves: Record<string, number> = {
+      ArrowDown: active + 1,
+      ArrowUp: active - 1,
+      Home: 0,
+      End: items.length - 1,
+    };
+    const to = moves[event.key];
+    const does = LIST_KEYS[event.key];
+    if (to !== undefined) {
+      event.preventDefault();
+      mark(to);
+    } else if (does === 'choose') {
+      event.preventDefault();
+      choose(active);
+    } else if (does === 'close') {
+      event.preventDefault();
+      close(true);
+    } else if (does === 'leave') {
+      // Back on the button first: the Tab then goes on from it, not from the body of the page.
+      close(true);
+    }
+  });
+
+  root.dataset.open = 'false';
+  trigger.setAttribute('aria-expanded', 'false');
+  root.append(trigger);
+  if (options.open === true) show(false);
+
+  return root;
+}

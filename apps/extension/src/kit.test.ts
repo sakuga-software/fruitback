@@ -9,6 +9,7 @@ import {
   head,
   keys,
   listRow,
+  listSelect,
   primaryButton,
   secondaryButton,
   segmentedTabs,
@@ -247,5 +248,118 @@ describe('the kit of the extension (FRU-293)', () => {
       [...sheet.matchAll(/#[0-9a-f]{3,8}\b|rgba?\(/gi)].map(([colour]) => colour),
       [],
     );
+  });
+});
+
+describe('a list to choose from (FRU-535)', () => {
+  const build = (open = false) => {
+    const document = page();
+    const said: string[] = [];
+    const root = listSelect(document, {
+      label: 'Status',
+      trigger: 'Status · All · 9',
+      options: [
+        { id: '', label: 'All', count: 9 },
+        {
+          id: 'name:Triage',
+          label: 'Triage',
+          count: 2,
+          drop: { stage: 'new', paint: { fill: '#e0f2fe', ink: '#18181b' } },
+        },
+        { id: 'name:In Review', label: 'In Review', count: 3, drop: { stage: 'progress' } },
+      ],
+      selected: '',
+      open,
+      onOpenChange: (state) => said.push(`open:${state}`),
+      onSelect: (id) => said.push(`select:${id}`),
+    });
+    document.body.append(root);
+    const trigger = root.querySelector<HTMLButtonElement>('button.kit-select-trigger');
+    const key = (target: Element | null, name: string): void => {
+      target?.dispatchEvent(
+        new document.defaultView!.KeyboardEvent('keydown', { key: name, bubbles: true }) as unknown as Event,
+      );
+    };
+
+    return { document, root, trigger, said, key, list: () => root.querySelector('[role="listbox"]') };
+  };
+
+  it('is a button that says the choice, and a list box, never a native select', () => {
+    const { root, trigger, list } = build();
+
+    assert.equal(trigger?.type, 'button');
+    assert.equal(trigger?.textContent?.includes('Status · All · 9'), true);
+    assert.equal(trigger?.getAttribute('aria-haspopup'), 'listbox');
+    assert.equal(trigger?.getAttribute('aria-expanded'), 'false');
+    assert.equal(list(), null, 'closed, the list is not drawn');
+    assert.equal(root.querySelector('select'), null);
+  });
+
+  it('opens on a click, with each option, its drop and its number, and the choice selected', () => {
+    const { document, trigger, said, list } = build();
+    trigger?.click();
+
+    assert.equal(trigger?.getAttribute('aria-expanded'), 'true');
+    assert.equal(document.activeElement, list());
+    assert.equal(list()?.getAttribute('aria-label'), 'Status');
+    const options = [...(list()?.querySelectorAll('[role="option"]') ?? [])];
+    assert.deepEqual(
+      options.map((option) => [option.textContent, option.getAttribute('aria-selected')]),
+      [
+        ['All9', 'true'],
+        ['Triage2', 'false'],
+        ['In Review3', 'false'],
+      ],
+    );
+    assert.equal(options[1]?.querySelector<HTMLElement>('.kit-drop')?.style.background, '#e0f2fe');
+    assert.deepEqual(said, ['open:true']);
+  });
+
+  it('moves with the arrows, chooses with Enter, and gives the focus back to its button', () => {
+    const { document, trigger, said, key, list } = build();
+    key(trigger, 'ArrowDown');
+    assert.equal(document.activeElement, list(), 'an arrow on the button opens the list');
+    key(list(), 'ArrowDown');
+    key(list(), 'ArrowDown');
+    key(list(), 'ArrowDown');
+    const active = list()?.getAttribute('aria-activedescendant');
+    assert.equal(list()?.querySelector(`#${active}`)?.textContent, 'In Review3', 'the last stays the last');
+    key(list(), 'Home');
+    key(list(), 'ArrowDown');
+    const listbox = list();
+    key(listbox, 'Enter');
+
+    assert.deepEqual(said, ['open:true', 'open:false', 'select:name:Triage']);
+    assert.equal(list(), null);
+    assert.equal(trigger?.getAttribute('aria-expanded'), 'false');
+    assert.equal(document.activeElement, trigger);
+  });
+
+  it('closes on Escape with nothing chosen, and on a click outside', () => {
+    const { document, trigger, said, key, list } = build();
+    trigger?.click();
+    key(list(), 'Escape');
+    assert.equal(list(), null);
+    assert.equal(document.activeElement, trigger);
+
+    trigger?.click();
+    document.body.dispatchEvent(new document.defaultView!.Event('pointerdown', { bubbles: true }) as unknown as Event);
+    assert.equal(list(), null);
+    assert.deepEqual(said, ['open:true', 'open:false', 'open:true', 'open:false']);
+  });
+
+  it('is drawn open when asked: a page that draws again keeps it open', () => {
+    const { trigger, list } = build(true);
+
+    assert.equal(trigger?.getAttribute('aria-expanded'), 'true');
+    assert.notEqual(list(), null);
+  });
+
+  it('lies over what follows it, in its sheet', () => {
+    const sheet = readFileSync(new URL('./kit.css', import.meta.url), 'utf8');
+    const rule = /\n\.kit-select-list \{([^}]*)\}/.exec(sheet)?.[1] ?? '';
+    assert.match(rule, /position: absolute/);
+    assert.match(rule, /z-index: \d+/);
+    assert.match(/\n\.kit-select \{([^}]*)\}/.exec(sheet)?.[1] ?? '', /position: relative/);
   });
 });

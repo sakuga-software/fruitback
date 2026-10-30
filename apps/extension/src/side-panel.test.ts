@@ -367,6 +367,8 @@ describe('the page of the panel (FRU-296, FRU-299)', () => {
           onSiteRetry: () => undefined,
           onMore: () => undefined,
           onPins: () => undefined,
+          onStatus: () => undefined,
+          onStatusOpen: () => undefined,
         },
       },
     });
