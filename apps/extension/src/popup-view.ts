@@ -747,7 +747,10 @@ export function showSiteFacts(
   const state = screen.querySelector('.kit-site-state');
   if (state !== null) state.textContent = onState(options.workspace, options.on);
   const where = screen.querySelector<HTMLElement>('.site-destination');
-  if (where !== null && facts.destination !== undefined) showDestination(where, facts.destination, facts.change);
+  // A role that may change the place gets the line even when the worker named none: « Not known », and
+  // « Change » to set it (review of #736).
+  const label = facts.destination ?? (facts.change === undefined ? undefined : t('Not known'));
+  if (where !== null && label !== undefined) showDestination(where, label, facts.change);
   const lines = screen.querySelector('.site-lines');
   if (lines === null) return;
   const rows: HTMLElement[] = [];

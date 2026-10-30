@@ -868,6 +868,21 @@ describe('where the notes of a site that is on go (FRU-530)', () => {
     assert.equal(screen.querySelector('.site-row')?.nextElementSibling?.classList.contains('site-destination'), true);
   });
 
+  it('says « Not known » with « Change » when the worker names no place to a role that may set one', () => {
+    const screen = on();
+    showSiteFacts(screen, facts, {
+      change: { sources: [LINEAR], loadOffer: async () => undefined, onPlace: async () => true },
+    });
+    const line = screen.querySelector('.site-destination .destination-entry');
+    assert.equal(line?.querySelector('.destination-place')?.textContent, 'Not known');
+    assert.equal(line?.querySelector('svg'), null);
+    assert.equal(line?.querySelector('button')?.textContent, 'Change');
+    // Nothing named and nothing to change: no line.
+    const reader = on();
+    showSiteFacts(reader, facts, { open: 1 });
+    assert.equal(reader.querySelector('.destination-entry'), null);
+  });
+
   it('draws the drop of Fruitback for a site that keeps its notes', () => {
     const screen = on();
     showSiteFacts(screen, facts, { destination: 'Fruitback' });
