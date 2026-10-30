@@ -358,8 +358,10 @@ describe('a worker that has better-auth switched off (FRU-144)', () => {
 
     assert.deepEqual(
       down.statuses,
-      [200, 502, 502],
-      'the accounts do not answer, so every read is a store that is down',
+      [200, 503, 503],
+      // A route of the console reads no site (FRU-495): the rate limit, in the same database, is the
+      // first read, and it refuses.
+      'the database does not answer, so the rate limit refuses every request',
     );
     assert.equal(down.announced, 'failed');
     assert.equal(down.library, 0);

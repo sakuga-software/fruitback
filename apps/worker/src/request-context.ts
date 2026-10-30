@@ -1,12 +1,6 @@
 import type { NoteIssue, NoteReporter } from '@fruitback/shared';
 import type { Auth } from './auth.ts';
-import {
-  type ClientConfig,
-  type ClientMap,
-  type ClientPolicy,
-  type ClientResolution,
-  originsFromClients,
-} from './clients.ts';
+import { type ClientConfig, type ClientMap, type ClientPolicy, type ClientResolution } from './clients.ts';
 import type { AccountStore, Reach, Role } from './accounts.ts';
 import { type AgentRequest, requestAgent } from './agent-triggers.ts';
 import type { AttachmentStore } from './attachments.ts';
@@ -81,18 +75,18 @@ export type RequestContext = {
 };
 
 /**
- * The configuration with the sites of every workspace as its clients, and their origins allowed.
+ * The configuration with the sites of every workspace as its clients.
  *
- * An empty map stays an empty map: a worker with accounts and no site yet serves no client, and an
- * `undefined` here would turn it into a single-client worker that answers anybody.
+ * Nothing is read here (FRU-495). A request reads the one site it names (`clientNamed`), and asks
+ * whether a site serves its origin (`servesOrigin`) only when that origin is not on
+ * `ALLOWED_ORIGINS`. A site added a second ago is served now, and a site removed or suspended a
+ * second ago is refused now, as when every request read every site.
  */
-export async function withSites(config: WorkerConfig, accounts: AccountStore): Promise<Served> {
-  const clients = await accounts.clientMap();
-
+export function withSites(config: WorkerConfig, accounts: AccountStore): Served {
   return {
     ...config,
-    clients,
-    allowedOrigins: [...new Set([...config.allowedOrigins, ...originsFromClients(clients)])],
+    clientNamed: (site) => accounts.client(site),
+    servesOrigin: (origin) => accounts.servesOrigin(origin),
     roleIn: (workspace, account) => accounts.role(workspace, account),
     reachIn: (workspace, account) => accounts.reach(workspace, account),
     accountActive: async (account) => {
@@ -112,6 +106,13 @@ export async function withSites(config: WorkerConfig, accounts: AccountStore): P
  */
 export type Served = WorkerConfig & {
   clients?: ClientMap;
+  /**
+   * The site of an id as a client, on a worker with accounts (FRU-495): `routeFor` reads it in place
+   * of `clients`. `undefined` for a site that does not exist or whose workspace is suspended.
+   */
+  clientNamed?: (site: string) => Promise<ClientConfig | undefined>;
+  /** Whether a site serves this origin, on a worker with accounts (FRU-495): the CORS of the widget. */
+  servesOrigin?: (origin: string) => Promise<boolean>;
   /** Absent on a worker with no accounts: nobody is a member of anything there. */
   roleIn?: (workspace: string, account: string) => Promise<Role | undefined>;
   /** The role and the sites of a person in a workspace (FRU-250). Absent on a worker with no accounts. */
@@ -142,7 +143,7 @@ export type Verified = IdentityResult & { session?: true };
 /** The checks of the caller that `app.ts` keeps, and that its modules of routes call. */
 export type CallerChecks = {
   /** Which client a request belongs to, and what was decided for it: `routeFor` of `app.ts`. */
-  routeFor: (request: Request, config: Served, clientId: string | undefined) => ClientResolution;
+  routeFor: (request: Request, config: Served, clientId: string | undefined) => Promise<ClientResolution>;
   /** Who writes a reply, or why nobody may: `replyAuthorFor` of `app.ts`. */
   replyAuthorFor: (
     request: Request,

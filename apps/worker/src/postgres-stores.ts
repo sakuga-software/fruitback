@@ -147,6 +147,8 @@ export function accountStoreOn(database: Database): AccountStore {
     setPreviews: true,
     deleteWorkspace: true,
     clientMap: true,
+    client: true,
+    servesOrigin: true,
   });
 }
 

@@ -52,9 +52,10 @@ export type AttachmentSeams = {
    */
   route: (
     site: string | undefined,
-  ) =>
+  ) => Promise<
     | { ok: false; response: Response }
-    | { ok: true; workspace: string | undefined; place: () => Promise<ClientConfig | undefined | null> };
+    | { ok: true; workspace: string | undefined; place: () => Promise<ClientConfig | undefined | null> }
+  >;
   writer: Writer;
 };
 
@@ -113,7 +114,7 @@ export async function handleAttachment(request: Request, pathname: string, seams
   if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
   const params = new URL(request.url).searchParams;
   const site = normalizeClientId(params.get('client'));
-  const route = seams.route(site);
+  const route = await seams.route(site);
   if (!route.ok) return route.response;
   const { workspace } = route;
   // A write: a member of the workspace, with a session read again in the store (FRU-238).
