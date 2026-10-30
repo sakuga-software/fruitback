@@ -293,6 +293,16 @@ test('a hash of the address goes to its section, and #remove asks the second tim
   await page.goto(`${CONSOLE}/w/w1/sites/s1#statuses`);
   await expect(page.getByRole('region', { name: 'Statuses' })).toBeInViewport();
   await expect(advanced(page)).toHaveAttribute('open');
+  // Folded by hand, a navigation to the hash already in the address opens it again (review of #737):
+  // a link of the router to `#statuses` is a new location with the same hash.
+  await advanced(page).locator('summary').click();
+  await expect(advanced(page)).not.toHaveAttribute('open');
+  await page.evaluate(() => {
+    history.pushState({ key: 'again', idx: history.length }, '', location.href);
+    dispatchEvent(new PopStateEvent('popstate', { state: history.state }));
+  });
+  await expect(advanced(page)).toHaveAttribute('open');
+  await expect(page.getByRole('region', { name: 'Statuses' })).toBeInViewport();
 
   await page.goto(`${CONSOLE}/w/w1/sites/s1#remove`);
   await expect(group).toBeInViewport();

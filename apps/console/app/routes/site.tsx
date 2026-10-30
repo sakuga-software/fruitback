@@ -69,7 +69,7 @@ export default function SitePage() {
   useLocale();
   const { workspace } = useWorkspace();
   const { site: siteId = '' } = useParams();
-  const { hash } = useLocation();
+  const { hash, key } = useLocation();
   const navigate = useNavigate();
   const base = `/console/workspaces/${workspace.id}`;
   const manages = workspace.role === 'owner' || workspace.role === 'admin';
@@ -106,14 +106,19 @@ export default function SitePage() {
     if (wanted === 'remove') setRemoving(true);
   }, [wanted, hash]);
   const [advanced, setAdvanced] = useState(ADVANCED.includes(wanted));
-  const folded = useRef<HTMLDetailsElement>(null);
+  // The section to scroll to, a new object for each navigation: it is set in the render that opens « Advanced ».
+  const [target, setTarget] = useState<{ id: string } | undefined>();
   const drawn = site !== undefined;
+  // `key` is new on each navigation: a link to the hash already in the address opens « Advanced » again.
   useEffect(() => {
     if (!drawn || wanted === '') return;
-    // A folded section has no box to scroll to: it opens first, in the same frame. `toggle` sets the state.
-    if (ADVANCED.includes(wanted) && folded.current !== null) folded.current.open = true;
-    document.getElementById(wanted)?.scrollIntoView({ block: 'start' });
-  }, [drawn, wanted]);
+    if (ADVANCED.includes(wanted)) setAdvanced(true);
+    setTarget({ id: wanted });
+  }, [drawn, wanted, key]);
+  // A folded section has no box: the page scrolls once « Advanced » is drawn open.
+  useEffect(() => {
+    if (target !== undefined) document.getElementById(target.id)?.scrollIntoView({ block: 'start' });
+  }, [target]);
 
   /** The places the worker kept, in place of the ones of the list: no read again. */
   function placed(places: Destination[]) {
@@ -266,7 +271,6 @@ export default function SitePage() {
         {manages ? (
           <Disclosure
             id="advanced"
-            ref={folded}
             title={t('Advanced')}
             hint={t('Statuses, starting an agent, preview deploys')}
             open={advanced}

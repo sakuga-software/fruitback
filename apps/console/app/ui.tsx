@@ -1240,7 +1240,6 @@ export function Disclosure({
   hint,
   open,
   onToggle,
-  ref,
   children,
 }: {
   id: string;
@@ -1248,17 +1247,10 @@ export function Disclosure({
   hint?: string;
   open: boolean;
   onToggle: (open: boolean) => void;
-  ref?: Ref<HTMLDetailsElement>;
   children: ReactNode;
 }) {
   return (
-    <details
-      id={id}
-      ref={ref}
-      open={open}
-      onToggle={(event) => onToggle(event.currentTarget.open)}
-      className="kit-disclosure"
-    >
+    <details id={id} open={open} onToggle={(event) => onToggle(event.currentTarget.open)} className="kit-disclosure">
       <summary className="kit-disclosure__summary">
         <svg aria-hidden="true" viewBox="0 0 24 24" className="kit-disclosure__chevron">
           <path
