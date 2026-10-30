@@ -263,7 +263,11 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
         // The deliveries first: a few rows, read once, then matched to the notes by their key.
         const pending = await pendingOf(db, workspace);
         const narrowed = filtered(workspace, query);
-        const placed = query.place === undefined ? narrowed : and(narrowed, placeIs(query.place));
+        // The list is `narrowed` (role, site, stage, author, search) and `inPlace`. The counts read
+        // `narrowed` once: by place for the chips, and by stage under `inPlace` for the groups, so a
+        // group counts what the list shows (FRU-551).
+        const inPlace = query.place === undefined ? undefined : placeIs(query.place);
+        const placed = inPlace === undefined ? narrowed : and(narrowed, inPlace);
         // FRU-551: read by status, a page is ordered by the rank of its stage first. The cursor holds
         // the rank of the last note: the next page starts after it in its stage, then the next stages.
         const byStatus = query.order === 'status';
@@ -310,10 +314,7 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
               notes: count(),
               // The notes of the row in the place of the filter, by the SQL of the filter itself
               // (`placeIs`): the counts by stage are those of the list (review of #764).
-              placed:
-                query.place === undefined
-                  ? count()
-                  : sql<number>`count(*) FILTER (WHERE ${placeIs(query.place)})`.mapWith(Number),
+              placed: inPlace === undefined ? count() : sql<number>`count(*) FILTER (WHERE ${inPlace})`.mapWith(Number),
             })
             .from(note_index)
             .innerJoin(sites, eq(sites.id, note_index.site_id))
