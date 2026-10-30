@@ -161,11 +161,16 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
       const { database, store } = await opened();
       await store.create(noteFixtureOf('sd_café', 'site_a'), undefined, POLICY);
       await store.create(noteFixtureOf('sd_plain', 'site_a'), undefined, POLICY);
-      // As a writer that escapes what is not ASCII writes it: the JSON is the same note.
-      await rowsOf(database, `UPDATE notes SET payload = replace(payload, 'é', '\\u00e9')`);
-      assert.match(
-        String((await rowsOf(database, 'SELECT payload FROM notes ORDER BY id'))[0]?.payload),
-        /sd_caf\\u00e9/,
+      // As a writer that escapes what is not ASCII writes it, and one that escapes `_`: the same JSON.
+      await rowsOf(
+        database,
+        `UPDATE notes SET payload = replace(replace(payload, 'é', '\\u00e9'), 'sd_plain', 'sd\\u005fplain')`,
+      );
+      assert.deepEqual(
+        (await rowsOf(database, 'SELECT payload FROM notes ORDER BY id')).map(
+          (row) => /"id":"([^"]*)"/.exec(String(row.payload))?.[1],
+        ),
+        ['sd_caf\\u00e9', 'sd\\u005fplain'],
       );
       const lookUp = (id: string) =>
         store.findNote?.({ url: PAGE, clientId: 'site_a', id, by: 'note' }, undefined, POLICY);
