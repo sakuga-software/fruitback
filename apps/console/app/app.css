@@ -1114,8 +1114,10 @@ textarea {
     min-width: 0;
   }
 
-  .kit-table[data-stack='true'] thead {
+  /* The heads, and each head in them: a screen reader reads them, and nothing measures a column of 1 px. */
+  .kit-table[data-stack='true'] :is(thead, th) {
     position: absolute;
+    padding: 0;
     width: 1px;
     height: 1px;
     overflow: hidden;
