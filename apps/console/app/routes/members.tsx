@@ -322,13 +322,15 @@ export default function Members() {
       memberIdOrEmail: member.id,
     });
     if (!removed.ok) return setStuck({ row: member.id, problem: problemOf(removed, MEMBER_PROBLEMS, NOT_CHANGED) });
-    // The row goes from the page, and the page is read again: the member after this page moves into it.
-    setMembers((current) => edited(current, (items) => items.filter((each) => each.id !== member.id)));
-    setTotal((count) => (count === undefined ? count : Math.max(0, count - 1)));
-    // The last row of its page: the page before it is shown.
+    // The last row of a page past the first: the page before it is read, and the row stays until it
+    // comes with its count. Taken away at once, the empty page said « Nobody matches this search. »
+    // for the time of the read.
     const alone = typeof members !== 'string' && members.length === 1;
-    if (alone && offset > 0) setOffset(Math.max(0, offset - PAGE));
-    else void readMembers('a-removal');
+    if (alone && offset > 0) return setOffset(Math.max(0, offset - PAGE));
+    // Else the row goes from the page, and the page is read again: the member after it moves in.
+    setTotal((count) => (count === undefined ? count : Math.max(0, count - 1)));
+    setMembers((current) => edited(current, (items) => items.filter((each) => each.id !== member.id)));
+    void readMembers('a-removal');
   }
 
   const self = {

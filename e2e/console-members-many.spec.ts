@@ -102,6 +102,42 @@ test.describe('the members of a large workspace (FRU-496)', () => {
     await expect(pages).toContainText('1 to 50 of 500');
   });
 
+  test('removes the only member of the last page, and shows the page before with no empty list between', async () => {
+    const page = await context.newPage();
+    const workspace = await owner(page, worker, 'owner@acme.dev');
+    await worker.crowd(workspace, 500, 0);
+    await page.goto(`${CONSOLE}/w/${workspace}/members`);
+    const members = page.getByRole('region', { name: 'Members' });
+    const pages = page.getByRole('navigation', { name: 'Pages of members' });
+    await expect(pages).toContainText('1 to 50 of 501');
+    for (let at = 51; at <= 501; at += 50) await pages.getByRole('button', { name: 'Next' }).click();
+    await expect(pages).toContainText('501 to 501 of 501');
+
+    // The read of the page before is held a while: the row of Person 500 stays until it comes.
+    let held = 0;
+    await page.route(/\/list-members\?/, async (route) => {
+      held += 1;
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      await route.fallback();
+    });
+    // Whatever the screen draws between the press and the page before, an empty list is noted.
+    await page.evaluate(() => {
+      const seen = window as unknown as { emptySeen: boolean };
+      seen.emptySeen = false;
+      new MutationObserver(() => {
+        if (document.body.textContent?.includes('Nobody matches this search.')) seen.emptySeen = true;
+      }).observe(document.body, { childList: true, subtree: true, characterData: true });
+    });
+    await members.getByRole('button', { name: 'Remove' }).click();
+    await page.getByRole('button', { name: 'Remove Person 500' }).click();
+    await expect.poll(() => held).toBe(1);
+    await expect(members.getByText('p500@crowd.test')).toBeVisible();
+    await expect(pages).toContainText('451 to 500 of 500');
+    await expect(members.locator('tbody tr')).toHaveCount(50);
+    await expect(members.locator('tbody tr').last()).toContainText('p499@crowd.test');
+    expect(await page.evaluate(() => (window as unknown as { emptySeen: boolean }).emptySeen)).toBe(false);
+  });
+
   test('pages through 300 invitations that wait, and finds one by its address', async () => {
     const page = await context.newPage();
     const workspace = await owner(page, worker, 'owner@acme.dev');
