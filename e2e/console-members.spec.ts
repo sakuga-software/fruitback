@@ -11,6 +11,7 @@ import {
   sideScroll,
   stubWorker,
   styles,
+  fulfillSites,
 } from './console-workspace.ts';
 
 /**
@@ -191,7 +192,11 @@ async function workerWith(page: Page, world: World = {}): Promise<Worker> {
 
 /** The sites of the workspace, in place of the one the stub lists. */
 async function stubSites(page: Page, sites: readonly unknown[]): Promise<void> {
-  await page.route(/\/console\/workspaces\/w1\/sites$/, (route) => route.fulfill({ status: 200, json: { sites } }));
+  // The list, or the sites to choose from (FRU-497).
+  await page.route(
+    /\/console\/workspaces\/w1\/sites(\/choices)?(\?|$)/,
+    (route) => fulfillSites(route, sites) || route.fallback(),
+  );
 }
 
 async function open(page: Page): Promise<void> {
@@ -488,7 +493,9 @@ test('a guest of one site: the list « Site » where the mockup draws it, and th
 
   // The state of the mockup at 1440 px: Email, Role, Site, « Invite » on one line.
   await expect(sitesList(page)).toBeVisible();
-  await expect(sitesList(page)).toContainText('staging.acme.dev');
+  // The sites to choose from come by address (FRU-497): the first one is chosen.
+  await expect(sitesList(page)).toContainText('acme.dev');
+  await expect(sitesList(page)).not.toContainText('staging');
   expectBox(await box(email(page)), { x: 297, y: 148, width: 580.1, height: 44 }, 2, 'the field');
   expectBox(await box(roles(page)), { x: 886.6, y: 148, width: 200.3, height: 44 }, 2, 'the list of roles');
   expectBox(await box(sitesList(page)), { x: 1097, y: 148, width: 200.3, height: 44 }, 2, 'the list of sites');
@@ -498,8 +505,8 @@ test('a guest of one site: the list « Site » where the mockup draws it, and th
   await expectNoViolation(page, 'the form of a guest');
 
   await sitesList(page).click();
-  await expect(page.getByRole('option')).toHaveText(['https://staging.acme.dev', 'https://acme.dev']);
-  await page.getByRole('option', { name: 'https://acme.dev', exact: true }).click();
+  await expect(page.getByRole('option')).toHaveText(['https://acme.dev', 'https://staging.acme.dev']);
+  await page.getByRole('option', { name: 'https://staging.acme.dev', exact: true }).click();
   await email(page).fill('zoe@client.fr');
   await invite(page).click();
   await expect
@@ -507,7 +514,7 @@ test('a guest of one site: the list « Site » where the mockup draws it, and th
     .toEqual([
       {
         call: 'invite-member',
-        body: { organizationId: 'w1', email: 'zoe@client.fr', role: 'guest', sites: ['s2'] },
+        body: { organizationId: 'w1', email: 'zoe@client.fr', role: 'guest', sites: ['s1'] },
       },
     ]);
 });

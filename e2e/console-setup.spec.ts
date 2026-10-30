@@ -3,6 +3,9 @@ import { type Locator, type Page, expect, test } from '@playwright/test';
 import { CONSOLE, type Worker, cloudWorker, finished, linkIn, served } from './cloud-worker.ts';
 import { WORKER_ORIGIN } from './pin.ts';
 
+/** A read of the sites by the setup: the list, or its one site (FRU-497). */
+const SITE_READS = /^GET \/console\/workspaces\/w1\/sites(\/s1)?$/;
+
 /**
  * The setup on one screen (FRU-239, screen 01 of the mockup of 2026-10-13): « Your account »,
  * « Your site », then the step that puts Fruitback on the site.
@@ -364,10 +367,12 @@ async function stubWorker(page: Page, stub: Stub): Promise<string[]> {
 
       return json(workspace, 201);
     }
-    if (pathname === '/console/workspaces/w1/sites') {
+    // The list, or the one site the setup reads again until its first note (FRU-497).
+    const one = pathname === '/console/workspaces/w1/sites/s1' && request.method() === 'GET';
+    if (pathname === '/console/workspaces/w1/sites' || one) {
       if (request.method() === 'GET') {
         if (stub.refuses?.sites === true) return json({ error: 'unavailable' }, 503);
-        const reads = asked.filter((each) => each === 'GET /console/workspaces/w1/sites').length;
+        const reads = asked.filter((each) => SITE_READS.test(each)).length;
         const first =
           stub.notedFrom !== undefined && reads >= stub.notedFrom
             ? {
@@ -376,6 +381,8 @@ async function stubWorker(page: Page, stub: Stub): Promise<string[]> {
                 via: ['extension'],
               }
             : {};
+
+        if (one) return stub.as === 'sited' ? json({ ...site, ...first }) : json({ error: 'not-found' }, 404);
 
         return json({ sites: stub.as === 'sited' ? [{ ...site, ...first }] : [] });
       }
@@ -760,7 +767,7 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
   test('the setup ends by itself at the first note: the step and the conclusion', async ({ page }) => {
     await page.clock.install();
     const asked = await stubWorker(page, { as: 'sited', notedFrom: 3 });
-    const reads = () => asked.filter((each) => each === 'GET /console/workspaces/w1/sites').length;
+    const reads = () => asked.filter((each) => SITE_READS.test(each)).length;
     await page.goto(`${CONSOLE}/setup`);
     await expect(page.getByRole('heading', { name: `${CURRENT}Put it on the site` })).toBeVisible();
     await expect(page.getByText('Waiting for your first note.')).toBeVisible();
@@ -803,7 +810,7 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
   test('a hidden tab reads nothing, and reads again once it is shown', async ({ page }) => {
     await page.clock.install();
     const asked = await stubWorker(page, { as: 'sited' });
-    const reads = () => asked.filter((each) => each === 'GET /console/workspaces/w1/sites').length;
+    const reads = () => asked.filter((each) => SITE_READS.test(each)).length;
     await page.goto(`${CONSOLE}/setup`);
     await expect(page.getByText('Waiting for your first note.')).toBeVisible();
     const show = (state: 'hidden' | 'visible') =>

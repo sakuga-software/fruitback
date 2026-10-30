@@ -11,6 +11,7 @@ import {
   sideScroll,
   stubWorker,
   styles,
+  fulfillSites,
 } from './console-workspace.ts';
 
 /**
@@ -126,11 +127,13 @@ async function workerWith(
     const one = /^\/console\/workspaces\/w1\/sites(?:\/(\w+))?$/.exec(pathname);
     if (one === null) return undefined;
     if (method === 'GET') {
-      if (worker.read === 'waits') return held.then(() => route.fulfill({ json: { sites: kept } }));
+      // A page of the grid, one site, or the whole list (FRU-497), from what the worker keeps.
+      const answered = () => fulfillSites(route, kept) || route.fulfill({ json: { sites: kept } });
+      if (worker.read === 'waits') return held.then(answered);
       if (worker.read === 'fails') return route.fulfill({ status: 500, json: { error: 'unknown' } });
       if (worker.read === 'unreachable') return route.abort('connectionfailed');
 
-      return route.fulfill({ json: { sites: kept } });
+      return answered();
     }
     worker.sent.push({ method, pathname, body: method === 'POST' ? request.postDataJSON() : undefined });
     if (worker.refuses !== undefined)

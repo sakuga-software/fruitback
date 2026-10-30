@@ -45,6 +45,13 @@ function fake(worker: Worker): { calls: SetupCalls; asked: string[] } {
 
       return typeof answer === 'number' ? yes({ sites: answer === 0 ? [] : [site] }) : answer;
     },
+    site: async () => {
+      asked.push('site');
+      const answer = worker.sites ?? 0;
+      if (typeof answer !== 'number') return answer;
+
+      return answer === 0 ? no(404, 'not-found') : yes(site);
+    },
     createWorkspace: async (name) => {
       asked.push(`create ${name}`);
       if (worker.creates !== undefined) return worker.creates;
@@ -166,7 +173,7 @@ describe('where the setup takes a person (FRU-239)', () => {
     assert.equal(noted({ ...site, lastNoteAt: '2026-10-14T08:00:00.000Z' }), true);
   });
 
-  it('reads the same site again by its id, and nothing when the list was not read', async () => {
+  it('reads the same site again by its id, and nothing when it was not read or is gone', async () => {
     assert.deepEqual(await siteNow(fake({ sites: 1 }).calls, owner, site), site);
     assert.equal(await siteNow(fake({ sites: 0 }).calls, owner, site), undefined);
     assert.equal(await siteNow(fake({ sites: no(503) }).calls, owner, site), undefined);

@@ -28,6 +28,7 @@ import {
   tabOf,
   toCheck,
   webHost,
+  type PanelNotes,
 } from './side-panel.ts';
 
 /**
@@ -474,6 +475,34 @@ describe('the page of the panel (FRU-296, FRU-299)', () => {
     const empty = panelPage(page(), { ...options, state: on([]), tab: 'open' });
     assert.equal(empty.querySelector('.panel-empty-title')?.textContent, 'No notes on this page yet');
     assert.equal(empty.querySelector('[role="tablist"]'), null);
+  });
+
+  it('leads to the guide, centred, from each state that blocks (FRU-528)', () => {
+    const NOT_ANSWERING = 'https://fruitback.com/reviewing.html#when-fruitback-does-not-answer';
+    const states: [PanelNotes, string, string][] = [
+      ['failed', 'What to check when Fruitback does not answer', NOT_ANSWERING],
+      ['reload', 'What to check when Fruitback does not answer', NOT_ANSWERING],
+      ['not-started', 'What to check when Fruitback does not answer', NOT_ANSWERING],
+      [[], 'How to leave and follow notes', 'https://fruitback.com/reviewing.html#2-switch-a-site-on'],
+    ];
+    for (const [notes, label, href] of states) {
+      const root = panelPage(page(), {
+        ...handlers(),
+        state: { kind: 'on', host: 'staging.acme.dev', notes },
+        tab: 'open',
+      });
+      const links = [...root.querySelectorAll<HTMLAnchorElement>('.kit-help a')];
+      assert.deepEqual(
+        links.map((link) => [link.textContent, link.href, link.target]),
+        [[label, href, '_blank']],
+        String(notes),
+      );
+    }
+    // A list to read, or reading it: nothing blocks, and no button to the guide.
+    for (const notes of ['reading', NOTES] as const) {
+      const root = panelPage(page(), { ...handlers(), state: on(notes), tab: 'open' });
+      assert.equal(root.querySelector('.kit-help'), null);
+    }
   });
 
   it('is in French for a French reader', () => {
