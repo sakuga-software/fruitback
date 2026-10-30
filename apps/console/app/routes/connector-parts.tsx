@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { type Connector, type Destination, type Repository, type Site, type Stage, placesOf } from '../api';
 import { Confirmation } from '../confirm';
+import { ConnectorMark, type LaterKind, type MarkedKind } from '../connector-marks';
 import { locale, msg, t } from '../i18n';
 import type { Listed } from '../listed';
 import { Chip, LinkButton, Problem } from '../ui';
@@ -12,12 +13,12 @@ import { useLocale } from '../use-locale';
  * named and drawn, the words of a source, and the gesture that disconnects one.
  */
 
-/** How each kind of source is drawn. The mark is a letter of the mockup, not a logo. */
+/** How each kind of source is named. Its mark is the logo of its tracker (FRU-543, `connector-marks.tsx`). */
 export const KINDS = {
-  linear: { mark: 'L', name: 'Linear' },
+  linear: { name: 'Linear' },
   // « REST API » is said « API REST » in French: `msg` marks it for the guard of the words.
-  rest: { mark: '{ }', name: msg('REST API') },
-  github: { mark: 'G', name: msg('GitHub Issues') },
+  rest: { name: msg('REST API') },
+  github: { name: msg('GitHub Issues') },
 } as const;
 
 /** What a refused key means for the person, and what to do. */
@@ -42,18 +43,17 @@ export const STAGE_NAMES: Record<Stage, string> = {
 };
 
 /**
- * The mark of a source: a letter in a white box. « { } » is written in the mono font, as on the mockup,
- * which sizes the box by its content: 34 px inside its border.
+ * The mark of a source: the logo of its tracker, 18 px, in the white box of the mockup, 34 px inside
+ * its border (FRU-543: the mockup wrote a letter, « L », « G », « { } »). The same box for a source
+ * that is connected and for one to add, so that the names of both lists start on one line.
  */
-export function SourceMark({ children }: { children: string }) {
+export function SourceMark({ kind }: { kind: MarkedKind | LaterKind }) {
   return (
     <span
       aria-hidden="true"
-      className={`box-content flex h-[34px] w-[34px] flex-none items-center justify-center rounded-field border border-line bg-surface leading-auto font-bold ${
-        children.includes('{') ? 'font-mono text-tiny' : 'text-hint'
-      }`}
+      className="box-content flex h-[34px] w-[34px] flex-none items-center justify-center rounded-field border border-line bg-surface text-ink"
     >
-      {children}
+      <ConnectorMark kind={kind} size={18} />
     </span>
   );
 }
