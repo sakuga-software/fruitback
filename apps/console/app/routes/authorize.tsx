@@ -3,6 +3,7 @@ import { useParams } from 'react-router';
 import { type AuthorizeRequest, MAX_AGENT_KEY_SITES, answerAuthorize, authorizeRequest, signOut } from '../api';
 import { dayOf } from '../ago';
 import { daysOf, endOf } from '../agent-keys';
+import { refusalOf } from '../authorize-answer';
 import { keepAuthorize } from '../connect-return';
 import { msg, t } from '../i18n';
 import { DID_NOT_ANSWER } from '../problems';
@@ -151,12 +152,6 @@ export default function Authorize() {
   );
 }
 
-const REFUSALS: Record<string, string> = {
-  'too-many-keys': msg('This workspace holds 20 agents already. Revoke one in Agents, then start again.'),
-  'unknown-site': msg('A site you ticked is gone. Read the page again.'),
-  forbidden: msg('Only an owner or an admin of this workspace can connect an agent to it.'),
-};
-
 type AskProps = {
   request: string;
   asked: AuthorizeRequest;
@@ -205,9 +200,10 @@ function Ask({ request, asked, onLeaving, onGone, onSignedOut }: AskProps) {
       return;
     }
     setBusy(false);
-    if (answered.status === 401) return onSignedOut();
-    if (answered.status === 404 || answered.status === 409) return onGone();
-    setProblem(REFUSALS[answered.error] ?? DID_NOT_ANSWER);
+    const refusal = refusalOf(answered);
+    if (refusal.is === 'signed-out') return onSignedOut();
+    if (refusal.is === 'gone') return onGone();
+    setProblem(refusal.problem);
   }
 
   function allow(event: FormEvent) {
