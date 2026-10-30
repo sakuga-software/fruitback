@@ -30,6 +30,7 @@ import { Button, Choice, Field, IconButton, LinkButton, LoadFailed, Problem, Rad
 import { useLocale } from '../use-locale';
 import { STAGE_NAMES, placeLabel } from './connector-parts';
 import { PageHead, useWorkspace } from './workspace';
+import { ReadProblem } from '../read-problem';
 
 /**
  * The statuses of a site (FRU-371), as the board `design/site-statuses/` draws them: the list of the
@@ -334,7 +335,11 @@ export default function SiteStatuses() {
       {read === 'failed' ? (
         <LoadFailed
           title={t('The statuses did not load')}
-          detail={t('Fruitback did not answer. Your statuses are safe.')}
+          detail={
+            <>
+              <ReadProblem /> {t('Your statuses are safe.')}
+            </>
+          }
           retry={t('Try again')}
           onRetry={() => void load()}
         />

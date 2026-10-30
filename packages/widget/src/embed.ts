@@ -905,7 +905,7 @@ export function init(options: FruitbackOptions): Fruitback {
         ...(planted === true ? {} : { picture: 'missed' as const }),
       };
     },
-    // « Pick again » starts a capture over the open composer: it keeps the text, and moves to the
+    // « Choose another element » starts a capture over the open composer: it keeps the text, and moves to the
     // element chosen (FRU-258, FRU-305).
     onPickAgain: () => host.start(),
   });

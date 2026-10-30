@@ -454,6 +454,15 @@ describe('the notes of a workspace by status (FRU-551)', () => {
       answer.total,
     );
     assert.equal(answer.counts.byPlace?.removed, gone.length);
+
+    // Every place, the one that was removed included: the counts by stage add up to the list, and to
+    // the count of the place on its chip.
+    for (const place of Object.keys(answer.counts.byPlace ?? {})) {
+      const one = await listOf(world, workspace, alice.token, `?order=status&place=${place}&limit=50`);
+      const sum = Object.values(one.counts.byStage ?? {}).reduce((total, notes) => total + notes, 0);
+      assert.equal(sum, one.total, place);
+      assert.equal(sum, answer.counts.byPlace?.[place], place);
+    }
   });
 
   it('refuses another order, and a cursor of the other order', async () => {

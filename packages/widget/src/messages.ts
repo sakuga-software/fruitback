@@ -79,18 +79,19 @@ export const ENGLISH = {
   'composer.attachSending': 'Sending…',
   // Why a file did not go, under its name. The text of the note stays in every case.
   'composer.attachTooLarge': 'Too large: 10 MB for an image, a PDF or a file, 2 MB for a text, 25 MB for a note',
-  'composer.attachType': 'This file is not what its type says',
+  'composer.attachType': 'This file’s content does not match its extension. Choose another file.',
   'composer.attachTooMany': 'A note takes 5 files at most',
   'composer.attachNoTrackerShort': 'This destination takes no file',
   'composer.attachFull': 'Too many files on their way: send your notes first',
-  'composer.attachSignedOut': 'Your session has ended: sign in again',
+  'composer.attachSignedOut': 'Your session has ended. Sign in again.',
   'composer.attachCapture': 'The capture was not taken',
   // FRU-423: the browser refused the capture for want of a gesture on the extension.
   'composer.attachCapturePermission': 'Click the Fruitback icon in the toolbar, then try again.',
-  'composer.attachRetry': 'Did not go: remove it, then try again',
+  'composer.attachRetry': 'Upload failed. Remove the file, then add it again.',
   'composer.failedAttachmentGone':
-    'A file of this note is no longer on its way. Your text is kept: remove the file, then send again.',
-  'composer.failedNoTracker': 'This destination takes no file. Your text is kept: remove the files, then send again.',
+    'A file of this note is no longer on its way. Your text is still here. Remove the file, then send again.',
+  'composer.failedNoTracker':
+    'This destination takes no file. Your text is still here. Remove the files, then send again.',
   // The area that a capture takes (FRU-332). The keyboard is enough, and the help says how.
   'area.dialog': 'Choose an area of the page',
   'area.help':
@@ -103,7 +104,7 @@ export const ENGLISH = {
   // The name of the dialog.
   'composer.dialog': 'New note',
   // The button of the head that starts a capture again, keeping the text (FRU-305).
-  'composer.pickAgain': 'Pick again',
+  'composer.pickAgain': 'Choose another element',
   // The same preference as `settings.screenshot`, said beside the note it applies to.
   'composer.picture': 'Attach a picture of the element',
   'composer.namePlaceholder': 'Your name',
@@ -118,12 +119,12 @@ export const ENGLISH = {
   'composer.sentFollows': 'The pin stays here and follows the issue’s status.',
   'composer.sentOpen': 'Open →',
   // Where the note lands, in the foot (FRU-305): the place a member sees, or the team.
-  'composer.lands': 'Lands in {destination} as a new issue',
+  'composer.lands': 'Creates a new issue in {destination}',
   'composer.landsTeam': 'Sent to the team',
   // The title of the card of a failed send (FRU-305), above the sentence of its cause.
-  'composer.failedTitle': 'Did not go through',
+  'composer.failedTitle': 'Not sent',
   // The sentence of a send that can be tried again, under that title.
-  'composer.failedRetry': 'Your text is kept. Try again, or copy it before closing the page.',
+  'composer.failedRetry': 'Your text is still here. Try again, or copy it before you close the page.',
   'composer.sentWithoutPicture':
     'Sent without the picture, which could not be taken. The pin stays here and follows the issue’s status.',
   'composer.keptWithoutPicture': 'Kept for later, without the picture',
@@ -132,20 +133,20 @@ export const ENGLISH = {
   // The text left on this element came back, from a reload or a closed composer (FRU-311).
   'composer.restored': 'Draft restored',
   'composer.kept': 'Kept for later',
-  'composer.failed': 'Did not go through — your text is kept, try again',
+  'composer.failed': 'Not sent. Your text is still here. Try again.',
   // Why a send failed, when trying again at once will not help (FRU-156).
-  'composer.failedWait': 'Too many notes just now. Your text is kept: send it again in a minute.',
+  'composer.failedWait': 'Too many notes just now. Your text is still here. Send it again in a minute.',
   'composer.failedRefused':
-    'This site does not accept your note from here. Your text is kept: tell the team of the site.',
+    'This site refused the note from this address. Your text is still here. Tell the site’s team.',
   // A `401`: the session of the extension ended, or the token of the site is out of date (FRU-193).
-  'composer.failedSignedOut': 'Your session has ended. Your text is kept: sign in again, then send it.',
+  'composer.failedSignedOut': 'Your session has ended. Your text is still here. Sign in again, then send it.',
   // A `401` on a site whose notes are « Members only », for a page with no session (FRU-394).
   'composer.failedMembersOnly':
-    'This site is for members only. Your text is kept: sign in to Fruitback from the extension, then send it again.',
+    'This site is for members only. Your text is still here. Sign in to Fruitback from the extension, then send it again.',
   // The button beside that sentence, when the host can open the sign-in (FRU-315).
   'composer.signIn': 'Sign in again',
   'composer.failedTooLarge':
-    'This note is too large. Your text is kept: shorten it, or turn the picture off in the settings.',
+    'This note is too large. Your text is still here. Shorten it, or turn the picture off in the settings.',
   // The line that says where the note goes (FRU-123). A member of the team reads it, nobody else.
   // `{destination}` is the name the worker gives a place, or `composer.destinationUnnamed`.
   'composer.destination': 'Send to: {destination}',
@@ -186,9 +187,9 @@ export const ENGLISH = {
   'reply.sendLabel': 'Send reply',
   'reply.sending': 'Sending…',
   'reply.sent': 'Sent',
-  'reply.failed': 'Did not go through — your text is kept, try again',
-  'reply.failedWait': 'Too many replies just now. Your text is kept: send it again in a minute.',
-  'reply.failedSignedOut': 'Your session has ended. Your text is kept: sign in again, then send it.',
+  'reply.failed': 'Not sent. Your text is still here. Try again.',
+  'reply.failedWait': 'Too many replies just now. Your text is still here. Send it again in a minute.',
+  'reply.failedSignedOut': 'Your session has ended. Your text is still here. Sign in again, then send it.',
   // FRU-475: the author edits the text of their note, from its thread.
   'edit.open': 'Edit',
   'edit.openLabel': 'Edit your note',
@@ -197,14 +198,14 @@ export const ENGLISH = {
   'edit.cancel': 'Cancel',
   'edit.saving': 'Saving…',
   'edit.saved': 'Saved',
-  'edit.failed': 'Not saved — your text is kept, try again',
-  'edit.failedWait': 'Too many requests just now. Your text is kept: save it again in a minute.',
-  'edit.failedSignedOut': 'Your session has ended. Your text is kept: sign in again, then save it.',
+  'edit.failed': 'Not saved. Your text is still here. Try again.',
+  'edit.failedWait': 'Too many requests just now. Your text is still here. Save it again in a minute.',
+  'edit.failedSignedOut': 'Your session has ended. Your text is still here. Sign in again, then save it.',
   'edit.refused':
-    'This note can no longer be edited: the team has started on it. Your text is kept here; send it as a reply.',
+    'This note can no longer be edited: the team has started on it. Your text is still here. Send it as a reply.',
   'thread.anonymous': 'Anonymous',
-  'thread.orphan': 'Element not found — approximate position.',
-  'thread.uncertain': 'Element found by its position, not by its identity — the page may have changed under the pin.',
+  'thread.orphan': 'Element not found. The position is approximate.',
+  'thread.uncertain': 'Element found by its position, not by its identity. The page may have changed under the pin.',
   // The identifier and an arrow, in a chip (FRU-256, FRU-304): the widget does not know the name of
   // the store behind the worker. A message all the same, so that a language can put a word around it.
   'thread.link': '{identifier} →',
@@ -285,7 +286,7 @@ export const ENGLISH = {
   'export.component': 'Component: {component}',
   'export.by': 'By: {name}',
   'export.written': 'Written: {date}',
-  'export.approximate': 'Position: approximate — found by its place on the page, not by its identity',
+  'export.approximate': 'Position: approximate, found by its place on the page, not by its identity',
   'export.detached': 'Position: element not found on this page',
   'export.picture': 'Picture: {url}',
   'export.reply': 'Reply from {author}',

@@ -3,6 +3,7 @@ import { verifyAccountEmail } from '../api';
 import { t } from '../i18n';
 import { Button, EntryPage, Lead, SuccessMark, Title } from '../ui';
 import { useLocale } from '../use-locale';
+import { ReadProblem } from '../read-problem';
 
 /**
  * Where the link that adds an address to an account lands (FRU-450). Its code is after the `#`: it
@@ -137,7 +138,9 @@ export default function VerifyEmail() {
           <div className="mb-2">
             <Title>{t('The address is not added yet')}</Title>
           </div>
-          <Lead className="mb-7">{t('Fruitback did not answer. Your link still works.')}</Lead>
+          <Lead className="mb-7">
+            <ReadProblem /> {t('Your link still works.')}
+          </Lead>
           <div>
             <Button onClick={() => spend(stage.code)}>{t('Try again')}</Button>
           </div>

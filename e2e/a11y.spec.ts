@@ -43,10 +43,10 @@ test('a note can be planted with the keyboard alone', async ({ page }) => {
   await expect(field).toHaveValue('');
 
   await page.keyboard.type('Planté sans souris');
-  // « Pick again » of the head is the control before the field (FRU-305), and the first of the
+  // « Choose another element » of the head is the control before the field (FRU-305), and the first of the
   // dialog: one more step back wraps to the last one, which is Send.
   await page.keyboard.press('Shift+Tab');
-  await expect(page.getByRole('button', { name: 'Pick again' })).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Choose another element' })).toBeFocused();
   await page.keyboard.press('Shift+Tab');
   const plant = page.getByRole('button', { name: 'Send', exact: true });
   await expect(plant).toBeFocused();

@@ -20,7 +20,7 @@ const PROBLEMS: Readonly<Record<string, string>> = {
   'email-mismatch': msg('This is not the address of the account. Type it as it is written.'),
   'self-deletion': msg('You cannot delete your own account. Another instance admin can.'),
   'last-admin': msg('The last instance admin cannot be deleted. Name another admin first.'),
-  'not-found': msg('This account no longer exists.'),
+  'not-found': msg('This account no longer exists. Reload the page.'),
 };
 const NOT_DELETED = msg('The account was not deleted. Try again.');
 
@@ -112,7 +112,7 @@ export function AccountDeletion({
         >
           <p>
             {t(
-              "{name}'s account is deleted at once, and nothing brings it back. Their sessions in the console and in the extension end, and they leave every workspace. Their notes stay, signed as a former member. The owners of each of their workspaces see that you did it.",
+              "This deletes {name}'s account for good. They are signed out everywhere and leave every workspace. Their notes stay, signed as a former member. The owners of their workspaces see that you did it.",
               { name },
             )}
           </p>

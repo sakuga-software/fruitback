@@ -301,13 +301,13 @@ test('« Share rules » downloads the rules, imports a file chosen or dropped, a
 
   // Refused: a file that is not JSON, and one that is JSON of something else. Nothing is stored.
   await input.setInputFiles({ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('not json') });
-  await expect(result).toHaveText('That file is not JSON.');
+  await expect(result).toHaveText('That file is not JSON. Choose the file that Export downloaded.');
   await input.setInputFiles({
     name: 'package.json',
     mimeType: 'application/json',
     buffer: Buffer.from('{"name":"x"}'),
   });
-  await expect(result).toHaveText('That file is not a Fruitback rules file.');
+  await expect(result).toHaveText('That file is not a Fruitback rules file. Choose the file that Export downloaded.');
   expect(Object.keys(await storedSites(extension)).length).toBe(3);
 
   // The two cards, as the mock-up draws them, in both schemes, with no violation.

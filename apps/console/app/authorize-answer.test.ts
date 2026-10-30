@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { refusalOf } from './authorize-answer.ts';
-import { DID_NOT_ANSWER, WORKSPACE_SUSPENDED } from './problems.ts';
+import { SERVER_PROBLEM, WORKSPACE_SUSPENDED } from './problems.ts';
 
 describe('a refused answer of « Connect an agent » (FRU-467)', () => {
   it('says the request is gone only for a 404: unknown, ended or answered', () => {
@@ -26,6 +26,6 @@ describe('a refused answer of « Connect an agent » (FRU-467)', () => {
 
   it('sends a signed-out person to the sign-in, and says « did not answer » for the rest', () => {
     assert.deepEqual(refusalOf({ status: 401, error: 'unauthorized' }), { is: 'signed-out' });
-    assert.deepEqual(refusalOf({ status: 500, error: 'internal' }), { is: 'refused', problem: DID_NOT_ANSWER });
+    assert.deepEqual(refusalOf({ status: 500, error: 'internal' }), { is: 'refused', problem: SERVER_PROBLEM });
   });
 });

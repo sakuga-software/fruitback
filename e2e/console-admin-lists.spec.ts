@@ -932,7 +932,7 @@ test('the states of a list: loading, a read that failed and « Try again », and
   await visit(page, '/admin/workspaces', 'Workspaces');
   await expect(main(page).getByText('Loading…')).toBeVisible();
   release();
-  await expect(main(page).getByRole('alert')).toHaveText('The workspaces could not be read. Fruitback did not answer.');
+  await expect(main(page).getByRole('alert')).toHaveText('The workspaces did not load. Fruitback hit an error.');
   await expect(page.getByRole('table')).toHaveCount(0);
   await axe(page, 'a read that failed');
   failing.status = undefined;
@@ -942,7 +942,7 @@ test('the states of a list: loading, a read that failed and « Try again », and
 
   failing.status = 503;
   await page.goto(`${CONSOLE}/admin/users`);
-  await expect(main(page).getByRole('alert')).toHaveText('The people could not be read. Fruitback did not answer.');
+  await expect(main(page).getByRole('alert')).toHaveText('The people did not load. Fruitback hit an error.');
 });
 
 test('an instance with no workspace and nobody says so', async ({ page }) => {
@@ -1231,7 +1231,7 @@ test('Users: each refusal of the worker is said, and the switch shows the role i
   options.refusing = { status: 409, error: 'self-removal' };
   await refused(SELF_REMOVAL);
   options.refusing = { status: 500, error: 'down' };
-  await refused('Fruitback did not answer. Try again.');
+  await refused('Fruitback hit an error. Try again in a moment.');
   options.refusing = { status: 404, error: 'not-found' };
   await refused('The role did not change. Try again.');
   expect(posted).toHaveLength(4);
@@ -1555,11 +1555,11 @@ test('Users: each refusal of a suspension is said, and the row keeps its true st
   options.refusingSuspension = { status: 409, error: 'self-suspension' };
   await refused(SELF_SUSPENSION);
   options.refusingSuspension = { status: 500, error: 'down' };
-  await refused('Fruitback did not answer. Try again.');
+  await refused('Fruitback hit an error. Try again in a moment.');
   options.refusingSuspension = { status: 404, error: 'not-found' };
-  await refused('Nothing changed. Try again.');
+  await refused('The account was not suspended. Try again.');
   options.refusingSuspension = { status: 400, error: 'invalid-suspended' };
-  await refused('Nothing changed. Try again.');
+  await refused('The account was not suspended. Try again.');
   expect(posted).toHaveLength(5);
 
   // A refused restoration leaves the account suspended.
@@ -1568,14 +1568,14 @@ test('Users: each refusal of a suspension is said, and the row keeps its true st
   await expect(panel(page)).toHaveAccessibleName('Hugo Petit');
   await restore(page).click();
   await confirmation(page, RESTORES_HUGO).getByRole('button', { name: RESTORES_HUGO }).click();
-  await expect(panel(page).getByRole('alert')).toHaveText('Fruitback did not answer. Try again.');
+  await expect(panel(page).getByRole('alert')).toHaveText('Fruitback hit an error. Try again in a moment.');
   await expect(statusOf(page, 4)).toHaveText('Suspended');
   await expect(restore(page)).toBeFocused();
 
   options.refusingSuspension = undefined;
   await restore(page).click();
   // The sentence of the refusal stays until the next answer: no error path clears what it says.
-  await expect(panel(page).getByRole('alert')).toHaveText('Fruitback did not answer. Try again.');
+  await expect(panel(page).getByRole('alert')).toHaveText('Fruitback hit an error. Try again in a moment.');
   await confirmation(page, RESTORES_HUGO).getByRole('button', { name: RESTORES_HUGO }).click();
   await expect(statusOf(page, 4)).toHaveText('Active');
   await expect(panel(page).getByRole('alert')).toHaveCount(0);
@@ -1675,7 +1675,7 @@ test('Workspaces: an admin deletes a workspace after typing its name, and the ro
   await panel(page).getByRole('button', { name: 'Delete the workspace' }).click();
   const asking = panel(page).getByRole('group', { name: 'Delete Acme support' });
   await expect(asking).toContainText(
-    'Acme support is deleted at once, and nothing brings it back. Its sites, its members, its invitations, its connectors and the notes that Fruitback keeps for it go. The issues already sent to its sources stay there, and its people keep their accounts. Every instance admin reads that you did it.',
+    'This deletes Acme support for good: its sites, members, invitations, connectors and the notes Fruitback keeps. Issues already in its trackers stay, and its people keep their accounts. Every instance admin sees that you did it.',
   );
   // The field has focus, and the button that deletes is held until the name is typed as it is written.
   await expect(nameField(page, 'Acme support')).toBeFocused();
@@ -1743,9 +1743,9 @@ test('Workspaces: each refusal of a deletion is said, the typed name stays, and 
     ],
     [
       { status: 404, error: 'not-found' },
-      'This workspace no longer exists. Another admin or its owner may have deleted it.',
+      'This workspace no longer exists. Another admin or its owner may have deleted it. Reload the page.',
     ],
-    [{ status: 500, error: 'down' }, 'Fruitback did not answer. Try again.'],
+    [{ status: 500, error: 'down' }, 'Fruitback hit an error. Try again in a moment.'],
     [{ status: 403, error: 'forbidden' }, 'The workspace was not deleted. Try again.'],
   ] as const) {
     options.refusingDeletion = refusal;
@@ -1786,7 +1786,7 @@ test('Workspaces: the deletion in French, and at 390 px (FRU-284)', async ({ pag
   await panel(page).getByRole('button', { name: 'Supprimer le workspace' }).click();
   const asking = panel(page).getByRole('group', { name: 'Supprimer Acme support' });
   await expect(asking).toContainText(
-    'Acme support est supprimé tout de suite, et rien ne le fait revenir. Ses sites, ses membres, ses invitations, ses connecteurs et les notes que Fruitback garde pour lui disparaissent. Les tickets déjà envoyés à ses sources y restent, et ses membres gardent leur compte. Chaque administrateur de l’instance lit que vous l’avez fait.',
+    'Cela supprime Acme support définitivement : ses sites, ses membres, ses invitations, ses connecteurs et les notes que Fruitback garde. Les tickets déjà dans ses outils de suivi y restent, et ses membres gardent leur compte. Chaque administrateur de l’instance voit que vous l’avez fait.',
   );
   const field = panel(page).getByRole('textbox', { name: 'Tapez Acme support pour confirmer' });
   await expect(field).toBeFocused();
@@ -1868,7 +1868,7 @@ test('Workspaces: « Keep it » and Escape send nothing and keep the panel; a re
     ],
     [{ status: 409, error: 'already-member' }, 'This person is a member of the workspace already.'],
     [{ status: 409, error: 'workspace-suspended' }, 'This workspace is suspended. Restore it first.'],
-    [{ status: 500, error: 'down' }, 'Fruitback did not answer. Try again.'],
+    [{ status: 500, error: 'down' }, 'Fruitback hit an error. Try again in a moment.'],
   ] as const) {
     options.refusingWrite = refusal;
     if ((await group(page, 'Add someone to Acme support').count()) === 0) await first.click();
@@ -1916,14 +1916,14 @@ test('Workspaces: « New workspace » makes one for an account, and its panel op
   const asking = group(page, 'New workspace');
   await expect(asking.getByRole('textbox', { name: 'Name of the workspace' })).toBeFocused();
   await asking.getByRole('textbox', { name: 'Name of the workspace' }).fill('  Ines   studio ');
-  await expect(asking.getByRole('button', { name: 'Make the workspace' })).toBeDisabled();
+  await expect(asking.getByRole('button', { name: 'Create the workspace' })).toBeDisabled();
   await asking.getByRole('textbox', { name: 'Address of its owner' }).fill('ines@acme.dev');
   await expect(asking).toContainText(
-    'The workspace is made at once, and ines@acme.dev owns it. They see that you made it.',
+    'The workspace is created at once, and ines@acme.dev owns it. They see that you created it.',
   );
-  await asking.getByRole('button', { name: 'Make the workspace' }).click();
+  await asking.getByRole('button', { name: 'Create the workspace' }).click();
 
-  await expect(main(page).getByRole('status').first()).toHaveText('Ines studio was made, owned by ines@acme.dev.');
+  await expect(main(page).getByRole('status').first()).toHaveText('Ines studio was created, owned by ines@acme.dev.');
   await expect(page).toHaveURL(/[?&]open=w20(&|$)/);
   await expect(panel(page)).toHaveAccessibleName('Ines studio');
   expect(posted).toEqual([
@@ -2055,7 +2055,7 @@ test('Users: an admin deletes an account after typing its address, and the row g
   await deleteAccount(page, 'Inès Roux').click();
   const asking = page.getByRole('group', { name: "Delete Inès Roux's account" });
   await expect(asking).toContainText(
-    "Inès Roux's account is deleted at once, and nothing brings it back. Their sessions in the console and in the extension end, and they leave every workspace. Their notes stay, signed as a former member. The owners of each of their workspaces see that you did it.",
+    "This deletes Inès Roux's account for good. They are signed out everywhere and leave every workspace. Their notes stay, signed as a former member. The owners of their workspaces see that you did it.",
   );
   const field = asking.getByRole('textbox', { name: 'Type ines@acme.dev to confirm' });
   await expect(field).toBeFocused();
@@ -2098,7 +2098,7 @@ test('Users: each refusal of a deletion is said and keeps the address; yourself 
       'This person owns a workspace alone now. Read Users again, and change its owner first.',
     ],
     [{ status: 409, error: 'email-mismatch' }, 'This is not the address of the account. Type it as it is written.'],
-    [{ status: 500, error: 'down' }, 'Fruitback did not answer. Try again.'],
+    [{ status: 500, error: 'down' }, 'Fruitback hit an error. Try again in a moment.'],
   ] as const) {
     options.refusingAccountDeletion = refusal;
     await asking.getByRole('button', { name: "Delete Inès Roux's account" }).click();
@@ -2198,7 +2198,7 @@ test('Workspaces: an admin suspends a workspace with a reason after a confirmati
   await suspendWorkspace(page).click();
   const asking = group(page, 'Suspend Acme support');
   await expect(asking).toContainText(
-    'Acme support is suspended at once. Its sites answer as unknown to the widget and the extension, every change in it is refused, and its notes wait to be delivered. Its members still sign in and read it. Nothing is deleted. Its owners see that you did it.',
+    'Acme support stops at once: its sites take no notes, nothing in it can change, and its notes wait to be delivered. Its members can still read it. Nothing is deleted. Its owners see that you did it.',
   );
   const reason = asking.getByRole('textbox', { name: 'Reason (optional)' });
   await expect(reason).toBeFocused();
@@ -2293,10 +2293,13 @@ test('Workspaces: each refusal of a suspension is said, the reason stays, and th
   await asking.getByRole('textbox').fill('Unpaid');
 
   for (const [refusal, sentence] of [
-    [{ status: 404, error: 'not-found' }, 'This workspace no longer exists, or you are no longer an instance admin.'],
+    [
+      { status: 404, error: 'not-found' },
+      'This workspace no longer exists, or you are no longer an instance admin. Reload the page.',
+    ],
     [{ status: 400, error: 'invalid-reason' }, 'A reason is one line of 200 characters at most.'],
-    [{ status: 500, error: 'down' }, 'Fruitback did not answer. Try again.'],
-    [{ status: 409, error: 'something-else' }, 'Nothing changed. Try again.'],
+    [{ status: 500, error: 'down' }, 'Fruitback hit an error. Try again in a moment.'],
+    [{ status: 409, error: 'something-else' }, 'The workspace was not suspended. Try again.'],
   ] as const) {
     options.refusingWorkspaceSuspension = refusal;
     await asking.getByRole('button', { name: 'Suspend Acme support' }).click();
@@ -2327,7 +2330,7 @@ test('Workspaces: the suspension and its confirmations in French, and at 390 px 
   await panel(page).locator('.kit-panel__foot').getByRole('button', { name: 'Suspendre', exact: true }).click();
   const asking = group(page, 'Suspendre Acme support');
   await expect(asking).toContainText(
-    'Acme support est suspendu aussitôt. Ses sites répondent comme inconnus au widget et à l’extension, chaque changement y est refusé, et ses notes attendent d’être livrées. Ses membres se connectent toujours et le lisent. Rien n’est supprimé. Ses propriétaires voient que vous l’avez fait.',
+    'Acme support s’arrête aussitôt : ses sites ne prennent plus de notes, rien n’y change, et ses notes attendent d’être livrées. Ses membres peuvent toujours le lire. Rien n’est supprimé. Ses propriétaires voient que vous l’avez fait.',
   );
   await expect(asking.getByRole('textbox', { name: 'Raison (facultative)' })).toBeFocused();
   await expect(asking.getByRole('button', { name: 'Suspendre Acme support' })).toBeInViewport();

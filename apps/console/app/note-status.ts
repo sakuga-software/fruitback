@@ -1,6 +1,6 @@
 import type { Stage } from './api';
 import { msg } from './i18n.ts';
-import { DID_NOT_ANSWER, writeProblemOf } from './problems.ts';
+import { failureOf, writeProblemOf } from './problems.ts';
 
 /**
  * The status of a note the worker keeps, chosen in the list of the notes (FRU-384).
@@ -49,7 +49,7 @@ export const STATUS_NOT_SAVED = msg('The status was not saved. Try again.');
 
 export function statusProblemOf(failed: { status: number; error: string }): string {
   if (Object.hasOwn(STATUS_PROBLEMS, failed.error)) return STATUS_PROBLEMS[failed.error] as string;
-  if (failed.status === 0 || failed.status >= 500) return DID_NOT_ANSWER;
+  if (failed.status === 0 || failed.status >= 500) return failureOf(failed);
 
   return writeProblemOf(failed, STATUS_NOT_SAVED);
 }

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { describe, it } from 'vitest';
+import { describe, it, vi } from 'vitest';
 import { type Note, canonicalizePageUrl } from '@fruitback/shared';
 import { noteFixture } from '@fruitback/shared/note.fixture';
 import { MIGRATED_DATABASES, databasesOfACase } from './auth.fixture.ts';
@@ -431,6 +431,81 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
         ['FB-1'],
       );
       assert.deepEqual(await rowsOf(database, 'SELECT count(*)::int AS n FROM notes'), [{ n: 3 }]);
+    });
+
+    it('parses only the rows that can hold the address or the name (FRU-539)', async () => {
+      const { store } = await opened();
+      await store.create(
+        noteFixtureOf('sd_alice', 'site_a', { reporter: { name: 'Alice', email: 'alice@example.com' } }),
+        undefined,
+        POLICY,
+      );
+      for (let n = 0; n < 12; n++) {
+        await store.create(noteFixtureOf(`sd_bob_${n}`, 'site_b', { reporter: { name: 'Bob' } }), undefined, POLICY);
+      }
+      const parse = vi.spyOn(JSON, 'parse');
+      try {
+        const listed = await store.forget?.({ email: 'Alice@Example.com' }, { dryRun: true });
+        const parsed = parse.mock.calls.filter(([text]) => typeof text === 'string' && text.includes('sd_bob_'));
+
+        assert.deepEqual(
+          listed?.map((note) => note.identifier),
+          ['FB-1'],
+        );
+        assert.equal(parsed.length, 0, 'no note of Bob is parsed to forget Alice');
+      } finally {
+        parse.mockRestore();
+      }
+      assert.equal((await store.forget?.({ name: ' BOB ' }, { dryRun: true }))?.length, 12);
+    });
+
+    it('finds an address or a name that a row escapes, in any case (FRU-539)', async () => {
+      const { database, store } = await opened();
+      const signed = async (id: string, name: string, email?: string) =>
+        store.create(
+          noteFixtureOf(id, 'site_a', { reporter: { name, ...(email === undefined ? {} : { email }) } }),
+          undefined,
+          POLICY,
+        );
+      await signed('sd_escaped', 'Alice', 'Alice@Example.com');
+      await signed('sd_kelvin', 'Kim');
+      await signed('sd_dotted', 'AL\u0130');
+      await signed('sd_plain', 'Ali');
+      await signed('sd_slash', 'AC/DC');
+      // As a restore or an operator can write them: `A` for `A`, and `\/` for `/`.
+      await rowsOf(
+        database,
+        `UPDATE notes SET payload = replace(payload, 'Alice@Example', '\\u0041lice@Example') WHERE id = 1`,
+      );
+      await rowsOf(database, `UPDATE notes SET payload = replace(payload, 'AC/DC', 'AC\\/DC') WHERE id = 5`);
+      const found = async (which: { email: string } | { name: string }) =>
+        (await store.forget?.(which, { dryRun: true }))?.map((note) => note.identifier);
+
+      assert.deepEqual(await found({ email: 'ALICE@example.com' }), ['FB-1']);
+      assert.deepEqual(await found({ name: 'kim' }), ['FB-2']);
+      assert.deepEqual(await found({ name: 'AL\u0130' }), ['FB-3']);
+      assert.deepEqual(await found({ name: 'ali' }), ['FB-4']);
+      assert.deepEqual(await found({ name: 'ac/dc' }), ['FB-5']);
+    });
+
+    it('reads and deletes more notes than one statement takes (FRU-539)', async () => {
+      const { database, store } = await opened();
+      await store.create(noteFixtureOf('sd_bob', 'site_a', { reporter: { name: 'Bob' } }), undefined, POLICY);
+      await store.create(noteFixtureOf('sd_carol', 'site_a', { reporter: { name: 'Carol' } }), undefined, POLICY);
+      await rowsOf(
+        database,
+        `INSERT INTO notes (client_id, page_url, stage, payload, created_at, updated_at)
+         SELECT client_id, page_url, stage, payload, created_at, updated_at FROM notes, generate_series(1, 1200) WHERE id = 1`,
+      );
+
+      const deleted = await store.forget?.({ name: 'bob' }, { dryRun: false });
+
+      assert.equal(deleted?.length, 1201);
+      assert.deepEqual(new Set(deleted?.map((note) => note.id)), new Set(['sd_bob']));
+      assert.deepEqual(
+        (await rowsOf(database, 'SELECT id FROM notes')).map((row) => Number(row.id)),
+        [2],
+      );
     });
 
     it('is not stopped by a row that is not JSON, and leaves that row alone', async () => {

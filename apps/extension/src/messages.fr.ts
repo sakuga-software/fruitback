@@ -87,7 +87,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'L’accès à {host} a été retiré dans les réglages de votre navigateur. Vos notes sont en sécurité.',
   'Allow access again': 'Autoriser à nouveau',
   'Turn off for this site': 'Désactiver pour ce site',
-  "Fruitback can't reach {worker}": 'Fruitback ne joint pas {worker}',
+  "Fruitback can't reach {server}": 'Fruitback ne joint pas {server}',
   // The page of the extension (FRU-301).
   Preferences: 'Préférences',
   'No rules yet. Add one, or turn a site on from the toolbar.':
@@ -140,12 +140,15 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Waiting for you to connect in the tab…': 'En attente de votre connexion dans l’onglet…',
   'Start again': 'Recommencer',
   'The sign-in did not finish.': 'La connexion n’a pas abouti.',
-  'It was refused in the console.': 'Elle a été refusée dans la console.',
-  'The tab was not approved in time.': 'L’onglet n’a pas été approuvé à temps.',
-  'Fruitback did not answer.': 'Fruitback n’a pas répondu.',
+  'Someone declined it in the console. Sign in again to retry.':
+    'Quelqu’un l’a refusée dans la console. Reconnectez-vous pour réessayer.',
+  'The console did not approve it within 15 minutes. Sign in again.':
+    'La console ne l’a pas approuvée dans les 15 minutes. Reconnectez-vous.',
+  'Fruitback could not be reached.': 'Fruitback est injoignable.',
   'Check the connection, then try again.': 'Vérifiez la connexion, puis réessayez.',
   'The sign-in did not start.': 'La connexion n’a pas commencé.',
-  'Fruitback named a console that is not its own.': 'Fruitback a indiqué une console qui n’est pas la sienne.',
+  'Fruitback named a console that is not its own. Tell the person who runs your Fruitback.':
+    'Fruitback a indiqué une console qui n’est pas la sienne. Prévenez la personne qui gère votre Fruitback.',
   'Loading…': 'Chargement…',
   // A site of a workspace (FRU-254). The words of the stages are the widget's.
   New: 'Nouveau',
@@ -181,7 +184,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Votre rôle dans ce workspace ne permet pas d’ajouter un site.',
   'Too many sites were added in the last hour. Try again later.':
     'Trop de sites ont été ajoutés dans l’heure. Réessayez plus tard.',
-  'Fruitback did not answer. Try again.': 'Fruitback n’a pas répondu. Réessayez.',
+  'This site did not change. Try again in a moment.': 'Ce site n’a pas changé. Réessayez dans un instant.',
+  'The site was not added. Try again in a moment.': 'Le site n’a pas été ajouté. Réessayez dans un instant.',
   'Your sign-in ended': 'Votre connexion a pris fin',
   'Sign in again to see and leave notes here.': 'Reconnectez-vous pour voir et laisser des notes ici.',
   'Fruitback did not answer. The popup asks again.': 'Fruitback n’a pas répondu. Le popup redemande.',
@@ -198,10 +202,11 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Turn on {site}': 'Activer sur {site}',
   'Turn on a site of your workspaces:': 'Activez un site de vos workspaces :',
   'Chrome asks for access to this site only.': 'Chrome demande l’accès à ce site seulement.',
-  'The browser did not give access to this site.': 'Le navigateur n’a pas donné l’accès à ce site.',
+  'The browser did not give access to this site. Press Turn on again, then allow it.':
+    'Le navigateur n’a pas donné l’accès à ce site. Appuyez de nouveau sur Activer, puis autorisez-le.',
   'The site could not be turned on. Try again.': 'Le site n’a pas pu être activé. Réessayez.',
-  'The browser did not give the extension access to Fruitback.':
-    'Le navigateur n’a pas donné à l’extension l’accès à Fruitback.',
+  'The browser did not give the extension access to Fruitback. Sign in again, and allow it when the browser asks.':
+    'Le navigateur n’a pas donné à l’extension l’accès à Fruitback. Reconnectez-vous, et autorisez-le quand le navigateur le demande.',
   // FRU-528: the buttons that open the guide.
   'How Fruitback works': 'Comment fonctionne Fruitback',
   'What to check when Fruitback does not answer': 'Que vérifier quand Fruitback ne répond pas',
@@ -355,10 +360,10 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Cancel: 'Annuler',
   'Sending…': 'Envoi…',
   Send: 'Envoyer',
-  'The reply did not go through. Your text is kept. Try again.':
-    'La réponse n’est pas partie. Votre texte est gardé. Réessayez.',
-  'Too many replies just now. Your text is kept. Try again in a minute.':
-    'Trop de réponses à l’instant. Votre texte est gardé. Réessayez dans une minute.',
+  'The reply was not sent. Your text is still here. Try again.':
+    'La réponse n’est pas partie. Votre texte est toujours là. Réessayez.',
+  'Too many replies just now. Your text is still here. Try again in a minute.':
+    'Trop de réponses en ce moment. Votre texte est toujours là. Réessayez dans une minute.',
   'Your session ended. Sign in again from the Fruitback button, then send.':
     'Votre session a pris fin. Reconnectez-vous depuis le bouton Fruitback, puis envoyez.',
   'You cannot reply to this note any more.': 'Vous ne pouvez plus répondre à cette note.',
@@ -383,7 +388,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'The team says these are fixed. Do they look right to you?': 'L’équipe dit que c’est corrigé. Est-ce bon pour vous ?',
   'Looks fixed': 'C’est corrigé',
   'Still wrong': 'Toujours pas',
-  'Did not go through. Try again.': 'Ça n’est pas parti. Réessayez.',
+  'Your answer was not sent. Try again.': 'Votre réponse n’est pas partie. Réessayez.',
   'Too many requests just now. Try again in a minute.': 'Trop de demandes à l’instant. Réessayez dans une minute.',
   'Your session ended. Sign in again from the Fruitback button, then try again.':
     'Votre session a pris fin. Reconnectez-vous depuis le bouton Fruitback, puis réessayez.',
@@ -394,14 +399,16 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'That code has been used or has expired. Ask for a new one.':
     'Ce code a déjà servi ou a expiré. Demandez-en un nouveau.',
   'The worker did not answer. Try again.': 'Le worker n’a pas répondu. Réessayez.',
-  'That worker is on plain http. A session must not cross it.':
-    'Ce worker est en http simple. Une session ne doit pas y passer.',
+  'That worker is on plain http, and a session must not cross it. Use its https address.':
+    'Ce worker est en http simple, et une session ne doit pas y passer. Utilisez son adresse https.',
   'Fruitback needs permission to reach that worker.': 'Fruitback a besoin de la permission de joindre ce worker.',
   'Pairing needs https (localhost excepted): a session must not cross http.':
     'L’appairage demande https (sauf localhost) : une session ne doit pas passer en http.',
   'The pairing code is required.': 'Le code d’appairage est requis.',
-  'That file is not JSON.': 'Ce fichier n’est pas du JSON.',
-  'That file is not a Fruitback rules file.': 'Ce fichier n’est pas un fichier de règles Fruitback.',
+  'That file is not JSON. Choose the file that Export downloaded.':
+    'Ce fichier n’est pas du JSON. Choisissez le fichier téléchargé par Exporter.',
+  'That file is not a Fruitback rules file. Choose the file that Export downloaded.':
+    'Ce fichier n’est pas un fichier de règles Fruitback. Choisissez le fichier téléchargé par Exporter.',
   'That file comes from a newer Fruitback. Update the extension, then import it again.':
     'Ce fichier vient d’un Fruitback plus récent. Mettez l’extension à jour, puis importez-le de nouveau.',
   'Try again': 'Réessayer',
@@ -464,4 +471,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Shows the note on this page': 'Montre la note sur cette page',
   'Opens {path} in a new tab': 'Ouvre {path} dans un nouvel onglet',
   'Open {reference} →': 'Ouvrir {reference} →',
+  // FRU-519: the line of a new release, in the popup and the page.
+  'Fruitback {version} is out.': 'Fruitback {version} est disponible.',
+  Update: 'Mettre à jour',
 };

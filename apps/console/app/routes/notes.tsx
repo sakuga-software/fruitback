@@ -23,7 +23,7 @@ import { KINDS, STAGE_NAMES, connectorName } from './connector-parts';
 import { ConnectorMark } from '../connector-marks';
 import { useWorkspace } from './workspace';
 import { msg, t } from '../i18n';
-import { DID_NOT_ANSWER, writeProblemOf } from '../problems';
+import { failureOf, writeProblemOf } from '../problems';
 import { useTypedSearch } from '../typed-search';
 import { useLocale } from '../use-locale';
 import { domainOf, siteLabel } from '../site-address';
@@ -31,6 +31,7 @@ import { NoteIcon } from '../note-icons';
 import { type StatusChoice, offeredFor, statusName, statusProblemOf } from '../note-status';
 import { boardColumns } from '../board-columns';
 import { NotesBoard } from './notes-board';
+import { ReadProblem } from '../read-problem';
 
 /** Who left a note, as the index of the notes says it (FRU-244). A name only for an account of the workspace. */
 export type NoteAuthor = {
@@ -558,7 +559,7 @@ function NoteRow({
   /** The connector the note went to, when the connectors were read: it may have a name (FRU-404). */
   source: Connector | undefined;
   manages: boolean;
-  retry: () => Promise<{ ok: true } | { ok: false; error: string }>;
+  retry: () => Promise<{ ok: true } | { ok: false; status: number; error: string }>;
   onSent: () => void;
   statuses: readonly StatusChoice[] | undefined;
   choose: (status: string) => Promise<Answer<{ status: string; stage: Stage }>>;
@@ -580,7 +581,7 @@ function NoteRow({
     setRefused(undefined);
     const sent = await retry();
     setSending(false);
-    if (!sent.ok) return setRefused(writeProblemOf(sent, DID_NOT_ANSWER));
+    if (!sent.ok) return setRefused(writeProblemOf(sent, failureOf(sent)));
     onSent();
   }
 
@@ -658,7 +659,7 @@ function NoteRow({
 
 /**
  * Who left a note (FRU-553): the icon of their role, then their name cut to its room. The tooltip,
- * under the pointer and under the focus, says the name whole and the role.
+ * under the pointer, says the name whole and the role; a screen reader reads both in the cell.
  */
 function Author({ author, site }: { author: NoteAuthor; site: string }) {
   useLocale();
@@ -667,11 +668,12 @@ function Author({ author, site }: { author: NoteAuthor; site: string }) {
   const role = author.kind === 'verified' ? t(AUTHOR_WORDS.verified, { site }) : t(AUTHOR_WORDS[author.kind]);
 
   return (
-    <Tip label={`${who}, ${role}`} tip={`${who} · ${role}`}>
+    <Tip tip={`${who} · ${role}`}>
       <span className="text-muted">
         <NoteIcon name={author.kind} />
       </span>
       <span className="min-w-0 truncate">{who}</span>
+      <span className="sr-only">{`, ${role}`}</span>
     </Tip>
   );
 }
@@ -931,7 +933,11 @@ export function NotesFailed({ onRetry }: { onRetry: () => void }) {
   return (
     <LoadFailed
       title={t('The notes did not load')}
-      detail={t('Fruitback did not answer. Your notes are safe.')}
+      detail={
+        <>
+          <ReadProblem /> {t('Your notes are safe.')}
+        </>
+      }
       retry={t('Try again')}
       onRetry={onRetry}
     />

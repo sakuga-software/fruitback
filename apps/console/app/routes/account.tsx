@@ -28,7 +28,7 @@ import {
   signOutEverywhere,
   unlinkProvider,
 } from '../api';
-import { ago } from '../ago';
+import { agoInSentence } from '../ago';
 import { type Listed, edited } from '../listed';
 import { problemOf } from '../problems';
 import { Button, Choice, Field, LinkButton, Problem } from '../ui';
@@ -36,6 +36,7 @@ import { Disconnect as AsksTwice } from './connector-parts';
 import { PageHead, useWorkspace } from './workspace';
 import { LOCALES, chooseLanguage, locale, msg, t } from '../i18n';
 import { useLocale } from '../use-locale';
+import { ReadProblem } from '../read-problem';
 
 /**
  * My account, as screen 13 of the mockup of 2026-10-13 draws it (FRU-248, FRU-249): the profile, how
@@ -54,7 +55,7 @@ const PROVIDER_NAMES: Readonly<Record<Linkable, string>> = { github: 'GitHub', g
 /** What the page says of one provider. WARNING: « Not set up » only when the worker said so. */
 function providerWord(asked: Asked, provider: Linkable): string {
   if (asked === 'asking') return msg('Checking…');
-  if (asked === 'silent') return msg('Could not check');
+  if (asked === 'silent') return msg('Not known: reload the page');
   const known = asked[provider];
   if (known === undefined) return msg('Not set up');
 
@@ -148,9 +149,10 @@ const ADDRESS_PROBLEMS: Readonly<Record<string, string>> = {
   'primary-address': msg('This is your primary address. Make another one primary first.'),
   'provider-address': msg('A linked provider gives this address. Unlink it under « How you sign in » to take it away.'),
   'sign-in-again': msg('Sign in again first: the primary address changes only in the day after a sign-in.'),
-  'not-found': msg('This address is no longer one of your account.'),
+  'not-found': msg('This address is no longer one of your account. Reload the page.'),
 };
-const ADDRESS_NOT_CHANGED = msg('Nothing changed. Try again.');
+const NOT_MADE_PRIMARY = msg('The primary address did not change. Try again.');
+const ADDRESS_NOT_REMOVED = msg('The address was not removed. Try again.');
 const NOT_UNLINKED = msg('{provider} is still linked. Try again.');
 
 const NAME_PROBLEMS: Readonly<Record<string, string>> = {
@@ -385,8 +387,7 @@ export default function Account() {
     setAddressStuck(undefined);
     setMadePrimary(undefined);
     const chosen = await makePrimaryEmail(email, workspace.id);
-    if (!chosen.ok)
-      return setAddressStuck({ email, problem: problemOf(chosen, ADDRESS_PROBLEMS, ADDRESS_NOT_CHANGED) });
+    if (!chosen.ok) return setAddressStuck({ email, problem: problemOf(chosen, ADDRESS_PROBLEMS, NOT_MADE_PRIMARY) });
     setPrimary(chosen.data.email);
     setMadePrimary(chosen.data.email);
     await readEmails();
@@ -397,7 +398,7 @@ export default function Account() {
     setMadePrimary(undefined);
     const removed = await removeAccountEmail(email);
     if (!removed.ok && removed.status !== 404) {
-      return setAddressStuck({ email, problem: problemOf(removed, ADDRESS_PROBLEMS, ADDRESS_NOT_CHANGED) });
+      return setAddressStuck({ email, problem: problemOf(removed, ADDRESS_PROBLEMS, ADDRESS_NOT_REMOVED) });
     }
     await readEmails();
   }
@@ -493,7 +494,7 @@ export default function Account() {
           {emails === 'failed' ? (
             <div className={`${ONE_ROW} gap-[12px]`}>
               <p role="alert" className="min-w-0 flex-1 text-small text-muted">
-                {t('Fruitback did not answer. The addresses of your account could not be read.')}
+                {t('The addresses of your account did not load.')} <ReadProblem />
               </p>
               <Button tone="outline" onClick={() => void readEmails()}>
                 {t('Try again')}
@@ -664,7 +665,7 @@ export default function Account() {
           {sessions === 'failed' ? (
             <div className={`${ONE_ROW} gap-[12px]`}>
               <p role="alert" className="min-w-0 flex-1 text-small text-muted">
-                {t('Fruitback did not answer. The browsers where you are signed in could not be read.')}
+                {t('The browsers where you are signed in did not load.')} <ReadProblem />
               </p>
               <Button tone="outline" onClick={() => void read()}>
                 {t('Try again')}
@@ -708,7 +709,7 @@ export default function Account() {
                     title={t('Extension · {browser}', { browser: browser.browser })}
                     detail={t('Connected {day} · used {last}', {
                       day: dayOf(browser.connectedAt),
-                      last: ago(browser.usedAt),
+                      last: agoInSentence(browser.usedAt),
                     })}
                     under={
                       extensionStuck === browser.id ? (
@@ -733,7 +734,7 @@ export default function Account() {
               {extensionsFailed ? (
                 <li className={`${ONE_ROW} gap-[12px] border-t-0`}>
                   <p role="alert" className="min-w-0 flex-1 text-small text-muted">
-                    {t('Fruitback did not answer. The browsers of the extension could not be read.')}
+                    {t('The browsers of the extension did not load.')} <ReadProblem />
                   </p>
                   <Button tone="outline" onClick={() => void read()}>
                     {t('Try again')}

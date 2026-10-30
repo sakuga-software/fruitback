@@ -940,10 +940,13 @@ describe('the notes kept for later, in the list (FRU-124)', () => {
     };
 
     assert.equal(send.textContent, 'Send the 2 notes');
-    assert.equal(await said(), '1 note sent — Too many notes just now. Your text is kept: send it again in a minute.');
+    assert.equal(
+      await said(),
+      '1 note sent — Too many notes just now. Your text is still here. Send it again in a minute.',
+    );
     // Nothing left: the sentence of the failure alone, with no « 0 note sent ».
     outcome = { sent: 0, failure: 'wait' };
-    assert.equal(await said(), 'Too many notes just now. Your text is kept: send it again in a minute.');
+    assert.equal(await said(), 'Too many notes just now. Your text is still here. Send it again in a minute.');
     outcome = { sent: 2 };
     assert.equal(await said(), '2 notes sent');
     sidebar.destroy();
