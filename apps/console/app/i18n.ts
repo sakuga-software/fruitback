@@ -1,4 +1,3 @@
-import { FRENCH } from './messages.fr.ts';
 import { frenchSpaces } from './typography.ts';
 
 /**
@@ -10,6 +9,11 @@ import { frenchSpaces } from './typography.ts';
  *
  * `messages.test.ts` reads the sources: every sentence a screen shows is in the French map, and the
  * map holds no sentence that no screen shows.
+ *
+ * **A map is loaded when its language is asked for** (FRU-494). The French map is 112 kB, and a
+ * person who reads English never downloads it. `setLocale` loads the map first, and changes the
+ * language only when it is there: a screen never shows a mix of the two languages. The root waits
+ * for `ready()` before its first render, so a French browser shows French from the first frame.
  */
 export const LOCALES = [
   { tag: 'en', name: 'English' },
@@ -17,11 +21,21 @@ export const LOCALES = [
 ] as const;
 export type LocaleTag = (typeof LOCALES)[number]['tag'];
 
-// French is set with its narrow no-break spaces once, here (FRU-517).
-const CATALOGS: Record<LocaleTag, Readonly<Record<string, string>> | undefined> = {
+type Catalog = Readonly<Record<string, string>>;
+
+/**
+ * WARNING: `import()` only. A static import puts the map in the chunk that every page loads, and
+ * `catalog-chunk.test.ts` fails on it. Exported for `i18n-load.test.ts`, which makes a load fail.
+ */
+export const LOADERS: Record<LocaleTag, (() => Promise<Catalog>) | undefined> = {
   en: undefined,
-  fr: Object.fromEntries(Object.entries(FRENCH).map(([english, french]) => [english, frenchSpaces(french)])),
+  // French is set with its narrow no-break spaces once, here (FRU-517).
+  fr: () =>
+    import('./messages.fr.ts').then(({ FRENCH }) =>
+      Object.fromEntries(Object.entries(FRENCH).map(([english, french]) => [english, frenchSpaces(french)])),
+    ),
 };
+const CATALOGS: Partial<Record<LocaleTag, Catalog>> = {};
 const STORED = 'fruitback:locale';
 
 /** The language we have words for that is nearest to a tag: `fr-CA` reads French, `ja` reads English. */
@@ -40,15 +54,34 @@ function remembered(): string | null {
   }
 }
 
-let current: LocaleTag = nearest(remembered() ?? globalThis.navigator?.language);
+/** The language of the screens. It changes only when its map is loaded. */
+let current: LocaleTag = 'en';
+/** The language asked for last. A map that arrives for a language asked for before it is not used. */
+let wanted: LocaleTag = 'en';
+let loading: Promise<void> = Promise.resolve();
 const listeners = new Set<() => void>();
 
 export function locale(): LocaleTag {
   return current;
 }
 
-/** Changes the language of every screen. `remember` keeps it for the next visit of this browser. */
-export function setLocale(tag: string, remember = true): void {
+function loaded(tag: LocaleTag): boolean {
+  return LOADERS[tag] === undefined || CATALOGS[tag] !== undefined;
+}
+
+function show(tag: LocaleTag): void {
+  if (tag === current) return;
+  current = tag;
+  for (const listener of listeners) listener();
+}
+
+/**
+ * Changes the language of every screen, once its map is loaded. `remember` keeps it for the next
+ * visit of this browser. A language whose map is loaded already changes before this returns.
+ *
+ * A map that fails to load leaves the language as it is: English words are better than no words.
+ */
+export function setLocale(tag: string, remember = true): Promise<void> {
   const next = nearest(tag);
   if (remember) {
     try {
@@ -57,10 +90,45 @@ export function setLocale(tag: string, remember = true): void {
       // Not kept: the account still holds the choice.
     }
   }
-  if (next === current) return;
-  current = next;
-  for (const listener of listeners) listener();
+  wanted = next;
+  if (loaded(next)) {
+    show(next);
+    loading = Promise.resolve();
+
+    return loading;
+  }
+  loading = loadLocale(next).then(
+    () => {
+      if (wanted === next) show(next);
+    },
+    (error: unknown) => {
+      // English stays on the screens, and `ready()` resolves: the console starts with words. The
+      // next `setLocale` asks for the map again, and `adoptLanguage` calls it each time a workspace
+      // reads `/console/me`. A map gone with a deploy loads after a reload.
+      console.error(`[fruitback] the words in ${next} did not load, so the console shows English`, error);
+    },
+  );
+
+  return loading;
 }
+
+/**
+ * Loads the map of a language, and changes nothing on the screens. `translate(tag, …)` reads a map
+ * that is not loaded as English: a reader outside the screens (a test, a guide) awaits this first.
+ */
+export async function loadLocale(tag: string): Promise<void> {
+  const next = nearest(tag);
+  if (loaded(next)) return;
+  CATALOGS[next] = await (LOADERS[next] as () => Promise<Catalog>)();
+}
+
+/** Done when the map of the language asked for last has loaded, or failed to. */
+export function ready(): Promise<void> {
+  return loading;
+}
+
+// The language of this browser, asked for when the bundle starts. `ready()` waits for it.
+void setLocale(remembered() ?? globalThis.navigator?.language ?? 'en', false);
 
 export function onLocale(listener: () => void): () => void {
   listeners.add(listener);
@@ -112,10 +180,11 @@ function markUnsent(kept: Kept | undefined, tag: LocaleTag | undefined): void {
  */
 export async function chooseLanguage(tag: string, save: SaveLanguage, kept = browserStorage()): Promise<boolean> {
   const chosen = nearest(tag);
-  setLocale(chosen);
+  const shown = setLocale(chosen);
   markUnsent(kept, chosen);
   const heard = await save(chosen).catch(() => false);
   if (heard) markUnsent(kept, undefined);
+  await shown;
 
   return heard;
 }
@@ -130,7 +199,7 @@ export async function chooseLanguage(tag: string, save: SaveLanguage, kept = bro
 export function adoptLanguage(account: { locale?: string }, save?: SaveLanguage, kept = browserStorage()): void {
   const waiting = unsent(kept);
   if (waiting !== undefined) {
-    setLocale(waiting);
+    void setLocale(waiting);
     if (save !== undefined) {
       void save(waiting)
         .catch(() => false)
@@ -141,7 +210,7 @@ export function adoptLanguage(account: { locale?: string }, save?: SaveLanguage,
 
     return;
   }
-  if (account.locale !== undefined) setLocale(account.locale);
+  if (account.locale !== undefined) void setLocale(account.locale);
 }
 
 /** A sentence that a table holds, to translate where it is shown. It marks the sentence for the guard. */
@@ -154,6 +223,11 @@ export function t(sentence: string, values: Readonly<Record<string, string | num
   return translate(current, sentence, values);
 }
 
+/**
+ * The sentence in the language `tag`. WARNING: the map of `tag` must be loaded (`loadLocale`). A map
+ * that is not reads English, as a screen would rather show English than no words. A screen passes
+ * `locale()` or `useLocale()`, whose map is loaded.
+ */
 export function translate(
   tag: LocaleTag,
   sentence: string,
