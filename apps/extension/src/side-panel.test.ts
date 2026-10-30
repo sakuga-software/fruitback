@@ -823,3 +823,51 @@ describe('the pins a panel hid come back when it goes (FRU-307, review of #419)'
     assert.equal(parsePinsMessage('hidden'), undefined);
   });
 });
+
+describe('the margins of the panel (FRU-533)', () => {
+  const sheet = readFileSync(fileURLToPath(new URL('../entrypoints/sidepanel/style.css', import.meta.url)), 'utf8');
+  /** The declarations of the rule whose selector is `selector`, alone on its line. */
+  const rule = (selector: string): string =>
+    new RegExp(`\\n${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} \\{([^}]*)\\}`).exec(sheet)?.[1] ?? '';
+
+  it('declares the gutter once, at 12 px', () => {
+    assert.deepEqual(
+      [...sheet.matchAll(/--panel-gutter:\s*([^;]+);/g)].map((match) => match[1]),
+      ['12px'],
+    );
+  });
+
+  it('gives every block its side margin from the gutter, not a value of its own', () => {
+    for (const selector of [
+      '.panel-head',
+      '.panel-state',
+      '.panel-action',
+      '.panel-tabs',
+      '.panel-list',
+      '.panel-failed',
+      '.panel-foot',
+      '.ready',
+      '.search-options',
+      '.site-more',
+      '.search-detached',
+    ]) {
+      const declarations = rule(selector);
+      assert.notEqual(declarations, '', `no rule for ${selector}: this guard reads nothing`);
+      assert.match(declarations, /(padding|margin):[^;]*var\(--panel-gutter\)/, `${selector} has a margin of its own`);
+    }
+  });
+
+  it('keeps no side margin of 18 or 20 px, the margins of before', () => {
+    // The side values of a shorthand: the second, and the fourth when there is one.
+    const sides = [...sheet.matchAll(/\b(?:padding|margin):\s*([^;]+);/g)].flatMap((match) => {
+      const values = (match[1] ?? '').trim().split(/\s+(?![^(]*\))/);
+
+      return values.length === 1 ? values : [values[1], values[3] ?? values[1]];
+    });
+    assert.ok(sides.length > 20, 'this guard reads no margin');
+    assert.deepEqual(
+      sides.filter((value) => value === '18px' || value === '20px'),
+      [],
+    );
+  });
+});
