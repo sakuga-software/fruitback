@@ -1,3 +1,5 @@
+import { frenchSpaces } from './typography.ts';
+
 /**
  * The words of the console, in the language of the person (FRU-120).
  *
@@ -27,7 +29,11 @@ type Catalog = Readonly<Record<string, string>>;
  */
 const LOADERS: Record<LocaleTag, (() => Promise<Catalog>) | undefined> = {
   en: undefined,
-  fr: () => import('./messages.fr.ts').then((module) => module.FRENCH),
+  // French is set with its narrow no-break spaces once, here (FRU-517).
+  fr: () =>
+    import('./messages.fr.ts').then(({ FRENCH }) =>
+      Object.fromEntries(Object.entries(FRENCH).map(([english, french]) => [english, frenchSpaces(french)])),
+    ),
 };
 const CATALOGS: Partial<Record<LocaleTag, Catalog>> = {};
 const STORED = 'fruitback:locale';

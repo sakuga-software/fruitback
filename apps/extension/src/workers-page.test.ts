@@ -158,7 +158,7 @@ describe('« Workers and sessions » (FRU-302)', () => {
     setLanguage('fr');
     assert.equal(sitesCount(1), '1 site');
     assert.equal(sitesCount(3), '3 sites');
-    assert.equal(workers([]).querySelector('h2')?.textContent, 'Workers et sessions');
+    assert.equal(workers([]).querySelector('h2')?.textContent, 'Serveurs et sessions');
   });
 });
 

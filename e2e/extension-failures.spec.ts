@@ -123,7 +123,7 @@ test('a log out from the options page asks again which language to keep (FRU-510
   await extension.worker.evaluate(() => chrome.storage.local.set({ language: 'fr' }));
 
   await card.getByRole('button', { name: /^(Log out|Se déconnecter)$/ }).click();
-  await expect(card.getByLabel(/^(Pairing code|Code d’appairage)$/)).toBeVisible();
+  await expect(card.getByLabel(/^(Pairing code|Code de connexion)$/)).toBeVisible();
   // No session is left, so no account speaks for the language: the language of the browser is read.
   await expect
     .poll(() => extension.worker.evaluate(async () => (await chrome.storage.local.get('language')).language))

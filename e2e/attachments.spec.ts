@@ -90,7 +90,7 @@ for (const scheme of ['light', 'dark'] as const) {
     // A pin on the page first: a note with no file, to the worker of the suite.
     await page.getByRole('button', { name: 'Laisser une note' }).click();
     await page.locator('[data-testid="card-espresso"] .add').click();
-    await page.getByPlaceholder('Que faut-il changer ?').fill('Une note pour son pin');
+    await page.getByPlaceholder('Que faut-il changer\u202F?').fill('Une note pour son pin');
     await page.getByRole('button', { name: 'Envoyer', exact: true }).click();
     await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
     expect(await pinShown(page)).toBe(true);
@@ -225,7 +225,7 @@ async function openOnLatte(page: Page, url: string): Promise<void> {
   await mount(page);
   await page.getByRole('button', { name: 'Laisser une note' }).click();
   await page.locator('[data-testid="card-latte"] .add').click();
-  await page.getByPlaceholder('Que faut-il changer ?').fill('Le texte reste');
+  await page.getByPlaceholder('Que faut-il changer\u202F?').fill('Le texte reste');
   // The composer rises and scales as it comes: its box is its own only once that is over.
   await page.evaluate(() =>
     Promise.all(
@@ -250,9 +250,9 @@ test('the menu « Joindre » floats under its button, and the composer keeps its
   expect(open.menu.bottom).toBeLessThanOrEqual(open.height);
 
   // A click out of the menu closes it, and the note keeps its text.
-  await page.getByPlaceholder('Que faut-il changer ?').click();
+  await page.getByPlaceholder('Que faut-il changer\u202F?').click();
   await expect(menu).toBeHidden();
-  await expect(page.getByPlaceholder('Que faut-il changer ?')).toHaveValue('Le texte reste');
+  await expect(page.getByPlaceholder('Que faut-il changer\u202F?')).toHaveValue('Le texte reste');
   expect((await boxes(page)).composer.height).toBeCloseTo(closed.composer.height, 1);
 });
 
@@ -290,6 +290,6 @@ for (const [width, height] of [
     await trigger.click();
     await menu.getByRole('menuitem', { name: 'Glisser-déposer' }).click();
     await expect(page.locator('[data-fruitback-attach-dropzone]')).toBeVisible();
-    await expect(page.getByPlaceholder('Que faut-il changer ?')).toHaveValue('Le texte reste');
+    await expect(page.getByPlaceholder('Que faut-il changer\u202F?')).toHaveValue('Le texte reste');
   });
 }

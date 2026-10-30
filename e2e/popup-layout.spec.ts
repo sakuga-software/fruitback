@@ -113,7 +113,7 @@ for (const language of ['en', 'fr'] as const) {
     const worker = await extension.context.newPage();
     await worker.goto(link);
     const linked = await openPopup(extension, worker, AUTHENTICATED_WORKER_ORIGIN);
-    const pair = linked.getByRole('button', { name: /^(Pair with this worker|Appairer avec ce worker)$/ });
+    const pair = linked.getByRole('button', { name: /^(Pair with this worker|Se connecter à ce serveur)$/ });
     await expect(pair).toBeVisible();
     // FRU-302: « Pair in the page of the extension » joins the buttons.
     await expectLaidOut(linked, 'pairing link', 4);
@@ -140,7 +140,7 @@ for (const language of ['en', 'fr'] as const) {
     await expect(offered.getByRole('switch', { name: SITE_SWITCH })).toBeChecked();
     await expect(offered.getByRole('button', { name: /^(Account and settings|Compte et réglages)$/ })).toHaveText('Q');
     // The row of the pairing stays, with its log out.
-    await expect(offered.getByText(/^(Paired as|Appairé en tant que) /)).toBeVisible();
+    await expect(offered.getByText(/^(Paired as|Connecté en tant que) /)).toBeVisible();
     await expectLaidOut(offered, 'site turned on', 6);
 
     // The kit (FRU-293), read on computed styles in both schemes: the measures of the mock-up of
