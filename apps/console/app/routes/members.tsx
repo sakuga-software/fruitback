@@ -5,10 +5,11 @@ import {
   ORGANIZATION,
   type Role,
   type SharedSite,
-  type Site,
+  type SiteChoice,
   call,
   invitationLink,
   sendsMail,
+  siteChoices,
 } from '../api';
 import { Confirmation } from '../confirm';
 import { INVITED, type Message, messageOf } from '../invitation-message';
@@ -128,7 +129,7 @@ export default function Members() {
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<InvitedRole>('member');
   // The sites of the workspace: the ones a guest may be invited on, and for a guest their own.
-  const [sites, setSites] = useState<readonly Site[] | undefined>();
+  const [sites, setSites] = useState<readonly SiteChoice[] | undefined>();
   const [site, setSite] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | undefined>();
@@ -140,7 +141,8 @@ export default function Members() {
   const read = useCallback(async () => {
     setMailed(await sendsMail());
     // The sites are read beside the rest: the form and the column wait for nothing but them.
-    void call<{ sites: Site[] }>('GET', `/console/workspaces/${workspace.id}/sites`).then((listed) =>
+    // Their id and address only (FRU-497): no count of the notes of every site.
+    void siteChoices(workspace.id).then((listed) =>
       setSites(listed.ok && Array.isArray(listed.data?.sites) ? listed.data.sites : undefined),
     );
     if (!reads) return;

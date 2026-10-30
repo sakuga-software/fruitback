@@ -1,4 +1,5 @@
 import { type Page, expect, test } from '@playwright/test';
+import { fulfillSites } from './console-workspace.ts';
 import { WORKER_ORIGIN } from './pin.ts';
 
 /**
@@ -46,7 +47,8 @@ async function stubWorker(page: Page, locale: 'en' | 'fr', start: Partial<Worker
     const json = (body: unknown, status = 200) => route.fulfill({ status, json: body });
     if (pathname === '/console/session/refresh') return json({ accessToken: 'token' });
     if (pathname === '/console/me') return json(me());
-    if (pathname === '/console/workspaces/w1/sites') return json({ sites });
+    const read = fulfillSites(route, sites);
+    if (read !== false) return read;
     if (pathname === BASE) {
       if (request.method() === 'GET') return json({ domains: worker.domains });
       const { domain } = request.postDataJSON() as { domain: string };

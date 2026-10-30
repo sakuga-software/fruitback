@@ -1,5 +1,5 @@
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
-import { type Domain, type Site, type Workspace, call } from './api';
+import { type Domain, type SiteChoice, type Workspace, call } from './api';
 import { Confirm } from './confirm';
 import { locale, msg, t } from './i18n';
 import { type Listed, edited, known } from './listed';
@@ -34,7 +34,7 @@ function moment(iso: string | undefined): string {
   return Number.isNaN(date.getTime()) ? '' : date.toLocaleString(locale(), { dateStyle: 'medium', timeStyle: 'short' });
 }
 
-export function Domains({ workspace, sites }: { workspace: Workspace; sites: Listed<Site> }) {
+export function Domains({ workspace, sites }: { workspace: Workspace; sites: Listed<SiteChoice> }) {
   useLocale();
   const base = `/console/workspaces/${workspace.id}/domains`;
   const [domains, setDomains] = useState<Listed<Domain>>('loading');
@@ -147,7 +147,7 @@ function DomainRow({
 }: {
   base: string;
   domain: Domain;
-  sites: Listed<Site>;
+  sites: Listed<SiteChoice>;
   onChanged: (domain: Domain) => void;
   onRemoved: () => void;
 }) {

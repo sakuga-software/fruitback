@@ -72,6 +72,40 @@ export type Site = {
   undelivered?: number;
   asOf?: string;
 };
+/** A site as a list to choose one names it (FRU-497): no destination and no count. */
+export type SiteChoice = Pick<Site, 'id' | 'origin' | 'visibility'>;
+
+/** How many choices one read asks for. A workspace of more sites is read in several pages. */
+const CHOICES_PER_READ = 500;
+
+/**
+ * The sites of a workspace to choose from (FRU-497), by address: their id, address and visibility,
+ * and no count of their notes. The pages are read one after the other until the last one.
+ */
+export async function siteChoices(workspace: string): Promise<Answer<{ sites: SiteChoice[] }>> {
+  const sites: SiteChoice[] = [];
+  let after: string | undefined;
+  for (;;) {
+    const query = new URLSearchParams({ limit: String(CHOICES_PER_READ), ...(after === undefined ? {} : { after }) });
+    const answer = await call<{ sites: SiteChoice[]; next?: string }>(
+      'GET',
+      `/console/workspaces/${workspace}/sites/choices?${query}`,
+    );
+    if (!answer.ok) return answer;
+    // An answer with no list is no list: the screen says it did not load (FRU-162).
+    if (!Array.isArray(answer.data?.sites)) return answer;
+    sites.push(...answer.data.sites);
+    // A cursor that does not move would read the same page again, with no end.
+    if (typeof answer.data.next !== 'string' || answer.data.next === after) return { ...answer, data: { sites } };
+    after = answer.data.next;
+  }
+}
+
+/** One site of a workspace, for its page (FRU-497): what the list says of it, and its notes. */
+export function readSite(workspace: string, site: string): Promise<Answer<Site>> {
+  return call<Site>('GET', `/console/workspaces/${workspace}/sites/${encodeURIComponent(site)}`);
+}
+
 /**
  * A domain the workspace says it owns (FRU-103), as the worker answers it. `state` is the worker's
  * word: `proven` only while the DNS shows `record`. `previews` is the pattern a proven domain covers,

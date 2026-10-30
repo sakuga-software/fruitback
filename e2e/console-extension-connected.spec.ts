@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { type Page, type Route, expect, test } from '@playwright/test';
-import { sideScroll, stubWorker } from './console-workspace.ts';
+import { sideScroll, stubWorker, fulfillSites } from './console-workspace.ts';
 import { WORKER_ORIGIN } from './pin.ts';
 
 /**
@@ -173,9 +173,8 @@ test.describe('step 3 of the setup', () => {
         });
       }
       if (pathname.endsWith('/list-user-invitations')) return json([]);
-      if (pathname === '/console/workspaces/w1/sites') {
-        return json({ sites: [{ id: 's1', origin: 'https://staging.acme.dev', visibility: 'members' }] });
-      }
+      const read = fulfillSites(route, [{ id: 's1', origin: 'https://staging.acme.dev', visibility: 'members' }]);
+      if (read !== false) return read;
 
       return route.fulfill({ status: 204 });
     });
@@ -249,9 +248,8 @@ test.describe('« You are in »', () => {
         ]);
       }
       if (pathname.endsWith('/accept-invitation')) return json({});
-      if (pathname === '/console/workspaces/w1/sites') {
-        return json({ sites: [{ id: 's1', origin: 'https://staging.acme.dev', visibility: 'members' }] });
-      }
+      const read = fulfillSites(route, [{ id: 's1', origin: 'https://staging.acme.dev', visibility: 'members' }]);
+      if (read !== false) return read;
 
       return route.fulfill({ status: 404, json: { error: 'not-found' } });
     });

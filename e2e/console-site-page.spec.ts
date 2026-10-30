@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { type Page, type Route, expect, test } from '@playwright/test';
-import { ACME, type Role, sideScroll, stubWorker } from './console-workspace.ts';
+import { ACME, type Role, sideScroll, stubWorker, fulfillSites } from './console-workspace.ts';
 
 /**
  * The page of a site (FRU-433): what the grid of the Sites screen unfolded under a card, in one
@@ -39,10 +39,12 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
         site === undefined ? 201 : 200,
       );
     }
-    if (pathname === '/console/workspaces/w1/sites') {
-      worker.reads += 1;
+    // The page reads its one site, and the sites to choose from for its previews (FRU-497).
+    if (route.request().method() === 'GET' && /^\/console\/workspaces\/w1\/sites\/\w+$/.test(pathname)) {
+      if (!pathname.endsWith('/choices')) worker.reads += 1;
+      if (worker.fails) return json({ error: 'unknown' }, 500);
 
-      return worker.fails ? json({ error: 'unknown' }, 500) : json({ sites: SITES });
+      return fulfillSites(route, SITES) || undefined;
     }
     if (route.request().method() === 'DELETE') {
       worker.deleted.push(pathname);
