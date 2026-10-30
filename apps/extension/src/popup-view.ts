@@ -445,7 +445,7 @@ export function turnOnScreen(document: Document, options: TurnOnOptions): HTMLEl
   const [first] = addable;
   // A site of no workspace, and no workspace where the account may add it: who can, and nothing to press.
   if (options.workspace === undefined && options.unaddable !== undefined) {
-    return frame(hostAsTitle(site), element(document, 'p', options.unaddable, 'lead'));
+    return frame(hostAsTitle(site), make(document, 'p', 'lead', options.unaddable));
   }
   if (options.workspace === undefined && first === undefined) {
     return frame(
