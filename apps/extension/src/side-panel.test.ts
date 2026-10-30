@@ -830,6 +830,10 @@ describe('the margins of the panel (FRU-533)', () => {
   const rule = (selector: string): string =>
     new RegExp(`\\n${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} \\{([^}]*)\\}`).exec(sheet)?.[1] ?? '';
 
+  it('takes off the padding of the body of the popup, whose sheet the panel links first', () => {
+    assert.match(rule('body.side-panel-page'), /\bpadding: 0;/);
+  });
+
   it('declares the gutter once, at 12 px', () => {
     assert.deepEqual(
       [...sheet.matchAll(/--panel-gutter:\s*([^;]+);/g)].map((match) => match[1]),
