@@ -69,7 +69,7 @@ import { type PanelApis, openPanelOrPage } from '../../src/side-panel.ts';
 import { browserFamily, extensionsPlace } from '../../src/browser-family.ts';
 import { type TabCommandAnswer, parseAnswer, tabCommand } from '../../src/tab-command.ts';
 import { showUpdateLine } from '../../src/update-notice-browser.ts';
-import { intoPopup } from '../../src/update-notice.ts';
+import { keepInPopup } from '../../src/update-notice.ts';
 import {
   type Account,
   keysOfShortcut,
@@ -182,12 +182,7 @@ void spoken.then(() => {
 // `#app`, so the line goes back into each one.
 void spoken.then(() =>
   showUpdateLine((line) => {
-    const place = (): void => {
-      const screen = app?.querySelector(':scope > .popup');
-      if (screen !== null && screen !== undefined) intoPopup(screen, line);
-    };
-    place();
-    if (app !== null) new MutationObserver(place).observe(app, { childList: true });
+    if (app !== null) keepInPopup(app, line);
   }),
 );
 // Not awaited. When the account speaks another language than the one this popup opened in, the

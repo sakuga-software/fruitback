@@ -10,6 +10,7 @@ import {
   availableUpdate,
   intoPopup,
   isNewer,
+  keepInPopup,
   parseRelease,
   updatedByHand,
 } from './update-notice.ts';
@@ -174,5 +175,60 @@ describe('the line of a new release (FRU-519)', () => {
     const bare = shell('popup-head', 'popup-body');
     intoPopup(bare, line);
     assert.equal(bare.lastElementChild, line);
+  });
+
+  it('puts the line back after each draw of the popup, and does not wake itself (review of #731)', async () => {
+    const window = new HappyDomWindow({ url: 'chrome-extension://fruitback/popup.html' });
+    const document = window.document as unknown as Document;
+    const app = document.createElement('main');
+    document.body.append(app);
+    const shell = (): HTMLElement => {
+      const root = document.createElement('div');
+      root.className = 'popup';
+      for (const part of ['popup-head', 'popup-body', 'popup-foot']) {
+        root.append(Object.assign(document.createElement('div'), { className: part }));
+      }
+
+      return root;
+    };
+    const line = updateLine(document, { version: '0.6.0', url: RELEASE.html_url });
+    const settle = async (): Promise<void> => {
+      await window.happyDOM.waitUntilComplete();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    };
+    // Every change of the children of `app`. The draws make them; placing the line must make none.
+    const records: MutationRecord[] = [];
+    new (window.MutationObserver as unknown as typeof MutationObserver)((seen) => {
+      records.push(...seen);
+    }).observe(app, { childList: true });
+
+    app.replaceChildren(shell());
+    const observer = keepInPopup(app, line);
+    assert.equal(app.querySelector('.popup')?.contains(line), true);
+
+    // The loading screen has no shell: no line, and nothing breaks.
+    app.replaceChildren(Object.assign(document.createElement('p'), { textContent: 'Loading' }));
+    await settle();
+    assert.equal(line.isConnected, false);
+
+    // Two draws, two shells: the line is in the last one, above its foot.
+    app.replaceChildren(shell());
+    await settle();
+    app.replaceChildren(shell());
+    await settle();
+    assert.deepEqual(
+      [...(app.querySelector('.popup')?.children ?? [])].map((child) => child.className),
+      ['popup-head', 'popup-body', 'kit-update', 'popup-foot'],
+    );
+    // No loop: once settled, nothing more happens, and no record of `app` holds the line.
+    const settled = records.length;
+    await settle();
+    await settle();
+    assert.equal(records.length, settled);
+    assert.equal(
+      records.some((record) => [...record.addedNodes].includes(line)),
+      false,
+    );
+    observer.disconnect();
   });
 });

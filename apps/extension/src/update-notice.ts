@@ -128,3 +128,21 @@ export function intoPopup(screen: Element, line: HTMLElement): void {
   if (screen.contains(line)) return;
   screen.insertBefore(line, screen.querySelector(':scope > .popup-foot'));
 }
+
+/**
+ * Keeps the line in the shell that `app` holds, across every draw. A draw replaces the children of
+ * `app`; the observer sees only that (`childList`, not `subtree`), so putting the line inside the shell
+ * does not wake it again. A screen with no shell gets no line, and the next shell gets it back.
+ * The observer stops with the popup: it is no longer needed once the popup closes.
+ */
+export function keepInPopup(app: Element, line: HTMLElement): MutationObserver {
+  const place = (): void => {
+    const screen = app.querySelector(':scope > .popup');
+    if (screen !== null) intoPopup(screen, line);
+  };
+  place();
+  const observer = new (app.ownerDocument.defaultView?.MutationObserver ?? MutationObserver)(place);
+  observer.observe(app, { childList: true });
+
+  return observer;
+}
