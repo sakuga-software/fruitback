@@ -14,7 +14,7 @@ import {
 } from './workers-page.ts';
 
 /**
- * « Workers and sessions » and « Preferences » of the page of the extension (FRU-302), on happy-dom.
+ * « Servers and sessions » and « Preferences » of the page of the extension (FRU-302), on happy-dom.
  * Pairing, logging out and the preferences in a real browser are `e2e/extension-page.spec.ts`'s.
  */
 
@@ -32,7 +32,7 @@ const workers = (cards: WorkerCard[], calls: string[] = []) =>
 
 afterEach(() => setLanguage('en'));
 
-describe('« Workers and sessions » (FRU-302)', () => {
+describe('« Servers and sessions » (FRU-302)', () => {
   it('says what pairing is for, and has one card for each worker, with its sites', () => {
     const section = workers([
       { endpoint: 'https://feedback.acme.dev', host: 'feedback.acme.dev', sites: 2, pairing: 'https' },
@@ -40,10 +40,10 @@ describe('« Workers and sessions » (FRU-302)', () => {
     ]);
 
     assert.equal(section.id, 'workers');
-    assert.equal(section.querySelector('h2')?.textContent, 'Workers and sessions');
+    assert.equal(section.querySelector('h2')?.textContent, 'Servers and sessions');
     assert.equal(
       section.querySelector('.workers-intro')?.textContent,
-      'You pair with a worker, not with a site: one session covers every site that reports to it. Only team mode needs one.',
+      'You connect to a server, not to a site: one session covers every site that reports to it. Only team mode needs one.',
     );
     assert.deepEqual(
       [...section.querySelectorAll('.worker-card')].map((card) => [
@@ -73,10 +73,10 @@ describe('« Workers and sessions » (FRU-302)', () => {
     );
     const card = section.querySelector('.worker-card');
 
-    assert.equal(card?.querySelector('.worker-who')?.textContent, 'Paired as Camille Durand');
+    assert.equal(card?.querySelector('.worker-who')?.textContent, 'Connected as Camille Durand');
     assert.equal(card?.querySelector('.worker-who strong')?.textContent, 'Camille Durand');
     assert.equal(card?.querySelector('.worker-dot')?.getAttribute('data-on'), 'true');
-    assert.match(card?.textContent ?? '', /Verified by the worker · renews on its own/);
+    assert.match(card?.textContent ?? '', /Verified by the server · renews on its own/);
     card?.querySelector<HTMLButtonElement>('button')?.click();
     assert.deepEqual(calls, ['logout:https://feedback.acme.dev']);
   });
@@ -93,7 +93,7 @@ describe('« Workers and sessions » (FRU-302)', () => {
       },
     ]);
 
-    assert.equal(section.querySelector('.worker-who')?.textContent, 'Paired');
+    assert.equal(section.querySelector('.worker-who')?.textContent, 'Connected');
     assert.equal(section.querySelector('.worker-who + .worker-hint')?.textContent, 'camille@acme.dev');
   });
 
@@ -131,9 +131,9 @@ describe('« Workers and sessions » (FRU-302)', () => {
 
     assert.equal(
       section.querySelector('.worker-text')?.textContent,
-      'Not paired. Private-mode sites read without a session; a team site would stay asleep.',
+      'Not connected. Private-mode sites read without a session; a team site would show nothing.',
     );
-    assert.equal(input?.getAttribute('aria-label'), 'Pairing code');
+    assert.equal(input?.getAttribute('aria-label'), 'Connection code');
     assert.equal(input?.value, 'ABCD-EFGH-JKMN');
     section
       .querySelector('form')
@@ -144,7 +144,7 @@ describe('« Workers and sessions » (FRU-302)', () => {
 
   it('says plain http works on this machine only, and offers no pairing off it', () => {
     const local = workers([{ endpoint: 'http://localhost:8787', host: 'localhost:8787', sites: 1, pairing: 'local' }]);
-    assert.match(local.textContent ?? '', /Plain http on localhost\. Pairing works here/);
+    assert.match(local.textContent ?? '', /Plain http on localhost\. Connecting works here/);
     assert.ok(local.querySelector('form'));
 
     const insecure = workers([
@@ -162,7 +162,7 @@ describe('« Workers and sessions » (FRU-302)', () => {
   });
 });
 
-describe('« Workers and sessions » drawn again (raised in review)', () => {
+describe('« Servers and sessions » drawn again (raised in review)', () => {
   const unpaired: WorkerCard = {
     endpoint: 'https://feedback.acme.dev',
     host: 'feedback.acme.dev',
@@ -212,7 +212,7 @@ describe('« Workers and sessions » drawn again (raised in review)', () => {
   });
 });
 
-describe('« Workers and sessions » while a pairing is in progress (raised in review)', () => {
+describe('« Servers and sessions » while a pairing is in progress (raised in review)', () => {
   it('is not drawn again while a button of a card is off, and says a draw waits', () => {
     const document = page();
     const container = document.createElement('div');
@@ -348,7 +348,7 @@ describe('« Preferences » (FRU-302)', () => {
         'Show CSS selectors',
         'Corner of the widget',
         'Allow captures on every site',
-        'Leave feedback shortcut',
+        'Leave a note shortcut',
         'Keep my rules in the account of this browser',
       ],
     );

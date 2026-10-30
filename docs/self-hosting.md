@@ -232,7 +232,7 @@ The last command keeps running; use another terminal for the next step.
 
 ### 7. Leave a note as a visitor
 
-Open `http://localhost:5500` in a private window, where nobody is signed in. Click **Leave feedback**,
+Open `http://localhost:5500` in a private window, where nobody is signed in. Click **Leave a note**,
 then the title, write a note, and click **Send**. The pin is on the title. Another visitor who opens
 the page sees it too. The screen of step 5 in the console (« Set up Fruitback », `/setup`) shows
 « First note received » if it is still open. The « Sites » screen shows the count `1` for the site,

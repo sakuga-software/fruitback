@@ -1,0 +1,14 @@
+{
+  "extensionName": {
+    "message": "Fruitback",
+    "description": "Le nom de l’extension, dans la boutique et la liste des extensions."
+  },
+  "extensionDescription": {
+    "message": "Laissez une note sur n’importe quel élément d’un site que vous relisez. Votre équipe la reçoit dans son outil de suivi.",
+    "description": "La description de l’extension, dans la liste des extensions."
+  },
+  "leaveNoteCommand": {
+    "message": "Laisser une note sur cette page",
+    "description": "Le raccourci clavier qui commence une note, dans les réglages des raccourcis du navigateur."
+  }
+}

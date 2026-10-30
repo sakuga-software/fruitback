@@ -26,7 +26,7 @@ async function paired(extension: LoadedExtension): Promise<void> {
   const worker = await extension.context.newPage();
   await worker.goto(link);
   const popup = await openPopup(extension, worker, AUTHENTICATED_WORKER_ORIGIN);
-  await popup.getByRole('button', { name: /^(Pair with this worker|Se connecter à ce serveur)$/ }).click();
+  await popup.getByRole('button', { name: /^(Connect to this server|Se connecter à ce serveur)$/ }).click();
   await expect(popup.getByText(NAME, { exact: false })).toBeVisible();
   await popup.close();
   await worker.close();
@@ -54,7 +54,7 @@ test('the preferences of the Safari build name Safari, and offer no panel and no
     'Show CSS selectors',
     'Corner of the widget',
     'Allow captures on every site',
-    'Leave feedback shortcut',
+    'Leave a note shortcut',
   ]);
   await expect(prefs.getByText('Change it in Safari Settings, Extensions.')).toBeVisible();
   await expect(prefs.getByText(/^Your browser will ask you to allow Fruitback on every website\./)).toBeVisible();

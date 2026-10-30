@@ -19,14 +19,14 @@ test('the settings copy the notes on screen as text', async ({ page, context }) 
   await plantPin(page, page.locator('#checkout-cta'), 'Le bouton est trop bas');
 
   await page.getByLabel('Open Fruitback settings').click();
-  await page.getByRole('button', { name: 'Copy the feedback as text' }).click();
+  await page.getByRole('button', { name: 'Copy the notes as text' }).click();
   await expect(page.locator('.fruitback-config-copy-status')).toHaveText('Copied');
 
   const copied = await page.evaluate(() => navigator.clipboard.readText());
   const lines = copied.split('\n');
 
   expect(lines[0]).toBe(
-    `# Feedback on ${new URL(page.url()).origin}/?case=${new URL(page.url()).searchParams.get('case')}`,
+    `# Notes on ${new URL(page.url()).origin}/?case=${new URL(page.url()).searchParams.get('case')}`,
   );
   // Two notes, and the heading that a note tried to forge stays a quoted line.
   expect(lines.filter((line) => line.startsWith('## '))).toHaveLength(2);
@@ -44,8 +44,8 @@ test('the settings copy the notes on screen as text', async ({ page, context }) 
     .evaluateAll((pins) => pins.map((pin) => pin.getAttribute('data-fruitback-stage')));
   for (const stage of new Set(stages)) await page.locator(`[name="stage-${stage}"]`).uncheck();
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Copy the feedback as text' }).click();
-  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toMatch(/No feedback on this page\.\n$/);
+  await page.getByRole('button', { name: 'Copy the notes as text' }).click();
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toMatch(/No note on this page\.\n$/);
 });
 
 // FRU-288: when the clipboard refuses, the field to copy from opens on the title, not on the last note.
@@ -61,7 +61,7 @@ test('a refused copy shows the text from its first line, all of it selected', as
   });
 
   await page.getByLabel('Open Fruitback settings').click();
-  await page.getByRole('button', { name: 'Copy the feedback as text' }).click();
+  await page.getByRole('button', { name: 'Copy the notes as text' }).click();
   const field = page.getByRole('textbox', { name: 'Copy the text from here' });
   await expect(field).toBeFocused();
 
@@ -75,5 +75,5 @@ test('a refused copy shows the text from its first line, all of it selected', as
   expect(shown.overflows).toBe(true);
   expect(shown.scrollTop).toBe(0);
   expect(shown.selected).toBe(true);
-  expect(shown.first).toMatch(/^# Feedback on /);
+  expect(shown.first).toMatch(/^# Notes on /);
 });

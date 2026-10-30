@@ -53,7 +53,7 @@ test('the frame and the composer stay on a fixed link when the page scrolls', as
   await addFixedLink(page);
 
   // In a capture: the frame is on the link under the pointer.
-  await page.getByRole('button', { name: /Leave feedback/ }).click();
+  await page.getByRole('button', { name: /Leave a note/ }).click();
   await page.locator('#fixed-link').hover();
   const hovered = await tops(page);
   expect(hovered.frame).not.toBeNull();
@@ -76,7 +76,7 @@ test('the composer of an element that scrolls with the page stays with that elem
   // the composer leaves the window with it rather than slide along the window.
   await openPlayground(page, 'scroll-static');
   await addFixedLink(page);
-  await page.getByRole('button', { name: /Leave feedback/ }).click();
+  await page.getByRole('button', { name: /Leave a note/ }).click();
   await page.locator('#checkout-cta').click();
   await settled(page);
   const cta = () => page.locator('#checkout-cta').evaluate((node) => Math.round(node.getBoundingClientRect().top));
