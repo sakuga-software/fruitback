@@ -163,7 +163,7 @@ test('the settings have two pages, « General » and « AI », and « Agents » 
 }) => {
   await workerWith(page, [ACME]);
   await page.goto(`${CONSOLE}/w/w1/settings`);
-  const pages = page.getByRole('main').getByRole('navigation', { name: 'Workspace settings' }).getByRole('link');
+  const pages = page.getByRole('main').getByRole('navigation', { name: 'Pages of the settings' }).getByRole('link');
   await expect(pages).toHaveText(['General', 'AI']);
   await expect(pages.first()).toHaveAttribute('aria-current', 'page');
   await expect(pages.last()).not.toHaveAttribute('aria-current');

@@ -19,6 +19,7 @@ import { PageHead as KitPageHead, Logo, Menu } from '../ui';
 import { RailIcon, type RailIconName } from '../rail-icons';
 import { manages } from '../setup-stage';
 import { useLocale } from '../use-locale';
+import { underSettings } from '../settings-path';
 
 /**
  * The frame of a workspace, as the mockup of 2026-10-13 draws it (FRU-234): a dark rail with the
@@ -173,7 +174,7 @@ export default function WorkspaceFrame() {
           onSettings={() => navigate(`/w/${context.workspace.id}/settings`, { viewTransition: true })}
           // The entry « Settings » is the one on screen when the rail has it: the name is not a second one.
           // Every page of the settings is the settings: « General » and « AI » (FRU-544).
-          settings={current?.path !== 'settings' && pathname.startsWith(`/w/${context.workspace.id}/settings`)}
+          settings={current?.path !== 'settings' && underSettings(pathname, context.workspace.id)}
           admin={context.me.instanceAdmin === true}
         />
       }

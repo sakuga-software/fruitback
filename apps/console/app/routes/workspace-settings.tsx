@@ -27,7 +27,9 @@ export function SettingsNav({ workspace, current }: { workspace: Workspace; curr
 
   return (
     <SubNav
-      label={t('Workspace settings')}
+      // Not « Workspace settings »: a name that holds « Workspace », the name of the rail, would be
+      // found by a search of that name too.
+      label={t('Pages of the settings')}
       entries={[
         { to: base, label: t('General'), current: current === 'general' },
         { to: `${base}/ai`, label: t('AI'), current: current === 'ai' },
