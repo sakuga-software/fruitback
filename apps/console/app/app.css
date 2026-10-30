@@ -560,6 +560,31 @@ textarea {
   line-height: normal;
 }
 
+/*
+ * A long value is cut with « … » before the chevron (FRU-549): « https://staging.a-very-long… ». It
+ * went past its button, over the chevron and the list beside it, and 31 px past a phone.
+ */
+.kit-field .select__value {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The list of a select is no wider than 360 px, nor than the screen; its labels are cut to it. */
+.kit-select-popover {
+  max-width: min(360px, calc(100vw - 32px));
+}
+
+.kit-option-label {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .kit-field[data-compact='true'] .input,
 .kit-field[data-compact='true'] .select__trigger {
   height: var(--spacing-control-panel);
