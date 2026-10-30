@@ -39,6 +39,7 @@ import {
   type SiteSettings,
   type Workspace,
   addSite,
+  addableFromPopup,
   addableWorkspaces,
   cloudEntry,
   finishAdd,
@@ -575,6 +576,8 @@ function waitForTheConsole(waiting: PendingConnect, unanswered: boolean): void {
 }
 
 const NO_RULE = msg('No rule covers this origin, so Fruitback does nothing here.');
+/** FRU-537: the popup adds a site over https, or the loopback; another http site from the console. */
+const HTTP_SITE = msg('This site is on http. Add it to a workspace from the console, then turn it on here.');
 
 /** What `offerFor` needs, bound to the popup's one `Sessions`. */
 function cloudSeams(): CloudSeams {
@@ -664,6 +667,19 @@ const SETTINGS_PROBLEM: Record<SettingsFailure, string> = {
  * are read now; none, and the popup says who can. « Turn on » adds it, then turns it on.
  */
 async function siteOfNoWorkspace(origin: string, account: Account | undefined): Promise<HTMLElement> {
+  // FRU-537: an http site that is not the loopback is added from the console, never from here. Said
+  // before anything is asked, rather than « Turn on » and « Fruitback did not answer » after.
+  if (!addableFromPopup(origin)) {
+    return turnOnScreen(document, {
+      origin,
+      visibility: 'members',
+      workspaces: [],
+      unaddable: t(HTTP_SITE),
+      ...(account === undefined ? {} : { account }),
+      onTurnOn: () => undefined,
+      onSettings: openSettings,
+    });
+  }
   const listed = CLOUD === undefined ? [] : await addableWorkspaces(CLOUD, cloudSeams());
   // Fruitback said nothing: that is an outage, not « ask an admin ».
   if (listed === undefined) return unreachableScreen(account);
@@ -793,6 +809,7 @@ const ADD_PROBLEM: Record<Exclude<AddFailure, 'signed-out'>, string> = {
   forbidden: msg('Your role in this workspace does not let you add a site.'),
   'rate-limited': msg('Too many sites were added in the last hour. Try again later.'),
   unavailable: msg('The site was not added. Try again in a moment.'),
+  'insecure-origin': HTTP_SITE,
 };
 
 /**

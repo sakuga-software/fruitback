@@ -595,7 +595,7 @@ function NoteRow({
 
 /**
  * Who left a note (FRU-553): the icon of their role, then their name cut to its room. The tooltip,
- * under the pointer and under the focus, says the name whole and the role.
+ * under the pointer, says the name whole and the role; a screen reader reads both in the cell.
  */
 function Author({ author, site }: { author: NoteAuthor; site: string }) {
   useLocale();
@@ -604,11 +604,12 @@ function Author({ author, site }: { author: NoteAuthor; site: string }) {
   const role = author.kind === 'verified' ? t(AUTHOR_WORDS.verified, { site }) : t(AUTHOR_WORDS[author.kind]);
 
   return (
-    <Tip label={`${who}, ${role}`} tip={`${who} · ${role}`}>
+    <Tip tip={`${who} · ${role}`}>
       <span className="text-muted">
         <NoteIcon name={author.kind} />
       </span>
       <span className="min-w-0 truncate">{who}</span>
+      <span className="sr-only">{`, ${role}`}</span>
     </Tip>
   );
 }

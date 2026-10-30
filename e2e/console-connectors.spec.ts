@@ -651,7 +651,7 @@ for (const { width, height, locale, words } of [
     locale: 'fr',
     words: {
       rename: 'Renommer Linear',
-      field: 'Nom de cette source',
+      field: 'Nom de ce connecteur',
       save: 'Enregistrer',
       refused: 'Un nom d’une ligne, de 80 caractères au plus.',
     },
