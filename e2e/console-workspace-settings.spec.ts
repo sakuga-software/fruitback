@@ -162,6 +162,13 @@ test('the section « Agents » leads to the keys, the addresses that receive, an
     '/w/w1/settings/agents',
   );
   await expect(agents.getByRole('link', { name: 'Connectors' })).toHaveAttribute('href', '/w/w1/connectors');
+  // The three steps are numbered: a `li` that is a flex box would draw no number.
+  const steps = agents.locator('ol > li');
+  await expect(steps).toHaveCount(3);
+  for (const index of [0, 1, 2])
+    expect(await steps.nth(index).evaluate((li) => getComputedStyle(li).display), `step ${index + 1}`).toBe(
+      'list-item',
+    );
   const sites = agents.getByRole('list', { name: 'Start an agent, by site' });
   await expect(sites.getByRole('link')).toHaveText(['Start an agent on staging.acme.dev']);
   await expect(sites.getByRole('link')).toHaveAttribute('href', '/w/w1/sites/s1#agent');

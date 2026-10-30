@@ -139,11 +139,14 @@ function AgentsSection({ workspace, may }: { workspace: Workspace; may: boolean 
       </p>
       {may ? (
         <ol className="flex list-decimal flex-col gap-[14px] pl-[20px] text-body">
-          <li className="flex flex-col items-start gap-[8px]">
-            <span>{t('A key for each agent.')}</span>
-            <Button tone="outline" size="page" to={`${base}/settings/agents`}>
-              {t('Manage the agent keys')}
-            </Button>
+          {/* A `li` that is a flex box draws no number: the layout is in a box inside it. */}
+          <li>
+            <div className="flex flex-col items-start gap-[8px]">
+              <span>{t('A key for each agent.')}</span>
+              <Button tone="outline" size="page" to={`${base}/settings/agents`}>
+                {t('Manage the agent keys')}
+              </Button>
+            </div>
           </li>
           <li>
             {t('To start an agent when a note arrives: an address of your team that receives the call.')}{' '}
@@ -151,9 +154,11 @@ function AgentsSection({ workspace, may }: { workspace: Workspace; may: boolean 
               {t('Connectors')}
             </LinkButton>
           </li>
-          <li className="flex flex-col gap-[8px]">
-            <span>{t('Then, site by site, when to call it.')}</span>
-            <SiteTriggers base={base} sites={sites} onRetry={() => void load()} />
+          <li>
+            <div className="flex flex-col gap-[8px]">
+              <span>{t('Then, site by site, when to call it.')}</span>
+              <SiteTriggers base={base} sites={sites} onRetry={() => void load()} />
+            </div>
           </li>
         </ol>
       ) : (
