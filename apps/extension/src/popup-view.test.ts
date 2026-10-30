@@ -697,9 +697,46 @@ describe('3 · a site on (FRU-298)', () => {
     ]);
 
     screen.querySelector<HTMLButtonElement>('.kit-primary')?.click();
-    screen.querySelector<HTMLButtonElement>('.action-block .kit-secondary')?.click();
+    screen.querySelector<HTMLButtonElement>('.leave-row .panel-button')?.click();
     screen.querySelector<HTMLButtonElement>('[role="switch"]')?.click();
     assert.deepEqual(calls, ['leave', 'panel', 'toggle:false']);
+  });
+
+  it('puts « Leave feedback » at the bottom, the side panel beside it as an icon, the keys under both (FRU-529)', () => {
+    const screen = on({ visibility: { shown: true, onChange: nothing } });
+    showSiteFacts(screen, { workspace: 'Acme', on: true, onOpenPanel: nothing }, { toCheck: 2, open: 3 });
+    const body = screen.querySelector('.popup-body') as HTMLElement;
+
+    // The site, then what waits under it, then the block of « Leave feedback », last of the body.
+    assert.deepEqual(
+      [...body.children].map((child) => child.className),
+      ['site-row', 'visibility-row', 'site-lines', 'leave-block'],
+    );
+    const leave = body.querySelector('.leave-block') as HTMLElement;
+    assert.deepEqual(
+      [...leave.children].map((child) => child.className),
+      ['leave-row', 'shortcut-line'],
+    );
+    const [feedback, panel] = [...leave.querySelectorAll('.leave-row > button')];
+    assert.equal(feedback?.textContent, 'Leave feedback');
+    // The side panel: one icon, no word; its name in aria-label and in the tooltip.
+    assert.equal(panel?.textContent, '');
+    assert.equal(panel?.getAttribute('aria-label'), 'Show all notes in a sidebar');
+    assert.equal(panel?.getAttribute('title'), 'Show all notes in a sidebar');
+    assert.equal(panel?.querySelector('svg')?.getAttribute('aria-hidden'), 'true');
+    assert.equal(screen.querySelector('.action-block'), null);
+  });
+
+  it('keeps the layout with the foot of a paired session, and draws no button when hidden (FRU-529)', () => {
+    const foot = page().createElement('div');
+    foot.className = 'popup-foot';
+    const paired = on({ foot });
+    assert.ok(paired.querySelector('.leave-row .panel-button') !== null);
+    assert.equal(paired.lastElementChild?.className, 'popup-foot');
+
+    const hidden = on({ visibility: { shown: false, onChange: nothing } });
+    assert.equal(hidden.querySelector('.leave-block'), null);
+    assert.equal(hidden.querySelector('.panel-button'), null);
   });
 
   it('has no line of keys when the browser has no shortcut', () => {
@@ -766,10 +803,9 @@ describe('3 · a site on (FRU-298)', () => {
       [...screen.querySelectorAll('.kit-row-title')].map((title) => title.textContent),
       ['2 corrections à vérifier', '1 note ouverte'],
     );
-    assert.equal(
-      screen.querySelector('.action-block .kit-secondary')?.textContent,
-      'Voir toutes les notes dans un panneau',
-    );
+    const panel = screen.querySelector('.leave-row .panel-button');
+    assert.equal(panel?.getAttribute('aria-label'), 'Voir toutes les notes dans un panneau');
+    assert.equal(panel?.getAttribute('title'), 'Voir toutes les notes dans un panneau');
   });
 });
 

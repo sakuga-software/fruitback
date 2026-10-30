@@ -3,7 +3,7 @@ import { createAll } from './batch.ts';
 import { GithubInstallationGone, GithubRepositoryRefused } from './github-connector.ts';
 import { LinearKeyForbidden, LinearKeyRefused } from './linear.ts';
 import { LinearConnectionEnded } from './linear-oauth.ts';
-import type { NoteStore } from './store.ts';
+import { type NoteStore, findNote } from './store.ts';
 
 /**
  * Whether a connector works, as its tracker last said (FRU-102).
@@ -86,6 +86,7 @@ export function watchedStore(
     createBatch: (notes, client, policy, memory) =>
       watched(client?.connector, () => createAll(store, notes, client, policy, memory)),
     findForPage: (query, client, policy) => watched(client?.connector, () => store.findForPage(query, client, policy)),
+    findNote: (lookup, client, policy) => watched(client?.connector, () => findNote(store, lookup, client, policy)),
     ...(store.reply === undefined
       ? {}
       : {

@@ -168,6 +168,13 @@ test('lists the five built-in statuses and the ones of the team, with stage, col
   await expect(item(page, 'new')).toContainText('Built in');
   await expect(item(page, 'new').locator('.sr-only', { hasText: 'Colour of the stage' })).toHaveCount(1);
   await expect(page.getByText('A swatch with no code is the colour of the stage of its status.')).toHaveCount(1);
+  // The « 3 » of each pin is a sample: the list says so once, under it (FRU-538).
+  const legend = page.getByText(
+    'Each pin shows how a note in that status looks on the page. The 3 is an example number.',
+  );
+  await expect(legend).toHaveCount(1);
+  await expect(legend).toBeVisible();
+  expect(await item(page, 'new').locator('.kit-pin').textContent()).toBe('3');
   const newText = item(page, 'new').getByTitle('Contrast 9.90:1, text colour Auto');
   await expect(newText).toContainText('Readable');
   await expect(newText.locator('.sr-only')).toHaveText(', Contrast 9.90:1, text colour Auto');
@@ -607,6 +614,11 @@ test('at 390 px in French: one card per status, no sideways scroll, and the word
   await expect(item(page, 'new')).toContainText('· 3 notes');
   await expect(item(page, 'todo')).toContainText('· Aucune note');
   await expect(item(page, 'new')).toContainText('Phase');
+  await expect(
+    page.getByText(
+      'Chaque pin montre à quoi ressemble une note de ce statut sur la page. Le 3 est un numéro d’exemple.',
+    ),
+  ).toBeVisible();
   await expect(item(page, 'waiting').getByTitle('Contraste 10,63:1, couleur du texte Auto')).toContainText('Lisible');
   expect(await sideScroll(page)).toBe(0);
   await expectNoViolation(page, 'the list at 390 px');

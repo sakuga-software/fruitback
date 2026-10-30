@@ -47,6 +47,7 @@ function draw(state: WelcomeSignIn | undefined): void {
   app?.replaceChildren(
     welcomeScreen(document, {
       openPopup,
+      reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,
       ...(state === undefined
         ? {}
         : {

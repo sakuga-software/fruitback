@@ -69,6 +69,13 @@ export type BatchMemory = {
 /** The read the worker asks for: every note on one page, for one client. */
 export type NoteIssueQuery = { url: string; clientId: string | undefined };
 
+/**
+ * One note of one page, for one client (FRU-499): by the `id` of its issue (`by: 'issue'`), or by the
+ * id the widget gave it (`by: 'note'`). A write reads the note it changes with this, and not the
+ * whole page.
+ */
+export type NoteLookup = NoteIssueQuery & { id: string; by: 'issue' | 'note' };
+
 export type NoteStore = {
   /** For `/health` and the boot log. Never for an error code — see `StoreError`. */
   readonly name: string;
@@ -128,6 +135,12 @@ export type NoteStore = {
     memory?: BatchMemory,
   ): Promise<BatchAnswer[]>;
   findForPage(query: NoteIssueQuery, client: ClientConfig | undefined, policy: ClientPolicy): Promise<NoteIssue[]>;
+  /**
+   * One note of a page (FRU-499): the issue that `findForPage` answers for this lookup, with the same
+   * replies, or `undefined`. Absent: `findNote` below reads the whole page and picks the note. A store
+   * that can read one row has it, and a write then reads one note and its newest replies only.
+   */
+  findNote?(lookup: NoteLookup, client: ClientConfig | undefined, policy: ClientPolicy): Promise<NoteIssue | undefined>;
   /**
    * Delete the notes that `which` selects, and the replies to them (FRU-85, FRU-111).
    *
@@ -243,6 +256,27 @@ export type NewEdit = { text: string; author: Extract<ReplyAuthor, { kind: 'memb
 
 /** A reply to write: what somebody typed, and who they are. */
 export type NewReply = { body: string; author: ReplyAuthor };
+
+/** Whether `issue` is the note that `lookup` names. */
+export function isLookedUp(lookup: NoteLookup, issue: NoteIssue): boolean {
+  return lookup.by === 'issue' ? issue.id === lookup.id : issue.note.id === lookup.id;
+}
+
+/**
+ * The note that `lookup` names, read in the store (FRU-499): by `findNote` when the store has it,
+ * else in the whole page. The first that matches, as `findForPage` orders them.
+ */
+export async function findNote(
+  store: NoteStore,
+  lookup: NoteLookup,
+  client: ClientConfig | undefined,
+  policy: ClientPolicy,
+): Promise<NoteIssue | undefined> {
+  if (store.findNote !== undefined) return store.findNote(lookup, client, policy);
+  const { url, clientId } = lookup;
+
+  return (await store.findForPage({ url, clientId }, client, policy)).find((issue) => isLookedUp(lookup, issue));
+}
 
 /** Whether a store takes the files of a note for this client (FRU-331). */
 export async function takesAttachments(store: NoteStore, client: ClientConfig | undefined): Promise<boolean> {

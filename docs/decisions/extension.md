@@ -389,7 +389,7 @@ did not change: the fields of 760 px and the file input of the browser are as th
   (« Change », a target of 44 px), the switch (44 × 26, 36 × 22 in a table, 40 × 24 in the
   preferences), the tile and the line of a site, the drop of a status (a mark of 12 px, a pin of
   24 or 28 px with its number), the row of a list (52 px and a chevron), the `dl`, the alert, the
-  keys of a shortcut and the segmented tabs.
+  keys of a shortcut, the segmented tabs, and the list to choose from (`listSelect`, FRU-535).
 - **Every control is a native `button` of type `button`**: Space and Enter press it, and it takes
   the focus ring. The tabs have the keyboard of a tab list: the chosen tab is the one stop, and the
   arrows, Home and End move and choose.
@@ -527,6 +527,15 @@ did not change: the fields of 760 px and the file input of the browser are as th
   on ». It keeps nothing. It reads the worker for one thing only, the scope « Whole site » of
   « Search and options » (FRU-307, see below).
 - **The panel lists the notes of the page (FRU-299)**: see the next section.
+- **One side margin, `--panel-gutter` (12 px), for every block of the panel** (FRU-533): the head,
+  « Leave feedback », « Ready to check », the tabs, the rows, the search and the foot take it from
+  `sidepanel/style.css`, and a row gives the words of its note `--panel-row-inset` inside the box an
+  open row draws, so they sit on the gutter too. The page takes off the 14 px of padding that the
+  body of `popup/style.css` gives (the panel links that sheet first): before, every block sat 14 px
+  further in, 34 px from the edge. `side-panel.spec.ts` measures 12 px in the panel itself.
+  `side-panel.test.ts` fails on a block with a margin
+  of its own, and on a side margin of 18 or 20 px, the margins of before. « All pages » of the widget
+  (FRU-470) is drawn by the widget, with its own sheet: it is not one of these blocks.
 - **« Open Fruitback » opens the popup from the panel (FRU-532)**, under « Fruitback is not on for
   this page. » and under a session that ended: the popup is where a site is turned on and a session
   signed in again. It calls `action.openPopup()` in the click, before any `await`
@@ -598,6 +607,11 @@ holds `http://127.0.0.1/*`; a page of `http://127.0.0.1` with no rule, the panel
 - **A row says the status of its note, in its colour** (FRU-370): the name of the status, then the word
   of the store, then the word of the stage, and the drop in the colour the team chose. « Open » and
   « Done » stay by stage. See [statuses.md](statuses.md), « What the widget draws ».
+- **A note holds one line in a list, cut with « … »** (FRU-534): a closed row of « Open » and
+  « Done », « Ready to check », the rows of « Search and options » on the page and on the whole
+  site, and the detached notes. An open row shows the whole note. The sheet cuts it, never the
+  code: the text stays whole in the DOM, so the name of the button of the row and the specs read
+  all of it, and `title` gives it to a pointer.
 - **A reply is 2,000 characters at most**, the length the worker takes: the field takes no more.
 - **The panel does not poll.** `notes` answers the notes, or why there are none: a read not answered
   (the panel waits for `notes-changed`), a read that failed (« Try again » asks the widget to read
@@ -624,6 +638,15 @@ holds `http://127.0.0.1/*`; a page of `http://127.0.0.1` with no rule, the panel
   the scope « This page · {n} » / « Whole site · {n} », « Search notes », the chips All, New, To do,
   In progress and Done with their counts (`aria-pressed`), and « Show pins on the page » at the foot.
   `src/search-options.ts` draws them, with no `browser`.
+- **Beyond five statuses, the chips become a list** (FRU-535): a team's own statuses (Linear's
+  « In Review », FRU-370) can make more than `MAX_CHIPS`. Then « Status · {choice} · {count} » opens
+  `listSelect` of the kit: « All », then each status with the drop in its colour, its name and its
+  number of notes, in the order of the stages. It filters by the status, by its name, where the chips
+  filter by stage. The list lies over the notes and pushes nothing (`position: absolute`). It is a
+  `listbox`, never a native `select`: the arrows, Home and End move, Enter and Space choose, Escape
+  and Tab close, the focus goes back to its button, and a click outside closes it. The panel keeps it
+  open across a draw (`statusOpen`), on the option the keyboard is on (`statusActive`). « Whole site » reads the stage of a note only (FRU-306), so it
+  never has more than five, and keeps its chips.
 - **While it is open, one list stands in for « Ready to check » and the tabs**: the chips do what
   Open and Done did. Closing it gives the panel of FRU-299 and FRU-300 back as it was.
 - **« This page » filters the notes the widget read**: every word of the search in the whole text of

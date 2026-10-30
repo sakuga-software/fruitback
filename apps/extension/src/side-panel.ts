@@ -8,10 +8,11 @@ import {
   detachedPart,
   magnifier,
   matchesPage,
-  passes,
+  noteWords,
   pinsSwitch,
   searchControls,
   siteList,
+  statusFilter,
 } from './search-options.ts';
 
 /**
@@ -592,7 +593,9 @@ function searchedPart(
   if (state.scope === 'site') return siteList(document, state, handlers, options.now ?? Date.now(), ageOf);
   if (!Array.isArray(notes) || notes.length === 0) return notesPart(document, options, notes);
 
-  const found = notes.filter((note) => matchesPage(note, state.q) && passes(note.stage, state.stage)).sort(byNumber);
+  const matching = notes.filter((note) => matchesPage(note, state.q));
+  const keeps = statusFilter(state, notes);
+  const found = matching.filter(keeps).sort(byNumber);
   const placed = found.filter((note) => note.placement !== 'detached');
   const parts: Node[] = [];
   if (placed.length === 0) {
@@ -640,7 +643,7 @@ function noteRow(document: Document, options: PanelOptions, note: PanelNote): HT
     make(document, 'strong', 'panel-row-stage', stateWord(note, t(STAGE_WORD[note.stage]))),
     ` · ${saidOf(note, now, reopenedAt)}`,
   );
-  words.append(make(document, 'span', 'panel-row-note', note.note), meta);
+  words.append(noteWords(document, 'span', 'panel-row-note', note.note), meta);
   head.append(drop, words);
   row.append(head);
   if (!opened) return row;
@@ -737,7 +740,7 @@ function readyBlock(document: Document, options: PanelOptions, ready: PanelNote[
     const paint = notePaint(note);
     const words = make(document, 'div', 'ready-words');
     words.append(
-      make(document, 'span', 'ready-note', note.note),
+      noteWords(document, 'span', 'ready-note', note.note),
       make(document, 'span', 'ready-meta', fixedLine(note, now)),
     );
     head.append(

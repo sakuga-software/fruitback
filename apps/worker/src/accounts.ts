@@ -142,6 +142,35 @@ export function readableSites<T extends { id: string }>(sites: readonly T[], rea
 /** A site as the invitations and the members name it (FRU-250): its id and its address. */
 export type SharedSite = { id: string; origin: string };
 
+/**
+ * A member of a workspace and their person, as `list-members` of the organization plugin of
+ * better-auth answers them (FRU-496): the row of `member`, and four fields of `user`.
+ */
+export type WorkspaceMember = {
+  id: string;
+  organizationId: string;
+  userId: string;
+  role: string;
+  createdAt: Date;
+  user: { id: string; name: string; email: string; image: string | null };
+};
+
+/** One page of the members of a workspace (FRU-496), and how many members the search finds in all. */
+export type MembersPage = { members: WorkspaceMember[]; total: number };
+
+/** An invitation as the organization plugin keeps it: its row of `invitation`, every column. */
+export type InvitationRow = {
+  id: string;
+  organizationId: string;
+  email: string;
+  role: string | null;
+  status: string;
+  expiresAt: Date;
+  createdAt: Date;
+  inviterId: string;
+  mailed: boolean | null;
+};
+
 /** How many agent keys one workspace holds (FRU-461). A connection of OAuth counts as one (FRU-467). */
 export const MAX_AGENT_KEYS = 20;
 
@@ -542,6 +571,16 @@ export type AccountStore = {
   shareByInvitation(workspace: string, invitation: string, sites: readonly string[]): Promise<boolean>;
   /** The sites each of these invitations names, by invitation id. An invitation that names none is absent. */
   sitesOfInvitations(invitations: readonly string[]): Promise<Map<string, SharedSite[]>>;
+  /**
+   * The invitations of `workspace` that wait (FRU-496): `pending`, and not past their end at `now`,
+   * oldest first. The accepted, declined, cancelled and ended ones stay in the table, and are not read.
+   */
+  waitingInvitations(workspace: string, now: Date): Promise<InvitationRow[]>;
+  /**
+   * One page of the members of `workspace` (FRU-496), oldest first, and their count. `search`: the
+   * members whose name or address holds it, whatever the case. `%`, `_` and `\` match themselves.
+   */
+  membersOf(workspace: string, page: { search?: string; limit: number; offset: number }): Promise<MembersPage>;
   /**
    * What `account` reads in the workspace of `invitation` once it accepts it (FRU-250), written before
    * the acceptance: the sites of the invitation, in place of any share the person had there. An

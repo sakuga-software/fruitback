@@ -85,6 +85,13 @@ test('a click in the popup opens the panel on the tab, and the panel follows the
   await expect.poll(async () => (await panelWords(page)).site).toBe(new URL(PLAYGROUND_ORIGIN).host);
   const said = await words(page);
   expect(await panelWords(page)).toMatchObject({ title: said.title, close: said.close });
+  // FRU-533: the title, the action and the foot sit on the gutter of 12 px, in the panel itself.
+  expect(
+    await inPanel<number[]>(
+      page,
+      `['.panel-title', '.panel-action .kit-primary', '.panel-where'].map((selector) => Math.round(document.querySelector(selector).getBoundingClientRect().left))`,
+    ),
+  ).toEqual([12, 12, 12]);
 
   // Another tab, on a page Fruitback is not on: the panel says so. Back: the site again.
   const other = await extension.context.newPage();
