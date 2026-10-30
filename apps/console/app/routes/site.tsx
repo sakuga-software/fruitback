@@ -18,7 +18,7 @@ import { InstallOptions } from '../install-options';
 import { type Listed, edited, listedOf } from '../listed';
 import { problemOf } from '../problems';
 import { siteLabel, siteName } from '../site-address';
-import { Button, KeyValue, LinkButton, LoadFailed, Pick, Problem } from '../ui';
+import { Button, Disclosure, KeyValue, LinkButton, LoadFailed, Pick, Problem } from '../ui';
 import { useLocale } from '../use-locale';
 import { WritersPick } from '../writers-pick';
 import { SitePlaces } from './site-places';
@@ -38,12 +38,26 @@ const ACCESS_NOT_CHANGED = msg('Nothing was changed. Try again.');
 type Access = { visibility: Visibility; writers?: Writers };
 
 /** The sections of the page that an address reaches with its hash: `…/sites/<site>#install`. */
-export const SITE_SECTIONS = ['install', 'destinations', 'statuses', 'previews', 'remove'] as const;
+export const SITE_SECTIONS = [
+  'install',
+  'destinations',
+  'advanced',
+  'statuses',
+  'agent',
+  'previews',
+  'remove',
+] as const;
+
+/** The sections folded under « Advanced » (FRU-538): the page shows first what most people come for. */
+const ADVANCED: readonly string[] = ['statuses', 'agent', 'previews'];
 
 /**
  * The page of one site (FRU-433, Mathieu): what the grid of the Sites screen unfolded under a card, in
  * one place. Its address and who writes there, how to install Fruitback on it, where its notes go, a
  * link to its statuses, the preview builds, and its removal. The grid draws cards only.
+ *
+ * « Advanced » folds the statuses, « Start an agent » and the preview builds (FRU-538): the page shows
+ * first the notes, the install, and who sees and who writes. A hash of a section inside opens it.
  *
  * The page reads the list of the sites, as the page of the statuses does: the worker has no route for
  * one site, and no route of the worker is new.
@@ -91,9 +105,13 @@ export default function SitePage() {
   useEffect(() => {
     if (wanted === 'remove') setRemoving(true);
   }, [wanted, hash]);
+  const [advanced, setAdvanced] = useState(ADVANCED.includes(wanted));
+  const folded = useRef<HTMLDetailsElement>(null);
   const drawn = site !== undefined;
   useEffect(() => {
     if (!drawn || wanted === '') return;
+    // A folded section has no box to scroll to: it opens first, in the same frame. `toggle` sets the state.
+    if (ADVANCED.includes(wanted) && folded.current !== null) folded.current.open = true;
     document.getElementById(wanted)?.scrollIntoView({ block: 'start' });
   }, [drawn, wanted]);
 
@@ -246,28 +264,36 @@ export default function SitePage() {
         ) : null}
 
         {manages ? (
-          <Section id="statuses" title={t('Statuses')}>
-            <p className="text-small text-muted">
-              {t(
-                'The name and the colour of each status, and the stage it belongs to. The stage decides the filters and the counts.',
-              )}
-            </p>
-            <div>
-              <Button tone="outline" to={`/w/${workspace.id}/sites/${site.id}/statuses`}>
-                {t('Edit the statuses')}
-              </Button>
+          <Disclosure
+            id="advanced"
+            ref={folded}
+            title={t('Advanced')}
+            hint={t('Statuses, starting an agent, preview deploys')}
+            open={advanced}
+            onToggle={setAdvanced}
+          >
+            <Section id="statuses" title={t('Statuses')}>
+              <p className="text-small text-muted">
+                {t(
+                  'The name and the colour of each status, and the stage it belongs to. The stage decides the filters and the counts.',
+                )}
+              </p>
+              <div>
+                <Button tone="outline" to={`/w/${workspace.id}/sites/${site.id}/statuses`}>
+                  {t('Edit the statuses')}
+                </Button>
+              </div>
+            </Section>
+            <SiteAgent
+              workspace={workspace}
+              site={site}
+              connectors={connectors}
+              onRetry={() => void readConnectors()}
+            />
+            <div id="previews" className="scroll-mt-[24px] [&>section]:mt-0">
+              <Domains workspace={workspace} sites={sites} />
             </div>
-          </Section>
-        ) : null}
-
-        {manages ? (
-          <SiteAgent workspace={workspace} site={site} connectors={connectors} onRetry={() => void readConnectors()} />
-        ) : null}
-
-        {manages ? (
-          <div id="previews" className="scroll-mt-[24px] [&>section]:mt-0">
-            <Domains workspace={workspace} sites={sites} />
-          </div>
+          </Disclosure>
         ) : null}
 
         {manages ? (

@@ -309,7 +309,7 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   a value set elsewhere; the value of a `Choice` in the type of its button, so its words sit on the
   baseline of a field beside it (FRU-412: HeroUI writes it at 14 px on a line of 20); `status` on a `Choice` draws the drop of the chosen status in a list of 38 px), `Pick` (radio cards), `Toggle`, `FilterChip` (`aria-pressed`), `StatusDot`
   and `StatusBar`, `DataTable` (`stack`: under 640 px one card per row, its cells one under the other, FRU-505), `SidePanel` (named by its title, or by `label`; `panelId` for `aria-controls`; `flush` for an accordion under its row), `KeyValue`, `SuccessMark`, `Title`, `Lead`, `PageHead`,
-  `Initial`, `Card`, `Chip`, `Problem`, `LoadFailed` (a read that failed: a title, a sentence that nothing is lost, and one « Try again », FRU-508), `Logo` (the name as outlines, in tokens: `logo.tsx`), `EntryPage`
+  `Initial`, `Card`, `Chip`, `Disclosure` (sections folded under one line, a `<details>`: Enter and Space open it, a screen reader hears it expanded or collapsed, and its line is 44 px between two rules, FRU-538), `Problem`, `LoadFailed` (a read that failed: a title, a sentence that nothing is lost, and one « Try again », FRU-508), `Logo` (the name as outlines, in tokens: `logo.tsx`), `EntryPage`
   (the header and the column of a page outside a workspace; `/kit/entry` mounts it), `Divider`, `Menu`
   (a button that opens a menu, on the dropdown of HeroUI: the menu is named after its button, a
   `chosen` item makes it a choice of radios, and it is drawn as a page wherever its button is; the
@@ -440,13 +440,16 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   of the statuses, and its title is the name of the site, at the place of every title (FRU-405). Its
   sections, in this order: the site (its address, who sees its notes, who can leave one, read only);
   « Install », for every role; where its notes go (`site-places.tsx`) for who manages the sites and
-  sees the tracker; « Statuses », a link to the page of the statuses (FRU-371), which is too large
-  to be a section, and whose crumbs lead back here; the preview builds (`domains.tsx`); « Remove
-  this site ». A member and a guest read the first two only. **It reads the list of the sites**, as
+  sees the tracker; « Advanced », folded by default (FRU-538), which holds « Statuses », a link to
+  the page of the statuses (FRU-371), which is too large to be a section, and whose crumbs lead back
+  here, « Start an agent » and the preview builds (`domains.tsx`); « Remove this site ». The page
+  shows first who sees and who writes, the install and where the notes go: the rest is set once.
+  A member and a guest read the first two only, and have no « Advanced ». **It reads the list of the sites**, as
   the page of the statuses does: the worker has no route for one site, and no route of the worker
   is new. A site that is not in the list says « This site is not in the workspace any more. », and
   a read that failed is the alert of the Sites screen, with « Try again ». A hash of the address
-  scrolls to its section once the site is drawn. `e2e/console-site-page.spec.ts` holds the
+  scrolls to its section once the site is drawn, and a hash of a section under « Advanced »
+  (`#statuses`, `#agent`, `#previews`) opens it first. `e2e/console-site-page.spec.ts` holds the
   sections, the roles, the hash, the two failures, 390 px in English and in French, and axe.
 - **The agent keys of a workspace have a page of their own** (FRU-462, `routes/agents.tsx`, the
   board `design/agents/`), `/w/<workspace>/settings/agents`, with the crumbs « Workspace settings ›

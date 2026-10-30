@@ -1228,6 +1228,58 @@ export function Callout({
   );
 }
 
+/**
+ * Sections that a page keeps folded under one line (FRU-538): a `<details>`, so the keyboard opens it
+ * with Enter or Space, and a screen reader hears a button that is expanded or collapsed. `hint` says
+ * what is inside while it is folded. `open` and `onToggle` let the page open it for an address with
+ * the hash of a section inside it.
+ */
+export function Disclosure({
+  id,
+  title,
+  hint,
+  open,
+  onToggle,
+  ref,
+  children,
+}: {
+  id: string;
+  title: string;
+  hint?: string;
+  open: boolean;
+  onToggle: (open: boolean) => void;
+  ref?: Ref<HTMLDetailsElement>;
+  children: ReactNode;
+}) {
+  return (
+    <details
+      id={id}
+      ref={ref}
+      open={open}
+      onToggle={(event) => onToggle(event.currentTarget.open)}
+      className="kit-disclosure"
+    >
+      <summary className="kit-disclosure__summary">
+        <svg aria-hidden="true" viewBox="0 0 24 24" className="kit-disclosure__chevron">
+          <path
+            d="M9 6l6 6-6 6"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+        <span className="flex min-w-0 flex-col">
+          <span className="text-section font-bold">{title}</span>
+          {hint === undefined ? null : <span className="text-small text-muted">{hint}</span>}
+        </span>
+      </summary>
+      <div className="kit-disclosure__body">{children}</div>
+    </details>
+  );
+}
+
 /** One way among a few to do a thing, in its card: its name, then what the screen puts in it. */
 export function OptionCard({ title, children }: { title: string; children: ReactNode }) {
   return (

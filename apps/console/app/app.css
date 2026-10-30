@@ -1501,6 +1501,59 @@ textarea {
   line-height: normal;
 }
 
+/*
+  Sections a page keeps folded (FRU-538): a rule above and below, the line that opens them, and a
+  chevron that turns. The whole line is the target, 44 px at the least. No box: the sections inside
+  keep the width and the gaps of the page.
+*/
+.kit-disclosure {
+  border-top: 1px solid var(--color-line);
+  border-bottom: 1px solid var(--color-line);
+}
+
+.kit-disclosure__summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--spacing-control);
+  padding: 14px 0;
+  cursor: pointer;
+  list-style: none;
+}
+
+.kit-disclosure__summary::-webkit-details-marker {
+  display: none;
+}
+
+.kit-disclosure__chevron {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  color: var(--color-muted);
+  transition: transform var(--duration-fast) var(--ease-settle);
+}
+
+.kit-disclosure[open] .kit-disclosure__chevron {
+  transform: rotate(90deg);
+}
+
+.kit-disclosure__summary:hover .kit-disclosure__chevron {
+  color: var(--color-ink);
+}
+
+.kit-disclosure__body {
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+  padding: 16px 0 32px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kit-disclosure__chevron {
+    transition: none;
+  }
+}
+
 /* Cards or buttons side by side while they have room, then one under the other. */
 .kit-auto-grid {
   display: grid;
