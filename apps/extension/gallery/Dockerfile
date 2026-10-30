@@ -21,7 +21,9 @@ RUN pnpm install --frozen-lockfile --ignore-scripts --filter @fruitback/extensio
 
 COPY packages/shared packages/shared
 COPY apps/extension apps/extension
-RUN pnpm --filter @fruitback/extension gallery:build
+# `.wxt/tsconfig.json`, which the tsconfig of the extension extends, is written by `wxt prepare`: a
+# clone has none, and Vite stops on the missing file.
+RUN pnpm --filter @fruitback/extension exec wxt prepare && pnpm --filter @fruitback/extension gallery:build
 
 FROM nginx:1.29-alpine-slim AS runtime
 
