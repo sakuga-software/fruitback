@@ -458,8 +458,8 @@ Since FRU-119 an account also holds the language its person reads, taken from th
   day at most, when its popup or its page opens: a folder loaded from an archive, Firefox's temporary
   add-on, a build of the sources. The request is `GET` on the API of GitHub, with no cookie, no
   referrer and nothing of the reviewer, but GitHub sees the address it comes from. An extension from
-  the Chrome Web Store, or one an administrator installs by policy, asks nothing: the browser updates
-  it. The extension keeps the number and the time of the question in its own storage.
+  the Chrome Web Store or addons.mozilla.org, or one an administrator installs by policy, asks
+  nothing: the browser updates it. The extension keeps the number and the time of the question in its own storage.
 - The widget sets no cookie.
 
 ## How long a note is kept

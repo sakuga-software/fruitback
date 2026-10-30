@@ -2553,7 +2553,7 @@ before you push the next tag.
 
 - **Only an install that no store updates says it.** `management.getSelf().installType` is
   `development` for a folder loaded by hand and for Firefox's temporary add-on, `sideload` or `other`
-  for an archive another program put there: those ask. `normal` (a store) and `admin` (a policy)
+  for an archive another program put there: those ask. `normal` (the Chrome Web Store, addons.mozilla.org) and `admin` (a policy)
   update on their own, and ask nothing. `getSelf` needs no permission, in Chromium and in Firefox.
 - **The source is the last release on GitHub**, `releases/latest`, the page `reviewing.md` sends a
   reviewer to for the archive. Its API answers any origin, so the request needs no host permission.

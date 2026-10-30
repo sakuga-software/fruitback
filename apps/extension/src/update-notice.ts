@@ -2,10 +2,10 @@
  * « Fruitback 0.6.0 is out » (FRU-519): the line the popup and the options page show when this
  * extension is older than the last release.
  *
- * **Only an install that no store updates asks.** The Chrome Web Store, and a policy of an
- * administrator, update the extension on their own. A folder loaded by hand (`development`), an
- * archive put there by another program (`sideload`) and Firefox's temporary add-on stay on their
- * version until the reviewer installs another. `management.getSelf` says which, and it asks for no
+ * **Only an install that no store updates asks.** The Chrome Web Store, addons.mozilla.org and a
+ * policy of an administrator update the extension on their own. A folder loaded by hand and
+ * Firefox's temporary add-on (`development`), or an archive another program put there (`sideload`),
+ * stay on their version until the reviewer installs another. `management.getSelf` says which, and it asks for no
  * permission. A browser without it asks nothing.
  *
  * **The source is the last release on GitHub**, the page `reviewing.md` sends a reviewer to for the
