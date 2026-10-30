@@ -19,6 +19,44 @@ export async function readBoundedText(request: Request): Promise<string | null> 
   return body === null ? null : new TextDecoder().decode(body);
 }
 
+/**
+ * A body over the cap, thrown by `readJsonObject` (FRU-506). `handleConsole` of `console-routes.ts`
+ * answers it `413 payload-too-large`, with `maxBytes`, as every route that reads its body here.
+ */
+export class BodyTooLarge extends Error {
+  readonly maxBytes = MAX_BODY_BYTES;
+
+  constructor() {
+    super(`the body is over ${MAX_BODY_BYTES} bytes`);
+    this.name = 'BodyTooLarge';
+  }
+}
+
+/**
+ * The body as a JSON object, or `undefined` for a body that is not one: no JSON, an array, a number.
+ * Read under the cap of `readBoundedText`. Over it, this throws `BodyTooLarge`: the routes of the
+ * console read their body in many places, and one `catch` answers all of them.
+ */
+export async function readJsonObject(request: Request): Promise<Record<string, unknown> | undefined> {
+  const text = await readBoundedText(request);
+  if (text === null) throw new BodyTooLarge();
+
+  return parseJsonObject(text);
+}
+
+/** A JSON object, or `undefined`. An array is not an object here, whatever `typeof` says. */
+export function parseJsonObject(text: string): Record<string, unknown> | undefined {
+  try {
+    const parsed: unknown = JSON.parse(text);
+
+    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** The bytes of the body, or `null` over `maxBytes`. The cap of a picture is not the cap of a note (FRU-44). */
 export async function readBoundedBytes(request: Request, maxBytes: number): Promise<Uint8Array | null> {
   const declared = Number(request.headers.get('Content-Length') ?? '');

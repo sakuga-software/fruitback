@@ -252,6 +252,8 @@ describe('the logo of a workspace (FRU-428)', () => {
     ] as const) {
       const answer = await send(people[role].token, bytes, type);
       assert.equal(answer.status, 200, role);
+      // The answer of a session cookie: no cache keeps it (FRU-506). The image itself stays private, max-age.
+      assert.equal(answer.headers.get('Cache-Control'), 'no-store', role);
       const { logo } = (await answer.json()) as { logo: string };
       assert.match(logo, new RegExp(`^/console/workspaces/${id}/logo\\?v=\\d+$`), role);
 
