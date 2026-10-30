@@ -183,14 +183,15 @@ test('the settings lead an owner to the keys, listed with their last use, their 
 }) => {
   await workerWith(page);
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto(`${CONSOLE}/w/w1/settings`);
+  await page.goto(`${CONSOLE}/w/w1/settings/ai`);
   const section = page.getByRole('region', { name: 'Agents' });
   await section.getByRole('link', { name: 'Manage the agent keys' }).click();
   await expect(page).toHaveURL(`${CONSOLE}/w/w1/settings/agents`);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Agents');
-  await expect(
-    page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'Workspace settings' }),
-  ).toBeVisible();
+  // The crumbs lead back to the settings, and to their page « AI » (FRU-544).
+  const crumbs = page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link');
+  await expect(crumbs).toHaveText(['Workspace settings', 'AI']);
+  await expect(crumbs.last()).toHaveAttribute('href', '/w/w1/settings/ai');
 
   await expect(list(page).getByRole('listitem')).toHaveCount(3);
   const ci = row(page, 'Claude on CI');
@@ -334,7 +335,7 @@ test('the writes of a key unfold under its row, and a key revoked after a second
 
 test('a member reads why there is no way to the keys, and the page asks the worker nothing', async ({ page }) => {
   const worker = await workerWith(page, { workspace: { ...ACME, role: 'member' } });
-  await page.goto(`${CONSOLE}/w/w1/settings`);
+  await page.goto(`${CONSOLE}/w/w1/settings/ai`);
   const section = page.getByRole('region', { name: 'Agents' });
   await expect(section).toContainText('Only an owner or an admin of the workspace manages its agent keys.');
   await expect(section.getByRole('link')).toHaveCount(0);

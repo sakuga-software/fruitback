@@ -384,6 +384,10 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   the person. **The section « Agents » shows the whole way of an agent** (FRU-503): its key, an
   address that receives (Connectors), then the trigger of each site, a link to `#agent` on the page
   of the site; anybody but an owner or an admin reads one sentence, and the page asks nothing.
+  **The settings have two pages** (FRU-544, asked by Mathieu): « General » (`/settings`: the name,
+  the logo, the deletion) and « AI » (`/settings/ai`: the section « Agents »), two links of
+  `SubNav` of the kit under the head of both, the page on screen with `aria-current="page"`. The
+  keys of the agents (`/settings/agents`) are reached from « AI », and their crumbs lead back to it.
   `e2e/console-workspace-settings.spec.ts` holds the entry by role, the section and the deletion. **At 900 px and under the sections are one row
   that scrolls in the rail, and the page never scrolls sideways**: the mockup does at 390 px (its
   document is 547 px wide). An edge of the row that hides a section fades, and the section on
