@@ -389,7 +389,7 @@ did not change: the fields of 760 px and the file input of the browser are as th
   (« Change », a target of 44 px), the switch (44 × 26, 36 × 22 in a table, 40 × 24 in the
   preferences), the tile and the line of a site, the drop of a status (a mark of 12 px, a pin of
   24 or 28 px with its number), the row of a list (52 px and a chevron), the `dl`, the alert, the
-  keys of a shortcut and the segmented tabs.
+  keys of a shortcut, the segmented tabs, and the list to choose from (`listSelect`, FRU-535).
 - **Every control is a native `button` of type `button`**: Space and Enter press it, and it takes
   the focus ring. The tabs have the keyboard of a tab list: the chosen tab is the one stop, and the
   arrows, Home and End move and choose.
@@ -638,6 +638,15 @@ holds `http://127.0.0.1/*`; a page of `http://127.0.0.1` with no rule, the panel
   the scope « This page · {n} » / « Whole site · {n} », « Search notes », the chips All, New, To do,
   In progress and Done with their counts (`aria-pressed`), and « Show pins on the page » at the foot.
   `src/search-options.ts` draws them, with no `browser`.
+- **Beyond five statuses, the chips become a list** (FRU-535): a team's own statuses (Linear's
+  « In Review », FRU-370) can make more than `MAX_CHIPS`. Then « Status · {choice} · {count} » opens
+  `listSelect` of the kit: « All », then each status with the drop in its colour, its name and its
+  number of notes, in the order of the stages. It filters by the status, by its name, where the chips
+  filter by stage. The list lies over the notes and pushes nothing (`position: absolute`). It is a
+  `listbox`, never a native `select`: the arrows, Home and End move, Enter and Space choose, Escape
+  and Tab close, the focus goes back to its button, and a click outside closes it. The panel keeps it
+  open across a draw (`statusOpen`), on the option the keyboard is on (`statusActive`). « Whole site » reads the stage of a note only (FRU-306), so it
+  never has more than five, and keeps its chips.
 - **While it is open, one list stands in for « Ready to check » and the tabs**: the chips do what
   Open and Done did. Closing it gives the panel of FRU-299 and FRU-300 back as it was.
 - **« This page » filters the notes the widget read**: every word of the search in the whole text of
