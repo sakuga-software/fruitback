@@ -224,9 +224,15 @@ test('a key is made, shown once with the line for Claude Code, copied, then gone
   await expect(page.getByRole('button', { name: 'New key' })).toBeDisabled();
 
   await form.getByRole('textbox', { name: 'Name' }).fill('  Claude on my laptop ');
-  // The input of a box of HeroUI is hidden under its drawing: a person presses its words.
+  // The input of a box of HeroUI is hidden under its drawing: a person presses the box, or its words
+  // (FRU-550: the box did not tick).
+  const docs = form.getByRole('checkbox', { name: /docs\.acme\.dev/ });
+  await form.locator('.kit-checkbox').filter({ hasText: 'docs.acme.dev' }).locator('.checkbox__control').click();
+  await expect(docs).toBeChecked();
   await form.getByText('docs.acme.dev', { exact: true }).click();
-  await expect(form.getByRole('checkbox', { name: /docs\.acme\.dev/ })).toBeChecked();
+  await expect(docs).not.toBeChecked();
+  await form.getByText('docs.acme.dev', { exact: true }).click();
+  await expect(docs).toBeChecked();
   await form.getByText('Read, reply and set a status', { exact: true }).click();
   await expect(form.getByRole('radio', { name: 'Read, reply and set a status' })).toBeChecked();
   await form.getByRole('textbox', { name: 'Lives for, in days' }).fill('30');

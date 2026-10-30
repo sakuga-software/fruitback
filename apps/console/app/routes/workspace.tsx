@@ -464,8 +464,8 @@ export type RailLink = { href: string; label: string; status?: string; detail?: 
 
 /**
  * The way to the browser extension, at the foot of both rails (FRU-406). Chrome and Edge go to the
- * Chrome Web Store, where 0.3.0 is public. Firefox is not on AMO yet: it, and every other browser,
- * goes to the page that installs the archive of the release.
+ * Chrome Web Store, where 0.3.0 is public, and Firefox to addons.mozilla.org (FRU-536). Every other
+ * browser goes to the page that installs the archive of the release.
  *
  * With a browser of the extension connected to the account, the rail says so and names it, and the
  * link is « Connect another browser » (FRU-441): `/connect` on Fruitback Cloud, the page that installs
