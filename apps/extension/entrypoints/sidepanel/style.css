@@ -169,7 +169,10 @@ button.panel-row-head {
   color: inherit;
   font: inherit;
   text-align: start;
-  /* The note wraps: the buttons of popup/style.css stay on one line, and a long note was cut. */
+  /*
+    The meta line wraps: the buttons of popup/style.css stay on one line. The note holds one line by
+    its own rule, with « … », and wraps in an open row.
+  */
   white-space: normal;
 }
 
@@ -181,9 +184,26 @@ button.panel-row-head {
   min-width: 0;
 }
 
+/*
+  The words of a note hold one line, cut with « … » (FRU-534): in a closed row, « Ready to check »,
+  the rows of the search and the detached notes. The text stays whole in the DOM and in `title`.
+*/
+.panel-row-note,
+.ready-note,
+.search-detached-note {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 .panel-row-note {
   font-size: 14px;
   line-height: 1.45;
+}
+
+/* An open row shows the whole note. */
+.panel-row[data-open='true'] .panel-row-note {
+  white-space: normal;
   overflow-wrap: anywhere;
 }
 
@@ -419,7 +439,6 @@ button.panel-send:disabled {
 .ready-note {
   font-size: 14px;
   line-height: 1.45;
-  overflow-wrap: anywhere;
 }
 
 .ready-meta {
@@ -709,7 +728,6 @@ button.site-row-ref {
 
 .search-detached-note {
   font-size: 14px;
-  overflow-wrap: anywhere;
 }
 
 .search-detached-meta {

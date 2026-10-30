@@ -286,7 +286,12 @@ function note(id: string, more: Partial<PanelNote>): PanelNote {
 }
 
 const NOTES: PanelNote[] = [
-  note('n1', { number: 12, note: 'The price is hard to read on the dark card.', author: 'Ana Duval', mine: true }),
+  note('n1', {
+    number: 12,
+    note: 'The price is hard to read on the dark card, and the discount badge covers it on mobile.',
+    author: 'Ana Duval',
+    mine: true,
+  }),
   note('n2', {
     number: 9,
     stage: 'progress',
