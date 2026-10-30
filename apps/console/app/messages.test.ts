@@ -214,13 +214,13 @@ function kept(): Kept & { values: Map<string, string> } {
 describe('a language the account did not hear', () => {
   it('stays the language of this browser at the next visit, and is sent again', async () => {
     const storage = kept();
-    setLocale('en', false);
+    void setLocale('en', false);
     const heard = await chooseLanguage('fr', async () => false, storage);
     assert.equal(heard, false);
     assert.equal(locale(), 'fr');
 
     // The next visit: the account still says English, and it must not take the place of the choice.
-    setLocale('en', false);
+    void setLocale('en', false);
     const sent: string[] = [];
     adoptLanguage({ locale: 'en' }, async (tag) => (sent.push(tag), true), storage);
     await new Promise((resolve) => setImmediate(resolve));
@@ -296,7 +296,9 @@ describe('the language of a person', () => {
     assert.equal(nearest(undefined), 'en');
   });
 
-  it('fills the values of a sentence, and shows English for a sentence with no French', () => {
+  it('fills the values of a sentence, and shows English for a sentence with no French', async () => {
+    await setLocale('fr', false);
+    void setLocale('en', false);
     assert.equal(translate('fr', 'Key of {person}', { person: 'Camille' }), 'Clé de Camille');
     assert.equal(translate('en', 'Key of {person}', { person: 'Camille' }), 'Key of Camille');
     assert.equal(translate('fr', 'A sentence nobody translated'), 'A sentence nobody translated');

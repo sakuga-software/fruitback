@@ -14,7 +14,11 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   choice, then the browser's own. **Every component that calls `t` calls `useLocale()` first**, and
   the guard fails on one that does not: `t` reads the language at render, so a component with no
   subscription keeps the old words. The root holds no `key` on the language: a screen mounted again
-  loses what somebody typed and runs its effects twice. **`HydrateFallback` holds no word**: it is rendered when the console
+  loses what somebody typed and runs its effects twice. **A map is loaded with `import()`, when its
+  language is asked for** (FRU-494): a static import of `messages.fr.ts` puts 112 kB back in the chunk
+  of every page, and `catalog-chunk.test.ts` fails on it. `setLocale` changes the language once the map
+  is there, and the root's `clientLoader` waits for it, so a French browser shows no English first.
+  **`HydrateFallback` holds no word**: it is rendered when the console
   is built, and a word in another language is a hydration error in the browser.
 - `apps/console` (`@fruitback/console`) — the console of the Cloud (FRU-99): React Router in SPA mode,
   Tailwind on the tokens of `design/README.md`, served as static files by nginx. **It holds no secret, and no
