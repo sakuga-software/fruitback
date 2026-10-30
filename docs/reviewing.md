@@ -96,9 +96,10 @@ site of none of your workspaces, an owner or an admin gets the same question wit
 list of the workspaces when there are several: the browser asks for access to the site, the site is
 added to that workspace, for its members only, and the widget appears.
 
-**Once a site is on**, the popup has a switch to turn it off and on, **Leave feedback** with its
-keys, the fixes the team marked done for you to check and the open notes of the site, and
-**Show all notes in a sidebar**; a click on a line opens the side panel too. The side panel opens
+**Once a site is on**, the popup has a switch to turn it off and on, the fixes the team marked done
+for you to check and the open notes of the site, then, at the bottom, **Leave feedback** with its
+keys and, beside it, the panel icon **Show all notes in a sidebar**; a click on a line opens the side
+panel too. The side panel opens
 beside the page: **Notes on this page**, with **Open** and **Done**, the replies of a note,
 **Show on the page**, and **Reply** where your role may reply. A click on a pin opens its row; the panel follows
 the tab you look at. **Alt+Shift+F** (Option+Shift+F on a Mac) starts a note too, on a site that is
