@@ -542,7 +542,7 @@ describe('a picture with a note, on a site that its members read (FRU-330)', () 
       headers: {},
       secretsKey: undefined,
       kv: () => createMemoryKv(),
-      route: () => ({ ok: true, workspace: 'ws_acme', place: async () => undefined }),
+      route: async () => ({ ok: true, workspace: 'ws_acme', place: async () => undefined }),
       writer: async () => undefined,
     });
     const request = () =>

@@ -140,6 +140,19 @@ const SITE_WITH_DESTINATION = {
   private: site_destinations.private,
 };
 
+/**
+ * The site of the row is in a workspace that is not suspended. A site of a suspended workspace is no
+ * client (FRU-282): it answers as a site that does not exist.
+ */
+function notSuspended(db: Db) {
+  return notExists(
+    db
+      .select({ id: workspace_suspensions.workspace_id })
+      .from(workspace_suspensions)
+      .where(eq(workspace_suspensions.workspace_id, sites.workspace_id)),
+  );
+}
+
 /** A domain as `domainOf` reads one. */
 const DOMAIN = {
   id: domains.id,
@@ -2123,28 +2136,49 @@ export function createPostgresAccountStore(database: Database): AccountStore {
     },
 
     async clientMap() {
-      // Every request reads this. The order of the sites is nothing to a map, and a sort of their ids
-      // is what costs: only the places of one site have an order.
+      // The order of the sites is nothing to a map, and a sort of their ids is what costs: only the
+      // places of one site have an order.
       const rows = await run((db) =>
         db
           .select(SITE_WITH_DESTINATION)
           .from(sites)
           .leftJoin(site_destinations, eq(site_destinations.site_id, sites.id))
-          // A site of a suspended workspace is no client (FRU-282): it answers as a site that does not exist.
-          .where(
-            notExists(
-              db
-                .select({ id: workspace_suspensions.workspace_id })
-                .from(workspace_suspensions)
-                .where(eq(workspace_suspensions.workspace_id, sites.workspace_id)),
-            ),
-          )
+          .where(notSuspended(db))
           .orderBy(site_destinations.position),
       );
       const map: ClientMap = {};
       for (const site of sitesFrom(rows)) map[site.id] = clientOf(site);
 
       return map;
+    },
+
+    async client(site) {
+      // Each request of the widget reads this (FRU-495): one site and its places, by its key.
+      const rows = await run((db) =>
+        db
+          .select(SITE_WITH_DESTINATION)
+          .from(sites)
+          .leftJoin(site_destinations, eq(site_destinations.site_id, sites.id))
+          .where(and(eq(sites.id, site), notSuspended(db)))
+          .orderBy(site_destinations.position),
+      );
+      const [found] = sitesFrom(rows);
+
+      return found === undefined ? undefined : clientOf(found);
+    },
+
+    async servesOrigin(origin) {
+      // Each request of a site that is not on `ALLOWED_ORIGINS` reads this (FRU-495), through the
+      // index `sites_by_origin`.
+      const rows = await run((db) =>
+        db
+          .select({ id: sites.id })
+          .from(sites)
+          .where(and(eq(sites.origin, origin), notSuspended(db)))
+          .limit(1),
+      );
+
+      return rows.length === 1;
     },
   };
 

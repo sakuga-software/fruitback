@@ -346,6 +346,8 @@ describe('the membership that lets a session of an account read a site, taken ou
   const accounts = new Proxy(
     {
       clientMap: async () => ({ site_acme: ACME_SITE }),
+      client: async (site: string) => (site === 'site_acme' ? ACME_SITE : undefined),
+      servesOrigin: async (origin: string) => ACME_SITE.origins.includes(origin),
       role: async (workspace: string, account: string) => roles[`${workspace} ${account}`],
       reach: async (workspace: string, account: string) => {
         const role = roles[`${workspace} ${account}`];
