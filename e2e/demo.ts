@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { type Page, expect, test } from '@playwright/test';
 import { DEMO_FILES, DEMO_FRAMES } from '../apps/extension/src/demo-video.ts';
 import { CAPTURING } from './guide.ts';
@@ -22,12 +23,12 @@ import { CAPTURING } from './guide.ts';
  */
 
 /**
- * Where the frames are, from the root of the repository, where Playwright runs: beside the captures
- * of the guide, as the configuration of the guide writes them.
+ * Where the frames are: beside the captures of the guide, as the configuration of the guide writes
+ * them. Read from this file, not from the directory Playwright runs in (raised in review).
  */
-const FRAMES = 'docs/assets/video';
+const FRAMES = fileURLToPath(new URL('../docs/assets/video/', import.meta.url));
 /** Where the extension serves the video from. */
-const PUBLIC = 'apps/extension/public';
+const PUBLIC = fileURLToPath(new URL('../apps/extension/public/', import.meta.url));
 /** The size of the video: twice the width the welcome page draws it at. */
 const SIZE = { width: 960, height: 540 };
 
@@ -94,6 +95,14 @@ export function recordDemo(before: Map<string, string>): string[] {
   const changed = DEMO_FRAMES.some(({ name }) => before.get(name) !== after.get(name));
   const missing = Object.values(DEMO_FILES).some((file) => !fs.existsSync(path.join(PUBLIC, file)));
   if (!changed && !missing) return [];
+  // Said before the first call, with what to do: an `ENOENT` of `spawnSync` names no tool.
+  try {
+    execFileSync('ffmpeg', ['-version'], { stdio: 'ignore' });
+  } catch {
+    throw new Error(
+      'A frame of the video changed, and ffmpeg is not installed: install it (brew install ffmpeg), then run pnpm guide:captures again. The frames are written; the video is not.',
+    );
+  }
 
   return joinFrames(FRAMES, PUBLIC);
 }
