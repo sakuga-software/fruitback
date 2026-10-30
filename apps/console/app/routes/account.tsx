@@ -13,7 +13,6 @@ import {
   removeAccountEmail,
   type PendingLink,
   type SignInMethods,
-  call,
   cancelLink,
   confirmLink,
   consoleSessions,
@@ -159,11 +158,6 @@ const NAME_PROBLEMS: Readonly<Record<string, string>> = {
 };
 const NAME_NOT_KEPT = msg('Your name was not changed. Try again.');
 
-const DELETION_PROBLEMS: Readonly<Record<string, string>> = {
-  forbidden: msg('Only the owner of the workspace deletes it.'),
-};
-const WORKSPACE_NOT_DELETED = msg('The workspace was not deleted. Try again.');
-
 /** « 12 Oct », as the mockup writes the day a browser connected. */
 function dayOf(iso: string): string {
   const date = new Date(iso);
@@ -199,7 +193,6 @@ export default function Account() {
   // The primary address (FRU-450): the person can choose another one here, and this page shows it at once.
   const [primary, setPrimary] = useState(me.account.email);
   const navigate = useNavigate();
-  const [confirming, setConfirming] = useState(false);
   // What the worker signs people in with (FRU-135). A provider is on or "not set up" only when the
   // worker said so: a slow answer and no answer prove neither, and each has its own word.
   const [providers, setProviders] = useState<Asked>('asking');
@@ -423,16 +416,6 @@ export default function Account() {
     if (await signOutEverywhere()) return navigate('/setup', { replace: true });
     // As above: no browser is said to be signed out when the worker did not say so.
     setStillIn('everywhere');
-  }
-
-  const [undeleted, setUndeleted] = useState<string | undefined>();
-
-  async function destroy() {
-    setUndeleted(undefined);
-    const deleted = await call('DELETE', `/console/workspaces/${workspace.id}`);
-    if (deleted.ok) return navigate('/', { replace: true });
-    // The workspace is still there: say so beside the button (FRU-164).
-    setUndeleted(problemOf(deleted, DELETION_PROBLEMS, WORKSPACE_NOT_DELETED));
   }
 
   // This browser first, then the others, the one used last first.
@@ -787,35 +770,6 @@ export default function Account() {
             </div>
           )}
         </section>
-
-        {/* The mockup does not draw it, and it is the one place where an owner deletes a workspace. */}
-        {workspace.role === 'owner' ? (
-          <section aria-labelledby="delete-title" className="border-t border-line pt-[24px]">
-            <SectionTitle id="delete-title">{t('Delete the workspace')}</SectionTitle>
-            <SectionHelp>
-              {t('Sites, members and pin positions go. Items already in your sources stay there.')}
-            </SectionHelp>
-            {undeleted === undefined ? null : (
-              <div className="mb-[12px]">
-                <Problem>{t(undeleted)}</Problem>
-              </div>
-            )}
-            {confirming ? (
-              <span className="flex flex-wrap gap-[8px]">
-                <Button tone="quiet" autoFocus onClick={() => setConfirming(false)}>
-                  {t('Keep it')}
-                </Button>
-                <Button tone="danger" onClick={() => void destroy()}>
-                  {t('Delete {workspace}', { workspace: workspace.name })}
-                </Button>
-              </span>
-            ) : (
-              <Button tone="outline" inset={16} onClick={() => setConfirming(true)}>
-                {t('Delete workspace')}
-              </Button>
-            )}
-          </section>
-        ) : null}
       </div>
     </>
   );

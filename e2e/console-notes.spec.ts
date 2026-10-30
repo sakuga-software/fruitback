@@ -320,7 +320,7 @@ test('the page is the one of the mockup: chips, filters, the table and its pages
 
   // The rail has its entry, on screen, between « Sites » and « Connectors ».
   const rail = page.getByRole('navigation', { name: 'Workspace' }).getByRole('link');
-  await expect(rail).toHaveText(['Sites', 'Notes', 'Connectors', 'Members', 'My account']);
+  await expect(rail).toHaveText(['Sites', 'Notes', 'Connectors', 'Members', 'Settings', 'My account']);
   await expect(rail.nth(1)).toHaveAttribute('aria-current', 'page');
 
   // The head.

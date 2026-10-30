@@ -6,7 +6,7 @@ import {
   type Visibility,
   can,
 } from './accounts.ts';
-import { readBoundedBytes } from './bounded-body.ts';
+import { parseJsonObject, readBoundedBytes } from './bounded-body.ts';
 import { type TrackerContext, UnknownPlace, offerOf, placeOf } from './console-api.ts';
 import { isExtensionOrigin } from './cors.ts';
 import { StoreError } from './store.ts';
@@ -198,13 +198,5 @@ export async function setSessionSite(request: Request, context: SiteSettingsCont
 async function bodyOf(request: Request): Promise<Record<string, unknown> | undefined> {
   const bytes = await readBoundedBytes(request, MAX_BODY_BYTES);
   if (bytes === null) return undefined;
-  try {
-    const parsed: unknown = JSON.parse(new TextDecoder().decode(bytes));
-
-    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : undefined;
-  } catch {
-    return undefined;
-  }
+  return parseJsonObject(new TextDecoder().decode(bytes));
 }

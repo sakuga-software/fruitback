@@ -1,5 +1,5 @@
 import { t } from './i18n.ts';
-import { alertBox, head, primaryButton, secondaryButton } from './kit.ts';
+import { alertBox, head, primaryButton, providerButton, secondaryButton } from './kit.ts';
 import { type SignInStop, element, linkButton } from './popup-view.ts';
 
 /**
@@ -150,8 +150,8 @@ function signInPart(document: Document, signIn: NonNullable<WelcomeOptions['sign
   if (state.stop !== undefined) part.append(alertBox(document, state.stop.title, state.stop.text));
   const others = element(document, 'div', '', 'method-row');
   others.append(
-    secondaryButton(document, 'Google', signIn.onSignIn),
-    secondaryButton(document, 'GitHub', signIn.onSignIn),
+    providerButton(document, 'google', signIn.onSignIn),
+    providerButton(document, 'github', signIn.onSignIn),
   );
   part.append(primaryButton(document, t('Sign in with email'), signIn.onSignIn), others);
 

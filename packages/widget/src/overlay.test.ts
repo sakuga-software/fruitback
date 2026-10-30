@@ -4,7 +4,7 @@ import { noteFixture, noteIssueFixture } from '@fruitback/shared/note.fixture';
 import type { NoteIssue } from '@fruitback/shared';
 import { type Overlay, createOverlay } from './overlay.ts';
 import { createTranslator } from './messages.ts';
-import { type MountedPage, mountPage, pressKey, setDocumentSize, setRect } from './dom.fixture.ts';
+import { type MountedPage, mountPage, pressKey, setDocumentSize, setRect, stylesIn } from './dom.fixture.ts';
 
 const PAGE = '<main><section><button data-testid="checkout-cta">Commander</button></section></main>';
 
@@ -360,7 +360,7 @@ describe('createOverlay', () => {
     ]);
     // The stylesheet is what turns the slot into a distance.
     assert.match(
-      page.document.querySelector('style')?.textContent ?? '',
+      stylesIn(page.document),
       /left: calc\(var\(--fruitback-pin-tip-x, 0px\) - 16px \+ var\(--fruitback-pin-slot, 0\) \* 30px\)/,
     );
 
@@ -399,7 +399,7 @@ describe('createOverlay', () => {
     page.query('button').remove();
     overlay = createOverlay({ document: page.document });
     overlay.render([issueOnCta()]);
-    const sheet = (page.document.querySelector('style')?.textContent ?? '').replace(/\/\*[\s\S]*?\*\//g, '');
+    const sheet = stylesIn(page.document).replace(/\/\*[\s\S]*?\*\//g, '');
     assert.match(sheet, /\.fruitback-pin-orphan:not\(\[data-fruitback-draft\]\) \{ display: none; \}/);
     assert.ok(page.document.querySelector('[data-fruitback-pin]')?.classList.contains('fruitback-pin-orphan'));
   });
@@ -410,7 +410,7 @@ describe('createOverlay', () => {
     overlay = createOverlay({ document: page.document });
     overlay.render([issueOnCta()]);
 
-    const sheet = page.document.querySelector('style')?.textContent ?? '';
+    const sheet = stylesIn(page.document);
     const pinRule = /\.fruitback-pin \{[^}]*\}/.exec(sheet)?.[0] ?? '';
     assert.match(pinRule, /border: 2px solid transparent/);
     assert.doesNotMatch(pinRule, /background/);
@@ -428,7 +428,7 @@ describe('createOverlay', () => {
     assert.equal(overlay.mark(issueOnCta().note.id), true);
     assert.ok(page.document.querySelector('[data-fruitback-pin]')?.hasAttribute('data-fruitback-marked'));
 
-    const rules = (page.document.querySelector('style')?.textContent ?? '').replace(/\/\*[\s\S]*?\*\//g, '');
+    const rules = stylesIn(page.document).replace(/\/\*[\s\S]*?\*\//g, '');
     const zOf = (rule: RegExp) => Number(/z-index: (\d+)/.exec(rule.exec(rules)?.[0] ?? '')?.[1]);
     const pin = zOf(/\.fruitback-pin \{[^}]*\}/);
     const marked = zOf(/\.fruitback-pin\[data-fruitback-marked\] \{[^}]*\}/);
@@ -1052,7 +1052,7 @@ describe('a note chosen in the list of the page (FRU-308)', () => {
     overlay.showPins(false);
     assert.equal(container(page).hasAttribute('data-fruitback-pins-hidden'), true);
     // The rule that hides them spares the open pin, its drop too: a thread open on the page keeps its pin.
-    const style = [...page.document.querySelectorAll('style')].map((node) => node.textContent).join('');
+    const style = stylesIn(page.document);
     assert.match(
       style,
       /\[data-fruitback-pins-hidden\] \.fruitback-pin:not\(\[data-fruitback-open\]\) \{ display: none; \}/,

@@ -9,6 +9,7 @@ import { createOrphanList, type OrphanList } from './orphans.ts';
 import { type AnchorResolution, resolveAnchor } from './resolve.ts';
 import { PREVIEW_STYLES, PREVIEW_WIDTH, buildPreview, previewPlace } from './pin-preview.ts';
 import { besideElement } from './thread-place.ts';
+import { adoptStyles } from './stylesheet.ts';
 
 /**
  * The pins on the page: one box over each element someone left a note on, coloured by where the
@@ -245,11 +246,9 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
   container.className = 'fruitback-overlay';
   container.dataset.fruitbackOverlay = '';
 
-  const style = document.createElement('style');
-  style.textContent = STYLES + PREVIEW_STYLES;
-
   const host = options.host ?? document.body;
-  host.append(style, container);
+  const style = adoptStyles(host, STYLES + PREVIEW_STYLES);
+  host.append(container);
 
   /**
    * The notes whose element the cascade could not find at all (FRU-12).
@@ -630,7 +629,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
    * `<body>` host does not, and re-resolving mutates the container again.
    */
   function isOurs(node: Node): boolean {
-    return container.contains(node) || node === container || node === style || orphans.owns(node);
+    return container.contains(node) || node === container || style.owns(node) || orphans.owns(node);
   }
 
   function onMutations(records: MutationRecord[]): void {

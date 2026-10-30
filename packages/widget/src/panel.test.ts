@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import type { NoteStage } from '@fruitback/shared';
 import { type ConfigPanel, createConfigPanel, createOfferedStages } from './panel.ts';
 import { createConfigStore, type WidgetConfig } from './config.ts';
-import { type MountedPage, mountPage } from './dom.fixture.ts';
+import { type MountedPage, mountPage, stylesIn } from './dom.fixture.ts';
 
 const DEFAULTS: WidgetConfig = {
   hiddenStages: [],
@@ -138,7 +138,7 @@ describe('createConfigPanel', () => {
     panel = null;
 
     assert.equal(page.document.querySelector('[data-fruitback-config]'), null);
-    assert.equal(page.document.querySelector('style'), null);
+    assert.equal(stylesIn(page.document), '');
   });
 });
 
@@ -313,7 +313,7 @@ describe('the stages a store can report (FRU-32)', () => {
     // The class sets display:flex, which beats the browser's own rule for the hidden attribute.
     // happy-dom does no layout, so the rule is read from the stylesheet.
     const { page } = mount();
-    const css = [...page.document.querySelectorAll('style')].map((style) => style.textContent).join('\n');
+    const css = stylesIn(page.document);
 
     assert.match(css, /\.fruitback-config-check\[hidden\]\s*\{\s*display:\s*none;?\s*\}/);
   });

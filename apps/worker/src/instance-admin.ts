@@ -1,4 +1,6 @@
+import { json } from './http.ts';
 import type { NoteStage } from '@fruitback/shared';
+import { readJsonObject } from './bounded-body.ts';
 import {
   type Account,
   type ConnectorAttention,
@@ -655,13 +657,6 @@ export type InstanceAdminContext = {
   now?: number;
 };
 
-function json(status: number, body: unknown, headers: Record<string, string>): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...headers },
-  });
-}
-
 /** `q` and `show` of a list, or `undefined` for a value that the list does not take. */
 function queryOf<Show extends string>(url: URL, filters: readonly Show[]): AdminQuery<Show> | undefined {
   const show = url.searchParams.get('show') ?? 'all';
@@ -751,7 +746,7 @@ async function changeSuspension(
   now: number,
   headers: Record<string, string>,
 ): Promise<Response> {
-  const body: unknown = await request.json().catch(() => undefined);
+  const body: unknown = await readJsonObject(request);
   const asked = typeof body === 'object' && body !== null ? (body as { suspended?: unknown }).suspended : undefined;
   if (typeof asked !== 'boolean') return json(400, { error: 'invalid-suspended' }, headers);
 
@@ -799,7 +794,7 @@ async function changeWorkspaceSuspension(
   now: number,
   headers: Record<string, string>,
 ): Promise<Response> {
-  const body: unknown = await request.json().catch(() => undefined);
+  const body: unknown = await readJsonObject(request);
   const fields = typeof body === 'object' && body !== null ? (body as { suspended?: unknown; reason?: unknown }) : {};
   if (typeof fields.suspended !== 'boolean') return json(400, { error: 'invalid-suspended' }, headers);
   const reason = reasonOf(fields.reason);
@@ -846,7 +841,7 @@ async function deleteWorkspace(
   now: number,
   headers: Record<string, string>,
 ): Promise<Response> {
-  const body: unknown = await request.json().catch(() => undefined);
+  const body: unknown = await readJsonObject(request);
   const name = typeof body === 'object' && body !== null ? (body as { name?: unknown }).name : undefined;
   if (typeof name !== 'string' || name.trim() === '') return json(400, { error: 'invalid-name' }, headers);
 
@@ -894,9 +889,7 @@ function refusedIn(refused: string, headers: Record<string, string>): Response {
 
 /** The fields of a body, or `{}` for one that is not an object. */
 async function fieldsOf(request: Request): Promise<Record<string, unknown>> {
-  const body: unknown = await request.json().catch(() => undefined);
-
-  return typeof body === 'object' && body !== null && !Array.isArray(body) ? (body as Record<string, unknown>) : {};
+  return (await readJsonObject(request)) ?? {};
 }
 
 function oneOf<T extends string>(value: unknown, among: readonly T[]): T | undefined {
@@ -1058,7 +1051,7 @@ async function changeRole(
   now: number,
   headers: Record<string, string>,
 ): Promise<Response> {
-  const body: unknown = await request.json().catch(() => undefined);
+  const body: unknown = await readJsonObject(request);
   const asked = typeof body === 'object' && body !== null ? (body as { admin?: unknown }).admin : undefined;
   if (typeof asked !== 'boolean') return json(400, { error: 'invalid-admin' }, headers);
 

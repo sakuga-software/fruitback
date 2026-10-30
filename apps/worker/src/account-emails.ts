@@ -1,4 +1,6 @@
+import { json } from './http.ts';
 import { randomBytes } from 'node:crypto';
+import { readJsonObject } from './bounded-body.ts';
 import { mailboxOf, normalizeEmail } from './accounts.ts';
 import { type Auth, SESSION_FRESH_SECONDS } from './auth.ts';
 import { type AuthRouteContext, mutationAllowed, onePersonAtATime, sessionOfCookie } from './auth-routes.ts';
@@ -91,25 +93,6 @@ export function isEmailRoute(pathname: string): boolean {
   return pathname === EMAILS_PATH || ONE_EMAIL.test(pathname);
 }
 
-function json(status: number, body: unknown, headers: Record<string, string>): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...headers },
-  });
-}
-
-async function readBody(request: Request): Promise<Record<string, unknown> | undefined> {
-  try {
-    const parsed: unknown = JSON.parse(await request.text());
-
-    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
 /** An address that waits: the account that asked, and the address. */
 function readWaiting(row: { value: string; expiresAt: Date } | null, now: number) {
   if (row === null || new Date(row.expiresAt).getTime() <= now) return undefined;
@@ -173,7 +156,7 @@ export async function handleEmailRoutes(
   }
 
   if (pathname === EMAILS_PATH && request.method === 'POST') {
-    const body = await readBody(request);
+    const body = await readJsonObject(request);
     const email = typeof body?.email === 'string' ? normalizeEmail(body.email) : undefined;
     if (email === undefined) return json(400, { error: 'invalid-email' }, headers);
     const mailer = context.mailer;
@@ -218,7 +201,7 @@ export async function handleEmailRoutes(
 
   if (pathname === VERIFY_PATH) {
     if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
-    const body = await readBody(request);
+    const body = await readJsonObject(request);
     const token = typeof body?.token === 'string' ? body.token.trim() : '';
     if (!TOKEN.test(token)) return json(400, { error: 'invalid-code' }, headers);
     const adapter = (await auth.$context).internalAdapter as unknown as VerificationAdapter;
@@ -239,7 +222,7 @@ export async function handleEmailRoutes(
 
   if (pathname === PRIMARY_PATH) {
     if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
-    const body = await readBody(request);
+    const body = await readJsonObject(request);
     const email = typeof body?.email === 'string' ? normalizeEmail(body.email) : undefined;
     if (email === undefined) return json(400, { error: 'invalid-email' }, headers);
     // A session of the last day, as for an unlink: a cookie copied a week ago does not move the account.

@@ -341,7 +341,8 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
 - **The frame of a workspace is the rail of the mockup** (FRU-234, `routes/workspace.tsx`): the
   workspace, its sections as links with `aria-current="page"` on the one on screen, and the way to
   the documentation. **The rail shows a section only when its screen exists**: `SECTIONS` lists the
-  five of the mockup in its order, each with `built`, and
+  five of the mockup in its order, with « Settings » before « My account » (FRU-503), each with
+  `built`, and
   `frame.test.ts` holds `built` to the routes of a build, so no entry leads nowhere. **Each entry of
   both rails has an icon** (FRU-477, Mathieu; no board draws them): `rail-icons.tsx` draws them as
   every icon of the console is drawn, inline on a grid of 24, a stroke of 2 in `currentColor`, no
@@ -352,7 +353,7 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   the five. **The name of the workspace opens a menu only when the person has several workspaces**:
   with one it is no button, and draws no chevrons. **The name of the workspace leads to its settings**
   (FRU-414, `routes/workspace-settings.tsx`, asked by Mathieu; no board draws it): with one workspace
-  the name is a link to `/w/<id>/settings`, `aria-current` there; with several, the menu of the
+  the name is a link to `/w/<id>/settings`, `aria-current` there when the rail has no « Settings »; with several, the menu of the
   workspaces ends with « Workspace settings », in a group of its own under a rule that chooses nothing
   (`after` of `Menu`). The screen renames the workspace for an owner or an admin (FRU-236), and the
   rail shows the new name at once; another role reads the name, locked. **The logo** (FRU-428):
@@ -361,8 +362,18 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   owner or an admin sends it (`FilePick` of the kit), replaces it and removes it in one press, with
   no confirmation: it is sent again as easily. The console refuses a type that is not PNG, JPEG or
   WebP, and a file over 512 KB, before it sends anything (`workspace-logo.ts`), and says each
-  refusal of the worker. `e2e/console-workspace-logo.spec.ts` holds it. The settings are no section of the rail, and
-  `frame.test.ts` names them as the one screen of a workspace that is not. **At 900 px and under the sections are one row
+  refusal of the worker. `e2e/console-workspace-logo.spec.ts` holds it. **The settings are « Settings »
+  in the rail, under « Members », for an owner or an admin** (FRU-503, `sectionsFor`): the rare tasks
+  that matter, rename, the logo, the agent keys and the deletion, were behind the name of the
+  workspace alone. A member and a guest have no entry and read the settings from the name. On the
+  settings the entry is the one on screen, and the name is not a second one. **The settings hold
+  the deletion of the workspace**, last, for the owner alone, under a rule: it was at the foot of
+  « My account », the page of the person. The call (`DELETE /console/workspaces/<id>`) and the rule
+  of the worker are those of before, and a second press deletes. « My account » keeps what is about
+  the person. **The section « Agents » shows the whole way of an agent** (FRU-503): its key, an
+  address that receives (Connectors), then the trigger of each site, a link to `#agent` on the page
+  of the site; anybody but an owner or an admin reads one sentence, and the page asks nothing.
+  `e2e/console-workspace-settings.spec.ts` holds the entry by role, the section and the deletion. **At 900 px and under the sections are one row
   that scrolls in the rail, and the page never scrolls sideways**: the mockup does at 390 px (its
   document is 547 px wide). An edge of the row that hides a section fades, and the section on
   screen or with focus is scrolled into view: measured in Chromium, focus alone does not scroll a
@@ -439,7 +450,8 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   sections, the roles, the hash, the two failures, 390 px in English and in French, and axe.
 - **The agent keys of a workspace have a page of their own** (FRU-462, `routes/agents.tsx`, the
   board `design/agents/`), `/w/<workspace>/settings/agents`, with the crumbs « Workspace settings ›
-  Agents », reached from the section « Agents » of the settings. It is no section of the rail: only
+  Agents », reached from the section « Agents » of the settings. It is no section of the rail, and
+  « Settings » is the entry on screen there: only
   the owner and the admins make a key (decision 5 of [agents.md](agents.md)), and anybody else reads
   one sentence there, and on the page, which then asks the worker nothing. **The key is shown once**,
   in a card above the list, held in the state of the screen and in no storage of the browser, with

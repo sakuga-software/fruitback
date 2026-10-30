@@ -208,15 +208,16 @@ test.describe('the setup, against a worker with accounts (FRU-239)', () => {
     await page.getByRole('button', { name: 'Add site' }).click();
     await expect(page.getByRole('heading', { name: `${CURRENT}Put it on the site` })).toBeVisible();
     const [workspace] = await workspaces(page);
-    const sites = (): Promise<string[]> =>
+    const listed = (): Promise<{ id: string; origin: string; visibility: string }[]> =>
       page.evaluate(
         async ([origin, id]) => {
           const answer = await fetch(`${origin}/console/workspaces/${id}/sites`, { credentials: 'include' });
 
-          return ((await answer.json()) as { sites: { origin: string }[] }).sites.map((site) => site.origin);
+          return ((await answer.json()) as { sites: { id: string; origin: string; visibility: string }[] }).sites;
         },
         [WORKER_ORIGIN, workspace!.id],
       );
+    const sites = async (): Promise<string[]> => (await listed()).map((site) => site.origin);
 
     // A typing mistake, seen at once: the form opens with its values, and the site is replaced.
     await page.getByRole('button', { name: 'Change' }).click();
@@ -236,6 +237,16 @@ test.describe('the setup, against a worker with accounts (FRU-239)', () => {
     await page.getByRole('button', { name: 'Save' }).click();
     await expect(page.getByText('Everyone who visits sees the notes')).toBeVisible();
     expect(await sites()).toEqual(['https://staging.acme.dev']);
+
+    // The same address, another choice: the same site, changed, with its script (FRU-504). It was
+    // removed as « the site it replaces » before.
+    const [kept] = await listed();
+    await page.getByRole('button', { name: 'Change' }).click();
+    await page.getByText('Members of Acme', { exact: true }).click();
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(page.getByText('Members of Acme see the notes')).toBeVisible();
+    expect(await listed()).toEqual([{ ...kept, visibility: 'members' }]);
+    await expect(page.getByRole('status').filter({ hasText: 'is still in your sites' })).toHaveCount(0);
 
     // Another visit: the site may hold notes now, so it is not removed behind the person's back.
     await page.goto(`${CONSOLE}/setup`);

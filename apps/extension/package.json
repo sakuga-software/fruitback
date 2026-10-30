@@ -45,13 +45,17 @@
           "default",
           "^production",
           "{workspaceRoot}/apps/console/app/app.css",
+          "{workspaceRoot}/apps/console/app/provider-icons.tsx",
+          "{workspaceRoot}/apps/console/app/routes/connect.tsx",
           "{workspaceRoot}/docs/install.md",
           "{workspaceRoot}/docs/reviewing.md",
           "{workspaceRoot}/docs/privacy.md",
           "{workspaceRoot}/SECURITY.md",
           "{workspaceRoot}/apps/worker/LICENSE",
+          "{workspaceRoot}/apps/worker/src/accounts.ts",
           "{workspaceRoot}/apps/worker/src/app.ts",
           "{workspaceRoot}/apps/worker/src/pair-page.ts",
+          "{workspaceRoot}/apps/worker/src/session-site-add.ts",
           "{workspaceRoot}/apps/worker/src/session.ts"
         ]
       }

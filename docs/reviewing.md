@@ -10,10 +10,12 @@ with the worker. If it does not, that is private mode and the extension mounts t
 ## 1. Install it
 
 The extension is in beta. **In Chrome or Edge**, add it from the
-[Chrome Web Store](https://chromewebstore.google.com/detail/fruitback/jjjemdloknmggncbickofjgbodplekoa),
-then go on at step 4 below. It is not on the add-ons site of Firefox yet: there, and in a browser that
-does not reach the store, you install the archive of its last release by hand, once; it takes two
-minutes and no developer tools.
+[Chrome Web Store](https://chromewebstore.google.com/detail/fruitback/jjjemdloknmggncbickofjgbodplekoa).
+**In Firefox**, add it from
+[addons.mozilla.org](https://addons.mozilla.org/en-US/firefox/addon/fruitback/); it asks for Firefox
+140 or later. Then go on at step 4 below.
+
+A browser that reaches neither store installs the archive of the last release by hand, once.
 
 **By hand, in Chrome, Edge, Brave or Arc:**
 
@@ -27,7 +29,8 @@ minutes and no developer tools.
 5. To find Fruitback in the toolbar later, pin it: open the puzzle piece at the right of the address
    bar, then press the pin beside Fruitback. Nothing needs it to leave a first note.
 
-**In Firefox:** download `fruitback-<version>-firefox.zip` from the same release, open
+**By hand, in Firefox**, to try a build that is not on addons.mozilla.org yet: download
+`fruitback-<version>-firefox.zip` from the same release, open
 `about:debugging#/runtime/this-firefox`, choose **Load Temporary Add-on…** and pick the archive.
 Firefox keeps such an add-on until it restarts.
 
@@ -321,6 +324,88 @@ signed it in with, and they reach your other browsers where the box is ticked to
 - The account keeps at most 8 KB for one rule. A larger rule, with a very long label for example,
   stays and works in this browser, is not copied, and its row in the options page says so.
 - Firefox with no account keeps them on the machine, as before.
+
+## When Fruitback does not answer
+
+Open the popup first. It names most of these problems itself. Each case below gives what you see,
+then what to do.
+
+### The sign-in did not finish
+
+The popup shows the sign-in buttons again, with the reason above them.
+
+| The popup says                                                | What to do                                                                                                                               |
+| ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `It was refused in the console.`                              | Someone pressed **Not now** in the tab of the console. Sign in again, then press **Connect Chrome**, or the name of your browser, there. |
+| `The tab was not approved in time.`                           | The request expired before the console connected it. Sign in again.                                                                      |
+| `Check the connection, then try again.`                       | Fruitback did not answer. Check that the browser is online, then sign in again.                                                          |
+| `The browser did not give the extension access to Fruitback.` | You refused the browser's prompt for Fruitback itself. Sign in again, and allow it this time.                                            |
+
+While the popup waits for the console, it shows the word to check. If it reads
+`Fruitback did not answer. The popup asks again.`, it asks again by itself. **Start again** makes a
+new request.
+
+**Your session can end later.** The popup then reads `Your sign-in ended`, and the button of the
+widget on the page reads `Sign in to leave notes`. Sign in again from the popup. What you were
+writing stays.
+
+### Fruitback Cloud does not answer
+
+The popup reads `Fruitback can't reach` and the address of Fruitback, with
+`Check the connection, then try again.` Your session is kept. Check that the browser is online,
+then press **Try again**.
+
+A note that does not go through stays in the widget, under `Did not go through`:
+`Your text is kept. Try again, or copy it before closing the page.`
+
+### Your own server does not answer
+
+On a site that uses a worker you run yourself:
+
+- `The worker of this rule does not answer. Check its address in the options.` means that something
+  answered at that address, and it was not a worker. Correct the **Worker endpoint** of the rule on
+  the options page.
+- When the worker is down or slow, the popup says nothing about it. The widget keeps the note you
+  send and says `Did not go through`. Ask the person who runs the worker to check it. Their side is
+  in [self-hosting/troubleshooting.md](self-hosting/troubleshooting.md).
+- A pairing that gets no answer reads `The worker did not answer. Try again.` The code stays good
+  until it expires. Press **Try again** once the worker is back.
+
+### Access was removed in the settings of the browser
+
+The popup reads `Fruitback can't open this page`, and the site is **Paused**. Your notes are safe.
+Press **Allow access again**. The browser asks for that site once more, and the widget comes back.
+
+### The widget does not show after Turn on
+
+Reload the page. The extension puts the widget into the tabs that are open on the site when you
+turn it on, and the browser refuses that in some tabs: an error page, or a page that another
+extension controls. The next load of the page gets the widget.
+
+If the popup reads `Another copy of Fruitback runs on this page`, reload the page too. A tab that
+was open while the extension updated keeps the script of the earlier version. If the line stays
+after the reload, remove the other copy from the extensions page of your browser.
+
+## Who can add a site to a workspace
+
+**An owner or an admin of the workspace.** A member can turn on a site that is already in their
+workspace, and a guest the sites shared with them. Neither can add a new one.
+
+On a site of none of your workspaces:
+
+- If you are an owner or an admin of at least one workspace, the popup offers **Turn on**. It adds
+  the site to the workspace you choose.
+- Otherwise the popup reads `Ask an admin of your workspace to add this site.`, and has no button.
+- If your role changed in the meantime, **Turn on** answers
+  `Your role in this workspace does not let you add a site.`
+
+**What to ask an admin.** Send the address of the site, as the browser shows it, and the name of
+the workspace. The admin adds it on the **Sites** screen of the console, with **Add a site**. Then
+open the popup on the site again: it offers **Turn on**.
+
+The popup adds a site over `https` only, or on the loopback (`localhost`, `127.0.0.1`). Add a
+staging site on plain `http` from the console. One account adds 10 sites an hour at most from the popup; past that, it reads
+`Too many sites were added in the last hour. Try again later.`
 
 ## What log out does, and what it cannot undo
 

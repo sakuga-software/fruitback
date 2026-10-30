@@ -1,4 +1,6 @@
+import { json } from './http.ts';
 import { type AccountStore, mailboxOf, normalizeEmail, readLocaleTag } from './accounts.ts';
+import { MAX_BODY_BYTES, readBoundedBytes, readJsonObject } from './bounded-body.ts';
 import {
   ACCOUNT_SUSPENDED,
   AUTH_BASE_PATH,
@@ -111,25 +113,6 @@ export function isAuthRoute(pathname: string): boolean {
 const LINK_TOKEN = /^[A-Za-z0-9_-]{16,128}$/;
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
-
-function json(status: number, body: unknown, headers: Record<string, string>): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...headers },
-  });
-}
-
-async function readBody(request: Request): Promise<Record<string, unknown> | undefined> {
-  try {
-    const parsed: unknown = JSON.parse(await request.text());
-
-    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : undefined;
-  } catch {
-    return undefined;
-  }
-}
 
 /**
  * Whether a request that carries the cookie of a session may change something.
@@ -285,7 +268,7 @@ async function sendLink(
   if (context.mailer === undefined) return json(404, { error: 'not-found' }, headers);
   if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
 
-  const body = await readBody(request);
+  const body = await readJsonObject(request);
   const email = typeof body?.email === 'string' ? normalizeEmail(body.email) : undefined;
   if (email === undefined) return json(400, { error: 'invalid-email' }, headers);
   // FRU-450: another address of an account, which something proved, opens that account. better-auth
@@ -355,7 +338,7 @@ async function redeemLink(
   // to the account of that page (a login CSRF): `consoleCors` refuses another origin, and this
   // refuses a request with none.
   if (!mutationAllowed(request, context.consoleUrl)) return json(403, { error: 'origin-not-allowed' }, headers);
-  const body = await readBody(request);
+  const body = await readJsonObject(request);
   const token = typeof body?.token === 'string' ? body.token.trim() : '';
   if (!LINK_TOKEN.test(token)) return json(400, { error: 'invalid-code' }, headers);
 
@@ -819,10 +802,13 @@ export async function handleAuthRoutes(
   // that comes back by a form (`response_mode=form_post`, Apple) would need its route named here.
   if (!mutationAllowed(request, context.consoleUrl)) return json(403, { error: 'origin-not-allowed' }, headers);
 
+  // Read under the cap of the worker, as every body of the console (FRU-506).
+  const body = SAFE_METHODS.has(request.method) ? undefined : await readBoundedBytes(request, MAX_BODY_BYTES);
+  if (body === null) return json(413, { error: 'payload-too-large', maxBytes: MAX_BODY_BYTES }, headers);
   const forwarded = new Request(request.url, {
     method: request.method,
     headers: headersFor(request, context),
-    ...(SAFE_METHODS.has(request.method) ? {} : { body: await request.arrayBuffer() }),
+    ...(body === undefined ? {} : { body }),
   });
 
   const answer = await (await context.auth).handler(forwarded);

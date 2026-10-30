@@ -371,7 +371,7 @@ test('a member reads where the notes go and the warning, chooses nothing, and as
   // The public one only: acme/web is private.
   await expect(card(page).getByRole('alert')).toHaveText([PUBLIC_DOCS]);
   await page.getByRole('button', { name: `More for ${SITE}`, exact: true }).click();
-  await expect(page.getByRole('menuitem')).toHaveText(['Settings', 'Install']);
+  await expect(page.getByRole('menuitem')).toHaveText(['Open its page', 'See the notes']);
   await page.keyboard.press('Escape');
   // The page of the site does not offer to change them either (FRU-433).
   await page.goto(`${CONSOLE}/w/w1/sites/s1`);

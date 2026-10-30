@@ -12,7 +12,9 @@ import {
   PANEL_PORT,
   REPLY_PROBLEM,
   notesOf,
+  offersPopup,
   openOnRead,
+  openPopupFrom,
   panelPage,
   tabOf,
   webHost,
@@ -92,6 +94,10 @@ let focusOnOpen: string | undefined;
 const sessions = createBrowserSessions();
 /** The background shows again the pins this panel hid, once the panel is gone (review of #419). */
 const pinsPort = browser.runtime.connect({ name: PANEL_PORT });
+/** The address of the active tab, when the browser gives it: the popup reads it the same way (FRU-532). */
+let tabAddress: string | undefined;
+/** The browser refused to open the popup from the panel once: the panel says to use the toolbar. */
+let popupRefused = false;
 
 async function ask(command: TabCommand, args: TabCommandArguments = {}): Promise<TabCommandAnswer> {
   return (await askOrNothing(command, args)) ?? { done: false };
@@ -121,6 +127,7 @@ async function look(): Promise<void> {
   if (mine !== looks) return;
   const source = await sourceOf(site);
   if (mine !== looks) return;
+  tabAddress = active?.url;
   const before = followed?.tabId;
   if (active?.id === undefined || active.url === undefined || host === undefined || site?.enabled !== true) {
     followed = undefined;
@@ -310,6 +317,15 @@ function draw(): void {
       },
       onSettings: () => void browser.runtime.openOptionsPage(),
       onVerdict: (id, verdict) => void sendVerdict(id, verdict),
+      ...(offersPopup(browser, tabAddress, popupRefused)
+        ? {
+            onOpenPopup: () =>
+              openPopupFrom(browser, () => {
+                popupRefused = true;
+                draw();
+              }),
+          }
+        : {}),
       onSearch: () => toggleSearch(),
       ...(search === undefined ? {} : { search: { state: search, handlers: searchHandlers } }),
     }),

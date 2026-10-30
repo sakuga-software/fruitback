@@ -1,3 +1,4 @@
+import { json } from './http.ts';
 import { type AccountStore, type Role, type Site, can, readableSites } from './accounts.ts';
 import type { Kv } from './kv.ts';
 import { addSessionSite } from './session-site-add.ts';
@@ -21,13 +22,6 @@ import type { SessionIdentity } from './session.ts';
  * is not a member of, and its sites as sites that do not exist.
  */
 export const SESSION_SITES_PATH = '/session/sites';
-
-function json(status: number, body: unknown, headers: Record<string, string>): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...headers },
-  });
-}
 
 /** What `POST /session/sites` needs beside the read: the `Kv` of its count, and the session read again. */
 export type SiteWrites = {

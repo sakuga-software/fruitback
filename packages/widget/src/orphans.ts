@@ -3,6 +3,7 @@ import { type Translator, createTranslator, languageOf } from './messages.ts';
 import { createIcon } from './icons.ts';
 import { statusPaint } from './status-paint.ts';
 import { CAPTURE_START } from './events.ts';
+import { adoptStyles } from './stylesheet.ts';
 
 /**
  * The notes whose element is gone (FRU-12).
@@ -61,9 +62,6 @@ export function createOrphanList(options: OrphanListOptions): OrphanList {
   const document = options.document ?? options.host.ownerDocument ?? globalThis.document;
   const t = options.translator ?? createTranslator({ language: languageOf(document) });
 
-  const style = document.createElement('style');
-  style.textContent = STYLES;
-
   const root = document.createElement('div');
   root.className = 'fruitback-orphans';
   root.dataset.fruitbackOrphans = '';
@@ -108,7 +106,8 @@ export function createOrphanList(options: OrphanListOptions): OrphanList {
   announcer.setAttribute('role', 'status');
   announcer.setAttribute('aria-live', 'polite');
 
-  options.host.append(style, announcer);
+  const style = adoptStyles(options.host, STYLES);
+  options.host.append(announcer);
   if (options.dock === undefined) options.host.append(root);
   else options.dock.prepend(root);
 
@@ -156,7 +155,7 @@ export function createOrphanList(options: OrphanListOptions): OrphanList {
         ...issues.map((issue) => entry(document, issue, options.statusOf?.(issue), t, options.onSelect)),
       );
     },
-    owns: (node) => node === root || node === style || root.contains(node) || announcer.contains(node),
+    owns: (node) => node === root || style.owns(node) || root.contains(node) || announcer.contains(node),
     entry: (id) =>
       [...list.children]
         .find((item) => (item as HTMLElement).dataset.fruitbackOrphan === id)

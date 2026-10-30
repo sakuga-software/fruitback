@@ -260,18 +260,11 @@ test('the screen is the one of the mockup, with what the worker of today does', 
   await expect(page.locator('main h1')).toHaveText('My account');
   await expect(page.getByText('Your name on notes, your addresses, how you sign in, and where.')).toBeVisible();
 
-  // Four sections of the mockup, each named by its title, 40 px apart; and the two it does not draw:
-  // the addresses (FRU-450), under the profile, and the end of the workspace.
+  // Four sections of the mockup, each named by its title, 40 px apart; and the addresses (FRU-450),
+  // under the profile, which it does not draw. The end of the workspace is in its settings (FRU-503).
   const sections = page.locator('main section');
-  await expect(sections).toHaveCount(6);
-  for (const name of [
-    'Profile',
-    'Addresses',
-    'How you sign in',
-    'Where you are signed in',
-    'Sign out',
-    'Delete the workspace',
-  ]) {
+  await expect(sections).toHaveCount(5);
+  for (const name of ['Profile', 'Addresses', 'How you sign in', 'Where you are signed in', 'Sign out']) {
     await expect(section(page, name), name).toBeVisible();
   }
   expect.soft(await styles(sections.first().locator('..'), ['display', 'flex-direction', 'row-gap'])).toEqual({
@@ -600,25 +593,14 @@ test('« Sign out everywhere » asks twice, and a sign-out that the worker did n
   expect(worker.sent).toEqual(['POST /console/auth/revoke-sessions', 'POST /console/auth/sign-out']);
 });
 
-test('the owner alone deletes the workspace, and asks twice', async ({ page }) => {
-  const worker = await workerWith(page, 'owner');
+test('« My account » is about the person: the owner deletes the workspace from its settings (FRU-503)', async ({
+  page,
+}) => {
+  await workerWith(page, 'owner');
   await open(page);
-  const end = section(page, 'Delete the workspace');
-  await end.getByRole('button', { name: 'Delete workspace', exact: true }).click();
-  await expect(end.getByRole('button', { name: 'Keep it', exact: true })).toBeFocused();
-  await expect(end.getByRole('button', { name: 'Delete Acme', exact: true })).toBeVisible();
-  expect(worker.sent).toEqual([]);
-  await expectNoViolation(page, 'the second time of the deletion');
-  await end.getByRole('button', { name: 'Keep it', exact: true }).click();
-  await expect(end.getByRole('button', { name: 'Delete workspace', exact: true })).toBeVisible();
-
-  for (const role of ['admin', 'member', 'guest'] as const) {
-    await page.unrouteAll();
-    await workerWith(page, role);
-    await open(page);
-    await expect(page.getByText('Delete the workspace'), role).toHaveCount(0);
-    await expect(page.locator('main section'), role).toHaveCount(5);
-  }
+  await expect(page.locator('main section')).toHaveCount(5);
+  await expect(page.getByText('Delete the workspace')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Delete workspace' })).toHaveCount(0);
 });
 
 for (const locale of ['en', 'fr'] as const) {
