@@ -5,7 +5,9 @@ import {
   type Role,
   box,
   contrast,
+  NO_PASSWORD_MANAGER,
   expectBox,
+  fillMarks,
   painted,
   rgb,
   sideScroll,
@@ -478,6 +480,38 @@ test('the invitation is one line: a form with a name, and each field under its l
 });
 
 const sitesList = (page: Page) => form(page).getByRole('button', { name: /Site$/ });
+
+test('the address of the person invited, and the search, are no field for a password manager (FRU-540)', async ({
+  page,
+}) => {
+  await workerWith(page);
+  await open(page);
+
+  expect(await fillMarks(email(page))).toEqual(NO_PASSWORD_MANAGER);
+  expect(await fillMarks(page.getByRole('searchbox', { name: 'Search members' }))).toEqual(NO_PASSWORD_MANAGER);
+});
+
+test('the icon of a password manager next to « Email » moves nothing in the form (FRU-540)', async ({ page }) => {
+  await page.setViewportSize({ width: 1528, height: 840 });
+  await workerWith(page);
+  await open(page);
+  const before = { form: await box(form(page)), email: await box(email(page)), role: await box(roles(page)) };
+
+  // What LastPass 4.156 adds to the parent of a field, even one marked `data-lpignore` (measured
+  // with the extension loaded in Chromium): the form was 72 px high, and not 66.
+  await email(page).evaluate((input) => {
+    const icon = document.createElement('div');
+    icon.setAttribute('data-lastpass-icon-root', '');
+    icon.setAttribute(
+      'style',
+      'position: relative !important; height: 0px !important; width: 0px !important; display: initial !important; float: left !important;',
+    );
+    input.after(icon);
+  });
+  expect(await box(form(page))).toEqual(before.form);
+  expect(await box(email(page))).toEqual(before.email);
+  expect(await box(roles(page))).toEqual(before.role);
+});
 
 test('a guest of one site: the list « Site » where the mockup draws it, and the site goes with the invitation (FRU-250)', async ({
   page,

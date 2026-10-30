@@ -84,7 +84,7 @@ describe('a site whose notes are « Members only », for a reader with no sessio
       const { transport } = worker({ status: 401, body });
       const { widget, launch } = await widgetOn(mounted(), { transport });
 
-      assert.equal(launch.textContent, 'Leave feedback', JSON.stringify(body));
+      assert.equal(launch.textContent, 'Leave a note', JSON.stringify(body));
       assert.equal(launch.hasAttribute('aria-disabled'), false, JSON.stringify(body));
       assert.equal(widget.leaveFeedback(), true, JSON.stringify(body));
       widget.destroy();
@@ -99,7 +99,7 @@ describe('a site whose notes are « Members only », for a reader with no sessio
     answer.body = { issues: [] };
     await widget.refresh();
 
-    assert.equal(launch.textContent, 'Leave feedback');
+    assert.equal(launch.textContent, 'Leave a note');
     assert.equal(launch.hasAttribute('aria-disabled'), false);
     assert.equal(launch.hasAttribute('title'), false);
     assert.equal(widget.leaveFeedback(), true);
@@ -176,6 +176,6 @@ describe('a site whose notes are « Members only », for a reader with no sessio
 
     assert.ok(requests.length > before, 'the widget did not read again when the network came back');
     assert.equal(launch.hasAttribute('aria-disabled'), false);
-    assert.equal(launch.textContent, 'Leave feedback');
+    assert.equal(launch.textContent, 'Leave a note');
   });
 });

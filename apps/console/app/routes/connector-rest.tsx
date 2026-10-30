@@ -58,7 +58,7 @@ export function RestPanel({ id, base, connector, sites, manages, onChanged, onRe
   async function disconnect() {
     const removed = await call('DELETE', `${base}/connectors/${connector.id}`);
     if (removed.ok) return onRemoved();
-    setProblem(writeProblemOf(removed, msg('This source is still connected. Try again.')));
+    setProblem(writeProblemOf(removed, msg('This connector is still connected. Try again.')));
   }
 
   return (

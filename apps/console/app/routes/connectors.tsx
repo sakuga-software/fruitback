@@ -45,7 +45,7 @@ const LATER = [
 /** What the way back from Linear says, as the worker words it in the address (FRU-134). */
 const LINEAR_RETURNS: Record<string, string> = {
   declined: msg('You declined access in Linear, so it is not connected. Press Connect to try again.'),
-  forbidden: msg('Only an owner or an admin of the workspace connects a source.'),
+  forbidden: msg('Only an owner or an admin of the workspace adds a connector.'),
   failed: msg('Linear was not connected. Start again from « Connect ».'),
 };
 
@@ -63,7 +63,7 @@ const GITHUB_RETURNS: Record<string, string> = {
   refused: msg(
     'GitHub was not connected: your GitHub account does not reach this installation. Ask an owner of the organisation to connect it.',
   ),
-  forbidden: msg('Only an owner or an admin of the workspace connects a source.'),
+  forbidden: msg('Only an owner or an admin of the workspace adds a connector.'),
   suspended: WORKSPACE_SUSPENDED,
   'unauthorized-app': msg(
     'GitHub was not connected: the GitHub App of this Fruitback is not set up correctly. Contact the operator of this Fruitback.',
@@ -76,7 +76,7 @@ const GITHUB_RETURNS: Record<string, string> = {
 
 /** What the start of the way to GitHub can be refused for. */
 const GITHUB_START_PROBLEMS: Readonly<Record<string, string>> = {
-  forbidden: msg('Only an owner or an admin of the workspace connects a source.'),
+  forbidden: msg('Only an owner or an admin of the workspace adds a connector.'),
   'connectors-unavailable': msg('This Fruitback has no GitHub App. Its operator must set one up.'),
 };
 
@@ -270,7 +270,7 @@ export default function Connectors() {
     );
 
   const cannot = !manages || !available;
-  // WARNING: « Add a source » waits for the list to be read. The list arrives above it, and its
+  // WARNING: « Add a connector » waits for the list to be read. The list arrives above it, and its
   // buttons went down by the height of the list (45 px for one source, 110 for two, measured): a
   // press that starts before a button moves and ends after is lost. And only a list that was read
   // says what « Connect Linear » does, the consent at Linear or a key: after a read that failed
@@ -346,7 +346,7 @@ export default function Connectors() {
                 tabIndex={-1}
                 className="text-body leading-auto font-semibold focus:outline-none"
               >
-                {t('Add a source')}
+                {t('Add a connector')}
               </h2>
               {connected && adding === undefined ? (
                 <LinkButton onClick={() => closeCatalogue()}>{t('Close')}</LinkButton>
@@ -356,7 +356,7 @@ export default function Connectors() {
               <p className="mb-[10px] text-hint text-muted">{t('No tracker yet. The notes stay in Fruitback.')}</p>
             )}
             {manages ? null : (
-              <p className="mb-[10px] text-hint text-muted">{t('An owner or an admin connects a source')}</p>
+              <p className="mb-[10px] text-hint text-muted">{t('An owner or an admin adds a connector')}</p>
             )}
             {available ? null : (
               <p className="mb-[10px] text-hint text-muted">{t(KEY_PROBLEMS['connectors-unavailable'] ?? '')}</p>

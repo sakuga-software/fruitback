@@ -196,7 +196,7 @@ test('a first user goes from the setup to a first note (FRU-481)', async ({ exte
   // The welcome page says the site is on now, and offers to open it.
   await expect(welcome!.getByRole('button', { name: 'Open localhost:5177' })).toBeVisible();
 
-  // The first activation opens the choice of an element (FRU-485): no « Leave feedback » to press.
+  // The first activation opens the choice of an element (FRU-485): no « Leave a note » to press.
   await site.bringToFront();
   await expect(site.locator('[data-fruitback-host]')).toHaveAttribute('data-fruitback-capturing', '', {
     timeout: 20_000,
@@ -268,7 +268,7 @@ test('a first user goes from the setup to a first note (FRU-481)', async ({ exte
   await settled(site);
   await demoFrame(site, '09-pin', box);
   // A second load does not open the choice again: it opens at the first activation only.
-  await expect(site.getByRole('button', { name: 'Leave feedback' })).toBeVisible();
+  await expect(site.getByRole('button', { name: 'Leave a note' })).toBeVisible();
   await expect(site.locator('[data-fruitback-host]')).not.toHaveAttribute('data-fruitback-capturing');
 
   // The popup on the site that is on, for the last step of the guide: after the path, which it is not part of.

@@ -71,8 +71,8 @@ export const GUIDE_STEPS: readonly GuideStep[] = [
     text: msg(
       'Later, the Fruitback icon in the toolbar opens the same tools on any site of your team: {leave} starts a note.',
     ),
-    alt: msg('The popup on a site that is on, with Leave feedback'),
-    controls: { leave: { role: 'button', name: msg('Leave feedback'), where: 'extension' } },
+    alt: msg('The popup on a site that is on, with Leave a note'),
+    controls: { leave: { role: 'button', name: msg('Leave a note'), where: 'extension' } },
   },
 ];
 

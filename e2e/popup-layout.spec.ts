@@ -113,15 +113,15 @@ for (const language of ['en', 'fr'] as const) {
     const worker = await extension.context.newPage();
     await worker.goto(link);
     const linked = await openPopup(extension, worker, AUTHENTICATED_WORKER_ORIGIN);
-    const pair = linked.getByRole('button', { name: /^(Pair with this worker|Se connecter à ce serveur)$/ });
+    const pair = linked.getByRole('button', { name: /^(Connect to this server|Se connecter à ce serveur)$/ });
     await expect(pair).toBeVisible();
-    // FRU-302: « Pair in the page of the extension » joins the buttons.
+    // FRU-302: « Connect in the page of the extension » joins the buttons.
     await expectLaidOut(linked, 'pairing link', 4);
 
     // 3. Paired, with a name of forty characters beside « Log out ».
     await pair.click();
     await expect(linked.getByText(NAME, { exact: false })).toBeVisible();
-    await expect(linked.getByRole('button', { name: /^(Log out|Se déconnecter)$/ })).toBeVisible();
+    await expect(linked.getByRole('button', { name: /^(Sign out|Se déconnecter)$/ })).toBeVisible();
     await expectLaidOut(linked, 'paired', 3);
     await linked.close();
     await worker.close();
@@ -134,13 +134,13 @@ for (const language of ['en', 'fr'] as const) {
     await expectLaidOut(offered, 'site of the workspace', 2);
 
     // 5. The site turned on (FRU-298): the gear, the switch, « Show Fruitback on this page » (FRU-444),
-    // « Leave feedback » and the icon of the side panel beside it (FRU-529); the head names the person of the pairing. The worker of this spec says nothing of
+    // « Leave a note » and the icon of the side panel beside it (FRU-529); the head names the person of the pairing. The worker of this spec says nothing of
     // the notes of the site, so no line of what waits.
     await turnOn.click();
     await expect(offered.getByRole('switch', { name: SITE_SWITCH })).toBeChecked();
     await expect(offered.getByRole('button', { name: /^(Account and settings|Compte et réglages)$/ })).toHaveText('Q');
     // The row of the pairing stays, with its log out.
-    await expect(offered.getByText(/^(Paired as|Connecté en tant que) /)).toBeVisible();
+    await expect(offered.getByText(/^(Connected as|Connecté en tant que) /)).toBeVisible();
     await expectLaidOut(offered, 'site turned on', 6);
 
     // The kit (FRU-293), read on computed styles in both schemes: the measures of the mock-up of
@@ -163,14 +163,14 @@ for (const language of ['en', 'fr'] as const) {
         .toBe(ACCENT[colorScheme]);
       const kit = await readKit(offered);
       const where = `${language}, ${colorScheme}`;
-      // « Leave feedback » of screen 3 (FRU-298): the tall button of the kit, 56 px, the corner of 12.
+      // « Leave a note » of screen 3 (FRU-298): the tall button of the kit, 56 px, the corner of 12.
       expect.soft(kit.primary, `${where}: the main button`).toMatchObject({
         height: 56,
         radius: '12px',
         font: '16px 650',
         fill: ACCENT[colorScheme],
       });
-      // « Show all notes in a sidebar » (FRU-529): a square of one icon, as high as « Leave feedback ».
+      // « Show all notes in a sidebar » (FRU-529): a square of one icon, as high as « Leave a note ».
       expect.soft(kit.secondary, `${where}: the button of the side panel`).toMatchObject({
         height: 56,
         width: 56,

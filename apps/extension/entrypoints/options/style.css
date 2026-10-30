@@ -576,7 +576,7 @@ button.share-button:disabled {
   display: none;
 }
 
-/* « Workers and sessions » (FRU-302): one card for each worker, in a grid. */
+/* « Servers and sessions » (FRU-302): one card for each worker, in a grid. */
 .workers-intro {
   max-width: 620px;
   color: var(--muted);

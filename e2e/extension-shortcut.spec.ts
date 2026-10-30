@@ -37,7 +37,7 @@ test('what the shortcut sends starts a capture on the tab, and Esc stops it', as
   await openBareSite(page, 'ext-shortcut');
   // By its attribute: the capsule hides it while a capture runs (FRU-303), and a role query skips it.
   const launch = page.locator('[data-fruitback-host-launch]');
-  await expect(launch).toHaveText('Leave feedback');
+  await expect(launch).toHaveText('Leave a note');
   await expect(launch).toHaveAttribute('aria-pressed', 'false');
 
   // The message of `runShortcut`, sent from where the listener runs.
@@ -60,7 +60,7 @@ test('the options page shows the key, and the way to change it', async ({ extens
   const options = await extension.context.newPage();
   await options.goto(`chrome-extension://${extension.id}/options.html`);
   // FRU-302: the line is a row of « Preferences », the keys in the `kbd` of the kit.
-  const row = options.locator('section#prefs .pref-row').filter({ hasText: 'Leave feedback shortcut' });
+  const row = options.locator('section#prefs .pref-row').filter({ hasText: 'Leave a note shortcut' });
 
   await expect(row.locator('kbd')).toHaveText([/^(Alt|⌥)$/, /^(Shift|⇧)$/, 'F']);
 

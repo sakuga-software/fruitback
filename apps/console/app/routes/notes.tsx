@@ -443,7 +443,7 @@ function Places({
   const nameOf = (id: string): string => {
     if (id === 'fruitback') return t('In Fruitback');
     const connector = connectors.find((each) => each.id === id);
-    if (connector === undefined) return t('A source that was removed');
+    if (connector === undefined) return t('A connector that was removed');
     if (connector.name !== undefined) return connector.name;
     const twins = connectors.filter((each) => each.kind === connector.kind).length > 1;
 
@@ -791,7 +791,7 @@ function Place({
   late: boolean;
 }) {
   useLocale();
-  if (place.kind === 'removed') return <span className="block font-semibold">{t('A source that was removed')}</span>;
+  if (place.kind === 'removed') return <span className="block font-semibold">{t('A connector that was removed')}</span>;
   // FRU-552: the mark of the place, then its reference, on one line. The name of the place is said to
   // a screen reader only, where a reference or an address follows it.
   if (place.kind === 'fruitback') {

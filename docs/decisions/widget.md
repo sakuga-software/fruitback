@@ -419,7 +419,7 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
       surface), with a sunken fill under the pointer. The list is a panel beside the page, drawn
       in `icons.ts`. It opens the list in the page. The side panel of the extension (FRU-296) is not
       on `main`: when it is, the button will ask the extension first.
-    - **No landmark of its own.** The host element is already the region « Fruitback feedback »:
+    - **No landmark of its own.** The host element is already the region « Fruitback notes »:
       a second region with that name is two landmarks a screen reader cannot tell apart.
     - **The launch button's drop is the mark**, 11 by 14 px (`mark` in `icons.ts`), not the pin.
       Its name in French is « Laisser une note »; the `label` of the host wins.
@@ -1493,7 +1493,7 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
     one is a button: it still opens its thread. The title is in the muted text, not the brown of the
     board, which is 3.8:1 on the dark surface. The chips filter them too. The chip of `orphans.ts`
     on the page is unchanged.
-  - **The foot**: « Leave feedback », 44 px, with the label of the host, which closes the list and
+  - **The foot**: « Leave a note », 44 px, with the label of the host, which closes the list and
     starts a capture; and « Show pins on the page », a switch (`overlay.showPins`). Off, the pins go
     while the list is open, and the ring of the chosen note stays; the list shows them again when it
     closes, so no state of the widget is left with no pin and no list.
@@ -1582,7 +1582,7 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
   `aria-disabled`, and a press says « Only members of this site leave notes here. Ask its team to
   invite you. » in the live region. `host.closeNotes` makes `start` a no-op, so no other way in (the
   list, « Choose another element », `leaveFeedback()`, which answers `false`) starts a capture. The list hides its
-  « Leave feedback ».
+  « Leave a note ».
 - **A host that signs in keeps its own offer.** With `onSignIn` (the extension), the widget closes
   nothing: a refused read there is a session that ended, and `signedOut` offers the sign-in.
 - **What is written stays**, as for FRU-315: a draft stays in its store, an open composer stays open.

@@ -274,7 +274,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'A workspace': 'Un espace de travail',
   '1 kept note': '1 note gardée',
   '{count} kept notes': '{count} notes gardées',
-  'Sites, members and pin positions go. Items already in your sources stay there.':
+  'Sites, members and pin positions go. Items already in your trackers stay there.':
     'Les sites, les membres et la position des repères disparaissent. Les éléments déjà dans vos outils de suivi y restent.',
   'Keep it': 'Le garder',
   'Delete workspace': 'Supprimer l’espace de travail',
@@ -331,7 +331,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Ce Fruitback ne peut pas encore garder de clé. Son opérateur doit définir FRUITBACK_SECRETS_KEY.',
   'Linear knows this key, and it may not list your teams. Create a key with read and write access, then try again.':
     'Linear connaît cette clé, mais elle ne peut pas lister vos équipes. Créez une clé avec accès en lecture et en écriture, puis réessayez.',
-  'Only an owner or an admin of the workspace connects a source.':
+  'Only an owner or an admin of the workspace adds a connector.':
     'Seul un propriétaire ou un administrateur de l’espace de travail ajoute un connecteur.',
   'Fruitback hit an error. Try again in a moment.': 'Fruitback a rencontré une erreur. Réessayez dans un instant.',
   'Fruitback could not be reached. Check your connection, then try again.':
@@ -344,11 +344,11 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Your connectors': 'Vos connecteurs',
   Connected: 'Connecté',
   'Key of {person}': 'Clé de {person}',
-  'Add a source': 'Ajouter un connecteur',
+  'Add a connector': 'Ajouter un connecteur',
   'New connector': 'Nouveau connecteur',
   Close: 'Fermer',
   'An issue per note, in the team you choose.': 'Un ticket par note, dans l’équipe que vous choisissez.',
-  'An owner or an admin connects a source': 'Un propriétaire ou un administrateur ajoute un connecteur',
+  'An owner or an admin adds a connector': 'Un propriétaire ou un administrateur ajoute un connecteur',
   'The key could not be kept just now. Try again.': 'La clé n’a pas pu être gardée. Réessayez.',
   'Linear API key': 'Clé d’API Linear',
   'A personal API key, from Linear, Settings, Security and access. Fruitback keeps it encrypted.':
@@ -365,7 +365,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Linear a mis fin à cette connexion, et depuis {when} les notes de ses sites n’arrivent pas dans Linear. Déconnectez-la, puis connectez Linear de nouveau.',
   '{count} site': '{count} site',
   '{count} sites': '{count} sites',
-  'This source is still connected. Try again.': 'Ce connecteur est toujours connecté. Réessayez.',
+  'This connector is still connected. Try again.': 'Ce connecteur est toujours connecté. Réessayez.',
   'Connected with the key of {person}': 'Connecté avec la clé de {person}',
   'This workspace has no site yet.': 'Cet espace de travail n’a pas encore de site.',
   '{team}, no project': '{team}, sans projet',
@@ -541,7 +541,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Who sees the notes?': 'Qui voit les notes ?',
   'Who can leave a note?': 'Qui peut laisser une note ?',
   'Members only': 'Les membres seulement',
-  'A note needs the extension, connected by a member. Private mode carries no session: a site you review in private mode needs « Anyone on the page ».':
+  'A note needs the extension, connected by a member. In private mode the extension holds no session, so a site you review in private mode needs « Anyone on the page ».':
     'Une note demande l’extension, connectée par un membre. Le mode privé ne porte aucune session : un site que vous relisez en mode privé demande « Toute personne sur la page ».',
   'Anyone on the page': 'Toute personne sur la page',
   'A visitor leaves a note and cannot read it back. Your members find it.':
@@ -814,8 +814,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
   // The example page of before (FRU-242), on demand when the site cannot show (FRU-354).
   'An example page. Pins show the same way on your site.':
     'Une page d’exemple. Les repères s’affichent de la même façon sur votre site.',
-  'Leave feedback': 'Laisser une note',
-  'Click Leave feedback, then any part of the page.':
+  'Leave a note': 'Laisser une note',
+  'Click Leave a note, then any part of the page.':
     'Cliquez sur Laisser une note, puis sur n’importe quelle partie de la page.',
   'Use one, or both.': 'Utilisez l’un, ou les deux.',
   'Browser extension': 'Extension de navigateur',
@@ -841,7 +841,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Before the closing body tag. Every visitor sees the pins.':
     'Avant la balise body fermante. Chaque visiteur voit les repères.',
   'Copy script': 'Copier le script',
-  'Open the site, click Leave feedback, then any part of the page.':
+  'Open the site, click Leave a note, then any part of the page.':
     'Ouvrez le site, cliquez sur Laisser une note, puis sur n’importe quelle partie de la page.',
   'Open the console': 'Ouvrir la console',
   // The first note of the setup (FRU-242).
@@ -882,7 +882,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Where the notes went': 'Où sont parties les notes',
   All: 'Toutes',
   'In Fruitback': 'Dans Fruitback',
-  'A source that was removed': 'Un connecteur retiré',
+  'A connector that was removed': 'Un connecteur retiré',
   'Search notes': 'Chercher dans les notes',
   'Search the text, the page or the reference': 'Chercher le texte, la page ou la référence',
   'Search the text or the page': 'Chercher le texte ou la page',
@@ -926,7 +926,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'GitHub, dépôts publics de {account} : leurs tickets sont publics',
   'Where the notes of {site} go': 'Où vont les notes de {site}',
   'The connectors of this workspace did not load.': 'Les connecteurs de cet espace de travail ne se sont pas chargés.',
-  'No source is connected.': 'Aucun connecteur n’est ajouté.',
+  'No connector is added.': 'Aucun connecteur n’est ajouté.',
   '{source} did not send its places. Try again in a moment.':
     '{source} n’a pas envoyé ses destinations. Réessayez dans un instant.',
   'Some connectors did not send their places. Try again in a moment.':
@@ -1083,7 +1083,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Tout ce que fait tourner ce serveur. Chaque réglage vient de l’environnement du serveur.',
   'The instance did not load.': 'L’instance ne s’est pas chargée.',
   Health: 'État',
-  Worker: 'Serveur',
+  Server: 'Serveur',
   Answering: 'Répond',
   'Started just now': 'Démarré à l’instant',
   'Up for {count} min': 'En service depuis {count} min',
@@ -1094,7 +1094,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Not reported': 'Non signalé',
   Mail: 'E-mail',
   'No sign-in link goes out by e-mail.': 'Aucun lien de connexion ne part par e-mail.',
-  'No link sent since the worker started.': 'Aucun lien envoyé depuis le démarrage du serveur.',
+  'No link sent since the server started.': 'Aucun lien envoyé depuis le démarrage du serveur.',
   'Last link sent {when}': 'Dernier lien envoyé {when}',
   'All working': 'Tous fonctionnent',
   '{count} needs a look': '{count} à vérifier',
@@ -1135,7 +1135,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Verified: 'Vérifié',
   'Kept in {tool}. Fruitback keeps the first 64 characters.':
     'Gardée dans {tool}. Fruitback garde les 64 premiers caractères.',
-  'Kept in a source that was removed. Fruitback keeps the first 64 characters.':
+  'Kept in a connector that was removed. Fruitback keeps the first 64 characters.':
     'Gardée dans un connecteur retiré. Fruitback garde les 64 premiers caractères.',
   'Every workspace on this instance, who owns it and where its notes go.':
     'Chaque espace de travail de cette instance, qui en est propriétaire et où vont ses notes.',
@@ -1353,11 +1353,11 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'A text colour of your own goes with a colour of your own.':
     'Une couleur de texte à vous va avec une couleur de fond à vous.',
   'A name of one line, up to 80 characters.': 'Un nom d’une ligne, de 80 caractères au plus.',
-  'Only an owner or an admin of the workspace renames a source.':
+  'Only an owner or an admin of the workspace renames a connector.':
     'Seul un propriétaire ou un admin de l’espace de travail renomme un connecteur.',
   'This connector is not connected any more. Reload the page.': 'Ce connecteur n’est plus connecté. Rechargez la page.',
-  'The source was not renamed. Try again.': 'Le connecteur n’a pas été renommé. Réessayez.',
-  'Name of this source': 'Nom de ce connecteur',
+  'The connector was not renamed. Try again.': 'Le connecteur n’a pas été renommé. Réessayez.',
+  'Name of this connector': 'Nom de ce connecteur',
   'Empty, it is named {kind}.': 'Vide, elle s’appelle {kind}.',
   // FRU-462: the agent keys of a workspace.
   Agents: 'Agents',
@@ -1523,7 +1523,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'A note written on an element of the site': 'Une note écrite sur un élément du site',
   'Later, the Fruitback icon in the toolbar opens the same tools on any site of your team: {leave} starts a note.':
     'Plus tard, l’icône Fruitback de la barre d’outils ouvre les mêmes outils sur tout site de votre équipe : {leave} commence une note.',
-  'The popup on a site that is on, with Leave feedback':
+  'The popup on a site that is on, with Leave a note':
     'La fenêtre de Fruitback sur un site activé, avec Laisser une note',
   'Sign in with email': 'Se connecter par e-mail',
   'Turn on {site}': 'Activer sur {site}',
