@@ -319,7 +319,7 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   a value set elsewhere; the value of a `Choice` in the type of its button, so its words sit on the
   baseline of a field beside it (FRU-412: HeroUI writes it at 14 px on a line of 20); `status` on a `Choice` draws the drop of the chosen status in a list of 38 px), `Pick` (radio cards), `Toggle`, `FilterChip` (`aria-pressed`), `StatusDot`
   and `StatusBar`, `DataTable` (`stack`: under 640 px one card per row, its cells one under the other, FRU-505), `SidePanel` (named by its title, or by `label`; `panelId` for `aria-controls`; `flush` for an accordion under its row), `KeyValue`, `SuccessMark`, `Title`, `Lead`, `PageHead`,
-  `Initial`, `Card`, `Chip`, `Problem`, `Logo` (the name as outlines, in tokens: `logo.tsx`), `EntryPage`
+  `Initial`, `Card`, `Chip`, `Problem`, `LoadFailed` (a read that failed: a title, a sentence that nothing is lost, and one « Try again », FRU-508), `Logo` (the name as outlines, in tokens: `logo.tsx`), `EntryPage`
   (the header and the column of a page outside a workspace; `/kit/entry` mounts it), `Divider`, `Menu`
   (a button that opens a menu, on the dropdown of HeroUI: the menu is named after its button, a
   `chosen` item makes it a choice of radios, and it is drawn as a page wherever its button is; the

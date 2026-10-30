@@ -914,6 +914,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Previous: 'Précédentes',
   Next: 'Suivantes',
   'The notes did not load': 'Les notes ne se sont pas chargées',
+  'The members did not load': 'Les membres ne se sont pas chargés',
+  'Fruitback did not answer. Your members are safe.': 'Fruitback n’a pas répondu. Vos membres sont en sécurité.',
   'Fruitback did not answer. Your notes are safe.': 'Fruitback n’a pas répondu. Vos notes sont en sécurité.',
   'No note yet. Notes show here as soon as someone leaves one on a site of {workspace}.':
     'Pas encore de note. Les notes s’affichent ici dès que quelqu’un en laisse une sur un site de {workspace}.',

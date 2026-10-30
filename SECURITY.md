@@ -52,9 +52,12 @@ has a visibility, chosen when it is added**:
   `curl`. Hiding pins in a browser was never the fix.
 
 The boot log says that the visibility is chosen site by site. `FRUITBACK_READ` does not apply to a
-site: it was the setting of a worker with no database, and that worker no longer starts. **A site
-that only members read still takes a note from anybody** (measured in FRU-224): only the read asks
-for a session.
+site: it was the setting of a worker with no database, and that worker no longer starts.
+
+A site that only members read takes a note from its members only, unless its « Who can leave a
+note » says « Anyone on the page ». A new site says « Members only », and a site made before FRU-330
+says « Anyone on the page ». The paragraph that starts « The visibility of a site decides who reads
+it », further down, gives the tests.
 
 A link that opens a note on its page, `<page>#fruitback-note=<id>`, opens nothing to somebody who
 cannot already read that page: the widget opens the note among those `GET /feedback` answered to
