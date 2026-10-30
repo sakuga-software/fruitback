@@ -987,7 +987,7 @@ test('under 1280 px the panel opens under its row, and at 390 px nothing scrolls
 test('in French, every sentence of both screens is French', async ({ page }) => {
   await stub(page, { locale: 'fr' });
   await page.goto(`${CONSOLE}/admin/workspaces?open=w9`);
-  await expect(main(page).getByRole('heading', { level: 1, name: 'Workspaces' })).toBeVisible();
+  await expect(main(page).getByRole('heading', { level: 1, name: 'Espaces de travail' })).toBeVisible();
   await expect(panel(page)).toContainText('Où vont les notes');
   await expect(search(page, 'Chercher un espace de travail')).toHaveAttribute(
     'placeholder',
@@ -1285,7 +1285,7 @@ test('Users: the switch and its confirmation in French, and at 390 px (FRU-280)'
   await expect(panel(page).getByRole('switch', { name: /^Administrateur de l’instance/ })).not.toBeChecked();
   await track(page).click();
   const naming = panel(page).getByRole('group', { name: 'Nommer Tom Marchal administrateur' });
-  await expect(naming).toContainText('Tom Marchal voit cette administration et chaque workspace');
+  await expect(naming).toContainText('Tom Marchal voit cette administration et chaque espace de travail');
   await expect(naming.getByRole('button', { name: /^Nommer/ })).toBeInViewport();
   expect(await sideScroll(page)).toBe(0);
   await axe(page, 'the confirmation at 390 px');
@@ -1773,7 +1773,7 @@ test('Workspaces: the button that deletes is busy while the worker answers, and 
 test('Workspaces: the deletion in French, and at 390 px (FRU-284)', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await stub(page, { locale: 'fr' });
-  await visit(page, '/admin/workspaces?open=w9', 'Workspaces');
+  await visit(page, '/admin/workspaces?open=w9', 'Espaces de travail');
   await panel(page).getByRole('button', { name: 'Supprimer l’espace de travail' }).click();
   const asking = panel(page).getByRole('group', { name: 'Supprimer Acme support' });
   await expect(asking).toContainText(
@@ -2091,7 +2091,7 @@ test('Users: the deletion of an account in French, and at 390 px (FRU-285)', asy
   await axe(page, 'the deletion of an account at 390 px');
 
   await page.goto(`${CONSOLE}/admin/users?open=a3`);
-  await expect(panel(page)).toContainText('Tom Marchal possède seul ces workspaces.');
+  await expect(panel(page)).toContainText('Tom Marchal possède seul ces espaces de travail.');
   await expect(panel(page).getByRole('link', { name: 'Changer le propriétaire de Acme support' })).toBeVisible();
   expect(await sideScroll(page)).toBe(0);
   await axe(page, 'an account held by its workspaces at 390 px');
@@ -2283,7 +2283,7 @@ test('Workspaces: each refusal of a suspension is said, the reason stays, and th
 test('Workspaces: the suspension and its confirmations in French, and at 390 px (FRU-323)', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await stub(page, { locale: 'fr', suspensions: LUMEN_SUSPENDED });
-  await visit(page, '/admin/workspaces?open=w9', 'Workspaces');
+  await visit(page, '/admin/workspaces?open=w9', 'Espaces de travail');
   await expect(nameCell(page, 'Lumen')).toContainText(`Suspendu depuis le ${SUSPENDED_DAY_FR}`);
 
   await panel(page).locator('.kit-panel__foot').getByRole('button', { name: 'Suspendre', exact: true }).click();
@@ -2340,7 +2340,7 @@ test('Workspaces: the filter « Suspended » asks the worker for the suspended w
 test('Workspaces: the filter « Suspended » in French, and at 390 px (FRU-328)', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await stub(page, { locale: 'fr', suspensions: LUMEN_SUSPENDED });
-  await visit(page, '/admin/workspaces', 'Workspaces');
+  await visit(page, '/admin/workspaces', 'Espaces de travail');
 
   await filter(page, /Tous les espaces de travail/).click();
   await page.getByRole('option', { name: 'Suspendu', exact: true }).click();

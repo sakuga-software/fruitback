@@ -495,7 +495,9 @@ test('in French, every sentence of the screen is French', async ({ page }) => {
   await stub(page, { locale: 'fr' });
   await page.goto(`${CONSOLE}/admin`);
   await expect(main(page).getByRole('heading', { level: 1, name: 'Instance' })).toBeVisible();
-  await expect(main(page)).toContainText('Les propriétaires de chaque workspace voient que vous avez lu sa liste');
+  await expect(main(page)).toContainText(
+    'Les propriétaires de chaque espace de travail voient que vous avez lu sa liste',
+  );
   await main(page).getByRole('button', { name: 'Afficher les espaces de travail' }).click();
   await expect(page.getByRole('table')).toBeVisible();
 
@@ -504,10 +506,10 @@ test('in French, every sentence of the screen is French', async ({ page }) => {
   );
   await expect(page.getByRole('navigation', { name: 'Instance' }).getByRole('link')).toHaveText([
     'Instance',
-    'Workspaces',
+    'Espaces de travail',
     'Utilisateurs',
     'Notes',
-    'Mes workspaces',
+    'Mes espaces de travail',
   ]);
   await expect(rail(page)).toContainText('Instance auto-hébergée');
   await expect(page.getByRole('textbox', { name: 'Adresse publique' })).toHaveAccessibleDescription(

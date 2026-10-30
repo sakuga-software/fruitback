@@ -583,10 +583,10 @@ test('a pairing link says « Paired » once it paired, and « already paired » 
   await popup.getByRole('button', { name: /^(Pair with this worker|Se connecter à ce serveur)$/ }).click();
   await expect(popup.getByText(/^(Paired as|Connecté en tant que) Camille Durand$/)).toBeVisible();
   await expect(popup.getByText(/^(Paired\. This browser|Connecté\. Ce navigateur)/)).toBeVisible();
-  await expect(popup.getByText(/already paired|déjà appairé/)).toHaveCount(0);
+  await expect(popup.getByText(/already paired|déjà connecté/)).toHaveCount(0);
   await popup.close();
 
   // The same link, later: this browser was paired before it.
   const again = await openPopup(extension, worker, AUTHENTICATED_WORKER_ORIGIN);
-  await expect(again.getByText(/already paired|déjà appairé/)).toBeVisible();
+  await expect(again.getByText(/already paired|déjà connecté/)).toBeVisible();
 });

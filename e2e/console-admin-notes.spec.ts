@@ -273,7 +273,7 @@ test('in French, every sentence of the screen is French', async ({ page }) => {
   await expect(main(page)).toContainText('Gardée dans Linear. Fruitback garde les 64 premiers caractères.');
   await expect(page.getByRole('table').getByRole('columnheader')).toHaveText([
     'Note',
-    'Workspace',
+    'Espace de travail',
     'Statut',
     'Laissée par',
     'Gardée dans',
