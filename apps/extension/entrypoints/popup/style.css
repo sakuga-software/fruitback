@@ -575,7 +575,7 @@ body.popup-page {
   color: var(--subtle);
 }
 
-.popup-screen-2 .kit-dl select {
+:is(.popup-screen-2, .popup-site-on) .kit-dl select {
   height: 34px;
   margin: 2px 0 0;
   padding: 0 10px;
@@ -589,12 +589,12 @@ body.popup-page {
   (Firefox) shows its own lists, the names alone.
 */
 @supports (appearance: base-select) {
-  .popup-screen-2 .kit-dl select,
-  .popup-screen-2 .kit-dl select::picker(select) {
+  :is(.popup-screen-2, .popup-site-on) .kit-dl select,
+  :is(.popup-screen-2, .popup-site-on) .kit-dl select::picker(select) {
     appearance: base-select;
   }
 
-  .popup-screen-2 .kit-dl select {
+  :is(.popup-screen-2, .popup-site-on) .kit-dl select {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -604,12 +604,12 @@ body.popup-page {
       box-shadow 0.15s;
   }
 
-  .popup-screen-2 .kit-dl select:hover:not(:disabled) {
+  :is(.popup-screen-2, .popup-site-on) .kit-dl select:hover:not(:disabled) {
     border-color: var(--ink);
   }
 
   /* The arrow: a chevron drawn by two borders, at the right edge, never over the words. */
-  .popup-screen-2 .kit-dl select::picker-icon {
+  :is(.popup-screen-2, .popup-site-on) .kit-dl select::picker-icon {
     content: '';
     flex: none;
     box-sizing: border-box;
@@ -624,13 +624,13 @@ body.popup-page {
       margin 0.18s ease;
   }
 
-  .popup-screen-2 .kit-dl select:open::picker-icon {
+  :is(.popup-screen-2, .popup-site-on) .kit-dl select:open::picker-icon {
     margin-top: 3px;
     rotate: 225deg;
   }
 
   /* The field shows the option chosen: its mark and its words, cut with « … » when they are long. */
-  .popup-screen-2 .kit-dl select > button {
+  :is(.popup-screen-2, .popup-site-on) .kit-dl select > button {
     all: unset;
     display: flex;
     flex: 1;
@@ -638,15 +638,15 @@ body.popup-page {
     min-width: 0;
   }
 
-  .popup-screen-2 .kit-dl selectedcontent,
-  .popup-screen-2 .kit-dl select option {
+  :is(.popup-screen-2, .popup-site-on) .kit-dl selectedcontent,
+  :is(.popup-screen-2, .popup-site-on) .kit-dl select option {
     display: flex;
     align-items: center;
     gap: 8px;
     min-width: 0;
   }
 
-  .popup-screen-2 .kit-dl .choice-label {
+  :is(.popup-screen-2, .popup-site-on) .kit-dl .choice-label {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -654,7 +654,7 @@ body.popup-page {
 
   /* The menu opens under the field, fading and sliding 4 px. */
   /* As wide as its field, under it: a long name is cut, never out of the popup. */
-  .popup-screen-2 .kit-dl select::picker(select) {
+  :is(.popup-screen-2, .popup-site-on) .kit-dl select::picker(select) {
     box-sizing: border-box;
     width: anchor-size(width);
     max-height: 260px;
@@ -673,41 +673,60 @@ body.popup-page {
       overlay 0.15s allow-discrete;
   }
 
-  .popup-screen-2 .kit-dl select:open::picker(select) {
+  :is(.popup-screen-2, .popup-site-on) .kit-dl select:open::picker(select) {
     opacity: 1;
     translate: 0 0;
   }
 
   @starting-style {
-    .popup-screen-2 .kit-dl select:open::picker(select) {
+    :is(.popup-screen-2, .popup-site-on) .kit-dl select:open::picker(select) {
       opacity: 0;
       translate: 0 -4px;
     }
   }
 
-  .popup-screen-2 .kit-dl select option {
+  :is(.popup-screen-2, .popup-site-on) .kit-dl select option {
     padding: 8px 10px;
     border-radius: calc(var(--radius-field) - 2px);
   }
 
-  .popup-screen-2 .kit-dl select option:hover,
-  .popup-screen-2 .kit-dl select option:focus-visible {
+  :is(.popup-screen-2, .popup-site-on) .kit-dl select option:hover,
+  :is(.popup-screen-2, .popup-site-on) .kit-dl select option:focus-visible {
     background: var(--line-row);
   }
 
-  .popup-screen-2 .kit-dl select option::checkmark {
+  :is(.popup-screen-2, .popup-site-on) .kit-dl select option::checkmark {
     order: 1;
     margin-left: auto;
   }
 }
 
 /* A line of the lists that has nothing to choose yet, or any more. */
-.popup-screen-2 .kit-dl-entry[hidden] {
+:is(.popup-screen-2, .popup-site-on) .kit-dl-entry[hidden] {
+  display: none;
+}
+
+/* « Notes go to » (FRU-530): the mark of the provider, then the place, on one line. */
+.popup .destination-value {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-weight: 600;
+}
+
+.popup .destination-place {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.popup .site-destination:empty {
   display: none;
 }
 
 /* A line that appears, the team after the provider, the project after the team: it fades in. */
-.popup-screen-2 .kit-dl-entry {
+:is(.popup-screen-2, .popup-site-on) .kit-dl-entry {
   transition:
     opacity 0.18s ease,
     translate 0.18s ease;
@@ -730,10 +749,10 @@ body.popup-page {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .popup-screen-2 .kit-dl-entry,
-  .popup-screen-2 .kit-dl select,
-  .popup-screen-2 .kit-dl select::picker-icon,
-  .popup-screen-2 .kit-dl select::picker(select) {
+  :is(.popup-screen-2, .popup-site-on) .kit-dl-entry,
+  :is(.popup-screen-2, .popup-site-on) .kit-dl select,
+  :is(.popup-screen-2, .popup-site-on) .kit-dl select::picker-icon,
+  :is(.popup-screen-2, .popup-site-on) .kit-dl select::picker(select) {
     transition: none;
   }
 }

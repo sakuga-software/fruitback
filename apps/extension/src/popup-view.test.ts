@@ -8,6 +8,7 @@ import {
   keysOfShortcut,
   notAWebPage,
   problem,
+  readDestination,
   shell,
   showSiteFacts,
   signInStop,
@@ -710,7 +711,7 @@ describe('3 · a site on (FRU-298)', () => {
     // The site, then what waits under it, then the block of « Leave feedback », last of the body.
     assert.deepEqual(
       [...body.children].map((child) => child.className),
-      ['site-row', 'visibility-row', 'site-lines', 'leave-block'],
+      ['site-row', 'kit-dl site-destination', 'visibility-row', 'site-lines', 'leave-block'],
     );
     const leave = body.querySelector('.leave-block') as HTMLElement;
     assert.deepEqual(
@@ -762,7 +763,7 @@ describe('3 · a site on (FRU-298)', () => {
       { destination: 'Linear · Acme', toCheck: 2, open: 3 },
     );
 
-    assert.equal(screen.querySelector('.kit-site-state')?.textContent, 'On · notes go to Linear');
+    assert.equal(screen.querySelector('.kit-site-state')?.textContent, 'On · Acme');
     assert.deepEqual(
       [...screen.querySelectorAll('.kit-row')].map((row) => [
         row.querySelector('.kit-row-title')?.textContent,
@@ -813,5 +814,136 @@ describe('the keys of a shortcut (FRU-298)', () => {
   it('splits « Alt+Shift+F », and the signs of Chrome on macOS one by one', () => {
     assert.deepEqual(keysOfShortcut('Alt+Shift+F'), ['Alt', 'Shift', 'F']);
     assert.deepEqual(keysOfShortcut('⌥⇧F'), ['⌥', '⇧', 'F']);
+  });
+});
+
+describe('where the notes of a site that is on go (FRU-530)', () => {
+  const SITE = 'https://staging.acme.dev';
+  const LINEAR = { id: 'lin', kind: 'linear' as const, label: 'Linear · Acme' };
+  const HOOK = { id: 'hook', kind: 'rest' as const, label: 'REST API · Hook' };
+  const settled = () => new Promise((resolve) => setTimeout(resolve, 0));
+  const pick = (select: HTMLSelectElement, value: string): void => {
+    select.value = value;
+    select.dispatchEvent(new (select.ownerDocument.defaultView as unknown as typeof globalThis).Event('change'));
+  };
+  const on = () =>
+    siteOn(page(), {
+      origin: SITE,
+      workspace: 'Acme',
+      on: true,
+      visibility: { shown: true, onChange: nothing },
+      onToggle: nothing,
+      onLeaveFeedback: nothing,
+      onOpenPanel: nothing,
+      onSettings: nothing,
+    });
+  const facts = { workspace: 'Acme', on: true, onOpenPanel: nothing };
+
+  it('reads the provider and the place of the label the worker writes', () => {
+    assert.deepEqual(readDestination('Linear · Northwind'), { kind: 'linear', provider: 'Linear', place: 'Northwind' });
+    assert.deepEqual(readDestination('GitHub · acme/web'), { kind: 'github', provider: 'GitHub', place: 'acme/web' });
+    assert.deepEqual(readDestination('REST API · Hook'), { kind: 'rest', provider: 'REST API', place: 'Hook' });
+    assert.deepEqual(readDestination('Fruitback'), { kind: 'fruitback', place: 'Fruitback' });
+    // A label of no known provider is said as it is, with no mark: a guess would be a wrong mark.
+    assert.deepEqual(readDestination('Jira · Web'), { place: 'Jira · Web' });
+  });
+
+  it('says « On · workspace » under the site, and where the notes go on a line of their own, with the mark', () => {
+    const screen = on();
+    // Before the worker answers: no line yet.
+    assert.equal(screen.querySelector('.destination-entry'), null);
+    showSiteFacts(screen, facts, { destination: 'Linear · Northwind', open: 0 });
+
+    assert.equal(screen.querySelector('.kit-site-state')?.textContent, 'On · Acme');
+    const line = screen.querySelector('.site-destination .destination-entry') as HTMLElement;
+    assert.equal(line.querySelector('dt')?.textContent, 'Notes go to');
+    assert.equal(line.querySelector('.destination-place')?.textContent, 'Northwind');
+    assert.equal(line.querySelector('svg.source-mark')?.getAttribute('data-kind'), 'linear');
+    assert.equal(line.querySelector('svg.source-mark')?.getAttribute('aria-hidden'), 'true');
+    // The provider in words, for a screen reader.
+    assert.equal(line.querySelector('dd.destination-value')?.textContent, 'Linear · Northwind');
+    // A role that may not change it: no « Change ».
+    assert.equal(line.querySelector('button'), null);
+    // It sits right under the site.
+    assert.equal(screen.querySelector('.site-row')?.nextElementSibling?.classList.contains('site-destination'), true);
+  });
+
+  it('draws the drop of Fruitback for a site that keeps its notes', () => {
+    const screen = on();
+    showSiteFacts(screen, facts, { destination: 'Fruitback' });
+    assert.equal(screen.querySelector('.destination-entry svg')?.getAttribute('data-kind'), 'fruitback');
+  });
+
+  it('opens the lists of « Turn on » on « Change », and writes a new place at once', async () => {
+    const asked: unknown[] = [];
+    const screen = on();
+    showSiteFacts(screen, facts, {
+      destination: 'Linear · Northwind',
+      change: {
+        sources: [LINEAR, HOOK],
+        place: { connector: 'lin', teamId: 't1' },
+        loadOffer: async () => ({ kind: 'linear', teams: [{ id: 't1', name: 'Northwind', key: 'NOR', projects: [] }] }),
+        onPlace: async (place) => {
+          asked.push(place);
+
+          return true;
+        },
+      },
+    });
+    const change = screen.querySelector<HTMLButtonElement>('.destination-entry button');
+    assert.equal(change?.textContent, 'Change');
+    change?.click();
+    await settled();
+
+    const provider = screen.querySelector<HTMLSelectElement>('.site-destination select[name="provider"]');
+    assert.equal(provider?.value, 'lin');
+    assert.equal(screen.querySelector<HTMLSelectElement>('.site-destination select[name="team"]')?.value, 't1');
+    // The marks of the providers in the list, as on « Turn on ».
+    assert.deepEqual(
+      [...(provider?.querySelectorAll('option') ?? [])].map((each) =>
+        each.querySelector('svg')?.getAttribute('data-kind'),
+      ),
+      ['fruitback', 'linear', 'rest'],
+    );
+    pick(provider as HTMLSelectElement, 'hook');
+    await settled();
+    assert.deepEqual(asked, [{ connector: 'hook' }]);
+  });
+
+  it('puts the lists back as they were when the worker refuses the change', async () => {
+    const screen = on();
+    showSiteFacts(screen, facts, {
+      destination: 'REST API · Hook',
+      change: {
+        sources: [LINEAR, HOOK],
+        place: { connector: 'hook' },
+        loadOffer: async () => undefined,
+        onPlace: async () => false,
+      },
+    });
+    screen.querySelector<HTMLButtonElement>('.destination-entry button')?.click();
+    await settled();
+    const provider = screen.querySelector<HTMLSelectElement>(
+      '.site-destination select[name="provider"]',
+    ) as HTMLSelectElement;
+    pick(provider, '');
+    await settled();
+    await settled();
+    assert.equal(screen.querySelector<HTMLSelectElement>('.site-destination select[name="provider"]')?.value, 'hook');
+  });
+
+  it('draws the same line, with its mark, on « Turn on » for a role that only reads it', () => {
+    const screen = turnOnScreen(page(), {
+      origin: SITE,
+      workspace: 'Acme',
+      destination: 'GitHub · acme/web',
+      visibility: 'members',
+      onTurnOn: nothing,
+      onSettings: nothing,
+    });
+    const line = screen.querySelector('.destination-entry');
+    assert.equal(line?.querySelector('svg')?.getAttribute('data-kind'), 'github');
+    assert.equal(line?.querySelector('.destination-place')?.textContent, 'acme/web');
+    assert.equal(screen.querySelector('.kit-dl')?.firstElementChild, line);
   });
 });
