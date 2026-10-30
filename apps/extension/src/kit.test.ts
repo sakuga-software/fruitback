@@ -5,11 +5,15 @@ import { Window as HappyDomWindow } from 'happy-dom';
 import { setLanguage } from './i18n.ts';
 import {
   alertBox,
+  button,
   definitions,
   head,
   helpLink,
+  hostOf,
   keys,
+  linkButton,
   listRow,
+  make,
   listSelect,
   primaryButton,
   providerButton,
@@ -38,6 +42,31 @@ function isNativeButton(node: Element | null): void {
 }
 
 afterEach(() => setLanguage('en'));
+
+describe('the builders every screen shares (FRU-511)', () => {
+  it('makes an element with its class and its words, and no class attribute for none', () => {
+    const document = page();
+    const line = make(document, 'p', 'state', 'No rule yet.');
+    assert.equal(line.outerHTML, '<p class="state">No rule yet.</p>');
+    assert.equal(make(document, 'div', '').hasAttribute('class'), false);
+  });
+
+  it('makes a button that submits nothing, and a link button in the class of its screen', () => {
+    const document = page();
+    let pressed = 0;
+    const node = button(document, 'remedy', 'Allow', () => (pressed += 1));
+    isNativeButton(node);
+    node.click();
+    assert.equal(pressed, 1);
+    assert.equal(linkButton(document, 'Log out', () => undefined).className, 'link-button');
+    assert.equal(linkButton(document, 'Reply', () => undefined, 'panel-link').className, 'panel-link');
+  });
+
+  it('names the host of an address with its port, and keeps an address that does not parse', () => {
+    assert.equal(hostOf('https://acme.dev:8443/notes'), 'acme.dev:8443');
+    assert.equal(hostOf('not an address'), 'not an address');
+  });
+});
 
 describe('the kit of the extension (FRU-293)', () => {
   it('heads a shell with the drop and the name, and the button of the account', () => {
