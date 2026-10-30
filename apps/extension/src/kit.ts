@@ -1,3 +1,4 @@
+import type { Help } from './guide.ts';
 import { t } from './i18n.ts';
 
 /**
@@ -614,6 +615,38 @@ export function providerButton(document: Document, provider: SignInProvider, onC
   node.prepend(providerMark(document, provider));
 
   return node;
+}
+
+/** The open book of Phosphor (`ph:book-open-fill`, @iconify-json/ph 1.2.2, MIT), in a box of 256. */
+const BOOK =
+  'M240 56v144a8 8 0 0 1-8 8h-72a24 24 0 0 0-24 23.94a7.9 7.9 0 0 1-5.12 7.55A8 8 0 0 1 120 232a24 24 0 0 0-24-24H24a8 8 0 0 1-8-8V56a8 8 0 0 1 8-8h64a32 32 0 0 1 32 32v87.73a8.17 8.17 0 0 0 7.47 8.25a8 8 0 0 0 8.53-8V80a32 32 0 0 1 32-32h64a8 8 0 0 1 8 8';
+
+/**
+ * The way to the guide of a state that blocks (FRU-528): a second action, centred, the book and the
+ * words. It is a link, since it opens a page of the guide in a new tab: a screen reader says so, and
+ * the browser offers what it offers for a link. The popup, the page of the extension and the side
+ * panel all draw it.
+ */
+export function helpLink(document: Document, help: Help): HTMLElement {
+  const row = make(document, 'div', 'kit-help');
+  const link = make(document, 'a', 'kit-secondary');
+  link.classList.add('kit-help-link');
+  link.href = help.href;
+  link.target = '_blank';
+  link.rel = 'noreferrer';
+  const book = document.createElementNS(SVG, 'svg');
+  book.setAttribute('viewBox', '0 0 256 256');
+  book.setAttribute('aria-hidden', 'true');
+  book.setAttribute('focusable', 'false');
+  book.setAttribute('class', 'kit-help-icon');
+  const path = document.createElementNS(SVG, 'path');
+  path.setAttribute('fill', 'currentColor');
+  path.setAttribute('d', BOOK);
+  book.append(path);
+  link.append(book, document.createTextNode(help.label));
+  row.append(link);
+
+  return row;
 }
 
 export type UpdateLineOptions = { version: string; url: string };

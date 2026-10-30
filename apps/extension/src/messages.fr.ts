@@ -43,7 +43,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Your browser will ask to allow this site once.': 'Votre navigateur demandera une fois l’accès à ce site.',
   'Your team and invited guests': 'Votre équipe et les invités',
   'Everyone who visits the site': 'Tous ceux qui visitent le site',
-  'On · notes go to {tracker}': 'Activé · les notes vont vers {tracker}',
   'or press {keys} on the page': 'ou appuyez sur {keys} sur la page',
   '1 fix to check': '1 correction à vérifier',
   '{count} fixes to check': '{count} corrections à vérifier',
@@ -203,6 +202,11 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'The site could not be turned on. Try again.': 'Le site n’a pas pu être activé. Réessayez.',
   'The browser did not give the extension access to Fruitback.':
     'Le navigateur n’a pas donné à l’extension l’accès à Fruitback.',
+  // FRU-528: the buttons that open the guide.
+  'How Fruitback works': 'Comment fonctionne Fruitback',
+  'What to check when Fruitback does not answer': 'Que vérifier quand Fruitback ne répond pas',
+  'Who can add a site to a workspace?': 'Qui peut ajouter un site à un espace ?',
+  'How to leave and follow notes': 'Laisser et suivre des notes',
   // FRU-526: a page of the browser, where no extension draws.
   "Fruitback can't run on this page": 'Fruitback ne peut pas fonctionner sur cette page',
   'This is a page of the browser, like a new tab, the settings, the extension store or a PDF. No extension can draw on it.':
