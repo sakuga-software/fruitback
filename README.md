@@ -105,16 +105,16 @@ The full walk-through — the site, the widget, a Linear team, several sites —
 The first question a reader has is whether their reviewers need the site to ship anything. All three
 answers exist, and [docs/modes.md](docs/modes.md) is the page that picks between them.
 
-|                                           | **Public**                            | **Private**                           | **Team**                         |
-| ----------------------------------------- | ------------------------------------- | ------------------------------------- | -------------------------------- |
-| The site embeds                           | the widget                            | **nothing**                           | the widget, dormant              |
-| Delivered as                              | `<script>` tag or npm                 | a browser extension                   | `<script>` tag or npm            |
-| Published                                 | **not yet** — build it from this repo | **not yet** — load it unpacked        | **not yet** — both of the above  |
-| Who is **shown** the pins                 | every visitor                         | the reviewer who switched the site on | reviewers who are signed in      |
-| Who can fetch them **with no credential** | anyone                                | anyone, or nobody                     | nobody, on a site members read   |
-| Who supplies the credential               | nobody                                | **nobody can**                        | the reviewer, by connecting      |
-| Good for                                  | a public "report a problem"           | reviewing a client's site, invisibly  | a team reviewing its own staging |
-| Built                                     | **yes**                               | **yes**, MV3 on Chromium and Firefox  | **yes**                          |
+|                                           | **Public**                      | **Private**                           | **Team**                         |
+| ----------------------------------------- | ------------------------------- | ------------------------------------- | -------------------------------- |
+| The site embeds                           | the widget                      | **nothing**                           | the widget, dormant              |
+| Delivered as                              | `<script>` tag or npm           | a browser extension                   | `<script>` tag or npm            |
+| Published                                 | **yes**, on npm and as a script | **yes**, Chrome and Firefox stores    | **yes**, both of the above       |
+| Who is **shown** the pins                 | every visitor                   | the reviewer who switched the site on | reviewers who are signed in      |
+| Who can fetch them **with no credential** | anyone                          | anyone, or nobody                     | nobody, on a site members read   |
+| Who supplies the credential               | nobody                          | **nobody can**                        | the reviewer, by connecting      |
+| Good for                                  | a public "report a problem"     | reviewing a client's site, invisibly  | a team reviewing its own staging |
+| Built                                     | **yes**                         | **yes**, MV3 on Chromium and Firefox  | **yes**                          |
 
 **Who may read is the visibility of the site — « Members of … » or « Everyone who visits », chosen
 in the console — and the mode decides who can satisfy it.** **Team mode is the only one where the
