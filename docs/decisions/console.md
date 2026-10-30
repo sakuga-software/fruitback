@@ -555,12 +555,12 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   in the table. `e2e/console-notes-board.spec.ts` holds the view in the address, the columns, the
   filters, the drag, the refusal, the keyboard, the stages, 1440 and 390 px, axe and French.
 - **The Connectors screen is the one of the mockup, with the sources that exist** (FRU-246):
-  `routes/connectors.tsx` (the list and « Add a source »), `connector-add.tsx` (the two forms),
+  `routes/connectors.tsx` (the list and « Add a connector »), `connector-add.tsx` (the two forms),
   `connector-linear.tsx` and `connector-rest.tsx` (the panels), `connector-parts.tsx` (what they
   share). **A source that does not exist connects nothing**: Jira, GitLab, Trello,
   Notion and Webhook are listed with the sentence of the mockup and a disabled « After the beta »,
-  where the mockup draws « Connect ». Linear and an address stay in « Add a source » when one is
-  connected: a workspace can connect a second one. **« Add a source » waits for the list to be read**
+  where the mockup draws « Connect ». Linear and an address stay in « Add a connector » when one is
+  connected: a workspace can connect a second one. **« Add a connector » waits for the list to be read**
   (FRU-271; after a read that failed there is « Try again » and no source to add): the list arrives above it and its buttons went down by the height of the
   list (45 px for one source, 110 for two, measured), so a press that started before and ended
   after was lost; and the same read says what « Connect Linear » does, the consent at Linear or a
@@ -587,7 +587,7 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   and every source is named by its kind, as before.
 - **GitHub connects with its App, where the worker has one** (FRU-361, routes of FRU-359 and
   FRU-360): `connectors.tsx` (the card), `connector-github.tsx` (the panel). The card « GitHub
-  Issues » is always in « Add a source », between Linear and the REST API. With `githubApp: true`,
+  Issues » is always in « Add a connector », between Linear and the REST API. With `githubApp: true`,
   « Connect » asks `POST …/connectors/github/start` and goes to the `url` it answers, as « Connect
   Linear » does with OAuth. Without it, a disabled « Not on this Fruitback » and a line that names
   the operator: there is no other way to connect GitHub. **Each word of the way back has its

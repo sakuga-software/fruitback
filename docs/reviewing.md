@@ -79,9 +79,9 @@ captures.
 
    ![A note written on an element of the site](assets/guide/note.png)
 
-5. Later, the Fruitback icon in the toolbar opens the same tools on any site of your team: **Leave feedback** starts a note.
+5. Later, the Fruitback icon in the toolbar opens the same tools on any site of your team: **Leave a note** starts a note.
 
-   ![The popup on a site that is on, with Leave feedback](assets/guide/popup.png)
+   ![The popup on a site that is on, with Leave a note](assets/guide/popup.png)
 
 The captures are of the extension 0.5.0, taken by `e2e/first-note.spec.ts`.
 
@@ -104,7 +104,7 @@ added to that workspace, for its members only, and the widget appears.
 **Once a site is on**, the popup has a switch to turn it off and on, **Notes go to** with the mark
 of the tracker and its place (**Change** opens the same lists as « Turn on », for a role that may
 change them), the fixes the team marked done for you to check and the open notes of the site, then,
-at the bottom, **Leave feedback** with its keys and, beside it, the panel icon
+at the bottom, **Leave a note** with its keys and, beside it, the panel icon
 **Show all notes in a sidebar**; a click on a line opens the side panel too. The side panel opens
 beside the page: **Notes on this page**, with **Open** and **Done**, the replies of a note,
 **Show on the page**, and **Reply** where your role may reply. A click on a pin opens its row; the panel follows
@@ -133,12 +133,12 @@ click the extension. While this browser holds no session at all, the foot of the
 **Use your own Fruitback server**, and the options page asks for the three things below. Once it holds one, the popup names
 the site it is about and asks for them itself:
 
-| Field               |                                             |                                                                |
-| ------------------- | ------------------------------------------- | -------------------------------------------------------------- |
-| **Mode**            | `Private · the extension mounts the widget` | for a site that embeds nothing                                 |
-|                     | `Team · the site embeds it, we relay`       | for a site that ships a dormant widget                         |
-| **Worker endpoint** | `https://feedback.acme.dev`                 | your worker, not the site                                      |
-| **Client id**       | `acme`                                      | **private mode only** — in team mode the site declares its own |
+| Field              |                                                              |                                                                |
+| ------------------ | ------------------------------------------------------------ | -------------------------------------------------------------- |
+| **Mode**           | `Private · the extension shows the widget`                   | for a site that embeds nothing                                 |
+|                    | `Team · the site embeds it, the extension adds your session` | for a site that ships a dormant widget                         |
+| **Server address** | `https://feedback.acme.dev`                                  | your worker, not the site                                      |
+| **Client id**      | `acme`                                                       | **private mode only** — in team mode the site declares its own |
 
 Then **Turn on for this site**. The browser asks for permission on that origin; refuse it and nothing
 runs. The row afterwards reads `On · acme` in private mode, and in team mode
@@ -148,20 +148,20 @@ declares its own. Either row carries **Turn off here** and **Change**.
 **Turn off here** also gives the access to that site back to the browser, so the browser no longer
 lists the site under what Fruitback can read. To turn the site on again, the browser asks you again.
 The access to a worker stays while another site that is on uses it, or while you are paired with it;
-it goes back when you log out and no site that is on uses that worker.
+it goes back when you sign out and no site that is on uses that worker.
 
 A grant reaches the **next** page load, so the popup injects into the tab you have open. Come back to
 the page and the widget is there.
 
 **If a private-mode site shows no note, open the popup.** When the worker reads `authenticated`, the
-popup says `This worker answers a signed-in reader only, and private mode carries no session. Notes do not show on this site.`,
+popup says `This server answers a signed-in reader only, and in private mode the extension holds no session. Notes do not show on this site.`,
 with a link to [the three modes](modes.md). Private mode carries no session, so the fix is on the
 worker's side: read `public` for that client, or use team mode. The popup says nothing when the
 worker is down or slow, because it did not measure why.
 
 **If a private-mode site takes no note**, the site is « Members only » (FRU-330), the default of a new
 site of the console: the popup says
-`This site takes notes from its members only, and private mode carries no session: no note can be sent from here. To review it in private mode, an admin of the site sets « Who can leave a note » to « Anyone on the page » in the console.`
+`This site takes notes from its members only, and in private mode the extension holds no session: no note can be sent from here. To review it in private mode, an admin of the site sets « Who can leave a note » to « Anyone on the page » in the console.`
 The widget offers no note there. An admin of the site adds its address again on the Sites screen of
 the console with « Anyone on the page » (the site keeps its notes and its id), or the reviewer
 connects the browser and uses team mode.
@@ -176,10 +176,10 @@ protect, and an `http://` staging site is exactly the thing this mode is for.
 
 Private mode needs nothing more — the widget is mounted, and it reads as an anonymous visitor would.
 The popup offers no pairing there, because a session would change nothing. If you already hold a
-session with that worker, the popup still shows it, with **Log out**.
+session with that worker, the popup still shows it, with **Sign out**.
 Team mode relays every call through your session, so until you pair the site can reach nothing:
 
-> Not paired — this site cannot reach the worker until you do
+> Not connected. This site cannot reach the server until you connect.
 
 **Every worker holds sessions since FRU-225**: they are in its PostgreSQL, whatever `FRUITBACK_STORE`
 says, and `FRUITBACK_IDENTITY_SECRET` signs the access token. The usual way is « Connect this
@@ -205,37 +205,37 @@ code: `https://feedback.acme.dev/pair#ABCD-EFGH-JKMN`. That is what the operator
 
 1. Open the link. The page says what to do, and it is all it does: it runs no script.
 2. Click the Fruitback icon in the toolbar, on that tab. The popup reads
-   `This page is a pairing link for https://feedback.acme.dev.` — **read the address**: it is the
+   `This page is a connection link for https://feedback.acme.dev.` — **read the address**: it is the
    worker you are about to trust with your notes.
-3. Press **Pair with this worker**. The popup then reads `Paired as Alex`, with **Log out** beside
+3. Press **Connect to this server**. The popup then reads `Connected as Alex`, with **Sign out** beside
    it. Go back to the site: it reaches the worker now.
 
-The page of the extension does the same, worker by worker: **Workers and sessions** has a card for
-each worker a rule names, with who you are paired as and **Log out**, or a field for the code and
-**Pair**. From the popup of a pairing link, **Pair in the page of the extension** opens that card with
+The page of the extension does the same, worker by worker: **Servers and sessions** has a card for
+each worker a rule names, with who you are connected as and **Sign out**, or a field for the code and
+**Connect**. From the popup of a pairing link, **Connect in the page of the extension** opens that card with
 the code filled in.
 
 The code is after the `#`, and a browser sends nothing after a `#` to a server, so the worker's logs
 do not hold it. It is still in your browser's history, and it is spent the moment you pair.
 
 **If you were given a code and no link**, open the popup on the site, press **I have a code**, and
-paste it into the field above **Pair with this worker**.
+paste it into the field above **Connect to this server**.
 
 On a worker that is not on `https`, there is nothing to paste into: the button is disabled before you
 get that far, under
 
-> Pairing needs https (localhost excepted): a session must not cross http.
+> Connecting needs https (localhost excepted): a session must not cross http.
 
-with **Change the worker** beside it, which opens the fields of the rule.
+with **Change the server** beside it, which opens the fields of the rule.
 
 Otherwise, what a failed attempt answers. Each message has the one thing to do about it beside it:
 
 | The popup says                                                                          | Why                                                                                                                                                                              | Beside it                                     |
 | --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
 | `That code has been used or has expired. Ask for a new one.`                            | Codes are single-use, and expire 15 minutes after they are minted.                                                                                                               | **How to get a code**, a link to this section |
-| `The worker did not answer. Try again.`                                                 | The worker is down or unreachable — the code is still good.                                                                                                                      | **Try again**, with the same code             |
-| `Fruitback needs permission to reach that worker.`                                      | The prompt for the **worker's** origin was refused. It is not the site's.                                                                                                        | **Grant access**, which asks again            |
-| `That worker is on plain http, and a session must not cross it. Use its https address.` | The same rule as the disabled button above, answered by `session.ts` rather than by the popup. You reach it only if something else asks for a pairing — the popup refuses first. | **Change the worker**                         |
+| `The server did not answer. Try again.`                                                 | The worker is down or unreachable — the code is still good.                                                                                                                      | **Try again**, with the same code             |
+| `Fruitback needs permission to reach that server.`                                      | The prompt for the **worker's** origin was refused. It is not the site's.                                                                                                        | **Grant access**, which asks again            |
+| `That server is on plain http, and a session must not cross it. Use its https address.` | The same rule as the disabled button above, answered by `session.ts` rather than by the popup. You reach it only if something else asks for a pairing — the popup refuses first. | **Change the server**                         |
 
 Pairing asks for a permission on the worker's origin, which is a different grant from the site's. It
 is asked for at the click, so nothing is awaited before the prompt — a browser drops the gesture
@@ -261,7 +261,7 @@ adds new ones.
 The page of the extension (FRU-301) has a menu on the left, and **Sites** first: a table of every
 rule with its **Mode**, its **Worker**, its **Access** and a switch to turn it on or off. **Filter
 sites** narrows the table by pattern or by worker. Click the site of a row, or press Enter on it, to
-open its panel: the mode, the **Worker endpoint**, the **Client id**, what this browser holds for it,
+open its panel: the mode, the **Server address**, the **Client id**, what this browser holds for it,
 **Save** and **Remove rule**. **Add a site** opens the form of a new rule in the same place.
 
 A rule names the sites it covers:
@@ -365,13 +365,13 @@ A note that does not go through stays in the widget, under `Not sent`:
 
 On a site that uses a worker you run yourself:
 
-- `The worker of this rule does not answer. Check its address in the options.` means that something
-  answered at that address, and it was not a worker. Correct the **Worker endpoint** of the rule on
+- `The server of this rule does not answer. Check its address in the options.` means that something
+  answered at that address, and it was not a worker. Correct the **Server address** of the rule on
   the options page.
 - When the worker is down or slow, the popup says nothing about it. The widget keeps the note you
   send and says `Not sent`. Ask the person who runs the worker to check it. Their side is
   in [self-hosting/troubleshooting.md](self-hosting/troubleshooting.md).
-- A pairing that gets no answer reads `The worker did not answer. Try again.` The code stays good
+- A pairing that gets no answer reads `The server did not answer. Try again.` The code stays good
   until it expires. Press **Try again** once the worker is back.
 
 ### Access was removed in the settings of the browser
@@ -412,7 +412,7 @@ staging site on plain `http` from the console. One account adds 10 sites an hour
 
 ## What log out does, and what it cannot undo
 
-**Log out** revokes the session on the worker first, then clears both tokens here. The refresh token
+**Sign out** revokes the session on the worker first, then clears both tokens here. The refresh token
 is dead and the chain with it, so nothing can be renewed. The access token already minted is not
 reachable by a revoke — nothing checks a list when one is presented — and it stops working on its
 own. That window is the token's **11 minutes**: its 10 minutes of life, plus the 60 seconds of clock

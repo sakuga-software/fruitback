@@ -6,7 +6,7 @@ import { parseDockPosition } from './protocol.ts';
 import { PAIRING_NEEDS_HTTPS } from './remedy.ts';
 
 /**
- * « Workers and sessions » and « Preferences » of the page of the extension (FRU-302), as the mock-up
+ * « Servers and sessions » and « Preferences » of the page of the extension (FRU-302), as the mock-up
  * of 2026-10-20 draws them. No `browser` here: `entrypoints/options/main.ts` reads the rules, the
  * sessions and the preferences, and binds what a click does, so `workers-page.test.ts` reads every
  * part on happy-dom.
@@ -63,12 +63,12 @@ export function sitesCount(count: number): string {
   return count === 1 ? t('1 site') : t('{count} sites', { count });
 }
 
-/** The section « Workers and sessions »: one card for each worker. */
+/** The section « Servers and sessions »: one card for each worker. */
 export function workersSection(document: Document, options: WorkersOptions): HTMLElement {
   const section = make(document, 'section', 'page-section');
   section.classList.add('workers');
   section.id = 'workers';
-  const title = make(document, 'h2', '', t('Workers and sessions'));
+  const title = make(document, 'h2', '', t('Servers and sessions'));
   title.id = 'workers-title';
   section.setAttribute('aria-labelledby', title.id);
   section.append(
@@ -78,12 +78,12 @@ export function workersSection(document: Document, options: WorkersOptions): HTM
       'p',
       'workers-intro',
       t(
-        'You pair with a worker, not with a site: one session covers every site that reports to it. Only team mode needs one.',
+        'You connect to a server, not to a site: one session covers every site that reports to it. Only team mode needs one.',
       ),
     ),
   );
   if (options.cards.length === 0) {
-    section.append(make(document, 'p', 'state', t('No worker yet. A rule names one.')));
+    section.append(make(document, 'p', 'state', t('No server yet. A rule names one.')));
 
     return section;
   }
@@ -95,7 +95,7 @@ export function workersSection(document: Document, options: WorkersOptions): HTM
 }
 
 /**
- * Draws « Workers and sessions » in `container`, unless the cards are those already drawn (raised in
+ * Draws « Servers and sessions » in `container`, unless the cards are those already drawn (raised in
  * review). The tokens of a session turn at each refresh, and each turn is a change of the storage:
  * drawn again for it, a card would lose the code somebody is typing and what its line says. When the
  * cards did change (a session made or ended elsewhere), a code typed in a card that is still unpaired
@@ -152,7 +152,7 @@ export function workerCard(document: Document, card: WorkerCard, options: Worker
 
   if (card.session !== undefined) {
     root.append(...sessionLines(document, card));
-    const out = button(document, 'worker-button', t('Log out'), () => options.onLogout(card.endpoint, out));
+    const out = button(document, 'worker-button', t('Sign out'), () => options.onLogout(card.endpoint, out));
     root.append(out);
 
     return root;
@@ -168,7 +168,7 @@ export function workerCard(document: Document, card: WorkerCard, options: Worker
       document,
       'p',
       'worker-text',
-      t('Not paired. Private-mode sites read without a session; a team site would stay asleep.'),
+      t('Not connected. Private-mode sites read without a session; a team site would show nothing.'),
     ),
   );
   const form = make(document, 'form', 'worker-pair');
@@ -177,9 +177,9 @@ export function workerCard(document: Document, card: WorkerCard, options: Worker
   input.placeholder = 'ABCD-EFGH-JKMN';
   input.autocomplete = 'off';
   input.spellcheck = false;
-  input.setAttribute('aria-label', t('Pairing code'));
+  input.setAttribute('aria-label', t('Connection code'));
   if (card.code !== undefined) input.value = card.code;
-  const submit = make(document, 'button', 'worker-pair-button', t('Pair'));
+  const submit = make(document, 'button', 'worker-pair-button', t('Connect'));
   submit.type = 'submit';
   const said = make(document, 'p', 'worker-said');
   said.setAttribute('role', 'status');
@@ -195,7 +195,7 @@ export function workerCard(document: Document, card: WorkerCard, options: Worker
         document,
         'p',
         'worker-hint',
-        t('Plain http on localhost. Pairing works here; anywhere else a session must not cross http.'),
+        t('Plain http on localhost. Connecting works here; anywhere else a session must not cross http.'),
       ),
     );
   }
@@ -212,10 +212,12 @@ function sessionLines(document: Document, card: WorkerCard): HTMLElement[] {
   const name = session.name?.trim();
   const line = make(document, 'p', 'worker-who');
   if (name !== undefined && name !== '') {
-    const [before, after] = (card.account === true ? t('Signed in as {name}') : t('Paired as {name}')).split('{name}');
+    const [before, after] = (card.account === true ? t('Signed in as {name}') : t('Connected as {name}')).split(
+      '{name}',
+    );
     line.append(before ?? '', make(document, 'strong', '', name), after ?? '');
   } else {
-    line.textContent = card.account === true ? t('Signed in') : t('Paired');
+    line.textContent = card.account === true ? t('Signed in') : t('Connected');
   }
   const lines = [line];
   if ((name === undefined || name === '') && session.email !== undefined) {
@@ -228,7 +230,7 @@ function sessionLines(document: Document, card: WorkerCard): HTMLElement[] {
       'worker-hint',
       card.account === true
         ? t('One account for the console and this extension')
-        : t('Verified by the worker · renews on its own'),
+        : t('Verified by the server · renews on its own'),
     ),
   );
 
@@ -242,7 +244,7 @@ export type PreferencesOptions = {
   onPanelOnClick: (on: boolean) => Promise<void> | void;
   name: string;
   onName: (name: string) => Promise<void> | void;
-  /** The keys of « Leave feedback », as the browser has them: `Alt+Shift+F`. None: not set. */
+  /** The keys of « Leave a note », as the browser has them: `Alt+Shift+F`. None: not set. */
   shortcut?: string;
   /** Opens the shortcut settings of the browser. None: the row says where to look. */
   onShortcut?: () => void;
@@ -315,7 +317,7 @@ function row(document: Document, title: string, help: string, control: HTMLEleme
   return root;
 }
 
-/** The keys of a shortcut, as the kit draws them: the same as « Leave feedback » of the popup (FRU-298). */
+/** The keys of a shortcut, as the kit draws them: the same as « Leave a note » of the popup (FRU-298). */
 export const shortcutKeys = keysOfShortcut;
 
 /** The section « Preferences ». */
@@ -479,7 +481,7 @@ export function preferencesSection(document: Document, options: PreferencesOptio
   if (options.onShortcut !== undefined) {
     shortcut.append(button(document, 'pref-link', t('Change'), options.onShortcut));
   }
-  card.append(row(document, t('Leave feedback shortcut'), shortcutHelp(options), shortcut));
+  card.append(row(document, t('Leave a note shortcut'), shortcutHelp(options), shortcut));
 
   const synced = options.synced;
   if (synced !== undefined) {

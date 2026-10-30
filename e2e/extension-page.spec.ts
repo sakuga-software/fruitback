@@ -84,11 +84,11 @@ test('the table lists the rules, filters them, opens one in its panel, switches,
   // The panel of the playground: its worker, its client id, and the grant it holds.
   await rowOf(page, PLAYGROUND_ORIGIN).getByRole('button').first().click();
   await expect(details).toContainText('Access granted');
-  await expect(details.getByLabel('Worker endpoint')).toHaveValue(WORKER_ORIGIN);
+  await expect(details.getByLabel('Server address')).toHaveValue(WORKER_ORIGIN);
   await expect(details.getByLabel('Client id')).toHaveValue('playground');
 
   // « Save » changes the worker; the rule stays on.
-  await details.getByLabel('Worker endpoint').fill('http://localhost:8790');
+  await details.getByLabel('Server address').fill('http://localhost:8790');
   await details.getByRole('button', { name: 'Save' }).click();
   await expect(rowOf(page, PLAYGROUND_ORIGIN)).toContainText('localhost:8790');
   expect((await storedSites(extension))[PLAYGROUND_ORIGIN]).toMatchObject({
@@ -116,7 +116,7 @@ test('the table lists the rules, filters them, opens one in its panel, switches,
   // « Add a site »: once stored, the panel of the new rule takes the place of the form (raised in review).
   await page.getByRole('button', { name: 'Add a site' }).click();
   await page.getByLabel('Sites', { exact: true }).fill(WORKER_ORIGIN);
-  await page.getByLabel('Worker endpoint', { exact: true }).fill(WORKER_ORIGIN);
+  await page.getByLabel('Server address', { exact: true }).fill(WORKER_ORIGIN);
   await page.getByLabel('Client id', { exact: true }).fill('worker-page');
   await page.getByRole('button', { name: 'Add rule' }).click();
   await expect(details).toContainText(WORKER_ORIGIN);
@@ -127,10 +127,10 @@ test('the table lists the rules, filters them, opens one in its panel, switches,
   // The switch of the table, with the panel open: its state follows, and what is typed stays (raised in review).
   await rowOf(page, FAR).getByRole('button').first().click();
   await expect(details).toContainText('No access in this browser');
-  await details.getByLabel('Worker endpoint').fill('https://typed.elsewhere.example');
+  await details.getByLabel('Server address').fill('https://typed.elsewhere.example');
   await rowOf(page, FAR).getByRole('switch').click();
   await expect(details).toContainText('No access while it is off');
-  await expect(details.getByLabel('Worker endpoint')).toHaveValue('https://typed.elsewhere.example');
+  await expect(details.getByLabel('Server address')).toHaveValue('https://typed.elsewhere.example');
 
   // « Remove rule » removes it, and its panel goes.
   await details.getByRole('button', { name: 'Remove rule' }).click();
@@ -360,7 +360,7 @@ async function teamRuleOnTheSessionWorker(extension: {
   );
 }
 
-test('« Workers and sessions » pairs with a code, says who, logs out, and takes a code from a link (FRU-302)', async ({
+test('« Servers and sessions » pairs with a code, says who, logs out, and takes a code from a link (FRU-302)', async ({
   extension,
 }) => {
   await teamRuleOnTheSessionWorker(extension);
@@ -368,44 +368,44 @@ test('« Workers and sessions » pairs with a code, says who, logs out, and take
   await openPage(page, extension.id);
   const card = page.locator(`.worker-card[data-endpoint="${AUTHENTICATED_WORKER_ORIGIN}"]`);
   await expect(card).toContainText(
-    'Not paired. Private-mode sites read without a session; a team site would stay asleep.',
+    'Not connected. Private-mode sites read without a session; a team site would show nothing.',
   );
   await expect(card).toContainText('Plain http on localhost. Pairing works here');
   await expect(card).toContainText('1 site');
 
   // A code nobody minted: the card says why, and keeps the code.
-  await card.getByLabel('Pairing code').fill('AAAA-BBBB-CCCC');
-  await card.getByRole('button', { name: 'Pair' }).click();
+  await card.getByLabel('Connection code').fill('AAAA-BBBB-CCCC');
+  await card.getByRole('button', { name: 'Connect' }).click();
   await expect(card.getByRole('status')).toContainText('That code has been used or has expired.');
-  await expect(card.getByLabel('Pairing code')).toHaveValue('AAAA-BBBB-CCCC');
+  await expect(card.getByLabel('Connection code')).toHaveValue('AAAA-BBBB-CCCC');
 
   // A real code: « Paired as » the name the operator gave (FRU-289), and « Log out ».
   const { code } = await mintPairing('Camille Durand');
-  await card.getByLabel('Pairing code').fill(code);
-  await card.getByRole('button', { name: 'Pair' }).click();
+  await card.getByLabel('Connection code').fill(code);
+  await card.getByRole('button', { name: 'Connect' }).click();
   // The suite builds the extension with this worker as its Cloud (WXT_FRUITBACK_CLOUD): its card
   // speaks of an account.
   await expect(card.locator('.worker-who')).toHaveText(
-    /^(Paired as|Signed in as|Connecté en tant que) Camille Durand$/,
+    /^(Connected as|Signed in as|Connecté en tant que) Camille Durand$/,
   );
   await expect(card.locator('.worker-dot')).toHaveAttribute('data-on', 'true');
   await expect(page.locator('.page-entry[href="#workers"] .page-count')).not.toHaveText('');
 
-  await card.getByRole('button', { name: /^(Log out|Se déconnecter)$/ }).click();
-  await expect(card.getByLabel(/^(Pairing code|Code de connexion)$/)).toBeVisible();
+  await card.getByRole('button', { name: /^(Sign out|Se déconnecter)$/ }).click();
+  await expect(card.getByLabel(/^(Connection code|Code de connexion)$/)).toBeVisible();
 
   // A link from the popup: the card of the worker, its code filled.
   const linked = await mintPairing('Camille Durand');
   const query = new URLSearchParams({ worker: AUTHENTICATED_WORKER_ORIGIN, code: linked.code });
   await page.goto(`chrome-extension://${extension.id}/options.html#workers?${query.toString()}`);
-  await expect(card.getByLabel(/^(Pairing code|Code de connexion)$/)).toHaveValue(linked.code);
-  await expect(card.getByLabel(/^(Pairing code|Code de connexion)$/)).toBeFocused();
+  await expect(card.getByLabel(/^(Connection code|Code de connexion)$/)).toHaveValue(linked.code);
+  await expect(card.getByLabel(/^(Connection code|Code de connexion)$/)).toBeFocused();
 
   // Paired with it, then logged out: the code of the link is spent, and the field is empty (review).
-  await card.getByRole('button', { name: /^(Pair|Se connecter)$/ }).click();
+  await card.getByRole('button', { name: /^(Connect|Se connecter)$/ }).click();
   await expect(card.locator('.worker-who')).toContainText('Camille Durand');
-  await card.getByRole('button', { name: /^(Log out|Se déconnecter)$/ }).click();
-  await expect(card.getByLabel(/^(Pairing code|Code de connexion)$/)).toHaveValue('');
+  await card.getByRole('button', { name: /^(Sign out|Se déconnecter)$/ }).click();
+  await expect(card.getByLabel(/^(Connection code|Code de connexion)$/)).toHaveValue('');
 
   for (const colorScheme of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme });
@@ -426,7 +426,7 @@ test('a card is not drawn again while its pairing is in progress: « Pair » sta
   const page = await extension.context.newPage();
   await openPage(page, extension.id);
   const card = page.locator(`.worker-card[data-endpoint="${AUTHENTICATED_WORKER_ORIGIN}"]`);
-  await expect(card.getByLabel('Pairing code')).toBeVisible();
+  await expect(card.getByLabel('Connection code')).toBeVisible();
 
   // The pairing is held at the worker until the spec lets it go.
   let release: () => void = () => {};
@@ -440,8 +440,8 @@ test('a card is not drawn again while its pairing is in progress: « Pair » sta
     await route.continue();
   });
   const { code } = await mintPairing('Camille Durand');
-  await card.getByLabel('Pairing code').fill(code);
-  const pair = card.getByRole('button', { name: 'Pair' });
+  await card.getByLabel('Connection code').fill(code);
+  const pair = card.getByRole('button', { name: 'Connect' });
   await pair.click();
   await expect.poll(() => pairs).toBe(1);
   await expect(pair).toBeDisabled();
@@ -486,7 +486,7 @@ test('« Preferences »: the name fills the composer in private mode, and the ic
     'Show CSS selectors',
     'Corner of the widget',
     'Allow captures on every site',
-    'Leave feedback shortcut',
+    'Leave a note shortcut',
     'Keep my rules in the account of this browser',
   ]);
 
@@ -580,13 +580,13 @@ test('a pairing link says « Paired » once it paired, and « already paired » 
   const worker = await extension.context.newPage();
   await worker.goto(link);
   const popup = await openPopup(extension, worker, AUTHENTICATED_WORKER_ORIGIN);
-  await popup.getByRole('button', { name: /^(Pair with this worker|Se connecter à ce serveur)$/ }).click();
-  await expect(popup.getByText(/^(Paired as|Connecté en tant que) Camille Durand$/)).toBeVisible();
-  await expect(popup.getByText(/^(Paired\. This browser|Connecté\. Ce navigateur)/)).toBeVisible();
-  await expect(popup.getByText(/already paired|déjà connecté/)).toHaveCount(0);
+  await popup.getByRole('button', { name: /^(Connect to this server|Se connecter à ce serveur)$/ }).click();
+  await expect(popup.getByText(/^(Connected as|Connecté en tant que) Camille Durand$/)).toBeVisible();
+  await expect(popup.getByText(/^(Connected\. This browser|Connecté\. Ce navigateur)/)).toBeVisible();
+  await expect(popup.getByText(/already connected|déjà connecté/)).toHaveCount(0);
   await popup.close();
 
   // The same link, later: this browser was paired before it.
   const again = await openPopup(extension, worker, AUTHENTICATED_WORKER_ORIGIN);
-  await expect(again.getByText(/already paired|déjà connecté/)).toBeVisible();
+  await expect(again.getByText(/already connected|déjà connecté/)).toBeVisible();
 });

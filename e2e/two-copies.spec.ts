@@ -27,7 +27,7 @@ async function paired(extension: LoadedExtension): Promise<void> {
   const worker = await extension.context.newPage();
   await worker.goto(link);
   const popup = await openPopup(extension, worker, AUTHENTICATED_WORKER_ORIGIN);
-  await popup.getByRole('button', { name: 'Pair with this worker' }).click();
+  await popup.getByRole('button', { name: 'Connect to this server' }).click();
   await expect(popup.getByText(NAME, { exact: false })).toBeVisible();
   await popup.close();
   await worker.close();
@@ -82,16 +82,16 @@ for (const order of ['before', 'after'] as const) {
 
     if (order === 'after') {
       // The current copy holds the page: its widget, one, through the relay.
-      await expect(page.getByRole('button', { name: 'Leave feedback' })).toHaveCount(1);
+      await expect(page.getByRole('button', { name: 'Leave a note' })).toHaveCount(1);
     } else {
       // The old copy holds the page: the current one steps aside, and mounts nothing beside it.
-      await expect(page.getByRole('button', { name: 'Leave feedback' })).toHaveCount(0);
+      await expect(page.getByRole('button', { name: 'Leave a note' })).toHaveCount(0);
     }
     // A reload: both copies start again, in the same order.
     await page.reload();
     await expect(page.getByRole('heading', { name: 'Nos formules' })).toBeVisible();
     await hydrated(page);
-    if (order === 'after') await expect(page.getByRole('button', { name: 'Leave feedback' })).toHaveCount(1);
+    if (order === 'after') await expect(page.getByRole('button', { name: 'Leave a note' })).toHaveCount(1);
     // Nothing on the page read the site of the workspace with no session.
     expect(direct).toEqual([]);
   });

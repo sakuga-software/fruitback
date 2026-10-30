@@ -433,7 +433,9 @@ export function panelPage(document: Document, options: PanelOptions): HTMLElemen
               document,
               'p',
               'panel-state-text',
-              t('Its notes are on the page, in its own list. This panel lists the notes of a site Fruitback mounts.'),
+              t(
+                'Its notes are on the page, in its own list. This panel lists the notes of a site where the extension shows Fruitback.',
+              ),
             ),
           ]),
     );
@@ -442,9 +444,9 @@ export function panelPage(document: Document, options: PanelOptions): HTMLElemen
     return root;
   }
 
-  // « Leave feedback », and what to do next.
+  // « Leave a note », and what to do next.
   const action = make(document, 'div', 'panel-action');
-  const leave = primaryButton(document, t('Leave feedback'), options.onLeave, { size: 'panel' });
+  const leave = primaryButton(document, t('Leave a note'), options.onLeave, { size: 'panel' });
   leave.prepend(dropMark(document));
   action.append(leave, make(document, 'p', 'panel-hint', t('Then click the part of the page you want to comment on')));
   root.append(action);
@@ -544,7 +546,7 @@ function notesPart(document: Document, options: PanelOptions, notes: PanelNotes)
         'p',
         'panel-empty-text',
         t(
-          'Press Leave feedback, click anything that looks wrong and write what you expected. The team gets it right away.',
+          'Press Leave a note, click anything that looks wrong and write what you expected. The team gets it right away.',
         ),
       ),
       helpLink(document, leaveAndFollow()),

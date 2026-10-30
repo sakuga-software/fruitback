@@ -19,7 +19,7 @@ test('the page cannot restyle the widget, however hard it tries', async ({ page 
   await openPlayground(page, 'isolation');
   await page.addStyleTag({ content: HOSTILE_CSS });
 
-  const launch = page.getByRole('button', { name: /Leave feedback/ });
+  const launch = page.getByRole('button', { name: /Leave a note/ });
   const styles = await launch.evaluate((node) => {
     const computed = getComputedStyle(node);
 
@@ -50,7 +50,7 @@ test('the icons are actually drawn, not empty boxes (FRU-36)', async ({ page }) 
   // Measured before the fix: `d` came back as the string "none" under `* { all: initial }`.
   await openPlayground(page, 'icons');
 
-  const drawn = await page.getByRole('button', { name: /Leave feedback/ }).evaluate((node) => {
+  const drawn = await page.getByRole('button', { name: /Leave a note/ }).evaluate((node) => {
     const path = node.querySelector('svg path');
     if (path === null) return null;
 
@@ -92,7 +92,7 @@ test('no emoji survives anywhere in the widget chrome (FRU-36)', async ({ page }
   seen.push(await chrome());
   await page.locator('.fruitback-config-close').click();
 
-  await page.getByRole('button', { name: /Leave feedback/ }).click();
+  await page.getByRole('button', { name: /Leave a note/ }).click();
   await page.locator('#email-field').click();
   await page.getByPlaceholder('What should change?').fill('Une note sur un champ qui disparaît');
   seen.push(await chrome());
@@ -135,7 +135,7 @@ test('no emoji survives anywhere in the widget chrome (FRU-36)', async ({ page }
   // Proof that the emoji check below is checking something. `textContent` on a Shadow root includes
   // the CSS of every <style> in it, so asserting the text is non-empty passes before a single piece
   // of chrome has rendered — which is what the first version of this test did. Raised in review.
-  for (const rendered of ['Leave feedback', 'Settings', 'detached']) {
+  for (const rendered of ['Leave a note', 'Settings', 'detached']) {
     expect(text, `never reached the state that renders ${rendered}`).toContain(rendered);
   }
 
@@ -200,7 +200,7 @@ test('hovering highlights the element the pointer is really over', async ({ page
   const button = page.locator('[data-testid="card-latte"] .add');
   const highlight = page.locator('[data-fruitback-host-highlight]');
 
-  await page.getByRole('button', { name: /Leave feedback/ }).click();
+  await page.getByRole('button', { name: /Leave a note/ }).click();
   await button.hover();
 
   await expect
@@ -233,7 +233,7 @@ test('a click while capturing goes to the widget, not to the site', async ({ pag
       ?.addEventListener('click', () => ((window as unknown as { clicked: boolean }).clicked = true));
   });
 
-  await page.getByRole('button', { name: /Leave feedback/ }).click();
+  await page.getByRole('button', { name: /Leave a note/ }).click();
   await page.locator('#checkout-cta').click();
 
   expect(await page.evaluate(() => (window as unknown as { clicked: boolean }).clicked)).toBe(false);
@@ -246,7 +246,7 @@ test('the dev chrome keeps working while capturing, and is never itself captured
   // it does *not* promise: react-grab walks past a rejected candidate, so hovering the toolbar
   // highlights whatever sits behind it. Harmless. Capturing the toolbar would not be.
   await openPlayground(page, 'ignore-chrome');
-  await page.getByRole('button', { name: /Leave feedback/ }).click();
+  await page.getByRole('button', { name: /Leave a note/ }).click();
 
   await page.locator('[data-fruitback-dev="redeploy"]').click();
 

@@ -88,7 +88,9 @@ export function sitesHead(
       document,
       'p',
       'sites-intro',
-      t('A rule says which worker, and which client, a site belongs to. A site no rule covers mounts nothing.'),
+      t(
+        'A rule says which server, and which client, a site belongs to. Fruitback shows nothing on a site that no rule covers.',
+      ),
     ),
   );
   const tools = make(document, 'div', 'sites-tools');
@@ -179,7 +181,7 @@ export function sitesTable(document: Document, options: TableOptions): HTMLEleme
   const table = make(document, 'table', '');
   const head = make(document, 'thead', '');
   const titles = make(document, 'tr', '');
-  for (const word of [t('Site'), t('Mode'), t('Worker'), t('Access'), t('On')]) {
+  for (const word of [t('Site'), t('Mode'), t('Server'), t('Access'), t('On')]) {
     const cell = make(document, 'th', '', word);
     cell.scope = 'col';
     titles.append(cell);
@@ -237,7 +239,7 @@ export type PanelOptions = {
 };
 
 const MODE_HINT: Record<SiteMode, string> = {
-  private: msg('The site ships nothing; the extension mounts the widget for you only.'),
+  private: msg('The site needs no code: the extension shows the widget for you only.'),
   team: msg('The site embeds a dormant widget; the extension wakes it and carries your session.'),
 };
 
@@ -245,11 +247,9 @@ const MODE_HINT: Record<SiteMode, string> = {
  * A team rule of a site of a workspace (FRU-319): the site embeds nothing, the extension mounts the
  * widget and relays it. « The site embeds a dormant widget » was said of it, and was wrong.
  */
-const MOUNT_HINT = msg(
-  'The site ships nothing; the extension mounts the widget of {workspace} and carries your session.',
-);
+const MOUNT_HINT = msg('The site needs no code: the extension shows the widget of {workspace} with your session.');
 const MOUNT_HINT_UNNAMED = msg(
-  'The site ships nothing; the extension mounts the widget of your workspace and carries your session.',
+  'The site needs no code: the extension shows the widget of your workspace with your session.',
 );
 
 /** What the panel says of a mode, for this rule. */
@@ -298,7 +298,7 @@ export function rulePanel(document: Document, options: PanelOptions): HTMLElemen
     hint,
   );
 
-  const endpoint = textField(document, t('Worker endpoint'), row.site.endpoint, 'url');
+  const endpoint = textField(document, t('Server address'), row.site.endpoint, 'url');
   const client = textField(document, t('Client id'), row.site.mode === 'private' ? row.site.clientId : '', 'text');
   client.hidden = mode === 'team';
 
@@ -366,13 +366,17 @@ export function ruleState(document: Document, options: PanelOptions): HTMLElemen
   } else if (row.site.mode === 'team' && options.pairedAs !== undefined) {
     say(
       'paired',
-      t('Paired as {name}', { name: options.pairedAs }),
+      t('Connected as {name}', { name: options.pairedAs }),
       t('Your session with {worker} is attached in the background, never in the page.', {
         worker: hostOf(row.site.endpoint),
       }),
     );
   } else if (row.site.mode === 'team') {
-    say('unpaired', t('Not paired'), t('A team site stays asleep until this browser holds a session of its worker.'));
+    say(
+      'unpaired',
+      t('Not connected'),
+      t('A team site shows nothing until this browser holds a session of its server.'),
+    );
   } else {
     say('granted', t('Access granted'), t('Notes on this site are readable by anyone who can build the URL.'));
   }

@@ -206,7 +206,7 @@ export async function addRule(
   await options.getByLabel('Sites', { exact: true }).fill(PLAYGROUND_ORIGIN);
   // The name of a select in a label includes the chosen option, so it only starts with the label.
   await options.getByLabel(/^Mode/).selectOption(rule.mode);
-  await options.getByLabel('Worker endpoint', { exact: true }).fill(rule.endpoint);
+  await options.getByLabel('Server address', { exact: true }).fill(rule.endpoint);
   if (rule.mode === 'private') await options.getByLabel('Client id', { exact: true }).fill(rule.clientId);
   await options.getByRole('button', { name: 'Add rule' }).click();
   await expect(options.locator(`tr.rule-row[data-pattern="${PLAYGROUND_ORIGIN}"]`)).toContainText('Granted');
@@ -257,7 +257,7 @@ export async function openPopup(extension: LoadedExtension, site: Page, _origin 
 const TARGET_CLOSED = /Target page, context or browser has been closed/;
 
 /**
- * A click in the popup that closes it (FRU-375): the side panel, « Leave feedback ».
+ * A click in the popup that closes it (FRU-375): the side panel, « Leave a note ».
  *
  * The popup calls `window.close()` when the click is done. When that is fast (the side panel is
  * already open, so `sidePanel.open` answers at once), the popup closes before Playwright has the
@@ -314,8 +314,8 @@ export async function pairFromPopup(extension: LoadedExtension, site: Page, code
 
   // The field is one step away since FRU-92: a link is the first way in.
   await popup.getByRole('button', { name: 'I have a code' }).click();
-  await popup.getByLabel('Pairing code').fill(code);
-  await popup.getByRole('button', { name: 'Pair with this worker' }).click();
+  await popup.getByLabel('Connection code').fill(code);
+  await popup.getByRole('button', { name: 'Connect to this server' }).click();
   await expect(popup.getByText(`Paired as ${name}`)).toBeVisible();
   await popup.close();
 }

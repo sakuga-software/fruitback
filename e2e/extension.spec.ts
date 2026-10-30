@@ -109,7 +109,7 @@ test('an origin with no rule mounts nothing, until a rule covers it', async ({ e
   await addRule(extension, { mode: 'private', clientId: 'playground', endpoint: WORKER_ORIGIN });
   await page.reload();
 
-  await expect(page.getByRole('button', { name: /Leave feedback/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Leave a note/ })).toBeVisible();
 });
 
 test('private mode: the mounted widget reads the component, and the pin comes back', async ({ extension }) => {
@@ -117,7 +117,7 @@ test('private mode: the mounted widget reads the component, and the pin comes ba
   const page = await extension.context.newPage();
   await openBareSite(page, 'ext-private');
 
-  await plantOnTheLatteCard(page, /Leave feedback/, 'Planté par le mode privé');
+  await plantOnTheLatteCard(page, /Leave a note/, 'Planté par le mode privé');
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
 
   // The component name comes from the React fiber, which only the page's own world can see. A widget
@@ -141,7 +141,7 @@ test('private mode: the same decision posted again keeps the open composer and i
   const page = await extension.context.newPage();
   await openBareSite(page, 'ext-private-again');
 
-  await page.getByRole('button', { name: /Leave feedback/ }).click();
+  await page.getByRole('button', { name: /Leave a note/ }).click();
   await page.locator('[data-testid="card-latte"] .add').click();
   const note = page.getByPlaceholder('What should change?');
   await note.fill('Une note à moitié écrite');
@@ -163,7 +163,7 @@ test('private mode: the same decision posted again keeps the open composer and i
 
   await expect(note).toBeVisible();
   await expect(note).toHaveValue('Une note à moitié écrite');
-  await expect(page.getByRole('button', { name: /Leave feedback/ })).toHaveCount(1);
+  await expect(page.getByRole('button', { name: /Leave a note/ })).toHaveCount(1);
   await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
 });
@@ -246,13 +246,13 @@ test('private mode: no file and no picture of the element are offered without a 
   await expect(page.locator('[name="screenshot"]')).toHaveCount(0);
   await page.getByLabel('Open Fruitback settings').click();
 
-  await page.getByRole('button', { name: /Leave feedback/ }).click();
+  await page.getByRole('button', { name: /Leave a note/ }).click();
   await page.locator('[data-testid="card-latte"] .add').click();
   await expect(page.getByPlaceholder('What should change?')).toBeVisible();
   await expect(page.locator('[data-fruitback-attach]')).toBeHidden();
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
 
-  await plantOnTheLatteCard(page, /Leave feedback/, 'Sans fichier, et pourtant envoyée');
+  await plantOnTheLatteCard(page, /Leave a note/, 'Sans fichier, et pourtant envoyée');
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
   const [note] = await notesOn(page);
   expect(note?.text).toBe('Sans fichier, et pourtant envoyée');
@@ -338,7 +338,7 @@ test('private mode on a worker that wants a session: the popup says why the page
     const page = await extension.context.newPage();
     await openBareSite(page, 'ext-private-authenticated');
     // The widget mounts and looks ready. Its reads answer 401, and nothing on the page says so.
-    await expect(page.getByRole('button', { name: /Leave feedback/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Leave a note/ })).toBeVisible();
 
     const popup = await openPopup(extension, page);
 
@@ -346,7 +346,7 @@ test('private mode on a worker that wants a session: the popup says why the page
     await expect(popup.getByText(/takes notes from its members only/)).toHaveCount(0);
     // A session changes nothing in this mode, so the popup offers none (FRU-88). The team spec below
     // pairs through the same field, which is the control for this absence.
-    await expect(popup.getByLabel('Pairing code')).toHaveCount(0);
+    await expect(popup.getByLabel('Connection code')).toHaveCount(0);
     await expect(popup.getByText(/Not paired/)).toHaveCount(0);
     const shot = test.info().outputPath('popup.png');
     await popup.screenshot({ path: shot });
@@ -371,7 +371,7 @@ test('private mode on a site whose notes are « Members only »: the widget offe
   const closed = page.getByRole('button', { name: 'Notes from members only' });
   await expect(closed).toBeVisible();
   await expect(closed).toHaveAttribute('aria-disabled', 'true');
-  await expect(page.getByRole('button', { name: /Leave feedback/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Leave a note/ })).toHaveCount(0);
 
   const popup = await openPopup(extension, page);
 
@@ -398,7 +398,7 @@ test('private mode on a worker that answers anyone: the popup says nothing about
   await expect(popup.getByText(/takes notes from its members only/)).toHaveCount(0);
   await expect(popup.getByText('On · playground', { exact: false })).toBeVisible();
   // The control of the closed button above: a site that everyone reads offers a note.
-  await expect(page.getByRole('button', { name: /Leave feedback/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Leave a note/ })).toBeVisible();
 });
 
 test('team mode: paired from the popup, the site reads and writes through the relay and never sees a token', async ({
@@ -475,11 +475,11 @@ test('a session held with the worker of a private-mode site stays on the popup, 
 
   await expect(popup.getByText('On · playground', { exact: false })).toBeVisible();
   await expect(popup.getByText(`Paired as ${REVIEWER}`)).toBeVisible();
-  await expect(popup.getByLabel('Pairing code')).toHaveCount(0);
+  await expect(popup.getByLabel('Connection code')).toHaveCount(0);
 
-  await popup.getByRole('button', { name: 'Log out' }).click();
+  await popup.getByRole('button', { name: 'Sign out' }).click();
   await expect(popup.getByText(`Paired as ${REVIEWER}`)).toHaveCount(0);
-  await expect(popup.getByLabel('Pairing code')).toHaveCount(0);
+  await expect(popup.getByLabel('Connection code')).toHaveCount(0);
   await expect(popup.getByText('On · playground', { exact: false })).toBeVisible();
 });
 
@@ -498,8 +498,8 @@ test('a failed pairing offers the one thing to do about it, and Try again pairs 
 
   // A code nobody minted: the worker answers, so the popup must not offer to try it again.
   await popup.getByRole('button', { name: 'I have a code' }).click();
-  await popup.getByLabel('Pairing code').fill('AAAA-BBBB-CCCC');
-  await popup.getByRole('button', { name: 'Pair with this worker' }).click();
+  await popup.getByLabel('Connection code').fill('AAAA-BBBB-CCCC');
+  await popup.getByRole('button', { name: 'Connect to this server' }).click();
   await expect(popup.getByText('That code has been used or has expired. Ask for a new one.')).toBeVisible();
   await expect(popup.getByRole('link', { name: 'How to get a code' })).toHaveAttribute(
     'href',
@@ -514,9 +514,9 @@ test('a failed pairing offers the one thing to do about it, and Try again pairs 
     if (refused++ === 0) await route.abort('connectionrefused');
     else await route.continue();
   });
-  await popup.getByLabel('Pairing code').fill(await mintPairingCode(REVIEWER));
-  await popup.getByRole('button', { name: 'Pair with this worker' }).click();
-  await expect(popup.getByText('The worker did not answer. Try again.')).toBeVisible();
+  await popup.getByLabel('Connection code').fill(await mintPairingCode(REVIEWER));
+  await popup.getByRole('button', { name: 'Connect to this server' }).click();
+  await expect(popup.getByText('The server did not answer. Try again.')).toBeVisible();
   await shot('worker-down');
 
   await popup.getByRole('button', { name: 'Try again' }).click();
@@ -547,7 +547,7 @@ test('a pairing link pairs with one click, and the site then works through that 
   const popup = await openPopup(extension, linkPage, AUTHENTICATED_WORKER_ORIGIN);
   await expect(popup.getByText(`This page is a pairing link for ${AUTHENTICATED_WORKER_ORIGIN}.`)).toBeVisible();
   // No field to fill in, and no form to switch the worker's own page on as a site.
-  await expect(popup.getByLabel('Pairing code')).toHaveCount(0);
+  await expect(popup.getByLabel('Connection code')).toHaveCount(0);
   await expect(popup.getByRole('button', { name: 'Turn on for this site' })).toHaveCount(0);
   // The address has the shape of a link, and that proves nothing: the site's screen is one click away.
   await popup.getByRole('button', { name: 'This is a site to review' }).click();
@@ -561,7 +561,7 @@ test('a pairing link pairs with one click, and the site then works through that 
   await linkPage.screenshot({ path: pageShot, clip: { x: 0, y: 0, width: 900, height: 360 } });
   await test.info().attach('pair-page', { path: pageShot, contentType: 'image/png' });
 
-  await popup.getByRole('button', { name: 'Pair with this worker' }).click();
+  await popup.getByRole('button', { name: 'Connect to this server' }).click();
   await expect(popup.getByText(`Paired as ${REVIEWER}`)).toBeVisible();
 
   // The session is stored under the endpoint the rule names, so the site's widget is served.
@@ -569,8 +569,8 @@ test('a pairing link pairs with one click, and the site then works through that 
   await expect(site.locator('[data-fruitback-pin]')).toHaveCount(1);
 
   // The same link a second time: the code is spent, and the popup says what to do next.
-  await popup.getByRole('button', { name: 'Log out' }).click();
-  await popup.getByRole('button', { name: 'Pair with this worker' }).click();
+  await popup.getByRole('button', { name: 'Sign out' }).click();
+  await popup.getByRole('button', { name: 'Connect to this server' }).click();
   await expect(popup.getByText('That code has been used or has expired. Ask for a new one.')).toBeVisible();
   await expect(popup.getByRole('link', { name: 'How to get a code' })).toBeVisible();
 });
@@ -592,7 +592,7 @@ test('the popup, the options page and the mounted widget speak the language of t
   await setUp.getByRole('button', { name: 'Save' }).click();
   await expect(setUp.getByText('On · playground', { exact: false })).toBeVisible();
   await setUp.close();
-  await expect(page.getByRole('button', { name: 'Leave feedback' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Leave a note' })).toBeVisible();
 
   // The worker of the session says the account reads French. The E2E workers keep no accounts, so
   // the answer of that one route is given here; the popup asks it with its real session.
@@ -632,7 +632,7 @@ test('the popup, the options page and the mounted widget speak the language of t
   // English again with no reload.
   await popup.getByRole('button', { name: 'Se déconnecter' }).click();
   await expect.poll(() => extension.worker.evaluate(() => chrome.storage.local.get('language'))).toEqual({});
-  await expect(page.getByRole('button', { name: 'Leave feedback' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Leave a note' })).toBeVisible();
   await popup.close();
   const after = await openPopup(extension, page);
   await expect(after.getByText('On · playground', { exact: false })).toBeVisible();

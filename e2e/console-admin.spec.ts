@@ -231,7 +231,7 @@ test('an administrator sees the frame and the instance, with the values of the m
   // Health.
   const grid = health(page).locator('dl');
   expect.soft((await styles(grid, ['grid-template-columns']))['grid-template-columns']?.split(' ').length).toBe(4);
-  const worker = fact(page, 'Worker');
+  const worker = fact(page, 'Server');
   await expect(worker.value).toHaveText('Answering');
   await expect(worker.detail).toHaveText('Up for 12 days');
   expect.soft(await painted(worker.value, 'color')).toEqual(rgb(DONE));
@@ -342,7 +342,7 @@ test('no field is editable, nothing changes a setting, and no write request leav
   await stub(page);
   await open(page);
   // No visit reads the workspaces: their owners would see a read nobody asked for (Mathieu, 2026-10-19).
-  await expect(fact(page, 'Worker').value).toHaveText('Answering');
+  await expect(fact(page, 'Server').value).toHaveText('Answering');
   expect(sent).not.toContain('GET /console/admin/workspaces');
   await main(page).getByRole('button', { name: 'Show the workspaces' }).click();
   await expect(page.getByRole('table')).toBeVisible();
@@ -467,7 +467,7 @@ test('a worker that does not answer the read says so, keeps the frame, and reads
 
   status = undefined;
   await main(page).getByRole('button', { name: 'Try again' }).click();
-  await expect(fact(page, 'Worker').value).toHaveText('Answering');
+  await expect(fact(page, 'Server').value).toHaveText('Answering');
   await expect(main(page).getByRole('alert')).toHaveCount(0);
 });
 
@@ -487,7 +487,7 @@ test('the screen says it is loading while the worker has not answered', async ({
   await expect(page.getByRole('region', { name: 'Deleted workspaces' }).getByText('Loading…')).toBeVisible();
   await expect(health(page)).toHaveCount(0);
   release();
-  await expect(fact(page, 'Worker').value).toHaveText('Answering');
+  await expect(fact(page, 'Server').value).toHaveText('Answering');
   await expect(loading).toHaveCount(0);
 });
 

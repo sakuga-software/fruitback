@@ -763,7 +763,7 @@ body.popup-page {
 
 /*
   3 · Site on (FRU-298): 20 px above, 24 around, 20 between the blocks. The site and its switch, the
-  lines of what waits under it; at the bottom (FRU-529), « Leave feedback » with the side panel
+  lines of what waits under it; at the bottom (FRU-529), « Leave a note » with the side panel
   beside it as a square of one icon, and the keys under both.
 */
 .popup-screen-3 .popup-body {
@@ -812,7 +812,7 @@ body.popup-page {
   min-width: 0;
 }
 
-/* « Show all notes in a sidebar »: a square as high as « Leave feedback », its name in aria-label. */
+/* « Show all notes in a sidebar »: a square as high as « Leave a note », its name in aria-label. */
 .popup .leave-row .panel-button {
   flex: none;
   width: 56px;

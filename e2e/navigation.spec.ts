@@ -42,7 +42,7 @@ test('a note sent after a navigation goes to the page where it was written', asy
   await mount(page, testCase);
   const note = 'Written on the pricing page';
 
-  await page.getByRole('button', { name: 'Leave feedback' }).click();
+  await page.getByRole('button', { name: 'Leave a note' }).click();
   await page.locator('[data-testid="card-espresso"] .add').click();
   const composer = page.getByRole('dialog', { name: 'New note' });
   const field = page.getByPlaceholder('What should change?');

@@ -28,7 +28,7 @@ test('the widget keeps its styles on a page whose CSP refuses inline styles', as
 
   await page.goto(`/?case=${caseOf('csp-styles')}`);
 
-  const launch = page.getByRole('button', { name: /Leave feedback/ });
+  const launch = page.getByRole('button', { name: /Leave a note/ });
   await expect(launch).toBeVisible();
   const styles = await launch.evaluate((node) => {
     const computed = getComputedStyle(node);

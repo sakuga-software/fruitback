@@ -310,7 +310,7 @@ export function SitePlaces({
       ) : null}
       {typeof connectors !== 'string' && connectors.length === 0 ? (
         <p className="text-small text-muted">
-          {t('No source is connected.')}{' '}
+          {t('No connector is added.')}{' '}
           <LinkButton space="inline" to={`/w/${workspaceId}/connectors`}>
             {t('Connect a tracker')}
           </LinkButton>

@@ -827,7 +827,7 @@ async function siteOfWorkspaceOn(
       { ...(tab?.id === undefined ? {} : { tabId: tab.id }) },
       async () => (await askTab(tab, 'show-notes')).done,
     ).then((shown) => (shown === 'nothing' ? showProblem(problem, t(NOT_THERE)) : window.close()));
-  // FRU-291: the keys of « Leave feedback », as the person set them. None: no line.
+  // FRU-291: the keys of « Leave a note », as the person set them. None: no line.
   const shortcut = currentShortcut(await browser.commands.getAll().catch(() => []));
   const screen = siteOn(document, {
     origin,
@@ -1028,12 +1028,12 @@ async function linked(link: PairLink): Promise<HTMLElement[]> {
     return [pairedRow(link.endpoint, held.identity), element('p', t(said), 'state')];
   }
 
-  const submit = element('button', t('Pair with this worker'));
+  const submit = element('button', t('Connect to this server'));
   const problem = element('p', '', 'problem');
   const wrapper = document.createElement('div');
   wrapper.className = 'session';
   wrapper.append(
-    element('p', t('This page is a pairing link for {worker}.', { worker: link.endpoint }), 'state'),
+    element('p', t('This page is a connection link for {worker}.', { worker: link.endpoint }), 'state'),
     submit,
     problem,
   );
@@ -1048,7 +1048,7 @@ async function linked(link: PairLink): Promise<HTMLElement[]> {
   const attempt = pairing(link.endpoint, () => link.code, submit, problem, {});
   submit.addEventListener('click', attempt);
   // FRU-302: the same pairing, on the card of the worker in the page of the extension, code filled.
-  const page = element('button', t('Pair in the page of the extension'), 'secondary');
+  const page = element('button', t('Connect in the page of the extension'), 'secondary');
   page.addEventListener('click', () => {
     const query = new URLSearchParams({ worker: link.endpoint, code: link.code });
     void browser.tabs.create({ url: `${browser.runtime.getURL('/options.html')}#workers?${query.toString()}` });
@@ -1061,9 +1061,9 @@ async function linked(link: PairLink): Promise<HTMLElement[]> {
 
 const NOT_A_LINK = msg('This is a site to review');
 
-const LINK_ALREADY_PAIRED = msg('This browser is already paired with that worker, so the link is not needed.');
+const LINK_ALREADY_PAIRED = msg('This browser is already connected to that server, so the link is not needed.');
 
-const LINK_PAIRED = msg('Paired. This browser reads and writes the notes of this worker.');
+const LINK_PAIRED = msg('Connected. This browser reads and writes the notes of this server.');
 
 /** The workers this popup paired with, while it is open: the screen after a pairing says it is done. */
 const pairedNow = new Set<string>();
@@ -1073,7 +1073,7 @@ const pairedNow = new Set<string>();
  * the e-mail under it, in the secondary text (FRU-289), as the card of the page of the extension.
  */
 function pairedRow(endpoint: string, identity: SessionIdentity): HTMLElement {
-  const out = logOut(endpoint, element('button', t('Log out')));
+  const out = logOut(endpoint, element('button', t('Sign out')));
 
   const row = document.createElement('div');
   row.className = 'row';
@@ -1081,7 +1081,7 @@ function pairedRow(endpoint: string, identity: SessionIdentity): HTMLElement {
   row.append(
     element(
       'span',
-      name === undefined || name === '' ? t('Paired') : t('Paired as {identity}', { identity: name }),
+      name === undefined || name === '' ? t('Connected') : t('Connected as {identity}', { identity: name }),
       'state',
     ),
     out,
@@ -1102,7 +1102,7 @@ function pairedRow(endpoint: string, identity: SessionIdentity): HTMLElement {
 /**
  * The foot of screen 3 for a session of a pairing (FRU-319): who it is, once, and « Log out » as a
  * link. The person was written three times there (the head, a row « Paired as » and the foot), and
- * « Log out » was a filled pill of the weight of « Leave feedback ».
+ * « Log out » was a filled pill of the weight of « Leave a note ».
  */
 function pairedFoot(endpoint: string, identity: SessionIdentity): HTMLElement {
   const foot = element('div', '', 'popup-foot');
@@ -1111,14 +1111,14 @@ function pairedFoot(endpoint: string, identity: SessionIdentity): HTMLElement {
   // and the address beside it.
   const name = identity.name?.trim();
   const email = identity.email?.trim();
-  let who = t('Paired');
-  if (name !== undefined && name !== '') who = t('Paired as {identity}', { identity: name });
+  let who = t('Connected');
+  if (name !== undefined && name !== '') who = t('Connected as {identity}', { identity: name });
   else if (email !== undefined && email !== '') who = `${who} · ${email}`;
   foot.append(
     element('span', who, 'who'),
     logOut(
       endpoint,
-      linkButton(document, t('Log out'), () => undefined),
+      linkButton(document, t('Sign out'), () => undefined),
     ),
   );
 
@@ -1219,8 +1219,8 @@ async function session(site: SiteConfig): Promise<HTMLElement[]> {
   if (held === undefined && site.mode !== 'team') return [];
   if (held !== undefined) return [pairedRow(endpoint, held.identity)];
 
-  const code = field(t('Pairing code'), 'ABCD-EFGH-JKMN');
-  const submit = element('button', t('Pair with this worker'));
+  const code = field(t('Connection code'), 'ABCD-EFGH-JKMN');
+  const submit = element('button', t('Connect to this server'));
   const problem = element('p', '', 'problem');
 
   // The worker this rule names is what is wrong, so the way out is the fields of the rule.
@@ -1259,7 +1259,7 @@ async function session(site: SiteConfig): Promise<HTMLElement[]> {
   // Said plainly, because it is the difference between a page that shows this reviewer's pins and
   // one that shows nothing at all: the relay refuses a call it has no session for, rather than
   // making it without one.
-  row.append(element('span', t('Not paired — this site cannot reach the worker until you do'), 'state'));
+  row.append(element('span', t('Not connected. This site cannot reach the server until you connect.'), 'state'));
 
   const wrapper = document.createElement('div');
   wrapper.className = 'session';
@@ -1268,7 +1268,7 @@ async function session(site: SiteConfig): Promise<HTMLElement[]> {
   return [wrapper];
 }
 
-const HOW_TO_PAIR = msg('Open the pairing link you were sent, then click this icon on that page.');
+const HOW_TO_PAIR = msg('Open the connection link you were sent, then click this icon on that page.');
 
 /**
  * Ask for the mode, and for what that mode cannot work without.
@@ -1283,7 +1283,7 @@ function form(origin: string, found?: ResolvedSite, draft?: SiteConfig): HTMLEle
   // A wildcard entry is saved under its own pattern, so the change reaches every site it covers.
   const pattern = found?.pattern ?? origin;
   const mode = modeField(shown?.mode ?? 'private');
-  const endpoint = field(t('Worker endpoint'), 'https://feedback.acme.dev');
+  const endpoint = field(t('Server address'), 'https://feedback.acme.dev');
   const clientId = field(t('Client id'), 'acme');
   const save = element('button', site === undefined ? t('Turn on for this site') : t('Save'));
   const problem = element('p', '', 'problem');
@@ -1488,8 +1488,8 @@ function describeSite(site: SiteConfig): string {
 function modeField(current: SiteMode): { label: HTMLLabelElement; select: HTMLSelectElement } {
   const select = document.createElement('select');
   for (const [value, text] of [
-    ['private', 'Private · the extension mounts the widget'],
-    ['team', 'Team · the site embeds it, we relay'],
+    ['private', 'Private · the extension shows the widget'],
+    ['team', 'Team · the site embeds it, the extension adds your session'],
   ]) {
     const option = document.createElement('option');
     option.value = value as string;
