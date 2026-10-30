@@ -141,8 +141,7 @@ export async function setSessionSite(request: Request, context: SiteSettingsCont
   if (!allowed.ok) return allowed.answer;
   const { workspace } = allowed;
 
-  const sites = await context.accounts.sites(workspace);
-  const site = sites.find((each) => each.id === siteId);
+  const site = await context.accounts.site(workspace, siteId);
   if (site === undefined) return { status: 404, body: { error: 'not-found' } };
 
   // Both are read before anything is written: a bad place changes no visibility.

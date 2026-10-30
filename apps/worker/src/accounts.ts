@@ -142,6 +142,20 @@ export function readableSites<T extends { id: string }>(sites: readonly T[], rea
 /** A site as the invitations and the members name it (FRU-250): its id and its address. */
 export type SharedSite = { id: string; origin: string };
 
+/** A site as a list to choose one names it (FRU-497): no destination and no count. */
+export type SiteChoice = { id: string; origin: string; visibility: Visibility };
+
+/** What a page of the sites of a workspace holds (FRU-497). `only`: the sites a guest reads. */
+export type SitePageQuery = { q?: string; offset: number; limit: number; only?: readonly string[] };
+
+/** What a page of `siteChoices` holds (FRU-497). `after`: the address of the last site before it. */
+export type SiteChoiceQuery = { q?: string; after?: string; limit: number; only?: readonly string[] };
+
+/** The sites of `reach` for a page of sites: absent for a reach of every site (FRU-497). */
+export function onlyOf(reach: Reach): { only?: readonly string[] } {
+  return reach.sites === 'every' ? {} : { only: reach.sites };
+}
+
 /** How many agent keys one workspace holds (FRU-461). A connection of OAuth counts as one (FRU-467). */
 export const MAX_AGENT_KEYS = 20;
 
@@ -618,6 +632,22 @@ export type AccountStore = {
    */
   addSite(workspace: string, site: { origin: string; visibility: Visibility; writers?: Writers }): Promise<Site>;
   sites(workspace: string): Promise<Site[]>;
+  /**
+   * One site of a workspace by its id (FRU-497), with its destinations. `undefined` when the site is
+   * not of this workspace. The read of one row, where `sites(...).find(...)` read them all.
+   */
+  site(workspace: string, site: string): Promise<Site | undefined>;
+  /**
+   * One page of the sites of a workspace, in the order of `sites` (FRU-497), and how many sites hold
+   * the search. `q`: words that the host of the site holds, with no case. `only`: the sites a guest
+   * reads; absent, every site.
+   */
+  sitePage(workspace: string, page: SitePageQuery): Promise<{ sites: Site[]; total: number }>;
+  /**
+   * The id, address and visibility of the sites of a workspace (FRU-497), what a list to choose a
+   * site from needs, by address. `after`: the address of the last site of the page before.
+   */
+  siteChoices(workspace: string, page: SiteChoiceQuery): Promise<SiteChoice[]>;
   removeSite(workspace: string, site: string): Promise<boolean>;
   /**
    * Who reads the notes of a site that exists (FRU-453). `false` when the site is not of this
