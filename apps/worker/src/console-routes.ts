@@ -1,3 +1,4 @@
+import { json } from './http.ts';
 import type { AccountStore } from './accounts.ts';
 import { BodyTooLarge } from './bounded-body.ts';
 import { authFor } from './auth.ts';
@@ -248,11 +249,4 @@ export async function handleConsole(request: Request, pathname: string, seams: C
     }
     throw error;
   }
-}
-
-function json(status: number, body: unknown, headers: Record<string, string> = {}): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...headers },
-  });
 }

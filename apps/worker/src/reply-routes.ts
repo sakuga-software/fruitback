@@ -1,3 +1,4 @@
+import { json } from './http.ts';
 import { type AccountStore, can } from './accounts.ts';
 import { MAX_BODY_BYTES, readBoundedText } from './bounded-body.ts';
 import { type ClientConfig, normalizeClientId } from './clients.ts';
@@ -435,11 +436,4 @@ export async function postStatus(
     if (error instanceof KvError) return json(503, { error: 'limiter-unavailable' }, corsHeaders);
     throw error;
   }
-}
-
-function json(status: number, body: unknown, headers: Record<string, string> = {}): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...headers },
-  });
 }

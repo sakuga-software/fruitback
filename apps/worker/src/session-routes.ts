@@ -1,5 +1,6 @@
+import { json } from './http.ts';
 import type { AccountStore } from './accounts.ts';
-import { MAX_BODY_BYTES, readBoundedText } from './bounded-body.ts';
+import { MAX_BODY_BYTES, parseJsonObject, readBoundedText } from './bounded-body.ts';
 import { handleExtensionConnect } from './connect-routes.ts';
 import type { CorsDecision } from './cors.ts';
 import type { GithubApp } from './github-connector.ts';
@@ -281,26 +282,6 @@ export async function createPairingCommand(
   }
 
   return openPairing(store, identity);
-}
-
-/** A session body is a JSON object or nothing. An array is not an object here, whatever `typeof` says. */
-function parseJsonObject(text: string): Record<string, unknown> | undefined {
-  try {
-    const parsed: unknown = JSON.parse(text);
-
-    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function json(status: number, body: unknown, headers: Record<string, string> = {}): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...headers },
-  });
 }
 
 /** What reads a tracker for the popup (FRU-453): the keys of this worker, as the console has them. */

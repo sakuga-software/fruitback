@@ -117,6 +117,38 @@ describe('the body of a route of the console (FRU-506)', () => {
     );
   });
 
+  /**
+   * `readJsonObject` throws `BodyTooLarge`, and only `handleConsole` of `console-routes.ts` answers it
+   * `413`. So it is read only by the modules that `handleConsole` alone calls: `handleEmailRoutes`,
+   * `handleAuthRoutes` and `handleConsoleApi`, with what `console-api.ts` calls. A new module that reads
+   * a body with it fails here, and must show that `handleConsole` is its only way in (review of #714).
+   */
+  it('is read with readJsonObject only by the modules that handleConsole calls', () => {
+    const dir = new URL('.', import.meta.url);
+    const sources = readdirSync(dir).filter((name) => name.endsWith('.ts') && !/\.(test|fixture)\.ts$/.test(name));
+    const reads = sources.filter((name) =>
+      /\breadJsonObject\(request\)/.test(readFileSync(new URL(name, dir), 'utf8')),
+    );
+    assert.deepEqual(reads.sort(), [
+      'account-emails.ts',
+      'auth-routes.ts',
+      'console-api.ts',
+      'console-notes.ts',
+      'instance-admin.ts',
+    ]);
+    // And these modules answer no route by another way: their handlers are called by these files only.
+    for (const handler of ['handleEmailRoutes', 'handleAuthRoutes', 'handleConsoleApi', 'handleNotes']) {
+      const callers = sources.filter((name) =>
+        new RegExp(`\\b${handler}\\(`).test(
+          readFileSync(new URL(name, dir), 'utf8')
+            .replace(/^\s*(\*|\/\/).*$/gm, '')
+            .replace(/function \w+\(/g, ''),
+        ),
+      );
+      assert.deepEqual(callers, [handler === 'handleNotes' ? 'console-api.ts' : 'console-routes.ts'], handler);
+    }
+  });
+
   /** A guard, with its control: a new route that reads its body with no cap fails here. */
   it('is read by bounded-body.ts and by nothing else', () => {
     const dir = new URL('.', import.meta.url);

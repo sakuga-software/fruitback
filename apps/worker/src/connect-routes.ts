@@ -1,5 +1,6 @@
+import { json } from './http.ts';
 import type { AccountStore } from './accounts.ts';
-import { MAX_BODY_BYTES, readBoundedText } from './bounded-body.ts';
+import { MAX_BODY_BYTES, parseJsonObject, readBoundedText } from './bounded-body.ts';
 import { isExtensionOrigin } from './cors.ts';
 import {
   CONNECT_INTERVAL_SECONDS,
@@ -48,26 +49,11 @@ export function isConsoleConnectRoute(pathname: string): boolean {
   return CONSOLE_CONNECT.test(pathname) || pathname === BROWSERS_PATH || BROWSER_PATH.test(pathname);
 }
 
-function json(status: number, body: unknown, headers: Record<string, string>): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...headers },
-  });
-}
-
 /** The body as an object, `'too-large'` over the cap (FRU-506), or `undefined`: not JSON, not an object. */
 async function bodyOf(request: Request): Promise<Record<string, unknown> | 'too-large' | undefined> {
   const text = await readBoundedText(request);
   if (text === null) return 'too-large';
-  try {
-    const parsed: unknown = JSON.parse(text);
-
-    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : undefined;
-  } catch {
-    return undefined;
-  }
+  return parseJsonObject(text);
 }
 
 export type ExtensionConnectContext = {

@@ -1,30 +1,85 @@
 import { describe, it } from 'vitest';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
+import { json } from './http.ts';
 
 /**
  * Every JSON answer of the worker says `Cache-Control: no-store` (FRU-506). Each answer is of one
  * caller: a session, a token, a site, an operator. A shared cache must keep none of them.
  *
- * Nine of the twenty `json()` helpers of the routes did not say it, `POST /session/pair` and
- * `POST /session/refresh` included, which answer tokens. The HTTP tests check the routes of a
- * session; this test checks every helper, so that a new copy cannot drop the header.
+ * Nine of the twenty copies of `json()` in the modules of routes did not say it, `POST /session/pair`
+ * and `POST /session/refresh` included, which answer tokens. Now `json()` of `http.ts` makes every
+ * JSON answer. The HTTP tests check the routes of a session; this file checks the helper, and that
+ * no source makes a JSON answer another way, whatever the name or the form of its function.
  */
 describe('the JSON answers of the worker (FRU-506)', () => {
-  const dir = new URL('.', import.meta.url);
-  const sources = readdirSync(dir).filter((name) => name.endsWith('.ts') && !/\.(test|fixture)\.ts$/.test(name));
+  it('say Cache-Control: no-store, and the headers of the caller', async () => {
+    const answer = json(201, { id: 'one' }, { 'Access-Control-Allow-Origin': 'https://console.test' });
 
-  it('all say Cache-Control: no-store', () => {
-    const helpers = sources.flatMap((name) => {
+    assert.equal(answer.status, 201);
+    assert.equal(answer.headers.get('Content-Type'), 'application/json');
+    assert.equal(answer.headers.get('Cache-Control'), 'no-store');
+    assert.equal(answer.headers.get('Access-Control-Allow-Origin'), 'https://console.test');
+    assert.deepEqual(await answer.json(), { id: 'one' });
+  });
+
+  it('are made by http.ts, and by no other source of the worker', () => {
+    const dir = new URL('.', import.meta.url);
+    // Every source under `src/`, in a subdirectory too. `linear-stub.ts` fakes the answers of Linear
+    // for the unit tests: it answers no request of the worker.
+    const sources = readdirSync(dir, { recursive: true })
+      .map(String)
+      .filter((name) => name.endsWith('.ts') && !/\.(test|fixture)\.ts$/.test(name))
+      .filter((name) => name !== 'http.ts' && name !== 'linear-stub.ts');
+    // A body of JSON in a `Response`, or a function of its own named `json`, in any form.
+    const own = [/new Response\(\s*JSON\.stringify\(/, /\bfunction json\s*\(/, /\b(const|let|var) json\s*=/];
+    // The control: the patterns find the helper of `http.ts`, and the copy that each module had.
+    const helper = readFileSync(new URL('http.ts', dir), 'utf8');
+    assert.ok(own[0]?.test(helper) && own[1]?.test(helper), 'the patterns of this guard find nothing');
+    assert.ok(own[2]?.test('const json = (status: number) => status;'), 'the pattern of an arrow finds nothing');
+    assert.ok(sources.length > 50, `${sources.length} sources: the list of this guard is out of date`);
+
+    // `redeemLink` of `auth-routes.ts` answers several `Set-Cookie`, which the record of headers of
+    // `json()` cannot hold. Its `Headers` say `no-store` by hand, and this checks that they do.
+    const byHand: Record<string, RegExp> = {
+      'auth-routes.ts':
+        /new Headers\(\{ 'Content-Type': 'application\/json', 'Cache-Control': 'no-store', \.\.\.headers \}\)/,
+    };
+    const found = sources.filter((name) => {
       const text = readFileSync(new URL(name, dir), 'utf8');
-      const found = [...text.matchAll(/^function json\([^]*?^}/gm)];
+      if (byHand[name] !== undefined) return !byHand[name].test(text);
 
-      return found.map((match) => ({ name, body: match[0] }));
+      return own.some((pattern) => pattern.test(text));
     });
+    assert.deepEqual(found, []);
+  });
 
-    // Nineteen when this test was written: fewer means that the pattern no longer finds them.
-    assert.ok(helpers.length >= 19, `${helpers.length} json() helpers found: the pattern of this test is out of date`);
-    // `NO_STORE` of `oauth.ts` says `no-store` and `Pragma: no-cache`.
-    for (const { name, body } of helpers) assert.match(body, /'Cache-Control': 'no-store'|\.\.\.NO_STORE\b/, name);
+  /**
+   * An answer of another shape: a JSON type set on `new Headers(`, on `new Response(` or on
+   * `writeHead(` of `node:http`. Each says `no-store` in the same statement (review of #714).
+   * The other `application/json` of the sources are requests that the worker sends: to Linear,
+   * GitHub, a REST connector, the mail API, better-auth, and the command `plant-a-pin`.
+   */
+  it('say no-store wherever an answer gets a JSON type another way', () => {
+    const dir = new URL('.', import.meta.url);
+    const sources = readdirSync(dir, { recursive: true })
+      .map(String)
+      .filter((name) => name.endsWith('.ts') && !/\.(test|fixture)\.ts$/.test(name) && name !== 'linear-stub.ts');
+    const answer = /(?:new Headers|new Response|\.writeHead)\([^;]*?'application\/json'[^;]*;/g;
+    // The control: the pattern finds the answer of `http.ts` and the 500 of `server.ts`.
+    const statements = sources.flatMap((name) =>
+      [...readFileSync(new URL(name, dir), 'utf8').matchAll(answer)].map((match) => ({ name, text: match[0] })),
+    );
+    for (const name of ['http.ts', 'server.ts', 'auth-routes.ts'])
+      assert.ok(
+        statements.some((each) => each.name === name),
+        `the pattern finds nothing in ${name}`,
+      );
+
+    const without = statements.filter((each) => !each.text.includes("'Cache-Control': 'no-store'"));
+    assert.deepEqual(
+      without.map((each) => each.name),
+      [],
+    );
   });
 });
