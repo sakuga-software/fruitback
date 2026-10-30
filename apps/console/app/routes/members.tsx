@@ -566,7 +566,7 @@ function Row({
             </span>
           </span>
         </td>
-        <td>{t(ROLE_WORDS[role])}</td>
+        <td className="whitespace-nowrap">{t(ROLE_WORDS[role])}</td>
         <td className="[overflow-wrap:anywhere]">{sites}</td>
         {last}
       </tr>

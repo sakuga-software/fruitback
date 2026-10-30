@@ -1034,6 +1034,11 @@ textarea {
 
 /* A table in its frame. A table wider than the frame scrolls in it, and the page does not. */
 .kit-table {
+  /*
+    The frame holds what is positioned in it: the label of a field that only a screen reader reads is
+    absolute, and out of a frame with no position it widened the page past the screen (FRU-505).
+  */
+  position: relative;
   overflow-x: auto;
   border: 1px solid var(--color-line);
   border-radius: var(--radius-frame);
@@ -1093,6 +1098,49 @@ textarea {
 
 .kit-table [data-align='end'] {
   text-align: right;
+}
+
+/*
+  A stacked table (FRU-505): from 640 px a table, under it one card per row, so that no cell is
+  past the screen. The heads stay for a screen reader.
+*/
+.kit-table[data-stack='true'] table {
+  min-width: var(--table-min-width);
+}
+
+@media (width < 640px) {
+  .kit-table[data-stack='true'] :is(table, tbody, tr, td) {
+    display: block;
+    min-width: 0;
+  }
+
+  .kit-table[data-stack='true'] thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .kit-table[data-stack='true'] tr {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--color-line);
+  }
+
+  .kit-table[data-stack='true'] td,
+  .kit-table[data-stack='true'] :is(th, td):is(:first-child, :last-child) {
+    max-width: none;
+    padding: 0;
+    border-bottom: 0;
+  }
+
+  .kit-table[data-stack='true'] td[data-align='end'] {
+    text-align: left;
+  }
 }
 
 /* A panel beside a list. */

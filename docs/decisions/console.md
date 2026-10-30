@@ -308,7 +308,7 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   `IconButton` (36 px, named by `label`), `Field` and `Choice` (44 px, `compact` 40 px, `locked` for
   a value set elsewhere; the value of a `Choice` in the type of its button, so its words sit on the
   baseline of a field beside it (FRU-412: HeroUI writes it at 14 px on a line of 20); `status` on a `Choice` draws the drop of the chosen status in a list of 38 px), `Pick` (radio cards), `Toggle`, `FilterChip` (`aria-pressed`), `StatusDot`
-  and `StatusBar`, `DataTable`, `SidePanel` (named by its title, or by `label`; `panelId` for `aria-controls`; `flush` for an accordion under its row), `KeyValue`, `SuccessMark`, `Title`, `Lead`, `PageHead`,
+  and `StatusBar`, `DataTable` (`stack`: under 640 px one card per row, its cells one under the other, FRU-505), `SidePanel` (named by its title, or by `label`; `panelId` for `aria-controls`; `flush` for an accordion under its row), `KeyValue`, `SuccessMark`, `Title`, `Lead`, `PageHead`,
   `Initial`, `Card`, `Chip`, `Problem`, `Logo` (the name as outlines, in tokens: `logo.tsx`), `EntryPage`
   (the header and the column of a page outside a workspace; `/kit/entry` mounts it), `Divider`, `Menu`
   (a button that opens a menu, on the dropdown of HeroUI: the menu is named after its button, a
@@ -498,7 +498,8 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   reach moves meanwhile. A workspace with no note says so, a filter that keeps nothing says so with
   « Clear the filters », and a read that failed is the alert of the Sites screen, never « No note
   yet ». The reference in a tracker is a link at 400, where a link of the kit is at 600 for an
-  action. `e2e/console-notes.spec.ts` holds the values, every filter, the pages, « Send again », the
+  action. **Under 640 px a note is a card** (FRU-505): the table scrolled in its frame, and only the
+  text of a note was on a phone, its status, author and day past the edge. `e2e/console-notes.spec.ts` holds the values, every filter, the pages, « Send again », the
   states, the roles, 390 px and axe.
 - **The notes are a table or a board, and the address says which** (FRU-436, decided by Mathieu on
   2026-10-24). « Table » and « Board », two pressed buttons at the right of the head, write
