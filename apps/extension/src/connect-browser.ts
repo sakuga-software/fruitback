@@ -61,9 +61,10 @@ export function createBrowserConnect(sessions: Pick<Sessions, 'claim' | 'list'>)
 /**
  * Asks the browser for the access to the Fruitback at `endpoint`: its origin only, from the optional
  * access the manifest declares. **Call it in the click, before any `await`**: a host permission may
- * only be asked for while the click is handled.
+ * only be asked for while the click is handled. `async`, so an endpoint that does not parse rejects
+ * rather than throws in the click: the page then says the sign-in did not start.
  */
-export function requestWorkerAccess(endpoint: string): Promise<boolean> {
+export async function requestWorkerAccess(endpoint: string): Promise<boolean> {
   return browser.permissions.request({ origins: [matchPatternFor(workerOrigin(endpoint))] });
 }
 
