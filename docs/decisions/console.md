@@ -636,7 +636,8 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   the sources with nothing left; a cross in the field empties it and gives it focus back; a search
   that keeps nothing says so in the list, which offers nothing. The list shows 50 places, then a
   last option « Show 50 more (70 left) », which chooses nothing. The search and the pages are the
-  console's, on the lists the worker answered whole: no route of the worker is new. **It is not a
+  console's, on the lists the worker answered whole: no route of the worker is new. The teams of a
+  Linear have since come a page at a time (FRU-501, below). **It is not a
   combo box**, which typed in the list itself: measured on 2026-10-25, the combo box of HeroUI
   (react-aria 3.53) throws « childNodes is not supported » under React 19.3 in development when its
   options change while it is open, and its list then stops following what is typed. A `Select`
@@ -654,6 +655,27 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   query by the nodes it may return, and the status of each project doubles them. The answer of
   `GET …/connectors/<id>/teams` gains `private` and `status`, both optional: a console of before
   ignores them.
+  **The teams of a Linear come a page at a time, and a search asks Linear** (FRU-501). `GET
+  …/connectors/<id>/teams` answers one page of 50 teams, each with all its projects, and `next`
+  while Linear has more; `?after=<next>` reads the next page, and `?q=<words>` (100 characters at
+  most) only the teams whose name holds them, as Linear compares them with no case
+  (`containsIgnoreCase`). The list of each Linear is one state, `team-list.ts`: its teams, the
+  cursor of the next page (`null` once Linear says there is no other), the search, and the one
+  request it waits for. Each answer carries the id of its request, and any other answer is dropped:
+  a slow page that a search replaced, or a page of a list that « Try again » read again. A search
+  filters what the console holds, and, 300 ms after the last key, asks the worker for its words
+  once, only while the list is not complete. « More teams of <source>… », after every other option,
+  never paged and never searched (`tail` of `SearchChoice`), shows while there is a next page, no
+  search and no page on its way. `team-list.test.ts` crosses the shapes of a list, the moments of a
+  search, « Try again » after an error, and a slow answer. The popup of the extension still reads
+  every team (`GET /session/sites/places`, `listLinearTeams`). **A place is labelled from its own
+  team and project**, read by their ids in one call for each connector (`readLinearPlaces`), never
+  from the list of the teams; a new connector reads only who the key belongs to
+  (`readLinearViewer`). These reads, and the states, give up after 10 s (`READ_TIMEOUT_MS`), as the
+  calls of `linear-oauth.ts`: a Linear that hangs is then a Linear that is down. The write of a note
+  has no such limit, as a write Linear finishes after the worker gave up would be written twice when
+  the widget tries again. Measured with a fake Linear of 300 teams of 60 projects, 40 ms a call: see
+  the description of the pull request of FRU-501.
   **Each place shows the mark of its source, and a place of Linear its colour** (FRU-459, Mathieu):
   the `ConnectorMark` of FRU-435 before its name, then a dot in the colour Linear gives its project,
   else its team (`color` of the teams answer, `#rrggbb` only: anything else would reach a style, and
