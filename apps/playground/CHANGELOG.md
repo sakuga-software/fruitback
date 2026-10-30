@@ -1,5 +1,13 @@
 # @fruitback/playground
 
+## 0.6.0
+
+### Patch Changes
+
+- Updated dependencies [9bc7374]
+  - @fruitback/widget@0.6.0
+  - @fruitback/shared@0.6.0
+
 ## 0.5.0
 
 ### Patch Changes

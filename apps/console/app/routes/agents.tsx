@@ -34,7 +34,7 @@ import { PageHead, useWorkspace } from './workspace';
  * the line that connects Claude Code; list the keys with their last use and their end, and a warning
  * 7 days before it; the writes of each key; revoke one. The routes are those of FRU-461 and FRU-464.
  *
- * Reached from the section « Agents » of the workspace settings, for an owner or an admin: the worker
+ * Reached from the section « Agents » of the page « AI » of the settings (FRU-544), for an owner or an admin: the worker
  * answers `403` to anybody else, so the page asks it nothing for them.
  */
 export default function Agents() {
@@ -89,6 +89,11 @@ function AgentsScreen() {
     >
       <LinkButton space="inline" to={`/w/${workspace.id}/settings`}>
         {t('Workspace settings')}
+      </LinkButton>
+      <span aria-hidden="true">›</span>
+      {/* The keys are reached from the page « AI » of the settings (FRU-544). */}
+      <LinkButton space="inline" to={`/w/${workspace.id}/settings/ai`}>
+        {t('AI')}
       </LinkButton>
       <span aria-hidden="true">›</span>
       <span>{t('Agents')}</span>
