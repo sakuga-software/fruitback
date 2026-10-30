@@ -325,7 +325,7 @@ export default function KitGallery() {
       <section aria-label="A read that failed" className="flex flex-col gap-3" data-kit="load-failed">
         <LoadFailed
           title="The notes did not load"
-          detail="Fruitback hit an error. Try again in a moment. Your notes are safe."
+          detail="Fruitback hit an error. Your notes are safe."
           retry="Try again"
           onRetry={() => undefined}
         />

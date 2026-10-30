@@ -423,7 +423,7 @@ test('with no source, and with a read that failed, the screen says which of the 
   worker.down = true;
   await open(page);
   await expect(page.getByRole('alert')).toHaveText(
-    'The connectors and their sites did not load. Fruitback hit an error. Try again in a moment.',
+    'The connectors and their sites did not load. Fruitback hit an error.',
   );
   await expect(page.getByText('No tracker yet. The notes stay in Fruitback.')).toHaveCount(0);
   // Nothing to add while the list is not read: the screen does not know how this worker connects

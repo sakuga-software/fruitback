@@ -91,7 +91,7 @@ export function RestPanel({ id, base, connector, sites, manages, onChanged, onRe
         <BlockTitle>{t('Notes that did not arrive')}</BlockTitle>
         {late === undefined ? (
           <p className="text-small text-muted">
-            {t('This list did not load.')} <ReadProblem />
+            {t('This list did not load.')} <ReadProblem alone />
           </p>
         ) : null}
         {late?.length === 0 ? <p className="text-small text-muted">{t('Every note arrived.')}</p> : null}

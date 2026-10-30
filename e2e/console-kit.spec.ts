@@ -259,7 +259,7 @@ test('a read that failed has a title, a sentence and one « Try again », in the
   await openKit(page);
   const failed = page.locator('[data-kit="load-failed"]').getByRole('alert');
   await expect(failed.getByRole('heading', { level: 2, name: 'The notes did not load' })).toBeVisible();
-  await expect(failed.locator('p')).toHaveText('Fruitback hit an error. Try again in a moment. Your notes are safe.');
+  await expect(failed.locator('p')).toHaveText('Fruitback hit an error. Your notes are safe.');
   await expect(failed.getByRole('button')).toHaveText(['Try again']);
   await expectStyle(failed, 'box', {
     paddingTop: '28px',

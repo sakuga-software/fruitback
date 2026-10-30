@@ -17,6 +17,13 @@ export const UNREACHABLE_PROBLEM = msg('Fruitback could not be reached. Check yo
 /** An answer that is an error, a `5xx`: the server answered, so the connection is not the cause. */
 export const SERVER_PROBLEM = msg('Fruitback hit an error. Try again in a moment.');
 
+/**
+ * The same two causes, beside a « Try again » button: the button is the action, so the sentence says
+ * only the cause, and « Try again » is not said twice.
+ */
+export const UNREACHABLE_CAUSE = msg('Fruitback could not be reached. Check your connection.');
+export const SERVER_CAUSE = msg('Fruitback hit an error.');
+
 /** The sentence for a call that got no answer, or an error. Trying again can work in both cases. */
 export function failureOf(failed: { status: number }): string {
   return failed.status === 0 ? UNREACHABLE_PROBLEM : SERVER_PROBLEM;

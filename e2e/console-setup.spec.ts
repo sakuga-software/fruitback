@@ -951,7 +951,7 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
     });
     await page.goto(`${CONSOLE}/setup`);
 
-    await expect(page.getByRole('alert')).toHaveText('Fruitback hit an error. Try again in a moment.');
+    await expect(page.getByRole('alert')).toHaveText('Fruitback hit an error.');
     // The first step is still the one to do, and the second is to come: a screen reader says so.
     await expect(page.getByRole('heading', { name: `${CURRENT}Your account` })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Your site', exact: true })).toBeVisible();
@@ -1002,9 +1002,7 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
     await stubWorker(page, { as: 'named', refuses: { sites: true } });
     await page.goto(`${CONSOLE}/setup`);
 
-    await expect(page.getByRole('alert')).toHaveText(
-      'Fruitback hit an error. Try again in a moment. Your sites are safe.',
-    );
+    await expect(page.getByRole('alert')).toHaveText('Fruitback hit an error. Your sites are safe.');
     await expect(page.getByRole('textbox', { name: 'Site address' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible();
   });
