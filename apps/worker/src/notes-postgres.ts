@@ -115,11 +115,11 @@ export function createPostgresNoteStore(database: Database): NoteStore {
           // `findForPage` answers `String(row.id)`: `01` or `1.0` is no id of a row.
           if (!Number.isSafeInteger(id) || String(id) !== lookup.id) return undefined;
           which = eq(notes.id, id);
-        } else {
-          // The id the widget gave is in `payload`, which is text: the rows whose text holds it, as
-          // `JSON.stringify` writes it, and the parse below says which one is the note. A query on the
-          // JSON would throw for every row on one row that is not JSON.
-          which = sql`strpos(${notes.payload}, ${JSON.stringify(lookup.id).slice(1, -1)}) > 0`;
+        } else if (PLAIN_ID.test(lookup.id)) {
+          // The id the widget gave is in `payload`, which is text: the rows whose text holds it, and
+          // the parse below says which one is the note. A query on the JSON would throw for every row
+          // on one row that is not JSON.
+          which = sql`strpos(${notes.payload}, ${lookup.id}) > 0`;
         }
         const rows = await run((db) =>
           db
@@ -331,6 +331,13 @@ export function createPostgresNoteStore(database: Database): NoteStore {
       ),
   };
 }
+
+/**
+ * An id that every JSON writer writes as it is, never escaped: what the routes take, `[A-Za-z0-9_-]`.
+ * Any other id (from MCP) can be written escaped, `é` as `\u00e9` by a restore or an operator: its
+ * note is found by the parse of every note of the page, as `findForPage` finds it (review of #733).
+ */
+const PLAIN_ID = /^[A-Za-z0-9_-]+$/;
 
 /** The columns of a note that a read hands to `toNoteIssue`. */
 const NOTE_COLUMNS = {

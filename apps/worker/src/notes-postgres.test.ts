@@ -157,6 +157,24 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
       }
     });
 
+    it('finds a note by the id the widget gave, when its row writes that id escaped (review of #733)', async () => {
+      const { database, store } = await opened();
+      await store.create(noteFixtureOf('sd_café', 'site_a'), undefined, POLICY);
+      await store.create(noteFixtureOf('sd_plain', 'site_a'), undefined, POLICY);
+      // As a writer that escapes what is not ASCII writes it: the JSON is the same note.
+      await rowsOf(database, `UPDATE notes SET payload = replace(payload, 'é', '\\u00e9')`);
+      assert.match(
+        String((await rowsOf(database, 'SELECT payload FROM notes ORDER BY id'))[0]?.payload),
+        /sd_caf\\u00e9/,
+      );
+      const lookUp = (id: string) =>
+        store.findNote?.({ url: PAGE, clientId: 'site_a', id, by: 'note' }, undefined, POLICY);
+
+      assert.equal((await lookUp('sd_café'))?.note.id, 'sd_café');
+      assert.equal((await lookUp('sd_plain'))?.note.id, 'sd_plain');
+      assert.equal(await lookUp('sd_cafe'), undefined);
+    });
+
     it('gives a read that names no site the notes that name none, and never the notes of a site', async () => {
       const { store } = await opened();
       await store.create(noteFixtureOf('sd_site', 'site_a'), undefined, POLICY);
