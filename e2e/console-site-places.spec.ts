@@ -69,6 +69,13 @@ type Worker = {
   repositories: { fullName: string; private: boolean }[];
   /** The teams of the Linear source. */
   teams: Team[];
+  /**
+   * FRU-501: the teams that come after the first page, read with `after`, and those only a search
+   * finds. With it, the first answer says `next`.
+   */
+  laterTeams?: Team[];
+  /** The query of each read of the teams. */
+  teamReads: string[];
   /** The read of the sources fails. */
   connectorsFail: boolean;
   /** The places of the one site, as the worker keeps them: a repository is in `teamId`. */
@@ -95,6 +102,7 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
     connectors: [LINEAR, GITHUB, REST],
     repositories: REPOSITORIES,
     teams: TEAMS,
+    teamReads: [],
     connectorsFail: false,
     places: [],
     sent: [],
@@ -150,7 +158,18 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
 
       return json({ error: 'connector-failed' }, 502);
     }
-    if (pathname.endsWith('/c1/teams')) return json({ teams: worker.teams });
+    if (pathname.endsWith('/c1/teams')) {
+      const query = new URL(request.url()).searchParams;
+      worker.teamReads.push(query.toString());
+      const later = worker.laterTeams;
+      if (later === undefined) return json({ teams: worker.teams });
+      const words = query.get('q')?.toLowerCase();
+      if (words !== undefined) {
+        return json({ teams: [...worker.teams, ...later].filter((team) => team.name.toLowerCase().includes(words)) });
+      }
+
+      return json(query.get('after') === 'c-2' ? { teams: later } : { teams: worker.teams, next: 'c-2' });
+    }
     if (pathname.endsWith('/r1/deliveries')) return json({ deliveries: [] });
 
     return undefined;
@@ -659,4 +678,77 @@ test('each place shows the mark of its source, and a place of Linear the colour 
   await expect(rows.nth(3).locator('[data-place-color]')).toHaveCount(0);
   await expect(rows.nth(0).locator('[data-place-color]')).toHaveCSS('background-color', 'rgb(38, 181, 206)');
   await expectNoViolation(page, 'the marks of the places');
+});
+
+test('a Linear of many teams gives them a page at a time, and a search asks it for the others (FRU-501)', async ({
+  page,
+}) => {
+  const worker = await workerWith(page);
+  const team = (index: number, name = `Team ${index}`): Team => ({
+    id: `t${index}`,
+    name,
+    key: `T${index}`,
+    projects: [],
+  });
+  worker.connectors = [LINEAR];
+  worker.teams = Array.from({ length: 3 }, (_, index) => team(index + 1));
+  worker.laterTeams = [team(4), team(5, 'Payments')];
+  await openPlaces(page);
+  await expect(add(page)).toBeEnabled();
+  /** The reads of the teams past the first page. */
+  const more = () => worker.teamReads.filter((query) => query !== '');
+  expect(more()).toEqual([]);
+
+  // The first page, then the option that reads the next one.
+  await add(page).click();
+  await expect(page.getByRole('option')).toHaveText([
+    'Add a destination…',
+    'Team 1 (T1) · no project',
+    'Team 2 (T2) · no project',
+    'Team 3 (T3) · no project',
+    'More teams of Linear · Key of Ana…',
+  ]);
+  await page.getByRole('option', { name: 'More teams of Linear · Key of Ana…', exact: true }).click();
+  await expect.poll(more).toEqual(['after=c-2']);
+  await add(page).click();
+  await expect(page.getByRole('option')).toHaveText([
+    'Add a destination…',
+    'Team 1 (T1) · no project',
+    'Team 2 (T2) · no project',
+    'Team 3 (T3) · no project',
+    'Team 4 (T4) · no project',
+    'Payments (T5) · no project',
+  ]);
+  await page.keyboard.press('Escape');
+
+  // Once every team is read, a search stays in the console: Linear is not asked again.
+  await search(page).fill('pay');
+  await page.waitForTimeout(600);
+  expect(more()).toEqual(['after=c-2']);
+});
+
+test('a search finds a team of Linear that the first page does not hold (FRU-501)', async ({ page }) => {
+  const worker = await workerWith(page);
+  const team = (index: number, name = `Team ${index}`): Team => ({
+    id: `t${index}`,
+    name,
+    key: `T${index}`,
+    projects: [],
+  });
+  worker.connectors = [LINEAR];
+  worker.teams = [team(1), team(2)];
+  worker.laterTeams = [team(5, 'Payments')];
+  await openPlaces(page);
+  await expect(add(page)).toBeEnabled();
+
+  await search(page).fill('pay');
+  // One read, once the person stops typing, with the words.
+  await expect.poll(() => worker.teamReads.filter((query) => query !== '')).toEqual(['q=pay']);
+  await add(page).click();
+  await expect(page.getByRole('option')).toHaveText(['Add a destination…', 'Payments (T5) · no project']);
+  await page.getByRole('option', { name: 'Payments (T5) · no project', exact: true }).click();
+  await expect(project(page, 'Payments')).toBeVisible();
+  await project(page, 'Payments').click();
+  await page.getByRole('option', { name: 'Payments, no project', exact: true }).click();
+  await expect.poll(() => worker.sent).toEqual([[{ connector: 'c1', teamId: 't5' }]]);
 });

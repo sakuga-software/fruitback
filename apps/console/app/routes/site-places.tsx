@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   type Connector,
   type Destination,
@@ -20,9 +20,12 @@ import { useLocale } from '../use-locale';
 import { KINDS, accountOf, hostOf, sourceLine } from './connector-parts';
 import { GITHUB_APP_PAGE } from './connector-github';
 
-/** What a source offers: its teams, its repositories, or nothing to choose for an address. */
+/**
+ * What a source offers: its teams, its repositories, or nothing to choose for an address. A Linear
+ * gives a page of its teams at a time (FRU-501): `next` is where the next page starts, while there is one.
+ */
 type Offer =
-  | { kind: 'linear'; teams: Team[] }
+  | { kind: 'linear'; teams: Team[]; next?: string }
   | { kind: 'github'; repositories: Repository[] }
   | { kind: 'rest' }
   | 'loading'
@@ -75,16 +78,17 @@ export function SitePlaces({
       }
       setOffers((current) => ({ ...current, [source.id]: 'loading' }));
       const path = source.kind === 'linear' ? 'teams' : 'repositories';
-      void call<{ teams?: Team[]; repositories?: Repository[] }>('GET', `${base}/connectors/${source.id}/${path}`).then(
-        (answer) => {
-          if (stale) return;
-          let offer: Offer = 'failed';
-          if (answer.ok && source.kind === 'linear') offer = { kind: 'linear', teams: answer.data.teams ?? [] };
-          if (answer.ok && source.kind === 'github')
-            offer = { kind: 'github', repositories: answer.data.repositories ?? [] };
-          setOffers((current) => ({ ...current, [source.id]: offer }));
-        },
-      );
+      void call<{ teams?: Team[]; next?: string; repositories?: Repository[] }>(
+        'GET',
+        `${base}/connectors/${source.id}/${path}`,
+      ).then((answer) => {
+        if (stale) return;
+        let offer: Offer = 'failed';
+        if (answer.ok && source.kind === 'linear') offer = withTeams({ kind: 'linear', teams: [] }, answer.data);
+        if (answer.ok && source.kind === 'github')
+          offer = { kind: 'github', repositories: answer.data.repositories ?? [] };
+        setOffers((current) => ({ ...current, [source.id]: offer }));
+      });
     }
 
     return () => {
@@ -93,6 +97,44 @@ export function SitePlaces({
     // The sources are a new array at each render: the ids are what the reads depend on.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [base, ids, reads]);
+
+  /** Asks a Linear for more of its teams (FRU-501), and adds those it did not give yet. */
+  function readTeams(source: string, query: string, keepsNext: boolean) {
+    void call<{ teams?: Team[]; next?: string }>('GET', `${base}/connectors/${source}/teams?${query}`).then(
+      (answer) => {
+        if (!answer.ok) return;
+        setOffers((current) => {
+          const offer = current[source];
+          if (typeof offer !== 'object' || offer.kind !== 'linear') return current;
+          // A page moves `next` on; a search leaves it where the pages are.
+          const next = keepsNext ? answer.data.next : offer.next;
+
+          return { ...current, [source]: withTeams(offer, { teams: answer.data.teams ?? [], next }) };
+        });
+      },
+    );
+  }
+
+  // A search asks each Linear that has not given every team yet for the teams that hold it (FRU-501),
+  // once the person stops typing.
+  const searching = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  /** What is typed in the search: the next page of the teams is offered while it is empty. */
+  const [searched, setSearched] = useState('');
+  useEffect(() => () => clearTimeout(searching.current), []);
+  function searchTeams(search: string) {
+    clearTimeout(searching.current);
+    const wanted = search.trim();
+    setSearched(wanted);
+    if (wanted === '') return;
+    searching.current = setTimeout(() => {
+      for (const source of sources) {
+        const offer = offers[source.id];
+        if (typeof offer === 'object' && offer.kind === 'linear' && offer.next !== undefined) {
+          readTeams(source.id, new URLSearchParams({ q: wanted }).toString(), false);
+        }
+      }
+    }, SEARCH_PAUSE_MS);
+  }
 
   const places = placesOf(site);
 
@@ -227,6 +269,19 @@ export function SitePlaces({
       options: group.options.filter((option) => option.value.startsWith(TEAM) || free(option.value)),
     }))
     .filter((group) => group.options.length > 0);
+  // The teams each Linear did not give yet: its next page, on demand (FRU-501), after every option.
+  const moreTeams = sources.flatMap((source) => {
+    const offer = offers[source.id];
+
+    return typeof offer === 'object' && offer.kind === 'linear' && offer.next !== undefined
+      ? [
+          {
+            value: `${MORE_TEAMS}${source.id}`,
+            label: t('More teams of {source}…', { source: `${t(KINDS[source.kind].name)} · ${sourceLine(source)}` }),
+          },
+        ]
+      : [];
+  });
   const chosenOffer = chosen === undefined ? undefined : offers[chosen.source];
   const chosenTeam =
     typeof chosenOffer === 'object' && chosenOffer.kind === 'linear'
@@ -320,12 +375,23 @@ export function SitePlaces({
             label={t('Add a destination for {site}', { site: host })}
             searchLabel={t('Search the destinations')}
             placeholder={reading && offered.length === 0 ? t('Loading…') : t('Add a destination…')}
-            disabled={writing || offered.length === 0}
+            disabled={writing || (offered.length === 0 && moreTeams.length === 0)}
             groups={offered}
+            tail={searched === '' ? moreTeams : []}
             clearLabel={t('Clear the search')}
             noMatch={t('No destination matches this search.')}
             moreLabel={(more, left) => t('Show {more} more ({left} left)', { more, left })}
+            onSearch={searchTeams}
             onChoose={(value) => {
+              if (value.startsWith(MORE_TEAMS)) {
+                const source = value.slice(MORE_TEAMS.length);
+                const offer = offers[source];
+                if (typeof offer === 'object' && offer.kind === 'linear' && offer.next !== undefined) {
+                  readTeams(source, new URLSearchParams({ after: offer.next }).toString(), true);
+                }
+
+                return;
+              }
               if (value.startsWith(TEAM)) {
                 const [source = '', team = ''] = value.slice(TEAM.length).split('|');
                 setChosen({ source, team });
@@ -413,6 +479,23 @@ export function SitePlaces({
 
 /** The value of a team in the first list: it opens the list of its projects, and adds nothing. */
 const TEAM = 'team:';
+
+/** The value of the last option of a Linear that has more teams: it reads them, and adds nothing. */
+const MORE_TEAMS = 'more-teams:';
+
+/** How long a search waits for the person to stop typing before it asks Linear. */
+const SEARCH_PAUSE_MS = 300;
+
+/** The offer of a Linear with these teams added, each once, and the `next` of what was read. */
+function withTeams(
+  offer: { kind: 'linear'; teams: Team[] },
+  read: { teams?: Team[]; next?: string | undefined },
+): { kind: 'linear'; teams: Team[]; next?: string } {
+  const known = new Set(offer.teams.map((team) => team.id));
+  const teams = [...offer.teams, ...(read.teams ?? []).filter((team) => !known.has(team.id))];
+
+  return read.next === undefined ? { kind: 'linear', teams } : { kind: 'linear', teams, next: read.next };
+}
 
 /** The places a team offers: the team itself, and each of its projects. */
 function placesOfTeam(source: string, team: Team): string[] {

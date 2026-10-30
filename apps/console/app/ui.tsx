@@ -1415,6 +1415,16 @@ type SearchChoiceProps = {
   disabled?: boolean;
   /** How many options the list shows, and how many more « Show more » adds. */
   page?: number;
+  /**
+   * What is typed, each time it changes (FRU-501): a list whose options are not all read yet asks
+   * the server for those that hold it, and gives them in `groups`.
+   */
+  onSearch?: (search: string) => void;
+  /**
+   * Options offered after all the others, never searched and never paged (FRU-501): a read of more
+   * options from the server, which a « Show more » of this list would otherwise hide.
+   */
+  tail?: readonly Option[];
 };
 
 /**
@@ -1438,6 +1448,8 @@ export function SearchChoice({
   moreLabel,
   disabled = false,
   page = 50,
+  onSearch,
+  tail = [],
 }: SearchChoiceProps) {
   const [search, setSearch] = useState('');
   const [limit, setLimit] = useState(page);
@@ -1447,8 +1459,10 @@ export function SearchChoice({
   const type = (value: string) => {
     setSearch(value);
     setLimit(page);
+    onSearch?.(value);
   };
-  const empty = { value: placeholder, label: found.length === 0 ? noMatch : placeholder };
+  const nothing = found.length === 0 && tail.length === 0;
+  const empty = { value: placeholder, label: nothing ? noMatch : placeholder };
 
   return (
     <div className="kit-search-choice">
@@ -1484,7 +1498,7 @@ export function SearchChoice({
         label={label}
         labelHidden
         value={empty.value}
-        disabled={disabled || found.length === 0}
+        disabled={disabled || nothing}
         onChange={(value) => {
           if (value === MORE) setLimit((current) => current + page);
           else if (value !== empty.value) onChoose(value);
@@ -1493,6 +1507,7 @@ export function SearchChoice({
           empty,
           ...shown.groups,
           ...(shown.left === 0 ? [] : [{ value: MORE, label: moreLabel(Math.min(page, shown.left), shown.left) }]),
+          ...tail,
         ]}
       />
     </div>

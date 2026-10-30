@@ -52,7 +52,16 @@ import { noteConnectorCall } from './connector-health.ts';
 import { type GithubApp, openInstallation, readGithubRepository } from './github-connector.ts';
 import { GITHUB_STATES } from './github.ts';
 import { githubAppTicket } from './github-app-flow.ts';
-import { LinearKeyForbidden, LinearKeyRefused, listLinearStates, listLinearTeams } from './linear.ts';
+import {
+  LinearKeyForbidden,
+  LinearKeyRefused,
+  MAX_TEAM_SEARCH,
+  listLinearStates,
+  listLinearTeams,
+  readLinearPlaces,
+  readLinearTeams,
+  readLinearViewer,
+} from './linear.ts';
 import { rememberTrackerStates } from './tracker-states.ts';
 import { isAcceptableSecret, newSecret, parseTargetUrl, sealTarget, targetLabel } from './rest-connector.ts';
 import type { Kv } from './kv.ts';
@@ -357,8 +366,9 @@ async function listRepositories(
  * The destinations with the label a member reads when they choose one (FRU-123): « Linear · Design ».
  *
  * The worker writes the label from what the tracker answers, never from the request: a member
- * chooses by this word, so it must name the place the note goes to. A tracker is asked once for a
- * connector, and what it answers is noted on the connector. It throws `UnknownPlace` for a team or a
+ * chooses by this word, so it must name the place the note goes to. Linear is asked once for a
+ * connector, for the teams and the projects of its places only, and never for the list of its teams
+ * (FRU-501); what it answers is noted on the connector. It throws `UnknownPlace` for a team or a
  * project the key does not reach.
  */
 async function labelled(
@@ -367,7 +377,7 @@ async function labelled(
   wanted: readonly Destination[],
 ): Promise<Destination[]> {
   const connectors = await context.accounts.connectors(workspaceId);
-  const teamsOf = new Map<string, Awaited<ReturnType<typeof listLinearTeams>>['teams']>();
+  const linear = await linearNamesOf(context, connectors, wanted);
   const out: Destination[] = [];
 
   for (const destination of wanted) {
@@ -391,27 +401,53 @@ async function labelled(
       continue;
     }
 
-    let teams = teamsOf.get(connector.id);
-    if (teams === undefined) {
-      const kept = await context.accounts.sealedKey(connector.id);
-      if (kept === undefined) throw new UnknownPlace();
-      teams = (await askLinear(context, connector.id, kept.sealed, listLinearTeams)).teams;
-      teamsOf.set(connector.id, teams);
-    }
-    const team = teams.find((each) => each.id === destination.teamId);
-    const project =
-      destination.projectId === undefined
-        ? undefined
-        : team?.projects.find((each) => each.id === destination.projectId);
-    if (team === undefined || (destination.projectId !== undefined && project === undefined)) throw new UnknownPlace();
+    const named = linear.get(destination);
+    if (named === undefined) throw new UnknownPlace();
 
     out.push({
       ...destination,
-      label: [KIND_NAMES[connector.kind], team.name, ...(project === undefined ? [] : [project.name])].join(' · '),
+      label: [KIND_NAMES[connector.kind], named.team, ...(named.project === undefined ? [] : [named.project])].join(
+        ' · ',
+      ),
     });
   }
 
   return out;
+}
+
+/**
+ * The names of the places of Linear among `wanted` (FRU-501): one call for each connector, with the
+ * ids of its places. A place the key does not reach has no entry.
+ */
+async function linearNamesOf(
+  context: TrackerContext,
+  connectors: readonly { id: string; kind: ConnectorKind }[],
+  wanted: readonly Destination[],
+): Promise<Map<Destination, { team: string; project?: string }>> {
+  const names = new Map<Destination, { team: string; project?: string }>();
+  for (const connector of connectors) {
+    if (connector.kind !== 'linear') continue;
+    const places = wanted.flatMap((destination) =>
+      destination.connector === connector.id && destination.teamId !== undefined
+        ? [{ destination, place: { teamId: destination.teamId, projectId: destination.projectId } }]
+        : [],
+    );
+    if (places.length === 0) continue;
+    const kept = await context.accounts.sealedKey(connector.id);
+    if (kept === undefined) continue;
+    const read = await askLinear(context, connector.id, kept.sealed, (authorization) =>
+      readLinearPlaces(
+        authorization,
+        places.map(({ place }) => place),
+      ),
+    );
+    for (const [index, { destination }] of places.entries()) {
+      const named = read[index];
+      if (named !== undefined) names.set(destination, named);
+    }
+  }
+
+  return names;
 }
 
 /**
@@ -1146,7 +1182,7 @@ export async function handleConsoleApi(
     // Asked before anything is kept: a key the tracker refuses is never stored.
     let viewer: string;
     try {
-      viewer = (await listLinearTeams(apiKey)).viewer;
+      viewer = (await readLinearViewer(apiKey)).viewer;
     } catch (error) {
       // Only a refusal of the key is the person's to fix. A Linear that is down answers `502`, and
       // the key is not kept either way.
@@ -1306,7 +1342,8 @@ export async function handleConsoleApi(
       return removed ? new Response(null, { status: 204, headers }) : json(404, { error: 'not-found' }, headers);
     }
 
-    // The teams the key reaches, for the person who chooses a destination.
+    // The teams the key reaches, for the person who chooses a destination: a page of them, and the
+    // ones whose name holds `q` (FRU-501). `after` is the `next` of the page before.
     if (request.method !== 'GET') return json(405, { error: 'method-not-allowed' }, headers);
     if (!allowed('manage-sites')) return forbidden();
     if (context.secretsKey === undefined) return json(404, CONNECTORS_UNAVAILABLE, headers);
@@ -1317,9 +1354,20 @@ export async function handleConsoleApi(
     if (kept.kind !== 'linear') return json(404, { error: 'not-found' }, headers);
     // This read is a call to the tracker like a note is, so what Linear answers is noted too
     // (FRU-102): somebody who opens the panel of a connector that Linear refuses sees it at once.
-    const { teams } = await askLinear(context, id, kept.sealed, listLinearTeams);
+    const asked = new URL(request.url).searchParams;
+    const search = asked.get('q')?.trim() ?? '';
+    const after = asked.get('after') ?? undefined;
+    if (search.length > MAX_TEAM_SEARCH || (after !== undefined && (after === '' || after.length > 200))) {
+      return json(400, { error: 'invalid-query' }, headers);
+    }
+    const page = await askLinear(context, id, kept.sealed, (authorization) =>
+      readLinearTeams(authorization, {
+        ...(search === '' ? {} : { search }),
+        ...(after === undefined ? {} : { after }),
+      }),
+    );
 
-    return json(200, { teams }, headers);
+    return json(200, page, headers);
   }
 
   if (rest === '/connect') {

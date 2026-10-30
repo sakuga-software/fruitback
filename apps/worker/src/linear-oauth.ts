@@ -11,7 +11,7 @@ import {
   spendTicket,
   stateCookie as cookieOf,
 } from './oauth-flow.ts';
-import { listLinearTeams } from './linear.ts';
+import { readLinearViewer } from './linear.ts';
 import { open, seal } from './secrets.ts';
 import { StoreError } from './store.ts';
 
@@ -325,8 +325,8 @@ async function callback(request: Request, context: LinearOAuthContext): Promise<
   if (answer?.tokens === undefined) return back(context, workspace, 'failed');
 
   const credential = { via: 'oauth', ...answer.tokens } as const;
-  // Asked before anything is kept, like a key: a token that reads no team is never stored.
-  const named = await listLinearTeams(authorizationOf(credential)).catch(() => undefined);
+  // Asked before anything is kept, like a key: a token that Linear refuses is never stored.
+  const named = await readLinearViewer(authorizationOf(credential)).catch(() => undefined);
   if (named === undefined) return back(context, workspace, 'failed');
 
   await context.accounts.addConnector(workspace, {
