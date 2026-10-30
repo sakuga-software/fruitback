@@ -9,10 +9,10 @@ import { MANIFEST_COMMANDS } from './shortcut.ts';
  * the name, the description and the shortcut were in English only.
  */
 type Messages = Record<string, { message: string; description?: string }>;
-const read = (language: string): Messages =>
-  JSON.parse(readFileSync(new URL(`../public/_locales/${language}/messages.json`, import.meta.url), 'utf8'));
-const english = read('en');
-const french = read('fr');
+const read = (file: URL): Messages => JSON.parse(readFileSync(file, 'utf8'));
+// Two literal paths, which `test-inputs.test.ts` resolves: a path built from the language would not be.
+const english = read(new URL('../public/_locales/en/messages.json', import.meta.url));
+const french = read(new URL('../public/_locales/fr/messages.json', import.meta.url));
 
 /** Each `__MSG_name__` the manifest uses. */
 function used(): string[] {
