@@ -1,3 +1,4 @@
+import { json } from './http.ts';
 import type { NoteIssue, NoteReporter } from '@fruitback/shared';
 import { type IdentityResult, readBearerToken, stripClaimedVerification, verifyIdentityToken } from './identity.ts';
 import {
@@ -928,11 +929,4 @@ async function chosenPlace(
   }
 
   return placedAt(route.client, place);
-}
-
-function json(status: number, body: unknown, headers: Record<string, string> = {}): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...headers },
-  });
 }

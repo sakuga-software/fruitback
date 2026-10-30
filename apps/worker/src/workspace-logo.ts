@@ -1,3 +1,4 @@
+import { json } from './http.ts';
 import type { AccountStore } from './accounts.ts';
 import { readBoundedBytes } from './bounded-body.ts';
 
@@ -206,11 +207,4 @@ export async function handleLogo(request: Request, seams: LogoSeams): Promise<Re
   await accounts.setLogo(workspace, { type: checked.type, content: body, updatedAt: seams.now });
 
   return json(200, { logo: seams.addressAt(seams.now) }, headers);
-}
-
-function json(status: number, body: unknown, headers: Record<string, string>): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...headers },
-  });
 }

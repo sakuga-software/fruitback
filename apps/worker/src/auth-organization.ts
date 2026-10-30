@@ -1,3 +1,4 @@
+import { json } from './http.ts';
 import { type AccountStore, type SharedSite, type Workspace, can, mailboxOf } from './accounts.ts';
 import { newId, roleOf } from './account-rows.ts';
 import { AUTH_BASE_PATH, type Auth, INVITATION_SECONDS, INVITER_GONE } from './auth.ts';
@@ -10,7 +11,7 @@ import {
   mutationAllowed,
   sessionOfCookie,
 } from './auth-routes.ts';
-import { MAX_BODY_BYTES, readBoundedText } from './bounded-body.ts';
+import { MAX_BODY_BYTES, parseJsonObject, readBoundedText } from './bounded-body.ts';
 import {
   ORGANIZATION_PATHS,
   type OrganizationRule,
@@ -320,13 +321,6 @@ export const GUEST_WITHOUT_SITE = 'GUEST_INVITATION_NAMES_NO_SITE';
 
 const PREFIX = `${AUTH_BASE_PATH}/organization/`;
 
-function json(status: number, body: unknown, headers: Record<string, string>): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...headers },
-  });
-}
-
 /**
  * What the caller sent: the query of a `GET`, the body of a `POST`. `undefined`: not an object.
  * `'too-large'`: a body over the cap of the worker, which is not read to its end.
@@ -350,15 +344,7 @@ async function sentBy(
 
   const text = await readBoundedText(request);
   if (text === null) return 'too-large';
-  try {
-    const parsed: unknown = JSON.parse(text);
-
-    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : undefined;
-  } catch {
-    return undefined;
-  }
+  return parseJsonObject(text);
 }
 
 /**
