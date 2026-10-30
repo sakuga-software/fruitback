@@ -607,6 +607,11 @@ holds `http://127.0.0.1/*`; a page of `http://127.0.0.1` with no rule, the panel
 - **A row says the status of its note, in its colour** (FRU-370): the name of the status, then the word
   of the store, then the word of the stage, and the drop in the colour the team chose. « Open » and
   « Done » stay by stage. See [statuses.md](statuses.md), « What the widget draws ».
+- **A note holds one line in a list, cut with « … »** (FRU-534): a closed row of « Open » and
+  « Done », « Ready to check », the rows of « Search and options » on the page and on the whole
+  site, and the detached notes. An open row shows the whole note. The sheet cuts it, never the
+  code: the text stays whole in the DOM, so the name of the button of the row and the specs read
+  all of it, and `title` gives it to a pointer.
 - **A reply is 2,000 characters at most**, the length the worker takes: the field takes no more.
 - **The panel does not poll.** `notes` answers the notes, or why there are none: a read not answered
   (the panel waits for `notes-changed`), a read that failed (« Try again » asks the widget to read
