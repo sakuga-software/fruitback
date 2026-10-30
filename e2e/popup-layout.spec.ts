@@ -134,7 +134,7 @@ for (const language of ['en', 'fr'] as const) {
     await expectLaidOut(offered, 'site of the workspace', 2);
 
     // 5. The site turned on (FRU-298): the gear, the switch, « Show Fruitback on this page » (FRU-444),
-    // « Leave feedback » and « Show all notes in a sidebar »; the head names the person of the pairing. The worker of this spec says nothing of
+    // « Leave feedback » and the icon of the side panel beside it (FRU-529); the head names the person of the pairing. The worker of this spec says nothing of
     // the notes of the site, so no line of what waits.
     await turnOn.click();
     await expect(offered.getByRole('switch', { name: SITE_SWITCH })).toBeChecked();
@@ -170,9 +170,11 @@ for (const language of ['en', 'fr'] as const) {
         font: '16px 650',
         fill: ACCENT[colorScheme],
       });
-      expect.soft(kit.secondary, `${where}: the second button`).toMatchObject({
-        height: 44,
-        radius: '10px',
+      // « Show all notes in a sidebar » (FRU-529): a square of one icon, as high as « Leave feedback ».
+      expect.soft(kit.secondary, `${where}: the button of the side panel`).toMatchObject({
+        height: 56,
+        width: 56,
+        radius: '12px',
         font: '14px 600',
         edge: CONTROL_EDGE[colorScheme],
       });
@@ -322,6 +324,7 @@ function readKit(popup: Page) {
       },
       secondary: {
         height: secondary.box.height,
+        width: secondary.box.width,
         radius: secondary.style.borderRadius,
         font: `${secondary.style.fontSize} ${secondary.style.fontWeight}`,
         edge: secondary.style.borderTopColor,

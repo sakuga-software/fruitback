@@ -151,21 +151,31 @@ test('2 then 3: a site of the workspace turns on in one click, then the switch, 
   );
   expectNear(
     await boxOf(popup.getByRole('button', { name: 'Leave feedback' })),
-    { x: 24, width: 332, height: 56 },
+    { x: 24, width: 268, height: 56 },
     'leave',
   );
+  // FRU-529: the side panel beside « Leave feedback », a square of 56 at the right of the column.
   expectNear(
     await boxOf(popup.getByRole('button', { name: 'Show all notes in a sidebar' })),
-    { x: 24, width: 332, height: 44 },
+    { x: 300, width: 56, height: 56 },
     'sidebar',
   );
+  {
+    const leave = await boxOf(popup.getByRole('button', { name: 'Leave feedback' }));
+    const sidebar = await boxOf(popup.getByRole('button', { name: 'Show all notes in a sidebar' }));
+    expect(sidebar.y, 'the side panel is on the line of « Leave feedback »').toBe(leave.y);
+    await expect(popup.getByRole('button', { name: 'Show all notes in a sidebar' })).toHaveAttribute(
+      'title',
+      'Show all notes in a sidebar',
+    );
+  }
   // The keys of « Leave feedback », as the browser has them (FRU-291).
   await expect(popup.locator('.shortcut-line')).toHaveText(/^or press .+ on the page$/);
   expect(await popup.locator('.shortcut-line kbd').count()).toBeGreaterThanOrEqual(2);
   // A session of a pairing keeps its row.
   await expect(popup.getByText(`Paired as ${NAME}`)).toBeVisible();
-  // The keyboard: the gear, the switch, « Show Fruitback on this page » (FRU-444), « Leave feedback »,
-  // the line, then the side panel.
+  // The keyboard: the gear, the switch, « Show Fruitback on this page » (FRU-444), the line of what
+  // waits, then « Leave feedback » and the side panel at the bottom (FRU-529).
   await popup.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
   const stops: string[] = [];
   for (let index = 0; index < 6; index += 1) {
@@ -183,8 +193,8 @@ test('2 then 3: a site of the workspace turns on in one click, then the switch, 
   expect(stops[0]).toBe('Account and settings');
   expect(stops[1]).toBe('Fruitback on localhost:5177');
   expect(stops[2]).toBe('Show Fruitback on this page');
-  expect(stops[3]).toBe('Leave feedback');
-  expect(stops[4]).toMatch(/open notes?$/);
+  expect(stops[3]).toMatch(/open notes?$/);
+  expect(stops[4]).toBe('Leave feedback');
   expect(stops[5]).toBe('Show all notes in a sidebar');
   expect(await popup.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(380);
   await clean(popup, 'the popup on a site that is on');
