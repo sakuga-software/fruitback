@@ -502,6 +502,16 @@ textarea {
   min-width: 0;
 }
 
+/*
+ * The block around the input of a `Field`. A password manager puts its icon element next to the
+ * input, in this block, so the element takes no place in the gap of `.kit-field` (FRU-540). Each
+ * rule of the input selects `.kit-field .input`, as a descendant, so the input keeps its styles.
+ */
+.kit-field__control {
+  display: block;
+  min-width: 0;
+}
+
 .kit-field .label {
   color: var(--color-ink);
   font-size: var(--text-label);

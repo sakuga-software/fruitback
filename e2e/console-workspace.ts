@@ -147,6 +147,28 @@ export function styles(locator: Locator, names: readonly string[]): Promise<Reco
   }, names);
 }
 
+/**
+ * What a field tells the fill of the browser and the password managers (FRU-540). A field that asks
+ * for the address of another person reads `NO_PASSWORD_MANAGER`: LastPass draws nothing in it.
+ */
+export function fillMarks(field: Locator): Promise<Record<string, string | null>> {
+  return field.evaluate((element) =>
+    Object.fromEntries(
+      ['autocomplete', 'data-lpignore', 'data-1p-ignore', 'data-bwignore'].map((name) => [
+        name,
+        element.getAttribute(name),
+      ]),
+    ),
+  );
+}
+
+export const NO_PASSWORD_MANAGER = {
+  autocomplete: 'off',
+  'data-lpignore': 'true',
+  'data-1p-ignore': 'true',
+  'data-bwignore': 'true',
+};
+
 export type Box = { x: number; y: number; width: number; height: number };
 
 export async function box(locator: Locator): Promise<Box> {

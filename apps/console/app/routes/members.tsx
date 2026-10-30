@@ -376,7 +376,7 @@ export default function Members() {
             <Field
               label={t('Email')}
               type="email"
-              autoComplete="off"
+              someoneElse
               placeholder="name@company.com"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
@@ -441,6 +441,7 @@ export default function Members() {
                 labelHidden
                 compact
                 type="search"
+                someoneElse
                 placeholder={t('Search by name or address')}
                 maxLength={SEARCH_MOST}
                 value={typed}
