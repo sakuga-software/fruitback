@@ -1331,6 +1331,49 @@ textarea {
   margin-bottom: 6px;
 }
 
+/*
+  The pages of one screen (`SubNav`, FRU-544): links on a rule, the page on screen in ink and
+  underlined by 2 px of ink over the rule. A link is 44 px high, the target of a finger. The row
+  scrolls in its frame on a narrow screen, so the focus ring is drawn inside a link.
+*/
+.kit-subnav {
+  margin: -12px 0 28px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.kit-subnav ul {
+  display: flex;
+  gap: 24px;
+  min-width: max-content;
+  border-bottom: 1px solid var(--color-line);
+}
+
+.kit-subnav a {
+  display: inline-flex;
+  align-items: center;
+  height: var(--spacing-control);
+  margin-bottom: -1px;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  font-size: var(--text-small);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.kit-subnav a:hover {
+  color: var(--color-ink);
+}
+
+.kit-subnav a[aria-current='page'] {
+  border-bottom-color: var(--color-ink);
+  color: var(--color-ink);
+}
+
+.kit-subnav a:focus-visible {
+  outline-offset: -2px;
+}
+
 /* A page outside a workspace: a header with the logo, and one column. */
 .kit-entry {
   display: flex;

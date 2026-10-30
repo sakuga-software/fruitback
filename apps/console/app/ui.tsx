@@ -1021,6 +1021,34 @@ export function PageHead({
   );
 }
 
+/**
+ * The pages of one screen, as a row of links under its head (FRU-544): the settings of a workspace
+ * and their page « AI ». The page on screen has `aria-current="page"` and is underlined. The row
+ * scrolls in its frame on a narrow screen, and the page does not.
+ */
+export function SubNav({
+  label,
+  entries,
+}: {
+  /** What the row of links is, for a screen reader: « Workspace settings ». */
+  label: string;
+  entries: readonly { to: string; label: string; current: boolean }[];
+}) {
+  return (
+    <nav aria-label={label} className="kit-subnav">
+      <ul>
+        {entries.map((entry) => (
+          <li key={entry.to}>
+            <Link to={entry.to} {...(entry.current ? { 'aria-current': 'page' as const } : {})}>
+              {entry.label}
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  );
+}
+
 /** The site of the product: where the logo of a page outside a workspace leads. */
 const SITE = 'https://fruitback.com';
 
