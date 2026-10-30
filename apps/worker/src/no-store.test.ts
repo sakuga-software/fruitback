@@ -53,4 +53,33 @@ describe('the JSON answers of the worker (FRU-506)', () => {
     });
     assert.deepEqual(found, []);
   });
+
+  /**
+   * An answer of another shape: a JSON type set on `new Headers(`, on `new Response(` or on
+   * `writeHead(` of `node:http`. Each says `no-store` in the same statement (review of #714).
+   * The other `application/json` of the sources are requests that the worker sends: to Linear,
+   * GitHub, a REST connector, the mail API, better-auth, and the command `plant-a-pin`.
+   */
+  it('say no-store wherever an answer gets a JSON type another way', () => {
+    const dir = new URL('.', import.meta.url);
+    const sources = readdirSync(dir, { recursive: true })
+      .map(String)
+      .filter((name) => name.endsWith('.ts') && !/\.(test|fixture)\.ts$/.test(name) && name !== 'linear-stub.ts');
+    const answer = /(?:new Headers|new Response|\.writeHead)\([^;]*?'application\/json'[^;]*;/g;
+    // The control: the pattern finds the answer of `http.ts` and the 500 of `server.ts`.
+    const statements = sources.flatMap((name) =>
+      [...readFileSync(new URL(name, dir), 'utf8').matchAll(answer)].map((match) => ({ name, text: match[0] })),
+    );
+    for (const name of ['http.ts', 'server.ts', 'auth-routes.ts'])
+      assert.ok(
+        statements.some((each) => each.name === name),
+        `the pattern finds nothing in ${name}`,
+      );
+
+    const without = statements.filter((each) => !each.text.includes("'Cache-Control': 'no-store'"));
+    assert.deepEqual(
+      without.map((each) => each.name),
+      [],
+    );
+  });
 });
