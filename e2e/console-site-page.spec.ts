@@ -68,6 +68,35 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
 }
 
 const crumbs = (page: Page) => page.getByRole('navigation', { name: 'Breadcrumb' });
+/** « Advanced », the sections that the page keeps folded (FRU-538). */
+const advanced = (page: Page) => page.locator('details#advanced');
+
+/**
+ * What Chromium tells a screen reader of the line of « Advanced »: its role, and whether it is
+ * expanded. Playwright gives a `<summary>` no role, so the tree of the browser is read.
+ */
+async function announced(page: Page): Promise<{ role?: string; name?: string; expanded?: boolean }> {
+  const cdp = await page.context().newCDPSession(page);
+  const { nodes } = (await cdp.send('Accessibility.getFullAXTree')) as {
+    nodes: {
+      ignored: boolean;
+      role?: { value: string };
+      name?: { value: string };
+      properties?: { name: string; value: { value: unknown } }[];
+    }[];
+  };
+  await cdp.detach();
+  const node = nodes.find(
+    (each) => !each.ignored && each.role?.value !== 'StaticText' && each.name?.value.startsWith('Advanced') === true,
+  );
+  const expanded = node?.properties?.find((property) => property.name === 'expanded')?.value.value;
+
+  return {
+    ...(node?.role === undefined ? {} : { role: node.role.value }),
+    ...(node?.name === undefined ? {} : { name: node.name.value }),
+    ...(typeof expanded === 'boolean' ? { expanded } : {}),
+  };
+}
 
 async function expectNoViolation(page: Page, name: string): Promise<void> {
   const results = await new AxeBuilder({ page }).include('main').analyze();
@@ -89,18 +118,21 @@ test('an owner reads everything of a site on its page, under the crumbs « Sites
   await expect(page.getByRole('link', { name: 'See its 12 notes' })).toHaveAttribute('href', '/w/w1/notes?site=s1');
   await expect(crumbs(page).getByRole('link', { name: 'Sites' })).toHaveAttribute('href', '/w/w1/sites');
 
-  // Its sections, in this order: nothing is unfolded under a card any more.
-  await expect(page.locator('main h2')).toHaveText([
+  // Its sections, in this order: nothing is unfolded under a card any more. « Advanced » folds the
+  // statuses, the agent and the previews (FRU-538): the page shows first who sees, the install and
+  // where the notes go.
+  await expect(page.locator('main h2:visible')).toHaveText([
     'Site',
     'Install',
     'Script',
     'Extension',
     'Where the notes of staging.acme.dev go',
-    'Statuses',
-    'Start an agent',
-    'Preview deploys',
     'Remove this site',
   ]);
+  await expect(advanced(page).locator('summary')).toHaveText('AdvancedStatuses, starting an agent, preview deploys');
+  await expect(advanced(page)).not.toHaveAttribute('open');
+  await expect(page.getByRole('region', { name: 'Preview deploys' })).toBeHidden();
+  await expect(page.getByRole('link', { name: 'Edit the statuses' })).toBeHidden();
 
   // Its address, who sees its notes and who writes them. « Change » opens them (FRU-504).
   const about = page.getByRole('region', { name: 'Site', exact: true });
@@ -119,8 +151,32 @@ test('an owner reads everything of a site on its page, under the crumbs « Sites
   const places = page.getByRole('region', { name: 'Where the notes of staging.acme.dev go' });
   await expect(places.getByText('Linear · Web', { exact: true })).toBeVisible();
   await expect(places.getByRole('button', { name: /Add a destination for staging\.acme\.dev/ })).toBeEnabled();
+  await expectNoViolation(page, 'the page of a site, « Advanced » folded');
+
+  // « Advanced » opens with a keyboard, and a screen reader hears it collapsed, then expanded.
+  expect(await announced(page)).toMatchObject({ role: 'DisclosureTriangle', expanded: false });
+  await advanced(page).locator('summary').focus();
+  await page.keyboard.press('Enter');
+  await expect(advanced(page)).toHaveAttribute('open');
+  expect(await announced(page)).toMatchObject({ role: 'DisclosureTriangle', expanded: true });
+  await expect(page.locator('main h2:visible')).toHaveText([
+    'Site',
+    'Install',
+    'Script',
+    'Extension',
+    'Where the notes of staging.acme.dev go',
+    'Statuses',
+    'Start an agent',
+    'Preview deploys',
+    'Remove this site',
+  ]);
   await expect(page.getByRole('region', { name: 'Preview deploys' })).toBeVisible();
-  await expectNoViolation(page, 'the page of a site');
+  await expectNoViolation(page, 'the page of a site, « Advanced » open');
+  // Space folds it again.
+  await page.keyboard.press('Space');
+  await expect(advanced(page)).not.toHaveAttribute('open');
+  await page.keyboard.press('Space');
+  await expect(advanced(page)).toHaveAttribute('open');
 
   // « Edit the statuses » leads to the page of the statuses (FRU-371).
   await page.getByRole('link', { name: 'Edit the statuses' }).click();
@@ -223,11 +279,32 @@ test('a site that everyone reads takes a note from anybody, and says so', async 
 test('a hash of the address goes to its section, and #remove asks the second time', async ({ page }) => {
   const worker = await workerWith(page);
   await page.setViewportSize({ width: 1440, height: 600 });
-  await page.goto(`${CONSOLE}/w/w1/sites/s1#previews`);
-  await expect(page.getByRole('region', { name: 'Preview deploys' })).toBeInViewport();
-
+  // A section outside « Advanced » leaves it folded (FRU-538).
   await page.goto(`${CONSOLE}/w/w1/sites/s1#remove`);
   const group = page.getByRole('group', { name: 'Remove staging.acme.dev' });
+  await expect(group).toBeInViewport();
+  await expect(advanced(page)).not.toHaveAttribute('open');
+
+  // A section folded under it opens it, on the page already drawn as on a page loaded.
+  await page.goto(`${CONSOLE}/w/w1/sites/s1#previews`);
+  await expect(page.getByRole('region', { name: 'Preview deploys' })).toBeInViewport();
+  await expect(advanced(page)).toHaveAttribute('open');
+  await page.goto(`${CONSOLE}/w/w1/sites`);
+  await page.goto(`${CONSOLE}/w/w1/sites/s1#statuses`);
+  await expect(page.getByRole('region', { name: 'Statuses' })).toBeInViewport();
+  await expect(advanced(page)).toHaveAttribute('open');
+  // Folded by hand, a navigation to the hash already in the address opens it again (review of #737):
+  // a link of the router to `#statuses` is a new location with the same hash.
+  await advanced(page).locator('summary').click();
+  await expect(advanced(page)).not.toHaveAttribute('open');
+  await page.evaluate(() => {
+    history.pushState({ key: 'again', idx: history.length }, '', location.href);
+    dispatchEvent(new PopStateEvent('popstate', { state: history.state }));
+  });
+  await expect(advanced(page)).toHaveAttribute('open');
+  await expect(page.getByRole('region', { name: 'Statuses' })).toBeInViewport();
+
+  await page.goto(`${CONSOLE}/w/w1/sites/s1#remove`);
   await expect(group).toBeInViewport();
   expect(worker.deleted).toEqual([]);
   await group.getByRole('button', { name: 'Remove staging.acme.dev' }).click();
@@ -249,6 +326,8 @@ test('a member installs, and reads where the notes go nowhere on the page', asyn
     'Remove this site',
   ])
     await expect(page.getByRole('region', { name })).toHaveCount(0);
+  // Every section under « Advanced » is for an owner or an admin: a member has no empty fold.
+  await expect(advanced(page)).toHaveCount(0);
   await expectNoViolation(page, 'the page of a site, for a member');
 
   // A guest neither.
@@ -289,6 +368,9 @@ for (const locale of ['en', 'fr'] as const) {
     await expect(page.getByRole('region', { name: 'Site', exact: true })).toContainText(
       locale === 'en' ? 'Who can leave a note' : 'Qui peut laisser une note',
     );
+    // Open, the sections of « Advanced » fit too.
+    await advanced(page).locator('summary').click();
+    await expect(page.getByRole('region', { name: locale === 'en' ? 'Preview deploys' : 'Previews' })).toBeVisible();
     await page.waitForTimeout(300);
     expect.soft(await sideScroll(page)).toBe(0);
     // The script breaks inside its attributes (FRU-321): nothing of it is past its block.

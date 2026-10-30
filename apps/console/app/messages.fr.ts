@@ -1502,4 +1502,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'La fenêtre de Fruitback sur un site activé, avec Laisser une note',
   'Sign in with email': 'Se connecter par e-mail',
   'Turn on {site}': 'Activer sur {site}',
+  Advanced: 'Avancé',
+  'Statuses, starting an agent, preview deploys': 'Statuts, lancement d’un agent, previews',
+  'Each pin shows how a note in that status looks on the page. The 3 is an example number.':
+    'Chaque pin montre à quoi ressemble une note de ce statut sur la page. Le 3 est un numéro d’exemple.',
 };
