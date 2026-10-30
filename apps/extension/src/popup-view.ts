@@ -381,6 +381,11 @@ export type TurnOnOptions = {
     onVisibility: (visibility: 'members' | 'everyone') => Promise<boolean>;
     onPlace: (place: PlaceIds | null) => Promise<boolean>;
   };
+  /**
+   * A site of no workspace that the popup cannot add (FRU-537): why, in place of « ask an admin »,
+   * and nothing to press.
+   */
+  unaddable?: string;
   /** « Turn on », with the workspace chosen for a site of no workspace. */
   onTurnOn: (workspace?: string) => void;
   onSettings: () => void;
@@ -458,6 +463,9 @@ export function turnOnScreen(document: Document, options: TurnOnOptions): HTMLEl
   const addable = options.workspaces ?? [];
   const [first] = addable;
   // A site of no workspace, and no workspace where the account may add it: who can, and nothing to press.
+  if (options.workspace === undefined && options.unaddable !== undefined) {
+    return frame(hostAsTitle(site), element(document, 'p', options.unaddable, 'lead'));
+  }
   if (options.workspace === undefined && first === undefined) {
     return frame(
       hostAsTitle(site),

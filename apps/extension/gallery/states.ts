@@ -154,6 +154,17 @@ function popupStates(): GalleryState[] {
         }),
     },
     {
+      id: 'turn-on-http',
+      title: 'Turn on · a site on http, added from the console (FRU-537)',
+      build: (d) =>
+        turnOnScreen(d, {
+          ...turnOn,
+          origin: 'http://staging.acme.dev',
+          workspaces: [],
+          unaddable: 'This site is on http. Add it to a workspace from the console, then turn it on here.',
+        }),
+    },
+    {
       id: 'turn-on-ask-admin',
       title: 'Turn on · nobody here can add the site',
       build: (d) => turnOnScreen(d, { ...turnOn, workspaces: [] }),

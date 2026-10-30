@@ -4,6 +4,7 @@ import { createApply } from './bridge.ts';
 import {
   accountLanguage,
   addSite,
+  addableFromPopup,
   addableWorkspaces,
   cloudEntry,
   finishAdd,
@@ -540,6 +541,9 @@ describe('adding the site of the tab to a workspace (FRU-255)', () => {
       [404, { error: 'not-found' }, 'forbidden'],
       [429, { error: 'rate-limited' }, 'rate-limited'],
       [401, { error: 'identity-required' }, 'signed-out'],
+      // FRU-537: the worker does not add this origin from the popup: no outage, and no « Try again ».
+      [400, { error: 'invalid-url' }, 'insecure-origin'],
+      [400, { error: 'invalid-body' }, 'unavailable'],
       [502, {}, 'unavailable'],
       [
         201,
@@ -569,6 +573,44 @@ describe('adding the site of the tab to a workspace (FRU-255)', () => {
         reason: 'unavailable',
       },
     );
+  });
+});
+
+describe('the sites the popup may add (FRU-537)', () => {
+  it('adds https, and the loopback over http, as the worker does', () => {
+    for (const origin of [
+      'https://preview.client.fr',
+      'http://localhost:5177',
+      'http://127.0.0.1:8080',
+      'http://[::1]:3000',
+    ]) {
+      assert.equal(addableFromPopup(origin), true, origin);
+    }
+    for (const origin of [
+      'http://staging.client.fr',
+      'http://192.168.1.20:3000',
+      'ftp://client.fr',
+      'not an address',
+    ]) {
+      assert.equal(addableFromPopup(origin), false, origin);
+    }
+  });
+
+  it('asks nothing of the worker for an http site, and says why', async () => {
+    let asked = 0;
+    const fetcher = (async () => {
+      asked += 1;
+
+      return new Response('{}', { status: 201 });
+    }) as unknown as typeof fetch;
+    const added = await addSite(
+      'https://api.fruitback.test',
+      { id: 'ws_1', name: 'Sakuga' },
+      'http://staging.client.fr',
+      { ensureAccess: async () => GRANTED, fetcher },
+    );
+    assert.deepEqual(added, { ok: false, reason: 'insecure-origin' });
+    assert.equal(asked, 0);
   });
 });
 

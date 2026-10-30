@@ -427,7 +427,25 @@ export async function addableWorkspaces(endpoint: string, seams: CloudSeams): Pr
   return listed.account ? listed.workspaces.filter((workspace) => workspace.canAddSite === true) : [];
 }
 
-export type AddFailure = 'forbidden' | 'rate-limited' | 'signed-out' | 'unavailable';
+export type AddFailure = 'forbidden' | 'rate-limited' | 'signed-out' | 'unavailable' | 'insecure-origin';
+
+/** The hosts the worker lets the popup add over http (`LOOPBACK` of `session-site-add.ts`). */
+const ADDABLE_OVER_HTTP = new Set(['localhost', '127.0.0.1', '[::1]']);
+
+/**
+ * Whether the worker adds this origin from the popup (FRU-537): https, or the loopback over http, as
+ * `addableOrigin` of the worker's `session-site-add.ts` decides. Another http site is added from the
+ * console.
+ */
+export function addableFromPopup(origin: string): boolean {
+  try {
+    const { protocol, hostname } = new URL(origin);
+
+    return protocol === 'https:' || (protocol === 'http:' && ADDABLE_OVER_HTTP.has(hostname));
+  } catch {
+    return false;
+  }
+}
 export type AddResult = { ok: true; offer: Offer } | { ok: false; reason: AddFailure };
 
 /**
@@ -444,6 +462,8 @@ export async function addSite(
   if (access === undefined || (!access.ok && access.reason === 'unavailable'))
     return { ok: false, reason: 'unavailable' };
   if (!access.ok) return { ok: false, reason: 'signed-out' };
+  // The worker would answer 400 `invalid-url`: no request for an answer known before it is asked.
+  if (!addableFromPopup(origin)) return { ok: false, reason: 'insecure-origin' };
 
   let response: Response;
   try {
@@ -459,9 +479,13 @@ export async function addSite(
   if (response.status === 403 || response.status === 404) return { ok: false, reason: 'forbidden' };
   if (response.status === 429) return { ok: false, reason: 'rate-limited' };
   if (response.status === 401) return { ok: false, reason: 'signed-out' };
+  const body: unknown = await response.json().catch(() => undefined);
+  // FRU-537: the worker refuses an origin it does not add from the popup, an http site: no outage.
+  if (response.status === 400 && (body as { error?: unknown } | undefined)?.error === 'invalid-url') {
+    return { ok: false, reason: 'insecure-origin' };
+  }
   if (response.status !== 200 && response.status !== 201) return { ok: false, reason: 'unavailable' };
 
-  const body: unknown = await response.json().catch(() => undefined);
   const site = typeof body === 'object' && body !== null ? (body as { site?: unknown }).site : undefined;
   const parsed = parseWorkspaceSites({ account: true, workspaces: [workspace], sites: [site] })?.sites[0];
   // The worker added the site of this tab, in this workspace, or the answer is not believed.
