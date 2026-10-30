@@ -53,9 +53,18 @@ describe('the body of a route of the console (FRU-506)', () => {
   it('is refused over the cap on the routes of an account and of a workspace, and writes nothing', async () => {
     const on = await world();
     const alice = await signInTo(on, 'alice@acme.dev');
-    await workspaceIn(on, alice.token, 'Acme');
+    const acme = await workspaceIn(on, alice.token, 'Acme');
 
-    for (const path of ['/console/me/locale', '/console/me/name', '/console/me/emails', '/console/workspaces']) {
+    for (const path of [
+      '/console/me/locale',
+      '/console/me/name',
+      '/console/me/emails',
+      '/console/workspaces',
+      // `agent-keys.ts` reads its body with the `readBody` that `console-api.ts` hands it.
+      `/console/workspaces/${acme}/agent-keys`,
+      // The organization plugin answers its own `413`, in the same words (FRU-149).
+      '/console/auth/organization/update-member-role',
+    ]) {
       await assertTooLarge(await callOn(on, 'POST', path, { token: alice.token, body: OVER }), path);
     }
     const workspaces = await rowsOf(on.database, 'SELECT name FROM organization');
