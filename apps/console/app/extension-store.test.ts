@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
-import { CHROME_WEB_STORE, EXTENSION_GUIDE, extensionInstallFor } from './extension-store.ts';
+import { CHROME_WEB_STORE, EXTENSION_GUIDE, FIREFOX_ADDONS, extensionInstallFor } from './extension-store.ts';
 
 // User agents as each browser sends them (macOS, Windows, Android, iOS).
 const CHROME =
@@ -15,6 +15,9 @@ const OPERA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 OPR/120.0.0.0';
 const ANDROID =
   'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36';
+const FIREFOX_ANDROID = 'Mozilla/5.0 (Android 14; Mobile; rv:145.0) Gecko/145.0 Firefox/145.0';
+const IOS_FIREFOX =
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) FxiOS/145.0 Mobile/15E148 Safari/605.1.15';
 const IOS_CHROME =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/145.0.0.0 Mobile/15E148 Safari/604.1';
 
@@ -24,8 +27,12 @@ describe('where a browser installs the extension', () => {
     assert.equal(extensionInstallFor(EDGE), CHROME_WEB_STORE);
   });
 
-  it('sends every other browser to the guide', () => {
-    for (const agent of [FIREFOX, SAFARI, OPERA, ANDROID, IOS_CHROME, '']) {
+  it('sends Firefox on a computer to addons.mozilla.org (FRU-536)', () => {
+    assert.equal(extensionInstallFor(FIREFOX), FIREFOX_ADDONS);
+  });
+
+  it('sends every other browser, and Firefox on a phone, to the guide', () => {
+    for (const agent of [SAFARI, OPERA, ANDROID, IOS_CHROME, FIREFOX_ANDROID, IOS_FIREFOX, '']) {
       assert.equal(extensionInstallFor(agent), EXTENSION_GUIDE, agent);
     }
   });
@@ -33,6 +40,8 @@ describe('where a browser installs the extension', () => {
   it('names the listing of the extension, and the install section of the guide', () => {
     assert.match(CHROME_WEB_STORE, /^https:\/\/chromewebstore\.google\.com\/detail\/fruitback\/[a-p]{32}$/);
     assert.equal(EXTENSION_GUIDE, 'https://fruitback.com/reviewing.html#1-install-it');
+    // The address of the guide and of the landing (FRU-521), held by `docs-site.test.ts` of the worker.
+    assert.equal(FIREFOX_ADDONS, 'https://addons.mozilla.org/en-US/firefox/addon/fruitback/');
   });
 });
 
@@ -65,10 +74,10 @@ describe('the screens that offer the extension (FRU-409)', () => {
     assert.deepEqual(installLinks(before), [{ href: 'EXTENSION_GUIDE', words: 'Install the extension (beta)' }]);
   });
 
-  it('keep the guide for « Install it in Firefox (beta) »: Firefox is not on AMO yet', () => {
+  it('lead « Install it in Firefox (beta) » to addons.mozilla.org (FRU-536)', () => {
     const firefox = SCREENS.flatMap(({ source }) => installLinks(source)).filter(
       ({ words }) => words === 'Install it in Firefox (beta)',
     );
-    assert.deepEqual(firefox, [{ href: 'EXTENSION_GUIDE', words: 'Install it in Firefox (beta)' }]);
+    assert.deepEqual(firefox, [{ href: 'FIREFOX_ADDONS', words: 'Install it in Firefox (beta)' }]);
   });
 });
