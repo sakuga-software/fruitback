@@ -1,7 +1,7 @@
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router';
 import { readableTextColor } from '@fruitback/shared';
-import { type Connector, STAGES, type Site, type Stage, call, placesOf } from '../api';
+import { type Connector, STAGES, type Site, type Stage, call, placesOf, readSite } from '../api';
 import { Confirmation } from '../confirm';
 import { locale, msg, t } from '../i18n';
 import { problemOf } from '../problems';
@@ -30,6 +30,7 @@ import { Button, Choice, Field, IconButton, LinkButton, LoadFailed, Problem, Rad
 import { useLocale } from '../use-locale';
 import { STAGE_NAMES, placeLabel } from './connector-parts';
 import { PageHead, useWorkspace } from './workspace';
+import { ReadProblem } from '../read-problem';
 
 /**
  * The statuses of a site (FRU-371), as the board `design/site-statuses/` draws them: the list of the
@@ -210,8 +211,9 @@ export default function SiteStatuses() {
   const load = useCallback(async () => {
     // A read again keeps the rows on the screen until its answer replaces them (FRU-271).
     setRead((current) => (typeof current === 'string' ? 'loading' : current));
-    const [sites, connectors, statuses, tracker] = await Promise.all([
-      call<{ sites: Site[] }>('GET', `${base}/sites`),
+    // The one site (FRU-497): the notes of the other sites are not counted for it.
+    const [one, connectors, statuses, tracker] = await Promise.all([
+      readSite(workspace.id, siteId),
       call<{ connectors: Connector[] }>('GET', `${base}/connectors`),
       call<{ statuses: StatusRow[]; notes?: Record<string, number> }>(
         'GET',
@@ -223,8 +225,8 @@ export default function SiteStatuses() {
         `${base}/sites/${encodeURIComponent(siteId)}/statuses/tracker`,
       ),
     ]);
-    const site = sites.ok ? sites.data.sites.find((each) => each.id === siteId) : undefined;
-    if ((sites.ok && site === undefined) || (!statuses.ok && statuses.status === 404)) return setRead('gone');
+    const site = one.ok && typeof one.data?.origin === 'string' ? one.data : undefined;
+    if ((!one.ok && one.status === 404) || (!statuses.ok && statuses.status === 404)) return setRead('gone');
     // An answer with no list is no list (FRU-162): the page says it did not load.
     if (site === undefined || !connectors.ok || !statuses.ok || !Array.isArray(statuses.data?.statuses))
       return setRead('failed');
@@ -235,7 +237,7 @@ export default function SiteStatuses() {
       notes: notesOf(statuses.data.notes),
       tracker: tracker.ok && Array.isArray(tracker.data?.trackers) ? tracker.data : 'failed',
     });
-  }, [base, siteId]);
+  }, [base, siteId, workspace.id]);
 
   useEffect(() => {
     if (manages) void load();
@@ -333,7 +335,11 @@ export default function SiteStatuses() {
       {read === 'failed' ? (
         <LoadFailed
           title={t('The statuses did not load')}
-          detail={t('Fruitback did not answer. Your statuses are safe.')}
+          detail={
+            <>
+              <ReadProblem /> {t('Your statuses are safe.')}
+            </>
+          }
           retry={t('Try again')}
           onRetry={() => void load()}
         />

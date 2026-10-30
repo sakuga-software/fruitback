@@ -1,4 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
+import { fulfillSites } from './console-workspace.ts';
 import { type Locator, type Page, expect, test } from '@playwright/test';
 import { WORKER_ORIGIN } from './pin.ts';
 
@@ -33,7 +34,7 @@ async function openSites(page: Page): Promise<void> {
     if (pathname === '/console/workspaces/w1/domains') return json({ domains: [] });
     if (pathname === '/console/workspaces/w1/sites') {
       // Reading the sites works. Adding one fails, which is what shows the alert.
-      return route.request().method() === 'GET' ? json({ sites: [] }) : json({ error: 'unknown' }, 500);
+      return fulfillSites(route, []) || json({ error: 'unknown' }, 500);
     }
 
     return route.fulfill({ status: 204 });
@@ -259,7 +260,7 @@ test('a read that failed has a title, a sentence and one « Try again », in the
   await openKit(page);
   const failed = page.locator('[data-kit="load-failed"]').getByRole('alert');
   await expect(failed.getByRole('heading', { level: 2, name: 'The notes did not load' })).toBeVisible();
-  await expect(failed.locator('p')).toHaveText('Fruitback did not answer. Your notes are safe.');
+  await expect(failed.locator('p')).toHaveText('Fruitback hit an error. Your notes are safe.');
   await expect(failed.getByRole('button')).toHaveText(['Try again']);
   await expectStyle(failed, 'box', {
     paddingTop: '28px',
@@ -1308,9 +1309,8 @@ test('axe finds nothing on the screens of before, in the new palette (FRU-232)',
     if (pathname === '/auth/providers') return json({ betterAuth: { email: true, github: true, google: true } });
     if (pathname === '/console/me') return signedIn ? json(me) : json({ error: 'unauthorized' }, 401);
     if (pathname === '/console/workspaces/w1/domains') return json({ domains: [] });
-    if (pathname === '/console/workspaces/w1/sites') {
-      return json({ sites: [{ id: 's1', origin: 'https://staging.acme.dev', visibility: 'members' }] });
-    }
+    const read = fulfillSites(route, [{ id: 's1', origin: 'https://staging.acme.dev', visibility: 'members' }]);
+    if (read !== false) return read;
     if (pathname === '/console/workspaces/w1/connectors') return json({ connectors: [], available: true });
     if (pathname.endsWith('/list-user-invitations')) return json([invitation]);
     if (pathname.endsWith('/list-invitations')) return json([invitation]);

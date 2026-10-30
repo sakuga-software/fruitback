@@ -1,6 +1,6 @@
 import { type Dispatch, type SetStateAction, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { API, type Me, type Site, type Workspace, call, myInvitations, saveLanguage } from '../api';
+import { API, type Me, type Site, type Workspace, call, myInvitations, readSite, saveLanguage } from '../api';
 import { adoptLanguage, t } from '../i18n';
 import { InstallOptions } from '../install-options';
 import {
@@ -20,6 +20,7 @@ import { PutDone, PutOnSite } from './setup-install';
 import { SiteForm, SiteSummary } from './setup-site';
 import { SitePreview } from '../site-preview';
 import { instanceOf } from '../instance';
+import { ReadProblem } from '../read-problem';
 
 /** Whether this console calls Fruitback Cloud: the build holds no flag, the host of the worker decides. */
 const CLOUD = instanceOf(API).cloud;
@@ -44,7 +45,8 @@ const CALLS: SetupCalls = {
   // Quiet: a person who is not signed in gets the first step, not the notice of a session that ended.
   me: () => call<Me>('GET', '/console/me', undefined, { quiet: true }),
   invitations: myInvitations,
-  sites: (workspace) => call<{ sites: Site[] }>('GET', `/console/workspaces/${workspace.id}/sites`),
+  sites: (workspace) => call<{ sites: Site[] }>('GET', `/console/workspaces/${workspace.id}/sites?limit=1`),
+  site: (workspace, site) => readSite(workspace.id, site),
   createWorkspace: (name) => call<Workspace>('POST', '/console/workspaces', { name }),
   // No lock outside a secure context (`http` on a host other than localhost): two tabs can then each
   // make one. docs/decisions/console.md says so.
@@ -211,7 +213,9 @@ export default function Setup() {
             ) : null}
             {stage.kind === 'unchecked' ? (
               <div className="mt-3 flex flex-col items-start gap-3 [&>[role=alert]]:self-stretch">
-                <Problem>{t('Fruitback did not answer. Try again.')}</Problem>
+                <Problem>
+                  <ReadProblem />
+                </Problem>
                 <Button tone="outline" onClick={() => void resolveOnce().then(setStage)}>
                   {t('Try again')}
                 </Button>
@@ -240,7 +244,9 @@ export default function Setup() {
             ) : null}
             {stage.kind === 'unread' ? (
               <div className="mt-3 flex flex-col items-start gap-3 [&>[role=alert]]:self-stretch">
-                <Problem>{t('Fruitback did not answer. Your sites are not lost.')}</Problem>
+                <Problem>
+                  <ReadProblem /> {t('Your sites are safe.')}
+                </Problem>
                 <Button
                   tone="outline"
                   onClick={() => void siteStage(CALLS, stage.account, stage.workspace).then(setStage)}

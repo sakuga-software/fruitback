@@ -138,7 +138,7 @@ export function SignInClosed() {
     <Problem>
       {closedByOperator
         ? t(
-            'This Fruitback sends no sign-in link by e-mail. Only its owner signs in for now, with a link that the person who runs it makes. Everybody else can sign in once it sends e-mail, or offers GitHub or Google.',
+            'This Fruitback sends no sign-in link by e-mail. For now only its owner signs in, with a link that the person who runs it creates. Everybody else can sign in once it sends e-mail, or offers GitHub or Google.',
           )
         : t(
             'Nobody can sign in to this Fruitback yet: its sign-in is not set up. The person who runs it has one setting to add.',

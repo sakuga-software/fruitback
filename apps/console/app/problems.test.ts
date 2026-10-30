@@ -2,10 +2,11 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { UNREACHABLE } from './api.ts';
 import {
-  DID_NOT_ANSWER,
   NAME_PROBLEMS,
+  SERVER_PROBLEM,
   SITE_NOT_ADDED,
   SITE_PROBLEMS,
+  UNREACHABLE_PROBLEM,
   WORKSPACE_NOT_CREATED,
   WORKSPACE_SUSPENDED,
   copyText,
@@ -18,13 +19,20 @@ describe('what a refused call says (FRU-164)', () => {
     // The defect: a 500 on a correct address said « Paste the full address of the site ».
     const said = problemOf({ status: 500, error: 'unknown' }, SITE_PROBLEMS, SITE_NOT_ADDED);
 
-    assert.equal(said, DID_NOT_ANSWER);
+    assert.equal(said, SERVER_PROBLEM);
     assert.notEqual(said, SITE_PROBLEMS['invalid-url']);
-    assert.equal(problemOf(UNREACHABLE, SITE_PROBLEMS, SITE_NOT_ADDED), DID_NOT_ANSWER);
+    assert.equal(problemOf(UNREACHABLE, SITE_PROBLEMS, SITE_NOT_ADDED), UNREACHABLE_PROBLEM);
     assert.equal(
       problemOf({ status: 503, error: 'store-unavailable' }, NAME_PROBLEMS, WORKSPACE_NOT_CREATED),
-      DID_NOT_ANSWER,
+      SERVER_PROBLEM,
     );
+  });
+
+  // FRU-516: « Fruitback did not answer » was said for a 500 too, where Fruitback had answered.
+  it('tells no answer from an answer that is an error, and asks for the connection only for the first', () => {
+    assert.match(problemOf(UNREACHABLE, SITE_PROBLEMS, SITE_NOT_ADDED), /Check your connection/);
+    assert.doesNotMatch(problemOf({ status: 500, error: 'unknown' }, SITE_PROBLEMS, SITE_NOT_ADDED), /connection/);
+    assert.notEqual(UNREACHABLE_PROBLEM, SERVER_PROBLEM);
   });
 
   it('keeps the sentence of the address for an address the worker refuses: the control', () => {

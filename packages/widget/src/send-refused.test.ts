@@ -83,7 +83,7 @@ describe('a send refused for who the reader is (FRU-394)', () => {
 
     assert.equal(
       said,
-      'This site is for members only. Your text is kept: sign in to Fruitback from the extension, then send it again.',
+      'This site is for members only. Your text is still here. Sign in to Fruitback from the extension, then send it again.',
     );
     assert.doesNotMatch(said, /try again/i);
   });
@@ -96,31 +96,31 @@ describe('a send refused for who the reader is (FRU-394)', () => {
 
     assert.equal(
       said,
-      'Ce site est réservé aux membres. Le texte est gardé : connectez-vous à Fruitback depuis l’extension, puis envoyez à nouveau.',
+      'Ce site est réservé aux membres. Votre texte est toujours là. Connectez-vous à Fruitback depuis l’extension, puis renvoyez-le.',
     );
   });
 
   it('still says the session ended on the 401 of a token that was refused (FRU-193)', async () => {
     const said = await sendThrough(answering(401, JSON.stringify({ error: 'invalid-identity', reason: 'expired' })));
 
-    assert.equal(said, 'Your session has ended. Your text is kept: sign in again, then send it.');
+    assert.equal(said, 'Your session has ended. Your text is still here. Sign in again, then send it.');
   });
 
   it('does not say to try again on a 403', async () => {
     const said = await sendThrough(answering(403, JSON.stringify({ error: 'origin-not-allowed' })));
 
-    assert.equal(said, 'This site does not accept your note from here. Your text is kept: tell the team of the site.');
+    assert.equal(said, 'This site refused the note from this address. Your text is still here. Tell the site’s team.');
   });
 
   it('says to try again on a failure of the worker or of the network, and only there', async () => {
     assert.equal(
       await sendThrough(answering(503, JSON.stringify({ error: 'store-unavailable' }))),
-      'Your text is kept. Try again, or copy it before closing the page.',
+      'Your text is still here. Try again, or copy it before you close the page.',
     );
     composer?.destroy();
     assert.equal(
       await sendThrough(() => Promise.reject(new TypeError('Failed to fetch'))),
-      'Your text is kept. Try again, or copy it before closing the page.',
+      'Your text is still here. Try again, or copy it before you close the page.',
     );
   });
 });
@@ -236,7 +236,7 @@ describe('a host that signs in (FRU-394, review of #529)', () => {
 
     assert.equal(
       root.querySelector('[data-fruitback-failed-text]')?.textContent,
-      'Your session has ended. Your text is kept: sign in again, then send it.',
+      'Your session has ended. Your text is still here. Sign in again, then send it.',
     );
     const signIn = root.querySelector('[data-fruitback-sign-in]') as HTMLButtonElement;
     assert.equal(signIn.hidden, false);

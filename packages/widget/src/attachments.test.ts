@@ -149,11 +149,11 @@ describe('the files of a note in the composer (FRU-332)', () => {
       files(root).map(([, detail, state]) => [detail, state]),
       [
         ['Too large: 10 MB for an image, a PDF or a file, 2 MB for a text, 25 MB for a note', 'refused'],
-        ['This file is not what its type says', 'refused'],
+        ['This file’s content does not match its extension. Choose another file.', 'refused'],
         ['This destination takes no file', 'refused'],
         ['Too many files on their way: send your notes first', 'refused'],
-        ['Your session has ended: sign in again', 'refused'],
-        ['Did not go: remove it, then try again', 'refused'],
+        ['Your session has ended. Sign in again.', 'refused'],
+        ['Upload failed. Remove the file, then add it again.', 'refused'],
       ],
     );
     assert.equal(field.value, 'The price is wrong');
@@ -257,7 +257,7 @@ describe('the files of a note in the composer (FRU-332)', () => {
     await settle();
     assert.equal(
       q('[data-fruitback-failed-text]').textContent,
-      'A file of this note is no longer on its way. Your text is kept: remove the file, then send again.',
+      'A file of this note is no longer on its way. Your text is still here. Remove the file, then send again.',
     );
     assert.deepEqual(files(root)[0]?.[2], 'refused');
     assert.equal(q<HTMLTextAreaElement>('[data-fruitback-note]').value, 'kept');

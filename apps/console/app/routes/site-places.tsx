@@ -19,6 +19,7 @@ import { Button, Chip, LinkButton, type OptionGroup, Problem, SearchChoice } fro
 import { useLocale } from '../use-locale';
 import { KINDS, accountOf, hostOf, sourceLine } from './connector-parts';
 import { GITHUB_APP_PAGE } from './connector-github';
+import { ReadProblem } from '../read-problem';
 
 /**
  * What a source offers: its teams, its repositories, or nothing to choose for an address. A Linear
@@ -373,7 +374,9 @@ export function SitePlaces({
       {connectors === 'loading' ? <p className="text-small text-muted">{t('Loading…')}</p> : null}
       {connectors === 'failed' ? (
         <div className="flex flex-col items-start gap-[8px]">
-          <Problem>{t('The sources of this workspace did not load.')}</Problem>
+          <Problem>
+            {t('The connectors of this workspace did not load.')} <ReadProblem />
+          </Problem>
           <Button tone="outline" onClick={onRetry}>
             {t('Try again')}
           </Button>
@@ -486,10 +489,10 @@ export function SitePlaces({
         <div className="flex flex-col items-start gap-[8px]">
           <Problem>
             {silent.length === 1
-              ? t('{source} did not answer with its places.', {
+              ? t('{source} did not send its places. Try again in a moment.', {
                   source: `${t(KINDS[silent[0]?.kind ?? 'linear'].name)} · ${sourceLine(silent[0] as Connector)}`,
                 })
-              : t('Some sources did not answer with their places.')}
+              : t('Some connectors did not send their places. Try again in a moment.')}
           </Problem>
           <Button tone="outline" onClick={() => setReads((count) => count + 1)}>
             {t('Try again')}

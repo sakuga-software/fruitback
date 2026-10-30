@@ -1,6 +1,6 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
-import { type Answer, type Connector, type Site, STAGES, type Stage, call } from '../api';
+import { type Answer, type Connector, type SiteChoice, STAGES, type Stage, call, siteChoices } from '../api';
 import { ago } from '../ago';
 import { type Listed, listedOf } from '../listed';
 import {
@@ -23,7 +23,7 @@ import { KINDS, STAGE_NAMES, connectorName } from './connector-parts';
 import { ConnectorMark } from '../connector-marks';
 import { useWorkspace } from './workspace';
 import { msg, t } from '../i18n';
-import { DID_NOT_ANSWER, writeProblemOf } from '../problems';
+import { failureOf, writeProblemOf } from '../problems';
 import { useTypedSearch } from '../typed-search';
 import { useLocale } from '../use-locale';
 import { domainOf, siteLabel } from '../site-address';
@@ -31,6 +31,7 @@ import { NoteIcon } from '../note-icons';
 import { type StatusChoice, offeredFor, statusName, statusProblemOf } from '../note-status';
 import { boardColumns } from '../board-columns';
 import { NotesBoard } from './notes-board';
+import { ReadProblem } from '../read-problem';
 
 /** Who left a note, as the index of the notes says it (FRU-244). A name only for an account of the workspace. */
 export type NoteAuthor = {
@@ -125,17 +126,16 @@ export default function Notes() {
 
   // The sites name the filter « Site » and the site of a verified author; the connectors name the
   // chips. Both are read once, with the first page.
-  const [sites, setSites] = useState<Listed<Site>>('loading');
+  // Their id and address only, by address (FRU-497): no count of the notes of every site.
+  const [sites, setSites] = useState<Listed<SiteChoice>>('loading');
   const [connectors, setConnectors] = useState<Connector[]>([]);
   useEffect(() => {
-    void call<{ sites: Site[] }>('GET', `${base}/sites`).then((answer) =>
-      setSites(listedOf(answer, (data) => data.sites)),
-    );
+    void siteChoices(workspace.id).then((answer) => setSites(listedOf(answer, (data) => data.sites)));
     if (seesTracker)
       void call<{ connectors: Connector[] }>('GET', `${base}/connectors`).then((answer) => {
         if (answer.ok) setConnectors(answer.data.connectors);
       });
-  }, [base, seesTracker]);
+  }, [base, seesTracker, workspace.id]);
 
   const filters = useMemo(
     () =>
@@ -513,7 +513,7 @@ function NoteRow({
   /** The connector the note went to, when the connectors were read: it may have a name (FRU-404). */
   source: Connector | undefined;
   manages: boolean;
-  retry: () => Promise<{ ok: true } | { ok: false; error: string }>;
+  retry: () => Promise<{ ok: true } | { ok: false; status: number; error: string }>;
   onSent: () => void;
   statuses: readonly StatusChoice[] | undefined;
   choose: (status: string) => Promise<Answer<{ status: string; stage: Stage }>>;
@@ -533,7 +533,7 @@ function NoteRow({
     setRefused(undefined);
     const sent = await retry();
     setSending(false);
-    if (!sent.ok) return setRefused(writeProblemOf(sent, DID_NOT_ANSWER));
+    if (!sent.ok) return setRefused(writeProblemOf(sent, failureOf(sent)));
     onSent();
   }
 
@@ -858,7 +858,11 @@ export function NotesFailed({ onRetry }: { onRetry: () => void }) {
   return (
     <LoadFailed
       title={t('The notes did not load')}
-      detail={t('Fruitback did not answer. Your notes are safe.')}
+      detail={
+        <>
+          <ReadProblem /> {t('Your notes are safe.')}
+        </>
+      }
       retry={t('Try again')}
       onRetry={onRetry}
     />

@@ -39,6 +39,7 @@ import {
 import { AdminWrite, GIVEN_ROLES, INVITED_ROLES } from './admin-writes';
 import { KINDS } from './connector-parts';
 import { siteLabel } from '../site-address';
+import { ReadProblem } from '../read-problem';
 
 /**
  * The workspaces of the instance, as screen 18 of the mockup of 2026-10-13 draws them (FRU-263):
@@ -175,7 +176,7 @@ export default function AdminWorkspaces() {
         <NewWorkspace
           onMade={(made) => {
             setSaid(
-              saying(msg('{workspace} was made, owned by {email}.'), {
+              saying(msg('{workspace} was created, owned by {email}.'), {
                 workspace: made.workspace.name,
                 email: made.owner.email,
               }),
@@ -204,7 +205,9 @@ export default function AdminWorkspaces() {
       {shown === 'loading' ? <p className="text-small text-muted">{t('Loading…')}</p> : null}
       {shown === 'failed' ? (
         <div className="flex flex-col items-start gap-[12px]">
-          <Problem>{t('The workspaces could not be read. Fruitback did not answer.')}</Problem>
+          <Problem>
+            {t('The workspaces did not load.')} <ReadProblem />
+          </Problem>
           <Button tone="outline" onClick={again}>
             {t('Try again')}
           </Button>
@@ -445,7 +448,9 @@ function Panel({
       {detail === 'loading' ? <p className="text-small text-muted">{t('Loading…')}</p> : null}
       {detail === 'failed' ? (
         <div className="flex flex-col items-start gap-[12px]">
-          <Problem>{t('This workspace could not be read. Fruitback did not answer.')}</Problem>
+          <Problem>
+            {t('This workspace did not load.')} <ReadProblem />
+          </Problem>
           <Button tone="outline" onClick={onRetry}>
             {t('Try again')}
           </Button>
@@ -573,7 +578,7 @@ function Suspension({
   };
   const problems = {
     'invalid-reason': msg('A reason is one line of 200 characters at most.'),
-    'invalid-suspended': msg('Nothing changed. Try again.'),
+    'invalid-suspended': msg('The workspace did not change. Reload the page, then try again.'),
   };
 
   return (
@@ -611,14 +616,14 @@ function Suspension({
             />
           }
           consequence={t(
-            '{workspace} is suspended at once. Its sites answer as unknown to the widget and the extension, every change in it is refused, and its notes wait to be delivered. Its members still sign in and read it. Nothing is deleted. Its owners see that you did it.',
+            '{workspace} stops at once: its sites take no notes, nothing in it can change, and its notes wait to be delivered. Its members can still read it. Nothing is deleted. Its owners see that you did it.',
             { workspace: name },
           )}
           confirmLabel={t('Suspend {workspace}', { workspace: name })}
           ready
           send={() => setWorkspaceSuspendedAsAdmin(workspace.id, true, given === '' ? undefined : given)}
           problems={problems}
-          notDone={msg('Nothing changed. Try again.')}
+          notDone={msg('The workspace was not suspended. Try again.')}
           onDone={done}
           onClose={() => setReason('')}
         />
@@ -635,7 +640,7 @@ function Suspension({
           ready
           send={() => setWorkspaceSuspendedAsAdmin(workspace.id, false)}
           problems={problems}
-          notDone={msg('Nothing changed. Try again.')}
+          notDone={msg('The workspace was not restored. Try again.')}
           onDone={done}
         />
       )}
@@ -646,7 +651,7 @@ function Suspension({
 /** What the worker refuses when a workspace is deleted (FRU-284). */
 const DELETION_PROBLEMS: Readonly<Record<string, string>> = {
   'name-mismatch': msg('This is not the name of the workspace. Type it as it is written, capitals included.'),
-  'not-found': msg('This workspace no longer exists. Another admin or its owner may have deleted it.'),
+  'not-found': msg('This workspace no longer exists. Another admin or its owner may have deleted it. Reload the page.'),
 };
 const NOT_DELETED = msg('The workspace was not deleted. Try again.');
 
@@ -717,7 +722,7 @@ function Deletion({ workspace, onDeleted }: { workspace: AdminWorkspace; onDelet
         >
           <p>
             {t(
-              '{workspace} is deleted at once, and nothing brings it back. Its sites, its members, its invitations, its connectors and the notes that Fruitback keeps for it go. The issues already sent to its sources stay there, and its people keep their accounts. Every instance admin reads that you did it.',
+              'This deletes {workspace} for good: its sites, members, invitations, connectors and the notes Fruitback keeps. Issues already in its trackers stay, and its people keep their accounts. Every instance admin sees that you did it.',
               { workspace: name },
             )}
           </p>
@@ -821,7 +826,7 @@ function AddPerson({ workspace, onChanged }: { workspace: AdminWorkspaceDetail; 
         problems={{
           'unknown-account': msg('No account has this address. Use « Invite someone » for a person with no account.'),
           'already-member': msg('This person is a member of the workspace already.'),
-          'invalid-email': msg('This is not an e-mail address.'),
+          'invalid-email': msg('This is not an e-mail address. Type one like name@company.com.'),
         }}
         notDone={msg('Nobody was added. Try again.')}
         onDone={(data) => {
@@ -883,7 +888,7 @@ function InvitePerson({ workspace, onChanged }: { workspace: AdminWorkspaceDetai
           'has-account': msg('This address has an account. Use « Add someone » instead.'),
           'already-member': msg('This person is a member of the workspace already.'),
           'already-invited': msg('This address is invited to the workspace already.'),
-          'invalid-email': msg('This is not an e-mail address.'),
+          'invalid-email': msg('This is not an e-mail address. Type one like name@company.com.'),
         }}
         notDone={msg('Nobody was invited. Try again.')}
         onDone={(data) => {
@@ -939,7 +944,7 @@ function ChangeOwner({ workspace, onChanged }: { workspace: AdminWorkspaceDetail
         problems={{
           'unknown-account': msg('No account has this address. Invite them first, then make them the owner.'),
           'suspended-account': msg('This account is suspended. Restore its access first.'),
-          'invalid-email': msg('This is not an e-mail address.'),
+          'invalid-email': msg('This is not an e-mail address. Type one like name@company.com.'),
         }}
         notDone={msg('The owner did not change. Try again.')}
         onDone={(data) => {
@@ -997,19 +1002,19 @@ function NewWorkspace({
           />
         </>
       }
-      consequence={t('The workspace is made at once, and {email} owns it. They see that you made it.', {
+      consequence={t('The workspace is created at once, and {email} owns it. They see that you created it.', {
         email: address === '' ? t('its owner') : address,
       })}
-      confirmLabel={t('Make the workspace')}
+      confirmLabel={t('Create the workspace')}
       ready={named !== '' && address.includes('@')}
       send={() => createWorkspaceAsAdmin(named, address)}
       problems={{
         'unknown-account': msg('No account has this address. The owner signs in once first.'),
         'suspended-account': msg('This account is suspended. Restore its access first.'),
         'invalid-name': msg('A workspace needs a name of one line, up to 80 characters.'),
-        'invalid-email': msg('This is not an e-mail address.'),
+        'invalid-email': msg('This is not an e-mail address. Type one like name@company.com.'),
       }}
-      notDone={msg('The workspace was not made. Try again.')}
+      notDone={msg('The workspace was not created. Try again.')}
       onDone={(data) => {
         setName('');
         setEmail('');

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import { type Site, type Workspace, call } from '../api';
+import { type SiteChoice, type Workspace, siteChoices } from '../api';
 import { t } from '../i18n';
 import { type Listed, listedOf } from '../listed';
+import { ReadProblem } from '../read-problem';
 import { manages } from '../setup-stage';
 import { siteName } from '../site-address';
 import { Button, LinkButton } from '../ui';
@@ -39,10 +40,11 @@ export default function WorkspaceSettingsAi() {
  */
 function AgentsSection({ workspace, may }: { workspace: Workspace; may: boolean }) {
   useLocale();
-  const [sites, setSites] = useState<Listed<Site>>('loading');
+  const [sites, setSites] = useState<Listed<SiteChoice>>('loading');
   const load = useCallback(async () => {
     setSites('loading');
-    const read = await call<{ sites: Site[] }>('GET', `/console/workspaces/${workspace.id}/sites`);
+    // Their id and address (FRU-497): no count of the notes of every site.
+    const read = await siteChoices(workspace.id);
     setSites(listedOf(read, (data) => data.sites));
   }, [workspace.id]);
   useEffect(() => {
@@ -92,13 +94,15 @@ function AgentsSection({ workspace, may }: { workspace: Workspace; may: boolean 
 }
 
 /** A link to « Start an agent » on the page of each site, `…/sites/<site>#agent`. */
-function SiteTriggers({ base, sites, onRetry }: { base: string; sites: Listed<Site>; onRetry: () => void }) {
+function SiteTriggers({ base, sites, onRetry }: { base: string; sites: Listed<SiteChoice>; onRetry: () => void }) {
   useLocale();
   if (sites === 'loading') return <p className="text-small text-muted">{t('Loading…')}</p>;
   if (sites === 'failed')
     return (
       <div role="alert" className="flex flex-wrap items-center gap-[12px]">
-        <p className="text-small">{t('The sites of the workspace did not load.')}</p>
+        <p className="text-small">
+          {t('The sites of the workspace did not load.')} <ReadProblem />
+        </p>
         <Button tone="outline" onClick={onRetry}>
           {t('Try again')}
         </Button>

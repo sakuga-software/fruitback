@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { type Page, type Route, expect, test } from '@playwright/test';
-import { ACME, type Role, sideScroll, stubWorker } from './console-workspace.ts';
+import { ACME, type Role, sideScroll, stubWorker, fulfillSites } from './console-workspace.ts';
 
 /**
  * Where the notes of a site go, set from the Sites screen (FRU-399), and no longer from the panel of
@@ -142,18 +142,15 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
 
       return json({ connectors: worker.connectors, available: true, linearOAuth: true, githubApp: true });
     }
-    if (pathname.endsWith('/sites')) {
-      return json({
-        sites: [
-          {
-            id: 's1',
-            origin: `https://${SITE}`,
-            visibility: 'members',
-            destinations: worker.places.map((each) => labelled(each, worker.privacy)),
-          },
-        ],
-      });
-    }
+    const read = fulfillSites(route, [
+      {
+        id: 's1',
+        origin: `https://${SITE}`,
+        visibility: 'members',
+        destinations: worker.places.map((each) => labelled(each, worker.privacy)),
+      },
+    ]);
+    if (read !== false) return read;
     if (pathname.endsWith('/g1/repositories')) {
       worker.listed += 1;
       if (worker.repositoriesWait) return new Promise<void>(() => {});
@@ -338,7 +335,7 @@ test('a read of the repositories that failed says so, and « Try again » reads 
   worker.silentReads = 99;
   await openPlaces(page);
   await expect(panel(page).getByRole('alert')).toHaveText(
-    'GitHub Issues · Installed on acme did not answer with its places.',
+    'GitHub Issues · Installed on acme did not send its places. Try again in a moment.',
   );
   worker.silentReads = 0;
   await panel(page).getByRole('button', { name: 'Try again', exact: true }).click();
@@ -366,7 +363,7 @@ test('a list of the repositories that failed does not hide the warning (FRU-382)
   worker.silentReads = 100;
   await openPlaces(page);
 
-  await expect(panel(page).getByText('did not answer with its places.')).toBeVisible();
+  await expect(panel(page).getByText('did not send its places. Try again in a moment.')).toBeVisible();
   await expect(panel(page).locator('[data-public]')).toHaveText(PUBLIC_DOCS);
 });
 
@@ -376,10 +373,11 @@ test('once the list names the repository, it wins over an older word of the work
   worker.places = [{ connector: 'g1', teamId: 'acme/web' }];
   worker.repositoriesWait = true;
   const stale = { connector: 'g1', teamId: 'acme/web', label: 'GitHub · acme/web', private: false };
-  await page.route('**/console/workspaces/w1/sites', (route) =>
-    route.fulfill({
-      json: { sites: [{ id: 's1', origin: `https://${SITE}`, visibility: 'members', destinations: [stale] }] },
-    }),
+  await page.route(
+    /\/console\/workspaces\/w1\/sites\/s1$/,
+    (route) =>
+      fulfillSites(route, [{ id: 's1', origin: `https://${SITE}`, visibility: 'members', destinations: [stale] }]) ||
+      route.fallback(),
   );
   await openPlaces(page);
   // While the list is read, the worker's word.
@@ -438,7 +436,9 @@ test('with no source, and with a read of the sources that failed, the panel says
   worker.connectors = [LINEAR];
   worker.connectorsFail = true;
   await openPlaces(page);
-  await expect(panel(page).getByRole('alert')).toHaveText('The sources of this workspace did not load.');
+  await expect(panel(page).getByRole('alert')).toHaveText(
+    'The connectors of this workspace did not load. Fruitback hit an error.',
+  );
   worker.connectorsFail = false;
   await panel(page).getByRole('button', { name: 'Try again', exact: true }).click();
   await expect(add(page)).toBeEnabled();
@@ -452,7 +452,9 @@ test('the places wait for the sources: a list written without them would send Gi
   ];
   worker.connectorsFail = true;
   await openPlaces(page);
-  await expect(panel(page).getByRole('alert')).toHaveText('The sources of this workspace did not load.');
+  await expect(panel(page).getByRole('alert')).toHaveText(
+    'The connectors of this workspace did not load. Fruitback hit an error.',
+  );
   const remove = panel(page).getByRole('button', { name: 'Remove', exact: true });
   const first = panel(page).getByRole('button', { name: 'Make it the default', exact: true });
   await expect(remove.nth(1)).toBeDisabled();

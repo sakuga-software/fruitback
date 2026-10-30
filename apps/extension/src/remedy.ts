@@ -23,7 +23,7 @@ import type { SitesImport } from './site-transfer.ts';
 export const PAIRING_PROBLEM: Record<PairFailure | 'blocked', string> = {
   'code-spent-or-expired': 'That code has been used or has expired. Ask for a new one.',
   unavailable: 'The worker did not answer. Try again.',
-  'insecure-endpoint': 'That worker is on plain http. A session must not cross it.',
+  'insecure-endpoint': 'That worker is on plain http, and a session must not cross it. Use its https address.',
   blocked: 'Fruitback needs permission to reach that worker.',
 };
 
@@ -31,8 +31,8 @@ export const PAIRING_NEEDS_HTTPS = 'Pairing needs https (localhost excepted): a 
 export const PAIRING_CODE_REQUIRED = 'The pairing code is required.';
 
 export const IMPORT_PROBLEM: Record<Extract<SitesImport, { ok: false }>['reason'], string> = {
-  'not-json': 'That file is not JSON.',
-  'not-a-sites-file': 'That file is not a Fruitback rules file.',
+  'not-json': 'That file is not JSON. Choose the file that Export downloaded.',
+  'not-a-sites-file': 'That file is not a Fruitback rules file. Choose the file that Export downloaded.',
   'newer-version': 'That file comes from a newer Fruitback. Update the extension, then import it again.',
 };
 

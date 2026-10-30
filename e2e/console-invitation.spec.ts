@@ -1,4 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
+import { fulfillSites } from './console-workspace.ts';
 import { type BrowserContext, type Locator, type Page, expect, test } from '@playwright/test';
 import { CONSOLE, type Worker, cloudWorker, finished, served } from './cloud-worker.ts';
 import { WORKER_ORIGIN } from './pin.ts';
@@ -297,9 +298,9 @@ async function stubWorker(page: Page, stub: Stub = {}): Promise<string[]> {
       if (stub.sites === 'failed') return json({ error: 'unavailable' }, 503);
       if (stub.sites === 'lost') return route.abort('connectionfailed');
 
-      return json({
-        sites: (stub.sites ?? []).map((origin, index) => ({ id: `s${index}`, origin, visibility: 'members' })),
-      });
+      const sites = (stub.sites ?? []).map((origin, index) => ({ id: `s${index}`, origin, visibility: 'members' }));
+
+      return fulfillSites(route, sites) || json({ sites });
     }
     if (pathname === '/console/auth/sign-out') {
       if (stub.signsOut === false) return json({ error: 'unavailable' }, 503);
@@ -585,7 +586,7 @@ test.describe('the screen of an invitation, against the mockup (FRU-241)', () =>
     await page.context().unrouteAll({ behavior: 'ignoreErrors' });
     await stubWorker(page, { invitations: 'failed' });
     await page.goto(`${CONSOLE}/invitations`);
-    await expect(page.getByRole('alert')).toHaveText('Fruitback did not answer. Your invitations are not lost.');
+    await expect(page.getByRole('alert')).toHaveText('Fruitback hit an error. Your invitations are safe.');
     await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible();
   });
 

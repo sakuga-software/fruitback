@@ -117,7 +117,7 @@ describe('the field to reply to a note (FRU-257)', () => {
     for (const [failure, words] of [
       ['wait', /Too many replies/],
       ['signed-out', /session has ended/],
-      ['retry', /Did not go through/],
+      ['retry', /Not sent/],
     ] as const) {
       thread.submit();
       assert.equal(thread.status(), 'Sending…');

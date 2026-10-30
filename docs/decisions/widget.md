@@ -581,7 +581,7 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
     with no fade. Held by `e2e/composer.spec.ts` on computed styles.
     - **The head**, on the warm surface: the drop of « new », what the note points at in mono
       (« button.add · <AddToCart> », as the frame writes it: `aboutTarget` in `host.ts`), with what
-      the element says as its title, and « Pick again ». « Pick again » is the seam `onPickAgain`:
+      the element says as its title, and « Choose another element ». « Choose another element » is the seam `onPickAgain`:
       `init` starts a capture over the open composer, which keeps the text and moves to the element
       chosen. The cross is gone: « Cancel » and Escape close it. The dialog keeps the name
       « New note », where the ticket writes « Leave a note »: every spec and every screen reader
@@ -591,7 +591,7 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
       sight (the link « Add my name (optional) » is gone; a signed reader still sees no field),
       « Remember me on this site », and the box of the picture, in the accent. The e-mail of the
       mock-up is not there: a new personal datum (FRU-58, open question 2).
-    - **The foot**: « Lands in {place} as a new issue » when a member sees one place, « Sent to the
+    - **The foot**: « Creates a new issue in {place} » when a member sees one place, « Sent to the
       team » otherwise; with several places, the line of the body that lets a member choose stays,
       and the foot says nothing. « Cancel » and « Send », 34 px drawn and 44 px to press, « Send »
       with the drop of the mark.
@@ -600,7 +600,7 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
       follows the issue's status. » in green, and « Open → » when the reader may open the issue.
       `init` finds them in the read that follows the send, by the id of the note (`onNote` of
       `plant`). It said « Sent » for 1.1 s before. A note kept for later still says so in the foot.
-    - **Failed**: a card above the foot, `role="alert"`: « Did not go through », then the sentence of
+    - **Failed**: a card above the foot, `role="alert"`: « Not sent », then the sentence of
       its cause (FRU-156). The text stays in the field.
   - **« Attach a picture of the element » is the preference of the settings panel**, shown beside
     the note (`PictureChoice`, a seam like `NameMemory`). It is there only when the host gave
@@ -639,8 +639,7 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
   `403`, `signed-out` for a `401` (FRU-193), `too-large` for a `413`. A `403` that names a place gone
   (`destination-not-allowed`) is a `retry`: the read after it makes the list right. The text is kept
   in every case, and the sentence takes its own line above the buttons, in the live region.
-- **A `401` has its own sentence** (FRU-193): « Your session has ended. Your text is kept: sign in
-  again, then send it. » It shared the sentence of the `403`, which sends the reporter to the team of
+- **A `401` has its own sentence** (FRU-193): « Your session has ended. Your text is still here. Sign in again, then send it. » It shared the sentence of the `403`, which sends the reporter to the team of
   the site, and that team can do nothing about a session of the extension that ended or a token of the
   host out of date. It does not say « try again » alone: the token is asked for again at each send,
   and a host that mints a bad one mints it again. The widget does not know which of the two it is, so
@@ -1582,7 +1581,7 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
 - **Closed, no note starts**: the launch button reads « Notes from members only », is
   `aria-disabled`, and a press says « Only members of this site leave notes here. Ask its team to
   invite you. » in the live region. `host.closeNotes` makes `start` a no-op, so no other way in (the
-  list, « Pick again », `leaveFeedback()`, which answers `false`) starts a capture. The list hides its
+  list, « Choose another element », `leaveFeedback()`, which answers `false`) starts a capture. The list hides its
   « Leave feedback ».
 - **A host that signs in keeps its own offer.** With `onSignIn` (the extension), the widget closes
   nothing: a refused read there is a session that ended, and `signedOut` offers the sign-in.
@@ -1599,7 +1598,7 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
 - **A `401` whose `error` is `identity-required` is « Members only », not « session ended ».** The
   worker answers it to a page that sent no token, or a token that names nobody of the workspace, on a
   site whose notes are « Members only » (`attributionFor`, `authorizeRead`). There was no session to
-  end: the composer says « This site is for members only. Your text is kept: sign in to Fruitback
+  end: the composer says « This site is for members only. Your text is still here. Sign in to Fruitback
   from the extension, then send it again. » Any other `401` keeps the words of FRU-193. **A host
   that signs in (`onSignIn`, the extension) keeps « Your session has ended » and its « Sign in
   again »** for that `401` too, on a note and on the notes kept for later, and its list keeps the

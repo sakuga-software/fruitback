@@ -18,10 +18,9 @@ const ADDRESS_PROBLEMS: Record<string, string> = {
   'invalid-address': msg(
     'Fruitback cannot send to this address. Use a full https:// address that the internet can reach.',
   ),
-  'invalid-secret': msg('A secret is 16 to 256 characters, with no space. Leave it empty and Fruitback makes one.'),
+  'invalid-secret': msg('A secret is 16 to 256 characters, with no space. Leave it empty and Fruitback creates one.'),
   'connectors-unavailable': msg('This Fruitback cannot keep a key yet. Its operator must set FRUITBACK_SECRETS_KEY.'),
   forbidden: msg('Only an owner or an admin of the workspace connects a source.'),
-  unreachable: msg('Fruitback did not answer. Try again.'),
 };
 
 /** The key is typed once and sent once. Nothing here keeps it, and the worker never answers it. */
@@ -158,7 +157,7 @@ export function AddRest({
         autoComplete="off"
         value={secret}
         onChange={(event) => setSecret(event.target.value)}
-        hint={t('Leave it empty and Fruitback makes one, shown once.')}
+        hint={t('Leave it empty and Fruitback creates one, shown once.')}
       />
       {problem === undefined ? null : <Problem>{t(problem)}</Problem>}
       <div className="flex flex-wrap items-center gap-x-[16px] gap-y-[8px]">

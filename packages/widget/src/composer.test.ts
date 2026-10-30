@@ -134,14 +134,14 @@ describe('what the popover looks like (FRU-36)', () => {
       composer.open(ANCHOR);
       assert.equal(
         lands().textContent,
-        places.length === 0 ? 'Sent to the team' : 'Lands in Linear · Northwind as a new issue',
+        places.length === 0 ? 'Sent to the team' : 'Creates a new issue in Linear · Northwind',
       );
       composer.destroy();
       composer = null;
     }
   });
 
-  it('offers « Pick again » only to a host that can start a capture, and keeps the text when it does (FRU-305)', () => {
+  it('offers « Choose another element » only to a host that can start a capture, and keeps the text when it does (FRU-305)', () => {
     let asked = 0;
     const page = mountPage('<main></main>');
     const host = page.document.createElement('div');
@@ -156,7 +156,7 @@ describe('what the popover looks like (FRU-36)', () => {
     field().value = 'Half a note';
     const pick = composer.element.querySelector('[data-fruitback-pick]') as HTMLButtonElement;
     assert.equal(pick.hidden, false);
-    assert.equal(pick.textContent, 'Pick again');
+    assert.equal(pick.textContent, 'Choose another element');
     pick.click();
     assert.equal(asked, 1);
     // The host chooses again and opens the composer on the new element: nothing written goes.
@@ -230,7 +230,7 @@ describe('what the popover looks like (FRU-36)', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     assert.equal(composer?.state(), 'failed');
     assert.equal(field().value, 'A note on its way');
-    assert.match(failedText(), /^Did not go through Your text is kept\./);
+    assert.match(failedText(), /^Not sent Your text is still here\./);
   });
 
   it('closes on Cancel, and gives the note up', () => {
@@ -452,12 +452,12 @@ describe('createComposer', () => {
       composer = null;
     }
 
-    // « Did not go through », then the sentence of the cause (FRU-305).
-    assert.equal(said.retry, 'Did not go through Your text is kept. Try again, or copy it before closing the page.');
-    for (const sentence of Object.values(said)) assert.match(sentence, /^Did not go through /);
+    // « Not sent », then the sentence of the cause (FRU-305).
+    assert.equal(said.retry, 'Not sent Your text is still here. Try again, or copy it before you close the page.');
+    for (const sentence of Object.values(said)) assert.match(sentence, /^Not sent /);
     assert.match(said.wait ?? '', /in a minute/);
-    assert.match(said.refused ?? '', /tell the team of the site/);
-    assert.match(said['too-large'] ?? '', /shorten it/);
+    assert.match(said.refused ?? '', /Tell the site’s team/);
+    assert.match(said['too-large'] ?? '', /Shorten it/);
     assert.equal(new Set(Object.values(said)).size, 4, 'four causes, four sentences');
   });
 
@@ -1755,7 +1755,7 @@ describe('a send refused for a session that ended (FRU-315)', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     assert.equal(
       failedText(),
-      'Did not go through Your session has ended. Your text is kept: sign in again, then send it.',
+      'Not sent Your session has ended. Your text is still here. Sign in again, then send it.',
     );
     assert.equal(signInButton().hidden, true);
   });

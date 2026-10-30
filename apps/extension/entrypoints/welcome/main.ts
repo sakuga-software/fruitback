@@ -34,7 +34,7 @@ let drawn = 0;
 /** The sites of the account, by origin, as the last read listed them (FRU-483). */
 let offers = new Map<string, Offer>();
 
-const NO_ACCESS = msg('The browser did not give access to this site.');
+const NO_ACCESS = msg('The browser did not give access to this site. Press Turn on again, then allow it.');
 const NOT_TURNED_ON = msg('The site could not be turned on. Try again.');
 
 // `action.openPopup` needs no permission. Where the browser does not let a page call it, it rejects,
