@@ -39,6 +39,7 @@ import {
   type SiteSettings,
   type Workspace,
   addSite,
+  addableFromPopup,
   addableWorkspaces,
   cloudEntry,
   finishAdd,
@@ -79,8 +80,6 @@ import {
   turnOnScreen,
   siteOn,
   connecting,
-  hostOf,
-  linkButton,
   loading,
   notAWebPage,
   problem,
@@ -89,6 +88,7 @@ import {
   signedOut,
   visibilityRow,
 } from '../../src/popup-view.ts';
+import { hostOf, linkButton, make } from '../../src/kit.ts';
 
 /**
  * The switch for the tab you are looking at (FRU-41), in the shell of the mock-up of 2026-10-13
@@ -312,7 +312,7 @@ async function draw(state: PopupState, facts: Found): Promise<HTMLElement> {
       // the form to switch this origin on would be the wrong question on a worker's own page.
       // An address of this shape is not proof of a worker: a page of a site to review can end in
       // `/pair` with a fragment that looks like a code. The way to the site's own screen stays open.
-      const site = element('button', t(NOT_A_LINK), 'secondary');
+      const site = make(document, 'button', 'secondary', t(NOT_A_LINK));
       site.addEventListener('click', () => void render(true));
 
       return frame(title(origin), ...(await linked(facts.link as PairLink)), actions(site));
@@ -367,7 +367,12 @@ async function draw(state: PopupState, facts: Found): Promise<HTMLElement> {
       const body: Node[] = [
         title(origin),
         // FRU-43: why the widget does or does not appear here must be answerable from the toolbar.
-        element('p', found === undefined ? t(NO_RULE) : t('Rule: {pattern}', { pattern: found.pattern }), 'rule'),
+        make(
+          document,
+          'p',
+          'rule',
+          found === undefined ? t(NO_RULE) : t('Rule: {pattern}', { pattern: found.pattern }),
+        ),
         open || found === undefined ? form(origin, found, draft) : status(found, await visibility(origin)),
       ];
       // Pairing is against the **worker**, not the site, so there is nothing to ask for until one is
@@ -442,7 +447,7 @@ function siteWithoutAccess(origin: string, { pattern, site }: ResolvedSite, acco
     onSettings: openSettings,
     ...(account === undefined ? {} : { account }),
   });
-  const said = element('p', '', 'problem');
+  const said = make(document, 'p', 'problem');
   screen.querySelector('.popup-body')?.append(said);
 
   return screen;
@@ -459,7 +464,7 @@ async function wantsSession(site: SiteConfig): Promise<boolean> {
 
 /** The title of a screen about a site: its host, as the mock-up writes it (06, 07, 08). */
 function title(origin: string): HTMLElement {
-  return element('h1', hostOf(origin));
+  return make(document, 'h1', '', hostOf(origin));
 }
 
 /**
@@ -575,6 +580,8 @@ function waitForTheConsole(waiting: PendingConnect, unanswered: boolean): void {
 }
 
 const NO_RULE = msg('No rule covers this origin, so Fruitback does nothing here.');
+/** FRU-537: the popup adds a site over https, or the loopback; another http site from the console. */
+const HTTP_SITE = msg('This site is on http. Add it to a workspace from the console, then turn it on here.');
 
 /** What `offerFor` needs, bound to the popup's one `Sessions`. */
 function cloudSeams(): CloudSeams {
@@ -610,7 +617,7 @@ function consoleSites(account: Account | undefined, workspace: string): (() => v
  * before `turnOn` asks.
  */
 function offered(origin: string, offer: Offer, account: Account | undefined): HTMLElement {
-  const problem = element('p', '', 'problem');
+  const problem = make(document, 'p', 'problem');
   const turn = (): void => void turnOn(offer.pattern, cloudEntry(offer)).then(refused(problem, turn), failed(problem));
   const change = consoleSites(account, offer.workspace.id);
   // FRU-453: a role that manages the sites chooses here, and each choice is written at once. Written
@@ -664,11 +671,24 @@ const SETTINGS_PROBLEM: Record<SettingsFailure, string> = {
  * are read now; none, and the popup says who can. « Turn on » adds it, then turns it on.
  */
 async function siteOfNoWorkspace(origin: string, account: Account | undefined): Promise<HTMLElement> {
+  // FRU-537: an http site that is not the loopback is added from the console, never from here. Said
+  // before anything is asked, rather than « Turn on » and « Fruitback did not answer » after.
+  if (!addableFromPopup(origin)) {
+    return turnOnScreen(document, {
+      origin,
+      visibility: 'members',
+      workspaces: [],
+      unaddable: t(HTTP_SITE),
+      ...(account === undefined ? {} : { account }),
+      onTurnOn: () => undefined,
+      onSettings: openSettings,
+    });
+  }
   const listed = CLOUD === undefined ? [] : await addableWorkspaces(CLOUD, cloudSeams());
   // Fruitback said nothing: that is an outage, not « ask an admin ».
   if (listed === undefined) return unreachableScreen(account);
   const workspaces = listed;
-  const problem = element('p', '', 'problem');
+  const problem = make(document, 'p', 'problem');
   // FRU-453: what is chosen here is written once the site is added, before it is turned on.
   const wanted: SiteSettings = {};
   const screen = turnOnScreen(document, {
@@ -793,6 +813,7 @@ const ADD_PROBLEM: Record<Exclude<AddFailure, 'signed-out'>, string> = {
   forbidden: msg('Your role in this workspace does not let you add a site.'),
   'rate-limited': msg('Too many sites were added in the last hour. Try again later.'),
   unavailable: msg('The site was not added. Try again in a moment.'),
+  'insecure-origin': HTTP_SITE,
 };
 
 /**
@@ -817,7 +838,7 @@ async function siteOfWorkspaceOn(
   const held = (await sessions.list())[site.endpoint];
   const paired = held === undefined || held.account === true ? undefined : held;
   const person = account ?? (paired === undefined ? undefined : { name: describeIdentity(paired.identity) });
-  const problem = element('p', '', 'problem');
+  const problem = make(document, 'p', 'problem');
   // FRU-296: the panel of the browser, opened in this click (before any `await`: the browser opens it
   // only in a gesture). A browser with no panel shows the list of the widget in the page. « Show all
   // notes in a sidebar », and a click on « fixes to check » or « open notes » (FRU-298).
@@ -931,7 +952,7 @@ async function askTab(tab: PopupTab | undefined, command: TabCommand): Promise<T
  * helps. Empty until the tab answers, and when it says nothing of another copy.
  */
 function otherCopyLine(tab: PopupTab | undefined, on: boolean): HTMLElement {
-  const line = element('p', '', 'problem');
+  const line = make(document, 'p', 'problem');
   if (!on) return line;
   void askTab(tab, 'counts').then(({ otherCopy }) => {
     if (otherCopy === undefined) return;
@@ -963,7 +984,7 @@ const OTHER_COPY_VERSION = msg(
  * popup does not wait for it: the switch must not sit behind a worker that is slow.
  */
 function readability(site: SiteConfig, pageUrl: string): HTMLElement {
-  const line = element('p', '', 'problem');
+  const line = make(document, 'p', 'problem');
   if (!site.enabled) return line;
 
   // FRU-395: in both modes, a worker that is not at the address of the rule. The client is the one
@@ -979,7 +1000,7 @@ function readability(site: SiteConfig, pageUrl: string): HTMLElement {
       if (site.mode !== 'private') return;
       if (answer !== 'wants-a-session' && answer !== 'members-only') return;
 
-      const guide = element('a', t('Which mode can read it'));
+      const guide = make(document, 'a', '', t('Which mode can read it'));
       guide.href = MODES_GUIDE;
       guide.target = '_blank';
       guide.rel = 'noreferrer';
@@ -1025,15 +1046,15 @@ async function linked(link: PairLink): Promise<HTMLElement[]> {
     // that was paired before the link.
     const said = pairedNow.has(link.endpoint) ? LINK_PAIRED : LINK_ALREADY_PAIRED;
 
-    return [pairedRow(link.endpoint, held.identity), element('p', t(said), 'state')];
+    return [pairedRow(link.endpoint, held.identity), make(document, 'p', 'state', t(said))];
   }
 
-  const submit = element('button', t('Connect to this server'));
-  const problem = element('p', '', 'problem');
+  const submit = make(document, 'button', '', t('Connect to this server'));
+  const problem = make(document, 'p', 'problem');
   const wrapper = document.createElement('div');
   wrapper.className = 'session';
   wrapper.append(
-    element('p', t('This page is a connection link for {worker}.', { worker: link.endpoint }), 'state'),
+    make(document, 'p', 'state', t('This page is a connection link for {worker}.', { worker: link.endpoint })),
     submit,
     problem,
   );
@@ -1048,7 +1069,7 @@ async function linked(link: PairLink): Promise<HTMLElement[]> {
   const attempt = pairing(link.endpoint, () => link.code, submit, problem, {});
   submit.addEventListener('click', attempt);
   // FRU-302: the same pairing, on the card of the worker in the page of the extension, code filled.
-  const page = element('button', t('Connect in the page of the extension'), 'secondary');
+  const page = make(document, 'button', 'secondary', t('Connect in the page of the extension'));
   page.addEventListener('click', () => {
     const query = new URLSearchParams({ worker: link.endpoint, code: link.code });
     void browser.tabs.create({ url: `${browser.runtime.getURL('/options.html')}#workers?${query.toString()}` });
@@ -1073,16 +1094,17 @@ const pairedNow = new Set<string>();
  * the e-mail under it, in the secondary text (FRU-289), as the card of the page of the extension.
  */
 function pairedRow(endpoint: string, identity: SessionIdentity): HTMLElement {
-  const out = logOut(endpoint, element('button', t('Sign out')));
+  const out = logOut(endpoint, make(document, 'button', '', t('Sign out')));
 
   const row = document.createElement('div');
   row.className = 'row';
   const name = identity.name?.trim();
   row.append(
-    element(
+    make(
+      document,
       'span',
-      name === undefined || name === '' ? t('Connected') : t('Connected as {identity}', { identity: name }),
       'state',
+      name === undefined || name === '' ? t('Connected') : t('Connected as {identity}', { identity: name }),
     ),
     out,
   );
@@ -1091,7 +1113,7 @@ function pairedRow(endpoint: string, identity: SessionIdentity): HTMLElement {
   wrapper.className = 'session';
   wrapper.append(row);
   if ((name === undefined || name === '') && identity.email !== undefined) {
-    const email = element('p', identity.email, 'state');
+    const email = make(document, 'p', 'state', identity.email);
     email.classList.add('identity-email');
     wrapper.append(email);
   }
@@ -1105,7 +1127,7 @@ function pairedRow(endpoint: string, identity: SessionIdentity): HTMLElement {
  * « Log out » was a filled pill of the weight of « Leave a note ».
  */
 function pairedFoot(endpoint: string, identity: SessionIdentity): HTMLElement {
-  const foot = element('div', '', 'popup-foot');
+  const foot = make(document, 'div', 'popup-foot');
   foot.classList.add('popup-foot-account');
   // The rule of the row (FRU-289): « Paired as » a name, never as an address. With no name, « Paired »
   // and the address beside it.
@@ -1115,7 +1137,7 @@ function pairedFoot(endpoint: string, identity: SessionIdentity): HTMLElement {
   if (name !== undefined && name !== '') who = t('Connected as {identity}', { identity: name });
   else if (email !== undefined && email !== '') who = `${who} · ${email}`;
   foot.append(
-    element('span', who, 'who'),
+    make(document, 'span', 'who', who),
     logOut(
       endpoint,
       linkButton(document, t('Sign out'), () => undefined),
@@ -1220,8 +1242,8 @@ async function session(site: SiteConfig): Promise<HTMLElement[]> {
   if (held !== undefined) return [pairedRow(endpoint, held.identity)];
 
   const code = field(t('Connection code'), 'ABCD-EFGH-JKMN');
-  const submit = element('button', t('Connect to this server'));
-  const problem = element('p', '', 'problem');
+  const submit = make(document, 'button', '', t('Connect to this server'));
+  const problem = make(document, 'p', 'problem');
 
   // The worker this rule names is what is wrong, so the way out is the fields of the rule.
   const change = (): void => void render(true);
@@ -1244,7 +1266,7 @@ async function session(site: SiteConfig): Promise<HTMLElement[]> {
   typed.hidden = isSecureWorkerEndpoint(endpoint);
   typed.append(code.label, submit, problem);
 
-  const reveal = element('button', t('I have a code'), 'secondary');
+  const reveal = make(document, 'button', 'secondary', t('I have a code'));
   reveal.hidden = typed.hidden === false;
   reveal.setAttribute('aria-expanded', 'false');
   reveal.addEventListener('click', () => {
@@ -1259,11 +1281,11 @@ async function session(site: SiteConfig): Promise<HTMLElement[]> {
   // Said plainly, because it is the difference between a page that shows this reviewer's pins and
   // one that shows nothing at all: the relay refuses a call it has no session for, rather than
   // making it without one.
-  row.append(element('span', t('Not connected. This site cannot reach the server until you connect.'), 'state'));
+  row.append(make(document, 'span', 'state', t('Not connected. This site cannot reach the server until you connect.')));
 
   const wrapper = document.createElement('div');
   wrapper.className = 'session';
-  wrapper.append(row, element('p', t(HOW_TO_PAIR), 'state'), reveal, typed);
+  wrapper.append(row, make(document, 'p', 'state', t(HOW_TO_PAIR)), reveal, typed);
 
   return [wrapper];
 }
@@ -1285,8 +1307,8 @@ function form(origin: string, found?: ResolvedSite, draft?: SiteConfig): HTMLEle
   const mode = modeField(shown?.mode ?? 'private');
   const endpoint = field(t('Server address'), 'https://feedback.acme.dev');
   const clientId = field(t('Client id'), 'acme');
-  const save = element('button', site === undefined ? t('Turn on for this site') : t('Save'));
-  const problem = element('p', '', 'problem');
+  const save = make(document, 'button', '', site === undefined ? t('Turn on for this site') : t('Save'));
+  const problem = make(document, 'p', 'problem');
 
   endpoint.input.value = shown?.endpoint ?? '';
   clientId.input.value = shown !== undefined && shown.mode === 'private' ? shown.clientId : '';
@@ -1416,8 +1438,8 @@ function status({ pattern, site }: ResolvedSite, shown?: Awaited<ReturnType<type
   const wide = isWildcardPattern(pattern);
   const off = wide ? t('Turn off for every site this rule covers') : t('Turn off here');
   const on = wide ? t('Turn on for every site this rule covers') : t('Turn on here');
-  const toggle = element('button', site.enabled ? off : on);
-  const problem = element('p', '', 'problem');
+  const toggle = make(document, 'button', '', site.enabled ? off : on);
+  const problem = make(document, 'p', 'problem');
   toggle.addEventListener('click', () => {
     if (site.enabled) {
       void writeSite(pattern, { ...site, enabled: false }).then(() => render(), failed(problem));
@@ -1430,7 +1452,7 @@ function status({ pattern, site }: ResolvedSite, shown?: Awaited<ReturnType<type
     turn();
   });
 
-  const change = element('button', t('Change'));
+  const change = make(document, 'button', '', t('Change'));
   change.className = 'secondary';
   change.addEventListener('click', () => void render(true));
 
@@ -1440,7 +1462,7 @@ function status({ pattern, site }: ResolvedSite, shown?: Awaited<ReturnType<type
 
   const row = document.createElement('div');
   row.className = 'row';
-  row.append(element('span', `${site.enabled ? t('On') : t('Off')} · ${describeSite(site)}`, 'state'), buttons);
+  row.append(make(document, 'span', 'state', `${site.enabled ? t('On') : t('Off')} · ${describeSite(site)}`), buttons);
 
   const wrapper = document.createElement('div');
   wrapper.append(row);
@@ -1524,18 +1546,6 @@ function actions(...buttons: HTMLElement[]): HTMLElement {
   group.append(...buttons);
 
   return group;
-}
-
-function element<K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  text: string,
-  className?: string,
-): HTMLElementTagNameMap[K] {
-  const node = document.createElement(tag);
-  node.textContent = text;
-  if (className !== undefined) node.className = className;
-
-  return node;
 }
 
 type PopupTab = { id?: number; url?: string };

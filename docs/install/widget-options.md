@@ -29,7 +29,7 @@ clipboard, as Markdown: one block per note, with its status, the element it poin
 and the file behind it when your build exposes them, who wrote it, and the team's replies.
 
 ```md
-# Feedback on https://staging.acme.dev/pricing
+# Notes on https://staging.acme.dev/pricing
 
 ## 1. FB-12 — To do
 

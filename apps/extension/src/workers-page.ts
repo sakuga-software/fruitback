@@ -1,6 +1,6 @@
 import type { DockPosition } from '@fruitback/widget';
 import { msg, t } from './i18n.ts';
-import { keys, toggle } from './kit.ts';
+import { button, keys, make, toggle } from './kit.ts';
 import { keysOfShortcut } from './popup-view.ts';
 import { parseDockPosition } from './protocol.ts';
 import { PAIRING_NEEDS_HTTPS } from './remedy.ts';
@@ -11,27 +11,6 @@ import { PAIRING_NEEDS_HTTPS } from './remedy.ts';
  * sessions and the preferences, and binds what a click does, so `workers-page.test.ts` reads every
  * part on happy-dom.
  */
-
-function make<K extends keyof HTMLElementTagNameMap>(
-  document: Document,
-  tag: K,
-  className: string,
-  text = '',
-): HTMLElementTagNameMap[K] {
-  const node = document.createElement(tag);
-  if (className !== '') node.className = className;
-  if (text !== '') node.textContent = text;
-
-  return node;
-}
-
-function button(document: Document, className: string, text: string, onClick: () => void): HTMLButtonElement {
-  const node = make(document, 'button', className, text);
-  node.type = 'button';
-  node.addEventListener('click', onClick);
-
-  return node;
-}
 
 /** How a worker takes a pairing: over https, on plain http of this machine, or not at all. */
 export type Pairing = 'https' | 'local' | 'insecure';

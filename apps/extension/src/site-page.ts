@@ -1,5 +1,5 @@
 import { msg, t } from './i18n.ts';
-import { dropMark, segmentedTabs, toggle } from './kit.ts';
+import { button, dropMark, hostOf, make, segmentedTabs, toggle } from './kit.ts';
 import { isWildcardPattern } from './site-patterns.ts';
 import type { SiteConfig, SiteMode } from './sites.ts';
 
@@ -9,27 +9,6 @@ import type { SiteConfig, SiteMode } from './sites.ts';
  * here: `entrypoints/options/main.ts` reads storage and the grants and binds what a click does, so
  * every part is built and read under `node --test` (`site-page.test.ts`, on happy-dom).
  */
-
-function make<K extends keyof HTMLElementTagNameMap>(
-  document: Document,
-  tag: K,
-  className: string,
-  text = '',
-): HTMLElementTagNameMap[K] {
-  const node = document.createElement(tag);
-  if (className !== '') node.className = className;
-  if (text !== '') node.textContent = text;
-
-  return node;
-}
-
-function button(document: Document, className: string, text: string, onClick: () => void): HTMLButtonElement {
-  const node = make(document, 'button', className, text);
-  node.type = 'button';
-  node.addEventListener('click', onClick);
-
-  return node;
-}
 
 /** The guides the menu links to, on the documentation site. */
 export const GUIDES = {
@@ -133,14 +112,6 @@ export function scopeOf(pattern: string, imported = false, workspace?: string): 
 /** The workspace of a rule whose widget the extension mounts and relays, when the rule names it. */
 function workspaceOf(site: SiteConfig): string | undefined {
   return site.mode === 'team' ? site.mount?.workspace : undefined;
-}
-
-function hostOf(endpoint: string): string {
-  try {
-    return new URL(endpoint).host;
-  } catch {
-    return endpoint;
-  }
 }
 
 /** Whether a row holds the words of a filter, in its pattern or its worker. */

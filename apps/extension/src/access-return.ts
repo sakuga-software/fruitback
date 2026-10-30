@@ -86,13 +86,13 @@ function grantCovers(pattern: string, access: string): boolean {
   if (!isWildcardPattern(pattern)) return false;
   const [scheme = '', base = ''] = pattern.split('://*.');
   const [accessScheme = '', rest = ''] = access.split('://');
-  const host = hostOf(rest.startsWith('*.') ? rest.slice(2) : rest);
+  const host = withoutPort(rest.startsWith('*.') ? rest.slice(2) : rest);
 
   return accessScheme === scheme && (host === base || host.endsWith(`.${base}`));
 }
 
 /** `acme.dev:8443` gives `acme.dev`, and `[::1]:8788` gives `[::1]`. */
-function hostOf(authority: string): string {
+function withoutPort(authority: string): string {
   return authority.replace(/:\d+$/, '');
 }
 

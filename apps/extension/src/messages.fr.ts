@@ -214,6 +214,9 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'What to check when Fruitback does not answer': 'Que vérifier quand Fruitback ne répond pas',
   'Who can add a site to a workspace?': 'Qui peut ajouter un site à un espace de travail ?',
   'How to leave and follow notes': 'Laisser et suivre des notes',
+  // FRU-537: an http site, which the popup does not add.
+  'This site is on http. Add it to a workspace from the console, then turn it on here.':
+    'Ce site est en http. Ajoutez-le à un espace depuis la console, puis activez-le ici.',
   // FRU-526: a page of the browser, where no extension draws.
   "Fruitback can't run on this page": 'Fruitback ne peut pas fonctionner sur cette page',
   'This is a page of the browser, like a new tab, the settings, the extension store or a PDF. No extension can draw on it.':
