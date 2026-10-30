@@ -7,8 +7,8 @@ import { ACME, LUMEN, type StubbedWorkspace, sideScroll, stubWorker } from './co
  * them. With one workspace the name is a link; with several it opens the menu of the workspaces,
  * which ends with « Workspace settings ». For an owner or an admin they are also « Settings » in the
  * rail (FRU-503). The screen renames the workspace for an owner or an admin, and the rail shows the
- * new name at once; it leads through what an agent needs, and the owner deletes the workspace there
- * (FRU-503). The worker is answered by stubs.
+ * new name at once, and the owner deletes the workspace there (FRU-503). Its page « AI » leads through
+ * what an agent needs (FRU-544). The worker is answered by stubs.
  */
 const CONSOLE = 'http://localhost:5178';
 
@@ -148,14 +148,53 @@ test('« Settings » is an entry of the rail for an owner and an admin, under «
     await expect(entries, role).toHaveText(['Sites', 'Notes', 'Connectors', 'Members', 'My account']);
     await rail(page).getByRole('link', { name: 'Acme Cloud workspace Workspace settings' }).click();
     await expect(page).toHaveURL(/\/w\/w1\/settings$/);
+    // The name stays the one on screen on the page « AI » of the settings (FRU-544).
+    await page.getByRole('main').getByRole('link', { name: 'AI', exact: true }).click();
+    await expect(page).toHaveURL(/\/w\/w1\/settings\/ai$/);
+    await expect(
+      rail(page).getByRole('link', { name: 'Acme Cloud workspace Workspace settings' }),
+      role,
+    ).toHaveAttribute('aria-current', 'page');
   }
+});
+
+test('the settings have two pages, « General » and « AI », and « Agents » is on « AI » alone (FRU-544)', async ({
+  page,
+}) => {
+  await workerWith(page, [ACME]);
+  await page.goto(`${CONSOLE}/w/w1/settings`);
+  const pages = page.getByRole('main').getByRole('navigation', { name: 'Pages of the settings' }).getByRole('link');
+  await expect(pages).toHaveText(['General', 'AI']);
+  await expect(pages.first()).toHaveAttribute('aria-current', 'page');
+  await expect(pages.last()).not.toHaveAttribute('aria-current');
+  // « General » holds the name, the logo and the deletion; the agents are no longer there.
+  await expect(page.getByRole('region', { name: 'Name' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Agents' })).toHaveCount(0);
+
+  await pages.last().click();
+  await expect(page).toHaveURL(/\/w\/w1\/settings\/ai$/);
+  await expect(page.getByRole('heading', { level: 1, name: 'Workspace settings' })).toBeVisible();
+  await expect(pages.last()).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByRole('region', { name: 'Agents' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Name' })).toHaveCount(0);
+  await expect(page.getByText('Delete the workspace')).toHaveCount(0);
+  // The entry « Settings » of the rail stays the one on screen.
+  await expect(rail(page).getByRole('link', { name: 'Settings', exact: true })).toHaveAttribute('aria-current', 'page');
+  const results = await new AxeBuilder({ page }).include('main').analyze();
+  expect(results.violations.map((violation) => violation.id)).toEqual([]);
+
+  // Back to « General » with the keyboard.
+  await pages.first().focus();
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/\/w\/w1\/settings$/);
+  await expect(page.getByRole('region', { name: 'Name' })).toBeVisible();
 });
 
 test('the section « Agents » leads to the keys, the addresses that receive, and the trigger of each site (FRU-503)', async ({
   page,
 }) => {
   await workerWith(page, [ACME]);
-  await page.goto(`${CONSOLE}/w/w1/settings`);
+  await page.goto(`${CONSOLE}/w/w1/settings/ai`);
   const agents = page.getByRole('region', { name: 'Agents' });
   await expect(agents.getByRole('link', { name: 'Manage the agent keys' })).toHaveAttribute(
     'href',
@@ -180,7 +219,7 @@ test('the section « Agents » leads to the keys, the addresses that receive, an
   page.on('request', (request) => {
     if (request.url().endsWith('/console/workspaces/w1/sites')) asked.push(request.url());
   });
-  await page.goto(`${CONSOLE}/w/w1/settings`);
+  await page.goto(`${CONSOLE}/w/w1/settings/ai`);
   await expect(page.getByRole('region', { name: 'Agents' })).toContainText(
     'Only an owner or an admin of the workspace manages its agent keys.',
   );
@@ -235,4 +274,10 @@ test('at 390 px in French nothing scrolls sideways', async ({ page }) => {
   expect(await sideScroll(page)).toBe(0);
   const results = await new AxeBuilder({ page }).analyze();
   expect(results.violations.map((violation) => violation.id)).toEqual([]);
+  // The page « IA » too (FRU-544): its links and the steps of « Agents » fit in 390 px.
+  await page.getByRole('main').getByRole('link', { name: 'IA', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Agents' })).toBeVisible();
+  expect(await sideScroll(page)).toBe(0);
+  const ai = await new AxeBuilder({ page }).analyze();
+  expect(ai.violations.map((violation) => violation.id)).toEqual([]);
 });

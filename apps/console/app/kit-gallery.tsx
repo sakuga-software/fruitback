@@ -32,6 +32,7 @@ import {
   StatusDot,
   Step,
   Steps,
+  SubNav,
   SuccessMark,
   Title,
   Toggle,
@@ -60,6 +61,16 @@ export default function KitGallery() {
   return (
     <main className="mx-auto flex max-w-[1120px] flex-col gap-10 px-8 py-10">
       <PageHead title="Kit" lead="Every component of the console, once." action={<Button>Add a site</Button>} />
+
+      <section aria-label="Pages of a screen" data-kit="subnav">
+        <SubNav
+          label="Workspace settings"
+          entries={[
+            { to: '/kit', label: 'General', current: true },
+            { to: '/kit/entry', label: 'AI', current: false },
+          ]}
+        />
+      </section>
 
       <section aria-label="Titles" className="flex flex-col gap-2" data-kit="titles">
         <Title size="setup">Set up Fruitback</Title>

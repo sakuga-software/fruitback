@@ -1,20 +1,10 @@
-import { type FormEvent, useCallback, useEffect, useState } from 'react';
+import { type FormEvent, useState } from 'react';
 import { useNavigate } from 'react-router';
-import {
-  LOGO_TYPES,
-  type Site,
-  type Workspace,
-  call,
-  removeWorkspaceLogo,
-  renameWorkspace,
-  setWorkspaceLogo,
-} from '../api';
-import { type Listed, listedOf } from '../listed';
-import { siteName } from '../site-address';
+import { LOGO_TYPES, type Workspace, call, removeWorkspaceLogo, renameWorkspace, setWorkspaceLogo } from '../api';
 import { msg, t } from '../i18n';
 import { problemOf } from '../problems';
 import { manages } from '../setup-stage';
-import { Button, Field, FilePick, LinkButton, Problem } from '../ui';
+import { Button, Field, FilePick, Problem, SubNav } from '../ui';
 import { useLocale } from '../use-locale';
 import { LOGO_NOT_REMOVED, LOGO_NOT_SAVED, LOGO_PROBLEMS, logoRefusal } from '../workspace-logo';
 import { RENAME_PROBLEMS, WORKSPACE_NOT_RENAMED } from './setup-account';
@@ -26,10 +16,28 @@ import { PageHead, WorkspaceMark, useWorkspace } from './workspace';
  * kit, as « My account » lays it out.
  *
  * It holds what the worker lets a workspace change today, for an owner or an admin: its name
- * (FRU-236) and its logo (FRU-428). Every member reads both. The section « Agents » leads an owner
- * or an admin through what an agent needs (FRU-462, FRU-503), and the owner deletes the workspace
- * at the end (FRU-503).
+ * (FRU-236) and its logo (FRU-428). Every member reads both. The owner deletes the workspace at the
+ * end (FRU-503). What an agent needs is on the page « AI » of the settings (FRU-544,
+ * `workspace-settings-ai.tsx`), the second link of `SettingsNav`.
  */
+/** The pages of the settings (FRU-544): « General », here, and « AI », what an agent needs. */
+export function SettingsNav({ workspace, current }: { workspace: Workspace; current: 'general' | 'ai' }) {
+  useLocale();
+  const base = `/w/${workspace.id}/settings`;
+
+  return (
+    <SubNav
+      // Not « Workspace settings »: a name that holds « Workspace », the name of the rail, would be
+      // found by a search of that name too.
+      label={t('Pages of the settings')}
+      entries={[
+        { to: base, label: t('General'), current: current === 'general' },
+        { to: `${base}/ai`, label: t('AI'), current: current === 'ai' },
+      ]}
+    />
+  );
+}
+
 export default function WorkspaceSettings() {
   const { workspace } = useWorkspace();
 
@@ -69,7 +77,8 @@ function Settings() {
         title={t('Workspace settings')}
         lead={t('Settings that every member of {name} sees.', { name: workspace.name })}
       />
-      <section aria-labelledby="workspace-name-title" className="flex max-w-[640px] flex-col gap-[14px] pt-[12px]">
+      <SettingsNav workspace={workspace} current="general" />
+      <section aria-labelledby="workspace-name-title" className="flex max-w-[640px] flex-col gap-[14px]">
         <h2 id="workspace-name-title" className="text-section font-bold">
           {t('Name')}
         </h2>
@@ -104,105 +113,8 @@ function Settings() {
         </p>
       </section>
       <LogoSection workspace={workspace} may={may} />
-      <AgentsSection workspace={workspace} may={may} />
       {workspace.role === 'owner' ? <DeleteSection workspace={workspace} /> : null}
     </>
-  );
-}
-
-/**
- * Everything an agent needs, in one place (FRU-503): its key (FRU-462, `routes/agents.tsx`), the
- * address that receives the calls (Connectors), and the trigger of each site (FRU-468, « Start an
- * agent » on the page of a site). The three were on three screens, and none showed the whole way.
- * For an owner or an admin; anybody else reads why there is no way, and the page asks nothing.
- */
-function AgentsSection({ workspace, may }: { workspace: Workspace; may: boolean }) {
-  useLocale();
-  const [sites, setSites] = useState<Listed<Site>>('loading');
-  const load = useCallback(async () => {
-    setSites('loading');
-    const read = await call<{ sites: Site[] }>('GET', `/console/workspaces/${workspace.id}/sites`);
-    setSites(listedOf(read, (data) => data.sites));
-  }, [workspace.id]);
-  useEffect(() => {
-    if (may) void load();
-  }, [load, may]);
-  const base = `/w/${workspace.id}`;
-
-  return (
-    <section aria-labelledby="workspace-agents-title" className="flex max-w-[640px] flex-col gap-[14px] pt-[32px]">
-      <h2 id="workspace-agents-title" className="text-section font-bold">
-        {t('Agents')}
-      </h2>
-      <p className="text-body">
-        {t('Keys that let an AI agent of your team read the notes of some sites, and reply to them.')}
-      </p>
-      {may ? (
-        <ol className="flex list-decimal flex-col gap-[14px] pl-[20px] text-body">
-          {/* A `li` that is a flex box draws no number: the layout is in a box inside it. */}
-          <li>
-            <div className="flex flex-col items-start gap-[8px]">
-              <span>{t('A key for each agent.')}</span>
-              <Button tone="outline" size="page" to={`${base}/settings/agents`}>
-                {t('Manage the agent keys')}
-              </Button>
-            </div>
-          </li>
-          <li>
-            {t('To start an agent when a note arrives: an address of your team that receives the call.')}{' '}
-            <LinkButton space="inline" to={`${base}/connectors`}>
-              {t('Connectors')}
-            </LinkButton>
-          </li>
-          <li>
-            <div className="flex flex-col gap-[8px]">
-              <span>{t('Then, site by site, when to call it.')}</span>
-              <SiteTriggers base={base} sites={sites} onRetry={() => void load()} />
-            </div>
-          </li>
-        </ol>
-      ) : (
-        <p className="text-small text-muted">
-          {t('Only an owner or an admin of the workspace manages its agent keys.')}
-        </p>
-      )}
-    </section>
-  );
-}
-
-/** A link to « Start an agent » on the page of each site, `…/sites/<site>#agent`. */
-function SiteTriggers({ base, sites, onRetry }: { base: string; sites: Listed<Site>; onRetry: () => void }) {
-  useLocale();
-  if (sites === 'loading') return <p className="text-small text-muted">{t('Loading…')}</p>;
-  if (sites === 'failed')
-    return (
-      <div role="alert" className="flex flex-wrap items-center gap-[12px]">
-        <p className="text-small">{t('The sites of the workspace did not load.')}</p>
-        <Button tone="outline" onClick={onRetry}>
-          {t('Try again')}
-        </Button>
-      </div>
-    );
-  if (sites.length === 0)
-    return (
-      <p className="text-small text-muted">
-        {t('The workspace has no site yet.')}{' '}
-        <LinkButton space="inline" to={`${base}/sites`}>
-          {t('Add a site first')}
-        </LinkButton>
-      </p>
-    );
-
-  return (
-    <ul aria-label={t('Start an agent, by site')} className="flex flex-col gap-[6px] text-small">
-      {sites.map((site) => (
-        <li key={site.id}>
-          <LinkButton space="inline" to={`${base}/sites/${site.id}#agent`}>
-            {t('Start an agent on {site}', { site: siteName(site.origin) })}
-          </LinkButton>
-        </li>
-      ))}
-    </ul>
   );
 }
 
