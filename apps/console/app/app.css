@@ -652,12 +652,14 @@ textarea {
   line-height: var(--text-hint--line-height);
 }
 
-/* A box to tick: 16 px, the border of a control, ink when ticked; its words at 14 px, 8 px after. */
+/*
+ * A box to tick: 16 px, the border of a control, ink when ticked; its words at 14 px, 8 px after. The
+ * content is the label that takes the press: it holds the box and the words, on the whole line.
+ */
 .kit-checkbox {
   display: inline-flex;
   flex-flow: row nowrap;
   align-items: center;
-  gap: 8px;
   min-height: var(--spacing-control-panel);
   cursor: pointer;
 }
@@ -678,7 +680,12 @@ textarea {
 }
 
 .kit-checkbox .checkbox__content {
+  flex-flow: row nowrap;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--spacing-control-panel);
   margin: 0;
+  cursor: pointer;
 }
 
 .kit-checkbox .label {
