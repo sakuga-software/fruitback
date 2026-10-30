@@ -131,7 +131,8 @@ describe('the French words of the extension', () => {
 describe('a word on a page of the extension', () => {
   /** What reads as words and is none to translate: a line for the console, the name of the product. */
   // A name is not translated: the product, and the two providers of a sign-in (FRU-297).
-  const NAMES = new Set(['Fruitback', 'Google', 'GitHub']);
+  // FRU-530: the providers of a destination, as the worker names them in its label.
+  const NAMES = new Set(['Fruitback', 'Google', 'GitHub', 'Linear', 'REST API']);
   const NOT_FOR_A_READER = (text: string): boolean => text.startsWith('[fruitback]') || NAMES.has(text);
 
   it('goes through the catalog', () => {

@@ -13,7 +13,8 @@ process.env.FRUITBACK_GUIDE_CAPTURE = '1';
 export default defineConfig({
   ...base,
   testMatch: '**/e2e/first-note.spec.ts',
-  snapshotPathTemplate: '{testDir}/../docs/assets/guide/{arg}{ext}',
+  // `guide/<name>` for the captures of the guide, `video/<name>` for the frames of the video (FRU-531).
+  snapshotPathTemplate: '{testDir}/../docs/assets/{arg}{ext}',
   updateSnapshots: 'changed',
   retries: 0,
   workers: 1,

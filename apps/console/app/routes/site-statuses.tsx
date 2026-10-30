@@ -424,9 +424,7 @@ function LinearUnread({
       {colours}
       <div className="mt-[8px] flex flex-wrap items-center gap-[12px]">
         <p role="alert" className="min-w-0 flex-1 text-small text-muted">
-          {t(
-            'Fruitback could not read the states of Linear. The statuses you set are not lost. Reload the page to try again.',
-          )}
+          {t('Fruitback could not read the states of Linear. The statuses you set are not lost.')}
         </p>
         <Button tone="outline" onClick={onRetry}>
           {t('Try again')}

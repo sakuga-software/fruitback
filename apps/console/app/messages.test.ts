@@ -23,6 +23,7 @@ const APP = new URL('./', import.meta.url);
 // `guide-steps.ts` holds the steps of the guide of the extension, that `setup-guide.tsx` shows (FRU-486).
 // `extension-here.ts` says why the extension of this browser was not connected, at step 3 (FRU-487).
 // `read-problem.tsx` says why a read failed, for every screen that reads (FRU-516).
+// `authorize-answer.ts` says why « Connect an agent » refused an answer (FRU-467).
 const screens = [
   ...readdirSync(new URL('routes/', APP))
     .map((name) => `routes/${name}`)
@@ -44,6 +45,7 @@ const screens = [
   'setup-guide.tsx',
   'extension-here.ts',
   'read-problem.tsx',
+  'authorize-answer.ts',
 ];
 const sources = new Map(screens.map((name) => [name, readFileSync(new URL(name, APP), 'utf8')]));
 

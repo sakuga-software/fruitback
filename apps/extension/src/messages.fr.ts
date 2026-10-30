@@ -43,7 +43,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Your browser will ask to allow this site once.': 'Votre navigateur demandera une fois l’accès à ce site.',
   'Your team and invited guests': 'Votre équipe et les invités',
   'Everyone who visits the site': 'Tous ceux qui visitent le site',
-  'On · notes go to {tracker}': 'Activé · les notes vont vers {tracker}',
   'or press {keys} on the page': 'ou appuyez sur {keys} sur la page',
   '1 fix to check': '1 correction à vérifier',
   '{count} fixes to check': '{count} corrections à vérifier',
@@ -56,6 +55,9 @@ export const FRENCH: Readonly<Record<string, string>> = {
   // The page that opens at install (FRU-318).
   'Welcome to Fruitback': 'Bienvenue dans Fruitback',
   'Fruitback is installed': 'Fruitback est installé',
+  // The demonstration under the action of the page (FRU-531).
+  'A first note, from the click to the pin': 'Une première note, du clic au repère',
+  '{seconds} seconds': '{seconds} secondes',
   'Pin Fruitback, then sign in. It then works on every site your team reviews.':
     'Épinglez Fruitback, puis connectez-vous. Il fonctionne ensuite sur chaque site que votre équipe relit.',
   'Pin Fruitback': 'Épinglez Fruitback',

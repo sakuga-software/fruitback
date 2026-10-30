@@ -167,6 +167,33 @@ function popupStates(): GalleryState[] {
         }),
     },
     {
+      id: 'site-on-change',
+      title: 'Site on · a role that may change where the notes go',
+      build: (d) =>
+        siteOn(d, {
+          ...on,
+          on: true,
+          visibility: { shown: true, onChange: nothing },
+          facts: {
+            destination: 'Linear · Acme web',
+            toCheck: 2,
+            open: 7,
+            change: {
+              sources: [
+                { id: 'lin', kind: 'linear', label: 'Linear · Acme' },
+                { id: 'gh', kind: 'github', label: 'GitHub · acme' },
+              ],
+              place: { connector: 'lin', teamId: 'web' },
+              loadOffer: async () => ({
+                kind: 'linear',
+                teams: [{ id: 'web', name: 'Acme web', key: 'WEB', projects: [] }],
+              }),
+              onPlace: async () => true,
+            },
+          },
+        }),
+    },
+    {
       id: 'site-on-quiet',
       title: 'Site on · nothing open',
       build: (d) => siteOn(d, { ...on, on: true, visibility: { shown: true, onChange: nothing }, facts: { open: 0 } }),
@@ -198,6 +225,11 @@ function welcomeStates(): GalleryState[] {
 
   return [
     { id: 'signed-out', title: 'Signed out', build: (d) => welcomeScreen(d, signIn({ kind: 'signed-out' })) },
+    {
+      id: 'signed-out-less-motion',
+      title: 'Signed out · less motion: the video waits behind its poster (FRU-531)',
+      build: (d) => welcomeScreen(d, { ...signIn({ kind: 'signed-out' }), reducedMotion: true }),
+    },
     {
       id: 'sign-in-refused',
       title: 'Sign-in stopped · refused',

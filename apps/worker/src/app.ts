@@ -456,7 +456,12 @@ async function routed(
           kv,
           noteIndex,
           replyLength: REPLY_LENGTH,
-          route: (site) => routeFor(request, served, site),
+          // FRU-524: a site that the accounts do not read fails one call of a tool, not the request.
+          // The tool answers its `StoreError` as an error of the tool.
+          route: (site) =>
+            routeFor(request, served, site).catch((error: unknown) => {
+              throw error instanceof SiteUnread ? error.unread : error;
+            }),
         }),
     });
   }
@@ -740,7 +745,7 @@ async function writerIn(
 
 /**
  * The site of a request that the accounts did not answer (FRU-495). `handleRequest` answers it with
- * `502 store-unavailable`. Its own class, so that a `StoreError` of a store that a route reads still
+ * `502 store-unavailable`. A tool of `/mcp` gets its `StoreError` back instead (FRU-524). Its own class, so that a `StoreError` of a store that a route reads still
  * reaches the route, which answers it.
  */
 class SiteUnread extends Error {

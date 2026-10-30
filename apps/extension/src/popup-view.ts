@@ -3,6 +3,7 @@ import {
   type Definition,
   alertBox,
   definitions,
+  dropMark,
   head,
   keys,
   listRow,
@@ -14,7 +15,7 @@ import {
   toggle,
 } from './kit.ts';
 import type { PlaceIds, Source, SourceOffer } from './cloud.ts';
-import { option, placeChoice, shownChoice } from './place-choice.ts';
+import { option, placeChoice, shownChoice, sourceMark } from './place-choice.ts';
 
 /**
  * The screens of the popup. The shell and the screens 1 and 4 are those of the mock-up of 2026-10-20
@@ -471,14 +472,11 @@ export function turnOnScreen(document: Document, options: TurnOnOptions): HTMLEl
   const choices = options.choices;
   let chosen = first?.id;
   const entries: Definition[] = [];
-  if (choices === undefined && options.destination !== undefined) {
-    const where = change();
-    entries.push({
-      term: t('Notes go to'),
-      value: options.destination,
-      ...(where === undefined ? {} : { action: where }),
-    });
-  }
+  // FRU-530: the line of « Notes go to » with the mark of its provider, as on a site that is on.
+  const destination =
+    choices === undefined && options.destination !== undefined
+      ? destinationEntry(document, options.destination, change())
+      : undefined;
   if (choices === undefined) {
     const who = change();
     entries.push({
@@ -488,6 +486,7 @@ export function turnOnScreen(document: Document, options: TurnOnOptions): HTMLEl
     });
   }
   const facts = definitions(document, entries);
+  if (destination !== undefined) facts.prepend(destination);
   /** A line of the list whose value is a field: a `select` in its `dd`. */
   const field = (term: string, input: HTMLElement): HTMLElement => {
     const entry = element(document, 'div', '', 'kit-dl-entry');
@@ -537,10 +536,71 @@ export function turnOnScreen(document: Document, options: TurnOnOptions): HTMLEl
   return frame(site, element(document, 'h1', t('Turn Fruitback on for this site?')), facts, act);
 }
 
+/** A provider of a destination, by the mark that draws it: a source, or Fruitback with no tracker. */
+export type DestinationKind = Source['kind'] | 'fruitback';
+
+/**
+ * The words the worker writes first in the label of a destination (`KIND_NAMES` of the worker's
+ * `console-api.ts`, and « Fruitback » in `session-sites.ts`): « Linear · Northwind ».
+ */
+const KIND_WORDS: [DestinationKind, string][] = [
+  ['linear', 'Linear'],
+  ['github', 'GitHub'],
+  ['rest', 'REST API'],
+];
+
+/** The provider and the place of a label: « Linear · Northwind » → linear, « Northwind ». */
+export function readDestination(label: string): { kind?: DestinationKind; provider?: string; place: string } {
+  if (label === 'Fruitback') return { kind: 'fruitback', place: label };
+  for (const [kind, word] of KIND_WORDS) {
+    if (label.startsWith(`${word} · `)) return { kind, provider: word, place: label.slice(word.length + 3) };
+  }
+
+  return { place: label };
+}
+
+/**
+ * « Notes go to », as a line of a list of terms (FRU-530): the mark of the provider, then the place.
+ * The provider is said to a screen reader in words, since the mark is a drawing it skips.
+ */
+export function destinationEntry(document: Document, label: string, action?: HTMLElement): HTMLElement {
+  const entry = element(document, 'div', '', 'kit-dl-entry');
+  entry.classList.add('destination-entry');
+  const { kind, provider, place } = readDestination(label);
+  const value = element(document, 'dd', '', 'destination-value');
+  if (kind === 'fruitback') {
+    const drop = dropMark(document, 'source-mark');
+    drop.dataset.kind = 'fruitback';
+    value.append(drop);
+  } else if (kind !== undefined) value.append(sourceMark(document, kind));
+  if (provider !== undefined) value.append(element(document, 'span', `${provider} · `, 'visually-hidden'));
+  value.append(element(document, 'span', place, 'destination-place'));
+  entry.append(element(document, 'dt', t('Notes go to')), value);
+  if (action !== undefined) {
+    const holder = element(document, 'dd', '', 'kit-dl-action');
+    holder.append(action);
+    entry.append(holder);
+  }
+
+  return entry;
+}
+
+/** What changes where the notes of a site go (FRU-530): the lists of « Turn on », for a role that may. */
+export type DestinationChange = {
+  sources: Source[];
+  /** Where the notes go now: `null` for « Fruitback », absent when not known. */
+  place?: PlaceIds | null;
+  loadOffer: (connector: string) => Promise<SourceOffer | undefined>;
+  /** Answers whether the change holds: `false` puts the lists back as they were. */
+  onPlace: (place: PlaceIds | null) => Promise<boolean>;
+};
+
 /** What the worker says of a site that is on (FRU-295), read after the screen is drawn. */
 export type SiteFacts = {
   /** « Linear · Northwind ». */
   destination?: string;
+  /** The lists that change it (FRU-530). Absent: a role that may not, and no « Change ». */
+  change?: DestinationChange;
   /** The notes of the person the team marked done, not checked yet. */
   toCheck?: number;
   /** The notes of the site that are New, To do or In progress. */
@@ -584,15 +644,9 @@ function hostAsTitle(site: HTMLElement): HTMLElement {
   return site;
 }
 
-/** The state line of a site that is on: where its notes go, or its workspace. */
-function onState(workspace: string, on: boolean, destination: string | undefined): string {
-  if (!on) return t('Off · {workspace}', { workspace });
-  // « Linear · Northwind » → « Linear »: the tracker, as the mock-up says it under the host.
-  const tracker = destination?.split(' · ')[0]?.trim();
-
-  return tracker === undefined || tracker === ''
-    ? t('On · {workspace}', { workspace })
-    : t('On · notes go to {tracker}', { tracker });
+/** The state line of a site: « On · Acme ». Where its notes go has its own line (FRU-530). */
+function onState(workspace: string, on: boolean): string {
+  return on ? t('On · {workspace}', { workspace }) : t('Off · {workspace}', { workspace });
 }
 
 /**
@@ -627,7 +681,7 @@ export function siteOn(document: Document, options: SiteOnOptions): HTMLElement 
     hostAsTitle(
       siteLine(document, {
         host,
-        state: onState(options.workspace, options.on, options.facts?.destination),
+        state: onState(options.workspace, options.on),
         on: options.on,
       }),
     ),
@@ -640,6 +694,12 @@ export function siteOn(document: Document, options: SiteOnOptions): HTMLElement 
   );
 
   const body: Node[] = [row];
+  // FRU-530: where the notes go, under the site, once the worker says it (`showSiteFacts`).
+  if (options.on) {
+    const where = element(document, 'dl', '', 'kit-dl');
+    where.classList.add('site-destination');
+    body.push(where);
+  }
   if (options.on && options.visibility !== undefined) body.push(visibilityRow(document, options.visibility));
   // Off, or hidden here: the widget left the tab, so there is nothing to leave and nothing to show.
   if (options.on && options.visibility?.shown !== false) {
@@ -693,7 +753,12 @@ export function showSiteFacts(
 ): void {
   const document = screen.ownerDocument;
   const state = screen.querySelector('.kit-site-state');
-  if (state !== null) state.textContent = onState(options.workspace, options.on, facts.destination);
+  if (state !== null) state.textContent = onState(options.workspace, options.on);
+  const where = screen.querySelector<HTMLElement>('.site-destination');
+  // A role that may change the place gets the line even when the worker named none: « Not known », and
+  // « Change » to set it (review of #736).
+  const label = facts.destination ?? (facts.change === undefined ? undefined : t('Not known'));
+  if (where !== null && label !== undefined) showDestination(where, label, facts.change);
   const lines = screen.querySelector('.site-lines');
   if (lines === null) return;
   const rows: HTMLElement[] = [];
@@ -725,6 +790,27 @@ export function showSiteFacts(
     );
   }
   lines.replaceChildren(...rows);
+}
+
+/**
+ * « Notes go to » of a site that is on (FRU-530), with « Change » for a role that may: it opens the
+ * lists of « Turn on » in place of the line. A change the worker refuses puts the lists back.
+ */
+function showDestination(list: HTMLElement, label: string, change: DestinationChange | undefined): void {
+  const document = list.ownerDocument;
+  const open = (): void => {
+    if (change === undefined) return;
+    const { entries } = placeChoice(document, {
+      sources: () => change.sources,
+      ...(change.place === undefined ? {} : { place: change.place }),
+      loadOffer: change.loadOffer,
+      onPlace: change.onPlace,
+    });
+    list.replaceChildren(...entries);
+    list.querySelector('select')?.focus();
+  };
+  const action = change === undefined ? undefined : textButton(document, t('Change'), open);
+  list.replaceChildren(destinationEntry(document, label, action));
 }
 
 /** One or many, by the rules of the language of the popup: « 1 fix », « 2 fixes ». */
