@@ -1,0 +1,89 @@
+/*
+  The frame of the gallery (FRU-523), around the screens. Every rule is under `.gallery-`: the sheets
+  of the extension come first, and nothing here may change what a screen looks like.
+*/
+body.gallery-all {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  background: var(--surface-sunken, #f4f4f5);
+}
+
+.gallery-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  align-items: baseline;
+  padding: 24px 32px 0;
+  font: 14px/1.4 var(--font-sans, system-ui, sans-serif);
+  color: var(--text);
+}
+
+.gallery-head h1 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.gallery-head a {
+  color: inherit;
+}
+
+.gallery-head a[aria-current='page'] {
+  font-weight: 600;
+  text-decoration: none;
+}
+
+body:not(.gallery-all) .gallery-head {
+  display: none;
+}
+
+body.gallery-all #app {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 40px;
+  align-items: flex-start;
+  padding: 24px 32px 48px;
+}
+
+.gallery-state {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.gallery-name {
+  font: 600 14px/1.4 var(--font-sans, system-ui, sans-serif);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.gallery-frame {
+  overflow: hidden;
+  border-radius: 12px;
+  box-shadow:
+    0 0 0 1px var(--line-soft, rgb(0 0 0 / 8%)),
+    0 8px 24px rgb(0 0 0 / 8%);
+}
+
+.gallery-frame-popup {
+  width: 380px;
+  background: var(--surface);
+}
+
+.gallery-frame-welcome {
+  width: 900px;
+  min-height: 700px;
+  background: var(--surface-raised);
+}
+
+.gallery-frame-panel {
+  width: 400px;
+  height: 900px;
+  overflow-y: auto;
+  background: var(--surface);
+}
+
+/* The panel fills its window: here its window is the frame. */
+.gallery-frame-panel .side-panel {
+  min-height: 100%;
+}
