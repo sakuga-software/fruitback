@@ -416,7 +416,10 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   words of the card), with who sees its notes and, when it is the exception, who writes them, on
   one line under it; then its status, the count of its notes at 20 px, a bar whose name says the
   counts again, and how many are new in the accent, or « Waiting for the first note »; then a foot
-  under a line, where the notes go at the left, to whoever sees the tracker, and the last one at the
+  under a line, where the notes go at the left, to whoever sees the tracker, after the logo of its
+  tracker (FRU-541, the mark of the Notes table, read from the first word of the label of the
+  worker: « Linear », « GitHub », « REST API »; a word it does not know has its name alone), and the
+  last one at the
   right (`ago.ts`: « 12 min ago », « Yesterday », then the day). The terms of the foot are for a
   screen reader: the place and the moment say what they are to the eye. How the notes came (the
   script or the extension) is on the page of the site. Cards are side by side while each has 280 px, and
