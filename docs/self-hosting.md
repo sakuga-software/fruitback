@@ -182,8 +182,8 @@ The console opens on « Set up Fruitback », at « Your site »:
 
 1. In **Site address**, write the address of the site: `http://localhost:5500` for the trial.
 2. Under **Who sees the notes?**, choose **Everyone who visits**. The other choice, « Members of … »,
-   is the default: there a visitor can still leave a note, but sees no pin, and only a member of the
-   workspace signed in through the extension reads them.
+   is the default: there a visitor sees no pin and, on a new site, cannot leave a note. Only a member
+   of the workspace signed in through the extension reads and writes the notes.
 3. Click **Add site**.
 
 « Put it on the site » then shows the **Script tag** of this site, with **Copy script**:

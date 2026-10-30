@@ -152,6 +152,15 @@ describe('the landing (FRU-418)', () => {
     assert.ok(!landing.includes('not in a store yet'), 'the landing still says the extension is in no store');
   });
 
+  it('keeps no word of the garden in its title, and promises the component only when the build exposes it (FRU-514)', () => {
+    const landing = readFileSync(new URL('_layouts/landing.html', DOCS), 'utf8');
+    const title = /<h1>([^<]*)<\/h1>/.exec(landing)?.[1] ?? '';
+
+    assert.ok(title.length > 0, 'the landing has no h1');
+    assert.doesNotMatch(title, /plant|harvest|seed|ripe/i, 'the h1 keeps the metaphor that FRU-355 removed');
+    assert.ok(!landing.includes('attached to every note'), 'the landing says every note carries the React component');
+  });
+
   it('names only fragments that are headings of their guide', () => {
     const links = anchoredLinksOfLanding();
     assert.ok(links.length > 0, 'no anchored link found — the walk stopped matching');
@@ -401,5 +410,26 @@ describe('the guides split in pages (FRU-427)', () => {
     });
 
     assert.deepEqual(broken, [], 'these links of a guide name no file, or no heading of it');
+  });
+});
+
+/**
+ * Sentences that were true before a release, or before FRU-330, and stayed in the guides after it
+ * (FRU-514). The packages are on npm since 0.5.0, and the visibility of a site is not its mode.
+ */
+describe('the guides after the first release (FRU-514)', () => {
+  const readme = readFileSync(new URL('../README.md', DOCS), 'utf8');
+  const install = readFileSync(new URL('install.md', DOCS), 'utf8');
+
+  it('says the packages and the extension are published', () => {
+    const published = readme.split('\n').find((line) => line.startsWith('| Published'));
+
+    assert.ok(published !== undefined, 'the table of the modes lost its row « Published »');
+    assert.doesNotMatch(published, /not yet/, 'the README says the modes are not published');
+    assert.ok(!install.includes('not on npm yet'), 'docs/install.md says the packages are not on npm');
+  });
+
+  it('does not call the visibility « Members of the workspace » the team mode', () => {
+    assert.ok(!install.includes('this is the team mode'), 'docs/install.md names a visibility as a mode');
   });
 });
