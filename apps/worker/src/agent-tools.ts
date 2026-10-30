@@ -55,6 +55,13 @@ export type AgentToolsContext = {
 /** The most notes `feedback_as_text` writes for a whole site. */
 export const MAX_TEXT_NOTES = 200;
 
+/**
+ * The pages that `list_feedback` and `feedback_as_text` read at the same time (FRU-539). A read of a
+ * tracker calls it: GitHub counts the requests that run at the same time, and a page of GitHub
+ * already fetches four threads at once.
+ */
+export const PAGE_READS_AT_ONCE = 4;
+
 const NO_SITE = 'No site of this key has this id.';
 const NO_NOTE = 'No note of the sites of this key has this id.';
 const UNAVAILABLE = 'The store of the notes did not answer. Try again later.';
@@ -227,12 +234,33 @@ function noteView(site: Site, issue: NoteIssue, seesTracker: boolean): Record<st
   return { id: noteIdOf(site.id, issue.note.id), site: site.id, ...(seesTracker ? { issueId } : {}), ...fields };
 }
 
-/** The issues of these notes of the index, in their order, read page by page. */
+/**
+ * The issues of these notes of the index, in their order. Each page is read once, and
+ * `PAGE_READS_AT_ONCE` pages at the same time (FRU-539): one page after the other made 50 reads in a
+ * row for `list_feedback`, and 200 for `feedback_as_text`. A note that two pages hold is the one of
+ * the last page, as when the pages were read one after the other.
+ */
 async function contentOf(site: Site, listed: readonly ListedNote[]): Promise<NoteIssue[]> {
   const pages = [...new Set(listed.map((note) => note.pageUrl))];
+  const byPage: NoteIssue[][] = [];
+  let next = 0;
+  let failed = false;
+  const reader = async (): Promise<void> => {
+    // After a failure, no reader starts a page: the call answers the error of the first one.
+    while (!failed && next < pages.length) {
+      const position = next++;
+      try {
+        byPage[position] = await site.read(pages[position] as string);
+      } catch (error) {
+        failed = true;
+        throw error;
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(PAGE_READS_AT_ONCE, pages.length) }, reader));
   const read = new Map<string, NoteIssue>();
-  for (const page of pages) {
-    for (const issue of await site.read(page)) read.set(issue.note.id, issue);
+  for (const issues of byPage) {
+    for (const issue of issues) read.set(issue.note.id, issue);
   }
 
   return listed.flatMap((note) => {
