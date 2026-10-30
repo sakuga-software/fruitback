@@ -159,6 +159,23 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
 
       return json({ error: 'connector-failed' }, 502);
     }
+    // FRU-501: a second Linear, `c2`, answers the same teams, each named « B … », and its reads are
+    // kept as `c2:<query>`.
+    if (pathname.endsWith('/c2/teams')) {
+      const query = new URL(request.url()).searchParams;
+      worker.teamReads.push(`c2:${query.toString()}`);
+      const other = (teams: Team[]) =>
+        teams.map((each) => ({ ...each, id: `b${each.id}`, name: `B ${each.name}`, key: `B${each.key}` }));
+      const later = other(worker.laterTeams ?? []);
+      const words = query.get('q')?.toLowerCase();
+      if (words !== undefined) {
+        return json({
+          teams: [...other(worker.teams), ...later].filter((team) => team.name.toLowerCase().includes(words)),
+        });
+      }
+
+      return json(query.get('after') === 'c-2' ? { teams: later } : { teams: other(worker.teams), next: 'c-2' });
+    }
     if (pathname.endsWith('/c1/teams')) {
       const query = new URL(request.url()).searchParams;
       worker.teamReads.push(query.toString());
@@ -903,4 +920,52 @@ test('a search emptied with the cross, then « Try again », leaves no hidden se
     'Team 2 (T2) · no project',
   ]);
   await expect(page.getByRole('option', { name: 'More teams of Linear · Key of Ana…', exact: true })).toBeVisible();
+});
+
+test('two Linears each keep their own pages and searches: no answer of one is dropped by the other (FRU-501)', async ({
+  page,
+}) => {
+  const worker = await workerWith(page);
+  const team = (index: number, name = `Team ${index}`): Team => ({
+    id: `t${index}`,
+    name,
+    key: `T${index}`,
+    projects: [],
+  });
+  const SECOND = { id: 'c2', kind: 'linear', label: 'Linear · Bo', createdAt: '2026-10-03T10:00:00.000Z' };
+  worker.connectors = [LINEAR, SECOND];
+  worker.teams = [team(1)];
+  worker.laterTeams = [team(2, 'Payments')];
+  await openPlaces(page);
+  await expect(add(page)).toBeEnabled();
+
+  // One search: each Linear is asked, at the same time, and both answers are taken.
+  await search(page).fill('pay');
+  await expect
+    .poll(() => worker.teamReads.filter((query) => query.includes('q=')).sort())
+    .toEqual(['c2:q=pay', 'q=pay']);
+  await add(page).click();
+  await expect(page.getByRole('option').filter({ hasText: /Payments/ })).toHaveText([
+    'Payments (T2) · no project',
+    'B Payments (BT2) · no project',
+  ]);
+  await page.keyboard.press('Escape');
+  await panel(page).getByRole('button', { name: 'Clear the search' }).click();
+
+  // The next page of each, one after the other: each list takes its own.
+  await add(page).click();
+  await page.getByRole('option', { name: /^More teams of Linear · Key of Ana/ }).click();
+  await add(page).click();
+  await page.getByRole('option', { name: /^More teams of Linear · Key of Bo/ }).click();
+  await expect
+    .poll(() => worker.teamReads.filter((query) => query.includes('after=')).sort())
+    .toEqual(['after=c-2', 'c2:after=c-2']);
+  await add(page).click();
+  await expect(page.getByRole('option').filter({ hasText: /^More teams/ })).toHaveCount(0);
+  await expect(page.getByRole('option').filter({ hasText: /^(B )?(Team|Payments)/ })).toHaveText([
+    'Team 1 (T1) · no project',
+    'Payments (T2) · no project',
+    'B Team 1 (BT1) · no project',
+    'B Payments (BT2) · no project',
+  ]);
 });

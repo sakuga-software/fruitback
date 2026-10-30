@@ -87,6 +87,20 @@ export function SitePlaces({
     });
   }
 
+  /** Moves every list of teams on, as they are now: a list read during a pause gets the event too. */
+  function stepAll(event: TeamListEvent) {
+    setOffers((current) =>
+      Object.fromEntries(
+        Object.entries(current).map(([source, offer]) => [
+          source,
+          typeof offer === 'object' && offer.kind === 'linear'
+            ? { kind: 'linear', list: stepTeamList(offer.list, event) }
+            : offer,
+        ]),
+      ),
+    );
+  }
+
   // The teams of each Linear and the repositories of each GitHub are read when the page draws them, and
   // again on « Try again », which starts each list of teams again. An address has nothing to choose.
   useEffect(() => {
@@ -154,7 +168,7 @@ export function SitePlaces({
     clearTimeout(pause.current);
     const give = () => {
       typed.current = search.trim();
-      for (const source of Object.keys(offers)) step(source, { type: 'type', query: search });
+      stepAll({ type: 'type', query: search });
     };
     if (search.trim() === '') give();
     else pause.current = setTimeout(give, SEARCH_PAUSE_MS);
