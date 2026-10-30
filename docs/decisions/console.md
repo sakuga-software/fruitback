@@ -384,6 +384,10 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   the person. **The section « Agents » shows the whole way of an agent** (FRU-503): its key, an
   address that receives (Connectors), then the trigger of each site, a link to `#agent` on the page
   of the site; anybody but an owner or an admin reads one sentence, and the page asks nothing.
+  **The settings have two pages** (FRU-544, asked by Mathieu): « General » (`/settings`: the name,
+  the logo, the deletion) and « AI » (`/settings/ai`: the section « Agents »), two links of
+  `SubNav` of the kit under the head of both, the page on screen with `aria-current="page"`. The
+  keys of the agents (`/settings/agents`) are reached from « AI », and their crumbs lead back to it.
   `e2e/console-workspace-settings.spec.ts` holds the entry by role, the section and the deletion. **At 900 px and under the sections are one row
   that scrolls in the rail, and the page never scrolls sideways**: the mockup does at 390 px (its
   document is 547 px wide). An edge of the row that hides a section fades, and the section on
@@ -506,8 +510,13 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   French, with axe.
 - **The Notes page lists the index of the notes, never their text** (FRU-245, `routes/notes.tsx`,
   read from the route of FRU-244). A note is its first 64 characters (Q6: all that Fruitback keeps
-  of the text), cut to two lines, with its page and « Show on the page » (`<page>#fruitback-note=<id>`,
-  the link of the widget, FRU-253). The chips are every note and each place that has notes, in the order
+  of the text), cut to two lines. **A row is short words beside the note** (FRU-546, 547, 552, 553,
+  Mathieu on 2026-10-30): « Site » is the domain and its extension (`domainOf`, `fruitback.com` for
+  `app.fruitback.com`); « Left by » is the icon of the role and the name cut to its room, both whole
+  in a tooltip that the keyboard reaches too; « Went to » is the mark of the place and the reference
+  on one line, the name of the tracker said to a screen reader only; the last column is an icon that
+  opens the page (`<page>#fruitback-note=<id>`, the link of the widget, FRU-253) in a new tab, its
+  address in the tooltip. The tooltips are `Tip` and `IconLink` of the kit (HeroUI's). The chips are every note and each place that has notes, in the order
   of the sources of the workspace. **No chip « Not delivered »**, which the mockup draws: the route
   counts those notes and does not filter them, and a chip that chooses nothing is not drawn; each of
   them says « Not delivered yet » on its row. The search says what the index searches (the 64

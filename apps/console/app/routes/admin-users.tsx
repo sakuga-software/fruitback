@@ -11,6 +11,7 @@ import {
   Cut,
   ListBar,
   NoRows,
+  PanelActions,
   PanelRows,
   PanelSection,
   RowLink,
@@ -448,8 +449,10 @@ function Panel({
         ) : (
           <PanelRows rows={rows.map((row) => ({ ...row, name: <span className="font-semibold">{row.name}</span> }))} />
         )}
-        <ChangeRole user={user} onChanged={onWorkspaces} />
-        <AddToWorkspace user={user} onChanged={onWorkspaces} />
+        <PanelActions>
+          <ChangeRole user={user} onChanged={onWorkspaces} />
+          <AddToWorkspace user={user} onChanged={onWorkspaces} />
+        </PanelActions>
       </PanelSection>
 
       <PanelSection title={t('Sign-in')}>

@@ -23,22 +23,47 @@ function storage(): Storage | undefined {
   }
 }
 
-/** Keeps the request before the page leaves for a provider. */
-export function keepConnect(request: string, now = Date.now()): void {
+/**
+ * The consent page of OAuth (FRU-467) comes back the same way, under its own key: a request of a
+ * client lives ten minutes.
+ */
+const AUTHORIZE_KEY = 'fruitback:authorize';
+const AUTHORIZE_LIVES_MS = 10 * 60 * 1000;
+
+function keep(key: string, lives: number, request: string, now: number): void {
   if (!REQUEST.test(request)) return;
   try {
-    storage()?.setItem(KEY, JSON.stringify({ request, until: now + LIVES_MS } satisfies Kept));
+    storage()?.setItem(key, JSON.stringify({ request, until: now + lives } satisfies Kept));
   } catch {
     // Full or refused: the sign-in comes back to the root.
   }
 }
 
+/** Keeps the request before the page leaves for a provider. */
+export function keepConnect(request: string, now = Date.now()): void {
+  keep(KEY, LIVES_MS, request, now);
+}
+
+/** Keeps the request of a client of OAuth before the consent page leaves for a provider (FRU-467). */
+export function keepAuthorize(request: string, now = Date.now()): void {
+  keep(AUTHORIZE_KEY, AUTHORIZE_LIVES_MS, request, now);
+}
+
 /** The request to go back to, once: it is forgotten as it is read. */
 export function takeConnect(now = Date.now()): string | undefined {
+  return take(KEY, now);
+}
+
+/** The request of a client of OAuth to go back to, once (FRU-467). */
+export function takeAuthorize(now = Date.now()): string | undefined {
+  return take(AUTHORIZE_KEY, now);
+}
+
+function take(key: string, now: number): string | undefined {
   const kept = storage();
-  const value = kept?.getItem(KEY) ?? null;
+  const value = kept?.getItem(key) ?? null;
   if (value === null) return undefined;
-  kept?.removeItem(KEY);
+  kept?.removeItem(key);
   try {
     const read = JSON.parse(value) as Partial<Kept>;
     if (typeof read.request !== 'string' || !REQUEST.test(read.request)) return undefined;

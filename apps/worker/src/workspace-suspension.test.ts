@@ -770,6 +770,7 @@ const READ_ONLY_RESTS = [
   '/members/seen',
   '/admin-reads',
   '/notes',
+  '/sites/choices',
   '/connectors/con_1/states',
   '/connectors/con_1/teams',
   '/connectors/con_1/repositories',

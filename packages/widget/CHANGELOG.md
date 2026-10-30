@@ -1,5 +1,12 @@
 # @fruitback/widget
 
+## 0.6.0
+
+### Patch Changes
+
+- 9bc7374: The widget keeps its styles on a page whose Content Security Policy refuses inline styles (`style-src 'self'`): each part adopts its stylesheet into the Shadow root in place of a `<style>` element, which such a page refused. There, the widget showed the browser's own buttons.
+- @fruitback/shared@0.6.0
+
 ## 0.5.0
 
 ### Minor Changes

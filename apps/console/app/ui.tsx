@@ -10,12 +10,14 @@ import {
   Chip as HeroChip,
   Input,
   Label,
+  Link as HeroLink,
   ListBox,
   Radio,
   RadioGroup,
   Select,
   Switch,
   TextField,
+  Tooltip,
 } from '@heroui/react';
 import {
   type CSSProperties,
@@ -317,6 +319,62 @@ export function IconButton({
     >
       {children}
     </HeroButton>
+  );
+}
+
+type IconLinkProps = {
+  /** Where the link goes, said to a screen reader: its picture says it to the eye alone. */
+  label: string;
+  href: string;
+  /** What the tooltip shows, under the pointer and under the focus: the address, for a link out. */
+  tip: string;
+  /** The picture: an `svg` with `aria-hidden`. */
+  children: ReactNode;
+};
+
+/**
+ * A link that is a picture, opened in a new tab, with a tooltip of HeroUI (FRU-546): « Open the page
+ * of the note » in the table of the notes, its address in the tooltip. 32 px, as a small
+ * `IconButton`.
+ */
+export function IconLink({ label, href, tip, children }: IconLinkProps) {
+  return (
+    <Tooltip delay={300} closeDelay={0}>
+      <HeroLink href={href} target="_blank" rel="noreferrer" aria-label={label} className="kit-icon-link">
+        {children}
+      </HeroLink>
+      <Tooltip.Content placement="top" className="kit-tip">
+        {tip}
+      </Tooltip.Content>
+    </Tooltip>
+  );
+}
+
+type TipProps = {
+  /** What a screen reader says of the whole: the words cut on screen, and what the picture means. */
+  label: string;
+  /** What the tooltip shows: the words whole, and what the picture means. */
+  tip: string;
+  className?: string;
+  /** What is drawn: a picture and words cut to their room. */
+  children: ReactNode;
+};
+
+/**
+ * Words cut to their room, whole in a tooltip of HeroUI (FRU-553): the author of a note, with the
+ * icon of their role. The trigger takes focus, so a keyboard shows the tooltip too, and it is one
+ * picture to a screen reader, named by `label`: nothing to press.
+ */
+export function Tip({ label, tip, className = '', children }: TipProps) {
+  return (
+    <Tooltip delay={300} closeDelay={0}>
+      <Tooltip.Trigger role="img" aria-label={label} className={`kit-tip-trigger ${className}`}>
+        {children}
+      </Tooltip.Trigger>
+      <Tooltip.Content placement="top" className="kit-tip">
+        {tip}
+      </Tooltip.Content>
+    </Tooltip>
   );
 }
 
@@ -631,7 +689,7 @@ export function Checks({ label, value, onChange, options, hint, error, groupRef 
             <HeroCheckbox.Control>
               <HeroCheckbox.Indicator />
             </HeroCheckbox.Control>
-            <span className="flex flex-wrap items-baseline gap-x-[10px]">
+            <span className="flex min-w-0 flex-wrap items-baseline gap-x-[10px]">
               <Label>{option.label}</Label>
               {option.detail === undefined ? null : <span className="text-hint text-muted">{option.detail}</span>}
             </span>
@@ -1018,6 +1076,34 @@ export function PageHead({
       </div>
       {action ?? null}
     </header>
+  );
+}
+
+/**
+ * The pages of one screen, as a row of links under its head (FRU-544): the settings of a workspace
+ * and their page « AI ». The page on screen has `aria-current="page"` and is underlined. The row
+ * scrolls in its frame on a narrow screen, and the page does not.
+ */
+export function SubNav({
+  label,
+  entries,
+}: {
+  /** What the row of links is, for a screen reader: « Workspace settings ». */
+  label: string;
+  entries: readonly { to: string; label: string; current: boolean }[];
+}) {
+  return (
+    <nav aria-label={label} className="kit-subnav">
+      <ul>
+        {entries.map((entry) => (
+          <li key={entry.to}>
+            <Link to={entry.to} {...(entry.current ? { 'aria-current': 'page' as const } : {})}>
+              {entry.label}
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </nav>
   );
 }
 

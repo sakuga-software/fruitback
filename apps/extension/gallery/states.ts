@@ -1,3 +1,4 @@
+import { whenNotAnswering } from '../src/guide.ts';
 import type { PanelNote } from '../src/protocol.ts';
 import {
   type Account,
@@ -95,6 +96,7 @@ function popupStates(): GalleryState[] {
           title: "Fruitback can't reach api.fruitback.com",
           text: 'Check the connection, then try again.',
           primary: { label: 'Try again', onClick: nothing },
+          help: whenNotAnswering(),
         }),
     },
     {
@@ -109,6 +111,7 @@ function popupStates(): GalleryState[] {
           text: 'Access to staging.acme.dev was removed in your browser settings. Your notes are safe.',
           primary: { label: 'Allow access again', onClick: nothing },
           secondary: { label: 'Turn off for this site', onClick: nothing },
+          help: whenNotAnswering(),
         }),
     },
     {
@@ -164,6 +167,33 @@ function popupStates(): GalleryState[] {
           on: true,
           visibility: { shown: true, onChange: nothing },
           facts: { destination: 'Linear · Acme web', toCheck: 2, open: 7 },
+        }),
+    },
+    {
+      id: 'site-on-change',
+      title: 'Site on · a role that may change where the notes go',
+      build: (d) =>
+        siteOn(d, {
+          ...on,
+          on: true,
+          visibility: { shown: true, onChange: nothing },
+          facts: {
+            destination: 'Linear · Acme web',
+            toCheck: 2,
+            open: 7,
+            change: {
+              sources: [
+                { id: 'lin', kind: 'linear', label: 'Linear · Acme' },
+                { id: 'gh', kind: 'github', label: 'GitHub · acme' },
+              ],
+              place: { connector: 'lin', teamId: 'web' },
+              loadOffer: async () => ({
+                kind: 'linear',
+                teams: [{ id: 'web', name: 'Acme web', key: 'WEB', projects: [] }],
+              }),
+              onPlace: async () => true,
+            },
+          },
         }),
     },
     {

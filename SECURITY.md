@@ -1035,6 +1035,9 @@ whole.
 - **A guest reads the counts of the sites shared with them, and of no other** (FRU-250): the list
   of the sites is narrowed first, in the console and in `GET /session/sites`, and the counts with it.
   test:`lets the guest read every site in GET /console/workspaces/<id>/sites without its filter`.
+  The other reads of the sites of the console are narrowed the same way (FRU-497): a page of the
+  list, the sites to choose from (`…/sites/choices`), and one site (`…/sites/<id>`, `404` for a site
+  not shared). test:`lets the guest read a site not shared with them in the reads of FRU-497 without their filter`.
 - **An anonymous reader of a public page writes to the index**: a read that asks the store writes
   the stages it got, at most once for each answer of the read cache. It writes only what the store
   answered for the site of that read, and nothing the reader sent.

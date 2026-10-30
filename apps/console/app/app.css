@@ -12,6 +12,7 @@
 @import '@heroui/styles/components/description.css' layer(components);
 @import '@heroui/styles/components/field-error.css' layer(components);
 @import '@heroui/styles/components/label.css' layer(components);
+@import '@heroui/styles/components/link.css' layer(components);
 @import '@heroui/styles/components/button.css' layer(components);
 @import '@heroui/styles/components/button-group.css' layer(components);
 @import '@heroui/styles/components/dropdown.css' layer(components);
@@ -31,6 +32,7 @@
 @import '@heroui/styles/components/textfield.css' layer(components);
 @import '@heroui/styles/components/header.css' layer(components);
 @import '@heroui/styles/components/surface.css' layer(components);
+@import '@heroui/styles/components/tooltip.css' layer(components);
 @import '@heroui/styles/components/combo-box.css' layer(components);
 @import '@heroui/styles/components/select.css' layer(components);
 @import '@heroui/styles/themes/default' layer(theme);
@@ -437,6 +439,55 @@ textarea {
   cursor: not-allowed;
 }
 
+/* A link that is a picture (FRU-546): a small icon button, opened in a new tab. */
+.kit-icon-link {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--spacing-control-small);
+  height: var(--spacing-control-small);
+  border-radius: var(--field-radius);
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.kit-icon-link:hover,
+.kit-icon-link[data-hovered='true'] {
+  background: var(--color-chip);
+  color: var(--color-ink);
+}
+
+.kit-icon-link svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Words cut to their room, with a picture before them (FRU-553); whole in the tooltip. */
+.kit-tip-trigger {
+  display: inline-flex;
+  max-width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  border-radius: 4px;
+  cursor: default;
+}
+
+/* A tooltip: ink, 12 px, under 360 px; an address breaks anywhere rather than overflow. */
+.kit-tip {
+  max-width: min(360px, calc(100vw - 32px));
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--color-ink);
+  color: var(--color-page);
+  font-size: var(--text-tiny);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  box-shadow: none;
+}
+
 .kit-icon-button svg {
   width: 18px;
   height: 18px;
@@ -679,6 +730,11 @@ textarea {
   color: var(--surface);
 }
 
+/* HeroUI paints a ticked box with a layer in its accent, over the background: ink here too. */
+.kit-checkbox .checkbox__control::before {
+  background: var(--color-ink);
+}
+
 .kit-checkbox .checkbox__content {
   flex-flow: row nowrap;
   align-items: center;
@@ -693,6 +749,21 @@ textarea {
   white-space: nowrap;
   font-size: var(--text-small);
   font-weight: 400;
+}
+
+/*
+ * A box of a list (`Checks`) takes the width of the list, and its words wrap: a long site name goes
+ * to the next line, and never past the edge of a phone.
+ */
+.kit-checks .kit-checkbox,
+.kit-checks .kit-checkbox .checkbox__content {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.kit-checks .kit-checkbox .label {
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 /* The switch: ink when on, the border of a control when off, and one movement of 220 ms. */
@@ -1309,6 +1380,49 @@ textarea {
 
 .kit-page-head .kit-title {
   margin-bottom: 6px;
+}
+
+/*
+  The pages of one screen (`SubNav`, FRU-544): links on a rule, the page on screen in ink and
+  underlined by 2 px of ink over the rule. A link is 44 px high, the target of a finger. The row
+  scrolls in its frame on a narrow screen, so the focus ring is drawn inside a link.
+*/
+.kit-subnav {
+  margin: -12px 0 28px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.kit-subnav ul {
+  display: flex;
+  gap: 24px;
+  min-width: max-content;
+  border-bottom: 1px solid var(--color-line);
+}
+
+.kit-subnav a {
+  display: inline-flex;
+  align-items: center;
+  height: var(--spacing-control);
+  margin-bottom: -1px;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  font-size: var(--text-small);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.kit-subnav a:hover {
+  color: var(--color-ink);
+}
+
+.kit-subnav a[aria-current='page'] {
+  border-bottom-color: var(--color-ink);
+  color: var(--color-ink);
+}
+
+.kit-subnav a:focus-visible {
+  outline-offset: -2px;
 }
 
 /* A page outside a workspace: a header with the logo, and one column. */

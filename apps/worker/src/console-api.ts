@@ -33,9 +33,11 @@ import {
   readConnectorSettings,
   readLocaleTag,
   readPersonName,
+  onlyOf,
   readableSites,
   workspaceName,
 } from './accounts.ts';
+import { readSiteChoices, readSitePage, readableSite, siteChoicesPage } from './console-sites.ts';
 import { seen } from './last-seen.ts';
 import {
   type ProofState,
@@ -804,33 +806,68 @@ export async function handleConsoleApi(
   });
   if (notes !== undefined) return notes;
 
+  /**
+   * Sites as the console reads them, each with its notes and, for whoever sees the tracker, what did
+   * not arrive (FRU-237). The index reads the notes of these sites only (FRU-497). An index that does
+   * not answer costs the counts, never the sites.
+   */
+  const sitesWithNotes = async (sites: readonly Site[], options: { counts?: boolean; every?: boolean } = {}) => {
+    const { counts = true, every = false } = options;
+    const seesTracker = allowed('see-tracker');
+    // Every site of the workspace: the index counts them all with no list, which is faster than a list
+    // of hundreds of ids (measured on the bench, FRU-497). Otherwise only the sites of the answer.
+    const ids = every ? undefined : sites.map((site) => site.id);
+    const [notes, undelivered] =
+      counts && sites.length > 0
+        ? await Promise.all([
+            counted(() => context.noteIndex?.summary(workspaceId as string, ids)),
+            seesTracker ? counted(() => context.noteIndex?.undelivered(workspaceId as string, ids)) : undefined,
+          ])
+        : [undefined, undefined];
+
+    return sites.map((site) => ({
+      ...siteView(site, seesTracker),
+      ...(notes === undefined ? {} : (notes.get(site.id) ?? noNotes())),
+      ...(undelivered === undefined ? {} : { undelivered: undelivered.get(site.id) ?? 0 }),
+    }));
+  };
+
+  // The sites to choose from (FRU-497): their id, address and visibility, by address, a page at a time.
+  if (rest === '/sites/choices') {
+    if (request.method !== 'GET') return json(405, { error: 'method-not-allowed' }, headers);
+    if (!allowed('read-feedback')) return forbidden();
+    const reach = await context.accounts.reach(workspaceId as string, account.id);
+    if (reach === undefined) return json(404, { error: 'not-found' }, headers);
+    const asked = readSiteChoices(new URL(request.url).searchParams);
+    if (!asked.ok) return json(400, { error: asked.error }, headers);
+
+    return json(200, await siteChoicesPage(context.accounts, workspaceId as string, reach, asked.query), headers);
+  }
+
   if (rest === '/sites') {
     if (request.method === 'GET') {
       if (!allowed('read-feedback')) return forbidden();
 
-      const seesTracker = allowed('see-tracker');
       // A guest reads the sites shared with them and no other (FRU-250), and the counts of those.
       const reach = await context.accounts.reach(workspaceId as string, account.id);
       if (reach === undefined) return json(404, { error: 'not-found' }, headers);
-      const sites = readableSites(await context.accounts.sites(workspaceId as string), reach);
-      // FRU-237: the notes of each site, from the index. What did not arrive is about the tracker.
-      // An index that does not answer costs the counts, never the list of the sites.
-      const [notes, undelivered] = await Promise.all([
-        counted(() => context.noteIndex?.summary(workspaceId as string)),
-        seesTracker ? counted(() => context.noteIndex?.undelivered(workspaceId as string)) : undefined,
-      ]);
+      const params = new URL(request.url).searchParams;
+      // `counts=none`: the sites and their destinations, and no read of the notes (FRU-497).
+      const counts = params.get('counts') !== 'none';
+      // FRU-497: one page of the grid, and the notes of its sites only.
+      const page = readSitePage(params);
+      if (page?.ok === false) return json(400, { error: page.error }, headers);
+      if (page !== undefined) {
+        const { sites, total } = await context.accounts.sitePage(workspaceId as string, {
+          ...page.query,
+          ...onlyOf(reach),
+        });
 
-      return json(
-        200,
-        {
-          sites: sites.map((site) => ({
-            ...siteView(site, seesTracker),
-            ...(notes === undefined ? {} : (notes.get(site.id) ?? noNotes())),
-            ...(undelivered === undefined ? {} : { undelivered: undelivered.get(site.id) ?? 0 }),
-          })),
-        },
-        headers,
-      );
+        return json(200, { sites: await sitesWithNotes(sites, { counts }), total }, headers);
+      }
+      const sites = readableSites(await context.accounts.sites(workspaceId as string), reach);
+
+      return json(200, { sites: await sitesWithNotes(sites, { counts, every: reach.sites === 'every' }) }, headers);
     }
     if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
     if (!allowed('manage-sites')) return forbidden();
@@ -863,6 +900,17 @@ export async function handleConsoleApi(
   }
 
   const removal = /^\/sites\/([A-Za-z0-9_-]+)$/.exec(rest);
+  // One site, for its page (FRU-497): what the list says of it, and the notes of this site only.
+  if (removal !== null && request.method === 'GET') {
+    if (!allowed('read-feedback')) return forbidden();
+    const reach = await context.accounts.reach(workspaceId as string, account.id);
+    if (reach === undefined) return json(404, { error: 'not-found' }, headers);
+    const site = await readableSite(context.accounts, workspaceId as string, reach, removal[1] as string);
+    if (site === undefined) return json(404, { error: 'not-found' }, headers);
+    const [one] = await sitesWithNotes([site]);
+
+    return json(200, one, headers);
+  }
   if (removal !== null) {
     if (request.method !== 'DELETE') return json(405, { error: 'method-not-allowed' }, headers);
     if (!allowed('manage-sites')) return forbidden();
@@ -879,7 +927,7 @@ export async function handleConsoleApi(
     if (!allowed('manage-sites')) return forbidden();
     // This route writes a list of one place, or of none. A site with two places or more is set by
     // the list route only: a console of before FRU-123 must not take the other places away.
-    const current = (await context.accounts.sites(workspaceId as string)).find((site) => site.id === destination[1]);
+    const current = await context.accounts.site(workspaceId as string, destination[1] as string);
     if (current !== undefined && current.destinations.length > 1) {
       return json(409, { error: 'site-has-destinations', count: current.destinations.length }, headers);
     }
@@ -986,7 +1034,7 @@ export async function handleConsoleApi(
       }
       // A status comes from the worker's store or from a connector this site sends to: a state of
       // another tracker is a state that no note of this site can be in.
-      const current = (await context.accounts.sites(workspaceId as string)).find((one) => one.id === site);
+      const current = await context.accounts.site(workspaceId as string, site);
       if (current === undefined) return notFound();
       if (status.source !== OWN_SOURCE && !current.destinations.some((place) => place.connector === status.source)) {
         return json(400, { error: 'invalid-status', refusal: 'unknown-source' }, headers);
@@ -1008,7 +1056,7 @@ export async function handleConsoleApi(
     // what shows a change made at Linear at once.
     if (statusPath[2] === 'tracker') {
       if (request.method !== 'GET') return json(405, { error: 'method-not-allowed' }, headers);
-      const current = (await context.accounts.sites(workspaceId as string)).find((one) => one.id === site);
+      const current = await context.accounts.site(workspaceId as string, site);
       const trackerColours = await context.accounts.siteTrackerColours(workspaceId as string, site);
       if (current === undefined || trackerColours === undefined) return notFound();
       const trackers = [];
