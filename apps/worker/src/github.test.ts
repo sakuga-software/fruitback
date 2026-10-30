@@ -10,6 +10,7 @@ import {
   createGithubStore,
   createGithubStoreSpec,
   githubLabelName,
+  searchPhrase,
   signAppJwt,
   stageForGithubIssue,
 } from './github.ts';
@@ -641,20 +642,125 @@ describe('findForPage', () => {
     assert.equal(calls.filter((call) => call.path.endsWith('/comments')).length, 0);
   });
 
-  it('walks the pages, and stops at a short page or at the cap', async () => {
-    const full = Array.from({ length: 100 }, () => ({}));
+  it('reads one list when the site has fewer notes than a list holds, and searches nothing', async () => {
+    const { calls, issues } = readWith([row()]);
 
-    const capped = readWith(full);
-    await capped.issues;
-    assert.equal(apiCalls(capped.calls).length, 10);
-
-    let page = 0;
-    const short = readWith([], { 'GET /repos/acme/site/issues': () => json(200, ++page === 1 ? full : [row()]) });
-    assert.equal((await short.issues).length, 1);
+    assert.equal((await issues).length, 1);
     assert.deepEqual(
-      apiCalls(short.calls).map((call) => call.query.get('page')),
-      ['1', '2'],
+      apiCalls(calls).map((call) => call.path),
+      ['/repos/acme/site/issues'],
     );
+  });
+
+  it('reads the oldest note of a page on a site of 1,001 issues, in two calls (FRU-500)', async () => {
+    // 1,001 issues, the newest first, as GitHub lists them. Only the oldest is a note of this page:
+    // the 1,000 others are notes of other pages.
+    const elsewhere = noteFixture({
+      id: 'sd_other',
+      page: { url: 'https://preview.acme.test/pricing', path: '/pricing', title: 'Pricing — Acme' },
+    });
+    const site = Array.from({ length: 1001 }, (_, index) => {
+      const number = 1001 - index;
+
+      return number === 1
+        ? row({ id: number, number, html_url: `https://github.com/acme/site/issues/${number}` })
+        : row({ id: number, number, html_url: `https://github.com/acme/site/issues/${number}` }, elsewhere);
+    });
+    const { calls, issues } = readWith([], {
+      'GET /repos/acme/site/issues': (call) => {
+        const size = Number(call.query.get('per_page'));
+        const page = Number(call.query.get('page') ?? '1');
+
+        return json(200, site.slice((page - 1) * size, page * size));
+      },
+      // GitHub's search, as far as this store asks it: the labels, and a phrase of the body.
+      'GET /search/issues': (call) => {
+        const q = call.query.get('q') ?? '';
+        const phrase = /"([^"]+)" in:body$/.exec(q)?.[1] ?? '';
+        const labels = [...q.matchAll(/label:"([^"]+)"/g)].map(([, name]) => name);
+        const items = site.filter(
+          (each) =>
+            each.body.includes(phrase) && labels.every((name) => each.labels.some((label) => label.name === name)),
+        );
+
+        return json(200, { total_count: items.length, incomplete_results: false, items });
+      },
+    });
+
+    const found = await issues;
+
+    assert.deepEqual(
+      found.map((issue) => issue.identifier),
+      ['#1'],
+    );
+    const api = apiCalls(calls);
+    assert.deepEqual(
+      api.map((call) => call.path),
+      ['/repos/acme/site/issues', '/search/issues'],
+    );
+    assert.equal(
+      api[1]?.query.get('q'),
+      `repo:acme/site is:issue label:"fruitback" label:"fruitback:acme" "${PAGE}" in:body`,
+    );
+  });
+
+  it('keeps one copy of a note that both the list and the search give', async () => {
+    const full = [row(), ...Array.from({ length: 99 }, (_, index) => ({ id: 100 + index }))];
+    const { issues } = readWith(full, {
+      'GET /search/issues': () => json(200, { total_count: 1, incomplete_results: false, items: [row()] }),
+    });
+
+    assert.equal((await issues).length, 1);
+  });
+
+  it('keeps the newest notes when GitHub refuses the search for its rate, and says so in the log', async () => {
+    const full = [row(), ...Array.from({ length: 99 }, (_, index) => ({ id: 100 + index }))];
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { issues } = readWith(full, {
+      'GET /search/issues': () =>
+        new Response(JSON.stringify({ message: 'secondary rate limit' }), {
+          status: 403,
+          headers: { 'Content-Type': 'application/json', 'retry-after': '60' },
+        }),
+    });
+
+    assert.equal((await issues).length, 1);
+    assert.match(String(logged.mock.calls[0]?.[0]), /refused the search of a page \(403\)/);
+  });
+
+  it('fails as a store failure when the search is refused for another reason', async () => {
+    const full = Array.from({ length: 100 }, (_, index) => ({ id: index }));
+    const { issues } = readWith(full, { 'GET /search/issues': () => json(422, { message: 'Validation Failed' }) });
+
+    await assert.rejects(issues, StoreError);
+  });
+
+  it('searches a long URL by a prefix that ends on a slash', () => {
+    const long = `https://preview.acme.test/${'a'.repeat(120)}/${'b'.repeat(120)}`;
+
+    assert.equal(searchPhrase(PAGE), PAGE);
+    assert.equal(searchPhrase(long), `https://preview.acme.test/${'a'.repeat(120)}`);
+    assert.equal(searchPhrase('https://acme.test/a"b\\c'), 'https://acme.test/a b c');
+  });
+
+  it('gives a read up after its delay, and never a write (FRU-500)', async () => {
+    const signals: [string, AbortSignal | undefined][] = [];
+    mockMethod(globalThis, 'fetch', async (input: string, init: RequestInit = {}) => {
+      signals.push([`${init.method ?? 'GET'} ${new URL(input).pathname}`, init.signal ?? undefined]);
+      throw new DOMException('The operation timed out.', 'TimeoutError');
+    });
+    const store = createGithubStore(CONFIG, { now: () => NOW });
+
+    await assert.rejects(store.findForPage({ url: PAGE, clientId: 'acme' }, undefined, POLICY), {
+      message: 'GitHub did not answer in time',
+    });
+    assert.equal(signals[0]?.[0], 'GET /repos/acme/site/installation');
+    assert.ok(signals[0]?.[1] instanceof AbortSignal);
+
+    const { githubFetch } = await import('./github.ts');
+    await assert.rejects(githubFetch('/repos/acme/site/issues', { method: 'POST', token: 't', body: {} }), StoreError);
+    assert.equal(signals.at(-1)?.[0], 'POST /repos/acme/site/issues');
+    assert.equal(signals.at(-1)?.[1], undefined);
   });
 
   it('fails as a store failure when GitHub refuses the read', async () => {

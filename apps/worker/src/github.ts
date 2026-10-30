@@ -64,14 +64,28 @@ const CLOCK_DRIFT_SECONDS = 60;
 /** If a token has less time left than this, the store mints a new one before the call. */
 const TOKEN_REFRESH_MARGIN_MS = 5 * 60_000;
 
-/** The largest page GitHub gives. */
+/** The largest page GitHub gives, for a list and for a search. */
 const ISSUES_PAGE_SIZE = 100;
 
 /**
- * The read stops after this many pages, the newest issues first. A client with more than 1,000
- * Fruitback issues loses its oldest pins from the page.
+ * The pages of a search for the notes of one page (FRU-500). GitHub answers 1,000 results of a search
+ * at most, so a page with more notes than that keeps its newest ones.
  */
-const ISSUES_MAX_PAGES = 10;
+const SEARCH_MAX_PAGES = 10;
+
+/**
+ * The words of a URL a search may hold. GitHub refuses a query whose words, out of its qualifiers,
+ * pass 256 characters (documentation of « Searching issues and pull requests »). A longer URL is
+ * searched by a prefix of it: the search finds more, and `matchPage` keeps the exact page.
+ */
+const SEARCH_PHRASE_MAX = 200;
+
+/**
+ * How long a read of GitHub may take (FRU-500). A GitHub that does not answer is then a failed read,
+ * as when it is down, and not a request held open for ever. A write has no limit: a note GitHub makes
+ * after the worker gave up would be made twice when the widget sends it again.
+ */
+export const READ_TIMEOUT_MS = 10_000;
 
 /** Same cap as the Linear store. The thread keeps the newest comments. */
 export const COMMENTS_PER_ISSUE = 20;
@@ -211,7 +225,10 @@ export class GithubResponseError extends StoreError {
 
 type GithubCall = { method?: 'GET' | 'POST'; token: string; body?: unknown };
 
-/** `api` is for the tests: a GitHub on a port of the machine. */
+/**
+ * `api` is for the tests: a GitHub on a port of the machine. A `GET` gives up after `READ_TIMEOUT_MS`
+ * with a `StoreError`; a `POST` waits.
+ */
 export async function githubFetch(
   path: string,
   { method = 'GET', token, body }: GithubCall,
@@ -220,6 +237,7 @@ export async function githubFetch(
   let response: Response;
   try {
     response = await fetch(`${api}${path}`, {
+      ...(method === 'GET' ? { signal: AbortSignal.timeout(READ_TIMEOUT_MS) } : {}),
       method,
       headers: {
         Accept: 'application/vnd.github+json',
@@ -231,7 +249,10 @@ export async function githubFetch(
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'TimeoutError') {
+      throw new StoreError('GitHub did not answer in time');
+    }
     // A network failure is a store failure: the widget keeps the note and tries again.
     throw new StoreError('GitHub could not be reached');
   }
@@ -526,29 +547,82 @@ export function createIssueStore({
       }));
   }
 
-  async function listIssues(repository: string, labels: string[]): Promise<unknown[]> {
+  /** The newest `ISSUES_PAGE_SIZE` issues that carry every label: one call. */
+  async function newestIssues(repository: string, labels: string[]): Promise<unknown[]> {
+    const params = new URLSearchParams({
+      // An issue must carry every label in the list. Measured on cli/cli, 2026-09-14: `bug` gave
+      // 100+ issues, `gh-codespace` 42, and `bug,gh-codespace` 22, each with both labels. The
+      // client label is what keeps one client's pins off another client's site.
+      labels: labels.join(','),
+      state: 'all',
+      sort: 'created',
+      direction: 'desc',
+      per_page: String(ISSUES_PAGE_SIZE),
+    });
+    const answer = await call(repository, `/repos/${repository}/issues?${params}`);
+    if (!Array.isArray(answer)) throw new StoreError('GitHub returned no issue list');
+
+    return answer;
+  }
+
+  /**
+   * The issues whose body names `url`, among those that carry every label (FRU-500): the search of
+   * GitHub, so the cost follows the notes of the page, not the issues of the site.
+   *
+   * Measured on cli/cli, 2026-10-30: a URL written only inside a fenced JSON block, as the note is,
+   * is found by its exact phrase (issue 10695), and by a prefix of it; a URL one character off finds
+   * nothing.
+   */
+  async function issuesNaming(repository: string, labels: string[], url: string): Promise<unknown[]> {
+    const q = [
+      `repo:${repository}`,
+      'is:issue',
+      ...labels.map((name) => `label:"${name}"`),
+      `"${searchPhrase(url)}"`,
+      'in:body',
+    ].join(' ');
     const rows: unknown[] = [];
-
-    for (let page = 1; page <= ISSUES_MAX_PAGES; page += 1) {
-      const params = new URLSearchParams({
-        // An issue must carry every label in the list. Measured on cli/cli, 2026-09-14: `bug` gave
-        // 100+ issues, `gh-codespace` 42, and `bug,gh-codespace` 22, each with both labels. The
-        // client label is what keeps one client's pins off another client's site.
-        labels: labels.join(','),
-        state: 'all',
-        sort: 'created',
-        direction: 'desc',
-        per_page: String(ISSUES_PAGE_SIZE),
-        page: String(page),
-      });
-      const answer = await call(repository, `/repos/${repository}/issues?${params}`);
-      if (!Array.isArray(answer)) throw new StoreError('GitHub returned no issue list');
-
-      rows.push(...answer);
-      if (answer.length < ISSUES_PAGE_SIZE) break;
+    for (let page = 1; page <= SEARCH_MAX_PAGES; page += 1) {
+      const params = new URLSearchParams({ q, per_page: String(ISSUES_PAGE_SIZE), page: String(page) });
+      const answer = searchAnswerSchema.safeParse(await call(repository, `/search/issues?${params}`));
+      if (!answer.success) throw new StoreError('GitHub returned no search');
+      rows.push(...answer.data.items);
+      if (answer.data.items.length < ISSUES_PAGE_SIZE) break;
     }
 
     return rows;
+  }
+
+  /**
+   * The issues of the page: the newest ones in one list, which a new note reaches at once, and, when
+   * the site has more than that list holds, a search for the page, which reaches the older ones
+   * (FRU-500). Before, the store listed every issue of the site, ten calls at most, and lost the
+   * pins past the 1,000th.
+   *
+   * GitHub counts searches apart: 30 a minute for a token (`GET /rate_limit`, `resources.search`,
+   * measured 2026-10-30). A search it refuses keeps the newest notes, says so in the log, and the
+   * page still draws them.
+   */
+  async function issuesOfPage(repository: string, labels: string[], url: string): Promise<unknown[]> {
+    const newest = await newestIssues(repository, labels);
+    if (newest.length < ISSUES_PAGE_SIZE) return newest;
+    let older: unknown[];
+    try {
+      older = await issuesNaming(repository, labels, url);
+    } catch (error) {
+      if (!(error instanceof GithubResponseError) || !error.rateLimited) throw error;
+      console.error(`[fruitback] GitHub refused the search of a page (${error.status}): its older notes are not read`);
+      older = [];
+    }
+    const seen = new Set<unknown>();
+
+    return [...newest, ...older].filter((row) => {
+      const id = (row as { id?: unknown } | null)?.id;
+      if (seen.has(id)) return false;
+      seen.add(id);
+
+      return true;
+    });
   }
 
   return {
@@ -583,7 +657,7 @@ export function createIssueStore({
         githubLabelName,
       );
 
-      const matched = (await listIssues(repository, labels)).flatMap((row) => {
+      const matched = (await issuesOfPage(repository, labels, query.url)).flatMap((row) => {
         const match = matchPage(row, query.url, labels, query.clientId);
 
         return match === null ? [] : [match];
@@ -644,6 +718,18 @@ function matchPage(
   if (clientId && parsed.note.client?.id !== clientId) return null;
 
   return { issue: issue.data, note: parsed.note };
+}
+
+const searchAnswerSchema = z.object({ items: z.array(z.unknown()) });
+
+/** The words of `url` a search holds: the URL, or a prefix of it cut after a `/` (`SEARCH_PHRASE_MAX`). */
+export function searchPhrase(url: string): string {
+  // A quote or a backslash would end the phrase of the query.
+  const plain = url.replace(/["\\]/g, ' ');
+  if (plain.length <= SEARCH_PHRASE_MAX) return plain;
+  const cut = plain.lastIndexOf('/', SEARCH_PHRASE_MAX);
+
+  return plain.slice(0, cut > 'https://'.length ? cut : SEARCH_PHRASE_MAX);
 }
 
 function isAlreadyExists(payload: unknown): boolean {
