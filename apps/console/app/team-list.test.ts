@@ -208,6 +208,53 @@ describe('the list of teams of a Linear, one rule at a time (FRU-501)', () => {
     assert.equal(offersMore(list), true);
   });
 
+  it('never stays « searching »: new words replace the search on its way, and its late answer is dropped', () => {
+    let list = teamListOf({ teams: [team(1)], next: '50' }, 1);
+    list = stepTeamList(list, { type: 'type', query: 'pay' });
+    list = stepTeamList(list, { type: 'ask-search', requestId: 2 });
+    list = stepTeamList(list, { type: 'type', query: 'paym' });
+    assert.equal(searchToAsk(list), 'paym', 'the new words are asked at once');
+    list = stepTeamList(list, { type: 'ask-search', requestId: 3 });
+    list = stepTeamList(list, { type: 'answer', requestId: 2, teams: [team(7, 'Payroll')] });
+    assert.equal(list.status, 'searching', 'the answer of « pay » is not the one the list waits for');
+    list = stepTeamList(list, { type: 'answer', requestId: 3, teams: [team(8, 'Payments')] });
+    assert.equal(list.status, 'idle');
+    assert.deepEqual(
+      list.items.map((each) => each.name),
+      ['Team 1', 'Payments'],
+    );
+  });
+
+  it('a search emptied while it is on its way still ends: its answer is taken, and the pages come back', () => {
+    let list = teamListOf({ teams: [team(1)], next: '50' }, 1);
+    list = stepTeamList(list, { type: 'type', query: 'pay' });
+    list = stepTeamList(list, { type: 'ask-search', requestId: 2 });
+    list = stepTeamList(list, { type: 'type', query: '' });
+    assert.equal(searchToAsk(list), undefined);
+    list = stepTeamList(list, { type: 'answer', requestId: 2, teams: [team(8, 'Payments')] });
+    assert.equal(list.status, 'idle');
+    assert.equal(offersMore(list), true);
+  });
+
+  it('a page that a search replaced is asked again from the same cursor once the search is emptied', () => {
+    let list = teamListOf({ teams: [team(1)], next: '50' }, 1);
+    list = stepTeamList(list, { type: 'ask-page', requestId: 2 });
+    list = stepTeamList(list, { type: 'type', query: 'pay' });
+    list = stepTeamList(list, { type: 'ask-search', requestId: 3 });
+    list = stepTeamList(list, { type: 'answer', requestId: 2, teams: [team(2)], next: '100' });
+    list = stepTeamList(list, { type: 'answer', requestId: 3, teams: [team(8, 'Payments')] });
+    list = stepTeamList(list, { type: 'type', query: '' });
+    assert.equal(list.cursor, '50', 'the page that was dropped is the next one');
+    assert.equal(offersMore(list), true);
+    list = stepTeamList(list, { type: 'ask-page', requestId: 4 });
+    list = stepTeamList(list, { type: 'answer', requestId: 4, teams: [team(2)], next: '100' });
+    assert.deepEqual(
+      list.items.map((each) => each.id),
+      ['t1', 't8', 't2'],
+    );
+    assert.equal(list.cursor, '100');
+  });
+
   it('the control: an answer with the id the list waits for is taken', () => {
     let list = teamListOf({ teams: [team(1)], next: '50' }, 1);
     list = stepTeamList(list, { type: 'ask-page', requestId: 7 });

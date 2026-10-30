@@ -872,3 +872,35 @@ test('« Try again » takes away the message of a page of teams that failed (FRU
   await expect(panel(page).getByRole('button', { name: 'Try again' })).toHaveCount(0);
   await expect(panel(page)).not.toContainText('did not answer with more teams');
 });
+
+test('a search emptied with the cross, then « Try again », leaves no hidden search on the new list (FRU-501)', async ({
+  page,
+}) => {
+  const worker = await workerWith(page);
+  const team = (index: number, name = `Team ${index}`): Team => ({
+    id: `t${index}`,
+    name,
+    key: `T${index}`,
+    projects: [],
+  });
+  worker.connectors = [LINEAR, GITHUB];
+  worker.teams = [team(1), team(2)];
+  worker.laterTeams = [team(3, 'Payments')];
+  worker.silentReads = 1;
+  await openPlaces(page);
+  await expect(panel(page).getByRole('button', { name: 'Try again' })).toBeVisible();
+
+  await search(page).fill('pay');
+  await expect.poll(() => worker.teamReads.filter((query) => query.startsWith('q='))).toEqual(['q=pay']);
+  await panel(page).getByRole('button', { name: 'Clear the search' }).click();
+  await panel(page).getByRole('button', { name: 'Try again' }).click();
+  await expect(panel(page).getByRole('button', { name: 'Try again' })).toHaveCount(0);
+
+  // The new list holds its first page, filtered by nothing, with its next page offered.
+  await add(page).click();
+  await expect(page.getByRole('option').filter({ hasText: /^Team \d/ })).toHaveText([
+    'Team 1 (T1) · no project',
+    'Team 2 (T2) · no project',
+  ]);
+  await expect(page.getByRole('option', { name: 'More teams of Linear · Key of Ana…', exact: true })).toBeVisible();
+});
