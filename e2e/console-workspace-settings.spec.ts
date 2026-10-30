@@ -229,8 +229,10 @@ test('at 390 px in French nothing scrolls sideways', async ({ page }) => {
   await workerWith(page, [ACME], 'fr');
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${CONSOLE}/w/w1/settings`);
-  await expect(page.getByRole('heading', { level: 1, name: 'Réglages du workspace' })).toBeVisible();
-  await expect(rail(page).getByRole('link', { name: 'Acme Workspace Cloud Réglages du workspace' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'Réglages de l’espace de travail' })).toBeVisible();
+  await expect(
+    rail(page).getByRole('link', { name: 'Acme Espace de travail Cloud Réglages de l’espace de travail' }),
+  ).toBeVisible();
   await expect(page.getByRole('button', { name: 'Enregistrer' })).toBeVisible();
   expect(await sideScroll(page)).toBe(0);
   const results = await new AxeBuilder({ page }).analyze();

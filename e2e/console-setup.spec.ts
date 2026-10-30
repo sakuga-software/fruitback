@@ -751,7 +751,7 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
     await expect(preview.locator('.scene__hint')).toHaveText(
       'Cliquez sur Laisser une note, puis sur n’importe quelle partie de la page.',
     );
-    await expect(preview).toContainText('Une page d’exemple. Les pins s’affichent de la même façon sur votre site.');
+    await expect(preview).toContainText('Une page d’exemple. Les repères s’affichent de la même façon sur votre site.');
     expect(await sideScroll(page)).toBe(0);
     expect(await violations(page)).toEqual([]);
     await context.close();

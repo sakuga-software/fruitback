@@ -386,26 +386,26 @@ test('« Workers and sessions » pairs with a code, says who, logs out, and take
   // The suite builds the extension with this worker as its Cloud (WXT_FRUITBACK_CLOUD): its card
   // speaks of an account.
   await expect(card.locator('.worker-who')).toHaveText(
-    /^(Paired as|Appairé en tant que|Signed in as|Connecté en tant que) Camille Durand$/,
+    /^(Paired as|Signed in as|Connecté en tant que) Camille Durand$/,
   );
   await expect(card.locator('.worker-dot')).toHaveAttribute('data-on', 'true');
   await expect(page.locator('.page-entry[href="#workers"] .page-count')).not.toHaveText('');
 
   await card.getByRole('button', { name: /^(Log out|Se déconnecter)$/ }).click();
-  await expect(card.getByLabel(/^(Pairing code|Code d’appairage)$/)).toBeVisible();
+  await expect(card.getByLabel(/^(Pairing code|Code de connexion)$/)).toBeVisible();
 
   // A link from the popup: the card of the worker, its code filled.
   const linked = await mintPairing('Camille Durand');
   const query = new URLSearchParams({ worker: AUTHENTICATED_WORKER_ORIGIN, code: linked.code });
   await page.goto(`chrome-extension://${extension.id}/options.html#workers?${query.toString()}`);
-  await expect(card.getByLabel(/^(Pairing code|Code d’appairage)$/)).toHaveValue(linked.code);
-  await expect(card.getByLabel(/^(Pairing code|Code d’appairage)$/)).toBeFocused();
+  await expect(card.getByLabel(/^(Pairing code|Code de connexion)$/)).toHaveValue(linked.code);
+  await expect(card.getByLabel(/^(Pairing code|Code de connexion)$/)).toBeFocused();
 
   // Paired with it, then logged out: the code of the link is spent, and the field is empty (review).
-  await card.getByRole('button', { name: /^(Pair|Appairer)$/ }).click();
+  await card.getByRole('button', { name: /^(Pair|Se connecter)$/ }).click();
   await expect(card.locator('.worker-who')).toContainText('Camille Durand');
   await card.getByRole('button', { name: /^(Log out|Se déconnecter)$/ }).click();
-  await expect(card.getByLabel(/^(Pairing code|Code d’appairage)$/)).toHaveValue('');
+  await expect(card.getByLabel(/^(Pairing code|Code de connexion)$/)).toHaveValue('');
 
   for (const colorScheme of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme });
@@ -580,9 +580,9 @@ test('a pairing link says « Paired » once it paired, and « already paired » 
   const worker = await extension.context.newPage();
   await worker.goto(link);
   const popup = await openPopup(extension, worker, AUTHENTICATED_WORKER_ORIGIN);
-  await popup.getByRole('button', { name: /^(Pair with this worker|Appairer avec ce worker)$/ }).click();
-  await expect(popup.getByText(/^(Paired as|Appairé en tant que) Camille Durand$/)).toBeVisible();
-  await expect(popup.getByText(/^(Paired\. This browser|Appairé\. Ce navigateur)/)).toBeVisible();
+  await popup.getByRole('button', { name: /^(Pair with this worker|Se connecter à ce serveur)$/ }).click();
+  await expect(popup.getByText(/^(Paired as|Connecté en tant que) Camille Durand$/)).toBeVisible();
+  await expect(popup.getByText(/^(Paired\. This browser|Connecté\. Ce navigateur)/)).toBeVisible();
   await expect(popup.getByText(/already paired|déjà appairé/)).toHaveCount(0);
   await popup.close();
 

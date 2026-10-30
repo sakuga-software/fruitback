@@ -616,7 +616,7 @@ test('at 390 px in French: one card per status, no sideways scroll, and the word
   await expect(item(page, 'new')).toContainText('Phase');
   await expect(
     page.getByText(
-      'Chaque pin montre à quoi ressemble une note de ce statut sur la page. Le 3 est un numéro d’exemple.',
+      'Chaque repère montre à quoi ressemble une note de ce statut sur la page. Le 3 est un numéro d’exemple.',
     ),
   ).toBeVisible();
   await expect(item(page, 'waiting').getByTitle('Contraste 10,63:1, couleur du texte Auto')).toContainText('Lisible');

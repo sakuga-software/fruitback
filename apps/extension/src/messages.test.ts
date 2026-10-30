@@ -185,7 +185,7 @@ describe('a word on a page of the extension', () => {
       setLanguage('en');
     }
 
-    assert.deepEqual(children[0], 'Le worker n’a pas répondu. Réessayez.');
+    assert.deepEqual(children[0], 'Le serveur n’a pas répondu. Réessayez.');
     assert.equal(made.length, 1, 'the remedy button was not drawn');
     assert.equal(made[0]?.textContent, 'Réessayer');
   });
@@ -200,7 +200,7 @@ describe('the language of a reviewer', () => {
   });
 
   it('fills the values, and shows a sentence with no French in English', () => {
-    assert.equal(translate('fr', 'Paired as {identity}', { identity: 'Alice' }), 'Appairé en tant que Alice');
+    assert.equal(translate('fr', 'Paired as {identity}', { identity: 'Alice' }), 'Connecté en tant que Alice');
     assert.equal(translate('en', 'Paired as {identity}', { identity: 'Alice' }), 'Paired as Alice');
     assert.equal(translate('fr', 'A sentence nobody translated'), 'A sentence nobody translated');
   });

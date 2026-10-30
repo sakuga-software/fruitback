@@ -268,7 +268,7 @@ test('in French, every sentence of the screen is French', async ({ page }) => {
 
   await expect(main(page)).toContainText('Chaque note laissée sur cette instance, et où elle est gardée maintenant.');
   await expect(main(page)).toContainText(
-    'Les propriétaires de chaque workspace voient que vous avez lu ses notes, avec votre adresse et le jour.',
+    'Les propriétaires de chaque espace de travail voient que vous avez lu ses notes, avec votre adresse et le jour.',
   );
   await expect(main(page)).toContainText('Gardée dans Linear. Fruitback garde les 64 premiers caractères.');
   await expect(page.getByRole('table').getByRole('columnheader')).toHaveText([
@@ -281,7 +281,7 @@ test('in French, every sentence of the screen is French', async ({ page }) => {
   ]);
   await expect(main(page).getByRole('searchbox')).toHaveAttribute(
     'placeholder',
-    'Chercher le texte, la page, le site, le workspace, le statut ou la référence',
+    'Chercher le texte, la page, le site, l’espace de travail, le statut ou la référence',
   );
 
   const english = [

@@ -993,7 +993,7 @@ test('in French, every sentence of both screens is French', async ({ page }) => 
   await page.goto(`${CONSOLE}/admin/workspaces?open=w9`);
   await expect(main(page).getByRole('heading', { level: 1, name: 'Workspaces' })).toBeVisible();
   await expect(panel(page)).toContainText('Où vont les notes');
-  await expect(search(page, 'Chercher un workspace')).toHaveAttribute(
+  await expect(search(page, 'Chercher un espace de travail')).toHaveAttribute(
     'placeholder',
     'Chercher par nom ou propriétaire',
   );
@@ -1024,7 +1024,7 @@ test('in French, every sentence of both screens is French', async ({ page }) => 
 
   await page.goto(`${CONSOLE}/admin/users?open=a2`);
   await expect(main(page).getByRole('heading', { level: 1, name: 'Utilisateurs' })).toBeVisible();
-  await expect(panel(page)).toContainText('Voit cette administration et chaque workspace.');
+  await expect(panel(page)).toContainText('Voit cette administration et chaque espace de travail.');
   await expect(main(page)).toContainText('Acme web · propriétaire');
   await expect(main(page)).toContainText('Lien par e-mail, GitHub');
   const usersText = await text();
@@ -1276,7 +1276,7 @@ test('Users: the switch and its confirmation in French, and at 390 px (FRU-280)'
   await track(page).click();
   const asking = panel(page).getByRole('group', { name: 'Retirer le rôle à Nadia Benali' });
   await expect(asking).toContainText(
-    'Nadia Benali ne voit plus cette administration, ni les workspaces dont cette personne n’est pas membre. Chaque administrateur de l’instance lit que vous avez fait ce changement.',
+    'Nadia Benali ne voit plus cette administration, ni les espaces de travail dont cette personne n’est pas membre. Chaque administrateur de l’instance lit que vous avez fait ce changement.',
   );
   await expect(asking.getByRole('button', { name: 'Le garder' })).toBeVisible();
   await asking.getByRole('button', { name: /^Retirer/ }).click();
@@ -1615,7 +1615,7 @@ test('Users: the suspension and its confirmations in French, and at 390 px (FRU-
   );
   await panel(page).getByRole('button', { name: 'Rétablir l’accès', exact: true }).click();
   await expect(panel(page).getByRole('group', { name: 'Rétablir l’accès de Hugo Petit' })).toContainText(
-    'Hugo Petit peut de nouveau se connecter. Ses anciennes sessions restent fermées. Les propriétaires de chacun de ses workspaces voient que vous l’avez fait.',
+    'Hugo Petit peut de nouveau se connecter. Ses anciennes sessions restent fermées. Les propriétaires de chacun de ses espaces de travail voient que vous l’avez fait.',
   );
 
   await page.setViewportSize({ width: 390, height: 844 });
@@ -1623,7 +1623,7 @@ test('Users: the suspension and its confirmations in French, and at 390 px (FRU-
   await panel(page).getByRole('button', { name: 'Suspendre', exact: true }).click();
   const asking = panel(page).getByRole('group', { name: 'Suspendre Nadia Benali' });
   await expect(asking).toContainText(
-    'Nadia Benali ne peut plus se connecter d’aucune façon, et ses sessions de la console et de l’extension prennent fin aussitôt. Ses notes restent. Les propriétaires de chacun de ses workspaces voient que vous l’avez fait.',
+    'Nadia Benali ne peut plus se connecter d’aucune façon, et ses sessions de la console et de l’extension prennent fin aussitôt. Ses notes restent. Les propriétaires de chacun de ses espaces de travail voient que vous l’avez fait.',
   );
   await expect(asking.getByRole('button', { name: 'Le garder' })).toBeFocused();
   await expect(asking.getByRole('button', { name: 'Suspendre Nadia Benali' })).toBeInViewport();
@@ -1778,7 +1778,7 @@ test('Workspaces: the deletion in French, and at 390 px (FRU-284)', async ({ pag
   await page.setViewportSize({ width: 390, height: 844 });
   await stub(page, { locale: 'fr' });
   await visit(page, '/admin/workspaces?open=w9', 'Workspaces');
-  await panel(page).getByRole('button', { name: 'Supprimer le workspace' }).click();
+  await panel(page).getByRole('button', { name: 'Supprimer l’espace de travail' }).click();
   const asking = panel(page).getByRole('group', { name: 'Supprimer Acme support' });
   await expect(asking).toContainText(
     'Acme support est supprimé tout de suite, et rien ne le fait revenir. Ses sites, ses membres, ses invitations, ses connecteurs et les notes que Fruitback garde pour lui disparaissent. Les tickets déjà envoyés à ses sources y restent, et ses membres gardent leur compte. Chaque administrateur de l’instance lit que vous l’avez fait.',
@@ -1966,7 +1966,7 @@ test('the writes of FRU-283 in French, and at 390 px', async ({ page }) => {
   const asking = group(page, 'Changer le propriétaire de Acme support');
   await asking.getByRole('textbox', { name: 'Adresse du nouveau propriétaire' }).fill('ines@acme.dev');
   await expect(asking).toContainText(
-    'ines@acme.dev devient propriétaire de Acme support tout de suite. Les propriétaires d’avant deviennent administrateurs : ils gardent le workspace. Les propriétaires voient que vous l’avez fait.',
+    'ines@acme.dev devient propriétaire de Acme support tout de suite. Les propriétaires d’avant deviennent administrateurs : ils gardent l’espace de travail. Les propriétaires voient que vous l’avez fait.',
   );
   await expect(asking.getByRole('button')).toHaveText(['Le garder', 'En faire le propriétaire']);
   await expect(asking.getByRole('button', { name: 'En faire le propriétaire' })).toBeInViewport();
@@ -1980,9 +1980,9 @@ test('the writes of FRU-283 in French, and at 390 px', async ({ page }) => {
   await axe(page, 'an invitation at 390 px');
 
   await page.goto(`${CONSOLE}/admin/users?open=a5`);
-  await panel(page).getByRole('button', { name: 'Ajouter à un workspace' }).click();
-  await expect(group(page, 'Ajouter Inès Roux à un workspace')).toContainText(
-    'Les propriétaires de chaque workspace de cette liste voient que vous l’avez lue.',
+  await panel(page).getByRole('button', { name: 'Ajouter à un espace de travail' }).click();
+  await expect(group(page, 'Ajouter Inès Roux à un espace de travail')).toContainText(
+    'Les propriétaires de chaque espace de travail de cette liste voient que vous l’avez lue.',
   );
   expect(await sideScroll(page)).toBe(0);
   await axe(page, 'an addition to a workspace at 390 px');
@@ -2346,7 +2346,7 @@ test('Workspaces: the filter « Suspended » in French, and at 390 px (FRU-328)'
   await stub(page, { locale: 'fr', suspensions: LUMEN_SUSPENDED });
   await visit(page, '/admin/workspaces', 'Workspaces');
 
-  await filter(page, /Tous les workspaces/).click();
+  await filter(page, /Tous les espaces de travail/).click();
   await page.getByRole('option', { name: 'Suspendu', exact: true }).click();
   await expect(page).toHaveURL(/[?&]show=suspended(&|$)/);
   await expect(rows(page)).toHaveCount(1);
