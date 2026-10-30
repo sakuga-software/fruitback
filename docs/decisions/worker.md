@@ -436,6 +436,11 @@ degradation the ticket asked to have written down rather than discovered.
 - **`store.ts` is the interface.** `findForPage` states the _intention_, not the method — Linear
   filters by substring, SQL does a `WHERE`, and exposing a `contains` filter would have made
   Linear's trick the contract.
+- **A write reads one note, through `findNote` of `store.ts`** (FRU-499): a reply, a verdict, an edit,
+  a status, and the MCP writes. The worker's store reads one row and its newest replies; a store with
+  no `findNote` reads the page and picks the note. Never `findForPage` and a `find` in a route.
+- **The cap of the replies is in the SQL** (FRU-499): a `LATERAL … LIMIT COMMENTS_PER_ISSUE` on
+  `note_comments_by_note`, so a long thread sends twenty rows, not all of them.
 - **Every state the deprecated flag can be in says something at boot** (FRU-54).
   `fakeLinearIgnoredReason` answers when the flag lost — to `NODE_ENV=production`, or to an explicit
   `FRUITBACK_STORE`. `fakeLinearDeprecationNotice` answers when it selected the memory store, and

@@ -257,6 +257,19 @@ describe('the text of a note, edited by the person who left it (FRU-475)', () =>
     assert.deepEqual(await textOfRow(world), ['The price is wrong']);
   });
 
+  it('reads the one note it edits, never the whole page (FRU-499)', async () => {
+    const { world, store, site, tokens, note } = await aNote();
+    const onePage: NoteStore = {
+      ...store,
+      findForPage: () => Promise.reject(new Error('an edit read the whole page')),
+    };
+
+    const edited = await edit(world, site, note, 'The price of the Pro plan is wrong', tokens.bob, onePage);
+
+    assert.equal(edited.status, 200, JSON.stringify(edited.body));
+    assert.deepEqual(await textOfRow(world), ['The price of the Pro plan is wrong']);
+  });
+
   it('answers 404 for a note that is not on the page of the request', async () => {
     const { world, store, site, tokens } = await aNote();
 

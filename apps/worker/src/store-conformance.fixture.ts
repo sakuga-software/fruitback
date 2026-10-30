@@ -8,7 +8,7 @@ import type { ClientConfig, ClientPolicy } from './clients.ts';
 import type { WorkerEnv } from './env.ts';
 import { createMemoryKv } from './kv.ts';
 import { checkText, replyText } from './reply-text.ts';
-import { type CreatedIssue, type NoteStore, StoreError } from './store.ts';
+import { type CreatedIssue, type NoteStore, StoreError, findNote } from './store.ts';
 import { beforePostgres } from './before-postgres.fixture.ts';
 
 /**
@@ -355,6 +355,35 @@ export function describeStoreConformance(subject: ConformanceSubject): void {
           bodies,
           Array.from({ length: cap }, (_, index) => `reply ${index + 2}`),
         );
+      });
+
+      it('finds one note of a page as the read of the page shows it (FRU-499)', async () => {
+        // `sd_one` is in the text of `sd_one_more`: only the note whose id it is answers.
+        await store.create(noteAt('sd_one_more', PAGE, 'acme'), undefined, POLICY);
+        await subject.plantReplies(
+          store,
+          noteAt('sd_one', PAGE, 'acme'),
+          typeof subject.replyCap === 'number' ? subject.replyCap + 2 : 3,
+        );
+        await store.create(noteAt('sd_one', PAGE_WITH_QUERY, 'acme'), undefined, POLICY);
+        await store.create(noteAt('sd_one', PAGE, 'globex'), undefined, POLICY);
+        const one = (policy: ClientPolicy) => async (url: string, clientId: string, id: string, by: 'issue' | 'note') =>
+          findNote(store, { url, clientId, id, by }, undefined, policy);
+
+        for (const policy of [POLICY, QUIET]) {
+          const read = (await find(PAGE, 'acme', policy)).find((issue) => issue.note.id === 'sd_one');
+          assert.ok(read !== undefined, 'the note was not found');
+          const lookUp = one(policy);
+
+          assert.deepEqual(await lookUp(PAGE, 'acme', 'sd_one', 'note'), read);
+          assert.deepEqual(await lookUp(PAGE, 'acme', read.id, 'issue'), read);
+          assert.equal(await lookUp(PAGE, 'acme', 'sd_on', 'note'), undefined);
+          assert.equal(await lookUp(PAGE, 'acme', `0${read.id}`, 'issue'), undefined);
+          assert.equal(await lookUp(PAGE, 'acme', read.identifier, 'issue'), undefined);
+          assert.equal(await lookUp(PAGE, 'initech', 'sd_one', 'note'), undefined);
+          assert.equal(await lookUp(PAGE, 'globex', read.id, 'issue'), undefined);
+          assert.equal(await lookUp(PAGE_WITH_QUERY, 'acme', read.id, 'issue'), undefined, 'a note of another page');
+        }
       });
 
       it('says empty when a note has no replies', async () => {
