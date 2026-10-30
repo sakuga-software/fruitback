@@ -520,7 +520,7 @@ export default function Members() {
                       <th scope="col">{t('Role')}</th>
                       <th scope="col">{t('Sites')}</th>
                       <th scope="col" data-align="end">
-                        {t('Sent')}
+                        {t('Invited on')}
                       </th>
                     </tr>
                   </thead>

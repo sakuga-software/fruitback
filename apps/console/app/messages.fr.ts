@@ -396,7 +396,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'No invitation matches this search.': 'Aucune invitation ne correspond à cette recherche.',
   'Pages of members': 'Pages de membres',
   'Pages of invitations': 'Pages d’invitations',
-  Sent: 'Envoyée',
+  'Invited on': 'Invitée le',
   Joined: 'Arrivée',
   Resend: 'Renvoyer',
   'Cancel the invitation of {email}': 'Annuler l’invitation de {email}',
