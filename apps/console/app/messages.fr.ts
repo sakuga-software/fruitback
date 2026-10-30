@@ -922,6 +922,14 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'GitHub, private repositories of {account}': 'GitHub, dépôts privés de {account}',
   'GitHub, public repositories of {account}: their issues are public':
     'GitHub, dépôts publics de {account} : leurs tickets sont publics',
+  // FRU-500: a repository past the 1,000 that GitHub lists.
+  'GitHub lists {listed} of the {total} repositories of {account}. Add another one by its name.':
+    'GitHub liste {listed} des {total} dépôts de {account}. Ajoutez-en un autre par son nom.',
+  'Repository of {account}': 'Dépôt de {account}',
+  Add: 'Ajouter',
+  'The App reaches no repository {name}.': 'L’App n’atteint aucun dépôt {name}.',
+  'Write the repository as owner/name.': 'Écrivez le dépôt sous la forme propriétaire/nom.',
+  'GitHub did not answer. Try again in a moment.': 'GitHub n’a pas répondu. Réessayez dans un instant.',
   'Where the notes of {site} go': 'Où vont les notes de {site}',
   'The connectors of this workspace did not load.': 'Les connecteurs de cet espace de travail ne se sont pas chargés.',
   'No source is connected.': 'Aucun connecteur n’est ajouté.',

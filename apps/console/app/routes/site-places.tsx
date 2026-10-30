@@ -15,7 +15,7 @@ import { ConnectorMark } from '../connector-marks';
 import { msg, t } from '../i18n';
 import type { Listed } from '../listed';
 import { writeProblemOf } from '../problems';
-import { Button, Chip, LinkButton, type OptionGroup, Problem, SearchChoice } from '../ui';
+import { Button, Chip, Field, LinkButton, type OptionGroup, Problem, SearchChoice } from '../ui';
 import { useLocale } from '../use-locale';
 import { KINDS, accountOf, hostOf, sourceLine } from './connector-parts';
 import { GITHUB_APP_PAGE } from './connector-github';
@@ -24,7 +24,8 @@ import { ReadProblem } from '../read-problem';
 /** What a source offers: its teams, its repositories, or nothing to choose for an address. */
 type Offer =
   | { kind: 'linear'; teams: Team[] }
-  | { kind: 'github'; repositories: Repository[] }
+  /** `total`: how many GitHub counts, which can pass the list (FRU-500). */
+  | { kind: 'github'; repositories: Repository[]; total: number }
   | { kind: 'rest' }
   | 'loading'
   | 'failed';
@@ -76,16 +77,19 @@ export function SitePlaces({
       }
       setOffers((current) => ({ ...current, [source.id]: 'loading' }));
       const path = source.kind === 'linear' ? 'teams' : 'repositories';
-      void call<{ teams?: Team[]; repositories?: Repository[] }>('GET', `${base}/connectors/${source.id}/${path}`).then(
-        (answer) => {
-          if (stale) return;
-          let offer: Offer = 'failed';
-          if (answer.ok && source.kind === 'linear') offer = { kind: 'linear', teams: answer.data.teams ?? [] };
-          if (answer.ok && source.kind === 'github')
-            offer = { kind: 'github', repositories: answer.data.repositories ?? [] };
-          setOffers((current) => ({ ...current, [source.id]: offer }));
-        },
-      );
+      void call<{ teams?: Team[]; repositories?: Repository[]; total?: number }>(
+        'GET',
+        `${base}/connectors/${source.id}/${path}`,
+      ).then((answer) => {
+        if (stale) return;
+        let offer: Offer = 'failed';
+        if (answer.ok && source.kind === 'linear') offer = { kind: 'linear', teams: answer.data.teams ?? [] };
+        if (answer.ok && source.kind === 'github') {
+          const repositories = answer.data.repositories ?? [];
+          offer = { kind: 'github', repositories, total: answer.data.total ?? repositories.length };
+        }
+        setOffers((current) => ({ ...current, [source.id]: offer }));
+      });
     }
 
     return () => {
@@ -367,6 +371,38 @@ export function SitePlaces({
           />
         </div>
       ) : null}
+      {places.length < MAX_DESTINATIONS
+        ? sources.map((source) => {
+            const offer = offers[source.id];
+            if (typeof offer !== 'object' || offer.kind !== 'github' || offer.total <= offer.repositories.length) {
+              return null;
+            }
+
+            return (
+              <RepositoryByName
+                key={source.id}
+                base={base}
+                source={source}
+                listed={offer.repositories.length}
+                total={offer.total}
+                disabled={blocked}
+                onFound={(repository) => {
+                  setOffers((current) => {
+                    const now = current[source.id];
+                    if (typeof now !== 'object' || now.kind !== 'github') return current;
+                    if (now.repositories.some((each) => each.fullName === repository.fullName)) return current;
+
+                    return { ...current, [source.id]: { ...now, repositories: [...now.repositories, repository] } };
+                  });
+                  const added = placeOf(`${source.id}|${repository.fullName.toLowerCase()}|`);
+                  if (added !== undefined && !places.some((each) => samePlace(each, added))) {
+                    void place([...places, added]);
+                  }
+                }}
+              />
+            );
+          })
+        : null}
       {places.length >= MAX_DESTINATIONS ? (
         <p className="text-hint text-muted">
           {t('A site sends to {count} places at most.', { count: MAX_DESTINATIONS })}
@@ -483,4 +519,88 @@ function projectGroupsOf(source: string, team: Team, free: (value: string) => bo
   ]
     .map((group) => ({ ...group, options: group.options.filter((each) => free(each.value)) }))
     .filter((group) => group.options.length > 0);
+}
+
+/**
+ * A repository past the list (FRU-500): GitHub lists 1,000 repositories of an installation at most, so
+ * a person names another one, which the worker reads alone, by its name, with a token of that
+ * repository. Found, it is added as a destination.
+ */
+function RepositoryByName({
+  base,
+  source,
+  listed,
+  total,
+  disabled,
+  onFound,
+}: {
+  base: string;
+  source: Connector;
+  listed: number;
+  total: number;
+  disabled: boolean;
+  onFound: (repository: Repository) => void;
+}) {
+  useLocale();
+  const [name, setName] = useState('');
+  const [asking, setAsking] = useState(false);
+  // In English, with its values: translated where it is shown, so it follows a change of language.
+  const [said, setSaid] = useState<{ text: string; values?: Record<string, string> } | undefined>();
+  const account = accountOf(source);
+
+  async function find() {
+    const wanted = name.trim();
+    if (wanted === '' || asking) return;
+    setAsking(true);
+    setSaid(undefined);
+    const answer = await call<{ repository?: Repository }>(
+      'GET',
+      `${base}/connectors/${source.id}/repositories?name=${encodeURIComponent(wanted)}`,
+    );
+    setAsking(false);
+    if (answer.ok && answer.data.repository !== undefined) {
+      setName('');
+      onFound(answer.data.repository);
+    } else if (!answer.ok && answer.status === 404) {
+      setSaid({ text: msg('The App reaches no repository {name}.'), values: { name: wanted } });
+    } else if (!answer.ok && answer.status === 400) {
+      setSaid({ text: msg('Write the repository as owner/name.') });
+    } else {
+      setSaid({ text: msg('GitHub did not answer. Try again in a moment.') });
+    }
+  }
+
+  return (
+    <form
+      className="flex max-w-[420px] flex-col gap-[8px]"
+      data-repository-by-name
+      onSubmit={(event) => {
+        event.preventDefault();
+        void find();
+      }}
+    >
+      <p className="text-hint text-muted">
+        {t('GitHub lists {listed} of the {total} repositories of {account}. Add another one by its name.', {
+          listed,
+          total,
+          account,
+        })}
+      </p>
+      <div className="flex items-end gap-[8px]">
+        <Field
+          label={t('Repository of {account}', { account })}
+          placeholder="owner/name"
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          disabled={disabled || asking}
+          compact
+          code
+        />
+        <Button tone="outline" type="submit" disabled={disabled || asking || name.trim() === ''}>
+          {t('Add')}
+        </Button>
+      </div>
+      {said === undefined ? null : <Problem>{t(said.text, said.values)}</Problem>}
+    </form>
+  );
 }

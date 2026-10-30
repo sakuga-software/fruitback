@@ -610,6 +610,7 @@ describe('the repositories of a github connector, for a destination (FRU-361)', 
         { fullName: 'acme/site', private: false },
         { fullName: 'acme/blog', private: true },
       ],
+      total: 5,
     });
     // The body whole: no `repositories` beside the permission, and no other permission.
     assert.deepEqual(github.mints(), [{ installation: '7', body: { permissions: { metadata: 'read' } } }]);
@@ -625,9 +626,44 @@ describe('the repositories of a github connector, for a destination (FRU-361)', 
     const acme = await tenant(world, githubApp, 7, []);
 
     const answer = await listed(world, githubApp, acme.base, acme.connector.id, acme.token);
-    const { repositories } = (await answer.json()) as { repositories: unknown[] };
+    const { repositories, total } = (await answer.json()) as { repositories: unknown[]; total: number };
     assert.equal(repositories.length, MAX_LISTED_REPOSITORIES);
+    // FRU-500: the count of GitHub, so the console says the list is cut, and how much.
+    assert.equal(total, MAX_LISTED_REPOSITORIES + 5);
     assert.equal(github.listings().length, MAX_LISTED_REPOSITORIES / 100);
+  });
+
+  it('finds one repository past the list by its name, and only one the installation covers (FRU-500)', async () => {
+    const names = Array.from({ length: MAX_LISTED_REPOSITORIES + 5 }, (_, index) => `repo-${index}`);
+    const { world, github, githubApp } = await worldWithGithub(
+      { 7: { owner: 'acme', repositories: names }, 8: { owner: 'globex', repositories: ['secret'] } },
+      100,
+    );
+    const acme = await tenant(world, githubApp, 7, []);
+    const named = (name: string) =>
+      call(
+        world,
+        githubApp,
+        'GET',
+        `${acme.base}/connectors/${acme.connector.id}/repositories?name=${encodeURIComponent(name)}`,
+        { token: acme.token },
+      );
+
+    // The last one, which the list of 1,000 does not hold.
+    const last = await named('Acme/Repo-1004');
+    assert.equal(last.status, 200, await last.clone().text());
+    assert.deepEqual(await last.json(), { repository: { fullName: 'acme/repo-1004', private: true } });
+    // Asked with a token of that repository alone, for its metadata: no list was read.
+    assert.deepEqual(github.mints().at(-1), {
+      installation: '7',
+      body: { repositories: ['repo-1004'], permissions: { metadata: 'read' } },
+    });
+    assert.equal(github.listings().length, 0);
+
+    // A repository of another installation, or of nobody, is not found; a name that is no repository is refused.
+    assert.equal((await named('globex/secret')).status, 404);
+    assert.equal((await named('acme/nothing-here')).status, 404);
+    assert.deepEqual(await (await named('acme')).json(), { error: 'invalid-repository' });
   });
 
   it('never gives the token of the list to an issue: a note asks its own, for its repository', async () => {
