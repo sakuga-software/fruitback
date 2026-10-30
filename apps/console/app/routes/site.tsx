@@ -9,7 +9,7 @@ import { InstallOptions } from '../install-options';
 import { type Listed, edited, listedOf } from '../listed';
 import { problemOf } from '../problems';
 import { siteLabel, siteName } from '../site-address';
-import { Button, KeyValue, LinkButton, Problem } from '../ui';
+import { Button, KeyValue, LinkButton, LoadFailed, Problem } from '../ui';
 import { useLocale } from '../use-locale';
 import { SitePlaces } from './site-places';
 import { PageHead, useWorkspace } from './workspace';
@@ -140,18 +140,12 @@ export default function SitePage() {
         {sites === 'loading' ? <p className="text-small text-muted">{t('Loading…')}</p> : null}
         {gone ? <p className="text-body text-muted">{t('This site is not in the workspace any more.')}</p> : null}
         {sites === 'failed' ? (
-          <div
-            role="alert"
-            className="box-content flex max-w-[760px] flex-wrap items-center justify-between gap-[16px] rounded-frame border border-control px-[32px] py-[28px]"
-          >
-            <div>
-              <h2 className="mb-[4px] text-step leading-auto font-semibold">{t('The site did not load')}</h2>
-              <p className="text-body text-muted">{t('Fruitback did not answer. Your sites and notes are safe.')}</p>
-            </div>
-            <Button tone="outline" size="page" inset={18} onClick={() => void read()}>
-              {t('Try again')}
-            </Button>
-          </div>
+          <LoadFailed
+            title={t('The site did not load')}
+            detail={t('Fruitback did not answer. Your sites and notes are safe.')}
+            retry={t('Try again')}
+            onRetry={() => void read()}
+          />
         ) : null}
       </>
     );

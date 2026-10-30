@@ -769,9 +769,12 @@ test('a read that failed says so with « Try again », and is never a table with
   worker.members = 'fails';
   await open(page);
 
+  // The box of the kit (FRU-508): a title, a sentence, and « Try again » once.
   const alert = page.getByRole('alert');
-  await expect(alert).toHaveText('Fruitback did not answer. Try again.');
-  const frame = page.locator('main > div').filter({ has: alert });
+  await expect(alert.getByRole('heading', { level: 2, name: 'The members did not load' })).toBeVisible();
+  await expect(alert.locator('p')).toHaveText('Fruitback did not answer. Your members are safe.');
+  await expect(page.getByText('Try again')).toHaveCount(1);
+  const frame = alert;
   expect
     .soft(await styles(frame, ['padding-top', 'padding-left', 'border-top-left-radius', 'border-top-width']))
     .toEqual({
@@ -781,7 +784,7 @@ test('a read that failed says so with « Try again », and is never a table with
       'border-top-width': '1px',
     });
   expect.soft(await painted(frame, 'borderTopColor')).toEqual(rgb(CONTROL));
-  expect.soft(contrast(await painted(alert, 'color'), rgb(WHITE))).toBeGreaterThanOrEqual(4.5);
+  expect.soft(contrast(await painted(alert.locator('p'), 'color'), rgb(WHITE))).toBeGreaterThanOrEqual(4.5);
   await expect(table(page)).toHaveCount(0);
   // What was typed before the failure stays, and the form is still there.
   await email(page).fill('zoe@client.fr');

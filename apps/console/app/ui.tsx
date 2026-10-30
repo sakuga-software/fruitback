@@ -688,6 +688,40 @@ export function Problem({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * A read that failed (FRU-508): what did not load, that nothing is lost, and one way to read again.
+ * Never « Nothing yet »: the screen does not know. The box of the mockup is 760 px inside its padding.
+ */
+export function LoadFailed({
+  title,
+  detail,
+  retry,
+  onRetry,
+}: {
+  /** « The notes did not load ». */
+  title: string;
+  /** « Fruitback did not answer. Your notes are safe. » */
+  detail: string;
+  /** The words of the button: « Try again ». */
+  retry: string;
+  onRetry: () => void;
+}) {
+  return (
+    <div
+      role="alert"
+      className="box-content flex max-w-[760px] flex-wrap items-center justify-between gap-[16px] rounded-frame border border-control px-[32px] py-[28px]"
+    >
+      <div>
+        <h2 className="mb-[4px] text-step leading-auto font-semibold">{title}</h2>
+        <p className="text-body text-muted">{detail}</p>
+      </div>
+      <Button tone="outline" size="page" inset={18} onClick={onRetry}>
+        {retry}
+      </Button>
+    </div>
+  );
+}
+
 /** A name and its initial, in the round chip of the mockup. `pending`: somebody invited who has not come. */
 export function Initial({
   name,

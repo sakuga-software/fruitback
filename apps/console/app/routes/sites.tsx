@@ -12,7 +12,7 @@ import {
 } from '../api';
 import { SITE_NOT_ADDED, SITE_PROBLEMS, problemOf } from '../problems';
 import { type Listed, listedOf } from '../listed';
-import { Button, Field, LinkButton, Menu, type MenuItem, Pick, Problem, StatusBar } from '../ui';
+import { Button, Field, LinkButton, LoadFailed, Menu, type MenuItem, Pick, Problem, StatusBar } from '../ui';
 import { ago } from '../ago';
 import { NotePages } from './notes';
 import { PageHead, useWorkspace } from './workspace';
@@ -127,18 +127,12 @@ export default function Sites() {
 
       {/* The mockup sizes the two boxes below by their content: 760 px and 640 px inside the padding. */}
       {sites === 'failed' ? (
-        <div
-          role="alert"
-          className="box-content flex max-w-[760px] flex-wrap items-center justify-between gap-[16px] rounded-frame border border-control px-[32px] py-[28px]"
-        >
-          <div>
-            <h2 className="mb-[4px] text-step leading-auto font-semibold">{t('The sites did not load')}</h2>
-            <p className="text-body text-muted">{t('Fruitback did not answer. Your sites and notes are safe.')}</p>
-          </div>
-          <Button tone="outline" size="page" inset={18} onClick={() => void read()}>
-            {t('Try again')}
-          </Button>
-        </div>
+        <LoadFailed
+          title={t('The sites did not load')}
+          detail={t('Fruitback did not answer. Your sites and notes are safe.')}
+          retry={t('Try again')}
+          onRetry={() => void read()}
+        />
       ) : null}
 
       {typeof sites !== 'string' && sites.length === 0 ? (
