@@ -290,6 +290,8 @@ describe('POST /attachments (FRU-331)', () => {
     const end = Date.parse(String(answer.expiresAt));
     assert.ok(end >= before + TRANSIT_MS && end <= Date.now() + TRANSIT_MS);
     assert.equal(sent.headers.get('Access-Control-Allow-Origin'), EXTENSION);
+    // The answer of a session of the extension: no cache keeps it (FRU-506).
+    assert.equal(sent.headers.get('Cache-Control'), 'no-store');
     assert.equal(attachments.size(), 1);
   });
 

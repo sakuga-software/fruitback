@@ -240,7 +240,7 @@ async function handleSession(
     // to revoke" would tell a caller which refresh tokens are live.
     await revokeSession(store, refreshToken);
 
-    return new Response(null, { status: 204, headers });
+    return new Response(null, { status: 204, headers: { 'Cache-Control': 'no-store', ...headers } });
   }
 
   return json(404, { error: 'not-found' }, headers);
@@ -299,7 +299,7 @@ function parseJsonObject(text: string): Record<string, unknown> | undefined {
 function json(status: number, body: unknown, headers: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json', ...headers },
+    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...headers },
   });
 }
 

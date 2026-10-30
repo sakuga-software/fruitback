@@ -445,6 +445,13 @@ holds another kind of session, a cookie of better-auth (FRU-147), which does not
 | Refresh token | 256 bits, 30 days, **rotated on every refresh**, revocable |
 | On disk       | codes and refresh tokens are stored as **SHA-256 digests** |
 
+**No cache keeps a token** (FRU-506). Every answer of `/session/pair`, `/session/refresh` and
+`/session/revoke`, a refusal included, says `Cache-Control: no-store`. Every other JSON answer of the
+worker says it too. Before FRU-506 these three routes did not, and `/session/pair` and
+`/session/refresh` answer an access token and a refresh token. The header is an instruction: it
+protects against a proxy or a cache that obeys it, and against no other. See
+test:`answers POST /session/refresh with Cache-Control: no-store`.
+
 **A pairing code can travel in a link, `<worker>/pair#<code>`** (FRU-92). What that changes:
 
 - **The code is in the fragment**, which a browser sends to no server. The worker does not receive
