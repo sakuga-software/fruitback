@@ -1,3 +1,4 @@
+import { json } from './http.ts';
 import { MAX_ATTACHMENTS_PER_NOTE, MAX_ATTACHMENT_BYTES_PER_NOTE, type Note } from '@fruitback/shared';
 import {
   ATTACHMENTS_PATH,
@@ -291,11 +292,4 @@ export async function settleFiles(
   }
 
   return { sent: outcome.sent.length, lost: outcome.lost.length, waiting: outcome.waiting.length };
-}
-
-function json(status: number, body: unknown, headers: Record<string, string> = {}): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json', ...headers },
-  });
 }

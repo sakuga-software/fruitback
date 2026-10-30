@@ -1,3 +1,4 @@
+import { json } from './http.ts';
 import { MAX_ATTACHMENTS_PER_NOTE, NOTE_STAGES, type Note, type NoteIssue, parseNote } from '@fruitback/shared';
 import { legacyAttachment, settleFiles, takeFiles } from './attachment-routes.ts';
 import { attachmentIdsOf } from './attachments.ts';
@@ -611,13 +612,6 @@ async function postBatch(
   if (kept.length === 0) return json(502, { error: 'store-unavailable', results: answered }, corsHeaders);
 
   return json(kept.length === results.length ? 201 : 207, { results: answered }, corsHeaders);
-}
-
-function json(status: number, body: unknown, headers: Record<string, string> = {}): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json', ...headers },
-  });
 }
 
 /** The stages a connector gives some states (FRU-102), read at this request. None when it cannot say. */

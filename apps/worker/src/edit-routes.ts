@@ -1,3 +1,4 @@
+import { json } from './http.ts';
 import { NOTE_MAX_LENGTH } from '@fruitback/shared';
 import type { AccountStore } from './accounts.ts';
 import { MAX_BODY_BYTES, readBoundedText } from './bounded-body.ts';
@@ -130,11 +131,4 @@ export async function postEdit(
     if (error instanceof KvError) return json(503, { error: 'limiter-unavailable' }, corsHeaders);
     throw error;
   }
-}
-
-function json(status: number, body: unknown, headers: Record<string, string> = {}): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json', ...headers },
-  });
 }

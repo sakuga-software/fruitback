@@ -126,6 +126,31 @@ describe('1 · signed out (FRU-297)', () => {
     assert.deepEqual(done, ['sign in', 'sign in', 'sign in', 'settings']);
   });
 
+  it('draws the mark of its provider in « Google » and « GitHub », in every state of the sign-in (FRU-525)', () => {
+    const states = [
+      {},
+      { ended: true },
+      ...(['refused', 'expired', 'unavailable', 'untrusted', 'blocked'] as const).map((stop) => ({
+        stop: signInStop(stop),
+      })),
+    ];
+    for (const state of states) {
+      const root = signedOut(page(), { canSignIn: true, onSignIn: nothing, onSettings: nothing, ...state });
+      const marked = [...root.querySelectorAll('.method-row button')].map((button) => [
+        button.textContent,
+        button.querySelector('svg.kit-provider-mark[aria-hidden="true"]')?.getAttribute('data-provider'),
+      ]);
+      assert.deepEqual(
+        marked,
+        [
+          ['Google', 'google'],
+          ['GitHub', 'github'],
+        ],
+        JSON.stringify(state),
+      );
+    }
+  });
+
   it('leads to the page of the extension alone in a build that names no Fruitback to sign in to', () => {
     const root = signedOut(page(), { canSignIn: false, onSignIn: nothing, onSettings: nothing });
 
@@ -251,12 +276,47 @@ describe('4 · a problem, with its fix (FRU-297)', () => {
     assert.deepEqual(stops(root), ['button: Account and settings']);
   });
 
-  it('says that a page that is not http or https is not one Fruitback runs on, with no button', () => {
+  it('says why nothing runs on a page of the browser, and what to do, with no button (FRU-526)', () => {
     const root = notAWebPage(page(), { onSettings: nothing });
 
     assert.ok(root.classList.contains('popup-screen-4'));
-    assert.equal(root.querySelector('h1')?.textContent, 'Fruitback works on http and https pages.');
+    assert.equal(root.querySelector('h1')?.textContent, "Fruitback can't run on this page");
+    assert.equal(
+      root.querySelector('.lead')?.textContent,
+      'This is a page of the browser, like a new tab, the settings, the extension store or a PDF. No extension can draw on it.',
+    );
+    assert.deepEqual(
+      [...root.querySelectorAll('.not-web-steps li')].map((step) => step.textContent),
+      [
+        'Open a site your team reviews.',
+        'There, click the Fruitback icon.',
+        'Nothing changed for your sites and your notes.',
+      ],
+    );
     assert.deepEqual(stops(root), ['button: Account and settings']);
+  });
+
+  it('names the keys the person set, each in its kbd, and no key written in the code (FRU-526)', () => {
+    const root = notAWebPage(page(), { onSettings: nothing, shortcut: ['Ctrl', 'Shift', 'Y'] });
+    const step = root.querySelectorAll('.not-web-steps li')[1];
+
+    assert.equal(step?.textContent, 'There, click the Fruitback icon, or press Ctrl Shift Y.');
+    assert.deepEqual(
+      [...(step?.querySelectorAll('kbd') ?? [])].map((key) => key.textContent),
+      ['Ctrl', 'Shift', 'Y'],
+    );
+    assert.doesNotMatch(root.textContent ?? '', /⌥|⇧|Alt/);
+  });
+
+  it('says it in French for a French reviewer (FRU-526)', () => {
+    setLanguage('fr');
+    const root = notAWebPage(page(), { onSettings: nothing, shortcut: ['⌥', '⇧', 'F'] });
+
+    assert.equal(root.querySelector('h1')?.textContent, 'Fruitback ne peut pas fonctionner sur cette page');
+    assert.equal(
+      root.querySelectorAll('.not-web-steps li')[1]?.textContent,
+      'Là, cliquez sur l’icône de Fruitback, ou appuyez sur ⌥ ⇧ F.',
+    );
   });
 
   it('says it is loading, once, with nothing to press but the settings', () => {

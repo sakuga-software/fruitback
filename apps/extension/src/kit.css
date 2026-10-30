@@ -145,6 +145,16 @@ button.kit-secondary:hover {
   background: var(--surface-raised);
 }
 
+/*
+  The mark of a provider of sign-in, before its word (FRU-525): 18 px, as the console draws it. The
+  paths carry their paint: the four colours of the « G », and currentColor for the GitHub mark.
+*/
+.kit-provider-mark {
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
+
 /* « Change »: a word in the accent, in a target of 44 px. */
 button.kit-text {
   height: 44px;

@@ -1,3 +1,4 @@
+import { json } from './http.ts';
 import { type AccountStore, type Reach, can, readsSite } from './accounts.ts';
 import { authorView, cursorOf, pageOf, queryOf } from './console-notes.ts';
 import { readBearerToken } from './identity.ts';
@@ -138,11 +139,4 @@ function noteView(note: ListedNote, account: string, seesTracker: boolean) {
     ...(seesTracker && note.referenceUrl !== undefined ? { referenceUrl: note.referenceUrl } : {}),
     createdAt: new Date(note.createdAt).toISOString(),
   };
-}
-
-function json(status: number, body: unknown, headers: Record<string, string>): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...headers },
-  });
 }

@@ -74,7 +74,7 @@ async function respond(
     console.error('[fruitback] request failed', error);
 
     if (!response.headersSent) {
-      response.writeHead(500, { 'Content-Type': 'application/json' });
+      response.writeHead(500, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
       response.end(JSON.stringify({ error: 'internal' }));
       return;
     }

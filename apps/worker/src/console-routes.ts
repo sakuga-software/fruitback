@@ -1,4 +1,6 @@
+import { json } from './http.ts';
 import type { AccountStore } from './accounts.ts';
+import { BodyTooLarge } from './bounded-body.ts';
 import { authFor } from './auth.ts';
 import {
   createWorkspaceWithPlugin,
@@ -99,8 +101,9 @@ export async function handleConsole(request: Request, pathname: string, seams: C
           (await handleAuthRoutes(request, pathname, routes, cors.headers));
         if (answer !== undefined) return answer;
       } catch (error) {
-        // A `Kv` that stopped is not better-auth: it is answered above, as the limiter's outage.
-        if (error instanceof StoreError || error instanceof KvError) throw error;
+        // A `Kv` that stopped is not better-auth: it is answered above, as the limiter's outage. A
+        // body over the cap is answered below, as on every route of the console.
+        if (error instanceof StoreError || error instanceof KvError || error instanceof BodyTooLarge) throw error;
         // better-auth rejects, and does not answer, on a schema that is not the one it expects, or
         // a database that does not answer (FRU-144). Said in the log, with no address and no token.
         const said = error instanceof Error ? error.message : String(error);
@@ -232,6 +235,9 @@ export async function handleConsole(request: Request, pathname: string, seams: C
     return answer ?? json(404, { error: 'not-found' }, cors.headers);
   } catch (error) {
     if (error instanceof StoreError) return json(502, { error: 'store-unavailable' }, cors.headers);
+    // `readJsonObject` of `bounded-body.ts` throws it, wherever a route reads its body (FRU-506).
+    if (error instanceof BodyTooLarge)
+      return json(413, { error: 'payload-too-large', maxBytes: error.maxBytes }, cors.headers);
     // The cookie of a call of the console is read by better-auth (FRU-147): the same answer as on
     // its own routes when it does not answer.
     if (error instanceof AuthUnavailable) {
@@ -243,11 +249,4 @@ export async function handleConsole(request: Request, pathname: string, seams: C
     }
     throw error;
   }
-}
-
-function json(status: number, body: unknown, headers: Record<string, string> = {}): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json', ...headers },
-  });
 }

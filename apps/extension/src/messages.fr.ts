@@ -200,7 +200,14 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'The site could not be turned on. Try again.': 'Le site n’a pas pu être activé. Réessayez.',
   'The browser did not give the extension access to Fruitback.':
     'Le navigateur n’a pas donné à l’extension l’accès à Fruitback.',
-  'Fruitback works on http and https pages.': 'Fruitback fonctionne sur les pages http et https.',
+  // FRU-526: a page of the browser, where no extension draws.
+  "Fruitback can't run on this page": 'Fruitback ne peut pas fonctionner sur cette page',
+  'This is a page of the browser, like a new tab, the settings, the extension store or a PDF. No extension can draw on it.':
+    'C’est une page du navigateur, comme un nouvel onglet, les réglages, la boutique d’extensions ou un PDF. Aucune extension ne peut y dessiner.',
+  'Open a site your team reviews.': 'Ouvrez un site que votre équipe relit.',
+  'There, click the Fruitback icon, or press {keys}.': 'Là, cliquez sur l’icône de Fruitback, ou appuyez sur {keys}.',
+  'There, click the Fruitback icon.': 'Là, cliquez sur l’icône de Fruitback.',
+  'Nothing changed for your sites and your notes.': 'Rien n’a changé pour vos sites et vos notes.',
   'No rule covers this origin, so Fruitback does nothing here.':
     'Aucune règle ne couvre cette origine, donc Fruitback ne fait rien ici.',
   'Rule: {pattern}': 'Règle : {pattern}',

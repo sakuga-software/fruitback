@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { NOTES_NEED_SESSION, READ_NEEDS_SESSION } from './read-probe.ts';
+import { NOTES_NEED_SESSION, READ_NEEDS_SESSION, WORKER_NOT_FOUND } from './read-probe.ts';
 import { PAIRING_NEEDS_HTTPS, PAIRING_PROBLEM, PROBLEMS, REMEDY_LABEL } from './remedy.ts';
 
 /**
@@ -144,5 +144,107 @@ describe('the guide quotes the popup this extension renders', () => {
       assert.ok(optionsPage.includes(control), `the options page no longer renders: ${control}`);
       assert.ok(guide.includes(control), `docs/reviewing.md no longer names: ${control}`);
     }
+  });
+
+  /**
+   * « When Fruitback does not answer » and « Who can add a site to a workspace » (FRU-527). The help
+   * buttons of the extension link these two headings, and each line they quote is a cause the code
+   * draws: renamed there, the section would send a reviewer looking for words that no screen shows.
+   */
+  describe('the sections that the help buttons link (FRU-527)', () => {
+    const widget = read('../../../packages/widget/src/messages.ts');
+    const consoleConnect = read('../../console/app/routes/connect.tsx');
+    const section = (heading: string): string => {
+      const start = guide.indexOf(`\n## ${heading}\n`);
+      assert.ok(start >= 0, `docs/reviewing.md has no heading « ${heading} »`);
+      const end = guide.indexOf('\n## ', start + 1);
+
+      return guide.slice(start, end < 0 ? undefined : end);
+    };
+
+    it('keeps the two headings, whose ids the extension links', () => {
+      const ids = [...guide.matchAll(/^## (.+)$/gm)].map((match) =>
+        (match[1] ?? '')
+          .toLowerCase()
+          .replaceAll(/[^\p{L}\p{N}\s_-]/gu, '')
+          .replaceAll(/\s/g, '-'),
+      );
+
+      assert.ok(ids.includes('when-fruitback-does-not-answer'), 'the id #when-fruitback-does-not-answer is gone');
+      assert.ok(ids.includes('who-can-add-a-site-to-a-workspace'), 'the id #who-can-add-a-site-to-a-workspace is gone');
+    });
+
+    it('quotes only what the popup draws', () => {
+      const troubleshooting = section('When Fruitback does not answer');
+      const quotes = [
+        'It was refused in the console.',
+        'The tab was not approved in time.',
+        'Check the connection, then try again.',
+        'The browser did not give the extension access to Fruitback.',
+        'Fruitback did not answer. The popup asks again.',
+        'Your sign-in ended',
+        "Fruitback can't reach",
+        'Try again',
+        "Fruitback can't open this page",
+        'Allow access again',
+        'Paused',
+        'Another copy of Fruitback runs on this page',
+        'Start again',
+      ];
+
+      for (const quote of quotes) {
+        assert.ok(troubleshooting.includes(quote), `the section does not quote: ${quote}`);
+        assert.ok(popup.includes(quote), `the popup no longer draws: ${quote}`);
+      }
+      // Drawn from their modules, which the popup imports.
+      assert.ok(troubleshooting.includes(WORKER_NOT_FOUND), 'the section does not quote the worker that is not there');
+      assert.ok(popup.includes('WORKER_NOT_FOUND'), 'the popup no longer says that the worker of a rule is not there');
+      assert.ok(
+        troubleshooting.includes(PAIRING_PROBLEM.unavailable),
+        'the section does not quote the pairing with no answer',
+      );
+      assert.ok(
+        consoleConnect.includes("t('Not now')"),
+        'the console no longer has « Not now », which the section names',
+      );
+    });
+
+    it('quotes only what the widget draws', () => {
+      const troubleshooting = section('When Fruitback does not answer');
+
+      for (const quote of [
+        'Sign in to leave notes',
+        'Did not go through',
+        'Your text is kept. Try again, or copy it before closing the page.',
+      ]) {
+        assert.ok(troubleshooting.includes(quote), `the section does not quote: ${quote}`);
+        assert.ok(widget.includes(`'${quote}'`), `the widget no longer draws: ${quote}`);
+      }
+    });
+
+    it('says who can add a site as the popup and the worker decide it', () => {
+      const who = section('Who can add a site to a workspace');
+      const roles = read('../../worker/src/accounts.ts');
+      const adds = read('../../worker/src/session-site-add.ts');
+
+      for (const quote of [
+        'Ask an admin of your workspace to add this site.',
+        'Your role in this workspace does not let you add a site.',
+        'Too many sites were added in the last hour. Try again later.',
+      ]) {
+        assert.ok(who.includes(quote), `the section does not quote: ${quote}`);
+        assert.ok(popup.includes(quote), `the popup no longer draws: ${quote}`);
+      }
+      // Owner and admin: the two roles that hold `manage-sites`, the right that `POST /session/sites` asks.
+      assert.match(roles, /owner: ACTIONS,/);
+      assert.match(roles, /admin: \[[^\]]*'manage-sites'/);
+      assert.doesNotMatch(roles, /(member|guest): \[[^\]]*'manage-sites'/);
+      assert.ok(
+        adds.includes("can(role, 'manage-sites')"),
+        'the route that adds a site no longer asks for manage-sites',
+      );
+      assert.match(adds, /ADDS_PER_ACCOUNT = 10;/);
+      assert.ok(who.includes('10 sites an hour'), 'the section does not give the limit of the route');
+    });
   });
 });
