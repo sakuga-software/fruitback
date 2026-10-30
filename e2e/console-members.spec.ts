@@ -801,7 +801,7 @@ test('a read that failed says so with « Try again », and is never a table with
   // The box of the kit (FRU-508): a title, a sentence, and « Try again » once.
   const alert = page.getByRole('alert');
   await expect(alert.getByRole('heading', { level: 2, name: 'The members did not load' })).toBeVisible();
-  await expect(alert.locator('p')).toHaveText('Fruitback hit an error. Try again in a moment. Your members are safe.');
+  await expect(alert.locator('p')).toHaveText('Fruitback hit an error. Your members are safe.');
   await expect(page.getByText('Try again')).toHaveCount(1);
   const frame = alert;
   expect

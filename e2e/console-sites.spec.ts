@@ -549,16 +549,12 @@ test('a read with no answer asks to check the connection, and an error answered 
   await open(page);
   const card = page.getByRole('alert').filter({ has: page.getByRole('heading', { name: 'The sites did not load' }) });
   await expect(
-    card.getByText(
-      'Fruitback could not be reached. Check your connection, then try again. Your sites and notes are safe.',
-    ),
+    card.getByText('Fruitback could not be reached. Check your connection. Your sites and notes are safe.'),
   ).toBeVisible();
 
   worker.read = 'fails';
   await card.getByRole('button', { name: 'Try again' }).click();
-  await expect(
-    card.getByText('Fruitback hit an error. Try again in a moment. Your sites and notes are safe.'),
-  ).toBeVisible();
+  await expect(card.getByText('Fruitback hit an error. Your sites and notes are safe.')).toBeVisible();
   await expect(card).not.toContainText('connection');
 });
 
@@ -569,9 +565,7 @@ test('a read that failed is the alert of the mockup, and never « No site yet »
 
   const alert = page.getByRole('alert');
   await expect(alert.getByRole('heading', { level: 2, name: 'The sites did not load' })).toBeVisible();
-  await expect(
-    alert.getByText('Fruitback hit an error. Try again in a moment. Your sites and notes are safe.'),
-  ).toBeVisible();
+  await expect(alert.getByText('Fruitback hit an error. Your sites and notes are safe.')).toBeVisible();
   expect
     .soft(
       await styles(alert, ['padding-top', 'padding-left', 'border-top-left-radius', 'border-top-width', 'max-width']),

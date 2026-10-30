@@ -143,7 +143,7 @@ export function SitesState({ sites }: { sites: Listed<Site> }) {
   if (sites === 'failed')
     return (
       <p className="text-small text-muted">
-        {t('The sites did not load.')} <ReadProblem />
+        {t('The sites did not load.')} <ReadProblem alone />
       </p>
     );
 

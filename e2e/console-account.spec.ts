@@ -505,7 +505,7 @@ test('a list of browsers that was not read is no list: it says so, and reads aga
   await page.goto(`${CONSOLE}/w/w1/account`);
   const where = section(page, 'Where you are signed in');
   await expect(where.getByRole('alert')).toHaveText(
-    'The browsers where you are signed in did not load. Fruitback hit an error. Try again in a moment.',
+    'The browsers where you are signed in did not load. Fruitback hit an error.',
   );
   await expect(where.getByRole('listitem')).toHaveCount(0);
   // The control of the count above: with an answer, the same reading finds the rows.
@@ -1220,7 +1220,7 @@ test('a list of the extension that was not read leaves the browsers of the conso
   await expect(where.getByRole('button', { name: 'Disconnect', exact: true })).toHaveCount(2);
   // And a line says what is missing, with the way to read it again.
   await expect(where.getByRole('alert')).toHaveText(
-    'The browsers of the extension did not load. Fruitback hit an error. Try again in a moment.',
+    'The browsers of the extension did not load. Fruitback hit an error.',
   );
   worker.extensions = EXTENSIONS;
   await where.getByRole('button', { name: 'Try again' }).click();
@@ -1315,7 +1315,7 @@ test('the line of a list of the extension that was not read goes when a later re
   worker.extensions = undefined;
   await disconnect('Chrome on macOS');
   await expect(where.getByRole('alert')).toHaveText(
-    'The browsers of the extension did not load. Fruitback hit an error. Try again in a moment.',
+    'The browsers of the extension did not load. Fruitback hit an error.',
   );
   // Firefox ended elsewhere too, and the list is read: the rows are the worker's, and the line goes.
   worker.extensions = [];

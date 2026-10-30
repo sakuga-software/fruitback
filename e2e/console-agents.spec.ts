@@ -230,7 +230,7 @@ test('a key is made, shown once with the line for Claude Code, copied, then gone
   await form.getByText('Read, reply and set a status', { exact: true }).click();
   await expect(form.getByRole('radio', { name: 'Read, reply and set a status' })).toBeChecked();
   await form.getByRole('textbox', { name: 'Expires after (days)' }).fill('30');
-  await expect(form).toContainText('Ends on');
+  await expect(form).toContainText('Expires on');
   // On by default, and turned off here, knowing it.
   const known = form.getByRole('switch', { name: /Only the notes of known people/ });
   await expect(known).toBeChecked();

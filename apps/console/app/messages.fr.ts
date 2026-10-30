@@ -336,6 +336,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Fruitback hit an error. Try again in a moment.': 'Fruitback a rencontré une erreur. Réessayez dans un instant.',
   'Fruitback could not be reached. Check your connection, then try again.':
     'Fruitback est injoignable. Vérifiez votre connexion, puis réessayez.',
+  'Fruitback could not be reached. Check your connection.': 'Fruitback est injoignable. Vérifiez votre connexion.',
+  'Fruitback hit an error.': 'Fruitback a rencontré une erreur.',
   'Linear did not answer just now. Your key is not kept: try again in a minute.':
     'Linear n’a pas répondu. Votre clé n’est pas gardée : réessayez dans une minute.',
   Connectors: 'Connecteurs',

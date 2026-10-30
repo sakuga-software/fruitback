@@ -68,7 +68,7 @@ test('a 503 and a 403 say two different things, and both keep the note', async (
   await refuseWrites(page, 403, 'origin-not-allowed');
   await mount(page, 'send-failure-403', 'en-US');
   const refused = await sendFailing(page, 'Kept through a 403');
-  expect(refused).toMatch(/tell the team of the site/);
+  expect(refused).toMatch(/Tell the site’s team/);
   expect(refused).not.toBe(unavailable);
 
   // Still announced: the card of a failure is an alert (FRU-305).

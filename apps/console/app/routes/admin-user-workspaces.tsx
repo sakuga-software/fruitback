@@ -116,7 +116,7 @@ function WorkspaceChoice({
   if (found === 'failed')
     return (
       <p className="text-muted">
-        {t('The workspaces did not load.')} <ReadProblem />
+        {t('The workspaces did not load.')} <ReadProblem alone />
       </p>
     );
   if (found.length === 0) return <p className="text-muted">{t('This person is in every workspace already.')}</p>;
