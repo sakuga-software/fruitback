@@ -947,6 +947,10 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Workspace settings': 'Réglages du workspace',
   'Settings that every member of {name} sees.': 'Les réglages que voit chaque membre de {name}.',
   'The name is saved.': 'Le nom est enregistré.',
+  // The pages of the settings, FRU-544.
+  'Pages of the settings': 'Pages des réglages',
+  General: 'Général',
+  AI: 'IA',
   // The logo of a workspace, FRU-428.
   Logo: 'Logo',
   'Upload a logo': 'Envoyer un logo',

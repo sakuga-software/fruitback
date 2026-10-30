@@ -1,5 +1,27 @@
 # @fruitback/extension
 
+## 0.6.0
+
+### Minor Changes
+
+- The screens of the extension, after a review of each of its states (gallery.fruitback.com):
+
+  - The Google and GitHub buttons of the sign-in carry the mark of their provider, in the popup and on the welcome page.
+  - The popup on a page of the browser says why nothing runs there, and what to do.
+  - On a site that is on, « Leave feedback » sits at the bottom of the popup, with the side panel as a button of one icon beside it.
+  - The welcome page shows an 18 s video of a first note, taken by a spec.
+  - On a page Fruitback is not on, the side panel offers « Open Fruitback », which opens the popup.
+  - The side panel has one side margin of 12 px, and a note holds one line in its lists.
+  - Beyond five statuses, the filter of the side panel is a list that opens over the notes.
+  - « Turn on » of the welcome page gives its scripts to the site it opens, after the load: a slow machine loaded it with no widget.
+  - A failed read or pairing call no longer hides its fix.
+
+### Patch Changes
+
+- Updated dependencies [9bc7374]
+  - @fruitback/widget@0.6.0
+  - @fruitback/shared@0.6.0
+
 ## 0.5.0
 
 ### Minor Changes
