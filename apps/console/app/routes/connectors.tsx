@@ -92,6 +92,9 @@ const PANEL_TITLE = 'source-panel-title';
 /** The id of the list of the sources to add, which « New source » names in `aria-controls`. */
 const CATALOGUE = 'source-catalogue';
 
+/** The id of the title « Connected », where focus goes back when « New source » is not there. */
+const CONNECTED_TITLE = 'connected-title';
+
 export default function Connectors() {
   useLocale();
   const { workspace } = useWorkspace();
@@ -186,10 +189,16 @@ export default function Connectors() {
     // Once, when the screen opens: the word in the address is read one time.
   }, [load]);
 
-  /** « Close » of the list of the sources to add: the keyboard goes back to « New source ». */
+  /**
+   * « Close » of the list of the sources to add: the keyboard goes back to « New source ». A read
+   * since the list opened can take that button away (a role, or a worker that cannot keep a key any
+   * more): focus then goes to the title of the sources that are connected, never to the page.
+   */
   function closeCatalogue() {
     setCatalogue(false);
-    document.querySelector<HTMLElement>(`[aria-controls="${CATALOGUE}"]`)?.focus();
+    const back =
+      document.querySelector<HTMLElement>(`[aria-controls="${CATALOGUE}"]`) ?? document.getElementById(CONNECTED_TITLE);
+    back?.focus();
   }
 
   /** The worker says where to go, and the browser goes there: the consent is at Linear. */
@@ -449,8 +458,12 @@ export default function Connectors() {
         ) : null}
 
         {connected ? (
-          <section aria-labelledby="connected-title">
-            <h2 id="connected-title" className="mb-[10px] text-body leading-auto font-semibold">
+          <section aria-labelledby={CONNECTED_TITLE}>
+            <h2
+              id={CONNECTED_TITLE}
+              tabIndex={-1}
+              className="mb-[10px] text-body leading-auto font-semibold focus:outline-none"
+            >
               {t('Connected')}
             </h2>
             {/* FRU-542: a card for each source, one under the other. Its panel opens inside its card

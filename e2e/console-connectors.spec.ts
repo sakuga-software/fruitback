@@ -78,6 +78,8 @@ type Worker = {
   late: unknown[] | undefined;
   /** The worker answers no list of sources, and no list of sites. */
   down: boolean;
+  /** The worker says it cannot keep a key: nobody connects a source. */
+  unavailable?: boolean;
   /** What the worker answers to a source that is added. */
   refuses?: string;
   /** What the worker answers to a name (FRU-404). */
@@ -124,7 +126,7 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
     }
     if (worker.down && (pathname.endsWith('/connectors') || pathname.endsWith('/sites'))) return json({}, 500);
     if (pathname.endsWith('/connectors'))
-      return json({ connectors: worker.connectors, available: true, linearOAuth: worker.oauth });
+      return json({ connectors: worker.connectors, available: worker.unavailable !== true, linearOAuth: worker.oauth });
     if (pathname.endsWith('/sites')) return json({ sites: SITES });
     if (pathname.endsWith('/c1/teams'))
       return json({ teams: [{ id: 't1', name: 'Acme web', key: 'ACM', projects: [{ id: 'p1', name: 'Website' }] }] });
@@ -540,6 +542,20 @@ test('« Add a source » lists what connects, and what does not yet with a butto
   // The secret was kept: the list of the sources to add closes, over the new source.
   await expect(sources(page)).toHaveCount(0);
   await expect(page.getByText('made-by-fruitback-0123456789')).toHaveCount(0);
+});
+
+test('« Close » gives focus to « Connected » when a read took « New source » away (FRU-542)', async ({ page }) => {
+  const worker = await workerWith(page);
+  await open(page);
+  // The panel of the address reads the list again on « Try now ».
+  await rows(page).nth(1).click();
+  await openCatalogue(page);
+  worker.unavailable = true;
+  await panel(page).getByRole('button', { name: 'Try now' }).first().click();
+  await expect(page.getByRole('button', { name: 'New source', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(sources(page)).toHaveCount(0);
+  await expect(page.getByRole('heading', { level: 2, name: 'Connected', exact: true })).toBeFocused();
 });
 
 test('« Add a source » waits for the list of the sources, and its buttons do not move under a press', async ({

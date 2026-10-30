@@ -239,6 +239,19 @@ test('each word of the way back from GitHub says what happened, then leaves the 
   }
 });
 
+test('a way back that went wrong opens the list, and its sentence is there again after « Close » (FRU-542)', async ({
+  page,
+}) => {
+  await workerWith(page);
+  await page.goto(`${CONSOLE}/w/w1/connectors?github=requested`);
+  await expect(card(page).getByRole('alert')).toHaveText(RETURNS.requested);
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(card(page)).toHaveCount(0);
+  // Closed is not forgotten: « New source » shows the same sentence under GitHub.
+  await openCatalogue(page);
+  await expect(card(page).getByRole('alert')).toHaveText(RETURNS.requested);
+});
+
 test('back with « connected », the panel of the GitHub installation opens, even when it is not the last row', async ({
   page,
 }) => {
