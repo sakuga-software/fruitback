@@ -422,9 +422,13 @@ export default function Notes() {
                             <span className="inline-flex items-center gap-[8px]">
                               <StatusDot status={group.stage} size={10} />
                               {t(STAGE_NAMES[group.stage])}
-                              <span className="font-normal text-muted tabular-nums">
-                                {shown.counts.byStage?.[group.stage] ?? group.notes.length}
-                              </span>
+                              {/* The notes of the whole list in the group. A worker that does not
+                                count them gets no number: the notes of one page are no count. */}
+                              {shown.counts.byStage?.[group.stage] === undefined ? null : (
+                                <span className="font-normal text-muted tabular-nums">
+                                  {shown.counts.byStage[group.stage]}
+                                </span>
+                              )}
                             </span>
                           </th>
                         </tr>

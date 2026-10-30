@@ -435,6 +435,27 @@ describe('the notes of a workspace by status (FRU-551)', () => {
     assert.deepEqual(answer.counts.byStage, { todo: kept.length });
   });
 
+  it('counts by stage the notes of a source that was removed, as it lists them (review of #764)', async () => {
+    const { world, alice, workspace, rest, planted } = await sixtyNotes();
+    assert.equal(await world.accounts.removeConnector(workspace, rest.id), true);
+
+    const answer = await listOf(world, workspace, alice.token, '?order=status&place=removed&limit=50');
+
+    const gone = planted.filter((note) => note.place === rest.id);
+    assert.deepEqual(
+      answer.notes.map((note) => note.id),
+      byStatus(gone).map((note) => noteIdOf(note.site, note.id)),
+    );
+    const counted: Record<string, number> = {};
+    for (const note of gone) counted[note.stage] = (counted[note.stage] ?? 0) + 1;
+    assert.deepEqual(answer.counts.byStage, counted);
+    assert.equal(
+      Object.values(answer.counts.byStage ?? {}).reduce((sum, notes) => sum + notes, 0),
+      answer.total,
+    );
+    assert.equal(answer.counts.byPlace?.removed, gone.length);
+  });
+
   it('refuses another order, and a cursor of the other order', async () => {
     const { world, alice, workspace } = await sixtyNotes();
     const dated = (await listOf(world, workspace, alice.token, '?limit=8')).next as string;

@@ -540,6 +540,12 @@ test('the page is the one of the mockup: chips, filters, the table and its pages
     .toEqual({ 'margin-top': '16px', 'font-size': '14px' });
   expect.soft(await painted(pages(page), 'color')).toEqual(rgb(MUTED));
 
+  // The heads of the groups: a worker that does not count each stage gets no number, as the notes
+  // of one page are no count of the list (review of #764).
+  const heads = await table(page).locator('.kit-table-group th').allInnerTexts();
+  expect(heads.length).toBeGreaterThan(0);
+  for (const head of heads) expect(head).not.toMatch(/\d/);
+
   // The table reads its notes by status, every time (FRU-551).
   expect(worker.orders.length).toBeGreaterThan(0);
   expect(worker.orders.every((order) => order === 'status')).toBe(true);
