@@ -1,4 +1,5 @@
 import { t } from './i18n.ts';
+import { make } from './kit.ts';
 
 /**
  * The section « Share rules » of the page of the extension (FRU-290), as the mock-up of 2026-10-20
@@ -29,19 +30,6 @@ export type ShareSection = {
   /** Writes the number of rules the export holds. `undefined` until the page has read them. */
   setCount: (count: number | undefined) => void;
 };
-
-function make<K extends keyof HTMLElementTagNameMap>(
-  document: Document,
-  tag: K,
-  className: string,
-  text = '',
-): HTMLElementTagNameMap[K] {
-  const node = document.createElement(tag);
-  if (className !== '') node.className = className;
-  if (text !== '') node.textContent = text;
-
-  return node;
-}
 
 /** « 5 rules · fruitback-rules.json », or the name of the file alone before the rules are read. */
 export function exportSummary(count: number | undefined): string {

@@ -484,6 +484,27 @@ describe('2 · a site of no workspace (FRU-298, FRU-255)', () => {
   });
 });
 
+describe('2 · a site on http, which the popup does not add (FRU-537)', () => {
+  it('says to add it from the console, and has nothing to press but the account', () => {
+    const screen = turnOnScreen(page(), {
+      origin: 'http://staging.acme.dev',
+      visibility: 'members',
+      workspaces: [],
+      unaddable: 'This site is on http. Add it to a workspace from the console, then turn it on here.',
+      onTurnOn: nothing,
+      onSettings: nothing,
+    });
+
+    assert.equal(screen.querySelector('h1')?.textContent, 'staging.acme.dev');
+    assert.equal(
+      screen.querySelector('.lead')?.textContent,
+      'This site is on http. Add it to a workspace from the console, then turn it on here.',
+    );
+    assert.doesNotMatch(screen.textContent ?? '', /Ask an admin/);
+    assert.deepEqual(stops(screen), ['button: Account and settings']);
+  });
+});
+
 describe('2 · who sees the notes and where they go, chosen at the turn on (FRU-453)', () => {
   const LINEAR = { id: 'lin', kind: 'linear' as const, label: 'Linear · Acme' };
   const HOOK = { id: 'hook', kind: 'rest' as const, label: 'REST API · Hook' };
