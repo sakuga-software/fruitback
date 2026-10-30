@@ -20,6 +20,7 @@ import { msg, t } from '../i18n';
 import { useLocale } from '../use-locale';
 import { siteAddress, siteName } from '../site-address';
 import { SiteIcon } from '../site-icon';
+import { ConnectorMark, type MarkedKind } from '../connector-marks';
 import { useTypedSearch } from '../typed-search';
 import { WritersPick } from '../writers-pick';
 
@@ -361,6 +362,13 @@ function placeOf(destination: Destination): { name: string; detail: string | und
   return { name, detail: rest.length === 0 ? undefined : rest.join(' · ') };
 }
 
+/**
+ * The kind of a tracker by the first word of the label of a destination, as the worker writes it
+ * (`KIND_NAMES` of `console-api.ts`): « Linear · Design », « GitHub · acme/web », « REST API · host ».
+ * A word that this build does not know has no mark, and its name alone.
+ */
+const KIND_OF_NAME: Readonly<Record<string, MarkedKind>> = { Linear: 'linear', GitHub: 'github', 'REST API': 'rest' };
+
 /** Where the notes of a site go: its first destination, and how many more a member can choose. */
 function GoesTo({ site }: { site: Site }) {
   useLocale();
@@ -373,6 +381,7 @@ function GoesTo({ site }: { site: Site }) {
       </>
     );
   const place = placeOf(first);
+  const kind = KIND_OF_NAME[place.name];
   // The worker writes « Linear · Design »: the place in a Linear is a team, and its project if any.
   const named =
     place.detail !== undefined && place.name === 'Linear' ? t('Team {team}', { team: place.detail }) : place.detail;
@@ -384,7 +393,11 @@ function GoesTo({ site }: { site: Site }) {
 
   return (
     <>
-      <span className="block [overflow-wrap:anywhere]">{t(place.name)}</span>
+      {/* FRU-541: the logo of the tracker before its name, as in the Notes table (FRU-435). */}
+      <span className="flex items-center gap-[6px] [overflow-wrap:anywhere]">
+        {kind === undefined ? null : <ConnectorMark kind={kind} />}
+        <span className="min-w-0">{t(place.name)}</span>
+      </span>
       <span className="block text-hint leading-[inherit] text-muted [overflow-wrap:anywhere]">
         {others.length === 0
           ? detail

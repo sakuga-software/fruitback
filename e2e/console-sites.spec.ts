@@ -315,6 +315,14 @@ test('the list is a grid of cards, each named by its address and its icon (FRU-4
   await expect(value(card(page, 'acme.dev'), 'Notes go to')).toContainText('Team Acme web and 1 more');
   await expect(value(card(page, 'support.acme.dev'), 'Notes go to')).toHaveText('REST API2 not delivered yet');
   await expect(value(lumen, 'Notes go to')).toHaveText('Kept in FruitbackNo tracker yet');
+  // FRU-541: the logo of the tracker before its name (`connector-marks.tsx`: Linear in a box of 24,
+  // the braces of an address in a box of 16), 14 px; none for Fruitback.
+  const linear = value(first, 'Notes go to').locator('svg[aria-hidden="true"]');
+  await expect(linear).toHaveAttribute('viewBox', '0 0 24 24');
+  expect.soft(await styles(linear, ['width', 'height'])).toEqual({ width: '14px', height: '14px' });
+  const address = value(card(page, 'support.acme.dev'), 'Notes go to').locator('svg[aria-hidden="true"]');
+  await expect(address).toHaveAttribute('viewBox', '0 0 16 16');
+  await expect(value(lumen, 'Notes go to').locator('svg')).toHaveCount(0);
 
   // The button of a card: 36 px, named after its site, in the top right corner, and it opens a menu.
   const button = more(page, 'staging.acme.dev');
