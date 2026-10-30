@@ -22,6 +22,7 @@ import {
 } from './connector-parts';
 import { RestPanel } from './connector-rest';
 import type { LaterKind, MarkedKind } from '../connector-marks';
+import { ReadProblem } from '../read-problem';
 
 /**
  * The sources of a workspace, as screen 11 of the mockup of 2026-10-13 draws them (FRU-246): the
@@ -43,7 +44,7 @@ const LATER = [
 
 /** What the way back from Linear says, as the worker words it in the address (FRU-134). */
 const LINEAR_RETURNS: Record<string, string> = {
-  declined: msg('Linear was not connected: the consent was refused there.'),
+  declined: msg('You declined access in Linear, so it is not connected. Press Connect to try again.'),
   forbidden: msg('Only an owner or an admin of the workspace connects a source.'),
   failed: msg('Linear was not connected. Start again from « Connect ».'),
 };
@@ -92,7 +93,7 @@ const PANEL_TITLE = 'source-panel-title';
 /** The id of the list of the sources to add, which « New source » names in `aria-controls`. */
 const CATALOGUE = 'source-catalogue';
 
-/** The id of the title « Connected », where focus goes back when « New source » is not there. */
+/** The id of the title « Your connectors », where focus goes back when « New source » is not there. */
 const CONNECTED_TITLE = 'connected-title';
 
 export default function Connectors() {
@@ -196,7 +197,7 @@ export default function Connectors() {
   /**
    * « Close » of the list of the sources to add: the keyboard goes back to « New source ». A read
    * since the list opened can take that button away (a role, or a worker that cannot keep a key any
-   * more): focus then goes to the title of the sources that are connected, never to the page.
+   * more): focus then goes to the title « Your connectors », never to the page.
    */
   function closeCatalogue() {
     setCatalogue(false);
@@ -318,7 +319,7 @@ export default function Connectors() {
         {unread ? (
           <div className="flex flex-wrap items-center gap-[12px]">
             <p role="alert" className="min-w-0 flex-1 text-small text-muted">
-              {t('Fruitback did not answer. The sources and their sites could not be read.')}
+              {t('The connectors and their sites did not load.')} <ReadProblem />
             </p>
             <Button tone="outline" onClick={() => void reload()}>
               {t('Try again')}
@@ -482,7 +483,7 @@ export default function Connectors() {
               tabIndex={-1}
               className="mb-[10px] text-body leading-auto font-semibold focus:outline-none"
             >
-              {t('Connected')}
+              {t('Your connectors')}
             </h2>
             {/* FRU-542: a card for each source, one under the other. Its panel opens inside its card
                 (FRU-403): a panel between two cards of a grid reads as a stray card (FRU-433). */}

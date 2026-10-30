@@ -348,7 +348,7 @@ test('in the panel, a list of the repositories that failed keeps the warning, sa
   worker.silentReads = Number.POSITIVE_INFINITY;
   await openGithub(page);
   await expect(
-    panel(page).getByText('GitHub did not answer with the repositories of this installation.'),
+    panel(page).getByText('GitHub did not send the repositories of this installation. Try again in a moment.'),
   ).toBeVisible();
   await expect(panel(page).locator('[data-public]')).toHaveText(PUBLIC_DOCS);
   // The panel reads only when it opens and on « Try again » (`reads` in `connector-github.tsx`). The
@@ -358,9 +358,9 @@ test('in the panel, a list of the repositories that failed keeps the warning, sa
   worker.silentReads = 0;
   await panel(page).getByRole('button', { name: 'Try again', exact: true }).click();
   await expect.poll(() => worker.listed).toBe(before + 1);
-  await expect(panel(page).getByText('GitHub did not answer with the repositories of this installation.')).toHaveCount(
-    0,
-  );
+  await expect(
+    panel(page).getByText('GitHub did not send the repositories of this installation. Try again in a moment.'),
+  ).toHaveCount(0);
   // acme/docs is public in the list too: the warning stays.
   await expect(panel(page).locator('[data-public]')).toHaveText(PUBLIC_DOCS);
 });

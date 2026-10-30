@@ -183,7 +183,7 @@ export default function KitGallery() {
           ]}
         />
         <Radios
-          label="Who can make an account"
+          label="Who can create an account"
           value="invited"
           options={[
             { value: 'invited', label: 'Only people invited to a workspace' },
@@ -318,7 +318,7 @@ export default function KitGallery() {
       </section>
 
       <section aria-label="Notices" className="flex w-[440px] max-w-full flex-col gap-3" data-kit="notices">
-        <Problem>Fruitback did not answer. Try again.</Problem>
+        <Problem>Fruitback hit an error. Try again in a moment.</Problem>
         <p className="text-small font-semibold text-accent" data-kit="alert-on-white">
           2 notes did not arrive
         </p>
@@ -336,7 +336,7 @@ export default function KitGallery() {
       <section aria-label="A read that failed" className="flex flex-col gap-3" data-kit="load-failed">
         <LoadFailed
           title="The notes did not load"
-          detail="Fruitback did not answer. Your notes are safe."
+          detail="Fruitback hit an error. Your notes are safe."
           retry="Try again"
           onRetry={() => undefined}
         />

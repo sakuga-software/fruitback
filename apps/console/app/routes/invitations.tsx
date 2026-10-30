@@ -19,6 +19,7 @@ import { withStrong } from '../sign-in-form';
 import { Button, EntryPage, Initial, KeyValue, Lead, LinkButton, Problem, StatusDot, SuccessMark, Title } from '../ui';
 import { useLocale } from '../use-locale';
 import { siteLabel } from '../site-address';
+import { ReadProblem } from '../read-problem';
 
 /**
  * The invitation that waits for the person who is signed in (FRU-104), as screen 03 of the mockup of
@@ -53,7 +54,7 @@ const ANSWER_PROBLEMS: Readonly<Record<string, string>> = {
   INVITATION_NOT_FOUND: msg('This invitation was cancelled, or it ended. Ask for another one.'),
   INVITER_NO_LONGER_INVITES: msg('This invitation was cancelled, or it ended. Ask for another one.'),
 };
-const NOT_ANSWERED = msg('The invitation could not be answered. Try again.');
+const NOT_ANSWERED = msg('Your answer was not sent. Try again.');
 const STILL_SIGNED_IN = msg('You are still signed in: Fruitback did not confirm the sign-out. Try again.');
 
 type Read =
@@ -156,7 +157,11 @@ export default function Invitations() {
       {read.kind === 'failed' ? (
         <Note
           title={t('Invitations')}
-          lead={t('Fruitback did not answer. Your invitations are not lost.')}
+          lead={
+            <>
+              <ReadProblem /> {t('Your invitations are safe.')}
+            </>
+          }
           alert
           action={
             <Button tone="outline" size="page" onClick={load}>
@@ -205,7 +210,7 @@ function Note({
   alert = false,
 }: {
   title: string;
-  lead: string;
+  lead: ReactNode;
   action: ReactNode;
   alert?: boolean;
 }) {

@@ -958,7 +958,7 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
     });
     await page.goto(`${CONSOLE}/setup`);
 
-    await expect(page.getByRole('alert')).toHaveText('Fruitback did not answer. Try again.');
+    await expect(page.getByRole('alert')).toHaveText('Fruitback hit an error.');
     // The first step is still the one to do, and the second is to come: a screen reader says so.
     await expect(page.getByRole('heading', { name: `${CURRENT}Your account` })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Your site', exact: true })).toBeVisible();
@@ -993,7 +993,7 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
     // Signed in, and no workspace: the first step is still the current one, and says what failed: the
     // worker did not answer the try that was made for the person.
     await expect(page.getByRole('heading', { name: `${CURRENT}Your account` })).toBeVisible();
-    await expect(page.getByRole('alert')).toHaveText('Fruitback did not answer. Try again.');
+    await expect(page.getByRole('alert')).toHaveText('Fruitback hit an error. Try again in a moment.');
     const name = page.getByRole('textbox', { name: 'Workspace name' });
     // The name the workspace would have taken: the domain of the address.
     await expect(name).toHaveValue('Acme');
@@ -1009,7 +1009,7 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
     await stubWorker(page, { as: 'named', refuses: { sites: true } });
     await page.goto(`${CONSOLE}/setup`);
 
-    await expect(page.getByRole('alert')).toHaveText('Fruitback did not answer. Your sites are not lost.');
+    await expect(page.getByRole('alert')).toHaveText('Fruitback hit an error. Your sites are safe.');
     await expect(page.getByRole('textbox', { name: 'Site address' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible();
   });

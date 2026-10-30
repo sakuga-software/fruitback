@@ -159,7 +159,8 @@ export function threadsOf(rows: readonly CommentRow[]): Map<number, NoteComment[
  * sides. An identifier is compared as it is written, `FB-12`.
  *
  * The filter runs on the rows, and not in the database: one row that is not JSON makes a query on
- * the JSON throw for every row, and a row is parsed, never trusted.
+ * the JSON throw for every row, and a row is parsed, never trusted. `forgetNarrowingOf` says which
+ * rows the database can leave out before.
  */
 export function forgetSelectorFor(which: ForgetSelector): (row: { id: number; payload: string }) => boolean {
   if ('identifiers' in which) {
@@ -172,6 +173,33 @@ export function forgetSelectorFor(which: ForgetSelector): (row: { id: number; pa
   const wanted = value.trim().toLowerCase();
 
   return (row) => reporterFieldOf(row.payload, field) === wanted;
+}
+
+/**
+ * What the database can compare before `forgetSelectorFor` parses a row (FRU-539): the numbers of the
+ * rows that the identifiers name, or a text that the payload of each selected row holds. A row that
+ * the database leaves out is a row that `forgetSelectorFor` refuses.
+ *
+ * The text is the longest part of the address or the name, in lower case, that is the same in the
+ * JSON of the row and in its lower case:
+ * - ASCII only, and no `i` or `k`. The query folds ASCII only, in the collation `C`, whatever the
+ *   locale. In JavaScript, U+0130 (`İ`) and U+212A (the Kelvin sign) have the lower case `i` and `k`,
+ *   which a fold of ASCII does not give.
+ * - No `"`, `\` or `/`, which JSON can escape. The query keeps every row that escapes a character
+ *   with `\u`.
+ *
+ * `undefined` for a value with no such text: every row is parsed.
+ */
+export function forgetNarrowingOf(which: ForgetSelector): { rows: number[] } | { text: string } | undefined {
+  if ('identifiers' in which) {
+    return { rows: which.identifiers.flatMap((identifier) => rowOfIdentifier(identifier) ?? []) };
+  }
+  const value = ('email' in which ? which.email : which.name).trim().toLowerCase();
+  const longest = (value.match(/[\x20-\x7e]+/g) ?? [])
+    .flatMap((run) => run.split(/["\\/ik]/))
+    .reduce((best, part) => (part.length > best.length ? part : best), '');
+
+  return longest === '' ? undefined : { text: longest };
 }
 
 function reporterFieldOf(text: string, field: 'email' | 'name'): string | undefined {

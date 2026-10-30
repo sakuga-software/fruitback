@@ -14,6 +14,7 @@ import { problemOf } from '../problems';
 import { Button, Callout, Choice, LinkButton, Pick, Problem, Snippet, Toggle } from '../ui';
 import { useLocale } from '../use-locale';
 import { connectorName, shortHost } from './connector-parts';
+import { ReadProblem } from '../read-problem';
 
 /**
  * « Start an agent », a section of the page of a site (FRU-468, the board `design/agent-triggers/`):
@@ -120,13 +121,15 @@ export function SiteAgent({
       </h2>
       <p className="text-small text-muted">
         {t(
-          'When a note arrives, Fruitback can call an address of your team, which starts your agent: a receiver that dispatches a workflow of GitHub that runs Claude Code, or a cloud agent. The call carries the id of the note, never its text: the agent reads it through the MCP server, with its agent key.',
+          'When a note arrives, Fruitback can call an address of your team that starts your agent, such as a GitHub workflow that runs Claude Code, or a cloud agent. The call carries the id of the note, never its text: the agent reads the note through the MCP server, with its key.',
         )}
       </p>
       {read === 'loading' ? <p className="text-small text-muted">{t('Loading…')}</p> : null}
       {listed === 'failed' ? (
         <div role="alert" className="flex flex-wrap items-center gap-[12px]">
-          <p className="text-small">{t('The addresses of the workspace did not load.')}</p>
+          <p className="text-small">
+            {t('The addresses of the workspace did not load.')} <ReadProblem />
+          </p>
           <Button tone="outline" onClick={onRetry}>
             {t('Try again')}
           </Button>
@@ -134,7 +137,9 @@ export function SiteAgent({
       ) : null}
       {read === 'failed' ? (
         <div role="alert" className="flex flex-wrap items-center gap-[12px]">
-          <p className="text-small">{t('The trigger of this site did not load.')}</p>
+          <p className="text-small">
+            {t('The trigger of this site did not load.')} <ReadProblem />
+          </p>
           <Button tone="outline" onClick={() => void load()}>
             {t('Try again')}
           </Button>

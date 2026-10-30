@@ -304,7 +304,7 @@ test('a read of the repositories that failed says so, and « Try again » reads 
   worker.silentReads = 99;
   await openPlaces(page);
   await expect(panel(page).getByRole('alert')).toHaveText(
-    'GitHub Issues · Installed on acme did not answer with its places.',
+    'GitHub Issues · Installed on acme did not send its places. Try again in a moment.',
   );
   worker.silentReads = 0;
   await panel(page).getByRole('button', { name: 'Try again', exact: true }).click();
@@ -332,7 +332,7 @@ test('a list of the repositories that failed does not hide the warning (FRU-382)
   worker.silentReads = 100;
   await openPlaces(page);
 
-  await expect(panel(page).getByText('did not answer with its places.')).toBeVisible();
+  await expect(panel(page).getByText('did not send its places. Try again in a moment.')).toBeVisible();
   await expect(panel(page).locator('[data-public]')).toHaveText(PUBLIC_DOCS);
 });
 
@@ -405,7 +405,9 @@ test('with no source, and with a read of the sources that failed, the panel says
   worker.connectors = [LINEAR];
   worker.connectorsFail = true;
   await openPlaces(page);
-  await expect(panel(page).getByRole('alert')).toHaveText('The sources of this workspace did not load.');
+  await expect(panel(page).getByRole('alert')).toHaveText(
+    'The connectors of this workspace did not load. Fruitback hit an error.',
+  );
   worker.connectorsFail = false;
   await panel(page).getByRole('button', { name: 'Try again', exact: true }).click();
   await expect(add(page)).toBeEnabled();
@@ -419,7 +421,9 @@ test('the places wait for the sources: a list written without them would send Gi
   ];
   worker.connectorsFail = true;
   await openPlaces(page);
-  await expect(panel(page).getByRole('alert')).toHaveText('The sources of this workspace did not load.');
+  await expect(panel(page).getByRole('alert')).toHaveText(
+    'The connectors of this workspace did not load. Fruitback hit an error.',
+  );
   const remove = panel(page).getByRole('button', { name: 'Remove', exact: true });
   const first = panel(page).getByRole('button', { name: 'Make it the default', exact: true });
   await expect(remove.nth(1)).toBeDisabled();

@@ -561,7 +561,7 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   Notion and Webhook are listed with the sentence of the mockup and a disabled « After the beta »,
   where the mockup draws « Connect ». **With no source connected, the screen is « Add a source »**,
   its eight sources and « No tracker yet. The notes stay in Fruitback. » (FRU-542, Mathieu). **With
-  one, it is « Connected », a card for each source, one under the other, and « New source » at the
+  one, it is « Your connectors », a card for each source, one under the other, and « New source » at the
   top right** opens « Add a source » above the cards, in a frame of its own, its title focused,
   with « Close », which gives focus back to « New source ». Linear and an address stay in it: a
   workspace can connect a second one. The cards are not a grid: the panel of a source opens inside

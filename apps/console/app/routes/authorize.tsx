@@ -6,7 +6,7 @@ import { daysOf, endOf } from '../agent-keys';
 import { refusalOf } from '../authorize-answer';
 import { keepAuthorize } from '../connect-return';
 import { msg, t } from '../i18n';
-import { DID_NOT_ANSWER } from '../problems';
+import { SERVER_CAUSE, UNREACHABLE_CAUSE } from '../problems';
 import {
   AnotherAddress,
   EmailForm,
@@ -34,7 +34,8 @@ import { useLocale } from '../use-locale';
 type Stage =
   | { kind: 'loading' }
   /** The worker did not answer. Nothing was decided: the same reading again. */
-  | { kind: 'silent' }
+  /** `status` 0: no answer at all. Any other: an answer that is an error. */
+  | { kind: 'silent'; status: number }
   | { kind: 'signed-out' }
   | { kind: 'sent'; email: string }
   | { kind: 'ask'; asked: AuthorizeRequest }
@@ -47,7 +48,7 @@ async function resolve(request: string): Promise<Stage> {
   const read = await authorizeRequest(request);
   if (read.ok) return { kind: 'ask', asked: read.data };
   if (read.status === 401) return { kind: 'signed-out' };
-  if (read.status === 0 || read.status === 429 || read.status >= 500) return { kind: 'silent' };
+  if (read.status === 0 || read.status === 429 || read.status >= 500) return { kind: 'silent', status: read.status };
 
   return { kind: 'gone' };
 }
@@ -89,7 +90,7 @@ export default function Authorize() {
             <Title>{t('Connect an agent')}</Title>
           </div>
           <p role="alert" className="mb-6 text-lead text-muted">
-            {t(DID_NOT_ANSWER)}
+            {t(stage.status === 0 ? UNREACHABLE_CAUSE : SERVER_CAUSE)}
           </p>
           <div>
             <Button tone="outline" size="page" onClick={read}>

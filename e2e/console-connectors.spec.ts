@@ -112,6 +112,19 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
       }
       if (pathname.endsWith('/connectors')) {
         if (worker.refuses !== undefined) return json({ error: worker.refuses }, 400);
+        // A key of Linear: the connector of its person, with no secret to show.
+        if ((request.postDataJSON() as { kind?: string }).kind === 'linear') {
+          const key = {
+            id: 'c9',
+            kind: 'linear',
+            label: 'Linear · Bo',
+            createdAt: '2026-10-13T10:00:00.000Z',
+            settings: SETTINGS,
+          };
+          worker.connectors = [...worker.connectors, key];
+
+          return json(key, 201);
+        }
         const made = {
           id: 'r2',
           kind: 'rest',
@@ -191,8 +204,8 @@ test('the list of the sources and the panel of a Linear are the ones of the mock
     'row-gap': '32px',
   });
 
-  // « Connected »: a card for each source, one under the other (FRU-542).
-  const title = page.getByRole('heading', { level: 2, name: 'Connected', exact: true });
+  // « Your connectors »: a card for each source, one under the other (FRU-542).
+  const title = page.getByRole('heading', { level: 2, name: 'Your connectors', exact: true });
   expect.soft(await styles(title, ['font-size', 'font-weight', 'margin-bottom'])).toEqual({
     'font-size': '15px',
     'font-weight': '600',
@@ -405,7 +418,7 @@ test('a list of late notes that was not read is no number, and not « every note
   await expect(address.getByText('Connected', { exact: true })).toBeVisible();
   await expect(address.getByText(/did not arrive/)).toHaveCount(0);
   await address.click();
-  await expect(panel(page).getByText('Fruitback did not answer. Try again.')).toBeVisible();
+  await expect(panel(page).getByText('Fruitback hit an error. Try again in a moment.')).toBeVisible();
   await expect(panel(page).getByText('Every note arrived.')).toHaveCount(0);
 });
 
@@ -437,14 +450,14 @@ test('with no source, and with a read that failed, the screen says which of the 
 
   // With no source, the screen is the list of the sources to add (FRU-542), and no « New source ».
   await expect(sources(page)).toHaveCount(8);
-  await expect(page.getByRole('heading', { level: 2, name: 'Connected', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('heading', { level: 2, name: 'Your connectors', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'New source', exact: true })).toHaveCount(0);
 
   // A read that failed is not « no tracker »: it says so, and reads again.
   worker.down = true;
   await open(page);
   await expect(page.getByRole('alert')).toHaveText(
-    'Fruitback did not answer. The sources and their sites could not be read.',
+    'The connectors and their sites did not load. Fruitback hit an error.',
   );
   await expect(page.getByText('No tracker yet. The notes stay in Fruitback.')).toHaveCount(0);
   // Nothing to add while the list is not read: the screen does not know how this worker connects
@@ -549,7 +562,9 @@ test('« Add a source » lists what connects, and what does not yet with a butto
   await expect(page.getByText('made-by-fruitback-0123456789')).toHaveCount(0);
 });
 
-test('« Close » gives focus to « Connected » when a read took « New source » away (FRU-542)', async ({ page }) => {
+test('« Close » gives focus to « Your connectors » when a read took « New source » away (FRU-542)', async ({
+  page,
+}) => {
   const worker = await workerWith(page);
   await open(page);
   // The panel of the address reads the list again on « Try now ».
@@ -560,7 +575,7 @@ test('« Close » gives focus to « Connected » when a read took « New source 
   await expect(page.getByRole('button', { name: 'New source', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Close', exact: true }).click();
   await expect(sources(page)).toHaveCount(0);
-  await expect(page.getByRole('heading', { level: 2, name: 'Connected', exact: true })).toBeFocused();
+  await expect(page.getByRole('heading', { level: 2, name: 'Your connectors', exact: true })).toBeFocused();
 });
 
 test('« Add a source » waits for the list of the sources, and its buttons do not move under a press', async ({
@@ -609,6 +624,21 @@ test('a worker with no Linear application connects Linear by a key, under its ro
   await source.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(source.getByLabel('Linear API key')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Connect Linear', exact: true })).toBeVisible();
+});
+
+test('a Linear connected by a key from « New source » opens its panel with focus (FRU-542)', async ({ page }) => {
+  const worker = await workerWith(page);
+  worker.oauth = false;
+  await open(page);
+  await openCatalogue(page);
+  await page.getByRole('button', { name: 'Connect Linear', exact: true }).click();
+  await page.getByLabel('Linear API key').fill('lin_api_0123456789');
+  await page.locator('[data-source="Linear"]').getByRole('button', { name: 'Connect', exact: true }).click();
+  // The form that had focus went with the list: the panel of the new source has it, once it is read.
+  await expect(sources(page)).toHaveCount(0);
+  await expect(rows(page)).toHaveCount(3);
+  await expect(panel(page)).toHaveAttribute('aria-label', 'Linear · Key of Bo');
+  await expect(panel(page)).toBeFocused();
 });
 
 test('a member reads the sources and changes none', async ({ page }) => {

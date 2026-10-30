@@ -7,6 +7,7 @@ import type { Listed } from '../listed';
 import { Chip, LinkButton, Problem } from '../ui';
 import { siteLabel } from '../site-address';
 import { useLocale } from '../use-locale';
+import { ReadProblem } from '../read-problem';
 
 /**
  * What the Connectors screen and the panels of a source share (FRU-246): how a kind of source is
@@ -29,7 +30,6 @@ export const KEY_PROBLEMS: Record<string, string> = {
     'Linear knows this key, and it may not list your teams. Create a key with read and write access, then try again.',
   ),
   forbidden: msg('Only an owner or an admin of the workspace connects a source.'),
-  unreachable: msg('Fruitback did not answer. Try again.'),
   'store-unavailable': msg('Linear did not answer just now. Your key is not kept: try again in a minute.'),
 };
 
@@ -140,7 +140,12 @@ export function siteCount(count: number): string {
 export function SitesState({ sites }: { sites: Listed<Site> }) {
   useLocale();
   if (sites === 'loading') return <p className="text-small text-muted">{t('Loading…')}</p>;
-  if (sites === 'failed') return <p className="text-small text-muted">{t('Fruitback did not answer. Try again.')}</p>;
+  if (sites === 'failed')
+    return (
+      <p className="text-small text-muted">
+        {t('The sites did not load.')} <ReadProblem alone />
+      </p>
+    );
 
   return sites.length === 0 ? <p className="text-small text-muted">{t('This workspace has no site yet.')}</p> : null;
 }

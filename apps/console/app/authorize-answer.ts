@@ -1,5 +1,5 @@
 import { msg } from './i18n.ts';
-import { DID_NOT_ANSWER, WORKSPACE_SUSPENDED, WORKSPACE_SUSPENDED_ERROR } from './problems.ts';
+import { WORKSPACE_SUSPENDED, WORKSPACE_SUSPENDED_ERROR, failureOf } from './problems.ts';
 
 /**
  * What « Connect an agent » does with a refused « Allow » or « Deny » (FRU-467).
@@ -27,5 +27,5 @@ export function refusalOf(failed: { status: number; error: string }): AnswerRefu
   if (failed.status === 401) return { is: 'signed-out' };
   if (failed.status === 404) return { is: 'gone' };
 
-  return { is: 'refused', problem: REFUSALS[failed.error] ?? DID_NOT_ANSWER };
+  return { is: 'refused', problem: REFUSALS[failed.error] ?? failureOf(failed) };
 }

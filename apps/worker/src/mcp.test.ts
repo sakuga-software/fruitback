@@ -4,6 +4,8 @@ import type { Visibility } from './accounts.ts';
 import { type World, callOn, memberOf, signInTo, workspaceIn, worlds } from './console-world.fixture.ts';
 import { resetMemoryLinear } from './linear-memory.ts';
 import { createPostgresNoteStore } from './notes-postgres.ts';
+import { PAGE_READS_AT_ONCE } from './agent-tools.ts';
+import { createMemoryKv } from './kv.ts';
 import { DATA_NOT_INSTRUCTION, PROTOCOL_VERSIONS } from './mcp.ts';
 import { rowsOf } from './postgres.fixture.ts';
 import { StoreError } from './store.ts';
@@ -416,6 +418,63 @@ describe('the read tools of /mcp (FRU-463)', () => {
     );
     const refused = await call(world, good, 'feedback_as_text', { site: shop.id, page: 'not a page' });
     assert.equal(refused.body.result.isError, true);
+  });
+
+  it('reads the pages of a site a few at a time, and answers the notes as one page after the other did (FRU-539)', async () => {
+    const { world, shop, member, key } = await acme();
+    const store = createPostgresNoteStore(world.database);
+    world.context.store = store;
+    const paths = ['/one', '/two', '/three', '/four', '/five', '/six'];
+    for (const [position, path] of paths.entries()) {
+      await leave(world, shop, `sd_${position}`, `Note on ${path}.`, {
+        token: member,
+        path,
+        createdAt: new Date(Date.UTC(2026, 9, 1, position)).toISOString(),
+      });
+    }
+    const good = await key({ sites: [shop.id], verifiedOnly: false });
+    // Each read of a page waits a moment, so that the reads that run at the same time are counted.
+    let reading = 0;
+    let most = 0;
+    let reads = 0;
+    const findForPage = store.findForPage.bind(store);
+    store.findForPage = async (...args) => {
+      reads += 1;
+      most = Math.max(most, ++reading);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      reading -= 1;
+
+      return findForPage(...args);
+    };
+
+    const listed = notesOf(await call(world, good, 'list_feedback', { site: shop.id }));
+
+    assert.deepEqual(
+      [reads, most],
+      [paths.length, PAGE_READS_AT_ONCE],
+      'each page once, and no more pages at a time than the bound',
+    );
+    assert.deepEqual(
+      listed.map((note) => note.note.text),
+      paths.map((path) => `Note on ${path}.`).toReversed(),
+      'the order of the index, the newest first',
+    );
+    const text: string = (await call(world, good, 'feedback_as_text', { site: shop.id })).body.result.structuredContent
+      .text;
+    assert.deepEqual(
+      [...text.matchAll(/^# Feedback on (\S+)/gm)].map((match) => match[1]),
+      paths.map((path) => `https://shop.acme.dev${path}`).toReversed(),
+    );
+
+    // A page that the store does not read is the error of the tool, as when the pages were read one by one.
+    // An empty cache, so that the pages are read again.
+    store.findForPage = async () => {
+      throw new StoreError('the database went away');
+    };
+    world.context.kv = createMemoryKv();
+    const failed = await call(world, good, 'list_feedback', { site: shop.id });
+    assert.equal(failed.status, 200);
+    assert.equal(failed.body.result.isError, true, JSON.stringify(failed.body));
   });
 
   it('answers a site that the accounts do not read as an error of the tool, not a 502 of the request (FRU-524)', async () => {

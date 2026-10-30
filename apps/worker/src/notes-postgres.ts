@@ -1,4 +1,4 @@
-import { type SQL, and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { type SQL, and, asc, desc, eq, gt, inArray, isNull, sql } from 'drizzle-orm';
 import { DEFAULT_NOTE_STAGE, type Note, type NoteComment, type NoteIssue, noteSchema } from '@fruitback/shared';
 import type { Database, Db } from './postgres.ts';
 import { migrated } from './postgres-migrate.ts';
@@ -6,6 +6,7 @@ import { note_comments, notes, sites, statuses } from './postgres-schema.ts';
 import { OWN_SOURCE } from './site-statuses.ts';
 import {
   COMMENTS_PER_ISSUE,
+  forgetNarrowingOf,
   forgetSelectorFor,
   identifierFor,
   readJson,
@@ -19,6 +20,7 @@ import { checkText, editText, replyText } from './reply-text.ts';
 import {
   type BatchAnswer,
   type CreatedIssue,
+  type ForgetSelector,
   type NoteIssueQuery,
   type NoteStore,
   StoreError,
@@ -304,25 +306,33 @@ export function createPostgresNoteStore(database: Database): NoteStore {
       ),
     // The notes of the whole instance, whatever their site: the command of whoever runs the worker.
     // The rows are read and deleted in one transaction, and the replies go with their note: the
-    // foreign key deletes them.
+    // foreign key deletes them. FRU-539: the database leaves out the rows that cannot be the notes
+    // asked for, and the rows come `FORGET_ROWS_AT_ONCE` at a time, not the whole instance at once.
     forget: (which, options) =>
       through('forget the notes', ({ transaction }) =>
         transaction(async (tx) => {
           const selects = forgetSelectorFor(which);
-          const found = (
-            await tx
+          const narrows = forgetWhere(which);
+          if (narrows === 'none') return [];
+          const found: { id: number; page_url: string; payload: string; created_at: number }[] = [];
+          for (let after = 0; ;) {
+            const rows = await tx
               .select({ id: notes.id, page_url: notes.page_url, payload: notes.payload, created_at: notes.created_at })
               .from(notes)
+              .where(and(gt(notes.id, after), narrows))
               .orderBy(asc(notes.id))
-          ).filter(selects);
+              .limit(FORGET_ROWS_AT_ONCE);
+            found.push(...rows.filter(selects));
+            const last = rows.at(-1);
+            if (last === undefined || rows.length < FORGET_ROWS_AT_ONCE) break;
+            after = last.id;
+          }
 
-          if (!options.dryRun && found.length > 0) {
-            await tx.delete(notes).where(
-              inArray(
-                notes.id,
-                found.map((row) => row.id),
-              ),
-            );
+          if (!options.dryRun) {
+            for (let start = 0; start < found.length; start += FORGET_ROWS_AT_ONCE) {
+              const ids = found.slice(start, start + FORGET_ROWS_AT_ONCE).map((row) => row.id);
+              await tx.delete(notes).where(inArray(notes.id, ids));
+            }
           }
 
           return found.map((row) => ({
@@ -336,6 +346,21 @@ export function createPostgresNoteStore(database: Database): NoteStore {
       ),
   };
 }
+
+/**
+ * The rows that `forget` reads (FRU-539): what the database compares before the parse, `undefined` for
+ * every row, or `'none'` when no row can be the notes asked for.
+ */
+function forgetWhere(which: ForgetSelector): SQL | undefined | 'none' {
+  const narrowing = forgetNarrowingOf(which);
+  if (narrowing === undefined) return undefined;
+  if ('rows' in narrowing) return narrowing.rows.length === 0 ? 'none' : inArray(notes.id, narrowing.rows);
+
+  return sql`(strpos(lower(${notes.payload} COLLATE "C"), ${narrowing.text}) > 0 OR strpos(${notes.payload}, ${'\\u'}) > 0)`;
+}
+
+/** The rows that `forget` reads, and deletes, in one statement. */
+const FORGET_ROWS_AT_ONCE = 500;
 
 /** The columns of a note that a read hands to `toNoteIssue`. */
 const NOTE_COLUMNS = {

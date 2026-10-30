@@ -9,7 +9,7 @@ import {
   statusName,
   statusProblemOf,
 } from './note-status.ts';
-import { DID_NOT_ANSWER, WORKSPACE_SUSPENDED } from './problems.ts';
+import { SERVER_PROBLEM, UNREACHABLE_PROBLEM, WORKSPACE_SUSPENDED } from './problems.ts';
 
 const [FIRST, SECOND] = STAGES;
 const waiting: StatusChoice = { key: 'own:waiting', name: 'Waiting', stage: SECOND };
@@ -38,8 +38,8 @@ describe('the status of a note in the list (FRU-384)', () => {
     for (const [error, sentence] of Object.entries(STATUS_PROBLEMS)) {
       assert.equal(statusProblemOf({ status: 409, error }), sentence);
     }
-    assert.equal(statusProblemOf({ status: 0, error: 'network' }), DID_NOT_ANSWER);
-    assert.equal(statusProblemOf({ status: 503, error: 'index-unavailable' }), DID_NOT_ANSWER);
+    assert.equal(statusProblemOf({ status: 0, error: 'network' }), UNREACHABLE_PROBLEM);
+    assert.equal(statusProblemOf({ status: 503, error: 'index-unavailable' }), SERVER_PROBLEM);
     assert.equal(statusProblemOf({ status: 409, error: 'workspace-suspended' }), WORKSPACE_SUSPENDED);
     assert.equal(statusProblemOf({ status: 400, error: 'invalid-status' }), STATUS_NOT_SAVED);
     assert.equal(statusProblemOf({ status: 400, error: 'constructor' }), STATUS_NOT_SAVED);

@@ -505,7 +505,7 @@ test('a list of browsers that was not read is no list: it says so, and reads aga
   await page.goto(`${CONSOLE}/w/w1/account`);
   const where = section(page, 'Where you are signed in');
   await expect(where.getByRole('alert')).toHaveText(
-    'Fruitback did not answer. The browsers where you are signed in could not be read.',
+    'The browsers where you are signed in did not load. Fruitback hit an error.',
   );
   await expect(where.getByRole('listitem')).toHaveCount(0);
   // The control of the count above: with an answer, the same reading finds the rows.
@@ -750,7 +750,7 @@ test.describe('the browsers of a person, on a worker with accounts', () => {
     const browsers = first.page.getByRole('region', { name: 'Where you are signed in' }).getByRole('listitem');
     await expect(browsers).toHaveCount(2);
     const extension = browsers.filter({ hasText: 'Extension · Chrome on macOS' });
-    await expect(extension).toContainText(/Connected \d+ \w+ · used (Just now|\d+ min ago)/);
+    await expect(extension).toContainText(/Connected \d+ \w+ · used (just now|\d+ min ago)/);
 
     // Disconnected in two presses: the row goes, and the worker refuses its refresh.
     await extension.getByRole('button', { name: 'Disconnect', exact: true }).click();
@@ -1220,7 +1220,7 @@ test('a list of the extension that was not read leaves the browsers of the conso
   await expect(where.getByRole('button', { name: 'Disconnect', exact: true })).toHaveCount(2);
   // And a line says what is missing, with the way to read it again.
   await expect(where.getByRole('alert')).toHaveText(
-    'Fruitback did not answer. The browsers of the extension could not be read.',
+    'The browsers of the extension did not load. Fruitback hit an error.',
   );
   worker.extensions = EXTENSIONS;
   await where.getByRole('button', { name: 'Try again' }).click();
@@ -1315,7 +1315,7 @@ test('the line of a list of the extension that was not read goes when a later re
   worker.extensions = undefined;
   await disconnect('Chrome on macOS');
   await expect(where.getByRole('alert')).toHaveText(
-    'Fruitback did not answer. The browsers of the extension could not be read.',
+    'The browsers of the extension did not load. Fruitback hit an error.',
   );
   // Firefox ended elsewhere too, and the list is read: the rows are the worker's, and the line goes.
   worker.extensions = [];

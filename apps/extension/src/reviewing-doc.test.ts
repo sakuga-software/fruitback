@@ -178,10 +178,10 @@ describe('the guide quotes the popup this extension renders', () => {
     it('quotes only what the popup draws', () => {
       const troubleshooting = section('When Fruitback does not answer');
       const quotes = [
-        'It was refused in the console.',
-        'The tab was not approved in time.',
+        'Someone declined it in the console. Sign in again to retry.',
+        'The console did not approve it within 15 minutes. Sign in again.',
         'Check the connection, then try again.',
-        'The browser did not give the extension access to Fruitback.',
+        'The browser did not give the extension access to Fruitback. Sign in again, and allow it when the browser asks.',
         'Fruitback did not answer. The popup asks again.',
         'Your sign-in ended',
         "Fruitback can't reach",
@@ -215,8 +215,8 @@ describe('the guide quotes the popup this extension renders', () => {
 
       for (const quote of [
         'Sign in to leave notes',
-        'Did not go through',
-        'Your text is kept. Try again, or copy it before closing the page.',
+        'Not sent',
+        'Your text is still here. Try again, or copy it before you close the page.',
       ]) {
         assert.ok(troubleshooting.includes(quote), `the section does not quote: ${quote}`);
         assert.ok(widget.includes(`'${quote}'`), `the widget no longer draws: ${quote}`);

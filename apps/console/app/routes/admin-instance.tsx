@@ -10,12 +10,13 @@ import {
   instanceFacts,
   instanceWorkspaces,
 } from '../api';
-import { ago, dayOf } from '../ago';
+import { agoInSentence, dayOf } from '../ago';
 import { locale, msg, t } from '../i18n';
 import { useCopy } from '../install-options';
 import { type Listed, listedOf } from '../listed';
 import { Button, DataTable, Field, Lead, LinkButton, Problem, Radios, Title } from '../ui';
 import { useLocale } from '../use-locale';
+import { ReadProblem } from '../read-problem';
 
 /**
  * The instance, as screen 17 of the mockup of 2026-10-13 draws it (FRU-262), read-only: what this
@@ -87,7 +88,9 @@ export default function AdminInstance() {
       {facts === 'loading' ? <p className="text-small text-muted">{t('Loading…')}</p> : null}
       {facts === 'failed' ? (
         <div className="flex flex-col items-start gap-[12px]">
-          <Problem>{t('The instance could not be read. Fruitback did not answer.')}</Problem>
+          <Problem>
+            {t('The instance did not load.')} <ReadProblem />
+          </Problem>
           <Button tone="outline" onClick={() => void read()}>
             {t('Try again')}
           </Button>
@@ -151,7 +154,7 @@ function mailDetail(provider: string | undefined, lastSentAt: string | null, now
   if (provider === undefined) return t('No sign-in link goes out by e-mail.');
   if (lastSentAt === null) return t('No link sent since the worker started.');
 
-  return t('Last link sent {when}', { when: ago(lastSentAt, now) });
+  return t('Last link sent {when}', { when: agoInSentence(lastSentAt, now) });
 }
 
 /** How many connectors need somebody. */
@@ -202,7 +205,7 @@ function SignIn({ facts }: { facts: InstanceFacts }) {
 
       <div className="mt-[24px]">
         <Radios
-          label={t('Who can make an account')}
+          label={t('Who can create an account')}
           value={signUp.policy}
           options={SIGN_UP.map((option) => ({ value: option.value, label: t(option.label) }))}
           disabled
@@ -314,7 +317,9 @@ function Workspaces() {
       {rows === 'loading' ? <p className="text-small text-muted">{t('Loading…')}</p> : null}
       {rows === 'failed' ? (
         <div className="flex flex-col items-start gap-[12px]">
-          <Problem>{t('The workspaces could not be read. Fruitback did not answer.')}</Problem>
+          <Problem>
+            {t('The workspaces did not load.')} <ReadProblem />
+          </Problem>
           <Button tone="outline" onClick={() => void read()}>
             {t('Try again')}
           </Button>
@@ -408,7 +413,9 @@ function Deleted() {
       {rows === 'loading' ? <p className="text-small text-muted">{t('Loading…')}</p> : null}
       {rows === 'failed' ? (
         <div className="flex flex-col items-start gap-[12px]">
-          <Problem>{t('The deleted workspaces could not be read. Fruitback did not answer.')}</Problem>
+          <Problem>
+            {t('The deleted workspaces did not load.')} <ReadProblem />
+          </Problem>
           <Button tone="outline" onClick={() => void read()}>
             {t('Try again')}
           </Button>
