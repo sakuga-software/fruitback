@@ -1,6 +1,6 @@
 import { type Dispatch, type SetStateAction, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { API, type Me, type Site, type Workspace, call, myInvitations, saveLanguage } from '../api';
+import { API, type Me, type Site, type Workspace, call, myInvitations, readSite, saveLanguage } from '../api';
 import { adoptLanguage, t } from '../i18n';
 import { InstallOptions } from '../install-options';
 import {
@@ -45,7 +45,8 @@ const CALLS: SetupCalls = {
   // Quiet: a person who is not signed in gets the first step, not the notice of a session that ended.
   me: () => call<Me>('GET', '/console/me', undefined, { quiet: true }),
   invitations: myInvitations,
-  sites: (workspace) => call<{ sites: Site[] }>('GET', `/console/workspaces/${workspace.id}/sites`),
+  sites: (workspace) => call<{ sites: Site[] }>('GET', `/console/workspaces/${workspace.id}/sites?limit=1`),
+  site: (workspace, site) => readSite(workspace.id, site),
   createWorkspace: (name) => call<Workspace>('POST', '/console/workspaces', { name }),
   // No lock outside a secure context (`http` on a host other than localhost): two tabs can then each
   // make one. docs/decisions/console.md says so.

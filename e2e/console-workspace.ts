@@ -30,6 +30,48 @@ type Stub = {
   answer?: (pathname: string, route: Route) => Promise<void> | undefined;
 };
 
+/** A site as a stub answers it: what the reads of FRU-497 need of it. */
+type StubbedSite = { id: string; origin: string; visibility?: string };
+
+/**
+ * What the worker answers to a read of the sites of a workspace (FRU-497), from the whole list a
+ * spec gives: the list, a page of it with its total, the sites to choose from by address, or one
+ * site (`undefined` for one that is not in the list: a 404). `false`: the address is no read of
+ * the sites, and the spec answers it.
+ */
+export function sitesRead(url: URL, list: readonly unknown[]): unknown | undefined | false {
+  const sites = list as readonly StubbedSite[];
+  const read = /^\/console\/workspaces\/[^/]+\/sites(?:\/([A-Za-z0-9_-]+))?$/.exec(url.pathname);
+  if (read === null) return false;
+  const host = (site: StubbedSite) => site.origin.split('://')[1] ?? site.origin;
+  const q = url.searchParams.get('q')?.trim().toLowerCase() ?? '';
+  const found = sites.filter((site) => host(site).toLowerCase().includes(q));
+  if (read[1] === 'choices') {
+    return {
+      sites: [...found]
+        .sort((a, b) => a.origin.localeCompare(b.origin))
+        .map(({ id, origin, visibility }) => ({ id, origin, visibility })),
+    };
+  }
+  if (read[1] !== undefined) return sites.find((site) => site.id === read[1]);
+  if (!url.searchParams.has('limit')) return { sites };
+  const offset = Number(url.searchParams.get('offset') ?? 0);
+
+  return { sites: found.slice(offset, offset + Number(url.searchParams.get('limit'))), total: found.length };
+}
+
+/** Answers a read of the sites from the whole list (FRU-497); `false` when `route` asks for something else. */
+export function fulfillSites(route: Route, list: readonly unknown[]): Promise<void> | false {
+  const url = new URL(route.request().url());
+  if (route.request().method() !== 'GET') return false;
+  const body = sitesRead(url, list);
+  if (body === false) return false;
+
+  return body === undefined
+    ? route.fulfill({ status: 404, json: { error: 'not-found' } })
+    : route.fulfill({ json: body });
+}
+
 /** A signed-in person, their workspaces, and the lists every screen of a workspace reads. */
 export async function stubWorker(page: Page, stub: Stub = {}): Promise<void> {
   const me = {
@@ -44,7 +86,8 @@ export async function stubWorker(page: Page, stub: Stub = {}): Promise<void> {
     if (answered !== undefined) return answered;
     if (pathname === '/console/me') return json(me);
     if (/^\/console\/workspaces\/w\d\/domains$/.test(pathname)) return json({ domains: [] });
-    if (/^\/console\/workspaces\/w\d\/sites$/.test(pathname)) return json({ sites });
+    const read = /^\/console\/workspaces\/w\d\//.test(pathname) ? fulfillSites(route, sites) : false;
+    if (read !== false) return read;
     if (/^\/console\/workspaces\/w\d\/connectors$/.test(pathname)) return json({ connectors: [], available: true });
     // Nobody invited the person elsewhere: the front door opens their first workspace.
     if (pathname.endsWith('/list-user-invitations')) return json([]);

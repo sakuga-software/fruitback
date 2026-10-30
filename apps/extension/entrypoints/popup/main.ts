@@ -25,6 +25,7 @@ import {
   failedPairing,
 } from '../../src/session.ts';
 import { currentShortcut } from '../../src/shortcut.ts';
+import { whenNotAnswering } from '../../src/guide.ts';
 import { showProblem } from '../../src/problem-view.ts';
 import { PAIRING_CODE_REQUIRED, PAIRING_NEEDS_HTTPS, PAIRING_PROBLEM } from '../../src/remedy.ts';
 import { type PairLink, parsePairLink } from '../../src/pair-link.ts';
@@ -378,6 +379,7 @@ function unreachableScreen(account: Account | undefined): HTMLElement {
     title: t("Fruitback can't reach {server}", { server: hostOf(CLOUD ?? '') }),
     text: t('Check the connection, then try again.'),
     primary: { label: t('Try again'), onClick: () => void render() },
+    help: whenNotAnswering(),
     onSettings: openSettings,
     ...(account === undefined ? {} : { account }),
   });
@@ -427,6 +429,7 @@ function siteWithoutAccess(origin: string, { pattern, site }: ResolvedSite, acco
       label: t('Turn off for this site'),
       onClick: () => void writeSite(pattern, { ...site, enabled: false }).then(() => render(), failed(said)),
     },
+    help: whenNotAnswering(),
     onSettings: openSettings,
     ...(account === undefined ? {} : { account }),
   });

@@ -1,4 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
+import { fulfillSites } from './console-workspace.ts';
 import { type Page, expect, test } from '@playwright/test';
 import { WORKER_ORIGIN } from './pin.ts';
 
@@ -29,7 +30,8 @@ async function stub(page: Page): Promise<string[]> {
     await new Promise((done) => setTimeout(done, LATENCY));
     if (pathname === '/console/me') return route.fulfill({ json: me });
     if (pathname === '/console/admin/instance') return route.fulfill({ status: 503, json: { error: 'unavailable' } });
-    if (pathname.endsWith('/sites')) return route.fulfill({ json: { sites: [] } });
+    const read = fulfillSites(route, []);
+    if (read !== false) return read;
 
     return route.fulfill({ json: {} });
   });

@@ -1,6 +1,7 @@
 import { DEMO_FILES, DEMO_SECONDS, demoLength } from './demo-video.ts';
 import { t } from './i18n.ts';
-import { alertBox, head, primaryButton, providerButton, secondaryButton } from './kit.ts';
+import { whenNotAnswering } from './guide.ts';
+import { alertBox, head, helpLink, primaryButton, providerButton, secondaryButton } from './kit.ts';
 import { type SignInStop, element, linkButton } from './popup-view.ts';
 
 /**
@@ -175,7 +176,9 @@ function sitesPart(
     element(document, 'p', t('Open a site of your team, then click the Fruitback icon.'), 'lead'),
   ];
   if (sites === undefined) return [];
-  if (sites === 'unavailable' || signIn.onTurnOn === undefined) return elsewhere();
+  // Fruitback did not answer: what to check, in the guide (FRU-528).
+  if (sites === 'unavailable') return [...elsewhere(), helpLink(document, whenNotAnswering())];
+  if (signIn.onTurnOn === undefined) return elsewhere();
   if (sites.length === 0) {
     const none = element(document, 'p', t('No site in your workspaces yet.'), 'lead');
 

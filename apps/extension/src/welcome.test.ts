@@ -93,6 +93,21 @@ describe('the page that opens at install (FRU-318)', () => {
       }
     });
 
+    it('leads to the guide when Fruitback did not answer, and only then (FRU-528)', () => {
+      const down = signIn({ kind: 'signed-in', who: 'ana@acme.dev', sites: 'unavailable' });
+      assert.deepEqual(
+        [...down.querySelectorAll<HTMLAnchorElement>('.kit-help a')].map((link) => [link.textContent, link.href]),
+        [
+          [
+            'What to check when Fruitback does not answer',
+            'https://fruitback.com/reviewing.html#when-fruitback-does-not-answer',
+          ],
+        ],
+      );
+      const up = signIn({ kind: 'signed-in', who: 'ana@acme.dev', sites: [] });
+      assert.equal(up.querySelector('.kit-help'), null);
+    });
+
     it('puts the sign-in first, and the pin in a tip under it, with no step to follow (FRU-484)', () => {
       const screen = signIn({ kind: 'signed-out' });
       assert.equal(screen.querySelector('.lead')?.textContent, 'Sign in, then turn on a site your team reviews.');

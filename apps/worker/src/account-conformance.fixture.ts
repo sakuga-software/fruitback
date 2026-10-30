@@ -321,6 +321,75 @@ export function accountCases(it: Declare<AccountStore>): void {
     );
   });
 
+  it('reads one site by its id with its destinations, only in its own workspace', async (store) => {
+    const { workspace: acme } = await world(store);
+    const { workspace: globex } = await otherWorld(store);
+    const connector = await store.addConnector(acme.id, { kind: 'linear', label: 'Linear', sealed: 'sealed' });
+    const site = await store.addSite(acme.id, { origin: 'https://acme.dev', visibility: 'members' });
+    await store.addSite(acme.id, { origin: 'https://other.acme.dev', visibility: 'everyone' });
+    const destination = { connector: connector.id, teamId: 'team_1' };
+    assert.equal(await store.setDestination(acme.id, site.id, destination), true);
+
+    assert.deepEqual(await store.site(acme.id, site.id), { ...site, destinations: [destination] });
+    assert.equal(await store.site(globex.id, site.id), undefined);
+    assert.equal(await store.site(acme.id, 'site_nobody'), undefined);
+  });
+
+  it('answers a page of the sites oldest first, with the total of its search and the sites it is given', async (store) => {
+    const { workspace } = await world(store);
+    const { workspace: other } = await otherWorld(store);
+    const added = [];
+    for (const origin of ['https://one.dev', 'https://two.dev', 'https://three.dev', 'https://www.thirty.dev']) {
+      added.push(await store.addSite(workspace.id, { origin, visibility: 'members' }));
+      await pause();
+    }
+    await store.addSite(other.id, { origin: 'https://three.other.dev', visibility: 'members' });
+    const origins = async (query: Parameters<AccountStore['sitePage']>[1]) => {
+      const page = await store.sitePage(workspace.id, query);
+
+      return [page.sites.map((site) => site.origin), page.total];
+    };
+
+    assert.deepEqual(await origins({ offset: 0, limit: 2 }), [['https://one.dev', 'https://two.dev'], 4]);
+    assert.deepEqual(await origins({ offset: 2, limit: 2 }), [['https://three.dev', 'https://www.thirty.dev'], 4]);
+    assert.deepEqual(await origins({ offset: 9, limit: 2 }), [[], 4]);
+    assert.deepEqual(await origins({ offset: 0, limit: 9, q: ' TH ' }), [
+      ['https://three.dev', 'https://www.thirty.dev'],
+      2,
+    ]);
+    assert.deepEqual(await origins({ offset: 0, limit: 9, q: 'https' }), [[], 0]);
+    assert.deepEqual(await origins({ offset: 0, limit: 9, q: '_' }), [[], 0]);
+    assert.deepEqual(await origins({ offset: 0, limit: 9, only: [added[3]?.id ?? '', added[0]?.id ?? ''] }), [
+      ['https://one.dev', 'https://www.thirty.dev'],
+      2,
+    ]);
+    assert.deepEqual(await origins({ offset: 0, limit: 9, only: [] }), [[], 0]);
+    assert.deepEqual((await store.sitePage(workspace.id, { offset: 1, limit: 1 })).sites, [added[1]]);
+  });
+
+  it('answers the sites to choose from by address, after an address, and only the sites it is given', async (store) => {
+    const { workspace } = await world(store);
+    const { workspace: other } = await otherWorld(store);
+    const charlie = await store.addSite(workspace.id, { origin: 'https://charlie.dev', visibility: 'everyone' });
+    const alpha = await store.addSite(workspace.id, { origin: 'https://alpha.dev', visibility: 'members' });
+    await store.addSite(workspace.id, { origin: 'https://bravo.dev', visibility: 'members' });
+    await store.addSite(other.id, { origin: 'https://alpha.other.dev', visibility: 'members' });
+    const origins = async (query: Parameters<AccountStore['siteChoices']>[1]) =>
+      (await store.siteChoices(workspace.id, query)).map((site) => site.origin);
+
+    assert.deepEqual(await store.siteChoices(workspace.id, { limit: 1 }), [
+      { id: alpha.id, origin: 'https://alpha.dev', visibility: 'members' },
+    ]);
+    assert.deepEqual(await origins({ limit: 9 }), ['https://alpha.dev', 'https://bravo.dev', 'https://charlie.dev']);
+    assert.deepEqual(await origins({ limit: 9, after: 'https://alpha.dev' }), [
+      'https://bravo.dev',
+      'https://charlie.dev',
+    ]);
+    assert.deepEqual(await origins({ limit: 9, q: 'ALPH' }), ['https://alpha.dev']);
+    assert.deepEqual(await origins({ limit: 9, only: [charlie.id] }), ['https://charlie.dev']);
+    assert.deepEqual(await origins({ limit: 9, only: [] }), []);
+  });
+
   it('removes a site only from its own workspace', async (store) => {
     const { workspace: a } = await world(store);
     const { workspace: b } = await otherWorld(store);

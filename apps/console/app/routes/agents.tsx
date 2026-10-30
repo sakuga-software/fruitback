@@ -7,14 +7,14 @@ import {
   DEFAULT_AGENT_KEY_DAYS,
   MAX_AGENT_KEYS,
   MAX_AGENT_KEY_SITES,
-  type Site,
+  type SiteChoice,
   type Stage,
   STAGES,
   agentKeys,
   agentWrites,
-  call,
   makeAgentKey,
   revokeAgentKey,
+  siteChoices,
 } from '../api';
 import { ago, dayOf } from '../ago';
 import { claudeLine, daysOf, endOf, keyEnd, statusKey } from '../agent-keys';
@@ -58,7 +58,7 @@ function AgentsScreen() {
   const { workspace } = useWorkspace();
   const may = manages(workspace);
   const [keys, setKeys] = useState<Listed<AgentKey>>('loading');
-  const [sites, setSites] = useState<Listed<Site>>('loading');
+  const [sites, setSites] = useState<Listed<SiteChoice>>('loading');
   const [forming, setForming] = useState(false);
   const [made, setMade] = useState<Made | undefined>();
   // The name of the key revoked last: its sentence is translated where it is shown.
@@ -69,7 +69,8 @@ function AgentsScreen() {
     setKeys('loading');
     const [listed, read] = await Promise.all([
       agentKeys(workspace.id),
-      call<{ sites: Site[] }>('GET', `/console/workspaces/${workspace.id}/sites`),
+      // Their id, address and visibility (FRU-497): no count of the notes of every site.
+      siteChoices(workspace.id),
     ]);
     setKeys(listedOf(listed, (data) => data.keys));
     setSites(listedOf(read, (data) => data.sites));
@@ -116,7 +117,7 @@ function AgentsScreen() {
     );
 
   const listed = Array.isArray(keys) ? (keys as readonly AgentKey[]) : undefined;
-  const workspaceSites = Array.isArray(sites) ? (sites as readonly Site[]) : undefined;
+  const workspaceSites = Array.isArray(sites) ? (sites as readonly SiteChoice[]) : undefined;
   const full = listed !== undefined && listed.length >= MAX_AGENT_KEYS;
   const busy = forming || made !== undefined;
   let action = null;
@@ -227,7 +228,7 @@ function KeyForm({
   onCancel,
   onMade,
 }: {
-  sites: readonly Site[];
+  sites: readonly SiteChoice[];
   onCancel: () => void;
   onMade: (made: Made) => void;
 }) {

@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { GUIDE, GUIDE_ANCHORS } from './guide.ts';
 import { NOTES_NEED_SESSION, READ_NEEDS_SESSION, WORKER_NOT_FOUND } from './read-probe.ts';
 import { PAIRING_NEEDS_HTTPS, PAIRING_PROBLEM, PROBLEMS, REMEDY_LABEL } from './remedy.ts';
 
@@ -246,5 +247,27 @@ describe('the guide quotes the popup this extension renders', () => {
       assert.match(adds, /ADDS_PER_ACCOUNT = 10;/);
       assert.ok(who.includes('10 sites an hour'), 'the section does not give the limit of the route');
     });
+  });
+
+  /**
+   * The buttons of the guide (FRU-528) open a section by its anchor. The site builds an anchor from a
+   * heading as GitHub does: lower case, the punctuation dropped, a hyphen for each space.
+   */
+  it('has a heading for each anchor a button of the extension opens (FRU-528)', () => {
+    const slug = (heading: string): string =>
+      heading
+        .trim()
+        .toLowerCase()
+        .replace(/[^\p{L}\p{N}\s-]/gu, '')
+        .replace(/\s/g, '-');
+    const anchors = new Set([...guide.matchAll(/^#{1,6} (.+)$/gm)].map(([, heading]) => slug(heading ?? '')));
+
+    assert.ok(anchors.has('2-switch-a-site-on'), 'the slugs are not read as the site builds them');
+    assert.equal(GUIDE, 'https://fruitback.com/reviewing.html');
+    for (const anchor of Object.values(GUIDE_ANCHORS)) {
+      assert.ok(anchors.has(anchor), `docs/reviewing.md has no heading for #${anchor}`);
+    }
+    // The control: an anchor nobody wrote is not found.
+    assert.equal(anchors.has('when-fruitback-never-answers'), false);
   });
 });

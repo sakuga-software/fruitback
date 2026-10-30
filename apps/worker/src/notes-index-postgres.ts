@@ -1,6 +1,6 @@
 import type { NoteIssue, NoteStage } from '@fruitback/shared';
 import { NOTE_STAGES } from '@fruitback/shared';
-import { and, count, eq, gte, ilike, inArray, isNull, max, min, or, sql } from 'drizzle-orm';
+import { type SQL, and, count, eq, gte, ilike, inArray, isNull, max, min, or, sql } from 'drizzle-orm';
 import { member, user } from './auth-schema.ts';
 import {
   type AuthorKind,
@@ -168,7 +168,7 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
       return new Map(rows.map((row) => [row.site, Number(row.notes)]));
     },
 
-    async summary(workspace) {
+    async summary(workspace, only) {
       const rows = await run((db) =>
         db
           .select({
@@ -181,7 +181,8 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
             extension: sql<boolean>`bool_or(${note_index.channel} = 'extension')`,
           })
           .from(note_index)
-          .where(eq(note_index.workspace_id, workspace))
+          // `note_index_by_workspace` (workspace_id, site_id, stage) reads the notes of these sites only.
+          .where(and(eq(note_index.workspace_id, workspace), readable(only)))
           .groupBy(note_index.site_id, note_index.stage),
       );
 
@@ -215,7 +216,7 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
       );
     },
 
-    async undelivered(workspace) {
+    async undelivered(workspace, only) {
       // The body of a delivery is what was sent, as JSON: the site is in it, and nowhere else. A body
       // that is not JSON names no site, and does not stop the count of the others.
       const site = sql<string>`CASE WHEN pg_input_is_valid(${deliveries.body}, 'jsonb') THEN (${deliveries.body}::jsonb -> 'site' ->> 'id') END`;
@@ -225,7 +226,7 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
           .from(deliveries)
           .innerJoin(connectors, eq(connectors.id, deliveries.connector_id))
           // FRU-468: a call of a trigger that starts an agent is no note that waits.
-          .where(and(eq(connectors.workspace_id, workspace), eq(deliveries.event, 'note.created')))
+          .where(and(eq(connectors.workspace_id, workspace), eq(deliveries.event, 'note.created'), ofSites(site, only)))
           .groupBy(site),
       );
 
@@ -497,6 +498,13 @@ function placeKey() {
 }
 
 /** The sites a caller may read: absent, every one; an empty list, none. */
+/** The rows whose site is one of `only` (FRU-497): none for no site. Absent: every site. */
+function ofSites(site: SQL<string>, only: readonly string[] | undefined) {
+  if (only === undefined) return undefined;
+
+  return only.length === 0 ? sql`false` : inArray(site, [...only]);
+}
+
 function readable(sites: readonly string[] | undefined) {
   if (sites === undefined) return undefined;
 
