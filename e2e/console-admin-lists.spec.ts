@@ -1,7 +1,16 @@
 import AxeBuilder from '@axe-core/playwright';
 import { type Locator, type Page, type Route, expect, test } from '@playwright/test';
 import { WORKER_ORIGIN } from './pin.ts';
-import { contrast, painted, rgb, sideScroll, stubWorker, styles, typeDuringTheWrite } from './console-workspace.ts';
+import {
+  box,
+  contrast,
+  painted,
+  rgb,
+  sideScroll,
+  stubWorker,
+  styles,
+  typeDuringTheWrite,
+} from './console-workspace.ts';
 
 /**
  * « Workspaces » and « Users » of the administration of the instance (FRU-263), measured in a
@@ -1951,6 +1960,38 @@ test('Users: an admin changes a role and adds a person to a workspace, and the p
     { path: '/console/admin/workspaces/w1/members/a5/role', body: { role: 'member' } },
     { path: '/console/admin/workspaces/w9/members', body: { email: 'ines@acme.dev', role: 'member' } },
   ]);
+});
+
+test('Users: « Change a role » and « Add to a workspace » stand under the rows, apart, as wide as the panel (FRU-545)', async ({
+  page,
+}) => {
+  await stub(page, { locale: 'fr' });
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: width > 500 ? 1000 : 844 });
+    await page.goto(`${CONSOLE}/admin/users?open=a2`);
+    const change = panel(page).getByRole('button', { name: 'Changer un rôle' });
+    const add = panel(page).getByRole('button', { name: 'Ajouter à un workspace' });
+    await expect(add).toBeVisible();
+    const rows = await box(panel(page).getByRole('list').first());
+    const [first, second] = [await box(change), await box(add)];
+    // 12 px under the last row, and 8 px between the two: they touched the row and each other.
+    expect(Math.round(first.y - (rows.y + rows.height)), `${width}: under the rows`).toBe(12);
+    expect(Math.round(second.y - (first.y + first.height)), `${width}: between`).toBe(8);
+    // One width, the width of the rows: each was as wide as its words.
+    expect(Math.round(first.width), `${width}: first`).toBe(Math.round(rows.width));
+    expect(Math.round(second.width), `${width}: second`).toBe(Math.round(rows.width));
+    expect(first.x, `${width}: one edge`).toBe(rows.x);
+    expect(await sideScroll(page)).toBe(0);
+  }
+  // At 390 px, the form that opens is as wide as the rows, and the other button stays under it.
+  await panel(page).getByRole('button', { name: 'Changer un rôle' }).click();
+  const asking = group(page, 'Changer le rôle de Nadia Benali');
+  await expect(asking).toBeVisible();
+  const rows = await box(panel(page).getByRole('list').first());
+  expect(Math.round((await box(asking)).width)).toBe(Math.round(rows.width));
+  await expect(panel(page).getByRole('button', { name: 'Ajouter à un workspace' })).toBeVisible();
+  expect(await sideScroll(page)).toBe(0);
+  await axe(page, 'the writes of a person at 390 px');
 });
 
 test('the writes of FRU-283 in French, and at 390 px', async ({ page }) => {
