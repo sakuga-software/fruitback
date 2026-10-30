@@ -12,7 +12,7 @@ import {
 } from './composer.ts';
 import type { Destination } from './destinations.ts';
 import { deepActiveElement, focusables } from './focus.ts';
-import { type MountedPage, keyboardEventCtor, mountPage, useHandFrames } from './dom.fixture.ts';
+import { type MountedPage, keyboardEventCtor, mountPage, useHandFrames, stylesIn } from './dom.fixture.ts';
 import { createTranslator } from './messages.ts';
 
 /**
@@ -884,7 +884,7 @@ describe('createComposer', () => {
     composer = null;
 
     assert.equal(host.querySelector('[data-fruitback-composer]'), null);
-    assert.equal(host.querySelector('style'), null);
+    assert.equal(stylesIn(host), '');
   });
 });
 
@@ -1565,7 +1565,7 @@ describe('where the note goes (FRU-123)', () => {
   it('hides the folded line and list with a rule of their own, because their class sets a display', () => {
     // happy-dom does no layout. A class that sets `display` beats the browser's rule for `hidden`.
     mountWith(choiceOf([WEB, DESIGN]));
-    const styles = (mounted as MountedPage).document.querySelector('style')?.textContent ?? '';
+    const styles = stylesIn((mounted as MountedPage).document);
 
     assert.match(styles, /\.fruitback-composer-places\[hidden\] \{ display: none; \}/);
     assert.match(styles, /\.fruitback-composer-identify\[hidden\] \{ display: none; \}/);
