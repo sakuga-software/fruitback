@@ -530,7 +530,10 @@ did not change: the fields of 760 px and the file input of the browser are as th
 - **One side margin, `--panel-gutter` (12 px), for every block of the panel** (FRU-533): the head,
   « Leave feedback », « Ready to check », the tabs, the rows, the search and the foot take it from
   `sidepanel/style.css`, and a row gives the words of its note `--panel-row-inset` inside the box an
-  open row draws, so they sit on the gutter too. `side-panel.test.ts` fails on a block with a margin
+  open row draws, so they sit on the gutter too. The page takes off the 14 px of padding that the
+  body of `popup/style.css` gives (the panel links that sheet first): before, every block sat 14 px
+  further in, 34 px from the edge. `side-panel.spec.ts` measures 12 px in the panel itself.
+  `side-panel.test.ts` fails on a block with a margin
   of its own, and on a side margin of 18 or 20 px, the margins of before. « All pages » of the widget
   (FRU-470) is drawn by the widget, with its own sheet: it is not one of these blocks.
 - **« Open Fruitback » opens the popup from the panel (FRU-532)**, under « Fruitback is not on for
