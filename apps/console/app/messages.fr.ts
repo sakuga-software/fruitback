@@ -1269,8 +1269,12 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Reset {name}': 'Rétablir {name}',
   Reset: 'Rétablir',
   Auto: 'Auto',
-  'reads well': 'se lit bien',
-  'under 4.5:1': 'sous 4,5:1',
+  Readable: 'Lisible',
+  'Low contrast': 'Contraste faible',
+  'Contrast {ratio}': 'Contraste {ratio}',
+  'Contrast {ratio}, text colour Auto': 'Contraste {ratio}, couleur du texte Auto',
+  'A swatch with no code is the colour of the stage of its status.':
+    'Une pastille sans code est la couleur de la phase de son statut.',
   'Type a colour to see how its text reads.': 'Saisissez une couleur pour voir comment son texte se lit.',
   'Text on this colour: {ratio}. It reads well.': 'Texte sur cette couleur : {ratio}. Il se lit bien.',
   'Text on this colour: {ratio}. Text needs 4.5:1 at least: choose Auto, or a darker or lighter text.':
