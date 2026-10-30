@@ -126,6 +126,31 @@ describe('1 · signed out (FRU-297)', () => {
     assert.deepEqual(done, ['sign in', 'sign in', 'sign in', 'settings']);
   });
 
+  it('draws the mark of its provider in « Google » and « GitHub », in every state of the sign-in (FRU-525)', () => {
+    const states = [
+      {},
+      { ended: true },
+      ...(['refused', 'expired', 'unavailable', 'untrusted', 'blocked'] as const).map((stop) => ({
+        stop: signInStop(stop),
+      })),
+    ];
+    for (const state of states) {
+      const root = signedOut(page(), { canSignIn: true, onSignIn: nothing, onSettings: nothing, ...state });
+      const marked = [...root.querySelectorAll('.method-row button')].map((button) => [
+        button.textContent,
+        button.querySelector('svg.kit-provider-mark[aria-hidden="true"]')?.getAttribute('data-provider'),
+      ]);
+      assert.deepEqual(
+        marked,
+        [
+          ['Google', 'google'],
+          ['GitHub', 'github'],
+        ],
+        JSON.stringify(state),
+      );
+    }
+  });
+
   it('leads to the page of the extension alone in a build that names no Fruitback to sign in to', () => {
     const root = signedOut(page(), { canSignIn: false, onSignIn: nothing, onSettings: nothing });
 

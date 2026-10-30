@@ -338,12 +338,38 @@ test('a member reads why there is no way to the keys, and the page asks the work
   expect(worker.asked).toEqual([]);
 });
 
+test('the last key revoked: one « New key », in the empty card, with the focus (FRU-503)', async ({ page }) => {
+  const worker = await workerWith(page, { keys: KEYS().slice(0, 1) });
+  await page.goto(`${CONSOLE}/w/w1/settings/agents`);
+  const ci = row(page, 'Claude on CI');
+  await ci.getByRole('button', { name: 'Revoke', exact: true }).click();
+  await ci.getByRole('button', { name: 'Revoke « Claude on CI »' }).click();
+  await expect(page.getByRole('heading', { name: 'No agent key yet' })).toBeVisible();
+  expect(worker.revoked).toEqual(['agk_ci']);
+  await expect(page.getByRole('button', { name: 'New key' })).toHaveCount(1);
+  await expect(page.getByRole('button', { name: 'New key' })).toBeFocused();
+});
+
 test('with no key, the screen says what a key is for; at 390 px in French nothing scrolls sideways', async ({
   page,
 }) => {
   await workerWith(page, { keys: [] });
   await page.goto(`${CONSOLE}/w/w1/settings/agents`);
   await expect(page.getByRole('heading', { name: 'No agent key yet' })).toBeVisible();
+  // FRU-503: one « New key », in the card. The head had a second one above it.
+  const card = page
+    .locator('div')
+    .filter({ has: page.getByRole('heading', { name: 'No agent key yet' }) })
+    .last();
+  await expect(page.getByRole('button', { name: 'New key' })).toHaveCount(1);
+  await expect(card.getByRole('button', { name: 'New key' })).toBeVisible();
+  // Opened and cancelled from the card, the form gives the focus back to it.
+  await card.getByRole('button', { name: 'New key' }).click();
+  const form = page.getByRole('region', { name: 'New agent key' });
+  await form.getByRole('button', { name: 'Cancel' }).click();
+  await expect(form).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'New key' })).toHaveCount(1);
+  await expect(page.getByRole('button', { name: 'New key' })).toBeFocused();
   await expectNoViolation(page);
 
   await page.unrouteAll();

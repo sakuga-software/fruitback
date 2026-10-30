@@ -1,4 +1,5 @@
 import { handleNotes } from './console-notes.ts';
+import { readJsonObject } from './bounded-body.ts';
 import {
   type InstanceAdminContext,
   type InstanceAdminReads,
@@ -178,18 +179,6 @@ function statusIdsOf(asked: readonly unknown[]): { source: string; key: string }
   }
 
   return order;
-}
-
-async function readBody(request: Request): Promise<Record<string, unknown> | undefined> {
-  try {
-    const parsed: unknown = JSON.parse(await request.text());
-
-    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : undefined;
-  } catch {
-    return undefined;
-  }
 }
 
 function visibilityOf(value: unknown): Visibility | undefined {
@@ -654,7 +643,7 @@ export async function handleConsoleApi(
   // The language the person reads (FRU-119). Their own account only: the subject of the token.
   if (pathname === '/console/me/locale') {
     if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
-    const body = (await request.json().catch(() => undefined)) as { locale?: unknown } | undefined;
+    const body = await readJsonObject(request);
     const locale = body?.locale === null ? undefined : readLocaleTag(body?.locale);
     if (body?.locale !== null && locale === undefined) return json(400, { error: 'invalid-locale' }, headers);
     await context.accounts.setLocale(account.id, locale);
@@ -666,7 +655,7 @@ export async function handleConsoleApi(
   // keep the name they were sent with; their extensions sign the new one from their next access token.
   if (pathname === '/console/me/name') {
     if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
-    const name = readPersonName((await readBody(request))?.name);
+    const name = readPersonName((await readJsonObject(request))?.name);
     if (name === undefined) return json(400, { error: 'invalid-name' }, headers);
     await context.accounts.setName(account.id, name);
     await context.sessions.renameSessionsOf(account.id, name, context.now ?? Date.now());
@@ -676,7 +665,7 @@ export async function handleConsoleApi(
 
   if (pathname === '/console/workspaces') {
     if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
-    const name = workspaceName((await readBody(request))?.name);
+    const name = workspaceName((await readJsonObject(request))?.name);
     if (name === undefined) return json(400, { error: 'invalid-name' }, headers);
     // By the organization plugin (FRU-149): its hooks see the workspace and its first member.
     const workspace =
@@ -727,7 +716,7 @@ export async function handleConsoleApi(
     account: account.id,
     manages: allowed('manage-workspace'),
     forbidden,
-    readBody,
+    readBody: readJsonObject,
     json,
     headers,
     now: context.now ?? Date.now(),
@@ -740,7 +729,7 @@ export async function handleConsoleApi(
     workspace: workspaceId as string,
     manages: allowed('manage-workspace'),
     forbidden,
-    readBody,
+    readBody: readJsonObject,
     json,
     headers,
     now: context.now ?? Date.now(),
@@ -816,7 +805,7 @@ export async function handleConsoleApi(
     if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
     if (!allowed('manage-sites')) return forbidden();
 
-    const body = await readBody(request);
+    const body = await readJsonObject(request);
     const origin = typeof body?.url === 'string' ? siteOrigin(body.url) : undefined;
     if (origin === undefined) return json(400, { error: 'invalid-url' }, headers);
     const visibility = visibilityOf(body?.visibility ?? 'members');
@@ -865,7 +854,7 @@ export async function handleConsoleApi(
       return json(409, { error: 'site-has-destinations', count: current.destinations.length }, headers);
     }
 
-    const body = await readBody(request);
+    const body = await readJsonObject(request);
     // The kind of the connector says what a destination holds. A connector of another workspace
     // answers like one that does not exist.
     const named = typeof body?.connector === 'string' ? await context.accounts.sealedKey(body.connector) : undefined;
@@ -897,7 +886,7 @@ export async function handleConsoleApi(
     if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
     if (!allowed('manage-sites')) return forbidden();
 
-    const body = await readBody(request);
+    const body = await readJsonObject(request);
     const asked = body?.destinations;
     if (!Array.isArray(asked) || asked.length > MAX_DESTINATIONS) {
       return json(400, { error: 'invalid-destinations', max: MAX_DESTINATIONS }, headers);
@@ -957,7 +946,7 @@ export async function handleConsoleApi(
         return json(200, { statuses: listed, notes }, headers);
       }
       if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
-      const body = await readBody(request);
+      const body = await readJsonObject(request);
       const read = readSiteStatus(body === undefined ? undefined : { ...body, origin: 'tracker' });
       if (!read.ok) return json(400, { error: 'invalid-status', refusal: read.refusal }, headers);
       const status = { ...read.status, origin: originOf(read.status.source, read.status.key) };
@@ -1068,7 +1057,7 @@ export async function handleConsoleApi(
     // FRU-368: POST …/statuses/settings, `{ trackerColours }`: the switch of the site.
     if (statusPath[2] === 'settings') {
       if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
-      const asked = (await readBody(request))?.trackerColours;
+      const asked = (await readJsonObject(request))?.trackerColours;
       if (typeof asked !== 'boolean') return json(400, { error: 'invalid-settings' }, headers);
       const set = await context.accounts.setSiteTrackerColours(workspaceId as string, site, asked);
 
@@ -1078,7 +1067,7 @@ export async function handleConsoleApi(
     // POST …/statuses/order: each status named takes its place in the list.
     if (statusPath[2] === 'order') {
       if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
-      const asked = (await readBody(request))?.order;
+      const asked = (await readJsonObject(request))?.order;
       const order = Array.isArray(asked) && asked.length <= MAX_STATUSES ? statusIdsOf(asked) : undefined;
       if (order === undefined) return json(400, { error: 'invalid-order', max: MAX_STATUSES }, headers);
       const ordered = await context.accounts.orderSiteStatuses(workspaceId as string, site, order);
@@ -1139,7 +1128,7 @@ export async function handleConsoleApi(
     if (!allowed('manage-workspace')) return forbidden();
     if (context.secretsKey === undefined) return json(404, CONNECTORS_UNAVAILABLE, headers);
 
-    const body = await readBody(request);
+    const body = await readJsonObject(request);
     if (body?.kind === 'rest') {
       // FRU-122: an address that receives each note. Nothing is asked of it now: it is called when a
       // note is written, and the console shows a delivery that did not arrive.
@@ -1245,7 +1234,7 @@ export async function handleConsoleApi(
     }
 
     if (writes) {
-      const settings = readConnectorSettings(await readBody(request));
+      const settings = readConnectorSettings(await readJsonObject(request));
       if (settings === undefined) return json(400, { error: 'invalid-settings' }, headers);
       const set = await context.accounts.setConnectorSettings(workspaceId as string, id, settings);
       if (!set) return json(404, { error: 'not-found' }, headers);
@@ -1299,7 +1288,7 @@ export async function handleConsoleApi(
       // FRU-404: the name a workspace gives its connector, so that two of one kind read apart. `null`
       // or an empty name takes it away. The rule of a name is the one of a workspace.
       if (!allowed('manage-workspace')) return forbidden();
-      const given = (await readBody(request))?.name;
+      const given = (await readJsonObject(request))?.name;
       const cleared = given === null || (typeof given === 'string' && given.trim() === '');
       const name = cleared ? undefined : workspaceName(given);
       if (!cleared && name === undefined) return json(400, { error: 'invalid-name' }, headers);
@@ -1366,7 +1355,7 @@ export async function handleConsoleApi(
   // sessions of its extensions, which name the id.
   if (rest === '' && request.method === 'POST') {
     if (!allowed('manage-workspace')) return forbidden();
-    const name = workspaceName((await readBody(request))?.name);
+    const name = workspaceName((await readJsonObject(request))?.name);
     if (name === undefined) return json(400, { error: 'invalid-name' }, headers);
     if (context.renameWorkspace === undefined) return json(404, { error: 'not-found' }, headers);
     const renamed = await context.renameWorkspace(request, workspaceId as string, name);
@@ -1419,7 +1408,7 @@ async function domainRoute(
       return json(200, { domains: (await accounts.domains(workspace)).map((each) => domainView(each, now)) }, headers);
     }
     if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
-    const domain = readDomain((await readBody(request))?.domain);
+    const domain = readDomain((await readJsonObject(request))?.domain);
     if (domain === undefined) return json(400, { error: 'invalid-domain' }, headers);
     const known = await accounts.domains(workspace);
     // Counted, then written: two calls of one admin at the same moment can both pass at 19, and leave
@@ -1462,7 +1451,7 @@ async function domainRoute(
   }
 
   // The previews: a proven domain only. Taking them away is always allowed.
-  const body = await readBody(request);
+  const body = await readJsonObject(request);
   if (body?.site !== null && typeof body?.site !== 'string') return json(400, { error: 'invalid-site' }, headers);
   const site = body.site ?? undefined;
   if (site !== undefined && proofState(domain, now) !== 'proven') {

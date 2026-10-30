@@ -546,6 +546,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'No tracker yet': 'Pas encore de tracker',
   '{place} and {count} more': '{place} et {count} de plus',
   'More for {site}': 'Plus pour {site}',
+  Settings: 'Réglages',
   '1 new': '1 nouvelle',
   '{count} new': '{count} nouvelles',
   'No destination matches this search.': 'Aucune destination ne correspond à cette recherche.',
@@ -1272,8 +1273,12 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Reset {name}': 'Rétablir {name}',
   Reset: 'Rétablir',
   Auto: 'Auto',
-  'reads well': 'se lit bien',
-  'under 4.5:1': 'sous 4,5:1',
+  Readable: 'Lisible',
+  'Low contrast': 'Contraste faible',
+  'Contrast {ratio}': 'Contraste {ratio}',
+  'Contrast {ratio}, text colour Auto': 'Contraste {ratio}, couleur du texte Auto',
+  'A swatch with no code is the colour of the stage of its status.':
+    'Une pastille sans code est la couleur de la phase de son statut.',
   'Type a colour to see how its text reads.': 'Saisissez une couleur pour voir comment son texte se lit.',
   'Text on this colour: {ratio}. It reads well.': 'Texte sur cette couleur : {ratio}. Il se lit bien.',
   'Text on this colour: {ratio}. Text needs 4.5:1 at least: choose Auto, or a darker or lighter text.':
@@ -1422,6 +1427,15 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Keys that let an AI agent of your team read the notes of some sites, and reply to them.':
     'Les clés qui permettent à un agent IA de votre équipe de lire les notes de certains sites, et d’y répondre.',
   'Manage the agent keys': 'Gérer les clés d’agent',
+  // FRU-503: the settings of a workspace hold what an agent needs.
+  'A key for each agent.': 'Une clé pour chaque agent.',
+  'To start an agent when a note arrives: an address of your team that receives the call.':
+    'Pour lancer un agent quand une note arrive : une adresse de votre équipe qui reçoit l’appel.',
+  'Then, site by site, when to call it.': 'Puis, site par site, quand l’appeler.',
+  'The sites of the workspace did not load.': 'Les sites du workspace ne se sont pas chargés.',
+  'The workspace has no site yet.': 'Le workspace n’a pas encore de site.',
+  'Start an agent, by site': 'Lancer un agent, par site',
+  'Start an agent on {site}': 'Lancer un agent sur {site}',
   // FRU-468: a site starts an agent.
   'Call of an agent': 'Appel d’un agent',
   'This address is not in the workspace any more. Choose another one.':

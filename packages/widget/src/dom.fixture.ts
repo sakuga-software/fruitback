@@ -38,6 +38,7 @@ export function mountPage(html: string, options: MountOptions = {}): MountedPage
     height: options.height ?? 900,
   });
 
+  recordStyleSources(window);
   const document = window.document as unknown as Document;
   document.body.innerHTML = html;
   if (options.title !== undefined) document.title = options.title;
@@ -55,6 +56,36 @@ export function mountPage(html: string, options: MountOptions = {}): MountedPage
       return element;
     },
   };
+}
+
+const styleSources = new WeakMap<object, string>();
+
+/**
+ * Keeps the text that each adopted stylesheet of `window` gets. happy-dom writes `outline` back as
+ * `outline-color`, `outline-style` and `outline-width`, and the tests read the CSS as we wrote it.
+ */
+function recordStyleSources(window: HappyDomWindow): void {
+  const Sheet = window.CSSStyleSheet;
+  class RecordedSheet extends Sheet {
+    override replaceSync(text: string): void {
+      styleSources.set(this, text);
+      super.replaceSync(text);
+    }
+  }
+  Object.defineProperty(window, 'CSSStyleSheet', { value: RecordedSheet, configurable: true, writable: true });
+}
+
+/**
+ * The CSS of the widget in `node`: the text of the `<style>` elements in it, then the text of the
+ * stylesheets adopted by its Shadow root or its document.
+ */
+export function stylesIn(node: Document | ShadowRoot | Element): string {
+  const root = 'adoptedStyleSheets' in node ? node : (node.getRootNode() as Document | ShadowRoot);
+  const elements = [...node.querySelectorAll('style')].map((style) => style.textContent ?? '');
+  const adopted =
+    'adoptedStyleSheets' in root ? root.adoptedStyleSheets.map((sheet) => styleSources.get(sheet) ?? '') : [];
+
+  return [...elements, ...adopted].join('\n');
 }
 
 /**

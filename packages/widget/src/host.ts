@@ -10,6 +10,7 @@ import { type CaptureEngine, reactGrabEngine } from './engine.ts';
 import { createIcon } from './icons.ts';
 import { type Translator, createTranslator, languageOf } from './messages.ts';
 import { framesOf, settle } from './settle.ts';
+import { adoptStyles } from './stylesheet.ts';
 
 /**
  * The widget's own patch of DOM, and the selection mode that runs inside it.
@@ -158,10 +159,9 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   applyTheme(container, options.theme);
 
   const root = container.attachShadow({ mode: 'open' });
-  const style = document.createElement('style');
   // Tokens first: every other stylesheet in this root — the overlay's, the composer's, the panel's —
   // resolves `var(--fruitback-…)` against them by inheritance, without importing anything.
-  style.textContent = THEME_STYLES + STYLES;
+  adoptStyles(root, THEME_STYLES + STYLES);
 
   const button = document.createElement('button');
   button.type = 'button';
@@ -253,7 +253,7 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   announcer.setAttribute('role', 'status');
   announcer.setAttribute('aria-live', 'polite');
 
-  root.append(style, dock, highlight, panel, announcer);
+  root.append(dock, highlight, panel, announcer);
 
   configure.addEventListener('click', (event) => {
     event.preventDefault();

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { noteFixture, noteIssueFixture } from '@fruitback/shared/note.fixture';
 import type { FeedbackEntry } from './export.ts';
 import type { SidebarEntry } from './sidebar.ts';
-import { keyboardEventCtor, mountPage, setDocumentSize, setRect } from './dom.fixture.ts';
+import { keyboardEventCtor, mountPage, setDocumentSize, setRect, stylesIn } from './dom.fixture.ts';
 import { deepActiveElement } from './focus.ts';
 import { createTranslator } from './messages.ts';
 import { type ReadState, type Sidebar, createSidebar } from './sidebar.ts';
@@ -1048,10 +1048,7 @@ describe('« All pages », when the host reads the site (FRU-470)', () => {
     assert.equal(items().length, 0, 'the rows of this page stay in « All pages »');
     assert.equal(chips().length > 0 && chips()[0]!.closest('[hidden]') !== null, true, 'the chips of the page stay');
     // happy-dom does no layout: the rule that makes `hidden` win over the `display` of the class.
-    assert.match(
-      root.parentElement?.querySelector('style')?.textContent ?? '',
-      /\.fruitback-sidebar-chips\[hidden\] \{ display: none; \}/,
-    );
+    assert.match(stylesIn(root), /\.fruitback-sidebar-chips\[hidden\] \{ display: none; \}/);
 
     host.answer({ ok: true, notes: [siteNote('s1', '/about'), siteNote('a', '/pricing', 'done')], total: 2 });
     await settle();

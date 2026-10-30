@@ -1,6 +1,6 @@
 import { type AccountStore, MAX_AGENT_KEYS, type OAuthClient, can } from './accounts.ts';
 import { type AgentGrant, DEFAULT_KEY_DAYS, daysOf, grantOf, sitesOf } from './agent-keys.ts';
-import { readBoundedText } from './bounded-body.ts';
+import { MAX_BODY_BYTES, readBoundedText } from './bounded-body.ts';
 import type { Kv } from './kv.ts';
 import { MCP_PATH } from './mcp.ts';
 import { digest } from './session.ts';
@@ -261,6 +261,8 @@ export async function handleOAuth(
   if (pathname === REGISTER_PATH) return register(request, context, now, headers);
 
   const form = await formOf(request);
+  // Over the cap: the answer of every route of the worker (FRU-506), not an error of OAuth.
+  if (form === 'too-large') return json(413, { error: 'payload-too-large', maxBytes: MAX_BODY_BYTES }, headers);
   if (form === undefined) return oauthError(400, 'invalid_request', 'The body is a form, and is short.', headers);
   if (pathname === TOKEN_PATH) return token(request, form, context, now, headers);
 
@@ -280,9 +282,10 @@ async function register(
   if (made > REGISTRATIONS_PER_ADDRESS) return oauthError(429, 'rate_limited', 'Too many registrations.', headers);
 
   const text = await readBoundedText(request);
+  if (text === null) return json(413, { error: 'payload-too-large', maxBytes: MAX_BODY_BYTES }, headers);
   let body: Record<string, unknown> | undefined;
   try {
-    const parsed: unknown = text === null ? undefined : JSON.parse(text);
+    const parsed: unknown = JSON.parse(text);
     body =
       typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
         ? (parsed as Record<string, unknown>)
@@ -404,12 +407,12 @@ async function authorize(params: URLSearchParams, context: OAuthContext, now: nu
 
 // --- the token endpoint ---------------------------------------------------------------------------
 
-async function formOf(request: Request): Promise<URLSearchParams | undefined> {
+async function formOf(request: Request): Promise<URLSearchParams | 'too-large' | undefined> {
   const type = request.headers.get('Content-Type') ?? '';
   if (!type.toLowerCase().startsWith('application/x-www-form-urlencoded')) return undefined;
   const text = await readBoundedText(request);
 
-  return text === null ? undefined : new URLSearchParams(text);
+  return text === null ? 'too-large' : new URLSearchParams(text);
 }
 
 /** The client of a request to the token endpoint, authenticated as it registered; or why not. */
@@ -615,9 +618,9 @@ export type ConsoleOAuthContext = {
   now?: number;
 };
 
-async function bodyOf(request: Request): Promise<Record<string, unknown> | undefined> {
+async function bodyOf(request: Request): Promise<Record<string, unknown> | 'too-large' | undefined> {
   const text = await readBoundedText(request);
-  if (text === null) return undefined;
+  if (text === null) return 'too-large';
   try {
     const parsed: unknown = JSON.parse(text);
 
@@ -704,6 +707,7 @@ export async function handleConsoleOAuth(
 
   if (request.method !== 'POST') return say(405, { error: 'method-not-allowed' });
   const body = await bodyOf(request);
+  if (body === 'too-large') return say(413, { error: 'payload-too-large', maxBytes: MAX_BODY_BYTES });
   if (body === undefined || typeof body.account !== 'string') return say(400, { error: 'invalid-body' });
   // The account the page showed: a console that changed account since would approve for another.
   if (body.account !== account.id) return say(409, { error: 'account-changed' });

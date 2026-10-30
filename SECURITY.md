@@ -379,6 +379,24 @@ address unless it trusts that proxy (Traefik: `forwardedHeaders.trustedIPs`).
 [docs/self-hosting/reverse-proxy.md](docs/self-hosting/reverse-proxy.md#behind-a-reverse-proxy) has the cases and a check an
 operator can run.
 
+### The body of a request has a cap (FRU-506)
+
+**Every route of the worker reads its body under a cap**, and answers `413 payload-too-large`, with
+`maxBytes`, over it. The cap is 64 KiB (`MAX_BODY_BYTES` of `bounded-body.ts`). A file in transit and
+the logo of a workspace have their own caps: see their sections. A declared `Content-Length` over the
+cap is refused before a byte is read. A body with no length, or with a false one, is read until it
+crosses the cap, and no further.
+
+Before FRU-506 the routes of the console read their body with no cap: the sign-in by a link, the
+routes of better-auth that the worker forwards, the account, the workspaces and the administrator.
+Three of them answer a person who is not signed in. The routes of OAuth (`/oauth/register`,
+`/oauth/token`, `/oauth/revoke`) and of the connection of the extension read under the cap already,
+and answered `400` over it: they answer the same `413` now. What the cap protects: the memory of the worker
+against one large request. It is not a limit of rate: see the section above.
+test:`is refused over the cap on the routes of the sign-in, which need no session`, and the guard
+test:`is read by bounded-body.ts and by nothing else`, which fails on a route that reads its body
+another way.
+
 ### Private mode hides the pins from a visitor, and from nobody else
 
 **The widget the extension mounts in private mode carries no credential.** `page.content.ts` mounts
@@ -447,6 +465,13 @@ holds another kind of session, a cookie of better-auth (FRU-147), which does not
 | Access token  | HS256 identity token, 10 minutes                           |
 | Refresh token | 256 bits, 30 days, **rotated on every refresh**, revocable |
 | On disk       | codes and refresh tokens are stored as **SHA-256 digests** |
+
+**No cache keeps a token** (FRU-506). Every answer of `/session/pair`, `/session/refresh` and
+`/session/revoke`, a refusal included, says `Cache-Control: no-store`. Every other JSON answer of the
+worker says it too. Before FRU-506 these three routes did not, and `/session/pair` and
+`/session/refresh` answer an access token and a refresh token. The header is an instruction: it
+protects against a proxy or a cache that obeys it, and against no other. See
+test:`answers POST /session/refresh with Cache-Control: no-store`.
 
 **A pairing code can travel in a link, `<worker>/pair#<code>`** (FRU-92). What that changes:
 

@@ -1,5 +1,5 @@
 import type { AccountStore } from './accounts.ts';
-import { readBoundedText } from './bounded-body.ts';
+import { MAX_BODY_BYTES, readBoundedText } from './bounded-body.ts';
 import { isExtensionOrigin } from './cors.ts';
 import {
   CONNECT_INTERVAL_SECONDS,
@@ -55,10 +55,10 @@ function json(status: number, body: unknown, headers: Record<string, string>): R
   });
 }
 
-/** The body as an object, or `undefined`: too long, not JSON, not an object. */
-async function bodyOf(request: Request): Promise<Record<string, unknown> | undefined> {
+/** The body as an object, `'too-large'` over the cap (FRU-506), or `undefined`: not JSON, not an object. */
+async function bodyOf(request: Request): Promise<Record<string, unknown> | 'too-large' | undefined> {
   const text = await readBoundedText(request);
-  if (text === null) return undefined;
+  if (text === null) return 'too-large';
   try {
     const parsed: unknown = JSON.parse(text);
 
@@ -100,6 +100,7 @@ export async function handleExtensionConnect(
   if (origin !== null && !isExtensionOrigin(origin)) return json(403, { error: 'origin-not-allowed' }, headers);
 
   const body = await bodyOf(request);
+  if (body === 'too-large') return json(413, { error: 'payload-too-large', maxBytes: MAX_BODY_BYTES }, headers);
   if (body === undefined) return json(400, { error: 'invalid-body' }, headers);
 
   if (pathname === CONNECT_PATH) {
@@ -295,6 +296,7 @@ export async function handleConsoleConnect(
 
   if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
   const body = await bodyOf(request);
+  if (body === 'too-large') return json(413, { error: 'payload-too-large', maxBytes: MAX_BODY_BYTES }, headers);
   if (body === undefined || typeof body.account !== 'string') return json(400, { error: 'invalid-body' }, headers);
   // The account the screen showed. A console that changed account between the read and the click
   // would otherwise connect the browser to another person than the one it named.
