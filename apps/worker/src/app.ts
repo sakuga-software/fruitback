@@ -1000,6 +1000,6 @@ async function chosenPlace(
 function json(status: number, body: unknown, headers: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json', ...headers },
+    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...headers },
   });
 }
