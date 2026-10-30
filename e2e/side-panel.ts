@@ -29,14 +29,22 @@ export async function paired(extension: LoadedExtension): Promise<void> {
 }
 
 /** Runs `expression` in the side panel, and answers its value. */
-export async function inPanel<T>(page: Page, expression: string): Promise<T> {
+export function inPanel<T>(page: Page, expression: string): Promise<T> {
+  return inTarget<T>(page, '/sidepanel.html', expression);
+}
+
+/**
+ * Runs `expression` in the page of the extension whose address ends with `ending`: the side panel, or
+ * the popup that `action.openPopup` opened (FRU-532), which Playwright hands over as no `Page` either.
+ */
+export async function inTarget<T>(page: Page, ending: string, expression: string): Promise<T> {
   const cdp = await page.context().newCDPSession(page);
   try {
     const { targetInfos } = (await cdp.send('Target.getTargets')) as {
       targetInfos: { targetId: string; url: string }[];
     };
-    const target = targetInfos.find((info) => info.url.endsWith('/sidepanel.html'));
-    if (target === undefined) throw new Error('no side panel among the targets');
+    const target = targetInfos.find((info) => info.url.endsWith(ending));
+    if (target === undefined) throw new Error(`no ${ending} among the targets`);
     const { sessionId } = (await cdp.send('Target.attachToTarget', { targetId: target.targetId, flatten: false })) as {
       sessionId: string;
     };
@@ -79,6 +87,7 @@ export const WORDS = {
     title: 'Notes on this page',
     close: 'Close the sidebar',
     notOn: ['Fruitback is not on for this page.', 'Turn it on from the Fruitback button in the toolbar.'],
+    openPopup: 'Open Fruitback',
     open: 'Open',
     done: 'Done',
     show: 'Show on the page',
@@ -100,6 +109,7 @@ export const WORDS = {
       'Fruitback n’est pas activé sur cette page.',
       'Activez-le depuis le bouton Fruitback de la barre d’outils.',
     ],
+    openPopup: 'Ouvrir Fruitback',
     open: 'Ouvertes',
     done: 'Terminées',
     show: 'Voir sur la page',
@@ -123,12 +133,19 @@ export async function words(page: Page): Promise<(typeof WORDS)[keyof typeof WOR
 
 /** What the panel shows: the title, the site it names, and the lines it says. */
 export function panelWords(page: Page) {
-  return inPanel<{ title: string; site: string | null; lines: string[]; close: string | null }>(
+  return inPanel<{
+    title: string;
+    site: string | null;
+    lines: string[];
+    close: string | null;
+    openPopup: string | null;
+  }>(
     page,
     `({
       title: document.querySelector('h2')?.textContent ?? '',
       site: document.querySelector('.panel-where')?.textContent?.split(' · ')[0] ?? null,
       lines: [...document.querySelectorAll('.panel-state p')].map((line) => line.textContent),
+      openPopup: document.querySelector('button.panel-open-popup')?.textContent ?? null,
       close: document.querySelector('button.panel-close')?.getAttribute('aria-label') ?? null,
     })`,
   );
