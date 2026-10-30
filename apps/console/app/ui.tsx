@@ -411,7 +411,21 @@ type FieldProps = {
   inputRef?: Ref<HTMLInputElement>;
   /** A field of code, such as a colour: drawn in the mono font, with no correction of what is typed. */
   code?: boolean;
+  /**
+   * The field asks for the address of another person, or searches among people: no browser fill and
+   * no password manager. LastPass draws its icon in such a field and makes it 5 px higher (FRU-540).
+   * Never on a field where somebody types their own address or password.
+   */
+  someoneElse?: boolean;
 };
+
+/** What turns off the fill of the browser and of LastPass, 1Password and Bitwarden in one field. */
+const NO_PASSWORD_MANAGER = {
+  autoComplete: 'off',
+  'data-lpignore': 'true',
+  'data-1p-ignore': 'true',
+  'data-bwignore': 'true',
+} as const;
 
 /** A text field of HeroUI: its label, its input, and the hint the input is described by. */
 export function Field({
@@ -426,6 +440,7 @@ export function Field({
   error,
   inputRef,
   code = false,
+  someoneElse = false,
   ...input
 }: FieldProps) {
   return (
@@ -440,12 +455,20 @@ export function Field({
       data-code={code}
     >
       <Label className={labelHidden ? 'sr-only' : ''}>{label}</Label>
-      <Input
-        {...input}
-        {...(inputRef === undefined ? {} : { ref: inputRef })}
-        {...(code ? { spellCheck: false, autoCapitalize: 'off', autoCorrect: 'off' } : {})}
-        readOnly={readOnly || locked}
-      />
+      {/*
+       * A password manager puts its icon next to the input, in its parent. LastPass adds an empty
+       * element, and the gap of the field then makes the field 6 px higher (FRU-540). In this block,
+       * that element takes no room.
+       */}
+      <div className="kit-field__control">
+        <Input
+          {...input}
+          {...(inputRef === undefined ? {} : { ref: inputRef })}
+          {...(code ? { spellCheck: false, autoCapitalize: 'off', autoCorrect: 'off' } : {})}
+          {...(someoneElse ? NO_PASSWORD_MANAGER : {})}
+          readOnly={readOnly || locked}
+        />
+      </div>
       {hint === undefined ? null : <Description>{hint}</Description>}
       {error === undefined ? null : <FieldError>{error}</FieldError>}
     </TextField>

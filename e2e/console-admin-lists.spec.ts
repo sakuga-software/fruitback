@@ -2,8 +2,10 @@ import AxeBuilder from '@axe-core/playwright';
 import { type Locator, type Page, type Route, expect, test } from '@playwright/test';
 import { WORKER_ORIGIN } from './pin.ts';
 import {
+  NO_PASSWORD_MANAGER,
   box,
   contrast,
+  fillMarks,
   painted,
   rgb,
   sideScroll,
@@ -495,7 +497,9 @@ async function visit(page: Page, path: string, title: string): Promise<void> {
 
 /** The search bar, its field and its list, by the boxes that hold them. */
 function bar(page: Page, name: string): { bar: Locator; field: Locator; list: Locator } {
-  const field = search(page, name).locator('xpath=ancestor::div[contains(@class,"kit-field")][1]/..');
+  const field = search(page, name).locator(
+    'xpath=ancestor::div[contains(concat(" ", @class, " "), " kit-field ")][1]/..',
+  );
 
   return { bar: field.locator('..'), field, list: field.locator('xpath=following-sibling::div[1]') };
 }
@@ -2390,4 +2394,35 @@ test('Workspaces: the filter « Suspended » in French, and at 390 px (FRU-328)'
   await expect(nameCell(page, 'Lumen')).toContainText(`Suspendu depuis le ${SUSPENDED_DAY_FR}`);
   expect(await sideScroll(page)).toBe(0);
   await axe(page, 'the filter « Suspended » at 390 px, in French');
+});
+
+test('the addresses of other people and the searches of the administration are no field for a password manager (FRU-540)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await stub(page);
+  const asks = async (field: Locator) => expect(await fillMarks(field)).toEqual(NO_PASSWORD_MANAGER);
+
+  await visit(page, '/admin/workspaces?open=w9', 'Workspaces');
+  await asks(search(page, 'Search workspaces'));
+  for (const [button, name, label] of [
+    ['Add someone', 'Add someone to Acme support', 'Address of their account'],
+    ['Invite someone', 'Invite someone to Acme support', 'Their e-mail address'],
+    ['Change the owner', 'Change the owner of Acme support', 'Address of the new owner'],
+  ] as const) {
+    await panel(page).getByRole('button', { name: button }).click();
+    await asks(group(page, name).getByRole('textbox', { name: label }));
+    await group(page, name).getByRole('button', { name: 'Keep it' }).click();
+  }
+  await main(page).getByRole('button', { name: 'New workspace' }).click();
+  await asks(group(page, 'New workspace').getByRole('textbox', { name: 'Address of its owner' }));
+
+  await visit(page, '/admin/users?open=a5', 'Users');
+  await asks(search(page, 'Search people'));
+  await deleteAccount(page, 'Inès Roux').click();
+  await asks(
+    page.getByRole('group', { name: "Delete Inès Roux's account" }).getByRole('textbox', {
+      name: 'Type ines@acme.dev to confirm',
+    }),
+  );
 });

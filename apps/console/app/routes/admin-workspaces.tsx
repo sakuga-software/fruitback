@@ -800,7 +800,7 @@ function AddPerson({ workspace, onChanged }: { workspace: AdminWorkspaceDetail; 
             <Field
               label={t('Address of their account')}
               type="email"
-              autoComplete="off"
+              someoneElse
               compact
               autoFocus
               value={email}
@@ -862,7 +862,7 @@ function InvitePerson({ workspace, onChanged }: { workspace: AdminWorkspaceDetai
             <Field
               label={t('Their e-mail address')}
               type="email"
-              autoComplete="off"
+              someoneElse
               compact
               autoFocus
               value={email}
@@ -927,7 +927,7 @@ function ChangeOwner({ workspace, onChanged }: { workspace: AdminWorkspaceDetail
           <Field
             label={t('Address of the new owner')}
             type="email"
-            autoComplete="off"
+            someoneElse
             compact
             autoFocus
             value={email}
@@ -995,7 +995,7 @@ function NewWorkspace({
           <Field
             label={t('Address of its owner')}
             type="email"
-            autoComplete="off"
+            someoneElse
             compact
             value={email}
             onChange={(event) => setEmail(event.target.value)}
