@@ -7,6 +7,7 @@ import {
   keys,
   listRow,
   primaryButton,
+  providerButton,
   secondaryButton,
   siteLine,
   textButton,
@@ -172,8 +173,8 @@ export function signedOut(document: Document, options: SignedOutOptions): HTMLEl
   const methods = element(document, 'div', '', 'methods');
   const others = element(document, 'div', '', 'method-row');
   others.append(
-    secondaryButton(document, 'Google', options.onSignIn),
-    secondaryButton(document, 'GitHub', options.onSignIn),
+    providerButton(document, 'google', options.onSignIn),
+    providerButton(document, 'github', options.onSignIn),
   );
   methods.append(primaryButton(document, t('Sign in with email'), options.onSignIn), others);
   const invited = element(document, 'div', '', 'invited');
