@@ -525,7 +525,13 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   `GET …/notes`, the route of the console only; `/mcp` and the extension read by date), so a group
   goes on from one page to the next and the cursor holds the rank of the stage. A cursor of one order
   is refused in the other, and « Table » and « Board » start again on the first page. The board reads
-  by date: its columns are those of a page. The chips are every note and each place that has notes, in the order
+  by date: its columns are those of a page. **A note whose status changes during a walk of the pages
+  is where its status is when its page is read**: the key of the order changes with it, as no
+  cursor on a status can avoid. Moved to a group already read, it is not on the pages still to come
+  (« Previous » finds it); moved from a group already read to one still to come, it is read again
+  there. Every note whose status does not change is on one page, and one only
+  (`notes-list.test.ts`, every role and filter crossed). The console reads the page in view again
+  after a status it saves, so the person sees the note in its new group. The chips are every note and each place that has notes, in the order
   of the sources of the workspace. **No chip « Not delivered »**, which the mockup draws: the route
   counts those notes and does not filter them, and a chip that chooses nothing is not drawn; each of
   them says « Not delivered yet » on its row. The search says what the index searches (the 64

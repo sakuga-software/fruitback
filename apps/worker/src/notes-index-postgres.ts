@@ -270,6 +270,9 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
         const placed = inPlace === undefined ? narrowed : and(narrowed, inPlace);
         // FRU-551: read by status, a page is ordered by the rank of its stage first. The cursor holds
         // the rank of the last note: the next page starts after it in its stage, then the next stages.
+        // A note whose stage changes between two pages is where its stage is now: before the cursor,
+        // the walk does not read it; after, it may read it a second time. A note that does not move
+        // is read once (console.md, « The table is grouped by status »).
         const byStatus = query.order === 'status';
         const rank = rankOfStage();
         const older = (cursor: NoteCursor) =>
