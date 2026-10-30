@@ -369,6 +369,13 @@ const LIST_KEYS: Record<string, 'choose' | 'close' | 'leave'> = {
   Tab: 'leave',
 };
 
+/**
+ * The click-outside listener of the open list of each `listSelect`, by document and id. A page that
+ * draws again builds a new list while the old one is still open: the new one takes the old
+ * listener off at once, so one listener per list is on the document (review of #730).
+ */
+const OPEN_LISTS = new WeakMap<Document, Map<string, () => void>>();
+
 export type ListSelectOption = {
   id: string;
   label: string;
@@ -455,26 +462,37 @@ export function listSelect(document: Document, options: ListSelectOptions): HTML
       if (active !== before) options.onActiveChange?.(item.dataset.option ?? '');
     }
   };
-  const outside = (event: Event): void => {
+  const lists = OPEN_LISTS.get(document) ?? new Map<string, () => void>();
+  OPEN_LISTS.set(document, lists);
+  const unlisten = (): void => {
+    document.removeEventListener('pointerdown', outside, true);
+    if (lists.get(id) === unlisten) lists.delete(id);
+  };
+  function outside(event: Event): void {
     if (!root.isConnected) {
-      document.removeEventListener('pointerdown', outside, true);
+      unlisten();
 
       return;
     }
-    // `contains`, not `instanceof Node`: the test reads the kit on happy-dom, with no global `Node`.
-    // The focus in the list goes back to the button; a click on a field takes it from there.
-    if (!root.contains(event.target as Node | null)) close(root.contains(document.activeElement));
-  };
+    // Read before anything closes: the focus in the list goes back to the button; a click on a
+    // field takes it from there. `contains`, not `instanceof Node`: happy-dom has no global `Node`.
+    const hadFocus = root.contains(document.activeElement);
+    if (!root.contains(event.target as Node | null)) close(hadFocus);
+  }
   const show = (focus: boolean): void => {
     root.dataset.open = 'true';
     trigger.setAttribute('aria-expanded', 'true');
     if (!list.isConnected) root.append(list);
     mark(active);
+    // The list this one replaces, drawn open before, stops listening now.
+    const before = lists.get(id);
+    if (before !== undefined && before !== unlisten) before();
+    lists.set(id, unlisten);
     document.addEventListener('pointerdown', outside, true);
     if (focus) list.focus();
   };
   const close = (focus: boolean): void => {
-    document.removeEventListener('pointerdown', outside, true);
+    unlisten();
     if (root.dataset.open !== 'true') return;
     root.dataset.open = 'false';
     trigger.setAttribute('aria-expanded', 'false');

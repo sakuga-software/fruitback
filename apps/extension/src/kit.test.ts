@@ -391,6 +391,46 @@ describe('a list to choose from (FRU-535)', () => {
     assert.deepEqual(said, ['open:true', 'open:false', 'open:true', 'open:false']);
   });
 
+  it('leaves one click-outside listener when a page draws an open list again, and closes the new one (review of #730)', () => {
+    const document = page();
+    const listening = new Set<unknown>();
+    const add = document.addEventListener.bind(document);
+    const remove = document.removeEventListener.bind(document);
+    document.addEventListener = ((type: string, listener: unknown, capture?: unknown) => {
+      if (type === 'pointerdown') listening.add(listener);
+      add(type, listener as EventListener, capture as boolean);
+    }) as typeof document.addEventListener;
+    document.removeEventListener = ((type: string, listener: unknown, capture?: unknown) => {
+      if (type === 'pointerdown') listening.delete(listener);
+      remove(type, listener as EventListener, capture as boolean);
+    }) as typeof document.removeEventListener;
+    const said: string[] = [];
+    const draw = () =>
+      listSelect(document, {
+        label: 'Status',
+        trigger: 'Status · All · 2',
+        options: [
+          { id: '', label: 'All' },
+          { id: 'a', label: 'A' },
+        ],
+        selected: '',
+        open: true,
+        onOpenChange: (open) => said.push(`open:${open}`),
+      });
+    document.body.replaceChildren(draw());
+    // The panel draws again while the list is open, and puts the focus back on the new list.
+    const again = draw();
+    document.body.replaceChildren(again);
+    again.querySelector<HTMLElement>('[role="listbox"]')?.focus();
+    assert.equal(listening.size, 1, 'the list drawn before still listens');
+
+    document.body.dispatchEvent(new document.defaultView!.Event('pointerdown', { bubbles: true }) as unknown as Event);
+    assert.equal(again.querySelector('[role="listbox"]'), null);
+    assert.ok(document.activeElement === again.querySelector('.kit-select-trigger'));
+    assert.deepEqual(said, ['open:false']);
+    assert.equal(listening.size, 0);
+  });
+
   it('is drawn open when asked: a page that draws again keeps it open', () => {
     const { trigger, list } = build(true);
 
