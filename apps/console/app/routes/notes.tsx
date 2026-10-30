@@ -367,7 +367,7 @@ export default function Notes() {
                 />
               ) : (
                 <div aria-busy={reading}>
-                  <DataTable label={t('Notes')} minWidth={960} hover>
+                  <DataTable label={t('Notes')} minWidth={960} hover stack>
                     <thead>
                       <tr>
                         <th scope="col">{t('Note')}</th>
