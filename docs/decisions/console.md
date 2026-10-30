@@ -115,6 +115,16 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   for the time of the read, so what is under it jumped and no action of a row was there to press.
   `e2e/console-members.spec.ts` reads the values and the boxes of the mockup at 1440 and 390 px,
   the keyboard, the contrasts and axe.
+  **Two lists, in pages of 50, and a search** (FRU-496): « Members » and « Pending invitations »,
+  each under its heading with its count, as the mockup draws one table for both. The table stopped
+  at a hundred members and a hundred invitations and said nothing: a 101ᵗʰ member could not be
+  found nor removed. The worker gives the members a page at a time (`limit`, `offset`, `total`) and
+  searches them (`q`, the name or the address); it gives every invitation that waits, which the
+  screen cuts in pages and searches by address itself (`invitationsFound`, no case, no accent).
+  « 1 to 50 of 501 » and « Previous », « Next » are those of the Notes screen (`NotePages`), under a
+  list longer than a page. The search is not in the address. A member removed is read again with
+  its page: the next member moves into it. `e2e/console-members-many.spec.ts` holds it, on a
+  workspace of 501 members and 300 invitations.
 - **« Connect this browser » of a site leads to the sign-in of the popup, on the Cloud** (FRU-313).
   On a console of Fruitback Cloud (`connectsBySignIn` of `instance.ts`, the host of the worker) the
   button opens `/connect`, a page that says the three steps of the popup: the icon, « Sign in with

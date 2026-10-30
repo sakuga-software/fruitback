@@ -88,6 +88,8 @@ export function accountStoreOn(database: Database): AccountStore {
     reach: true,
     shareByInvitation: true,
     sitesOfInvitations: true,
+    waitingInvitations: true,
+    membersOf: true,
     shareOnAcceptance: true,
     sharedIn: true,
     unshare: true,

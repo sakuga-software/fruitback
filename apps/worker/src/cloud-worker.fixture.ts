@@ -1,4 +1,5 @@
 import { createServer } from 'node:http';
+import { sql } from 'drizzle-orm';
 import { createPostgresAccountStore } from './accounts-postgres.ts';
 import { handleRequest } from './app.ts';
 import { authConfigOf, authOptions, startAuth } from './auth.ts';
@@ -20,7 +21,8 @@ import { createPostgresConnectStore, createPostgresSessionStore } from './sessio
  * `CLOUD_WORKER` as JSON): Playwright compiles a spec as CommonJS and cannot import the worker, which
  * is ES modules. The spec starts this file, and hands it each request the console sends to the
  * address of the worker. `/__test/sent` and `/__test/received` answer what a test reads: the mail,
- * and the requests. It imports nothing of vitest.
+ * and the requests. `/__test/crowd` fills a workspace with members and invitations (FRU-496). It
+ * imports nothing of vitest.
  */
 export async function cloudWorker(options: {
   consoleUrl: string;
@@ -99,6 +101,33 @@ export async function cloudWorker(options: {
 
       return firstAdminLines({ auth, kv, owners: () => accounts.owners(), consoleUrl: options.consoleUrl }, email);
     },
+    /**
+     * `members` people who joined `workspace` and `invitations` invitations of its owner that wait,
+     * written in the tables as the seed of a bench writes them (FRU-496): a workspace past the
+     * hundred members and the hundred invitations of the organization plugin. Member `n` is
+     * « Person n », `p<n>@crowd.test`, and joined `n` seconds after the owner; invitation `n` goes to
+     * `invitee<n>@client.test`.
+     */
+    async crowd(workspace: string, members: number, invitations: number): Promise<void> {
+      await database.run((db) =>
+        db.execute(sql`INSERT INTO "user" (id, name, email, "emailVerified", "createdAt", "updatedAt")
+          SELECT 'crowd' || n, 'Person ' || n, 'p' || n || '@crowd.test', true, now(), now()
+          FROM generate_series(1, ${members}::int) n`),
+      );
+      await database.run((db) =>
+        db.execute(sql`INSERT INTO member (id, "organizationId", "userId", role, "createdAt")
+          SELECT 'crowd' || n, ${workspace}, 'crowd' || n, 'member', now() + n * interval '1 second'
+          FROM generate_series(1, ${members}::int) n`),
+      );
+      await database.run((db) =>
+        db.execute(sql`INSERT INTO invitation
+            (id, "organizationId", email, role, status, "expiresAt", "createdAt", "inviterId", mailed)
+          SELECT 'crowd' || n, ${workspace}, 'invitee' || n || '@client.test', 'member', 'pending',
+                 now() + interval '7 days', now() + n * interval '1 second',
+                 (SELECT "userId" FROM member WHERE "organizationId" = ${workspace} AND role = 'owner' LIMIT 1), true
+          FROM generate_series(1, ${invitations}::int) n`),
+      );
+    },
     async close(): Promise<void> {
       await instance.close();
     },
@@ -115,6 +144,17 @@ if (process.argv[1] === import.meta.filename) {
       const email = new URL(path, 'http://test.invalid').searchParams.get('email') ?? '';
       const body = JSON.stringify(await worker.firstAdminLines(email));
       outgoing.writeHead(200, { 'Content-Type': 'application/json' }).end(body);
+
+      return;
+    }
+    if (path.startsWith('/__test/crowd?')) {
+      const asked = new URL(path, 'http://test.invalid').searchParams;
+      await worker.crowd(
+        asked.get('workspace') ?? '',
+        Number(asked.get('members') ?? 0),
+        Number(asked.get('invitations') ?? 0),
+      );
+      outgoing.writeHead(204).end();
 
       return;
     }
