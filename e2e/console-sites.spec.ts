@@ -812,6 +812,33 @@ test('what is typed in the form stays when the form goes and comes back', async 
   await expect(form.getByRole('radio', { name: /Everyone who visits/ })).toBeChecked();
 });
 
+test('a tracker that this build does not know has its name and no mark, even a key of every object (FRU-541)', async ({
+  page,
+}) => {
+  await workerWith(page, 'owner', [
+    {
+      id: 's1',
+      origin: 'https://staging.acme.dev',
+      visibility: 'members',
+      destination: { connector: 'c1', label: 'constructor · Board' },
+    },
+    {
+      id: 's2',
+      origin: 'https://acme.dev',
+      visibility: 'members',
+      destination: { connector: 'c2', label: 'Jira · Web' },
+    },
+  ]);
+  await open(page);
+  for (const [site, words] of [
+    ['staging.acme.dev', 'constructorBoard'],
+    ['acme.dev', 'JiraWeb'],
+  ] as const) {
+    await expect(value(card(page, site), 'Notes go to')).toHaveText(words);
+    await expect(value(card(page, site), 'Notes go to').locator('svg')).toHaveCount(0);
+  }
+});
+
 test('a destination with no words of the worker reads as a tracker, and not as nothing', async ({ page }) => {
   // A worker of before FRU-123 writes no label on a destination.
   await workerWith(page, 'owner', [

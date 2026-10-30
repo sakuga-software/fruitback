@@ -386,7 +386,8 @@ function GoesTo({ site }: { site: Site }) {
       </>
     );
   const place = placeOf(first);
-  const kind = KIND_OF_NAME[place.name];
+  // Only a name of the table: « constructor » is not a kind, it is a key of every object.
+  const kind = Object.hasOwn(KIND_OF_NAME, place.name) ? KIND_OF_NAME[place.name] : undefined;
   // The worker writes « Linear · Design »: the place in a Linear is a team, and its project if any.
   const named =
     place.detail !== undefined && place.name === 'Linear' ? t('Team {team}', { team: place.detail }) : place.detail;
