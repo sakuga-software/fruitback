@@ -131,6 +131,11 @@ jobs:
       - name: Install Chromium
         run: pnpm exec playwright install chromium
 
+      # `ffmpeg` joins the frames of the video of the welcome page (FRU-531, `e2e/demo.ts`), when one
+      # changed. Homebrew installs it where the image of the runner has none.
+      - name: Install ffmpeg
+        run: command -v ffmpeg >/dev/null || brew install ffmpeg
+
       - name: Take the captures of the guide
         run: pnpm guide:captures
 
@@ -151,7 +156,7 @@ jobs:
         id: changed
         run: |
           set -euo pipefail
-          paths=(docs/assets/guide apps/console/public/guide apps/console/app/guide-captured.ts docs/reviewing.md)
+          paths=(docs/assets/guide apps/console/public/guide apps/console/app/guide-captured.ts docs/reviewing.md docs/assets/video apps/extension/public/demo)
           # A file that .gitignore hides there would be left out in silence: none may exist.
           ignored=$(git ls-files --others --ignored --exclude-standard -- "${paths[@]}")
           if [ -n "$ignored" ]; then
@@ -227,7 +232,7 @@ jobs:
           # The patch comes from a job that ran the code of the tag: it may touch the paths of the
           # guide and nothing else.
           outside=$(git apply --numstat "$RUNNER_TEMP/guide/guide.patch" | cut -f3 |
-            grep -Ev '^(docs/assets/guide/[^/]+\.png|apps/console/public/guide/[^/]+\.png|apps/console/app/guide-captured\.ts|docs/reviewing\.md)$' || true)
+            grep -Ev '^(docs/assets/guide/[^/]+\.png|docs/assets/video/[^/]+\.png|apps/console/public/guide/[^/]+\.png|apps/console/app/guide-captured\.ts|docs/reviewing\.md|apps/extension/public/demo/first-note\.(webm|mp4|jpg))$' || true)
           if [ -n "$outside" ]; then
             echo "the patch touches files out of the guide: $outside" >&2
             exit 1

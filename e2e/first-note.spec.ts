@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import { type Page, expect } from '@playwright/test';
 import { CONSOLE, type Worker, cloudWorker, finished, linkIn, served } from './cloud-worker.ts';
 import { BUILT_EXTENSION, PLAYGROUND_ORIGIN, openPopup, test } from './extension.ts';
+import { demoBox, demoFrame, framesNow, recordDemo, showPointer } from './demo.ts';
 import { capture, capturesNow, recordCaptures } from './guide.ts';
 import { badgeFor } from './pin.ts';
 import { AUTHENTICATED_WORKER_ORIGIN } from './worker-sessions.ts';
@@ -53,6 +54,7 @@ test('a first user goes from the setup to a first note (FRU-481)', async ({ exte
   const actions: Action[] = [];
   const did = (place: Place, what: string): void => void actions.push({ place, what });
   const before = capturesNow();
+  const framesBefore = framesNow();
   test.setTimeout(120_000);
   worker = await cloudWorker();
   const { context } = extension;
@@ -200,24 +202,71 @@ test('a first user goes from the setup to a first note (FRU-481)', async ({ exte
     timeout: 20_000,
   });
   await site.screenshot({ path: test.info().outputPath('09-site-on.png') });
-  await site.locator('[data-testid="card-espresso"] .add').click();
+  // The video of the welcome page (FRU-531): a frame at each step from here to the pin, all in one
+  // box of 16/9 around the element, with a pointer drawn where the person points.
+  const element = site.locator('[data-testid="card-espresso"] .add');
+  const where = await element.boundingBox();
+  if (where === null) throw new Error('the element of the note is not on the page');
+  const pointAt = { x: Math.round(where.x + where.width / 2), y: Math.round(where.y + where.height / 2) };
+  // From above the title of the cards, tall enough for the composer under the element and its « Send ».
+  const heading = await site.getByRole('heading', { name: 'Nos formules' }).boundingBox();
+  const box = demoBox(site, { x: pointAt.x + 200, top: (heading?.y ?? where.y - 100) - 32 }, 1280);
+  await showPointer(site, { x: box.x + 120, y: box.y + box.height - 120 });
+  await demoFrame(site, '01-site', box);
+  await element.hover();
+  await showPointer(site, pointAt);
+  await demoFrame(site, '02-pick', box);
+  await element.click();
   did('site', 'click the element of the page');
+  const composer = site.getByRole('dialog', { name: 'New note' });
+  await expect(composer).toBeVisible();
+  await settled(site);
+  await demoFrame(site, '03-composer', box);
   // The worker of this test is its own: the text needs no mark of the run.
   const note = 'The price is hard to read.';
-  await site.getByPlaceholder('What should change?').fill(note);
+  const field = site.getByPlaceholder('What should change?');
+  for (const [frame, typed] of [
+    ['04-typing-1', 'The price'],
+    ['05-typing-2', 'The price is hard'],
+    ['06-typing-3', 'The price is hard to'],
+  ] as const) {
+    await field.fill(typed);
+    await demoFrame(site, frame, box);
+  }
+  await field.fill(note);
   did('site', 'type the note');
-  await capture(site, 'note', [
-    site.locator('[data-testid="card-espresso"]'),
-    site.getByRole('dialog', { name: 'New note' }),
-  ]);
-  await site.getByRole('button', { name: 'Send', exact: true }).click();
+  // The capture of the guide shows no pointer.
+  await showPointer(site, undefined);
+  await capture(site, 'note', [site.locator('[data-testid="card-espresso"]'), composer]);
+  const send = site.getByRole('button', { name: 'Send', exact: true });
+  const sendAt = await send.boundingBox();
+  if (sendAt !== null) {
+    await showPointer(site, {
+      x: Math.round(sendAt.x + sendAt.width / 2),
+      y: Math.round(sendAt.y + sendAt.height / 2),
+    });
+  }
+  await demoFrame(site, '07-written', box);
+  await send.click();
   did('site', 'click « Send »');
-  await expect(site.getByRole('dialog', { name: 'New note' })).toBeHidden({ timeout: 15_000 });
+  await expect(composer).toBeHidden({ timeout: 15_000 });
   await site.screenshot({ path: test.info().outputPath('10-sent.png') });
 
   // The worker keeps the note: the site, loaded again, reads it from the worker and draws its pin.
   await site.reload();
   await expect(badgeFor(site, note)).toBeVisible({ timeout: 20_000 });
+  // The pin of the note, then its preview under the pointer.
+  await site.mouse.move(0, 0);
+  await settled(site);
+  await demoFrame(site, '08-sent', box);
+  const pin = badgeFor(site, note);
+  await pin.hover();
+  const pinAt = await pin.boundingBox();
+  if (pinAt !== null) {
+    await showPointer(site, { x: Math.round(pinAt.x + pinAt.width / 2), y: Math.round(pinAt.y + pinAt.height / 2) });
+  }
+  await settled(site);
+  await demoFrame(site, '09-pin', box);
   // A second load does not open the choice again: it opens at the first activation only.
   await expect(site.getByRole('button', { name: 'Leave feedback' })).toBeVisible();
   await expect(site.locator('[data-fruitback-host]')).not.toHaveAttribute('data-fruitback-capturing');
@@ -229,9 +278,26 @@ test('a first user goes from the setup to a first note (FRU-481)', async ({ exte
   const manifest = JSON.parse(fs.readFileSync(`${BUILT_EXTENSION}/manifest.json`, 'utf8')) as { version: string };
   const changed = recordCaptures(before, manifest.version);
   if (changed.length > 0) console.log(`The captures of the guide that changed: ${changed.join(', ')}`);
+  const video = recordDemo(framesBefore);
+  if (video.length > 0) console.log(`The video of the welcome page, written again: ${video.join(', ')}`);
 
   fs.writeFileSync(test.info().outputPath('actions.json'), JSON.stringify(actions, null, 2));
   // The table of the page is this list: a change to the path changes both in one pull request.
   expect(actions).toEqual(measuredInThePage());
   console.log(actions.map((action, index) => `${index + 1}. [${action.place}] ${action.what}`).join('\n'));
 });
+
+/**
+ * Waits for the motions of the page to end: a frame taken in the middle of one differs at each run.
+ * An animation with no end, such as a spinner, is not waited for.
+ */
+async function settled(page: Page): Promise<void> {
+  await page.evaluate(() =>
+    Promise.all(
+      document
+        .getAnimations()
+        .filter((animation) => Number.isFinite(animation.effect?.getComputedTiming().endTime ?? Infinity))
+        .map((animation) => animation.finished.catch(() => undefined)),
+    ),
+  );
+}

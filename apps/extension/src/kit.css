@@ -514,6 +514,97 @@ button.kit-tab[aria-selected='true'] {
   box-shadow: var(--shadow-xs);
 }
 
+/*
+  A list to choose from (FRU-535): the button, then the list box over what follows it. The list is
+  placed against the button and pushes nothing down.
+*/
+.kit-select {
+  position: relative;
+}
+
+button.kit-select-trigger {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: start;
+  cursor: pointer;
+}
+
+.kit-select-words {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.kit-select-caret {
+  color: var(--subtle);
+}
+
+.kit-select-list {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 4px);
+  right: 0;
+  left: 0;
+  box-sizing: border-box;
+  max-height: 320px;
+  margin: 0;
+  padding: 4px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-action);
+  background: var(--surface);
+  box-shadow: var(--shadow-popup);
+  list-style: none;
+}
+
+.kit-select-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 10px;
+  border-radius: var(--radius-control);
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.kit-select-option[data-active='true'],
+.kit-select-option:hover {
+  background: var(--surface-sunken);
+}
+
+.kit-select-option[aria-selected='true'] {
+  font-weight: 650;
+}
+
+.kit-select-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.kit-select-count {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
 /* Words for a screen reader alone: the provider beside its mark (FRU-530). */
 .visually-hidden {
   position: absolute;
