@@ -238,7 +238,7 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   // One capsule (FRU-303): the detached notes, the list, the gear and the launch button, in this
   // order. The overlay puts the chip of the detached notes at its start. A capture turns the same
   // capsule dark and gives it the banner: the way out is where the way in was.
-  // No landmark of its own: the host element is the region « Fruitback feedback », and a second
+  // No landmark of its own: the host element is the region « Fruitback notes », and a second
   // region with the same name is two landmarks that a screen reader cannot tell apart.
   const dock = document.createElement('div');
   dock.className = 'fruitback-dock';

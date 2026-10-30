@@ -122,7 +122,7 @@ the id of the site.
   src="https://cdn.acme.dev/fruitback.iife.js"
   data-fruitback-endpoint="https://api.feedback.acme.dev"
   data-fruitback-client="site_…"
-  data-fruitback-label="Leave feedback"
+  data-fruitback-label="Leave a note"
   defer
 ></script>
 ```

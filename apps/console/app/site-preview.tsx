@@ -119,7 +119,7 @@ export function SitePreview({ origin }: { origin: string }) {
         </LinkButton>
       </>
     );
-    page = <PreviewScene launch={t('Leave feedback')} hint={t('Click Leave feedback, then any part of the page.')} />;
+    page = <PreviewScene launch={t('Leave a note')} hint={t('Click Leave a note, then any part of the page.')} />;
   } else {
     page = (
       <Refused

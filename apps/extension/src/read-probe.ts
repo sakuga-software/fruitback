@@ -11,7 +11,7 @@
 
 /** What the popup says when the worker wants a session for a read. */
 export const READ_NEEDS_SESSION =
-  'This worker answers a signed-in reader only, and private mode carries no session. Notes do not show on this site.';
+  'This server answers a signed-in reader only, and in private mode the extension holds no session. Notes do not show on this site.';
 
 /**
  * What the popup says when the site takes notes from its members only (FRU-330): the refusal of the
@@ -19,13 +19,13 @@ export const READ_NEEDS_SESSION =
  * for private mode: « Anyone on the page », in the console.
  */
 export const NOTES_NEED_SESSION =
-  'This site takes notes from its members only, and private mode carries no session: no note can be sent from here. To review it in private mode, an admin of the site sets « Who can leave a note » to « Anyone on the page » in the console.';
+  'This site takes notes from its members only, and in private mode the extension holds no session: no note can be sent from here. To review it in private mode, an admin of the site sets « Who can leave a note » to « Anyone on the page » in the console.';
 
 /**
  * FRU-395: the worker of the rule answers `404` to a read, so nothing is at that address: a pairing
  * link pasted where the worker goes (`…/pair`), or a path that is not the worker's.
  */
-export const WORKER_NOT_FOUND = 'The worker of this rule does not answer. Check its address in the options.';
+export const WORKER_NOT_FOUND = 'The server of this rule does not answer. Check its address in the options.';
 
 /** The guide that says which mode can read an authenticated worker. */
 export const MODES_GUIDE = 'https://sakuga-software.github.io/fruitback/modes.html';

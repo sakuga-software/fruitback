@@ -23,7 +23,7 @@ describe('complaint', () => {
   it('names the first field that is wrong', () => {
     assert.equal(
       complaint({ mode: 'private', endpoint: '', clientId: 'acme' }, ORIGIN),
-      'The worker endpoint is required.',
+      'The server address is required.',
     );
     assert.equal(
       complaint({ mode: 'private', endpoint: 'javascript:alert(1)', clientId: 'acme' }, ORIGIN),
@@ -35,7 +35,7 @@ describe('complaint', () => {
     );
     assert.equal(
       complaint({ mode: 'team', endpoint: 'http://feedback.acme.dev', clientId: '' }, ORIGIN),
-      'A team-mode worker must be on https (localhost excepted).',
+      'A team-mode server must be on https (localhost excepted).',
     );
   });
 

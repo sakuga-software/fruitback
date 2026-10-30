@@ -15,7 +15,7 @@ async function paired(extension: LoadedExtension): Promise<void> {
   const worker = await extension.context.newPage();
   await worker.goto(link);
   const popup = await openPopup(extension, worker, AUTHENTICATED_WORKER_ORIGIN);
-  await popup.getByRole('button', { name: /^(Pair with this worker|Se connecter à ce serveur)$/ }).click();
+  await popup.getByRole('button', { name: /^(Connect to this server|Se connecter à ce serveur)$/ }).click();
   await expect(popup.getByText(NAME, { exact: false })).toBeVisible();
   await popup.close();
   await worker.close();

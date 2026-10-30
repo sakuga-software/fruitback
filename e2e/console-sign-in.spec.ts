@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { type Locator, type Page, expect, test } from '@playwright/test';
 import { CONSOLE, type Worker, cloudWorker, finished, linkIn, served } from './cloud-worker.ts';
+import { fillMarks } from './console-workspace.ts';
 import { WORKER_ORIGIN } from './pin.ts';
 
 /**
@@ -388,6 +389,18 @@ test.describe('the four states of the sign-in page, against the mockup (FRU-235)
       '« Continue in this tab »',
       2,
     );
+  });
+
+  test('the address of the person who signs in is filled by the browser and the password managers (FRU-540)', async ({
+    page,
+  }) => {
+    await show(page, 'sign-in');
+    expect(await fillMarks(page.getByRole('textbox', { name: 'Work email' }))).toEqual({
+      autocomplete: 'email',
+      'data-lpignore': null,
+      'data-1p-ignore': null,
+      'data-bwignore': null,
+    });
   });
 
   test('« Send again » counts a minute down, then sends a second link', async ({ page }) => {

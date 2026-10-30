@@ -1,0 +1,14 @@
+{
+  "extensionName": {
+    "message": "Fruitback",
+    "description": "The name of the extension, in the store and the list of extensions."
+  },
+  "extensionDescription": {
+    "message": "Leave a note on any element of a site you review. Your team gets it in its tracker.",
+    "description": "The description of the extension, in the list of extensions."
+  },
+  "leaveNoteCommand": {
+    "message": "Leave a note on this page",
+    "description": "The keyboard shortcut that starts a note, in the shortcut settings of the browser."
+  }
+}

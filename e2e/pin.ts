@@ -53,7 +53,7 @@ export async function plantPin(page: Page, target: Locator, note: string): Promi
   // The launch button lives in the widget's Shadow root, which Playwright's selectors pierce. The
   // name is a pattern rather than a string because an embedder sets the label — it opened with a
   // sprout until FRU-36, and it is a mark beside the words now.
-  await page.getByRole('button', { name: /Leave feedback/ }).click();
+  await page.getByRole('button', { name: /Leave a note/ }).click();
   await target.click();
   await page.getByPlaceholder('What should change?').fill(note);
   await page.getByRole('button', { name: 'Send', exact: true }).click();

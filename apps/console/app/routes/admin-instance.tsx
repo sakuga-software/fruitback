@@ -125,7 +125,7 @@ function Health({ facts }: { facts: InstanceFacts }) {
         {t('Health')}
       </h2>
       <dl className="grid grid-cols-[repeat(auto-fit,minmax(min(max(200px,25%),100%),1fr))] border-y border-line">
-        <Fact term={t('Worker')} value={t('Answering')} tone="done" detail={uptime(facts.startedAt, now)} />
+        <Fact term={t('Server')} value={t('Answering')} tone="done" detail={uptime(facts.startedAt, now)} />
         <Fact
           term={t('Database')}
           value={DATABASES[facts.database.kind] ?? facts.database.kind}
@@ -152,7 +152,7 @@ const TONES = { done: 'text-done', alert: 'text-accent' } as const;
 /** What the mail of the instance did last. */
 function mailDetail(provider: string | undefined, lastSentAt: string | null, now: number): string {
   if (provider === undefined) return t('No sign-in link goes out by e-mail.');
-  if (lastSentAt === null) return t('No link sent since the worker started.');
+  if (lastSentAt === null) return t('No link sent since the server started.');
 
   return t('Last link sent {when}', { when: agoInSentence(lastSentAt, now) });
 }

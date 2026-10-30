@@ -94,6 +94,8 @@ const beginRender = latestOnly();
 // first element: every sentence below is written once.
 setLanguage((await storedLanguage(browser.storage.local)) ?? navigator.language);
 document.documentElement.lang = language();
+// FRU-555: the title of the tab, in the language of the page; the HTML holds the English one.
+document.title = t('Fruitback sites');
 
 const app = document.querySelector('#app');
 /** The table of the rules, drawn again at each change of storage or of a grant. */
@@ -130,7 +132,7 @@ const CLOUD = cloudEndpoint(import.meta.env.WXT_FRUITBACK_CLOUD);
 /** Chromium, Firefox or Safari (FRU-380): only for words and links, never for an API. */
 const FAMILY = browserFamily(import.meta.env);
 const returnAccess = createBrowserAccessReturn(sessions);
-/** The section « Workers and sessions », drawn again at each change of the rules or of a session. */
+/** The section « Servers and sessions », drawn again at each change of the rules or of a session. */
 const workers = make(document, 'div', 'workers-slot');
 /** A code a pairing link brought here from the popup: `#workers?worker=<endpoint>&code=<code>`. */
 let linked = linkedPairing(window.location.hash);
@@ -165,7 +167,7 @@ if (app !== null) {
       current: 'sites',
       entries: [
         { id: 'sites', label: t('Sites') },
-        { id: 'workers', label: t('Workers and sessions') },
+        { id: 'workers', label: t('Servers and sessions') },
         { id: 'share', label: t('Share rules') },
         { id: 'prefs', label: t('Preferences') },
       ],
@@ -419,7 +421,7 @@ function reloadList(): void {
 function addForm(): HTMLElement {
   const sites = field(t('Sites'), 'https://*.staging.acme.dev');
   const mode = modeField();
-  const endpoint = field(t('Worker endpoint'), 'https://feedback.acme.dev');
+  const endpoint = field(t('Server address'), 'https://feedback.acme.dev');
   const clientId = field(t('Client id'), 'acme');
   const submit = (): void => {
     void editor
@@ -546,8 +548,8 @@ async function importFile(file: File, result: HTMLElement): Promise<void> {
 function modeField(): { label: HTMLLabelElement; select: HTMLSelectElement } {
   const select = document.createElement('select');
   const modes: [SiteMode, string][] = [
-    ['private', 'Private · the extension mounts the widget'],
-    ['team', 'Team · the site embeds it, we relay'],
+    ['private', 'Private · the extension shows the widget'],
+    ['team', 'Team · the site embeds it, the extension adds your session'],
   ];
   for (const [value, text] of modes) {
     const option = document.createElement('option');
@@ -575,8 +577,8 @@ function field(label: string, placeholder: string): { label: HTMLLabelElement; i
 }
 
 /**
- * FRU-395: a pairing link typed where the worker goes. « Pair with this link » takes it to its
- * worker's card, in « Workers and sessions », with the code filled in.
+ * FRU-395: a pairing link typed where the worker goes. « Connect with this link » takes it to its
+ * worker's card, in « Servers and sessions », with the code filled in.
  */
 function pairWith(endpoint: string): { pair?: () => void } {
   const link = pairingLinkIn(endpoint);
@@ -641,7 +643,7 @@ async function renderWorkers(): Promise<void> {
       };
     });
   const drew = redrawWorkers(document, workers, { cards, onPair: pair, onLogout: logout });
-  // The menu counts the workers, as the mock-up does: « Workers and sessions 3 ».
+  // The menu counts the workers, as the mock-up does: « Servers and sessions 3 ».
   const entry = document.querySelector('.page-entry[href="#workers"]');
   let menuCount = entry?.querySelector('.page-count') ?? null;
   if (entry !== null && menuCount === null) {

@@ -307,11 +307,11 @@ it changes who is shown the feedback and never who may fetch it.
   popup and on the page of the extension (`complaint` in `site-form.ts`). Measured in production on
   2026-10-23: a rule of private mode kept `https://api.fruitback.com/pair`, a pairing link pasted where
   the worker goes, and every page read `/pair/feedback`, which answered `404`, with nothing on screen.
-- **A whole link is offered as a pairing**: « Pair with this link » (remedy `pair`) opens « Workers
+- **A whole link is offered as a pairing**: « Connect with this link » (remedy `pair`) opens « Workers
   and sessions » on the card of the worker before `/pair`, with the code filled in, as a link opened in
   a tab does (FRU-92). An address with no code says to give the address before `/pair`.
 - **The popup says it for a rule already stored**: the probe of FRU-66 now runs in both modes, and a
-  `404` says « The worker of this rule does not answer. Check its address in the options. ». A worker
+  `404` says « The server of this rule does not answer. Check its address in the options. ». A worker
   that is there answers its read, or refuses it: only an address with no route answers `404`.
 - **A stored rule is not rewritten** (`…/pair` into `…`): it is said, not corrected in silence
   (the recommendation of the ticket).
@@ -437,7 +437,7 @@ did not change: the fields of 760 px and the file input of the browser are as th
   « Fruitback » and the version of the manifest, the sections, the two guides), and a column of
   sections. **Sites** is a table of the rules and the panel of the one that is chosen; **Share
   rules** is the two cards of FRU-290; **Preferences** (the copy to the account of the browser) is
-  the section of before, until FRU-302 draws it. « Workers and sessions » comes with FRU-302.
+  the section of before, until FRU-302 draws it. « Servers and sessions » comes with FRU-302.
 - **`src/site-page.ts` builds the parts**, with no `browser`: `site-page.test.ts` reads them on
   happy-dom. `entrypoints/options/main.ts` reads storage and the grants, and binds the clicks.
 - **What a rule does has not changed**: the checks of a new rule, the grant asked in the click, the
@@ -528,7 +528,7 @@ did not change: the fields of 760 px and the file input of the browser are as th
   « Search and options » (FRU-307, see below).
 - **The panel lists the notes of the page (FRU-299)**: see the next section.
 - **One side margin, `--panel-gutter` (12 px), for every block of the panel** (FRU-533): the head,
-  « Leave feedback », « Ready to check », the tabs, the rows, the search and the foot take it from
+  « Leave a note », « Ready to check », the tabs, the rows, the search and the foot take it from
   `sidepanel/style.css`, and a row gives the words of its note `--panel-row-inset` inside the box an
   open row draws, so they sit on the gutter too. The page takes off the 14 px of padding that the
   body of `popup/style.css` gives (the panel links that sheet first): before, every block sat 14 px
@@ -689,7 +689,7 @@ holds `http://127.0.0.1/*`; a page of `http://127.0.0.1` with no rule, the panel
 ### The rules, in short
 
 - **A note is to check when the worker says so**: `done`, `mine: true`, and no `checked` (FRU-294).
-  It sits in « Ready to check · {n} », between « Leave feedback » and the tabs, and not in « Done ».
+  It sits in « Ready to check · {n} », between « Leave a note » and the tabs, and not in « Done ».
 - **« Fixed by {name} · {age}»** names the author of the newest reply of the note, as the store
   keeps it; with none, « Marked done · {age} », from `updatedAt`.
 - **« Looks fixed » and « Still wrong » go through the widget of the tab** (`check`, then
@@ -702,19 +702,19 @@ holds `http://127.0.0.1/*`; a page of `http://127.0.0.1` with no rule, the panel
   That last word is kept by the panel while it is open: the store keeps the verdict, not who
   reopened from where.
 
-## The page of the extension, « Workers and sessions » and « Preferences » (FRU-302)
+## The page of the extension, « Servers and sessions » and « Preferences » (FRU-302)
 
 ### The rules, in short
 
 - **One card for each worker a rule names**, and for a worker this browser holds a session with and
-  no rule names (the Cloud of an account). Paired: « Paired as {name} », or « Paired » and the e-mail
-  under it when the worker gave no name (FRU-289), « Verified by the worker · renews on its own », and
+  no rule names (the Cloud of an account). Paired: « Connected as {name} », or « Paired » and the e-mail
+  under it when the worker gave no name (FRU-289), « Verified by the server · renews on its own », and
   **Log out** (revoke on the worker, forget here, give back the access to the worker). The Cloud:
   « Signed in as {name} ». Not paired: the code and **Pair**, which asks for the worker's origin in
   its click, then pairs; plain http off this machine offers no pairing. `src/workers-page.ts` builds
   them, with no `browser`.
 - **The popup keeps its pairing.** A pairing link still pairs from the popup, which the specs and the
-  guide use; the popup adds **Pair in the page of the extension**, which opens the card of that
+  guide use; the popup adds **Connect in the page of the extension**, which opens the card of that
   worker with the code filled in (`#workers?worker=…&code=…`). Taking pairing out of the popup is a
   choice for later, once the page is the habit.
 - **FRU-289, in the popup too.** A pairing link that just paired says « Paired. This browser reads and
@@ -729,7 +729,7 @@ holds `http://127.0.0.1/*`; a page of `http://127.0.0.1` with no rule, the panel
   name on that site, and the box « remember me » stays as it was, so the site keeps nothing it was not
   asked to. Team mode signs with the session. It is not part of the signature of a mount: a change of
   it never builds the widget again over a note being written; the next mount takes it.
-- **« Leave feedback shortcut »** shows the keys of `commands.getAll()` and opens the shortcut settings
+- **« Leave a note shortcut »** shows the keys of `commands.getAll()` and opens the shortcut settings
   of the browser; **« Keep my rules in the account of this browser »** is the copy of FRU-72, moved.
 - **A preference is a write, and a write can fail** (a full storage): the control goes back where it
   was and the card says « This preference could not be saved. Try again. », so the page never shows
@@ -755,7 +755,7 @@ holds `http://127.0.0.1/*`; a page of `http://127.0.0.1` with no rule, the panel
   message crosses to the page, and `protocol.ts` is unchanged.
 - **Shown again, the popup injects both scripts into the open tabs of the origin**, as a site turned on
   does (`injectIntoOpenTabs`): a tab loaded while it was hidden has no bridge to hear the change.
-- **Hidden, the screen offers neither « Leave feedback » nor the side panel**: the page has no widget
+- **Hidden, the screen offers neither « Leave a note » nor the side panel**: the page has no widget
   to take them. The switch is a `role="switch"` of the kit, named by its words, in the order of the
   keyboard after the switch of the site. `e2e/popup-hide-widget.spec.ts` hides, reloads, reads the
   registered scripts, and shows again; axe runs on the popup in both schemes.
@@ -988,7 +988,7 @@ access in this browser » with **Grant access** beside it.
   | a code that is spent or expired             | **How to get a code** |
   | a worker that did not answer                | **Try again**         |
   | a refused permission on the worker          | **Grant access**      |
-  | a worker on plain http, from either message | **Change the worker** |
+  | a worker on plain http, from either message | **Change the server** |
   | a refused permission on the site            | **Grant access**      |
   | a change that was not confirmed             | **Check the list**    |
 
@@ -1164,7 +1164,7 @@ Web Store (it installs from there, so its id is the same), and Safari.
   numbers are dropped.
 - **Screen 3 (FRU-298), a site turned on here, by its own origin**: the site with a switch
   (`role="switch"`, « On »), « On · notes go to {tracker} » (the tracker of the destination) or « On ·
-  {workspace} »; « Leave feedback », the tall button of the kit, with « or press Alt Shift F on the
+  {workspace} »; « Leave a note », the tall button of the kit, with « or press Alt Shift F on the
   page » from `commands.getAll()` (no line without a shortcut; the signs of Chrome on macOS, `⌥⇧F`,
   are one key each); « {n} fixes to check » (`toCheck`, an account's only, hidden at 0) and « {n} open
   notes » (New, To do and In progress of the site, « No open note » at 0), plural by
@@ -1274,7 +1274,7 @@ Web Store (it installs from there, so its id is the same), and Safari.
 - **Signed out, the widget offers the sign-in instead of a note**: the launch button says « Sign in
   to leave notes », the list « Sign in to see the notes of this page. » with « Sign in », a send
   refused with `401` offers « Sign in again », the composer asks for no name, and « Keep for later »
-  stays offered. Alt+Shift+F and « Leave feedback » of the popup lead to the sign-in too.
+  stays offered. Alt+Shift+F and « Leave a note » of the popup lead to the sign-in too.
 - **Each of those asks the background, which opens the popup** over that tab (`action.openPopup`):
   the popup is where a sign-in starts and where its word is compared, so nothing opens the console
   in its place. The ask is taken from a content script of this extension only
