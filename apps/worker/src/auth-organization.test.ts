@@ -379,6 +379,15 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
         (await list('q=ADMIN%40acme')).members.map((each) => each.user.email),
         ['admin@acme.dev'],
       );
+      // No accent either, on both sides, as the console searches the invitations (heavy review of #712).
+      await rowsOf(worker.database, `UPDATE "user" SET name = 'Zoé Lefèvre' WHERE id = 'u8'`);
+      for (const q of ['zoe lef', 'ZOÉ LEF', 'lefevre', 'Lefe\u0300vre']) {
+        assert.deepEqual(
+          (await list(`q=${encodeURIComponent(q)}`)).members.map((each) => each.userId),
+          ['u8'],
+          q,
+        );
+      }
       // `%` and `_` are characters of the search, not wildcards.
       assert.deepEqual(
         (await list('q=100%25')).members.map((each) => each.userId),

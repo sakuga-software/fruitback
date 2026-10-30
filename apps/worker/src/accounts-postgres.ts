@@ -6,7 +6,6 @@ import {
   eq,
   exists,
   gt,
-  ilike,
   inArray,
   isNotNull,
   isNull,
@@ -215,6 +214,14 @@ function given<T>(value: T | undefined, what: string): T {
   if (value === undefined) throw new TypeError(`${what} is required`);
 
   return value;
+}
+
+/** The combining marks of Unicode, as `NFD` writes an accent apart from its letter: « é » is « e » and U+0301. */
+const MARKS = '[\u0300-\u036f]';
+
+/** `text` with no accent: its letters in `NFD`, less the combining marks. */
+function withoutMarks(text: string): string {
+  return text.normalize('NFD').replace(new RegExp(MARKS, 'g'), '');
 }
 
 /** `limit`, when it is a whole number of rows of at least one. Drizzle leaves out a `LIMIT` that is not. */
@@ -1014,11 +1021,17 @@ export function createPostgresAccountStore(database: Database): AccountStore {
     },
 
     async membersOf(workspace, page) {
-      const search = page.search?.trim() ?? '';
+      // No case and no accent, as the console searches the invitations (`folded`): « zoe » finds
+      // « Zoé ». The marks are taken off both sides, with no extension and no index (FRU-496).
+      const search = withoutMarks(page.search?.trim() ?? '');
       const like = `%${search.replace(/[\\%_]/g, (character) => `\\${character}`)}%`;
+      const folded = (column: typeof user.name | typeof user.email) =>
+        sql`regexp_replace(normalize(${column}, NFD), ${MARKS}, '', 'g')`;
       const which = and(
         eq(member.organizationId, workspace),
-        search === '' ? undefined : or(ilike(user.name, like), ilike(user.email, like)),
+        search === ''
+          ? undefined
+          : or(sql`${folded(user.name)} ILIKE ${like}`, sql`${folded(user.email)} ILIKE ${like}`),
       );
       const [rows, counted] = await Promise.all([
         run((db) =>

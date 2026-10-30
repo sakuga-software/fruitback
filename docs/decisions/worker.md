@@ -2137,7 +2137,9 @@ may change, and who », says what is protected; this section says how to change 
 - **The two lists of the Members screen are read by the worker, not by the plugin** (FRU-496), after
   the same checks: `list-members` from `AccountStore.membersOf`, a page in the order the members
   joined (`createdAt`, then `id`), with `total` and a search `q` (1 to 100 characters) of the name
-  or the address, `ILIKE` with `%`, `_` and `\` escaped; `list-invitations` from
+  or the address, `ILIKE` with `%`, `_` and `\` escaped, and no accent on either side
+  (`normalize(…, NFD)` less the marks U+0300 to U+036F, as `folded` of the console reads the
+  invitations: « zoe » finds « Zoé »); `list-invitations` from
   `waitingInvitations`, the `pending` ones that did not end, oldest first. Each answer keeps the
   shape of the plugin's. The plugin's `listMembers` has no order, so a page could repeat a member
   and skip another, and its filter reads `member` only, never a name. Its `listInvitations` reads
