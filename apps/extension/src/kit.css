@@ -173,6 +173,8 @@ a.kit-help-link {
   padding-block: 10px;
   text-align: center;
   text-decoration: none;
+  /* « What to check when Fruitback does not answer » takes two lines in 380 px: two of one length. */
+  text-wrap: balance;
   white-space: normal;
 }
 
