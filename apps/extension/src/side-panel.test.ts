@@ -338,6 +338,42 @@ describe('the page of the panel (FRU-296, FRU-299)', () => {
     assert.equal(plain?.style.background, '');
   });
 
+  it('gives each note its whole text in `title`, where the sheet cuts it to one line (FRU-534)', () => {
+    const long = 'The price on the dark card is hard to read, and the button under it jumps when the cart opens.';
+    const notes = [
+      note({ id: 'p', number: 2, stage: 'new', note: long }),
+      note({ id: 'r', number: 5, stage: 'done', mine: true, note: `${long} Ready.` }),
+      note({ id: 'd', stage: 'todo', placement: 'detached', note: `${long} Detached.` }),
+    ];
+    const root = panelPage(page(), { ...handlers(), state: on(notes), tab: 'open' });
+    const row = root.querySelector('li[data-note="p"] .panel-row-note');
+    assert.equal(row?.textContent, long, 'the text is cut by the sheet, never in the DOM');
+    assert.equal(row?.getAttribute('title'), long);
+    // The name of the button of the row holds the whole note.
+    assert.ok(root.querySelector('li[data-note="p"] button.panel-row-head')?.textContent?.includes(long));
+    assert.equal(root.querySelector('.ready-item .ready-note')?.getAttribute('title'), `${long} Ready.`);
+
+    const searched = panelPage(page(), {
+      ...handlers(),
+      state: on(notes),
+      tab: 'open',
+      search: {
+        state: { scope: 'page', q: '', stage: 'all', pinsShown: true },
+        handlers: {
+          onScope: () => undefined,
+          onQuery: () => undefined,
+          onStage: () => undefined,
+          onSiteNote: () => undefined,
+          onSiteRetry: () => undefined,
+          onMore: () => undefined,
+          onPins: () => undefined,
+        },
+      },
+    });
+    assert.equal(searched.querySelector('li[data-note="p"] .panel-row-note')?.getAttribute('title'), long);
+    assert.equal(searched.querySelector('.search-detached-note')?.getAttribute('title'), `${long} Detached.`);
+  });
+
   it('lists done and closed notes under « Done »', () => {
     const root = panelPage(page(), { ...handlers(), state: on(NOTES), tab: 'finished' });
 
@@ -873,5 +909,21 @@ describe('the margins of the panel (FRU-533)', () => {
       sides.filter((value) => value === '18px' || value === '20px'),
       [],
     );
+  });
+});
+
+describe('one line for each note (FRU-534)', () => {
+  const sheet = readFileSync(fileURLToPath(new URL('../entrypoints/sidepanel/style.css', import.meta.url)), 'utf8');
+
+  it('cuts the words of a note to one line, with « … », in each list of the panel', () => {
+    const rule = /\.panel-row-note,\s*\.ready-note,\s*\.search-detached-note \{([^}]*)\}/.exec(sheet)?.[1] ?? '';
+    for (const declaration of ['overflow: hidden', 'white-space: nowrap', 'text-overflow: ellipsis']) {
+      assert.ok(rule.includes(declaration), `no « ${declaration} » for the words of a note`);
+    }
+  });
+
+  it('shows the whole note in an open row', () => {
+    const rule = /\.panel-row\[data-open='true'\] \.panel-row-note \{([^}]*)\}/.exec(sheet)?.[1] ?? '';
+    assert.ok(rule.includes('white-space: normal'), 'an open row cuts its note');
   });
 });
