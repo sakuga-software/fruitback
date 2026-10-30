@@ -8,6 +8,7 @@ import {
   detachedPart,
   magnifier,
   matchesPage,
+  noteWords,
   passes,
   pinsSwitch,
   searchControls,
@@ -226,7 +227,57 @@ export type PanelOptions = {
   onReload: () => void;
   onSettings: () => void;
   onVerdict: (id: string, verdict: CheckVerdict) => void;
+  /**
+   * « Open Fruitback » (FRU-532): opens the popup, where the site is turned on or the session signed
+   * in again. Absent where the popup would not know the page, or where the browser refused it: the
+   * panel then says to use the button of the toolbar (`offersPopup`).
+   */
+  onOpenPopup?: () => void;
 };
+
+/** `action.openPopup`, as both browsers name it. Safari has no panel, so it never asks. */
+export type PopupApis = { action?: { openPopup?: () => Promise<void> } };
+
+/**
+ * Whether the panel offers « Open Fruitback » (FRU-532). The popup opened by `action.openPopup` gets
+ * no `activeTab`: it reads the address of the tab only where the extension has access to the site,
+ * as the panel does (measured in Chromium 156, see « The side panel of the browser »). With no
+ * address, the popup would say that Fruitback works on web pages only, on a web page. So the button
+ * is offered where the panel reads the address, and not after the browser refused to open the popup.
+ */
+export function offersPopup(apis: PopupApis, address: string | undefined, refused: boolean): boolean {
+  return typeof apis.action?.openPopup === 'function' && webHost(address) !== undefined && !refused;
+}
+
+/**
+ * Opens the popup from a click of the panel, **before any `await`**: Firefox opens it only in the
+ * handler of a gesture. A refusal calls `onRefused`, and the panel says to use the toolbar.
+ */
+export function openPopupFrom(apis: PopupApis, onRefused: () => void): void {
+  let opened: Promise<void> | undefined;
+  try {
+    opened = apis.action?.openPopup?.();
+  } catch (error) {
+    opened = Promise.reject(error);
+  }
+  if (opened === undefined) {
+    onRefused();
+
+    return;
+  }
+  opened.catch((error: unknown) => {
+    console.error('[fruitback] the popup did not open', error);
+    onRefused();
+  });
+}
+
+/** « Open Fruitback », the main button of the panel, on its whole width. */
+function popupButton(document: Document, onOpenPopup: () => void): HTMLButtonElement {
+  const open = primaryButton(document, t('Open Fruitback'), onOpenPopup, { size: 'panel' });
+  open.classList.add('panel-open-popup');
+
+  return open;
+}
 
 function make<K extends keyof HTMLElementTagNameMap>(
   document: Document,
@@ -370,7 +421,10 @@ export function panelPage(document: Document, options: PanelOptions): HTMLElemen
       ...(state.kind === 'not-on'
         ? [
             make(document, 'p', 'panel-state-title', t('Fruitback is not on for this page.')),
-            make(document, 'p', 'panel-state-text', t('Turn it on from the Fruitback button in the toolbar.')),
+            // FRU-532: the popup, where the site is turned on. Without it, the way to it.
+            options.onOpenPopup === undefined
+              ? make(document, 'p', 'panel-state-text', t('Turn it on from the Fruitback button in the toolbar.'))
+              : popupButton(document, options.onOpenPopup),
           ]
         : [
             make(document, 'p', 'panel-state-title', t('{host} runs its own Fruitback.', { host: state.host })),
@@ -439,8 +493,12 @@ function notesPart(document: Document, options: PanelOptions, notes: PanelNotes)
       t('Your session ended. Sign in again from the Fruitback button.'),
     );
     line.setAttribute('role', 'status');
+    if (options.onOpenPopup === undefined) return [line];
+    // FRU-532: the popup is where the session is signed in again.
+    const box = make(document, 'div', 'panel-signed-out');
+    box.append(line, popupButton(document, options.onOpenPopup));
 
-    return [line];
+    return [box];
   }
   if (notes === 'reload') {
     const box = make(document, 'div', 'panel-failed');
@@ -583,7 +641,7 @@ function noteRow(document: Document, options: PanelOptions, note: PanelNote): HT
     make(document, 'strong', 'panel-row-stage', stateWord(note, t(STAGE_WORD[note.stage]))),
     ` · ${saidOf(note, now, reopenedAt)}`,
   );
-  words.append(make(document, 'span', 'panel-row-note', note.note), meta);
+  words.append(noteWords(document, 'span', 'panel-row-note', note.note), meta);
   head.append(drop, words);
   row.append(head);
   if (!opened) return row;
@@ -680,7 +738,7 @@ function readyBlock(document: Document, options: PanelOptions, ready: PanelNote[
     const paint = notePaint(note);
     const words = make(document, 'div', 'ready-words');
     words.append(
-      make(document, 'span', 'ready-note', note.note),
+      noteWords(document, 'span', 'ready-note', note.note),
       make(document, 'span', 'ready-meta', fixedLine(note, now)),
     );
     head.append(

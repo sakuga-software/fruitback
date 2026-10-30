@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { hydrated, openPlayground, WORKER_ORIGIN } from './pin.ts';
+import { caseOf, hydrated, openPlayground, WORKER_ORIGIN } from './pin.ts';
 
 /**
  * The popover (FRU-4) in a browser: the two things that only exist there — a media query deciding
@@ -321,7 +321,7 @@ test('a sent note says « Sent as » its identifier, with the number of its pin 
   page,
 }) => {
   // The widget as `init` assembles it: it reads the note back and finds its identifier and its pin.
-  await page.goto(`/?widget=off&case=composer-sent-as-${test.info().retry}`);
+  await page.goto(`/?widget=off&case=${caseOf('composer-sent-as')}`);
   await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
   await hydrated(page);
   await page.addScriptTag({ path: 'packages/widget/dist/fruitback.iife.js' });
@@ -435,7 +435,7 @@ for (const [locale, keep, cancel, send] of [
     // frame of that animation, so the boxes did not agree to a pixel or two on CI. With no motion,
     // the boxes are those of the final layout.
     await page.emulateMedia({ reducedMotion: 'reduce' });
-    await page.goto(`/?widget=off&case=composer-foot-${locale}-${test.info().retry}`);
+    await page.goto(`/?widget=off&case=${caseOf(`composer-foot-${locale}`)}`);
     await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
     await page.addScriptTag({ path: 'packages/widget/dist/fruitback.iife.js' });
     // « Keep for later » is offered once the first read says the worker takes a batch.

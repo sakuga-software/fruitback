@@ -1,5 +1,6 @@
 import { deepActiveElement } from './focus.ts';
 import type { Translator } from './messages.ts';
+import { adoptStyles } from './stylesheet.ts';
 
 /**
  * The area of the page that a capture takes (FRU-332): the person draws a rectangle, or moves the one
@@ -37,8 +38,6 @@ export function pickArea(options: {
     height,
   );
 
-  const style = document.createElement('style');
-  style.textContent = STYLES;
   const overlay = document.createElement('div');
   overlay.className = 'fruitback-area';
   overlay.dataset.fruitbackArea = '';
@@ -66,7 +65,8 @@ export function pickArea(options: {
   bar.className = 'fruitback-area-bar';
   bar.append(help, cancel, take);
   overlay.append(box, bar);
-  host.append(style, overlay);
+  const style = adoptStyles(host, STYLES);
+  host.append(overlay);
 
   // In the Shadow root of the widget, `document.activeElement` is the host: the button that opened the
   // area is the active element of the root (FRU-353). Esc and Enter give the focus back to it.

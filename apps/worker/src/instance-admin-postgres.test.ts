@@ -303,6 +303,29 @@ for (const { label, open, skip } of DATABASES) {
       );
     });
 
+    it('serves none of its sites by their id or their origin, and serves them again once it is restored (FRU-495)', async () => {
+      const database = await opening(open);
+      const accounts = createPostgresAccountStore(database);
+      const reads = createPostgresInstanceAdmin(database);
+      const ana = await accounts.signIn({ provider: 'email', subject: 'ana@acme.dev', email: 'ana@acme.dev' });
+      const acme = await accounts.createWorkspace('Acme', ana.id);
+      const globex = await accounts.createWorkspace('Globex', ana.id);
+      const site = await accounts.addSite(acme.id, { origin: 'https://acme.dev', visibility: 'members' });
+      const kept = await accounts.addSite(globex.id, { origin: 'https://globex.dev', visibility: 'members' });
+      const before = await accounts.client(site.id);
+      assert.notEqual(before, undefined);
+
+      assert.equal((await reads.setWorkspaceSuspended(ana, acme.id, true, undefined, 1)).ok, true);
+      assert.equal(await accounts.client(site.id), undefined);
+      assert.equal(await accounts.servesOrigin('https://acme.dev'), false);
+      assert.notEqual(await accounts.client(kept.id), undefined);
+      assert.equal(await accounts.servesOrigin('https://globex.dev'), true);
+
+      assert.equal((await reads.setWorkspaceSuspended(ana, acme.id, false, undefined, 2)).ok, true);
+      assert.deepEqual(await accounts.client(site.id), before);
+      assert.equal(await accounts.servesOrigin('https://acme.dev'), true);
+    });
+
     it('refuses an account that is no longer an administrator, and a workspace that does not exist', async () => {
       const database = await opening(open);
       const accounts = createPostgresAccountStore(database);

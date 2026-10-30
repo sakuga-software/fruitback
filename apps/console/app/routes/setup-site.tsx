@@ -20,10 +20,14 @@ type SiteFormProps = {
 /**
  * Step 2: the address of the site, and who sees its notes.
  *
- * WARNING: the worker has no route that changes a site, and a site that is removed takes its notes
- * with it. So « Change » adds the site again with the new values, and removes the one it replaces
- * only when that one was added in this visit: nothing was noted on it yet. A site of a visit before
- * stays, the summary says so, and the Sites screen removes it with its two presses (FRU-165).
+ * The add of an address that exists changes that site: the same id, the same script (`addSite` of
+ * the worker). So « Change » with the same address keeps the site, and only who sees and who writes
+ * change (FRU-504).
+ *
+ * WARNING: a site that is removed takes its notes with it. So « Change » with another address adds
+ * another site, and removes the one it replaces only when that one was added in this visit: nothing
+ * was noted on it yet. A site of a visit before stays, the summary says so, and the Sites screen
+ * removes it with its two presses (FRU-165).
  */
 export function SiteForm({ workspace, replaces, onDone }: SiteFormProps) {
   useLocale();
@@ -62,6 +66,12 @@ export function SiteForm({ workspace, replaces, onDone }: SiteFormProps) {
 
       // No failure clears the field: the address stays as it was typed.
       return setProblem(problemOf(added, SITE_PROBLEMS, SITE_NOT_ADDED));
+    }
+    // The same address is the same site, changed: removing « the one it replaces » would remove it.
+    if (before !== undefined && added.data.id === before.id) {
+      setBusy(false);
+
+      return onDone({ ...replaces, site: added.data });
     }
     const removed =
       before !== undefined && replaces?.fresh === true && (await call('DELETE', `${base}/${before.id}`)).ok;

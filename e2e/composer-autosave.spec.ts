@@ -1,5 +1,5 @@
 import { type Page, expect, test } from '@playwright/test';
-import { WORKER_ORIGIN, hydrated } from './pin.ts';
+import { caseOf, WORKER_ORIGIN, hydrated } from './pin.ts';
 
 /**
  * The note being written survives a reload, Esc, « Cancel » and the cross (FRU-311), on the widget
@@ -27,7 +27,7 @@ async function mount(page: Page): Promise<void> {
 }
 
 async function openPlayground(page: Page, testCase: string): Promise<void> {
-  await page.goto(`/?widget=off&case=${testCase}-${test.info().retry}`);
+  await page.goto(`/?widget=off&case=${caseOf(testCase)}`);
   await mount(page);
 }
 
@@ -106,7 +106,7 @@ test('another element opens empty, and a composer left with nothing typed saves 
 // Review of #372: a text whose element came late must not reopen over a note the person already
 // left on this visit, at a later read that finds that element.
 async function mountWithLateText(page: Page, testCase: string): Promise<void> {
-  await page.goto(`/?widget=off&case=${testCase}-${test.info().retry}`);
+  await page.goto(`/?widget=off&case=${caseOf(testCase)}`);
   await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
   await hydrated(page);
   // A text saved for an element that is not on the page when the widget mounts.

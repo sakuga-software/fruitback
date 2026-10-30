@@ -14,7 +14,12 @@ import {
   turn,
 } from './conformance.fixture.ts';
 import type { Database } from './postgres.ts';
-import { NO_REAL_POSTGRES, createMigratedPgliteDatabase, createRealDatabase, onDatabase } from './postgres.fixture.ts';
+import {
+  NO_REAL_POSTGRES,
+  createMigratedPgliteDatabase,
+  createMigratedRealDatabase,
+  onDatabase,
+} from './postgres.fixture.ts';
 
 /**
  * Each `AccountStore` against the conformance suite (FRU-140). A new implementation adds a subject
@@ -34,7 +39,7 @@ const SUBJECTS: Subject<AccountStore>[] = [
   onDatabase(
     'the PostgreSQL account store, on a real server',
     'createPostgresAccountStore',
-    createRealDatabase,
+    createMigratedRealDatabase,
     createPostgresAccountStore,
     NO_REAL_POSTGRES,
   ),
@@ -679,6 +684,48 @@ const VIOLATIONS: Violation<AccountStore>[] = [
         },
         domains: async (workspace) => left.get(workspace) ?? real.domains(workspace),
       };
+    },
+  },
+  {
+    breaks:
+      'serves one site by its id as the client map has it, the moment it is added, and no more once it goes (FRU-495)',
+    by: 'answers the first site, whatever the id',
+    replace: {
+      from: '.where(and(eq(sites.id, site), notSuspended(db)))',
+      to: '.where(notSuspended(db))',
+    },
+  },
+  {
+    breaks:
+      'serves one site by its id as the client map has it, the moment it is added, and no more once it goes (FRU-495)',
+    by: 'answers a site without its places',
+    wrap: (real) => ({
+      ...real,
+      async client(site) {
+        const found = await real.client(site);
+        if (found === undefined) return undefined;
+        const { destinations: _destinations, connector: _connector, teamId: _teamId, ...rest } = found;
+
+        return rest;
+      },
+    }),
+  },
+  {
+    breaks:
+      'says that a site serves an origin the moment it is added, until the last site of that origin goes (FRU-495)',
+    by: 'says that any origin is served once a site exists',
+    replace: {
+      from: '.where(and(eq(sites.origin, origin), notSuspended(db)))',
+      to: '.where(notSuspended(db))',
+    },
+  },
+  {
+    breaks:
+      'says that a site serves an origin the moment it is added, until the last site of that origin goes (FRU-495)',
+    by: 'compares the origins without their case',
+    replace: {
+      from: '.where(and(eq(sites.origin, origin), notSuspended(db)))',
+      to: '.where(and(sql`lower(${sites.origin}) = lower(${origin})`, notSuspended(db)))',
     },
   },
 ];

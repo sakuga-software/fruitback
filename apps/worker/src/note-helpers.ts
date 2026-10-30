@@ -1,3 +1,4 @@
+import { json } from './http.ts';
 import { type Note, type NoteIssue, type NoteReporter, canonicalizePageUrl } from '@fruitback/shared';
 import { MAX_BODY_BYTES } from './bounded-body.ts';
 import { type ClientConfig, type ClientDestination, type ClientResolution, normalizeClientId } from './clients.ts';
@@ -157,11 +158,4 @@ export function batchOffer(config: WorkerConfig): { batch?: { max: number; maxBy
   const max = maxBatch(config.rateLimitPerMinute);
 
   return max === 0 ? {} : { batch: { max, maxBytes: MAX_BODY_BYTES } };
-}
-
-function json(status: number, body: unknown, headers: Record<string, string> = {}): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json', ...headers },
-  });
 }

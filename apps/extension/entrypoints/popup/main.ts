@@ -17,7 +17,13 @@ import { isHidden, setHidden } from '../../src/page-visibility.ts';
 import { browserTabScripting } from '../../src/tab-scripting-browser.ts';
 import { createBrowserSessions } from '../../src/session-browser.ts';
 import { createBrowserAccessReturn } from '../../src/access-return-browser.ts';
-import { type SessionIdentity, type StoredSession, describeIdentity } from '../../src/session.ts';
+import {
+  PAIR_UNAVAILABLE,
+  type SessionIdentity,
+  type StoredSession,
+  describeIdentity,
+  failedPairing,
+} from '../../src/session.ts';
 import { currentShortcut } from '../../src/shortcut.ts';
 import { showProblem } from '../../src/problem-view.ts';
 import { PAIRING_CODE_REQUIRED, PAIRING_NEEDS_HTTPS, PAIRING_PROBLEM } from '../../src/remedy.ts';
@@ -278,10 +284,17 @@ async function draw(state: PopupState, facts: Found): Promise<HTMLElement> {
     shell(document, { onSettings: openSettings, ...(account === undefined ? {} : { account }) }, ...body);
 
   switch (state.kind) {
-    case 'not-web':
-      // A `chrome://` page, the store, a PDF viewer. Nothing is wrong, and saying so is better than an
-      // enabled-looking switch that silently does nothing.
-      return notAWebPage(document, { onSettings: openSettings, ...(account === undefined ? {} : { account }) });
+    case 'not-web': {
+      // A `chrome://` page, the store, a PDF viewer. Nothing is wrong: the screen says why nothing
+      // runs here, and the keys the person set (FRU-526).
+      const shortcut = currentShortcut(await browser.commands.getAll().catch(() => []));
+
+      return notAWebPage(document, {
+        onSettings: openSettings,
+        ...(account === undefined ? {} : { account }),
+        ...(shortcut === undefined ? {} : { shortcut: keysOfShortcut(shortcut) }),
+      });
+    }
 
     case 'pair-link': {
       // A pairing link is about a worker, not about a site to review, so it gets a screen of its own:
@@ -369,10 +382,20 @@ function unreachableScreen(account: Account | undefined): HTMLElement {
   });
 }
 
-/** Whether the browser still grants the sites of a rule: access can be removed in its settings. */
+/**
+ * Whether the browser still grants the sites of a rule: access can be removed in its settings.
+ *
+ * A read that fails answers « not granted » (FRU-510). Read as granted, the popup said the site was on
+ * while nothing could run there, and offered no fix. Read as not granted, it offers « Allow access
+ * again », and a request for an access that is held answers at once with no prompt.
+ */
 async function holdsAccess(pattern: string): Promise<boolean> {
   // FRU-425: `<all_urls>` grants no rule (`src/site-grant.ts`).
-  return holdsSiteAccess(matchPatternFor(pattern), browser.permissions).catch(() => true);
+  return holdsSiteAccess(matchPatternFor(pattern), browser.permissions).catch((error: unknown) => {
+    console.error('[fruitback] could not read the access of the site', error);
+
+    return false;
+  });
 }
 
 /**
@@ -1121,8 +1144,9 @@ function pairing(
       // The permission request is first and nothing is awaited before it, because a host permission
       // may only be asked for while a user gesture is being handled. Same rule as `turnOn`, for the
       // same reason and the same trap: one storage read in front of it and no prompt ever appears.
-      const granted = await grantWorkerOrigin(endpoint);
-      const result = granted ? await sessions.pair(endpoint, value) : undefined;
+      // A call that throws is a failure like the others (FRU-510): it must not leave the button off.
+      const granted = await grantWorkerOrigin(endpoint).catch(failedPairing(false));
+      const result = granted ? await sessions.pair(endpoint, value).catch(failedPairing(PAIR_UNAVAILABLE)) : undefined;
       if (result?.ok === true) {
         pairedNow.add(endpoint);
         void render();

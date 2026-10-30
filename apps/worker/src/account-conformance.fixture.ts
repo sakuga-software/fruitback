@@ -1288,6 +1288,57 @@ export function accountCases(it: Declare<AccountStore>): void {
     assert.deepEqual(await lastUses(), [1_000_000 + AGENT_KEY_USE_STEP_MS, undefined]);
     assert.equal((await store.agentKeyOf('digest-of-the-key'))?.key.lastUsedAt, 1_000_000 + AGENT_KEY_USE_STEP_MS);
   });
+
+  // --- One site, as a request of the widget reads it (FRU-495)
+
+  it('serves one site by its id as the client map has it, the moment it is added, and no more once it goes (FRU-495)', async (store) => {
+    const { workspace } = await world(store);
+    const globex = (await otherWorld(store)).workspace;
+    const hook = await store.addConnector(workspace.id, { kind: 'rest', label: 'Hook', sealed: 'sealed' });
+    const linear = await store.addConnector(workspace.id, { kind: 'linear', label: 'Linear', sealed: 'sealed' });
+
+    assert.equal(await store.client('site_nobody'), undefined);
+
+    const site = await store.addSite(workspace.id, { origin: 'https://acme.dev', visibility: 'members' });
+    const theirs = await store.addSite(globex.id, { origin: 'https://globex.dev', visibility: 'everyone' });
+    const places = [{ connector: hook.id }, { connector: linear.id, teamId: 'team_1', label: 'Linear' }];
+    assert.equal(await store.setDestinations(workspace.id, site.id, places), true);
+
+    const map = await store.clientMap();
+    assert.deepEqual(await store.client(site.id), map[site.id]);
+    assert.deepEqual(await store.client(theirs.id), map[theirs.id]);
+    assert.deepEqual(
+      (await store.client(site.id))?.destinations,
+      places.map((place) => ({ id: destinationId(site.id, place), ...place })),
+    );
+    assert.equal((await store.client(theirs.id))?.workspace, globex.id);
+
+    assert.equal(await store.removeSite(workspace.id, site.id), true);
+    assert.equal(await store.client(site.id), undefined);
+    assert.deepEqual(await store.client(theirs.id), map[theirs.id]);
+  });
+
+  it('says that a site serves an origin the moment it is added, until the last site of that origin goes (FRU-495)', async (store) => {
+    const { workspace } = await world(store);
+    const globex = (await otherWorld(store)).workspace;
+
+    assert.equal(await store.servesOrigin('https://shared.dev'), false);
+
+    const ours = await store.addSite(workspace.id, { origin: 'https://shared.dev', visibility: 'members' });
+    const theirs = await store.addSite(globex.id, { origin: 'https://shared.dev', visibility: 'everyone' });
+    await store.addSite(globex.id, { origin: 'https://globex.dev', visibility: 'everyone' });
+    assert.equal(await store.servesOrigin('https://shared.dev'), true);
+    assert.equal(await store.servesOrigin('https://globex.dev'), true);
+    // The origin as the browser sends it, and nothing that only looks like it.
+    assert.equal(await store.servesOrigin('https://shared.dev/'), false);
+    assert.equal(await store.servesOrigin('https://SHARED.dev'), false);
+    assert.equal(await store.servesOrigin('https://nobody.dev'), false);
+
+    assert.equal(await store.removeSite(workspace.id, ours.id), true);
+    assert.equal(await store.servesOrigin('https://shared.dev'), true, 'a site of another workspace has it still');
+    assert.equal(await store.removeSite(globex.id, theirs.id), true);
+    assert.equal(await store.servesOrigin('https://shared.dev'), false);
+  });
 }
 
 /** A key of `account` on these sites, under the digest `digest-of-the-key`. */

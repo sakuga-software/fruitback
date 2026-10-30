@@ -1,5 +1,22 @@
 # @fruitback/worker
 
+## 0.5.0
+
+### Minor Changes
+
+- 784f098: The worker keeps when each agent key last opened a request of `/mcp`, to the minute, and the list of the keys in the console API answers it as `lastUsedAt` (`null` for a key nobody used).
+- 106f528: A reply can say `by: 'agent'`: an AI agent wrote it through `/mcp`, with an agent key of the workspace. The field is optional, and a widget that does not read it shows the name of the reply alone. The worker gives an agent key with the right `write` two tools, `reply_to_feedback` and `set_feedback_status`, limits each key to 30 writes a minute, and keeps a log of the writes of each key, which the owner and the admins read in the console API.
+- ed49f59: A site can start an agent of the team when a note arrives: off by default, an owner or an admin turns it on in the page of the site. It calls an address of the workspace that receives (the REST connector), signed and tried again, when a note of a known person arrives or when a person of the team moves a note to To do. The call, `agent.requested`, carries the ids of the note, never its text; the agent reads the note through `/mcp` with its key.
+- 5e1e3a0: The worker serves `POST /mcp`, a remote MCP server for an AI agent with an agent key of a workspace: `list_feedback`, `get_feedback` and `feedback_as_text` read the notes of the sites of the key, with their whole content. `@fruitback/shared` exports `feedbackText`, the plain text of the notes of a page that « Copy as text » writes, with the words given by the caller. `feedbackAsText` of the widget answers the same text as before.
+- 667e2fe: A client that connects from a page, as a connector of claude.ai, gets a token for `/mcp` by OAuth 2.1: discovery by `/.well-known/oauth-protected-resource` and `/.well-known/oauth-authorization-server`, open registration of clients, PKCE with S256, a person who approves in the console, an access token of one hour and a refresh token spent once. A connection is an agent key with no secret, listed and revoked with the others. Where OAuth is on (accounts, `FRUITBACK_PUBLIC_URL` and `FRUITBACK_CONSOLE_URL`), `/mcp` answers `401` with `WWW-Authenticate` in place of `404` to a request it refuses. Migration `0038_oauth_connections`.
+
+### Patch Changes
+
+- Updated dependencies [106f528]
+- Updated dependencies [ec76366]
+- Updated dependencies [5e1e3a0]
+  - @fruitback/shared@0.5.0
+
 ## 0.4.0
 
 ### Minor Changes

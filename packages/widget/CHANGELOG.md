@@ -1,5 +1,27 @@
 # @fruitback/widget
 
+## 0.5.0
+
+### Minor Changes
+
+- aa1688d: A reply that an AI agent wrote (`by: 'agent'`) says « Agent » beside the name of its key in the thread of a note, in English and in French.
+- c17cb4e: `init` takes `siteNotes`, the notes of every page of the site for a host that can read them. The list then offers « All pages » beside « This page »: a search through the host, « Show more », and a row that opens the page of its note.
+- b702ee6: The settings of the widget offer « Position » under « Pins shown »: the reporter moves the dock to any corner of the window. The choice is kept for the site in this browser and beats the `position` of `init`; a later `moveDock()` of the host forgets it.
+- ec76366: The author of a note edits its text from its thread while nobody of the team moved it: « Edit », then « Save » or « Cancel », in English and in French. A read says `editable: true` on such a note. Only a note that the worker keeps can be edited; a note sent to a tracker or to an address cannot.
+- c14db05: `init` takes `openSidebar`: the button of the dock that shows every note asks the host for its side panel first, and opens the list of the page when the host cannot. The widget the extension mounts opens the side panel of the browser with it.
+
+### Patch Changes
+
+- 389ac28: The composer that follows its element at a scroll moves by as much as the element, and keeps its side: it no longer jumps below an element that shifted by a pixel as the page scrolled.
+- 5e1e3a0: The worker serves `POST /mcp`, a remote MCP server for an AI agent with an agent key of a workspace: `list_feedback`, `get_feedback` and `feedback_as_text` read the notes of the sites of the key, with their whole content. `@fruitback/shared` exports `feedbackText`, the plain text of the notes of a page that « Copy as text » writes, with the words given by the caller. `feedbackAsText` of the widget answers the same text as before.
+- 7cce931: The frame of a capture and the composer stay on an element that does not scroll with the page, such as a link of a fixed sidebar, instead of scrolling away from it. `Composer.open` also takes the element itself, and then follows it.
+- fde538c: The frame of a capture and the composer stay on an element that is smaller while it is pressed, such as a button drawn at `scale(0.97)` under `[data-pressed]`. They were placed on the pressed box and stayed about 1 px off once the button was released. They now follow the box of the element for the few frames after the choice, until it stays the same (200 ms, at most 1 s). In a right-to-left language the composer keeps to the right edge of its element.
+- d0216b5: The dock fades in when the widget mounts, the settings and the thread of a note fade in when they open, and a button of the dock gives way a little under a press. Nothing moves for a person who asked the system for less motion.
+- Updated dependencies [106f528]
+- Updated dependencies [ec76366]
+- Updated dependencies [5e1e3a0]
+  - @fruitback/shared@0.5.0
+
 ## 0.4.0
 
 ### Minor Changes

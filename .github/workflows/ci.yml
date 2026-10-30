@@ -112,16 +112,17 @@ jobs:
 
   e2e-shard:
     # The two things `node --test` cannot answer for: a real selector engine and real layout. The
-    # suite runs in three parts side by side, each on four workers (FRU-268): on one runner it took 6
-    # minutes of tests on four workers, 12 on one. The parts have the same duration, not the same
-    # count of tests: `e2e/shards.ts`. `e2e` below is the one check that says whether
-    # every part passed.
+    # suite runs in six parts side by side, each on four workers (FRU-268, FRU-480): on one runner it
+    # took 6 minutes of tests on four workers, 12 on one, and a part of three took 3.6 to 5.4 minutes.
+    # The parts have the same duration, not the same count of tests: `e2e/shards.ts`. No part ends
+    # before its longest file (`side-panel.spec.ts`, about 110 s): a seventh part gains little until
+    # that file is cut again. `e2e` below is the one check that says whether every part passed.
     name: e2e (${{ matrix.shard }}/${{ strategy.job-total }})
     strategy:
       # A part that fails does not stop the others: their results are still worth reading.
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        shard: [1, 2, 3, 4, 5, 6]
     runs-on: ubuntu-latest
     # The browser comes with the image instead of being downloaded. Twice in a row, `playwright
     # install` reached 100% of the archive and then sat there until it was killed — eighteen minutes,
@@ -134,7 +135,8 @@ jobs:
       options: --user 1001
     # Node still comes from `.nvmrc` and not from the image: the sources run untranspiled, which
     # needs a newer Node than noble ships.
-    # The ceiling stops a browser that hangs. One part takes about 4 minutes (FRU-268).
+    # The ceiling stops a browser that hangs. A part of six is 2.2 minutes of tests in the model
+    # (FRU-480).
     timeout-minutes: 15
 
     steps:

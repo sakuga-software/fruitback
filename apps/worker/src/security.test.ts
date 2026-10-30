@@ -360,6 +360,39 @@ describe('SECURITY.md states what the code does', () => {
   });
 
   /**
+   * The section on visibility said that a site its members read takes a note from anybody. FRU-330
+   * closed that write on a new site, and the section kept the old sentence (FRU-514).
+   */
+  it('is right that a site its members read takes a note from its members only, unless it says « Anyone on the page »', () => {
+    const loose = SECURITY.replace(/\s+/g, ' ');
+    assert.ok(
+      !loose.includes('still takes a note from anybody'),
+      'SECURITY.md still says a members site takes any note',
+    );
+    assert.ok(
+      loose.includes(
+        'A site that only members read takes a note from its members only, unless its « Who can leave a note » says « Anyone on the page ». A new site says « Members only »',
+      ),
+      'SECURITY.md no longer says who writes on a site that its members read',
+    );
+
+    const migration = readFileSync(
+      fileURLToPath(new URL('../drizzle/0022_sites_writers_default.sql', import.meta.url)),
+      'utf8',
+    );
+    assert.match(migration, /SET DEFAULT 'members'/, 'a new site is no longer « Members only »');
+    const site = {
+      id: 's',
+      workspaceId: 'w',
+      origin: 'https://a.test',
+      visibility: 'members' as const,
+      destinations: [],
+    };
+    assert.equal(clientOf({ ...site, writers: 'members' }).write, 'authenticated');
+    assert.equal(clientOf({ ...site, writers: 'anyone' }).write, 'public');
+  });
+
+  /**
    * The document promises that a browser cannot mint a verified reporter. The prose is checked for
    * exactly once, and the mechanism behind it separately — a heading that survived a deleted guard
    * would be the worst version of this file.

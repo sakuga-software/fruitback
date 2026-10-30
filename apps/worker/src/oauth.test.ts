@@ -347,9 +347,11 @@ describe('the consent of a person (FRU-467)', () => {
     assert.deepEqual(shown.client, { name: 'Claude', host: 'claude.ai' });
     assert.deepEqual(shown.scopes, ['read']);
     assert.equal(shown.redirectUri, CALLBACK);
+    // `sites()` orders by the instant a site was added, then by its random id: two sites added in the
+    // same millisecond come in either order (FRU-480: one run in two on a fast machine).
     assert.deepEqual(
-      shown.workspaces.map((each: any) => [each.id, each.sites.map((site: any) => site.id)]),
-      [[workspace, [shop.id, blog.id]]],
+      shown.workspaces.map((each: any) => [each.id, each.sites.map((site: any) => site.id).toSorted()]),
+      [[workspace, [shop.id, blog.id].toSorted()]],
     );
 
     // A plain member manages no workspace: nothing to choose, and an approval is refused.

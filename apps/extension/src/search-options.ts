@@ -111,6 +111,23 @@ function make<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 
+/**
+ * The words of a note in a row (FRU-534): one line, cut with « … » by the sheet, and the whole text
+ * in `title`. The text stays whole in the DOM, so the name of the row's button and a search of the
+ * page still read all of it.
+ */
+export function noteWords<K extends 'span' | 'p'>(
+  document: Document,
+  tag: K,
+  className: string,
+  text: string,
+): HTMLElementTagNameMap[K] {
+  const node = make(document, tag, className, text);
+  node.title = text;
+
+  return node;
+}
+
 const SVG = 'http://www.w3.org/2000/svg';
 
 /** The magnifier: 18 px in the head, 15 px in the field. */
@@ -253,7 +270,7 @@ export function detachedPart(document: Document, notes: readonly PanelNote[]): H
     const card = make(document, 'li', 'search-detached-card');
     card.dataset.note = note.id;
     card.append(
-      make(document, 'p', 'search-detached-note', note.note),
+      noteWords(document, 'p', 'search-detached-note', note.note),
       make(
         document,
         'p',
@@ -392,7 +409,7 @@ function siteRow(
     ` · ${who} · ${here ? t('This page') : note.page.path} · ${age(note.createdAt, now)}`,
   );
   const excerpt = note.excerpt.length >= EXCERPT ? `${note.excerpt}…` : note.excerpt;
-  words.append(make(document, 'span', 'panel-row-note', excerpt), meta);
+  words.append(noteWords(document, 'span', 'panel-row-note', excerpt), meta);
   head.append(drop, words);
   // Said to a screen reader: what the click does.
   head.setAttribute(

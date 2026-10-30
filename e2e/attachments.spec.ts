@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { type Page, expect, test } from '@playwright/test';
-import { WORKER_ORIGIN } from './pin.ts';
+import { caseOf, WORKER_ORIGIN } from './pin.ts';
 
 /**
  * The files of a note in the composer (FRU-332), in French, at 390 px, with axe, in both schemes:
@@ -83,7 +83,7 @@ for (const scheme of ['light', 'dark'] as const) {
   }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.emulateMedia({ colorScheme: scheme });
-    await page.goto(`/?case=attachments-${scheme}&widget=off`);
+    await page.goto(`/?case=${caseOf(`attachments-${scheme}`)}&widget=off`);
     await expect(page.getByRole('heading', { name: 'Nos formules' })).toBeVisible();
     await mount(page);
 
@@ -235,7 +235,7 @@ async function openOnLatte(page: Page, url: string): Promise<void> {
 }
 
 test('the menu « Joindre » floats under its button, and the composer keeps its size (FRU-431)', async ({ page }) => {
-  await openOnLatte(page, '/?case=attachments-float&widget=off');
+  await openOnLatte(page, `/?case=${caseOf('attachments-float')}&widget=off`);
   const files = page.getByRole('group', { name: 'Pièces jointes' });
   const trigger = files.getByRole('button', { name: 'Joindre' });
   const menu = files.getByRole('menu');
@@ -265,7 +265,7 @@ for (const [width, height] of [
     page,
   }) => {
     await page.setViewportSize({ width, height });
-    await openOnLatte(page, `/?case=attachments-up-${width}&widget=off`);
+    await openOnLatte(page, `/?case=${caseOf(`attachments-up-${width}`)}&widget=off`);
     const files = page.getByRole('group', { name: 'Pièces jointes' });
     const trigger = files.getByRole('button', { name: 'Joindre' });
     const menu = files.getByRole('menu');

@@ -264,9 +264,9 @@ export function approvalPage(
 }
 
 /** A request is base64url (FRU-238): it goes in an address as it is, with nothing to escape. */
-const REQUEST = /^[A-Za-z0-9_-]{1,200}$/;
+export const REQUEST = /^[A-Za-z0-9_-]{1,200}$/;
 
-function trustedConsole(worker: URL, console: URL): boolean {
+export function trustedConsole(worker: URL, console: URL): boolean {
   if (console.username !== '' || console.password !== '') return false;
   const loopback = isLoopback(worker.hostname) && isLoopback(console.hostname);
   if (console.protocol !== 'https:' && !(loopback && console.protocol === 'http:')) return false;

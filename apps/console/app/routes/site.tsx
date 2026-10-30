@@ -1,7 +1,16 @@
 import { SiteAgent } from './site-agent';
-import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import { type FormEvent, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router';
-import { type Connector, type Destination, type Site, call } from '../api';
+import {
+  type Connector,
+  type Destination,
+  STAGES,
+  type Site,
+  type Visibility,
+  type Workspace,
+  type Writers,
+  call,
+} from '../api';
 import { Confirmation } from '../confirm';
 import { Domains } from '../domains';
 import { msg, t } from '../i18n';
@@ -9,23 +18,46 @@ import { InstallOptions } from '../install-options';
 import { type Listed, edited, listedOf } from '../listed';
 import { problemOf } from '../problems';
 import { siteLabel, siteName } from '../site-address';
-import { Button, KeyValue, LinkButton, Problem } from '../ui';
+import { Button, Disclosure, KeyValue, LinkButton, LoadFailed, Pick, Problem } from '../ui';
 import { useLocale } from '../use-locale';
+import { WritersPick } from '../writers-pick';
 import { SitePlaces } from './site-places';
+import { notesOf } from './sites';
 import { PageHead, useWorkspace } from './workspace';
 
 const REMOVAL_PROBLEMS: Readonly<Record<string, string>> = {
   forbidden: msg('Only an owner or an admin of the workspace removes a site.'),
 };
 const SITE_NOT_REMOVED = msg('This site is still here. Try again.');
+const ACCESS_PROBLEMS: Readonly<Record<string, string>> = {
+  forbidden: msg('Only an owner or an admin of the workspace changes who sees the notes.'),
+};
+const ACCESS_NOT_CHANGED = msg('Nothing was changed. Try again.');
+
+/** Who sees the notes of a site, and who leaves them. */
+type Access = { visibility: Visibility; writers?: Writers };
 
 /** The sections of the page that an address reaches with its hash: `…/sites/<site>#install`. */
-export const SITE_SECTIONS = ['install', 'destinations', 'statuses', 'previews', 'remove'] as const;
+export const SITE_SECTIONS = [
+  'install',
+  'destinations',
+  'advanced',
+  'statuses',
+  'agent',
+  'previews',
+  'remove',
+] as const;
+
+/** The sections folded under « Advanced » (FRU-538): the page shows first what most people come for. */
+const ADVANCED: readonly string[] = ['statuses', 'agent', 'previews'];
 
 /**
  * The page of one site (FRU-433, Mathieu): what the grid of the Sites screen unfolded under a card, in
  * one place. Its address and who writes there, how to install Fruitback on it, where its notes go, a
  * link to its statuses, the preview builds, and its removal. The grid draws cards only.
+ *
+ * « Advanced » folds the statuses, « Start an agent » and the preview builds (FRU-538): the page shows
+ * first the notes, the install, and who sees and who writes. A hash of a section inside opens it.
  *
  * The page reads the list of the sites, as the page of the statuses does: the worker has no route for
  * one site, and no route of the worker is new.
@@ -37,7 +69,7 @@ export default function SitePage() {
   useLocale();
   const { workspace } = useWorkspace();
   const { site: siteId = '' } = useParams();
-  const { hash } = useLocation();
+  const { hash, key } = useLocation();
   const navigate = useNavigate();
   const base = `/console/workspaces/${workspace.id}`;
   const manages = workspace.role === 'owner' || workspace.role === 'admin';
@@ -73,11 +105,20 @@ export default function SitePage() {
   useEffect(() => {
     if (wanted === 'remove') setRemoving(true);
   }, [wanted, hash]);
+  const [advanced, setAdvanced] = useState(ADVANCED.includes(wanted));
+  // The section to scroll to, a new object for each navigation: it is set in the render that opens « Advanced ».
+  const [target, setTarget] = useState<{ id: string } | undefined>();
   const drawn = site !== undefined;
+  // `key` is new on each navigation: a link to the hash already in the address opens « Advanced » again.
   useEffect(() => {
     if (!drawn || wanted === '') return;
-    document.getElementById(wanted)?.scrollIntoView({ block: 'start' });
-  }, [drawn, wanted]);
+    if (ADVANCED.includes(wanted)) setAdvanced(true);
+    setTarget({ id: wanted });
+  }, [drawn, wanted, key]);
+  // A folded section has no box: the page scrolls once « Advanced » is drawn open.
+  useEffect(() => {
+    if (target !== undefined) document.getElementById(target.id)?.scrollIntoView({ block: 'start' });
+  }, [target]);
 
   /** The places the worker kept, in place of the ones of the list: no read again. */
   function placed(places: Destination[]) {
@@ -89,6 +130,23 @@ export default function SitePage() {
                 ...each,
                 destinations: places,
                 ...(places[0] === undefined ? { destination: undefined } : { destination: places[0] }),
+              }
+            : each,
+        ),
+      ),
+    );
+  }
+
+  /** Who sees the notes and who writes, as the worker answered them: no read again. */
+  function changed(answered: Access) {
+    setSites((current) =>
+      edited(current, (items) =>
+        items.map((each) =>
+          each.id === siteId
+            ? {
+                ...each,
+                visibility: answered.visibility,
+                ...(answered.writers === undefined ? {} : { writers: answered.writers }),
               }
             : each,
         ),
@@ -140,18 +198,12 @@ export default function SitePage() {
         {sites === 'loading' ? <p className="text-small text-muted">{t('Loading…')}</p> : null}
         {gone ? <p className="text-body text-muted">{t('This site is not in the workspace any more.')}</p> : null}
         {sites === 'failed' ? (
-          <div
-            role="alert"
-            className="box-content flex max-w-[760px] flex-wrap items-center justify-between gap-[16px] rounded-frame border border-control px-[32px] py-[28px]"
-          >
-            <div>
-              <h2 className="mb-[4px] text-step leading-auto font-semibold">{t('The site did not load')}</h2>
-              <p className="text-body text-muted">{t('Fruitback did not answer. Your sites and notes are safe.')}</p>
-            </div>
-            <Button tone="outline" size="page" inset={18} onClick={() => void read()}>
-              {t('Try again')}
-            </Button>
-          </div>
+          <LoadFailed
+            title={t('The site did not load')}
+            detail={t('Fruitback did not answer. Your sites and notes are safe.')}
+            retry={t('Try again')}
+            onRetry={() => void read()}
+          />
         ) : null}
       </>
     );
@@ -162,7 +214,11 @@ export default function SitePage() {
     <>
       {crumbs}
       {/* The title is where the title of every page is (FRU-405): no icon pushes it. */}
-      <PageHead title={host} lead={t('Its address, where its notes go, and how to install Fruitback on it.')} />
+      <PageHead
+        title={host}
+        lead={t('Its address, where its notes go, and how to install Fruitback on it.')}
+        action={<NotesLink workspace={workspace.id} site={site} />}
+      />
 
       <div className="flex max-w-[760px] flex-col gap-[40px]">
         <Section id="about" title={t('Site')}>
@@ -192,10 +248,7 @@ export default function SitePage() {
               },
             ]}
           />
-          {/* The worker has no route that changes them: a control that does nothing is not drawn. */}
-          <p className="text-hint text-muted">
-            {t('Who sees the notes and who leaves them are set when the site is added.')}
-          </p>
+          {manages ? <AccessForm workspace={workspace} site={site} base={base} onChanged={changed} /> : null}
         </Section>
 
         <Section id="install" title={t('Install')} label={t('Install on {site}', { site: host })}>
@@ -216,28 +269,35 @@ export default function SitePage() {
         ) : null}
 
         {manages ? (
-          <Section id="statuses" title={t('Statuses')}>
-            <p className="text-small text-muted">
-              {t(
-                'The name and the colour of each status, and the stage it belongs to. The stage decides the filters and the counts.',
-              )}
-            </p>
-            <div>
-              <Button tone="outline" to={`/w/${workspace.id}/sites/${site.id}/statuses`}>
-                {t('Edit the statuses')}
-              </Button>
+          <Disclosure
+            id="advanced"
+            title={t('Advanced')}
+            hint={t('Statuses, starting an agent, preview deploys')}
+            open={advanced}
+            onToggle={setAdvanced}
+          >
+            <Section id="statuses" title={t('Statuses')}>
+              <p className="text-small text-muted">
+                {t(
+                  'The name and the colour of each status, and the stage it belongs to. The stage decides the filters and the counts.',
+                )}
+              </p>
+              <div>
+                <Button tone="outline" to={`/w/${workspace.id}/sites/${site.id}/statuses`}>
+                  {t('Edit the statuses')}
+                </Button>
+              </div>
+            </Section>
+            <SiteAgent
+              workspace={workspace}
+              site={site}
+              connectors={connectors}
+              onRetry={() => void readConnectors()}
+            />
+            <div id="previews" className="scroll-mt-[24px] [&>section]:mt-0">
+              <Domains workspace={workspace} sites={sites} />
             </div>
-          </Section>
-        ) : null}
-
-        {manages ? (
-          <SiteAgent workspace={workspace} site={site} connectors={connectors} onRetry={() => void readConnectors()} />
-        ) : null}
-
-        {manages ? (
-          <div id="previews" className="scroll-mt-[24px] [&>section]:mt-0">
-            <Domains workspace={workspace} sites={sites} />
-          </div>
+          </Disclosure>
         ) : null}
 
         {manages ? (
@@ -270,6 +330,27 @@ export default function SitePage() {
   );
 }
 
+/**
+ * The notes of the site, on the Notes screen with the site chosen (FRU-504): the select of the Notes
+ * screen lists every site, and the count is on the card only. No link to a list that is empty.
+ */
+function NotesLink({ workspace, site }: { workspace: string; site: Site }) {
+  useLocale();
+  const notes = site.notes;
+  // A worker of before sends no count: the link is there, with no number.
+  const total = notes === undefined ? undefined : STAGES.reduce((sum, stage) => sum + notes[stage], 0);
+  if (total === 0) return null;
+  let words = t('See its notes');
+  if (total === 1) words = t('See its note');
+  else if (total !== undefined) words = t('See its {count} notes', { count: total });
+
+  return (
+    <Button tone="outline" to={notesOf(workspace, site.id)}>
+      {words}
+    </Button>
+  );
+}
+
 /** How the notes of a site came: the script pasted on its pages, the extension, or both. */
 function viaOf(via: readonly ('script' | 'extension')[]): string {
   if (via.includes('script') && via.includes('extension')) return t('Extension, script');
@@ -290,5 +371,130 @@ function Section({ id, title, label, children }: { id: string; title: string; la
       </h2>
       {children}
     </section>
+  );
+}
+
+/**
+ * Who sees the notes of a site and who leaves them (FRU-504), changed on its page as the popup of the
+ * extension changes them (FRU-453).
+ *
+ * `POST …/sites` with the address of a site that exists changes that site: the same id, the same
+ * script, the places it had (`addSite` of the store). So no route of the worker is new, and the
+ * answer is checked to be the same site.
+ */
+function AccessForm({
+  workspace,
+  site,
+  base,
+  onChanged,
+}: {
+  workspace: Workspace;
+  site: Site;
+  base: string;
+  onChanged: (answered: Access) => void;
+}) {
+  useLocale();
+  const [open, setOpen] = useState(false);
+  const [visibility, setVisibility] = useState<Visibility>(site.visibility);
+  // A site of a worker of before has no `writers`: it takes a note from anybody (FRU-330).
+  const [writers, setWriters] = useState<Writers>(site.writers ?? 'anyone');
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | undefined>();
+  const [saved, setSaved] = useState(false);
+  const change = useRef<HTMLDivElement>(null);
+  // The way back gives focus to « Change », which the form replaced.
+  const back = () => requestAnimationFrame(() => change.current?.querySelector('button')?.focus());
+
+  function start() {
+    setVisibility(site.visibility);
+    setWriters(site.writers ?? 'anyone');
+    setProblem(undefined);
+    setSaved(false);
+    setOpen(true);
+  }
+  function close() {
+    setOpen(false);
+    back();
+  }
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setProblem(undefined);
+    // Nothing changed: nothing is asked of the worker.
+    if (visibility === site.visibility && (visibility !== 'members' || writers === (site.writers ?? 'anyone'))) {
+      return close();
+    }
+    setBusy(true);
+    const answer = await call<Site>('POST', `${base}/sites`, {
+      url: site.origin,
+      visibility,
+      ...(visibility === 'members' ? { writers } : {}),
+    });
+    setBusy(false);
+    // Another id would be another site: this one was not changed.
+    if (!answer.ok || answer.data?.id !== site.id) {
+      return setProblem(answer.ok ? ACCESS_NOT_CHANGED : problemOf(answer, ACCESS_PROBLEMS, ACCESS_NOT_CHANGED));
+    }
+    onChanged({
+      visibility: answer.data.visibility,
+      ...(answer.data.writers === undefined ? {} : { writers: answer.data.writers }),
+    });
+    setSaved(true);
+    close();
+  }
+
+  if (!open)
+    return (
+      <div ref={change} className="flex flex-wrap items-center gap-x-[16px] gap-y-[8px]">
+        <Button
+          tone="outline"
+          label={t('Change who sees the notes of {site}', { site: siteName(site.origin) })}
+          onClick={start}
+        >
+          {t('Change')}
+        </Button>
+        {saved ? (
+          <p role="status" className="text-small text-muted">
+            {t('Saved. The script on the site stays the same.')}
+          </p>
+        ) : null}
+      </div>
+    );
+
+  return (
+    <form
+      noValidate
+      aria-label={t('Who sees the notes of {site}', { site: siteName(site.origin) })}
+      onSubmit={(event) => void submit(event)}
+      className="flex flex-col gap-[20px]"
+    >
+      <Pick
+        label={t('Who sees the notes?')}
+        value={visibility}
+        onChange={setVisibility}
+        options={[
+          {
+            value: 'members',
+            label: t('Members of {workspace}', { workspace: workspace.name }),
+            detail: t("Visitors of the site see nothing. Right for staging and for a client's site."),
+          },
+          {
+            value: 'everyone',
+            label: t('Everyone who visits'),
+            detail: t('A public way to report a problem on a live site.'),
+          },
+        ]}
+      />
+      <WritersPick visibility={visibility} value={writers} onChange={setWriters} />
+      {problem === undefined ? null : <Problem>{t(problem)}</Problem>}
+      <div className="flex flex-wrap items-center gap-x-[20px] gap-y-[10px]">
+        <Button type="submit" disabled={busy}>
+          {t('Save')}
+        </Button>
+        <LinkButton space="loose" onClick={close}>
+          {t('Cancel')}
+        </LinkButton>
+      </div>
+    </form>
   );
 }

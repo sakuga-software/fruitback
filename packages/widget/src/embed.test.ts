@@ -5,7 +5,14 @@ import { failureOf, init, plant, sendDrafts } from './embed.ts';
 import { capturePlace } from './capture.ts';
 import type { TransportRequest, TransportResponse } from './transport.ts';
 import { noteFixture, noteIssueFixture } from '@fruitback/shared/note.fixture';
-import { type MountedPage, globalNavigatorSpeaks, mountPage, setDocumentSize, setRect } from './dom.fixture.ts';
+import {
+  type MountedPage,
+  globalNavigatorSpeaks,
+  mountPage,
+  setDocumentSize,
+  setRect,
+  stylesIn,
+} from './dom.fixture.ts';
 import { readFile } from 'node:fs/promises';
 
 /**
@@ -861,7 +868,7 @@ describe('the theme a host passes in', () => {
     // The container carries its own positioning, so what is asserted is that no token was written.
     assert.equal(container.style.getPropertyValue('--fruitback-color-accent'), '');
     assert.match(
-      page.document.querySelector('[data-fruitback-host]')?.shadowRoot?.textContent ?? '',
+      stylesIn(page.document.querySelector('[data-fruitback-host]')?.shadowRoot ?? page.document),
       /prefers-color-scheme: dark/,
     );
 

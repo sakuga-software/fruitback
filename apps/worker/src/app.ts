@@ -1,9 +1,12 @@
+import { json } from './http.ts';
 import type { NoteIssue, NoteReporter } from '@fruitback/shared';
 import { type IdentityResult, readBearerToken, stripClaimedVerification, verifyIdentityToken } from './identity.ts';
 import {
   type ClientConfig,
+  type ClientMap,
   type ClientPolicy,
   type ClientResolution,
+  normalizeClientId,
   openReadClients,
   resolveClient,
 } from './clients.ts';
@@ -16,7 +19,7 @@ import { DELIVERY_HEADER, LOOP_STATUS } from './rest-connector.ts';
 import { type WorkerConfig, type WorkerEnv, hasAccounts, hasSessions, readAllowedOrigins, readConfig } from './env.ts';
 import { type ReplyAuthor, type NoteStore, StoreError } from './store.ts';
 import { watchedStore } from './connector-health.ts';
-import { type CorsDecision, diagnosticCorsHeaders, openCors, resolveCors } from './cors.ts';
+import { type CorsDecision, diagnosticCorsHeaders, isExtensionOrigin, openCors, resolveCors } from './cors.ts';
 import { PAIR_PATH } from './pair-page.ts';
 import { checkRateLimit } from './rate-limit.ts';
 import { KvError } from './kv.ts';
@@ -215,13 +218,22 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
   try {
     answer = await routed(request, env, context, seen);
   } catch (error) {
-    if (!(error instanceof KvError)) throw error;
-    // FRU-67. The `Kv` answered the rate limit and then stopped: a route below it counts a message,
-    // or keeps a ticket, and nothing there catches this. On memory a `Kv` never throws, so this is
-    // the answer of a database that went away between two calls of one request: the same `503` as
-    // the limiter's, with the CORS headers of the route, and never a `500` with no header.
-    console.error(`[fruitback] the Kv did not answer: ${error.message}`);
-    answer = json(503, { error: 'limiter-unavailable' }, seen.cors ?? {});
+    // FRU-495: a route reads its site when it resolves its `client`, below the CORS and the rate
+    // limit. A database that stops between the two answers as the accounts that do not answer, with
+    // the CORS headers of the route, and never a `500`.
+    if (error instanceof SiteUnread) {
+      console.error(`[fruitback] the accounts did not answer: ${error.unread.message}`);
+      answer = json(502, { error: 'store-unavailable' }, seen.cors ?? {});
+    } else if (error instanceof KvError) {
+      // FRU-67. The `Kv` answered the rate limit and then stopped: a route below it counts a message,
+      // or keeps a ticket, and nothing there catches this. On memory a `Kv` never throws, so this is
+      // the answer of a database that went away between two calls of one request: the same `503` as
+      // the limiter's, with the CORS headers of the route, and never a `500` with no header.
+      console.error(`[fruitback] the Kv did not answer: ${error.message}`);
+      answer = json(503, { error: 'limiter-unavailable' }, seen.cors ?? {});
+    } else {
+      throw error;
+    }
   }
 
   // FRU-208: a reading of the cookie of the console that renewed its session renews the cookie too.
@@ -287,22 +299,11 @@ async function routed(
     return json(500, { error: 'misconfigured', missing: config.missing }, headers);
   }
 
-  // With accounts, the sites the console wrote are this worker's clients (FRU-96), read per request so
-  // a site added a second ago is served now. Everything below reads the served map and nothing else.
+  // With accounts, the sites the console wrote are this worker's clients (FRU-96). A request reads the
+  // one it names, and the origin it comes from, when it needs them (FRU-495): a site added a second
+  // ago is served now. Everything below reads the served configuration and nothing else.
   const accounts = context.accounts ?? accountStoreFor(config.config);
-  let served: Served;
-  try {
-    served = accounts === undefined ? config.config : await withSites(config.config, accounts);
-  } catch (error) {
-    if (error instanceof StoreError) {
-      // Said in the log, because the answer says nothing: a database on a network fails in more ways
-      // than a file, and the message of the store holds no address (FRU-141).
-      console.error(`[fruitback] the accounts did not answer: ${error.message}`);
-
-      return json(502, { error: 'store-unavailable' }, diagnosticCorsHeaders(request));
-    }
-    throw error;
-  }
+  const served: Served = accounts === undefined ? config.config : withSites(config.config, accounts);
 
   // The session routes answer the extension, which is not a site on the allowlist and cannot be put
   // on one — see `openCors`. Resolved before the gate, so the preflight succeeds too.
@@ -310,15 +311,22 @@ async function routed(
   // The pairing page is opened from a link, by a browser, as a document. No site reads it through
   // CORS, so the list of client sites does not apply and it answers with no CORS header at all.
   const pairing = pathname === PAIR_PATH;
-  const site = (): CorsDecision => resolveCors(request, served.allowedOrigins);
-  const extension = (): CorsDecision => (session ? openCors(request) : site());
+  const site = async (): Promise<CorsDecision> => resolveCors(request, await originsServed(request, served));
+  const extension = (): Promise<CorsDecision> | CorsDecision => (session ? openCors(request) : site());
   // The console's routes answer the console and no site, with the cookie of its session (FRU-98).
   const consoleRoute = hasAccounts(served) && isConsoleRoute(pathname);
-  const chosen = (): CorsDecision => (consoleRoute ? consoleCors(request, served) : extension());
+  const chosen = (): Promise<CorsDecision> | CorsDecision =>
+    consoleRoute ? consoleCors(request, served) : extension();
   // FRU-467: the routes of OAuth take no cookie, and a client in a page reads them (RFC 8414, 7591).
   const oauthRoute = isOAuthRoute(pathname);
-  const routeCors = (): CorsDecision => (oauthRoute ? openCors(request) : chosen());
-  const cors: CorsDecision = pairing ? { allowed: true, headers: {} } : routeCors();
+  const routeCors = (): Promise<CorsDecision> | CorsDecision => (oauthRoute ? openCors(request) : chosen());
+  let cors: CorsDecision;
+  try {
+    cors = pairing ? { allowed: true, headers: {} } : await routeCors();
+  } catch (error) {
+    if (error instanceof StoreError) return accountsDown(request, error);
+    throw error;
+  }
   if (!cors.allowed) {
     return json(403, { error: 'origin-not-allowed' });
   }
@@ -461,8 +469,8 @@ async function routed(
         headers: cors.headers,
         secretsKey: served.secretsKey,
         kv: () => context.kv ?? kvFor(served),
-        route: (site) => {
-          const route = routeFor(request, served, site);
+        route: async (site) => {
+          const route = await routeFor(request, served, site);
           if (!route.ok) return { ok: false, response: routingFailure(route, cors.headers) };
 
           return {
@@ -731,6 +739,65 @@ async function writerIn(
 }
 
 /**
+ * The site of a request that the accounts did not answer (FRU-495). `handleRequest` answers it with
+ * `502 store-unavailable`. Its own class, so that a `StoreError` of a store that a route reads still
+ * reaches the route, which answers it.
+ */
+class SiteUnread extends Error {
+  readonly unread: StoreError;
+
+  constructor(unread: StoreError) {
+    super(unread.message);
+    this.unread = unread;
+  }
+}
+
+/**
+ * The map of clients of one request on a worker with accounts: the site it names, or none (FRU-495).
+ * Never `undefined`: that is a single-client worker, which answers anybody.
+ */
+async function namedClient(
+  clientNamed: (site: string) => Promise<ClientConfig | undefined>,
+  clientId: string | undefined,
+): Promise<ClientMap> {
+  const id = normalizeClientId(clientId);
+  let client: ClientConfig | undefined;
+  try {
+    client = id === undefined ? undefined : await clientNamed(id);
+  } catch (error) {
+    if (error instanceof StoreError) throw new SiteUnread(error);
+    throw error;
+  }
+
+  return id === undefined || client === undefined ? {} : { [id]: client };
+}
+
+/**
+ * The origins that the routes of the widget answer: `ALLOWED_ORIGINS`, and the origin of the request
+ * when a site of the accounts has it (FRU-495). The store is asked only for an origin of a page that
+ * the list does not hold already.
+ */
+async function originsServed(request: Request, config: Served): Promise<string[]> {
+  const origin = request.headers.get('Origin');
+  const { allowedOrigins, servesOrigin } = config;
+  if (origin === null || servesOrigin === undefined) return allowedOrigins;
+  if (isExtensionOrigin(origin) || allowedOrigins.includes(origin)) return allowedOrigins;
+
+  return (await servesOrigin(origin)) ? [...allowedOrigins, origin] : allowedOrigins;
+}
+
+/**
+ * The answer when the accounts do not answer the CORS of a request. Said in the log, because the
+ * answer says nothing: a database on a network fails in more ways than a file, and the message of
+ * the store holds no address (FRU-141).
+ */
+function accountsDown(request: Request, error: StoreError): Response {
+  console.error(`[fruitback] the accounts did not answer: ${error.message}`);
+
+  return json(502, { error: 'store-unavailable' }, diagnosticCorsHeaders(request));
+}
+
+/**
  * Which client this request belongs to, and what was decided for it (FRU-15).
  *
  * On a single-client worker this is the worker's own defaults and nothing else happens. With a client
@@ -741,11 +808,12 @@ async function writerIn(
  * FRU-29: falling back to *the worker's team* is a rule about teams, and this function has no
  * business knowing that a store has any.
  */
-function routeFor(request: Request, config: Served, clientId: string | undefined): ClientResolution {
-  const { reachIn } = config;
+async function routeFor(request: Request, config: Served, clientId: string | undefined): Promise<ClientResolution> {
+  const { reachIn, clientNamed } = config;
 
   return resolveClient({
-    clients: config.clients,
+    // FRU-495: on a worker with accounts, the one site the request names, never every site.
+    clients: clientNamed === undefined ? config.clients : await namedClient(clientNamed, clientId),
     clientId,
     origin: request.headers.get('Origin'),
     fallback: {
@@ -928,11 +996,4 @@ async function chosenPlace(
   }
 
   return placedAt(route.client, place);
-}
-
-function json(status: number, body: unknown, headers: Record<string, string> = {}): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json', ...headers },
-  });
 }

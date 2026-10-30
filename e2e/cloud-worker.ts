@@ -20,6 +20,11 @@ export type Worker = {
   received(): Promise<Received[]>;
   /** What the worker writes in its log for its first administrator when it starts (FRU-221). */
   firstAdminLines(email: string): Promise<string[]>;
+  /**
+   * Fills `workspace` with `members` members and `invitations` invitations that wait (FRU-496):
+   * « Person n », `p<n>@crowd.test`, and `invitee<n>@client.test`.
+   */
+  crowd(workspace: string, members: number, invitations: number): Promise<void>;
   /** Stops the process, and answers when it is gone. */
   close(): Promise<void>;
 };
@@ -107,6 +112,11 @@ export async function cloudWorker(options: { mail?: boolean } = {}): Promise<Wor
     mail: () => read<{ to: string; subject: string; text: string }[]>('/__test/sent'),
     received: () => read<Received[]>('/__test/received'),
     firstAdminLines: (email) => read<string[]>(`/__test/first-admin?email=${encodeURIComponent(email)}`),
+    crowd: async (workspace, members, invitations) => {
+      const asked = new URLSearchParams({ workspace, members: String(members), invitations: String(invitations) });
+      const answer = await fetch(`${origin}/__test/crowd?${asked}`);
+      if (answer.status !== 204) throw new Error(`the worker of the test did not crowd: ${answer.status}`);
+    },
     close: () =>
       new Promise<void>((resolve) => {
         if (child.exitCode !== null || child.signalCode !== null) return resolve();

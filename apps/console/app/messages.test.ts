@@ -21,6 +21,7 @@ const APP = new URL('./', import.meta.url);
 // `site-preview.tsx` holds the site itself in the preview of the setup, or why it cannot show (FRU-354).
 // `workspace-logo.ts` says why a logo of a workspace is refused, for its settings (FRU-428).
 // `guide-steps.ts` holds the steps of the guide of the extension, that `setup-guide.tsx` shows (FRU-486).
+// `extension-here.ts` says why the extension of this browser was not connected, at step 3 (FRU-487).
 const screens = [
   ...readdirSync(new URL('routes/', APP))
     .map((name) => `routes/${name}`)
@@ -40,6 +41,7 @@ const screens = [
   'workspace-logo.ts',
   'guide-steps.ts',
   'setup-guide.tsx',
+  'extension-here.ts',
 ];
 const sources = new Map(screens.map((name) => [name, readFileSync(new URL(name, APP), 'utf8')]));
 

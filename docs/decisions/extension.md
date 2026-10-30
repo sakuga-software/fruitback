@@ -527,6 +527,44 @@ did not change: the fields of 760 px and the file input of the browser are as th
   on ». It keeps nothing. It reads the worker for one thing only, the scope « Whole site » of
   « Search and options » (FRU-307, see below).
 - **The panel lists the notes of the page (FRU-299)**: see the next section.
+- **One side margin, `--panel-gutter` (12 px), for every block of the panel** (FRU-533): the head,
+  « Leave feedback », « Ready to check », the tabs, the rows, the search and the foot take it from
+  `sidepanel/style.css`, and a row gives the words of its note `--panel-row-inset` inside the box an
+  open row draws, so they sit on the gutter too. The page takes off the 14 px of padding that the
+  body of `popup/style.css` gives (the panel links that sheet first): before, every block sat 14 px
+  further in, 34 px from the edge. `side-panel.spec.ts` measures 12 px in the panel itself.
+  `side-panel.test.ts` fails on a block with a margin
+  of its own, and on a side margin of 18 or 20 px, the margins of before. « All pages » of the widget
+  (FRU-470) is drawn by the widget, with its own sheet: it is not one of these blocks.
+- **« Open Fruitback » opens the popup from the panel (FRU-532)**, under « Fruitback is not on for
+  this page. » and under a session that ended: the popup is where a site is turned on and a session
+  signed in again. It calls `action.openPopup()` in the click, before any `await`
+  (`openPopupFrom`). **It is offered only where the panel reads the address of the tab**
+  (`offersPopup`): the popup that `openPopup` opens gets no `activeTab`, so on a site the extension
+  has no access to it reads no address, and would say « Fruitback works on http and https pages. »
+  on an https page. There, and after the browser refused the popup once, the sentence stays: « Turn
+  it on from the Fruitback button in the toolbar. » A site that runs its own Fruitback has no button:
+  the action is on its page.
+
+### What was measured for « Open Fruitback » (FRU-532), and what was not
+
+Chromium 156 of Playwright, headless, on the shipped build (no host permission) and on a copy that
+holds `http://127.0.0.1/*`; a page of `http://127.0.0.1` with no rule, the panel open on it, then
+`action.openPopup()` evaluated in the panel.
+
+|                                            | shipped build            | copy with access to the page |
+| ------------------------------------------ | ------------------------ | ---------------------------- |
+| the popup opens (`getContexts` `POPUP`)    | yes, with no gesture too | yes                          |
+| the address of the tab, read by that popup | withheld                 | read                         |
+| the address of the tab, read by the panel  | withheld                 | read                         |
+
+- So the button shows where the extension may read the page: a rule that is off but whose access
+  is still held, a site covered by « Allow captures on every site » (`<all_urls>`), a tab whose icon
+  was clicked (`activeTab`), and every page of the E2E copies. On a site with no access, the most
+  common « not on », it does not show. `e2e/side-panel.spec.ts` clicks it and reads the address from
+  the popup, with a page the extension may not read as the control.
+- **Firefox was not measured.** MDN documents `action.openPopup()` from a user action; a refusal
+  takes the button away, and the sentence comes back.
 
 ### What was measured, and what was not
 
@@ -569,6 +607,11 @@ did not change: the fields of 760 px and the file input of the browser are as th
 - **A row says the status of its note, in its colour** (FRU-370): the name of the status, then the word
   of the store, then the word of the stage, and the drop in the colour the team chose. « Open » and
   « Done » stay by stage. See [statuses.md](statuses.md), « What the widget draws ».
+- **A note holds one line in a list, cut with « … »** (FRU-534): a closed row of « Open » and
+  « Done », « Ready to check », the rows of « Search and options » on the page and on the whole
+  site, and the detached notes. An open row shows the whole note. The sheet cuts it, never the
+  code: the text stays whole in the DOM, so the name of the button of the row and the specs read
+  all of it, and `title` gives it to a pointer.
 - **A reply is 2,000 characters at most**, the length the worker takes: the field takes no more.
 - **The panel does not poll.** `notes` answers the notes, or why there are none: a read not answered
   (the panel waits for `notes-changed`), a read that failed (« Try again » asks the widget to read
@@ -621,8 +664,8 @@ did not change: the fields of 760 px and the file input of the browser are as th
   (`noteLink`, the link of FRU-253, after the fragment of the site), in a new tab, `noreferrer`; the
   widget there scrolls to the note and opens its thread. A note of the page of the tab: a button that
   does what a click on its row does, a scroll to the pin and its thread, in that tab. The row of
-  « This page » keeps its « Show on the page » in the row it opens. `e2e/side-panel.spec.ts` follows
-  both links.
+  « This page » keeps its « Show on the page » in the row it opens. `e2e/side-panel-search.spec.ts`
+  follows both links.
 - **« Show pins on the page »** sends `hide-pins` or `show-pins` to the widget of the tab
   (`showPins`), the same switch as the list of the page (FRU-308): the pins are hidden but the pin
   of an open thread, and the notes are still read and listed. The tab the panel leaves gets its pins back. **The pins come back when the panel closes,
@@ -1031,6 +1074,70 @@ What is not done here: the account's own shape of `GET /session/sites` (several 
 counts and the switch of the site are FRU-254 (screen 3 of FRU-298); adding a site from the popup is FRU-255 (screen 2 of FRU-298),
 which replaced the fields of before for a person signed in on a site of no rule.
 
+## The console of the Cloud connects the extension of its browser (FRU-487)
+
+Decided by Mathieu on 2026-10-28: yes, for the console of the Cloud only, after FRU-482 and FRU-483.
+It reverses the « not wanted » of `console.md` for that console. The threat model is in
+`SECURITY.md` (« The console of the Cloud talks to the extension of the same browser »).
+
+### The rules, in short
+
+- **`externally_connectable` names one exact origin: the console of the Cloud.** `cloudConsole` of
+  `src/external-console.ts` reads `WXT_FRUITBACK_CONSOLE` and `WXT_FRUITBACK_CLOUD` at build:
+  `https://app.fruitback.com` when both are absent, none when the Cloud is empty (a build for a
+  self-hosted instance) or the console is empty, none for another Cloud that names no console. A
+  joker, a path, a query, plain http away from loopback, or a host outside the site of the Cloud
+  (the rule of `approvalPage`) stops the build. The manifest gets `matches: ["<origin>/*"]`: the path
+  must be written in a match pattern, and `/*` is the only one. No `ids`: the key closes the
+  extension to the messages of other extensions too.
+- **Chromium only.** The hook `build:manifestGenerated` writes the key for Chrome and Edge, and not
+  for `-b firefox` nor `-b safari`. Firefox does not implement the key (`browser-compat-data`:
+  `version_added: false`, bug 1319168). Safari has it since 15.4, `matches` only, marked partial; the
+  id of the Safari extension is not the one of the store, and nobody measured it here: it keeps the
+  flow with the word. The background listens to `runtime.onMessageExternal` only in the Chromium build.
+- **The background answers three messages, and no other** (`acceptedExternal`, decided before any
+  `await`): `{type: 'fruitback:hello', v: 1}`, `{type: 'fruitback:connect', v: 1}`,
+  `{type: 'fruitback:claim', v: 1, request}`, with exactly those keys, from `sender.origin` equal to
+  the console, a URL of the same origin, the top frame of a tab. A message not answered gets no
+  `sendResponse`: the page reads `lastError`, as if no extension were there.
+- **`connect` starts the request of the popup, with the Cloud of the build** (`startConnect`), and
+  answers its id only. The claim and the word stay in `storage.session`. The page names no worker.
+  The request must be approved by the same console (`consoleAt` of the worker's answer), or the
+  answer is `unavailable`. Refused (`signed-in`) while a session of the Cloud is held.
+- **`claim` claims at once**, the request that waits only, once per `interval` (5 s): the person
+  waits seconds, not the minute of the alarm. The alarm of the background stays, for a page that
+  closes before.
+- **The console asks the id of the store** (`STORE_EXTENSION_ID`, from `CHROME_WEB_STORE`) on the
+  Cloud, or the ids `/config.js` names (`extensionIds`), and none on a self-hosted console. It
+  approves with the word it reads from the worker: the worker is unchanged.
+- `pnpm e2e` builds with `WXT_FRUITBACK_CONSOLE=http://localhost:5178`, the console of the suite.
+  `e2e/console-extension-here.spec.ts` routes `/config.js` to name the id of the unpacked copy,
+  whose id depends on its folder.
+
+### The reasons, and what was measured
+
+The word answers one question: is the request I approve the one of the popup of this browser? Here
+the browser answers it. Chrome delivers the message from a tab of this browser, and tells its origin
+(`sender.origin`); the request id comes back from the extension of this browser; nothing the person
+types or reads is involved. An attacker who wants a victim to approve their request needs to put
+their id in front of the victim: this path approves only an id that the extension of the victim's
+browser gave.
+
+What it costs: the extension now trusts every page of `https://app.fruitback.com`. A script there
+connects the extension of that browser to the account of the console of that browser, when the
+extension is signed out. It reads no secret, and it cannot sign in a browser that holds a session.
+
+Measured in Chromium with the built extension (`console-extension-here.spec.ts`): the manifest of the
+e2e build holds `{"matches": ["http://localhost:5178/*"]}`; a page of the playground has no
+`chrome.runtime` at all; the console has it, and its `hello` is answered; a message with an extra key
+is not answered; one click on « Connect this browser » at step 3 connects the extension, with no new
+tab, and the extension holds the session of the Cloud; a second `connect` is refused with
+`signed-in`.
+
+Not measured: the build of the store against `https://app.fruitback.com` (the id of the store is
+fixed by the store, and only the published extension has it), Edge with the extension of the Chrome
+Web Store (it installs from there, so its id is the same), and Safari.
+
 ## A site of a workspace in the popup (FRU-254, FRU-298)
 
 ### The rules, in short
@@ -1189,12 +1296,12 @@ which replaced the fields of before for a person signed in on a site of no rule.
 A reviewer was handed `ABCD-EFGH-JKMN`, opened the popup on the right site and copied it in. The
 ticket asked for a link, and left the path to be measured. Four were on the table.
 
-| Path                                                           | What stops it                                                                                                                           |
-| -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| A content script on the worker's page                          | It needs a host permission on the worker, and the first pairing is where that permission is asked for.                                  |
-| `externally_connectable`                                       | The origins are declared in the manifest. A self-hosted worker is not known at build time, and Firefox has no such key.                 |
-| A page of the extension, `chrome-extension://<id>/pair.html#…` | The worker cannot know the id, which differs between an unpacked build and a store build. A web page cannot link to that scheme either. |
-| **The popup reads the address of the tab**                     | Nothing. No new permission, the same on Firefox, and any self-hosted worker.                                                            |
+| Path                                                           | What stops it                                                                                                                                                                |
+| -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A content script on the worker's page                          | It needs a host permission on the worker, and the first pairing is where that permission is asked for.                                                                       |
+| `externally_connectable`                                       | The origins are declared in the manifest. A self-hosted worker is not known at build time, and Firefox has no such key. (FRU-487 uses it for the console of the Cloud only.) |
+| A page of the extension, `chrome-extension://<id>/pair.html#…` | The worker cannot know the id, which differs between an unpacked build and a store build. A web page cannot link to that scheme either.                                      |
+| **The popup reads the address of the tab**                     | Nothing. No new permission, the same on Firefox, and any self-hosted worker.                                                                                                 |
 
 - **Measured, in Chromium 1234, on the built extension.** A tab on
   `http://localhost:<port>/fruitback/pair#ABCD-EFGH-JKMN`, then `tabs.query({ active: true })`:
@@ -2435,3 +2542,21 @@ The job `submit` reads these from the GitHub environment `stores` (**Settings �
 
 WARNING: a new archive during a review starts the review again. Wait for the end of one review
 before you push the next tag.
+
+## The gallery of the extension (FRU-523)
+
+### The rules, in short
+
+- **`apps/extension/gallery/` draws every state of the popup, the welcome page and the side panel**,
+  each with its own view of `src/` and the sheets of its entrypoint, on made-up data
+  (`gallery/states.ts`). `pnpm --filter @fruitback/extension gallery` serves it on
+  http://localhost:5179/gallery/. A page shows all the states of its surface; `?state=<id>` shows
+  one alone, as the page of the extension draws it.
+- **It is served at https://gallery.fruitback.com**, so the widget of Fruitback can run on it: the
+  pages of the extension are `chrome-extension://`, where no widget runs, and a note cannot be left on
+  them. The extension mounts the widget there, as on any site of a workspace: the gallery embeds
+  nothing. Dokploy builds `apps/extension/gallery/Dockerfile` from `main`.
+- **A new screen, or a new state of a screen, gets an entry in `gallery/states.ts`.**
+  `src/gallery.test.ts` builds each entry; it does not see a state that has no entry.
+- **Not there:** the options page and the rule editor of the popup, which their entrypoints build
+  with no function to call, and the widget itself.

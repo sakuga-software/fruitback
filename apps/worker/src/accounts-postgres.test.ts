@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
-import { afterEach, describe, it } from 'vitest';
+import { PGlite } from '@electric-sql/pglite';
+import { noteFixture } from '@fruitback/shared/note.fixture';
+import { afterEach, describe, it, vi } from 'vitest';
 import { accountCases } from './account-conformance.fixture.ts';
 import type { AccountStore } from './accounts.ts';
 import { createPostgresAccountStore } from './accounts-postgres.ts';
@@ -109,17 +111,29 @@ describe('a worker whose accounts are in PostgreSQL (FRU-141)', () => {
     const health = await handleRequest(new Request('https://worker.test/health'), env, { clientIp: '192.0.2.2' });
     assert.deepEqual(await health.json(), { ok: true, store: 'memory' });
 
-    const read = await handleRequest(
-      new Request(`https://worker.test/feedback?url=${encodeURIComponent('https://acme.dev/')}&client=site_x`, {
-        headers: { Origin: 'https://acme.dev' },
-      }),
-      env,
-      { clientIp: '192.0.2.3' },
-    );
-    const body = await read.text();
+    const readFrom = (origin: string) =>
+      handleRequest(
+        new Request(`https://worker.test/feedback?url=${encodeURIComponent(`${origin}/`)}&client=site_x`, {
+          headers: { Origin: origin },
+        }),
+        env,
+        { clientIp: '192.0.2.3' },
+      );
 
+    // The first read of the database answers (FRU-495). For a page of another origin, it is whether a
+    // site has that origin: the accounts do not answer.
+    const read = await readFrom('https://site.dev');
+    const body = await read.text();
     assert.equal(read.status, 502);
+    assert.deepEqual(JSON.parse(body), { error: 'store-unavailable' });
     assert.equal(body.includes(PASSWORD), false, body);
+
+    // An origin of `ALLOWED_ORIGINS` asks no site: the rate limit, in the same database, is the first.
+    const listed = await readFrom('https://acme.dev');
+    const said = await listed.text();
+    assert.equal(listed.status, 503);
+    assert.deepEqual(JSON.parse(said), { error: 'limiter-unavailable' });
+    assert.equal(said.includes(PASSWORD), false, said);
   });
 });
 
@@ -191,6 +205,66 @@ describe('the sites of a workspace, read from PostgreSQL (FRU-141)', () => {
 
     assert.equal(await accounts.removeSite(acme.id, site.id), true);
     assert.equal((await read(env, accounts, site.id, 'https://acme.dev', mine)).status, 403, 'after: the site is gone');
+  });
+
+  it('reads the one site a request of the widget names, and never the other sites of the instance (FRU-495)', async () => {
+    database = await createPgliteDatabase();
+    const accounts = createPostgresAccountStore(database);
+    const env = envWith();
+    const alice = await accounts.signIn({ provider: 'email', subject: 'alice@acme.dev', email: 'alice@acme.dev' });
+    const acme = await accounts.createWorkspace('Acme', alice.id);
+    const others = await accounts.createWorkspace('Others', alice.id);
+    const site = await accounts.addSite(acme.id, {
+      origin: 'https://acme.dev',
+      visibility: 'everyone',
+      writers: 'anyone',
+    });
+    const elsewhere: string[] = [];
+    for (let n = 0; n < 20; n++) {
+      elsewhere.push(
+        (await accounts.addSite(others.id, { origin: `https://site-${n}.dev`, visibility: 'everyone' })).id,
+      );
+    }
+    const url = 'https://acme.dev/pricing';
+    const post = () =>
+      handleRequest(
+        new Request('https://worker.test/feedback', {
+          method: 'POST',
+          headers: { Origin: 'https://acme.dev', 'Content-Type': 'application/json' },
+          body: JSON.stringify(noteFixture({ page: { url, path: '/pricing' }, client: { id: site.id, name: 'Acme' } })),
+        }),
+        env,
+        { clientIp: '192.0.2.250', kv, accounts },
+      );
+    const get = () => read(env, accounts, site.id, 'https://acme.dev');
+    // The migrations, and the first read of the page, before anything is counted.
+    assert.equal((await get()).status, 200);
+
+    // Every statement on the database, and the rows it answered: the reads of the sites among them.
+    const answered: { text: string; rows: unknown }[] = [];
+    const query = PGlite.prototype.query;
+    const spy = vi.spyOn(PGlite.prototype, 'query').mockImplementation(async function (this: PGlite, ...args) {
+      const result = await query.apply(this, args as Parameters<typeof query>);
+      answered.push({ text: String(args[0]), rows: result.rows });
+
+      return result;
+    });
+    let statuses: number[];
+    try {
+      statuses = [(await get()).status, (await post()).status, (await get()).status];
+    } finally {
+      spy.mockRestore();
+    }
+
+    assert.deepEqual(statuses, [200, 201, 200]);
+    const ofSites = answered.filter(({ text }) => /from "sites"/i.test(text));
+    assert.ok(ofSites.length > 0, 'the requests read no site, so this case counts nothing');
+    const rowsRead = JSON.stringify(ofSites.map(({ rows }) => rows));
+    assert.ok(rowsRead.includes(site.id), rowsRead);
+    for (const id of elsewhere)
+      assert.equal(rowsRead.includes(id), false, `the site ${id} of another workspace was read`);
+    // At most one row a statement: the site, or that a site has the origin.
+    for (const { text, rows } of ofSites) assert.ok((rows as unknown[]).length <= 1, text);
   });
 
   it('applies the migrations at the first call, and once for the stores of one database', async () => {

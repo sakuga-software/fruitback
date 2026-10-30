@@ -1,4 +1,6 @@
+import { json } from './http.ts';
 import { requestAgent } from './agent-triggers.ts';
+import { readJsonObject } from './bounded-body.ts';
 import { DEFAULT_NOTE_STAGE, NOTE_STAGES, type NoteStage, type NoteStatus } from '@fruitback/shared';
 import type { Action, AccountStore, Reach } from './accounts.ts';
 import type { Kv } from './kv.ts';
@@ -339,7 +341,7 @@ async function setStatus(id: string, request: Request, context: NotesContext): P
     return json(404, { error: 'not-found' }, headers);
   }
 
-  const asked = (await readBody(request))?.status;
+  const asked = (await readJsonObject(request))?.status;
   const prefix = `${OWN_SOURCE}:`;
   if (typeof asked !== 'string') return json(400, { error: 'invalid-status' }, headers);
   if (!asked.startsWith(prefix)) return json(400, { error: 'not-own' }, headers);
@@ -387,18 +389,6 @@ async function setStatus(id: string, request: Request, context: NotesContext): P
   return json(200, { status: asked, stage: answer.stage }, headers);
 }
 
-async function readBody(request: Request): Promise<Record<string, unknown> | undefined> {
-  try {
-    const parsed: unknown = JSON.parse(await request.text());
-
-    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
 const failed = Symbol('failed');
 
 /** What the index answers, or `failed` when it does not: said in the log, answered `503`. */
@@ -412,13 +402,6 @@ async function answered<T>(read: () => Promise<T>): Promise<T | typeof failed> {
 
     return failed;
   }
-}
-
-function json(status: number, body: unknown, headers: Record<string, string>): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...headers },
-  });
 }
 
 function forbidden(context: NotesContext): Response {

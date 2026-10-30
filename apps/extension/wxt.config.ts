@@ -4,7 +4,14 @@ import { ICON_SIZES, iconPath } from './src/icon-sizes.ts';
 import { DATA_COLLECTION_PERMISSIONS, FIREFOX_MIN_VERSION } from './src/data-collection.ts';
 import { MANIFEST_COMMANDS } from './src/shortcut.ts';
 import { noEval } from './src/no-eval.ts';
-import { safariManifest } from './src/browser-family.ts';
+import { browserFamily, safariManifest } from './src/browser-family.ts';
+import { cloudConsole, externallyConnectable } from './src/external-console.ts';
+
+/**
+ * FRU-487: the console of the Cloud that may talk to the extension. Read here once, so a wrong
+ * `WXT_FRUITBACK_CONSOLE` stops the build rather than ship a manifest without the key, or with another.
+ */
+const CONSOLE = cloudConsole(process.env.WXT_FRUITBACK_CONSOLE, process.env.WXT_FRUITBACK_CLOUD);
 
 /** Where the licence lives in the output, and where it is copied from (FRU-82). */
 export const LICENSE_IN_OUTPUT = 'LICENSE';
@@ -37,6 +44,17 @@ export default defineConfig({
     // FRU-380: Safari is told its own minimum, and not Firefox's. See `src/browser-family.ts`.
     'build:manifestGenerated': (wxt, manifest) => {
       if (wxt.config.browser === 'safari') safariManifest(manifest);
+      // FRU-487: the console of the Cloud, one exact origin, may send runtime messages. Chromium only:
+      // Firefox has no such key for pages, and Safari keeps the flow with the word. No warning at
+      // install, and no new permission at an update. See `src/external-console.ts`.
+      const family = browserFamily({
+        FIREFOX: wxt.config.browser === 'firefox',
+        SAFARI: wxt.config.browser === 'safari',
+      });
+      const connectable = externallyConnectable(CONSOLE, family);
+      if (connectable !== undefined) {
+        (manifest as { externally_connectable?: unknown }).externally_connectable = connectable;
+      }
     },
   },
   manifestVersion: 3,

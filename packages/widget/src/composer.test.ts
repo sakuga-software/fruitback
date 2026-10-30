@@ -12,7 +12,7 @@ import {
 } from './composer.ts';
 import type { Destination } from './destinations.ts';
 import { deepActiveElement, focusables } from './focus.ts';
-import { type MountedPage, keyboardEventCtor, mountPage } from './dom.fixture.ts';
+import { type MountedPage, keyboardEventCtor, mountPage, useHandFrames, stylesIn } from './dom.fixture.ts';
 import { createTranslator } from './messages.ts';
 
 /**
@@ -729,6 +729,70 @@ describe('createComposer', () => {
     assert.equal(top(), '120px', 'the composer followed an element that is gone');
   });
 
+  it('follows its element as it grows back from a press, on the edges it was placed against (FRU-489)', () => {
+    // A button at `scale(0.97)` while pressed: 116 px of its 120, around the same centre. The click
+    // places the composer on that box; React Aria takes the press off some frames later.
+    const pressed = { left: 21.8, right: 138.2, top: 300.45, bottom: 329.55 };
+    const released = { left: 20, right: 140, top: 300, bottom: 330 };
+    const opened = (translator = createTranslator(), box = { ...pressed }) => {
+      const page = mountPage('<main><button id="add">Ajouter</button></main>', { width: 1_000, height: 1_000 });
+      const frames = useHandFrames(page.view);
+      const host = page.document.createElement('div');
+      page.document.body.append(host);
+      const made = createComposer({ document: page.document, host, onSubmit: async () => true, translator });
+      composer = made;
+      made.element.getBoundingClientRect = () => ({ height: 240 }) as DOMRect;
+      const button = page.query('#add');
+      Object.defineProperty(button, 'getBoundingClientRect', { value: () => box, configurable: true });
+      made.open(button);
+      // Rounded: the edges of a scaled box are not whole, and their sums carry the error of a float.
+      const read = (name: string) =>
+        Math.round(Number.parseFloat(made.element.style.getPropertyValue(`--fruitback-composer-${name}`)) * 1_000) /
+        1_000;
+      const at = () => ({ left: read('left'), top: read('top') });
+
+      return { made, frames, box, at };
+    };
+
+    // Left to right, on the left edge of the frame: 21.8 − 5, then 20 − 5 once released.
+    const ltr = opened();
+    assert.deepEqual(ltr.at(), { left: 16.8, top: 20.45 });
+    for (let frame = 0; frame < 5; frame += 1) ltr.frames.next();
+    Object.assign(ltr.box, released);
+    ltr.frames.next();
+    assert.deepEqual(ltr.at(), { left: 15, top: 20 }, 'the composer stayed on the pressed box');
+    while (ltr.frames.next());
+    ltr.made.destroy();
+
+    // Right to left, on the right edge of the frame: it moves by that edge, the other way.
+    const rtl = opened(createTranslator({ locale: 'ar', messages: { ar: { 'composer.send': 'أرسل' } } }));
+    // 138.2 + 5 − 360, kept 10 px inside the window: the window starts at 0.
+    assert.equal(rtl.at().left, 10);
+    rtl.made.destroy();
+    const room = opened(createTranslator({ locale: 'ar', messages: { ar: { 'composer.send': 'أرسل' } } }), {
+      ...pressed,
+      left: 521.8,
+      right: 638.2,
+    });
+    assert.equal(room.at().left, 283.2);
+    Object.assign(room.box, { ...released, left: 520, right: 640 });
+    room.frames.next();
+    assert.equal(room.at().left, 285, 'the composer moved by the left edge of its element');
+    room.made.destroy();
+
+    // Below its element, it keeps to the bottom edge.
+    const low = opened(createTranslator(), { ...pressed, top: 100.45, bottom: 129.55 });
+    assert.equal(low.made.element.dataset.fruitbackSide, 'below');
+    assert.equal(low.at().top, 144.55);
+    Object.assign(low.box, { ...released, top: 100, bottom: 130 });
+    low.frames.next();
+    assert.equal(low.at().top, 145);
+
+    // Closed, it stops reading the box.
+    low.made.close();
+    assert.equal(low.frames.next(), false, 'a closed composer still watched its element');
+  });
+
   it('opens above its element, 40 px over its top, and below when there is no room above (FRU-258)', () => {
     const placed = (anchor: { left: number; top: number; bottom: number; right: number }, scrollY = 0) => {
       const page = mountPage('<main></main>', { width: 1_000, height: 1_000 });
@@ -820,7 +884,7 @@ describe('createComposer', () => {
     composer = null;
 
     assert.equal(host.querySelector('[data-fruitback-composer]'), null);
-    assert.equal(host.querySelector('style'), null);
+    assert.equal(stylesIn(host), '');
   });
 });
 
@@ -1501,7 +1565,7 @@ describe('where the note goes (FRU-123)', () => {
   it('hides the folded line and list with a rule of their own, because their class sets a display', () => {
     // happy-dom does no layout. A class that sets `display` beats the browser's rule for `hidden`.
     mountWith(choiceOf([WEB, DESIGN]));
-    const styles = (mounted as MountedPage).document.querySelector('style')?.textContent ?? '';
+    const styles = stylesIn((mounted as MountedPage).document);
 
     assert.match(styles, /\.fruitback-composer-places\[hidden\] \{ display: none; \}/);
     assert.match(styles, /\.fruitback-composer-identify\[hidden\] \{ display: none; \}/);

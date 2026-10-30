@@ -1,6 +1,41 @@
+/*
+  HeroUI 3 has no provider: its theme is this stylesheet (FRU-125). Its index, `@heroui/styles`,
+  less the components the kit does not draw (FRU-492): the 85 of them were 386 kB of the 478 kB of
+  this file. The list is the components that `ui.tsx` imports and the ones they import, in the order
+  of HeroUI's own index: `heroui-styles.test.ts` holds it to `ui.tsx`.
+*/
+@layer theme, base, components, utilities;
 @import 'tailwindcss';
-/* HeroUI 3 has no provider: its theme is this stylesheet (FRU-125). */
-@import '@heroui/react/styles';
+@import 'tw-animate-css';
+@import '@heroui/styles/base' layer(base);
+@import '@heroui/styles/base/scrollbar.css' layer(base);
+@import '@heroui/styles/components/description.css' layer(components);
+@import '@heroui/styles/components/field-error.css' layer(components);
+@import '@heroui/styles/components/label.css' layer(components);
+@import '@heroui/styles/components/button.css' layer(components);
+@import '@heroui/styles/components/button-group.css' layer(components);
+@import '@heroui/styles/components/dropdown.css' layer(components);
+@import '@heroui/styles/components/list-box-item.css' layer(components);
+@import '@heroui/styles/components/list-box-section.css' layer(components);
+@import '@heroui/styles/components/list-box.css' layer(components);
+@import '@heroui/styles/components/menu-item.css' layer(components);
+@import '@heroui/styles/components/menu-section.css' layer(components);
+@import '@heroui/styles/components/switch.css' layer(components);
+@import '@heroui/styles/components/chip.css' layer(components);
+@import '@heroui/styles/components/alert.css' layer(components);
+@import '@heroui/styles/components/checkbox-group.css' layer(components);
+@import '@heroui/styles/components/checkbox.css' layer(components);
+@import '@heroui/styles/components/input.css' layer(components);
+@import '@heroui/styles/components/radio-group.css' layer(components);
+@import '@heroui/styles/components/radio.css' layer(components);
+@import '@heroui/styles/components/textfield.css' layer(components);
+@import '@heroui/styles/components/header.css' layer(components);
+@import '@heroui/styles/components/surface.css' layer(components);
+@import '@heroui/styles/components/combo-box.css' layer(components);
+@import '@heroui/styles/components/select.css' layer(components);
+@import '@heroui/styles/themes/default' layer(theme);
+@import '@heroui/styles/utilities';
+@import '@heroui/styles/variants';
 
 /*
   HeroUI takes the theme, it does not set it: its variables get the tokens of design/README.md. It
@@ -999,6 +1034,11 @@ textarea {
 
 /* A table in its frame. A table wider than the frame scrolls in it, and the page does not. */
 .kit-table {
+  /*
+    The frame holds what is positioned in it: the label of a field that only a screen reader reads is
+    absolute, and out of a frame with no position it widened the page past the screen (FRU-505).
+  */
+  position: relative;
   overflow-x: auto;
   border: 1px solid var(--color-line);
   border-radius: var(--radius-frame);
@@ -1058,6 +1098,51 @@ textarea {
 
 .kit-table [data-align='end'] {
   text-align: right;
+}
+
+/*
+  A stacked table (FRU-505): from 640 px a table, under it one card per row, so that no cell is
+  past the screen. The heads stay for a screen reader.
+*/
+.kit-table[data-stack='true'] table {
+  min-width: var(--table-min-width);
+}
+
+@media (width < 640px) {
+  .kit-table[data-stack='true'] :is(table, tbody, tr, td) {
+    display: block;
+    min-width: 0;
+  }
+
+  /* The heads, and each head in them: a screen reader reads them, and nothing measures a column of 1 px. */
+  .kit-table[data-stack='true'] :is(thead, th) {
+    position: absolute;
+    padding: 0;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .kit-table[data-stack='true'] tr {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--color-line);
+  }
+
+  .kit-table[data-stack='true'] td,
+  .kit-table[data-stack='true'] :is(th, td):is(:first-child, :last-child) {
+    max-width: none;
+    padding: 0;
+    border-bottom: 0;
+  }
+
+  .kit-table[data-stack='true'] td[data-align='end'] {
+    text-align: left;
+  }
 }
 
 /* A panel beside a list. */
@@ -1416,6 +1501,59 @@ textarea {
   line-height: normal;
 }
 
+/*
+  Sections a page keeps folded (FRU-538): a rule above and below, the line that opens them, and a
+  chevron that turns. The whole line is the target, 44 px at the least. No box: the sections inside
+  keep the width and the gaps of the page.
+*/
+.kit-disclosure {
+  border-top: 1px solid var(--color-line);
+  border-bottom: 1px solid var(--color-line);
+}
+
+.kit-disclosure__summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--spacing-control);
+  padding: 14px 0;
+  cursor: pointer;
+  list-style: none;
+}
+
+.kit-disclosure__summary::-webkit-details-marker {
+  display: none;
+}
+
+.kit-disclosure__chevron {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  color: var(--color-muted);
+  transition: transform var(--duration-fast) var(--ease-settle);
+}
+
+.kit-disclosure[open] .kit-disclosure__chevron {
+  transform: rotate(90deg);
+}
+
+.kit-disclosure__summary:hover .kit-disclosure__chevron {
+  color: var(--color-ink);
+}
+
+.kit-disclosure__body {
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+  padding: 16px 0 32px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kit-disclosure__chevron {
+    transition: none;
+  }
+}
+
 /* Cards or buttons side by side while they have room, then one under the other. */
 .kit-auto-grid {
   display: grid;
@@ -1433,7 +1571,8 @@ textarea {
 .kit-snippet {
   overflow-x: auto;
   white-space: pre-wrap;
-  overflow-wrap: anywhere;
+  /* Break in place, not at a space: an indented long address moved whole left a blank line above it. */
+  word-break: break-all;
   padding: 10px 12px;
   border: 1px solid var(--color-line);
   border-radius: var(--radius-button);
@@ -1529,6 +1668,13 @@ textarea {
 
 .kit-browser__empty p {
   max-width: 280px;
+}
+
+/* On a phone the frame comes under the steps: with no site yet, a short frame says enough. */
+@media (width < 640px) {
+  .kit-browser__page:has(> .kit-browser__empty) {
+    height: 280px;
+  }
 }
 
 /* No sentence: the drop alone, for a page that has nothing to say yet. */
@@ -1730,4 +1876,30 @@ textarea {
   margin-top: 4px;
   padding-top: 4px;
   border-top: 1px solid var(--color-line);
+}
+
+/* The setup waits for the first note (FRU-242): the drop of the logo beats while the page reads the site again. */
+.setup-waiting {
+  width: 8px;
+  height: 8px;
+  margin-top: calc((var(--text-small--line-height) * 1em - 8px) / 2);
+  border-radius: 50%;
+  background: var(--accent);
+  animation: setup-waiting 1.6s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+
+@keyframes setup-waiting {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent);
+  }
+
+  100% {
+    box-shadow: 0 0 0 7px color-mix(in srgb, var(--accent) 0%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .setup-waiting {
+    animation: none;
+  }
 }

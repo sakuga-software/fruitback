@@ -139,8 +139,28 @@ describe('the landing (FRU-418)', () => {
       ([page, fragment]) => page === 'reviewing' && fragment === '1-install-it',
     );
 
-    // Firefox, by hand: the card « Sites you cannot touch », and the question about a site with no script.
+    // A browser that reaches no store: the card « Sites you cannot touch », and the question about a
+    // site with no script.
     assert.equal(links.length, 2, 'the landing lost a link to « 1. Install it » of the reviewer’s guide');
+  });
+
+  it('leads Firefox to addons.mozilla.org, not to an install by hand (FRU-521)', () => {
+    const landing = readFileSync(new URL('_layouts/landing.html', DOCS), 'utf8');
+    const guide = readFileSync(new URL('reviewing.md', DOCS), 'utf8');
+    const amo = 'https://addons.mozilla.org/en-US/firefox/addon/fruitback/';
+
+    // The card, the question, and the footer.
+    assert.equal(landing.split(`href="${amo}"`).length - 1, 3, 'the landing lost a link to addons.mozilla.org');
+    assert.doesNotMatch(
+      landing,
+      /Firefox, by hand|In Firefox you load it by hand/,
+      'the landing sends Firefox to an install by hand',
+    );
+    assert.ok(guide.includes(`(${amo})`), 'step 1 of the reviewer’s guide does not link addons.mozilla.org');
+    assert.ok(
+      !guide.includes('not on the add-ons site of Firefox'),
+      'the reviewer’s guide says the extension is not on AMO',
+    );
   });
 
   it('leads Chrome and Edge to the Chrome Web Store', () => {
@@ -150,6 +170,15 @@ describe('the landing (FRU-418)', () => {
     // The card, the question, and the footer.
     assert.equal(landing.split(`href="${store}"`).length - 1, 3, 'the landing lost a link to the Chrome Web Store');
     assert.ok(!landing.includes('not in a store yet'), 'the landing still says the extension is in no store');
+  });
+
+  it('keeps no word of the garden in its title, and promises the component only when the build exposes it (FRU-514)', () => {
+    const landing = readFileSync(new URL('_layouts/landing.html', DOCS), 'utf8');
+    const title = /<h1>([^<]*)<\/h1>/.exec(landing)?.[1] ?? '';
+
+    assert.ok(title.length > 0, 'the landing has no h1');
+    assert.doesNotMatch(title, /plant|harvest|seed|ripe/i, 'the h1 keeps the metaphor that FRU-355 removed');
+    assert.ok(!landing.includes('attached to every note'), 'the landing says every note carries the React component');
   });
 
   it('names only fragments that are headings of their guide', () => {
@@ -401,5 +430,26 @@ describe('the guides split in pages (FRU-427)', () => {
     });
 
     assert.deepEqual(broken, [], 'these links of a guide name no file, or no heading of it');
+  });
+});
+
+/**
+ * Sentences that were true before a release, or before FRU-330, and stayed in the guides after it
+ * (FRU-514). The packages are on npm since 0.5.0, and the visibility of a site is not its mode.
+ */
+describe('the guides after the first release (FRU-514)', () => {
+  const readme = readFileSync(new URL('../README.md', DOCS), 'utf8');
+  const install = readFileSync(new URL('install.md', DOCS), 'utf8');
+
+  it('says the packages and the extension are published', () => {
+    const published = readme.split('\n').find((line) => line.startsWith('| Published'));
+
+    assert.ok(published !== undefined, 'the table of the modes lost its row « Published »');
+    assert.doesNotMatch(published, /not yet/, 'the README says the modes are not published');
+    assert.ok(!install.includes('not on npm yet'), 'docs/install.md says the packages are not on npm');
+  });
+
+  it('does not call the visibility « Members of the workspace » the team mode', () => {
+    assert.ok(!install.includes('this is the team mode'), 'docs/install.md names a visibility as a mode');
   });
 });

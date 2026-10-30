@@ -163,19 +163,31 @@ test('lists the five built-in statuses and the ones of the team, with stage, col
   expect(keys).toEqual(['new', 'todo', 'progress', 'done', 'closed', 'waiting', 'legal']);
 
   // A built-in: its word, « Built in », the colour of its stage, the text computed (9.90:1 on new).
+  // FRU-504: the contrast is a word, « Readable »; the ratio is in its tooltip and for a screen reader.
+  // « Colour of the stage » is said once under the list, and in each row for a screen reader only.
   await expect(item(page, 'new')).toContainText('Built in');
-  await expect(item(page, 'new')).toContainText('Colour of the stage');
-  await expect(item(page, 'new')).toContainText('Auto · 9.90:1');
+  await expect(item(page, 'new').locator('.sr-only', { hasText: 'Colour of the stage' })).toHaveCount(1);
+  await expect(page.getByText('A swatch with no code is the colour of the stage of its status.')).toHaveCount(1);
+  // The « 3 » of each pin is a sample: the list says so once, under it (FRU-538).
+  const legend = page.getByText(
+    'Each pin shows how a note in that status looks on the page. The 3 is an example number.',
+  );
+  await expect(legend).toHaveCount(1);
+  await expect(legend).toBeVisible();
+  expect(await item(page, 'new').locator('.kit-pin').textContent()).toBe('3');
+  const newText = item(page, 'new').getByTitle('Contrast 9.90:1, text colour Auto');
+  await expect(newText).toContainText('Readable');
+  await expect(newText.locator('.sr-only')).toHaveText(', Contrast 9.90:1, text colour Auto');
   await expect(item(page, 'new').getByRole('button', { name: 'Reset New' })).toHaveCount(0);
   // A built-in that changed can be reset, never deleted; a status of the team is deleted, never reset.
   await expect(item(page, 'closed').getByRole('button', { name: 'Reset Won’t fix' })).toBeVisible();
   await expect(item(page, 'closed').getByRole('button', { name: /^Delete/ })).toHaveCount(0);
   await expect(item(page, 'waiting')).toContainText('Added by your team');
   await expect(item(page, 'waiting')).toContainText('#7dd3fc');
-  await expect(item(page, 'waiting')).toContainText('Auto · 10.63:1');
+  await expect(item(page, 'waiting').getByTitle('Contrast 10.63:1, text colour Auto')).toContainText('Readable');
   await expect(item(page, 'waiting').getByRole('button', { name: 'Delete Waiting for client' })).toBeVisible();
   // #8b5cf6 takes black, the last step of readableTextColor: 4.96:1.
-  await expect(item(page, 'legal')).toContainText('Auto · 4.96:1');
+  await expect(item(page, 'legal').getByTitle('Contrast 4.96:1, text colour Auto')).toContainText('Readable');
   // The first has no « up », the last no « down ».
   await expect(item(page, 'new').getByRole('button', { name: 'Move New up' })).toBeDisabled();
   await expect(item(page, 'legal').getByRole('button', { name: /down$/ })).toBeDisabled();
@@ -602,7 +614,12 @@ test('at 390 px in French: one card per status, no sideways scroll, and the word
   await expect(item(page, 'new')).toContainText('· 3 notes');
   await expect(item(page, 'todo')).toContainText('· Aucune note');
   await expect(item(page, 'new')).toContainText('Phase');
-  await expect(item(page, 'waiting')).toContainText('Auto · 10,63:1');
+  await expect(
+    page.getByText(
+      'Chaque pin montre à quoi ressemble une note de ce statut sur la page. Le 3 est un numéro d’exemple.',
+    ),
+  ).toBeVisible();
+  await expect(item(page, 'waiting').getByTitle('Contraste 10,63:1, couleur du texte Auto')).toContainText('Lisible');
   expect(await sideScroll(page)).toBe(0);
   await expectNoViolation(page, 'the list at 390 px');
 
@@ -673,7 +690,7 @@ test('a site that sends to Linear lists the states of its team, takes their colo
   expect(worker.sent.at(-1)).toEqual({ method: 'POST', path: `${STATUSES}/settings`, body: { trackerColours: true } });
   await expect(item(page, 'd1')).toContainText("Linear's colour");
   // Linear's Done takes white, 4.70:1 (statuses.md, « The colours »).
-  await expect(item(page, 'd1')).toContainText('Auto · 4.70:1');
+  await expect(item(page, 'd1').getByTitle('Contrast 4.70:1, text colour Auto')).toContainText('Readable');
   await expectNoViolation(page, "Linear, Linear's colours");
 
   // In Review moves to Done, for this site.

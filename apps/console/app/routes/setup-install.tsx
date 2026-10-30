@@ -3,6 +3,8 @@ import { ago } from '../ago';
 import { locale, t } from '../i18n';
 import { extensionInstallFor } from '../extension-store';
 import { useConnectedExtension } from '../extension-connected';
+import { EXTENSION_IDS, hereProblemOf, useExtensionHere } from '../extension-here';
+import { type ReactNode, useState } from 'react';
 import { BY_SIGN_IN, CONNECT_PAGE, snippetFor, useConnect, useCopy } from '../install-options';
 import { AutoGrid, Button, LinkButton, OptionCard, Problem, Snippet, StatusDot } from '../ui';
 import { useLocale } from '../use-locale';
@@ -23,6 +25,10 @@ import { SetupGuide } from '../setup-guide';
  * With a browser of the extension already connected to the account, the card says so and names it,
  * and « Connect another browser » is the only way on (FRU-441): nothing asks to install it again.
  *
+ * On the console of the Cloud, the extension of this browser answers the page (FRU-487,
+ * `extension-here.ts`): installed and signed out, « Connect this browser » connects it in place, with
+ * no tab and no word. Installed and signed in, the card says so. Elsewhere, nothing changes.
+ *
  * On Fruitback Cloud, the guide of the extension is folded under the cards (FRU-486).
  */
 export function PutOnSite({ workspace, site }: { workspace: Workspace; site: Site }) {
@@ -32,14 +38,91 @@ export function PutOnSite({ workspace, site }: { workspace: Workspace; site: Sit
   const { link, problem, connect } = useConnect(workspace);
   const host = siteLabel(site.origin);
   const connected = useConnectedExtension();
+  const { here, connect: connectHere } = useExtensionHere(EXTENSION_IDS);
+  const [hereBusy, setHereBusy] = useState(false);
+  const [hereProblem, setHereProblem] = useState<string | undefined>();
+  const connectInPlace = async () => {
+    if (hereBusy) return;
+    setHereBusy(true);
+    setHereProblem(undefined);
+    try {
+      setHereProblem(hereProblemOf(await connectHere()));
+    } finally {
+      setHereBusy(false);
+    }
+  };
+  const inPlace = here !== undefined && !here.signedIn;
+  // FRU-441: with a browser of the account connected, the way on is « Connect another browser », a
+  // quiet link, whatever it does. In place (FRU-487) it connects the extension of this browser.
   const connectLabel = connected === undefined ? t('Connect this browser') : t('Connect another browser');
-  const connectLink = BY_SIGN_IN ? (
-    <LinkButton href={CONNECT_PAGE} newTab>
-      {connectLabel}
-    </LinkButton>
-  ) : (
-    <LinkButton onClick={connect}>{connectLabel}</LinkButton>
-  );
+  let connectLink = <LinkButton onClick={connect}>{connectLabel}</LinkButton>;
+  if (inPlace) {
+    connectLink = (
+      <LinkButton disabled={hereBusy} onClick={() => void connectInPlace()}>
+        {hereBusy ? t('Connecting…') : connectLabel}
+      </LinkButton>
+    );
+  } else if (BY_SIGN_IN) {
+    connectLink = (
+      <LinkButton href={CONNECT_PAGE} newTab>
+        {connectLabel}
+      </LinkButton>
+    );
+  }
+  let card: ReactNode;
+  if (here?.signedIn === true && connected === undefined) {
+    card = (
+      <>
+        <p className="mb-1.5 flex items-center gap-2 text-small font-semibold">
+          <StatusDot status="done" size={10} />
+          {t('Extension connected in this browser')}
+        </p>
+        <div className="mt-auto">
+          <LinkButton href={CONNECT_PAGE} newTab>
+            {t('Connect another browser')}
+          </LinkButton>
+        </div>
+      </>
+    );
+  } else if (inPlace && connected === undefined) {
+    card = (
+      <>
+        <p className="mb-1.5 text-hint">
+          {t('Fruitback is installed in this browser. Connect it to your account here: no word to check.')}
+        </p>
+        <div className="mt-auto">
+          <Button tone="outline" size="page" wide disabled={hereBusy} onClick={() => void connectInPlace()}>
+            {hereBusy ? t('Connecting…') : t('Connect this browser')}
+          </Button>
+        </div>
+      </>
+    );
+  } else if (connected === undefined) {
+    card = (
+      <>
+        <p className="mb-1.5 text-hint">
+          {t('Add it, then connect this browser: a page opens, and you click the Fruitback icon there.')}
+        </p>
+        <div className="mt-auto flex flex-col gap-2">
+          <Button tone="outline" size="page" wide href={extensionInstallFor(navigator.userAgent)} newTab>
+            {t('Install the extension (beta)')}
+            <Away />
+          </Button>
+          <div>{connectLink}</div>
+        </div>
+      </>
+    );
+  } else {
+    card = (
+      <>
+        <p className="mb-1.5 flex items-center gap-2 text-small font-semibold">
+          <StatusDot status="done" size={10} />
+          {t('Extension connected · {browser}', { browser: connected.browser })}
+        </p>
+        <div className="mt-auto">{connectLink}</div>
+      </>
+    );
+  }
 
   return (
     <>
@@ -47,29 +130,9 @@ export function PutOnSite({ workspace, site }: { workspace: Workspace; site: Sit
       <AutoGrid min={230}>
         <OptionCard title={t('Browser extension')}>
           <p className="text-small text-muted">{t("Nothing to deploy. Right for a client's site you cannot touch.")}</p>
-          {connected === undefined ? (
-            <>
-              <p className="mb-1.5 text-hint">
-                {t('Add it, then connect this browser: a page opens, and you click the Fruitback icon there.')}
-              </p>
-              <div className="mt-auto flex flex-col gap-2">
-                <Button tone="outline" size="page" wide href={extensionInstallFor(navigator.userAgent)} newTab>
-                  {t('Install the extension (beta)')}
-                  <Away />
-                </Button>
-                <div>{connectLink}</div>
-              </div>
-            </>
-          ) : (
-            <>
-              <p className="mb-1.5 flex items-center gap-2 text-small font-semibold">
-                <StatusDot status="done" size={10} />
-                {t('Extension connected · {browser}', { browser: connected.browser })}
-              </p>
-              <div className="mt-auto">{connectLink}</div>
-            </>
-          )}
+          {card}
           {problem === undefined ? null : <Problem>{t(problem)}</Problem>}
+          {hereProblem === undefined ? null : <Problem>{t(hereProblem)}</Problem>}
           {link === undefined ? null : (
             <p className="text-hint text-muted">
               {t('A page opened in a new tab. If it did not, open')}{' '}
@@ -103,12 +166,18 @@ export function PutOnSite({ workspace, site }: { workspace: Workspace; site: Sit
       </AutoGrid>
       {/* The guide walks the sign-in of Fruitback Cloud, which a self-hosted console does not use. */}
       {BY_SIGN_IN ? <SetupGuide /> : null}
-      <p role="status" className="mt-4.5 text-small">
-        <strong className="font-semibold">{t('Waiting for your first note.')}</strong>{' '}
-        <span className="text-muted">{t('Open the site, click Leave feedback, then any part of the page.')}</span>{' '}
-        <LinkButton space="inline" href={site.origin} newTab>
-          {t('Open {site}', { site: host })}
-        </LinkButton>
+      {/* The drop beats while the page reads the site again. It hangs in the gutter: the words stay on the column. */}
+      <p role="status" className="mt-4.5 -ml-4.5 grid grid-cols-[auto_minmax(0,1fr)] gap-x-2.5 text-small">
+        <span aria-hidden="true" className="setup-waiting" />
+        <span>
+          <strong className="font-semibold">{t('Waiting for your first note.')}</strong>{' '}
+          <span className="text-muted">{t('Open the site, click Leave feedback, then any part of the page.')}</span>{' '}
+          <span className="mt-1 block wrap-anywhere">
+            <LinkButton space="inline" href={site.origin} newTab>
+              {t('Open {site}', { site: host })}
+            </LinkButton>
+          </span>
+        </span>
       </p>
       <div className="mt-6">
         <Button to={`/w/${workspace.id}/sites`}>{t('Open the console')}</Button>

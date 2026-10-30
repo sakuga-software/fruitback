@@ -1,6 +1,6 @@
 {
   "name": "@fruitback/extension",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "description": "Fruitback as a browser extension: review any site without it embedding anything.",
   "license": "AGPL-3.0-only",
@@ -8,6 +8,8 @@
   "scripts": {
     "dev": "wxt",
     "dev:firefox": "wxt -b firefox",
+    "gallery": "vite --config gallery/vite.config.ts",
+    "gallery:build": "vite build --config gallery/vite.config.ts",
     "build": "wxt build",
     "icons:build": "node build-icons.ts",
     "build:firefox": "wxt build -b firefox",
@@ -33,6 +35,7 @@
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
     "typescript": "catalog:",
+    "vite": "^8.3.5",
     "wxt": "^0.21.4"
   },
   "nx": {
@@ -42,13 +45,17 @@
           "default",
           "^production",
           "{workspaceRoot}/apps/console/app/app.css",
+          "{workspaceRoot}/apps/console/app/provider-icons.tsx",
+          "{workspaceRoot}/apps/console/app/routes/connect.tsx",
           "{workspaceRoot}/docs/install.md",
           "{workspaceRoot}/docs/reviewing.md",
           "{workspaceRoot}/docs/privacy.md",
           "{workspaceRoot}/SECURITY.md",
           "{workspaceRoot}/apps/worker/LICENSE",
+          "{workspaceRoot}/apps/worker/src/accounts.ts",
           "{workspaceRoot}/apps/worker/src/app.ts",
           "{workspaceRoot}/apps/worker/src/pair-page.ts",
+          "{workspaceRoot}/apps/worker/src/session-site-add.ts",
           "{workspaceRoot}/apps/worker/src/session.ts"
         ]
       }

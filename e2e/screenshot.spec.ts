@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { WORKER_ORIGIN } from './pin.ts';
+import { caseOf, WORKER_ORIGIN } from './pin.ts';
 
 /**
  * The optional picture (FRU-6), in a browser — the only place the full path is reachable.
@@ -72,7 +72,7 @@ async function storedScreenshot(page: import('@playwright/test').Page) {
 }
 
 test('a picture reaches the note when the host can take one', async ({ page }) => {
-  await page.goto('/?widget=off&case=shot-ok');
+  await page.goto(`/?widget=off&case=${caseOf('shot-ok')}`);
   await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
   await mountWith(page, 'ok');
 
@@ -87,7 +87,7 @@ test('no picture leaves the page until the box of the composer is ticked, and th
   // Privacy: the host can take a picture, and nobody chose one. The box is there, and it is off.
   // The control is the second half: the same path with the box ticked stores a picture, so the
   // first half is not green for want of a capture.
-  await page.goto('/?widget=off&case=shot-box');
+  await page.goto(`/?widget=off&case=${caseOf('shot-box')}`);
   await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
   await mountWith(page, 'ok', 'untouched');
   const box = page.getByRole('checkbox', { name: 'Attach a picture of the element' });
@@ -135,7 +135,7 @@ test('no picture leaves the page until the box of the composer is ticked, and th
 });
 
 test('the composer has no box of the picture when the host cannot take one (FRU-258)', async ({ page }) => {
-  await page.goto('/?widget=off&case=shot-no-box');
+  await page.goto(`/?widget=off&case=${caseOf('shot-no-box')}`);
   await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
   await page.addScriptTag({ path: IIFE });
   await page.evaluate(
@@ -156,7 +156,7 @@ test('the composer has no box of the picture when the host cannot take one (FRU-
 test('a capture that throws costs the picture, never the note', async ({ page }) => {
   // A canvas tainted by a cross-origin image is the ordinary failure, not the exotic one. Losing
   // what someone just wrote over it would be the one thing this widget cannot afford.
-  await page.goto('/?widget=off&case=shot-throws');
+  await page.goto(`/?widget=off&case=${caseOf('shot-throws')}`);
   await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
   await mountWith(page, 'throws');
 
@@ -167,7 +167,7 @@ test('a capture that throws costs the picture, never the note', async ({ page })
 
 test('a host that returns nothing leaves the field out entirely', async ({ page }) => {
   // `undefined` is a refusal, not an empty picture: the note round-trip forbids a key nobody gave.
-  await page.goto('/?widget=off&case=shot-nothing');
+  await page.goto(`/?widget=off&case=${caseOf('shot-nothing')}`);
   await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
   await mountWith(page, 'nothing');
 
@@ -177,7 +177,7 @@ test('a host that returns nothing leaves the field out entirely', async ({ page 
 });
 
 test('the setting is not offered when the host cannot take a picture', async ({ page }) => {
-  await page.goto('/?widget=off&case=shot-absent');
+  await page.goto(`/?widget=off&case=${caseOf('shot-absent')}`);
   await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
   await page.addScriptTag({ path: IIFE });
   await page.evaluate(
@@ -199,7 +199,7 @@ test('a capture with no URL is refused rather than stored', async ({ page }) => 
   // `NoteScreenshot` leaves `url` optional — the field was speculative before anything filled it —
   // so the seam requires it in TypeScript and checks it at runtime, because this package ships to
   // JavaScript too. A screenshot with no URL is a row in a Linear issue that opens nothing.
-  await page.goto('/?widget=off&case=shot-urlless');
+  await page.goto(`/?widget=off&case=${caseOf('shot-urlless')}`);
   await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
   await mountWith(page, 'urlless');
 

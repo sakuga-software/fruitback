@@ -180,7 +180,8 @@ async function noClientLeftOn(admin: Database, name: string, patienceMs: number)
 }
 
 /**
- * A new empty database on the real server, and its address. `drop` removes it.
+ * A new database on the real server, a copy of `template` (empty by default), and its address.
+ * `drop` removes it.
  *
  * `drop` first waits for the connections on the database to end, see `noClientLeftOn`. `FORCE` stays
  * for what does not end by itself: a process that a test killed. `dropAtOnce` does not wait: it is
@@ -188,12 +189,14 @@ async function noClientLeftOn(admin: Database, name: string, patienceMs: number)
  *
  * For a test that gives the address to another process. Any other test takes `createRealDatabase`.
  */
-export async function ownDatabase(): Promise<{ url: string; drop(): Promise<void>; dropAtOnce(): Promise<void> }> {
+export async function ownDatabase(
+  template = 'template0',
+): Promise<{ url: string; drop(): Promise<void>; dropAtOnce(): Promise<void> }> {
   if (TEST_DATABASE_URL === undefined) throw new Error('FRUITBACK_TEST_DATABASE_URL is not set');
   const name = databaseName();
   const admin = createPgDatabase(TEST_DATABASE_URL, 'public', { max: 1 });
-  // `template0`: a copy of `template1` is refused while another session is on it.
-  await rowsOf(admin, `CREATE DATABASE ${name} TEMPLATE template0`);
+  // `template0` by default: a copy of `template1` is refused while another session is on it.
+  await rowsOf(admin, `CREATE DATABASE ${name} TEMPLATE ${template}`);
   const url = new URL(TEST_DATABASE_URL);
   url.pathname = `/${name}`;
 
@@ -216,6 +219,80 @@ export async function ownDatabase(): Promise<{ url: string; drop(): Promise<void
 export async function createRealDatabase(schema = 'public'): Promise<PgDatabase> {
   const own = await ownDatabase();
   const database = createPgDatabase(own.url, schema);
+
+  return {
+    ...database,
+    async close() {
+      await database.close();
+      await own.drop();
+    },
+  };
+}
+
+/**
+ * The migrated database of this process on the real server, made once (FRU-480): the template of
+ * `createMigratedRealDatabase`. Nothing stays connected to it, as `CREATE DATABASE … TEMPLATE`
+ * requires. `afterAll` drops it.
+ */
+let migratedTemplate: Promise<{ name: string; drop(): Promise<void> }> | undefined;
+
+/**
+ * A new database on the real server with `apply` done on it (the migrations of the worker), and
+ * nothing connected to it. On a failure it drops that database before it throws: nothing else holds
+ * its name (review of #683).
+ */
+export async function makeMigratedTemplate(
+  apply: (database: Database) => Promise<void> = migrated,
+): Promise<{ name: string; drop(): Promise<void> }> {
+  const own = await ownDatabase();
+  const name = new URL(own.url).pathname.slice(1);
+  try {
+    const database = createPgDatabase(own.url, 'public');
+    try {
+      await apply(database);
+    } finally {
+      await database.close();
+    }
+    // The pool has ended, and its connections may still be on the server for a moment (FRU-196). A
+    // copy refuses a template that has one, after it waited up to 5 s for it to go. So the first copy
+    // starts when they are gone, and depends on no wait of PostgreSQL.
+    const admin = createPgDatabase(TEST_DATABASE_URL as string, 'public', { max: 1 });
+    try {
+      await noClientLeftOn(admin, name, LEFT_PATIENCE_MS);
+    } finally {
+      await admin.close();
+    }
+  } catch (error) {
+    await own.dropAtOnce();
+    throw error;
+  }
+
+  return { name, drop: own.drop };
+}
+
+afterAll(async () => {
+  const template = migratedTemplate;
+  migratedTemplate = undefined;
+  await (await template?.catch(() => undefined))?.drop();
+});
+
+/**
+ * A new database on the real server, with every migration of the worker applied and no row
+ * (FRU-480), and a pool on it. `close` drops it. For a case whose subject is not the migrations, as
+ * `createMigratedPgliteDatabase` is on PGlite.
+ *
+ * Each case gets a copy of one migrated database of the process (`CREATE DATABASE … TEMPLATE`),
+ * instead of an empty one where the store applies the 39 migrations again.
+ */
+export async function createMigratedRealDatabase(): Promise<PgDatabase> {
+  if (TEST_DATABASE_URL === undefined) throw new Error('FRUITBACK_TEST_DATABASE_URL is not set');
+  migratedTemplate ??= makeMigratedTemplate();
+  const template = await migratedTemplate.catch((error: unknown) => {
+    migratedTemplate = undefined;
+    throw error;
+  });
+  const own = await ownDatabase(template.name);
+  const database = createPgDatabase(own.url, 'public');
 
   return {
     ...database,

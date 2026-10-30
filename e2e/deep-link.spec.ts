@@ -1,5 +1,5 @@
 import { type Page, expect, test } from '@playwright/test';
-import { WORKER_ORIGIN } from './pin.ts';
+import { caseOf, WORKER_ORIGIN } from './pin.ts';
 
 /**
  * A link that opens a note on its page (FRU-253), on the widget as `init` assembles it.
@@ -52,7 +52,7 @@ test('a link opens the note on its page, scrolls to it, and leaves the address w
   page.on('console', (message) => {
     if (message.type() === 'error' || message.type() === 'warning') errors.push(message.text());
   });
-  const address = `/?widget=off&case=deep-link-${test.info().retry}`;
+  const address = `/?widget=off&case=${caseOf('deep-link')}`;
   await mount(page, address);
   await page.locator('#checkout-cta').scrollIntoViewIfNeeded();
   const id = await plant(page, '#checkout-cta', 'Opened by its link');
@@ -94,7 +94,7 @@ test('a link opens the note on its page, scrolls to it, and leaves the address w
 });
 
 test('a link that arrives while somebody writes closes nothing, and opens once the note is sent', async ({ page }) => {
-  const address = `/?widget=off&case=deep-link-writing-${test.info().retry}`;
+  const address = `/?widget=off&case=${caseOf('deep-link-writing')}`;
   await mount(page, address);
   const id = await plant(page, '[data-testid="card-espresso"] .add', 'The note the link names');
 

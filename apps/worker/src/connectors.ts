@@ -9,6 +9,7 @@ import { type LinearOAuth, linearAuthorization } from './linear-oauth.ts';
 import {
   type NoteStore,
   StoreError,
+  findNote,
   takesAttachments,
   takesChecks,
   takesEdits,
@@ -133,6 +134,7 @@ function withSettings(store: NoteStore, settings: ConnectorSettings): NoteStore 
             (store.createBatch as NonNullable<NoteStore['createBatch']>)(notes, client, quiet(policy)),
         }),
     findForPage: (query, client, policy) => store.findForPage(query, client, quiet(policy)),
+    findNote: (lookup, client, policy) => findNote(store, lookup, client, quiet(policy)),
   };
 }
 
@@ -275,6 +277,8 @@ export function createRoutedStore(base: NoteStore, connectors: ConnectorStores):
     // The store of the client decides how a batch is written: under a parent, or one note at a time.
     createBatch: async (notes, client, policy, memory) => createAll(await pick(client), notes, client, policy, memory),
     findForPage: async (query, client, policy) => (await pick(client)).findForPage(query, client, policy),
+    // FRU-499: one row in the worker's own store; the page, in a tracker that has no read by id.
+    findNote: async (lookup, client, policy) => findNote(await pick(client), lookup, client, policy),
     ...(base.forget === undefined ? {} : { forget: base.forget }),
     repliesFor: async (client) => takesReplies(await pick(client), client),
     checksFor: async (client) => takesChecks(await pick(client), client),

@@ -436,6 +436,11 @@ degradation the ticket asked to have written down rather than discovered.
 - **`store.ts` is the interface.** `findForPage` states the _intention_, not the method — Linear
   filters by substring, SQL does a `WHERE`, and exposing a `contains` filter would have made
   Linear's trick the contract.
+- **A write reads one note, through `findNote` of `store.ts`** (FRU-499): a reply, a verdict, an edit,
+  a status, and the MCP writes. The worker's store reads one row and its newest replies; a store with
+  no `findNote` reads the page and picks the note. Never `findForPage` and a `find` in a route.
+- **The cap of the replies is in the SQL** (FRU-499): a `LATERAL … LIMIT COMMENTS_PER_ISSUE` on
+  `note_comments_by_note`, so a long thread sends twenty rows, not all of them.
 - **Every state the deprecated flag can be in says something at boot** (FRU-54).
   `fakeLinearIgnoredReason` answers when the flag lost — to `NODE_ENV=production`, or to an explicit
   `FRUITBACK_STORE`. `fakeLinearDeprecationNotice` answers when it selected the memory store, and
@@ -866,14 +871,17 @@ same database since FRU-142: see the section after this one.
   other.
 - **A site and its destinations are one statement**, a `LEFT JOIN`, where SQLite reads the sites and
   then every destination. It is one exchange with the server for a request, and one moment of the
-  database. `clientMap` orders by position alone: read the numbers below before you add a column to
-  that `ORDER BY`.
+  database. `client` and `clientMap` order by position alone: read the numbers below before you add
+  a column to that `ORDER BY`.
 - **PGlite is the PostgreSQL of `node --test`, and it cannot show a race.** It has one connection, so
   a transaction holds every other call back. The CI job `postgres` runs the same cases on a server,
   and `test:postgres` fails when the address of that server is missing: a suite that is skipped
   proves nothing.
-- **The sites are still read on every request, on purpose**: see the numbers below before you add a
-  cache.
+- **A request reads one site, never every site** (FRU-495). The routes of the widget read the site
+  they name with `client(id)`, and the CORS of a page asks `servesOrigin(origin)` (index
+  `sites_by_origin`, migration `0039`) for an origin that `ALLOWED_ORIGINS` does not hold. The
+  console, `/session/*`, OAuth and `/pair` read no site to route. There is still no cache: see the
+  numbers below before you add one.
 
 ### The reasons, and the measurements
 
@@ -918,7 +926,8 @@ same database since FRU-142: see the section after this one.
 
 ### The sites are read on every request, and that was measured
 
-`withSites` reads every site on every request, `/feedback` included. On a file that is free. On a
+**Until FRU-495**, `withSites` read every site on every request, `/feedback` included. The numbers of
+FRU-495, which reads one site, are at the end of this section. On a file that is free. On a
 database it is one exchange with the server. Measured on 2026-10-11, after a site got its list of
 destinations (#134), on one machine, PostgreSQL 17 in a container reached through a published port.
 Every site but the one that is read has two destinations. 500 calls after 50 to warm up, three runs,
@@ -961,6 +970,44 @@ Neither was taken, for three reasons:
 **Not measured: a database on another host.** There the cost is the round trip of that network on
 every request, and this decision must be measured again before such a deployment. The same holds
 above a few thousand sites.
+
+**FRU-495: one site by its id, and the origin of the page apart.** Measured on 2026-10-30, on one
+machine, PostgreSQL 17 in a container reached through a published port, with the worker of
+production (`server.ts`) and each of its statements counted. The instance holds 500 sites (Acme with
+200 sites, 300 other workspaces with one each), then 10,500: 10,000 more sites in the other
+workspaces. `GET /feedback` reads one page of a site of Acme with a warm cache; `POST /feedback`
+writes one note on that site; `/console/me` is the owner of Acme. 60 calls after 10 to warm up, three
+runs, and for each cell the middle value of the three: median and p95, in milliseconds, measured by
+the client.
+
+| Sites  | Route             | Before (every site) | After (one site) | Statements, before → after |
+| ------ | ----------------- | ------------------- | ---------------- | -------------------------- |
+| 500    | `GET /console/me` | 3.46, 5.07          | 3.10, 5.46       | 8 → 7                      |
+| 500    | `GET /feedback`   | 2.24, 2.95          | 1.95, 3.60       | 5 → 6                      |
+| 500    | `POST /feedback`  | 6.64, 8.81          | 5.49, 10.18      | 6 → 7                      |
+| 10,500 | `GET /console/me` | 23.60, 30.65        | 3.05, 4.76       | 8 → 7                      |
+| 10,500 | `GET /feedback`   | 23.61, 33.36        | 2.20, 4.26       | 5 → 6                      |
+| 10,500 | `POST /feedback`  | 26.96, 44.32        | 5.72, 7.12       | 6 → 7                      |
+
+- **The cost no longer grows with the instance.** Before, the first statement of every request
+  answered every site: 500 or 10,500 rows. After, a route of the widget reads two rows at most: the
+  site it names (`client`, one row a place), and one `id` when the origin of the page is not on
+  `ALLOWED_ORIGINS` (`servesOrigin`, `LIMIT 1`). The console, `/session/*`, OAuth and `/pair` read
+  no site to route.
+- **One statement more on the widget, one less on the console.** The read of the site and the read
+  of the origin are two statements, where the map was one. At 500 sites the difference is in the
+  noise of the bench.
+- **`servesOrigin` reads the index `sites_by_origin`** (migration `0039`): `Index Scan using
+  sites_by_origin`, 0.05 ms at 10,500 sites. The unique key `(workspace_id, origin)` starts with the
+  workspace, and PostgreSQL 17 does not use it for an origin alone.
+- **What a request observes did not change.** A site is served the moment it is added, and refused
+  the moment it is removed or its workspace suspended: the cases of `account-conformance.fixture.ts`
+  on `clientMap`, unchanged, and the cases of `client` and `servesOrigin` beside them.
+  test:`reads the one site a request of the widget names, and never the other sites of the instance (FRU-495)`
+  counts the rows that the statements on `sites` answer.
+- **A database that does not answer is now met first by the rate limit** on a route that reads no
+  site (the console, an origin of `ALLOWED_ORIGINS`): `503 limiter-unavailable`, where it was
+  `502 store-unavailable` from the map. A page of a site still gets `502 store-unavailable`.
 
 ## The sessions in PostgreSQL (FRU-142)
 
@@ -2090,8 +2137,21 @@ may change, and who », says what is protected; this section says how to change 
   names, then `can`. It then writes the request that better-auth reads, with those fields and no
   other. Never forward the request of the caller: `organizationSlug` names another workspace than
   the one whose role was read, and `filterField` reads any column of `member`. The body is read
-  under the cap of the worker (`bounded-body.ts`, `413` over it). The other routes of the console
-  still read theirs with `request.text()`: that is older than this slice, and not changed by it.
+  under the cap of the worker (`bounded-body.ts`, `413` over it). Every other route of the console
+  reads its body with `readJsonObject` of the same file, under the same cap (FRU-506).
+- **The two lists of the Members screen are read by the worker, not by the plugin** (FRU-496), after
+  the same checks: `list-members` from `AccountStore.membersOf`, a page in the order the members
+  joined (`createdAt`, then `id`), with `total` and a search `q` (1 to 100 characters) of the name
+  or the address, `ILIKE` with `%`, `_` and `\` escaped, and no accent on either side
+  (`normalize(…, NFD)` less the marks U+0300 to U+036F, as `folded` of the console reads the
+  invitations: « zoe » finds « Zoé »); `list-invitations` from
+  `waitingInvitations`, the `pending` ones that did not end, oldest first. Each answer keeps the
+  shape of the plugin's. The plugin's `listMembers` has no order, so a page could repeat a member
+  and skip another, and its filter reads `member` only, never a name. Its `listInvitations` reads
+  every invitation the workspace ever had and stops at its default of 100 rows: with 100 answered
+  invitations, one that waits was not listed. No index was added: `member_organizationId_idx` and
+  `invitation_organizationId_idx` take both reads to their workspace (measured on 501 members and
+  300 invitations in the PR of FRU-496).
 - **Every open route names its workspace in `organizationId`.** No call of the worker reads the
   « active » workspace of a session, and nothing writes one: `createWorkspaceWithPlugin` passes
   `keepCurrentActiveOrganization`. Do not open `set-active`.
@@ -2576,10 +2636,11 @@ ticket removes; it adds no route and no table.
   the signature, on the read and on the write. `pair --workspace` names it, and it travels through
   every rotation.
 - **With `FRUITBACK_DATABASE_URL` (FRU-141), the sites are the clients**
-  (FRU-96). `withSites` in `request-context.ts` reads
-  them from the accounts on every request and lays them over the configuration as its client map
-  and its allowed origins, so routing, CORS and the `ws` check run unchanged. **An empty map stays
-  empty**: `undefined` would make it a single-client worker that answers every page. `accounts.ts`
+  (FRU-96). `withSites` in `request-context.ts` gives the configuration two reads of the accounts:
+  `clientNamed`, the site that a request names, and `servesOrigin`, whether a site has the origin
+  of the page (FRU-495). `routeFor` makes a client map of the one site, and `resolveClient`, CORS
+  and the `ws` check run unchanged. **An empty map stays empty**: an unknown site is `{}`, never
+  `undefined`, which would make it a single-client worker that answers every page. `accounts.ts`
   holds the roles, and `can(role, action)` is the one table of who does what. The boot log says so
   too: `readExposureNotice` does not read a worker with accounts as « one client, public », which is
   what it printed on the first day of the Cloud (FRU-116).
@@ -3080,16 +3141,17 @@ workspace too: the reason is free text, « impayé » for example.
   only a change writes its action. Two administrators who suspend one workspace at the same moment
   write one row and one action:
   test:`suspends it once: one call changes it and writes one action, and the other changes nothing`.
-- **A site of a suspended workspace answers as a site that does not exist.** `clientMap` of the
-  store leaves it out, so every route that resolves a `client` finds nothing, and its origin leaves
-  the list of CORS too, unless a site of another workspace has it. The routes of the extension that
+- **A site of a suspended workspace answers as a site that does not exist.** `client` and
+  `servesOrigin` of the store leave it out (FRU-495; `clientMap` before), so every route that
+  resolves a `client` finds nothing, and its origin leaves the list of CORS too, unless a site of
+  another workspace has it. The routes of the extension that
   take no `client` read the suspension themselves:
 
   | Route                                   | What a suspended workspace gives                                  |
   | --------------------------------------- | ----------------------------------------------------------------- |
-  | `GET /feedback`, `POST /feedback`       | the answer of an unknown `client`, by `clientMap`                 |
-  | `POST /feedback/<id>/replies`           | the answer of an unknown `client`, by `clientMap`                 |
-  | `POST /attachments`                     | the answer of an unknown `client`, by `clientMap`                 |
+  | `GET /feedback`, `POST /feedback`       | the answer of an unknown `client`, by `client`                    |
+  | `POST /feedback/<id>/replies`           | the answer of an unknown `client`, by `client`                    |
+  | `POST /attachments`                     | the answer of an unknown `client`, by `client`                    |
   | `GET /session/sites`, account session   | the workspace and its sites are not listed, as after its deletion |
   | `GET /session/sites`, workspace session | `401 not-a-member`, as after its deletion                         |
   | `POST /session/sites`                   | `404 not-found`, as for a workspace that does not exist           |
@@ -3149,10 +3211,11 @@ workspace too: the reason is free text, « impayé » for example.
   better-auth reads no `BIGINT`, on a pool with no parser of ours. A `suspended_at` there breaks
   both, or is not a `BIGINT`. A row of the worker keeps the convention, cascades with the workspace,
   and makes « changed » one statement.
-- **Why `clientMap`, and not a check in each route.** Every route of the widget reads the client map
-  of the request, and so does the list of CORS. A site that is not in the map is unknown by
-  construction, on the routes of today and on the next one. The cost is one `NOT EXISTS` on a key, in
-  the statement that every request already runs.
+- **Why in the read of the site, and not a check in each route.** Every route of the widget reads its
+  site with `client`, and the list of CORS asks `servesOrigin` (FRU-495; both read `clientMap`
+  before). A site that these reads leave out is unknown by construction, on the routes of today and
+  on the next one. The cost is one `NOT EXISTS` on a key, in the statement that the request already
+  runs.
 - **Why `409`, and not `423`.** Every refusal of the console that a person can understand is a `409`
   with its code (`self-removal`, `last-admin`, `too-many-domains`). The console reads the code.
 - **Why the guard comes after the role.** A person who is not a member must get the `404` of a
@@ -4094,21 +4157,25 @@ call, a write that changes no row when the day is the same.
   migrations, the catalogue, or a database of before takes it.
 - `createMigratedPgliteDatabase` (and `migratedDatabaseOn`) gives `public` with every migration
   applied and no row. `worlds()`, the conformance suites of the stores, the sessions and the accounts,
-  and `MIGRATED_DATABASES` of `auth.fixture.ts` take it. The real server of `MIGRATED_DATABASES` is the
-  one of `DATABASES`: in the CI job `postgres`, each case still applies every migration on an empty
-  database.
-- Between two cases it empties every table but the journal (`TRUNCATE … RESTART IDENTITY`), and
-  sets the session back (`RESET ALL`, temporary tables, advisory locks). When the shape of `public`
-  (tables, columns, defaults, indexes, constraints, triggers and their state, functions, types,
-  schemas, rows of the journal) is not the one `migrate` made, it empties `public` and applies the
-  migrations again. test:`gives no row of the case before, in any table, and the identities start again`
+  and `MIGRATED_DATABASES` of `auth.fixture.ts` take it. On the real server of the CI job `postgres`,
+  the same suites take `createMigratedRealDatabase` (FRU-480): a copy (`CREATE DATABASE … TEMPLATE`)
+  of one database that the process migrated once, instead of an empty one where each case applied
+  every migration again. The first copy waits until no connection is left on that template
+  (`noClientLeftOn`, FRU-196): a copy refuses a template that one is still on.
+- Between two cases it empties every table but the journal (`DELETE` with the triggers off, and each
+  owned sequence back to its first value, as `TRUNCATE … RESTART IDENTITY` did), and sets the session
+  back (`RESET ALL`, temporary tables, advisory locks). When a case changed the schema (an event
+  trigger sees any `CREATE`, `ALTER`, `DROP`, `GRANT` of the case) or a row of the journal, it
+  empties `public` and applies the migrations again. test:`gives no row of the case before, in any table, and the identities start again`
   test:`gives no state of the session of the case before: settings, temporary tables, advisory locks`
 
 ### Why
 
 Applying the migrations on PGlite took 50 ms a case, and emptying `public` 14 ms more: a third of the
 time of the suite, and the dry run of the mutation pass runs every test file in a process of its own
-(FRU-336). The store under test still calls `migrated`, and the first case of each process applies
+(FRU-336). FRU-480: `TRUNCATE` of the 36 tables took 20 ms a case, and the read of the
+whole catalogue of `public` that told whether a case changed it 7 ms: 34 s of CPU of the suite. A
+`DELETE` takes 1 ms, and reading the setting of the event trigger and the journal well under 1 ms. The store under test still calls `migrated`, and the first case of each process applies
 every migration on an empty database with `migrate` of `postgres-migrate.ts`. test:`is the database that migrate makes on an empty one, with every migration in its journal`
 
 ## The files of a note, in transit (FRU-331)

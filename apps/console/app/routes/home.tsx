@@ -40,21 +40,22 @@ export default function Home() {
       }
       // The front door must not take this person on with no word: they think GitHub is connected.
       if (unstarted) return setManagesNone(true);
-      void myInvitations().then((invitations) => {
+      const workspace = me.data.workspaces[0];
+      // Only somebody who adds a site is sent back to the step that adds one.
+      const adds = workspace !== undefined && (workspace.role === 'owner' || workspace.role === 'admin');
+      // The invitations and the sites are read side by side (FRU-492): one after the other, they
+      // were a third round trip before the first screen, 160 ms on a phone. The sites are read for
+      // nothing when an invitation waits.
+      const listing = adds ? call<{ sites: Site[] }>('GET', `/console/workspaces/${workspace.id}/sites`) : undefined;
+      void Promise.all([myInvitations(), listing]).then(([invitations, listed]) => {
         if (stopped) return;
         // An invitation that could not be read does not hold the front door: it is on its own page.
         if (invitations.ok && invitations.data.length > 0) return navigate('/invitations', { replace: true });
-        const workspace = me.data.workspaces[0];
         if (workspace === undefined) return navigate('/setup', { replace: true });
         const sites = `/w/${workspace.id}/sites`;
-        // Only somebody who adds a site is sent back to the step that adds one.
-        if (workspace.role !== 'owner' && workspace.role !== 'admin') return navigate(sites, { replace: true });
-        void call<{ sites: Site[] }>('GET', `/console/workspaces/${workspace.id}/sites`).then((listed) => {
-          if (stopped) return;
-          // A workspace with no site is a setup that stopped at its second step (FRU-239). A list
-          // that could not be read is not an empty list: the Sites screen says so itself.
-          navigate(listed.ok && listed.data.sites.length === 0 ? '/setup' : sites, { replace: true });
-        });
+        // A workspace with no site is a setup that stopped at its second step (FRU-239). A list
+        // that could not be read is not an empty list: the Sites screen says so itself.
+        navigate(listed?.ok === true && listed.data.sites.length === 0 ? '/setup' : sites, { replace: true });
       });
     });
 

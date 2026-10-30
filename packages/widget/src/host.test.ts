@@ -2,7 +2,15 @@ import { afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { type CaptureEngine } from './engine.ts';
 import { type CaptureHost, type CaptureTarget, createCaptureHost, shortSelector } from './host.ts';
-import { type MountedPage, keyboardEventCtor, mouseEventCtor, mountPage, pressKey } from './dom.fixture.ts';
+import {
+  type MountedPage,
+  keyboardEventCtor,
+  mouseEventCtor,
+  mountPage,
+  pressKey,
+  useHandFrames,
+  stylesIn,
+} from './dom.fixture.ts';
 import { deepActiveElement } from './focus.ts';
 import { createTranslator } from './messages.ts';
 
@@ -251,9 +259,9 @@ describe('the chrome the reporter sees (FRU-36)', () => {
     // nothing logs, and every icon in the widget is an empty box. happy-dom draws nothing, so this
     // asserts the selector; `e2e/host.spec.ts` asserts the pixels.
     const { page } = mount(() => null);
-    const sheet = page.document.querySelector('[data-fruitback-host]')?.shadowRoot?.querySelector('style');
+    const root = page.document.querySelector('[data-fruitback-host]')?.shadowRoot;
 
-    assert.match(sheet?.textContent ?? '', /\*:not\(svg, svg \*\) \{ all: initial;/);
+    assert.match(root ? stylesIn(root) : '', /\*:not\(svg, svg \*\) \{ all: initial;/);
   });
 });
 
@@ -417,6 +425,31 @@ describe('createCaptureHost', () => {
     host.release();
     scroll(0);
     assert.equal(highlight.style.display, 'none');
+  });
+
+  it('keeps the frame on a held element as it grows back from a press (FRU-489)', () => {
+    const page = mountPage(PAGE, { width: 1_000, height: 1_000 });
+    const frames = useHandFrames(page.view);
+    // 0.97 of a button of 100 × 30, around the same centre, then the button again.
+    const box = { left: 11.5, top: 20.45, width: 97, height: 29.1 };
+    const engine: CaptureEngine = { ...fakeEngine(page, () => null), boundsOf: () => box };
+    host = createCaptureHost({ document: page.document, engine, onSelect: () => {} });
+    const highlight = host.root.querySelector('[data-fruitback-host-highlight]') as HTMLElement;
+    host.hold(page.query('#cta'));
+    assert.equal(highlight.style.left, '6.5px');
+
+    frames.next();
+    Object.assign(box, { left: 10, top: 20, width: 100, height: 30 });
+    frames.next();
+    assert.deepEqual(
+      [highlight.style.left, highlight.style.top, highlight.style.width, highlight.style.height],
+      ['5px', '15px', '110px', '40px'],
+      'the frame stayed on the pressed box',
+    );
+
+    // Let go, it reads the box no more.
+    host.release();
+    assert.equal(frames.next(), false);
   });
 
   it('gives the frame back to the held element when a capture started over it stops', async () => {
@@ -870,7 +903,7 @@ describe('selecting an element without a pointer (FRU-51)', () => {
 
   it('shows a focus ring on the controls the keyboard reaches', () => {
     mountKeyboard();
-    const styles = host?.root.querySelector('style')?.textContent ?? '';
+    const styles = host ? stylesIn(host.root) : '';
 
     assert.match(styles, /button:focus-visible, a:focus-visible[^{]*\{\s*outline: 2px solid/);
   });
@@ -1044,8 +1077,7 @@ describe('the corner of the dock (FRU-443)', () => {
 
   it('has a rule for each corner, for the dock, the settings and the list of the detached notes', () => {
     mount(() => null);
-    const sheets = host?.root.querySelectorAll('style') ?? [];
-    const styles = [...sheets].map((style) => style.textContent).join('\n');
+    const styles = host ? stylesIn(host.root) : '';
     for (const selector of [
       ":host([data-fruitback-position^='top-']) .fruitback-dock",
       ":host([data-fruitback-position$='-left']) .fruitback-dock",

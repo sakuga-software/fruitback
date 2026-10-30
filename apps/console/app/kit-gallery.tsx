@@ -9,6 +9,7 @@ import {
   Choice,
   Divider,
   DataTable,
+  Disclosure,
   Field,
   FilterChip,
   IconButton,
@@ -18,6 +19,7 @@ import {
   Logo,
   OptionCard,
   LinkButton,
+  LoadFailed,
   Menu,
   PageHead,
   Pick,
@@ -53,6 +55,7 @@ export default function KitGallery() {
   const [text, setText] = useState('');
   const [picked, setPicked] = useState('nothing');
   const [workspace, setWorkspace] = useState('acme');
+  const [unfolded, setUnfolded] = useState(false);
 
   return (
     <main className="mx-auto flex max-w-[1120px] flex-col gap-10 px-8 py-10">
@@ -319,6 +322,15 @@ export default function KitGallery() {
         <Initial name="Marie" size="small" />
       </section>
 
+      <section aria-label="A read that failed" className="flex flex-col gap-3" data-kit="load-failed">
+        <LoadFailed
+          title="The notes did not load"
+          detail="Fruitback did not answer. Your notes are safe."
+          retry="Try again"
+          onRetry={() => undefined}
+        />
+      </section>
+
       <section aria-label="Menus" className="flex flex-wrap items-center gap-6" data-kit="menus">
         <Menu
           trigger="icon"
@@ -391,6 +403,18 @@ export default function KitGallery() {
             <WideButton>Continue with GitHub</WideButton>
           </AutoGrid>
         </div>
+      </section>
+
+      <section aria-label="Folded sections" className="w-[760px] max-w-full" data-kit="disclosure">
+        <Disclosure
+          id="kit-advanced"
+          title="Advanced"
+          hint="Statuses, starting an agent, preview deploys"
+          open={unfolded}
+          onToggle={setUnfolded}
+        >
+          <p className="text-small text-muted">What the page keeps folded.</p>
+        </Disclosure>
       </section>
 
       <section aria-label="Preview of your site" className="w-[760px] max-w-full" data-kit="browser">

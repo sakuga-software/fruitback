@@ -5,6 +5,7 @@ import {
   desc,
   eq,
   exists,
+  gt,
   inArray,
   isNotNull,
   isNull,
@@ -140,6 +141,19 @@ const SITE_WITH_DESTINATION = {
   private: site_destinations.private,
 };
 
+/**
+ * The site of the row is in a workspace that is not suspended. A site of a suspended workspace is no
+ * client (FRU-282): it answers as a site that does not exist.
+ */
+function notSuspended(db: Db) {
+  return notExists(
+    db
+      .select({ id: workspace_suspensions.workspace_id })
+      .from(workspace_suspensions)
+      .where(eq(workspace_suspensions.workspace_id, sites.workspace_id)),
+  );
+}
+
 /** A domain as `domainOf` reads one. */
 const DOMAIN = {
   id: domains.id,
@@ -202,9 +216,17 @@ function given<T>(value: T | undefined, what: string): T {
   return value;
 }
 
+/** The combining marks of Unicode, as `NFD` writes an accent apart from its letter: « é » is « e » and U+0301. */
+const MARKS = '[\u0300-\u036f]';
+
+/** `text` with no accent: its letters in `NFD`, less the combining marks. */
+function withoutMarks(text: string): string {
+  return text.normalize('NFD').replace(new RegExp(MARKS, 'g'), '');
+}
+
 /** `limit`, when it is a whole number of rows of at least one. Drizzle leaves out a `LIMIT` that is not. */
-function rowLimit(limit: number): number {
-  if (!Number.isSafeInteger(limit) || limit < 1) throw new TypeError(`dueDeliveries: limit must be a positive integer`);
+function rowLimit(limit: number, what: string): number {
+  if (!Number.isSafeInteger(limit) || limit < 1) throw new TypeError(`${what}: limit must be a positive integer`);
 
   return limit;
 }
@@ -980,6 +1002,57 @@ export function createPostgresAccountStore(database: Database): AccountStore {
         found.set(row.invitation, [...(found.get(row.invitation) ?? []), { id: row.id, origin: row.origin }]);
 
       return found;
+    },
+
+    async waitingInvitations(workspace, now) {
+      return run((db) =>
+        db
+          .select()
+          .from(invitation)
+          .where(
+            and(
+              eq(invitation.organizationId, workspace),
+              eq(invitation.status, 'pending'),
+              gt(invitation.expiresAt, now),
+            ),
+          )
+          .orderBy(asc(invitation.createdAt), asc(invitation.id)),
+      );
+    },
+
+    async membersOf(workspace, page) {
+      // No case and no accent, as the console searches the invitations (`folded`): « zoe » finds
+      // « Zoé ». The marks are taken off both sides, with no extension and no index (FRU-496).
+      const search = withoutMarks(page.search?.trim() ?? '');
+      const like = `%${search.replace(/[\\%_]/g, (character) => `\\${character}`)}%`;
+      const folded = (column: typeof user.name | typeof user.email) =>
+        sql`regexp_replace(normalize(${column}, NFD), ${MARKS}, '', 'g')`;
+      const which = and(
+        eq(member.organizationId, workspace),
+        search === ''
+          ? undefined
+          : or(sql`${folded(user.name)} ILIKE ${like}`, sql`${folded(user.email)} ILIKE ${like}`),
+      );
+      const [rows, counted] = await Promise.all([
+        run((db) =>
+          db
+            .select({
+              member,
+              user: { id: user.id, name: user.name, email: user.email, image: user.image },
+            })
+            .from(member)
+            .innerJoin(user, eq(user.id, member.userId))
+            .where(which)
+            .orderBy(asc(member.createdAt), asc(member.id))
+            .limit(rowLimit(page.limit, 'membersOf'))
+            .offset(page.offset),
+        ),
+        run((db) =>
+          db.select({ total: count() }).from(member).innerJoin(user, eq(user.id, member.userId)).where(which),
+        ),
+      ]);
+
+      return { members: rows.map((row) => ({ ...row.member, user: row.user })), total: counted[0]?.total ?? 0 };
     },
 
     async shareOnAcceptance(person, invited) {
@@ -1898,7 +1971,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
 
     async dueDeliveries(now, limit) {
       given(now, 'dueDeliveries: now');
-      rowLimit(limit);
+      rowLimit(limit, 'dueDeliveries');
       const rows = await run((db) =>
         db
           .select({
@@ -2081,7 +2154,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
 
     async domainsToCheck(before, limit) {
       given(before, 'domainsToCheck: before');
-      rowLimit(limit);
+      rowLimit(limit, 'domainsToCheck');
       const rows = await run((db) =>
         db
           .select(DOMAIN)
@@ -2123,28 +2196,49 @@ export function createPostgresAccountStore(database: Database): AccountStore {
     },
 
     async clientMap() {
-      // Every request reads this. The order of the sites is nothing to a map, and a sort of their ids
-      // is what costs: only the places of one site have an order.
+      // The order of the sites is nothing to a map, and a sort of their ids is what costs: only the
+      // places of one site have an order.
       const rows = await run((db) =>
         db
           .select(SITE_WITH_DESTINATION)
           .from(sites)
           .leftJoin(site_destinations, eq(site_destinations.site_id, sites.id))
-          // A site of a suspended workspace is no client (FRU-282): it answers as a site that does not exist.
-          .where(
-            notExists(
-              db
-                .select({ id: workspace_suspensions.workspace_id })
-                .from(workspace_suspensions)
-                .where(eq(workspace_suspensions.workspace_id, sites.workspace_id)),
-            ),
-          )
+          .where(notSuspended(db))
           .orderBy(site_destinations.position),
       );
       const map: ClientMap = {};
       for (const site of sitesFrom(rows)) map[site.id] = clientOf(site);
 
       return map;
+    },
+
+    async client(site) {
+      // Each request of the widget reads this (FRU-495): one site and its places, by its key.
+      const rows = await run((db) =>
+        db
+          .select(SITE_WITH_DESTINATION)
+          .from(sites)
+          .leftJoin(site_destinations, eq(site_destinations.site_id, sites.id))
+          .where(and(eq(sites.id, site), notSuspended(db)))
+          .orderBy(site_destinations.position),
+      );
+      const [found] = sitesFrom(rows);
+
+      return found === undefined ? undefined : clientOf(found);
+    },
+
+    async servesOrigin(origin) {
+      // Each request of a site that is not on `ALLOWED_ORIGINS` reads this (FRU-495), through the
+      // index `sites_by_origin`.
+      const rows = await run((db) =>
+        db
+          .select({ id: sites.id })
+          .from(sites)
+          .where(and(eq(sites.origin, origin), notSuspended(db)))
+          .limit(1),
+      );
+
+      return rows.length === 1;
     },
   };
 

@@ -116,6 +116,65 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
       }
     });
 
+    it('reads twenty replies of a long thread, and one note for a write, never the whole page (FRU-499)', async () => {
+      const { database } = await opened();
+      // The rows that each statement of a read answers, in order.
+      const answered: number[] = [];
+      const counted = createPostgresNoteStore({
+        ...database,
+        run: (work) =>
+          database.run(async (db) => {
+            const rows = await work(db);
+            if (Array.isArray(rows)) answered.push(rows.length);
+
+            return rows;
+          }),
+      });
+      const long = await counted.create(noteFixtureOf('sd_long', 'site_a'), undefined, POLICY);
+      const reply = { body: 'Seen.', author: { kind: 'visitor' as const } };
+      for (let n = 0; n < 25; n++)
+        await counted.reply?.({ issue: long.id, clientId: 'site_a' }, reply, undefined, POLICY);
+      for (let n = 0; n < 4; n++) {
+        const other = await counted.create(noteFixtureOf(`sd_other_${n}`, 'site_a'), undefined, POLICY);
+        for (let r = 0; r < 3; r++)
+          await counted.reply?.({ issue: other.id, clientId: 'site_a' }, reply, undefined, POLICY);
+      }
+
+      answered.length = 0;
+      const page = await counted.findForPage({ url: PAGE, clientId: 'site_a' }, undefined, POLICY);
+      // Five notes, then 20 + 4 × 3 replies: the database stops at twenty for the long thread.
+      assert.deepEqual(answered, [5, 32]);
+      const shown = page.find((issue) => issue.id === long.id);
+      assert.equal(shown?.comments?.length, 20);
+
+      for (const by of ['issue', 'note'] as const) {
+        answered.length = 0;
+        const id = by === 'issue' ? long.id : 'sd_long';
+        const one = await counted.findNote?.({ url: PAGE, clientId: 'site_a', id, by }, undefined, POLICY);
+        assert.deepEqual(one, shown);
+        // One row of `notes`, and its twenty newest replies.
+        assert.deepEqual(answered, [1, 20]);
+      }
+    });
+
+    it('finds a note by the id the widget gave, when its row writes that id escaped (review of #733)', async () => {
+      const { database, store } = await opened();
+      await store.create(noteFixtureOf('sd_café', 'site_a'), undefined, POLICY);
+      await store.create(noteFixtureOf('sd_plain', 'site_a'), undefined, POLICY);
+      // As a writer that escapes what is not ASCII writes it: the JSON is the same note.
+      await rowsOf(database, `UPDATE notes SET payload = replace(payload, 'é', '\\u00e9')`);
+      assert.match(
+        String((await rowsOf(database, 'SELECT payload FROM notes ORDER BY id'))[0]?.payload),
+        /sd_caf\\u00e9/,
+      );
+      const lookUp = (id: string) =>
+        store.findNote?.({ url: PAGE, clientId: 'site_a', id, by: 'note' }, undefined, POLICY);
+
+      assert.equal((await lookUp('sd_café'))?.note.id, 'sd_café');
+      assert.equal((await lookUp('sd_plain'))?.note.id, 'sd_plain');
+      assert.equal(await lookUp('sd_cafe'), undefined);
+    });
+
     it('gives a read that names no site the notes that name none, and never the notes of a site', async () => {
       const { store } = await opened();
       await store.create(noteFixtureOf('sd_site', 'site_a'), undefined, POLICY);

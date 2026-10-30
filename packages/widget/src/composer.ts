@@ -4,6 +4,7 @@ import { isElement } from './dom.ts';
 import { deepActiveElement, holdFocus } from './focus.ts';
 import { createIcon } from './icons.ts';
 import { type MessageKey, type Translator, createTranslator, languageOf } from './messages.ts';
+import { framesOf, settle } from './settle.ts';
 import {
   type AttachOffer,
   type AttachRefusal,
@@ -12,6 +13,7 @@ import {
   readableSize,
   refusalBefore,
 } from './attachments.ts';
+import { adoptStyles } from './stylesheet.ts';
 
 /**
  * The note popover: what the reporter actually writes in.
@@ -284,9 +286,6 @@ export function createComposer(options: ComposerOptions): Composer {
   const view = document.defaultView;
   const t = options.translator ?? createTranslator({ language: languageOf(document) });
 
-  const style = document.createElement('style');
-  style.textContent = STYLES;
-
   const root = document.createElement('div');
   root.className = 'fruitback-composer';
   root.dataset.fruitbackComposer = '';
@@ -297,7 +296,8 @@ export function createComposer(options: ComposerOptions): Composer {
   root.setAttribute('aria-modal', 'true');
   root.setAttribute('aria-label', t.text('composer.dialog'));
 
-  options.host.append(style, root);
+  const style = adoptStyles(options.host, STYLES);
+  options.host.append(root);
   const focus = holdFocus(root, close);
 
   const field = root.querySelector('[data-fruitback-note]') as HTMLTextAreaElement;
@@ -755,6 +755,7 @@ export function createComposer(options: ComposerOptions): Composer {
     // the parts itself might.
     if (!root.hidden && (state === 'idle' || state === 'failed' || state === 'sending')) {
       place(anchor);
+      settleOn();
       field.focus();
 
       return;
@@ -783,12 +784,25 @@ export function createComposer(options: ComposerOptions): Composer {
     focus.remember();
     root.hidden = false;
     place(anchor);
+    settleOn();
     field.focus();
+  }
+
+  /**
+   * The element is chosen at a click, so maybe on a box that the press made smaller (FRU-489). The
+   * composer follows its box for the few frames after, until the box stays the same.
+   */
+  function settleOn(): void {
+    stopSettling();
+    const element = following;
+    stopSettling = element === null ? () => {} : settle(frames, () => element.getBoundingClientRect(), follow);
   }
 
   /** The element the open composer follows, and its edges where the composer was placed last. */
   let following: Element | null = null;
   let placedAt: ElementBox | undefined;
+  const frames = framesOf(view);
+  let stopSettling: () => void = () => {};
 
   function boxOf(element: Element): ElementBox {
     const rect = element.getBoundingClientRect();
@@ -812,8 +826,10 @@ export function createComposer(options: ComposerOptions): Composer {
     const rect = following.getBoundingClientRect();
     if (rect.width === 0 && rect.height === 0) return;
     const now = boxOf(following);
-    const dx = now.left - placedAt.left;
-    const dy = now.top - placedAt.top;
+    // By the edges it was placed against: the start edge across, and the side it opened on. An element
+    // that only moved moves them all alike; one that grows back from a press (FRU-489) does not.
+    const dx = t.direction === 'rtl' ? now.right - placedAt.right : now.left - placedAt.left;
+    const dy = root.dataset.fruitbackSide === 'below' ? now.bottom - placedAt.bottom : now.top - placedAt.top;
     if (dx === 0 && dy === 0) return;
     placedAt = now;
     // Across, it stays inside the window, as `place` keeps it: an element that a box scrolls sideways
@@ -982,6 +998,7 @@ export function createComposer(options: ComposerOptions): Composer {
     session += 1;
     root.hidden = true;
     following = null;
+    stopSettling();
     setState('idle');
     focus.restore();
     options.onClose?.();
@@ -1169,6 +1186,7 @@ export function createComposer(options: ComposerOptions): Composer {
       document.removeEventListener('click', onMenuOutside, true);
       view?.removeEventListener('scroll', follow, true);
       view?.removeEventListener('resize', follow);
+      stopSettling();
       focus.destroy();
       stopFollowingPlaces?.();
       stopFollowingOffer?.();

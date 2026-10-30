@@ -1,4 +1,4 @@
-import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react';
+import { type FormEvent, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import {
   API,
   type AgentKey,
@@ -133,20 +133,20 @@ function AgentsScreen() {
       );
   }
 
+  // FRU-503: with no key, the action is in the card that says what a key is for, and the head has none.
+  // Two « New key » one under the other read as two different things.
+  const placed =
+    action === null ? undefined : (
+      <div ref={newKey} className="flex-none">
+        {action}
+      </div>
+    );
+  const empty = listed !== undefined && listed.length === 0;
+
   return (
     <>
       {crumbs}
-      <PageHead
-        title={t('Agents')}
-        lead={lead}
-        action={
-          action === null ? undefined : (
-            <div ref={newKey} className="flex-none">
-              {action}
-            </div>
-          )
-        }
-      />
+      <PageHead title={t('Agents')} lead={lead} action={empty && !busy ? undefined : placed} />
       <p className="-mt-[16px] mb-[24px] text-small">
         <LinkButton space="inline" href={GUIDE} newTab>
           {t('Connect an AI agent')}
@@ -188,7 +188,7 @@ function AgentsScreen() {
         <KeyList
           keys={listed}
           busy={busy}
-          onNew={() => setForming(true)}
+          action={placed}
           onRevoked={(gone) => {
             setKeys((current) => (Array.isArray(current) ? current.filter((each) => each.id !== gone.id) : current));
             setRevoked(gone.name);
@@ -429,12 +429,13 @@ function ShownOnce({ made, onKept }: { made: Made; onKept: () => void }) {
 function KeyList({
   keys,
   busy,
-  onNew,
+  action,
   onRevoked,
 }: {
   keys: readonly AgentKey[];
   busy: boolean;
-  onNew: () => void;
+  /** « New key », or « Add a site first »: the one action of the page, in the card when there is no key. */
+  action: ReactNode;
   onRevoked: (key: AgentKey) => void;
 }) {
   useLocale();
@@ -449,7 +450,7 @@ function KeyList({
             'Make one for each agent: Claude Code on a laptop, a job of your CI, a cloud agent. Revoking one stops that agent alone.',
           )}
         </p>
-        <Button onClick={onNew}>{t('New key')}</Button>
+        {action}
       </div>
     );
 

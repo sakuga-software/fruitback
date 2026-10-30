@@ -115,6 +115,16 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   for the time of the read, so what is under it jumped and no action of a row was there to press.
   `e2e/console-members.spec.ts` reads the values and the boxes of the mockup at 1440 and 390 px,
   the keyboard, the contrasts and axe.
+  **Two lists, in pages of 50, and a search** (FRU-496): « Members » and « Pending invitations »,
+  each under its heading with its count, as the mockup draws one table for both. The table stopped
+  at a hundred members and a hundred invitations and said nothing: a 101ᵗʰ member could not be
+  found nor removed. The worker gives the members a page at a time (`limit`, `offset`, `total`) and
+  searches them (`q`, the name or the address); it gives every invitation that waits, which the
+  screen cuts in pages and searches by address itself (`invitationsFound`, no case, no accent).
+  « 1 to 50 of 501 » and « Previous », « Next » are those of the Notes screen (`NotePages`), under a
+  list longer than a page. The search is not in the address. A member removed is read again with
+  its page: the next member moves into it. `e2e/console-members-many.spec.ts` holds it, on a
+  workspace of 501 members and 300 invitations.
 - **« Connect this browser » of a site leads to the sign-in of the popup, on the Cloud** (FRU-313).
   On a console of Fruitback Cloud (`connectsBySignIn` of `instance.ts`, the host of the worker) the
   button opens `/connect`, a page that says the three steps of the popup: the icon, « Sign in with
@@ -128,10 +138,28 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   opened (two minutes of margin for the clocks). A `401` there ends no session: the person may sign
   in from the other tab. The console cannot tell that it is this browser, and cannot see that the
   extension is installed: that would take a content script on the console or `externally_connectable`
-  in the manifest (`extension.md`), and neither is wanted. The worker's page
+  in the manifest (`extension.md`). **Since FRU-487, the console of the Cloud does** (below); a
+  self-hosted console still cannot. The worker's page
   `/pair` held a session of one workspace, in the words of a worker. **A self-hosted console keeps
   the pairing link** (`useConnect`): the extension of the store signs in to the Cloud alone
   (`WXT_FRUITBACK_CLOUD`), so it cannot sign in to that worker.
+- **On the console of the Cloud, step 3 connects the extension of this browser in place** (FRU-487,
+  decided by Mathieu on 2026-10-28). `useExtensionHere` (`extension-here.ts`) asks the extension of
+  the store (`STORE_EXTENSION_ID`, or the ids of `/config.js`) with `chrome.runtime.sendMessage`,
+  which Chrome gives to `https://app.fruitback.com` alone (`externally_connectable`, see
+  `extension.md`). Installed and signed out: the card says « Fruitback is installed in this
+  browser. » and « Connect this browser » connects it in this tab: the extension starts the request,
+  the page reads its word from the worker and approves it, the extension claims. No `/connect` tab,
+  no word to compare, no click on the icon. Installed and signed in: « Extension connected in this
+  browser ». With another browser of the account connected already, the quiet link stays « Connect
+  another browser » (FRU-441) and connects this one in place. No answer (another browser, Firefox,
+  Safari, no extension, a self-hosted console): the
+  card of before. A failure says « This browser was not connected. Try again. »; a session of the
+  console that ended says « Your session ended. Sign in again, then connect this browser. »
+  (`hereProblemOf`). Approved and not claimed after eight asks (44 s): « Approved. The extension
+  finishes connecting within a minute, or press again to finish now. » The alarm of the extension
+  claims it, and a new press takes the same request (`startConnect` gives it back) with no second
+  approval.
 - **Nothing offers to install or to connect the extension once a browser of the account is
   connected** (FRU-441, decided by Mathieu on 2026-10-24). `useConnectedExtension`
   (`extension-connected.ts`) reads `GET /console/me/browsers` once, and again when the tab is shown
@@ -196,6 +224,15 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   will do. »: the mockup goes on with a pattern for the previews, which a domain that is proven
   covers (FRU-103, decided on 2026-10-13), and the worker takes no pattern as an address. So what is
   under the hint is 19.5 px higher than on the mockup.
+- **What the setup adds to the mockup** (FRU-491, measured at 1440 and 390 px; the boxes of the mockup
+  are unchanged). The preview is `sticky`: the last step is longer than a screen, and the site stays
+  beside it. On a phone the header keeps « Self-hosting guide » beside the logo, and « Running your own
+  server? » is for a screen reader only: on two lines the question sat on the rule of the header. With
+  no site yet, the empty frame is 280 px high under 640 px, not 620. « Fruitback did not answer » is a
+  `Problem`, as every other refusal of the setup, not grey text. While the step waits for the first
+  note, a red drop beats in the gutter (still under `prefers-reduced-motion`), and « Open <site> » has
+  its own line. A script in a `Snippet` breaks at any character (`word-break: break-all`): an indented
+  address moved whole to the next line and left a blank line above it.
 - **The last step is two cards, and the preview is the site itself** (FRU-242, FRU-354). « Browser
   extension » and « Script tag » share the logic of the Sites screen (`useCopy`, `useConnect` in
   `install-options.tsx`). **The preview frames the site the person added, in their browser**
@@ -281,8 +318,8 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   `IconButton` (36 px, named by `label`), `Field` and `Choice` (44 px, `compact` 40 px, `locked` for
   a value set elsewhere; the value of a `Choice` in the type of its button, so its words sit on the
   baseline of a field beside it (FRU-412: HeroUI writes it at 14 px on a line of 20); `status` on a `Choice` draws the drop of the chosen status in a list of 38 px), `Pick` (radio cards), `Toggle`, `FilterChip` (`aria-pressed`), `StatusDot`
-  and `StatusBar`, `DataTable`, `SidePanel` (named by its title, or by `label`; `panelId` for `aria-controls`; `flush` for an accordion under its row), `KeyValue`, `SuccessMark`, `Title`, `Lead`, `PageHead`,
-  `Initial`, `Card`, `Chip`, `Problem`, `Logo` (the name as outlines, in tokens: `logo.tsx`), `EntryPage`
+  and `StatusBar`, `DataTable` (`stack`: under 640 px one card per row, its cells one under the other, FRU-505), `SidePanel` (named by its title, or by `label`; `panelId` for `aria-controls`; `flush` for an accordion under its row), `KeyValue`, `SuccessMark`, `Title`, `Lead`, `PageHead`,
+  `Initial`, `Card`, `Chip`, `Disclosure` (sections folded under one line, a `<details>`: Enter and Space open it, a screen reader hears it expanded or collapsed, and its line is 44 px between two rules, FRU-538), `Problem`, `LoadFailed` (a read that failed: a title, a sentence that nothing is lost, and one « Try again », FRU-508), `Logo` (the name as outlines, in tokens: `logo.tsx`), `EntryPage`
   (the header and the column of a page outside a workspace; `/kit/entry` mounts it), `Divider`, `Menu`
   (a button that opens a menu, on the dropdown of HeroUI: the menu is named after its button, a
   `chosen` item makes it a choice of radios, and it is drawn as a page wherever its button is; the
@@ -314,7 +351,8 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
 - **The frame of a workspace is the rail of the mockup** (FRU-234, `routes/workspace.tsx`): the
   workspace, its sections as links with `aria-current="page"` on the one on screen, and the way to
   the documentation. **The rail shows a section only when its screen exists**: `SECTIONS` lists the
-  five of the mockup in its order, each with `built`, and
+  five of the mockup in its order, with « Settings » before « My account » (FRU-503), each with
+  `built`, and
   `frame.test.ts` holds `built` to the routes of a build, so no entry leads nowhere. **Each entry of
   both rails has an icon** (FRU-477, Mathieu; no board draws them): `rail-icons.tsx` draws them as
   every icon of the console is drawn, inline on a grid of 24, a stroke of 2 in `currentColor`, no
@@ -325,7 +363,7 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   the five. **The name of the workspace opens a menu only when the person has several workspaces**:
   with one it is no button, and draws no chevrons. **The name of the workspace leads to its settings**
   (FRU-414, `routes/workspace-settings.tsx`, asked by Mathieu; no board draws it): with one workspace
-  the name is a link to `/w/<id>/settings`, `aria-current` there; with several, the menu of the
+  the name is a link to `/w/<id>/settings`, `aria-current` there when the rail has no « Settings »; with several, the menu of the
   workspaces ends with « Workspace settings », in a group of its own under a rule that chooses nothing
   (`after` of `Menu`). The screen renames the workspace for an owner or an admin (FRU-236), and the
   rail shows the new name at once; another role reads the name, locked. **The logo** (FRU-428):
@@ -334,8 +372,18 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   owner or an admin sends it (`FilePick` of the kit), replaces it and removes it in one press, with
   no confirmation: it is sent again as easily. The console refuses a type that is not PNG, JPEG or
   WebP, and a file over 512 KB, before it sends anything (`workspace-logo.ts`), and says each
-  refusal of the worker. `e2e/console-workspace-logo.spec.ts` holds it. The settings are no section of the rail, and
-  `frame.test.ts` names them as the one screen of a workspace that is not. **At 900 px and under the sections are one row
+  refusal of the worker. `e2e/console-workspace-logo.spec.ts` holds it. **The settings are « Settings »
+  in the rail, under « Members », for an owner or an admin** (FRU-503, `sectionsFor`): the rare tasks
+  that matter, rename, the logo, the agent keys and the deletion, were behind the name of the
+  workspace alone. A member and a guest have no entry and read the settings from the name. On the
+  settings the entry is the one on screen, and the name is not a second one. **The settings hold
+  the deletion of the workspace**, last, for the owner alone, under a rule: it was at the foot of
+  « My account », the page of the person. The call (`DELETE /console/workspaces/<id>`) and the rule
+  of the worker are those of before, and a second press deletes. « My account » keeps what is about
+  the person. **The section « Agents » shows the whole way of an agent** (FRU-503): its key, an
+  address that receives (Connectors), then the trigger of each site, a link to `#agent` on the page
+  of the site; anybody but an owner or an admin reads one sentence, and the page asks nothing.
+  `e2e/console-workspace-settings.spec.ts` holds the entry by role, the section and the deletion. **At 900 px and under the sections are one row
   that scrolls in the rail, and the page never scrolls sideways**: the mockup does at 390 px (its
   document is 547 px wide). An edge of the row that hides a section fades, and the section on
   screen or with focus is scrolled into view: measured in Chromium, focus alone does not scroll a
@@ -402,17 +450,21 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   of the statuses, and its title is the name of the site, at the place of every title (FRU-405). Its
   sections, in this order: the site (its address, who sees its notes, who can leave one, read only);
   « Install », for every role; where its notes go (`site-places.tsx`) for who manages the sites and
-  sees the tracker; « Statuses », a link to the page of the statuses (FRU-371), which is too large
-  to be a section, and whose crumbs lead back here; the preview builds (`domains.tsx`); « Remove
-  this site ». A member and a guest read the first two only. **It reads the list of the sites**, as
+  sees the tracker; « Advanced », folded by default (FRU-538), which holds « Statuses », a link to
+  the page of the statuses (FRU-371), which is too large to be a section, and whose crumbs lead back
+  here, « Start an agent » and the preview builds (`domains.tsx`); « Remove this site ». The page
+  shows first who sees and who writes, the install and where the notes go: the rest is set once.
+  A member and a guest read the first two only, and have no « Advanced ». **It reads the list of the sites**, as
   the page of the statuses does: the worker has no route for one site, and no route of the worker
   is new. A site that is not in the list says « This site is not in the workspace any more. », and
   a read that failed is the alert of the Sites screen, with « Try again ». A hash of the address
-  scrolls to its section once the site is drawn. `e2e/console-site-page.spec.ts` holds the
+  scrolls to its section once the site is drawn, and a hash of a section under « Advanced »
+  (`#statuses`, `#agent`, `#previews`) opens it first. `e2e/console-site-page.spec.ts` holds the
   sections, the roles, the hash, the two failures, 390 px in English and in French, and axe.
 - **The agent keys of a workspace have a page of their own** (FRU-462, `routes/agents.tsx`, the
   board `design/agents/`), `/w/<workspace>/settings/agents`, with the crumbs « Workspace settings ›
-  Agents », reached from the section « Agents » of the settings. It is no section of the rail: only
+  Agents », reached from the section « Agents » of the settings. It is no section of the rail, and
+  « Settings » is the entry on screen there: only
   the owner and the admins make a key (decision 5 of [agents.md](agents.md)), and anybody else reads
   one sentence there, and on the page, which then asks the worker nothing. **The key is shown once**,
   in a card above the list, held in the state of the screen and in no storage of the browser, with
@@ -471,7 +523,8 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   reach moves meanwhile. A workspace with no note says so, a filter that keeps nothing says so with
   « Clear the filters », and a read that failed is the alert of the Sites screen, never « No note
   yet ». The reference in a tracker is a link at 400, where a link of the kit is at 600 for an
-  action. `e2e/console-notes.spec.ts` holds the values, every filter, the pages, « Send again », the
+  action. **Under 640 px a note is a card** (FRU-505): the table scrolled in its frame, and only the
+  text of a note was on a phone, its status, author and day past the edge. `e2e/console-notes.spec.ts` holds the values, every filter, the pages, « Send again », the
   states, the roles, 390 px and axe.
 - **The notes are a table or a board, and the address says which** (FRU-436, decided by Mathieu on
   2026-10-24). « Table » and « Board », two pressed buttons at the right of the head, write

@@ -253,6 +253,24 @@ async function expectStyle(locator: Locator, name: string, expected: Style & { h
   if (width !== undefined) expect.soft(`${read.width}px`, `${name}: width`).toBe(width);
 }
 
+test('a read that failed has a title, a sentence and one « Try again », in the box of the mockup (FRU-508)', async ({
+  page,
+}) => {
+  await openKit(page);
+  const failed = page.locator('[data-kit="load-failed"]').getByRole('alert');
+  await expect(failed.getByRole('heading', { level: 2, name: 'The notes did not load' })).toBeVisible();
+  await expect(failed.locator('p')).toHaveText('Fruitback did not answer. Your notes are safe.');
+  await expect(failed.getByRole('button')).toHaveText(['Try again']);
+  await expectStyle(failed, 'box', {
+    paddingTop: '28px',
+    paddingLeft: '32px',
+    borderTopWidth: '1px',
+    borderTopColor: CONTROL,
+    borderTopLeftRadius: '14px',
+  });
+  await expectStyle(failed.locator('p'), 'sentence', { color: MUTED_TONE });
+});
+
 test('the buttons have the measures of the mockup (FRU-232)', async ({ page }) => {
   await openKit(page);
   const buttons = page.locator('[data-kit="buttons"]');
@@ -602,6 +620,59 @@ test('the switch does not move for somebody who asked for less motion (FRU-232)'
 
   await expectStyle(toggle.locator('.switch__thumb'), 'thumb', { transitionDuration: '0s' });
   await expectStyle(toggle.locator('.switch__control'), 'track', { transitionDuration: '0s' });
+});
+
+test('a fold opens with a keyboard, is a 44 px line between two rules, and turns its chevron (FRU-538)', async ({
+  page,
+}) => {
+  await openKit(page);
+  const fold = page.locator('[data-kit="disclosure"] details');
+  const summary = fold.locator('summary');
+  const inside = fold.getByText('What the page keeps folded.');
+  await expect(fold).not.toHaveAttribute('open');
+  await expect(inside).toBeHidden();
+  await expectStyle(fold, 'fold', {
+    borderTopWidth: '1px',
+    borderTopColor: LINE,
+    borderBottomWidth: '1px',
+    borderBottomColor: LINE,
+  });
+  await expectStyle(summary, 'line of a fold', { cursor: 'pointer', listStyleType: 'none' });
+  expect((await summary.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  await expectStyle(summary.getByText('Advanced', { exact: true }), 'title of a fold', {
+    fontSize: '18px',
+    fontWeight: '700',
+    color: INK,
+  });
+  await expectStyle(summary.getByText('Statuses, starting an agent, preview deploys'), 'hint of a fold', {
+    fontSize: '14px',
+    color: MUTED_TONE,
+  });
+  const chevron = summary.locator('svg');
+  await expectStyle(chevron, 'chevron, folded', { transform: 'none' });
+
+  await summary.focus();
+  await page.keyboard.press('Enter');
+  await expect(fold).toHaveAttribute('open');
+  await expect(inside).toBeVisible();
+  // Turned a quarter of a turn, read from its matrix once the move ends.
+  const angle = () =>
+    chevron.evaluate((element) => {
+      const { a, b } = new DOMMatrix(getComputedStyle(element).transform);
+
+      return Math.round((Math.atan2(b, a) * 180) / Math.PI);
+    });
+  await expect.poll(angle).toBe(90);
+  await page.keyboard.press('Space');
+  await expect(fold).not.toHaveAttribute('open');
+});
+
+test('the chevron of a fold does not turn slowly for somebody who asked for less motion (FRU-538)', async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await openKit(page);
+  await expectStyle(page.locator('[data-kit="disclosure"] summary svg'), 'chevron', { transitionDuration: '0s' });
 });
 
 test('a status has its colour, its shape, and words beside it (FRU-232)', async ({ page }) => {

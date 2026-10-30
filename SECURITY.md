@@ -52,9 +52,12 @@ has a visibility, chosen when it is added**:
   `curl`. Hiding pins in a browser was never the fix.
 
 The boot log says that the visibility is chosen site by site. `FRUITBACK_READ` does not apply to a
-site: it was the setting of a worker with no database, and that worker no longer starts. **A site
-that only members read still takes a note from anybody** (measured in FRU-224): only the read asks
-for a session.
+site: it was the setting of a worker with no database, and that worker no longer starts.
+
+A site that only members read takes a note from its members only, unless its « Who can leave a
+note » says « Anyone on the page ». A new site says « Members only », and a site made before FRU-330
+says « Anyone on the page ». The paragraph that starts « The visibility of a site decides who reads
+it », further down, gives the tests.
 
 A link that opens a note on its page, `<page>#fruitback-note=<id>`, opens nothing to somebody who
 cannot already read that page: the widget opens the note among those `GET /feedback` answered to
@@ -376,6 +379,24 @@ address unless it trusts that proxy (Traefik: `forwardedHeaders.trustedIPs`).
 [docs/self-hosting/reverse-proxy.md](docs/self-hosting/reverse-proxy.md#behind-a-reverse-proxy) has the cases and a check an
 operator can run.
 
+### The body of a request has a cap (FRU-506)
+
+**Every route of the worker reads its body under a cap**, and answers `413 payload-too-large`, with
+`maxBytes`, over it. The cap is 64 KiB (`MAX_BODY_BYTES` of `bounded-body.ts`). A file in transit and
+the logo of a workspace have their own caps: see their sections. A declared `Content-Length` over the
+cap is refused before a byte is read. A body with no length, or with a false one, is read until it
+crosses the cap, and no further.
+
+Before FRU-506 the routes of the console read their body with no cap: the sign-in by a link, the
+routes of better-auth that the worker forwards, the account, the workspaces and the administrator.
+Three of them answer a person who is not signed in. The routes of OAuth (`/oauth/register`,
+`/oauth/token`, `/oauth/revoke`) and of the connection of the extension read under the cap already,
+and answered `400` over it: they answer the same `413` now. What the cap protects: the memory of the worker
+against one large request. It is not a limit of rate: see the section above.
+test:`is refused over the cap on the routes of the sign-in, which need no session`, and the guard
+test:`is read by bounded-body.ts and by nothing else`, which fails on a route that reads its body
+another way.
+
 ### Private mode hides the pins from a visitor, and from nobody else
 
 **The widget the extension mounts in private mode carries no credential.** `page.content.ts` mounts
@@ -444,6 +465,13 @@ holds another kind of session, a cookie of better-auth (FRU-147), which does not
 | Access token  | HS256 identity token, 10 minutes                           |
 | Refresh token | 256 bits, 30 days, **rotated on every refresh**, revocable |
 | On disk       | codes and refresh tokens are stored as **SHA-256 digests** |
+
+**No cache keeps a token** (FRU-506). Every answer of `/session/pair`, `/session/refresh` and
+`/session/revoke`, a refusal included, says `Cache-Control: no-store`. Every other JSON answer of the
+worker says it too. Before FRU-506 these three routes did not, and `/session/pair` and
+`/session/refresh` answer an access token and a refresh token. The header is an instruction: it
+protects against a proxy or a cache that obeys it, and against no other. See
+test:`answers POST /session/refresh with Cache-Control: no-store`.
 
 **A pairing code can travel in a link, `<worker>/pair#<code>`** (FRU-92). What that changes:
 
@@ -705,6 +733,71 @@ session goes on with the others.
 reads the output of the whole way for them (test:`keeps no request, claim or token in clear in any row,
 and writes none of them in the log`). The request id is in the path of `GET /console/connect/<id>`,
 so a proxy in front of the worker logs it: it is the public half.
+
+### The console of the Cloud talks to the extension of the same browser (FRU-487)
+
+On Fruitback Cloud, step 3 of the setup connects the extension of the browser it runs in, with one
+click and no word: the console sends runtime messages to the extension. Decided by Mathieu on
+2026-10-28. What this adds to the flow above, and its conditions:
+
+- **Which pages may talk to the extension: `https://app.fruitback.com`, and no other.** The manifest
+  of the Chromium build declares `externally_connectable` with that one origin (`matches:
+  ["https://app.fruitback.com/*"]`: the path must be written, the host is exact). Chrome gives
+  `chrome.runtime.sendMessage` to that origin only, and to no other site. The value is fixed at build
+  (`WXT_FRUITBACK_CONSOLE`, `cloudConsole` of `external-console.ts`): a joker, a path, plain http
+  away from loopback, or a host outside the site of the Cloud stops the build. A build for a
+  self-hosted instance (`WXT_FRUITBACK_CLOUD` empty) has no such key. The key without `ids` also
+  closes the extension to the messages of every other extension. It adds no warning at install and
+  no prompt at an update.
+- **The background checks the sender and the message again.** `sender.origin` must be that origin,
+  the URL of the sender of the same origin, the sender the top frame of a tab (`frameId` 0: a
+  console in a frame is refused, and the console sends `frame-ancestors 'none'`). The message is one
+  of three, with exactly its keys and version 1: `hello`, `connect`, `claim` with a request id in
+  base64url. Anything else is not answered, before any `await`, so the page reads that no extension
+  answered. test:`refuses a key more, a key less, another version, another type, and a request that
+  is not one`, test:`is refused from another origin, a frame, no tab, another extension, or a build
+  with no console`, and the spec `console-extension-here.spec.ts` against the built extension.
+- **No secret crosses the channel.** The page names no worker: the extension asks its own Cloud
+  (`WXT_FRUITBACK_CLOUD`). `connect` answers the request id only, the public half that the popup
+  already puts in the address of `/connect`. The claim and the word stay in the extension
+  (`storage.session`). The console reads the word from the worker and sends it back with the
+  approval, with its cookie and its `Origin`, as `/connect` does: the worker is unchanged. The
+  session goes to the holder of the claim, so **the proof of possession is the claim**, which never
+  leaves the extension. `hello` says whether the extension holds a session of the Cloud, and nothing
+  else: no account, no version, no site. test:`starts a request with the Cloud and answers its id:
+  the claim and the word stay here`.
+- **Why no word.** The word protects against a request that another browser made: the person checks
+  that the popup of this browser shows it. Here the request id comes from the extension of this
+  browser, through the browser, and the extension accepts it from the console origin only. An
+  attacker's request id cannot reach this page: the phishing above needs the person to approve an id
+  that the attacker chose, and this path approves only the id that the extension of this browser
+  answered.
+- **A page cannot swap the account of a browser that is signed in.** `connect` is refused while the
+  extension holds a session of the Cloud (`signed-in`); to change accounts, the person signs out in
+  the popup first. test:`refuses to start while the browser holds a session of the Cloud`.
+- **A page cannot make the extension flood the worker.** `connect` takes the request that waits
+  (`startConnect` keeps one at a time), and `claim` calls the worker once per interval of the request
+  (5 seconds), for the request that waits only. test:`claims the request that waits, once per
+  interval, and keeps the session`.
+
+**What a script on `app.fruitback.com` gets.** This is the cost of the decision: the extension trusts
+every page of that origin. A script there (a cross-site scripting bug in the console, or a compromised
+host or dependency of the console) already acts as the person in the console, with their cookie. With
+this channel it can also connect the extension of that browser **to the account signed in to the
+console**, with no word and no click, when the extension holds no session of the Cloud. It cannot read
+a claim, an access token or a refresh token: the extension never sends one. It cannot connect the
+extension to another account than the one of that cookie, unless it signs in as another account in
+that console first. It cannot sign in a browser that is signed in. The extension then reads what that
+account may read; « My account » lists the browser and ends it. The defences of the console itself
+are what stands here: its Content Security Policy (`script-src 'self'` with hashes, `frame-ancestors
+'none'`, `csp.mjs`) and the review of its dependencies.
+
+**Where it does not apply.** Firefox does not implement `externally_connectable`, and Safari is not
+measured here (the id of its extension is not the one of the store): their builds have no such key,
+and they keep the flow with the word. A self-hosted console asks no extension: the one of the store
+answers the Cloud console alone. The console of the Cloud asks the id of the Chrome Web Store
+(`STORE_EXTENSION_ID`), or the ids `/config.js` names (`extensionIds`), which only the operator of
+the console writes.
 
 ### What the extension relays, and what it refuses to
 

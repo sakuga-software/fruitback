@@ -1,6 +1,6 @@
 import { type Page, expect, test } from '@playwright/test';
 import { LANGUAGES, LONG_NOTE, LONG_URL, LONG_WORD, WIDTHS, overflows } from './overflow.ts';
-import { WORKER_ORIGIN } from './pin.ts';
+import { caseOf, WORKER_ORIGIN } from './pin.ts';
 
 /**
  * No text of the widget runs past its box or past the screen (FRU-350): the composer, the bubble of
@@ -54,7 +54,7 @@ for (const width of WIDTHS) {
       await page.setViewportSize({ width, height: 844 });
       await page.emulateMedia({ reducedMotion: 'reduce' });
       await longNotes(page);
-      await page.goto(`/?widget=off&case=wrap-${at}-${test.info().retry}`);
+      await page.goto(`/?widget=off&case=${caseOf(`wrap-${at}`)}`);
       await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
       await page.addScriptTag({ path: IIFE });
       await page.evaluate(

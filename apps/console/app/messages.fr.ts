@@ -391,6 +391,12 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Until {date}': 'Jusqu’au {date}',
   'Invitation kept': 'Invitation gardée',
   'Sent {date}': 'Envoyée le {date}',
+  'Pending invitations': 'Invitations en attente',
+  'Search members': 'Chercher dans les membres',
+  'No invitation matches this search.': 'Aucune invitation ne correspond à cette recherche.',
+  'Pages of members': 'Pages de membres',
+  'Pages of invitations': 'Pages d’invitations',
+  'Invited on': 'Invitée le',
   Joined: 'Arrivée',
   Resend: 'Renvoyer',
   'Cancel the invitation of {email}': 'Annuler l’invitation de {email}',
@@ -558,8 +564,16 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Address: 'Adresse',
   'Who sees the notes': 'Qui voit les notes',
   'Who can leave a note': 'Qui peut laisser une note',
-  'Who sees the notes and who leaves them are set when the site is added.':
-    'Qui voit les notes et qui les laisse sont fixés quand le site est ajouté.',
+  'See its notes': 'Voir ses notes',
+  'See its note': 'Voir sa note',
+  'See its {count} notes': 'Voir ses {count} notes',
+  'Open its page': 'Ouvrir sa page',
+  'Change who sees the notes of {site}': 'Modifier qui voit les notes de {site}',
+  'Who sees the notes of {site}': 'Qui voit les notes de {site}',
+  'Saved. The script on the site stays the same.': 'Enregistré. Le script du site reste le même.',
+  'Only an owner or an admin of the workspace changes who sees the notes.':
+    'Seul un propriétaire ou un admin de l’espace de travail change qui voit les notes.',
+  'Nothing was changed. Try again.': 'Rien n’a changé. Réessayez.',
   'Edit the statuses': 'Modifier les statuts',
   'Remove this site': 'Retirer ce site',
   'The widget stops on this site, and the notes that Fruitback keeps for it are deleted.':
@@ -755,6 +769,14 @@ export const FRENCH: Readonly<Record<string, string>> = {
   // The extension is already connected to the account (FRU-441).
   'Extension connected · {browser}': 'Extension connectée · {browser}',
   'Extension connected': 'Extension connectée',
+  // The extension of this browser, connected in place by the console of the Cloud (FRU-487).
+  'Extension connected in this browser': 'Extension connectée dans ce navigateur',
+  'Approved. The extension finishes connecting within a minute, or press again to finish now.':
+    'Approuvé. L’extension termine sa connexion dans la minute, ou appuyez de nouveau pour terminer maintenant.',
+  'Your session ended. Sign in again, then connect this browser.':
+    'Votre session a pris fin. Reconnectez-vous, puis connectez ce navigateur.',
+  'Fruitback is installed in this browser. Connect it to your account here: no word to check.':
+    'Fruitback est installé dans ce navigateur. Connectez-le à votre compte ici : aucun mot à vérifier.',
   'Connect another browser': 'Connecter un autre navigateur',
   'Your extension shows the notes on the sites of {workspace} and lets you leave yours.':
     'Votre extension affiche les notes sur les sites de {workspace} et vous permet de laisser les vôtres.',
@@ -900,6 +922,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Previous: 'Précédentes',
   Next: 'Suivantes',
   'The notes did not load': 'Les notes ne se sont pas chargées',
+  'The members did not load': 'Les membres ne se sont pas chargés',
+  'Fruitback did not answer. Your members are safe.': 'Fruitback n’a pas répondu. Vos membres sont en sécurité.',
   'Fruitback did not answer. Your notes are safe.': 'Fruitback n’a pas répondu. Vos notes sont en sécurité.',
   'No note yet. Notes show here as soon as someone leaves one on a site of {workspace}.':
     'Pas encore de note. Les notes s’affichent ici dès que quelqu’un en laisse une sur un site de {workspace}.',
@@ -1255,8 +1279,12 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Reset {name}': 'Rétablir {name}',
   Reset: 'Rétablir',
   Auto: 'Auto',
-  'reads well': 'se lit bien',
-  'under 4.5:1': 'sous 4,5:1',
+  Readable: 'Lisible',
+  'Low contrast': 'Contraste faible',
+  'Contrast {ratio}': 'Contraste {ratio}',
+  'Contrast {ratio}, text colour Auto': 'Contraste {ratio}, couleur du texte Auto',
+  'A swatch with no code is the colour of the stage of its status.':
+    'Une pastille sans code est la couleur de la phase de son statut.',
   'Type a colour to see how its text reads.': 'Saisissez une couleur pour voir comment son texte se lit.',
   'Text on this colour: {ratio}. It reads well.': 'Texte sur cette couleur : {ratio}. Il se lit bien.',
   'Text on this colour: {ratio}. Text needs 4.5:1 at least: choose Auto, or a darker or lighter text.':
@@ -1405,6 +1433,15 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Keys that let an AI agent of your team read the notes of some sites, and reply to them.':
     'Les clés qui permettent à un agent IA de votre équipe de lire les notes de certains sites, et d’y répondre.',
   'Manage the agent keys': 'Gérer les clés d’agent',
+  // FRU-503: the settings of a workspace hold what an agent needs.
+  'A key for each agent.': 'Une clé pour chaque agent.',
+  'To start an agent when a note arrives: an address of your team that receives the call.':
+    'Pour lancer un agent quand une note arrive : une adresse de votre équipe qui reçoit l’appel.',
+  'Then, site by site, when to call it.': 'Puis, site par site, quand l’appeler.',
+  'The sites of the workspace did not load.': 'Les sites du workspace ne se sont pas chargés.',
+  'The workspace has no site yet.': 'Le workspace n’a pas encore de site.',
+  'Start an agent, by site': 'Lancer un agent, par site',
+  'Start an agent on {site}': 'Lancer un agent sur {site}',
   // FRU-468: a site starts an agent.
   'Call of an agent': 'Appel d’un agent',
   'This address is not in the workspace any more. Choose another one.':
@@ -1523,4 +1560,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Une application demande à se connecter à Fruitback comme agent de votre équipe. Connectez-vous pour lui répondre.',
   'Open it in this browser: this page comes back to the question. The link works once, for fifteen minutes.':
     'Ouvrez-le dans ce navigateur : cette page revient à la question. Le lien fonctionne une fois, pendant quinze minutes.',
+  Advanced: 'Avancé',
+  'Statuses, starting an agent, preview deploys': 'Statuts, lancement d’un agent, previews',
+  'Each pin shows how a note in that status looks on the page. The 3 is an example number.':
+    'Chaque pin montre à quoi ressemble une note de ce statut sur la page. Le 3 est un numéro d’exemple.',
 };

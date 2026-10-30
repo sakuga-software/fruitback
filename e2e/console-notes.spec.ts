@@ -320,7 +320,7 @@ test('the page is the one of the mockup: chips, filters, the table and its pages
 
   // The rail has its entry, on screen, between « Sites » and « Connectors ».
   const rail = page.getByRole('navigation', { name: 'Workspace' }).getByRole('link');
-  await expect(rail).toHaveText(['Sites', 'Notes', 'Connectors', 'Members', 'My account']);
+  await expect(rail).toHaveText(['Sites', 'Notes', 'Connectors', 'Members', 'Settings', 'My account']);
   await expect(rail.nth(1)).toHaveAttribute('aria-current', 'page');
 
   // The head.
@@ -796,16 +796,23 @@ test('the Sites screen leads here: « see where every note went »', async ({ pa
 });
 
 for (const locale of ['en', 'fr'] as const) {
-  test(`at 390 px the page does not scroll sideways, and the table scrolls in its frame, in ${locale}`, async ({
-    page,
-  }) => {
+  test(`at 390 px the page does not scroll sideways, and each note is a card, in ${locale}`, async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await workerWith(page, 'owner', locale);
     await page.goto(`${CONSOLE}/w/w1/notes`);
     await expect(page.locator('tbody tr')).toHaveCount(8);
     expect.soft(await sideScroll(page)).toBe(0);
+    // Under 640 px a row is a card (FRU-505): the frame does not scroll, and no cell is past it.
     const frame = page.locator('.kit-table');
-    expect.soft(await frame.evaluate((element) => element.scrollWidth)).toBe(960);
+    expect.soft(await frame.evaluate((element) => element.scrollWidth - element.clientWidth)).toBe(0);
+    expect
+      .soft(
+        await page
+          .locator('tbody tr')
+          .first()
+          .evaluate((row) => getComputedStyle(row).display),
+      )
+      .toBe('flex');
     await expectNoViolation(page, `390 px, ${locale}`);
   });
 }
