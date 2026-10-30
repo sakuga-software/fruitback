@@ -10,10 +10,12 @@ with the worker. If it does not, that is private mode and the extension mounts t
 ## 1. Install it
 
 The extension is in beta. **In Chrome or Edge**, add it from the
-[Chrome Web Store](https://chromewebstore.google.com/detail/fruitback/jjjemdloknmggncbickofjgbodplekoa),
-then go on at step 4 below. It is not on the add-ons site of Firefox yet: there, and in a browser that
-does not reach the store, you install the archive of its last release by hand, once; it takes two
-minutes and no developer tools.
+[Chrome Web Store](https://chromewebstore.google.com/detail/fruitback/jjjemdloknmggncbickofjgbodplekoa).
+**In Firefox**, add it from
+[addons.mozilla.org](https://addons.mozilla.org/en-US/firefox/addon/fruitback/); it asks for Firefox
+140 or later. Then go on at step 4 below.
+
+A browser that reaches neither store installs the archive of the last release by hand, once.
 
 **By hand, in Chrome, Edge, Brave or Arc:**
 
@@ -27,7 +29,8 @@ minutes and no developer tools.
 5. To find Fruitback in the toolbar later, pin it: open the puzzle piece at the right of the address
    bar, then press the pin beside Fruitback. Nothing needs it to leave a first note.
 
-**In Firefox:** download `fruitback-<version>-firefox.zip` from the same release, open
+**By hand, in Firefox**, to try a build that is not on addons.mozilla.org yet: download
+`fruitback-<version>-firefox.zip` from the same release, open
 `about:debugging#/runtime/this-firefox`, choose **Load Temporary Add-on…** and pick the archive.
 Firefox keeps such an add-on until it restarts.
 
