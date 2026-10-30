@@ -117,6 +117,9 @@ export const sites = pgTable(
     }).onDelete('set null'),
     unique('sites_workspace_id_origin_key').on(table.workspace_id, table.origin),
     index('sites_by_connector').on(table.connector_id),
+    // FRU-495: the worker asks whether a site serves the origin of a request, on each request of the
+    // widget. The unique key above starts with the workspace, so it cannot answer that question.
+    index('sites_by_origin').on(table.origin),
   ],
 );
 

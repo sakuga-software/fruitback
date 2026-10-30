@@ -1,0 +1,1 @@
+CREATE INDEX "sites_by_origin" ON "sites" USING btree ("origin");
