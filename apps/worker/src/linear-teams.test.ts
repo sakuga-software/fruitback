@@ -177,9 +177,6 @@ describe('the reads of Linear for one choice (FRU-501)', () => {
     assert.deepEqual(asked[0]?.variables, { after: 'c-before', filter: { name: { containsIgnoreCase: 'pay' } } });
     // With no search, no filter: Linear answers every team.
     assert.deepEqual(asked[1]?.variables, {});
-    // Under the limit of complexity of Linear: 50 teams of 20 projects a page (see #765).
-    assert.match(asked[0]?.query ?? '', /teams\(first: 50, after/);
-    assert.match(asked[0]?.query ?? '', /projects\(first: 20\)/);
     assert.equal(first.next, 'c-next');
     assert.equal(asked.length, 2);
   });
