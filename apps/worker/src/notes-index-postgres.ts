@@ -304,7 +304,17 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
             )
             .limit(query.limit + 1),
           db
-            .select({ key: keyOf, stage: note_index.stage, notes: count() })
+            .select({
+              key: keyOf,
+              stage: note_index.stage,
+              notes: count(),
+              // The notes of the row in the place of the filter, by the SQL of the filter itself
+              // (`placeIs`): the counts by stage are those of the list (review of #764).
+              placed:
+                query.place === undefined
+                  ? count()
+                  : sql<number>`count(*) FILTER (WHERE ${placeIs(query.place)})`.mapWith(Number),
+            })
             .from(note_index)
             .innerJoin(sites, eq(sites.id, note_index.site_id))
             .where(narrowed)
@@ -327,14 +337,14 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
         ]);
 
         // One count by place and stage: the places of the filter without its place, the stages of the
-        // filter with it.
+        // filter with it, counted by the condition that filters the list.
         const byPlace = new Map<string, number>();
         const byStage = new Map<NoteStage, number>();
         for (const row of counted) {
           byPlace.set(row.key, (byPlace.get(row.key) ?? 0) + Number(row.notes));
-          if (query.place !== undefined && row.key !== query.place) continue;
+          if (Number(row.placed) === 0) continue;
           const stage = row.stage as NoteStage;
-          byStage.set(stage, (byStage.get(stage) ?? 0) + Number(row.notes));
+          byStage.set(stage, (byStage.get(stage) ?? 0) + Number(row.placed));
         }
         const shown = page.slice(0, query.limit);
         const kept = await keptOf(db, shown);
