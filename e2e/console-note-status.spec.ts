@@ -172,7 +172,9 @@ test('the drop of a status takes its colour, or the one of its stage when the te
   expect(await painted(option('To do'), 'backgroundColor')).not.toEqual(rgb('#2563eb'));
   await page.getByRole('option', { name: 'Waiting', exact: true }).click();
 
-  // Chosen, the drop of the select takes the colour of « Waiting », and keeps its edge.
+  // Chosen, the drop of the select takes the colour of « Waiting », and keeps its edge. The list is
+  // read again and the row goes to « To do » (FRU-551): the drop is read once it is there.
+  await expect(page.locator('tbody[data-group="todo"]')).toContainText('The headline');
   await expect(select).toContainText('Waiting');
   expect(await painted(drop, 'backgroundColor')).toEqual(rgb('#2563eb'));
   expect(await drop.evaluate((element) => getComputedStyle(element).boxShadow)).not.toBe('none');
