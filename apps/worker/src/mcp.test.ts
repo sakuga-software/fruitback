@@ -6,6 +6,7 @@ import { resetMemoryLinear } from './linear-memory.ts';
 import { createPostgresNoteStore } from './notes-postgres.ts';
 import { DATA_NOT_INSTRUCTION, PROTOCOL_VERSIONS } from './mcp.ts';
 import { rowsOf } from './postgres.fixture.ts';
+import { StoreError } from './store.ts';
 import { createPairing, redeemPairing } from './session.ts';
 import { noteFixture } from '@fruitback/shared/note.fixture';
 
@@ -415,5 +416,32 @@ describe('the read tools of /mcp (FRU-463)', () => {
     );
     const refused = await call(world, good, 'feedback_as_text', { site: shop.id, page: 'not a page' });
     assert.equal(refused.body.result.isError, true);
+  });
+
+  it('answers a site that the accounts do not read as an error of the tool, not a 502 of the request (FRU-524)', async () => {
+    const { world, shop, member, key } = await acme();
+    await leave(world, shop, 'sd_one', 'Too small.', { token: member });
+    const good = await key({ sites: [shop.id], verifiedOnly: false });
+    const id = notesOf(await call(world, good, 'list_feedback', { site: shop.id }))[0].id;
+    world.accounts.client = async () => {
+      throw new StoreError('the database went away');
+    };
+
+    for (const [tool, args] of [
+      ['list_feedback', { site: shop.id }],
+      ['get_feedback', { id }],
+      ['feedback_as_text', { site: shop.id }],
+    ] as const) {
+      const failed = await call(world, good, tool, args);
+      assert.equal(failed.status, 200, `${tool}: ${JSON.stringify(failed.body)}`);
+      assert.deepEqual(
+        failed.body.result,
+        {
+          isError: true,
+          content: [{ type: 'text', text: 'The store of the notes did not answer. Try again later.' }],
+        },
+        tool,
+      );
+    }
   });
 });
