@@ -376,6 +376,22 @@ address unless it trusts that proxy (Traefik: `forwardedHeaders.trustedIPs`).
 [docs/self-hosting/reverse-proxy.md](docs/self-hosting/reverse-proxy.md#behind-a-reverse-proxy) has the cases and a check an
 operator can run.
 
+### The body of a request has a cap (FRU-506)
+
+**Every route of the worker reads its body under a cap**, and answers `413 payload-too-large`, with
+`maxBytes`, over it. The cap is 64 KiB (`MAX_BODY_BYTES` of `bounded-body.ts`). A file in transit and
+the logo of a workspace have their own caps: see their sections. A declared `Content-Length` over the
+cap is refused before a byte is read. A body with no length, or with a false one, is read until it
+crosses the cap, and no further.
+
+Before FRU-506 the routes of the console read their body with no cap: the sign-in by a link, the
+routes of better-auth that the worker forwards, the account, the workspaces and the administrator.
+Three of them answer a person who is not signed in. What the cap protects: the memory of the worker
+against one large request. It is not a limit of rate: see the section above.
+test:`is refused over the cap on the routes of the sign-in, which need no session`, and the guard
+test:`is read by bounded-body.ts and by nothing else`, which fails on a route that reads its body
+another way.
+
 ### Private mode hides the pins from a visitor, and from nobody else
 
 **The widget the extension mounts in private mode carries no credential.** `page.content.ts` mounts
