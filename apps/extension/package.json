@@ -56,7 +56,9 @@
           "{workspaceRoot}/apps/worker/src/app.ts",
           "{workspaceRoot}/apps/worker/src/pair-page.ts",
           "{workspaceRoot}/apps/worker/src/session-site-add.ts",
-          "{workspaceRoot}/apps/worker/src/session.ts"
+          "{workspaceRoot}/apps/worker/src/session.ts",
+          "{workspaceRoot}/apps/console/app/messages.fr.ts",
+          "{workspaceRoot}/docs/decisions/conventions.md"
         ]
       }
     }

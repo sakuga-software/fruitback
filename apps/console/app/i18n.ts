@@ -1,4 +1,5 @@
 import { FRENCH } from './messages.fr.ts';
+import { frenchSpaces } from './typography.ts';
 
 /**
  * The words of the console, in the language of the person (FRU-120).
@@ -16,7 +17,11 @@ export const LOCALES = [
 ] as const;
 export type LocaleTag = (typeof LOCALES)[number]['tag'];
 
-const CATALOGS: Record<LocaleTag, Readonly<Record<string, string>> | undefined> = { en: undefined, fr: FRENCH };
+// French is set with its narrow no-break spaces once, here (FRU-517).
+const CATALOGS: Record<LocaleTag, Readonly<Record<string, string>> | undefined> = {
+  en: undefined,
+  fr: Object.fromEntries(Object.entries(FRENCH).map(([english, french]) => [english, frenchSpaces(french)])),
+};
 const STORED = 'fruitback:locale';
 
 /** The language we have words for that is nearest to a tag: `fr-CA` reads French, `ja` reads English. */

@@ -237,7 +237,7 @@ describe('the page of the extension (FRU-301)', () => {
     const table = sitesTable(page(), { rows: [PRIVATE], onSelect: nothing, onToggle: nothing });
     assert.deepEqual(
       [...table.querySelectorAll('th')].map((cell) => cell.textContent),
-      ['Site', 'Mode', 'Worker', 'Accès', 'Activé'],
+      ['Site', 'Mode', 'Serveur', 'Accès', 'Activé'],
     );
     assert.equal(table.querySelector('.access-granted')?.textContent, 'Accordé');
   });
