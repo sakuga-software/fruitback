@@ -121,7 +121,8 @@ button.kit-primary[data-size='panel'] {
 }
 
 /* A second action: 44 px, a border on the surface. */
-button.kit-secondary {
+button.kit-secondary,
+a.kit-secondary {
   box-sizing: border-box;
   display: flex;
   align-items: center;
@@ -140,7 +141,8 @@ button.kit-secondary {
   cursor: pointer;
 }
 
-button.kit-secondary:hover {
+button.kit-secondary:hover,
+a.kit-secondary:hover {
   border-color: var(--text);
   background: var(--surface-raised);
 }
@@ -153,6 +155,33 @@ button.kit-secondary:hover {
   flex: none;
   width: 18px;
   height: 18px;
+}
+
+/*
+  The way to the guide (FRU-528): a second action, as wide as its words, centred in its line. A link
+  takes the look of the button, without the line under it.
+*/
+.kit-help {
+  display: flex;
+  justify-content: center;
+}
+
+a.kit-help-link {
+  height: auto;
+  min-height: 44px;
+  max-width: 100%;
+  padding-block: 10px;
+  text-align: center;
+  text-decoration: none;
+  /* « What to check when Fruitback does not answer » takes two lines in 380 px: two of one length. */
+  text-wrap: balance;
+  white-space: normal;
+}
+
+.kit-help-icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
 }
 
 /* « Change »: a word in the accent, in a target of 44 px. */

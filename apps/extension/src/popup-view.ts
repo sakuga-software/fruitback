@@ -5,6 +5,7 @@ import {
   definitions,
   dropMark,
   head,
+  helpLink,
   keys,
   listRow,
   primaryButton,
@@ -15,6 +16,7 @@ import {
   toggle,
 } from './kit.ts';
 import type { PlaceIds, Source, SourceOffer } from './cloud.ts';
+import { type Help, howItWorks, whoCanAdd } from './guide.ts';
 import { option, placeChoice, shownChoice, sourceMark } from './place-choice.ts';
 
 /**
@@ -248,6 +250,8 @@ export type ProblemOptions = {
   text?: string;
   primary?: { label: string; onClick: () => void };
   secondary?: { label: string; onClick: () => void };
+  /** The section of the guide that says what to check (FRU-528): a button under the actions. */
+  help?: Help;
   account?: Account;
   onSettings: () => void;
 };
@@ -269,6 +273,7 @@ export function problem(document: Document, options: ProblemOptions): HTMLElemen
     }
     body.push(act);
   }
+  if (options.help !== undefined) body.push(helpLink(document, options.help));
 
   return shell(
     document,
@@ -330,6 +335,7 @@ export function notAWebPage(document: Document, options: NotAWebPageOptions): HT
     },
     intro,
     steps,
+    helpLink(document, howItWorks()),
   );
 }
 
@@ -456,6 +462,7 @@ export function turnOnScreen(document: Document, options: TurnOnOptions): HTMLEl
     return frame(
       hostAsTitle(site),
       element(document, 'p', t('Ask an admin of your workspace to add this site.'), 'lead'),
+      helpLink(document, whoCanAdd()),
     );
   }
 
