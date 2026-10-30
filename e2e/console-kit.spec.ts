@@ -253,6 +253,24 @@ async function expectStyle(locator: Locator, name: string, expected: Style & { h
   if (width !== undefined) expect.soft(`${read.width}px`, `${name}: width`).toBe(width);
 }
 
+test('a read that failed has a title, a sentence and one « Try again », in the box of the mockup (FRU-508)', async ({
+  page,
+}) => {
+  await openKit(page);
+  const failed = page.locator('[data-kit="load-failed"]').getByRole('alert');
+  await expect(failed.getByRole('heading', { level: 2, name: 'The notes did not load' })).toBeVisible();
+  await expect(failed.locator('p')).toHaveText('Fruitback did not answer. Your notes are safe.');
+  await expect(failed.getByRole('button')).toHaveText(['Try again']);
+  await expectStyle(failed, 'box', {
+    paddingTop: '28px',
+    paddingLeft: '32px',
+    borderTopWidth: '1px',
+    borderTopColor: CONTROL,
+    borderTopLeftRadius: '14px',
+  });
+  await expectStyle(failed.locator('p'), 'sentence', { color: MUTED_TONE });
+});
+
 test('the buttons have the measures of the mockup (FRU-232)', async ({ page }) => {
   await openKit(page);
   const buttons = page.locator('[data-kit="buttons"]');
