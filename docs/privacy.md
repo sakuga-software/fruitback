@@ -454,6 +454,12 @@ Since FRU-119 an account also holds the language its person reads, taken from th
   kept in the extension's own storage and given to the widget the extension mounts on a site in
   private mode, to fill the name of a note. That page can read it while the widget is mounted. It is
   sent only with a note the reviewer sends, as a name typed in the note is.
+- **An extension installed by hand asks GitHub for the number of the last release** (FRU-519), once a
+  day at most, when its popup or its page opens: a folder loaded from an archive, Firefox's temporary
+  add-on, a build of the sources. The request is `GET` on the API of GitHub, with no cookie, no
+  referrer and nothing of the reviewer, but GitHub sees the address it comes from. An extension from
+  the Chrome Web Store or addons.mozilla.org, or one an administrator installs by policy, asks
+  nothing: the browser updates it. The extension keeps the number and the time of the question in its own storage.
 - The widget sets no cookie.
 
 ## How long a note is kept

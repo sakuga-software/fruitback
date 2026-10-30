@@ -70,6 +70,8 @@ import { type TabCommand } from '../../src/protocol.ts';
 import { type PanelApis, openPanelOrPage } from '../../src/side-panel.ts';
 import { browserFamily, extensionsPlace } from '../../src/browser-family.ts';
 import { type TabCommandAnswer, parseAnswer, tabCommand } from '../../src/tab-command.ts';
+import { showUpdateLine } from '../../src/update-notice-browser.ts';
+import { keepInPopup } from '../../src/update-notice.ts';
 import {
   type Account,
   keysOfShortcut,
@@ -178,6 +180,13 @@ void spoken.then(() => {
 
   return render();
 });
+// FRU-519: « Fruitback 0.6.0 is out », above the foot of every screen. Each draw puts a new shell in
+// `#app`, so the line goes back into each one.
+void spoken.then(() =>
+  showUpdateLine((line) => {
+    if (app !== null) keepInPopup(app, line);
+  }),
+);
 // Not awaited. When the account speaks another language than the one this popup opened in, the
 // screen is drawn again in it (FRU-319): the first popup after a change in the console spoke the
 // language of before. Not a form: a draw would lose what somebody types there. The next popup

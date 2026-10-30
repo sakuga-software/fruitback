@@ -464,4 +464,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Shows the note on this page': 'Montre la note sur cette page',
   'Opens {path} in a new tab': 'Ouvre {path} dans un nouvel onglet',
   'Open {reference} →': 'Ouvrir {reference} →',
+  // FRU-519: the line of a new release, in the popup and the page.
+  'Fruitback {version} is out.': 'Fruitback {version} est disponible.',
+  Update: 'Mettre à jour',
 };
