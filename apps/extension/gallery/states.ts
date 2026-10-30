@@ -391,6 +391,7 @@ function panelStates(): GalleryState[] {
     onStage: nothing,
     onStatus: nothing,
     onStatusOpen: nothing,
+    onStatusActive: nothing,
     onSiteNote: nothing,
     onSiteRetry: nothing,
     onMore: nothing,

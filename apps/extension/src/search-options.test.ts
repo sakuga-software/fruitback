@@ -68,6 +68,7 @@ function draw(search: Partial<SearchState> | undefined, notes: PanelState = on(N
     onPins: (shown) => calls.push(`pins:${shown}`),
     onStatus: (status) => calls.push(`status:${status ?? 'all'}`),
     onStatusOpen: (open) => calls.push(`status-open:${open}`),
+    onStatusActive: (id) => calls.push(`status-active:${id}`),
   };
   const options: PanelOptions = {
     state: notes,
@@ -389,6 +390,70 @@ describe('more than five statuses: a list in place of the chips (FRU-535)', () =
       [...root.querySelectorAll('.search-status [role="option"]')].map((option) => option.textContent),
       ['All3', 'Triage0', 'Backlog0', 'Ready0', 'In Progress1', 'In Review2', 'Done0', 'Canceled0'],
     );
+  });
+
+  it('keeps the option the keyboard is on when the panel draws again between two arrows (review of #730)', () => {
+    // The panel as `main.ts` holds it: its state, and a draw that builds the page again from it.
+    let state: SearchState = { scope: 'page', q: '', stage: 'all', pinsShown: true };
+    const chosen: (string | undefined)[] = [];
+    const document = page();
+    const handlers: SearchHandlers = {
+      onScope: () => undefined,
+      onQuery: () => undefined,
+      onStage: () => undefined,
+      onSiteNote: () => undefined,
+      onSiteRetry: () => undefined,
+      onMore: () => undefined,
+      onPins: () => undefined,
+      onStatus: (status) => void chosen.push(status),
+      onStatusOpen: (open) => {
+        const { statusActive: _active, ...rest } = state;
+        state = { ...rest, statusOpen: open };
+      },
+      onStatusActive: (id) => {
+        state = { ...state, statusActive: id };
+      },
+    };
+    const draw = (): void => {
+      const root = panelPage(document, {
+        state: on(statused),
+        tab: 'open',
+        now: NOW,
+        onClose: () => {},
+        onLeave: () => {},
+        onTab: () => {},
+        onToggle: () => {},
+        onShow: () => {},
+        onReplyOpen: () => {},
+        onReplyInput: () => {},
+        onReplySend: () => {},
+        onReplyCancel: () => {},
+        onRetry: () => {},
+        onReload: () => {},
+        onSettings: () => {},
+        onVerdict: () => {},
+        onSearch: () => {},
+        search: { state, handlers },
+      });
+      document.body.replaceChildren(root);
+    };
+    const key = (name: string): void => {
+      document
+        .querySelector('.search-status [role="listbox"]')
+        ?.dispatchEvent(
+          new document.defaultView!.KeyboardEvent('keydown', { key: name, bubbles: true }) as unknown as Event,
+        );
+    };
+    draw();
+    document.querySelector<HTMLButtonElement>('.search-status .kit-select-trigger')?.click();
+    key('ArrowDown');
+    // The widget read the page again: the panel draws, the list stays open.
+    draw();
+    key('ArrowDown');
+    key('Enter');
+
+    // All → Triage → Backlog: the second arrow goes on from Triage, not from All.
+    assert.deepEqual(chosen, ['name:Backlog']);
   });
 
   it('is drawn open over the notes when the panel kept it open', () => {

@@ -388,6 +388,12 @@ export type ListSelectOptions = {
   /** Drawn open: a page that draws again keeps the list open (`onOpenChange`). */
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  /**
+   * The option the keyboard is on, by its id, while the list is open: a page that draws again puts
+   * it back (`onActiveChange`). Absent: the option selected.
+   */
+  active?: string;
+  onActiveChange?: (id: string) => void;
   onSelect?: (id: string) => void;
 };
 
@@ -432,17 +438,21 @@ export function listSelect(document: Document, options: ListSelectOptions): HTML
     return item;
   });
 
+  const at = (id: string | undefined): number => items.findIndex((item) => item.dataset.option === id);
+  // A list drawn open again starts on the option the keyboard was on, not on the one selected.
   let active = Math.max(
     0,
-    items.findIndex((item) => item.dataset.option === options.selected),
+    options.open === true && at(options.active) !== -1 ? at(options.active) : at(options.selected),
   );
   const mark = (index: number): void => {
+    const before = active;
     active = Math.min(Math.max(index, 0), items.length - 1);
     for (const [at, item] of items.entries()) item.dataset.active = String(at === active);
     const item = items[active];
     if (item !== undefined) {
       list.setAttribute('aria-activedescendant', item.id);
       item.scrollIntoView?.({ block: 'nearest' });
+      if (active !== before) options.onActiveChange?.(item.dataset.option ?? '');
     }
   };
   const outside = (event: Event): void => {

@@ -645,7 +645,7 @@ holds `http://127.0.0.1/*`; a page of `http://127.0.0.1` with no rule, the panel
   filter by stage. The list lies over the notes and pushes nothing (`position: absolute`). It is a
   `listbox`, never a native `select`: the arrows, Home and End move, Enter and Space choose, Escape
   and Tab close, the focus goes back to its button, and a click outside closes it. The panel keeps it
-  open across a draw (`statusOpen`). « Whole site » reads the stage of a note only (FRU-306), so it
+  open across a draw (`statusOpen`), on the option the keyboard is on (`statusActive`). « Whole site » reads the stage of a note only (FRU-306), so it
   never has more than five, and keeps its chips.
 - **While it is open, one list stands in for « Ready to check » and the tabs**: the chips do what
   Open and Done did. Closing it gives the panel of FRU-299 and FRU-300 back as it was.

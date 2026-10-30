@@ -50,6 +50,8 @@ export type SearchState = {
   status?: string;
   /** The list of the statuses is open: a page drawn again keeps it open. */
   statusOpen?: boolean;
+  /** The option of the open list the keyboard is on (`''` for « All »): a draw puts it back. */
+  statusActive?: string;
 };
 
 export type SearchHandlers = {
@@ -59,6 +61,7 @@ export type SearchHandlers = {
   /** A status of the list (FRU-535), or `undefined` for every one. */
   onStatus: (status: string | undefined) => void;
   onStatusOpen: (open: boolean) => void;
+  onStatusActive: (id: string) => void;
   onSiteNote: (note: SiteNote) => void;
   onSiteRetry: () => void;
   onMore: () => void;
@@ -344,6 +347,8 @@ function statusList(
     selected: chosen?.key ?? '',
     open: state.statusOpen === true,
     onOpenChange: handlers.onStatusOpen,
+    ...(state.statusActive === undefined ? {} : { active: state.statusActive }),
+    onActiveChange: handlers.onStatusActive,
     onSelect: (id) => handlers.onStatus(id === '' ? undefined : id),
   });
   select.classList.add('search-status');
