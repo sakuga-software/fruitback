@@ -76,6 +76,9 @@ type Worker = {
   laterTeams?: Team[];
   /** The query of each read of the teams. */
   teamReads: string[];
+  /** The next read of a page of teams fails (`fail`), or waits for `releaseTeams` (`hold`). */
+  nextTeams?: 'fail' | 'hold';
+  releaseTeams: () => void;
   /** The read of the sources fails. */
   connectorsFail: boolean;
   /** The places of the one site, as the worker keeps them: a repository is in `teamId`. */
@@ -103,6 +106,7 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
     repositories: REPOSITORIES,
     teams: TEAMS,
     teamReads: [],
+    releaseTeams: () => {},
     connectorsFail: false,
     places: [],
     sent: [],
@@ -168,7 +172,15 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
         return json({ teams: [...worker.teams, ...later].filter((team) => team.name.toLowerCase().includes(words)) });
       }
 
-      return json(query.get('after') === 'c-2' ? { teams: later } : { teams: worker.teams, next: 'c-2' });
+      if (query.get('after') !== 'c-2') return json({ teams: worker.teams, next: 'c-2' });
+      const asked = worker.nextTeams;
+      worker.nextTeams = undefined;
+      if (asked === 'fail') return json({ error: 'store-unavailable' }, 502);
+      if (asked === 'hold') {
+        return new Promise<void>((done) => (worker.releaseTeams = done)).then(() => json({ teams: later }));
+      }
+
+      return json({ teams: later });
     }
     if (pathname.endsWith('/r1/deliveries')) return json({ deliveries: [] });
 
@@ -751,4 +763,60 @@ test('a search finds a team of Linear that the first page does not hold (FRU-501
   await project(page, 'Payments').click();
   await page.getByRole('option', { name: 'Payments, no project', exact: true }).click();
   await expect.poll(() => worker.sent).toEqual([[{ connector: 'c1', teamId: 't5' }]]);
+});
+
+test('a page of teams that Linear did not give says so, and the option reads it again (FRU-501)', async ({ page }) => {
+  const worker = await workerWith(page);
+  const team = (index: number, name = `Team ${index}`): Team => ({
+    id: `t${index}`,
+    name,
+    key: `T${index}`,
+    projects: [],
+  });
+  worker.connectors = [LINEAR];
+  worker.teams = [team(1)];
+  worker.laterTeams = [team(2)];
+  worker.nextTeams = 'fail';
+  await openPlaces(page);
+  await expect(add(page)).toBeEnabled();
+
+  await add(page).click();
+  await page.getByRole('option', { name: 'More teams of Linear · Key of Ana…', exact: true }).click();
+  await expect(panel(page)).toContainText('Linear · Key of Ana did not answer with more teams. Try again.');
+  await add(page).click();
+  await page.getByRole('option', { name: 'More teams of Linear · Key of Ana…', exact: true }).click();
+  await expect(panel(page)).not.toContainText('did not answer with more teams');
+  await add(page).click();
+  await expect(page.getByRole('option')).toHaveText([
+    'Add a destination…',
+    'Team 1 (T1) · no project',
+    'Team 2 (T2) · no project',
+  ]);
+});
+
+test('a search reads the teams as they are when it starts, not as they were at the key (FRU-501)', async ({ page }) => {
+  const worker = await workerWith(page);
+  const team = (index: number, name = `Team ${index}`): Team => ({
+    id: `t${index}`,
+    name,
+    key: `T${index}`,
+    projects: [],
+  });
+  worker.connectors = [LINEAR];
+  worker.teams = [team(1)];
+  worker.laterTeams = [team(2, 'Payments')];
+  worker.nextTeams = 'hold';
+  await openPlaces(page);
+  await expect(add(page)).toBeEnabled();
+
+  // The last page is on its way while the person types: it arrives before the pause ends.
+  await add(page).click();
+  await page.getByRole('option', { name: 'More teams of Linear · Key of Ana…', exact: true }).click();
+  await search(page).fill('pay');
+  worker.releaseTeams();
+  await add(page).click();
+  await expect(page.getByRole('option')).toHaveText(['Add a destination…', 'Payments (T2) · no project']);
+  await page.waitForTimeout(600);
+  // Every team is read: the search asks Linear nothing.
+  expect(worker.teamReads.filter((query) => query.startsWith('q='))).toEqual([]);
 });

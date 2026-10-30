@@ -98,10 +98,18 @@ export function SitePlaces({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [base, ids, reads]);
 
+  /** The sources that did not answer the last read of more teams (FRU-501): the panel says so. */
+  const [moreFailed, setMoreFailed] = useState<readonly string[]>([]);
+
   /** Asks a Linear for more of its teams (FRU-501), and adds those it did not give yet. */
   function readTeams(source: string, query: string, keepsNext: boolean) {
     void call<{ teams?: Team[]; next?: string }>('GET', `${base}/connectors/${source}/teams?${query}`).then(
       (answer) => {
+        setMoreFailed((current) => {
+          const others = current.filter((each) => each !== source);
+
+          return answer.ok ? others : [...others, source];
+        });
         if (!answer.ok) return;
         setOffers((current) => {
           const offer = current[source];
@@ -118,6 +126,9 @@ export function SitePlaces({
   // A search asks each Linear that has not given every team yet for the teams that hold it (FRU-501),
   // once the person stops typing.
   const searching = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  /** The offers and the sources of the last render: a search reads them when it starts, not when the key was typed. */
+  const latest = useRef({ offers, sources });
+  latest.current = { offers, sources };
   /** What is typed in the search: the next page of the teams is offered while it is empty. */
   const [searched, setSearched] = useState('');
   useEffect(() => () => clearTimeout(searching.current), []);
@@ -127,8 +138,9 @@ export function SitePlaces({
     setSearched(wanted);
     if (wanted === '') return;
     searching.current = setTimeout(() => {
-      for (const source of sources) {
-        const offer = offers[source.id];
+      const { offers: now, sources: listed } = latest.current;
+      for (const source of listed) {
+        const offer = now[source.id];
         if (typeof offer === 'object' && offer.kind === 'linear' && offer.next !== undefined) {
           readTeams(source.id, new URLSearchParams({ q: wanted }).toString(), false);
         }
@@ -451,6 +463,18 @@ export function SitePlaces({
             </LinkButton>
           </p>
         ))}
+      {moreFailed.length === 0 ? null : (
+        <Problem>
+          {t('{source} did not answer with more teams. Try again.', {
+            source: moreFailed
+              .map((id) => sources.find((each) => each.id === id))
+              .flatMap((source) =>
+                source === undefined ? [] : [`${t(KINDS[source.kind].name)} · ${sourceLine(source)}`],
+              )
+              .join(', '),
+          })}
+        </Problem>
+      )}
       {silent.length === 0 ? null : (
         <div className="flex flex-col items-start gap-[8px]">
           <Problem>
