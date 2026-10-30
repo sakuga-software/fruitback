@@ -185,9 +185,10 @@ export default function Notes() {
   useEffect(() => {
     if (refocus === undefined || reading) return;
     setRefocus(undefined);
-    document
-      .querySelector<HTMLElement>(`tr[data-note="${CSS.escape(refocus)}"] .select__trigger`)
-      ?.focus({ preventScroll: false });
+    const moved = [...document.querySelectorAll<HTMLElement>('tr[data-note]')].find(
+      (row) => row.dataset.note === refocus,
+    );
+    moved?.querySelector<HTMLElement>('.select__trigger')?.focus();
   }, [refocus, reading, shown]);
 
   const read = useCallback(async () => {
