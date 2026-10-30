@@ -98,6 +98,9 @@ export function seenOn(day: string | undefined, now: number = Date.now()): strin
  */
 const PAGE = 50;
 
+/** The longest search the worker reads: `MEMBERS_SEARCH` of `organization-paths.ts`. A longer one is refused. */
+const SEARCH_MOST = 100;
+
 /** The invitations whose address holds the search, whatever its case and its accents. */
 function invitationsFound(invitations: readonly Invitation[], search: string): readonly Invitation[] {
   const sought = folded(search.trim());
@@ -145,6 +148,7 @@ export default function Members() {
     setInvitationsFrom(0);
   });
   const membersAsked = useRef(0);
+  const invitationsAsked = useRef(0);
   // Another workspace opens on its first page, with no search.
   const [pagedIn, setPagedIn] = useState(workspace.id);
   if (pagedIn !== workspace.id) {
@@ -195,26 +199,36 @@ export default function Members() {
     }
     if (!manages) return;
     setInvitations(whileRead);
+    // The answer of a read that is no longer the last one, of another workspace maybe, is dropped.
+    const invited = (invitationsAsked.current += 1);
     const waiting = await call<Invitation[]>('GET', `${base}/list-invitations?${query}`);
+    if (invited !== invitationsAsked.current) return;
     setInvitations(listedOf(waiting, (data) => data.filter((each) => each.status === 'pending')));
   }, [base, query, reads, manages, workspace.id]);
 
   /** The page of the members that is shown, for the search that is typed (FRU-496). */
-  const readMembers = useCallback(async () => {
-    if (!reads) return;
-    // WARNING: a read made again keeps the rows that are shown. « Loading… » in their place took the
-    // table away for the time of the read: what is under it went up, then down again, and an
-    // action of a row was not there to press. Only a list that is not shown says that it is read.
-    setMembers(whileRead);
-    // The answer of a page or of a search that is no longer the one asked is dropped.
-    const asked = (membersAsked.current += 1);
-    const page = new URLSearchParams({ limit: String(PAGE), offset: String(offset) });
-    if (search !== '') page.set('q', search);
-    const listed = await call<{ members: Member[]; total?: number }>('GET', `${base}/list-members?${query}&${page}`);
-    if (asked !== membersAsked.current) return;
-    setMembers(listedOf(listed, (data) => data.members));
-    setTotal(listed.ok && typeof listed.data?.total === 'number' ? listed.data.total : undefined);
-  }, [base, query, reads, offset, search]);
+  const readMembers = useCallback(
+    async (after?: 'a-removal') => {
+      if (!reads) return;
+      // WARNING: a read made again keeps the rows that are shown. « Loading… » in their place took the
+      // table away for the time of the read: what is under it went up, then down again, and an
+      // action of a row was not there to press. Only a list that is not shown says that it is read.
+      setMembers(whileRead);
+      // The answer of a page or of a search that is no longer the one asked is dropped.
+      const asked = (membersAsked.current += 1);
+      const page = new URLSearchParams({ limit: String(PAGE), offset: String(offset) });
+      if (search !== '') page.set('q', search.slice(0, SEARCH_MOST));
+      const listed = await call<{ members: Member[]; total?: number }>('GET', `${base}/list-members?${query}&${page}`);
+      if (asked !== membersAsked.current) return;
+      const rows = listedOf(listed, (data) => data.members);
+      // A read after a removal that went through and that fails keeps the page, less the member: the
+      // removal is done, and the table does not go for a read of the rows around it.
+      if (rows === 'failed' && after === 'a-removal') return;
+      setMembers(rows);
+      setTotal(listed.ok && typeof listed.data?.total === 'number' ? listed.data.total : undefined);
+    },
+    [base, query, reads, offset, search],
+  );
 
   /** Both lists, read again: after « Try again », and after a change that the worker refused. */
   const readAll = useCallback(() => {
@@ -314,7 +328,7 @@ export default function Members() {
     // The last row of its page: the page before it is shown.
     const alone = typeof members !== 'string' && members.length === 1;
     if (alone && offset > 0) setOffset(Math.max(0, offset - PAGE));
-    else void readMembers();
+    else void readMembers('a-removal');
   }
 
   const self = {
@@ -418,6 +432,7 @@ export default function Members() {
                 compact
                 type="search"
                 placeholder={t('Search by name or address')}
+                maxLength={SEARCH_MOST}
                 value={typed}
                 onChange={(event) => setTyped(event.target.value)}
               />

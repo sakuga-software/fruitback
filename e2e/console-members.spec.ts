@@ -119,6 +119,10 @@ async function workerWith(page: Page, world: World = {}): Promise<Worker> {
       worker.read.push(call);
       if (worker.members === 'waits') return new Promise<void>(() => {});
       if (worker.members === 'fails') return json({ error: 'unknown' }, 500);
+      // As the worker: a search past 100 characters is refused (FRU-496).
+      if ((new URL(request.url()).searchParams.get('q') ?? '').length > 100) {
+        return json({ error: 'invalid-request', field: 'q' }, 400);
+      }
 
       return json({ members });
     }
@@ -820,6 +824,35 @@ test('a read that failed says so with « Try again », and is never a table with
   await expect(row(page, 'Tom')).toBeVisible();
   await expect(alert).toHaveCount(0);
   await expect(email(page)).toHaveValue('zoe@client.fr');
+});
+
+test('a search longer than the worker reads is cut at 100 characters, and never fails the list (FRU-496)', async ({
+  page,
+}) => {
+  await workerWith(page);
+  await open(page);
+  const search = page.getByRole('searchbox', { name: 'Search members' });
+  await search.fill('a'.repeat(120));
+  await expect(search).toHaveValue('a'.repeat(100));
+  // The stub finds the four members whatever the search: the table is there, and no « Try again ».
+  await expect.poll(async () => (await table(page).locator('tbody tr').count()) > 0).toBe(true);
+  await page.waitForTimeout(500);
+  await expect(page.getByRole('button', { name: 'Try again' })).toHaveCount(0);
+  await expect(row(page, 'Tom')).toBeVisible();
+});
+
+test('a member removed stays removed when the read of their page after it fails (FRU-496)', async ({ page }) => {
+  const worker = await workerWith(page);
+  await open(page);
+  await row(page, 'Tom').getByRole('button', { name: 'Remove', exact: true }).click();
+  worker.members = 'fails';
+  await page.getByRole('button', { name: 'Remove Tom' }).click();
+  await expect.poll(() => worker.sent.map((each) => each.call)).toEqual(['remove-member']);
+  await expect.poll(() => worker.read.filter((each) => each === 'list-members').length).toBeGreaterThan(1);
+  await page.waitForTimeout(500);
+  await expect(page.getByText('tom@acme.dev', { exact: true })).toHaveCount(0);
+  await expect(row(page, 'Nora')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Try again' })).toHaveCount(0);
 });
 
 test('a day that the worker did not give, or that is no date, is not drawn', async ({ page }) => {
