@@ -12,6 +12,7 @@
 @import '@heroui/styles/components/description.css' layer(components);
 @import '@heroui/styles/components/field-error.css' layer(components);
 @import '@heroui/styles/components/label.css' layer(components);
+@import '@heroui/styles/components/link.css' layer(components);
 @import '@heroui/styles/components/button.css' layer(components);
 @import '@heroui/styles/components/button-group.css' layer(components);
 @import '@heroui/styles/components/dropdown.css' layer(components);
@@ -31,6 +32,7 @@
 @import '@heroui/styles/components/textfield.css' layer(components);
 @import '@heroui/styles/components/header.css' layer(components);
 @import '@heroui/styles/components/surface.css' layer(components);
+@import '@heroui/styles/components/tooltip.css' layer(components);
 @import '@heroui/styles/components/combo-box.css' layer(components);
 @import '@heroui/styles/components/select.css' layer(components);
 @import '@heroui/styles/themes/default' layer(theme);
@@ -435,6 +437,55 @@ textarea {
 .kit-icon-button[aria-disabled='true'] {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* A link that is a picture (FRU-546): a small icon button, opened in a new tab. */
+.kit-icon-link {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--spacing-control-small);
+  height: var(--spacing-control-small);
+  border-radius: var(--field-radius);
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.kit-icon-link:hover,
+.kit-icon-link[data-hovered='true'] {
+  background: var(--color-chip);
+  color: var(--color-ink);
+}
+
+.kit-icon-link svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Words cut to their room, with a picture before them (FRU-553); whole in the tooltip. */
+.kit-tip-trigger {
+  display: inline-flex;
+  max-width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  border-radius: 4px;
+  cursor: default;
+}
+
+/* A tooltip: ink, 12 px, under 360 px; an address breaks anywhere rather than overflow. */
+.kit-tip {
+  max-width: min(360px, calc(100vw - 32px));
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--color-ink);
+  color: var(--color-page);
+  font-size: var(--text-tiny);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  box-shadow: none;
 }
 
 .kit-icon-button svg {
