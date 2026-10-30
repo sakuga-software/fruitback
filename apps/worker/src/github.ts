@@ -582,13 +582,24 @@ export function createIssueStore({
       'in:body',
     ].join(' ');
     const rows: unknown[] = [];
+    let incomplete = false;
     for (let page = 1; page <= SEARCH_MAX_PAGES; page += 1) {
       const params = new URLSearchParams({ q, per_page: String(ISSUES_PAGE_SIZE), page: String(page) });
       const answer = searchAnswerSchema.safeParse(await call(repository, `/search/issues?${params}`));
       if (!answer.success) throw new StoreError('GitHub returned no search');
       rows.push(...answer.data.items);
-      if (answer.data.items.length < ISSUES_PAGE_SIZE) break;
+      incomplete ||= answer.data.incomplete_results === true;
+      if (answer.data.items.length < ISSUES_PAGE_SIZE) {
+        if (incomplete)
+          console.error('[fruitback] GitHub said its search of a page is incomplete: older notes may be missing');
+
+        return rows;
+      }
     }
+    // Ten full pages: GitHub answers no more than 1,000 results, so notes of the page may be cut.
+    console.error(
+      `[fruitback] the search of a page reached ${SEARCH_MAX_PAGES * ISSUES_PAGE_SIZE} results: older notes may be missing`,
+    );
 
     return rows;
   }
@@ -720,7 +731,7 @@ function matchPage(
   return { issue: issue.data, note: parsed.note };
 }
 
-const searchAnswerSchema = z.object({ items: z.array(z.unknown()) });
+const searchAnswerSchema = z.object({ items: z.array(z.unknown()), incomplete_results: z.boolean().optional() });
 
 /** The words of `url` a search holds: the URL, or a prefix of it cut after a `/` (`SEARCH_PHRASE_MAX`). */
 export function searchPhrase(url: string): string {

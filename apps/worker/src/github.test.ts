@@ -735,6 +735,31 @@ describe('findForPage', () => {
     await assert.rejects(issues, StoreError);
   });
 
+  it('says in the log when the search reaches the 1,000 results GitHub gives, or calls itself incomplete', async () => {
+    const full = Array.from({ length: 100 }, (_, index) => ({ id: index }));
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const capped = readWith(full, {
+      'GET /search/issues': () => json(200, { total_count: 5000, incomplete_results: false, items: full }),
+    });
+    await capped.issues;
+    assert.equal(apiCalls(capped.calls).filter((call) => call.path === '/search/issues').length, 10);
+    assert.match(String(logged.mock.calls.at(-1)?.[0]), /reached 1000 results: older notes may be missing/);
+
+    logged.mockClear();
+    const partial = readWith(full, {
+      'GET /search/issues': () => json(200, { total_count: 1, incomplete_results: true, items: [row()] }),
+    });
+    assert.equal((await partial.issues).length, 1);
+    assert.match(String(logged.mock.calls[0]?.[0]), /search of a page is incomplete/);
+
+    logged.mockClear();
+    const quiet = readWith(full, {
+      'GET /search/issues': () => json(200, { total_count: 1, incomplete_results: false, items: [row()] }),
+    });
+    await quiet.issues;
+    assert.equal(logged.mock.calls.length, 0);
+  });
+
   it('searches a long URL by a prefix that ends on a slash', () => {
     const long = `https://preview.acme.test/${'a'.repeat(120)}/${'b'.repeat(120)}`;
 
