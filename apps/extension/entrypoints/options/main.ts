@@ -28,6 +28,7 @@ import { showProblem } from '../../src/problem-view.ts';
 import { IMPORT_PROBLEM } from '../../src/remedy.ts';
 import { language, setLanguage, t } from '../../src/i18n.ts';
 import { createBrowserSessions } from '../../src/session-browser.ts';
+import { showUpdateLine } from '../../src/update-notice-browser.ts';
 import { PAIR_UNAVAILABLE, type StoredSession, describeIdentity, failedPairing } from '../../src/session.ts';
 import {
   type PanelOptions,
@@ -171,6 +172,8 @@ if (app !== null) {
     content,
   );
   app.append(frame);
+  // FRU-519: « Fruitback 0.6.0 is out », under the version in the menu.
+  void showUpdateLine((line) => frame.querySelector('.page-brand')?.after(line));
 }
 
 void renderList();

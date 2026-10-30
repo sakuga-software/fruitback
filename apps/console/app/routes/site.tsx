@@ -95,7 +95,16 @@ export default function SitePage() {
   const [choices, setChoices] = useState<Listed<SiteChoice>>('loading');
   useEffect(() => {
     if (!manages) return;
-    void siteChoices(workspace.id).then((answer) => setChoices(listedOf(answer, (data) => data.sites)));
+    // Another workspace: its sites are read, and the answer for the one before is dropped.
+    let current = true;
+    setChoices('loading');
+    void siteChoices(workspace.id).then((answer) => {
+      if (current) setChoices(listedOf(answer, (data) => data.sites));
+    });
+
+    return () => {
+      current = false;
+    };
   }, [manages, workspace.id]);
 
   // The sources of the workspace, for who sets where the notes of the site go (FRU-399).
