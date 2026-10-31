@@ -345,6 +345,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Connected: 'Connecté',
   'Key of {person}': 'Clé de {person}',
   'Add a connector': 'Ajouter un connecteur',
+  'New connector': 'Nouveau connecteur',
+  Close: 'Fermer',
   'An issue per note, in the team you choose.': 'Un ticket par note, dans l’équipe que vous choisissez.',
   'An owner or an admin adds a connector': 'Un propriétaire ou un administrateur ajoute un connecteur',
   'The key could not be kept just now. Try again.': 'La clé n’a pas pu être gardée. Réessayez.',

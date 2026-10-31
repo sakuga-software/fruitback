@@ -21,6 +21,7 @@ import {
   sourceLine,
 } from './connector-parts';
 import { RestPanel } from './connector-rest';
+import type { LaterKind, MarkedKind } from '../connector-marks';
 import { ReadProblem } from '../read-problem';
 
 /**
@@ -34,11 +35,11 @@ import { ReadProblem } from '../read-problem';
  * connects what does not exist.
  */
 const LATER = [
-  { name: 'Jira', detail: msg('An issue in a Jira Cloud project.') },
-  { name: 'GitLab', detail: msg('An issue in a project, cloud or self-managed.') },
-  { name: 'Trello', detail: msg('A card in the list you choose.') },
-  { name: 'Notion', detail: msg('A row in a database.') },
-  { name: 'Webhook', detail: msg('Tells Slack or any address when a note arrives.') },
+  { kind: 'jira', name: 'Jira', detail: msg('An issue in a Jira Cloud project.') },
+  { kind: 'gitlab', name: 'GitLab', detail: msg('An issue in a project, cloud or self-managed.') },
+  { kind: 'trello', name: 'Trello', detail: msg('A card in the list you choose.') },
+  { kind: 'notion', name: 'Notion', detail: msg('A row in a database.') },
+  { kind: 'webhook', name: 'Webhook', detail: msg('Tells Slack or any address when a note arrives.') },
 ] as const;
 
 /** What the way back from Linear says, as the worker words it in the address (FRU-134). */
@@ -89,6 +90,12 @@ const PANELS: Record<Connector['kind'], (props: PanelProps) => ReactNode> = {
 /** The id of the title of the open panel. */
 const PANEL_TITLE = 'source-panel-title';
 
+/** The id of the list of the sources to add, which « New connector » names in `aria-controls`. */
+const CATALOGUE = 'source-catalogue';
+
+/** The id of the title « Your connectors », where focus goes back when « New connector » is not there. */
+const CONNECTED_TITLE = 'connected-title';
+
 export default function Connectors() {
   useLocale();
   const { workspace } = useWorkspace();
@@ -115,6 +122,19 @@ export default function Connectors() {
   // Whether the panel that is about to appear was opened by a press of its row: see `Opened`.
   const opening = useRef(false);
   const [adding, setAdding] = useState<Connector['kind'] | undefined>();
+  // FRU-542: whether « New connector » opened the list of the sources to add. A way back from Linear or
+  // GitHub that went wrong opens it: its sentence is under the source, in that list.
+  const [catalogue, setCatalogue] = useState(problem !== undefined || githubProblem !== undefined);
+  const catalogueTitle = useRef<HTMLHeadingElement>(null);
+  const newSource = useRef(false);
+  // An address connected from the list, whose secret is still on the screen (see `AddRest`).
+  const restAdded = useRef(false);
+  const toPanel = useRef(false);
+  useEffect(() => {
+    // The list that « New connector » opens takes focus on its title: a screen reader says where it is.
+    if (catalogue && newSource.current) catalogueTitle.current?.focus();
+    newSource.current = false;
+  }, [catalogue]);
 
   const load = useCallback(async () => {
     const [listed, placed] = await Promise.all([
@@ -173,6 +193,18 @@ export default function Connectors() {
     });
     // Once, when the screen opens: the word in the address is read one time.
   }, [load]);
+
+  /**
+   * « Close » of the list of the sources to add: the keyboard goes back to « New connector ». A read
+   * since the list opened can take that button away (a role, or a worker that cannot keep a key any
+   * more): focus then goes to the title « Your connectors », never to the page.
+   */
+  function closeCatalogue() {
+    setCatalogue(false);
+    const back =
+      document.querySelector<HTMLElement>(`[aria-controls="${CATALOGUE}"]`) ?? document.getElementById(CONNECTED_TITLE);
+    back?.focus();
+  }
 
   /** The worker says where to go, and the browser goes there: the consent is at Linear. */
   async function connectLinear() {
@@ -244,6 +276,24 @@ export default function Connectors() {
   // says what « Connect Linear » does, the consent at Linear or a key: after a read that failed
   // the screen does not know, so it offers « Try again » and no source to add.
   const answered = connectors !== undefined;
+  const connected = connectors !== undefined && connectors.length > 0;
+  // FRU-542: with no source, the screen is the list of the sources to add. With one, it is the
+  // sources that are connected, and « New connector » opens the list above them. A form open in the
+  // list keeps it open: the secret of an address is shown there once, after the address is connected.
+  const listed = answered && (!connected || catalogue || adding !== undefined);
+  // A person who cannot connect a source is not offered a button that opens disabled ones.
+  const offersNew = connected && !cannot;
+  // Once « I kept it » closed the list, focus goes to the panel of the new address: the button had it.
+  // It waits for the list to close and for the panel to be there: the read that brings the new
+  // address can end after « I kept it ».
+  useEffect(() => {
+    if (listed || !toPanel.current) return;
+    const opened = document.getElementById(PANEL);
+    if (opened === null) return;
+    toPanel.current = false;
+    restAdded.current = false;
+    opened.focus({ preventScroll: true });
+  }, [listed, open?.id]);
 
   return (
     <>
@@ -252,88 +302,71 @@ export default function Connectors() {
         lead={t('Connect a tracker once. Every site of {workspace} can then send its notes there.', {
           workspace: workspace.name,
         })}
+        {...(offersNew
+          ? {
+              action: (
+                <Button
+                  expanded={listed}
+                  controls={CATALOGUE}
+                  onClick={() => {
+                    newSource.current = !listed;
+                    setCatalogue(!listed);
+                  }}
+                >
+                  {t('New connector')}
+                </Button>
+              ),
+            }
+          : {})}
       />
       <div className="flex min-w-0 flex-col gap-[32px]">
-        <section aria-labelledby="connected-title">
-          <h2 id="connected-title" className="mb-[10px] text-body leading-auto font-semibold">
-            {t('Your connectors')}
-          </h2>
-          {unread ? (
-            <div className="mb-[12px] flex flex-wrap items-center gap-[12px]">
-              <p role="alert" className="min-w-0 flex-1 text-small text-muted">
-                {t('The connectors and their sites did not load.')} <ReadProblem />
-              </p>
-              <Button tone="outline" onClick={() => void reload()}>
-                {t('Try again')}
-              </Button>
+        {unread ? (
+          <div className="flex flex-wrap items-center gap-[12px]">
+            <p role="alert" className="min-w-0 flex-1 text-small text-muted">
+              {t('The connectors and their sites did not load.')} <ReadProblem />
+            </p>
+            <Button tone="outline" onClick={() => void reload()}>
+              {t('Try again')}
+            </Button>
+          </div>
+        ) : null}
+        {connectors === undefined && !unread ? <p className="text-small text-muted">{t('Loading…')}</p> : null}
+
+        {listed ? (
+          <section
+            id={CATALOGUE}
+            aria-labelledby="add-title"
+            // Over the sources that are connected, a frame of its own: it is not one of them.
+            className={connected ? 'rounded-frame border border-line bg-surface px-[20px] pt-[16px] pb-[4px]' : ''}
+          >
+            <div className="mb-[10px] flex items-center justify-between gap-[12px]">
+              <h2
+                id="add-title"
+                ref={catalogueTitle}
+                tabIndex={-1}
+                className="text-body leading-auto font-semibold focus:outline-none"
+              >
+                {t('Add a connector')}
+              </h2>
+              {connected && adding === undefined ? (
+                <LinkButton onClick={() => closeCatalogue()}>{t('Close')}</LinkButton>
+              ) : null}
             </div>
-          ) : null}
-          {connectors === undefined && !unread ? <p className="text-small text-muted">{t('Loading…')}</p> : null}
-          {connectors?.length === 0 ? (
-            <p className="text-small text-muted">{t('No tracker yet. The notes stay in Fruitback.')}</p>
-          ) : null}
-          {connectors === undefined || connectors.length === 0 ? null : (
-            <ul className="overflow-hidden rounded-frame border border-line">
-              {connectors.map((connector) => {
-                const chosen = connector.id === selected;
-
-                return (
-                  <li key={connector.id} className="border-b border-line last:border-b-0">
-                    <button
-                      type="button"
-                      aria-expanded={chosen}
-                      id={rowId(connector.id)}
-                      aria-controls={chosen ? PANEL : undefined}
-                      onClick={() => {
-                        // A person opened it, so the panel takes focus when it appears (FRU-197).
-                        opening.current = !chosen;
-                        setSelected(chosen ? undefined : connector.id);
-                      }}
-                      // Under 640 px the state goes under the address, in line with it (FRU-321).
-                      className={`flex w-full cursor-pointer flex-wrap items-center gap-x-[14px] gap-y-[4px] px-[18px] py-[14px] text-left -outline-offset-2 sm:flex-nowrap ${
-                        chosen ? 'bg-chip' : 'hover:bg-subtle'
-                      }`}
-                    >
-                      <SourceMark>{KINDS[connector.kind].mark}</SourceMark>
-                      <span className="min-w-0 flex-1">
-                        {/* The name its workspace gave it, or its kind (FRU-404). */}
-                        <span className="block truncate text-body leading-auto font-semibold">
-                          {connectorName(connector)}
-                        </span>
-                        {/* One line: a long address is cut at its end, and the panel writes it whole (FRU-321). */}
-                        <span className="flex min-w-0 text-hint leading-auto text-muted" title={lineOf(connector)}>
-                          <span className="min-w-0 truncate" data-source-line>
-                            {lineOf(connector)}
-                          </span>
-                          <span className="flex-none whitespace-pre">{countOf(connector)}</span>
-                        </span>
-                      </span>
-                      <span className="flex-none max-sm:basis-full max-sm:pl-[50px]">
-                        <State connector={connector} late={late[connector.id]} chosen={chosen} />
-                      </span>
-                    </button>
-                    {/* The accordion of the source opens under its row (FRU-403). */}
-                    {chosen ? panel : null}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </section>
-
-        {answered ? (
-          <section aria-labelledby="add-title">
-            <h2 id="add-title" className="mb-[10px] text-body leading-auto font-semibold">
-              {t('Add a connector')}
-            </h2>
+            {connected ? null : (
+              <p className="mb-[10px] text-hint text-muted">{t('No tracker yet. The notes stay in Fruitback.')}</p>
+            )}
             {manages ? null : (
               <p className="mb-[10px] text-hint text-muted">{t('An owner or an admin adds a connector')}</p>
             )}
             {available ? null : (
               <p className="mb-[10px] text-hint text-muted">{t(KEY_PROBLEMS['connectors-unavailable'] ?? '')}</p>
             )}
-            <ul className="border-t border-line">
-              <Source name={t(KINDS.linear.name)} detail={t('An issue per note, in the team you choose.')}>
+            <ul className="border-t border-line [&>li:last-child]:border-b-0">
+              <Source
+                kind="linear"
+                name={t(KINDS.linear.name)}
+                detail={t('An issue per note, in the team you choose.')}
+              >
                 {adding === 'linear' ? null : (
                   <span className="flex flex-wrap items-center gap-x-[16px]">
                     {oauth ? (
@@ -358,6 +391,9 @@ export default function Connectors() {
                       onDone={(connector) => {
                         setAdding(undefined);
                         if (connector !== undefined) {
+                          setCatalogue(false);
+                          // The list goes with the form that had focus: the panel of the new source takes it.
+                          opening.current = true;
                           setSelected(connector.id);
                           void load();
                         }
@@ -373,6 +409,7 @@ export default function Connectors() {
               </Source>
               {/* FRU-331: the API of an issue of GitHub takes no file, so the files of a note do not go there. */}
               <Source
+                kind="github"
                 name={t(KINDS.github.name)}
                 detail={t(
                   'An issue per note, in one repository. The files of a note do not go: GitHub takes none by its API.',
@@ -402,6 +439,7 @@ export default function Connectors() {
                 )}
               </Source>
               <Source
+                kind="rest"
                 name={t(KINDS.rest.name)}
                 detail={t('POST each note to your own endpoint, with an address of one hour for each of its files.')}
               >
@@ -410,10 +448,18 @@ export default function Connectors() {
                     <AddRest
                       base={base}
                       onAdded={(connector) => {
+                        // Its panel opens now, and takes focus only once the secret was kept.
+                        restAdded.current = true;
                         setSelected(connector.id);
                         void load();
                       }}
-                      onDone={() => setAdding(undefined)}
+                      onDone={() => {
+                        setAdding(undefined);
+                        // « Cancel » closes the form only. « I kept it » closes the list too.
+                        if (!restAdded.current) return;
+                        setCatalogue(false);
+                        toPanel.current = true;
+                      }}
                     />
                   </Under>
                 ) : (
@@ -423,13 +469,72 @@ export default function Connectors() {
                 )}
               </Source>
               {LATER.map((source) => (
-                <Source key={source.name} name={source.name} detail={t(source.detail)}>
+                <Source key={source.name} kind={source.kind} name={source.name} detail={t(source.detail)}>
                   {/* No connector of this kind exists: the button says when, and connects nothing. */}
                   <Button tone="outline" inset={16} disabled>
                     {t('After the beta')}
                   </Button>
                 </Source>
               ))}
+            </ul>
+          </section>
+        ) : null}
+
+        {connected ? (
+          <section aria-labelledby={CONNECTED_TITLE}>
+            <h2
+              id={CONNECTED_TITLE}
+              tabIndex={-1}
+              className="mb-[10px] text-body leading-auto font-semibold focus:outline-none"
+            >
+              {t('Your connectors')}
+            </h2>
+            {/* FRU-542: a card for each source, one under the other. Its panel opens inside its card
+                (FRU-403): a panel between two cards of a grid reads as a stray card (FRU-433). */}
+            <ul className="flex flex-col gap-[12px]">
+              {connectors.map((connector) => {
+                const chosen = connector.id === selected;
+
+                return (
+                  <li key={connector.id} className="overflow-hidden rounded-frame border border-line bg-surface">
+                    <button
+                      type="button"
+                      aria-expanded={chosen}
+                      id={rowId(connector.id)}
+                      aria-controls={chosen ? PANEL : undefined}
+                      onClick={() => {
+                        // A person opened it, so the panel takes focus when it appears (FRU-197).
+                        opening.current = !chosen;
+                        setSelected(chosen ? undefined : connector.id);
+                      }}
+                      // Under 640 px the state goes under the address, in line with it (FRU-321).
+                      className={`flex w-full cursor-pointer flex-wrap items-center gap-x-[14px] gap-y-[4px] px-[18px] py-[14px] text-left -outline-offset-2 sm:flex-nowrap ${
+                        chosen ? 'bg-chip' : 'hover:bg-subtle'
+                      }`}
+                    >
+                      <SourceMark kind={connector.kind} />
+                      <span className="min-w-0 flex-1">
+                        {/* The name its workspace gave it, or its kind (FRU-404). */}
+                        <span className="block truncate text-body leading-auto font-semibold">
+                          {connectorName(connector)}
+                        </span>
+                        {/* One line: a long address is cut at its end, and the panel writes it whole (FRU-321). */}
+                        <span className="flex min-w-0 text-hint leading-auto text-muted" title={lineOf(connector)}>
+                          <span className="min-w-0 truncate" data-source-line>
+                            {lineOf(connector)}
+                          </span>
+                          <span className="flex-none whitespace-pre">{countOf(connector)}</span>
+                        </span>
+                      </span>
+                      <span className="flex-none max-sm:basis-full max-sm:pl-[50px]">
+                        <State connector={connector} late={late[connector.id]} chosen={chosen} />
+                      </span>
+                    </button>
+                    {/* The accordion of the source opens under its row, inside its card (FRU-403). */}
+                    {chosen ? panel : null}
+                  </li>
+                );
+              })}
             </ul>
           </section>
         ) : null}
@@ -457,14 +562,25 @@ function Connect({ name }: { name: string }) {
   );
 }
 
-/** A source to add: its name, what a note becomes there, and what connects it. */
-function Source({ name, detail, children }: { name: string; detail: string; children: ReactNode }) {
+/** A source to add: its mark, its name, what a note becomes there, and what connects it. */
+function Source({
+  kind,
+  name,
+  detail,
+  children,
+}: {
+  kind: MarkedKind | LaterKind;
+  name: string;
+  detail: string;
+  children: ReactNode;
+}) {
   return (
     <li
       className="flex flex-wrap items-center gap-x-[16px] gap-y-[8px] border-b border-line py-[12px]"
       data-source={name}
     >
-      <span className="min-w-0 flex-[1_1_260px]">
+      <SourceMark kind={kind} />
+      <span className="min-w-0 flex-[1_1_210px]">
         <span className="block text-body leading-auto font-semibold">{name}</span>
         <span className="block text-hint leading-auto text-muted">{detail}</span>
       </span>
@@ -475,7 +591,8 @@ function Source({ name, detail, children }: { name: string; detail: string; chil
 
 /** What opens under the row of a source to add: its form, or why it did not connect. */
 function Under({ children }: { children: ReactNode }) {
-  return <div className="w-full basis-full">{children}</div>;
+  // In line with the name, past the mark, from 640 px; under the mark on a phone, where width is short.
+  return <div className="w-full basis-full sm:pl-[52px]">{children}</div>;
 }
 
 /**
