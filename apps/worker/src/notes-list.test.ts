@@ -44,7 +44,7 @@ type Answer = {
     checkedAt: string;
   }[];
   total: number;
-  counts: { all: number; byPlace?: Record<string, number>; undelivered?: number };
+  counts: { all: number; byPlace?: Record<string, number>; byStage?: Record<string, number>; undelivered?: number };
   searched: string[];
   next?: string;
 };
@@ -206,7 +206,12 @@ describe('the notes of a workspace (FRU-244)', () => {
         .map((note) => noteIdOf(note.site, note.id)),
     );
     assert.equal(answer.total, 60);
-    assert.deepEqual(answer.counts, { all: 60, byPlace: { [linear.id]: 30, [rest.id]: 30 }, undelivered: 0 });
+    assert.deepEqual(answer.counts, {
+      all: 60,
+      byPlace: { [linear.id]: 30, [rest.id]: 30 },
+      byStage: { new: 12, todo: 12, progress: 12, done: 12, closed: 12 },
+      undelivered: 0,
+    });
     assert.deepEqual(answer.searched, ['excerpt', 'page', 'site', 'stage', 'reference']);
     assert.equal(typeof answer.next, 'string');
 
@@ -349,6 +354,259 @@ describe('the notes of a workspace (FRU-244)', () => {
   });
 });
 
+/** The planted notes in the order of a list by status (FRU-551): the rank of the stage, then the date. */
+function byStatus(planted: readonly Planted[]): Planted[] {
+  const ranks = ['progress', 'todo', 'new', 'closed', 'done'];
+  const dated = ordered(planted);
+
+  return [...dated].sort(
+    (a, b) => ranks.indexOf(a.stage) - ranks.indexOf(b.stage) || dated.indexOf(a) - dated.indexOf(b),
+  );
+}
+
+describe('the notes of a workspace by status (FRU-551)', () => {
+  it('reads in progress, to do, new, closed then done, the newest first in each, and counts each stage', async () => {
+    const { world, alice, workspace, planted } = await sixtyNotes();
+
+    const answer = await listOf(world, workspace, alice.token, '?order=status&limit=50');
+
+    assert.deepEqual(
+      answer.notes.map((note) => note.id),
+      byStatus(planted)
+        .slice(0, 50)
+        .map((note) => noteIdOf(note.site, note.id)),
+    );
+    assert.deepEqual(
+      [...new Set(answer.notes.map((note) => note.stage))],
+      ['progress', 'todo', 'new', 'closed', 'done'],
+    );
+    assert.equal(answer.total, 60);
+    assert.deepEqual(answer.counts.byStage, { new: 12, todo: 12, progress: 12, done: 12, closed: 12 });
+  });
+
+  it('walks every note once with its cursor, across the stages, a note that arrives between two pages included', async () => {
+    const { world, index, alice, workspace, sites, planted } = await sixtyNotes();
+    const site = (sites[0] as { id: string }).id;
+    const seen = await walk(world, workspace, alice.token, 'order=status&limit=8', async (page) => {
+      // After the second page, which ends in « in progress »: an old note « to do », which the walk
+      // still owes, and a new one « in progress », which it does not.
+      if (page === 2) {
+        for (const [id, stage, at] of [
+          ['sd_late_todo', 'todo', BASE + 500],
+          ['sd_late_progress', 'progress', BASE + 10_000_000],
+        ] as const) {
+          await index.record(
+            [
+              {
+                workspace,
+                site,
+                note: noteFixture({ id, text: 'Late' }),
+                channel: 'script',
+                author: { kind: 'visitor' },
+                place: { kind: 'fruitback' },
+                issue: { identifier: id },
+                stage,
+              },
+            ],
+            at,
+          );
+        }
+      }
+    });
+
+    const ids = seen.map((note) => note.id);
+    assert.equal(new Set(ids).size, ids.length, 'no note twice');
+    const expected = byStatus([...planted, { site, id: 'sd_late_todo', stage: 'todo', at: BASE + 500 } as Planted]).map(
+      (note) => noteIdOf(note.site, note.id),
+    );
+    assert.deepEqual(ids, expected, 'every note, in order, the late one « to do » too');
+  });
+
+  it('keeps the filters, and the counts of each stage follow the place', async () => {
+    const { world, alice, workspace, rest, planted } = await sixtyNotes();
+
+    const answer = await listOf(world, workspace, alice.token, `?order=status&place=${rest.id}&stage=todo&limit=50`);
+
+    const kept = planted.filter((note) => note.place === rest.id && note.stage === 'todo');
+    assert.deepEqual(
+      answer.notes.map((note) => note.id),
+      byStatus(kept).map((note) => noteIdOf(note.site, note.id)),
+    );
+    assert.deepEqual(answer.counts.byStage, { todo: kept.length });
+  });
+
+  it('counts by stage the notes of a source that was removed, as it lists them (review of #764)', async () => {
+    const { world, alice, workspace, rest, planted } = await sixtyNotes();
+    assert.equal(await world.accounts.removeConnector(workspace, rest.id), true);
+
+    const answer = await listOf(world, workspace, alice.token, '?order=status&place=removed&limit=50');
+
+    const gone = planted.filter((note) => note.place === rest.id);
+    assert.deepEqual(
+      answer.notes.map((note) => note.id),
+      byStatus(gone).map((note) => noteIdOf(note.site, note.id)),
+    );
+    const counted: Record<string, number> = {};
+    for (const note of gone) counted[note.stage] = (counted[note.stage] ?? 0) + 1;
+    assert.deepEqual(answer.counts.byStage, counted);
+    assert.equal(
+      Object.values(answer.counts.byStage ?? {}).reduce((sum, notes) => sum + notes, 0),
+      answer.total,
+    );
+    assert.equal(answer.counts.byPlace?.removed, gone.length);
+
+    // Every place, the one that was removed included: the counts by stage add up to the list, and to
+    // the count of the place on its chip.
+    for (const place of Object.keys(answer.counts.byPlace ?? {})) {
+      const one = await listOf(world, workspace, alice.token, `?order=status&place=${place}&limit=50`);
+      const sum = Object.values(one.counts.byStage ?? {}).reduce((total, notes) => total + notes, 0);
+      assert.equal(sum, one.total, place);
+      assert.equal(sum, answer.counts.byPlace?.[place], place);
+    }
+  });
+
+  it('refuses another order, and a cursor of the other order', async () => {
+    const { world, alice, workspace } = await sixtyNotes();
+    const dated = (await listOf(world, workspace, alice.token, '?limit=8')).next as string;
+    const ranked = (await listOf(world, workspace, alice.token, '?order=status&limit=8')).next as string;
+    for (const query of [
+      'order=date',
+      'order=',
+      `order=status&cursor=${dated}`,
+      `cursor=${ranked}`,
+      `order=status&cursor=${Buffer.from(JSON.stringify([BASE, 'a', 'b', 5])).toString('base64url')}`,
+      `order=status&cursor=${Buffer.from(JSON.stringify([BASE, 'a', 'b', 1.5])).toString('base64url')}`,
+    ]) {
+      const answer = await callOn(world, 'GET', `/console/workspaces/${workspace}/notes?${query}`, {
+        token: alice.token,
+      });
+      assert.equal(answer.status, 400, query);
+    }
+  });
+});
+
+/** The rank of a stage in a list by status. */
+const RANKS = ['progress', 'todo', 'new', 'closed', 'done'];
+
+/** Every page of a list by status, with the counts of each page. */
+async function pagesOf(world: World, workspace: string, token: string, query: string) {
+  const pages: Answer[] = [];
+  let next: string | undefined;
+  do {
+    const cursor = next === undefined ? '' : `&cursor=${next}`;
+    const answer = await listOf(world, workspace, token, `?order=status&limit=8${query}${cursor}`);
+    pages.push(answer);
+    next = answer.next;
+  } while (next !== undefined && pages.length < 50);
+
+  return pages;
+}
+
+describe('the list by status, every filter and every role crossed (FRU-551, review of #764)', () => {
+  it('walks each list once, its pages in order across their edges, and counts each group as it lists it', async () => {
+    const { world, alice, bob, workspace, sites, rest, planted } = await sixtyNotes();
+    // A guest of one site: the sites they read narrow the list and its counts.
+    const one = (sites[1] as { id: string }).id;
+    const hugo = await signInTo(world, 'hugo@client.fr');
+    await memberOf(world, workspace, hugo.id, 'guest');
+    await shareWith(world, workspace, hugo.id, [one]);
+
+    /** Moves a note to another stage, as a read of its tracker does. */
+    const move = async (note: Planted, stage: NoteStage) => {
+      await rowsOf(
+        world.database,
+        `UPDATE note_index SET stage = '${stage}' WHERE site_id = '${note.site}' AND note_id = '${note.id}'`,
+      );
+      note.stage = stage;
+    };
+
+    const readers = [
+      { name: 'owner', token: alice.token, reads: () => true, tracker: true },
+      { name: 'member', token: bob.token, reads: () => true, tracker: true },
+      { name: 'guest of one site', token: hugo.token, reads: (note: Planted) => note.site === one, tracker: false },
+    ];
+    const check = async (round: string) => {
+      for (const reader of readers) {
+        for (const stage of ['', 'todo']) {
+          for (const place of reader.tracker ? ['', rest.id] : ['']) {
+            for (const q of ['', 'checkout']) {
+              const name = `${round}, ${reader.name}, stage=${stage}, place=${place}, q=${q}`;
+              const query = `${stage === '' ? '' : `&stage=${stage}`}${place === '' ? '' : `&place=${place}`}${q === '' ? '' : `&q=${q}`}`;
+              const kept = planted.filter(
+                (note) =>
+                  reader.reads(note) &&
+                  (stage === '' || note.stage === stage) &&
+                  (place === '' || note.place === place) &&
+                  (q === '' || contains(note.note, q)),
+              );
+              const pages = await pagesOf(world, workspace, reader.token, query);
+              const ids = pages.flatMap((page) => page.notes.map((note) => note.id));
+
+              // Each note once, none missing, in the order of the groups then the dates.
+              assert.equal(new Set(ids).size, ids.length, `${name}: no note twice`);
+              assert.deepEqual(
+                ids,
+                byStatus(kept).map((note) => noteIdOf(note.site, note.id)),
+                name,
+              );
+              // Across the edge of two pages, the rank never goes back.
+              const ranks = pages.flatMap((page) => page.notes.map((note) => RANKS.indexOf(note.stage)));
+              assert.deepEqual(
+                ranks,
+                [...ranks].sort((a, b) => a - b),
+                `${name}: ranks in order`,
+              );
+              // Every page counts the same groups, those of the whole list it walks.
+              const expected: Record<string, number> = {};
+              for (const note of kept) expected[note.stage] = (expected[note.stage] ?? 0) + 1;
+              for (const page of pages) {
+                assert.deepEqual(page.counts.byStage ?? {}, expected, `${name}: counts by stage`);
+                assert.equal(page.total, kept.length, `${name}: total`);
+              }
+            }
+          }
+        }
+      }
+    };
+
+    await check('as planted');
+    // A note « to do » goes « done », out of the filter « to do », and a note « done » goes « to do »,
+    // into it: every list and every count follow.
+    const leaves = planted.find((note) => note.stage === 'todo' && note.site === one) as Planted;
+    const enters = planted.find((note) => note.stage === 'done' && note.site === one) as Planted;
+    await move(leaves, 'done');
+    await move(enters, 'todo');
+    await check('after two moves');
+  });
+
+  it('shows once a note that moves during a walk, when it moves to a group already read', async () => {
+    const { world, alice, workspace, planted } = await sixtyNotes();
+    const first = await listOf(world, workspace, alice.token, '?order=status&limit=8');
+    // A note of the first page goes back to « in progress », before the edge: the walk does not
+    // read it again. A note of a later group moves within the groups still to come: read once.
+    const seen = planted.find((note) => noteIdOf(note.site, note.id) === first.notes[0]?.id) as Planted;
+    const later = planted.find((note) => note.stage === 'new') as Planted;
+    for (const [note, stage] of [
+      [seen, 'progress'],
+      [later, 'closed'],
+    ] as const) {
+      await rowsOf(
+        world.database,
+        `UPDATE note_index SET stage = '${stage}' WHERE site_id = '${note.site}' AND note_id = '${note.id}'`,
+      );
+    }
+    const ids = [...first.notes.map((note) => note.id)];
+    let next = first.next;
+    while (next !== undefined) {
+      const page = await listOf(world, workspace, alice.token, `?order=status&limit=8&cursor=${next}`);
+      ids.push(...page.notes.map((note) => note.id));
+      next = page.next;
+    }
+    assert.equal(new Set(ids).size, ids.length, 'no note twice');
+    assert.equal(ids.length, planted.length, 'every note');
+  });
+});
+
 describe('who reads the notes (FRU-244)', () => {
   it('gives a guest the notes, and nothing of where they went', async () => {
     const { world, alice, gina, workspace, rest } = await sixtyNotes();
@@ -356,7 +614,8 @@ describe('who reads the notes (FRU-244)', () => {
     const answer = await listOf(world, workspace, gina.token, '?limit=50');
 
     assert.equal(answer.total, 60);
-    assert.deepEqual(answer.counts, { all: 60 });
+    // The stages of a note are no secret of the tracker: a guest reads them on each row too (FRU-551).
+    assert.deepEqual(answer.counts, { all: 60, byStage: { new: 12, todo: 12, progress: 12, done: 12, closed: 12 } });
     for (const note of answer.notes) {
       assert.deepEqual(
         Object.keys(note).filter((key) => ['place', 'ref', 'url', 'delivery'].includes(key)),

@@ -6,11 +6,13 @@ import {
   type AuthorKind,
   type ForgetIndex,
   type ListedNote,
+  type NoteCursor,
   type NoteEntry,
   type NoteIndex,
   type NoteQuery,
   type Place,
   type SiteNotes,
+  STAGE_ORDER,
   excerptOf,
   noNotes,
 } from './notes-index.ts';
@@ -261,14 +263,25 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
         // The deliveries first: a few rows, read once, then matched to the notes by their key.
         const pending = await pendingOf(db, workspace);
         const narrowed = filtered(workspace, query);
-        const placed = query.place === undefined ? narrowed : and(narrowed, placeIs(query.place));
-        const after =
-          query.after === undefined
-            ? placed
-            : and(
-                placed,
-                sql`(${note_index.created_at}, ${note_index.site_id} COLLATE "C", ${note_index.note_id} COLLATE "C") < (${query.after.at}, ${query.after.site} COLLATE "C", ${query.after.note} COLLATE "C")`,
-              );
+        // The list is `narrowed` (role, site, stage, author, search) and `inPlace`. The counts read
+        // `narrowed` once: by place for the chips, and by stage under `inPlace` for the groups, so a
+        // group counts what the list shows (FRU-551).
+        const inPlace = query.place === undefined ? undefined : placeIs(query.place);
+        const placed = inPlace === undefined ? narrowed : and(narrowed, inPlace);
+        // FRU-551: read by status, a page is ordered by the rank of its stage first. The cursor holds
+        // the rank of the last note: the next page starts after it in its stage, then the next stages.
+        // A note whose stage changes between two pages is where its stage is now: before the cursor,
+        // the walk does not read it; after, it may read it a second time. A note that does not move
+        // is read once (console.md, « The table is grouped by status »).
+        const byStatus = query.order === 'status';
+        const rank = rankOfStage();
+        const older = (cursor: NoteCursor) =>
+          sql`(${note_index.created_at}, ${note_index.site_id} COLLATE "C", ${note_index.note_id} COLLATE "C") < (${cursor.at}, ${cursor.site} COLLATE "C", ${cursor.note} COLLATE "C")`;
+        let after = placed;
+        if (query.after !== undefined && byStatus) {
+          const from = query.after.rank ?? 0;
+          after = and(placed, or(sql`${rank} > ${from}`, and(sql`${rank} = ${from}`, older(query.after))));
+        } else if (query.after !== undefined) after = and(placed, older(query.after));
         const keys = [...pending.values()].map((delivery) => delivery.key);
 
         const [page, counted, undelivered] = await Promise.all([
@@ -288,19 +301,28 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
             )
             .leftJoin(user, eq(user.id, member.userId))
             .where(after)
-            // The order of `note_index_by_date`, so that a page reads its rows from it and stops.
+            // The order of `note_index_by_date`, so that a page reads its rows from it and stops. Read
+            // by status, the rank comes first: PostgreSQL sorts the rows of the filter (measured in #749).
             .orderBy(
+              ...(byStatus ? [sql`${rank} ASC`] : []),
               sql`${note_index.created_at} DESC NULLS LAST`,
               sql`${note_index.site_id} COLLATE "C" DESC`,
               sql`${note_index.note_id} COLLATE "C" DESC`,
             )
             .limit(query.limit + 1),
           db
-            .select({ key: keyOf, notes: count() })
+            .select({
+              key: keyOf,
+              stage: note_index.stage,
+              notes: count(),
+              // The notes of the row in the place of the filter, by the SQL of the filter itself
+              // (`placeIs`): the counts by stage are those of the list (review of #764).
+              placed: inPlace === undefined ? count() : sql<number>`count(*) FILTER (WHERE ${inPlace})`.mapWith(Number),
+            })
             .from(note_index)
             .innerJoin(sites, eq(sites.id, note_index.site_id))
             .where(narrowed)
-            .groupBy(keyOf),
+            .groupBy(keyOf, note_index.stage),
           // The notes of the filter that have a delivery: those of its references, matched to their
           // key here. A list of tuples given to PostgreSQL was planned as a loop: 298 ms, measured.
           keys.length === 0
@@ -318,7 +340,16 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
                 ),
         ]);
 
-        const byPlace = new Map(counted.map((row) => [row.key, Number(row.notes)] as const));
+        // One count by place and stage: the places of the filter without its place, the stages of the
+        // filter with it, counted by the condition that filters the list.
+        const byPlace = new Map<string, number>();
+        const byStage = new Map<NoteStage, number>();
+        for (const row of counted) {
+          byPlace.set(row.key, (byPlace.get(row.key) ?? 0) + Number(row.notes));
+          if (Number(row.placed) === 0) continue;
+          const stage = row.stage as NoteStage;
+          byStage.set(stage, (byStage.get(stage) ?? 0) + Number(row.placed));
+        }
         const shown = page.slice(0, query.limit);
         const kept = await keptOf(db, shown);
         const last = shown.at(-1);
@@ -332,11 +363,19 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
               ? [...byPlace.values()].reduce((sum, notes) => sum + notes, 0)
               : (byPlace.get(query.place) ?? 0),
           byPlace,
+          byStage,
           undelivered: undelivered.filter((row) =>
             pending.has(JSON.stringify([row.connector, row.site, row.reference])),
           ).length,
           ...(page.length > query.limit && last !== undefined
-            ? { next: { at: Number(last.row.created_at), site: last.row.site_id, note: last.row.note_id } }
+            ? {
+                next: {
+                  at: Number(last.row.created_at),
+                  site: last.row.site_id,
+                  note: last.row.note_id,
+                  ...(byStatus ? { rank: rankOf(last.row.stage) } : {}),
+                },
+              }
             : {}),
         };
       });
@@ -624,4 +663,18 @@ function selected(which: ForgetIndex) {
       ...which.notes.map((note) => and(eq(note_index.reference, note.identifier), eq(note_index.note_id, note.note))),
     ) ?? sql`false`
   );
+}
+
+/** The place of a stage in `STAGE_ORDER` (FRU-551): an unknown stage goes last, with the done ones. */
+function rankOf(stage: string): number {
+  const at = (STAGE_ORDER as readonly string[]).indexOf(stage);
+
+  return at < 0 ? STAGE_ORDER.length - 1 : at;
+}
+
+/** `rankOf` in SQL, for the order of a list read by status and its cursor. */
+function rankOfStage() {
+  const cases = STAGE_ORDER.map((stage, at) => sql`WHEN ${stage} THEN ${sql.raw(String(at))}`);
+
+  return sql`(CASE ${note_index.stage} ${sql.join(cases, sql` `)} ELSE ${sql.raw(String(STAGE_ORDER.length - 1))} END)`;
 }

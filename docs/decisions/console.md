@@ -523,7 +523,22 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   in a tooltip that the keyboard reaches too; « Went to » is the mark of the place and the reference
   on one line, the name of the tracker said to a screen reader only; the last column is an icon that
   opens the page (`<page>#fruitback-note=<id>`, the link of the widget, FRU-253) in a new tab, its
-  address in the tooltip. The tooltips are `Tip` and `IconLink` of the kit (HeroUI's). The chips are every note and each place that has notes, in the order
+  address in the tooltip. The tooltips are `Tip` and `IconLink` of the kit (HeroUI's).
+  **The table is grouped by status, as Linear groups its issues** (FRU-551, Mathieu on 2026-10-30):
+  in progress, to do, new, closed, then done, each group under a head with its drop, its name and the
+  notes of the whole list in it (`counts.byStage`). There is no column « Status »: the status is its
+  drop before the note, a bare list of the statuses (`Choice` with `bare`) for whoever may change it,
+  and a refusal is said under the note. **The worker reads the table by status** (`order=status` of
+  `GET …/notes`, the route of the console only; `/mcp` and the extension read by date), so a group
+  goes on from one page to the next and the cursor holds the rank of the stage. A cursor of one order
+  is refused in the other, and « Table » and « Board » start again on the first page. The board reads
+  by date: its columns are those of a page. **A note whose status changes during a walk of the pages
+  is where its status is when its page is read**: the key of the order changes with it, as no
+  cursor on a status can avoid. Moved to a group already read, it is not on the pages still to come
+  (« Previous » finds it); moved from a group already read to one still to come, it is read again
+  there. Every note whose status does not change is on one page, and one only
+  (`notes-list.test.ts`, every role and filter crossed). The console reads the page in view again
+  after a status it saves, so the person sees the note in its new group. The chips are every note and each place that has notes, in the order
   of the sources of the workspace. **No chip « Not delivered »**, which the mockup draws: the route
   counts those notes and does not filter them, and a chip that chooses nothing is not drawn; each of
   them says « Not delivered yet » on its row. The search says what the index searches (the 64

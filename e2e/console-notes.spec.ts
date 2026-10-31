@@ -187,6 +187,8 @@ type Asked = Record<string, string>;
 type Worker = {
   /** What each read of the notes asked, in order. */
   asked: Asked[];
+  /** The `order` of each read (FRU-551). */
+  orders: (string | undefined)[];
   /** What the console sent that changes something. */
   sent: string[];
   read: 'list' | 'fails' | 'none' | 'waits';
@@ -201,6 +203,7 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
   let release: () => void = () => {};
   const worker: Worker = {
     asked: [],
+    orders: [],
     sent: [],
     read: 'list',
     release: () => release(),
@@ -225,7 +228,9 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
       return route.fulfill({ status: 204 });
     }
     if (pathname !== '/console/workspaces/w1/notes') return undefined;
-    const asked = Object.fromEntries(new URL(request.url()).searchParams);
+    // The order is kept apart (FRU-551): the table asks `order=status`, the board does not.
+    const { order, ...asked } = Object.fromEntries(new URL(request.url()).searchParams);
+    worker.orders.push(order);
     worker.asked.push(asked);
     if (worker.read === 'fails') return route.fulfill({ status: 500, json: { error: 'unknown' } });
     const fulfil = () => {
@@ -292,7 +297,8 @@ async function open(page: Page, query = ''): Promise<void> {
 }
 
 const table = (page: Page) => page.getByRole('region', { name: 'Notes' });
-const rows = (page: Page) => table(page).locator('tbody tr');
+// The rows of the notes, not the heads of their groups (FRU-551).
+const rows = (page: Page) => table(page).locator('tbody tr:not(.kit-table-group)');
 const chips = (page: Page) => page.getByRole('group', { name: 'Where the notes went' }).getByRole('button');
 const chip = (page: Page, name: string | RegExp) =>
   page.getByRole('group', { name: 'Where the notes went' }).getByRole('button', { name });
@@ -314,7 +320,7 @@ async function expectNoViolation(page: Page, name: string): Promise<void> {
 
 test('the page is the one of the mockup: chips, filters, the table and its pages', async ({ page }) => {
   await page.clock.setFixedTime(NOON);
-  await workerWith(page);
+  const worker = await workerWith(page);
   await open(page);
   await expect(rows(page)).toHaveCount(8);
 
@@ -389,20 +395,20 @@ test('the page is the one of the mockup: chips, filters, the table and its pages
   });
   expect.soft(await styles(page.locator('.kit-checkbox .label'), ['font-size'])).toEqual({ 'font-size': '14px' });
 
-  // The table: 960 px at the least, the seven columns. The last one is the link to the page
+  // The table: 960 px at the least, the six columns (FRU-551: no column « Status », the rows are in its groups). The last one is the link to the page
   // (FRU-546): its head is for a screen reader.
   const headers = table(page).locator('thead th');
-  await expect(headers).toHaveText(['Note', 'Site', 'Status', 'Left by', 'Went to', 'When', 'Page']);
+  await expect(headers).toHaveText(['Note', 'Site', 'Left by', 'Went to', 'When', 'Page']);
   expect.soft(await styles(table(page).locator('table'), ['min-width', 'font-size'])).toEqual({
     'min-width': '960px',
     'font-size': '14px',
   });
   expectBox(await box(table(page).locator('table')), { x: 298, y: 233 }, 2, 'the table');
-  expect.soft(await styles(headers.nth(5), ['text-align'])).toEqual({ 'text-align': 'right' });
+  expect.soft(await styles(headers.nth(4), ['text-align'])).toEqual({ 'text-align': 'right' });
 
   // A note: its 64 characters on two lines at most, and nothing else (FRU-546).
   const first = row(page, 'The headline runs');
-  const excerpt = first.locator('td').first().locator('span').first();
+  const excerpt = first.locator('.line-clamp-2');
   expect.soft(await styles(excerpt, ['-webkit-line-clamp', 'overflow'])).toEqual({
     '-webkit-line-clamp': '2',
     overflow: 'hidden',
@@ -433,14 +439,14 @@ test('the page is the one of the mockup: chips, filters, the table and its pages
   await expect(show).toHaveAttribute('target', '_blank');
 
   // Its status: a drop of 10 px, and the word.
-  await expect(first.locator('td').nth(2)).toHaveText('New');
-  const drop = await box(first.locator('td').nth(2).locator('[aria-hidden="true"]'));
+  await expect(first.locator('[data-status-of-note]')).toHaveText('New');
+  const drop = await box(first.locator('[data-status-of-note] [aria-hidden="true"]'));
   expect.soft({ width: drop.width, height: drop.height }).toEqual({ width: 10, height: 10 });
 
   // Who left it (FRU-553): the icon of their role, then the name; the role is in the tooltip, and
   // in the cell for a screen reader only. The cell holds no control: nothing of it is in the order of
-  // the keyboard (review of #748).
-  const author = (text: string) => row(page, text).locator('td').nth(3);
+  // the keyboard (review of #748). It is the third column since FRU-551.
+  const author = (text: string) => row(page, text).locator('td').nth(2);
   await expect(author('The headline runs')).toHaveText('Ana, You');
   await expect(author('The headline runs').locator('.sr-only')).toHaveText(', You');
   await expect(author('The headline runs').locator('[data-note-icon="you"]')).toHaveCount(1);
@@ -459,7 +465,7 @@ test('the page is the one of the mockup: chips, filters, the table and its pages
 
   // Where it went (FRU-552): the mark of the tracker and its reference on one line, the name of the
   // tracker for a screen reader only; the reference a link at 400 with an arrow.
-  const went = first.locator('td').nth(4);
+  const went = first.locator('td').nth(3);
   await expect(went).toHaveText('LinearACM-151');
   await expect(went.locator('.sr-only')).toHaveText('Linear');
   const line = await box(went.locator('[data-place]'));
@@ -473,23 +479,23 @@ test('the page is the one of the mockup: chips, filters, the table and its pages
   });
   const arrow = await box(ref.locator('svg'));
   expect.soft({ width: arrow.width, height: arrow.height }).toEqual({ width: 12, height: 12 });
-  await expect(row(page, 'chat bubble').locator('td').nth(4)).toHaveText('REST APIhooks.acme.dev');
+  await expect(row(page, 'chat bubble').locator('td').nth(3)).toHaveText('REST APIhooks.acme.dev');
   // A note an address did not take does not name its host.
-  await expect(row(page, 'The order form').locator('td').nth(4)).toHaveText('REST APINot delivered yetSend again');
+  await expect(row(page, 'The order form').locator('td').nth(3)).toHaveText('REST APINot delivered yetSend again');
   // An excerpt of 64 characters was cut: it says so.
-  await expect(row(page, 'cream').locator('td').first().locator('span').first()).toHaveText(
+  await expect(row(page, 'cream').locator('.line-clamp-2')).toHaveText(
     'The button is hard to read on the green. Could it take the cream…',
   );
-  await expect(first.locator('td').first().locator('span').first()).toHaveText(
+  await expect(first.locator('.line-clamp-2')).toHaveText(
     'The headline runs to three lines on a phone. Can it be shorter?',
   );
-  await expect(row(page, 'checkout button').locator('td').nth(4)).toHaveText('In Fruitback');
+  await expect(row(page, 'checkout button').locator('td').nth(3)).toHaveText('In Fruitback');
   // Each place has its mark first, 14 px, hidden from a screen reader (FRU-435): the pin of
   // Fruitback for a note it keeps.
   for (const cell of [
     went,
-    row(page, 'chat bubble').locator('td').nth(4),
-    row(page, 'checkout button').locator('td').nth(4),
+    row(page, 'chat bubble').locator('td').nth(3),
+    row(page, 'checkout button').locator('td').nth(3),
   ]) {
     const mark = cell.locator('svg').first();
     await expect(mark).toHaveAttribute('aria-hidden', 'true');
@@ -497,7 +503,7 @@ test('the page is the one of the mockup: chips, filters, the table and its pages
     expect.soft({ width: size.width, height: size.height }).toEqual({ width: 14, height: 14 });
   }
   // Not delivered: the words in the accent, and « Send again » at 32 px.
-  const late = row(page, 'The order form').locator('td').nth(4);
+  const late = row(page, 'The order form').locator('td').nth(3);
   const words = late.getByText('Not delivered yet', { exact: true });
   expect.soft(await styles(words, ['font-size', 'font-weight'])).toEqual({ 'font-size': '13px', 'font-weight': '600' });
   expect.soft(await painted(words, 'color')).toEqual(rgb(ACCENT));
@@ -513,9 +519,9 @@ test('the page is the one of the mockup: chips, filters, the table and its pages
     });
 
   // When: aligned to the right, muted, tabular.
-  const when = first.locator('td').nth(5);
+  const when = first.locator('td').nth(4);
   await expect(when).toHaveText('1 h ago');
-  await expect(row(page, 'The mug').locator('td').nth(5)).toHaveText('6 days ago');
+  await expect(row(page, 'The mug').locator('td').nth(4)).toHaveText('6 days ago');
   expect.soft(await styles(when, ['text-align', 'font-variant-numeric', 'white-space'])).toEqual({
     'text-align': 'right',
     'font-variant-numeric': 'tabular-nums',
@@ -537,6 +543,16 @@ test('the page is the one of the mockup: chips, filters, the table and its pages
     .soft(await styles(pages(page), ['margin-top', 'font-size']))
     .toEqual({ 'margin-top': '16px', 'font-size': '14px' });
   expect.soft(await painted(pages(page), 'color')).toEqual(rgb(MUTED));
+
+  // The heads of the groups: a worker that does not count each stage gets no number, as the notes
+  // of one page are no count of the list (review of #764).
+  const heads = await table(page).locator('.kit-table-group th').allInnerTexts();
+  expect(heads.length).toBeGreaterThan(0);
+  for (const head of heads) expect(head).not.toMatch(/\d/);
+
+  // The table reads its notes by status, every time (FRU-551).
+  expect(worker.orders.length).toBeGreaterThan(0);
+  expect(worker.orders.every((order) => order === 'status')).toBe(true);
 
   await expectNoViolation(page, 'the list');
 });
@@ -719,7 +735,7 @@ test('a delivery the worker gave up says so, and « Send again » still sends it
   await open(page);
   await pages(page).getByRole('button', { name: 'Next' }).click();
   const given = row(page, 'The contact form');
-  await expect(given.locator('td').nth(4)).toHaveText('REST APINot delivered: Fruitback stopped tryingSend again');
+  await expect(given.locator('td').nth(3)).toHaveText('REST APINot delivered: Fruitback stopped tryingSend again');
   const words = given.getByText('Not delivered: Fruitback stopped trying', { exact: true });
   expect.soft(await painted(words, 'color')).toEqual(rgb(ACCENT));
   // One that the worker still tries says « yet ».
@@ -825,7 +841,7 @@ test('a guest reads no place, no reference, no chip and no « Send again »', as
   // The route does not search a reference for a guest, and the field does not say it does.
   await expect(search(page)).toHaveAttribute('placeholder', 'Search the text or the page');
   // The worker tells a guest nothing of where a note went: no column for it.
-  await expect(table(page).locator('thead th')).toHaveText(['Note', 'Site', 'Status', 'Left by', 'When', 'Page']);
+  await expect(table(page).locator('thead th')).toHaveText(['Note', 'Site', 'Left by', 'When', 'Page']);
   await expect(page.getByText('Not delivered yet')).toHaveCount(0);
 });
 
@@ -850,15 +866,18 @@ for (const locale of ['en', 'fr'] as const) {
     await page.setViewportSize({ width: 390, height: 844 });
     await workerWith(page, 'owner', locale);
     await page.goto(`${CONSOLE}/w/w1/notes`);
-    await expect(page.locator('tbody tr')).toHaveCount(8);
+    await expect(rows(page)).toHaveCount(8);
     expect.soft(await sideScroll(page)).toBe(0);
+    // The head of a group stays on screen above its cards (FRU-551).
+    const head = page.locator('.kit-table-group th').first();
+    await expect(head).toBeVisible();
+    expect.soft((await box(head)).width).toBeGreaterThan(300);
     // Under 640 px a row is a card (FRU-505): the frame does not scroll, and no cell is past it.
     const frame = page.locator('.kit-table');
     expect.soft(await frame.evaluate((element) => element.scrollWidth - element.clientWidth)).toBe(0);
     expect
       .soft(
-        await page
-          .locator('tbody tr')
+        await rows(page)
           .first()
           .evaluate((row) => getComputedStyle(row).display),
       )
