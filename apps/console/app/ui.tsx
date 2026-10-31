@@ -504,14 +504,19 @@ type ChoiceProps = {
 };
 
 function item(option: Option) {
+  // FRU-549: a long label is cut to the width of the list, with « … », and whole under the pointer.
   return (
     <ListBox.Item key={option.value} id={option.value} textValue={option.label}>
       {option.drop === undefined ? (
-        option.label
-      ) : (
-        <span className="inline-flex items-center gap-[8px]">
-          <StatusDot status={option.drop.status} color={option.drop.color} />
+        <span className="kit-option-label" title={option.label}>
           {option.label}
+        </span>
+      ) : (
+        <span className="inline-flex min-w-0 items-center gap-[8px]">
+          <StatusDot status={option.drop.status} color={option.drop.color} />
+          <span className="kit-option-label" title={option.label}>
+            {option.label}
+          </span>
         </span>
       )}
       <ListBox.ItemIndicator />
@@ -556,7 +561,7 @@ export function Choice({
         <Select.Indicator />
       </Select.Trigger>
       {hint === undefined ? null : <Description>{hint}</Description>}
-      <Select.Popover>
+      <Select.Popover className="kit-select-popover">
         <ListBox>
           {options.map((each) =>
             'options' in each ? (

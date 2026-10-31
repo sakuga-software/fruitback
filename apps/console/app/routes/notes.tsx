@@ -483,7 +483,8 @@ export default function Notes() {
 }
 
 /**
- * The chips of where the notes went: every note, and each place that has notes. The mockup draws a
+ * The chips of where the notes went: every note, and each place that has notes, when there are two
+ * places or more (FRU-548). The mockup draws a
  * chip « Not delivered » too: the route of FRU-244 counts those notes and does not filter them, so a
  * chip would choose nothing. Each of them says « Not delivered yet » on its row.
  */
@@ -521,6 +522,9 @@ function Places({
   const places = Object.entries(counts.byPlace ?? {})
     .filter(([, count]) => count > 0)
     .sort(([one], [other]) => rank(one) - rank(other));
+  // FRU-548: with one place, « All » and that place are the same notes, and the chips choose nothing.
+  // A place chosen by the address keeps its chips, so that « All » takes it back.
+  if (places.length <= 1 && chosen === '') return null;
 
   return (
     <div role="group" aria-label={t('Where the notes went')} className="mb-[14px] flex flex-wrap gap-[8px]">
