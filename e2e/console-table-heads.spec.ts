@@ -71,8 +71,12 @@ for (const width of [1024, 1280, 1440, 390]) {
     await expect(terms).toHaveText(['Les notes vont vers', 'Dernière note', 'Les notes vont vers', 'Dernière note']);
     for (const term of await terms.all()) await expect(term).toHaveClass(/\bsr-only\b/);
     // What the eye reads in the foot is one line each: the place and its detail, and when the last
-    // note came.
-    const read = await linesOf(page, 'main li[data-site] dd > span.block, main li[data-site] dd.tabular-nums');
+    // note came. The name of a tracker is a row with its mark (FRU-541): its words are read without
+    // the mark, whose box is not a line of text.
+    const read = await linesOf(
+      page,
+      'main li[data-site] dd > span.block, main li[data-site] dd > span.flex > span, main li[data-site] dd.tabular-nums',
+    );
     expect(read.map(({ text }) => text)).toHaveLength(6);
     expect(read.filter(({ lines }) => lines !== 1)).toEqual([]);
     expect(await sideScroll(page)).toBe(0);

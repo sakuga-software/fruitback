@@ -69,6 +69,16 @@ type Worker = {
   repositories: { fullName: string; private: boolean }[];
   /** The teams of the Linear source. */
   teams: Team[];
+  /**
+   * FRU-501: the teams that come after the first page, read with `after`, and those only a search
+   * finds. With it, the first answer says `next`.
+   */
+  laterTeams?: Team[];
+  /** The query of each read of the teams. */
+  teamReads: string[];
+  /** The next read of a page of teams fails (`fail`), or waits for `releaseTeams` (`hold`). */
+  nextTeams?: 'fail' | 'hold';
+  releaseTeams: () => void;
   /** The read of the sources fails. */
   connectorsFail: boolean;
   /** The places of the one site, as the worker keeps them: a repository is in `teamId`. */
@@ -95,6 +105,8 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
     connectors: [LINEAR, GITHUB, REST],
     repositories: REPOSITORIES,
     teams: TEAMS,
+    teamReads: [],
+    releaseTeams: () => {},
     connectorsFail: false,
     places: [],
     sent: [],
@@ -147,7 +159,43 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
 
       return json({ error: 'connector-failed' }, 502);
     }
-    if (pathname.endsWith('/c1/teams')) return json({ teams: worker.teams });
+    // FRU-501: a second Linear, `c2`, answers the same teams, each named « B … », and its reads are
+    // kept as `c2:<query>`.
+    if (pathname.endsWith('/c2/teams')) {
+      const query = new URL(request.url()).searchParams;
+      worker.teamReads.push(`c2:${query.toString()}`);
+      const other = (teams: Team[]) =>
+        teams.map((each) => ({ ...each, id: `b${each.id}`, name: `B ${each.name}`, key: `B${each.key}` }));
+      const later = other(worker.laterTeams ?? []);
+      const words = query.get('q')?.toLowerCase();
+      if (words !== undefined) {
+        return json({
+          teams: [...other(worker.teams), ...later].filter((team) => team.name.toLowerCase().includes(words)),
+        });
+      }
+
+      return json(query.get('after') === 'c-2' ? { teams: later } : { teams: other(worker.teams), next: 'c-2' });
+    }
+    if (pathname.endsWith('/c1/teams')) {
+      const query = new URL(request.url()).searchParams;
+      worker.teamReads.push(query.toString());
+      const later = worker.laterTeams;
+      if (later === undefined) return json({ teams: worker.teams });
+      const words = query.get('q')?.toLowerCase();
+      if (words !== undefined) {
+        return json({ teams: [...worker.teams, ...later].filter((team) => team.name.toLowerCase().includes(words)) });
+      }
+
+      if (query.get('after') !== 'c-2') return json({ teams: worker.teams, next: 'c-2' });
+      const asked = worker.nextTeams;
+      worker.nextTeams = undefined;
+      if (asked === 'fail') return json({ error: 'store-unavailable' }, 502);
+      if (asked === 'hold') {
+        return new Promise<void>((done) => (worker.releaseTeams = done)).then(() => json({ teams: later }));
+      }
+
+      return json({ teams: later });
+    }
     if (pathname.endsWith('/r1/deliveries')) return json({ deliveries: [] });
 
     return undefined;
@@ -661,4 +709,263 @@ test('each place shows the mark of its source, and a place of Linear the colour 
   await expect(rows.nth(3).locator('[data-place-color]')).toHaveCount(0);
   await expect(rows.nth(0).locator('[data-place-color]')).toHaveCSS('background-color', 'rgb(38, 181, 206)');
   await expectNoViolation(page, 'the marks of the places');
+});
+
+test('a Linear of many teams gives them a page at a time, and a search asks it for the others (FRU-501)', async ({
+  page,
+}) => {
+  const worker = await workerWith(page);
+  const team = (index: number, name = `Team ${index}`): Team => ({
+    id: `t${index}`,
+    name,
+    key: `T${index}`,
+    projects: [],
+  });
+  worker.connectors = [LINEAR];
+  worker.teams = Array.from({ length: 3 }, (_, index) => team(index + 1));
+  worker.laterTeams = [team(4), team(5, 'Payments')];
+  await openPlaces(page);
+  await expect(add(page)).toBeEnabled();
+  /** The reads of the teams past the first page. */
+  const more = () => worker.teamReads.filter((query) => query !== '');
+  expect(more()).toEqual([]);
+
+  // The first page, then the option that reads the next one.
+  await add(page).click();
+  await expect(page.getByRole('option')).toHaveText([
+    'Add a destination…',
+    'Team 1 (T1) · no project',
+    'Team 2 (T2) · no project',
+    'Team 3 (T3) · no project',
+    'More teams of Linear · Key of Ana…',
+  ]);
+  await page.getByRole('option', { name: 'More teams of Linear · Key of Ana…', exact: true }).click();
+  await expect.poll(more).toEqual(['after=c-2']);
+  await add(page).click();
+  await expect(page.getByRole('option')).toHaveText([
+    'Add a destination…',
+    'Team 1 (T1) · no project',
+    'Team 2 (T2) · no project',
+    'Team 3 (T3) · no project',
+    'Team 4 (T4) · no project',
+    'Payments (T5) · no project',
+  ]);
+  await page.keyboard.press('Escape');
+
+  // Once every team is read, a search stays in the console: Linear is not asked again.
+  await search(page).fill('pay');
+  await page.waitForTimeout(600);
+  expect(more()).toEqual(['after=c-2']);
+});
+
+test('a search finds a team of Linear that the first page does not hold (FRU-501)', async ({ page }) => {
+  const worker = await workerWith(page);
+  const team = (index: number, name = `Team ${index}`): Team => ({
+    id: `t${index}`,
+    name,
+    key: `T${index}`,
+    projects: [],
+  });
+  worker.connectors = [LINEAR];
+  worker.teams = [team(1), team(2)];
+  worker.laterTeams = [team(5, 'Payments')];
+  await openPlaces(page);
+  await expect(add(page)).toBeEnabled();
+
+  await search(page).fill('pay');
+  // One read, once the person stops typing, with the words.
+  await expect.poll(() => worker.teamReads.filter((query) => query !== '')).toEqual(['q=pay']);
+  await add(page).click();
+  await expect(page.getByRole('option')).toHaveText(['Add a destination…', 'Payments (T5) · no project']);
+  await page.getByRole('option', { name: 'Payments (T5) · no project', exact: true }).click();
+  await expect(project(page, 'Payments')).toBeVisible();
+  await project(page, 'Payments').click();
+  await page.getByRole('option', { name: 'Payments, no project', exact: true }).click();
+  await expect.poll(() => worker.sent).toEqual([[{ connector: 'c1', teamId: 't5' }]]);
+});
+
+test('a page of teams that Linear did not give says so, and the option reads it again (FRU-501)', async ({ page }) => {
+  const worker = await workerWith(page);
+  const team = (index: number, name = `Team ${index}`): Team => ({
+    id: `t${index}`,
+    name,
+    key: `T${index}`,
+    projects: [],
+  });
+  worker.connectors = [LINEAR];
+  worker.teams = [team(1)];
+  worker.laterTeams = [team(2)];
+  worker.nextTeams = 'fail';
+  await openPlaces(page);
+  await expect(add(page)).toBeEnabled();
+
+  await add(page).click();
+  await page.getByRole('option', { name: 'More teams of Linear · Key of Ana…', exact: true }).click();
+  await expect(panel(page)).toContainText('Linear · Key of Ana did not answer with more teams. Try again.');
+  await add(page).click();
+  await page.getByRole('option', { name: 'More teams of Linear · Key of Ana…', exact: true }).click();
+  await expect(panel(page)).not.toContainText('did not answer with more teams');
+  await add(page).click();
+  await expect(page.getByRole('option')).toHaveText([
+    'Add a destination…',
+    'Team 1 (T1) · no project',
+    'Team 2 (T2) · no project',
+  ]);
+});
+
+test('a search reads the teams as they are when it starts, not as they were at the key (FRU-501)', async ({ page }) => {
+  const worker = await workerWith(page);
+  const team = (index: number, name = `Team ${index}`): Team => ({
+    id: `t${index}`,
+    name,
+    key: `T${index}`,
+    projects: [],
+  });
+  worker.connectors = [LINEAR];
+  worker.teams = [team(1)];
+  worker.laterTeams = [team(2, 'Payments')];
+  worker.nextTeams = 'hold';
+  await openPlaces(page);
+  await expect(add(page)).toBeEnabled();
+
+  // The last page is on its way while the person types: it arrives before the pause ends.
+  await add(page).click();
+  await page.getByRole('option', { name: 'More teams of Linear · Key of Ana…', exact: true }).click();
+  await search(page).fill('pay');
+  worker.releaseTeams();
+  await add(page).click();
+  await expect(page.getByRole('option')).toHaveText(['Add a destination…', 'Payments (T2) · no project']);
+  await page.waitForTimeout(600);
+  // Every team is read: the search asks Linear nothing.
+  expect(worker.teamReads.filter((query) => query.startsWith('q='))).toEqual([]);
+});
+
+test('a page of teams that arrives after « Try again » is dropped, not added to the new list (FRU-501)', async ({
+  page,
+}) => {
+  const worker = await workerWith(page);
+  const team = (index: number, name = `Team ${index}`): Team => ({
+    id: `t${index}`,
+    name,
+    key: `T${index}`,
+    projects: [],
+  });
+  worker.connectors = [LINEAR, GITHUB];
+  worker.teams = [team(1)];
+  worker.laterTeams = [team(2)];
+  worker.silentReads = 1;
+  worker.nextTeams = 'hold';
+  await openPlaces(page);
+  await expect(panel(page).getByRole('button', { name: 'Try again' })).toBeVisible();
+
+  // A page is on its way when the sources are read again: it belongs to the list of before.
+  await add(page).click();
+  await page.getByRole('option', { name: 'More teams of Linear · Key of Ana…', exact: true }).click();
+  await panel(page).getByRole('button', { name: 'Try again' }).click();
+  await expect(panel(page).getByRole('button', { name: 'Try again' })).toHaveCount(0);
+  worker.releaseTeams();
+  await page.waitForTimeout(500);
+  await add(page).click();
+  const options = page.getByRole('option');
+  await expect(options.filter({ hasText: /^Team \d/ })).toHaveText(['Team 1 (T1) · no project']);
+  await expect(page.getByRole('option', { name: 'More teams of Linear · Key of Ana…', exact: true })).toBeVisible();
+});
+
+test('« Try again » takes away the message of a page of teams that failed (FRU-501)', async ({ page }) => {
+  const worker = await workerWith(page);
+  const team = (index: number): Team => ({ id: `t${index}`, name: `Team ${index}`, key: `T${index}`, projects: [] });
+  worker.connectors = [LINEAR, GITHUB];
+  worker.teams = [team(1)];
+  worker.laterTeams = [team(2)];
+  worker.silentReads = 1;
+  worker.nextTeams = 'fail';
+  await openPlaces(page);
+  await expect(panel(page).getByRole('button', { name: 'Try again' })).toBeVisible();
+
+  await add(page).click();
+  await page.getByRole('option', { name: 'More teams of Linear · Key of Ana…', exact: true }).click();
+  await expect(panel(page)).toContainText('Linear · Key of Ana did not answer with more teams. Try again.');
+  await panel(page).getByRole('button', { name: 'Try again' }).click();
+  await expect(panel(page).getByRole('button', { name: 'Try again' })).toHaveCount(0);
+  await expect(panel(page)).not.toContainText('did not answer with more teams');
+});
+
+test('a search emptied with the cross, then « Try again », leaves no hidden search on the new list (FRU-501)', async ({
+  page,
+}) => {
+  const worker = await workerWith(page);
+  const team = (index: number, name = `Team ${index}`): Team => ({
+    id: `t${index}`,
+    name,
+    key: `T${index}`,
+    projects: [],
+  });
+  worker.connectors = [LINEAR, GITHUB];
+  worker.teams = [team(1), team(2)];
+  worker.laterTeams = [team(3, 'Payments')];
+  worker.silentReads = 1;
+  await openPlaces(page);
+  await expect(panel(page).getByRole('button', { name: 'Try again' })).toBeVisible();
+
+  await search(page).fill('pay');
+  await expect.poll(() => worker.teamReads.filter((query) => query.startsWith('q='))).toEqual(['q=pay']);
+  await panel(page).getByRole('button', { name: 'Clear the search' }).click();
+  await panel(page).getByRole('button', { name: 'Try again' }).click();
+  await expect(panel(page).getByRole('button', { name: 'Try again' })).toHaveCount(0);
+
+  // The new list holds its first page, filtered by nothing, with its next page offered.
+  await add(page).click();
+  await expect(page.getByRole('option').filter({ hasText: /^Team \d/ })).toHaveText([
+    'Team 1 (T1) · no project',
+    'Team 2 (T2) · no project',
+  ]);
+  await expect(page.getByRole('option', { name: 'More teams of Linear · Key of Ana…', exact: true })).toBeVisible();
+});
+
+test('two Linears each keep their own pages and searches: no answer of one is dropped by the other (FRU-501)', async ({
+  page,
+}) => {
+  const worker = await workerWith(page);
+  const team = (index: number, name = `Team ${index}`): Team => ({
+    id: `t${index}`,
+    name,
+    key: `T${index}`,
+    projects: [],
+  });
+  const SECOND = { id: 'c2', kind: 'linear', label: 'Linear · Bo', createdAt: '2026-10-03T10:00:00.000Z' };
+  worker.connectors = [LINEAR, SECOND];
+  worker.teams = [team(1)];
+  worker.laterTeams = [team(2, 'Payments')];
+  await openPlaces(page);
+  await expect(add(page)).toBeEnabled();
+
+  // One search: each Linear is asked, at the same time, and both answers are taken.
+  await search(page).fill('pay');
+  await expect
+    .poll(() => worker.teamReads.filter((query) => query.includes('q=')).sort())
+    .toEqual(['c2:q=pay', 'q=pay']);
+  await add(page).click();
+  await expect(page.getByRole('option').filter({ hasText: /Payments/ })).toHaveText([
+    'Payments (T2) · no project',
+    'B Payments (BT2) · no project',
+  ]);
+  await page.keyboard.press('Escape');
+  await panel(page).getByRole('button', { name: 'Clear the search' }).click();
+
+  // The next page of each, one after the other: each list takes its own.
+  await add(page).click();
+  await page.getByRole('option', { name: /^More teams of Linear · Key of Ana/ }).click();
+  await add(page).click();
+  await page.getByRole('option', { name: /^More teams of Linear · Key of Bo/ }).click();
+  await expect
+    .poll(() => worker.teamReads.filter((query) => query.includes('after=')).sort())
+    .toEqual(['after=c-2', 'c2:after=c-2']);
+  await add(page).click();
+  await expect(page.getByRole('option').filter({ hasText: /^More teams/ })).toHaveCount(0);
+  await expect(page.getByRole('option').filter({ hasText: /^(B )?(Team|Payments)/ })).toHaveText([
+    'Team 1 (T1) · no project',
+    'Payments (T2) · no project',
+    'B Team 1 (BT1) · no project',
+    'B Payments (BT2) · no project',
+  ]);
 });

@@ -1,10 +1,10 @@
 import { browser } from 'wxt/browser';
-import { workerOrigin } from '../../src/endpoint.ts';
 import { language, msg, setLanguage, t } from '../../src/i18n.ts';
 import { storedLanguage } from '../../src/language.ts';
-import { type ConnectState, forgetConnect, pollConnect, startConnect } from '../../src/connect.ts';
+import { type ConnectState } from '../../src/connect.ts';
+import { claimLoop, startSignIn } from '../../src/connect-loop.ts';
 import { type CloudSeams, type Offer, cloudEntry, sitesOf } from '../../src/cloud.ts';
-import { consoleOf, createBrowserConnect, rememberConsole } from '../../src/connect-browser.ts';
+import { consoleOf, createBrowserConnect, rememberConsole, requestWorkerAccess } from '../../src/connect-browser.ts';
 import { pickOnFirstActivation } from '../../src/first-pick.ts';
 import { cloudEndpoint } from '../../src/popup-state.ts';
 import { signInStop } from '../../src/popup-view.ts';
@@ -28,7 +28,8 @@ const app = document.querySelector('#app');
 
 /** The tab of the console that this page opened, closed once the console approved. */
 let approveTab: number | undefined;
-let nextClaim: ReturnType<typeof setTimeout> | undefined;
+/** The claims while the page shows the word: the same loop as the popup's. Every draw stops it. */
+const claims = claimLoop(connect);
 /** Each draw counts: a claim of a screen that is gone does not draw. */
 let drawn = 0;
 /** The sites of the account, by origin, as the last read listed them (FRU-483). */
@@ -43,7 +44,7 @@ const openPopup = () => browser.action.openPopup();
 
 function draw(state: WelcomeSignIn | undefined): void {
   drawn += 1;
-  clearTimeout(nextClaim);
+  claims.stop();
   app?.replaceChildren(
     welcomeScreen(document, {
       openPopup,
@@ -55,7 +56,7 @@ function draw(state: WelcomeSignIn | undefined): void {
               state,
               onSignIn: () => signIn(false),
               onStartAgain: () => signIn(true),
-              onTurnOn: turnOn,
+              onTurnOn: turnOnAndOpen,
               onOpen: (origin: string) => void browser.tabs.create({ url: origin }),
               onAddSite: () => void addSite(),
             },
@@ -116,7 +117,7 @@ async function sitesNow(): Promise<readonly WelcomeSite[] | 'unavailable'> {
  * **The request comes first, from this click**: a host permission may only be asked for while the
  * click is handled, so nothing is awaited before it.
  */
-function turnOn(origin: string): void {
+function turnOnAndOpen(origin: string): void {
   const offer = offers.get(origin);
   if (offer === undefined) return;
   const granted = browser.permissions.request({ origins: [matchPatternFor(offer.pattern)] });
@@ -159,20 +160,12 @@ async function addSite(): Promise<void> {
 function signIn(fresh: boolean): void {
   if (CLOUD === undefined) return;
   const endpoint = CLOUD;
-  const granted = browser.permissions.request({ origins: [matchPatternFor(workerOrigin(endpoint))] });
+  const granted = requestWorkerAccess(endpoint);
   for (const button of app?.querySelectorAll('button') ?? []) button.disabled = true;
 
   void (async () => {
-    if (!(await granted.catch(() => false))) return draw({ kind: 'signed-out', stop: signInStop('blocked') });
-    if (fresh) await forgetConnect(connect).catch(() => undefined);
-    const started = await startConnect(endpoint, connect).catch(() => ({ ok: false, reason: 'unavailable' }) as const);
-    if (!started.ok) {
-      return draw({
-        kind: 'signed-out',
-        stop: signInStop(started.reason === 'untrusted-console' ? 'untrusted' : 'unavailable'),
-      });
-    }
-    await rememberConsole(endpoint, started.pending.consoleAt).catch(() => undefined);
+    const started = await startSignIn(endpoint, granted, fresh, { connect, rememberConsole });
+    if (!started.ok) return draw({ kind: 'signed-out', stop: signInStop(started.stop) });
     draw({ kind: 'connecting', word: started.pending.word });
     waitForTheConsole(false);
     approveTab = (await browser.tabs.create({ url: started.pending.approveAt })).id;
@@ -187,11 +180,7 @@ function waitForTheConsole(unanswered: boolean): void {
   const screen = drawn;
   void connect.pending.read().then((waiting) => {
     if (waiting === undefined || screen !== drawn) return;
-    nextClaim = setTimeout(() => {
-      void pollConnect(connect)
-        .catch((): ConnectState => 'unavailable')
-        .then((now) => answered(now, screen, waiting.word, unanswered));
-    }, waiting.interval * 1000);
+    claims.wait(waiting, unanswered, (now) => void answered(now, screen, waiting.word, unanswered));
   });
 }
 

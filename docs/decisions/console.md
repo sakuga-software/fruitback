@@ -14,7 +14,11 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   choice, then the browser's own. **Every component that calls `t` calls `useLocale()` first**, and
   the guard fails on one that does not: `t` reads the language at render, so a component with no
   subscription keeps the old words. The root holds no `key` on the language: a screen mounted again
-  loses what somebody typed and runs its effects twice. **`HydrateFallback` holds no word**: it is rendered when the console
+  loses what somebody typed and runs its effects twice. **A map is loaded with `import()`, when its
+  language is asked for** (FRU-494): a static import of `messages.fr.ts` puts 112 kB back in the chunk
+  of every page, and `catalog-chunk.test.ts` fails on it. `setLocale` changes the language once the map
+  is there, and the root's `clientLoader` waits for it, so a French browser shows no English first.
+  **`HydrateFallback` holds no word**: it is rendered when the console
   is built, and a word in another language is a hydration error in the browser.
 - `apps/console` (`@fruitback/console`) — the console of the Cloud (FRU-99): React Router in SPA mode,
   Tailwind on the tokens of `design/README.md`, served as static files by nginx. **It holds no secret, and no
@@ -412,7 +416,10 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   words of the card), with who sees its notes and, when it is the exception, who writes them, on
   one line under it; then its status, the count of its notes at 20 px, a bar whose name says the
   counts again, and how many are new in the accent, or « Waiting for the first note »; then a foot
-  under a line, where the notes go at the left, to whoever sees the tracker, and the last one at the
+  under a line, where the notes go at the left, to whoever sees the tracker, after the logo of its
+  tracker (FRU-541, the mark of the Notes table, read from the first word of the label of the
+  worker: « Linear », « GitHub », « REST API »; a word it does not know has its name alone), and the
+  last one at the
   right (`ago.ts`: « 12 min ago », « Yesterday », then the day). The terms of the foot are for a
   screen reader: the place and the moment say what they are to the eye. How the notes came (the
   script or the extension) is on the page of the site. Cards are side by side while each has 280 px, and
@@ -516,7 +523,22 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   in a tooltip that the keyboard reaches too; « Went to » is the mark of the place and the reference
   on one line, the name of the tracker said to a screen reader only; the last column is an icon that
   opens the page (`<page>#fruitback-note=<id>`, the link of the widget, FRU-253) in a new tab, its
-  address in the tooltip. The tooltips are `Tip` and `IconLink` of the kit (HeroUI's). The chips are every note and each place that has notes, in the order
+  address in the tooltip. The tooltips are `Tip` and `IconLink` of the kit (HeroUI's).
+  **The table is grouped by status, as Linear groups its issues** (FRU-551, Mathieu on 2026-10-30):
+  in progress, to do, new, closed, then done, each group under a head with its drop, its name and the
+  notes of the whole list in it (`counts.byStage`). There is no column « Status »: the status is its
+  drop before the note, a bare list of the statuses (`Choice` with `bare`) for whoever may change it,
+  and a refusal is said under the note. **The worker reads the table by status** (`order=status` of
+  `GET …/notes`, the route of the console only; `/mcp` and the extension read by date), so a group
+  goes on from one page to the next and the cursor holds the rank of the stage. A cursor of one order
+  is refused in the other, and « Table » and « Board » start again on the first page. The board reads
+  by date: its columns are those of a page. **A note whose status changes during a walk of the pages
+  is where its status is when its page is read**: the key of the order changes with it, as no
+  cursor on a status can avoid. Moved to a group already read, it is not on the pages still to come
+  (« Previous » finds it); moved from a group already read to one still to come, it is read again
+  there. Every note whose status does not change is on one page, and one only
+  (`notes-list.test.ts`, every role and filter crossed). The console reads the page in view again
+  after a status it saves, so the person sees the note in its new group. The chips are every note and each place that has notes, in the order
   of the sources of the workspace. **No chip « Not delivered »**, which the mockup draws: the route
   counts those notes and does not filter them, and a chip that chooses nothing is not drawn; each of
   them says « Not delivered yet » on its row. The search says what the index searches (the 64
@@ -644,7 +666,8 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   the sources with nothing left; a cross in the field empties it and gives it focus back; a search
   that keeps nothing says so in the list, which offers nothing. The list shows 50 places, then a
   last option « Show 50 more (70 left) », which chooses nothing. The search and the pages are the
-  console's, on the lists the worker answered whole: no route of the worker is new. **It is not a
+  console's, on the lists the worker answered whole: no route of the worker is new. The teams of a
+  Linear have since come a page at a time (FRU-501, below). **It is not a
   combo box**, which typed in the list itself: measured on 2026-10-25, the combo box of HeroUI
   (react-aria 3.53) throws « childNodes is not supported » under React 19.3 in development when its
   options change while it is open, and its list then stops following what is typed. A `Select`
@@ -662,6 +685,27 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   query by the nodes it may return, and the status of each project doubles them. The answer of
   `GET …/connectors/<id>/teams` gains `private` and `status`, both optional: a console of before
   ignores them.
+  **The teams of a Linear come a page at a time, and a search asks Linear** (FRU-501). `GET
+  …/connectors/<id>/teams` answers one page of 50 teams, each with all its projects, and `next`
+  while Linear has more; `?after=<next>` reads the next page, and `?q=<words>` (100 characters at
+  most) only the teams whose name holds them, as Linear compares them with no case
+  (`containsIgnoreCase`). The list of each Linear is one state, `team-list.ts`: its teams, the
+  cursor of the next page (`null` once Linear says there is no other), the search, and the one
+  request it waits for. Each answer carries the id of its request, and any other answer is dropped:
+  a slow page that a search replaced, or a page of a list that « Try again » read again. A search
+  filters what the console holds, and, 300 ms after the last key, asks the worker for its words
+  once, only while the list is not complete. « More teams of <source>… », after every other option,
+  never paged and never searched (`tail` of `SearchChoice`), shows while there is a next page, no
+  search and no page on its way. `team-list.test.ts` crosses the shapes of a list, the moments of a
+  search, « Try again » after an error, and a slow answer. The popup of the extension still reads
+  every team (`GET /session/sites/places`, `listLinearTeams`). **A place is labelled from its own
+  team and project**, read by their ids in one call for each connector (`readLinearPlaces`), never
+  from the list of the teams; a new connector reads only who the key belongs to
+  (`readLinearViewer`). These reads, and the states, give up after 10 s (`READ_TIMEOUT_MS`), as the
+  calls of `linear-oauth.ts`: a Linear that hangs is then a Linear that is down. The write of a note
+  has no such limit, as a write Linear finishes after the worker gave up would be written twice when
+  the widget tries again. Measured with a fake Linear of 300 teams of 60 projects, 40 ms a call: see
+  the description of the pull request of FRU-501.
   **Each place shows the mark of its source, and a place of Linear its colour** (FRU-459, Mathieu):
   the `ConnectorMark` of FRU-435 before its name, then a dot in the colour Linear gives its project,
   else its team (`color` of the teams answer, `#rrggbb` only: anything else would reach a style, and

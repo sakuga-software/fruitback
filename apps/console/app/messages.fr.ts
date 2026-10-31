@@ -1583,4 +1583,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Statuses, starting an agent, preview deploys': 'Statuts, lancement d’un agent, previews',
   'Each pin shows how a note in that status looks on the page. The 3 is an example number.':
     'Chaque repère montre à quoi ressemble une note de ce statut sur la page. Le 3 est un numéro d’exemple.',
+  'More teams of {source}…': 'Plus d’équipes de {source}…',
+  '{source} did not answer with more teams. Try again.': '{source} n’a pas répondu avec d’autres équipes. Réessayez.',
 };

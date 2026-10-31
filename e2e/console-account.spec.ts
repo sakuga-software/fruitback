@@ -283,10 +283,27 @@ test('the screen is the one of the mockup, with what the worker of today does', 
   await expect(name).toHaveValue('Ana');
   await expect(name).toBeEditable();
   await expect(profile.getByText('ana@acme.dev')).toBeVisible();
-  expectBox(await box(name), { x: 297, y: 199, width: 355, height: 44 }, 2, 'the name');
+  // The screen is as wide as its column (FRU-398): 1095.5 px at 1440 px, where the mockup capped it
+  // at 724 px (820 px less its sides). The two fields share that width, so each is 540.7 px wide,
+  // and not the 355 px of the mockup.
+  expectBox(await box(name), { x: 297, y: 199, width: 540.7, height: 44 }, 2, 'the name');
   const language = profile.getByRole('button', { name: /Language/ });
   await expect(language).toContainText('English');
-  expectBox(await box(language), { x: 666, y: 199, width: 355, height: 44 }, 2, 'the language');
+  expectBox(await box(language), { x: 851.3, y: 199, width: 540.7, height: 44 }, 2, 'the language');
+  // No font sizes these boxes: they are measured on every system, where `expectBox` measures only
+  // in the font of the mockup. The two fields fill the section, 14 px apart.
+  const fields = { name: await box(name), language: await box(language), profile: await box(profile) };
+  expect.soft(Math.abs(fields.name.x - fields.profile.x), 'the name starts the section').toBeLessThanOrEqual(1);
+  expect.soft(Math.abs(fields.name.width - fields.language.width), 'the two fields are as wide').toBeLessThanOrEqual(1);
+  expect
+    .soft(Math.abs(fields.language.x - fields.name.x - fields.name.width - 14), 'the gap between the fields')
+    .toBeLessThanOrEqual(1);
+  expect
+    .soft(
+      Math.abs(fields.language.x + fields.language.width - fields.profile.x - fields.profile.width),
+      'the language ends the section',
+    )
+    .toBeLessThanOrEqual(1);
   expect
     .soft(await styles(name.locator('xpath=ancestor::div[contains(@class,"grid")]'), ['column-gap', 'row-gap']))
     .toEqual({
@@ -401,8 +418,19 @@ test('the screen is the one of the mockup, with what the worker of today does', 
     'text-decoration-line': 'underline',
     'padding-top': '10px',
   });
-  expectBox(await box(disconnect), { x: 944, y: 751 + under, width: 76.2, height: 37 }, 2, '« Disconnect »');
-  expectBox(await box(browsers.nth(2).getByRole('button')), { x: 944, y: 824 + under }, 2, 'the second « Disconnect »');
+  // At the right of the screen, as wide as its column (FRU-398): 371.5 px to the right of the mockup.
+  expectBox(await box(disconnect), { x: 1315.5, y: 751 + under, width: 76.2, height: 37 }, 2, '« Disconnect »');
+  expectBox(
+    await box(browsers.nth(2).getByRole('button')),
+    { x: 1315.5, y: 824 + under },
+    2,
+    'the second « Disconnect »',
+  );
+  // Its right edge is the one of its row on every system: the font sizes the button, not its place.
+  const [button, row] = [await box(disconnect), await box(browsers.nth(1))];
+  expect
+    .soft(Math.abs(button.x + button.width - row.x - row.width), '« Disconnect » ends its row')
+    .toBeLessThanOrEqual(1);
 
   // The two ways out.
   const out = section(page, 'Sign out');

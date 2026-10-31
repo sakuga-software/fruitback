@@ -7,6 +7,8 @@ import {
   parseEnded,
   parsePending,
 } from './connect.ts';
+import { workerOrigin } from './endpoint.ts';
+import { matchPatternFor } from './registration.ts';
 import { postJson } from './session-browser.ts';
 import type { Sessions } from './session.ts';
 
@@ -54,6 +56,15 @@ export function createBrowserConnect(sessions: Pick<Sessions, 'claim' | 'list'>)
     sessions,
     browser: browserLabel(navigator.userAgent),
   };
+}
+
+/**
+ * Asks the browser for the access to the Fruitback at `endpoint`: its origin only, from the optional
+ * access the manifest declares. **Call it in the click, before any `await`**: a host permission may
+ * only be asked for while the click is handled.
+ */
+export function requestWorkerAccess(endpoint: string): Promise<boolean> {
+  return browser.permissions.request({ origins: [matchPatternFor(workerOrigin(endpoint))] });
 }
 
 export async function rememberConsole(endpoint: string, consoleAt: string): Promise<void> {
