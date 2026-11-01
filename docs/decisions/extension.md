@@ -2556,19 +2556,44 @@ before you push the next tag.
 
 ### The rules, in short
 
-- **`apps/extension/gallery/` draws every state of the popup, the welcome page and the side panel**,
-  each with its own view of `src/` and the sheets of its entrypoint, on made-up data
-  (`gallery/states.ts`). `pnpm --filter @fruitback/extension gallery` serves it on
-  http://localhost:5179/gallery/. A page shows all the states of its surface; `?state=<id>` shows
-  one alone, as the page of the extension draws it.
+- **`apps/extension/gallery/` is a Storybook** (`@storybook/html-vite`) **of every state of the popup,
+  the welcome page, the side panel and the widget**, on made-up data.
+  `pnpm --filter @fruitback/extension gallery` serves it on http://localhost:5179;
+  `gallery:build` writes it to `gallery/dist/gallery`, which nginx serves at `/gallery/`.
+- **A screen of the extension is drawn by its own view of `src/`**, from its entry in
+  `gallery/states.ts`, with the sheets of its entrypoint. One document draws every story, so the
+  decorator of `.storybook/preview.ts` puts in the sheets and the class of `body` of each surface,
+  and takes out those of the story before.
+- **A new screen, or a new state of a screen, gets an entry in `gallery/states.ts` and a story in
+  `<surface>.stories.ts`, named by its title.** Storybook reads the names of the stories from the
+  source, so a story is written out, never made in a loop. `src/gallery.test.ts` builds each entry,
+  and fails when an entry has no story, a story has no entry, or a name is not the title.
+- **The export of a story is its id in PascalCase** (`site-off` → `SiteOff`), so the id of the
+  story is `extension-popup--site-off`. `nginx.conf` sends the links of before Storybook,
+  `/gallery/popup.html?state=<id>` and its two siblings, to that story: a note already left on a
+  state keeps its page. `src/gallery.test.ts` holds each export to its id.
+- **`tsconfig.json` lists `gallery/.storybook/`**: the include of WXT, `../**/*`, skips a folder whose
+  name starts with a dot, and `tsc` checked none of its files.
+- **The widget is the real one** (`widget.stories.ts`): `init` on a made-up page of « Acme », with a
+  transport of `gallery/widget-page.ts` in place of the worker, which keeps nothing. `play` takes it
+  to its state: the pins, the preview of a pin, the window of a pin (`focusNote`), the choice of an
+  element and the composer (`leaveFeedback`, then a click), the list (`showEveryNote`). The decorator
+  destroys the widget of the story before, so a document never holds two.
+- **The toolbar switches the language** of the screens and of the widget, English or French.
 - **It is served at https://gallery.fruitback.com**, so the widget of Fruitback can run on it: the
-  pages of the extension are `chrome-extension://`, where no widget runs, and a note cannot be left on
-  them. The extension mounts the widget there, as on any site of a workspace: the gallery embeds
-  nothing. Dokploy builds `apps/extension/gallery/Dockerfile` from `main`.
-- **A new screen, or a new state of a screen, gets an entry in `gallery/states.ts`.**
-  `src/gallery.test.ts` builds each entry; it does not see a state that has no entry.
+  pages of the extension are `chrome-extension://`, where no widget runs. The extension registers
+  its scripts with no `allFrames`, so it mounts the widget in the top frame only. In the Storybook
+  page, that frame is Storybook itself: **to leave a note on a screen, open the story alone**
+  (« Open canvas in new tab », `/gallery/iframe.html?viewMode=story&id=…`). Dokploy builds
+  `apps/extension/gallery/Dockerfile` from `main`.
+- **`.storybook/preview-body.html` deletes a React DevTools hook that is `undefined`.** The head of
+  `iframe.html` copies the hook of the Storybook page into the frame; without a hook there, the copy
+  is `undefined`, and react-grab, which the widget loads, stops the frame at load (measured in
+  Chromium with Storybook 10.6.3).
 - **Not there:** the options page and the rule editor of the popup, which their entrypoints build
-  with no function to call, and the widget itself.
+  with no function to call.
+- **Not measured:** a widget story opened alone, with the extension on for the gallery, holds the
+  widget of the story and the widget of the extension in one document.
 
 ## « Fruitback 0.6.0 is out », in the popup and the page (FRU-519)
 
