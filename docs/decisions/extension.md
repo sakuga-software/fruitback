@@ -2568,11 +2568,13 @@ before you push the next tag.
   `<surface>.stories.ts`, named by its title.** Storybook reads the names of the stories from the
   source, so a story is written out, never made in a loop. `src/gallery.test.ts` builds each entry,
   and fails when an entry has no story, a story has no entry, or a name is not the title.
-- **The export of a story is its id in PascalCase** (`site-off` → `SiteOff`), so the id of the
-  story is `extension-popup--site-off`. `nginx.conf` sends the links of before Storybook,
+- **The export of a story is its state id in PascalCase** (`site-off` → `SiteOff`), so the id of
+  the story is `extension-popup--site-off`. `nginx.conf` sends the links of before Storybook,
   `/gallery/popup.html?state=<id>` and its two siblings, to that story: a note already left on a
-  state keeps its page. Only a `state` of `[a-z0-9-]` reaches the `Location`; any other value
-  leads to the first story of the page. `src/gallery.test.ts` holds each export to its id.
+  state keeps its page. Only a `state` of `[a-z0-9-]` reaches the `Location`; any other value leads
+  to the first story of the page. `src/gallery.test.ts` makes the id of each story with `toId` of
+  Storybook, which splits a digit from a letter (`Step2` → `step-2`), and checks it against the
+  prefix that `nginx.conf` writes.
 - **`tsconfig.json` lists `gallery/.storybook/`**: the include of WXT, `../**/*`, skips a folder whose
   name starts with a dot, and `tsc` checked none of its files.
 - **The widget is the real one** (`widget.stories.ts`): `init` on a made-up page of « Acme », with a
