@@ -2571,7 +2571,8 @@ before you push the next tag.
 - **The export of a story is its id in PascalCase** (`site-off` → `SiteOff`), so the id of the
   story is `extension-popup--site-off`. `nginx.conf` sends the links of before Storybook,
   `/gallery/popup.html?state=<id>` and its two siblings, to that story: a note already left on a
-  state keeps its page. `src/gallery.test.ts` holds each export to its id.
+  state keeps its page. Only a `state` of `[a-z0-9-]` reaches the `Location`; any other value
+  leads to the first story of the page. `src/gallery.test.ts` holds each export to its id.
 - **`tsconfig.json` lists `gallery/.storybook/`**: the include of WXT, `../**/*`, skips a folder whose
   name starts with a dot, and `tsc` checked none of its files.
 - **The widget is the real one** (`widget.stories.ts`): `init` on a made-up page of « Acme », with a
