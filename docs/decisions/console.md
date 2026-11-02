@@ -486,6 +486,14 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   scrolls to its section once the site is drawn, and a hash of a section under « Advanced »
   (`#statuses`, `#agent`, `#previews`) opens it first. `e2e/console-site-page.spec.ts` holds the
   sections, the roles, the hash, the two failures, 390 px in English and in French, and axe.
+  **The address of the site is a link to it** (FRU-575, Mathieu), in a new tab with no referrer, so
+  the console stays where it is; a screen reader hears « (opens in a new tab) ». **Where the notes go
+  reads top down** (FRU-576, Mathieu): the title is « Where the notes go », as « Install » names no
+  site (the region keeps the name of the site); the sentence under it says what the default does, or
+  that the notes stay in Fruitback; the places are the rows of one frame, the mark, the name and
+  « Default » at the left and their actions on the same line; and « Add a destination » is written
+  above the search and the list that add one, and names them as a group.
+  `e2e/console-site-places.spec.ts` holds the frame and the line of a place.
 - **The agent keys of a workspace have a page of their own** (FRU-462, `routes/agents.tsx`, the
   board `design/agents/`), `/w/<workspace>/settings/agents`, with the crumbs « Workspace settings ›
   Agents », reached from the section « Agents » of the settings. It is no section of the rail, and
