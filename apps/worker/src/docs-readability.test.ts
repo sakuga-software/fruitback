@@ -328,9 +328,24 @@ describe('the guard of the guides finds (the control)', () => {
       '## Not labels',
       '- A bullet with **its bold** later.',
       '**A paragraph** that opens with bold is not a bullet.',
+      '## Over two lines, and after code',
+      '- **A label that runs',
+      '  over two lines** then the text.',
+      '- `code` first, then **bold**: not a label.',
+      '- A continuation line',
+      '  **opens with bold**: not a label either.',
     ].join('\n');
 
-    assert.deepEqual(short(page), ['1:3 bold label', '3:4 bold label', '5:5 bold label', '8:1 second bold']);
+    // The block of a bullet starts on its marker line, and hiding keeps every column: review of #803.
+    assert.deepEqual(short(page), [
+      '1:3 bold label',
+      '3:4 bold label',
+      '5:5 bold label',
+      '8:1 second bold',
+      '10:3 bold label',
+      '12:22 second bold',
+      '14:3 second bold',
+    ]);
   });
 
   it('nothing in a heading, the front matter, code, a comment, a tag, a link target or the copied guide', () => {
