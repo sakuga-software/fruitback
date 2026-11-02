@@ -1,9 +1,9 @@
 # Run Fruitback yourself
 
 A self-hosted Fruitback is three containers that `docker-compose.yml` starts together: **the
-worker**, which answers the widget; **PostgreSQL**, where the worker keeps the notes, the sites, the
-accounts and the sessions; and **the console**, where a person signs in and adds a site. Every
-instance has a database and an administrator account (FRU-225). A visitor who leaves a note needs no
+worker**, which answers the widget; PostgreSQL, where the worker keeps the notes, the sites, the
+accounts and the sessions; and the console, where a person signs in and adds a site. Every
+instance has a database and an administrator account. A visitor who leaves a note needs no
 account.
 
 This page goes from an empty folder to a pin that a visitor planted, in seven steps. The pages of
@@ -11,25 +11,24 @@ This page goes from an empty folder to a pin that a visitor planted, in seven st
 proxy, a database you already run, backups, upgrades, every variable. [install.md](install.md) is the
 other half: the widget on your site, and what each of its options does.
 
-Where this page gives a command or an answer, it was measured on the images under `env -i`, as FRU-50
-did, and it says what was not.
+Where this page gives a command or an answer, it was measured on the images under `env -i`, and the page says what was not.
 
 ## Before you start
 
 - **Docker Engine, with Compose 2.20 or later.** `docker compose up --wait` needs 2.20. Check with
   `docker compose version`.
-- **A 64-bit machine, `amd64` or `arm64`.** Linux for a server. For a trial, a Mac with Docker Desktop
+- A 64-bit machine, `amd64` or `arm64`. Linux for a server. For a trial, a Mac with Docker Desktop
   or OrbStack is fine: the path below was measured on one. The images are published for both
   architectures, and Docker picks the right one. One CPU is more than enough for one team: see [Sizing](self-hosting/database.md#sizing-and-more-than-one-replica).
-- **`openssl`**, to make the secrets.
-- **On a server, two HTTPS names**, one for the worker and one for the console, on one domain:
+- `openssl`, to make the secrets.
+- On a server, two HTTPS names, one for the worker and one for the console, on one domain:
   `api.feedback.example.com` and `app.feedback.example.com`, for example. A browser blocks a call from
   an `https://` page to an `http://` worker, and the console signs in with a cookie that a browser
   sends between two names of one domain only. The certificates come from the reverse proxy: see
-  [Behind a reverse proxy](self-hosting/reverse-proxy.md#behind-a-reverse-proxy). **To try it on one machine, you need neither**:
+  [Behind a reverse proxy](self-hosting/reverse-proxy.md#behind-a-reverse-proxy). To try it on one machine, you need neither:
   the defaults of `.env.example` are `http://localhost:8080` and `http://localhost:8081`.
 
-**The two images are not public yet.** On 2026-10-16 the repository was public, and `ghcr.io` still
+The two images are not public yet. On 2026-10-16 the repository was public, and `ghcr.io` still
 refused an anonymous pull of `fruitback-worker` and of `fruitback-console` (an anonymous token
 answered `401`): GHCR gives a new package the visibility its repository had then, until an owner
 changes it (_Packages → `fruitback-worker` → Package settings → Change visibility_, and the same for
@@ -83,7 +82,7 @@ sed -i.bak "s|^FRUITBACK_FIRST_ADMIN=.*|FRUITBACK_FIRST_ADMIN=you@example.com|" 
 rm .env.bak
 ```
 
-**Keep the three secrets and the password somewhere other than the server.** No backup holds them,
+Keep the three secrets and the password somewhere other than the server. No backup holds them,
 and [Back it up](self-hosting/backup.md#back-it-up) says what each one costs when it is lost.
 
 For the trial, `FRUITBACK_PUBLIC_URL` and `FRUITBACK_CONSOLE_URL` stay as they are. On a server, set
@@ -131,7 +130,7 @@ curl http://localhost:8080/health
 # {"ok":true,"store":"postgres"}
 ```
 
-**A `200` on `/health` does not prove the worker can serve**: it checks the configuration and never
+A `200` on `/health` does not prove the worker can serve: it checks the configuration and never
 opens the database. Step 7 reads a page, which does. Without the password, Compose starts nothing:
 `required variable FRUITBACK_POSTGRES_PASSWORD is missing a value` (measured). Without one of the
 secrets, the worker starts, refuses to serve, and `--wait` ends with `container … is unhealthy`: see
@@ -163,7 +162,7 @@ refused from then on (measured):
 docker compose exec worker node server.mjs admin-link --email you@example.com
 ```
 
-**The last line of the log is wrong within the ten minutes.** It says to start the worker again for
+The last line of the log is wrong within the ten minutes. It says to start the worker again for
 another link, but a restart inside the ten minutes writes no link (measured). It writes this line
 instead: « this Fruitback has no owner yet, and a sign-in link for its first administrator was written
 less than 10 minutes ago, by this worker or by another one (FRUITBACK_FIRST_ADMIN). Read the log of
@@ -172,7 +171,7 @@ command above: it gives a link at once. Once a workspace has an owner, the worke
 start: [The first administrator](#the-first-administrator-and-getting-back-in) says how to
 get back in.
 
-**Nobody else creates an account unless a workspace invites them** (`FRUITBACK_SIGN_UP`, `invited` by
+Nobody else creates an account unless a workspace invites them (`FRUITBACK_SIGN_UP`, `invited` by
 default). Invite a person from « Members » of the console: they sign in with the address of the
 invitation. `FRUITBACK_SIGN_UP=anyone` lets every person who signs in create an account.
 
@@ -180,13 +179,13 @@ invitation. `FRUITBACK_SIGN_UP=anyone` lets every person who signs in create an 
 
 The console opens on « Set up Fruitback », at « Your site »:
 
-1. In **Site address**, write the address of the site: `http://localhost:5500` for the trial.
-2. Under **Who sees the notes?**, choose **Everyone who visits**. The other choice, « Members of … »,
+1. In « Site address », write the address of the site: `http://localhost:5500` for the trial.
+2. Under « Who sees the notes? », choose « Everyone who visits ». The other choice, « Members of … »,
    is the default: there a visitor sees no pin and, on a new site, cannot leave a note. Only a member
    of the workspace signed in through the extension reads and writes the notes.
-3. Click **Add site**.
+3. Click « Add site ».
 
-« Put it on the site » then shows the **Script tag** of this site, with **Copy script**:
+« Put it on the site » then shows the « Script tag » of this site, with « Copy script »:
 
 ```html
 <script
@@ -232,8 +231,8 @@ The last command keeps running; use another terminal for the next step.
 
 ### 7. Leave a note as a visitor
 
-Open `http://localhost:5500` in a private window, where nobody is signed in. Click **Leave a note**,
-then the title, write a note, and click **Send**. The pin is on the title. Another visitor who opens
+Open `http://localhost:5500` in a private window, where nobody is signed in. Click « Leave a note »,
+then the title, write a note, and click « Send ». The pin is on the title. Another visitor who opens
 the page sees it too. The screen of step 5 in the console (« Set up Fruitback », `/setup`) shows
 « First note received » if it is still open. The « Sites » screen shows the count `1` for the site,
 and « Just now ».
@@ -251,7 +250,7 @@ way, a note sent from a context with no cookie, and a second visitor who saw one
 `docker compose up -d --wait --force-recreate`, and the note was still read: it is in the database,
 not in a container.
 
-FRU-107 counted seven steps for the path of before FRU-225, which ran one container with no database
+A count of the steps found seven for the path of before 0.3.0, which ran one container with no database
 and no account. The count stayed. What moved is where a site is made: in the console, by a person who
 signed in.
 
@@ -300,24 +299,24 @@ another site, gets `403 origin-not-allowed-for-client` when it names this site.
 
 - **Three services, and the worker waits for the database** to be healthy before it starts. PostgreSQL
   publishes no port: only the worker reaches it, on the network of the file.
-- **Two named volumes**: `fruitback-postgres` holds the database. `fruitback-data` holds nothing for
+- Two named volumes: `fruitback-postgres` holds the database. `fruitback-data` holds nothing for
   this worker; it is where an instance of before kept its files, and where `migrate-to-postgres`
   reads them (see [Upgrading](self-hosting/upgrade.md)). Compose prefixes both with the project
   name, so two stacks on one host keep separate data, and `docker compose down -v` in one cannot
-  delete the other's. **`docker compose down -v` deletes the database**: every note, site and account.
-- **`FRUITBACK_IMAGE` and `FRUITBACK_CONSOLE_IMAGE` are complete image references**, so each takes a
-  tag or a digest (`ghcr.io/sakuga-software/fruitback-worker@sha256:…`). **Compose does not pull a tag
-  that is already on the machine**, and `edge` moves on every merge: run `docker compose pull` before
+  delete the other's. `docker compose down -v` deletes the database: every note, site and account.
+- `FRUITBACK_IMAGE` and `FRUITBACK_CONSOLE_IMAGE` are complete image references, so each takes a
+  tag or a digest (`ghcr.io/sakuga-software/fruitback-worker@sha256:…`). Compose does not pull a tag
+  that is already on the machine, and `edge` moves on every merge: run `docker compose pull` before
   `docker compose up -d --wait` to update.
-- **`TRUSTED_PROXY_HOPS` is 0, because the file publishes the ports directly.** The worker's own
+- `TRUSTED_PROXY_HOPS` is 0, because the file publishes the ports directly. The worker's own
   default is 1, for one Traefik. With 1 and no proxy in front, forged reads kept answering `200` past
-  the limit; with 0, they answered `429` (measured on this file, FRU-48).
-- **A variable exported in your shell wins over `.env`.** Compose reads the shell first, so a
+  the limit; with 0, they answered `429` (measured on this file).
+- A variable exported in your shell wins over `.env`. Compose reads the shell first, so a
   `LINEAR_API_KEY` left in a shell profile reaches the container even when `.env` leaves it empty.
   The measurements of this page ran under `env -i` for that reason.
-- **`ALLOWED_ORIGINS` is required by the file itself.** Without it, Compose refuses to start:
+- `ALLOWED_ORIGINS` is required by the file itself. Without it, Compose refuses to start:
   `required variable ALLOWED_ORIGINS is missing a value: set ALLOWED_ORIGINS in .env`.
-- **`.env.example` lists exactly the variables the compose file reads.** `apps/worker/src/compose.test.ts`
+- `.env.example` lists exactly the variables the compose file reads. `apps/worker/src/compose.test.ts`
   compares both files, and this page's variable reference, with the variables the worker reads.
 
 ## The first administrator, and getting back in
@@ -342,7 +341,7 @@ their session, and never makes another owner` and exit code 1. A link made befor
 on, and the sessions that are open stay open. The log of the worker gets a line that says a link was
 made, for whom, and when: never the link.
 
-**The first account of the instance is its administrator** (FRU-261): the account of this link, when
+The first account of the instance is its administrator: the account of this link, when
 nobody signed up before it. The worker gives the role in the database, when the account is made, and
 no variable names an administrator. On a database that had accounts before this version, the oldest
 account gets the role. The administrator reads every workspace of the instance under
@@ -358,7 +357,7 @@ it on.
 
 **In the database, by default** (`FRUITBACK_STORE=postgres`). The pins on the page and the « Notes »
 screen of the console are the interface: there is no triage and no issue to assign. A member sets the
-status of a note on that screen or in the side panel of the extension (FRU-367, FRU-384), from the
+status of a note on that screen or in the side panel of the extension, from the
 statuses of its site. A workspace can also send the notes of a site to a tracker it connects in the
 console (a Linear workspace, a GitHub repository through a GitHub App, or an address that receives
 them: [rest-connector.md](rest-connector.md)), and a site can choose where its notes go.
@@ -378,8 +377,8 @@ GitHub App, see [Storing the notes in GitHub Issues](self-hosting/github-issues.
 
 What each store can show on a pin. `store-conformance.test.ts` compares the stages, the reply cap in the
 Replies column and the last column with the code. A stage is named here as it is stored, in the
-`stage` column and in the JSON. The widget shows `new` as **New**, `todo` as **To do**, `progress`
-as **In progress**, `done` as **Done** and `closed` as **Closed**.
+`stage` column and in the JSON. The widget shows `new` as « New », `todo` as « To do », `progress`
+as « In progress », `done` as « Done » and `closed` as « Closed ».
 
 | Store      | Stages                                      | What changes the stage                                                                          | Replies                                                                            | Runs in production |
 | ---------- | ------------------------------------------- | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | ------------------ |
@@ -407,11 +406,11 @@ FRUITBACK_PUBLIC_URL=http://localhost:8080
 FRUITBACK_CONSOLE_URL=http://localhost:8081
 ```
 
-`FRUITBACK_PUBLIC_URL` is where **a browser** reaches the worker, and the console is given that
+`FRUITBACK_PUBLIC_URL` is where a browser reaches the worker, and the console is given that
 value as its `FRUITBACK_API`: never write the name of the service there. `FRUITBACK_CONSOLE_URL` is
 where a browser reaches the console; the worker answers that origin and no other.
 
-**Two addresses, and that is the default on purpose.** The console calls the worker as another
+Two addresses, and that is the default on purpose. The console calls the worker as another
 origin, with the cookie of the session, which is the worker's. Behind a proxy, give them two names
 of one domain, as `api.feedback.example.com` and `app.feedback.example.com`: a browser then sends the cookie, which is
 `SameSite=Strict`, from one to the other. That is what the Cloud runs. One name with two paths is
@@ -433,12 +432,12 @@ docker run -d --name fruitback-console -p 8081:80 \
 
 The image runs as a user that is not root (`101`), writes under `/tmp` only, and starts with a
 read-only root and no capability: the compose file runs it that way. It serves the script of the
-widget too (FRU-106, measured):
+widget too (measured):
 
 | Address                          | Answer                                                                                  |
 | -------------------------------- | --------------------------------------------------------------------------------------- |
 | `/v/<version>/fruitback.iife.js` | the script, `Cache-Control: public, max-age=31536000, immutable`. The snippet gives it. |
-| `/fruitback.iife.js`             | the same file, `Cache-Control: public, max-age=300`. Snippets copied before FRU-106.    |
+| `/fruitback.iife.js`             | the same file, `Cache-Control: public, max-age=300`. Snippets copied before 0.3.0.      |
 | `/v/<other version>/…`           | `302` to the version of this image, kept five minutes: a snippet from an older image.   |
 
 `<version>` is the version of the widget and the first 12 hex characters of the sha256 of the file, so

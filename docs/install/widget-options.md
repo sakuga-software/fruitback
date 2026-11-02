@@ -5,17 +5,17 @@ back.
 
 ## What else `init` takes
 
-| Option          | Why you would                                                                                                                         |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `label`         | the text on the floating button                                                                                                       |
-| `locale`        | the language to show, as a tag like `fr` or `pt-BR` — the browser's by default                                                        |
-| `messages`      | your own words for that language — see [Another language](../translating.md#another-language)                                         |
-| `ignore`        | elements the pointer must skip — your own chrome, a support chat, a cookie banner                                                     |
-| `identityToken` | a signed token, so a reporter is _verified_ — not on a site of the console yet, see [Identified reporters](identified-reporters.md)   |
-| `includeEnv`    | `true` to send the reporter's user agent, language and platform — off by default                                                      |
-| `transport`     | who carries the calls — the extension's, in [team mode](../install.md#team-mode-dormant-until-a-reviewer-arrives)                     |
-| `showSelectors` | `true` to show the CSS selector of the element in the thread of a pin — off by default; the issue keeps it                            |
-| `position`      | the corner of the dock: `bottom-right` (the default), `bottom-left`, `top-right` or `top-left` — `data-fruitback-position` on the tag |
+| Option          | Why you would                                                                                                                        |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `label`         | the text on the floating button                                                                                                      |
+| `locale`        | the language to show, as a tag like `fr` or `pt-BR`: the browser's by default                                                        |
+| `messages`      | your own words for that language: see [Another language](../translating.md#another-language)                                         |
+| `ignore`        | elements the pointer must skip: your own chrome, a support chat, a cookie banner                                                     |
+| `identityToken` | a signed token, so a reporter is _verified_: not on a site of the console yet, see [Identified reporters](identified-reporters.md)   |
+| `includeEnv`    | `true` to send the reporter's user agent, language and platform: off by default                                                      |
+| `transport`     | who carries the calls: the extension's, in [team mode](../install.md#team-mode-dormant-until-a-reviewer-arrives)                     |
+| `showSelectors` | `true` to show the CSS selector of the element in the thread of a pin: off by default; the issue keeps it                            |
+| `position`      | the corner of the dock: `bottom-right` (the default), `bottom-left`, `top-right` or `top-left`: `data-fruitback-position` on the tag |
 
 **One part of the fragment is the widget's**: `fruitback-note=<id>`. A link like
 `https://staging.acme.dev/pricing#fruitback-note=<id>` opens that note on its page, and the widget
@@ -44,9 +44,9 @@ Reply from Léa · 2026-10-07
 > Fixed in the next deploy.
 ```
 
-- **It is what the reviewers wrote and where, and nothing else.** No instruction and no introduction.
+- It is what the reviewers wrote and where, and nothing else. No instruction and no introduction.
   Paste it into a ticket, a message or an agent, and write your own request around it.
-- **Every line a reviewer wrote starts with `>`.** A note is text from anybody who can reach the
+- Every line a reviewer wrote starts with `>`. A note is text from anybody who can reach the
   page. Quoted, it cannot pass for a heading or a line of the format. It is still somebody else's
   text: an agent that reads it must treat it as data.
 - It follows the panel: a stage the reporter hid is not copied. A note whose element is gone is

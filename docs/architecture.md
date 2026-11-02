@@ -2,31 +2,31 @@
 
 Written for somebody changing Fruitback, or deciding whether to. It is the design half of the old
 README: the page a reader lands on answers _what is this_, and everything that answers _why is it
-shaped like that_ is here (FRU-26).
+shaped like that_ is here.
 
-The per-ticket histories — the measurements, the first versions that failed, the reviews that caught
-them — are one level down, in [decisions/](https://github.com/sakuga-software/fruitback/tree/main/docs/decisions).
+The per-ticket histories (the measurements, the first versions that failed, the reviews that caught
+them) are one level down, in [decisions/](https://github.com/sakuga-software/fruitback/tree/main/docs/decisions).
 
 ## Why this shape
 
 Alternatives we looked at and dropped:
 
-- **SitePing** — closest match, but Prisma.
-- **Quackback** — no visual layer at all (a text form in a panel), AGPL-3.0, and oversized for the
+- **SitePing**: closest match, but Prisma.
+- Quackback: no visual layer at all (a text form in a panel), AGPL-3.0, and oversized for the
   need: it brings boards, roadmap and changelog we do not want.
-- **Full in-house** — rebuilding auth, dashboard, API, MCP and integrations to reach parity with
+- Full in-house: rebuilding auth, dashboard, API, MCP and integrations to reach parity with
   something Linear already does.
 
-So: build **only** the missing piece — the capture and restitution layer — on top of
+So: build only the missing piece (the capture and restitution layer) on top of
 [react-grab](https://github.com/aidenybai/react-grab) (MIT), and let the issue tracker absorb
 everything else. The one thing it cannot do is redraw a pin on the page; that part we reconstruct
 from the anchor we stored.
 
 ## Architecture
 
-**The diagram shows the Linear path.** Since FRU-33 the third column is whichever store the site
-sends to — the database of the worker by default (`postgres`, FRU-225), an issue in a repository with
-`github` (FRU-32), a Linear team — and the shape of the exchange does not change. This page was written
+**The diagram shows the Linear path.** The third column is whichever store the site
+sends to (the database of the worker by default (`postgres`), an issue in a repository with
+`github`, a Linear team) and the shape of the exchange does not change. This page was written
 when Linear was the only answer, and it is scoped here rather than rewritten: the reasoning below is
 still why the Linear connector looks the way it does.
 
@@ -38,37 +38,37 @@ comment popover                  (server-side token)        description = note
 pin overlay            ◀──GET─── query by label+URL ◀─────  status, comments
 ```
 
-- **widget** — `@fruitback/widget`, an embeddable script (Shadow DOM, so the client's CSS is never
+- widget: `@fruitback/widget`, an embeddable script (Shadow DOM, so the client's CSS is never
   touched). Picks the element via `react-grab/primitives`, captures the anchor, and later re-plants
   the pins it reads back.
-- **worker** — a small Node process in a container (Docker on a VPS, deployed by Dokploy from a
+- worker: a small Node process in a container (Docker on a VPS, deployed by Dokploy from a
   GitHub push). Why it exists at all: a tracker's API token cannot live in client-side JS on a public
   site. With the notes in its own database there is no such token and it still exists, because
   somebody has to hold the database and answer the two routes. It also decides attribution (anonymous
   vs signed in).
-- **PostgreSQL** — every instance has one since FRU-225, on a database of its own or in a schema of
+- PostgreSQL: every instance has one since 0.3.0, on a database of its own or in a schema of
   one that exists: the notes of the store `postgres`, the sites, the accounts and the sessions.
-- **console** — `@fruitback/console`, static files behind nginx, a second image. A person signs in,
+- console: `@fruitback/console`, static files behind nginx, a second image. A person signs in,
   makes a workspace and adds its sites there. It holds no secret: the session is the worker's cookie.
-- **shared** — `@fruitback/shared`, the note contract. Both ends depend on it.
-- **extension** — `@fruitback/extension`, the same widget on a site that embeds **nothing** (FRU-41).
-  The reviewer installs it, switches a site on, and the page they are reviewing is untouched — no
+- shared: `@fruitback/shared`, the note contract. Both ends depend on it.
+- extension: `@fruitback/extension`, the same widget on a site that embeds nothing.
+  The reviewer installs it, switches a site on, and the page they are reviewing is untouched: no
   tag, no package, no deploy, and nothing for an ordinary visitor to see. MV3 on Chromium and
-  Firefox. It asks for **no host permission at install**: the content scripts are registered at
+  Firefox. It asks for no host permission at install: the content scripts are registered at
   runtime, per origin, when somebody turns that site on.
 
-**Accounts, and a database, on every instance** (FRU-225, decided on 2026-10-13). An administrator
+Accounts, and a database, on every instance (decided on 2026-10-13). An administrator
 signs in to the console, adds the sites and invites the members; a visitor who leaves a note needs no
 account. Threads and assignees still belong to the store, and so does the stage of an issue in a
-tracker. Each site has its own statuses on top of the five stages, set in the console (FRU-352): the
+tracker. Each site has its own statuses on top of the five stages, set in the console: the
 console lists the notes, and a tracker you already run stays the place to triage them. The sentence that stood here said "no
-dashboard and no user accounts", and before FRU-26 "no database, no session store" as well. Each
-outlived itself in turn: a file of the worker's own for the notes (FRU-31) and another for the
-sessions (FRU-42), then the accounts (FRU-141), then PostgreSQL for all of it.
+dashboard and no user accounts", and earlier "no database, no session store" as well. Each
+outlived itself in turn: a file of the worker's own for the notes and another for the
+sessions, then the accounts, then PostgreSQL for all of it.
 
 ## The note
 
-A **note** is one piece of feedback planted on an element. **Where** it is stored is the connector's
+A **note** is one piece of feedback planted on an element. Where it is stored is the connector's
 business: `linear` puts it as a JSON block inside the issue description, under a human-readable
 summary, `github` puts the same block in the issue body, and `postgres` puts it in a column. The two
 decisions below were made for the Linear connector, and they are what the markdown codec exists for.
@@ -78,26 +78,26 @@ The GitHub connector uses the same codec, and finds a page's notes by label inst
 
 Two decisions worth knowing:
 
-**Why the description and not a Linear custom field** — it is portable (no workspace admin setup,
+Why the description and not a Linear custom field: it is portable (no workspace admin setup,
 survives an export) and Linear can filter on it server-side with
 `description: { contains: <canonical url> }`, which is how "the notes of this page" is fetched
 without walking every issue. The cost is that a human can corrupt the block, so the parser is
 deliberately tolerant: it accepts any fenced block, with or without a language tag, backticks or
 tildes, CRLF, even an unterminated fence, and finds ours by its `kind` field.
 
-**Why the anchor is redundant** — a selector breaks the moment the site is redeployed. Every note
+Why the anchor is redundant: a selector breaks the moment the site is redeployed. Every note
 therefore carries several independent ways to find the element again (`selector`, test id, text
 excerpt, `domPath`, and bounds as a share of the document). When none of them resolve, the pin
-becomes an _orphan_ — listed aside rather than dropped on the wrong element. That degradation is
+becomes an _orphan_: listed aside rather than dropped on the wrong element. That degradation is
 what separates a demo from a tool people keep using.
 
 Everything the widget draws lives in one Shadow root, mounted at the document origin. That is what
-makes "no style conflicts" true in both directions on a site whose CSS nobody has read — and the
+makes "no style conflicts" true in both directions on a site whose CSS nobody has read, and the
 selection engine underneath it is `react-grab/primitives`, which hit-tests through shadow roots and
 iframes and reads the component and source file straight off the React fiber.
 
-Coming back, the pin has to find its element again. The claims are tried in order — selector, test
-id, text, structural path, position — and the answer carries **how it was found**: the first three
+Coming back, the pin has to find its element again. The claims are tried in order (selector, test
+id, text, structural path, position) and the answer carries how it was found: the first three
 identify an element, the last two only locate a spot. A pin placed by position is drawn dashed and
 says so, because a neighbour that slid into a vacated slot has the same tag, the same text and the
 same box, and a pin that looks certain is believed.

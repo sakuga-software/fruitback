@@ -1,17 +1,17 @@
 # Install the widget
 
-Three things have to exist: **an instance** — the worker, its PostgreSQL and its console — **a site**,
-made in the console, and **the widget**, which goes on the pages of that site. The widget writes to the
+Three things have to exist: **an instance** (the worker, its PostgreSQL and its console), a site,
+made in the console, and the widget, which goes on the pages of that site. The widget writes to the
 worker, and the worker answers only the sites its console made.
 
 Do the instance first, then the site. The widget needs the address of the worker and the id of the
 site.
 
-**Which mode you are installing changes step 3 and nothing else.** Step 3 is where public mode puts the
-widget on the page, team mode ships it dormant, and private mode ships nothing at all — there the
+Which mode you are installing changes step 3 and nothing else. Step 3 is where public mode puts the
+widget on the page, team mode ships it dormant, and private mode ships nothing at all: there the
 extension mounts it, and the reviewer's side is [reviewing.md](reviewing.md). [modes.md](modes.md) is
-the page that picks between the three, and it is worth reading first: **who may read a site is the
-visibility you choose at step 2, and the mode decides who can satisfy it.**
+the page that picks between the three, and it is worth reading first: who may read a site is the
+visibility you choose at step 2, and the mode decides who can satisfy it.
 
 > The packages are on npm: `fruitback`, `@fruitback/react`, `@fruitback/element`, `@fruitback/widget`
 > and `@fruitback/shared`. A site with no bundler takes the `<script>` route instead. The console
@@ -23,18 +23,18 @@ visibility you choose at step 2, and the mode decides who can satisfy it.**
 
 ## 1. The instance
 
-**Fruitback Cloud** runs it for you. **Self-hosted**, it is three containers that one compose file
+Fruitback Cloud runs it for you. Self-hosted, it is three containers that one compose file
 starts: [self-hosting.md](self-hosting.md) goes from an empty folder to a pin in seven steps, and this
 page does not repeat them. Every instance keeps its notes, its sites and its accounts in PostgreSQL,
 and has an administrator who signs in to the console. A visitor who leaves a note needs no account.
 
 Two things matter whatever you deploy with:
 
-- **`/health` checks the configuration, not the database or a tracker.** It answers `503` and names
+- `/health` checks the configuration, not the database or a tracker. It answers `503` and names
   each variable that is missing or wrong. It answers `200` while the database does not answer, or
   while Linear refuses a key: those show on the first read, as `502 store-unavailable`. So check a
   read as well, at step 2.
-- **`TRUSTED_PROXY_HOPS` is the number of proxies in front of the container**: `0` when the port is
+- `TRUSTED_PROXY_HOPS` is the number of proxies in front of the container: `0` when the port is
   published directly, `1` behind one Traefik. Too high behind a proxy that appends to
   `X-Forwarded-For`, and a caller escapes the rate limit with a forged header. Too low, and every
   caller shares one bucket. [Behind a reverse proxy](self-hosting/reverse-proxy.md#behind-a-reverse-proxy) has the
@@ -50,17 +50,17 @@ written to anyone's workspace.
 
 In the console, add the address of the site, and choose **who sees the notes**:
 
-- **Members of the workspace**, the default. A read needs the session of a member. The visibility
+- Members of the workspace, the default. A read needs the session of a member. The visibility
   does not pick the mode: in team mode the extension supplies the session once the reviewer connects
   it, and private mode carries none ([modes.md](modes.md)). « Who can leave a note » is « Members
-  only » on a new site (FRU-330): a visitor with no session is refused. With « Anyone on the page »,
+  only » on a new site: a visitor with no session is refused. With « Anyone on the page »,
   a visitor can send a note, and sees no pin, theirs included.
-- **Everyone who visits** — a read needs nothing: this is the public mode. Every note, the name its
+- « Everyone who visits »: a read needs nothing: this is the public mode. Every note, the name its
   reporter typed and the replies are readable by anybody who knows a page address and the id of the
   site, with or without the widget.
 
-The console then gives the script tag of the site. `data-fruitback-client` in it is **the id of the
-site**, `site_…`: it is the `clientId` of every example below. The worker answers the page of each site
+The console then gives the script tag of the site. `data-fruitback-client` in it is the id of the
+site, `site_…`: it is the `clientId` of every example below. The worker answers the page of each site
 by itself; nothing to add to `ALLOWED_ORIGINS`.
 
 Check a read before going further, with the address of a page of the site, encoded, and its id:
@@ -79,10 +79,10 @@ The notes of a site go to the database of the instance, unless its workspace con
 console, and the site chooses it. A self-hosted instance can also send the notes of every site with no
 tracker of its own to one Linear team: `FRUITBACK_STORE=linear`, with two values and a key in `.env`.
 
-**The API key** — a personal API key from your Linear settings. It is a secret: it must never reach a
+**The API key**: a personal API key from your Linear settings. It is a secret: it must never reach a
 browser, and that is one reason the worker exists.
 
-**The team, and optionally the project.** Both are UUIDs. The quickest way to read them is to ask
+The team, and optionally the project. Both are UUIDs. The quickest way to read them is to ask
 Linear:
 
 ```bash
@@ -101,7 +101,7 @@ LINEAR_API_KEY=lin_api_…
 LINEAR_TEAM_ID=…
 ```
 
-**Labels need no setup.** Fruitback creates `fruitback`, and a label for the site of the note, on
+Labels need no setup. Fruitback creates `fruitback`, and a label for the site of the note, on
 demand, on first use. A label that cannot be created is dropped and the feedback still goes
 through: losing a label is a triage annoyance, losing someone's note is a bug.
 
@@ -132,8 +132,8 @@ with each note. It is off by default, and [privacy.md](privacy.md) says what tha
 notice.
 
 `defer` matters: the widget mounts into `<body>`. It auto-mounts only when **both** `endpoint` and
-`client` are on the tag; with either missing it does nothing and `Fruitback.init(…)` is yours to call
-— which is what a site with its own bootstrap wants.
+`client` are on the tag; with either missing it does nothing and `Fruitback.init(…)` is yours to call,
+which is what a site with its own bootstrap wants.
 
 ### An import
 
@@ -150,7 +150,7 @@ const widget = init({
 });
 ```
 
-In React, mount it in an effect — the widget points at elements your app has rendered, so it has to
+In React, mount it in an effect: the widget points at elements your app has rendered, so it has to
 arrive after they do:
 
 ```tsx
@@ -181,7 +181,7 @@ the options of `init`. A parent that renders again does not mount the widget aga
 `theme` is compared by its value, and a function such as `identityToken` is always the one of the
 last render. `onMount` hands you the widget, for `refresh()` or `feedbackAsText()`, and for a way in of your own:
 `leaveFeedback()` starts choosing an element, `showEveryNote()` opens the list, and `pageCounts()` says
-how many notes of each stage the page shows (FRU-254).
+how many notes of each stage the page shows.
 
 ### A custom element
 
@@ -247,11 +247,11 @@ sync();
 
 Both halves are needed: the event for a page that loaded before the extension announced itself, the
 call for one that loaded after. The **same event fires when the extension withdraws**, so `sync`
-reads the property rather than assuming an arrival — and it is written so a second announcement
+reads the property rather than assuming an arrival, and it is written so a second announcement
 cannot mount a second widget.
 
-The reviewer then turns your origin on in the extension's popup, in **Team** mode, and pairs with
-the worker, from the console. Until they do, the extension relays nothing — see
+The reviewer then turns your origin on in the extension's popup, in « Team » mode, and pairs with
+the worker, from the console. Until they do, the extension relays nothing: see
 [the threat model](https://github.com/sakuga-software/fruitback/blob/main/SECURITY.md#what-the-extension-relays-and-what-it-refuses-to) for why, and for
 the five other things the relay checks first.
 
