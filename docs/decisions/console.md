@@ -592,8 +592,15 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   where the mockup draws « Connect ». **With no connector added, the screen is « Add a connector »**,
   its eight connectors and « No tracker yet. The notes stay in Fruitback. » (FRU-542, Mathieu). **With
   one, it is « Your connectors », a card for each connector, one under the other, and « New connector » at the
-  top right** opens « Add a connector » above the cards, in a frame of its own, its title focused,
-  with « Close », which gives focus back to « New connector ». Linear and an address stay in it: a
+  top right** opens « Add a connector » in a `Dialog` (FRU-562), its sources a grid of cards (three
+  in a row at 1440 px, one at 390 px), with their buttons at the foot of each card. Escape or
+  « Close » give focus back to « New connector ». **A form open in it locks it**: no Escape and no
+  close button, as the list of before hid « Close » while a form was open, since the secret of an
+  address is shown there once and a key being typed would go with the dialog; the card of the form
+  takes the whole row. A form started on the page, before any source, stays on the page when its
+  source arrives. `?new` in the address opens the dialog (« Connect a tracker » of the Sites screen
+  links there), and leaves the address; it opens nothing for a person who cannot add a source.
+  With no source, the same grid is on the page. Linear and an address stay in it: a
   workspace can connect a second one. The cards are not a grid: the panel of a connector opens inside
   its card (FRU-403), and a panel between two rows of cards reads as a stray card (FRU-433). The list
   stays open while a form in it is open (the secret of an address is shown there once, after it is
