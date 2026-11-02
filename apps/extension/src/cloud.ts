@@ -317,8 +317,10 @@ export async function offerFor(origin: string, seams: CloudSeams): Promise<Offer
     // which keeps them before the click stores its rule, as before FRU-498.
     if (offer !== undefined && listed.origin !== undefined && offer.pattern !== origin) {
       const whole = await listedBy(endpoint, seams);
-
-      return whole === undefined ? undefined : offerIn(endpoint, whole, origin);
+      const kept = whole === undefined ? undefined : offerIn(endpoint, whole, origin);
+      // A whole list that did not answer, or no longer offers it: the next worker may (review of #791).
+      if (kept !== undefined) return kept;
+      continue;
     }
     if (offer !== undefined) return offer;
   }

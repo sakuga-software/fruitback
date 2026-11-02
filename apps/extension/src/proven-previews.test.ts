@@ -432,6 +432,32 @@ describe('the list of one tab (FRU-498)', () => {
     ]);
   });
 
+  it('asks the next worker when the whole list of the first does not answer (review of #791)', async () => {
+    const SECOND = 'https://second.fruitback.test';
+    const { fetcher: first } = workerOfTabs();
+    const asked: string[] = [];
+    const fetcher = (async (url: string, init?: RequestInit) => {
+      asked.push(url);
+      // The first worker answers the list of the tab, then does not answer the whole list.
+      if (url === `${WORKER}/session/sites`) return new Response('{}', { status: 503 });
+
+      return first(url.replace(SECOND, WORKER), init);
+    }) as typeof fetch;
+    const { seams } = seamsOf(fetcher);
+
+    const offer = await offerFor('https://pr-12.preview.acme.dev', {
+      ...seams,
+      endpoints: async () => [WORKER, SECOND],
+    });
+
+    assert.equal(offer?.endpoint, SECOND);
+    assert.equal(offer?.pattern, PREVIEWS);
+    assert.deepEqual(
+      asked.map((url) => new URL(url).origin),
+      [WORKER, WORKER, SECOND, SECOND],
+    );
+  });
+
   it('believes no list read for another origin', async () => {
     const fetcher = (async () =>
       new Response(
