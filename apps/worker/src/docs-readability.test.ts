@@ -11,7 +11,9 @@ import { describe, it } from 'vitest';
  * - one bold segment per section at most, so that the one there stands out.
  *
  * A heading keeps its words: its id is an address that other pages, `moved.yml` and the extension
- * link to. Code, HTML comments and the front matter are not prose, and are not read.
+ * link to. Code, HTML comments and the front matter are not prose, and are not read. Nor is the block
+ * that `apps/console/guide-docs.ts` copies from the steps of the guide: the console shows the same
+ * steps, with their bold, and `guide-steps.test.ts` holds the copy.
  */
 
 const ROOT = new URL('../../../', import.meta.url);
@@ -36,6 +38,7 @@ export function findingsIn(markdown: string): Finding[] {
   let fence = false;
   let comment = false;
   let front = false;
+  let copied = false;
   let bold = 0;
   markdown.split('\n').forEach((line, index) => {
     const trimmed = line.trim();
@@ -43,6 +46,9 @@ export function findingsIn(markdown: string): Finding[] {
     if (front) return void (trimmed === '---' && (front = false));
     if (/^(```|~~~)/.test(trimmed)) return void (fence = !fence);
     if (fence) return;
+    if (line.startsWith('<!-- guide:start')) copied = true;
+    if (line.startsWith('<!-- guide:end')) copied = false;
+    if (copied) return;
     if (comment || line.includes('<!--')) {
       comment = !line.includes('-->');
       return;
@@ -89,6 +95,9 @@ describe('the published guides (FRU-515)', () => {
       '```',
       '<!-- FRU-5 — a comment',
       '**still** **a comment** -->',
+      '<!-- guide:start: written from the steps. -->',
+      'A copied step (FRU-7) — **one** **two**.',
+      '<!-- guide:end -->',
       '## Next section',
       'A **bold** again, the first of its section.',
     ].join('\n');

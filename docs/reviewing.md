@@ -63,7 +63,7 @@ captures.
 
 <!-- guide:start: written from apps/console/app/guide-steps.ts by `node apps/console/guide-docs.ts`. -->
 
-1. Install the extension. A Fruitback tab opens: choose « Sign in with email » there.
+1. Install the extension. A Fruitback tab opens: choose **Sign in with email** there.
 
    ![The tab that opens at install, with Sign in with email](assets/guide/welcome.png)
 
@@ -71,7 +71,7 @@ captures.
 
    ![The console shows the word to check, and Connect Chrome](assets/guide/word.png)
 
-3. Back on the Fruitback tab, press Turn on your site. Chrome asks once for access to that site: allow it.
+3. Back on the Fruitback tab, press **Turn on your site**. Chrome asks once for access to that site: allow it.
 
    ![The Fruitback tab, signed in, with Turn on and the address of the site](assets/guide/turn-on.png)
 
@@ -79,7 +79,7 @@ captures.
 
    ![A note written on an element of the site](assets/guide/note.png)
 
-5. Later, the Fruitback icon in the toolbar opens the same tools on any site of your team: « Leave a note » starts a note.
+5. Later, the Fruitback icon in the toolbar opens the same tools on any site of your team: **Leave a note** starts a note.
 
    ![The popup on a site that is on, with Leave a note](assets/guide/popup.png)
 
