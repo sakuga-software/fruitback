@@ -316,6 +316,14 @@ test('the list is a grid of cards, each named by its address and its icon (FRU-4
   await expect(value(card(page, 'acme.dev'), 'Notes go to')).toContainText('Team Acme web and 1 more');
   await expect(value(card(page, 'support.acme.dev'), 'Notes go to')).toHaveText('REST API2 not delivered yet');
   await expect(value(lumen, 'Notes go to')).toHaveText('Kept in FruitbackNo tracker yet');
+  // FRU-541: the logo of the tracker before its name (`connector-marks.tsx`: Linear in a box of 24,
+  // the braces of an address in a box of 16), 14 px; none for Fruitback.
+  const linear = value(first, 'Notes go to').locator('svg[aria-hidden="true"]');
+  await expect(linear).toHaveAttribute('viewBox', '0 0 24 24');
+  expect.soft(await styles(linear, ['width', 'height'])).toEqual({ width: '14px', height: '14px' });
+  const address = value(card(page, 'support.acme.dev'), 'Notes go to').locator('svg[aria-hidden="true"]');
+  await expect(address).toHaveAttribute('viewBox', '0 0 16 16');
+  await expect(value(lumen, 'Notes go to').locator('svg')).toHaveCount(0);
 
   // The button of a card: 36 px, named after its site, in the top right corner, and it opens a menu.
   const button = more(page, 'staging.acme.dev');
@@ -802,6 +810,33 @@ test('what is typed in the form stays when the form goes and comes back', async 
   await page.getByRole('button', { name: 'Add a site', exact: true }).click();
   await expect(form.getByRole('textbox', { name: 'Site address' })).toHaveValue('docs.acme.dev');
   await expect(form.getByRole('radio', { name: /Everyone who visits/ })).toBeChecked();
+});
+
+test('a tracker that this build does not know has its name and no mark, even a key of every object (FRU-541)', async ({
+  page,
+}) => {
+  await workerWith(page, 'owner', [
+    {
+      id: 's1',
+      origin: 'https://staging.acme.dev',
+      visibility: 'members',
+      destination: { connector: 'c1', label: 'constructor · Board' },
+    },
+    {
+      id: 's2',
+      origin: 'https://acme.dev',
+      visibility: 'members',
+      destination: { connector: 'c2', label: 'Jira · Web' },
+    },
+  ]);
+  await open(page);
+  for (const [site, words] of [
+    ['staging.acme.dev', 'constructorBoard'],
+    ['acme.dev', 'JiraWeb'],
+  ] as const) {
+    await expect(value(card(page, site), 'Notes go to')).toHaveText(words);
+    await expect(value(card(page, site), 'Notes go to').locator('svg')).toHaveCount(0);
+  }
 });
 
 test('a destination with no words of the worker reads as a tracker, and not as nothing', async ({ page }) => {

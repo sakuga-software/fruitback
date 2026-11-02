@@ -265,7 +265,8 @@ test('at 390 px a note is a card: its status, its author and its day are on the 
   await page.setViewportSize({ width: 390, height: 844 });
   await stubScreens(page, { sites: SITES_OF_MANY, answer: answerLong });
   await page.goto(`${CONSOLE}/w/w1/notes`);
-  const first = page.locator('tbody tr').first();
+  // The first note, under the head of its group (FRU-551).
+  const first = page.locator('tbody tr:not(.kit-table-group)').first();
   const status = first.getByRole('button', { name: /Status of this note/ });
   await expect(status).toBeVisible();
   for (const part of [status, first.getByText('Ana Lucía Fernández-Morales'), first.locator('td').last()]) {

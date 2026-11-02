@@ -8,8 +8,8 @@
   "scripts": {
     "dev": "wxt",
     "dev:firefox": "wxt -b firefox",
-    "gallery": "vite --config gallery/vite.config.ts",
-    "gallery:build": "vite build --config gallery/vite.config.ts",
+    "gallery": "storybook dev -c gallery/.storybook -p 5179 --no-open",
+    "gallery:build": "storybook build -c gallery/.storybook -o gallery/dist/gallery --quiet",
     "build": "wxt build",
     "icons:build": "node build-icons.ts",
     "build:firefox": "wxt build -b firefox",
@@ -30,10 +30,12 @@
   },
   "devDependencies": {
     "@resvg/resvg-js": "^2.6.2",
+    "@storybook/html-vite": "10.6.3",
     "@types/node": "catalog:",
     "happy-dom": "catalog:",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
+    "storybook": "10.6.3",
     "typescript": "catalog:",
     "vite": "^8.3.5",
     "wxt": "^0.21.4"

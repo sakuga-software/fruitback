@@ -169,8 +169,17 @@ export type NoteIndex = {
 /** The smallest and the largest page of `list`, and the page when none is asked. */
 export const PAGE_SIZES = { min: 8, max: 50, default: 25 } as const;
 
-/** Where a page starts: after this note, in the order of `list`. */
-export type NoteCursor = { at: number; site: string; note: string };
+/**
+ * Where a page starts: after this note, in the order of `list`. `rank` is the place of its stage in
+ * `STAGE_ORDER`, for a list read by status (FRU-551).
+ */
+export type NoteCursor = { at: number; site: string; note: string; rank?: number };
+
+/**
+ * The order of the stages in a list read by status (FRU-551), as Linear groups its issues: what is
+ * being done, what is to do, what is new, what was closed without being done, then what is done.
+ */
+export const STAGE_ORDER = ['progress', 'todo', 'new', 'closed', 'done'] as const satisfies readonly NoteStage[];
 
 /** What `list` filters on. Each field narrows; an absent one does not. */
 export type NoteQuery = {
@@ -195,6 +204,11 @@ export type NoteQuery = {
   after?: NoteCursor;
   /** The notes left at this instant or after it, in milliseconds (FRU-463). */
   since?: number;
+  /**
+   * `status`: by the stages of `STAGE_ORDER`, then the newest first in each (FRU-551, the table of
+   * the console). Absent: the newest first.
+   */
+  order?: 'status';
   limit: number;
 };
 
@@ -243,6 +257,8 @@ export type NoteList = {
   total: number;
   /** The notes of the filter without `place`, by place: `fruitback`, a connector id, or `removed`. */
   byPlace: Map<string, number>;
+  /** The notes of the whole filter, place included, by stage (FRU-551). */
+  byStage: Map<NoteStage, number>;
   /** The notes of the filter without `place` whose delivery did not arrive. */
   undelivered: number;
   /** Where the next page starts; absent on the last one. */

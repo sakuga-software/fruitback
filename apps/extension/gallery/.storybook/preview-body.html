@@ -1,0 +1,10 @@
+<script>
+  /*
+    The head of iframe.html copies the React DevTools hook of the Storybook manager into this frame.
+    If the manager has no hook, the copy is `undefined`. react-grab, which the widget uses to read
+    the source of an element, then fails at load. This script runs before the modules of the frame.
+  */
+  if (Object.hasOwn(window, '__REACT_DEVTOOLS_GLOBAL_HOOK__') && window.__REACT_DEVTOOLS_GLOBAL_HOOK__ === undefined) {
+    delete window.__REACT_DEVTOOLS_GLOBAL_HOOK__;
+  }
+</script>

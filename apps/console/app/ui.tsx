@@ -496,17 +496,27 @@ type ChoiceProps = {
    * of a row of « Status of the pins ». The drop is a picture: the word beside it says the status.
    */
   status?: Status;
+  /**
+   * The button is the drop of the chosen status alone, 28 px, with no border (FRU-551): the status of
+   * a row of the notes, whose group already says it in words. Its name still says the status.
+   */
+  bare?: boolean;
 };
 
 function item(option: Option) {
+  // FRU-549: a long label is cut to the width of the list, with « … », and whole under the pointer.
   return (
     <ListBox.Item key={option.value} id={option.value} textValue={option.label}>
       {option.drop === undefined ? (
-        option.label
-      ) : (
-        <span className="inline-flex items-center gap-[8px]">
-          <StatusDot status={option.drop.status} color={option.drop.color} />
+        <span className="kit-option-label" title={option.label}>
           {option.label}
+        </span>
+      ) : (
+        <span className="inline-flex min-w-0 items-center gap-[8px]">
+          <StatusDot status={option.drop.status} color={option.drop.color} />
+          <span className="kit-option-label" title={option.label}>
+            {option.label}
+          </span>
         </span>
       )}
       <ListBox.ItemIndicator />
@@ -525,6 +535,7 @@ export function Choice({
   disabled = false,
   compact = false,
   status,
+  bare = false,
 }: ChoiceProps) {
   // An option with its own drop shows it in the button too, as the value: the button draws no second one.
   const chosen = options
@@ -532,10 +543,11 @@ export function Choice({
     .find((each) => each.value === value);
   return (
     <Select
-      fullWidth
+      fullWidth={!bare}
       isDisabled={disabled}
       className="kit-field"
       data-compact={compact}
+      data-bare={bare}
       data-status={status !== undefined}
       value={value}
       onChange={(chosen) => {
@@ -549,7 +561,7 @@ export function Choice({
         <Select.Indicator />
       </Select.Trigger>
       {hint === undefined ? null : <Description>{hint}</Description>}
-      <Select.Popover>
+      <Select.Popover className="kit-select-popover">
         <ListBox>
           {options.map((each) =>
             'options' in each ? (
@@ -1524,6 +1536,16 @@ type SearchChoiceProps = {
   disabled?: boolean;
   /** How many options the list shows, and how many more « Show more » adds. */
   page?: number;
+  /**
+   * What is typed, each time it changes (FRU-501): a list whose options are not all read yet asks
+   * the server for those that hold it, and gives them in `groups`.
+   */
+  onSearch?: (search: string) => void;
+  /**
+   * Options offered after all the others, never searched and never paged (FRU-501): a read of more
+   * options from the server, which a « Show more » of this list would otherwise hide.
+   */
+  tail?: readonly Option[];
 };
 
 /**
@@ -1547,6 +1569,8 @@ export function SearchChoice({
   moreLabel,
   disabled = false,
   page = 50,
+  onSearch,
+  tail = [],
 }: SearchChoiceProps) {
   const [search, setSearch] = useState('');
   const [limit, setLimit] = useState(page);
@@ -1556,8 +1580,10 @@ export function SearchChoice({
   const type = (value: string) => {
     setSearch(value);
     setLimit(page);
+    onSearch?.(value);
   };
-  const empty = { value: placeholder, label: found.length === 0 ? noMatch : placeholder };
+  const nothing = found.length === 0 && tail.length === 0;
+  const empty = { value: placeholder, label: nothing ? noMatch : placeholder };
 
   return (
     <div className="kit-search-choice">
@@ -1593,7 +1619,7 @@ export function SearchChoice({
         label={label}
         labelHidden
         value={empty.value}
-        disabled={disabled || found.length === 0}
+        disabled={disabled || nothing}
         onChange={(value) => {
           if (value === MORE) setLimit((current) => current + page);
           else if (value !== empty.value) onChoose(value);
@@ -1602,6 +1628,7 @@ export function SearchChoice({
           empty,
           ...shown.groups,
           ...(shown.left === 0 ? [] : [{ value: MORE, label: moreLabel(Math.min(page, shown.left), shown.left) }]),
+          ...tail,
         ]}
       />
     </div>

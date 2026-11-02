@@ -51,15 +51,9 @@ import { language, msg, setLanguage, t } from '../../src/i18n.ts';
 import { holdsSiteAccess } from '../../src/site-grant.ts';
 import { storedLanguage } from '../../src/language.ts';
 import { rememberLanguage } from '../../src/language-sync.ts';
-import {
-  type ConnectState,
-  type PendingConnect,
-  type StartFailure,
-  forgetConnect,
-  pollConnect,
-  startConnect,
-} from '../../src/connect.ts';
-import { consoleOf, createBrowserConnect, rememberConsole } from '../../src/connect-browser.ts';
+import { type ConnectState, type PendingConnect, pollConnect } from '../../src/connect.ts';
+import { consoleOf, createBrowserConnect, rememberConsole, requestWorkerAccess } from '../../src/connect-browser.ts';
+import { type StartStop, claimLoop, startSignIn } from '../../src/connect-loop.ts';
 import {
   type AccountState,
   type PopupState,
@@ -136,8 +130,8 @@ const CLOUD = cloudEndpoint(import.meta.env.WXT_FRUITBACK_CLOUD);
 /** The sign-in that waits for the console, kept in `storage.session` (see `connect-browser.ts`). */
 const connect = createBrowserConnect(sessions);
 
-/** The next claim while the popup shows the word. One at a time: every draw clears it. */
-let nextClaim: ReturnType<typeof setTimeout> | undefined;
+/** The claims while the popup shows the word. One loop at a time: every draw stops it. */
+const claims = claimLoop(connect);
 
 /** Which drawing the screen is: each `render` and each sign-in counts one. */
 let drawn = 0;
@@ -221,7 +215,7 @@ void rememberLanguage(browser.storage.local, cloudSeams())
  */
 async function render(editing = false, claimedNow?: ConnectState): Promise<void> {
   if (app === null) return;
-  clearTimeout(nextClaim);
+  claims.stop();
   drawn += 1;
   const thisDraw = drawn;
 
@@ -276,7 +270,11 @@ async function render(editing = false, claimedNow?: ConnectState): Promise<void>
     finished = thisDraw;
     markFirstDrawn();
   }
-  if (state.kind === 'connecting' && pendingNow !== undefined) waitForTheConsole(pendingNow, state.unanswered);
+  // The screen is drawn again only when the answer changes: the same screen drawn every few seconds
+  // would take the focus off « Start again » and read the status out again each time.
+  if (state.kind === 'connecting' && pendingNow !== undefined) {
+    claims.wait(pendingNow, state.unanswered, (now) => void render(false, now));
+  }
 }
 
 type Found = {
@@ -511,26 +509,18 @@ function signIn(origin: string, fresh: boolean): void {
   if (CLOUD === undefined || app === null) return;
   const endpoint = CLOUD;
   // No claim of the screen before goes on while this sign-in starts.
-  clearTimeout(nextClaim);
+  claims.stop();
   drawn += 1;
+  const granted = requestWorkerAccess(endpoint);
   for (const button of app.querySelectorAll('button')) button.disabled = true;
 
   void (async () => {
-    const granted = await grantWorkerOrigin(endpoint).catch(() => false);
-    if (!granted) {
-      app.replaceChildren(problemScreen(origin, 'blocked'));
-
-      return;
-    }
-    if (fresh) await forgetConnect(connect).catch(() => undefined);
-
-    const started = await startConnect(endpoint, connect).catch(() => ({ ok: false, reason: 'unavailable' }) as const);
+    const started = await startSignIn(endpoint, granted, fresh, { connect, rememberConsole });
     if (!started.ok) {
-      app.replaceChildren(problemScreen(origin, PROBLEM_OF_START[started.reason]));
+      app.replaceChildren(problemScreen(origin, started.stop));
 
       return;
     }
-    await rememberConsole(endpoint, started.pending.consoleAt).catch(() => undefined);
     await render();
     await browser.tabs.create({ url: started.pending.approveAt });
   })().catch((error: unknown) => {
@@ -541,42 +531,14 @@ function signIn(origin: string, fresh: boolean): void {
   });
 }
 
-const PROBLEM_OF_START: Record<StartFailure, 'unavailable' | 'untrusted'> = {
-  unavailable: 'unavailable',
-  'insecure-endpoint': 'unavailable',
-  'untrusted-console': 'untrusted',
-};
-
 /** 1, with what stopped the sign-in in an alert above the ways to sign in again (FRU-297). */
-function problemScreen(origin: string, stopped: 'unavailable' | 'untrusted' | 'blocked'): HTMLElement {
+function problemScreen(origin: string, stopped: StartStop): HTMLElement {
   return signedOut(document, {
     canSignIn: CLOUD !== undefined,
     stop: signInStop(stopped),
     onSignIn: () => signIn(origin, true),
     onSettings: openSettings,
   });
-}
-
-/**
- * Claim again at the pace the worker asked, while the word is on the screen.
- *
- * The screen is drawn again only when the answer changes: the same screen drawn every few seconds
- * would take the focus off « Start again » and read the status out again each time.
- */
-function waitForTheConsole(waiting: PendingConnect, unanswered: boolean): void {
-  clearTimeout(nextClaim);
-  // A claim in the air when the screen changes must not start a second loop: it belongs to a
-  // screen that is gone (raised in review: « Start again » while a claim was in the air).
-  const screen = drawn;
-  nextClaim = setTimeout(() => {
-    void pollConnect(connect)
-      .catch(() => 'unavailable' as const)
-      .then((now) => {
-        if (screen !== drawn) return;
-        if (now === (unanswered ? 'unavailable' : 'waiting')) waitForTheConsole(waiting, unanswered);
-        else void render(false, now);
-      });
-  }, waiting.interval * 1000);
 }
 
 const NO_RULE = msg('No rule covers this origin, so Fruitback does nothing here.');
@@ -1027,8 +989,8 @@ function readability(site: SiteConfig, pageUrl: string): HTMLElement {
  * Retained once granted, which is what lets the background refresh and the logout revoke later, with
  * no gesture to ask from.
  */
-async function grantWorkerOrigin(endpoint: string): Promise<boolean> {
-  return browser.permissions.request({ origins: [matchPatternFor(workerOrigin(endpoint))] });
+function grantWorkerOrigin(endpoint: string): Promise<boolean> {
+  return requestWorkerAccess(endpoint);
 }
 
 /**

@@ -136,9 +136,11 @@ async function expectNoViolation(page: Page): Promise<void> {
 }
 
 test('« Board » shows a column per status of the site, in its order, and the address keeps it', async ({ page }) => {
-  await workerWith(page);
+  const worker = await workerWith(page);
   await page.goto(`${CONSOLE}/w/w1/notes`);
-  await expect(page.locator('tbody tr')).toHaveCount(3);
+  await expect(page.locator('tbody tr:not(.kit-table-group)')).toHaveCount(3);
+  // FRU-551: the table reads the notes by status, in its groups; the board reads them by date.
+  expect(worker.asked.at(-1)?.get('order')).toBe('status');
   const views = page.getByRole('group', { name: 'Show the notes as' });
   await expect(views.getByRole('button', { name: 'Table' })).toHaveAttribute('aria-pressed', 'true');
 
@@ -146,6 +148,7 @@ test('« Board » shows a column per status of the site, in its order, and the a
   await expect(page).toHaveURL(/[?&]view=board/);
   await expect(views.getByRole('button', { name: 'Board' })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('table')).toHaveCount(0);
+  await expect.poll(() => worker.asked.at(-1)?.has('order')).toBe(false);
   const board = page.getByRole('region', { name: 'Notes by status' });
   // The hidden « Parked » is there because Ben's note is in it. A built-in status the team did not
   // rename is named by its stage.
@@ -169,7 +172,7 @@ test('« Board » shows a column per status of the site, in its order, and the a
   await expect(page.getByRole('region', { name: 'Notes by status' })).toBeVisible();
   await page.getByRole('button', { name: 'Table' }).click();
   await expect(page).not.toHaveURL(/view=board/);
-  await expect(page.locator('tbody tr')).toHaveCount(3);
+  await expect(page.locator('tbody tr:not(.kit-table-group)')).toHaveCount(3);
 });
 
 test('the board has the filters of the table, and a filter keeps the board', async ({ page }) => {

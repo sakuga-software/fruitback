@@ -48,6 +48,8 @@ function wanted(filter: unknown): string[] {
 function twoTeams() {
   const issues: { teamId: string; projectId?: string; description: string }[] = [];
   const reads: string[] = [];
+  /** Each call, by its operation and its variables. */
+  const asked: { operation: string | undefined; variables: Record<string, unknown> }[] = [];
   const answers = { as: 'working' as 'working' | 'revoked' | 'down' };
   mockMethod(globalThis, 'fetch', async (_url: unknown, init: { body: string; headers: Record<string, string> }) => {
     if (answers.as === 'down') return Response.json({ errors: [{ message: 'later' }] }, { status: 500 });
@@ -55,8 +57,10 @@ function twoTeams() {
       return Response.json({ errors: [{ message: 'no' }] }, { status: 401 });
     const { query, variables } = JSON.parse(init.body) as { query: string; variables: Record<string, unknown> };
     const operation = /Fruitback\w+/.exec(query)?.[0];
+    asked.push({ operation, variables });
 
-    if (operation === 'FruitbackTeams') {
+    // The list of the teams, who the key is, and the places of a site by their ids (FRU-501): one answer.
+    if (operation === 'FruitbackTeams' || operation === 'FruitbackViewer' || operation === 'FruitbackPlaces') {
       return Response.json({
         data: {
           viewer: { name: 'Camille' },
@@ -122,7 +126,7 @@ function twoTeams() {
     return Response.json({ errors: [{ message: `unexpected operation: ${operation}` }] });
   });
 
-  return { issues, reads, answers };
+  return { issues, reads, answers, asked };
 }
 
 /** A request with a cache of its own, unless it gives one: `kv` is the cache two requests share. */
@@ -238,6 +242,52 @@ describe('a site that can send to several places (FRU-123)', () => {
     assert.equal(client?.teamId, SUPPORT);
     assert.equal(client?.projectId, undefined);
     assert.equal(client?.destinations?.length, 2);
+  });
+
+  it('asks Linear for the places it labels, in one call, and never for the list of its teams (FRU-501)', async () => {
+    const env = await envWith();
+    const linear = twoTeams();
+    const world = await acme(env);
+    linear.asked.length = 0;
+
+    const set = await world.place([
+      { connector: world.connector, teamId: SUPPORT },
+      { connector: world.connector, teamId: DESIGN, projectId: 'proj_site' },
+    ]);
+
+    assert.equal(set.status, 200, await set.clone().text());
+    assert.deepEqual(linear.asked, [
+      {
+        operation: 'FruitbackPlaces',
+        variables: { teams: [SUPPORT, DESIGN], projects: ['proj_site'], teamCount: 2, projectCount: 1 },
+      },
+    ]);
+  });
+
+  it('gives a page of the teams to the picker, and the teams whose name holds a search (FRU-501)', async () => {
+    const env = await envWith();
+    const linear = twoTeams();
+    const world = await acme(env);
+    linear.asked.length = 0;
+    const teams = (query: string) =>
+      call(env, 'GET', `/console/workspaces/${world.workspace.id}/connectors/${world.connector}/teams${query}`, {
+        token: world.consoleToken,
+      });
+
+    const first = await teams('');
+    const found = await teams('?q=%20sup%20&after=c-1');
+    const tooLong = await teams(`?q=${'x'.repeat(101)}`);
+
+    assert.equal(first.status, 200, await first.clone().text());
+    assert.equal(found.status, 200);
+    assert.equal(tooLong.status, 400);
+    assert.deepEqual(
+      linear.asked.map((one) => [one.operation, one.variables]),
+      [
+        ['FruitbackTeams', {}],
+        ['FruitbackTeams', { after: 'c-1', filter: { name: { containsIgnoreCase: 'sup' } } }],
+      ],
+    );
   });
 
   it('refuses a sixth place, the same place twice, and a team the key does not reach, and keeps nothing', async () => {
