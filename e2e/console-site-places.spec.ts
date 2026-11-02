@@ -76,11 +76,15 @@ type Worker = {
   laterTeams?: Team[];
   /** The query of each read of the teams. */
   teamReads: string[];
+  /** FRU-557: the first read of the teams waits for `releaseTeams`. */
+  holdFirstTeams?: boolean;
   /** The next read of a page of teams fails (`fail`), or waits for `releaseTeams` (`hold`). */
   nextTeams?: 'fail' | 'hold';
   releaseTeams: () => void;
   /** The read of the sources fails. */
   connectorsFail: boolean;
+  /** How many reads of the sources the console asked for (FRU-557). */
+  connectorReads: number;
   /** The places of the one site, as the worker keeps them: a repository is in `teamId`. */
   places: Place[];
   /** Every list of places the console sent, as it sent it. */
@@ -108,6 +112,7 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
     teamReads: [],
     releaseTeams: () => {},
     connectorsFail: false,
+    connectorReads: 0,
     places: [],
     sent: [],
     silentReads: 0,
@@ -138,6 +143,7 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
     if (!pathname.startsWith('/console/workspaces/w1/')) return undefined;
     if (pathname.endsWith('/sites/s1/destinations') && request.method() === 'POST') return write(route);
     if (pathname.endsWith('/connectors')) {
+      worker.connectorReads += 1;
       if (worker.connectorsFail) return json({ error: 'unknown' }, 500);
 
       return json({ connectors: worker.connectors, available: true, linearOAuth: true, githubApp: true });
@@ -179,6 +185,10 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
     if (pathname.endsWith('/c1/teams')) {
       const query = new URL(request.url()).searchParams;
       worker.teamReads.push(query.toString());
+      if (worker.holdFirstTeams === true) {
+        worker.holdFirstTeams = false;
+        return new Promise<void>((done) => (worker.releaseTeams = done)).then(() => json({ teams: worker.teams }));
+      }
       const later = worker.laterTeams;
       if (later === undefined) return json({ teams: worker.teams });
       const words = query.get('q')?.toLowerCase();
@@ -270,6 +280,54 @@ test('an owner chooses where the notes of a site go, on the page of the site (FR
   // Back on the grid, the card of the site says where its notes go now.
   await page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'Sites' }).click();
   await expect(card(page).locator('dd').first()).toHaveText('LinearTeam Web and 1 more');
+});
+
+test('the page of a site reads its sources once, and the teams and repositories of each once (FRU-557)', async ({
+  page,
+}) => {
+  const worker = await workerWith(page);
+  const teams: string[] = [];
+  page.on('request', (request) => {
+    if (/\/connectors\/\w+\/(teams|repositories)/.test(request.url())) teams.push(new URL(request.url()).pathname);
+  });
+  await openPlaces(page);
+  await expect(add(page)).toBeEnabled();
+  // Every read of the opening has landed: the page waits for nothing more.
+  await page.waitForLoadState('networkidle');
+
+  expect(worker.connectorReads).toBe(1);
+  expect(teams.sort()).toEqual([
+    '/console/workspaces/w1/connectors/c1/teams',
+    '/console/workspaces/w1/connectors/g1/repositories',
+  ]);
+});
+
+test('a list of teams that answers after the page left is dropped, and the page reads it again on its return (FRU-557)', async ({
+  page,
+}) => {
+  const worker = await workerWith(page);
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  page.on('console', (message) => {
+    if (message.type() === 'error') errors.push(message.text());
+  });
+  worker.holdFirstTeams = true;
+  await openPlaces(page);
+  await expect.poll(() => worker.teamReads.length).toBe(1);
+
+  // The page leaves while the teams are on their way, inside the console: the panel unmounts.
+  await page.getByRole('link', { name: 'Sites', exact: true }).first().click();
+  await expect(panel(page)).toHaveCount(0);
+  worker.releaseTeams();
+  await page.waitForLoadState('networkidle');
+
+  // It comes back: a new panel reads the teams again, and draws them.
+  await page.goBack();
+  await expect(add(page)).toBeEnabled();
+  await add(page).click();
+  await expect(page.getByRole('option', { name: /^Web/ })).toBeVisible();
+  expect(worker.teamReads).toHaveLength(2);
+  expect(errors).toEqual([]);
 });
 
 test('the places wait for a list to be kept before the next gesture (FRU-123)', async ({ page }) => {
