@@ -1337,6 +1337,9 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
   with an open `shadowRoot`, then walks the cascade in the last root. When a host is gone, repeated,
   or its root is closed, only `bounds` runs, in the deepest root reached: the other claims describe
   the element inside, and read in a root above they could recognise a stranger and be sure of it.
+  Pointing over a shadow host goes through `deepElementAt` of `shadow-hit.ts`, which enters each
+  shadow root once: react-grab 0.2.0 overflows the stack on two nested roots, because
+  `elementsFromPoint` of the inner root also lists the outer host (measured in Chromium).
   The `MutationObserver` watches the document only, so a change inside a shadow root re-resolves
   nothing until the document changes or the element resizes.
 - **Every match must be unique and of the captured tag**, and `domPath` must additionally still be
