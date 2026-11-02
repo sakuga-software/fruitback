@@ -319,21 +319,22 @@ describe('who sees the notes and where they go, set from the popup (FRU-453)', (
     for (const role of managers) assert.equal(can(role, 'see-tracker'), true, role);
   });
 
-  // FRU-554: the kinds of the answer are read before the write. Read after, a store that fails there
-  // answered an error for a visibility already changed.
-  it('changes nothing when the connectors cannot be read', async () => {
+  // FRU-554: the kinds of the answer are read before the write, and a read that fails blocks nothing.
+  // Read after, a store that failed there answered an error for a visibility already changed.
+  it('makes the change and names no kind when the connectors cannot be read', async () => {
     const env = await world();
-    const { id, people, second } = await withSources(env);
+    const { id, people, first } = await withSources(env);
     const token = await accountToken(env, people.owner);
     vi.spyOn(env.accounts, 'connectors').mockRejectedValue(new Error('store down'));
 
-    const answer = await set(env, token, { workspace: id, site: second.id, visibility: 'everyone' }).catch(
-      () => undefined,
-    );
+    const answer = await set(env, token, { workspace: id, site: first.id, visibility: 'everyone' });
 
-    assert.notEqual(answer?.status, 200);
     vi.mocked(env.accounts.connectors).mockRestore();
-    assert.equal((await siteIn(env, id, second.id)).visibility, 'members');
+    assert.equal(answer.status, 200);
+    assert.deepEqual(((await answer.json()) as { site: { destination?: unknown } }).site.destination, {
+      label: 'REST API · Hook',
+    });
+    assert.equal((await siteIn(env, id, first.id)).visibility, 'everyone');
   });
 
   it('refuses a connector of another workspace', async () => {

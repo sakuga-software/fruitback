@@ -1,5 +1,6 @@
 import {
   type AccountStore,
+  type ConnectorKind,
   type Destination,
   MAX_DESTINATIONS,
   VISIBILITIES,
@@ -171,8 +172,12 @@ export async function setSessionSite(request: Request, context: SiteSettingsCont
   }
 
   // FRU-554: the kinds the answer names, read before anything is written. Read after, a store that
-  // fails there would answer an error for a change already made (raised in review of #784).
-  const kinds = new Map((await context.accounts.connectors(workspace)).map((each) => [each.id, each.kind]));
+  // fails there would answer an error for a change already made. A read that fails names no kind and
+  // blocks nothing: the label is what the answer said before FRU-554 (raised twice in review of #784).
+  const kinds = await context.accounts
+    .connectors(workspace)
+    .then((each) => new Map(each.map((connector) => [connector.id, connector.kind])))
+    .catch(() => new Map<string, ConnectorKind>());
   // On the site read above only: a site removed since is not made again (raised in review).
   if (visibility !== undefined && !(await context.accounts.setSiteVisibility(workspace, site.id, visibility))) {
     return { status: 404, body: { error: 'not-found' } };
