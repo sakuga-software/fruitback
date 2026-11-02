@@ -338,6 +338,8 @@ describe('the notes of a workspace (FRU-244)', () => {
       `q=${'a'.repeat(201)}`,
       'cursor=not-a-cursor',
       `cursor=${Buffer.from('[1,2]').toString('base64url')}`,
+      'counts=all',
+      'counts=',
     ]) {
       const answer = await callOn(world, 'GET', `/console/workspaces/${workspace}/notes?${query}`, {
         token: alice.token,
@@ -351,6 +353,39 @@ describe('the notes of a workspace (FRU-244)', () => {
         .length,
       0,
     );
+  });
+});
+
+describe('a page without its counts (FRU-502)', () => {
+  it('answers the same notes and cursor as the counted page, with no total and no counts', async () => {
+    const { world, alice, gina, workspace } = await sixtyNotes();
+    for (const [token, query] of [
+      [alice.token, 'limit=8'],
+      [alice.token, 'limit=8&order=status'],
+      [alice.token, 'limit=8&q=ACM'],
+      [gina.token, 'limit=8'],
+    ] as const) {
+      let next: string | undefined;
+      let pages = 0;
+      do {
+        const cursor = next === undefined ? '' : `&cursor=${next}`;
+        const counted = await listOf(world, workspace, token, `?${query}${cursor}`);
+        const alone = await listOf(world, workspace, token, `?${query}${cursor}&counts=none`);
+        assert.deepEqual(
+          alone.notes.map((note) => note.id),
+          counted.notes.map((note) => note.id),
+          `${query}, page ${pages}`,
+        );
+        assert.equal(alone.next, counted.next, `${query}, page ${pages}: cursor`);
+        assert.equal('total' in alone, false, `${query}: total`);
+        assert.equal('counts' in alone, false, `${query}: counts`);
+        assert.equal(typeof counted.total, 'number', 'the control: the counted page has its total');
+        assert.deepEqual(alone.searched, counted.searched);
+        next = counted.next;
+        pages += 1;
+      } while (next !== undefined && pages < 20);
+      assert.ok(pages > 1, `${query}: more than one page was compared`);
+    }
   });
 });
 

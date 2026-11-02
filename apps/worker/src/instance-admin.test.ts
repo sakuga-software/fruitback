@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
+import { sql } from 'drizzle-orm';
 import { describe, it, vi } from 'vitest';
 import { mockMethod } from './mock.fixture.ts';
 import { noteFixture } from '@fruitback/shared/note.fixture';
@@ -16,6 +17,7 @@ import {
 } from './instance-admin.ts';
 import { createLinearStore } from './linear.ts';
 import { omit } from './omit.ts';
+import { cursorOf } from './console-notes.ts';
 import type { Place } from './notes-index.ts';
 import { createPostgresNoteIndex } from './notes-index-postgres.ts';
 import { rowsOf, withoutOwnerRule } from './postgres.fixture.ts';
@@ -640,6 +642,54 @@ describe('the notes of the instance, for its administrator (FRU-272)', () => {
       assert.equal(raw.includes(`AFTER-THE-64TH-CHARACTER of ${head}`), false, head);
     }
     assert.deepEqual(answer.searched, ['excerpt', 'page', 'site', 'workspace', 'stage', 'reference']);
+  });
+
+  it('answers a page without its total for counts=none, and the same notes and cursor (FRU-502)', async () => {
+    const { on, ana } = await notesOfTheInstance();
+    const at = (answer: AdminNotes) => answer.notes.map((note) => note.id);
+
+    const counted = await adminNotes(on, ana.token, '?limit=8');
+    const alone = await adminNotes(on, ana.token, '?limit=8&counts=none');
+    assert.equal(counted.answer.total, 4, 'the control: the counted page has its total');
+    assert.equal('total' in alone.answer, false);
+    assert.deepEqual(at(alone.answer), at(counted.answer));
+    assert.equal(alone.answer.next, counted.answer.next);
+
+    // A cursor in the middle: the page after the second newest note, counted or not.
+    const second = cursorOf({ at: 3_000, site: '', note: '' });
+    const after = await adminNotes(on, ana.token, `?limit=8&cursor=${second}`);
+    const afterAlone = await adminNotes(on, ana.token, `?limit=8&cursor=${second}&counts=none`);
+    assert.equal(after.answer.notes.length, 2);
+    assert.deepEqual(at(afterAlone.answer), at(after.answer));
+    assert.equal('total' in afterAlone.answer, false);
+
+    for (const query of ['?counts=all', '?counts=']) {
+      assert.equal((await get(on, `${ADMIN_PATH}/notes${query}`, ana.token)).status, 400, query);
+    }
+  });
+
+  it('reads a page of the whole instance from note_index_by_instance_date, and stops there (FRU-502)', async () => {
+    const { on } = await notesOfTheInstance();
+    const plan = async (order: string) => {
+      // One connection for the two statements: the setting is the one of a session.
+      const answer = await on.database.alone(async (db) => {
+        await db.execute(sql`SET enable_seqscan = off`);
+        await db.execute(sql`SET enable_sort = off`);
+
+        return db.execute(sql.raw(`EXPLAIN SELECT * FROM note_index ORDER BY ${order} LIMIT 26`));
+      });
+
+      return (answer as unknown as { rows: Record<string, unknown>[] }).rows
+        .map((row) => String(Object.values(row)[0]))
+        .join('\n');
+    };
+
+    assert.match(
+      await plan('created_at DESC NULLS LAST, site_id COLLATE "C" DESC, note_id COLLATE "C" DESC'),
+      /Index Scan using note_index_by_instance_date on note_index/,
+    );
+    // The control: an order that no index holds is not read from that index.
+    assert.doesNotMatch(await plan('excerpt'), /note_index_by_instance_date/);
   });
 
   it('calls no tracker to read the notes, and the control sees the call of a read of Linear', async () => {

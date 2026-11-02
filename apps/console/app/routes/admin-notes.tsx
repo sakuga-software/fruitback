@@ -62,20 +62,33 @@ export default function AdminNotes() {
   // in every workspace of the instance, so the filter lists only the workspaces that this screen saw.
   const [workspaces, setWorkspaces] = useState<ReadonlyMap<string, string>>(new Map());
   const asked = useRef(0);
+  // The total of the last filter that the worker counted, and whether the next read is a press of
+  // « Next » or « Previous » (FRU-502).
+  const counted = useRef<{ filter: string; total: number } | undefined>(undefined);
+  const paging = useRef(false);
 
   const read = useCallback(async () => {
     const mine = (asked.current += 1);
     setReading(true);
     const query = new URLSearchParams();
     for (const name of FILTERS) if (filters[name] !== '') query.set(name, filters[name]);
+    // FRU-502: the total counts the whole filter. « Next » and « Previous » keep the one of the filter,
+    // so the worker reads the page alone. Any other read counts again.
+    const filter = query.toString();
+    const kept = paging.current && cursor !== '' && counted.current?.filter === filter ? counted.current : undefined;
+    paging.current = false;
     if (cursor !== '') query.set('cursor', cursor);
+    if (kept !== undefined) query.set('counts', 'none');
     const answer = await instanceNotes(query);
     // An answer to a question that is no longer asked is dropped: the filters moved on.
     if (mine !== asked.current) return;
     setReading(false);
     if (!answer.ok || !Array.isArray(answer.data?.notes)) return setShown('failed');
     const { notes } = answer.data;
-    setShown(answer.data);
+    const total = answer.data.total ?? kept?.total;
+    if (total === undefined) return setShown('failed');
+    if (answer.data.total !== undefined) counted.current = { filter, total };
+    setShown({ ...answer.data, total });
     setWorkspaces((known) => {
       const unknown = notes.filter((note) => known.get(note.workspace.id) !== note.workspace.name);
       if (unknown.length === 0) return known;
@@ -100,6 +113,7 @@ export default function AdminNotes() {
   }
 
   function page(to: 'next' | 'previous', answer: InstanceNotes) {
+    paging.current = true;
     const next = new URLSearchParams(params);
     if (to === 'next' && answer.next !== undefined) {
       setBefore((pages) => [...pages, cursor]);

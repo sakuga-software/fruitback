@@ -176,6 +176,10 @@ export default function Notes() {
   // then goes to the first page.
   const [before, setBefore] = useState<string[]>([]);
   const asked = useRef(0);
+  // The counts of the last filter that the worker counted, and whether the next read is a press of
+  // « Next » or « Previous » (FRU-502).
+  const counted = useRef<{ filter: string; total: number; counts: NotesAnswer['counts'] } | undefined>(undefined);
+  const paging = useRef(false);
   // A select of the board moved a note (FRU-436). If the read after it leaves no note under the
   // filters, the board is gone with the select that had the focus: « Clear the filters » takes it.
   const [movedOut, setMovedOut] = useState(false);
@@ -196,15 +200,26 @@ export default function Notes() {
     setReading(true);
     const query = new URLSearchParams();
     for (const name of FILTERS) if (filters[name] !== '') query.set(name, filters[name]);
-    if (cursor !== '') query.set('cursor', cursor);
     // The table groups the notes by status (FRU-551): the worker reads them in that order, so that a
     // group goes on from one page to the next. The board draws a page by date in its columns.
     if (view === 'table') query.set('order', 'status');
-    const answer = await call<NotesAnswer>('GET', `${base}/notes?${query.toString()}`);
+    // FRU-502: the counts read the whole filter. « Next » and « Previous » keep the ones of the
+    // filter, so the worker reads the page alone. Any other read counts again: a reload, a filter, a
+    // status that a person changed.
+    const filter = query.toString();
+    const kept = paging.current && cursor !== '' && counted.current?.filter === filter ? counted.current : undefined;
+    paging.current = false;
+    if (cursor !== '') query.set('cursor', cursor);
+    if (kept !== undefined) query.set('counts', 'none');
+    const answer = await call<Partial<NotesAnswer>>('GET', `${base}/notes?${query.toString()}`);
     // An answer to a question that is no longer asked is dropped: the filters moved on.
     if (mine !== asked.current) return;
     setReading(false);
-    setShown(answer.ok && Array.isArray(answer.data?.notes) ? answer.data : 'failed');
+    if (!answer.ok || !Array.isArray(answer.data?.notes)) return setShown('failed');
+    const { total, counts } = answer.data;
+    if (total !== undefined && counts !== undefined) counted.current = { filter, total, counts };
+    const whole = total !== undefined && counts !== undefined ? { total, counts } : kept;
+    setShown(whole === undefined ? 'failed' : { ...answer.data, notes: answer.data.notes, ...whole });
   }, [base, filters, cursor, view]);
   useEffect(() => void read(), [read]);
   // Only the read that follows the move: once it is drawn, a list emptied later takes no focus.
@@ -231,6 +246,7 @@ export default function Notes() {
   }
 
   function page(to: 'next' | 'previous', answer: NotesAnswer) {
+    paging.current = true;
     const next = new URLSearchParams(params);
     if (to === 'next' && answer.next !== undefined) {
       setBefore((pages) => [...pages, cursor]);
