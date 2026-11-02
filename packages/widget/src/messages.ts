@@ -1,3 +1,4 @@
+import { RELATIVE_UNITS } from './relative-units.ts';
 import type { NoteStage } from '@fruitback/shared';
 import { FRENCH } from './locale-fr.ts';
 import { frenchCatalog } from './typography.ts';
@@ -406,16 +407,6 @@ export function createTranslator(options: TranslatorOptions = {}): Translator {
 export function languageOf(document: Document): string | undefined {
   return document.defaultView?.navigator?.language || undefined;
 }
-
-/** Largest first. Under a minute is counted in seconds, and `numeric: 'auto'` says "now" for zero. */
-const RELATIVE_UNITS: readonly (readonly [Intl.RelativeTimeFormatUnit, number])[] = [
-  ['year', 31_536_000],
-  ['month', 2_592_000],
-  ['week', 604_800],
-  ['day', 86_400],
-  ['hour', 3_600],
-  ['minute', 60],
-];
 
 /**
  * The scripts written right to left.

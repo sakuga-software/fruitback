@@ -1,3 +1,4 @@
+import { RELATIVE_UNITS } from '@fruitback/widget';
 import { language, msg, t } from './i18n.ts';
 import { leaveAndFollow, whenNotAnswering } from './guide.ts';
 import { dropMark, helpLink, linkButton, make, primaryButton, segmentedTabs, statusDrop } from './kit.ts';
@@ -354,15 +355,6 @@ function byNumber(a: PanelNote, b: PanelNote): number {
   return (a.number ?? Number.MAX_SAFE_INTEGER) - (b.number ?? Number.MAX_SAFE_INTEGER);
 }
 
-const UNITS: readonly (readonly [Intl.RelativeTimeFormatUnit, number])[] = [
-  ['year', 31_536_000],
-  ['month', 2_592_000],
-  ['week', 604_800],
-  ['day', 86_400],
-  ['hour', 3_600],
-  ['minute', 60],
-];
-
 /** « just now », « 1 day ago », in the language of the reader. Nothing for a date that does not parse. */
 export function ageOf(iso: string, now: number): string {
   const then = Date.parse(iso);
@@ -370,7 +362,8 @@ export function ageOf(iso: string, now: number): string {
   const seconds = Math.round((then - now) / 1000);
   if (Math.abs(seconds) < 60) return t('just now');
   const format = new Intl.RelativeTimeFormat(language(), { numeric: 'auto', style: 'long' });
-  for (const [unit, size] of UNITS) {
+  // The units of the widget, largest first (FRU-512).
+  for (const [unit, size] of RELATIVE_UNITS) {
     if (Math.abs(seconds) >= size) return format.format(Math.round(seconds / size), unit);
   }
 

@@ -1,4 +1,5 @@
 import { MAX_ATTACHMENT_BYTES } from '@fruitback/shared';
+import { base64OfBytes, bytesOfBase64 } from '@fruitback/widget';
 import { isSecureWorkerEndpoint } from './endpoint.ts';
 import type { AccessResult } from './session.ts';
 import type { SiteConfig } from './sites.ts';
@@ -138,24 +139,12 @@ async function jpegOrNothing(toJpeg: (picture: Blob) => Promise<Blob>, png: Blob
   }
 }
 
-/** The base64 of bytes, by pieces: a spread of megabytes into `String.fromCharCode` overflows the stack. */
-export function base64Of(bytes: Uint8Array): string {
-  let binary = '';
-  for (let start = 0; start < bytes.length; start += 0x8000) {
-    binary += String.fromCharCode(...bytes.subarray(start, start + 0x8000));
-  }
-
-  return btoa(binary);
-}
-
-/** The bytes of base64, for the body of a relayed file. */
-export function bytesOf(base64: string): Uint8Array<ArrayBuffer> {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
-
-  return bytes;
-}
+/**
+ * The base64 of bytes and the bytes of base64: the functions of the widget, which relays the same
+ * files (FRU-512). Named as the extension calls them.
+ */
+export const base64Of = base64OfBytes;
+export const bytesOf = bytesOfBase64;
 
 /**
  * The area to cut, in pixels of the captured picture, inside it. `undefined` when nothing is left:
