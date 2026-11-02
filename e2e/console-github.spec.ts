@@ -126,6 +126,12 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
 }
 
 const card = (page: Page) => page.locator('[data-source="GitHub Issues"]');
+
+/** FRU-542: with a source connected, « New connector » opens the list where the card of GitHub is. */
+async function openCatalogue(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'New connector', exact: true }).click();
+  await expect(card(page)).toBeVisible();
+}
 const rows = (page: Page) => page.locator('button[id^="source-row-"]');
 const panel = (page: Page) => page.getByRole('region', { name: /^GitHub Issues · / });
 
@@ -161,6 +167,7 @@ async function openGithub(page: Page): Promise<void> {
 test('« Connect » of GitHub asks the worker where to go, then goes there', async ({ page }) => {
   const worker = await workerWith(page);
   await page.goto(`${CONSOLE}/w/w1/connectors`);
+  await openCatalogue(page);
   const connect = card(page).getByRole('button', { name: 'Connect GitHub Issues', exact: true });
   await expect(card(page).getByText('An issue per note, in one repository.', { exact: false })).toBeVisible();
   await picture(page, 'github-card');
@@ -175,6 +182,7 @@ test('a start that the worker refuses says why under the card, and stays', async
   const worker = await workerWith(page);
   worker.start = { status: 404, body: { error: 'connectors-unavailable' } };
   await page.goto(`${CONSOLE}/w/w1/connectors`);
+  await openCatalogue(page);
   await card(page).getByRole('button', { name: 'Connect GitHub Issues', exact: true }).click();
   await expect(card(page).getByRole('alert')).toHaveText(
     'This Fruitback has no GitHub App. Its operator must set one up.',
@@ -186,6 +194,7 @@ test('without the App, the card of GitHub says so and connects nothing', async (
   const worker = await workerWith(page);
   worker.githubApp = false;
   await page.goto(`${CONSOLE}/w/w1/connectors`);
+  await openCatalogue(page);
   await expect(card(page).getByRole('button')).toHaveText('Not on this Fruitback');
   await expect(card(page).getByRole('button')).toBeDisabled();
   await expect(card(page).getByText('The operator of this Fruitback has not set up the GitHub App.')).toBeVisible();
@@ -194,7 +203,9 @@ test('without the App, the card of GitHub says so and connects nothing', async (
 });
 
 test('a member reads the card of GitHub and cannot press it', async ({ page }) => {
-  await workerWith(page, 'member');
+  // A member sees the list of the sources to add when none is connected (FRU-542).
+  const worker = await workerWith(page, 'member');
+  worker.connectors = [];
   await page.goto(`${CONSOLE}/w/w1/connectors`);
   await expect(card(page).getByRole('button', { name: 'Connect GitHub Issues', exact: true })).toBeDisabled();
 });
@@ -223,6 +234,19 @@ test('each word of the way back from GitHub says what happened, then leaves the 
     await expect.poll(() => new URL(page.url()).search, word).toBe('');
     await picture(page, `return-${word}`);
   }
+});
+
+test('a way back that went wrong opens the list, and its sentence is there again after « Close » (FRU-542)', async ({
+  page,
+}) => {
+  await workerWith(page);
+  await page.goto(`${CONSOLE}/w/w1/connectors?github=requested`);
+  await expect(card(page).getByRole('alert')).toHaveText(RETURNS.requested);
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(card(page)).toHaveCount(0);
+  // Closed is not forgotten: « New connector » shows the same sentence under GitHub.
+  await openCatalogue(page);
+  await expect(card(page).getByRole('alert')).toHaveText(RETURNS.requested);
 });
 
 test('back with « connected », the panel of the GitHub installation opens, even when it is not the last row', async ({

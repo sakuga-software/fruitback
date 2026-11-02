@@ -75,7 +75,8 @@ for (const { width, height, locale } of [
       expect(await row.evaluate((button) => button.nextElementSibling?.id)).toBe('source-panel');
       await expect(row).toHaveAttribute('aria-controls', 'source-panel');
 
-      // It takes the width of its row, right under it, and the next row comes after it.
+      // It takes the width of its row, right under it, inside its card, and the next card comes after
+      // it (FRU-542): the border of the card, 12 px, and the border of the next card.
       const under = (await row.boundingBox())!;
       const opened = (await panel(page).boundingBox())!;
       expect(Math.abs(opened.x - under.x)).toBeLessThan(2);
@@ -83,7 +84,7 @@ for (const { width, height, locale } of [
       expect(Math.abs(opened.y - (under.y + under.height))).toBeLessThan(2);
       if (index === 0) {
         const next = (await rows(page).nth(1).boundingBox())!;
-        expect(Math.abs(next.y - (opened.y + opened.height))).toBeLessThan(2);
+        expect(Math.abs(next.y - (opened.y + opened.height + 14))).toBeLessThan(2);
       }
 
       // A second touch closes it.
