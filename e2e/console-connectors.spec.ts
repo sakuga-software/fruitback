@@ -664,6 +664,8 @@ test('the panel of a connector unfolds as its card opens, and is there at once w
   const still = await heights();
   expect(still.early, 'at once with reduced motion').toBe(still.settled);
   expect.soft(await styles(panel(page), ['animation-name'])).toEqual({ 'animation-name': 'none' });
+  // No move, so no event of its end: the panel is settled from the start (raised in review).
+  await expect(panel(page)).toHaveAttribute('data-settled', '');
 });
 
 test('a move of the panel that is cancelled leaves it unclipped (FRU-563)', async ({ page }) => {

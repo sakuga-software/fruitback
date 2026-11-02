@@ -701,6 +701,8 @@ function Opened({
     // panel must not stay clipped (raised in review). React has no prop for this event.
     const opened = held.current;
     if (opened === null) return;
+    // No move at all (reduced motion): it is settled from the start, and sends neither event.
+    if (getComputedStyle(opened).animationName === 'none') setSettled(true);
     const cancelled = (event: AnimationEvent) => {
       if (event.target === opened) setSettled(true);
     };
