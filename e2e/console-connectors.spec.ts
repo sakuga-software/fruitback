@@ -636,6 +636,44 @@ test('`?new` opens nothing for a member, who adds no source (FRU-562)', async ({
   await expect(page.getByRole('dialog')).toHaveCount(0);
 });
 
+test('a secret shown in the dialog stays when the read after it says no source can be added (FRU-562)', async ({
+  page,
+}) => {
+  const worker = await workerWith(page);
+  await open(page);
+  await openCatalogue(page);
+  const dialog = page.getByRole('dialog', { name: 'Add a connector' });
+  await dialog.getByRole('button', { name: 'Connect REST API', exact: true }).click();
+  await dialog.getByRole('textbox', { name: 'Address of your receiver' }).fill('https://hooks.client.fr/notes');
+  // The read that follows the address says this worker cannot keep a key any more: « New connector »
+  // goes, and the dialog with the secret must not go with it (raised in review).
+  worker.unavailable = true;
+  await dialog.getByRole('button', { name: 'Connect', exact: true }).click();
+  await expect(rows(page)).toHaveCount(3);
+  await expect(page.getByRole('button', { name: 'New connector', exact: true })).toHaveCount(0);
+  await expect(dialog.locator('[data-secret]')).toHaveText('made-by-fruitback-0123456789');
+  await dialog.getByRole('button', { name: 'I kept it', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(panel(page)).toBeFocused();
+});
+
+test('`?new` with a worker that cannot keep a key opens nothing, also after a read that can (FRU-562)', async ({
+  page,
+}) => {
+  const worker = await workerWith(page);
+  worker.unavailable = true;
+  await page.goto(`${CONSOLE}/w/w1/connectors?new=1`);
+  await expect(rows(page)).toHaveCount(2);
+  await expect(page).toHaveURL(`${CONSOLE}/w/w1/connectors`);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  // A later read that can add a source opens no dialog by itself (raised in review).
+  worker.unavailable = false;
+  await rows(page).nth(1).click();
+  await panel(page).getByRole('button', { name: 'Try now' }).first().click();
+  await expect(page.getByRole('button', { name: 'New connector', exact: true })).toBeVisible();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+});
+
 test('with no source, the sources to add are a grid of cards on the page (FRU-562)', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const worker = await workerWith(page);

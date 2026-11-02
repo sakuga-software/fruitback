@@ -124,10 +124,9 @@ export default function Connectors() {
   const [addingOnPage, setAddingOnPage] = useState(false);
   // FRU-542, FRU-562: whether « New connector » opened the dialog of the sources to add. A way back from
   // Linear or GitHub that went wrong opens it: its sentence is under the source, in that dialog. So does
-  // `?new` in the address, which another screen links to (« Connect a tracker » of the Sites screen).
-  const [catalogue, setCatalogue] = useState(
-    problem !== undefined || githubProblem !== undefined || search.get('new') !== null,
-  );
+  // `?new` in the address (« Connect a tracker » of the Sites screen), once the read says that this
+  // person can add a source.
+  const [catalogue, setCatalogue] = useState(problem !== undefined || githubProblem !== undefined);
   // An address connected from the list, whose secret is still on the screen (see `AddRest`).
   const restAdded = useRef(false);
   const toPanel = useRef(false);
@@ -171,17 +170,21 @@ export default function Connectors() {
       setLate(Object.fromEntries(counts.filter((count) => count !== undefined)));
     }
 
-    return listed.ok ? listed.data.connectors : [];
+    return { found: listed.ok ? listed.data.connectors : [], adds: listed.ok && listed.data.available };
   }, [base]);
   /** The same read, for a panel that only needs it done. */
   const reload = useCallback(async (): Promise<void> => void (await load()), [load]);
 
   useEffect(() => {
-    void load().then((found) => {
+    void load().then(({ found, adds }) => {
       // Back from Linear or GitHub with a new connector: its panel opens, and the word leaves the address.
       const linear = search.get('linear');
       const github = search.get('github');
-      if (linear === null && github === null && search.get('new') === null) return;
+      const asked = search.get('new') !== null;
+      if (linear === null && github === null && !asked) return;
+      // `?new` opens nothing for a person who cannot add a source: no dialog of disabled buttons, now
+      // or after a later read.
+      if (asked && manages && adds) setCatalogue(true);
       if (linear === 'connected') setSelected(found.at(-1)?.id);
       // An installation again keeps its connector, which is then not the last of the list.
       if (github === 'connected') setSelected(found.filter((each) => each.kind === 'github').at(-1)?.id);
@@ -269,9 +272,9 @@ export default function Connectors() {
   // before any source, stays there until it ends.
   const formOnPage = adding !== undefined && addingOnPage;
   const onPage = answered && (!connected || formOnPage);
-  // `?new` opens nothing for a person who cannot add a source; a sentence of a way back is shown to all.
-  const inDialog =
-    connected && catalogue && !formOnPage && (!cannot || problem !== undefined || githubProblem !== undefined);
+  // A form open in the dialog keeps it, whatever a read since says: the secret of an address is shown
+  // there once.
+  const inDialog = connected && !formOnPage && (catalogue || adding !== undefined);
   const listed = onPage || inDialog;
   // A person who cannot connect a source is not offered a button that opens disabled ones.
   const offersNew = connected && !cannot;
