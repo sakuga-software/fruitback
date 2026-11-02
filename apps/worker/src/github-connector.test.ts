@@ -765,6 +765,21 @@ describe('the repositories of a github connector, for a destination (FRU-361)', 
     assert.equal(await acme.attention(), undefined);
   });
 
+  it('says the connection ended when a repository asked by its name finds the installation gone (FRU-500)', async () => {
+    const { world, githubApp } = await worldWithGithub({ 7: { owner: 'acme', repositories: ['web'] } });
+    const acme = await tenant(world, githubApp, 99, []);
+
+    const answer = await call(
+      world,
+      githubApp,
+      'GET',
+      `${acme.base}/connectors/${acme.connector.id}/repositories?name=acme%2Fweb`,
+      { token: acme.token },
+    );
+    assert.equal(answer.status, 502);
+    assert.equal(await acme.attention(), 'connection-ended');
+  });
+
   it('keeps « key-lacks-access »: a list says nothing of the repository of a destination', async () => {
     const { world, githubApp } = await worldWithGithub({ 7: { owner: 'acme', repositories: ['web'] } });
     const acme = await tenant(world, githubApp, 7, ['acme/secret']);

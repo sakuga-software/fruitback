@@ -1361,10 +1361,18 @@ export async function handleConsoleApi(
     if (name !== null) {
       const wanted = readGithubRepository(name);
       if (wanted === undefined) return json(400, { error: 'invalid-repository' }, headers);
-      const found = await (context.githubApp as GithubApp).repository(
-        openInstallation(kept.sealed, context.secretsKey),
-        wanted,
-      );
+      let found: Awaited<ReturnType<GithubApp['repository']>>;
+      try {
+        found = await (context.githubApp as GithubApp).repository(
+          openInstallation(kept.sealed, context.secretsKey),
+          wanted,
+        );
+      } catch (error) {
+        // An installation that is gone makes the connector need attention, as the list does.
+        const moment = context.now;
+        await noteConnectorCall(context.accounts, id, error, moment === undefined ? undefined : () => moment);
+        throw error;
+      }
 
       return found === undefined
         ? json(404, { error: 'repository-not-found' }, headers)
