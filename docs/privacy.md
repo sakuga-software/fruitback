@@ -37,7 +37,7 @@ If your staging site shows real customer records, keep that in mind before you i
 
 ### What is right by default
 
-- **A reporter who does nothing is anonymous.** The name field sits behind a disclosure, is
+- A reporter who does nothing is anonymous. The name field sits behind a disclosure, is
   optional, and is sent only when filled in. The widget asks for no e-mail address.
 - The widget remembers nobody who did not ask. The name stays in the reporter's browser only if
   the reporter ticks « Remember me on this site », and unticking the box erases it at once.
@@ -57,7 +57,7 @@ If your staging site shows real customer records, keep that in mind before you i
 
 ### What you can turn on
 
-- **The browser environment.** Pass `includeEnv: true` to `init`, or write
+- The browser environment. Pass `includeEnv: true` to `init`, or write
   `data-fruitback-include-env="true"` on the `<script>` tag, and every note carries the user agent,
   the language and the platform of its reporter. Only the word `true` turns it on. If you do, say so
   in [your notice](privacy/notice.md).
@@ -151,7 +151,7 @@ cannot be edited, so nothing is sent to them again.
 
 ### What the worker keeps besides the note
 
-- **No access log.** The worker writes to its output at boot, on a configuration problem and on a
+- No access log. The worker writes to its output at boot, on a configuration problem and on a
   failed request. It does not log the requests it serves. Your reverse proxy probably does: its
   access log holds the address of every visitor that loaded a pin, and you set its retention.
 - The address of a caller, for two minutes. The rate limit counts requests per address over
@@ -466,7 +466,7 @@ Since 0.2.0 an account also holds the language its person reads, taken from the 
 
 As long as the issue or the row exists, and in Fruitback no longer than its site.
 
-- **Linear and GitHub:** the retention of your workspace or repository. Closing an issue does not
+- Linear and GitHub: the retention of your workspace or repository. Closing an issue does not
   delete it.
 - PostgreSQL: yours, and the dumps of the database are part of it. A dump kept for a year keeps
   every note for a year. Removing a site deletes the notes that Fruitback keeps for it: their

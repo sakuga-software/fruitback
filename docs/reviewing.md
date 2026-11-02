@@ -425,7 +425,7 @@ expires within 30 days regardless.
 
 ## What the extension never does
 
-- **It does not put a token in the page.** The access token lives in the extension's trusted
+- It does not put a token in the page. The access token lives in the extension's trusted
   contexts, and the widget asks the background to make the call. A page can forge messages on the
   bridge and still cannot ask for one.
 - It does not relay to a worker the page did not name. A page declaring another endpoint is

@@ -91,7 +91,7 @@ still reads them. To move:
    [Moving the notes of the SQLite file into PostgreSQL](#moving-the-notes-of-the-sqlite-file-into-postgresql).
    Notes in Linear or GitHub stay there: the site reads them where they are, once the console gives
    it that tracker, or through `FRUITBACK_STORE`.
-4. **Each reviewer pairs the extension again, once**, from the console. A session of a worker with
+4. Each reviewer pairs the extension again, once, from the console. A session of a worker with
    no workspace names no member, and is not copied.
 
 The way back is the image of before, by its digest, and the `.env` of before.

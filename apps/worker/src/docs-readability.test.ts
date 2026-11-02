@@ -9,11 +9,9 @@ import { describe, it } from 'vitest';
  * - no ticket reference (`FRU-` and a number): a reader outside the team cannot open one;
  * - no em dash, written as the character, as an entity, or as `---` that the site's kramdown turns
  *   into one;
- * - one bold segment per section at most, so that the one there stands out.
- *
- * The last clause of the rule, no bullet that opens with a bold label, has no guard yet (FRU-577):
- * 36 bullets still open with one, 22 of them in SECURITY.md, and changing that page is a pull request
- * of its own.
+ * - one bold segment per section at most, so that the one there stands out;
+ * - no bullet that opens with a bold label (FRU-577): the label reads as a heading, and the bold no
+ *   longer stands out.
  *
  * Only what a reader sees as prose is read. A heading keeps its words, ticket included: its id is an
  * address that other pages, `moved.yml` and the extension link to. The front matter, fenced code,
@@ -39,7 +37,7 @@ function published(): string[] {
   return ['README.md', 'SECURITY.md', ...docs].sort();
 }
 
-type What = 'ticket' | 'em dash' | 'second bold' | 'unpaired bold';
+type What = 'ticket' | 'em dash' | 'second bold' | 'unpaired bold' | 'bold label';
 
 type Finding = { line: number; column: number; what: What; detail: string };
 
@@ -208,6 +206,11 @@ function findingsIn(markdown: string): Finding[] {
         const opening = position(current, pair.index);
         bolds.push(opening);
         blank(left, pair.index, pair.index + pair[0].length, ' ');
+        // A list item whose text starts with the pair: the marker, then the bold, nothing between.
+        const before = current.text.slice(0, pair.index);
+        if (pair.index === (LIST_ITEM.exec(source[current.start] ?? '')?.[0].length ?? -1) && !before.includes('\n')) {
+          found.push({ ...opening, what: 'bold label', detail: 'a bullet opens with bold' });
+        }
       }
       for (const mark of left.join('').matchAll(/\*\*|(?<!\w)__|__(?!\w)/g)) {
         found.push({ ...position(current, mark.index), what: 'unpaired bold', detail: `${mark[0]} with no pair` });
@@ -313,6 +316,21 @@ describe('the guard of the guides finds (the control)', () => {
       '10:16 unpaired bold',
       '11:14 unpaired bold',
     ]);
+  });
+
+  it('a bullet that opens with a bold label, and not one whose bold comes later', () => {
+    const page = [
+      '- **Label:** the text.',
+      '## Next',
+      '1. **A label** too.',
+      '## Another',
+      '  * **Nested** label.',
+      '## Not labels',
+      '- A bullet with **its bold** later.',
+      '**A paragraph** that opens with bold is not a bullet.',
+    ].join('\n');
+
+    assert.deepEqual(short(page), ['1:3 bold label', '3:4 bold label', '5:5 bold label', '8:1 second bold']);
   });
 
   it('nothing in a heading, the front matter, code, a comment, a tag, a link target or the copied guide', () => {
