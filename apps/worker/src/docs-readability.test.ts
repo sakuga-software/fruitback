@@ -16,16 +16,13 @@ import { describe, it } from 'vitest';
 
 const ROOT = new URL('../../../', import.meta.url);
 
-/** Pages not rewritten yet: SECURITY.md and the privacy pages go in their own pull request. */
-const NOT_YET = new Set(['SECURITY.md', 'docs/privacy.md', 'docs/privacy/delete-notes.md', 'docs/privacy/notice.md']);
-
 /** Every published guide, as a path from the root: the README, and `docs/` without its decisions. */
 function published(): string[] {
   const docs = readdirSync(new URL('docs/', ROOT), { recursive: true, encoding: 'utf8' })
     .map((file) => `docs/${file.replaceAll('\\', '/')}`)
     .filter((file) => file.endsWith('.md') && !file.startsWith('docs/decisions/') && !file.includes('/_'));
 
-  return ['README.md', 'SECURITY.md', ...docs].filter((file) => !NOT_YET.has(file)).sort();
+  return ['README.md', 'SECURITY.md', ...docs].sort();
 }
 
 type Finding = { line: number; what: 'ticket' | 'em dash' | 'second bold'; text: string };
@@ -37,6 +34,8 @@ export function findingsIn(markdown: string): Finding[] {
   let comment = false;
   let front = false;
   let bold = 0;
+  // A code span can run over two lines: a test named by a document often does.
+  let span = false;
   markdown.split('\n').forEach((line, index) => {
     const trimmed = line.trim();
     if (index === 0 && trimmed === '---') return void (front = true);
@@ -48,7 +47,11 @@ export function findingsIn(markdown: string): Finding[] {
       return;
     }
     if (/^#{1,6} /.test(line)) return void (bold = 0);
-    const prose = line.replaceAll(/`[^`]*`/g, '');
+    let prose = '';
+    for (const character of line) {
+      if (character === '`') span = !span;
+      else if (!span) prose += character;
+    }
     const at = { line: index + 1, text: trimmed.slice(0, 120) };
     if (/FRU-\d/.test(prose)) found.push({ ...at, what: 'ticket' });
     if (prose.includes('—')) found.push({ ...at, what: 'em dash' });
@@ -90,7 +93,8 @@ describe('the published guides (FRU-515)', () => {
       '<!-- FRU-5 — a comment',
       '**still** **a comment** -->',
       '## Next section',
-      'A **bold** again, the first of its section.',
+      'A **bold** again, the first of its section, and test:`a name over',
+      'two lines (FRU-6) — **in** **code**`.',
     ].join('\n');
 
     assert.deepEqual(

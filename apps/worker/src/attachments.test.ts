@@ -913,7 +913,7 @@ describe('what SECURITY.md and docs/privacy.md say of the files (FRU-331)', () =
     assert.ok(stated.includes('answers for one hour'));
     assert.ok(stated.includes('`GET /screenshot/<id>` is gone'));
 
-    const privacy = section('../../../docs/privacy.md', '- **The files of the notes, in transit');
+    const privacy = section('../../../docs/privacy.md', '- The files of the notes, in transit');
     assert.ok(privacy.includes(`until the tracker has it, ${ATTACHMENT_TRANSIT_DAYS} days at most`));
   });
 });

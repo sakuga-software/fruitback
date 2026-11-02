@@ -245,7 +245,7 @@ make tickets.
   `docs/_data/moved.yml` and the extension link to. Changing one is a move, with its line in
   `moved.yml`.
 - `apps/worker/src/docs-readability.test.ts` holds the three counts on the text outside code, HTML
-  comments and headings. Its list `NOT_YET` names the pages not rewritten yet.
+  comments and headings.
 - A rewrite for readability never changes what a promise, a duty or a data practice says. On
   `SECURITY.md` and the privacy pages, the pull request lists each sentence whose meaning could be
   read differently, before and after.
