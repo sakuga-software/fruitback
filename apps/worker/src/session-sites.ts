@@ -95,9 +95,8 @@ export async function handleSessionSites(
 
   const workspace = membership?.workspace;
   const previewsOf = await previewsIn(accounts, workspaceId, now ?? Date.now());
-  const sites = readableSites(await accounts.sites(workspaceId), reach).filter(
-    (site) => origin === undefined || covers(site, previewsOf(site.id), origin),
-  );
+  const readable = readableSites(await accounts.sites(workspaceId), reach);
+  const sites = readable.filter((site) => origin === undefined || covers(site, previewsOf(site.id), origin));
   // The language the person reads (FRU-119), so the extension and its widget speak it too (FRU-131).
   const locale = (await accounts.account(subject))?.locale;
   // FRU-237: what the popup counts on a site (06, 07). What did not arrive stays in the console.
@@ -165,9 +164,8 @@ async function sitesOfAccount(
     const reach = await accounts.reach(workspace.id, account);
     if (reach === undefined) return undefined;
     const previewsOf = await previewsIn(accounts, workspace.id, now);
-    const readable = readableSites(await accounts.sites(workspace.id), reach).filter(
-      (site) => origin === undefined || covers(site, previewsOf(site.id), origin),
-    );
+    const all = readableSites(await accounts.sites(workspace.id), reach);
+    const readable = all.filter((site) => origin === undefined || covers(site, previewsOf(site.id), origin));
     // FRU-498: a workspace with no site of the tab costs no count and no connector.
     if (origin !== undefined && readable.length === 0) return { workspace: workspace.id, sites: [] };
     const notes = await notesIn(noteIndex, workspace.id);
