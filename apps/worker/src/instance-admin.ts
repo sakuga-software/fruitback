@@ -1,3 +1,4 @@
+import { isOneOf } from './one-of.ts';
 import { json } from './http.ts';
 import type { NoteStage } from '@fruitback/shared';
 import { readJsonObject } from './bounded-body.ts';
@@ -893,7 +894,7 @@ async function fieldsOf(request: Request): Promise<Record<string, unknown>> {
 }
 
 function oneOf<T extends string>(value: unknown, among: readonly T[]): T | undefined {
-  return (among as readonly unknown[]).includes(value) ? (value as T) : undefined;
+  return isOneOf(value, among) ? value : undefined;
 }
 
 /**

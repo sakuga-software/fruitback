@@ -18,6 +18,7 @@ import {
   placeOf,
   placedAt,
   routingFailure,
+  targetsOf,
   withoutTracker,
 } from './note-helpers.ts';
 import { type Channel, type NoteIndex, authorOf } from './notes-index.ts';
@@ -103,10 +104,7 @@ export async function getFeedback(
     // FRU-123: a site that can send to several places is read in each one, because a tracker finds
     // a note by where it is. Each place has its own entry: the scope of the store names it.
     const places = route.client?.destinations ?? [];
-    const targets =
-      route.client === undefined || places.length < 2
-        ? [route.client]
-        : places.map((place) => placedAt(route.client as ClientConfig, place));
+    const targets = targetsOf(route.client);
     const all = await readPage({ store, kv, noteIndex, client: route.client, clientId, url, policy: route.policy });
     // Asked at each request, after the cache, whose answer every reader of the page shares.
     const hidden = await hidesTracker(request, config, route.policy);

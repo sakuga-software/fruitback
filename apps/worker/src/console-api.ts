@@ -1,3 +1,4 @@
+import { isOneOf } from './one-of.ts';
 import { json } from './http.ts';
 import { handleNotes } from './console-notes.ts';
 import { readJsonObject } from './bounded-body.ts';
@@ -187,11 +188,11 @@ function statusIdsOf(asked: readonly unknown[]): { source: string; key: string }
 }
 
 function visibilityOf(value: unknown): Visibility | undefined {
-  return (VISIBILITIES as readonly unknown[]).includes(value) ? (value as Visibility) : undefined;
+  return isOneOf(value, VISIBILITIES) ? value : undefined;
 }
 
 function writersOf(value: unknown): Writers | undefined {
-  return (WRITERS as readonly unknown[]).includes(value) ? (value as Writers) : undefined;
+  return isOneOf(value, WRITERS) ? value : undefined;
 }
 
 /** The fields of a site the console shows, and the client id a script tag names. */

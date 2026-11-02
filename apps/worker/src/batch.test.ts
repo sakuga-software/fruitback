@@ -8,7 +8,7 @@ import { resetCacheState } from './cache.ts';
 import type { WorkerEnv } from './env.ts';
 import { type Kv, createMemoryKv, resetSharedKv } from './kv.ts';
 import { resetMemoryLinear } from './linear-memory.ts';
-import { installLinearStub } from './linear-stub.ts';
+import { installLinearStub } from './linear-stub.fixture.ts';
 import { batchParent } from './linear.ts';
 import { chargeRateLimit, checkRateLimit, maxBatch } from './rate-limit.ts';
 import { type NoteStore, StoreError } from './store.ts';

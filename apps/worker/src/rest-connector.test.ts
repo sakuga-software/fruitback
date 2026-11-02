@@ -33,7 +33,8 @@ import {
 } from './rest-connector.ts';
 import { DELIVERY_TIMEOUT_MS, createSender } from './rest-send.ts';
 import { createPairing, redeemPairing } from './session.ts';
-import { SIGNED_URL_MS, createMemoryAttachmentStore, verifiesSignedRead } from './attachments.ts';
+import { createMemoryAttachmentStore } from './attachments-memory.fixture.ts';
+import { SIGNED_URL_MS, verifiesSignedRead } from './attachments.ts';
 import { withSignedFiles } from './rest-connector.ts';
 import { DELIVERY_PASS_MS } from './server.ts';
 
