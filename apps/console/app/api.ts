@@ -47,6 +47,11 @@ export type Destination = {
    * worker. Absent: not known (another kind, a worker of before, or GitHub did not answer).
    */
   private?: boolean;
+  /**
+   * FRU-574: the page of the team of a Linear destination at Linear, as the worker built it from the
+   * keys Linear answered. Absent: another kind, a destination written before, or a worker of before.
+   */
+  url?: string;
 };
 /**
  * `destinations` is every place the site can send to, in order (FRU-123): the first one is where a

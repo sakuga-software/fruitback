@@ -936,8 +936,9 @@ const VIEWER_QUERY = `
  */
 const PLACES_QUERY = `
   query FruitbackPlaces($teams: [ID!]!, $projects: [ID!]!, $teamCount: Int!, $projectCount: Int!) {
+    organization { urlKey }
     teams(first: $teamCount, filter: { id: { in: $teams } }) {
-      nodes { id name projects(first: $projectCount, filter: { id: { in: $projects } }) { nodes { id name } } }
+      nodes { id name key projects(first: $projectCount, filter: { id: { in: $projects } }) { nodes { id name } } }
     }
   }
 `;
@@ -945,9 +946,25 @@ const PLACES_QUERY = `
 /** As `PLACES_QUERY`, for places with no project. */
 const TEAM_PLACES_QUERY = `
   query FruitbackPlaces($teams: [ID!]!, $teamCount: Int!) {
-    teams(first: $teamCount, filter: { id: { in: $teams } }) { nodes { id name } }
+    organization { urlKey }
+    teams(first: $teamCount, filter: { id: { in: $teams } }) { nodes { id name key } }
   }
 `;
+
+/** A key of a workspace or of a team of Linear, as it may stand in an address: no `/`, no `?`, no `.`. */
+const URL_PART = /^[A-Za-z0-9_-]{1,64}$/;
+
+/**
+ * The page of a team at Linear (FRU-574): `https://linear.app/<workspace>/team/<KEY>/all`, from the
+ * `urlKey` of the workspace and the `key` of the team that Linear answers. `undefined` when either is
+ * missing or is not a plain key: the worker never writes an address it did not build from parts it checked.
+ */
+export function linearTeamUrl(urlKey: unknown, key: unknown): string | undefined {
+  if (typeof urlKey !== 'string' || typeof key !== 'string') return undefined;
+  if (!URL_PART.test(urlKey) || !URL_PART.test(key)) return undefined;
+
+  return `https://linear.app/${urlKey}/team/${key}/all`;
+}
 
 /** How many pages a list reads at most: a key that reaches more is cut there, never read without end. */
 const MAX_PAGES = 20;
@@ -1017,17 +1034,19 @@ export type LinearPlace = { teamId: string; projectId?: string | undefined };
 /**
  * The names of these places (FRU-501), in their order: the name of the team and of the project of
  * each, or `undefined` for a place the key does not reach, or a team with no such project. One call to
- * Linear for them all, never the list of the teams.
+ * Linear for them all, never the list of the teams. FRU-574: with the page of the team at Linear,
+ * when Linear gives the keys that make it.
  */
 export async function readLinearPlaces(
   apiKey: string,
   places: readonly LinearPlace[],
-): Promise<({ team: string; project?: string } | undefined)[]> {
+): Promise<({ team: string; project?: string; url?: string } | undefined)[]> {
   if (places.length === 0) return [];
   const teamIds = [...new Set(places.map((place) => place.teamId))];
   const projectIds = [...new Set(places.flatMap((place) => (place.projectId === undefined ? [] : [place.projectId])))];
   const data = await graphql<{
-    teams?: { nodes?: { id?: unknown; name?: unknown; projects?: { nodes?: ProjectNode[] } }[] };
+    organization?: { urlKey?: unknown };
+    teams?: { nodes?: { id?: unknown; name?: unknown; key?: unknown; projects?: { nodes?: ProjectNode[] } }[] };
   }>(
     { apiKey, teamId: 'none' },
     projectIds.length === 0 ? TEAM_PLACES_QUERY : PLACES_QUERY,
@@ -1041,10 +1060,12 @@ export async function readLinearPlaces(
   return places.map(({ teamId, projectId }) => {
     const team = nodes.find((node) => node.id === teamId);
     if (typeof team?.name !== 'string') return undefined;
-    if (projectId === undefined) return { team: team.name };
+    const url = linearTeamUrl(data.organization?.urlKey, team.key);
+    const page = url === undefined ? {} : { url };
+    if (projectId === undefined) return { team: team.name, ...page };
     const project = projectsOf(team.projects?.nodes).find((node) => node.id === projectId);
 
-    return project === undefined ? undefined : { team: team.name, project: project.name };
+    return project === undefined ? undefined : { team: team.name, project: project.name, ...page };
   });
 }
 

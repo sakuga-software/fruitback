@@ -466,6 +466,12 @@ function GoesTo({ site }: { site: Site }) {
   if (late === 1) detail = t('1 not delivered yet');
   else if (late > 1) detail = t('{count} not delivered yet', { count: late });
 
+  // FRU-574: the page of the team at Linear, when the place says the team and the worker gave its
+  // page. Only an address of Linear: a link of the console never goes anywhere else.
+  const page =
+    detail === named && kind === 'linear' && first.url?.startsWith('https://linear.app/') === true
+      ? first.url
+      : undefined;
   const where =
     others.length === 0
       ? detail
@@ -478,10 +484,23 @@ function GoesTo({ site }: { site: Site }) {
         {kind === undefined ? null : <ConnectorMark kind={kind} />}
         <span className="min-w-0">{t(place.name)}</span>
       </span>
-      {/* FRU-567: a long team or project is cut to one line, and whole in a tooltip and to a screen reader. */}
+      {/* FRU-567: a long team or project is cut to one line, and whole in a tooltip and to a screen reader.
+          FRU-574: the team of a Linear leads to its page at Linear, in another tab. */}
       {where === undefined ? null : (
         <Tip tip={where} className="text-muted">
-          <span className="min-w-0 truncate text-hint leading-[inherit]">{where}</span>
+          {page === undefined ? (
+            <span className="min-w-0 truncate text-hint leading-[inherit]">{where}</span>
+          ) : (
+            <a
+              href={page}
+              target="_blank"
+              rel="noreferrer"
+              aria-label={t('{place}, at Linear, in a new tab', { place: where })}
+              className="min-w-0 truncate rounded-[2px] text-hint leading-[inherit] text-muted underline decoration-1 underline-offset-[3px] hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            >
+              {where}
+            </a>
+          )}
         </Tip>
       )}
     </>

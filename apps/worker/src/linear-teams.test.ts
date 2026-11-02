@@ -1,6 +1,13 @@
 import { afterEach, describe, it, vi } from 'vitest';
 import assert from 'node:assert/strict';
-import { listLinearStates, listLinearTeams, readLinearPlaces, readLinearTeams, readLinearViewer } from './linear.ts';
+import {
+  linearTeamUrl,
+  listLinearStates,
+  listLinearTeams,
+  readLinearPlaces,
+  readLinearTeams,
+  readLinearViewer,
+} from './linear.ts';
 
 /**
  * The teams and the projects a key reaches, as the console offers them for a destination (FRU-458):
@@ -209,6 +216,42 @@ describe('the reads of Linear for one choice (FRU-501)', () => {
       projectCount: 1,
     });
     assert.ok(!asked[0]?.query.includes('teams(first: 50, after'), 'never the list of the teams');
+  });
+
+  it('gives the page of each team at Linear, from the key of its workspace and its own (FRU-574)', async () => {
+    const asked = linear(() => ({
+      organization: { urlKey: 'acme' },
+      teams: {
+        nodes: [
+          { id: 'team_a', name: 'Design', key: 'DES', projects: { nodes: [{ id: 'p1', name: 'Site' }] } },
+          { id: 'team_b', name: 'Web', key: 'we/b', projects: { nodes: [] } },
+        ],
+      },
+    }));
+
+    const named = await readLinearPlaces('lin_api_key', [{ teamId: 'team_a', projectId: 'p1' }, { teamId: 'team_b' }]);
+
+    assert.deepEqual(named, [
+      { team: 'Design', project: 'Site', url: 'https://linear.app/acme/team/DES/all' },
+      // A key that is not a plain word makes no address.
+      { team: 'Web' },
+    ]);
+    assert.ok(asked[0]?.query.includes('organization { urlKey }'));
+    assert.ok(asked[0]?.query.includes('nodes { id name key'));
+  });
+
+  it('builds the page of a team from plain keys only (FRU-574)', () => {
+    assert.equal(linearTeamUrl('acme', 'FRU'), 'https://linear.app/acme/team/FRU/all');
+    for (const [urlKey, key] of [
+      [undefined, 'FRU'],
+      ['acme', undefined],
+      ['', 'FRU'],
+      ['acme', 'F?R'],
+      ['ac.me', 'FRU'],
+      ['acme', '../x'],
+      ['a'.repeat(65), 'FRU'],
+    ])
+      assert.equal(linearTeamUrl(urlKey, key), undefined, `${String(urlKey)} ${String(key)}`);
   });
 
   it('asks for no project of places that name none', async () => {
