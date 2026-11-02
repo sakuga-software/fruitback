@@ -1,6 +1,14 @@
 import AxeBuilder from '@axe-core/playwright';
 import { type BrowserContext, type Locator, type Page, expect } from '@playwright/test';
-import { type LoadedExtension, PLAYGROUND_ORIGIN, openBareSite, openPopup, test, SITE_SWITCH } from './extension.ts';
+import {
+  type LoadedExtension,
+  PLAYGROUND_ORIGIN,
+  openBareSite,
+  openPopup,
+  test,
+  SITE_SWITCH,
+  sessionSitesOf,
+} from './extension.ts';
 import { AUTHENTICATED_WORKER_ORIGIN } from './worker-sessions.ts';
 
 /**
@@ -114,7 +122,7 @@ async function sitesRoute(
       json: { site: { ...site, visibility: body.visibility ?? 'members', workspace: body.workspace } },
     });
   });
-  await context.route(`${CLOUD}/session/sites`, async (route) => {
+  await context.route(sessionSitesOf(CLOUD), async (route) => {
     const request = route.request();
     if (request.method() === 'POST') {
       const body = request.postDataJSON() as { workspace: string; origin: string };
@@ -325,7 +333,7 @@ test('an add refused for its session keeps the buttons off until the popup is dr
     { id: 'ws_1', name: 'Sakuga', role: 'owner', canAddSite: true },
   ]);
   await signedIn(extension, page, 'req_add_6');
-  await extension.context.route(`${CLOUD}/session/sites`, (route) =>
+  await extension.context.route(sessionSitesOf(CLOUD), (route) =>
     route.request().method() === 'POST'
       ? route.fulfill({ status: 401, json: { error: 'invalid-identity', reason: 'session-ended' } })
       : route.fallback(),
@@ -362,7 +370,7 @@ test('a Fruitback that does not answer is said, not read as « ask an admin »',
   const page = await extension.context.newPage();
   await openBareSite(page, 'popup-new-site-down');
   let down = false;
-  await extension.context.route(`${CLOUD}/session/sites`, (route) =>
+  await extension.context.route(sessionSitesOf(CLOUD), (route) =>
     down
       ? route.abort('connectionrefused')
       : route.fulfill({
