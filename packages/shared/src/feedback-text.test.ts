@@ -237,6 +237,15 @@ describe('what a reviewer wrote stays inside its quote', () => {
     assert.ok(line.endsWith('```[title="a `b` ``c``"]```'), line);
   });
 
+  it('names the shadow hosts before the selector (FRU-580)', () => {
+    const issue = note({}, { anchor: { ...ANCHOR, hosts: ['acme-promo'], selector: 'button.buy' } });
+
+    assert.match(
+      text([{ issue, placement: 'found' }]),
+      /^- Element: button "Add to cart" · `acme-promo >>> button\.buy`$/m,
+    );
+  });
+
   it('pads a selector that starts or ends with a backtick, as CommonMark asks', () => {
     const issue = note({}, { anchor: { ...ANCHOR, selector: '`odd`' } });
 

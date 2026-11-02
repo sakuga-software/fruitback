@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { TEXT_EXCERPT_MAX_LENGTH } from '@fruitback/shared';
 import { captureAnchor, captureBounds, readTextExcerpt } from './anchor.ts';
-import { mountPage, setDocumentSize, setRect, setScroll } from './dom.fixture.ts';
+import { attachShadowHtml, mountPage, queryIn, setDocumentSize, setRect, setScroll } from './dom.fixture.ts';
 
 describe('captureAnchor', () => {
   it('captures every independent way of finding the element again', () => {
@@ -37,6 +37,62 @@ describe('captureAnchor', () => {
     const anchor = captureAnchor(rule);
 
     assert.deepEqual(Object.keys(anchor).sort(), ['bounds', 'domPath', 'selector', 'tag']);
+  });
+});
+
+describe('captureAnchor, in a web component (FRU-580)', () => {
+  it('names the host, then reads the selector and the path in its open shadow root', () => {
+    // A button of the same class in the page itself: the selector is unique in the shadow root.
+    const page = mountPage('<main><button class="buy">Acheter</button><acme-promo id="promo"></acme-promo></main>');
+    const shadow = attachShadowHtml(page.query('#promo'), '<div><button class="buy">Acheter</button></div>');
+
+    const anchor = captureAnchor(queryIn(shadow, 'button'));
+
+    assert.deepEqual(anchor.hosts, ['#promo']);
+    assert.equal(anchor.selector, 'button.buy');
+    assert.equal(anchor.domPath, 'div > button');
+    assert.equal(anchor.tag, 'button');
+    assert.equal(anchor.text, 'Acheter');
+  });
+
+  it('names each host of two nested open shadow roots, outermost first', () => {
+    const page = mountPage('<main><acme-shop id="shop"></acme-shop></main>');
+    const shop = attachShadowHtml(
+      page.query('#shop'),
+      '<acme-price data-testid="price-espresso"></acme-price><acme-price data-testid="price-latte"></acme-price>',
+    );
+    const price = attachShadowHtml(
+      queryIn(shop, '[data-testid="price-latte"]'),
+      '<button aria-label="Acheter">19 €</button>',
+    );
+
+    const anchor = captureAnchor(queryIn(price, 'button'));
+
+    assert.deepEqual(anchor.hosts, ['#shop', '[data-testid="price-latte"]']);
+    assert.equal(anchor.selector, 'button[aria-label="Acheter"]');
+    assert.equal(anchor.domPath, 'button');
+  });
+
+  it('tells two instances of one component apart by the selector of their host', () => {
+    // Nothing names either host: the second one is told by its place, as a card is.
+    const page = mountPage('<main><acme-promo></acme-promo><acme-promo></acme-promo></main>');
+    const [first, second] = [...page.document.querySelectorAll('acme-promo')];
+    attachShadowHtml(first as Element, '<button class="buy">Acheter</button>');
+    const shadow = attachShadowHtml(second as Element, '<button class="buy">Acheter</button>');
+
+    const anchor = captureAnchor(queryIn(shadow, 'button'));
+
+    assert.deepEqual(anchor.hosts, ['html > body > main > acme-promo:nth-child(2)']);
+    assert.equal(page.document.querySelectorAll(anchor.hosts?.[0] ?? '').length, 1);
+  });
+
+  it('measures the bounds in the document, wherever the element is', () => {
+    const page = mountPage('<acme-promo id="promo"></acme-promo>', { width: 1_000, height: 1_000 });
+    const button = queryIn(attachShadowHtml(page.query('#promo'), '<button>Acheter</button>'), 'button');
+    setDocumentSize(page.document, 1_000, 1_000);
+    setRect(button, { left: 100, top: 200, width: 50, height: 20 });
+
+    assert.deepEqual(captureAnchor(button).bounds, { xPct: 10, yPct: 20, wPct: 5, hPct: 2 });
   });
 });
 

@@ -1,4 +1,5 @@
 import type { NoteSource } from '@fruitback/shared';
+import { deepElementAt, overShadowHost } from './shadow-hit.ts';
 import { sourceFromContext } from './source.ts';
 import { getElementBounds, getElementContext, getElementAtPoint, isElementGrabbable } from 'react-grab/primitives';
 
@@ -28,12 +29,15 @@ export type CaptureEngine = {
 };
 
 export const reactGrabEngine: CaptureEngine = {
-  elementAt: (clientX, clientY, reject) =>
-    getElementAtPoint(clientX, clientY, {
-      // `isElementGrabbable` already skips invisible nodes, document roots and page-covering
-      // overlays; `reject` is how the host keeps the pointer from landing on the widget itself.
-      filter: (candidate) => isElementGrabbable(candidate) && !reject(candidate),
-    }),
+  elementAt: (clientX, clientY, reject) => {
+    // `isElementGrabbable` already skips invisible nodes, document roots and page-covering
+    // overlays; `reject` is how the host keeps the pointer from landing on the widget itself.
+    const accept = (candidate: Element) => isElementGrabbable(candidate) && !reject(candidate);
+    // Over a shadow host, react-grab overflows the stack when two shadow roots nest (FRU-580).
+    if (overShadowHost(document, clientX, clientY)) return deepElementAt(document, clientX, clientY, accept);
+
+    return getElementAtPoint(clientX, clientY, { filter: accept });
+  },
 
   grabbable: (element) => isElementGrabbable(element),
 

@@ -31,6 +31,7 @@ const RECORDED = {
     'viewport.height: number',
     'viewport.dpr?: number',
     'anchor.selector: string',
+    'anchor.hosts?[]: string',
     'anchor.domPath?: string',
     'anchor.tag: string',
     'anchor.text?: string',

@@ -1,5 +1,5 @@
 import { type NoteAnchor, type NoteBounds, TEXT_EXCERPT_MAX_LENGTH } from '@fruitback/shared';
-import { buildDomPath, buildSelector } from './selector.ts';
+import { buildDomPath, buildHostPath, buildSelector } from './selector.ts';
 
 /**
  * Turning a clicked element into an anchor.
@@ -25,6 +25,10 @@ export function captureAnchor(element: Element): NoteAnchor {
     tag: element.localName,
     bounds: captureBounds(element),
   };
+
+  // Only for an element in a shadow root (FRU-580): a note of the document carries no `hosts` key.
+  const hosts = buildHostPath(element);
+  if (hosts !== undefined) anchor.hosts = hosts;
 
   const text = readTextExcerpt(element);
   if (text !== undefined) anchor.text = text;

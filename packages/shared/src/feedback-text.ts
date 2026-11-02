@@ -1,4 +1,5 @@
 import type { NoteComment, NoteIssue, NoteStatus } from './issue.ts';
+import { anchorSelectorPath } from './note.ts';
 
 /**
  * The feedback of a page as plain text (FRU-109): the format of « Copy as text » in the widget, and
@@ -74,7 +75,7 @@ function element(issue: NoteIssue): string {
   const anchor = issue.note.anchor;
   const text = oneLine(anchor.text ?? '');
 
-  return [text.length > 0 ? `${anchor.tag} "${text}"` : anchor.tag, code(anchor.selector)].join(' · ');
+  return [text.length > 0 ? `${anchor.tag} "${text}"` : anchor.tag, code(anchorSelectorPath(anchor))].join(' · ');
 }
 
 function component(issue: NoteIssue, words: FeedbackWords): string | undefined {

@@ -69,9 +69,22 @@ export const noteBoundsSchema = z.object({
  * `NOTE_ANCHOR_STRATEGIES` for the intended precedence.
  */
 export const noteAnchorSchema = z.object({
-  /** Most specific selector we could build that still looked stable (ids and test ids favoured). */
+  /**
+   * Most specific selector we could build that still looked stable (ids and test ids favoured). Read
+   * in the document, or in the innermost shadow root when `hosts` is present.
+   */
   selector: z.string().min(1),
-  /** Structural fallback: `:nth-child` chain from `<html>`. Brittle alone, useful as a tiebreak. */
+  /**
+   * The shadow hosts between the document and the element, outermost first (FRU-580). One selector
+   * for each level, read in the root of the level above: the first in the document, the next in the
+   * shadow root of the first host, and so on. `selector`, `domPath`, `text` and `tag` are then read in
+   * the shadow root of the last host. Absent for an element of the document itself.
+   */
+  hosts: z.array(z.string().min(1)).min(1).optional(),
+  /**
+   * Structural fallback: `:nth-child` chain from `<html>`, or from the top of the shadow root when
+   * `hosts` is present. Brittle alone, useful as a tiebreak.
+   */
   domPath: z.string().min(1).optional(),
   tag: z.string().min(1),
   /** Trimmed excerpt of the element's text, for content-based matching. */
@@ -89,6 +102,15 @@ export const noteAnchorSchema = z.object({
     .optional(),
   bounds: noteBoundsSchema,
 });
+
+/**
+ * The selector of an anchor as one line a person reads (FRU-580): each shadow host, then the selector
+ * in the last shadow root, joined by ` >>> `. For an anchor with no `hosts`, it is `selector`. No CSS
+ * engine reads this line: the widget follows `hosts` itself.
+ */
+export function anchorSelectorPath(anchor: Pick<NoteAnchor, 'selector' | 'hosts'>): string {
+  return [...(anchor.hosts ?? []), anchor.selector].join(' >>> ');
+}
 
 /** Precedence the widget applies when re-planting a pin (M4 / FRU-11). */
 export const NOTE_ANCHOR_STRATEGIES = ['selector', 'testId', 'text', 'domPath', 'bounds'] as const;

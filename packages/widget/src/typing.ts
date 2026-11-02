@@ -1,4 +1,4 @@
-import { type NoteAnchor, noteAnchorSchema } from '@fruitback/shared';
+import { type NoteAnchor, anchorSelectorPath, noteAnchorSchema } from '@fruitback/shared';
 
 /**
  * The note somebody is writing, saved as they type (FRU-311).
@@ -52,7 +52,7 @@ export function createTypingStore(options: TypingStoreOptions): TypingStore {
   let entries: Typing[] = readStored(storage, key);
 
   const same = (entry: Typing, place: TypingPlace): boolean =>
-    entry.page === place.page && entry.anchor.selector === place.anchor.selector;
+    entry.page === place.page && anchorSelectorPath(entry.anchor) === anchorSelectorPath(place.anchor);
 
   function set(next: Typing[]): void {
     entries = next;

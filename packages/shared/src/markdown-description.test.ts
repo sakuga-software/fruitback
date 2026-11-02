@@ -49,6 +49,14 @@ describe('buildIssueDescription', () => {
     assert.ok(description.includes('**Reported by** · Anonymous'));
   });
 
+  it('round-trips the shadow hosts, and names them in the prose (FRU-580)', () => {
+    const note = noteFixture({ anchor: { ...noteFixture().anchor, hosts: ['#promo'], selector: 'button.buy' } });
+    const description = buildIssueDescription(note);
+
+    assert.deepEqual(parsedNote(description), note);
+    assert.ok(description.includes('**Element** · `#promo >>> button.buy` (`<button>`)'), description);
+  });
+
   it('writes the canonical page URL verbatim, so Linear can filter on it', () => {
     // This is what makes `description: { contains: … }` a usable server-side query for a page.
     const description = buildIssueDescription(noteFixture());

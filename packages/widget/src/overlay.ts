@@ -1,4 +1,11 @@
-import { type Note, type NoteBounds, type NoteComment, type NoteIssue, type NoteStatus } from '@fruitback/shared';
+import {
+  type Note,
+  type NoteBounds,
+  type NoteComment,
+  type NoteIssue,
+  type NoteStatus,
+  anchorSelectorPath,
+} from '@fruitback/shared';
 import { type Direction, type Translator, createTranslator, languageOf } from './messages.ts';
 import { createIcon } from './icons.ts';
 import { type Box, type Offset, NO_OFFSET, attachHandle, clampOffset, moved, tether } from './bubble-drag.ts';
@@ -1259,7 +1266,8 @@ function initialOf(name: string): string {
 function sourceBlock(document: Document, issue: NoteIssue, showSelector: boolean): HTMLElement[] {
   if (!showSelector) return [];
   const source = issue.note.source;
-  const selector = issue.note.anchor.selector;
+  // The hosts first, when the element is in a web component (FRU-580): its selector alone finds nothing.
+  const selector = anchorSelectorPath(issue.note.anchor);
   const line = source?.line === undefined ? '' : `:${source.line}`;
   const file = source?.file === undefined ? undefined : `${source.file}${line}`;
   const component = source?.component?.trim() ? `<${source.component.trim()}>` : undefined;

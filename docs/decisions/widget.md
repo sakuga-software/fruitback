@@ -1331,6 +1331,17 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
 - `resolveAnchor` walks the anchor's claims in the order `NOTE_ANCHOR_STRATEGIES` declares:
   **selector → testId → text → domPath → bounds**. That order is the contract's, and it puts `text`
   ahead of `domPath` deliberately.
+- **A note in a web component follows its hosts, or keeps only its position** (FRU-580). The capture
+  builds the selector and the path in the element's shadow root, and `buildHostPath` writes a
+  selector of each host, read in the root above it. `resolveAnchor` follows them, each a unique match
+  with an open `shadowRoot`, then walks the cascade in the last root. When a host is gone, repeated,
+  or its root is closed, only `bounds` runs, in the deepest root reached: the other claims describe
+  the element inside, and read in a root above they could recognise a stranger and be sure of it.
+  Pointing over a shadow host goes through `deepElementAt` of `shadow-hit.ts`, which enters each
+  shadow root once: react-grab 0.2.0 overflows the stack on two nested roots, because
+  `elementsFromPoint` of the inner root also lists the outer host (measured in Chromium).
+  The `MutationObserver` watches the document only, so a change inside a shadow root re-resolves
+  nothing until the document changes or the element resizes.
 - **Every match must be unique and of the captured tag**, and `domPath` must additionally still be
   roughly where the note said it was — a structural path always resolves to _something_, and after
   an insertion that something is the neighbour.
