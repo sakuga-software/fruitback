@@ -1,4 +1,5 @@
 import { json } from './http.ts';
+import { adapterOf, internalAdapterOf } from './auth-internals.ts';
 import { randomBytes } from 'node:crypto';
 import { readJsonObject } from './bounded-body.ts';
 import { mailboxOf, normalizeEmail } from './accounts.ts';
@@ -50,18 +51,6 @@ function waitingKey(token: string): string {
   return `fruitback-email:${token}`;
 }
 
-/** What this file reads and writes through the internal adapter of better-auth. */
-type VerificationAdapter = {
-  createVerificationValue(data: { identifier: string; value: string; expiresAt: Date }): Promise<unknown>;
-  findVerificationValue(identifier: string): Promise<{ value: string; expiresAt: Date } | null>;
-  consumeVerificationValue(identifier: string): Promise<{ value: string; expiresAt: Date } | null>;
-  deleteVerificationByIdentifier(identifier: string): Promise<void>;
-};
-
-type AccountAdapter = {
-  findMany(input: { model: 'account'; where: { field: string; value: string }[] }): Promise<{ providerId: string }[]>;
-};
-
 /**
  * The addresses of the account, with no provider that is no longer linked. An unlink whose last
  * write failed left its provider on an address (raised in review of #613): it goes here, at the next
@@ -71,7 +60,7 @@ async function addressesOf(context: AuthRouteContext, auth: Auth, account: strin
   const rows = await context.accounts.addresses(account);
   const listed = new Set(rows.flatMap((row) => row.providers));
   if (listed.size === 0) return rows;
-  const adapter = (await auth.$context).adapter as unknown as AccountAdapter;
+  const adapter = await adapterOf(auth);
   const linked = new Set(
     (await adapter.findMany({ model: 'account', where: [{ field: 'userId', value: account }] })).map(
       (row) => row.providerId,
@@ -83,10 +72,6 @@ async function addressesOf(context: AuthRouteContext, auth: Auth, account: strin
 
   return context.accounts.addresses(account);
 }
-
-type SessionAdapter = {
-  findMany(input: { model: 'session'; where: { field: string; value: string }[] }): Promise<{ createdAt: Date }[]>;
-};
 
 /** Whether this path is one of this file. */
 export function isEmailRoute(pathname: string): boolean {
@@ -175,7 +160,7 @@ export async function handleEmailRoutes(
     if (sent > VERIFY_LINKS_PER_MAILBOX) return json(429, { error: 'too-many-addresses' }, headers);
 
     const token = randomBytes(32).toString('base64url');
-    const adapter = (await auth.$context).internalAdapter as unknown as VerificationAdapter;
+    const adapter = await internalAdapterOf(auth);
     await adapter.createVerificationValue({
       identifier: waitingKey(token),
       value: JSON.stringify({ account: account.id, email }),
@@ -204,7 +189,7 @@ export async function handleEmailRoutes(
     const body = await readJsonObject(request);
     const token = typeof body?.token === 'string' ? body.token.trim() : '';
     if (!TOKEN.test(token)) return json(400, { error: 'invalid-code' }, headers);
-    const adapter = (await auth.$context).internalAdapter as unknown as VerificationAdapter;
+    const adapter = await internalAdapterOf(auth);
     const spent = () => json(404, { error: 'link-spent-or-expired' }, headers);
 
     return onePersonAtATime(account.id, async () => {
@@ -226,7 +211,7 @@ export async function handleEmailRoutes(
     const email = typeof body?.email === 'string' ? normalizeEmail(body.email) : undefined;
     if (email === undefined) return json(400, { error: 'invalid-email' }, headers);
     // A session of the last day, as for an unlink: a cookie copied a week ago does not move the account.
-    const sessionAdapter = (await auth.$context).adapter as unknown as SessionAdapter;
+    const sessionAdapter = await adapterOf(auth);
     const [session] = await sessionAdapter.findMany({
       model: 'session',
       where: [{ field: 'id', value: mine.sessionId }],

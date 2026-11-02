@@ -1,4 +1,5 @@
 import { json } from './http.ts';
+import { type AuthAdapter, adapterOf, apiOf } from './auth-internals.ts';
 import { type AccountStore, type SharedSite, type Workspace, can, mailboxOf } from './accounts.ts';
 import { newId, roleOf } from './account-rows.ts';
 import { AUTH_BASE_PATH, type Auth, INVITATION_SECONDS, INVITER_GONE } from './auth.ts';
@@ -105,37 +106,13 @@ export const INVITATIONS_PER_INVITER = 20;
 export const INVITATIONS_PER_WORKSPACE = 40;
 export const INVITER_WINDOW_MS = 60 * 60 * 1000;
 
-/** The adapter of better-auth, to read which workspace an invitation is of, and who made it. */
-type InvitationAdapter = {
-  findOne(input: { model: 'invitation' | 'member' | 'user'; where: { field: string; value: string }[] }): Promise<{
-    organizationId?: unknown;
-    banned?: unknown;
-    inviterId?: unknown;
-    role?: unknown;
-    status?: unknown;
-    email?: unknown;
-    expiresAt?: unknown;
-    mailed?: unknown;
-  } | null>;
-  update(input: {
-    model: 'invitation';
-    where: { field: string; value: string }[];
-    update: { mailed: boolean } | { email: string };
-  }): Promise<unknown>;
-  updateMany(input: {
-    model: 'invitation';
-    where: { field: string; value: string }[];
-    update: { status: 'canceled' };
-  }): Promise<unknown>;
-};
-
 /**
  * An invitation is the word of whoever made it (FRU-209). When that person is removed, leaves, or
  * loses `manage-members`, the invitations of theirs that wait in the workspace are cancelled in the
  * same call. An admin who was removed left a second admin behind, for 7 days, or for ever with
  * « Resend ».
  */
-async function cancelInvitationsOf(adapter: InvitationAdapter, workspace: string, inviter: string): Promise<void> {
+async function cancelInvitationsOf(adapter: AuthAdapter, workspace: string, inviter: string): Promise<void> {
   await adapter.updateMany({
     model: 'invitation',
     where: [
@@ -154,7 +131,7 @@ async function cancelInvitationsOf(adapter: InvitationAdapter, workspace: string
  */
 async function afterSomebodyWent(
   context: Pick<OrganizationRouteContext, 'sessions' | 'accounts'>,
-  adapter: InvitationAdapter,
+  adapter: AuthAdapter,
   workspace: string,
   person: string,
 ): Promise<void> {
@@ -176,7 +153,7 @@ async function afterSomebodyWent(
  * plugin, in no transaction), and for an invitation that waited before the cancellation existed.
  * An invitation that does not exist is left to better-auth, which answers it.
  */
-async function inviterStillInvites(adapter: InvitationAdapter, invitationId: string): Promise<boolean> {
+async function inviterStillInvites(adapter: AuthAdapter, invitationId: string): Promise<boolean> {
   const invitation = await adapter.findOne({ model: 'invitation', where: [{ field: 'id', value: invitationId }] });
   if (invitation === null) return true;
   const member = await adapter.findOne({
@@ -203,7 +180,7 @@ async function inviterStillInvites(adapter: InvitationAdapter, invitationId: str
 /** Whether an invitation was sent to the address of `person` (FRU-282). */
 async function isInvitedPerson(
   context: Pick<OrganizationRouteContext, 'accounts'>,
-  adapter: InvitationAdapter,
+  adapter: AuthAdapter,
   person: string,
   invitationId: string,
 ): Promise<boolean> {
@@ -240,7 +217,7 @@ async function isAddressOf(
  */
 async function asPrimaryAddress(
   context: Pick<OrganizationRouteContext, 'accounts'>,
-  adapter: InvitationAdapter,
+  adapter: AuthAdapter,
   person: string,
   invitationId: string,
 ): Promise<{ restore(): Promise<void> } | undefined> {
@@ -268,7 +245,7 @@ async function asPrimaryAddress(
  * Whether a message of this invitation left (FRU-269), kept on the invitation so that the list says it
  * after a reload. A message that left stays left: a « Resend » that sent nothing does not take it back.
  */
-async function noteMailed(adapter: InvitationAdapter, invitationId: string, mailed: boolean): Promise<void> {
+async function noteMailed(adapter: AuthAdapter, invitationId: string, mailed: boolean): Promise<void> {
   if (!mailed) {
     const kept = await adapter.findOne({ model: 'invitation', where: [{ field: 'id', value: invitationId }] });
     if (kept?.mailed === true) return;
@@ -277,7 +254,7 @@ async function noteMailed(adapter: InvitationAdapter, invitationId: string, mail
 }
 
 /** An invitation made by this call, that cannot wait: its sites were not written (FRU-250). */
-async function cancelInvitation(adapter: InvitationAdapter, invitationId: string): Promise<void> {
+async function cancelInvitation(adapter: AuthAdapter, invitationId: string): Promise<void> {
   await adapter.updateMany({
     model: 'invitation',
     where: [{ field: 'id', value: invitationId }],
@@ -296,7 +273,7 @@ async function cancelInvitation(adapter: InvitationAdapter, invitationId: string
  */
 async function shareBeforeAcceptance(
   context: Pick<OrganizationRouteContext, 'accounts'>,
-  adapter: InvitationAdapter,
+  adapter: AuthAdapter,
   person: string,
   invitationId: string,
 ): Promise<{ refused?: { code: string; message: string }; workspace?: string }> {
@@ -406,7 +383,7 @@ async function workspaceOfInvitation(
   auth: Auth,
   input: Record<string, OrganizationValue>,
 ): Promise<string | undefined> {
-  const adapter = (await auth.$context).adapter as unknown as InvitationAdapter;
+  const adapter = await adapterOf(auth);
   const invitation = await adapter.findOne({
     model: 'invitation',
     where: [{ field: 'id', value: String(input.invitationId) }],
@@ -465,7 +442,7 @@ async function answerOrganizationCall(
   let guestSites: SharedSite[] | undefined;
   /** The invitation that waits for the address of a « Resend », whose sites are written already. */
   let waiting: string | undefined;
-  const adapter = (await auth.$context).adapter as unknown as InvitationAdapter;
+  const adapter = await adapterOf(auth);
 
   if (workspace !== undefined) {
     // Read by the store of the worker, which takes one role of the four and nothing else. Not a
@@ -759,7 +736,7 @@ async function answerOrganizationCall(
     const listed: unknown[] = [...read];
     const account = await context.accounts.account(mine.userId);
     const others = (await context.accounts.addresses(mine.userId)).filter((each) => each.email !== account?.email);
-    const api = auth.api as unknown as { listUserInvitations(input: object): Promise<unknown> };
+    const api = apiOf(auth);
     for (const other of others) {
       // A list of another address that fails leaves the others, said in the log: never a `502` for
       // the invitations of the primary address.
@@ -913,9 +890,7 @@ export async function mailAdminInvitation(
  * other calls that read the cookie.
  */
 export async function createWorkspaceWithPlugin(auth: Auth, headers: Headers, name: string): Promise<Workspace> {
-  const plugin = auth.api as unknown as {
-    createOrganization(input: object): Promise<{ id?: unknown; name?: unknown } | null>;
-  };
+  const plugin = apiOf(auth);
   let made: { id?: unknown; name?: unknown } | null;
   try {
     made = await plugin.createOrganization({
@@ -950,9 +925,7 @@ export async function renameWorkspaceWithPlugin(
   workspace: string,
   name: string,
 ): Promise<Workspace> {
-  const plugin = auth.api as unknown as {
-    updateOrganization(input: object): Promise<{ id?: unknown; name?: unknown } | null>;
-  };
+  const plugin = apiOf(auth);
   let renamed: { id?: unknown; name?: unknown } | null;
   try {
     renamed = await plugin.updateOrganization({ body: { organizationId: workspace, data: { name } }, headers });
