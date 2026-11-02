@@ -11,20 +11,35 @@ export const FROZEN_CLASS = 'gallery-frozen';
 
 const SOURCES = new WeakMap<CSSStyleSheet, string>();
 
+const KEPT = Symbol('fruitback.gallery.keepSheetSources');
+
 /**
- * Keeps the text that each sheet of the document receives. Call it before the widget mounts.
+ * Keeps the text that each sheet of the document receives. Call it before the widget mounts. A second
+ * call does nothing.
  *
  * `cssText` of a rule loses a shorthand with `var()` that a longhand follows: `border: 1px solid
  * var(--x)` then `border-bottom-width: 2px` comes back as `border-bottom-width: 2px` alone. The copy
  * uses the text that the widget gave.
  */
-export function keepSheetSources(): void {
-  const prototype = CSSStyleSheet.prototype;
-  const replaceSync = prototype.replaceSync;
+export function keepSheetSources(prototype: CSSStyleSheet = CSSStyleSheet.prototype): void {
+  const patched = prototype as CSSStyleSheet & { [KEPT]?: true };
+  if (patched[KEPT]) return;
+  patched[KEPT] = true;
+  const { replaceSync, replace } = prototype;
   prototype.replaceSync = function (this: CSSStyleSheet, text: string) {
     SOURCES.set(this, text);
     replaceSync.call(this, text);
   };
+  prototype.replace = function (this: CSSStyleSheet, text: string) {
+    SOURCES.set(this, text);
+
+    return replace.call(this, text);
+  };
+}
+
+/** The text that `keepSheetSources` kept for `sheet`. */
+export function sourceOf(sheet: CSSStyleSheet): string | undefined {
+  return SOURCES.get(sheet);
 }
 
 /**
@@ -37,9 +52,35 @@ export function scopedCss(texts: readonly string[], globals: readonly string[]):
   return [...globals, `@scope (.${FROZEN_CLASS}) {\n${texts.map(hostToScope).join('\n')}\n}`].join('\n');
 }
 
-/** `:host([a]) .b` → `:scope[a] .b`, and `:host` → `:scope`. A `:host()` holds one compound selector. */
+/** `:host([a]) .b` → `:scope[a] .b`, and `:host` → `:scope`. The argument of `:host()` can hold parentheses. */
 export function hostToScope(css: string): string {
-  return css.replace(/:host\(((?:[^()]|\([^()]*\))*)\)/g, ':scope$1').replace(/:host\b/g, ':scope');
+  let out = '';
+  let from = 0;
+  for (let at = css.indexOf(':host', from); at !== -1; at = css.indexOf(':host', from)) {
+    const after = at + ':host'.length;
+    if (/[\w-]/.test(css[after] ?? '')) {
+      out += css.slice(from, after);
+      from = after;
+      continue;
+    }
+    out += css.slice(from, at) + ':scope';
+    from = after;
+    if (css[after] !== '(') continue;
+    const close = closingParenthesis(css, after);
+    out += css.slice(after + 1, close);
+    from = close + 1;
+  }
+
+  return out + css.slice(from);
+}
+
+function closingParenthesis(text: string, open: number): number {
+  let depth = 0;
+  for (let at = open; at < text.length; at += 1) {
+    if (text[at] === '(') depth += 1;
+    else if (text[at] === ')' && --depth === 0) return at;
+  }
+  throw new Error(`No closing parenthesis for the one at ${open}: ${text.slice(open, open + 40)}`);
 }
 
 function sheetsOf(root: ShadowRoot): { texts: string[]; globals: string[] } {
@@ -49,7 +90,7 @@ function sheetsOf(root: ShadowRoot): { texts: string[]; globals: string[] } {
   );
   const texts = [
     ...root.adoptedStyleSheets.map((sheet) => {
-      const text = SOURCES.get(sheet);
+      const text = sourceOf(sheet);
       if (text === undefined) throw new Error('A sheet of the widget has no text: call keepSheetSources() first');
 
       return text;
