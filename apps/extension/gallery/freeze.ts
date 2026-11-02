@@ -9,20 +9,33 @@
 
 export const FROZEN_CLASS = 'gallery-frozen';
 
-/** A copy keeps the attributes, not the values that a script or a person typed: these come along. */
+/**
+ * A copy keeps the attributes, not the state that a script or a person gave to a field: the value of
+ * a text field, the `checked` of a box, the `selected` of an option. These come along as attributes.
+ */
 function withValues<T extends Node>(source: T, copy: T): T {
-  if (source instanceof Element && copy instanceof Element) {
-    const fields = source.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input, textarea');
-    const copies = copy.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input, textarea');
-    fields.forEach((field, index) => {
-      const target = copies[index];
-      if (target === undefined) return;
-      if (field instanceof HTMLTextAreaElement) target.textContent = field.value;
-      else target.setAttribute('value', field.value);
-    });
-  }
+  if (source.nodeType !== Node.ELEMENT_NODE) return copy;
+  const query = 'input, textarea, option';
+  const fields = (source as unknown as Element).querySelectorAll(query);
+  const copies = (copy as unknown as Element).querySelectorAll(query);
+  fields.forEach((field, index) => {
+    const target = copies[index];
+    if (target !== undefined) copyState(field, target);
+  });
 
   return copy;
+}
+
+function copyState(field: Element, target: Element): void {
+  if (field.tagName === 'TEXTAREA') {
+    target.textContent = (field as HTMLTextAreaElement).value;
+  } else if (field.tagName === 'OPTION') {
+    target.toggleAttribute('selected', (field as HTMLOptionElement).selected);
+  } else {
+    const input = field as HTMLInputElement;
+    if (input.type === 'checkbox' || input.type === 'radio') target.toggleAttribute('checked', input.checked);
+    else target.setAttribute('value', input.value);
+  }
 }
 
 /**
