@@ -777,6 +777,8 @@ describe('the repositories of a github connector, for a destination (FRU-361)', 
       { token: acme.token },
     );
     assert.equal(answer.status, 502);
+    // Its own word: the console says to connect GitHub again, not to try again.
+    assert.deepEqual(await answer.json(), { error: 'connection-ended' });
     assert.equal(await acme.attention(), 'connection-ended');
   });
 

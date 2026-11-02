@@ -51,7 +51,13 @@ import {
   systemResolver,
 } from './domain-proof.ts';
 import { noteConnectorCall } from './connector-health.ts';
-import { type GithubApp, type ListedRepositories, openInstallation, readGithubRepository } from './github-connector.ts';
+import {
+  type GithubApp,
+  GithubInstallationGone,
+  type ListedRepositories,
+  openInstallation,
+  readGithubRepository,
+} from './github-connector.ts';
 import { GITHUB_STATES } from './github.ts';
 import { githubAppTicket } from './github-app-flow.ts';
 import {
@@ -1371,6 +1377,8 @@ export async function handleConsoleApi(
         // An installation that is gone makes the connector need attention, as the list does.
         const moment = context.now;
         await noteConnectorCall(context.accounts, id, error, moment === undefined ? undefined : () => moment);
+        // The console says what to do about it, where a GitHub that is down is « try again ».
+        if (error instanceof GithubInstallationGone) return json(502, { error: 'connection-ended' }, headers);
         throw error;
       }
 

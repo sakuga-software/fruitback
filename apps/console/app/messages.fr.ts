@@ -927,7 +927,9 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'GitHub liste {listed} des {total} dépôts de {account}. Ajoutez-en un autre par son nom.',
   'Repository of {account}': 'Dépôt de {account}',
   Add: 'Ajouter',
-  'The App reaches no repository {name}.': 'L’App n’atteint aucun dépôt {name}.',
+  'The App reaches no repository {name}.': 'L’application n’atteint aucun dépôt {name}.',
+  'The GitHub App is no longer installed on {account}. Disconnect it on the Connectors screen, then connect GitHub again.':
+    'L’application GitHub n’est plus installée sur {account}. Déconnectez-la dans l’écran Connecteurs, puis connectez GitHub de nouveau.',
   'Write the repository as owner/name.': 'Écrivez le dépôt sous la forme propriétaire/nom.',
   'GitHub did not answer. Try again in a moment.': 'GitHub n’a pas répondu. Réessayez dans un instant.',
   'Where the notes of {site} go': 'Où vont les notes de {site}',

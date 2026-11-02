@@ -53,6 +53,7 @@ async function workerWith(page: Page, total: number, locale: 'en' | 'fr' = 'en')
       if (name === null) return json({ repositories: LISTED, total: worker.total });
       worker.asked.push(name);
       if (!/^[^/\s]+\/[^/\s]+$/.test(name)) return json({ error: 'invalid-repository' }, 400);
+      if (name.toLowerCase() === 'acme/gone') return json({ error: 'connection-ended' }, 502);
       if (name.toLowerCase() === 'acme/repo-1203') {
         return json({ repository: { fullName: 'acme/repo-1203', private: true } });
       }
@@ -93,6 +94,14 @@ test('a repository past the 1,000 listed is added by its name (FRU-500)', async 
   await field.fill('acme');
   await addButton.click();
   await expect(byName(page).getByText('Write the repository as owner/name.')).toBeVisible();
+  // An installation that is gone: what to do about it, not « try again ».
+  await field.fill('acme/gone');
+  await addButton.click();
+  await expect(
+    byName(page).getByText(
+      'The GitHub App is no longer installed on acme. Disconnect it on the Connectors screen, then connect GitHub again.',
+    ),
+  ).toBeVisible();
   expect(worker.sent).toEqual([]);
 
   // The one past the list: asked alone, then added as a destination.
@@ -103,7 +112,7 @@ test('a repository past the 1,000 listed is added by its name (FRU-500)', async 
   await expect(field).toHaveValue('');
   // The count stays what GitHub listed: the repository added by its name is not one of them.
   await expect(byName(page)).toContainText('GitHub lists 1000 of the 1250 repositories of acme.');
-  expect(worker.asked).toEqual(['acme/elsewhere', 'acme', 'Acme/Repo-1203']);
+  expect(worker.asked).toEqual(['acme/elsewhere', 'acme', 'acme/gone', 'Acme/Repo-1203']);
 
   const results = await new AxeBuilder({ page }).include('main').analyze();
   expect(results.violations.map((violation) => violation.id)).toEqual([]);

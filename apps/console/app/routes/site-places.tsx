@@ -688,6 +688,13 @@ function RepositoryByName({
       onFound(answer.data.repository);
     } else if (!answer.ok && answer.status === 404) {
       setSaid({ text: msg('The App reaches no repository {name}.'), values: { name: wanted } });
+    } else if (!answer.ok && answer.error === 'connection-ended') {
+      setSaid({
+        text: msg(
+          'The GitHub App is no longer installed on {account}. Disconnect it on the Connectors screen, then connect GitHub again.',
+        ),
+        values: { account },
+      });
     } else if (!answer.ok && answer.status === 400) {
       setSaid({ text: msg('Write the repository as owner/name.') });
     } else {
