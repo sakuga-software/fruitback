@@ -20,6 +20,7 @@
 /** Who the worker says this session speaks for. Its word, from the pairing an operator created. */
 import { isSecureWorkerEndpoint } from './endpoint.ts';
 import { randomId } from './relay-transport.ts';
+import { isNonEmptyString, isRecord } from './guards.ts';
 
 export type SessionIdentity = {
   subject: string;
@@ -716,12 +717,4 @@ function refusalOf(answer: SessionResponse): 'refused' | 'expired' | undefined {
 /** Whoever a session belongs to, as a person reads it. */
 export function describeIdentity(identity: SessionIdentity): string {
   return identity.name ?? identity.email ?? identity.subject;
-}
-
-function isNonEmptyString(value: unknown): value is string {
-  return typeof value === 'string' && value.length > 0;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
 }
