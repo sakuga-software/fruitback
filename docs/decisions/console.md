@@ -682,6 +682,15 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   workspace**: the whole list of a site is sent, and a GitHub place sent as a team makes the worker
   refuse that list. `e2e/console-github.spec.ts` holds the card, every word, the panel, 390 px and
   axe; `e2e/console-site-places.spec.ts` the places and the bodies sent.
+  **The team of a Linear place links to its page at Linear** (FRU-574): `url` comes with each Linear
+  destination of `GET …/sites`. The worker builds it, `https://linear.app/<urlKey>/team/<KEY>/all`, from
+  the keys that Linear answers in the same read that names the place (`linearTeamUrl`, plain keys
+  only), and never takes it from a request. The worker reads back only an address of
+  `https://linear.app/`, and the console links only to one. A destination written before migration
+  0041 has no `url` until its places are written again. Its card then shows the team as words.
+  A write of the places keeps the `url` that Linear's answer gives now, and never the stored one,
+  as for the label: a team key can be renamed at Linear. With no key in the answer, there is no link
+  until the next write.
 - **A site chooses where its notes go on its page** (FRU-399, Mathieu; FRU-433), and no longer in the
   panel of a source: a section of the page of the site, for an owner or an admin
   (`site-places.tsx`). It lists the places of the site in their order, with « Make it the default »

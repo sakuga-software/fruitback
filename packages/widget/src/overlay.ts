@@ -1,4 +1,11 @@
-import { type Note, type NoteBounds, type NoteComment, type NoteIssue, type NoteStatus } from '@fruitback/shared';
+import {
+  type Note,
+  type NoteBounds,
+  type NoteComment,
+  type NoteIssue,
+  type NoteStatus,
+  anchorSelectorPath,
+} from '@fruitback/shared';
 import { type Direction, type Translator, createTranslator, languageOf } from './messages.ts';
 import { createIcon } from './icons.ts';
 import { type Box, type Offset, NO_OFFSET, attachHandle, clampOffset, moved, tether } from './bubble-drag.ts';
@@ -6,7 +13,7 @@ import { statusLabel, statusPaint } from './status-paint.ts';
 import { isElement } from './dom.ts';
 import { deepActiveElement } from './focus.ts';
 import { createOrphanList, type OrphanList } from './orphans.ts';
-import { type AnchorResolution, resolveAnchor } from './resolve.ts';
+import { type AnchorResolution, followHosts, resolveAnchor } from './resolve.ts';
 import { PREVIEW_STYLES, PREVIEW_WIDTH, buildPreview, previewPlace } from './pin-preview.ts';
 import { besideElement } from './thread-place.ts';
 import { adoptStyles } from './stylesheet.ts';
@@ -576,6 +583,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
 
     fan();
     observeAnchors();
+    observeShadowRoots();
     listOrphans();
 
     // The thread quotes the resolution, so it is rebuilt rather than left contradicting its pin.
@@ -638,6 +646,59 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
       if (entry.resolution.element !== null) anchors.observe(entry.resolution.element);
     }
     if (thread !== null && threadHome === null) anchors.observe(thread);
+  }
+
+  /**
+   * A document observer does not see into a shadow root. So the open shadow roots that the `hosts`
+   * of the pins go through are observed too, with the same callback and the same debounce (FRU-582).
+   * Only those roots: a page can hold hundreds of web components, and a note names a few.
+   *
+   * Armed again after each resolution, as `observeAnchors` is. `disconnect` lets go of a root that
+   * left the page, and the next walk takes a root that came in. A host that appears later is
+   * inserted into a root observed already: the document, or the root of the host above it.
+   *
+   * The widget's own Shadow root is never observed, even when a host names it: its dock and its
+   * popover change on each move of the pointer. A closed root has no `shadowRoot` to observe, so a
+   * pin in one stays on its position.
+   */
+  function observeShadowRoots(): void {
+    if (shadowMutations === undefined) return;
+
+    shadowMutations.disconnect();
+    const ours = container.getRootNode();
+    const roots = new Set<ShadowRoot>();
+    for (const entry of placed) {
+      const hosts = entry.issue.note.anchor.hosts;
+      if (hosts === undefined || hosts.length === 0) continue;
+
+      const walk = followHosts(hosts, document);
+      for (const root of walk.roots) if (root !== ours) roots.add(root);
+      if (walk.stopped !== null) awaitDefinition(walk.stopped);
+    }
+    for (const root of roots) shadowMutations.observe(root, { childList: true, subtree: true });
+  }
+
+  /**
+   * A custom element defined after the pins resolved attaches its shadow root when it upgrades. No
+   * mutation record says so, in the document or anywhere. So a host with no shadow root whose name
+   * is not defined yet resolves the pins again once it is. One wait per name, and none for a name
+   * already defined: that host has a closed root, or none.
+   */
+  function awaitDefinition(host: Element): void {
+    const registry = view?.customElements;
+    const name = host.localName;
+    if (registry === undefined || !name.includes('-') || awaited.has(name) || registry.get(name) !== undefined) return;
+
+    awaited.add(name);
+    registry.whenDefined(name).then(
+      () => {
+        awaited.delete(name);
+        // After `destroy`, `placed` is empty and the resolution returns at once.
+        scheduleResolve();
+      },
+      // Not a valid custom element name: it never upgrades, so there is nothing to wait for.
+      () => undefined,
+    );
   }
 
   function render(issues: NoteIssue[]): void {
@@ -725,6 +786,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
 
     fan();
     observeAnchors();
+    observeShadowRoots();
     listOrphans();
     if (homed !== undefined) {
       const entry = placed.find((candidate) => candidate.issue.note.id === homed);
@@ -985,6 +1047,11 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
   const mutations = view?.MutationObserver === undefined ? undefined : new view.MutationObserver(onMutations);
   mutations?.observe(document, { childList: true, subtree: true });
 
+  // The open shadow roots that the hosts of the pins go through (FRU-582), and the custom element
+  // names a host waits on.
+  const shadowMutations = view?.MutationObserver === undefined ? undefined : new view.MutationObserver(onMutations);
+  const awaited = new Set<string>();
+
   // happy-dom has no ResizeObserver, and neither does an old browser.
   const anchors = view?.ResizeObserver === undefined ? undefined : new view.ResizeObserver(() => schedule());
 
@@ -1041,6 +1108,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
       if (frame !== 0) view?.cancelAnimationFrame(frame);
       if (resolveTimer !== undefined) clearTimeout(resolveTimer);
       mutations?.disconnect();
+      shadowMutations?.disconnect();
       anchors?.disconnect();
       view?.removeEventListener('scroll', schedule, true);
       view?.removeEventListener('resize', schedule);
@@ -1259,7 +1327,8 @@ function initialOf(name: string): string {
 function sourceBlock(document: Document, issue: NoteIssue, showSelector: boolean): HTMLElement[] {
   if (!showSelector) return [];
   const source = issue.note.source;
-  const selector = issue.note.anchor.selector;
+  // The hosts first, when the element is in a web component (FRU-580): its selector alone finds nothing.
+  const selector = anchorSelectorPath(issue.note.anchor);
   const line = source?.line === undefined ? '' : `:${source.line}`;
   const file = source?.file === undefined ? undefined : `${source.file}${line}`;
   const component = source?.component?.trim() ? `<${source.component.trim()}>` : undefined;

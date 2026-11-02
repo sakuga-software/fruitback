@@ -25,3 +25,17 @@ export function isElement(value: unknown): value is Element {
 
   return candidate.nodeType === ELEMENT_NODE && typeof candidate.tagName === 'string';
 }
+
+const DOCUMENT_FRAGMENT_NODE = 11;
+
+/**
+ * The same realm rule for a shadow root (FRU-580): a fragment with a `host` element. A plain
+ * `DocumentFragment` has no host.
+ */
+export function isShadowRoot(value: unknown): value is ShadowRoot {
+  if (typeof value !== 'object' || value === null) return false;
+
+  const candidate = value as ShadowRoot;
+
+  return candidate.nodeType === DOCUMENT_FRAGMENT_NODE && isElement(candidate.host);
+}

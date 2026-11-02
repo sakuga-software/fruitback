@@ -1,3 +1,5 @@
+import { isShadowRoot } from './dom.ts';
+
 /**
  * Building the selector half of an anchor.
  *
@@ -7,8 +9,10 @@
  * a refactor; a class emitted by CSS modules and a `:r7:` from `useId` do not, and picking one of
  * those produces an anchor that looks precise and resolves to nothing a week later.
  *
- * Whatever comes out of here is verified unique in the document before being returned, and
- * `domPath` is captured alongside it as the structural fallback.
+ * Whatever comes out of here is verified unique in the element's root before being returned, and
+ * `domPath` is captured alongside it as the structural fallback. The root is the document, or the
+ * shadow root the element lives in: no selector reaches into a shadow root from outside, so an
+ * element there gets a selector of its root and a path of hosts (`buildHostPath`, FRU-580).
  */
 
 /** In the order a front-end dev would recognise them. All of them mean "this is on purpose". */
@@ -88,7 +92,7 @@ function stableClasses(element: Element): string[] {
  * than a path from `<html>`: reordering the page above that ancestor no longer breaks it.
  */
 export function buildSelector(element: Element): string {
-  const root = element.ownerDocument;
+  const root = rootOf(element);
 
   for (const candidate of selectorCandidates(element)) {
     if (matchesOnly(root, candidate, element)) return candidate;
@@ -101,7 +105,7 @@ export function buildSelector(element: Element): string {
 }
 
 function scopeUnderAncestor(element: Element): string | null {
-  const root = element.ownerDocument;
+  const root = rootOf(element);
   const steps: string[] = [];
   let child: Element = element;
 
@@ -122,7 +126,35 @@ function scopeUnderAncestor(element: Element): string | null {
   return null;
 }
 
-function matchesOnly(root: Document, selector: string, element: Element): boolean {
+/**
+ * Where a selector of this element is read: its shadow root, else its document. A detached element
+ * keeps the document, as before FRU-580.
+ */
+function rootOf(element: Element): Document | ShadowRoot {
+  const root = element.getRootNode();
+
+  return isShadowRoot(root) ? root : element.ownerDocument;
+}
+
+/**
+ * The selectors of the shadow hosts above the element, outermost first (FRU-580), or `undefined` for
+ * an element of the document. Each host gets `buildSelector`, read in its own root, so two instances
+ * of one component are told apart as two cards are.
+ *
+ * A closed shadow root is written down too: the element is in hand, so its root is known. The widget
+ * cannot follow such a path when it resolves the note, and the pin falls back to its position.
+ */
+export function buildHostPath(element: Element): string[] | undefined {
+  const hosts: string[] = [];
+
+  for (let root = element.getRootNode(); isShadowRoot(root); root = root.host.getRootNode()) {
+    hosts.unshift(buildSelector(root.host));
+  }
+
+  return hosts.length > 0 ? hosts : undefined;
+}
+
+function matchesOnly(root: Document | ShadowRoot, selector: string, element: Element): boolean {
   try {
     const found = root.querySelectorAll(selector);
 
@@ -140,6 +172,7 @@ function matchesOnly(root: Document, selector: string, element: Element): boolea
  * Brittle on its own, which is why it is stored *next to* the selector rather than instead of it:
  * when everything else has been renamed, the shape of the page is the last thing left to match on.
  * `:nth-child` is only spelled out where it disambiguates, so the path stays readable in the issue.
+ * In a shadow root the path starts at the top of that root, where `parentElement` is `null`.
  */
 export function buildDomPath(element: Element): string {
   const steps: string[] = [];

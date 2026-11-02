@@ -45,6 +45,14 @@ first publish made it expensive.
 - **An issue says `checked: { by, at }` and `mine: true`** (FRU-294): `checked` on a done note whose
   newest verdict in its replies is « looks fixed », `mine` to the reader who left the note. Both
   optional, both read-envelope fields: `NOTE_VERSION` does not move.
+- **An anchor in a web component names its hosts** (FRU-580): `anchor.hosts`, optional, one selector
+  for each open shadow root between the document and the element, outermost first. `selector`,
+  `domPath`, `text` and `tag` are then read in the last shadow root. **`NOTE_VERSION` does not move**,
+  decided on 2026-11-02: a reader of before drops the field and reads the anchor in the document, which
+  is what it already did with every note of a shadow root (its selector was one of that root), while a
+  new version would make every reader of before refuse every new note. `anchorSelectorPath` writes the
+  hosts and the selector as one line (`#promo >>> button.buy`) for the description, the text of a page
+  and the thread; no CSS engine reads it.
 - **An issue says `editable: true`** (FRU-475) to the reader who may edit its text now: their own
   note, still `new`, kept by the worker. Optional, a read-envelope field: `NOTE_VERSION` does not move.
 

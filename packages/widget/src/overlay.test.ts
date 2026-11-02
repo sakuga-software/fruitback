@@ -4,7 +4,15 @@ import { noteFixture, noteIssueFixture } from '@fruitback/shared/note.fixture';
 import type { NoteIssue } from '@fruitback/shared';
 import { type Overlay, createOverlay } from './overlay.ts';
 import { createTranslator } from './messages.ts';
-import { type MountedPage, mountPage, pressKey, setDocumentSize, setRect, stylesIn } from './dom.fixture.ts';
+import {
+  type MountedPage,
+  attachShadowHtml,
+  mountPage,
+  pressKey,
+  setDocumentSize,
+  setRect,
+  stylesIn,
+} from './dom.fixture.ts';
 
 const PAGE = '<main><section><button data-testid="checkout-cta">Commander</button></section></main>';
 
@@ -945,6 +953,205 @@ describe('the page changing underneath', () => {
     overlay.render([]);
 
     page.document.querySelector('main')?.append(page.document.createElement('div'));
+    await settle();
+
+    assert.equal(resolves, 0);
+  });
+});
+
+describe('a shadow root changing underneath (FRU-582)', () => {
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 200));
+
+  /** A page with one web component host, `#promo`, and nothing drawn in it yet. */
+  function mountHost(tag = 'acme-promo'): MountedPage {
+    const page = mountPage(`<main><${tag} id="promo"></${tag}></main>`, { width: 1_000, height: 1_000 });
+    setDocumentSize(page.document, 1_000, 1_000);
+
+    return page;
+  }
+
+  /** A note on the button of the component, read through `hosts`. */
+  function issueInPromo(hosts: string[] | null = ['#promo']) {
+    return noteIssueFixture({
+      note: noteFixture({
+        anchor: {
+          ...(hosts === null ? {} : { hosts }),
+          selector: 'button.buy',
+          tag: 'button',
+          text: 'Acheter',
+          bounds: { xPct: 50, yPct: 50, wPct: 10, hPct: 4 },
+        },
+      }),
+    });
+  }
+
+  /** The button of the component, drawn late into `root`. */
+  function drawButton(page: MountedPage, root: ShadowRoot | Element): Element {
+    const button = page.document.createElement('button');
+    button.className = 'buy';
+    button.textContent = 'Acheter';
+    setRect(button, { left: 500, top: 500, width: 100, height: 40 });
+    root.append(button);
+
+    return button;
+  }
+
+  function strategy(page: MountedPage): string | undefined {
+    return (page.document.querySelector('[data-fruitback-pin]') as HTMLElement | null)?.dataset.fruitbackStrategy;
+  }
+
+  it('re-resolves a pin in a web component when its open shadow root draws late', async () => {
+    const page = mountHost();
+    const shadow = attachShadowHtml(page.query('#promo'), '<p>Offre du moment</p>');
+    overlay = createOverlay({ document: page.document });
+    overlay.render([issueInPromo()]);
+    assert.equal(strategy(page), 'orphan', 'nothing to pin on yet');
+
+    // The component draws its content after the pins resolved: the document does not change.
+    drawButton(page, shadow);
+    await settle();
+
+    assert.equal(strategy(page), 'selector');
+    const pin = page.document.querySelector('[data-fruitback-pin]') as HTMLElement;
+    assert.equal(pin.dataset.fruitbackConfident, 'true');
+    assert.equal(pin.style.left, '495px', 'on the button of the component');
+  });
+
+  it('waits for a custom element defined after the pins resolved, then observes its root', async () => {
+    const page = mountHost('late-promo');
+    overlay = createOverlay({ document: page.document });
+    overlay.render([issueInPromo()]);
+    assert.equal(strategy(page), 'orphan');
+
+    // Defined after the mount: the upgrade attaches the root, and no mutation record says so.
+    const HTMLElementOfPage = (page.view as unknown as { HTMLElement: typeof HTMLElement }).HTMLElement;
+    page.view.customElements.define(
+      'late-promo',
+      class extends HTMLElementOfPage {
+        connectedCallback(): void {
+          this.attachShadow({ mode: 'open' });
+        }
+      },
+    );
+    await settle();
+    const shadow = page.query('#promo').shadowRoot;
+    assert.ok(shadow !== null, 'the upgrade attached a root');
+    assert.equal(strategy(page), 'orphan', 'still empty');
+
+    drawButton(page, shadow);
+    await settle();
+
+    assert.equal(strategy(page), 'selector');
+  });
+
+  it('picks up a nested host inserted later into a root it observes', async () => {
+    const page = mountHost();
+    const outer = attachShadowHtml(page.query('#promo'), '<p>Offre du moment</p>');
+    overlay = createOverlay({ document: page.document });
+    overlay.render([issueInPromo(['#promo', 'acme-price'])]);
+    assert.equal(strategy(page), 'orphan');
+
+    const price = page.document.createElement('acme-price');
+    drawButton(page, attachShadowHtml(price, ''));
+    outer.append(price);
+    await settle();
+
+    assert.equal(strategy(page), 'selector');
+  });
+
+  it('lets go of a shadow root that left the page', async () => {
+    const page = mountHost();
+    const shadow = attachShadowHtml(page.query('#promo'), '<p>Offre du moment</p>');
+    drawButton(page, shadow);
+    let resolves = 0;
+    overlay = createOverlay({ document: page.document, onResolve: () => (resolves += 1) });
+    overlay.render([issueInPromo()]);
+    assert.equal(strategy(page), 'selector');
+
+    page.query('#promo').remove();
+    await settle();
+    assert.equal(resolves, 1, 'the host leaving is a change of the document');
+    assert.equal(strategy(page), 'orphan');
+
+    // The root is off the page: what it does is none of the pins' business any more.
+    shadow.append(page.document.createElement('div'));
+    await settle();
+
+    assert.equal(resolves, 1);
+  });
+
+  it('observes nothing in a closed shadow root, and keeps the pin on its position', async () => {
+    const page = mountHost();
+    const closed = attachShadowHtml(page.query('#promo'), '<p>Offre du moment</p>', 'closed');
+    let resolves = 0;
+    overlay = createOverlay({ document: page.document, onResolve: () => (resolves += 1) });
+    overlay.render([issueInPromo()]);
+
+    drawButton(page, closed);
+    await settle();
+
+    assert.equal(resolves, 0);
+    assert.equal(strategy(page), 'orphan');
+  });
+
+  it('control: a note with no hosts is not woken by a shadow root, as before', async () => {
+    const page = mountHost();
+    const shadow = attachShadowHtml(page.query('#promo'), '<p>Offre du moment</p>');
+    let resolves = 0;
+    overlay = createOverlay({ document: page.document, onResolve: () => (resolves += 1) });
+    overlay.render([issueInPromo(null)]);
+
+    drawButton(page, shadow);
+    await settle();
+    assert.equal(resolves, 0, 'no root is observed for it');
+
+    // And a change of the document still re-resolves it.
+    page.query('main').append(page.document.createElement('div'));
+    await settle();
+    assert.equal(resolves, 1);
+  });
+
+  it('resolves once for a burst inside a shadow root, as for the document', async () => {
+    const page = mountHost();
+    const shadow = attachShadowHtml(page.query('#promo'), '<p>Offre du moment</p>');
+    let resolves = 0;
+    overlay = createOverlay({ document: page.document, onResolve: () => (resolves += 1) });
+    overlay.render([issueInPromo()]);
+
+    for (let pass = 0; pass < 5; pass += 1) {
+      shadow.append(page.document.createElement('div'));
+      await new Promise((resolve) => setTimeout(resolve, 40));
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+
+    assert.equal(resolves, 1);
+  });
+
+  it('does not observe its own Shadow root, even when a host names it', async () => {
+    // `hosts` comes from a description a human can edit. Observing the widget's own root would
+    // resolve again on each change of its dock.
+    const page = mountHost();
+    const own = attachShadowHtml(page.query('#promo'), '');
+    let resolves = 0;
+    overlay = createOverlay({ document: page.document, host: own, onResolve: () => (resolves += 1) });
+    overlay.render([issueInPromo()]);
+
+    own.append(page.document.createElement('div'));
+    await settle();
+
+    assert.equal(resolves, 0);
+  });
+
+  it('does nothing for a definition that comes after it was destroyed', async () => {
+    const page = mountHost('gone-promo');
+    let resolves = 0;
+    overlay = createOverlay({ document: page.document, onResolve: () => (resolves += 1) });
+    overlay.render([issueInPromo()]);
+    overlay.destroy();
+    overlay = null;
+
+    const HTMLElementOfPage = (page.view as unknown as { HTMLElement: typeof HTMLElement }).HTMLElement;
+    page.view.customElements.define('gone-promo', class extends HTMLElementOfPage {});
     await settle();
 
     assert.equal(resolves, 0);

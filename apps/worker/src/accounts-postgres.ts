@@ -140,6 +140,7 @@ const SITE_WITH_DESTINATION = {
   project_id: site_destinations.project_id,
   label: site_destinations.label,
   private: site_destinations.private,
+  url: site_destinations.url,
 };
 
 /**
@@ -1387,6 +1388,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
             project_id: site_destinations.project_id,
             label: site_destinations.label,
             private: site_destinations.private,
+            url: site_destinations.url,
           })
           .from(site)
           .leftJoin(site_destinations, eq(site_destinations.site_id, site.id))
@@ -1993,6 +1995,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
             project_id: destination.projectId ?? null,
             label: destination.label ?? null,
             private: destination.private ?? null,
+            url: destination.url ?? null,
           });
         }
 

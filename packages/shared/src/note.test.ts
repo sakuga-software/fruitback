@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { NOTE_KIND, NOTE_VERSION, canonicalizePageUrl, parseNote } from './note.ts';
+import { NOTE_KIND, NOTE_VERSION, anchorSelectorPath, canonicalizePageUrl, parseNote } from './note.ts';
 import { minimalNoteFixture, noteFixture } from './note.fixture.ts';
 
 describe('createNote', () => {
@@ -41,6 +41,39 @@ describe('createNote', () => {
 
   it('rejects a text excerpt used as content storage', () => {
     assert.throws(() => noteFixture({ anchor: { ...noteFixture().anchor, text: 'x'.repeat(161) } }));
+  });
+
+  it('refuses an empty path of shadow hosts, and an empty selector in it (FRU-580)', () => {
+    // An empty list would say « in a shadow root » and name none: no field rather than a false one.
+    assert.throws(() => noteFixture({ anchor: { ...noteFixture().anchor, hosts: [] } }));
+    assert.throws(() => noteFixture({ anchor: { ...noteFixture().anchor, hosts: ['acme-card', ''] } }));
+  });
+});
+
+describe('the path of shadow hosts of an anchor (FRU-580)', () => {
+  const inShadow = { ...noteFixture().anchor, hosts: ['#promo', 'acme-price'], selector: 'button.buy' };
+
+  it('round-trips the hosts in their order', () => {
+    const note = noteFixture({ anchor: inShadow });
+
+    assert.deepEqual(parseNote(JSON.parse(JSON.stringify(note))), { ok: true, note });
+    assert.deepEqual(note.anchor.hosts, ['#promo', 'acme-price']);
+  });
+
+  it('reads an anchor written before the field as before: no hosts key appears', () => {
+    // The payload a widget before FRU-580 stored, unchanged. The version did not move.
+    const before = JSON.parse(JSON.stringify(noteFixture()));
+    const result = parseNote(before);
+
+    assert.ok(result.ok);
+    assert.equal(result.note.v, 3);
+    assert.equal('hosts' in result.note.anchor, false);
+    assert.deepEqual(result.note.anchor, before.anchor);
+  });
+
+  it('writes the hosts, then the selector, in one line a person reads', () => {
+    assert.equal(anchorSelectorPath(inShadow), '#promo >>> acme-price >>> button.buy');
+    assert.equal(anchorSelectorPath(noteFixture().anchor), '[data-testid="checkout-cta"]');
   });
 });
 

@@ -334,11 +334,15 @@ async function labelled(
     const named = linear.get(destination);
     if (named === undefined) throw new UnknownPlace();
 
+    // FRU-574: the page of the team at Linear, as Linear answers it now. Whatever a destination came
+    // with is dropped: only the worker's own address is written.
+    const { url: _asked, ...place } = destination;
     out.push({
-      ...destination,
+      ...place,
       label: [KIND_NAMES[connector.kind], named.team, ...(named.project === undefined ? [] : [named.project])].join(
         ' · ',
       ),
+      ...(named.url === undefined ? {} : { url: named.url }),
     });
   }
 
@@ -353,8 +357,8 @@ async function linearNamesOf(
   context: TrackerContext,
   connectors: readonly { id: string; kind: ConnectorKind }[],
   wanted: readonly Destination[],
-): Promise<Map<Destination, { team: string; project?: string }>> {
-  const names = new Map<Destination, { team: string; project?: string }>();
+): Promise<Map<Destination, { team: string; project?: string; url?: string }>> {
+  const names = new Map<Destination, { team: string; project?: string; url?: string }>();
   for (const connector of connectors) {
     if (connector.kind !== 'linear') continue;
     const places = wanted.flatMap((destination) =>

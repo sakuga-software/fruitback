@@ -455,6 +455,38 @@ test('the new notes of a card are on a line of their own, and lead to the notes 
   await expect(page).toHaveURL(/\/w\/w1\/notes\?site=s2&stage=new$/);
 });
 
+test('the team of a Linear leads to its page at Linear, and only an address of Linear does (FRU-574)', async ({
+  page,
+}) => {
+  const team = {
+    connector: 'c1',
+    teamId: 't1',
+    label: 'Linear · Acme web',
+    url: 'https://linear.app/acme/team/WEB/all',
+  };
+  const elsewhere = { connector: 'c1', teamId: 't2', label: 'Linear · Ops', url: 'https://evil.example/team/OPS' };
+  await workerWith(page, 'owner', [
+    { ...SITES[0], destination: team, destinations: [team] },
+    { ...SITES[1], destination: elsewhere, destinations: [elsewhere] },
+    SITES[2],
+  ]);
+  await open(page);
+
+  const link = value(card(page, 'staging.acme.dev'), 'Notes go to').getByRole('link', {
+    name: 'Team Acme web, at Linear, in a new tab',
+    exact: true,
+  });
+  await expect(link).toHaveAttribute('href', 'https://linear.app/acme/team/WEB/all');
+  await expect(link).toHaveAttribute('target', '_blank');
+  await expect(link).toHaveAttribute('rel', 'noreferrer');
+  await expect(link).toHaveText('Team Acme web');
+  // An address that is not Linear's is no link, and a place with no address neither.
+  await expect(value(card(page, 'acme.dev'), 'Notes go to').getByRole('link')).toHaveCount(0);
+  await expect(value(card(page, 'acme.dev'), 'Notes go to')).toContainText('Team Ops');
+  await expect(value(card(page, 'support.acme.dev'), 'Notes go to').getByRole('link')).toHaveCount(0);
+  await expectNoViolation(page, 'the link to the team');
+});
+
 test('the search keeps the sites whose address holds it, and a reload keeps it (FRU-408)', async ({ page }) => {
   await workerWith(page);
   await open(page);

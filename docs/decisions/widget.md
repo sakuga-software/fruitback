@@ -1331,6 +1331,25 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
 - `resolveAnchor` walks the anchor's claims in the order `NOTE_ANCHOR_STRATEGIES` declares:
   **selector → testId → text → domPath → bounds**. That order is the contract's, and it puts `text`
   ahead of `domPath` deliberately.
+- **A note in a web component follows its hosts, or keeps only its position** (FRU-580). The capture
+  builds the selector and the path in the element's shadow root, and `buildHostPath` writes a
+  selector of each host, read in the root above it. `resolveAnchor` follows them, each a unique match
+  with an open `shadowRoot`, then walks the cascade in the last root. When a host is gone, repeated,
+  or its root is closed, only `bounds` runs, in the deepest root reached: the other claims describe
+  the element inside, and read in a root above they could recognise a stranger and be sure of it.
+  Pointing over a shadow host goes through `deepElementAt` of `shadow-hit.ts`, which enters each
+  shadow root once: react-grab 0.2.0 overflows the stack on two nested roots, because
+  `elementsFromPoint` of the inner root also lists the outer host (measured in Chromium).
+- **A change inside a shadow root of a note's hosts resolves the pins again** (FRU-582). A document
+  observer does not see into a shadow root, and a web component often draws its content after the
+  pins resolved. So a second `MutationObserver` watches the open shadow roots that the `hosts` of
+  the pins go through, and only those: a page can hold hundreds of components. It goes through the
+  same filter and the same debounce. It is armed again after each resolution, as the
+  `ResizeObserver` is: a root that left the page is let go, and a host inserted later lands in a
+  root observed already. A host of a custom element that is not defined yet has no root, and its
+  upgrade makes no mutation record: `customElements.whenDefined` resolves again, once per name. A
+  closed root has nothing to observe, and the widget's own Shadow root is never observed, even when
+  a host names it. `e2e/shadow-late.spec.ts` defines a component after the widget mounts.
 - **Every match must be unique and of the captured tag**, and `domPath` must additionally still be
   roughly where the note said it was — a structural path always resolves to _something_, and after
   an insertion that something is the neighbour.

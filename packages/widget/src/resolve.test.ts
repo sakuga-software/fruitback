@@ -1,8 +1,9 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { NoteAnchor } from '@fruitback/shared';
-import { overlap, resolveAnchor } from './resolve.ts';
-import { type MountedPage, mountPage, setDocumentSize, setRect } from './dom.fixture.ts';
+import { type AnchorResolution, overlap, resolveAnchor } from './resolve.ts';
+import { captureAnchor } from './anchor.ts';
+import { type MountedPage, attachShadowHtml, mountPage, queryIn, setDocumentSize, setRect } from './dom.fixture.ts';
 
 /**
  * happy-dom does no layout, so every box here is stated outright. That is the right level for this
@@ -254,5 +255,147 @@ describe('overlap', () => {
     const card = { xPct: 5, yPct: 5, wPct: 30, hPct: 20 };
 
     assert.ok(overlap(button, card) < 0.1);
+  });
+});
+
+/**
+ * The resolution as plain data. An assertion that prints a happy-dom element on failure walks its
+ * whole tree and hangs the run for minutes, so the element is compared by identity and named.
+ */
+function outcome(resolved: AnchorResolution, expected: Element | null) {
+  return {
+    element: resolved.element === expected ? 'the expected one' : (resolved.element?.outerHTML ?? null),
+    strategy: resolved.strategy,
+    confident: resolved.confident,
+  };
+}
+
+describe('resolveAnchor, in a web component (FRU-580)', () => {
+  /** A button of the page and a button of the component, with one class, side by side. */
+  function mountPromo(mode: ShadowRootMode = 'open') {
+    const page = mountPage('<main><button class="buy">Acheter</button><acme-promo id="promo"></acme-promo></main>', {
+      width: 1_000,
+      height: 1_000,
+    });
+    setDocumentSize(page.document, 1_000, 1_000);
+    const shadow = attachShadowHtml(page.query('#promo'), '<div><button class="buy">Acheter</button></div>', mode);
+    const inside = queryIn(shadow, 'button');
+    setRect(page.query('main > button'), { left: 0, top: 0, width: 100, height: 40 });
+    setRect(inside, { left: 500, top: 500, width: 100, height: 40 });
+
+    return { page, inside };
+  }
+
+  /** What a widget of FRU-580 stores for the button of the component. */
+  const PROMO_ANCHOR: NoteAnchor = {
+    hosts: ['#promo'],
+    selector: 'button.buy',
+    domPath: 'div > button',
+    tag: 'button',
+    text: 'Acheter',
+    bounds: { xPct: 50, yPct: 50, wPct: 10, hPct: 4 },
+  };
+
+  it('follows the host into its open shadow root, and is sure', () => {
+    const { page, inside } = mountPromo();
+
+    const resolved = resolveAnchor(PROMO_ANCHOR, { document: page.document });
+
+    assert.deepEqual(outcome(resolved, inside), {
+      element: 'the expected one',
+      strategy: 'selector',
+      confident: true,
+    });
+  });
+
+  it('follows two nested open shadow roots, from an anchor the capture wrote', () => {
+    const page = mountPage('<main><acme-shop id="shop"></acme-shop></main>');
+    const shop = attachShadowHtml(
+      page.query('#shop'),
+      '<acme-price data-testid="price-espresso"></acme-price><acme-price data-testid="price-latte"></acme-price>',
+    );
+    for (const host of shop.querySelectorAll('acme-price')) attachShadowHtml(host, '<button class="buy">19 €</button>');
+    const latte = queryIn(queryIn(shop, '[data-testid="price-latte"]').shadowRoot as ShadowRoot, 'button');
+
+    const resolved = resolveAnchor(captureAnchor(latte), { document: page.document });
+
+    assert.deepEqual(outcome(resolved, latte), {
+      element: 'the expected one',
+      strategy: 'selector',
+      confident: true,
+    });
+  });
+
+  it('finds the element by its text in the shadow root when its selector broke', () => {
+    const { page, inside } = mountPromo();
+
+    const resolved = resolveAnchor({ ...PROMO_ANCHOR, selector: 'button.renamed' }, { document: page.document });
+
+    assert.deepEqual(outcome(resolved, inside), {
+      element: 'the expected one',
+      strategy: 'text',
+      confident: true,
+    });
+  });
+
+  it('falls back to the position when the host is gone, and never to a stranger that has the selector', () => {
+    // The component left. The page's own `button.buy`, of the same text, now sits where it was.
+    const { page } = mountPromo();
+    page.query('#promo').remove();
+    const stranger = page.query('main > button');
+    setRect(stranger, { left: 500, top: 500, width: 100, height: 40 });
+
+    const resolved = resolveAnchor(PROMO_ANCHOR, { document: page.document });
+
+    assert.deepEqual(outcome(resolved, stranger), {
+      element: 'the expected one',
+      strategy: 'bounds',
+      confident: false,
+    });
+  });
+
+  it('is an orphan when the host is gone and nothing holds its place', () => {
+    const { page } = mountPromo();
+    page.query('#promo').remove();
+
+    const resolved = resolveAnchor(PROMO_ANCHOR, { document: page.document });
+
+    assert.deepEqual(outcome(resolved, null), { element: 'the expected one', strategy: 'orphan', confident: false });
+  });
+
+  it('falls back to the coordinates when the shadow root is closed', () => {
+    // The host is there, but `shadowRoot` is `null`: the path cannot be followed.
+    const { page } = mountPromo('closed');
+
+    const resolved = resolveAnchor(PROMO_ANCHOR, { document: page.document });
+
+    assert.deepEqual(outcome(resolved, null), { element: 'the expected one', strategy: 'orphan', confident: false });
+  });
+
+  it('refuses a host that two elements match', () => {
+    const { page } = mountPromo();
+    page.query('main').insertAdjacentHTML('beforeend', '<acme-promo class="promo"></acme-promo>');
+    attachShadowHtml(page.query('acme-promo.promo'), '<button class="buy">Acheter</button>');
+
+    const resolved = resolveAnchor({ ...PROMO_ANCHOR, hosts: ['acme-promo'] }, { document: page.document });
+
+    assert.equal(resolved.confident, false);
+  });
+
+  it('reads an anchor with no hosts in the document, as before', () => {
+    // A note written before FRU-580 on the page's own button. The component's twin is not looked at.
+    const { page } = mountPromo();
+    const { hosts: _none, ...before } = PROMO_ANCHOR;
+
+    const resolved = resolveAnchor(
+      { ...before, domPath: 'html > body > main > button', bounds: { xPct: 0, yPct: 0, wPct: 10, hPct: 4 } },
+      { document: page.document },
+    );
+
+    assert.deepEqual(outcome(resolved, page.query('main > button')), {
+      element: 'the expected one',
+      strategy: 'selector',
+      confident: true,
+    });
   });
 });

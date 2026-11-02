@@ -100,6 +100,8 @@ export function destinationOf(row: Record<string, unknown>): Destination | undef
     ...(typeof row.project_id === 'string' && row.project_id !== '' ? { projectId: row.project_id } : {}),
     ...(typeof row.label === 'string' && row.label !== '' ? { label: row.label } : {}),
     ...(typeof row.private === 'boolean' ? { private: row.private } : {}),
+    // FRU-574: only an address of Linear is read back, whatever an operator wrote in the column.
+    ...(typeof row.url === 'string' && row.url.startsWith('https://linear.app/') ? { url: row.url } : {}),
   };
 }
 

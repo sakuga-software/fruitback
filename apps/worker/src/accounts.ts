@@ -313,6 +313,12 @@ export type Destination = {
    * request. Absent: not known (another kind of connector, or GitHub did not answer).
    */
   private?: boolean;
+  /**
+   * FRU-574: the page of the team of a `linear` destination at Linear, built by the worker from the
+   * keys Linear answers when the destination is written (`linearTeamUrl`). Never from a request.
+   * Absent: another kind of connector, a destination written before, or Linear gave no key.
+   */
+  url?: string;
 };
 
 /**
