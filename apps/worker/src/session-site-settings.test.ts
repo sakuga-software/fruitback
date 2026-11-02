@@ -308,6 +308,23 @@ describe('who sees the notes and where they go, set from the popup (FRU-453)', (
     assert.deepEqual(kept.destinations, []);
   });
 
+  // FRU-554: the kinds of the answer are read before the write. Read after, a store that fails there
+  // answered an error for a visibility already changed.
+  it('changes nothing when the connectors cannot be read', async () => {
+    const env = await world();
+    const { id, people, second } = await withSources(env);
+    const token = await accountToken(env, people.owner);
+    vi.spyOn(env.accounts, 'connectors').mockRejectedValue(new Error('store down'));
+
+    const answer = await set(env, token, { workspace: id, site: second.id, visibility: 'everyone' }).catch(
+      () => undefined,
+    );
+
+    assert.notEqual(answer?.status, 200);
+    vi.mocked(env.accounts.connectors).mockRestore();
+    assert.equal((await siteIn(env, id, second.id)).visibility, 'members');
+  });
+
   it('refuses a connector of another workspace', async () => {
     const env = await world();
     const { id, people, second, evil } = await withSources(env);

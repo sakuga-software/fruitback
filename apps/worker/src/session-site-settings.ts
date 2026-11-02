@@ -170,6 +170,9 @@ export async function setSessionSite(request: Request, context: SiteSettingsCont
     places = [picked, ...others].slice(0, MAX_DESTINATIONS);
   }
 
+  // FRU-554: the kinds the answer names, read before anything is written. Read after, a store that
+  // fails there would answer an error for a change already made (raised in review of #784).
+  const kinds = new Map((await context.accounts.connectors(workspace)).map((each) => [each.id, each.kind]));
   // On the site read above only: a site removed since is not made again (raised in review).
   if (visibility !== undefined && !(await context.accounts.setSiteVisibility(workspace, site.id, visibility))) {
     return { status: 404, body: { error: 'not-found' } };
@@ -179,7 +182,6 @@ export async function setSessionSite(request: Request, context: SiteSettingsCont
   }
 
   const [first] = places ?? site.destinations;
-  const kinds = new Map((await context.accounts.connectors(workspace)).map((each) => [each.id, each.kind]));
 
   return {
     status: 200,
