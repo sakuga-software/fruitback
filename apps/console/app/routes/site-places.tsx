@@ -107,30 +107,8 @@ export function SitePlaces({
 
   // The teams of each Linear and the repositories of each GitHub are read when the page draws them, and
   // again on « Try again », which starts each list of teams again. An address has nothing to choose.
-  // React runs an effect twice when it mounts in development: the lists are read once for each
-  // sources and « Try again » (FRU-557). Each read calls Linear or GitHub, 51 calls for 300 teams.
-  // An answer to a read that a newer one replaced is dropped.
-  const readFor = useRef<string | undefined>(undefined);
-  const generation = useRef(0);
-  // Whether the panel is on the page: an answer that comes after it left is dropped. The development
-  // mount runs this cleanup and this setup again, so the answer of the one read is kept there.
-  const mounted = useRef(false);
   useEffect(() => {
-    mounted.current = true;
-
-    return () => {
-      mounted.current = false;
-    };
-  }, []);
-  useEffect(() => {
-    const key = `${base} ${ids} ${reads}`;
-    if (readFor.current === key) return;
-    readFor.current = key;
-    generation.current += 1;
-    const mine = generation.current;
-    // A source that left takes its list with it: a read of the sources can answer fewer of them.
-    const kept = new Set(sources.map((source) => source.id));
-    setOffers((current) => Object.fromEntries(Object.entries(current).filter(([id]) => kept.has(id))));
+    let stale = false;
     for (const source of sources) {
       if (source.kind === 'rest') {
         setOffers((current) => ({ ...current, [source.id]: { kind: 'rest' } }));
@@ -144,7 +122,7 @@ export function SitePlaces({
         'GET',
         `${base}/connectors/${source.id}/${path}`,
       ).then((answer) => {
-        if (!mounted.current || mine !== generation.current) return;
+        if (stale) return;
         let offer: Offer = 'failed';
         if (answer.ok && source.kind === 'linear')
           offer = { kind: 'linear', list: teamListOf(answer.data, asked, typed.current) };
@@ -156,6 +134,10 @@ export function SitePlaces({
         setOffers((current) => ({ ...current, [source.id]: offer }));
       });
     }
+
+    return () => {
+      stale = true;
+    };
     // The sources are a new array at each render: the ids are what the reads depend on.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [base, ids, reads]);

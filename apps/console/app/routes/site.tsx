@@ -109,23 +109,24 @@ export default function SitePage() {
 
   // The sources of the workspace, for who sets where the notes of the site go (FRU-399).
   const [connectors, setConnectors] = useState<Listed<Connector>>('loading');
-  const readConnectors = useCallback(async () => {
-    setConnectors('loading');
-    const answer = await call<{ connectors: Connector[] }>('GET', `${base}/connectors`);
-    setConnectors(listedOf(answer, (data) => data.connectors));
-  }, [base]);
-  // React runs an effect twice when it mounts in development: the sources are read once, or the lists
-  // of their teams start again behind them (FRU-557). A role that stops managing, then manages again
-  // (`/console/me` read again), reads them again.
-  const readFor = useRef<unknown>(undefined);
+  // `current` says whether the answer is still wanted: a read that a newer one, or the page leaving,
+  // replaced is dropped (FRU-557).
+  const readConnectors = useCallback(
+    async (current: () => boolean = () => true) => {
+      setConnectors('loading');
+      const answer = await call<{ connectors: Connector[] }>('GET', `${base}/connectors`);
+      if (current()) setConnectors(listedOf(answer, (data) => data.connectors));
+    },
+    [base],
+  );
   useEffect(() => {
-    if (!manages || !seesTracker) {
-      readFor.current = undefined;
-      return;
-    }
-    if (readFor.current === readConnectors) return;
-    readFor.current = readConnectors;
-    void readConnectors();
+    if (!manages || !seesTracker) return;
+    let current = true;
+    void readConnectors(() => current);
+
+    return () => {
+      current = false;
+    };
   }, [manages, seesTracker, readConnectors]);
 
   const site = typeof read === 'string' ? undefined : read;
