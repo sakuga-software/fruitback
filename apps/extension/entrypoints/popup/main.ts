@@ -62,7 +62,7 @@ import {
   wantsSession as siteWantsSession,
 } from '../../src/popup-state.ts';
 import { type TabCommand } from '../../src/protocol.ts';
-import { type PanelApis, openPanelOrPage } from '../../src/side-panel.ts';
+import { openPanelOrPage, panelApis } from '../../src/side-panel.ts';
 import { browserFamily, extensionsPlace } from '../../src/browser-family.ts';
 import { type TabCommandAnswer, parseAnswer, tabCommand } from '../../src/tab-command.ts';
 import { showUpdateLine } from '../../src/update-notice-browser.ts';
@@ -807,7 +807,7 @@ async function siteOfWorkspaceOn(
   // notes in a sidebar », and a click on « fixes to check » or « open notes » (FRU-298).
   const openPanel = (): void =>
     void openPanelOrPage(
-      browser as unknown as PanelApis,
+      panelApis(browser),
       { ...(tab?.id === undefined ? {} : { tabId: tab.id }) },
       async () => (await askTab(tab, 'show-notes')).done,
     ).then((shown) => (shown === 'nothing' ? showProblem(problem, t(NOT_THERE)) : window.close()));
