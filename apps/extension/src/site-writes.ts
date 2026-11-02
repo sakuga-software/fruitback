@@ -1,5 +1,6 @@
 import { parseSitePattern } from './site-patterns.ts';
 import { SITE_MUTATION, type SiteConfig, type SiteMutation, parseSite } from './sites.ts';
+import { isRecord } from './guards.ts';
 
 /**
  * The background as the only writer of the sites map (FRU-43).
@@ -90,8 +91,4 @@ export function parseSiteMutation(message: unknown): SiteMutation | undefined {
  */
 export function isExtensionPage(sender: { id?: string; url?: string }, extensionId: string, root: string): boolean {
   return sender.id === extensionId && root.endsWith('/') && sender.url !== undefined && sender.url.startsWith(root);
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

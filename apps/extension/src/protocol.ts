@@ -18,6 +18,7 @@ import type { SiteNote, SiteRead } from '@fruitback/widget';
 import { STATUS_COLOR } from '@fruitback/shared';
 import type { DockPosition, TransportRequest, TransportResponse } from '@fruitback/widget';
 import { isWorkerEndpoint } from './endpoint.ts';
+import { isNonEmptyString, isRecord } from './guards.ts';
 
 /**
  * The channel, and the version of the protocol it carries (FRU-397). Version 2: each message carries
@@ -687,14 +688,6 @@ export const SHOW_SELECTORS_KEY = 'showSelectors';
 
 /** The storage key of « Corner of the widget » (FRU-443), in the local area. Absent: the default corner. */
 export const DOCK_POSITION_KEY = 'dockPosition';
-
-function isNonEmptyString(value: unknown): value is string {
-  return typeof value === 'string' && value.length > 0;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
 
 function parseRelayRequestMessage(data: Record<string, unknown>): RelayRequestMessage | undefined {
   const id = parseId(data.id);

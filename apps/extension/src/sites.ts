@@ -1,6 +1,7 @@
 import { browser } from 'wxt/browser';
 import { type FreshPreviews, type ListedPreviews, freshPreviews, parseProven, previewsKey } from './proven-previews.ts';
 import { type ResolvedSite, resolveSite } from './site-patterns.ts';
+import { isRecord } from './guards.ts';
 
 /**
  * Which worker answers for which origin, in which mode, and whether this origin is switched on.
@@ -186,8 +187,4 @@ function parseMount(value: unknown): { clientId: string; workspace?: string } | 
     clientId: value.clientId.trim(),
     ...(typeof value.workspace === 'string' && value.workspace.length > 0 ? { workspace: value.workspace } : {}),
   };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
 }
