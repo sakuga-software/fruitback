@@ -1,6 +1,15 @@
 import AxeBuilder from '@axe-core/playwright';
 import { type Page, expect } from '@playwright/test';
-import { PLAYGROUND_ORIGIN, addRule, mintPairing, openBareSite, openPopup, test, SITE_SWITCH } from './extension.ts';
+import {
+  PLAYGROUND_ORIGIN,
+  addRule,
+  mintPairing,
+  openBareSite,
+  openPopup,
+  test,
+  SITE_SWITCH,
+  sessionSitesOf,
+} from './extension.ts';
 import { WORKER_ORIGIN } from './pin.ts';
 import { AUTHENTICATED_WORKER_ORIGIN } from './worker-sessions.ts';
 
@@ -93,7 +102,7 @@ for (const language of ['en', 'fr'] as const) {
     }
     // The E2E workers keep no accounts, so the answer of that one route is given here.
     const sites: { id: string; origin: string; visibility: string }[] = [];
-    await extension.context.route(`${AUTHENTICATED_WORKER_ORIGIN}/session/sites`, (route) =>
+    await extension.context.route(sessionSitesOf(AUTHENTICATED_WORKER_ORIGIN), (route) =>
       route.fulfill({ json: { workspace: { id: 'ws_1', name: 'Acme' }, sites, locale: language } }),
     );
     const page = await extension.context.newPage();

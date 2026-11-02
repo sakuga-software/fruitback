@@ -72,7 +72,17 @@ export type WorkspaceSite = {
  * `workspace`; an account's (FRU-238) names its `workspaces`, and each site says which it is of.
  * `locale` is the language of the account behind the session, when it holds one (FRU-131).
  */
-export type WorkspaceSites = { workspaces: Workspace[]; sites: WorkspaceSite[]; locale?: string; account: boolean };
+/**
+ * `origin` (FRU-498): the worker listed only the sites of that origin, for `?origin=`. Absent: the
+ * whole list, which is what a worker of before answers to the same question.
+ */
+export type WorkspaceSites = {
+  workspaces: Workspace[];
+  sites: WorkspaceSite[];
+  locale?: string;
+  account: boolean;
+  origin?: string;
+};
 /** `pattern` is the rule the click stores: the origin of the site, or the wildcard of its previews. */
 export type Offer = { endpoint: string; workspace: Workspace; site: WorkspaceSite; pattern: string };
 
@@ -109,7 +119,7 @@ async function sessionMark(endpoint: string, seams: CloudSeams): Promise<string 
 /** The answer of `GET /session/sites`, parsed field by field: a bad entry costs that site. */
 export function parseWorkspaceSites(body: unknown): WorkspaceSites | undefined {
   if (typeof body !== 'object' || body === null) return undefined;
-  const { workspace, workspaces, sites, locale, account } = body as Record<string, unknown>;
+  const { workspace, workspaces, sites, locale, account, origin } = body as Record<string, unknown>;
   if (!Array.isArray(sites)) return undefined;
 
   const accountShape = account === true;
@@ -122,6 +132,7 @@ export function parseWorkspaceSites(body: unknown): WorkspaceSites | undefined {
 
   return {
     ...(typeof locale === 'string' && locale !== '' && locale.length <= 35 ? { locale } : {}),
+    ...(typeof origin === 'string' && origin !== '' ? { origin } : {}),
     account: accountShape,
     workspaces: known,
     sites: sites.flatMap((site: unknown) => {
@@ -297,16 +308,35 @@ const ASK_TIMEOUT_MS = 5_000;
  */
 export async function offerFor(origin: string, seams: CloudSeams): Promise<Offer | undefined> {
   for (const endpoint of await seams.endpoints()) {
-    const listed = await listedBy(endpoint, seams);
+    // FRU-498: the sites of this origin only. A worker of before answers the whole list.
+    const listed = await listedBy(endpoint, seams, origin);
     if (listed === undefined) continue;
-    // The site itself first: a page that is a site of the workspace is that site, whatever covers it.
-    const site = listed.sites.find((each) => each.origin === origin);
-    if (site !== undefined) return { endpoint, workspace: site.workspace, site, pattern: origin };
-    // FRU-103: a page under a domain the workspace proved is a preview of the site the worker named.
-    for (const each of listed.sites) {
-      const pattern = each.previews?.find((wildcard) => coversOrigin(wildcard, origin));
-      if (pattern !== undefined) return { endpoint, workspace: each.workspace, site: each, pattern };
+    const offer = offerIn(endpoint, listed, origin);
+    // WARNING: a preview grants through the previews this browser keeps (FRU-103), and only a whole
+    // list writes them. A preview found in the list of one origin is asked again in the whole list,
+    // which keeps them before the click stores its rule, as before FRU-498.
+    if (offer !== undefined && listed.origin !== undefined && offer.pattern !== origin) {
+      const whole = await listedBy(endpoint, seams);
+      const kept = whole === undefined ? undefined : offerIn(endpoint, whole, origin);
+      // A whole list that did not answer, or no longer offers it: the next worker may (review of #791).
+      if (kept !== undefined) return kept;
+      continue;
     }
+    if (offer !== undefined) return offer;
+  }
+
+  return undefined;
+}
+
+/** The offer of `origin` in a list of `endpoint`, or nothing. */
+function offerIn(endpoint: string, listed: WorkspaceSites, origin: string): Offer | undefined {
+  // The site itself first: a page that is a site of the workspace is that site, whatever covers it.
+  const site = listed.sites.find((each) => each.origin === origin);
+  if (site !== undefined) return { endpoint, workspace: site.workspace, site, pattern: origin };
+  // FRU-103: a page under a domain the workspace proved is a preview of the site the worker named.
+  for (const each of listed.sites) {
+    const pattern = each.previews?.find((wildcard) => coversOrigin(wildcard, origin));
+    if (pattern !== undefined) return { endpoint, workspace: each.workspace, site: each, pattern };
   }
 
   return undefined;
@@ -331,15 +361,21 @@ export async function sitesOf(endpoint: string, seams: CloudSeams): Promise<Offe
  * it said nothing. A worker that keeps no accounts lists nothing, and what it listed before goes. A
  * worker that did not answer changes nothing: what it listed ages by itself.
  */
-async function listedBy(endpoint: string, seams: CloudSeams): Promise<WorkspaceSites | undefined> {
+async function listedBy(endpoint: string, seams: CloudSeams, origin?: string): Promise<WorkspaceSites | undefined> {
   const { remember, now = Date.now } = seams;
   if (!isSecureWorkerEndpoint(endpoint)) return undefined;
 
   const asking = await sessionMark(endpoint, seams);
   if (asking === undefined) return undefined;
 
-  const listed = await ask(endpoint, seams);
+  const listed = await ask(endpoint, seams, origin);
   if (listed === undefined) return undefined;
+  // FRU-498: the list of one origin keeps nothing. Written whole, it would take away the previews of
+  // every other site; only a whole list says what this browser grants. A worker that keeps no
+  // accounts answers the same to both questions.
+  if (listed !== NO_ACCOUNTS && listed.origin !== undefined) {
+    return listed.origin === origin && (await sessionMark(endpoint, seams)) === asking ? listed : undefined;
+  }
   // WARNING: the answer took a call to the worker, and a logout or a new pairing can land in that
   // time. The background forgets the list at that instant (`session-previews.ts`), and an answer
   // written after it would put back the list of the session of before: nobody asks a worker again
@@ -426,10 +462,12 @@ function warned(what: string): (error: unknown) => undefined {
 async function ask(
   endpoint: string,
   seams: Pick<CloudSeams, 'ensureAccess' | 'renewAccess' | 'fetcher'>,
+  origin?: string,
 ): Promise<WorkspaceSites | typeof NO_ACCOUNTS | undefined> {
   const fetcher = seams.fetcher ?? fetch;
+  const query = origin === undefined ? '' : `?${new URLSearchParams({ origin }).toString()}`;
   const sent = await withAccess(endpoint, seams, (accessToken) =>
-    fetcher(`${endpoint}/session/sites`, {
+    fetcher(`${endpoint}/session/sites${query}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
       signal: AbortSignal.timeout(ASK_TIMEOUT_MS),
     }),
@@ -453,7 +491,10 @@ export async function accountLanguage(seams: CloudSeams): Promise<{ locale?: str
   // that is still true.
   let silent = false;
   for (const endpoint of (await seams.endpoints()).filter(isSecureWorkerEndpoint)) {
-    const listed = await ask(endpoint, seams);
+    // FRU-498: only the language is read here. The list of the worker's own origin answers it with
+    // no site, where the whole list read every site of every workspace. A worker of before answers
+    // the whole list.
+    const listed = await ask(endpoint, seams, new URL(endpoint).origin);
     if (listed === undefined) {
       silent = true;
       continue;

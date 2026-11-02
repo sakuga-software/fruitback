@@ -1226,7 +1226,10 @@ one click. It answers an origin, an id and a visibility per site, and the langua
 and nothing a member cannot already read in the console. The extension sends that language
 to a page where it mounts the widget: it is a locale tag, and the page can read it. The cookie of the console is not read here, and gets `401`. The entry the extension
 stores is team mode, so the relay's refusals all apply: the widget it mounts calls through the relay,
-and the page never holds the token.
+and the page never holds the token. With `?origin=` (what the popup asks), it answers
+only the sites of that origin, or whose proven previews cover it, and the origin it was read for: a
+part of the same list, never more. An origin that is not an `http` or `https` origin gets `400`.
+test:`answers the sites of one origin, for ?origin=, and refuses an origin that is not one`.
 
 This is the authenticated `GET` that counts by site (decided on 2026-10-06): the
 counts of the index of the notes, and two fields of the notes a person has to check (below).
@@ -1588,7 +1591,9 @@ site only while the workspace of that site proves the domain.
   between two checks of the DNS, a record that was removed can lend a session for six and a half
   hours at most. A worker that cannot be reached stops granting after two hours. The answer is
   for the session that asked: a logout, and a new pairing with the same worker, each forget it at
-  once. The page's own script reads the answer of the workers its rules name and nothing else of
+  once. Only a whole list is kept: the list of one tab (`?origin=`) would take away the
+  previews of every other site, so it keeps nothing, and a preview found in it is asked again in the
+  whole list before the popup offers it. The page's own script reads the answer of the workers its rules name and nothing else of
   that storage, where the refresh tokens are.
 - Not covered: a page in clear (`http`), another port, and a team rule that names no site (a
   site that embeds its own widget): those stay refused.
