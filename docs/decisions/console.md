@@ -93,8 +93,13 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   (`home.tsx`): somebody who signed in from the message of an invitation lands on `/invitations`,
   not on the setup that makes a workspace of their own.
   **The screen is screen 12 of the mockup of 2026-10-13, with what the worker of today says**
-  (FRU-247): the invitation on one line, a form named « Invite someone » with each field under its
-  label, and the table of the people (760 px at the least, which scrolls in its frame on a phone).
+  (FRU-247): a form named « Invite someone » with each field under its label, and the table of the
+  people (760 px at the least, which scrolls in its frame on a phone). **The form is in a dialog**
+  (FRU-565, Mathieu), where the mockup draws it on one line above the table: « Invite », the action
+  of the head of the page, opens the `Dialog` of the kit, one field a line, focus in « Email ». Escape,
+  « Cancel » and the close button close it, and what is typed stays. A refusal is said under its
+  fields, and the dialog stays open; a sent invitation closes it, and the block of its link is on the
+  page, where « Resend » puts its own.
   **« Last seen » is for an owner or an admin** (FRU-249, Q7): a day of UTC and
   never an hour (« Today », « Yesterday », « 3 days ago », then the day; « Not seen yet » for who
   was not seen since it came), read beside the members: the table does not wait for it, and a day
@@ -481,6 +486,14 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   scrolls to its section once the site is drawn, and a hash of a section under « Advanced »
   (`#statuses`, `#agent`, `#previews`) opens it first. `e2e/console-site-page.spec.ts` holds the
   sections, the roles, the hash, the two failures, 390 px in English and in French, and axe.
+  **The address of the site is a link to it** (FRU-575, Mathieu), in a new tab with no referrer, so
+  the console stays where it is; a screen reader hears « (opens in a new tab) ». **Where the notes go
+  reads top down** (FRU-576, Mathieu): the title is « Where the notes go », as « Install » names no
+  site (the region keeps the name of the site); the sentence under it says what the default does, or
+  that the notes stay in Fruitback; the places are the rows of one frame, the mark, the name and
+  « Default » at the left and their actions on the same line; and « Add a destination » is written
+  above the search and the list that add one, and names them as a group.
+  `e2e/console-site-places.spec.ts` holds the frame and the line of a place.
 - **The agent keys of a workspace have a page of their own** (FRU-462, `routes/agents.tsx`, the
   board `design/agents/`), `/w/<workspace>/settings/agents`, with the crumbs « Workspace settings ›
   Agents », reached from the section « Agents » of the settings. It is no section of the rail, and
@@ -592,8 +605,15 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   where the mockup draws « Connect ». **With no connector added, the screen is « Add a connector »**,
   its eight connectors and « No tracker yet. The notes stay in Fruitback. » (FRU-542, Mathieu). **With
   one, it is « Your connectors », a card for each connector, one under the other, and « New connector » at the
-  top right** opens « Add a connector » above the cards, in a frame of its own, its title focused,
-  with « Close », which gives focus back to « New connector ». Linear and an address stay in it: a
+  top right** opens « Add a connector » in a `Dialog` (FRU-562), its sources a grid of cards (three
+  in a row at 1440 px, one at 390 px), with their buttons at the foot of each card. Escape or
+  « Close » give focus back to « New connector ». **A form open in it locks it**: no Escape and no
+  close button, as the list of before hid « Close » while a form was open, since the secret of an
+  address is shown there once and a key being typed would go with the dialog; the card of the form
+  takes the whole row. A form started on the page, before any source, stays on the page when its
+  source arrives. `?new` in the address opens the dialog (« Connect a tracker » of the Sites screen
+  links there), and leaves the address; it opens nothing for a person who cannot add a source.
+  With no source, the same grid is on the page. Linear and an address stay in it: a
   workspace can connect a second one. The cards are not a grid: the panel of a connector opens inside
   its card (FRU-403), and a panel between two rows of cards reads as a stray card (FRU-433). The list
   stays open while a form in it is open (the secret of an address is shown there once, after it is

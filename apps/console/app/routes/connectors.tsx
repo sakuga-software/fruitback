@@ -2,7 +2,7 @@ import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router';
 import { type Connector, type Delivery, type Site, call, placesOf } from '../api';
 import { type Listed, known, listedOf } from '../listed';
-import { Button, LinkButton, Problem } from '../ui';
+import { Button, Dialog, LinkButton, Problem } from '../ui';
 import { PageHead, useWorkspace } from './workspace';
 import { msg, t } from '../i18n';
 import { WORKSPACE_SUSPENDED, problemOf, writeProblemOf } from '../problems';
@@ -90,10 +90,7 @@ const PANELS: Record<Connector['kind'], (props: PanelProps) => ReactNode> = {
 /** The id of the title of the open panel. */
 const PANEL_TITLE = 'source-panel-title';
 
-/** The id of the list of the sources to add, which « New connector » names in `aria-controls`. */
-const CATALOGUE = 'source-catalogue';
-
-/** The id of the title « Your connectors », where focus goes back when « New connector » is not there. */
+/** The id of the title « Your connectors ». */
 const CONNECTED_TITLE = 'connected-title';
 
 export default function Connectors() {
@@ -122,19 +119,17 @@ export default function Connectors() {
   // Whether the panel that is about to appear was opened by a press of its row: see `Opened`.
   const opening = useRef(false);
   const [adding, setAdding] = useState<Connector['kind'] | undefined>();
-  // FRU-542: whether « New connector » opened the list of the sources to add. A way back from Linear or
-  // GitHub that went wrong opens it: its sentence is under the source, in that list.
+  // Whether the open form started on the page, with no source connected yet (FRU-562). It stays on the
+  // page when its source arrives in the list: in the dialog it would mount again, and lose its secret.
+  const [addingOnPage, setAddingOnPage] = useState(false);
+  // FRU-542, FRU-562: whether « New connector » opened the dialog of the sources to add. A way back from
+  // Linear or GitHub that went wrong opens it: its sentence is under the source, in that dialog. So does
+  // `?new` in the address (« Connect a tracker » of the Sites screen), once the read says that this
+  // person can add a source.
   const [catalogue, setCatalogue] = useState(problem !== undefined || githubProblem !== undefined);
-  const catalogueTitle = useRef<HTMLHeadingElement>(null);
-  const newSource = useRef(false);
   // An address connected from the list, whose secret is still on the screen (see `AddRest`).
   const restAdded = useRef(false);
   const toPanel = useRef(false);
-  useEffect(() => {
-    // The list that « New connector » opens takes focus on its title: a screen reader says where it is.
-    if (catalogue && newSource.current) catalogueTitle.current?.focus();
-    newSource.current = false;
-  }, [catalogue]);
 
   const load = useCallback(async () => {
     const [listed, placed] = await Promise.all([
@@ -175,17 +170,21 @@ export default function Connectors() {
       setLate(Object.fromEntries(counts.filter((count) => count !== undefined)));
     }
 
-    return listed.ok ? listed.data.connectors : [];
+    return { found: listed.ok ? listed.data.connectors : [], adds: listed.ok && listed.data.available };
   }, [base]);
   /** The same read, for a panel that only needs it done. */
   const reload = useCallback(async (): Promise<void> => void (await load()), [load]);
 
   useEffect(() => {
-    void load().then((found) => {
+    void load().then(({ found, adds }) => {
       // Back from Linear or GitHub with a new connector: its panel opens, and the word leaves the address.
       const linear = search.get('linear');
       const github = search.get('github');
-      if (linear === null && github === null) return;
+      const asked = search.get('new') !== null;
+      if (linear === null && github === null && !asked) return;
+      // `?new` opens nothing for a person who cannot add a source: no dialog of disabled buttons, now
+      // or after a later read.
+      if (asked && manages && adds) setCatalogue(true);
       if (linear === 'connected') setSelected(found.at(-1)?.id);
       // An installation again keeps its connector, which is then not the last of the list.
       if (github === 'connected') setSelected(found.filter((each) => each.kind === 'github').at(-1)?.id);
@@ -193,18 +192,6 @@ export default function Connectors() {
     });
     // Once, when the screen opens: the word in the address is read one time.
   }, [load]);
-
-  /**
-   * « Close » of the list of the sources to add: the keyboard goes back to « New connector ». A read
-   * since the list opened can take that button away (a role, or a worker that cannot keep a key any
-   * more): focus then goes to the title « Your connectors », never to the page.
-   */
-  function closeCatalogue() {
-    setCatalogue(false);
-    const back =
-      document.querySelector<HTMLElement>(`[aria-controls="${CATALOGUE}"]`) ?? document.getElementById(CONNECTED_TITLE);
-    back?.focus();
-  }
 
   /** The worker says where to go, and the browser goes there: the consent is at Linear. */
   async function connectLinear() {
@@ -280,9 +267,161 @@ export default function Connectors() {
   // FRU-542: with no source, the screen is the list of the sources to add. With one, it is the
   // sources that are connected, and « New connector » opens the list above them. A form open in the
   // list keeps it open: the secret of an address is shown there once, after the address is connected.
-  const listed = answered && (!connected || catalogue || adding !== undefined);
+  //
+  // FRU-562: with a source, the list is a grid of cards in a dialog. A form that started on the page,
+  // before any source, stays there until it ends.
+  const formOnPage = adding !== undefined && addingOnPage;
+  const onPage = answered && (!connected || formOnPage);
+  // A form open in the dialog keeps it, whatever a read since says: the secret of an address is shown
+  // there once.
+  const inDialog = connected && !formOnPage && (catalogue || adding !== undefined);
+  const listed = onPage || inDialog;
   // A person who cannot connect a source is not offered a button that opens disabled ones.
   const offersNew = connected && !cannot;
+  /** Opens the form of a source, where the list of the sources is now. */
+  const startAdding = (kind: Connector['kind']) => {
+    setAddingOnPage(!connected);
+    setAdding(kind);
+  };
+  const sourcesToAdd = (
+    <>
+      {manages ? null : <p className="mb-[10px] text-hint text-muted">{t('An owner or an admin adds a connector')}</p>}
+      {available ? null : (
+        <p className="mb-[10px] text-hint text-muted">{t(KEY_PROBLEMS['connectors-unavailable'] ?? '')}</p>
+      )}
+      {/* FRU-562: a grid of cards. The card whose form is open takes the whole row. */}
+      <ul className="grid grid-flow-row-dense grid-cols-[repeat(auto-fill,minmax(min(100%,220px),1fr))] gap-[12px]">
+        <Source
+          kind="linear"
+          wide={adding === 'linear'}
+          name={t(KINDS.linear.name)}
+          detail={t('An issue per note, in the team you choose.')}
+        >
+          {adding === 'linear' ? null : (
+            <span className="flex flex-wrap items-center gap-x-[16px]">
+              {oauth ? (
+                <LinkButton disabled={cannot} onClick={() => startAdding('linear')}>
+                  {t('Use an API key')}
+                </LinkButton>
+              ) : null}
+              <Button
+                tone="outline"
+                inset={16}
+                disabled={cannot || leaving}
+                onClick={() => (oauth ? void connectLinear() : startAdding('linear'))}
+              >
+                {leaving ? t('Going to Linear…') : <Connect name={t(KINDS.linear.name)} />}
+              </Button>
+            </span>
+          )}
+          {adding === 'linear' ? (
+            <Under>
+              <AddLinear
+                base={base}
+                onDone={(connector) => {
+                  setAdding(undefined);
+                  if (connector !== undefined) {
+                    setCatalogue(false);
+                    // The list goes with the form that had focus: the panel of the new source takes it.
+                    opening.current = true;
+                    setSelected(connector.id);
+                    void load();
+                  }
+                }}
+              />
+            </Under>
+          ) : null}
+          {problem === undefined ? null : (
+            <Under>
+              <Problem>{t(problem)}</Problem>
+            </Under>
+          )}
+        </Source>
+        {/* FRU-331: the API of an issue of GitHub takes no file, so the files of a note do not go there. */}
+        <Source
+          kind="github"
+          name={t(KINDS.github.name)}
+          detail={t(
+            'An issue per note, in one repository. The files of a note do not go: GitHub takes none by its API.',
+          )}
+        >
+          {githubApp ? (
+            <Button tone="outline" inset={16} disabled={cannot || toGithub} onClick={() => void connectGithub()}>
+              {toGithub ? t('Going to GitHub…') : <Connect name={t(KINDS.github.name)} />}
+            </Button>
+          ) : (
+            <>
+              {/* A worker with no App connects no GitHub: the button says so, and connects nothing. */}
+              <Button tone="outline" inset={16} disabled>
+                {t('Not on this Fruitback')}
+              </Button>
+              <Under>
+                <p className="text-hint text-muted">
+                  {t('The operator of this Fruitback has not set up the GitHub App.')}
+                </p>
+              </Under>
+            </>
+          )}
+          {githubProblem === undefined ? null : (
+            <Under>
+              <Problem>{t(githubProblem)}</Problem>
+            </Under>
+          )}
+        </Source>
+        <Source
+          kind="rest"
+          wide={adding === 'rest'}
+          name={t(KINDS.rest.name)}
+          detail={t('POST each note to your own endpoint, with an address of one hour for each of its files.')}
+        >
+          {adding === 'rest' ? (
+            <Under>
+              <AddRest
+                base={base}
+                onAdded={(connector) => {
+                  // Its panel opens now, and takes focus only once the secret was kept.
+                  restAdded.current = true;
+                  setSelected(connector.id);
+                  void load();
+                }}
+                onDone={() => {
+                  setAdding(undefined);
+                  // « Cancel » closes the form only. « I kept it » closes the list too.
+                  if (!restAdded.current) return;
+                  setCatalogue(false);
+                  toPanel.current = true;
+                }}
+              />
+            </Under>
+          ) : (
+            <Button
+              tone="outline"
+              inset={16}
+              disabled={cannot}
+              onClick={() => {
+                // A new form starts clean: an address whose read failed must not make its « Cancel »
+                // close the list, nor send focus to a panel later.
+                restAdded.current = false;
+                toPanel.current = false;
+                startAdding('rest');
+              }}
+            >
+              <Connect name={t(KINDS.rest.name)} />
+            </Button>
+          )}
+        </Source>
+        {LATER.map((source) => (
+          <Source key={source.name} kind={source.kind} name={source.name} detail={t(source.detail)}>
+            {/* No connector of this kind exists: the button says when, and connects nothing. */}
+            <Button tone="outline" inset={16} disabled>
+              {t('After the beta')}
+            </Button>
+          </Source>
+        ))}
+      </ul>
+    </>
+  );
+
   // Once « I kept it » closed the list, focus goes to the panel of the new address: the button had it.
   // It waits for the list to close and for the panel to be there: the read that brings the new
   // address can end after « I kept it ».
@@ -304,21 +443,22 @@ export default function Connectors() {
         })}
         {...(offersNew
           ? {
-              action: (
-                <Button
-                  expanded={listed}
-                  controls={CATALOGUE}
-                  onClick={() => {
-                    newSource.current = !listed;
-                    setCatalogue(!listed);
-                  }}
-                >
-                  {t('New connector')}
-                </Button>
-              ),
+              action: <Button onClick={() => setCatalogue(true)}>{t('New connector')}</Button>,
             }
           : {})}
       />
+      {/* FRU-562: « New connector » opens the sources to add in a dialog. A form open in it locks it:
+          the secret of an address is shown there once, and a key being typed would go with it. */}
+      <Dialog
+        open={inDialog}
+        onClose={() => setCatalogue(false)}
+        title={t('Add a connector')}
+        closeLabel={t('Close')}
+        locked={adding !== undefined}
+        className="sm:max-w-[760px]"
+      >
+        {sourcesToAdd}
+      </Dialog>
       <div className="flex min-w-0 flex-col gap-[32px]">
         {unread ? (
           <div className="flex flex-wrap items-center gap-[12px]">
@@ -332,162 +472,15 @@ export default function Connectors() {
         ) : null}
         {connectors === undefined && !unread ? <p className="text-small text-muted">{t('Loading…')}</p> : null}
 
-        {listed ? (
-          <section
-            id={CATALOGUE}
-            aria-labelledby="add-title"
-            // Over the sources that are connected, a frame of its own: it is not one of them.
-            className={connected ? 'rounded-frame border border-line bg-surface px-[20px] pt-[16px] pb-[4px]' : ''}
-          >
-            <div className="mb-[10px] flex items-center justify-between gap-[12px]">
-              <h2
-                id="add-title"
-                ref={catalogueTitle}
-                tabIndex={-1}
-                className="text-body leading-auto font-semibold focus:outline-none"
-              >
-                {t('Add a connector')}
-              </h2>
-              {connected && adding === undefined ? (
-                <LinkButton onClick={() => closeCatalogue()}>{t('Close')}</LinkButton>
-              ) : null}
-            </div>
+        {onPage ? (
+          <section aria-labelledby="add-title">
+            <h2 id="add-title" className="mb-[10px] text-body leading-auto font-semibold">
+              {t('Add a connector')}
+            </h2>
             {connected ? null : (
               <p className="mb-[10px] text-hint text-muted">{t('No tracker yet. The notes stay in Fruitback.')}</p>
             )}
-            {manages ? null : (
-              <p className="mb-[10px] text-hint text-muted">{t('An owner or an admin adds a connector')}</p>
-            )}
-            {available ? null : (
-              <p className="mb-[10px] text-hint text-muted">{t(KEY_PROBLEMS['connectors-unavailable'] ?? '')}</p>
-            )}
-            <ul className="border-t border-line [&>li:last-child]:border-b-0">
-              <Source
-                kind="linear"
-                name={t(KINDS.linear.name)}
-                detail={t('An issue per note, in the team you choose.')}
-              >
-                {adding === 'linear' ? null : (
-                  <span className="flex flex-wrap items-center gap-x-[16px]">
-                    {oauth ? (
-                      <LinkButton disabled={cannot} onClick={() => setAdding('linear')}>
-                        {t('Use an API key')}
-                      </LinkButton>
-                    ) : null}
-                    <Button
-                      tone="outline"
-                      inset={16}
-                      disabled={cannot || leaving}
-                      onClick={() => (oauth ? void connectLinear() : setAdding('linear'))}
-                    >
-                      {leaving ? t('Going to Linear…') : <Connect name={t(KINDS.linear.name)} />}
-                    </Button>
-                  </span>
-                )}
-                {adding === 'linear' ? (
-                  <Under>
-                    <AddLinear
-                      base={base}
-                      onDone={(connector) => {
-                        setAdding(undefined);
-                        if (connector !== undefined) {
-                          setCatalogue(false);
-                          // The list goes with the form that had focus: the panel of the new source takes it.
-                          opening.current = true;
-                          setSelected(connector.id);
-                          void load();
-                        }
-                      }}
-                    />
-                  </Under>
-                ) : null}
-                {problem === undefined ? null : (
-                  <Under>
-                    <Problem>{t(problem)}</Problem>
-                  </Under>
-                )}
-              </Source>
-              {/* FRU-331: the API of an issue of GitHub takes no file, so the files of a note do not go there. */}
-              <Source
-                kind="github"
-                name={t(KINDS.github.name)}
-                detail={t(
-                  'An issue per note, in one repository. The files of a note do not go: GitHub takes none by its API.',
-                )}
-              >
-                {githubApp ? (
-                  <Button tone="outline" inset={16} disabled={cannot || toGithub} onClick={() => void connectGithub()}>
-                    {toGithub ? t('Going to GitHub…') : <Connect name={t(KINDS.github.name)} />}
-                  </Button>
-                ) : (
-                  <>
-                    {/* A worker with no App connects no GitHub: the button says so, and connects nothing. */}
-                    <Button tone="outline" inset={16} disabled>
-                      {t('Not on this Fruitback')}
-                    </Button>
-                    <Under>
-                      <p className="text-hint text-muted">
-                        {t('The operator of this Fruitback has not set up the GitHub App.')}
-                      </p>
-                    </Under>
-                  </>
-                )}
-                {githubProblem === undefined ? null : (
-                  <Under>
-                    <Problem>{t(githubProblem)}</Problem>
-                  </Under>
-                )}
-              </Source>
-              <Source
-                kind="rest"
-                name={t(KINDS.rest.name)}
-                detail={t('POST each note to your own endpoint, with an address of one hour for each of its files.')}
-              >
-                {adding === 'rest' ? (
-                  <Under>
-                    <AddRest
-                      base={base}
-                      onAdded={(connector) => {
-                        // Its panel opens now, and takes focus only once the secret was kept.
-                        restAdded.current = true;
-                        setSelected(connector.id);
-                        void load();
-                      }}
-                      onDone={() => {
-                        setAdding(undefined);
-                        // « Cancel » closes the form only. « I kept it » closes the list too.
-                        if (!restAdded.current) return;
-                        setCatalogue(false);
-                        toPanel.current = true;
-                      }}
-                    />
-                  </Under>
-                ) : (
-                  <Button
-                    tone="outline"
-                    inset={16}
-                    disabled={cannot}
-                    onClick={() => {
-                      // A new form starts clean: an address whose read failed must not make its « Cancel »
-                      // close the list, nor send focus to a panel later.
-                      restAdded.current = false;
-                      toPanel.current = false;
-                      setAdding('rest');
-                    }}
-                  >
-                    <Connect name={t(KINDS.rest.name)} />
-                  </Button>
-                )}
-              </Source>
-              {LATER.map((source) => (
-                <Source key={source.name} kind={source.kind} name={source.name} detail={t(source.detail)}>
-                  {/* No connector of this kind exists: the button says when, and connects nothing. */}
-                  <Button tone="outline" inset={16} disabled>
-                    {t('After the beta')}
-                  </Button>
-                </Source>
-              ))}
-            </ul>
+            {sourcesToAdd}
           </section>
         ) : null}
 
@@ -578,32 +571,39 @@ function Source({
   kind,
   name,
   detail,
+  wide = false,
   children,
 }: {
   kind: MarkedKind | LaterKind;
   name: string;
   detail: string;
+  /** Its form is open: the card takes the whole row of the grid (FRU-562). */
+  wide?: boolean;
   children: ReactNode;
 }) {
   return (
     <li
-      className="flex flex-wrap items-center gap-x-[16px] gap-y-[8px] border-b border-line py-[12px]"
+      className={`flex min-w-0 flex-col gap-[14px] rounded-frame border border-line bg-surface p-[16px] ${
+        wide ? 'col-span-full' : ''
+      }`}
       data-source={name}
     >
-      <SourceMark kind={kind} />
-      <span className="min-w-0 flex-[1_1_210px]">
-        <span className="block text-body leading-auto font-semibold">{name}</span>
-        <span className="block text-hint leading-auto text-muted">{detail}</span>
+      <span className="flex items-start gap-[12px]">
+        <SourceMark kind={kind} />
+        <span className="min-w-0 flex-1">
+          <span className="block text-body leading-auto font-semibold">{name}</span>
+          <span className="block text-hint leading-auto text-muted">{detail}</span>
+        </span>
       </span>
-      {children}
+      {/* What connects it, at the foot of the card: the buttons of a row of cards line up. */}
+      <div className="mt-auto flex flex-wrap items-center gap-x-[16px] gap-y-[10px]">{children}</div>
     </li>
   );
 }
 
-/** What opens under the row of a source to add: its form, or why it did not connect. */
+/** What opens in the card of a source to add, under its buttons: its form, or why it did not connect. */
 function Under({ children }: { children: ReactNode }) {
-  // In line with the name, past the mark, from 640 px; under the mark on a phone, where width is short.
-  return <div className="w-full basis-full sm:pl-[52px]">{children}</div>;
+  return <div className="w-full basis-full">{children}</div>;
 }
 
 /**

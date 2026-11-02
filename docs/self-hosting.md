@@ -15,7 +15,7 @@ Where this page gives a command or an answer, it was measured on the images unde
 
 ## Before you start
 
-- **Docker Engine, with Compose 2.20 or later.** `docker compose up --wait` needs 2.20. Check with
+- Docker Engine, with Compose 2.20 or later. `docker compose up --wait` needs 2.20. Check with
   `docker compose version`.
 - A 64-bit machine, `amd64` or `arm64`. Linux for a server. For a trial, a Mac with Docker Desktop
   or OrbStack is fine: the path below was measured on one. The images are published for both
@@ -297,7 +297,7 @@ another site, gets `403 origin-not-allowed-for-client` when it names this site.
 
 ## What the compose file decides
 
-- **Three services, and the worker waits for the database** to be healthy before it starts. PostgreSQL
+- Three services, and the worker waits for the database to be healthy before it starts. PostgreSQL
   publishes no port: only the worker reaches it, on the network of the file.
 - Two named volumes: `fruitback-postgres` holds the database. `fruitback-data` holds nothing for
   this worker; it is where an instance of before kept its files, and where `migrate-to-postgres`

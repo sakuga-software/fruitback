@@ -1005,6 +1005,9 @@ type SidePanelProps = {
  *
  * A press outside does not close it: a selection of text released past its edge would hide a form
  * and the sentence of its refusal (raised in review).
+ *
+ * `locked` takes away Escape and the close button while a form inside must end by its own buttons
+ * (FRU-562): a secret shown once, or a key being typed, would go with the dialog.
  */
 export function Dialog({
   open,
@@ -1012,6 +1015,7 @@ export function Dialog({
   title,
   closeLabel,
   size = 'lg',
+  locked = false,
   className = '',
   children,
 }: {
@@ -1021,6 +1025,8 @@ export function Dialog({
   /** The name of the close button, e.g. « Close ». */
   closeLabel: string;
   size?: 'sm' | 'md' | 'lg';
+  /** No Escape and no close button: the content closes it by its own buttons. */
+  locked?: boolean;
   className?: string;
   children: ReactNode;
 }) {
@@ -1028,13 +1034,14 @@ export function Dialog({
     <Modal.Backdrop
       isOpen={open}
       isDismissable={false}
+      isKeyboardDismissDisabled={locked}
       onOpenChange={(next) => {
         if (!next) onClose();
       }}
     >
       <Modal.Container size={size} scroll="inside">
         <Modal.Dialog className={`kit-dialog ${className}`}>
-          <Modal.CloseTrigger aria-label={closeLabel} />
+          {locked ? null : <Modal.CloseTrigger aria-label={closeLabel} />}
           <Modal.Header>
             <Modal.Heading className="kit-dialog__title">{title}</Modal.Heading>
           </Modal.Header>
