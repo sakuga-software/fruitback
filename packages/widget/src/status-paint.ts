@@ -1,4 +1,10 @@
-import { STATUS_COLOR, readableTextColor, type NoteIssue, type NoteStatus } from '@fruitback/shared';
+import {
+  type NoteIssue,
+  type NoteStatus,
+  type StatusPaint,
+  paintOfStatus,
+  statusLabel as labelOfState,
+} from '@fruitback/shared';
 import type { Translator } from './messages.ts';
 import { onStageToken, stageToken } from './theme.ts';
 
@@ -11,14 +17,11 @@ import { onStageToken, stageToken } from './theme.ts';
  */
 
 /**
- * The ink of the theme, `--fruitback-color-ink`: what `readableTextColor` measures first. The worker
- * computes the same text colour on the same ink (`STATUS_INK` of `apps/worker/src/site-statuses.ts`).
- * `status-paint.test.ts` compares it with `theme.ts`.
+ * The ink of the theme, `--fruitback-color-ink`: what `readableTextColor` measures first. Written once in
+ * `@fruitback/shared`, for the extension and the worker too (FRU-512). `status-paint.test.ts` compares it
+ * with `theme.ts`.
  */
-export const STATUS_INK = '#18181b';
-
-/** What a pin, a drop or a mark of a note is filled with, and what is written on it. */
-export type StatusPaint = { fill: string; ink: string };
+export { STATUS_INK, type StatusPaint } from '@fruitback/shared';
 
 /**
  * The fill and the ink of a note in this status. `undefined`: the stage.
@@ -27,17 +30,15 @@ export type StatusPaint = { fill: string; ink: string };
  * and this checks again, so no caller can pass `var(…)` or `url(…)` into a style.
  */
 export function statusPaint(issue: Pick<NoteIssue, 'stage'>, status: NoteStatus | undefined): StatusPaint {
-  const color = status?.color;
-  if (color === undefined || !STATUS_COLOR.test(color)) {
-    return { fill: stageToken(issue.stage), ink: onStageToken(issue.stage) };
-  }
-  const chosen = status?.textColor;
   // A text colour that the team chose was measured at 4.5:1 by the worker on save. Else, computed.
-  // Computed on a colour checked above, so it answers one.
-  const ink =
-    chosen !== undefined && STATUS_COLOR.test(chosen) ? chosen : (readableTextColor(color, STATUS_INK) as string);
+  const color = status?.color;
 
-  return { fill: color, ink };
+  return (
+    (color === undefined ? undefined : paintOfStatus(color, status?.textColor)) ?? {
+      fill: stageToken(issue.stage),
+      ink: onStageToken(issue.stage),
+    }
+  );
 }
 
 /**
@@ -49,5 +50,5 @@ export function statusLabel(
   status: NoteStatus | undefined,
   t: Translator,
 ): string {
-  return status?.name || issue.stateName || t.stage(issue.stage);
+  return labelOfState(status?.name, issue.stateName, t.stage(issue.stage));
 }

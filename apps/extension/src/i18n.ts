@@ -1,3 +1,4 @@
+import { fillSentence, nearestLanguage } from '@fruitback/shared';
 import { frenchCatalog } from '@fruitback/widget';
 import { FRENCH } from './messages.fr.ts';
 
@@ -17,9 +18,7 @@ const CATALOGS: Record<Language, Readonly<Record<string, string>>> = { en: {}, f
 
 /** The language of the catalog for a locale tag: `fr-CA` reads French, an unknown tag reads English. */
 export function nearest(tag: string | undefined): Language {
-  const base = tag?.toLowerCase().split('-')[0];
-
-  return LANGUAGES.find((language) => language === base) ?? 'en';
+  return nearestLanguage(tag, LANGUAGES, 'en');
 }
 
 let current: Language = 'en';
@@ -35,9 +34,7 @@ export function language(): Language {
 type Values = Readonly<Record<string, string | number>>;
 
 export function translate(to: Language, sentence: string, values: Values = {}): string {
-  const words = CATALOGS[to][sentence] ?? sentence;
-
-  return words.replace(/\{(\w+)\}/g, (whole, name: string) => (name in values ? String(values[name]) : whole));
+  return fillSentence(CATALOGS[to][sentence] ?? sentence, values);
 }
 
 /** The sentence in the language of the reviewer. Call it where the text goes on the screen. */
