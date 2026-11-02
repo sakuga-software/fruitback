@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { GUIDE, GUIDE_ANCHORS } from './guide.ts';
 import { NOTES_NEED_SESSION, READ_NEEDS_SESSION, WORKER_NOT_FOUND } from './read-probe.ts';
 import { PAIRING_NEEDS_HTTPS, PAIRING_PROBLEM, PROBLEMS, REMEDY_LABEL } from './remedy.ts';
+import { popupSource } from './popup-source.fixture.ts';
 
 /**
  * The popup's words, checked against the guide that quotes them (FRU-46).
@@ -19,13 +20,13 @@ import { PAIRING_NEEDS_HTTPS, PAIRING_PROBLEM, PROBLEMS, REMEDY_LABEL } from './
  * written. The buttons are named, because they are built one by one at their call sites and a regex
  * over them would guard whichever ones it happened to match.
  *
- * Source text for the popup rather than an import: `popup/main.ts` binds `browser` at import, so
+ * Source text for the popup rather than an import: the popup binds `browser` at import, so
  * `node --test` cannot load it. The same reason `page-api.test.ts` reads `docs/install.md` as text.
  */
 describe('the guide quotes the popup this extension renders', () => {
   const read = (path: string): string => readFileSync(fileURLToPath(new URL(path, import.meta.url)), 'utf8');
   // The screens of the sign-in and the head of every screen are drawn in `popup-view.ts` (FRU-251).
-  const popup = `${read('../entrypoints/popup/main.ts')}\n${read('./popup-view.ts')}\n${read('./kit.ts')}`;
+  const popup = `${popupSource()}\n${read('./popup-view.ts')}\n${read('./kit.ts')}`;
   const optionsPage = `${read('../entrypoints/options/main.ts')}\n${read('./site-page.ts')}\n${read('./share-rules.ts')}`;
   const guide = read('../../../docs/reviewing.md');
 

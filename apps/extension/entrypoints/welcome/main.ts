@@ -153,7 +153,7 @@ async function addSite(): Promise<void> {
 }
 
 /**
- * « Sign in with email », as in the popup (`popup/main.ts`, FRU-251).
+ * « Sign in with email », as in the popup (`popup/sign-in.ts`, FRU-251).
  *
  * **The access to Fruitback is asked for first, and nothing is awaited before it**: a host permission
  * may only be asked for while the click is handled.

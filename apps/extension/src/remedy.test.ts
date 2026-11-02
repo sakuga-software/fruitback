@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { IMPORT_PROBLEM, PAIRING_GUIDE, PAIRING_PROBLEM, PROBLEMS, REMEDY_LABEL, remedyFor } from './remedy.ts';
+import { popupSource } from './popup-source.fixture.ts';
 
 const read = (path: string): string => readFileSync(fileURLToPath(new URL(path, import.meta.url)), 'utf8');
 
@@ -65,7 +66,7 @@ describe('every problem says what to do next, or why nothing can be done (FRU-90
 });
 
 describe('the two pages draw a problem through one function', () => {
-  const pages = { popup: read('../entrypoints/popup/main.ts'), options: read('../entrypoints/options/main.ts') };
+  const pages = { popup: popupSource(), options: read('../entrypoints/options/main.ts') };
 
   it('writes no problem by hand', () => {
     for (const [name, source] of Object.entries(pages)) {

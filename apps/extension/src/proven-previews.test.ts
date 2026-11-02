@@ -20,6 +20,7 @@ import { lendsSession, resolveSite } from './site-patterns.ts';
 import type { AccessResult } from './session.ts';
 import type { SiteConfig } from './sites.ts';
 import { importSites } from './site-transfer.ts';
+import { popupSource } from './popup-source.fixture.ts';
 
 /**
  * The one wildcard that serves team mode (FRU-103): the previews of a site, which the worker of the
@@ -270,7 +271,7 @@ describe('the previews of a site, offered in one click (FRU-103)', () => {
     it('is given the epoch of the session by the background and by the popup, the two that ask', () => {
       const sources = {
         'background.ts': readFileSync(new URL('../entrypoints/background.ts', import.meta.url), 'utf8'),
-        'popup/main.ts': readFileSync(new URL('../entrypoints/popup/main.ts', import.meta.url), 'utf8'),
+        'popup/*.ts': popupSource(),
       };
       for (const [file, source] of Object.entries(sources)) {
         assert.match(
