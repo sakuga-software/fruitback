@@ -1,3 +1,4 @@
+import type { ExternalConnectState } from '@fruitback/shared';
 import { isSecureWorkerEndpoint } from './endpoint.ts';
 import type { ClaimResult, SessionResponse, Sessions, StoredSession } from './session.ts';
 
@@ -75,7 +76,8 @@ export type StartResult = { ok: true; pending: PendingConnect } | { ok: false; r
  * `refused`, `expired`: over, and gone from storage. `unavailable`: Fruitback did not answer this
  * time, and the request is still kept.
  */
-export type ConnectState = 'none' | 'waiting' | 'signed-in' | 'refused' | 'expired' | 'unavailable';
+/** Where a request to connect is: the states the console reads too (`@fruitback/shared`, FRU-512). */
+export type ConnectState = ExternalConnectState;
 
 /** How many times, and how far apart, a spent request looks for the session the other context stores. */
 const SPENT_LOOKS = 4;

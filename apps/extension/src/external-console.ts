@@ -1,4 +1,5 @@
-import { type ConnectSeams, type ConnectState, REQUEST, pollConnect, startConnect, trustedConsole } from './connect.ts';
+import { EXTERNAL_TYPES, EXTERNAL_VERSION, type ExternalAnswer } from '@fruitback/shared';
+import { type ConnectSeams, REQUEST, pollConnect, startConnect, trustedConsole } from './connect.ts';
 import { DEFAULT_CLOUD, cloudEndpoint } from './popup-state.ts';
 import type { BrowserFamily } from './browser-family.ts';
 
@@ -84,13 +85,17 @@ export function externallyConnectable(
   return { matches: [`${origin}/*`] };
 }
 
-/** The version of the messages. A page that speaks another one is not answered. */
-export const EXTERNAL_VERSION = 1;
+/** The version of the messages, from `@fruitback/shared`. A page that speaks another one is not answered. */
+export { EXTERNAL_VERSION };
 
 /** The three messages a console sends. */
 export type ExternalMessage = { kind: 'hello' } | { kind: 'connect' } | { kind: 'claim'; request: string };
 
-const TYPES = { 'fruitback:hello': 'hello', 'fruitback:connect': 'connect', 'fruitback:claim': 'claim' } as const;
+const TYPES = {
+  [EXTERNAL_TYPES.hello]: 'hello',
+  [EXTERNAL_TYPES.connect]: 'connect',
+  [EXTERNAL_TYPES.claim]: 'claim',
+} as const;
 
 /**
  * A message of the console, key by key: a plain object with exactly the keys of its type, or
@@ -133,11 +138,8 @@ export function fromConsole(sender: ExternalSender, consoleOrigin: string | unde
   }
 }
 
-export type ExternalAnswer =
-  | { v: 1; ok: true; signedIn: boolean }
-  | { v: 1; ok: true; request: string }
-  | { v: 1; ok: true; state: ConnectState }
-  | { v: 1; ok: false; reason: 'signed-in' | 'unavailable' | 'unknown-request' };
+/** What the extension answers: one type for both ends, in `@fruitback/shared` (FRU-512). */
+export type { ExternalAnswer };
 
 export type ExternalSeams = {
   /** The console that may talk, from `cloudConsole`. */
