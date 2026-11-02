@@ -49,6 +49,40 @@ describe('hit testing through nested shadow roots (FRU-580)', () => {
     );
   });
 
+  it('reaches the third level, where each root lists every host above it', () => {
+    // Three nested roots, listed as Chromium does: each inner root names every outer host again.
+    // Each root is entered once, and a host already explored is not entered a second time.
+    const page = mountPage('<main><acme-shop id="shop"></acme-shop></main>');
+    const shop = page.query('#shop');
+    const shopRoot = attachShadowHtml(shop, '<acme-promo></acme-promo>');
+    const promo = queryIn(shopRoot, 'acme-promo');
+    const promoRoot = attachShadowHtml(promo, '<acme-price></acme-price>');
+    const price = queryIn(promoRoot, 'acme-price');
+    const priceRoot = attachShadowHtml(price, '<button>Acheter</button>');
+    const button = queryIn(priceRoot, 'button');
+    const calls = new Map<unknown, number>();
+    const at = (root: Document | ShadowRoot, elements: Element[]) =>
+      Object.defineProperty(root, 'elementsFromPoint', {
+        value: () => {
+          calls.set(root, (calls.get(root) ?? 0) + 1);
+          return elements;
+        },
+        configurable: true,
+      });
+    at(page.document, [shop, page.query('main')]);
+    at(shopRoot, [promo, shop]);
+    at(promoRoot, [price, promo, shop]);
+    at(priceRoot, [button, price, promo, shop]);
+
+    assert.ok(deepElementAt(page.document, 10, 10, () => true) === button);
+    assert.deepEqual([...calls.values()], [1, 1, 1, 1]);
+
+    // Nothing inside is accepted: the walk ends, each root read once, and the outermost host answers.
+    calls.clear();
+    assert.ok(deepElementAt(page.document, 10, 10, (element) => element === shop) === shop);
+    assert.deepEqual([...calls.values()], [1, 1, 1, 1]);
+  });
+
   it('says when the point is over a shadow host, and not over a plain element', () => {
     const { page } = mountNested();
     assert.equal(overShadowHost(page.document, 10, 10), true);
