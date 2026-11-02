@@ -251,6 +251,7 @@ export function postgresNoteIndex(url: string, schema: string): NoteIndex {
     undelivered: true,
     forget: true,
     list: true,
+    page: true,
     deliveryOf: true,
     authors: true,
     toCheck: true,

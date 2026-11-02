@@ -638,7 +638,7 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
                 sql`(${note_index.created_at}, ${note_index.site_id} COLLATE "C", ${note_index.note_id} COLLATE "C") < (${query.after.at}, ${query.after.site} COLLATE "C", ${query.after.note} COLLATE "C")`,
               );
 
-        const [page, [counted]] = await Promise.all([
+        const [page, counted] = await Promise.all([
           db
             .select({
               row: NOTE_COLUMNS,
@@ -657,12 +657,16 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
               sql`${note_index.note_id} COLLATE "C" DESC`,
             )
             .limit(query.limit + 1),
-          db
-            .select({ notes: count() })
-            .from(note_index)
-            .innerJoin(sites, eq(sites.id, note_index.site_id))
-            .innerJoin(organization, eq(organization.id, note_index.workspace_id))
-            .where(filtered),
+          // FRU-502: the count reads the whole filter, once for the first page of a filter.
+          query.uncounted === true
+            ? undefined
+            : db
+                .select({ notes: count() })
+                .from(note_index)
+                .innerJoin(sites, eq(sites.id, note_index.site_id))
+                .innerJoin(organization, eq(organization.id, note_index.workspace_id))
+                .where(filtered)
+                .then(([row]) => number(row?.notes)),
         ]);
         const shown = page.slice(0, query.limit);
         const texts = await keptTexts(
@@ -695,7 +699,7 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
               checkedAt: Number(row.checked_at),
             };
           }),
-          total: number(counted?.notes),
+          ...(counted === undefined ? {} : { total: counted }),
           ...(page.length > query.limit && last !== undefined
             ? { next: { at: Number(last.row.created_at), site: last.row.site_id, note: last.row.note_id } }
             : {}),
