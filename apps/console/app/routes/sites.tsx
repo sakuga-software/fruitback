@@ -4,6 +4,7 @@ import {
   type Destination,
   STAGES,
   type Site,
+  type Stage,
   type Visibility,
   type Workspace,
   type Writers,
@@ -272,7 +273,8 @@ export default function Sites() {
           {seesTracker ? (
             <p className="mt-[14px] text-hint text-muted">
               {t('A site with no tracker keeps its notes in Fruitback.')}{' '}
-              <LinkButton space="inline" to={`/w/${workspace.id}/connectors`}>
+              {/* FRU-571: the dialog « Add a connector » of the Connectors screen, opened (FRU-562). */}
+              <LinkButton space="inline" to={`/w/${workspace.id}/connectors?new=1`}>
                 {t('Connect a tracker')}
               </LinkButton>{' '}
               {t('or')}{' '}
@@ -580,7 +582,7 @@ function SiteCard({ workspace, site, manages, seesTracker }: SiteCardProps) {
           </Menu>
         </span>
       </div>
-      <Counts site={site} />
+      <Counts site={site} name={name} notes={notesOf(workspace.id, site.id, 'new')} />
       {/* The foot of the card (FRU-432): where the notes go at the left, the last one at the right. The
           terms are for a screen reader: the place and the moment say what they are to the eye. How the
           notes came is on the page of the site. */}
@@ -659,9 +661,9 @@ function Access({ icon, children }: { icon: keyof typeof ACCESS_PATHS; children:
   );
 }
 
-/** The Notes screen with one site chosen in its filter « Site ». */
-export function notesOf(workspace: string, site: string): string {
-  return `/w/${workspace}/notes?${new URLSearchParams({ site }).toString()}`;
+/** The Notes screen with one site chosen in its filter « Site », and a status in « Status » when one is given. */
+export function notesOf(workspace: string, site: string, stage?: Stage): string {
+  return `/w/${workspace}/notes?${new URLSearchParams({ site, ...(stage === undefined ? {} : { stage }) }).toString()}`;
 }
 
 /** A cell with nothing to say yet: a dot for the eye, and words for a screen reader. */
@@ -678,9 +680,10 @@ function None() {
 
 /**
  * The notes of a site, the status of the card (FRU-432): how many, large, a bar of their statuses
- * that the words say again, and how many are new, which are the ones to read.
+ * that the words say again, and how many are new, which are the ones to read. FRU-570: the new ones
+ * are always on a line of their own, and lead to the Notes screen with this site and « New » chosen.
  */
-function Counts({ site }: { site: Site }) {
+function Counts({ site, name, notes: newNotes }: { site: Site; name: string; notes: string }) {
   useLocale();
   const notes = site.notes;
   if (notes === undefined) return <None />;
@@ -700,24 +703,34 @@ function Counts({ site }: { site: Site }) {
       : t('{count} notes: {new} new, {todo} to do, {progress} in progress, {done} done, {closed} closed', values);
 
   return (
-    <span className="flex flex-wrap items-center gap-x-[10px] gap-y-[6px]">
-      <span aria-hidden="true" className="text-[20px] leading-none font-semibold tabular-nums">
-        {total}
-      </span>
-      <StatusBar
-        label={label}
-        counts={{
-          new: notes.new,
-          todo: notes.todo,
-          progress: notes.progress,
-          done: notes.done,
-          closed: notes.closed,
-        }}
-      />
-      {notes.new === 0 ? null : (
-        <span aria-hidden="true" className="text-hint font-semibold text-accent-strong">
-          {notes.new === 1 ? t('1 new') : t('{count} new', { count: notes.new })}
+    <span className="flex flex-col items-start gap-[8px]">
+      <span className="flex flex-wrap items-center gap-x-[10px] gap-y-[6px]">
+        <span aria-hidden="true" className="text-[20px] leading-none font-semibold tabular-nums">
+          {total}
         </span>
+        <StatusBar
+          label={label}
+          counts={{
+            new: notes.new,
+            todo: notes.todo,
+            progress: notes.progress,
+            done: notes.done,
+            closed: notes.closed,
+          }}
+        />
+      </span>
+      {notes.new === 0 ? null : (
+        <Link
+          to={newNotes}
+          aria-label={
+            notes.new === 1
+              ? t('See the new note of {site}', { site: name })
+              : t('See the {count} new notes of {site}', { count: notes.new, site: name })
+          }
+          className="rounded-[2px] text-hint font-semibold text-accent-strong underline-offset-[3px] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+        >
+          {notes.new === 1 ? t('1 new') : t('{count} new', { count: notes.new })}
+        </Link>
       )}
     </span>
   );
