@@ -170,9 +170,12 @@ async function open(page: Page): Promise<void> {
 
 const rows = (page: Page) => page.locator('button[id^="source-row-"]');
 const panel = (page: Page) => page.locator('#source-panel');
-const sources = (page: Page) => page.getByRole('region', { name: 'Add a connector' }).getByRole('listitem');
+/** The sources to add: on the page with no source, in a dialog with one (FRU-562). */
+const catalogue = (page: Page) =>
+  page.getByRole('dialog', { name: 'Add a connector' }).or(page.getByRole('region', { name: 'Add a connector' }));
+const sources = (page: Page) => catalogue(page).getByRole('listitem');
 
-/** FRU-542: with a source connected, « New connector » opens the list of the sources to add. */
+/** FRU-542, FRU-562: with a source connected, « New connector » opens the dialog of the sources to add. */
 async function openCatalogue(page: Page, name = 'New connector'): Promise<void> {
   await page.getByRole('button', { name, exact: true }).click();
   await expect(sources(page)).toHaveCount(8);
@@ -227,10 +230,7 @@ test('the list of the sources and the panel of a Linear are the ones of the mock
   });
   // No list of the sources to add while one is connected: « New connector » opens it.
   await expect(sources(page)).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'New connector', exact: true })).toHaveAttribute(
-    'aria-expanded',
-    'false',
-  );
+  await expect(page.getByRole('dialog')).toHaveCount(0);
   const chosen = rows(page).first();
   const resting = rows(page).nth(1);
   await expect(chosen).toHaveAttribute('aria-expanded', 'true');
@@ -484,34 +484,11 @@ test('« Add a connector » lists what connects, and what does not yet with a bu
   const worker = await workerWith(page);
   await open(page);
   await openCatalogue(page);
-  // The list opens over the sources that are connected, its title takes focus, and « Close » closes it.
-  const title = page.getByRole('heading', { level: 2, name: 'Add a connector', exact: true });
-  await expect(title).toBeFocused();
-  await expect(page.getByRole('button', { name: 'New connector', exact: true })).toHaveAttribute(
-    'aria-expanded',
-    'true',
-  );
-  expect((await box(title)).y).toBeLessThan((await box(rows(page).first())).y);
-  await page.getByRole('button', { name: 'Close', exact: true }).click();
-  await expect(sources(page)).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'New connector', exact: true })).toBeFocused();
-  await openCatalogue(page);
   // Each source has the mark of its tracker (FRU-543).
   for (const [index, kind] of ['linear', 'github', 'rest', 'jira', 'gitlab', 'trello', 'notion', 'webhook'].entries()) {
     await expect(sources(page).nth(index).locator(`svg[data-mark="${kind}"]`), kind).toHaveCount(1);
   }
-  expect.soft(await styles(title, ['font-size', 'font-weight'])).toEqual({ 'font-size': '15px', 'font-weight': '600' });
   await expect(sources(page)).toHaveCount(8);
-  const row = sources(page).nth(3);
-  expect
-    .soft(await styles(row, ['padding-top', 'padding-bottom', 'border-bottom-width', 'column-gap', 'row-gap']))
-    .toEqual({
-      'padding-top': '12px',
-      'padding-bottom': '12px',
-      'border-bottom-width': '1px',
-      'column-gap': '16px',
-      'row-gap': '8px',
-    });
   // The sentences of the mockup.
   for (const [name, sentence] of [
     ['Jira', 'An issue in a Jira Cloud project.'],
@@ -572,20 +549,103 @@ test('« Add a connector » lists what connects, and what does not yet with a bu
   await expect(page.getByText('made-by-fruitback-0123456789')).toHaveCount(0);
 });
 
-test('« Close » gives focus to « Your connectors » when a read took « New connector » away (FRU-542)', async ({
-  page,
-}) => {
-  const worker = await workerWith(page);
+/**
+ * FRU-562: « New connector » opens « Add a connector » in a dialog over the page, its sources a grid
+ * of cards. The page behind is inert while it is open, so no read of a panel can take « New
+ * connector » away under it (the case FRU-542 handled with a focus on « Your connectors »).
+ */
+test('« New connector » opens a dialog with the sources as a grid of cards (FRU-562)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await workerWith(page);
   await open(page);
-  // The panel of the address reads the list again on « Try now ».
-  await rows(page).nth(1).click();
-  await openCatalogue(page);
-  worker.unavailable = true;
-  await panel(page).getByRole('button', { name: 'Try now' }).first().click();
-  await expect(page.getByRole('button', { name: 'New connector', exact: true })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Close', exact: true }).click();
-  await expect(sources(page)).toHaveCount(0);
-  await expect(page.getByRole('heading', { level: 2, name: 'Your connectors', exact: true })).toBeFocused();
+  const opener = page.getByRole('button', { name: 'New connector', exact: true });
+  await opener.click();
+  const dialog = page.getByRole('dialog', { name: 'Add a connector' });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('listitem')).toHaveCount(8);
+  // Not in the page: the list of the connected sources stays where it is, under the dialog.
+  await expect(page.locator('main').getByRole('region', { name: 'Add a connector' })).toHaveCount(0);
+  // Focus is in the dialog, and Tab keeps it there.
+  expect(await dialog.evaluate((element) => element.contains(document.activeElement))).toBe(true);
+  for (let press = 0; press < 12; press += 1) {
+    await page.keyboard.press('Tab');
+    expect(await dialog.evaluate((element) => element.contains(document.activeElement)), `Tab ${press}`).toBe(true);
+  }
+
+  // A grid of cards: three in a row at 1440 px, each a frame of its own, their buttons at the foot.
+  const grid = dialog.getByRole('list');
+  expect.soft(await styles(grid, ['display', 'row-gap', 'column-gap'])).toEqual({
+    display: 'grid',
+    'row-gap': '12px',
+    'column-gap': '12px',
+  });
+  const cards = await Promise.all([0, 1, 2, 3].map(async (index) => box(dialog.getByRole('listitem').nth(index))));
+  expect(cards[1]!.y).toBe(cards[0]!.y);
+  expect(cards[2]!.y).toBe(cards[0]!.y);
+  expect(cards[3]!.y).toBeGreaterThan(cards[0]!.y);
+  const card = dialog.getByRole('listitem').nth(3);
+  expect
+    .soft(await styles(card, ['border-top-left-radius', 'border-top-width', 'padding-top', 'padding-left']))
+    .toEqual({
+      'border-top-left-radius': '14px',
+      'border-top-width': '1px',
+      'padding-top': '16px',
+      'padding-left': '16px',
+    });
+  expect.soft(await painted(card, 'borderTopColor')).toEqual(rgb(LINE));
+  const results = await new AxeBuilder({ page }).include('[role="dialog"]').analyze();
+  expect.soft(results.violations.map((violation) => violation.id)).toEqual([]);
+
+  // Escape closes it, and focus goes back to « New connector ».
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  await expect(opener).toBeFocused();
+
+  // A form open in it takes the whole row, and locks it: no Escape and no close button, which would
+  // take away a key being typed, or the secret of an address shown once.
+  await opener.click();
+  await dialog.getByRole('button', { name: 'Connect REST API', exact: true }).click();
+  const form = dialog.locator('[data-source="REST API"]');
+  expect((await box(form)).width).toBeGreaterThan(cards[0]!.width * 2);
+  await dialog.getByRole('textbox', { name: 'Address of your receiver' }).fill('https://hooks.client.fr/notes');
+  await expect(dialog.getByRole('button', { name: 'Close', exact: true })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('textbox', { name: 'Address of your receiver' })).toHaveValue(
+    'https://hooks.client.fr/notes',
+  );
+  // « Cancel » ends the form, and the dialog closes again by its button.
+  await form.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(opener).toBeFocused();
+});
+
+test('`?new` in the address opens « Add a connector », and leaves the address (FRU-562)', async ({ page }) => {
+  await workerWith(page);
+  await page.goto(`${CONSOLE}/w/w1/connectors?new=1`);
+  await expect(page.getByRole('dialog', { name: 'Add a connector' })).toBeVisible();
+  await expect(sources(page)).toHaveCount(8);
+  await expect(page).toHaveURL(`${CONSOLE}/w/w1/connectors`);
+});
+
+test('`?new` opens nothing for a member, who adds no source (FRU-562)', async ({ page }) => {
+  await workerWith(page, 'member');
+  await page.goto(`${CONSOLE}/w/w1/connectors?new=1`);
+  await expect(rows(page)).toHaveCount(2);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+});
+
+test('with no source, the sources to add are a grid of cards on the page (FRU-562)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const worker = await workerWith(page);
+  worker.connectors = [];
+  await open(page);
+  await expect(sources(page)).toHaveCount(8);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  expect.soft(await styles(catalogue(page).getByRole('list'), ['display'])).toEqual({ display: 'grid' });
+  const first = await box(sources(page).nth(0));
+  expect((await box(sources(page).nth(1))).y).toBe(first.y);
 });
 
 test('« Add a connector » waits for the list of the sources, and its buttons do not move under a press', async ({
@@ -800,7 +860,15 @@ for (const locale of ['en', 'fr'] as const) {
       .getByRole('button', { name: locale === 'en' ? 'New connector' : 'Nouveau connecteur', exact: true })
       .click();
     expect.soft(await sideScroll(page), 'the list of the sources to add').toBe(0);
-    await expectNoViolation(page, `the list of the sources to add at 390 px`);
+    // The dialog fits the width of a phone: no card goes past its edge.
+    const dialog = page.getByRole('dialog');
+    const frame = await box(dialog);
+    expect.soft(frame.x).toBeGreaterThanOrEqual(0);
+    expect.soft(frame.x + frame.width).toBeLessThanOrEqual(390);
+    for (const card of await dialog.getByRole('listitem').all()) {
+      const each = await box(card);
+      expect.soft(each.x + each.width, 'a card in the dialog').toBeLessThanOrEqual(frame.x + frame.width);
+    }
     await page
       .getByRole('button', { name: locale === 'en' ? 'Connect REST API' : 'Connecter API REST', exact: true })
       .click();
