@@ -3631,6 +3631,11 @@ refused by its sentence. What follows is the history.
 - **`total` counts the filter, every page; `counts.all` and `counts.byPlace` the filter without
   `place`** (the tabs of the screen); `counts.undelivered` the notes of that filter whose delivery
   did not arrive.
+- **`counts=none` answers the page with no `total` and no `counts`** (FRU-502, `NoteIndex.page`).
+  The counts are a pass over the filter, and the page an index scan that stops: « Next » and
+  « Previous » of the console keep the counts of the filter and ask `counts=none`. Every other read
+  counts again: a first page, a reload on a later page, a filter, a status that a person changed.
+  `GET /console/admin/notes` takes `counts=none` too, for its `total`. Any other value is `400`.
 - **Who reads what**: every role reads the list (`read-feedback`). **Where a note went is about the
   tracker** (`see-tracker`): the place, the reference and its link, the delivery, `byPlace` and
   `undelivered`. A guest gets none of them, and a `place` filter is `403` to it. `mine` reads the
@@ -3679,6 +3684,27 @@ refused by its sentence. What follows is the history.
   counts, a pass over the notes of the workspace. **A search is a pass too**: 295 ms and 386 ms
   for two words, 123 ms and 177 ms for a word found nowhere. A trigram index (`pg_trgm`) would
   take it down; it is an extension, not done here.
+- **FRU-502, measured on PostgreSQL 17 in a local container** (190,000 notes: 100,000 in one
+  workspace on 50 sites, 10,000 in each of nine others; `EXPLAIN ANALYZE`, three runs):
+  - the counts of the workspace, 13 ms to 17 ms, are no longer read on a page that `counts=none` asks;
+  - the page of the whole instance, for its administrator, was a pass over every note, 29 ms to
+    34 ms, and is a scan of `note_index_by_instance_date` (migration 0040) that stops, 0.08 ms. Its
+    `count(*)` is 27 ms, and `counts=none` leaves it out too. Building the index takes 63 ms on
+    190,000 notes and 280 ms to 316 ms on 1,000,000. It is a plain `CREATE INDEX`, so it holds the
+    writes of `note_index` while it runs, and not its reads (measured: an `INSERT` waits, a `SELECT`
+    answers). Not `CONCURRENTLY`: `postgres-migrate.ts` applies the migrations in one transaction,
+    and PostgreSQL refuses `CREATE INDEX CONCURRENTLY` in one;
+  - **no index for the list of one site**: `note_index_by_workspace` (workspace, site, stage) finds
+    the rows of a site of 100 notes in 0.1 ms, and the planner reads a site of 2,000 notes from
+    `note_index_by_date`, 0.15 ms. An index of its own would cost each write and save nothing;
+  - **no trigram index**: a word found nowhere takes 38 ms to 40 ms on 100,000 notes. `CREATE
+    EXTENSION pg_trgm` needs `CREATE` on the database, and the role of the worker is documented with
+    `CREATE` on its schema only (FRU-219), so the migration would stop a worker at its start. And
+    the search is an `OR` over five columns of two tables, which one GIN index on `excerpt` does not
+    serve;
+  - `GET /console/admin/workspaces`: at 20,000 workspaces the three sub-queries of a row run 100
+    times, after the `LIMIT` (`loops=100` in the plan), not once per workspace. The whole read is
+    6 ms, so it stays as it is.
 - Two ways that were measured and dropped: the deliveries joined to the notes in SQL (the planner
   read the bodies again for each note, 528 ms for the place of a connector), and the keys of the
   deliveries given to PostgreSQL as a list of tuples (planned as a loop, 298 ms). The deliveries

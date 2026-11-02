@@ -393,7 +393,11 @@ export type AdminUser = {
 export type AttentionConnector = AdminConnector & { workspace: WorkspaceName };
 
 /** What the list of the notes of the instance filters on: the list of a workspace, less `author`. */
-export type AdminNoteQuery = Omit<NoteQuery, 'author' | 'sites' | 'searchesReference'> & { workspace?: string };
+export type AdminNoteQuery = Omit<NoteQuery, 'author' | 'sites' | 'searchesReference'> & {
+  workspace?: string;
+  /** FRU-502: no `total`. It counts the whole filter, and the console holds it from the first page. */
+  uncounted?: true;
+};
 
 /** What the list of the notes of the instance searches, in the order the console names them. */
 export const ADMIN_NOTES_SEARCHED = ['excerpt', 'page', 'site', 'workspace', 'stage', 'reference'] as const;
@@ -464,7 +468,8 @@ export type InstanceAdminReads = {
   workspace(id: string): Promise<AdminWorkspaceDetail | undefined>;
   users(query: AdminQuery<(typeof USER_FILTERS)[number]>): Promise<{ users: AdminUser[]; total: number }>;
   /** One page of the notes of the instance, the newest first, and how many the filter has. */
-  notes(query: AdminNoteQuery): Promise<{ notes: AdminNote[]; total: number; next?: NoteCursor }>;
+  /** `total` is absent when the query is `uncounted`. */
+  notes(query: AdminNoteQuery): Promise<{ notes: AdminNote[]; total?: number; next?: NoteCursor }>;
   /** Writes one row for each of `workspaces` that `admin` is not a member of, in one statement. */
   trace(
     admin: Pick<Account, 'id' | 'email'>,
@@ -677,10 +682,19 @@ function notesQueryOf(params: URLSearchParams): ParsedNotes {
   if (params.has('mine')) return { ok: false, error: 'invalid-mine' };
   const workspace = params.get('workspace') ?? undefined;
   if (workspace !== undefined && !ID.test(workspace)) return { ok: false, error: 'invalid-workspace' };
+  const counts = params.get('counts') ?? undefined;
+  if (counts !== undefined && counts !== 'none') return { ok: false, error: 'invalid-counts' };
   const parsed = noteQueryOf(params, '');
   if (!parsed.ok) return parsed;
 
-  return { ok: true, query: { ...parsed.query, ...(workspace === undefined ? {} : { workspace }) } };
+  return {
+    ok: true,
+    query: {
+      ...parsed.query,
+      ...(workspace === undefined ? {} : { workspace }),
+      ...(counts === undefined ? {} : { uncounted: true }),
+    },
+  };
 }
 
 /** Where a note went: the worker's store, a connector, or a connector that was removed since. */
@@ -1180,7 +1194,7 @@ export async function handleInstanceAdmin(
         200,
         {
           notes: found.notes.map(adminNoteView),
-          total: found.total,
+          ...(found.total === undefined ? {} : { total: found.total }),
           searched: ADMIN_NOTES_SEARCHED,
           ...(found.next === undefined ? {} : { next: cursorOf(found.next) }),
         },

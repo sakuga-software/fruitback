@@ -1019,7 +1019,7 @@ describe('the one guard of the writes of a suspended workspace (FRU-282)', () =>
   });
 
   it('names every route of the console API that writes, and the guard comes before each one', () => {
-    const sources = ['console-api.ts', 'console-notes.ts'].map((file) =>
+    const sources = ['console-api.ts', 'console-connectors.ts', 'console-notes.ts'].map((file) =>
       readFileSync(new URL(file, import.meta.url), 'utf8'),
     );
     const fx = {

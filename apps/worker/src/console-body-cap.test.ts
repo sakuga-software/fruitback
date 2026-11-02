@@ -133,11 +133,18 @@ describe('the body of a route of the console (FRU-506)', () => {
       'account-emails.ts',
       'auth-routes.ts',
       'console-api.ts',
+      'console-connectors.ts',
       'console-notes.ts',
       'instance-admin.ts',
     ]);
     // And these modules answer no route by another way: their handlers are called by these files only.
-    for (const handler of ['handleEmailRoutes', 'handleAuthRoutes', 'handleConsoleApi', 'handleNotes']) {
+    for (const handler of [
+      'handleEmailRoutes',
+      'handleAuthRoutes',
+      'handleConsoleApi',
+      'handleNotes',
+      'handleConnectors',
+    ]) {
       const callers = sources.filter((name) =>
         new RegExp(`\\b${handler}\\(`).test(
           readFileSync(new URL(name, dir), 'utf8')
@@ -145,7 +152,8 @@ describe('the body of a route of the console (FRU-506)', () => {
             .replace(/function \w+\(/g, ''),
         ),
       );
-      assert.deepEqual(callers, [handler === 'handleNotes' ? 'console-api.ts' : 'console-routes.ts'], handler);
+      const inConsoleApi = handler === 'handleNotes' || handler === 'handleConnectors';
+      assert.deepEqual(callers, [inConsoleApi ? 'console-api.ts' : 'console-routes.ts'], handler);
     }
   });
 
