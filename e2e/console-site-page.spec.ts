@@ -128,7 +128,7 @@ test('an owner reads everything of a site on its page, under the crumbs « Sites
     'Install',
     'Script',
     'Extension',
-    'Where the notes of staging.acme.dev go',
+    'Where the notes go',
     'Remove this site',
   ]);
   await expect(advanced(page).locator('summary')).toHaveText('AdvancedStatuses, starting an agent, preview deploys');
@@ -139,11 +139,16 @@ test('an owner reads everything of a site on its page, under the crumbs « Sites
   // Its address, who sees its notes and who writes them. « Change » opens them (FRU-504).
   const about = page.getByRole('region', { name: 'Site', exact: true });
   await expect(about.locator('dd')).toHaveText([
-    'https://staging.acme.dev',
+    'https://staging.acme.dev (opens in a new tab)',
     'Members of Acme',
     'Anyone on the page',
     'Extension, script',
   ]);
+  // The address is a link to the site, in a new tab (FRU-575): the console stays where it is.
+  const address = about.getByRole('link', { name: 'https://staging.acme.dev (opens in a new tab)' });
+  await expect(address).toHaveAttribute('href', 'https://staging.acme.dev');
+  await expect(address).toHaveAttribute('target', '_blank');
+  await expect(address).toHaveAttribute('rel', 'noreferrer');
   await expect(about.getByRole('textbox')).toHaveCount(0);
   await expect(about.getByRole('radio')).toHaveCount(0);
   await expect(about.getByRole('button', { name: 'Change who sees the notes of staging.acme.dev' })).toBeVisible();
@@ -166,7 +171,7 @@ test('an owner reads everything of a site on its page, under the crumbs « Sites
     'Install',
     'Script',
     'Extension',
-    'Where the notes of staging.acme.dev go',
+    'Where the notes go',
     'Statuses',
     'Start an agent',
     'Preview deploys',
@@ -185,6 +190,31 @@ test('an owner reads everything of a site on its page, under the crumbs « Sites
   await expect(page).toHaveURL(`${CONSOLE}/w/w1/sites/s1/statuses`);
 });
 
+test('the address of the site opens the site in a new tab, and the console stays (FRU-575)', async ({ page }) => {
+  await workerWith(page);
+  // The site answers here: no request leaves the machine.
+  await page
+    .context()
+    .route('https://staging.acme.dev/**', (route) =>
+      route.fulfill({ contentType: 'text/html', body: '<title>Acme staging</title>' }),
+    );
+  await page.goto(`${CONSOLE}/w/w1/sites/s1`);
+  const about = page.getByRole('region', { name: 'Site', exact: true });
+  const address = about.getByRole('link', { name: 'https://staging.acme.dev (opens in a new tab)' });
+  await expect(address).toBeVisible();
+  // It reads as a link: underlined, in ink.
+  expect.soft(await address.evaluate((element) => getComputedStyle(element).textDecorationLine)).toBe('underline');
+
+  const opened = page.waitForEvent('popup');
+  await address.click();
+  const site = await opened;
+  await expect(site).toHaveTitle('Acme staging');
+  expect(site.url()).toBe('https://staging.acme.dev/');
+  // No referrer goes with it.
+  expect(await site.evaluate(() => document.referrer)).toBe('');
+  await expect(page).toHaveURL(`${CONSOLE}/w/w1/sites/s1`);
+});
+
 test('an owner changes who sees the notes and who writes on the page, and the site keeps its id (FRU-504)', async ({
   page,
 }) => {
@@ -192,7 +222,7 @@ test('an owner changes who sees the notes and who writes on the page, and the si
   await page.goto(`${CONSOLE}/w/w1/sites/s1`);
   const about = page.getByRole('region', { name: 'Site', exact: true });
   // The first read of the list has landed: the page is drawn.
-  await expect(about.locator('dd').first()).toHaveText('https://staging.acme.dev');
+  await expect(about.locator('dd').first()).toHaveText('https://staging.acme.dev (opens in a new tab)');
   const reads = worker.reads;
 
   // Cancel changes nothing, asks nothing, and gives the focus back to « Change ».
@@ -212,7 +242,7 @@ test('an owner changes who sees the notes and who writes on the page, and the si
   await expect(about.getByRole('status')).toHaveText('Saved. The script on the site stays the same.');
   expect(worker.posted).toEqual([{ url: 'https://staging.acme.dev', visibility: 'members', writers: 'members' }]);
   await expect(about.locator('dd')).toHaveText([
-    'https://staging.acme.dev',
+    'https://staging.acme.dev (opens in a new tab)',
     'Members of Acme',
     'Members only',
     'Extension, script',
@@ -271,7 +301,7 @@ test('a site that everyone reads takes a note from anybody, and says so', async 
   await workerWith(page);
   await page.goto(`${CONSOLE}/w/w1/sites/s2`);
   await expect(page.getByRole('region', { name: 'Site', exact: true }).locator('dd')).toHaveText([
-    'https://acme.dev',
+    'https://acme.dev (opens in a new tab)',
     'Everyone who visits',
     'Anyone on the page',
     'None yet',

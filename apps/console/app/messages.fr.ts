@@ -936,6 +936,10 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Write the repository as owner/name.': 'Écrivez le dépôt sous la forme propriétaire/nom.',
   'GitHub did not answer. Try again in a moment.': 'GitHub n’a pas répondu. Réessayez dans un instant.',
   'Where the notes of {site} go': 'Où vont les notes de {site}',
+  'Where the notes go': 'Où vont les notes',
+  'Destinations of {site}': 'Destinations de {site}',
+  'Add a destination': 'Ajouter une destination',
+  '(opens in a new tab)': '(s’ouvre dans un nouvel onglet)',
   'The connectors of this workspace did not load.': 'Les connecteurs de cet espace de travail ne se sont pas chargés.',
   'No connector is added.': 'Aucun connecteur n’est ajouté.',
   '{source} did not send its places. Try again in a moment.':
