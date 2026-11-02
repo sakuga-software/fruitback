@@ -6,7 +6,8 @@ import welcomeSheet from '../../entrypoints/welcome/style.css?inline';
 import kitSheet from '../../src/kit.css?inline';
 import { setLanguage } from '../../src/i18n.ts';
 import gallerySheet from '../gallery.css?inline';
-import { unmountWidget } from '../widget-page.ts';
+import { FROZEN_CLASS, freezeChildren, keepSheetSources } from '../freeze.ts';
+import { freezeWidget, unmountWidget } from '../widget-page.ts';
 
 type Sheets = { sheets: string[]; bodyClass?: string };
 
@@ -25,6 +26,7 @@ const BODY_CLASSES = ['popup-page', 'side-panel-page'];
  */
 const surfaceOf: Decorator = (story, context) => {
   unmountWidget();
+  document.querySelectorAll(`.${FROZEN_CLASS}`).forEach((copy) => copy.remove());
   const surface = SURFACES[String(context.parameters.surface)] ?? WIDGET;
   document.querySelectorAll('style[data-gallery-sheet]').forEach((sheet) => sheet.remove());
   for (const text of [...surface.sheets, gallerySheet]) {
@@ -43,8 +45,19 @@ const surfaceOf: Decorator = (story, context) => {
   return story();
 };
 
+/**
+ * « Frozen » (FRU-579): after the `play`, the story stays in its state and nothing on it reacts. A
+ * pin window or a preview then stays open while the widget of Fruitback takes a note on it.
+ */
+keepSheetSources();
+
 const preview: Preview = {
   decorators: [surfaceOf],
+  afterEach: (context) => {
+    if (context.globals.frozen !== 'on') return;
+    freezeChildren(context.canvasElement);
+    freezeWidget();
+  },
   parameters: { layout: 'padded' },
   globalTypes: {
     locale: {
@@ -59,8 +72,20 @@ const preview: Preview = {
         dynamicTitle: true,
       },
     },
+    frozen: {
+      description: 'Keep the state of the story, with nothing that reacts, to take a note on it',
+      toolbar: {
+        title: 'Frozen',
+        icon: 'lock',
+        items: [
+          { value: 'on', title: 'Frozen', icon: 'lock' },
+          { value: 'off', title: 'Live', icon: 'unlock' },
+        ],
+        dynamicTitle: true,
+      },
+    },
   },
-  initialGlobals: { locale: 'en' },
+  initialGlobals: { locale: 'en', frozen: 'on' },
 };
 
 export default preview;

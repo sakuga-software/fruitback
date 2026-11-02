@@ -2648,8 +2648,34 @@ as `framed`, a bridge in each frame, a capture with no move. Not measured in Fir
   Chromium with Storybook 10.6.3).
 - **Not there:** the options page and the rule editor of the popup, which their entrypoints build
   with no function to call.
-- **A story of the widget holds two widgets**: the one of the story and the one of the extension.
-  Measured: the two docks are in the same corner, one on the other.
+- **« Frozen » is on by default** (the toolbar switches to « Live »; FRU-579). After the `play`,
+  `afterEach` of `.storybook/preview.ts` calls `gallery/freeze.ts`:
+  - the children of the root of the story are replaced by copies, which have no listener. A pin
+    window, a preview or a composer stays open, and a click elsewhere closes nothing;
+  - the widget of the story is copied out of its shadow root into the page, then destroyed. Its
+    elements are then in the document, where a selector of the widget of the extension finds them.
+    The document holds one live widget, the one of the extension.
+- **The copy takes the text of the sheets, not `cssText`.** `keepSheetSources` keeps what
+  `replaceSync` receives: `cssText` loses `border: 1px solid var(--x)` when `border-bottom-width`
+  follows, and the key « Esc » lost its border.
+- **The rules of the copy are in `@scope (.gallery-frozen)`**, with `:host` written `:scope`. Out of
+  the shadow root, a rule of the widget such as `button { … }` applied to the whole page, and the
+  page moved under its pins. `@keyframes`, `@font-face` and `@property` stay outside: `@scope`
+  cannot hold them.
+- **The copy is `isolation: isolate`, before the live widget in `body`**, so the pins of the live
+  widget show over the copy. **Its dock is on the other side** of the dock of the live widget: on the
+  same corner, its « Leave a note » covered the live one and did nothing.
+- **A note is filed under the address of the frame**, and Storybook writes a global that is not its
+  default value into it (`&globals=frozen:off`, `&globals=locale:fr`), then drops it at a reload.
+  So a note left in « Live » or in French belongs to another page: leave the notes in « Frozen »,
+  in English, which add nothing to the address.
+- Measured in Chromium with the built extension and Storybook 10.6.3: a note on the reply field of
+  the frozen pin window is anchored on `textarea[aria-label="Reply"]`, and after a reload its pin
+  comes back by the selector, confident. The 68 stories freeze with no error. Against « Live », a
+  frozen story differs by the focus ring and by the corner of the dock only. Each fault above was
+  seen before its fix: the moved page, the key with no border, the pin under the copy, the two docks
+  on one corner. The welcome page asks for `/demo/first-note.*`, which the gallery does not serve,
+  in both modes: FRU-581.
 
 ## « Fruitback 0.6.0 is out », in the popup and the page (FRU-519)
 
