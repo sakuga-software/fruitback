@@ -244,7 +244,11 @@ make tickets.
 - A heading keeps its words, ticket included: its id is an address that other pages,
   `docs/_data/moved.yml` and the extension link to. Changing one is a move, with its line in
   `moved.yml`.
-- No test holds these counts yet: a guard is a ticket of its own.
+- `apps/worker/src/docs-readability.test.ts` holds the tickets, the em dashes and the bold, and gives
+  the file, the line and the column of each break (FRU-561). It reads only what a reader sees as
+  prose: no heading, front matter, code, comment, tag, link target, bare address, nor the block that
+  `guide-docs.ts` copies. It holds the bullets too (FRU-577): a list item whose text starts with a
+  bold pair is a `bold label`. The 35 that did lost their bold and kept their words.
 - A rewrite for readability never changes what a promise, a duty or a data practice says. On
   `SECURITY.md` and the privacy pages, the pull request lists each sentence whose meaning could be
   read differently, before and after.

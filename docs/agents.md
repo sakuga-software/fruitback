@@ -11,7 +11,7 @@ pages of your sites, and Fruitback calls no model: the agent is yours, with its 
 
 The owner and the admins of a workspace make its keys. A key names:
 
-- **its sites**, 20 at most: it reads nothing of another site, and nothing of another workspace;
+- its sites, 20 at most: it reads nothing of another site, and nothing of another workspace;
 - its rights: `read`, or `write` to reply and set a status too;
 - how long it lives: 90 days unless you choose from 1 to 365. No key lives with no end;
 - `verifiedOnly`, on by default: on a site that everyone reads, the key reads only the notes of a

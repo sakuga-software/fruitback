@@ -15,7 +15,19 @@ import { Confirmation } from '../confirm';
 import { INVITED, type Message, messageOf } from '../invitation-message';
 import { type Listed, edited, listedOf } from '../listed';
 import { copyText, problemOf } from '../problems';
-import { Button, Choice, DataTable, Field, Initial, LinkButton, LoadFailed, PageHead, Problem, folded } from '../ui';
+import {
+  Button,
+  Choice,
+  DataTable,
+  Dialog,
+  Field,
+  Initial,
+  LinkButton,
+  LoadFailed,
+  PageHead,
+  Problem,
+  folded,
+} from '../ui';
 import { useTypedSearch } from '../typed-search';
 import { NotePages } from './notes';
 import { useWorkspace } from './workspace';
@@ -173,6 +185,9 @@ export default function Members() {
   const [sites, setSites] = useState<readonly SiteChoice[] | undefined>();
   const [site, setSite] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
+  // FRU-565: the dialog of the invitation is open.
+  const [inviting, setInviting] = useState(false);
+  const emailField = useRef<HTMLInputElement>(null);
   const [problem, setProblem] = useState<string | undefined>();
   const [sentTo, setSentTo] = useState<{ email: string; message: Message } | undefined>();
   const [stuck, setStuck] = useState<{ row: string; problem: string } | undefined>();
@@ -257,6 +272,9 @@ export default function Members() {
     });
     setBusy(false);
     if (!sent.ok) {
+      // The button was disabled while it sent, so focus left it: it goes back to the field, inside the
+      // dialog, where Escape and Tab work again and the sentence of the refusal is read next.
+      emailField.current?.focus();
       // A message that did not leave: the invitation is kept, so it is shown, to send again.
       if (sent.error === 'mail-unavailable') readAll();
       // The site was removed meanwhile: the list is read again, and the sentence says so.
@@ -270,6 +288,7 @@ export default function Members() {
     }
     setSentTo({ email: sent.data.email, message: messageOf(sent.data, mailed) });
     setEmail('');
+    setInviting(false);
     setInvitations((current) =>
       edited(current, (items) => [...items.filter((each) => each.id !== sent.data.id), sent.data]),
     );
@@ -365,24 +384,33 @@ export default function Members() {
         title={t('Members')}
         lead={t('Who sees and leaves notes, and who changes the workspace.')}
         className="mb-[24px]"
+        {...(manages
+          ? {
+              action: <Button onClick={() => setInviting(true)}>{t('Invite')}</Button>,
+            }
+          : {})}
       />
       {manages ? (
-        <form
-          onSubmit={invite}
-          aria-label={t('Invite someone')}
-          className="mb-[24px] flex flex-wrap items-end gap-[10px]"
+        // FRU-565: the form is in a dialog, opened by « Invite » in the head of the page. What is typed
+        // stays when it closes; a sent invitation closes it, and its link is shown on the page.
+        <Dialog
+          open={inviting}
+          onClose={() => setInviting(false)}
+          title={t('Invite someone')}
+          closeLabel={t('Close')}
+          size="md"
         >
-          <div className="min-w-0 flex-[999_1_260px]">
+          <form onSubmit={invite} aria-label={t('Invite someone')} className="flex flex-col gap-[16px]">
             <Field
               label={t('Email')}
               type="email"
               someoneElse
+              autoFocus
+              inputRef={emailField}
               placeholder="name@company.com"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
             />
-          </div>
-          <div className="min-w-0 flex-[1_1_200px]">
             <Choice
               label={t('Role')}
               value={chosen}
@@ -393,27 +421,24 @@ export default function Members() {
                 { value: 'admin', label: t('Admin') },
               ]}
             />
-          </div>
-          {chosen === 'guest' && shared !== undefined ? (
-            <div className="min-w-0 flex-[1_1_200px]">
+            {chosen === 'guest' && shared !== undefined ? (
               <Choice
                 label={t('Site')}
                 value={shared}
                 onChange={setSite}
                 options={(sites ?? []).map((each) => ({ value: each.id, label: siteLabel(each.origin) }))}
               />
+            ) : null}
+            {problem === undefined ? null : <Problem>{t(problem)}</Problem>}
+            <div className="flex flex-wrap items-center gap-[16px]">
+              <Button type="submit" inset={24} disabled={busy || email.trim() === ''}>
+                {busy ? t('Sending…') : t('Invite')}
+              </Button>
+              <LinkButton onClick={() => setInviting(false)}>{t('Cancel')}</LinkButton>
             </div>
-          ) : null}
-          <Button type="submit" inset={24} disabled={busy || email.trim() === ''}>
-            {busy ? t('Sending…') : t('Invite')}
-          </Button>
-        </form>
+          </form>
+        </Dialog>
       ) : null}
-      {problem === undefined ? null : (
-        <div className="mb-[24px]">
-          <Problem>{t(problem)}</Problem>
-        </div>
-      )}
       {sentTo === undefined ? null : <Invited email={sentTo.email} message={sentTo.message} />}
 
       {people === 'loading' ? <p className="text-small text-muted">{t('Loading…')}</p> : null}

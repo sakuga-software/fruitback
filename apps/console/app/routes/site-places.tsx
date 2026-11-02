@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import {
   type Connector,
   type Destination,
@@ -343,23 +343,41 @@ export function SitePlaces({
   const silent = sources.filter((source) => offers[source.id] === 'failed');
   const reading = sources.some((source) => offers[source.id] === 'loading');
   const host = new URL(site.origin).host;
+  const addId = useId();
 
   return (
+    // FRU-576: the title says what the section is, as « Install » does; the region keeps the name of
+    // the site. What a place does is said under the title, before the list, and the places are rows of
+    // a frame, each with its actions on its line. « Add a destination » names the search and the list.
     <section
       aria-label={t('Where the notes of {site} go', { site: host })}
-      className="flex min-w-0 flex-col gap-[12px]"
+      className="flex min-w-0 flex-col gap-[16px]"
     >
-      <h2 className="text-section font-bold">{t('Where the notes of {site} go', { site: host })}</h2>
-      {places.length === 0 ? (
-        <p className="text-small text-muted">{t('Its notes stay in Fruitback, in this workspace.')}</p>
-      ) : (
-        <ol className="flex flex-col">
+      <div className="flex flex-col gap-[4px]">
+        <h2 className="text-section font-bold">{t('Where the notes go')}</h2>
+        <p className="text-small text-muted">
+          {places.length === 0
+            ? t('Its notes stay in Fruitback, in this workspace.')
+            : t(
+                'A note goes to the default place. With two places or more, a member chooses one in the widget when they write.',
+              )}
+        </p>
+      </div>
+      {places.length === 0 ? null : (
+        <ol
+          aria-label={t('Destinations of {site}', { site: host })}
+          className="flex flex-col rounded-frame border border-line bg-surface"
+        >
           {places.map((each, index) => {
             const rest = places.filter((_, position) => position !== index);
 
             return (
-              <li key={valueOf(each)} className="border-b border-line py-[8px] text-small">
-                <span className="flex items-center gap-[8px]">
+              <li
+                key={valueOf(each)}
+                className="flex flex-wrap items-center gap-x-[16px] gap-y-[6px] border-b border-line px-[16px] py-[12px] text-small last:border-b-0"
+                data-place
+              >
+                <span className="flex min-w-0 flex-[1_1_240px] items-center gap-[8px]">
                   {/* The mark of the source, and the colour Linear gives the place (FRU-459): the name says both. */}
                   {sourceOf(each) === undefined ? null : (
                     <span className="flex flex-none items-center gap-[6px] text-muted" data-place-mark>
@@ -377,15 +395,6 @@ export function SitePlaces({
                   <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{nameOf(each)}</span>
                   {index === 0 ? <Chip>{t('Default')}</Chip> : null}
                 </span>
-                {isPublic(each) ? (
-                  <div className="my-[4px]" data-public>
-                    <Problem>
-                      {t('{repository} is public: each note of this site becomes an issue that anybody can read.', {
-                        repository: each.teamId ?? '',
-                      })}
-                    </Problem>
-                  </div>
-                ) : null}
                 <span className="flex flex-wrap gap-x-[16px]">
                   {index === 0 ? null : (
                     <LinkButton disabled={blocked} onClick={() => void place([each, ...rest])}>
@@ -396,6 +405,15 @@ export function SitePlaces({
                     {t('Remove')}
                   </LinkButton>
                 </span>
+                {isPublic(each) ? (
+                  <div className="basis-full" data-public>
+                    <Problem>
+                      {t('{repository} is public: each note of this site becomes an issue that anybody can read.', {
+                        repository: each.teamId ?? '',
+                      })}
+                    </Problem>
+                  </div>
+                ) : null}
               </li>
             );
           })}
@@ -423,7 +441,10 @@ export function SitePlaces({
       ) : null}
 
       {places.length < MAX_DESTINATIONS && sources.length > 0 ? (
-        <div className="max-w-[420px]">
+        <div role="group" aria-labelledby={addId} className="flex max-w-[420px] flex-col gap-[8px]">
+          <p id={addId} className="text-small font-semibold">
+            {t('Add a destination')}
+          </p>
           <SearchChoice
             label={t('Add a destination for {site}', { site: host })}
             searchLabel={t('Search the destinations')}
@@ -557,13 +578,6 @@ export function SitePlaces({
           </Button>
         </div>
       )}
-      {places.length > 1 || offered.length > 0 ? (
-        <p className="text-hint text-muted">
-          {t(
-            'A note goes to the default place. With two places or more, a member chooses one in the widget when they write.',
-          )}
-        </p>
-      ) : null}
       {problem === undefined ? null : <Problem>{t(problem)}</Problem>}
     </section>
   );

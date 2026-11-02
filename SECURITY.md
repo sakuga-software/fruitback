@@ -740,7 +740,7 @@ On Fruitback Cloud, step 3 of the setup connects the extension of the browser it
 click and no word: the console sends runtime messages to the extension. Decided by Mathieu on
 2026-10-28. What this adds to the flow above, and its conditions:
 
-- **Which pages may talk to the extension: `https://app.fruitback.com`, and no other.** The manifest
+- Which pages may talk to the extension: `https://app.fruitback.com`, and no other. The manifest
   of the Chromium build declares `externally_connectable` with that one origin (`matches:
   ["https://app.fruitback.com/*"]`: the path must be written, the host is exact). Chrome gives
   `chrome.runtime.sendMessage` to that origin only, and to no other site. The value is fixed at build
@@ -1414,7 +1414,7 @@ section above). A worker without `FRUITBACK_AUTH_SECRET` loads nothing of the li
 `404` under `/console/auth/`. What exists is its configuration, seven tables in the database of the
 accounts, and one secret. Four of them hold the accounts since 0.2.0.
 
-- **`FRUITBACK_AUTH_SECRET` signs the cookie of a console session.** It is a secret of the worker's
+- `FRUITBACK_AUTH_SECRET` signs the cookie of a console session. It is a secret of the worker's
   own, like `FRUITBACK_IDENTITY_SECRET` and `FRUITBACK_SECRETS_KEY`, and it is not one of those two:
   the worker refuses to start when it equals one of them, and when it is under 32 characters. It
   stays in the environment: nothing writes it in the database, and no route answers it. Changing it
@@ -1523,7 +1523,7 @@ go there. **This is the first secret of a customer that the Cloud holds.**
 A site can send its notes to several places of its workspace, five at most. An owner or an admin
 sets the list in the console, and a note goes to the first place unless a member chose another one.
 
-- **The names of the places are for a person who may see the tracker**: an owner, an admin or a
+- The names of the places are for a person who may see the tracker: an owner, an admin or a
   member. `GET /feedback` answers them in a `destinations` field only to a session of the workspace
   of the site, and it reads the role of the person at each request. A visitor, a guest, a session of
   another workspace and a token that the site signed get no such field.
@@ -1551,7 +1551,7 @@ pattern tells `*.preview.acme.dev` from `*.vercel.app`. The DNS can: only who ho
 domain writes a record under it. So the worker takes the subdomains of a domain as the previews of a
 site only while the workspace of that site proves the domain.
 
-- **The proof is a `TXT` record**, `_fruitback.<domain>`, whose value is a digest of the workspace id
+- The proof is a `TXT` record, `_fruitback.<domain>`, whose value is a digest of the workspace id
   and the domain (`proofRecord` in `domain-proof.ts`). It is public in the DNS and grants nothing to
   whoever reads it: writing it is the proof. The record of one workspace proves nothing for
   another, and the record of `preview.acme.dev` proves nothing for `acme.dev`.
@@ -1603,7 +1603,7 @@ site only while the workspace of that site proves the domain.
 Where the worker has a Linear application (`FRUITBACK_LINEAR_OAUTH`), a workspace connects its Linear
 by consent at Linear, and no personal key is typed.
 
-- **The token is the application's** (`actor=app`), with the scopes `read,write`: the worker creates
+- The token is the application's (`actor=app`), with the scopes `read,write`: the worker creates
   issues and labels and reads issues and their comments. It is not narrower than a key inside the
   workspace of Linear. What it changes: no person's key is held, the connection does not stop when
   its person leaves, an admin of Linear revokes it in one place, and the token lasts a day.
@@ -1625,7 +1625,7 @@ Where the worker has the App of the connectors (`FRUITBACK_GITHUB_CONNECTOR`), a
 of a workspace installs it on GitHub, and GitHub sends the person back to
 `/auth/github-app/callback` with an `installation_id`, a `setup_action` and a `code`.
 
-- **The `installation_id` of the way back is what the browser says.** Anybody can write the id of
+- The `installation_id` of the way back is what the browser says. Anybody can write the id of
   another client's installation there. The worker changes the `code` for a user token of the person,
   reads every page of `GET /user/installations` with it, and attaches the id only if it is in that
   list. An id that is not in it attaches nothing, and the worker asks no token of that installation.
@@ -1663,7 +1663,7 @@ of a workspace installs it on GitHub, and GitHub sends the person back to
 A workspace can also connect an address of its own, and the worker posts each note of a site that
 chose it. The notes stay in the worker: this is one more copy, sent out.
 
-- **The worker calls an address a customer chose, so it must not be a way in.** The address is
+- The worker calls an address a customer chose, so it must not be a way in. The address is
   https only. The worker does not call the machine it runs on (loopback), a private network, a
   link-local address or a mesh range (`100.64.0.0/10`): an IP address written in the address is refused when the connector
   is made, and a name is checked when the socket resolves it, at each attempt, so a name that
@@ -1717,7 +1717,7 @@ Through better-auth too, with the client of `FRUITBACK_GOOGLE_OAUTH` and the cal
 `/console/auth/callback/google`: the authorization code, a `state` and PKCE, as for GitHub. Only the
 identity is asked for (`openid email profile`).
 
-- **better-auth reads the identity from the id token** that the token endpoint of Google answers,
+- better-auth reads the identity from the id token that the token endpoint of Google answers,
   over TLS, and checks no signature of it: the token comes from Google itself, in the answer to a
   request of the worker.
 - An address is used only when Google says it is verified (`email_verified`). Another one makes
@@ -1732,7 +1732,7 @@ identity is asked for (`openid email profile`).
 
 ### A person's name and the ways they sign in, from « My account » (FRU-249)
 
-- **A person names themself, and nobody else.** `POST /console/me/name` sets the name of the
+- A person names themself, and nobody else. `POST /console/me/name` sets the name of the
   account of the cookie, from the console (its `Origin`), and no route takes an id: test:`sets the
   name of the person of the cookie only, by a POST of the console`. The token of an extension opens
   no route of the console. A name is one line of 1 to 80 characters, in NFC, and holds no control
@@ -1805,7 +1805,7 @@ Decisions of Mathieu, 2026-10-25. An account has one primary address (`user.emai
 and others, in the table `account_emails` (`account-emails.ts`). This protects against an address that
 nobody proved being used as an identity, and against one address opening two accounts.
 
-- **An address is there only once something proved it.** A linked provider proves the one it gives
+- An address is there only once something proved it. A linked provider proves the one it gives
   as verified (`email_verified` of Google, `verified` of GitHub). A person adds one in « My account »:
   Fruitback sends a link there, which works once, for 24 hours, and only in a session of the account
   that asked, from the console (its `Origin`). Another account that opens it adds nothing, and the
@@ -1857,7 +1857,7 @@ nobody proved being used as an identity, and against one address opening two acc
 Decision of Mathieu, 2026-10-13 (Q7): the short label of a browser is kept per session, and « Last
 seen » is shown to owners and admins only.
 
-- **« Last seen » is read by an owner or an admin of the workspace, and by nobody else.**
+- « Last seen » is read by an owner or an admin of the workspace, and by nobody else.
   `GET /console/workspaces/<id>/members/seen` answers `{seen: {<account>: <day>}}` with the right to
   manage the members; a member or a guest gets `403`, a person of another workspace `404`, as for
   every route of a workspace: test:`answers nothing of it to a member, a guest, another workspace,
@@ -1875,7 +1875,7 @@ seen » is shown to owners and admins only.
 
 ### The statuses of a site (FRU-366)
 
-- **Only a role with `manage-sites`** (an owner or an admin) lists, adds, changes, orders or removes
+- Only a role with `manage-sites` (an owner or an admin) lists, adds, changes, orders or removes
   the statuses of a site: `GET`, `POST /console/workspaces/<id>/sites/<site>/statuses`,
   `POST …/statuses/order`, `DELETE …/statuses/<source>/<key>`. A member or a guest is `403`, and a
   site of another workspace answers `404`, like one that does not exist, with nothing written.
@@ -1915,7 +1915,7 @@ seen » is shown to owners and admins only.
 
 ### The status of a note that the worker keeps (FRU-367)
 
-- **`POST /feedback/<id>/status?client=<site>` takes the rights of a verdict**: a session
+- `POST /feedback/<id>/status?client=<site>` takes the rights of a verdict: a session
   of the extension, read again in the store, of a person who reads the site now; and of them, the
   person who left the note (the index keeps their account) or a role with `manage-sites`. Anybody
   else of the workspace is `403`, no session is `401`, and nothing is written.
@@ -1933,8 +1933,8 @@ seen » is shown to owners and admins only.
 
 ### The status of a note, chosen in the console (FRU-384)
 
-- **`POST /console/workspaces/<id>/notes/<note>/status` takes the rights of the route of the
-  extension**, with the cookie of the console: the person who left the note (the index keeps
+- `POST /console/workspaces/<id>/notes/<note>/status` takes the rights of the route of the
+  extension, with the cookie of the console: the person who left the note (the index keeps
   their account), or a role with `manage-sites`. Anybody else of the workspace is `403 not-allowed`, a
   site the caller does not read (a guest) or of another workspace is `404`, and nothing is
   written. test:`refuses a member who did not write the note, and writes nothing`,
@@ -2244,7 +2244,7 @@ the console. Each one has a rule in `ORGANIZATION_PATHS` (`organization-paths.ts
 `POST /feedback/<id>/replies?client=<site>` writes a reply into the tracker of a workspace, or into
 the database for a site with no destination.
 
-- **Who.** A session of the workspace of the site, by the relay of the extension, on any site: the
+- Who. A session of the workspace of the site, by the relay of the extension, on any site: the
   reply is named by the account, and a name in the body is not read. With no token, a visitor, on a
   site that everybody reads (`everyone`) only: the name they typed is their word, and the text says
   « not verified ». A token that does not verify is `401`, and so is no token on a site of the
@@ -2323,7 +2323,7 @@ same transaction).
 The extension declares a side panel: `side_panel.default_path` and the `sidePanel` permission on
 Chrome, `sidebar_action` on Firefox. It is a page of the extension, `sidepanel.html`.
 
-- **No access to a page.** `sidePanel` lets the extension show its own page beside the tab; it
+- No access to a page. `sidePanel` lets the extension show its own page beside the tab; it
   grants no host, no content script and no read of a page. Chrome shows no warning for it: measured
   on the built manifest with `management.getPermissionWarningsByManifest`, the warnings with and
   without the panel are the same (`e2e/side-panel.spec.ts`). `sidebar_action` asks for no permission.
@@ -2456,7 +2456,7 @@ A workspace can have a logo, which the console shows in its rail and on the scre
 `/console/workspaces/<id>/logo`, under every rule of the console API (the cookie of a session, the
 `Origin` of the console for a write, `404` for a workspace somebody is not of):
 
-- **Who sends it, and who removes it: the owner and the admins of the workspace** (`manage-workspace`,
+- Who sends it, and who removes it: the owner and the admins of the workspace (`manage-workspace`,
   as for its name). `POST` with the bytes as the body, `DELETE` to remove it. A member or a guest:
   `403`. A suspended workspace refuses both, as every write (`409 workspace-suspended`).
   test:`refuses a member and a guest, as every route of who manages a workspace, and changes nothing`.
@@ -2490,7 +2490,7 @@ makes, lists and revokes the keys, and reads what a key reaches. `docs/decisions
 framing. `/console/workspaces/<id>/agent-keys`, under every rule of the console API (the cookie of a
 session, the `Origin` of the console for a write, `404` for a workspace somebody is not of):
 
-- **Who makes, lists and revokes a key: the owner and the admins of the workspace**
+- Who makes, lists and revokes a key: the owner and the admins of the workspace
   (`manage-workspace`). A member or a guest: `403`. A suspended workspace refuses a new key and a
   revocation, as every write (`409 workspace-suspended`).
   test:`refuses a member and a guest, as every route of who manages a workspace, and writes nothing`.
@@ -2534,7 +2534,7 @@ A site can call an address of the team when a note arrives, which starts the tea
 then reads the note through `/mcp` with its key. `docs/decisions/agents.md`, « Starting an agent on a
 note », gives the framing.
 
-- **Off by default, and set by the owner and the admins only** (`manage-workspace`), at
+- Off by default, and set by the owner and the admins only (`manage-workspace`), at
   `/console/workspaces/<id>/sites/<site>/agent-trigger`, under every rule of the console API. A member
   or a guest: `403`.
   test:`refuses a member and a guest, and a connector of another workspace`.
@@ -2563,7 +2563,7 @@ note », gives the framing.
 agent key through `POST /mcp`, the Streamable
 HTTP transport of MCP. Three tools, all reads: `list_notes`, `get_note`, `notes_as_text`.
 
-- **No valid key, no route.** No key, a key of another shape, a revoked or expired key, a key whose
+- No valid key, no route. No key, a key of another shape, a revoked or expired key, a key whose
   member left or was suspended, and a key of a suspended workspace: `401` with
   `WWW-Authenticate: Bearer resource_metadata="…"` where OAuth is on (below), so that a client
   finds where to get a token, and `error="invalid_token"` when a key or a token was presented. The
@@ -2705,7 +2705,7 @@ The threats, and what stands against each:
 Mathieu, 2026-10-18: « le premier compte utilisateur est forcèment admin lors de sa création sur
 l'interface, géré par better-auth avec le flag admin en base ». The Cloud runs the same code.
 
-- **Who.** The account whose `role` of `user` is `admin`, and that is not banned. No variable names an
+- Who. The account whose `role` of `user` is `admin`, and that is not banned. No variable names an
   administrator. A role that holds a list (`admin,user`) is no administrator.
 - How one becomes it. The first account of the instance, in the transaction that creates it: a
   trigger of the database (`0016_first_admin`) gives the role to a new account when the table of
@@ -3028,7 +3028,7 @@ how to delete a reporter's notes. It is not legal advice.
 
 ## What is not a vulnerability
 
-- **A reporter typing somebody else's name.** With no token that is a claim, which is what
+- A reporter typing somebody else's name. With no token that is a claim, which is what
   `verified: false` means. Report a case where a claim comes back marked verified.
 - Pins readable on a site that everyone reads. That is the visibility the person who added the
   site chose in the console. Report a case where a site that members read answers without a valid

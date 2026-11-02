@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { type Page, type Route, expect, test } from '@playwright/test';
-import { ACME, type Role, sideScroll, stubWorker, fulfillSites } from './console-workspace.ts';
+import { ACME, type Role, box, sideScroll, stubWorker, fulfillSites, styles } from './console-workspace.ts';
 
 /**
  * Where the notes of a site go, set from the Sites screen (FRU-399), and no longer from the panel of
@@ -280,6 +280,59 @@ test('an owner chooses where the notes of a site go, on the page of the site (FR
   // Back on the grid, the card of the site says where its notes go now.
   await page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'Sites' }).click();
   await expect(card(page).locator('dd').first()).toHaveText('LinearTeam Web and 1 more');
+});
+
+test('the section says what a place does, then the places in one frame, each with its actions on its line (FRU-576)', async ({
+  page,
+}) => {
+  const worker = await workerWith(page);
+  await openPlaces(page);
+
+  // Its title is short, as « Install » is: the region keeps the name of the site for a screen reader.
+  await expect(panel(page).getByRole('heading', { level: 2 })).toHaveText('Where the notes go');
+  // With no place, the sentence under the title says where the notes stay, and no empty frame is drawn.
+  await expect(panel(page).locator('h2 + p')).toHaveText('Its notes stay in Fruitback, in this workspace.');
+  await expect(panel(page).getByRole('list', { name: `Destinations of ${SITE}` })).toHaveCount(0);
+  // « Add a destination » is written above the search and the list, and names them as a group.
+  const adding = panel(page).getByRole('group', { name: 'Add a destination', exact: true });
+  await expect(adding.getByText('Add a destination', { exact: true })).toBeVisible();
+  await expect(adding.getByRole('searchbox', { name: 'Search the destinations', exact: true })).toBeVisible();
+  await expect(adding.getByRole('button', { name: new RegExp(`Add a destination for ${SITE}`) })).toBeEnabled();
+
+  // Two places: what the default does is said before the list, not under it.
+  worker.places = [{ connector: 'c1', teamId: 't1' }, { connector: 'r1' }];
+  await openPlaces(page);
+  await expect(panel(page).locator('h2 + p')).toHaveText(
+    'A note goes to the default place. With two places or more, a member chooses one in the widget when they write.',
+  );
+  await expect(panel(page).getByText(/With two places or more/)).toHaveCount(1);
+  const list = panel(page).getByRole('list', { name: `Destinations of ${SITE}` });
+  const rows = list.getByRole('listitem');
+  await expect(rows).toHaveCount(2);
+  expect
+    .soft(await styles(list, ['border-top-width', 'border-top-left-radius']))
+    .toEqual({ 'border-top-width': '1px', 'border-top-left-radius': '14px' });
+  expect.soft(await styles(rows.nth(0), ['border-bottom-width', 'padding-left'])).toEqual({
+    'border-bottom-width': '1px',
+    'padding-left': '16px',
+  });
+  // The last row draws no line under it: the frame does.
+  expect.soft(await styles(rows.nth(1), ['border-bottom-width'])).toEqual({ 'border-bottom-width': '0px' });
+  await expect(rows.nth(0)).toContainText('Linear · Web');
+  await expect(rows.nth(0).getByText('Default', { exact: true })).toBeVisible();
+  await expect(rows.nth(0).getByRole('button')).toHaveText(['Remove']);
+  await expect(rows.nth(1).getByRole('button')).toHaveText(['Make it the default', 'Remove']);
+
+  // At 1440 px a place and its actions are on one line.
+  const name = await box(rows.nth(1).getByText('REST API · hooks.acme.dev', { exact: true }));
+  const remove = await box(rows.nth(1).getByRole('button', { name: 'Remove', exact: true }));
+  expect.soft(Math.abs(name.y + name.height / 2 - (remove.y + remove.height / 2)), 'one line').toBeLessThan(4);
+  expect.soft(remove.x, 'the actions at the right of the name').toBeGreaterThan(name.x + name.width);
+  await expectNoViolation(page, 'the places in their frame');
+
+  await rows.nth(1).getByRole('button', { name: 'Make it the default', exact: true }).click();
+  await expect.poll(() => worker.sent).toEqual([[{ connector: 'r1' }, { connector: 'c1', teamId: 't1' }]]);
+  await expect(rows.nth(0)).toContainText('REST API · hooks.acme.dev');
 });
 
 test('the page of a site reads its sources once, and the teams and repositories of each once (FRU-557)', async ({

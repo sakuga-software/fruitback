@@ -404,6 +404,9 @@ for (const locale of ['en', 'fr'] as const) {
     expect.soft(await sideScroll(page), 'the card').toBe(0);
     await card(page).scrollIntoViewIfNeeded();
     await picture(page, `card-390-${locale}`);
+    // The card is in the dialog of the sources to add (FRU-562): the rows are under it until it closes.
+    await page.keyboard.press('Escape');
+    await expect(card(page)).toHaveCount(0);
     await rows(page).nth(1).click();
     await expect(panel(page).locator('[data-public]')).toBeVisible();
     await page.waitForTimeout(300);

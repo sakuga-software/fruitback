@@ -254,7 +254,7 @@ export default function SitePage() {
         <Section id="about" title={t('Site')}>
           <KeyValue
             rows={[
-              { term: t('Address'), value: <span className="[overflow-wrap:anywhere]">{siteLabel(site.origin)}</span> },
+              { term: t('Address'), value: <SiteLink origin={site.origin} /> },
               {
                 term: t('Who sees the notes'),
                 value:
@@ -386,6 +386,39 @@ function viaOf(via: readonly ('script' | 'extension')[]): string {
   if (via.includes('script') && via.includes('extension')) return t('Extension, script');
 
   return via.includes('extension') ? t('Extension') : t('Script');
+}
+
+/**
+ * The address of the site, a link to it in a new tab (FRU-575): the console stays where it is. Only an
+ * `http` or `https` origin is a link, to the address it shows; the worker keeps no other.
+ */
+function SiteLink({ origin }: { origin: string }) {
+  useLocale();
+  // The link opens the address it shows: the origin as `siteLabel` reads it, never the raw value.
+  const label = siteLabel(origin);
+  if (!/^https?:\/\//.test(label)) return <span className="[overflow-wrap:anywhere]">{label}</span>;
+
+  return (
+    <a
+      href={label}
+      target="_blank"
+      rel="noreferrer"
+      className="[overflow-wrap:anywhere] text-ink underline decoration-1 underline-offset-[3px] hover:text-accent-strong"
+    >
+      {label}
+      <span className="sr-only"> {t('(opens in a new tab)')}</span>
+      <svg aria-hidden="true" viewBox="0 0 24 24" className="ml-[4px] inline-block h-[12px] w-[12px] align-baseline">
+        <path
+          d="M8 16L16 8M9.5 8H16v6.5"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </a>
+  );
 }
 
 /** A section of the page, reached by its hash, and named by its title or by a longer label. */
