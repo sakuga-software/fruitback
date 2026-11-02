@@ -118,6 +118,9 @@ export function SitePlaces({
     readFor.current = key;
     generation.current += 1;
     const mine = generation.current;
+    // A source that left takes its list with it: a read of the sources can answer fewer of them.
+    const kept = new Set(sources.map((source) => source.id));
+    setOffers((current) => Object.fromEntries(Object.entries(current).filter(([id]) => kept.has(id))));
     for (const source of sources) {
       if (source.kind === 'rest') {
         setOffers((current) => ({ ...current, [source.id]: { kind: 'rest' } }));
