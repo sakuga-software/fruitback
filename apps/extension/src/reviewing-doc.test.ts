@@ -120,10 +120,8 @@ describe('the guide quotes the popup this extension renders', () => {
     assert.ok(quoted.length >= 5, `the guide quotes ${quoted.length} problems: this check reads nothing`);
     for (const problem of quoted) {
       if (problem.remedy === null) continue;
-      // A control is named in « », as every guide names one (FRU-515), or in bold.
-      const label = REMEDY_LABEL[problem.remedy];
       assert.ok(
-        guide.includes(`« ${label} »`) || guide.includes(`**${label}**`),
+        guide.includes(`« ${REMEDY_LABEL[problem.remedy]} »`),
         `docs/reviewing.md quotes "${problem.text}" and does not name its button: ${REMEDY_LABEL[problem.remedy]}`,
       );
     }

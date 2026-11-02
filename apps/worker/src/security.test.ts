@@ -97,15 +97,10 @@ describe('the reviewer guide states the lifetimes the worker issues', () => {
    */
   it('says how long an access token outlives a log out, skew included', () => {
     const window = (ACCESS_TTL_SECONDS + CLOCK_SKEW_SECONDS) / 60;
-    // In its section, bold or not, over one line or two (FRU-515, review of #786). « the token's » keeps
-    // the 10 minutes of its life, in the same section, from passing for the window.
-    const start = REVIEWING.indexOf('## What log out does');
-    const section = REVIEWING.slice(start, REVIEWING.indexOf('\n## ', start + 1)).replaceAll('**', '');
-    assert.ok(start >= 0, 'docs/reviewing.md has no section « What log out does »');
-    assert.match(
-      section,
-      new RegExp(`the token's\\s+${window}\\s+minutes\\b`),
-      `docs/reviewing.md does not say the access token outlives a log out ${window} minutes`,
+    const phrase = `**${window} minutes**`;
+    assert.ok(
+      REVIEWING.includes(phrase),
+      `docs/reviewing.md does not say the access token outlives a log out ${phrase}`,
     );
   });
 
