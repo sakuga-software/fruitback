@@ -9,6 +9,7 @@
 @import 'tw-animate-css';
 @import '@heroui/styles/base' layer(base);
 @import '@heroui/styles/base/scrollbar.css' layer(base);
+@import '@heroui/styles/components/close-button.css' layer(components);
 @import '@heroui/styles/components/description.css' layer(components);
 @import '@heroui/styles/components/field-error.css' layer(components);
 @import '@heroui/styles/components/label.css' layer(components);
@@ -32,6 +33,7 @@
 @import '@heroui/styles/components/textfield.css' layer(components);
 @import '@heroui/styles/components/header.css' layer(components);
 @import '@heroui/styles/components/surface.css' layer(components);
+@import '@heroui/styles/components/modal.css' layer(components);
 @import '@heroui/styles/components/tooltip.css' layer(components);
 @import '@heroui/styles/components/combo-box.css' layer(components);
 @import '@heroui/styles/components/select.css' layer(components);
@@ -2124,4 +2126,27 @@ textarea {
   .setup-waiting {
     animation: none;
   }
+}
+
+/* FRU-558: the dialog that adds a site. Its preview is shorter than the one of the setup: the form stays in view. */
+.add-site-dialog .kit-browser__page {
+  height: 280px;
+}
+
+.add-site-dialog__icon {
+  width: 24px;
+  height: 24px;
+  flex: none;
+  border-radius: var(--radius-box);
+  object-fit: contain;
+}
+
+.add-site-dialog__letter {
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--color-line);
+  background: var(--surface);
+  color: var(--color-ink);
+  font-size: 13px;
+  font-weight: 700;
 }

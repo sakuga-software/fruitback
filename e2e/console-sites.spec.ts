@@ -185,8 +185,12 @@ const value = (site: Locator, term: string) =>
 const more = (page: Page, name: string) => page.getByRole('button', { name: `More for ${name}`, exact: true });
 const search = (page: Page) => page.getByRole('searchbox', { name: 'Search sites' });
 
-async function expectNoViolation(page: Page, name: string): Promise<void> {
-  const results = await new AxeBuilder({ page }).include('main').analyze();
+async function expectNoViolation(page: Page, name: string, within = 'main'): Promise<void> {
+  // A dialog is read once it has come in: during its entrance its text is still fading in. The page
+  // of a site in its preview is not the console's, and is not read.
+  if (within !== 'main') await expect(page.locator('.modal__backdrop[data-entering]')).toHaveCount(0);
+  if (within !== 'main') await page.waitForTimeout(300);
+  const results = await new AxeBuilder({ page }).include(within).exclude('iframe').analyze();
   expect
     .soft(
       results.violations.map((violation) => `${violation.id}: ${violation.nodes[0]?.target.join(' ')}`),
@@ -659,18 +663,36 @@ test('the counts come with the list: nothing that a pointer can reach moves when
   );
 });
 
-test('« Add a site » opens the form above the grid, and a refusal keeps what was typed', async ({ page }) => {
+test('« Add a site » opens a dialog, Escape closes it, and a refusal keeps what was typed (FRU-558)', async ({
+  page,
+}) => {
   const worker = await workerWith(page);
   await open(page);
-  await page.getByRole('button', { name: 'Add a site', exact: true }).click();
+  const opener = page.getByRole('button', { name: 'Add a site', exact: true });
+  await opener.click();
 
-  const form = page.getByRole('region', { name: 'Add a site' });
-  const formBox = await box(form);
-  expect(formBox.y + formBox.height).toBeLessThanOrEqual((await box(search(page))).y);
+  // A dialog named by its title, with focus in its field; Escape closes it, and focus goes back.
+  const form = page.getByRole('dialog', { name: 'Add a site' });
+  await expect(form).toBeVisible();
   const field = form.getByRole('textbox', { name: 'Site address' });
+  await expect(field).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(form).toHaveCount(0);
+  await expect(opener).toBeFocused();
+  await opener.click();
+  await expect(field).toBeFocused();
+  // A press outside does not close it: the form and its refusal stay (raised in review).
+  await page.mouse.click(20, 880);
+  await expect(form).toBeVisible();
+  await field.focus();
+  // Tab never leaves the dialog: the page under it is out of reach.
+  for (let step = 0; step < 12; step += 1) {
+    await page.keyboard.press('Tab');
+    expect(await form.evaluate((dialog) => dialog.contains(document.activeElement))).toBe(true);
+  }
   const submit = form.getByRole('button', { name: 'Add site', exact: true });
   await expect(form.getByRole('radio', { name: /Members of Acme/ })).toBeChecked();
-  await expectNoViolation(page, 'the form');
+  await expectNoViolation(page, 'the form', '[role="dialog"]');
 
   // What is not an address: the sentence of the console, nothing sent, the field as it was.
   await field.fill('not an address');
@@ -708,20 +730,51 @@ test('« Add a site » opens the form above the grid, and a refusal keeps what w
   });
 });
 
+test('the dialog shows the icon and the page of the typed site, once it is an address (FRU-558)', async ({ page }) => {
+  await workerWith(page);
+  // The site, as its own server would answer the browser of the person: the console asks nothing.
+  await page.route('https://docs.acme.dev/**', (route) =>
+    route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>Docs</title><h1>Acme docs</h1>' }),
+  );
+  await open(page);
+  await page.getByRole('button', { name: 'Add a site', exact: true }).click();
+  const form = page.getByRole('dialog', { name: 'Add a site' });
+  const field = form.getByRole('textbox', { name: 'Site address' });
+
+  // One word names no site: nothing is asked.
+  await field.fill('docs');
+  await page.waitForTimeout(900);
+  await expect(form.getByRole('region', { name: /^Preview of/ })).toHaveCount(0);
+
+  await field.fill('docs.acme.dev');
+  const preview = form.getByRole('region', { name: 'Preview of docs.acme.dev' });
+  await expect(preview).toBeVisible();
+  // Its icon: the image of the site, or its letter when none loads (no route sees /favicon.ico).
+  await expect(preview.locator('.add-site-dialog__icon').first()).toBeVisible();
+  const frame = preview.frameLocator('iframe[title="docs.acme.dev, live"]');
+  await expect(frame.getByRole('heading', { name: 'Acme docs' })).toBeVisible();
+  await expect(preview.locator('iframe')).toHaveAttribute('referrerpolicy', 'no-referrer');
+  await expectNoViolation(page, 'the dialog with its preview', '[role="dialog"]');
+
+  // An address that is no longer one hides the preview at once, not after the pause of 600 ms.
+  await field.fill('docs');
+  await expect(form.getByRole('region', { name: /^Preview of/ })).toHaveCount(0, { timeout: 300 });
+});
+
 test('« Who can leave a note? » is asked for a site that its members read, « Members only » first (FRU-330)', async ({
   page,
 }) => {
   const worker = await workerWith(page);
   await open(page);
   await page.getByRole('button', { name: 'Add a site', exact: true }).click();
-  const form = page.getByRole('region', { name: 'Add a site' });
+  const form = page.getByRole('dialog', { name: 'Add a site' });
   const writers = form.getByRole('radiogroup', { name: 'Who can leave a note?' });
 
   // A new site is « Members only », and the detail says what private mode needs.
   await expect(writers.getByRole('radio', { name: 'Members only' })).toBeChecked();
   await expect(writers).toContainText('In private mode the extension holds no session');
   await expect(writers).toContainText(/«\sAnyone on the page\s»/);
-  await expectNoViolation(page, 'the form with « Who can leave a note? »');
+  await expectNoViolation(page, 'the form with « Who can leave a note? »', '[role="dialog"]');
 
   // A site that everyone reads takes a note from anybody: the question is not asked, nor sent.
   await form.getByText('Everyone who visits', { exact: true }).click();
@@ -801,7 +854,7 @@ test('what is typed in the form stays when the form goes and comes back', async 
   await workerWith(page);
   await open(page);
   await page.getByRole('button', { name: 'Add a site', exact: true }).click();
-  const form = page.getByRole('region', { name: 'Add a site' });
+  const form = page.getByRole('dialog', { name: 'Add a site' });
   await form.getByRole('textbox', { name: 'Site address' }).fill('docs.acme.dev');
   await form.getByText('Everyone who visits').click();
   // « Cancel » closes the form. What was typed is not thrown away: the form shows it again.

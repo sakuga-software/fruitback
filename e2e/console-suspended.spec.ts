@@ -110,7 +110,7 @@ test('a write refused with 409 workspace-suspended says so, keeps what was typed
   await expect(banner(page)).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Add a site', exact: true }).click();
-  const form = page.getByRole('region', { name: 'Add a site' });
+  const form = page.getByRole('dialog', { name: 'Add a site' });
   await form.getByRole('textbox', { name: 'Site address' }).fill('docs.acme.dev');
   await form.getByRole('button', { name: 'Add site', exact: true }).click();
 
@@ -153,7 +153,7 @@ test('in French and at 390 px, the banner and the refusal are French, and nothin
   await axe(page, 'the banner at 390 px, in French');
 
   await page.getByRole('button', { name: 'Ajouter un site', exact: true }).click();
-  const form = page.getByRole('region', { name: 'Ajouter un site' });
+  const form = page.getByRole('dialog', { name: 'Ajouter un site' });
   await form.getByRole('textbox', { name: 'Adresse du site' }).fill('docs.acme.dev');
   await form.getByRole('button', { name: 'Ajouter le site', exact: true }).click();
   await expect(form.getByRole('alert')).toHaveText(
@@ -205,11 +205,14 @@ test('a refusal of a write of another workspace, answered after the person chang
   });
   await open(page);
   await page.getByRole('button', { name: 'Add a site', exact: true }).click();
-  const form = page.getByRole('region', { name: 'Add a site' });
+  const form = page.getByRole('dialog', { name: 'Add a site' });
   await form.getByRole('textbox', { name: 'Site address' }).fill('docs.acme.dev');
   await form.getByRole('button', { name: 'Add site', exact: true }).click();
 
-  // The person goes to Lumen Studio before the worker answers the write of Acme.
+  // The person closes the dialog (FRU-558) and goes to Lumen Studio before the worker answers the
+  // write of Acme.
+  await page.keyboard.press('Escape');
+  await expect(form).toHaveCount(0);
   await page.locator('aside.kit-rail').getByRole('button', { name: /Acme/ }).click();
   await page.getByRole('menuitemradio', { name: /Lumen Studio/ }).click();
   await expect(page).toHaveURL(/\/w\/w2\/sites$/);

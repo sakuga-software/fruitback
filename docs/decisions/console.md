@@ -456,8 +456,16 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   it, in the card of a workspace with no site too, where the mockup draws the address alone, and the
   page of the site says them, read only. A host breaks after its dots first (`<wbr>`). The card and
   the alert are sized by their content (`box-content`), as the mockup sizes them: 640 px and 760 px
-  inside their padding. `e2e/console-sites.spec.ts` holds the three states, the counts, the search,
-  the pages, the form, the menu, the roles, 390 px and axe.
+  inside their padding. **« Add a site » opens a dialog** (FRU-558, `Dialog` of `ui.tsx` on HeroUI's
+  Modal): named by its title, focus in its field and kept inside, Escape or its close button close
+  it, and focus goes back to the button. A press outside does not: it would hide the form and its
+  refusal. What is typed stays when it closes. Once the
+  field holds an address and nobody typed for 600 ms, the dialog shows the icon and the domain of the
+  site, then its page in the sandboxed frame of the setup (`SitePreview`). The browser of the person
+  asks the site, under the `img-src https:` and `frame-src` the console already has; **the worker
+  fetches no typed address**, and no policy changed. The card of a workspace with no site keeps the
+  form in place. `e2e/console-sites.spec.ts` holds the three states, the counts, the search, the
+  pages, the form and its dialog, the menu, the roles, 390 px and axe.
 - **The page of a site** (FRU-433, `routes/site.tsx`) has the crumbs « Sites › site » of the page
   of the statuses, and its title is the name of the site, at the place of every title (FRU-405). Its
   sections, in this order: the site (its address, who sees its notes, who can leave one, read only);
