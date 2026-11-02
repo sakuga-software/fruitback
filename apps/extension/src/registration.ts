@@ -46,7 +46,7 @@ export type RegisteredScript = {
 };
 
 export type ScriptRegistrar = {
-  getRegisteredContentScripts(): Promise<{ id: string; excludeMatches?: string[] }[]>;
+  getRegisteredContentScripts(): Promise<{ id: string; excludeMatches?: string[]; allFrames?: boolean }[]>;
   registerContentScripts(scripts: RegisteredScript[]): Promise<void>;
   updateContentScripts(scripts: RegisteredScript[]): Promise<void>;
   unregisterContentScripts(filter: { ids: string[] }): Promise<void>;
@@ -101,7 +101,8 @@ function isOurs(id: string): boolean {
  * The scripts of an origin change only with the hidden origins it covers (FRU-444): an origin that
  * stays keeps its pair, one that goes is unregistered, a new one is registered. A pair whose hidden
  * origins changed is unregistered and registered again, in its own call. The pair of before FRU-74
- * (one id for every origin) is unregistered at the first sync.
+ * (one id for every origin) is unregistered at the first sync. A pair of before the frames (FRU-578),
+ * which has no `allFrames`, is registered again the same way.
  *
  * Answers the origins the browser refused.
  */
@@ -113,6 +114,7 @@ export async function syncRegistration(
   const registered = (await scripting.getRegisteredContentScripts()).filter((script) => isOurs(script.id));
   const existing = new Set(registered.map((script) => script.id));
   const excludedNow = new Map(registered.map((script) => [script.id, [...(script.excludeMatches ?? [])].sort()]));
+  const inFrames = new Set(registered.filter((script) => script.allFrames === true).map((script) => script.id));
   const wanted = new Set(origins.flatMap((origin) => Object.values(scriptIdsFor(origin))));
 
   const stale = [...existing].filter((id) => !wanted.has(id));
@@ -125,7 +127,9 @@ export async function syncRegistration(
     const scripts = scriptsFor(origin, ids, excluded);
     // The browser answers the patterns it holds, in its own order.
     const changed = scripts.filter(
-      (script) => existing.has(script.id) && excludedNow.get(script.id)?.join(' ') !== excluded.join(' '),
+      (script) =>
+        existing.has(script.id) &&
+        (excludedNow.get(script.id)?.join(' ') !== excluded.join(' ') || !inFrames.has(script.id)),
     );
     if (changed.length > 0) {
       await scripting.unregisterContentScripts({ ids: changed.map((script) => script.id) });
@@ -150,9 +154,17 @@ function scriptsFor(origin: string, ids: { bridge: string; page: string }, exclu
   const leftOut = excluded.length === 0 ? {} : { excludeMatches: excluded };
 
   return [
-    { id: ids.bridge, matches, ...leftOut, js: [BRIDGE_FILE], runAt: 'document_idle', world: 'ISOLATED' },
+    {
+      id: ids.bridge,
+      matches,
+      ...leftOut,
+      js: [BRIDGE_FILE],
+      runAt: 'document_idle',
+      world: 'ISOLATED',
+      allFrames: true,
+    },
     // The widget, in the page's own world. See entrypoints/page.content.ts for why that is not a
     // preference: from the isolated world every fiber the note's `source` comes from is invisible.
-    { id: ids.page, matches, ...leftOut, js: [PAGE_FILE], runAt: 'document_idle', world: 'MAIN' },
+    { id: ids.page, matches, ...leftOut, js: [PAGE_FILE], runAt: 'document_idle', world: 'MAIN', allFrames: true },
   ];
 }

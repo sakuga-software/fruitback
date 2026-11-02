@@ -20,6 +20,7 @@ import { SIGN_IN_REQUEST } from '../src/sign-in-request.ts';
 import { readSite } from '../src/sites.ts';
 import { LANGUAGE_KEY, storedLanguage } from '../src/language.ts';
 import { BRIDGE_SCRIPT_FLAG } from '../src/page-api.ts';
+import { frameRole, holdsWidget } from '../src/frames.ts';
 import { randomId } from '../src/relay-transport.ts';
 import { captureResponseOf } from '../src/capture-answer.ts';
 import { createPairing } from '../src/copy.ts';
@@ -52,6 +53,9 @@ export default defineContentScript({
   runAt: 'document_idle',
 
   async main() {
+    // A frame with no widget must not answer the commands of the popup: the frame that holds the
+    // widget answers them. See `src/frames.ts`.
+    if (!holdsWidget(frameRole(window))) return;
     // A second copy of this file in a frame that already has one, which would apply every decision
     // twice. See `PAGE_SCRIPT_FLAG`; this is that guard on the isolated world's own global, where
     // no page can read or write it.

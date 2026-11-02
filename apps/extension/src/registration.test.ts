@@ -11,27 +11,40 @@ import {
   syncRegistration,
 } from './registration.ts';
 
-function registrar(initial: string[] = []): ScriptRegistrar & {
+/** `inFrames: false` gives scripts registered before FRU-578, which had no `allFrames`. */
+function registrar(
+  initial: string[] = [],
+  { inFrames = true } = {},
+): ScriptRegistrar & {
   calls: string[];
   ids: Set<string>;
   excluded: Map<string, string[]>;
+  framed: Set<string>;
 } {
   const ids = new Set(initial);
   const calls: string[] = [];
   const excluded = new Map<string, string[]>();
+  const framed = new Set(inFrames ? initial : []);
 
   return {
     ids,
     calls,
     excluded,
+    framed,
     getRegisteredContentScripts: async () =>
-      [...ids].map((id) => (excluded.has(id) ? { id, excludeMatches: excluded.get(id) } : { id })),
+      [...ids].map((id) => ({
+        id,
+        ...(excluded.has(id) ? { excludeMatches: excluded.get(id) } : {}),
+        ...(framed.has(id) ? { allFrames: true } : {}),
+      })),
     registerContentScripts: async (scripts: RegisteredScript[]) => {
       for (const script of scripts) {
         // The real API throws on a duplicate id, and a test that let it pass would hide exactly the
         // bug this module exists to avoid.
         assert.equal(ids.has(script.id), false, `registered ${script.id} twice`);
         ids.add(script.id);
+        if (script.allFrames === true) framed.add(script.id);
+        else framed.delete(script.id);
         if (script.excludeMatches === undefined) excluded.delete(script.id);
         else excluded.set(script.id, script.excludeMatches);
       }
@@ -42,7 +55,10 @@ function registrar(initial: string[] = []): ScriptRegistrar & {
       calls.push(`update:${scripts.map((s) => s.id).join(',')}`);
     },
     unregisterContentScripts: async ({ ids: removed }) => {
-      for (const id of removed) ids.delete(id);
+      for (const id of removed) {
+        ids.delete(id);
+        framed.delete(id);
+      }
       calls.push(`unregister:${removed.join(',')}`);
     },
   };
@@ -161,9 +177,26 @@ describe('syncRegistration', () => {
     ]);
 
     assert.partialDeepStrictEqual(scripts, [
-      { id: acme.bridge, world: 'ISOLATED', matches: ['https://acme.dev/*'] },
-      { id: acme.page, world: 'MAIN', matches: ['https://acme.dev/*'] },
+      { id: acme.bridge, world: 'ISOLATED', matches: ['https://acme.dev/*'], allFrames: true },
+      { id: acme.page, world: 'MAIN', matches: ['https://acme.dev/*'], allFrames: true },
     ]);
+  });
+
+  it('registers again, in every frame, a pair of before the frames, and only once', async () => {
+    const before = registrar([acme.bridge, acme.page, other.bridge, other.page], { inFrames: false });
+
+    await syncRegistration(before, ['https://acme.dev', 'https://other.dev']);
+
+    assert.deepEqual(before.calls, [
+      `unregister:${acme.bridge},${acme.page}`,
+      `register:${acme.bridge},${acme.page}`,
+      `unregister:${other.bridge},${other.page}`,
+      `register:${other.bridge},${other.page}`,
+    ]);
+    assert.deepEqual([...before.framed].sort(), [acme.bridge, acme.page, other.bridge, other.page].sort());
+    before.calls.length = 0;
+    await syncRegistration(before, ['https://acme.dev', 'https://other.dev']);
+    assert.deepEqual(before.calls, []);
   });
 
   it('recovers when only one of the two of an origin survived', async () => {

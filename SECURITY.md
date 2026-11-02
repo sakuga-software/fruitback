@@ -452,6 +452,31 @@ from obeying a new bridge and reading a site of a workspace with no session. Wha
 that it did not: the version of the copy that holds it (in `ready`, and on
 `window.__fruitbackPageHolder`). The address of the copy is not posted; the tag is new on each page.
 
+### The widget in the frames of a page (FRU-578)
+
+The scripts of the extension run in each frame whose address is on an origin that somebody turned
+on. A frame holds the widget only if all of these are true:
+
+- The frame is directly under the top frame of the tab.
+- The frame and the top frame have the same origin. The browser refuses to read the `location` of a
+  top frame of another origin, and the scripts take that refusal as « no ».
+- The top frame declares `<meta name="fruitback" content="frames">`. Then the top frame holds no
+  widget.
+
+In all other cases, the top frame holds the widget, as before, and no frame does. A frame with no
+widget has no bridge either: the commands of the popup go to the frame that holds the widget.
+
+What this changes: a page of an origin that is on can move the widget into its own frames of that
+origin. It can already take the widget away or post to it (above). The relay takes the origin from
+the sender that the browser reports, which is the origin of the frame, and so the origin of the tab.
+A site of another origin that frames a site that is on gets no widget in that frame. Thus it cannot
+put its content around our composer to get a click or a capture of the reviewer: test:`a page of another origin that frames the site and declares its frames gets no widget in that frame`.
+
+A capture asked from a frame is a capture of the visible tab, cut to the area of that frame, or to an
+area the frame gives. The frame can give an area outside itself, in the tab of its own origin. A
+frame of another origin inside that tab can show in that area: this is the case of a capture asked
+from the top frame too.
+
 ### What a session protects, and what it does not
 
 The worker can hold sessions for the browser extension. An operator mints a pairing code for a named
