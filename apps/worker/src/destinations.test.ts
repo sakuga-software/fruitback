@@ -45,7 +45,7 @@ function wanted(filter: unknown): string[] {
  * `answers.as` is how it answers now: `revoked` is a key somebody removed at Linear (`401`), and
  * `down` is a Linear that fails (`500`).
  */
-function twoTeams() {
+function twoTeams(organization: { urlKey?: unknown } = {}) {
   const issues: { teamId: string; projectId?: string; description: string }[] = [];
   const reads: string[] = [];
   /** Each call, by its operation and its variables. */
@@ -64,6 +64,7 @@ function twoTeams() {
       return Response.json({
         data: {
           viewer: { name: 'Camille' },
+          ...(Object.keys(organization).length === 0 ? {} : { organization }),
           teams: {
             nodes: [
               {
@@ -242,6 +243,62 @@ describe('a site that can send to several places (FRU-123)', () => {
     assert.equal(client?.teamId, SUPPORT);
     assert.equal(client?.projectId, undefined);
     assert.equal(client?.destinations?.length, 2);
+  });
+
+  it('keeps the page of each team at Linear, built from the keys Linear answers, never from the request (FRU-574)', async () => {
+    const env = await envWith();
+    const linear = twoTeams({ urlKey: 'acme' });
+    const world = await acme(env);
+    linear.asked.length = 0;
+
+    const set = await world.place([
+      { connector: world.connector, teamId: SUPPORT, url: 'https://evil.example/phish' },
+      { connector: world.connector, teamId: DESIGN, projectId: 'proj_site' },
+    ]);
+
+    assert.equal(set.status, 200, await set.clone().text());
+    assert.deepEqual((await world.accounts.sites(world.workspace.id))[0]?.destinations, [
+      {
+        connector: world.connector,
+        teamId: SUPPORT,
+        label: 'Linear · Support',
+        url: 'https://linear.app/acme/team/SUP/all',
+      },
+      {
+        connector: world.connector,
+        teamId: DESIGN,
+        projectId: 'proj_site',
+        label: 'Linear · Design · Site',
+        url: 'https://linear.app/acme/team/DES/all',
+      },
+    ]);
+    // The console reads it with the sites.
+    const listed = await call(env, 'GET', `${world.base}/sites`, { token: world.consoleToken });
+    const body = (await listed.json()) as { sites: { destinations?: { url?: string }[] }[] };
+    assert.deepEqual(
+      body.sites[0]?.destinations?.map((each) => each.url),
+      ['https://linear.app/acme/team/SUP/all', 'https://linear.app/acme/team/DES/all'],
+    );
+    // Still one call to Linear: the keys come with the names.
+    assert.deepEqual(
+      linear.asked.map((one) => one.operation),
+      ['FruitbackPlaces'],
+    );
+  });
+
+  it('keeps no page of a team when Linear gives no key, or a key that is not a plain word (FRU-574)', async () => {
+    for (const organization of [{}, { urlKey: 'acme/../evil' }, { urlKey: 7 }]) {
+      const env = await envWith();
+      twoTeams(organization);
+      const world = await acme(env);
+
+      const set = await world.place([{ connector: world.connector, teamId: SUPPORT, url: 'https://linear.app/x' }]);
+
+      assert.equal(set.status, 200, await set.clone().text());
+      assert.deepEqual((await world.accounts.sites(world.workspace.id))[0]?.destinations, [
+        { connector: world.connector, teamId: SUPPORT, label: 'Linear · Support' },
+      ]);
+    }
   });
 
   it('asks Linear for the places it labels, in one call, and never for the list of its teams (FRU-501)', async () => {

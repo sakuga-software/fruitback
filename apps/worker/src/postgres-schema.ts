@@ -252,6 +252,10 @@ export const site_destinations = pgTable(
     // learned when the destination is written, and again when a note goes there. Empty: not known
     // (another kind of connector, or GitHub did not answer).
     private: boolean('private'),
+    // FRU-574: the page of the team of a `linear` destination at Linear, built by the worker from the
+    // keys Linear answers when the destination is written. Empty: another kind, written before, or
+    // Linear gave no key.
+    url: text('url'),
   },
   (table) => [
     primaryKey({ name: 'site_destinations_pkey', columns: [table.site_id, table.position] }),
