@@ -441,13 +441,16 @@ describe('the preflight lets through what the widget actually sends', () => {
     assert.ok(allowed.includes('authorization'), `the preflight allows only: ${allowed}`);
   });
 
-  /** The widget names the header; the worker must allow the same one. */
+  /** The widget names the header; the worker must allow the same one. `worker-client.ts` writes it (FRU-509). */
   it('allows the header the widget is written to send', () => {
-    const embed = readFileSync(
-      fileURLToPath(new URL('../../../packages/widget/src/embed.ts', import.meta.url)),
+    const client = readFileSync(
+      fileURLToPath(new URL('../../../packages/widget/src/worker-client.ts', import.meta.url)),
       'utf8',
     );
 
-    assert.ok(/Authorization: `Bearer /.test(embed), 'embed.ts no longer sends Authorization; this guard is stale');
+    assert.ok(
+      /Authorization: `Bearer /.test(client),
+      'worker-client.ts no longer sends Authorization; this guard is stale',
+    );
   });
 });

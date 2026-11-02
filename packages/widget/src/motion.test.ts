@@ -79,7 +79,8 @@ export function unstopped(sheet: string): string[] {
 }
 
 async function sheetOf(file: string): Promise<string> {
-  const source = await readFile(new URL(`./${file}`, import.meta.url), 'utf8');
+  // The sheet of `host.ts` is in `host.styles.ts`, and likewise for each module (FRU-509).
+  const source = await readFile(new URL(`./${file.replace(/\.ts$/, '.styles.ts')}`, import.meta.url), 'utf8');
   const sheet = /const STYLES = `([^`]*)`/.exec(source)?.[1];
   assert.ok(sheet, `${file} has no STYLES literal, so this test would check nothing`);
 
