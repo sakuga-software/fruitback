@@ -91,7 +91,7 @@ test.describe('an invited reviewer (FRU-104)', () => {
     await owner.goto(`${CONSOLE}/w/${workspace}/members`);
     await owner.getByRole('button', { name: 'Invite', exact: true }).click();
     await owner.getByRole('textbox', { name: 'Email', exact: true }).fill('paul@client.dev');
-    await owner.getByRole('button', { name: 'Invite', exact: true }).click();
+    await owner.getByRole('dialog').getByRole('button', { name: 'Invite', exact: true }).click();
     const kept = owner.getByRole('status');
     await expect(kept).toContainText('Invitation sent to paul@client.dev.');
     // The link to send by hand is the one of the message: it names no invitation (FRU-107).
@@ -213,7 +213,7 @@ test.describe('an invited reviewer (FRU-104)', () => {
     await owner.goto(`${CONSOLE}/w/${workspace}/members`);
     await owner.getByRole('button', { name: 'Invite', exact: true }).click();
     await owner.getByRole('textbox', { name: 'Email', exact: true }).fill('paul@client.dev');
-    await owner.getByRole('button', { name: 'Invite', exact: true }).click();
+    await owner.getByRole('dialog').getByRole('button', { name: 'Invite', exact: true }).click();
     const notice = owner.getByRole('status');
     await expect(notice).toContainText('Invitation sent to paul@client.dev.');
     // Two more messages go: three in the window of this workspace for this address.

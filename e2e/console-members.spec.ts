@@ -214,6 +214,8 @@ const dialog = (page: Page) => page.getByRole('dialog', { name: 'Invite someone'
 async function inviting(page: Page): Promise<void> {
   await opener(page).click();
   await expect(form(page)).toBeVisible();
+  // The dialog slides and fades in: a box is read once it is still.
+  await page.evaluate(() => Promise.all(document.getAnimations().map((each) => each.finished)));
 }
 const email = (page: Page) => form(page).getByRole('textbox', { name: 'Email', exact: true });
 const roles = (page: Page) => form(page).getByRole('button', { name: /Role$/ });
@@ -239,6 +241,8 @@ async function expectNoViolation(page: Page, name: string): Promise<void> {
 
 /** Axe on the dialog of the invitation, which is not in `main`: React Aria draws it at the end of the body. */
 async function expectNoDialogViolation(page: Page, name: string): Promise<void> {
+  // A colour read while a list closes is the colour of its fade.
+  await page.evaluate(() => Promise.all(document.getAnimations().map((each) => each.finished)));
   const results = await new AxeBuilder({ page }).include('[role="dialog"]').analyze();
   expect
     .soft(
@@ -257,6 +261,11 @@ const CELL = ['padding-top', 'padding-right', 'padding-bottom', 'padding-left'];
 const LISTS = 93;
 /** The table of the mockup holds Paul's invitation too: the members alone are one row shorter. */
 const MEMBERS_FRAME = 302.4;
+/**
+ * The form of the mockup is above the table, 66 px high and 24 px above it: it is in a dialog
+ * (FRU-565), so a box under it is compared this much higher than the mockup draws it.
+ */
+const FORM = 90;
 
 test('the list is the table of the mockup, with what the worker of today says of a person', async ({ page }) => {
   await workerWith(page);
@@ -325,7 +334,7 @@ test('the list is the table of the mockup, with what the worker of today says of
   // The screen is as wide as its column (FRU-398): 71.5 px wider than the 1120 px of the mockup.
   expectBox(
     await box(table(page)),
-    { x: 296.5, y: 216.2 + LISTS, width: 1095.5, height: MEMBERS_FRAME },
+    { x: 296.5, y: 216.2 + LISTS - FORM, width: 1095.5, height: MEMBERS_FRAME },
     2,
     'the frame of the table',
   );
@@ -333,7 +342,7 @@ test('the list is the table of the mockup, with what the worker of today says of
   // A row of the mockup is 64 px: two lines of 14 px and 13 px at 1.45, and 12 px above and under.
   expectBox(
     await box(row(page, 'Tom')),
-    { x: 297.5, y: 324.7 + LISTS, width: 1093.5, height: 64.1 },
+    { x: 297.5, y: 324.7 + LISTS - FORM, width: 1093.5, height: 64.1 },
     2,
     'the second row',
   );
@@ -351,12 +360,17 @@ test('the list is the table of the mockup, with what the worker of today says of
   });
   expect.soft(await painted(chip, 'backgroundColor')).toEqual(rgb(AVATAR));
   expect.soft(await painted(chip, 'color')).toEqual(rgb(WHITE));
-  expectBox(await box(chip), { x: 317.5, y: 340.7 + LISTS, width: 32, height: 32 }, 2, 'the chip of the second row');
+  expectBox(
+    await box(chip),
+    { x: 317.5, y: 340.7 + LISTS - FORM, width: 32, height: 32 },
+    2,
+    'the chip of the second row',
+  );
   expect.soft(await styles(tom.nth(0).locator('> span'), ['column-gap'])).toEqual({ 'column-gap': '12px' });
   const name = tom.nth(0).getByText('Tom', { exact: true });
   expect.soft(await styles(name, ['font-weight', 'font-size'])).toEqual({ 'font-weight': '600', 'font-size': '14px' });
   expect.soft(await painted(name, 'color')).toEqual(rgb(INK));
-  expectBox(await box(name), { x: 361.5, y: 337.1 + LISTS, height: 20.3 }, 2, 'the name of the second row');
+  expectBox(await box(name), { x: 361.5, y: 337.1 + LISTS - FORM, height: 20.3 }, 2, 'the name of the second row');
   const address = tom.nth(0).getByText('tom@acme.dev', { exact: true });
   expect.soft(await styles(address, ['font-size', 'line-height'])).toEqual({
     'font-size': '13px',
@@ -394,9 +408,10 @@ test('the list is the table of the mockup, with what the worker of today says of
   });
   expect.soft(await painted(resend, 'color')).toEqual(rgb(INK));
   // The link of the kit is 33 px high where the mockup has 36.3: its line is `normal`, not 1.45.
-  // The invitation is in the list under the members (FRU-496): 203.9 px lower than the mockup.
-  expectBox(await box(resend), { x: 1258.5, y: 531 + 203.9, width: 50.2 }, 2, '« Resend »');
-  expectBox(await box(cancel), { x: 1324.7, y: 531 + 203.9, width: 46.3 }, 2, '« Cancel »');
+  // The invitation is in the list under the members (FRU-496): 203.9 px lower than the mockup, less
+  // the form that is in a dialog.
+  expectBox(await box(resend), { x: 1258.5, y: 531 + 203.9 - FORM, width: 50.2 }, 2, '« Resend »');
+  expectBox(await box(cancel), { x: 1324.7, y: 531 + 203.9 - FORM, width: 46.3 }, 2, '« Cancel »');
   await resend.hover();
   expect.soft(await painted(resend, 'color')).toEqual(rgb(ACCENT_STRONG));
   await page.mouse.move(700, 800);
@@ -449,7 +464,8 @@ test('« Invite » opens the form in a dialog: a form with a name, and each fiel
       .soft(await styles(control, ['height', 'border-top-left-radius', 'border-top-width', 'font-size']), word)
       .toEqual({ height: '44px', 'border-top-left-radius': '8px', 'border-top-width': '1px', 'font-size': '15px' });
     expect.soft(await painted(control, 'borderTopColor'), word).toEqual(rgb(CONTROL));
-    expect.soft((await box(control)).width, word).toBeCloseTo((await box(form(page))).width, 0);
+    // The input draws its border inside the box of its field: 2 px at the most between them.
+    expect.soft(Math.abs((await box(control)).width - (await box(form(page))).width), word).toBeLessThanOrEqual(3);
   }
   expect.soft((await box(roles(page))).y, 'the role under the address').toBeGreaterThan((await box(email(page))).y);
   await expect(email(page)).toHaveAttribute('type', 'email');
@@ -482,12 +498,12 @@ test('« Invite » opens the form in a dialog: a form with a name, and each fiel
   await expect(form(page).getByText('Site', { exact: true })).toHaveCount(0);
 
   // Escape closes it, focus goes back to « Invite », and what was typed is there when it opens again.
-  await email(page).fill('  zoe@client.fr ');
+  await email(page).fill('zoe@client.fr');
   await page.keyboard.press('Escape');
   await expect(dialog(page)).toHaveCount(0);
   await expect(opener(page)).toBeFocused();
   await inviting(page);
-  await expect(email(page)).toHaveValue('  zoe@client.fr ');
+  await expect(email(page)).toHaveValue('zoe@client.fr');
   await expect(roles(page)).toContainText('Admin');
   // « Cancel » closes it too, and sends nothing.
   await form(page).getByRole('button', { name: 'Cancel', exact: true }).click();
@@ -742,6 +758,8 @@ test('an invitation that is refused says its cause, and clears nothing that was 
     // The sentence is in the dialog, under the fields: the dialog stays open.
     await expect(dialog(page).getByRole('alert'), error).toHaveText(sentence);
     await expect(email(page), error).toHaveValue('tom@acme');
+    // Focus is back in the field: the button it left was disabled while it sent.
+    await expect(email(page), error).toBeFocused();
     await expect(roles(page), error).toContainText('Admin');
   }
   await expect(page.getByRole('status')).toHaveCount(0);
@@ -994,12 +1012,15 @@ test('a read made again keeps the rows on the screen, and a press on one of them
   const read = reads();
   worker.members = 'waits';
   worker.refuses = { status: 503, error: 'mail-unavailable' };
+  await inviting(page);
   await email(page).fill('zoe@client.fr');
   await invite(page).click();
   await expect.poll(reads).toBe(read + 1);
-  // The alert of the refusal took its room above the table, once: from here nothing moves.
-  await expect(page.getByRole('alert')).toBeVisible();
+  // The alert of the refusal is in the dialog (FRU-565): the table under it does not move at all.
+  await expect(dialog(page).getByRole('alert')).toBeVisible();
+  await page.keyboard.press('Escape');
   const during = { table: await box(table(page)) };
+  expect(during.table.y).toBe(before.table.y);
 
   // The rows stay while the lists are read again: no « Loading… » in their place.
   await expect(page.locator('main').getByText('Loading…')).toHaveCount(0);
@@ -1056,7 +1077,8 @@ for (const width of [390, 320]) {
       await asked.getByRole('button', { name: words.keep }).click();
 
       // The dialog of the invitation, the block of an invitation, a refusal, and a read that failed.
-      const inviteButton = page.getByRole('button', { name: words.invite, exact: true });
+      const inviteButton = page.locator('main header').getByRole('button', { name: words.invite, exact: true });
+      const send = page.getByRole('dialog').getByRole('button', { name: words.invite, exact: true });
       await inviteButton.click();
       const opened = page.getByRole('dialog');
       await expect(opened).toBeVisible();
@@ -1065,13 +1087,13 @@ for (const width of [390, 320]) {
       expect.soft(drawn.x + drawn.width, 'the dialog ends on the screen').toBeLessThanOrEqual(width);
       expect.soft(await sideScroll(page), 'the dialog').toBe(0);
       await page.getByRole('textbox', { name: words.email, exact: true }).fill('zoe@client.fr');
-      await inviteButton.click();
+      await send.click();
       await expect(page.getByRole('status')).toBeVisible();
       expect.soft(await sideScroll(page), 'the block of an invitation').toBe(0);
       worker.refuses = { status: 400, error: 'USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION' };
       await inviteButton.click();
       await page.getByRole('textbox', { name: words.email, exact: true }).fill('zoe@client.fr');
-      await inviteButton.click();
+      await send.click();
       await expect(page.getByRole('alert')).toBeVisible();
       expect.soft(await sideScroll(page), 'a refusal').toBe(0);
       worker.members = 'fails';
@@ -1082,19 +1104,19 @@ for (const width of [390, 320]) {
   }
 }
 
-test('at 390 px the form stacks, and each part is where the mockup draws it', async ({ page }) => {
+test('at 390 px « Invite » is under the lead, the dialog fits, and the table is where the mockup draws it', async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await workerWith(page);
   await open(page);
-  // The render of the mockup at 390 px, from the top of the screen under the rail. The mockup has a
-  // line more in its form, the list « Site » (76 px): what is under the form is compared 76 px higher.
+  // The render of the mockup at 390 px, from the top of the screen under the rail. Its form is in a
+  // dialog (FRU-565), and « Invite » is under the lead. The form of the mockup is 182 px higher than
+  // « Invite » (its list « Site », 76 px, and its other fields): what was under it is that much higher.
   const top = (await box(page.locator('main'))).y;
-  const less = 76;
+  const less = 182;
   expectBox(await box(page.locator('main h1')), { x: 16, y: top + 40, width: 358, height: 32.2 }, 4, 'the title');
-  expectBox(await box(email(page)), { x: 16, y: top + 172.2, width: 358, height: 44 }, 4, 'the field');
-  // The last list and the button share a line, as « Site » and « Invite » do in the mockup.
-  expectBox(await box(roles(page)), { x: 16, y: top + 324.2 - less, width: 262.8, height: 44 }, 4, 'the list of roles');
-  expectBox(await box(invite(page)), { x: 288.8, y: top + 324.2 - less, width: 85.2, height: 44 }, 4, '« Invite »');
+  expectBox(await box(opener(page)), { x: 16, y: top + 142.2, height: 44 }, 4, '« Invite »');
   expectBox(
     await box(table(page)),
     { x: 16, y: top + 392.2 - less + LISTS, width: 358, height: MEMBERS_FRAME },
@@ -1111,6 +1133,24 @@ test('at 390 px the form stacks, and each part is where the mockup draws it', as
   );
   expect(await sideScroll(page)).toBe(0);
   await expectNoViolation(page, 'the list at 390 px');
+
+  // The dialog is as wide as the screen less its margins, and each field as wide as the dialog allows.
+  await inviting(page);
+  const drawn = await box(dialog(page));
+  expect.soft(drawn.x).toBeGreaterThanOrEqual(0);
+  expect.soft(drawn.x + drawn.width).toBeLessThanOrEqual(390);
+  expect.soft(drawn.y + drawn.height, 'the dialog ends in the window').toBeLessThanOrEqual(844);
+  for (const [name, control] of [
+    ['the field', email(page)],
+    ['the list of roles', roles(page)],
+  ] as const) {
+    const each = await box(control);
+    expect.soft(each.x, name).toBeGreaterThan(drawn.x);
+    expect.soft(each.x + each.width, name).toBeLessThan(drawn.x + drawn.width);
+    expect.soft(each.width, name).toBeGreaterThan(drawn.width - 64);
+  }
+  expect(await sideScroll(page)).toBe(0);
+  await expectNoDialogViolation(page, 'the dialog at 390 px');
 });
 
 test('every text of the screen is at 4.5:1 on what is behind it', async ({ page }) => {

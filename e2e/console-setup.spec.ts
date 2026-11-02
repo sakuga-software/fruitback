@@ -281,7 +281,7 @@ test.describe('the setup, against a worker with accounts (FRU-239)', () => {
     await owner.goto(`${CONSOLE}/w/${workspace!.id}/members`);
     await owner.getByRole('button', { name: 'Invite', exact: true }).click();
     await owner.getByRole('textbox', { name: 'Email', exact: true }).fill('tom@client.fr');
-    await owner.getByRole('button', { name: 'Invite', exact: true }).click();
+    await owner.getByRole('dialog').getByRole('button', { name: 'Invite', exact: true }).click();
     await expect.poll(async () => (await worker.mail()).filter((each) => each.to === 'tom@client.fr').length).toBe(1);
 
     // Tom opens the setup, not the link of his invitation, and signs in there.

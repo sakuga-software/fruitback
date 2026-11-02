@@ -187,6 +187,7 @@ export default function Members() {
   const [busy, setBusy] = useState(false);
   // FRU-565: the dialog of the invitation is open.
   const [inviting, setInviting] = useState(false);
+  const emailField = useRef<HTMLInputElement>(null);
   const [problem, setProblem] = useState<string | undefined>();
   const [sentTo, setSentTo] = useState<{ email: string; message: Message } | undefined>();
   const [stuck, setStuck] = useState<{ row: string; problem: string } | undefined>();
@@ -271,6 +272,9 @@ export default function Members() {
     });
     setBusy(false);
     if (!sent.ok) {
+      // The button was disabled while it sent, so focus left it: it goes back to the field, inside the
+      // dialog, where Escape and Tab work again and the sentence of the refusal is read next.
+      emailField.current?.focus();
       // A message that did not leave: the invitation is kept, so it is shown, to send again.
       if (sent.error === 'mail-unavailable') readAll();
       // The site was removed meanwhile: the list is read again, and the sentence says so.
@@ -402,6 +406,7 @@ export default function Members() {
               type="email"
               someoneElse
               autoFocus
+              inputRef={emailField}
               placeholder="name@company.com"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
