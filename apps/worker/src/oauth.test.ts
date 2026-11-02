@@ -438,7 +438,7 @@ describe('the tokens', () => {
     assert.equal(listed.status, 200);
     assert.deepEqual(
       listed.body.result.tools.map((tool: any) => tool.name).toSorted(),
-      ['feedback_as_text', 'get_feedback', 'list_feedback'],
+      ['get_note', 'list_notes', 'notes_as_text'],
       'read only: no write tool',
     );
 
@@ -452,12 +452,12 @@ describe('the tokens', () => {
       assert.ok(sent.status < 500);
     }
     const own = await mcp(world, tokens.access_token, 'tools/call', {
-      name: 'list_feedback',
+      name: 'list_notes',
       arguments: { site: shop.id },
     });
     assert.equal(own.body.result.isError, undefined, JSON.stringify(own.body));
     const other = await mcp(world, tokens.access_token, 'tools/call', {
-      name: 'list_feedback',
+      name: 'list_notes',
       arguments: { site: blog.id },
     });
     assert.equal(other.body.result.isError, true, 'a site the person did not choose');

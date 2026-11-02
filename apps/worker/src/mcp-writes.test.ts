@@ -10,7 +10,7 @@ import { StoreError } from './store.ts';
 import { noteFixture } from '@fruitback/shared/note.fixture';
 
 /**
- * The write tools of `/mcp` (FRU-464): `reply_to_feedback` and `set_feedback_status`, for a key with
+ * The write tools of `/mcp` (FRU-464): `reply_to_note` and `set_note_status`, for a key with
  * the right `write`, through `handleRequest`.
  */
 
@@ -86,7 +86,7 @@ const call = (world: World, key: string, name: string, args: Record<string, unkn
   rpc(world, key, 'tools/call', { name, arguments: args });
 
 async function noteId(world: World, key: string, site: string): Promise<string> {
-  const listed = await call(world, key, 'list_feedback', { site });
+  const listed = await call(world, key, 'list_notes', { site });
 
   return listed.body.result.structuredContent.notes[0].id;
 }
@@ -113,11 +113,11 @@ describe('the write tools of /mcp (FRU-464)', () => {
     const tools = await rpc(world, secret, 'tools/list');
     assert.deepEqual(
       tools.body.result.tools.map((tool: { name: string }) => tool.name),
-      ['list_feedback', 'get_feedback', 'feedback_as_text'],
+      ['list_notes', 'get_note', 'notes_as_text'],
     );
     for (const [name, args] of [
-      ['reply_to_feedback', { id, body: 'Done.' }],
-      ['set_feedback_status', { id, status: 'own:done' }],
+      ['reply_to_note', { id, body: 'Done.' }],
+      ['set_note_status', { id, status: 'own:done' }],
     ] as const) {
       const refused = await call(world, secret, name, args);
       assert.equal(refused.body.error?.code, -32602, name);
@@ -130,7 +130,7 @@ describe('the write tools of /mcp (FRU-464)', () => {
     const { id: keyId, secret } = await key('write');
     const id = await noteId(world, secret, shop.id);
 
-    const replied = await call(world, secret, 'reply_to_feedback', { id, body: 'Fixed in #42.' });
+    const replied = await call(world, secret, 'reply_to_note', { id, body: 'Fixed in #42.' });
     assert.equal(replied.body.result.isError, undefined, JSON.stringify(replied.body));
     assert.equal(replied.body.result.structuredContent.comment.by, 'agent');
 
@@ -152,16 +152,16 @@ describe('the write tools of /mcp (FRU-464)', () => {
       throw new StoreError('the database went away');
     };
 
-    const replied = await call(world, secret, 'reply_to_feedback', { id, body: 'Fixed.' });
+    const replied = await call(world, secret, 'reply_to_note', { id, body: 'Fixed.' });
     assert.equal(replied.body.result.isError, undefined, JSON.stringify(replied.body));
     assert.equal((await read(world, shop.id)).comments.length, 1);
   });
 
-  it('names the status of its own store in the words of set_feedback_status', async () => {
+  it('names the status of its own store in the words of set_note_status', async () => {
     const { world, key } = await acme();
     const { secret } = await key('write');
     const tools = (await rpc(world, secret, 'tools/list')).body.result.tools;
-    const words = JSON.stringify(tools.find((tool: { name: string }) => tool.name === 'set_feedback_status'));
+    const words = JSON.stringify(tools.find((tool: { name: string }) => tool.name === 'set_note_status'));
 
     assert.ok(words.includes('own:<key>') && words.includes('own:done'), words);
     assert.ok(!words.includes('${'), words);
@@ -185,18 +185,18 @@ describe('the write tools of /mcp (FRU-464)', () => {
     const { id: keyId, secret } = await kept.key('write');
     const id = await noteId(kept.world, secret, kept.shop.id);
 
-    const set = await call(kept.world, secret, 'set_feedback_status', { id, status: 'own:done' });
+    const set = await call(kept.world, secret, 'set_note_status', { id, status: 'own:done' });
     assert.equal(set.body.result.isError, undefined, JSON.stringify(set.body));
     assert.equal(set.body.result.structuredContent.stage, 'done');
     assert.equal((await read(kept.world, kept.shop.id)).stage, 'done');
     const [write] = await kept.writesOf(keyId);
     assert.deepEqual([write.action, write.status], ['status', 'own:done']);
-    const unknown = await call(kept.world, secret, 'set_feedback_status', { id, status: 'own:nope' });
+    const unknown = await call(kept.world, secret, 'set_note_status', { id, status: 'own:nope' });
     assert.equal(unknown.body.result.isError, true);
 
     const tracked = await acme();
     const other = await tracked.key('write');
-    const refused = await call(tracked.world, other.secret, 'set_feedback_status', {
+    const refused = await call(tracked.world, other.secret, 'set_note_status', {
       id: await noteId(tracked.world, other.secret, tracked.shop.id),
       status: 'own:done',
     });
@@ -218,13 +218,13 @@ describe('the write tools of /mcp (FRU-464)', () => {
     const listed = (await rpc(world, secret, 'tools/list')).body.result.tools.map(
       (tool: { name: string }) => tool.name,
     );
-    assert.ok(listed.includes('set_feedback_status') && listed.includes('reply_to_feedback'), 'the control');
+    assert.ok(listed.includes('set_note_status') && listed.includes('reply_to_note'), 'the control');
 
     // Each call reads the member again: a list of before gives no right.
     await rowsOf(world.database, `UPDATE member SET role = 'member' WHERE id = 'mem_admin'`);
     for (const [name, args] of [
-      ['set_feedback_status', { id, status: 'own:done' }],
-      ['reply_to_feedback', { id, body: 'Done.' }],
+      ['set_note_status', { id, status: 'own:done' }],
+      ['reply_to_note', { id, body: 'Done.' }],
     ] as const) {
       const refused = await call(world, secret, name, args);
       assert.equal(refused.body.error?.code, -32602, name);
@@ -238,11 +238,11 @@ describe('the write tools of /mcp (FRU-464)', () => {
     const { id: keyId, secret } = await key('write');
     const id = await noteId(world, secret, shop.id);
     for (let index = 0; index < AGENT_WRITE_LIMIT; index += 1) {
-      const replied = await call(world, secret, 'reply_to_feedback', { id, body: `Reply ${index}.` });
+      const replied = await call(world, secret, 'reply_to_note', { id, body: `Reply ${index}.` });
       assert.equal(replied.body.result.isError, undefined, `reply ${index}`);
     }
 
-    const limited = await call(world, secret, 'reply_to_feedback', { id, body: 'One more.' });
+    const limited = await call(world, secret, 'reply_to_note', { id, body: 'One more.' });
     assert.equal(limited.body.result.isError, true);
     assert.match(limited.body.result.content[0].text, /wrote 30 times/);
     assert.equal((await writesOf(keyId)).length, AGENT_WRITE_LIMIT);

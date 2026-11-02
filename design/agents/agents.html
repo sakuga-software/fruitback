@@ -423,7 +423,7 @@ table.texts td,table.texts th{border:1px solid var(--line);padding:6px 10px;text
 </section>
 <section class="frame" id="e">
   <h2 class="f-title">E · The writes of a key</h2>
-  <ul class="notes"><li>« Writes » unfolds what the key wrote under its row (aria-expanded), read when it opens: GET …/agent-keys/&lt;id>/writes, newest first. Each write: what (a reply, or the status set), the site, the id of the note (what get_feedback takes), when.</li><li>The console has no page for one note: the id is no link. At 100 writes (the bound of the worker) the foot says that only the last 100 are listed.</li><li>A key that wrote nothing says so (frame E2, 390 px).</li></ul>
+  <ul class="notes"><li>« Writes » unfolds what the key wrote under its row (aria-expanded), read when it opens: GET …/agent-keys/&lt;id>/writes, newest first. Each write: what (a reply, or the status set), the site, the id of the note (what get_note takes), when.</li><li>The console has no page for one note: the id is no link. At 100 writes (the bound of the worker) the foot says that only the last 100 are listed.</li><li>A key that wrote nothing says so (frame E2, 390 px).</li></ul>
   <div class="f-box" style="width:1440px;position:relative"><div class="app w1440">
     <aside class="rail">
     <a href="#" class="ws" aria-current="page"><span class="ws-i">A</span><span><b>Acme</b><small>Cloud workspace</small></span></a>
@@ -782,7 +782,7 @@ table.texts td,table.texts th{border:1px solid var(--line);padding:6px 10px;text
 <li><b>The warning 7 days before</b> is said in words in the row (« Ends in 5 days », the strong accent and a triangle: the colour is never alone) and in one line above the list, which says what to do. No new token: the console has no amber.</li>
 <li><b>An ended key stays listed</b>, with « Ended » and its day, since the worker keeps it; « Revoke » removes it.</li>
 <li><b>« Only the notes of known people » is asked for every key</b>, ticked, even when none of its sites is read by everyone today: who reads a site can change after the key is made.</li>
-<li><b>The writes unfold under their row</b>, read when they open. This is a list of rows, not the grid of cards where FRU-433 refused a panel between two rows. The note is named by its id, with no link: the console has no page of one note, and the id is what <code>get_feedback</code> takes.</li>
+<li><b>The writes unfold under their row</b>, read when they open. This is a list of rows, not the grid of cards where FRU-433 refused a panel between two rows. The note is named by its id, with no link: the console has no page of one note, and the id is what <code>get_note</code> takes.</li>
 <li><b>The last use</b> is the one the worker keeps to the minute (PR of the worker of FRU-462), shown with <code>ago()</code> of the console, and « Never used » for a key no agent used.</li>
 <li><b>Who made a key is not shown.</b> The worker answers an account id; the name would need the members, a second read, for a column the owner and the admins rarely need. Left for later.</li>
 <li><b>A member or a guest</b> reads the section of the settings with a sentence and no link; the page says the same sentence and asks nothing of the worker.</li>
