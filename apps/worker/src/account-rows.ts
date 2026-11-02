@@ -1,10 +1,10 @@
+import { isOneOf } from './one-of.ts';
 import {
   type Account,
   type AgentTrigger,
   CONNECTOR_KINDS,
   CONNECTOR_TROUBLES,
   type Connector,
-  type ConnectorKind,
   type ConnectorSettings,
   type ConnectorTrouble,
   type Destination,
@@ -53,28 +53,21 @@ export function workspaceOf(row: Record<string, unknown>): Workspace | undefined
 }
 
 export function roleOf(value: unknown): Role | undefined {
-  return (ROLES as readonly unknown[]).includes(value) ? (value as Role) : undefined;
+  return isOneOf(value, ROLES) ? value : undefined;
 }
 
 export function siteOf(row: Record<string, unknown>, destinations: Destination[]): Site | undefined {
-  const visibility = (VISIBILITIES as readonly unknown[]).includes(row.visibility)
-    ? (row.visibility as Visibility)
-    : undefined;
+  const visibility = isOneOf(row.visibility, VISIBILITIES) ? (row.visibility as Visibility) : undefined;
   if (typeof row.id !== 'string' || typeof row.workspace_id !== 'string' || typeof row.origin !== 'string') {
     return undefined;
   }
   if (visibility === undefined) return undefined;
   // A value that is not one of the two is no site, as for the visibility: it opens nothing (FRU-330).
-  if (!(WRITERS as readonly unknown[]).includes(row.writers)) return undefined;
+  if (!isOneOf(row.writers, WRITERS)) return undefined;
   const writers = row.writers as Writers;
 
   return { id: row.id, workspaceId: row.workspace_id, origin: row.origin, visibility, writers, destinations };
 }
-
-export const SITE_COLUMNS = 'id, workspace_id, origin, visibility, writers';
-
-export const DOMAIN_COLUMNS =
-  'id, workspace_id, domain, created_at, verified_at, lost_at, checked_at, previews_site_id';
 
 /** A row is parsed, never trusted. An instant that is not a number is an instant that is not there. */
 export function domainOf(row: Record<string, unknown> | undefined): Domain | undefined {
@@ -133,15 +126,13 @@ export function connectorSettingsOf(value: unknown): ConnectorSettings {
 }
 
 export function connectorOf(row: Record<string, unknown> | undefined): Connector | undefined {
-  const kind = (CONNECTOR_KINDS as readonly unknown[]).includes(row?.kind) ? (row?.kind as ConnectorKind) : undefined;
+  const kind = isOneOf(row?.kind, CONNECTOR_KINDS) ? row?.kind : undefined;
   if (row === undefined || kind === undefined) return undefined;
   if (typeof row.id !== 'string' || typeof row.workspace_id !== 'string' || typeof row.label !== 'string') {
     return undefined;
   }
   // A word this build does not know is no trouble it can explain: the connector reads as working.
-  const reason = (CONNECTOR_TROUBLES as readonly unknown[]).includes(row.attention)
-    ? (row.attention as ConnectorTrouble)
-    : undefined;
+  const reason = isOneOf(row.attention, CONNECTOR_TROUBLES) ? (row.attention as ConnectorTrouble) : undefined;
 
   return {
     id: row.id,

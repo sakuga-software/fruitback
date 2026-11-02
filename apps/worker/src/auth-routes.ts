@@ -1,4 +1,5 @@
 import { json } from './http.ts';
+import { adapterOf, apiOf, internalAdapterOf } from './auth-internals.ts';
 import { type AccountStore, mailboxOf, normalizeEmail, readLocaleTag } from './accounts.ts';
 import { MAX_BODY_BYTES, readBoundedBytes, readJsonObject } from './bounded-body.ts';
 import {
@@ -17,7 +18,6 @@ import { MailError, type Mailer, providerLinkedMessage, signInMessage } from './
 import {
   ACCOUNT_OF_ANOTHER,
   LINK_NEEDS_CONFIRMATION,
-  type LinkAdapter,
   pendingLinkKey,
   readPending,
   refusalOf,
@@ -241,7 +241,7 @@ async function startWithProvider(request: Request, provider: string, context: Au
   if (!Object.hasOwn(configured, provider)) return failed(context.consoleUrl, 'oauth_provider_not_found');
 
   // A rejection goes up: the caller answers `502`, and writes the reason in the log.
-  const answer = await (auth.api as unknown as { signInSocial(input: object): Promise<Response> }).signInSocial({
+  const answer = await apiOf(auth).signInSocial({
     body: { provider, callbackURL: `${consoleOrigin}/`, errorCallbackURL: `${consoleOrigin}/setup` },
     headers: headersFor(request, context),
     asResponse: true,
@@ -358,7 +358,7 @@ async function redeemLink(
   // No `callbackURL`: better-auth then answers JSON and does not redirect. A link that is spent or
   // that never was answers a redirect to an error, which is read as a refusal.
   const verify = () =>
-    (auth.api as unknown as { magicLinkVerify(input: object): Promise<Response> }).magicLinkVerify({
+    apiOf(auth).magicLinkVerify({
       query: { token },
       headers: headersFor(request, context),
       asResponse: true,
@@ -401,22 +401,6 @@ async function redeemLink(
   );
 }
 
-type SessionRow = {
-  id: string;
-  createdAt: Date | string;
-  expiresAt: Date | string;
-  updatedAt: Date | string;
-  userAgent?: string | null;
-  ipAddress?: string | null;
-  browser?: string | null;
-};
-
-/** The adapter of better-auth, the one with the layer of `auth-at-rest.ts` in front of it. */
-type SessionAdapter = {
-  findMany(input: { model: 'session'; where: { field: string; value: string }[] }): Promise<SessionRow[]>;
-  delete(input: { model: 'session'; where: { field: string; value: string }[] }): Promise<void>;
-};
-
 async function sessions(
   request: Request,
   pathname: string,
@@ -427,7 +411,7 @@ async function sessions(
   const mine = await sessionOfCookie(auth, request);
   if (mine === undefined) return json(401, { error: 'identity-required' }, headers);
   if (!mutationAllowed(request, context.consoleUrl)) return json(403, { error: 'origin-not-allowed' }, headers);
-  const adapter = (await auth.$context).adapter as unknown as SessionAdapter;
+  const adapter = await adapterOf(auth);
   const instant = (value: Date | string): string => new Date(value).toISOString();
 
   if (pathname === SESSIONS_PATH) {
@@ -472,14 +456,6 @@ async function sessions(
   return new Response(null, { status: 204, headers: { 'Cache-Control': 'no-store', ...headers } });
 }
 
-/** The rows of `account` of a person, through the adapter of better-auth: which providers they linked. */
-type AccountAdapter = {
-  findMany(input: {
-    model: 'account';
-    where: { field: string; value: string }[];
-  }): Promise<{ id: string; providerId: string }[]>;
-};
-
 /**
  * One change of the ways to sign in at a time for a person, in this process (FRU-249). Two unlinks
  * at the same moment each counted the other provider as left, and took both: a person on a worker
@@ -521,7 +497,7 @@ async function signInMethods(
   const mine = await sessionOfCookie(auth, request);
   if (mine === undefined) return json(401, { error: 'identity-required' }, headers);
   if (!mutationAllowed(request, context.consoleUrl)) return json(403, { error: 'origin-not-allowed' }, headers);
-  const adapter = (await auth.$context).adapter as unknown as AccountAdapter;
+  const adapter = await adapterOf(auth);
   const configured = (auth.options.socialProviders ?? {}) as Record<string, unknown>;
   const rowsOf = () => adapter.findMany({ model: 'account', where: [{ field: 'userId', value: mine.userId }] });
 
@@ -555,7 +531,7 @@ async function signInMethods(
       return json(409, { error: 'primary-address' }, headers);
     }
 
-    const answer = await (auth.api as unknown as { unlinkAccount(input: object): Promise<Response> }).unlinkAccount({
+    const answer = await apiOf(auth).unlinkAccount({
       body: { accountId: row.id },
       headers: headersFor(request, context),
       asResponse: true,
@@ -608,9 +584,7 @@ async function linkProvider(request: Request, provider: string, context: AuthRou
   if (!Object.hasOwn(configured, provider)) return back('oauth_provider_not_found');
   if ((await sessionOfCookie(auth, request)) === undefined) return back('identity_required');
 
-  const answer = await (
-    auth.api as unknown as { linkSocialAccount(input: object): Promise<Response> }
-  ).linkSocialAccount({
+  const answer = await apiOf(auth).linkSocialAccount({
     body: {
       provider,
       callbackURL: `${consoleOrigin}${page}?linked=${provider}`,
@@ -650,7 +624,7 @@ async function pendingLink(request: Request, context: AuthRouteContext, headers:
   const mine = await sessionOfCookie(auth, request);
   if (mine === undefined) return json(401, { error: 'identity-required' }, headers);
   if (!mutationAllowed(request, context.consoleUrl)) return json(403, { error: 'origin-not-allowed' }, headers);
-  const adapter = (await auth.$context).internalAdapter as unknown as LinkAdapter;
+  const adapter = await internalAdapterOf(auth);
   const key = pendingLinkKey(mine.userId);
   const none = () => json(404, { error: 'no-pending-link' }, headers);
   const waiting = async () => {

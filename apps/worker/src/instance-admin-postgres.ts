@@ -1,8 +1,9 @@
+import { isOneOf } from './one-of.ts';
 import { NOTE_STAGES, type NoteStage } from '@fruitback/shared';
 import { type SQL, and, asc, count, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { connectorOf, newId, roleOf } from './account-rows.ts';
-import { dropWorkspace, holdMembers } from './accounts-postgres.ts';
+import { dropWorkspace, holdMembers, insertWorkspaceWithOwner } from './accounts-postgres.ts';
 import { CONNECTOR_TROUBLES, can } from './accounts.ts';
 import { invitation, member, organization, session, user } from './auth-schema.ts';
 import type {
@@ -638,7 +639,7 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
                 sql`(${note_index.created_at}, ${note_index.site_id} COLLATE "C", ${note_index.note_id} COLLATE "C") < (${query.after.at}, ${query.after.site} COLLATE "C", ${query.after.note} COLLATE "C")`,
               );
 
-        const [page, [counted]] = await Promise.all([
+        const [page, counted] = await Promise.all([
           db
             .select({
               row: NOTE_COLUMNS,
@@ -657,12 +658,16 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
               sql`${note_index.note_id} COLLATE "C" DESC`,
             )
             .limit(query.limit + 1),
-          db
-            .select({ notes: count() })
-            .from(note_index)
-            .innerJoin(sites, eq(sites.id, note_index.site_id))
-            .innerJoin(organization, eq(organization.id, note_index.workspace_id))
-            .where(filtered),
+          // FRU-502: the count reads the whole filter, once for the first page of a filter.
+          query.uncounted === true
+            ? undefined
+            : db
+                .select({ notes: count() })
+                .from(note_index)
+                .innerJoin(sites, eq(sites.id, note_index.site_id))
+                .innerJoin(organization, eq(organization.id, note_index.workspace_id))
+                .where(filtered)
+                .then(([row]) => number(row?.notes)),
         ]);
         const shown = page.slice(0, query.limit);
         const texts = await keptTexts(
@@ -695,7 +700,7 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
               checkedAt: Number(row.checked_at),
             };
           }),
-          total: number(counted?.notes),
+          ...(counted === undefined ? {} : { total: counted }),
           ...(page.length > query.limit && last !== undefined
             ? { next: { at: Number(last.row.created_at), site: last.row.site_id, note: last.row.note_id } }
             : {}),
@@ -735,7 +740,7 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
       );
 
       return rows.flatMap((row): TracedRead[] => {
-        if (!(ADMIN_READS as readonly unknown[]).includes(row.what)) return [];
+        if (!isOneOf(row.what, ADMIN_READS)) return [];
 
         return [
           {
@@ -1139,13 +1144,8 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
         if (person === undefined) return { ok: false, refused: 'unknown-account' };
         if (person.suspended === true) return { ok: false, refused: 'suspended-account' };
         const owner = { id: String(person.id), email: String(person.email) };
-        // The rows of `createWorkspace` of `accounts-postgres.ts`: a slug that is the id, one owner.
         const workspace = { id: newId('ws'), name };
-        const at = new Date(now);
-        await db.insert(organization).values({ id: workspace.id, name, slug: workspace.id, createdAt: at });
-        await db
-          .insert(member)
-          .values({ id: newId('mem'), organizationId: workspace.id, userId: owner.id, role: 'owner', createdAt: at });
+        await insertWorkspaceWithOwner(db, workspace, owner.id, new Date(now));
         await db.insert(admin_actions).values({
           ...actionOf(actor, now, 'workspace-created', workspace.id),
           target_account_id: owner.id,

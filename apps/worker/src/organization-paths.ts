@@ -1,3 +1,4 @@
+import { isOneOf } from './one-of.ts';
 import { type Action, MAX_GUEST_SITES, normalizeEmail } from './accounts.ts';
 
 /**
@@ -128,7 +129,7 @@ export const ORGANIZATION_PATHS: Readonly<Record<string, OrganizationRule>> = {
     fields: {
       organizationId: id,
       memberId: id,
-      role: (value) => ((GIVEN_ROLES as readonly unknown[]).includes(value) ? (value as string) : undefined),
+      role: (value) => (isOneOf(value, GIVEN_ROLES) ? value : undefined),
     },
     required: ['organizationId', 'memberId', 'role'],
     why: 'an owner or an admin changes the role of a member: one role, owner, admin or member. Not guest: a guest is made by an invitation, which names their sites',
@@ -155,7 +156,7 @@ export const ORGANIZATION_PATHS: Readonly<Record<string, OrganizationRule>> = {
     fields: {
       organizationId: id,
       email: (value) => (typeof value === 'string' ? normalizeEmail(value) : undefined),
-      role: (value) => ((INVITED_ROLES as readonly unknown[]).includes(value) ? (value as string) : undefined),
+      role: (value) => (isOneOf(value, INVITED_ROLES) ? value : undefined),
       // Only `true`: an invitation that exists is sent again, and lasts from now.
       resend: (value) => (value === true ? true : undefined),
       // The sites of a guest (FRU-250), and only of a guest: the route reads them in the store.

@@ -897,6 +897,47 @@ describe('where the notes of a site that is on go (FRU-530)', () => {
     assert.deepEqual(readDestination('Jira · Web'), { place: 'Jira · Web' });
   });
 
+  // FRU-554: the kind the worker names decides the mark, whatever the label says.
+  it('takes the provider from the kind the worker names, and the place from the label', () => {
+    // A label in another form: the mark stays.
+    assert.deepEqual(readDestination('Northwind', 'linear'), {
+      kind: 'linear',
+      provider: 'Linear',
+      place: 'Northwind',
+    });
+    assert.deepEqual(readDestination('Linear · Northwind', 'linear'), {
+      kind: 'linear',
+      provider: 'Linear',
+      place: 'Northwind',
+    });
+    // A REST connector whose place reads « Linear · … » is a REST API, not a Linear.
+    assert.deepEqual(readDestination('Linear · Northwind', 'rest'), {
+      kind: 'rest',
+      provider: 'REST API',
+      place: 'Linear · Northwind',
+    });
+    assert.deepEqual(readDestination('Store', 'fruitback'), { kind: 'fruitback', place: 'Store' });
+  });
+
+  it('draws the mark of the kind the worker names, on a site that is on and on « Turn on »', () => {
+    const screen = on();
+    showSiteFacts(screen, facts, { destination: 'acme/web', destinationKind: 'github' });
+    const line = screen.querySelector('.site-destination .destination-entry');
+    assert.equal(line?.querySelector('svg.source-mark')?.getAttribute('data-kind'), 'github');
+    assert.equal(line?.querySelector('dd.destination-value')?.textContent, 'GitHub · acme/web');
+
+    const turnOn = turnOnScreen(page(), {
+      origin: SITE,
+      workspace: 'Acme',
+      destination: 'Hook',
+      destinationKind: 'rest',
+      visibility: 'members',
+      onTurnOn: nothing,
+      onSettings: nothing,
+    });
+    assert.equal(turnOn.querySelector('.destination-entry svg')?.getAttribute('data-kind'), 'rest');
+  });
+
   it('says « On · workspace » under the site, and where the notes go on a line of their own, with the mark', () => {
     const screen = on();
     // Before the worker answers: no line yet.

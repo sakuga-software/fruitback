@@ -16,6 +16,17 @@ import type { CreatedIssue } from './store.ts';
  * caller.
  */
 
+/**
+ * The clients a route reads its notes through (FRU-123): the client itself, or, for a site that
+ * sends to two places or more, the client placed at each one, because a tracker finds a note by
+ * where it is.
+ */
+export function targetsOf(client: ClientConfig | undefined): (ClientConfig | undefined)[] {
+  const places = client?.destinations ?? [];
+
+  return client === undefined || places.length < 2 ? [client] : places.map((place) => placedAt(client, place));
+}
+
 /** The client as it routes when its notes go to this place, and not to its first one. */
 export function placedAt(client: ClientConfig, place: ClientDestination): ClientConfig {
   const { teamId: _team, projectId: _project, ...rest } = client;

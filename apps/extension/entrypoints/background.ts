@@ -166,6 +166,7 @@ export default defineBackground(() => {
       await refreshPreviews({
         endpoints: async () => Object.keys(await sessions.list()),
         ensureAccess: (endpoint) => sessions.ensureAccess(endpoint),
+        renewAccess: (endpoint, refused) => sessions.renewAccess(endpoint, refused),
         remember: rememberPreviews,
         // The epoch of the session in place: an answer is kept only for the session that asked.
         sessionOf: async (endpoint) => {
@@ -278,7 +279,11 @@ export default defineBackground(() => {
   // FRU-454: a site of no workspace is added here when the prompt closed the popup that asked.
   const pending = createBrowserPending(
     (pattern, site) => ownSites({ kind: 'write', entries: { [pattern]: site } }),
-    (pattern, intent) => finishAdd(pattern, intent, { ensureAccess: (endpoint) => sessions.ensureAccess(endpoint) }),
+    (pattern, intent) =>
+      finishAdd(pattern, intent, {
+        ensureAccess: (endpoint) => sessions.ensureAccess(endpoint),
+        renewAccess: (endpoint, refused) => sessions.renewAccess(endpoint, refused),
+      }),
   );
 
   // FRU-307: the pins a side panel hid come back when the panel goes, whatever closed it.

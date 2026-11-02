@@ -646,7 +646,7 @@ degradation the ticket asked to have written down rather than discovered.
   replicas (FRU-67), and in the process otherwise, **per replica**, so N containers multiply the
   ceiling by N.
 - Tests drive `handleRequest` with plain `Request` objects against a stubbed Linear
-  (`linear-stub.ts`); no container needed. The assertion that matters most is that the stored
+  (`linear-stub.fixture.ts`); no container needed. The assertion that matters most is that the stored
   description parses back into the exact note that was posted.
 - **`reporter.verified` is the worker's word, never the client's** (FRU-9). Anything arriving with
   that flag has it stripped, whatever else it says: without that, a browser posting
@@ -752,7 +752,7 @@ degradation the ticket asked to have written down rather than discovered.
 
 ## The conformance suite, and the matrix (FRU-34)
 
-- **The doubles keep what they receive.** `linear-stub.ts` answers from a fixed list and records the
+- **The doubles keep what they receive.** `linear-stub.fixture.ts` answers from a fixed list and records the
   calls, so it cannot serve a suite that writes and then reads. `fakeLinear` and `fakeGithub` in
   `store-conformance.test.ts` store the write and apply the filter of the read. A Linear label belongs
   to one team, and GitHub serves comments oldest first, as the real services do. So client isolation is
@@ -3631,6 +3631,11 @@ refused by its sentence. What follows is the history.
 - **`total` counts the filter, every page; `counts.all` and `counts.byPlace` the filter without
   `place`** (the tabs of the screen); `counts.undelivered` the notes of that filter whose delivery
   did not arrive.
+- **`counts=none` answers the page with no `total` and no `counts`** (FRU-502, `NoteIndex.page`).
+  The counts are a pass over the filter, and the page an index scan that stops: « Next » and
+  « Previous » of the console keep the counts of the filter and ask `counts=none`. Every other read
+  counts again: a first page, a reload on a later page, a filter, a status that a person changed.
+  `GET /console/admin/notes` takes `counts=none` too, for its `total`. Any other value is `400`.
 - **Who reads what**: every role reads the list (`read-feedback`). **Where a note went is about the
   tracker** (`see-tracker`): the place, the reference and its link, the delivery, `byPlace` and
   `undelivered`. A guest gets none of them, and a `place` filter is `403` to it. `mine` reads the
@@ -3679,6 +3684,27 @@ refused by its sentence. What follows is the history.
   counts, a pass over the notes of the workspace. **A search is a pass too**: 295 ms and 386 ms
   for two words, 123 ms and 177 ms for a word found nowhere. A trigram index (`pg_trgm`) would
   take it down; it is an extension, not done here.
+- **FRU-502, measured on PostgreSQL 17 in a local container** (190,000 notes: 100,000 in one
+  workspace on 50 sites, 10,000 in each of nine others; `EXPLAIN ANALYZE`, three runs):
+  - the counts of the workspace, 13 ms to 17 ms, are no longer read on a page that `counts=none` asks;
+  - the page of the whole instance, for its administrator, was a pass over every note, 29 ms to
+    34 ms, and is a scan of `note_index_by_instance_date` (migration 0040) that stops, 0.08 ms. Its
+    `count(*)` is 27 ms, and `counts=none` leaves it out too. Building the index takes 63 ms on
+    190,000 notes and 280 ms to 316 ms on 1,000,000. It is a plain `CREATE INDEX`, so it holds the
+    writes of `note_index` while it runs, and not its reads (measured: an `INSERT` waits, a `SELECT`
+    answers). Not `CONCURRENTLY`: `postgres-migrate.ts` applies the migrations in one transaction,
+    and PostgreSQL refuses `CREATE INDEX CONCURRENTLY` in one;
+  - **no index for the list of one site**: `note_index_by_workspace` (workspace, site, stage) finds
+    the rows of a site of 100 notes in 0.1 ms, and the planner reads a site of 2,000 notes from
+    `note_index_by_date`, 0.15 ms. An index of its own would cost each write and save nothing;
+  - **no trigram index**: a word found nowhere takes 38 ms to 40 ms on 100,000 notes. `CREATE
+    EXTENSION pg_trgm` needs `CREATE` on the database, and the role of the worker is documented with
+    `CREATE` on its schema only (FRU-219), so the migration would stop a worker at its start. And
+    the search is an `OR` over five columns of two tables, which one GIN index on `excerpt` does not
+    serve;
+  - `GET /console/admin/workspaces`: at 20,000 workspaces the three sub-queries of a row run 100
+    times, after the `LIMIT` (`loops=100` in the plan), not once per workspace. The whole read is
+    6 ms, so it stays as it is.
 - Two ways that were measured and dropped: the deliveries joined to the notes in SQL (the planner
   read the bodies again for each note, 528 ms for the place of a connector), and the keys of the
   deliveries given to PostgreSQL as a list of tuples (planned as a loop, 298 ms). The deliveries
@@ -4246,7 +4272,7 @@ does.** `attachments.ts` is the mechanism, `SECURITY.md` says what is protected 
 - **Linear is not measured on a real workspace either.** The shapes are the ones of the guide of
   Linear (« How to upload a file to Linear »: `fileUpload(contentType, filename, size)`,
   `uploadUrl`, `assetUrl`, `headers`, a `PUT` from a server with `Content-Type` and
-  `Cache-Control`), played against `linear-stub.ts`. The guide names `attachmentCreate` for an
+  `Cache-Control`), played against `linear-stub.fixture.ts`. The guide names `attachmentCreate` for an
   issue only in passing; its limit of size is not written there. A first note with a file on a real
   workspace is the measurement this lacks.
 - **The rows of before** named no note: the note named `GET /screenshot/<id>`, which is gone. **The
@@ -4418,8 +4444,12 @@ The console chooses the repository of a destination in a list. `GithubApp.reposi
   repositories and write nothing. A token that GitHub answers with another permission is refused.
   It never goes into the cache of the tokens: each list mints its own, and no issue call can get it.
 - **Every page of `GET /installation/repositories` is read, until `total_count`**, with
-  `MAX_LISTED_REPOSITORIES` (1,000, 10 pages of 100) as the hard cap. A person who installs the App
-  on more chooses among the first thousand that GitHub lists.
+  `MAX_LISTED_REPOSITORIES` (1,000, 10 pages of 100) as the hard cap. The answer gives `total`, the
+  count GitHub gives (FRU-500): past the cap, the page of a site says the list is cut, and how much,
+  and takes the name of another repository. `GET …/repositories?name=owner/name` reads that one alone,
+  with the token `repository()` mints for it (that repository, the metadata), so a repository of
+  another installation is not found. The popup's `GET /session/sites/places` keeps the list alone:
+  the contract of the extension does not move.
 - **The state of the connector follows FRU-359.** `404` on the mint is `connection-ended`, `403` or
   `422` is `key-lacks-access`. A list that GitHub answers ends `connection-ended` only: it says that
   the installation exists, and nothing of the repository of each destination.

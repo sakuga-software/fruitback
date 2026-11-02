@@ -1015,8 +1015,12 @@ export type InstanceNotes = { notes: InstanceNote[]; total: number; searched: st
  *
  * WARNING: the worker writes a trace of this read in each workspace of the answer that the
  * administrator is not a member of. The owners of the workspace read it.
+ *
+ * `counts=none` (FRU-502): the page with no `total`, which the screen holds from the first page.
  */
-export function instanceNotes(query: URLSearchParams): Promise<Answer<InstanceNotes>> {
+export function instanceNotes(
+  query: URLSearchParams,
+): Promise<Answer<Omit<InstanceNotes, 'total'> & { total?: number }>> {
   const asked = query.toString();
 
   return call('GET', `/console/admin/notes${asked === '' ? '' : `?${asked}`}`);

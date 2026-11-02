@@ -810,15 +810,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
       const workspace = { id: newId('ws'), name: name.trim() };
       const now = new Date();
 
-      await transaction(async (tx) => {
-        // `organization.slug` is required and unique, and a workspace has no slug: it is its id.
-        await tx
-          .insert(organization)
-          .values({ id: workspace.id, name: workspace.name, slug: workspace.id, createdAt: now });
-        await tx
-          .insert(member)
-          .values({ id: newId('mem'), organizationId: workspace.id, userId: owner, role: 'owner', createdAt: now });
-      });
+      await transaction((tx) => insertWorkspaceWithOwner(tx, workspace, owner, now));
 
       return workspace;
     },
@@ -2339,4 +2331,21 @@ export function createPostgresAccountStore(database: Database): AccountStore {
   };
 
   return store;
+}
+
+/**
+ * The rows of a new workspace and of its owner (FRU-507): written by a person who makes one, and by
+ * an administrator who makes one for somebody. `organization.slug` is required and unique, and a
+ * workspace has no slug: it is its id. Run it in the transaction of the caller.
+ */
+export async function insertWorkspaceWithOwner(
+  db: Db,
+  workspace: { id: string; name: string },
+  owner: string,
+  now: Date,
+): Promise<void> {
+  await db.insert(organization).values({ id: workspace.id, name: workspace.name, slug: workspace.id, createdAt: now });
+  await db
+    .insert(member)
+    .values({ id: newId('mem'), organizationId: workspace.id, userId: owner, role: 'owner', createdAt: now });
 }

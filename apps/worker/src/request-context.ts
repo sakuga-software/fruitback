@@ -31,9 +31,8 @@ export type RequestContext = {
    * The store, built **once by the transport** rather than per request.
    *
    * This began as `storeFor(config)` inside the two handlers, which was invisible for Linear and the
-   * in-memory one — both are stateless closures — and would have opened a SQLite connection per
-   * request the moment FRU-31 landed. A refactor that exists to let a store hold a resource must
-   * not reconstruct it on every call.
+   * in-memory one, which are stateless closures. A store that holds a resource, as `postgres` holds
+   * a pool, must not be built again on every call.
    *
    * Optional because `handleRequest` answers `/health` and the misconfigured diagnostic *before*
    * there is a validated config to build a store from, so the transport cannot always have one. When
@@ -41,7 +40,7 @@ export type RequestContext = {
    * fresh store per case.
    */
   store?: NoteStore;
-  /** Same reason as `store`, for the sessions (FRU-42). A suite hands over a fresh file per case. */
+  /** Same reason as `store`, for the sessions (FRU-42). A suite hands over a fresh store per case. */
   sessionStore?: SessionStore;
   /** Same reason, for the accounts, the workspaces and their sites (FRU-96). */
   accounts?: AccountStore;

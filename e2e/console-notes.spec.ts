@@ -267,14 +267,19 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
       return route.fulfill({
         json: {
           notes,
-          total: placed.length,
-          counts: {
-            all: kept.length,
-            // A guest gets neither: the worker of FRU-244 leaves them out.
-            ...(role === 'guest'
-              ? {}
-              : { byPlace, undelivered: kept.filter((note) => note.delivery !== undefined).length }),
-          },
+          // FRU-502: `counts=none` reads the page alone, as the worker does.
+          ...(asked.counts === 'none'
+            ? {}
+            : {
+                total: placed.length,
+                counts: {
+                  all: kept.length,
+                  // A guest gets neither: the worker of FRU-244 leaves them out.
+                  ...(role === 'guest'
+                    ? {}
+                    : { byPlace, undelivered: kept.filter((note) => note.delivery !== undefined).length }),
+                },
+              }),
           ...(start + 8 < placed.length ? { next: 'p2' } : {}),
         },
       });
@@ -678,7 +683,9 @@ test('the pages go forward with the cursor and come back, « Previous » off on 
   await next.click();
   await expect(rows(page)).toHaveCount(2);
   await expect(pages(page).locator('span').first()).toHaveText('9 to 10 of 10');
-  expect(worker.asked.at(-1)).toEqual({ cursor: 'p2' });
+  // FRU-502: « Next » keeps the counts of the filter, and the worker reads the page alone.
+  expect(worker.asked.at(-1)).toEqual({ cursor: 'p2', counts: 'none' });
+  await expect(chip(page, /^Linear/)).toBeVisible();
   await expect(next).toBeDisabled();
   await expect(page).toHaveURL(/[?&]cursor=p2(&|$)/);
   await previous.click();
@@ -702,6 +709,9 @@ test('a link to a later page reads its range, and « Previous » goes to the fir
   await open(page, '?cursor=p2&from=9');
   await expect(rows(page)).toHaveCount(2);
   await expect(pages(page).locator('span').first()).toHaveText('9 to 10 of 10');
+  // No count is held for this filter yet: the worker counts it (FRU-502).
+  expect(worker.asked.length).toBeGreaterThan(0);
+  expect(worker.asked.every((asked) => asked.counts === undefined)).toBe(true);
   await pages(page).getByRole('button', { name: 'Previous' }).click();
   await expect(page).not.toHaveURL(/cursor=|from=/);
   await expect(rows(page)).toHaveCount(8);

@@ -55,7 +55,7 @@ describe('the sites a session may turn on (FRU-101)', () => {
           id: site.id,
           origin: 'https://staging.acme.dev',
           visibility: 'members',
-          destination: { label: 'Fruitback' },
+          destination: { label: 'Fruitback', kind: 'fruitback' },
           ...noNotes(),
         },
       ],

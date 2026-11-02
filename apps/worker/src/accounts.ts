@@ -1,3 +1,4 @@
+import { isOneOf } from './one-of.ts';
 import { createHash } from 'node:crypto';
 import type { SiteStatus } from './site-statuses.ts';
 import { NOTE_STAGES, type NoteStage } from '@fruitback/shared';
@@ -465,7 +466,7 @@ export function readConnectorSettings(value: unknown): ConnectorSettings | undef
   if (entries.length > MAX_STAGE_EXCEPTIONS) return undefined;
   const kept: Record<string, NoteStage> = {};
   for (const [state, stage] of entries) {
-    if (!STATE_ID.test(state) || !(NOTE_STAGES as readonly unknown[]).includes(stage)) return undefined;
+    if (!STATE_ID.test(state) || !isOneOf(stage, NOTE_STAGES)) return undefined;
     kept[state] = stage as NoteStage;
   }
 

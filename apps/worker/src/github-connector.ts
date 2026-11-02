@@ -98,10 +98,11 @@ export type GithubApp = {
   reachedBy(userToken: string, installation: number): Promise<ReachedInstallation | undefined>;
   /**
    * The repositories that `installation` covers, for the person who chooses a destination (FRU-361),
-   * `MAX_LISTED_REPOSITORIES` at most. The token of this list can read the metadata only, and no
-   * cache keeps it: see `listingToken`.
+   * `MAX_LISTED_REPOSITORIES` at most, and how many GitHub counts in all (FRU-500): past the list, the
+   * console asks for one by its name (`repository`). The token of this list can read the metadata
+   * only, and no cache keeps it: see `listingToken`.
    */
-  repositories(installation: number): Promise<ListedRepository[]>;
+  repositories(installation: number): Promise<ListedRepositories>;
   /**
    * Whether `repository` is private, for a destination that is written (FRU-382), with a token that
    * reaches that repository alone and reads its metadata only. `undefined`: the installation does
@@ -127,6 +128,9 @@ const MAX_PAGES = 100;
  * installs the App on more chooses among the first ones that GitHub lists.
  */
 export const MAX_LISTED_REPOSITORIES = 1_000;
+
+/** The repositories listed, and the count GitHub gives for the installation, which can be larger. */
+export type ListedRepositories = { repositories: ListedRepository[]; total: number };
 
 /** The one permission of the token of the list. It can read the names of the repositories, and write nothing. */
 const LISTING_PERMISSIONS = { metadata: 'read' } as const;
@@ -273,20 +277,23 @@ export function createGithubApp(config: GithubConnectorConfig, options: GithubAp
     return issued.data.token;
   }
 
-  async function repositories(installation: number): Promise<ListedRepository[]> {
+  async function repositories(installation: number): Promise<ListedRepositories> {
     const token = await listingToken(installation);
     const listed: ListedRepository[] = [];
+    let total = 0;
     for (let page = 1; listed.length < MAX_LISTED_REPOSITORIES; page += 1) {
       const parsed = repositoriesSchema.safeParse(
         await githubFetch(`/installation/repositories?per_page=${PER_PAGE}&page=${page}`, { token }, api),
       );
       if (!parsed.success) throw new StoreError('GitHub returned no list of repositories');
       for (const each of parsed.data.repositories) listed.push({ fullName: each.full_name, private: each.private });
+      total = parsed.data.total_count;
       // The count, not the size of a page, as for the installations of a person.
       if (parsed.data.repositories.length === 0 || listed.length >= parsed.data.total_count) break;
     }
+    const kept = listed.slice(0, MAX_LISTED_REPOSITORIES);
 
-    return listed.slice(0, MAX_LISTED_REPOSITORIES);
+    return { repositories: kept, total: Math.max(total, kept.length) };
   }
 
   async function repository(installation: number, wanted: string): Promise<ListedRepository | undefined> {
