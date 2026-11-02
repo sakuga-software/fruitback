@@ -22,6 +22,7 @@ import {
   openPanel,
   openPopupFrom,
   openPanelOrPage,
+  panelApis,
   panelPage,
   parsePinsMessage,
   pinsKeeper,
@@ -41,6 +42,75 @@ function page(): Document {
 }
 
 afterEach(() => setLanguage('en'));
+
+/** The panel APIs read from `browser` (FRU-560), in place of a cast at each call. */
+describe('panelApis', () => {
+  it('reads the side panel of Chrome, and calls each method on its own object', async () => {
+    const calls: string[] = [];
+    const sidePanel = {
+      name: 'chrome.sidePanel',
+      async open(this: { name: string }, options: unknown) {
+        calls.push(`${this.name} open ${JSON.stringify(options)}`);
+      },
+      async setPanelBehavior(this: { name: string }, behavior: unknown) {
+        calls.push(`${this.name} behavior ${JSON.stringify(behavior)}`);
+      },
+    };
+    const apis = panelApis({ runtime: {}, sidePanel });
+    assert.equal(apis?.sidePanel, sidePanel);
+    assert.equal(apis?.sidebarAction, undefined);
+
+    await openPanel(apis, { tabId: 4 });
+    await setPanelOnClick(apis, true, true);
+    assert.deepEqual(calls, [
+      'chrome.sidePanel open {"tabId":4}',
+      'chrome.sidePanel behavior {"openPanelOnActionClick":true}',
+    ]);
+  });
+
+  it('reads the sidebar of Firefox, which has no side panel', async () => {
+    let opened = 0;
+    const apis = panelApis({ runtime: {}, sidebarAction: { open: async () => void (opened += 1) } });
+    assert.equal(apis?.sidePanel, undefined);
+
+    await openPanel(apis, {});
+    assert.equal(opened, 1);
+    // Firefox keeps no behaviour of the icon: nothing to set, and nothing throws.
+    await setPanelOnClick(apis, true, true);
+    await keepPopupOnActionClick(apis);
+  });
+
+  it('keeps a Chrome side panel with no setPanelBehavior, bound to its object', async () => {
+    const sidePanel = {
+      seen: [] as unknown[],
+      async open(this: { seen: unknown[] }, options: unknown) {
+        this.seen.push(options);
+      },
+    };
+    const apis = panelApis({ sidePanel });
+    assert.equal(apis?.sidePanel?.setPanelBehavior, undefined);
+    await openPanel(apis, { windowId: 2 });
+    assert.deepEqual(sidePanel.seen, [{ windowId: 2 }]);
+  });
+
+  it('answers undefined for a browser with neither, and for parts that do not open', async () => {
+    for (const browser of [
+      undefined,
+      null,
+      {},
+      { sidePanel: {} },
+      { sidePanel: { open: 'no' } },
+      { sidebarAction: null },
+      'chrome',
+    ]) {
+      assert.equal(panelApis(browser), undefined, JSON.stringify(browser));
+    }
+    // With no panel: nothing opens, and the page shows the list.
+    assert.equal(openPanel(undefined, { tabId: 1 }), undefined);
+    assert.equal(await openPanelOrPage(undefined, { tabId: 1 }, async () => true), 'page');
+    await setPanelOnClick(undefined, true, true);
+  });
+});
 
 describe('opening the panel (FRU-296)', () => {
   it('asks Chrome for the panel of the tab, at once, in the click', () => {

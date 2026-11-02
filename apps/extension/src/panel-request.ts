@@ -50,7 +50,7 @@ export function createPanelGate(now: () => number = Date.now): PanelGate {
  * its own list. Never rejects.
  */
 export function openPanelForTab(
-  apis: PanelApis,
+  apis: PanelApis | undefined,
   tabId: number | undefined,
   gate: ((tabId: number) => boolean) & { forget?(tabId: number): void },
 ): Promise<boolean> {

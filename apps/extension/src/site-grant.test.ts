@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { covers, grantedForSite, holdsSiteAccess } from './site-grant.ts';
+import { popupSource } from './popup-source.fixture.ts';
 
 /** The grant of a rule, without the grants of every site (FRU-425, review of #560). */
 describe('the grant of the sites of a rule', () => {
@@ -42,10 +43,10 @@ describe('the grant of the sites of a rule', () => {
     for (const path of [
       '../entrypoints/background.ts',
       '../entrypoints/options/main.ts',
-      '../entrypoints/popup/main.ts',
+      '../entrypoints/popup/*.ts',
       './pending-site-browser.ts',
     ]) {
-      const source = readFileSync(new URL(path, import.meta.url), 'utf8');
+      const source = path.endsWith('*.ts') ? popupSource() : readFileSync(new URL(path, import.meta.url), 'utf8');
       assert.match(source, /holdsSiteAccess\(matchPatternFor\(pattern\), browser\.permissions\)/, path);
       assert.doesNotMatch(source, /permissions\.contains\(\{ origins: \[matchPatternFor/, path);
     }

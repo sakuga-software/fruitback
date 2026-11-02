@@ -27,7 +27,7 @@ it changes who is shown the feedback and never who may fetch it.
   and a form that does nothing reads as the fix for a page with no pins. A session the extension
   already holds with that worker stays on the screen with its log out: a credential is never hidden.
 - **In the popup a button stays on one line, and two buttons never touch** (FRU-169). Buttons side by
-  side go through `actions()` in `popup/main.ts`, which gives them 8 px and lets them go under each
+  side go through `actions()` in `popup/context.ts`, which gives them 8 px and lets them go under each
   other. In a `.row` the words give way, not the button, and the buttons go under the words when the
   row is short: French is a third longer, and the popup starts at 280 px. One button may wrap, the
   one of a rule that covers many sites. `e2e/popup-layout.spec.ts` measures the five states at 280
@@ -48,7 +48,7 @@ it changes who is shown the feedback and never who may fetch it.
   shows it. A change of language builds the mounted widget again, like a change of worker.
 - **The guide's words are guarded against the popup's** (`reviewing-doc.test.ts`). `docs/reviewing.md`
   walks somebody through a screen by naming what is on it, and a renamed button leaves it describing
-  a popup nobody has. The mode labels are read **out of** `popup/main.ts` and the pairing failures are imported from
+  a popup nobody has. The mode labels are read **out of** the modules of `popup/` and the pairing failures are imported from
   `remedy.ts`, so a fifth message is covered the day it is written; the buttons are named one by one, because a
   regex over them would guard whichever ones it happened to match.
 - **`world: 'MAIN'` is the ticket, not a preference.** A content script in the isolated world shares
@@ -412,6 +412,11 @@ did not change: the fields of 760 px and the file input of the browser are as th
   `new-site`); 3 · a site on (`rule`); 4 · a problem (`no-access`, `unreachable`, `not-web`); the
   page (`form`, `pair-link`). Until the page has them (FRU-301, FRU-302), `form` and `pair-link`
   keep their screen of before, and the screens 2 and 3 are FRU-298.
+- **The code of the popup is one module per group of screens** (FRU-560): `main.ts` decides and
+  draws (`render`, `draw`), `sign-in.ts`, `cloud-screens.ts` (a site of a workspace), `rule-screens.ts`
+  (a rule typed here), `pairing.ts`, `site-actions.ts`, and `context.ts` for what they share. A screen
+  draws the popup again with `render` of `context.ts`, which `main.ts` binds: no module imports
+  `main.ts`. A test that reads the popup as text reads them all (`src/popup-source.fixture.ts`).
 - **The shell is 380 × 580 at least**, with the head of the kit. The button at the top right,
   **Account and settings**, shows the initial of the account, or the gear when nobody is signed in,
   and opens the page of the extension. Screen 1 has no such button: its foot, **Use your own

@@ -6,6 +6,7 @@ import { nearest, setLanguage, translate } from './i18n.ts';
 import { FRENCH } from './messages.fr.ts';
 import { showProblem } from './problem-view.ts';
 import { PROBLEMS, REMEDY_LABEL } from './remedy.ts';
+import { popupSource } from './popup-source.fixture.ts';
 
 /**
  * The words of the popup and of the options page, held to the French catalog (FRU-131).
@@ -27,7 +28,8 @@ function code(source: string): string {
   );
 }
 
-const PAGES = ['../entrypoints/popup/main.ts', '../entrypoints/options/main.ts'] as const;
+/** The popup is its modules as one text (`popup-source.fixture.ts`); the options page is one file. */
+const OPTIONS = '../entrypoints/options/main.ts';
 /** The modules that draw a screen of the popup: their words go through `t` like a page's (FRU-251). */
 const VIEWS = [
   './popup-view.ts',
@@ -58,7 +60,10 @@ const CONSTANTS = [
   './context-menu.ts',
 ] as const;
 
-const pages = new Map(PAGES.map((path) => [path, code(read(path))]));
+const pages = new Map([
+  ['../entrypoints/popup/*.ts', code(popupSource())],
+  [OPTIONS, code(read(OPTIONS))],
+]);
 const views = new Map(VIEWS.map((path) => [path, code(read(path))]));
 
 const LITERAL = /'((?:[^'\\\n]|\\.)*)'|"((?:[^"\\\n]|\\.)*)"|`((?:[^`\\]|\\.)*)`/g;

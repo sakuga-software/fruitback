@@ -60,7 +60,7 @@ import { touchesARefreshToken } from '../../src/session-storage.ts';
 import { PAIRING_CODE_REQUIRED, PAIRING_PROBLEM } from '../../src/remedy.ts';
 import { button, hostOf, make } from '../../src/kit.ts';
 import { DOCK_POSITION_KEY, NOTES_NAME_KEY, SHOW_SELECTORS_KEY, parseDockPosition } from '../../src/protocol.ts';
-import { PANEL_ON_CLICK_KEY } from '../../src/side-panel.ts';
+import { PANEL_ON_CLICK_KEY, panelApis } from '../../src/side-panel.ts';
 
 /**
  * Every site entry, wildcards included, and the rules file a team hands around (FRU-43).
@@ -730,7 +730,7 @@ async function preferences(): Promise<HTMLElement> {
   let onShortcut: (() => void) | undefined;
   if (typeof commands.openShortcutSettings === 'function') onShortcut = () => void commands.openShortcutSettings?.();
   else if (opensChromiumShortcuts(FAMILY)) onShortcut = () => void browser.tabs.create({ url: CHROMIUM_SHORTCUTS_URL });
-  const panel = (browser as unknown as { sidePanel?: unknown }).sidePanel !== undefined;
+  const panel = panelApis(browser)?.sidePanel !== undefined;
   const captureWarning = browserWarning(FAMILY);
   // FRU-425: `<all_urls>`, asked for here and nowhere else.
   const capturesEverywhere = await browser.permissions
