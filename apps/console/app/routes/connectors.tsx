@@ -696,6 +696,19 @@ function Opened({
     held.current?.scrollIntoView({ block: 'nearest' });
   }, [takesFocus]);
 
+  useEffect(() => {
+    // A move that is cancelled (its animation taken away, the panel hidden) sends no end, and the
+    // panel must not stay clipped (raised in review). React has no prop for this event.
+    const opened = held.current;
+    if (opened === null) return;
+    const cancelled = (event: AnimationEvent) => {
+      if (event.target === opened) setSettled(true);
+    };
+    opened.addEventListener('animationcancel', cancelled);
+
+    return () => opened.removeEventListener('animationcancel', cancelled);
+  }, []);
+
   return (
     <div
       id={PANEL}

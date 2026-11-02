@@ -666,6 +666,24 @@ test('the panel of a connector unfolds as its card opens, and is there at once w
   expect.soft(await styles(panel(page), ['animation-name'])).toEqual({ 'animation-name': 'none' });
 });
 
+test('a move of the panel that is cancelled leaves it unclipped (FRU-563)', async ({ page }) => {
+  await workerWith(page);
+  await open(page);
+  await expect(rows(page)).toHaveCount(2);
+  // The move is taken away while it runs: the browser sends « animationcancel », and no end.
+  const settled = await page.evaluate(async () => {
+    document.querySelector<HTMLButtonElement>('button[id^="source-row-"]')!.click();
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    const opened = document.getElementById('source-panel')!;
+    opened.style.animation = 'none';
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    return opened.hasAttribute('data-settled');
+  });
+  expect(settled).toBe(true);
+  await expect(panel(page).locator('.source-panel__body')).toHaveCSS('overflow-y', 'visible');
+});
+
 test('`?new` in the address opens « Add a connector », and leaves the address (FRU-562)', async ({ page }) => {
   await workerWith(page);
   await page.goto(`${CONSOLE}/w/w1/connectors?new=1`);
