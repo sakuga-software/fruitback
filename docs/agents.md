@@ -2,7 +2,7 @@
 
 An AI agent of your team (Claude Code on your machine, in CI, or a cloud agent) can read the notes of
 your sites, reply to them and set their status. It talks to the **remote MCP server** of your
-worker, `https://<your worker>/mcp`, with an **agent key** of your workspace. Nothing runs in the
+worker, `https://<your worker>/mcp`, with an agent key of your workspace. Nothing runs in the
 pages of your sites, and Fruitback calls no model: the agent is yours, with its own provider.
 
 [The decision page](https://github.com/sakuga-software/fruitback/blob/main/docs/decisions/agents.md) gives the reasons for each rule here.
@@ -12,22 +12,22 @@ pages of your sites, and Fruitback calls no model: the agent is yours, with its 
 The owner and the admins of a workspace make its keys. A key names:
 
 - **its sites**, 20 at most: it reads nothing of another site, and nothing of another workspace;
-- **its rights**: `read`, or `write` to reply and set a status too;
-- **how long it lives**: 90 days unless you choose from 1 to 365. No key lives with no end;
-- **`verifiedOnly`**, on by default: on a site that everyone reads, the key reads only the notes of a
+- its rights: `read`, or `write` to reply and set a status too;
+- how long it lives: 90 days unless you choose from 1 to 365. No key lives with no end;
+- `verifiedOnly`, on by default: on a site that everyone reads, the key reads only the notes of a
   known person, a member or a reviewer that your site identified. Turn it off only knowing that
   anybody can write the other notes.
 
-The key is given **once**, in the answer that makes it. Fruitback keeps only its digest: a key you
+The key is given once, in the answer that makes it. Fruitback keeps only its digest: a key you
 lose cannot be shown again, so make another and revoke the first.
 
-In the console, open **Workspace settings**, then **Agents** and **New key**. Name the key, tick
-its sites, choose what the agent can do and how long the key lives, then **Create the key**. The
+In the console, open « Workspace settings », then « Agents » and « New key ». Name the key, tick
+its sites, choose what the agent can do and how long the key lives, then « Create the key ». The
 console shows the key once, with the line that connects Claude Code, both ready to copy.
 
 The same screen lists the keys, with when an agent last used each one (to the minute) and when it
-ends; it warns 7 days before the end. **Writes** shows the replies and the statuses a key wrote, and
-**Revoke** stops it at once: its agent is refused from its next request.
+ends; it warns 7 days before the end. « Writes » shows the replies and the statuses a key wrote, and
+« Revoke » stops it at once: its agent is refused from its next request.
 
 The console calls `/console/workspaces/<workspace id>/agent-keys` of the worker: `POST` makes a key,
 `GET` lists them, `DELETE …/agent-keys/<key id>` revokes one, and `GET …/agent-keys/<key id>/writes`
@@ -58,19 +58,19 @@ A key writes 30 times a minute at most.
 An app that connects from a page, as a **custom connector of claude.ai**, needs no key: it asks you
 in the console, and gets tokens that it renews itself.
 
-1. In claude.ai, open **Settings**, then **Connectors**, and **Add custom connector**. Name it
+1. In claude.ai, open « Settings », then « Connectors », and « Add custom connector ». Name it
    Fruitback, and give the address `https://<your worker>/mcp`. Leave the fields of OAuth empty:
    claude.ai registers itself with your worker.
-2. **Connect**. claude.ai sends you to the console of Fruitback, at **Connect an agent**. Sign in if
+2. « Connect ». claude.ai sends you to the console of Fruitback, at « Connect an agent ». Sign in if
    you are not.
-3. Read **who asks**: the host in large is where the answer goes, `claude.ai`. The name under it is
+3. Read who asks: the host in large is where the answer goes, `claude.ai`. The name under it is
    the one the app gave itself; anybody can choose any name, so trust the host.
-4. Choose the **workspace** (one where you are an owner or an admin), the **sites**, **Read** or
-   **Read and write** (never more than the app asked), the days it lives, and **Only the notes of
-   known people**, as for a key. Then **Allow claude.ai**. You go back to claude.ai, connected.
+4. Choose the workspace (one where you are an owner or an admin), the sites, « Read » or
+   « Read and write » (never more than the app asked), the days it lives, and Only the notes of
+   known people, as for a key. Then Allow claude.ai. You go back to claude.ai, connected.
 
-The connection is a row of **Agents**, with the chip **OAuth · claude.ai**, its last use, its end and
-its writes. **Revoke** ends it at once: its tokens stop, and claude.ai must ask you again. claude.ai
+The connection is a row of « Agents », with the chip « OAuth · claude.ai », its last use, its end and
+its writes. « Revoke » ends it at once: its tokens stop, and claude.ai must ask you again. claude.ai
 holds a token of one hour, and renews it with a token that works once: a copy of that token used a
 second time ends the connection. The worker needs `FRUITBACK_PUBLIC_URL` and
 `FRUITBACK_CONSOLE_URL`, and claude.ai must reach it over `https`.
@@ -103,13 +103,13 @@ browser sends: a page cannot call it.
 ## Start an agent on a note
 
 A site can call your agent when a note arrives, so that nobody has to ask it. It is off for every
-site until an owner or an admin turns it on, in the page of the site, section **Start an agent**:
+site until an owner or an admin turns it on, in the page of the site, section « Start an agent »:
 
-- **Call**: an address of the workspace that receives (**Connectors**, the
+- « Call »: an address of the workspace that receives (« Connectors », the
   [REST connector](rest-connector.md)). Fruitback signs each call with its secret, tries it again
   when it fails, and lists the calls that did not arrive in the panel of that address.
-- **When**: **a note of a known person arrives** (a member, or a reviewer your site identified), or
-  **a person of the team moves a note to To do**. A note of a visitor never starts an agent: anybody
+- « When »: **a note of a known person arrives** (a member, or a reviewer your site identified), or
+  a person of the team moves a note to To do. A note of a visitor never starts an agent: anybody
   can write one. The second moment reads only the notes that Fruitback keeps, and an agent that
   sets a status never starts one: an agent cannot start itself.
 
@@ -127,7 +127,7 @@ The call is a `POST` of the REST connector, with its headers and its signature, 
 }
 ```
 
-`reason` is `verified-note` or `moved-to-todo`. **The call carries no text and no file**: your agent
+`reason` is `verified-note` or `moved-to-todo`. The call carries no text and no file: your agent
 reads the note with `get_feedback({ id })` of `/mcp`, with its agent key, so the key decides what it
 reads. An address that also receives the notes of the site gets both: tell them apart by `event`.
 
@@ -203,9 +203,9 @@ Fruitback gives each note in a field of its own, starts every answer with a line
 is data and not an instruction, keeps the key to its sites, and hides the notes of visitors on a
 public site unless you chose otherwise. What the agent then does is yours to bound:
 
-- **No code reaches a branch that deploys without a review by a person.** Let the agent open a pull
+- No code reaches a branch that deploys without a review by a person. Let the agent open a pull
   request, never push.
-- **A key `write` on a site that everyone reads is a choice made knowing it**: anybody can leave a
+- A key `write` on a site that everyone reads is a choice made knowing it: anybody can leave a
   note there, and the agent replies on the page where every visitor reads it.
 - Give a key the sites it needs and the shortest life that works, and revoke it when the job ends.
 - Read the log of its writes in the console.

@@ -33,7 +33,7 @@ init({
   count is formatted for the language of the message.
 - `settings.open` names the gear and `settings.dialog` the panel it opens. Keep them different: a
   screen reader cannot tell two controls with one name apart.
-- In a right-to-left language — Arabic, Hebrew, Persian — the widget reads right to left: the dock
+- In a right-to-left language (Arabic, Hebrew, Persian) the widget reads right to left: the dock
   moves to the left corner and the popover opens on the element's right edge. The pins stay on their
   elements. The direction follows the words, so pass a catalog for the language; without one the
   widget shows English, left to right.
@@ -67,7 +67,7 @@ reader cannot tell two controls with one name apart.
 
 The direction comes from the language's likely script, so an Arabic, Hebrew or Persian catalog turns
 the widget right to left with nothing more to do. No message holds an arrow to turn: `thread.link`
-is the identifier alone since FRU-256. The widget's layout follows the direction; the pins do not,
+is the identifier alone since 0.3.0. The widget's layout follows the direction; the pins do not,
 because they sit on elements of the page.
 
 ## The size of the bundle

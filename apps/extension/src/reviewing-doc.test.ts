@@ -122,7 +122,7 @@ describe('the guide quotes the popup this extension renders', () => {
     for (const problem of quoted) {
       if (problem.remedy === null) continue;
       assert.ok(
-        guide.includes(`**${REMEDY_LABEL[problem.remedy]}**`),
+        guide.includes(`« ${REMEDY_LABEL[problem.remedy]} »`),
         `docs/reviewing.md quotes "${problem.text}" and does not name its button: ${REMEDY_LABEL[problem.remedy]}`,
       );
     }

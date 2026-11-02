@@ -21,7 +21,7 @@ docker compose cp postgres:/tmp/fruitback.pgdump "./fruitback-$(date +%F).pgdump
 ```
 
 Measured on 2026-10-16: the dump held the data of every table of the worker, `notes`,
-`note_comments` (named `seeds` and `seed_comments` before FRU-378), `sites`, `user` and `session` among them.
+`note_comments` (named `seeds` and `seed_comments` before 0.4.0), `sites`, `user` and `session` among them.
 
 **Four values are in no dump: keep them apart, somewhere other than the server.**
 
@@ -69,15 +69,15 @@ The worker signs with this key the access token of a session of the extension. T
 with the cookie of better-auth, which this key does not sign.
 
 - **Give it to no site.** A site signs nothing: who reads it is chosen in the console.
-- **Change it if a site ever had it**, for example an instance of before FRU-225 that served one site
+- Change it if a site ever had it, for example an instance of before 0.3.0 that served one site
   with no accounts, and when you think it was read by somebody else.
 
 To change it, set a new value of 32 characters or more, different from `FRUITBACK_SECRETS_KEY` and
 `FRUITBACK_AUTH_SECRET`, and start the worker again. What it cuts:
 
 - Every token signed with the old key answers `401` at once.
-- **Nobody signs in again, and no extension pairs again.** A session of an extension is kept as a
+- Nobody signs in again, and no extension pairs again. A session of an extension is kept as a
   digest of its refresh token, which this key does not sign: the extension gets a new access token
   at its next refresh. A console session is not signed with this key at all.
-- **It ends no session.** Deleting a workspace ends the extensions paired for it, and so does
+- It ends no session. Deleting a workspace ends the extensions paired for it, and so does
   removing the person from it.
