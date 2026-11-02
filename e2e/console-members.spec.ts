@@ -18,7 +18,8 @@ import {
 
 /**
  * The Members screen (FRU-247), measured in a browser against screen 12 of the mockup of 2026-10-13:
- * the invitation on one line, and the table of the people and of the invitations.
+ * the table of the people and of the invitations. The form of an invitation is in a dialog, opened by
+ * « Invite » in the head of the page (FRU-565), where the mockup draws it on one line above the table.
  *
  * The values are read in the code of the mockup (`12-console-members.html`), and the boxes in its
  * render at 1440 px and at 390 px (a box is compared where the font is the one of the mockup). The
@@ -207,6 +208,15 @@ async function open(page: Page): Promise<void> {
 }
 
 const form = (page: Page) => page.getByRole('form', { name: 'Invite someone' });
+/** « Invite » in the head of the page: it opens the dialog of the form (FRU-565). */
+const opener = (page: Page) => page.locator('main header').getByRole('button', { name: 'Invite', exact: true });
+const dialog = (page: Page) => page.getByRole('dialog', { name: 'Invite someone' });
+async function inviting(page: Page): Promise<void> {
+  await opener(page).click();
+  await expect(form(page)).toBeVisible();
+  // The dialog slides and fades in: a box is read once it is still.
+  await page.evaluate(() => Promise.all(document.getAnimations().map((each) => each.finished)));
+}
 const email = (page: Page) => form(page).getByRole('textbox', { name: 'Email', exact: true });
 const roles = (page: Page) => form(page).getByRole('button', { name: /Role$/ });
 const invite = (page: Page) => form(page).getByRole('button', { name: 'Invite', exact: true });
@@ -229,6 +239,19 @@ async function expectNoViolation(page: Page, name: string): Promise<void> {
     .toEqual([]);
 }
 
+/** Axe on the dialog of the invitation, which is not in `main`: React Aria draws it at the end of the body. */
+async function expectNoDialogViolation(page: Page, name: string): Promise<void> {
+  // A colour read while a list closes is the colour of its fade.
+  await page.evaluate(() => Promise.all(document.getAnimations().map((each) => each.finished)));
+  const results = await new AxeBuilder({ page }).include('[role="dialog"]').analyze();
+  expect
+    .soft(
+      results.violations.map((violation) => `${violation.id}: ${violation.nodes[0]?.target.join(' ')}`),
+      name,
+    )
+    .toEqual([]);
+}
+
 const CELL = ['padding-top', 'padding-right', 'padding-bottom', 'padding-left'];
 
 /**
@@ -238,6 +261,11 @@ const CELL = ['padding-top', 'padding-right', 'padding-bottom', 'padding-left'];
 const LISTS = 93;
 /** The table of the mockup holds Paul's invitation too: the members alone are one row shorter. */
 const MEMBERS_FRAME = 302.4;
+/**
+ * The form of the mockup is above the table, 66 px high and 24 px above it: it is in a dialog
+ * (FRU-565), so a box under it is compared this much higher than the mockup draws it.
+ */
+const FORM = 90;
 
 test('the list is the table of the mockup, with what the worker of today says of a person', async ({ page }) => {
   await workerWith(page);
@@ -306,7 +334,7 @@ test('the list is the table of the mockup, with what the worker of today says of
   // The screen is as wide as its column (FRU-398): 71.5 px wider than the 1120 px of the mockup.
   expectBox(
     await box(table(page)),
-    { x: 296.5, y: 216.2 + LISTS, width: 1095.5, height: MEMBERS_FRAME },
+    { x: 296.5, y: 216.2 + LISTS - FORM, width: 1095.5, height: MEMBERS_FRAME },
     2,
     'the frame of the table',
   );
@@ -314,7 +342,7 @@ test('the list is the table of the mockup, with what the worker of today says of
   // A row of the mockup is 64 px: two lines of 14 px and 13 px at 1.45, and 12 px above and under.
   expectBox(
     await box(row(page, 'Tom')),
-    { x: 297.5, y: 324.7 + LISTS, width: 1093.5, height: 64.1 },
+    { x: 297.5, y: 324.7 + LISTS - FORM, width: 1093.5, height: 64.1 },
     2,
     'the second row',
   );
@@ -332,12 +360,17 @@ test('the list is the table of the mockup, with what the worker of today says of
   });
   expect.soft(await painted(chip, 'backgroundColor')).toEqual(rgb(AVATAR));
   expect.soft(await painted(chip, 'color')).toEqual(rgb(WHITE));
-  expectBox(await box(chip), { x: 317.5, y: 340.7 + LISTS, width: 32, height: 32 }, 2, 'the chip of the second row');
+  expectBox(
+    await box(chip),
+    { x: 317.5, y: 340.7 + LISTS - FORM, width: 32, height: 32 },
+    2,
+    'the chip of the second row',
+  );
   expect.soft(await styles(tom.nth(0).locator('> span'), ['column-gap'])).toEqual({ 'column-gap': '12px' });
   const name = tom.nth(0).getByText('Tom', { exact: true });
   expect.soft(await styles(name, ['font-weight', 'font-size'])).toEqual({ 'font-weight': '600', 'font-size': '14px' });
   expect.soft(await painted(name, 'color')).toEqual(rgb(INK));
-  expectBox(await box(name), { x: 361.5, y: 337.1 + LISTS, height: 20.3 }, 2, 'the name of the second row');
+  expectBox(await box(name), { x: 361.5, y: 337.1 + LISTS - FORM, height: 20.3 }, 2, 'the name of the second row');
   const address = tom.nth(0).getByText('tom@acme.dev', { exact: true });
   expect.soft(await styles(address, ['font-size', 'line-height'])).toEqual({
     'font-size': '13px',
@@ -375,9 +408,10 @@ test('the list is the table of the mockup, with what the worker of today says of
   });
   expect.soft(await painted(resend, 'color')).toEqual(rgb(INK));
   // The link of the kit is 33 px high where the mockup has 36.3: its line is `normal`, not 1.45.
-  // The invitation is in the list under the members (FRU-496): 203.9 px lower than the mockup.
-  expectBox(await box(resend), { x: 1258.5, y: 531 + 203.9, width: 50.2 }, 2, '« Resend »');
-  expectBox(await box(cancel), { x: 1324.7, y: 531 + 203.9, width: 46.3 }, 2, '« Cancel »');
+  // The invitation is in the list under the members (FRU-496): 203.9 px lower than the mockup, less
+  // the form that is in a dialog.
+  expectBox(await box(resend), { x: 1258.5, y: 531 + 203.9 - FORM, width: 50.2 }, 2, '« Resend »');
+  expectBox(await box(cancel), { x: 1324.7, y: 531 + 203.9 - FORM, width: 46.3 }, 2, '« Cancel »');
   await resend.hover();
   expect.soft(await painted(resend, 'color')).toEqual(rgb(ACCENT_STRONG));
   await page.mouse.move(700, 800);
@@ -388,31 +422,33 @@ test('the list is the table of the mockup, with what the worker of today says of
   await expectNoViolation(page, 'the list');
 });
 
-test('the invitation is one line: a form with a name, and each field under its label', async ({ page }) => {
+test('« Invite » opens the form in a dialog: a form with a name, and each field under its label (FRU-565)', async ({
+  page,
+}) => {
   const worker = await workerWith(page);
   await open(page);
 
-  await expect(form(page)).toBeVisible();
+  // The form is not on the page: « Invite », at the right of the head, opens it.
+  await expect(form(page)).toHaveCount(0);
+  await expect(opener(page)).toBeVisible();
   expect
-    .soft(await styles(form(page), ['display', 'flex-wrap', 'column-gap', 'row-gap', 'align-items', 'margin-bottom']))
-    .toEqual({
-      display: 'flex',
-      'flex-wrap': 'wrap',
-      'column-gap': '10px',
-      'row-gap': '10px',
-      'align-items': 'flex-end',
-      'margin-bottom': '24px',
-    });
-  const basis = (locator: Locator) =>
-    locator.evaluate((element) => {
-      const { flexGrow, flexShrink, flexBasis } = getComputedStyle(element.closest('form > div')!);
+    .soft(await styles(opener(page), ['height', 'border-top-left-radius', 'font-size']))
+    .toEqual({ height: '44px', 'border-top-left-radius': '999px', 'font-size': '14px' });
+  expect.soft(await painted(opener(page), 'backgroundColor')).toEqual(rgb(ACCENT));
+  const head = await box(page.locator('main header'));
+  const button = await box(opener(page));
+  expect.soft(Math.abs(button.x + button.width - (head.x + head.width)), 'at the right of the head').toBeLessThan(1);
+  expect.soft(Math.abs(button.y + button.height - (head.y + head.height)), 'on the line of the lead').toBeLessThan(1);
 
-      return `${flexGrow} ${flexShrink} ${flexBasis}`;
-    });
-  expect.soft(await basis(email(page))).toBe('999 1 260px');
-  expect.soft(await basis(roles(page))).toBe('1 1 200px');
+  await inviting(page);
+  // The dialog is named by its title, and focus is in its field.
+  await expect(dialog(page).getByRole('heading', { name: 'Invite someone' })).toBeVisible();
+  await expect(email(page)).toBeFocused();
+  expect
+    .soft(await styles(form(page), ['display', 'flex-direction', 'row-gap']))
+    .toEqual({ display: 'flex', 'flex-direction': 'column', 'row-gap': '16px' });
 
-  // Each field has its label on the screen, above it.
+  // Each field has its label on the screen, above it, and the fields are as wide as the dialog.
   for (const [word, control] of [
     ['Email', email(page)],
     ['Role', roles(page)],
@@ -428,7 +464,10 @@ test('the invitation is one line: a form with a name, and each field under its l
       .soft(await styles(control, ['height', 'border-top-left-radius', 'border-top-width', 'font-size']), word)
       .toEqual({ height: '44px', 'border-top-left-radius': '8px', 'border-top-width': '1px', 'font-size': '15px' });
     expect.soft(await painted(control, 'borderTopColor'), word).toEqual(rgb(CONTROL));
+    // The input draws its border inside the box of its field: 2 px at the most between them.
+    expect.soft(Math.abs((await box(control)).width - (await box(form(page))).width), word).toBeLessThanOrEqual(3);
   }
+  expect.soft((await box(roles(page))).y, 'the role under the address').toBeGreaterThan((await box(email(page))).y);
   await expect(email(page)).toHaveAttribute('type', 'email');
   await expect(email(page)).toHaveAttribute('placeholder', 'name@company.com');
   expect.soft(await styles(email(page), ['padding-left'])).toEqual({ 'padding-left': '14px' });
@@ -444,12 +483,7 @@ test('the invitation is one line: a form with a name, and each field under its l
       'font-size': '14px',
     });
   expect.soft(await painted(invite(page), 'backgroundColor')).toEqual(rgb(ACCENT));
-
-  // The mockup has a third list, « Site », where the role is here: the field takes its room.
-  expectBox(await box(form(page)), { x: 296.5, y: 126.2, width: 1095.5, height: 66 }, 2, 'the form');
-  expectBox(await box(email(page)), { x: 296.5, y: 148.2, height: 44 }, 2, 'the field');
-  expectBox(await box(roles(page)), { x: 1096.7, y: 148.2, width: 200.3, height: 44 }, 2, 'the list of roles');
-  expectBox(await box(invite(page)), { x: 1307.3, y: 148.2, width: 85.2, height: 44 }, 2, '« Invite »');
+  await expect(form(page).getByRole('button', { name: 'Cancel', exact: true })).toBeVisible();
 
   // The roles in the order of the mockup; the list « Site » is for a guest only.
   await expect(form(page).getByText('Site', { exact: true })).toHaveCount(0);
@@ -463,20 +497,40 @@ test('the invitation is one line: a form with a name, and each field under its l
   await page.getByRole('option', { name: 'Admin' }).click();
   await expect(form(page).getByText('Site', { exact: true })).toHaveCount(0);
 
+  // Escape closes it, focus goes back to « Invite », and what was typed is there when it opens again.
+  await email(page).fill('zoe@client.fr');
+  await page.keyboard.press('Escape');
+  await expect(dialog(page)).toHaveCount(0);
+  await expect(opener(page)).toBeFocused();
+  await inviting(page);
+  await expect(email(page)).toHaveValue('zoe@client.fr');
+  await expect(roles(page)).toContainText('Admin');
+  // « Cancel » closes it too, and sends nothing.
+  await form(page).getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(dialog(page)).toHaveCount(0);
+  await expect(opener(page)).toBeFocused();
+  expect(worker.sent).toEqual([]);
+
   // Nothing to send with no address; then the address and the role go as they are.
+  await inviting(page);
+  await email(page).fill('');
   await expect(invite(page)).toBeDisabled();
   await email(page).fill('  zoe@client.fr ');
   await invite(page).click();
   await expect
     .poll(() => worker.sent)
     .toEqual([{ call: 'invite-member', body: { organizationId: 'w1', email: 'zoe@client.fr', role: 'admin' } }]);
-  await expect(email(page)).toHaveValue('');
+  // A sent invitation closes the dialog: its link is on the page, and the field is empty for the next one.
+  await expect(dialog(page)).toHaveCount(0);
+  await expect(page.getByRole('status')).toContainText('Invitation sent to zoe@client.fr.');
   await expect(cells(page, 'zoe@client.fr')).toHaveText([
     'Zzoe@client.frInvitation sent',
     'Admin',
     'Every site',
     /^Sent 13 OctUntil 20 Oct/,
   ]);
+  await inviting(page);
+  await expect(email(page)).toHaveValue('');
 });
 
 const sitesList = (page: Page) => form(page).getByRole('button', { name: /Site$/ });
@@ -486,8 +540,10 @@ test('the address of the person invited, and the search, are no field for a pass
 }) => {
   await workerWith(page);
   await open(page);
+  await inviting(page);
 
   expect(await fillMarks(email(page))).toEqual(NO_PASSWORD_MANAGER);
+  await page.keyboard.press('Escape');
   expect(await fillMarks(page.getByRole('searchbox', { name: 'Search members' }))).toEqual(NO_PASSWORD_MANAGER);
 });
 
@@ -495,6 +551,7 @@ test('the icon of a password manager next to « Email » moves nothing in the fo
   await page.setViewportSize({ width: 1528, height: 840 });
   await workerWith(page);
   await open(page);
+  await inviting(page);
   const before = { form: await box(form(page)), email: await box(email(page)), role: await box(roles(page)) };
 
   // What LastPass 4.156 adds to the parent of a field, even one marked `data-lpignore` (measured
@@ -522,21 +579,24 @@ test('a guest of one site: the list « Site » where the mockup draws it, and th
     { id: 's2', origin: 'https://acme.dev', visibility: 'everyone' },
   ]);
   await open(page);
+  await inviting(page);
   await roles(page).click();
   await page.getByRole('option', { name: 'Guest, one site' }).click();
 
-  // The state of the mockup at 1440 px: Email, Role, Site, « Invite » on one line.
+  // The list « Site » under « Role », as wide (FRU-565: the form is in a dialog, one field a line).
   await expect(sitesList(page)).toBeVisible();
   // The sites to choose from come by address (FRU-497): the first one is chosen.
   await expect(sitesList(page)).toContainText('acme.dev');
   await expect(sitesList(page)).not.toContainText('staging');
-  expectBox(await box(email(page)), { x: 297, y: 148, width: 580.1, height: 44 }, 2, 'the field');
-  expectBox(await box(roles(page)), { x: 886.6, y: 148, width: 200.3, height: 44 }, 2, 'the list of roles');
-  expectBox(await box(sitesList(page)), { x: 1097, y: 148, width: 200.3, height: 44 }, 2, 'the list of sites');
-  expectBox(await box(invite(page)), { x: 1307.3, y: 148.2, width: 85.2, height: 44 }, 2, '« Invite »');
+  const role = await box(roles(page));
+  const list = await box(sitesList(page));
+  expect.soft(list.y, 'under the role').toBeGreaterThan(role.y + role.height);
+  expect.soft(list.x).toBeCloseTo(role.x, 0);
+  expect.soft(list.width).toBeCloseTo(role.width, 0);
+  expect.soft((await box(invite(page))).y, '« Invite » under the list').toBeGreaterThan(list.y + list.height);
   const label = form(page).locator('.label', { hasText: 'Site' }).first();
   expect.soft(await styles(label, ['font-size', 'font-weight'])).toEqual({ 'font-size': '13px', 'font-weight': '600' });
-  await expectNoViolation(page, 'the form of a guest');
+  await expectNoDialogViolation(page, 'the form of a guest');
 
   await sitesList(page).click();
   await expect(page.getByRole('option')).toHaveText(['https://acme.dev', 'https://staging.acme.dev']);
@@ -557,6 +617,7 @@ test('a workspace with no site offers no guest, and a site the worker refuses is
   await workerWith(page);
   await stubSites(page, []);
   await open(page);
+  await inviting(page);
   await roles(page).click();
   await expect(page.getByRole('option')).toHaveText(['Member', 'Admin']);
   await page.keyboard.press('Escape');
@@ -565,6 +626,7 @@ test('a workspace with no site offers no guest, and a site the worker refuses is
   const worker = await workerWith(page);
   worker.refuses = { status: 400, error: 'invalid-request', field: 'sites' };
   await open(page);
+  await inviting(page);
   await roles(page).click();
   await page.getByRole('option', { name: 'Guest, one site' }).click();
   await email(page).fill('zoe@client.fr');
@@ -579,13 +641,15 @@ test('an invitation that was kept gives its link, whatever became of its message
   const notice = page.getByRole('status');
 
   // The message went.
+  await inviting(page);
   await email(page).fill('zoe@client.fr');
   await invite(page).click();
   await expect(notice).toContainText('Invitation sent to zoe@client.fr. You can also send them this link:');
   await expect(notice).toContainText(`${CONSOLE}/invitations`);
   await expect(notice.getByRole('button', { name: 'Copy the link' })).toBeVisible();
-  // The block is between the form and the table, on the tint of a block of the mockup.
-  expect((await box(notice)).y).toBeGreaterThanOrEqual((await box(form(page))).y + (await box(form(page))).height);
+  // The block is between the head and the table, on the tint of a block of the mockup.
+  const head = await box(page.locator('main header'));
+  expect((await box(notice)).y).toBeGreaterThanOrEqual(head.y + head.height);
   expect((await box(notice)).y + (await box(notice)).height).toBeLessThanOrEqual((await box(table(page))).y);
   expect.soft(await painted(notice, 'backgroundColor')).toEqual(rgb(SUBTLE));
   expect.soft(await styles(notice, ['border-top-left-radius'])).toEqual({ 'border-top-left-radius': '14px' });
@@ -606,6 +670,7 @@ test('an invitation that was kept gives its link, whatever became of its message
   await expect(cells(page, 'zoe@client.fr').nth(0)).toContainText('Invitation sent');
 
   // An invitation whose first message did not leave says « kept » on its row, until one leaves.
+  await inviting(page);
   await email(page).fill('lou@client.fr');
   await invite(page).click();
   await expect(notice).toContainText('Invitation kept for lou@client.fr, but no message was sent');
@@ -639,6 +704,7 @@ test('an invitation that was kept gives its link, whatever became of its message
     'Every site',
     /^3 OctUntil 10 Oct/,
   ]);
+  await inviting(page);
   await email(page).fill('zoe@client.fr');
   await invite(page).click();
   await expect(notice).toContainText('Invitation kept for zoe@client.fr. Send them this link:');
@@ -682,18 +748,22 @@ test('an invitation that is refused says its cause, and clears nothing that was 
     [500, 'unknown', 'Fruitback hit an error. Try again in a moment.'],
     [418, 'something-new', 'The invitation was not sent. Try again.'],
   ];
+  await inviting(page);
   await roles(page).click();
   await page.getByRole('option', { name: 'Admin' }).click();
   await email(page).fill('tom@acme');
   for (const [status, error, sentence] of refusals) {
     worker.refuses = { status, error };
     await invite(page).click();
-    await expect(page.getByRole('alert'), error).toHaveText(sentence);
+    // The sentence is in the dialog, under the fields: the dialog stays open.
+    await expect(dialog(page).getByRole('alert'), error).toHaveText(sentence);
     await expect(email(page), error).toHaveValue('tom@acme');
+    // Focus is back in the field: the button it left was disabled while it sent.
+    await expect(email(page), error).toBeFocused();
     await expect(roles(page), error).toContainText('Admin');
   }
   await expect(page.getByRole('status')).toHaveCount(0);
-  await expectNoViolation(page, 'an invitation that is refused');
+  await expectNoDialogViolation(page, 'an invitation that is refused');
 
   // While the worker has not answered, the button says so and sends nothing twice.
   worker.refuses = undefined;
@@ -768,15 +838,31 @@ test('cancelling an invitation and removing a member ask twice, with the keyboar
   ]);
 });
 
-test('Tab goes from the form to each action of the table, and each stop shows its ring', async ({ page }) => {
+test('Tab walks the dialog and stays in it, then goes from « Invite » to each action of the table', async ({
+  page,
+}) => {
   await workerWith(page);
   await open(page);
+  await inviting(page);
   await email(page).fill('zoe@client.fr');
-  await email(page).focus();
+  await expect(email(page)).toBeFocused();
 
-  const stops: [string, Locator][] = [
+  // In the dialog: its controls, then its close button, then the field again. Focus never leaves it.
+  const inside: [string, Locator][] = [
     ['the list of roles', roles(page)],
     ['« Invite »', invite(page)],
+    ['« Cancel »', form(page).getByRole('button', { name: 'Cancel', exact: true })],
+    ['the close button', dialog(page).getByRole('button', { name: 'Close', exact: true })],
+    ['the field', email(page)],
+  ];
+  for (const [name, stop] of inside) {
+    await page.keyboard.press('Tab');
+    await expect(stop, name).toBeFocused();
+  }
+  await page.keyboard.press('Escape');
+  await expect(opener(page)).toBeFocused();
+
+  const stops: [string, Locator][] = [
     ['the search', page.getByRole('searchbox', { name: 'Search members' })],
     // The frame takes focus, so a keyboard scrolls a table wider than its screen.
     ['the frame of the table', table(page)],
@@ -800,7 +886,7 @@ test('Tab goes from the form to each action of the table, and each stop shows it
 test('an admin invites; a member reads; a guest sees their own row and nothing of the others', async ({ page }) => {
   await workerWith(page, { role: 'admin' });
   await open(page);
-  await expect(form(page)).toBeVisible();
+  await expect(opener(page)).toBeVisible();
   await expect(row(page, 'Tom').getByRole('button', { name: 'Remove', exact: true })).toBeVisible();
   await expect(row(page, 'paul@client.fr')).toBeVisible();
 
@@ -856,14 +942,17 @@ test('a read that failed says so with « Try again », and is never a table with
   expect.soft(await painted(frame, 'borderTopColor')).toEqual(rgb(CONTROL));
   expect.soft(contrast(await painted(alert.locator('p'), 'color'), rgb(WHITE))).toBeGreaterThanOrEqual(4.5);
   await expect(table(page)).toHaveCount(0);
-  // What was typed before the failure stays, and the form is still there.
-  await email(page).fill('zoe@client.fr');
   await expectNoViolation(page, 'a read that failed');
+  // The form is still there, and what was typed in it stays through « Try again ».
+  await inviting(page);
+  await email(page).fill('zoe@client.fr');
+  await page.keyboard.press('Escape');
 
   worker.members = 'list';
   await page.getByRole('button', { name: 'Try again', exact: true }).click();
   await expect(row(page, 'Tom')).toBeVisible();
   await expect(alert).toHaveCount(0);
+  await inviting(page);
   await expect(email(page)).toHaveValue('zoe@client.fr');
 });
 
@@ -923,12 +1012,15 @@ test('a read made again keeps the rows on the screen, and a press on one of them
   const read = reads();
   worker.members = 'waits';
   worker.refuses = { status: 503, error: 'mail-unavailable' };
+  await inviting(page);
   await email(page).fill('zoe@client.fr');
   await invite(page).click();
   await expect.poll(reads).toBe(read + 1);
-  // The alert of the refusal took its room above the table, once: from here nothing moves.
-  await expect(page.getByRole('alert')).toBeVisible();
+  // The alert of the refusal is in the dialog (FRU-565): the table under it does not move at all.
+  await expect(dialog(page).getByRole('alert')).toBeVisible();
+  await page.keyboard.press('Escape');
   const during = { table: await box(table(page)) };
+  expect(during.table.y).toBe(before.table.y);
 
   // The rows stay while the lists are read again: no « Loading… » in their place.
   await expect(page.locator('main').getByText('Loading…')).toHaveCount(0);
@@ -946,7 +1038,7 @@ test('while the members are read, the screen says so and draws no table', async 
   await expect(page.locator('main').getByText('Loading…')).toBeVisible();
   await expect(table(page)).toHaveCount(0);
   await expect(page.getByRole('alert')).toHaveCount(0);
-  await expect(form(page)).toBeVisible();
+  await expect(opener(page)).toBeVisible();
 });
 
 for (const width of [390, 320]) {
@@ -984,14 +1076,24 @@ for (const width of [390, 320]) {
       expect.soft(await sideScroll(page), 'the second time of a removal').toBe(0);
       await asked.getByRole('button', { name: words.keep }).click();
 
-      // The block of an invitation, a refusal, and a read that failed.
+      // The dialog of the invitation, the block of an invitation, a refusal, and a read that failed.
+      const inviteButton = page.locator('main header').getByRole('button', { name: words.invite, exact: true });
+      const send = page.getByRole('dialog').getByRole('button', { name: words.invite, exact: true });
+      await inviteButton.click();
+      const opened = page.getByRole('dialog');
+      await expect(opened).toBeVisible();
+      const drawn = await box(opened);
+      expect.soft(drawn.x, 'the dialog starts on the screen').toBeGreaterThanOrEqual(0);
+      expect.soft(drawn.x + drawn.width, 'the dialog ends on the screen').toBeLessThanOrEqual(width);
+      expect.soft(await sideScroll(page), 'the dialog').toBe(0);
       await page.getByRole('textbox', { name: words.email, exact: true }).fill('zoe@client.fr');
-      await page.getByRole('button', { name: words.invite, exact: true }).click();
+      await send.click();
       await expect(page.getByRole('status')).toBeVisible();
       expect.soft(await sideScroll(page), 'the block of an invitation').toBe(0);
       worker.refuses = { status: 400, error: 'USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION' };
+      await inviteButton.click();
       await page.getByRole('textbox', { name: words.email, exact: true }).fill('zoe@client.fr');
-      await page.getByRole('button', { name: words.invite, exact: true }).click();
+      await send.click();
       await expect(page.getByRole('alert')).toBeVisible();
       expect.soft(await sideScroll(page), 'a refusal').toBe(0);
       worker.members = 'fails';
@@ -1002,19 +1104,19 @@ for (const width of [390, 320]) {
   }
 }
 
-test('at 390 px the form stacks, and each part is where the mockup draws it', async ({ page }) => {
+test('at 390 px « Invite » is under the lead, the dialog fits, and the table is where the mockup draws it', async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await workerWith(page);
   await open(page);
-  // The render of the mockup at 390 px, from the top of the screen under the rail. The mockup has a
-  // line more in its form, the list « Site » (76 px): what is under the form is compared 76 px higher.
+  // The render of the mockup at 390 px, from the top of the screen under the rail. Its form is in a
+  // dialog (FRU-565), and « Invite » is under the lead. The form of the mockup is 182 px higher than
+  // « Invite » (its list « Site », 76 px, and its other fields): what was under it is that much higher.
   const top = (await box(page.locator('main'))).y;
-  const less = 76;
+  const less = 182;
   expectBox(await box(page.locator('main h1')), { x: 16, y: top + 40, width: 358, height: 32.2 }, 4, 'the title');
-  expectBox(await box(email(page)), { x: 16, y: top + 172.2, width: 358, height: 44 }, 4, 'the field');
-  // The last list and the button share a line, as « Site » and « Invite » do in the mockup.
-  expectBox(await box(roles(page)), { x: 16, y: top + 324.2 - less, width: 262.8, height: 44 }, 4, 'the list of roles');
-  expectBox(await box(invite(page)), { x: 288.8, y: top + 324.2 - less, width: 85.2, height: 44 }, 4, '« Invite »');
+  expectBox(await box(opener(page)), { x: 16, y: top + 142.2, height: 44 }, 4, '« Invite »');
   expectBox(
     await box(table(page)),
     { x: 16, y: top + 392.2 - less + LISTS, width: 358, height: MEMBERS_FRAME },
@@ -1031,6 +1133,24 @@ test('at 390 px the form stacks, and each part is where the mockup draws it', as
   );
   expect(await sideScroll(page)).toBe(0);
   await expectNoViolation(page, 'the list at 390 px');
+
+  // The dialog is as wide as the screen less its margins, and each field as wide as the dialog allows.
+  await inviting(page);
+  const drawn = await box(dialog(page));
+  expect.soft(drawn.x).toBeGreaterThanOrEqual(0);
+  expect.soft(drawn.x + drawn.width).toBeLessThanOrEqual(390);
+  expect.soft(drawn.y + drawn.height, 'the dialog ends in the window').toBeLessThanOrEqual(844);
+  for (const [name, control] of [
+    ['the field', email(page)],
+    ['the list of roles', roles(page)],
+  ] as const) {
+    const each = await box(control);
+    expect.soft(each.x, name).toBeGreaterThan(drawn.x);
+    expect.soft(each.x + each.width, name).toBeLessThan(drawn.x + drawn.width);
+    expect.soft(each.width, name).toBeGreaterThan(drawn.width - 64);
+  }
+  expect(await sideScroll(page)).toBe(0);
+  await expectNoDialogViolation(page, 'the dialog at 390 px');
 });
 
 test('every text of the screen is at 4.5:1 on what is behind it', async ({ page }) => {
@@ -1040,7 +1160,6 @@ test('every text of the screen is at 4.5:1 on what is behind it', async ({ page 
   const paul = cells(page, 'paul@client.fr');
   const onWhite: [string, Locator][] = [
     ['the sentence under the title', page.getByText('Who sees and leaves notes, and who changes the workspace.')],
-    ['a label of the form', form(page).locator('.label').first()],
     ['a column header', table(page).locator('thead th').first()],
     ['a name', tom.nth(0).getByText('Tom', { exact: true })],
     ['an address', tom.nth(0).getByText('tom@acme.dev', { exact: true })],
@@ -1055,6 +1174,11 @@ test('every text of the screen is at 4.5:1 on what is behind it', async ({ page 
   for (const [name, text] of onWhite) {
     expect.soft(contrast(await painted(text, 'color'), rgb(WHITE)), name).toBeGreaterThanOrEqual(4.5);
   }
+  // The words of the dialog, on its white.
+  await inviting(page);
+  expect
+    .soft(contrast(await painted(form(page).locator('.label').first(), 'color'), rgb(WHITE)), 'a label of the form')
+    .toBeGreaterThanOrEqual(4.5);
   // The placeholder of the field, as the browser paints it.
   const placeholder = await email(page).evaluate((element) => {
     const context = document.createElement('canvas').getContext('2d', { willReadFrequently: true })!;
@@ -1073,6 +1197,7 @@ test('every text of the screen is at 4.5:1 on what is behind it', async ({ page 
   expect
     .soft(contrast(await painted(invite(page), 'color'), await painted(invite(page), 'backgroundColor')), '« Invite »')
     .toBeGreaterThanOrEqual(4.5);
+  await page.keyboard.press('Escape');
   // What a gesture costs is on the tint of what is under a row.
   await tom.nth(3).getByRole('button').click();
   const asked = page.getByRole('group', { name: 'Remove Tom' });
@@ -1150,8 +1275,12 @@ test('the days of a read made before, late, do not replace those of the read mad
   const worker = await workerWith(page, { seen: 'waits', released: SEEN, later: { a3: '2026-10-11' } });
   await open(page);
   worker.refuses = { status: 503, error: 'mail-unavailable' };
-  await page.getByRole('textbox', { name: 'Email' }).fill('zoe@client.fr');
-  await page.getByRole('button', { name: 'Invite', exact: true }).click();
+  await inviting(page);
+  await email(page).fill('zoe@client.fr');
+  await invite(page).click();
+  await expect(dialog(page).getByRole('alert')).toBeVisible();
+  // The table is behind the dialog, hidden to a screen reader while it is open.
+  await page.keyboard.press('Escape');
   const nora = page.getByRole('region', { name: 'Members' }).locator('tbody tr').filter({ hasText: 'nora@acme.dev' });
   await expect(nora).toContainText('2 days ago');
 
@@ -1162,22 +1291,27 @@ test('the days of a read made before, late, do not replace those of the read mad
   await expect(nora).not.toContainText('3 days ago');
 });
 
-test('the words of « Email » and « Role » sit on one baseline, in the type of the mockup (FRU-412)', async ({
+test('the words of « Email » and « Role » sit at one height in their control, in the type of the mockup (FRU-412)', async ({
   page,
 }) => {
   await workerWith(page);
   await page.setViewportSize({ width: 1528, height: 840 });
   await open(page);
+  await inviting(page);
   // The mockup writes both controls at 15 px. HeroUI wrote the chosen role at 14 px on a line of
-  // 20 px, so its words sat higher and smaller than those of the field beside it.
-  const type = (locator: Locator) =>
-    locator.evaluate((element) => {
-      const { fontSize, lineHeight } = getComputedStyle(element);
-      const box = element.getBoundingClientRect();
-      return { fontSize, lineHeight, middle: Math.round((box.top + box.height / 2) * 10) / 10 };
-    });
-  const field = await type(email(page));
-  const chosen = await type(roles(page).locator('.select__value'));
+  // 20 px, so its words sat higher and smaller than those of the field. The two controls are one under
+  // the other in the dialog (FRU-565): the middle of the words is read from the top of each control.
+  const type = async (locator: Locator, control: Locator) =>
+    locator.evaluate(
+      (element, top) => {
+        const { fontSize, lineHeight } = getComputedStyle(element);
+        const box = element.getBoundingClientRect();
+        return { fontSize, lineHeight, middle: Math.round((box.top + box.height / 2 - top) * 10) / 10 };
+      },
+      (await box(control)).y,
+    );
+  const field = await type(email(page), email(page));
+  const chosen = await type(roles(page).locator('.select__value'), roles(page));
   expect(chosen).toEqual(field);
   expect(field.fontSize).toBe('15px');
   // The value takes the size of its button, so a compact list keeps its own.

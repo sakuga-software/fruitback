@@ -68,7 +68,7 @@ last step was not run in the trial.
 The worker signs with this key the access token of a session of the extension. The console signs in
 with the cookie of better-auth, which this key does not sign.
 
-- **Give it to no site.** A site signs nothing: who reads it is chosen in the console.
+- Give it to no site. A site signs nothing: who reads it is chosen in the console.
 - Change it if a site ever had it, for example an instance of before 0.3.0 that served one site
   with no accounts, and when you think it was read by somebody else.
 
