@@ -4654,3 +4654,37 @@ framing; `SECURITY.md` says what is protected.
   /console/workspaces/<id>/agent-keys/<key>/writes` answers it to `manage-workspace`.
 - **The store of the tools is `watchedStore`**, as for the routes of the page: a call through a
   connector is noted on that connector.
+
+## The version of the worker, and the last release (FRU-520)
+
+### The rules, in short
+
+- **The worker says its version**: `version` of `GET /console/admin/instance`, the `version` of
+  `apps/worker/package.json`, imported in `release.ts`. The versions of the packages move together
+  (`fixed` of `.changeset/config.json`), and the tag `vX.Y.Z` of a release names them: the image of
+  a release says the number of its tag.
+- **The last release comes from GitHub**, as for the extension (FRU-519):
+  `releases/latest`, which leaves the drafts and the pre-releases out. `update` of the same answer is
+  that release when it is newer than the worker, else `null`. A page that is not under
+  `github.com/sakuga-software/fruitback/releases/` is never given.
+- **One check per process, built in `server.ts`**, and handed to the requests as `latestRelease` of
+  the context. A suite builds none, so no test asks GitHub. It keeps the answer in memory a day, and
+  a failure an hour. Two visits at the same time share one request.
+- **The screen waits for it, 3 s at the most**, in parallel with the counts. A failure, a timeout or
+  an answer it cannot read gives `update: null` and a `200`: the line is never worth a problem.
+- **Only an administrator's read asks.** The guard of `ADMIN_ROUTES` runs first: any other account
+  gets `404`, and GitHub is not asked.
+- **`FRUITBACK_NO_UPDATE_CHECK=1` stops it**, for an instance with no way out or one that does not
+  want GitHub to see its address.
+- **The console of the Cloud shows no release** (`releaseToShow` of `instance.ts`): its release
+  updates it. A worker of before says no `version`, and the console draws no « Version ».
+
+### The reasons
+
+- The ticket asks for a button that updates the instance, as Dokploy does. The button needs the
+  version first, so it is a second step (Mathieu, 2026-11-02). Dokploy updates itself because its
+  container holds `/var/run/docker.sock`, which is the root of the host. The worker and the console do
+  not hold it: the console runs `read_only` with no capability. The button goes to a container of its
+  own, apart from both.
+- The commands that the screen gives are the two of `upgrade.md` for a moving tag (`edge`). The screen
+  says to back up first, and links the guide for a pinned tag and for a rollback.

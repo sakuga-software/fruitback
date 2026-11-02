@@ -80,6 +80,8 @@ export type WorkerEnv = {
   FRUITBACK_IDENTITY_SECRET?: string;
   /** `1` keeps Linear comments out of the read path (FRU-13). */
   FRUITBACK_HIDE_COMMENTS?: string;
+  /** `1` stops the question to GitHub about the last release (FRU-520). See `release.ts`. */
+  FRUITBACK_NO_UPDATE_CHECK?: string;
   /**
    * Who may read pins: `public` (the default, and what this worker has always done) or
    * `authenticated` (FRU-40). A mapped client's own `read` overrides this.
@@ -250,6 +252,8 @@ const configSchema = z.object({
    * uncoupled (FRU-46).
    */
   showComments: z.boolean(),
+  /** Whether the screen « Instance » asks GitHub for the last release (FRU-520). On unless `FRUITBACK_NO_UPDATE_CHECK` is `1`. */
+  updateCheck: z.boolean(),
   /**
    * Who may read pins when a client does not say for itself (FRU-40).
    *
@@ -488,6 +492,7 @@ export function readConfig(env: WorkerEnv): ConfigResult {
     authTrackIp: env.FRUITBACK_AUTH_TRACK_IP === '1',
     signUp: readSignUp(env.FRUITBACK_SIGN_UP),
     showComments: env.FRUITBACK_HIDE_COMMENTS !== '1',
+    updateCheck: env.FRUITBACK_NO_UPDATE_CHECK !== '1',
     read: readAccess(env.FRUITBACK_READ),
     // A client's own `origins` are sites that must be able to reach this worker, so they join the
     // allowlist rather than having to be repeated in `ALLOWED_ORIGINS` — two lists to keep in step

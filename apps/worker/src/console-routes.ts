@@ -203,6 +203,7 @@ export async function handleConsole(request: Request, pathname: string, seams: C
         instance: {
           reads: context.instanceAdmin ?? instanceAdminFor(served),
           facts: instanceFactsOf(served, { auth: auth !== undefined, email: mailer !== undefined }),
+          ...(context.latestRelease === undefined ? {} : { latestRelease: context.latestRelease }),
           // The writes in a workspace (FRU-283): one at a time with the plugin, and the message of
           // an invitation as a member's, when this worker sends mail.
           writes: {

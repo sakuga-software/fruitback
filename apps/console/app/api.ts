@@ -945,6 +945,10 @@ export type AttentionConnector = {
  */
 export type InstanceFacts = {
   startedAt: string;
+  /** The version the worker runs (FRU-520). A worker of before says none. */
+  version?: string;
+  /** The last release when it is newer than the worker, or `null`. A worker of before says none. */
+  update?: { version: string; url: string } | null;
   store: string;
   database: { kind: string; schema?: string | null };
   mail: { provider: string | null; sender: string | null; variables: string[]; lastSentAt: string | null };

@@ -14,9 +14,16 @@ import { agoInSentence, dayOf } from '../ago';
 import { locale, msg, t } from '../i18n';
 import { useCopy } from '../install-options';
 import { type Listed, listedOf } from '../listed';
-import { Button, DataTable, Field, Lead, LinkButton, Problem, Radios, Title } from '../ui';
+import { Button, Callout, DataTable, Field, Lead, LinkButton, Problem, Radios, Snippet, Title } from '../ui';
 import { useLocale } from '../use-locale';
 import { ReadProblem } from '../read-problem';
+import { releaseToShow } from '../instance';
+
+/** How to update a self-hosted instance: the page of the guide that the commands below come from. */
+const UPGRADE_GUIDE = 'https://fruitback.com/self-hosting/upgrade.html';
+
+/** The commands of the guide, for a stack of `docker-compose.yml` on a moving tag such as `edge`. */
+const UPGRADE_COMMANDS = 'docker compose pull\ndocker compose up -d --wait';
 
 /**
  * The instance, as screen 17 of the mockup of 2026-10-13 draws it (FRU-262), read-only: what this
@@ -98,6 +105,7 @@ export default function AdminInstance() {
       ) : null}
       {typeof facts === 'object' ? (
         <>
+          <Version facts={facts} />
           <Health facts={facts} />
           <SignIn facts={facts} />
         </>
@@ -106,6 +114,56 @@ export default function AdminInstance() {
       <Workspaces />
       <Deleted />
     </>
+  );
+}
+
+/**
+ * The version of the worker, and a newer release when there is one (FRU-520). Fruitback Cloud is
+ * updated by its release, so its console says no release. A worker of before says no version: the
+ * section is not drawn.
+ */
+function Version({ facts }: { facts: InstanceFacts }) {
+  useLocale();
+  const { copied, copy } = useCopy(UPGRADE_COMMANDS);
+  if (facts.version === undefined) return null;
+  const update = releaseToShow(facts.update, API);
+
+  return (
+    <section aria-labelledby="version-title">
+      <h2 id="version-title" className="mb-[4px] text-section font-bold">
+        {t('Version')}
+      </h2>
+      <p className="mb-[12px] text-small text-muted">
+        {t('This server runs Fruitback {version}.', { version: facts.version })}
+      </p>
+      {update === null ? null : (
+        <Callout className="flex max-w-[720px] flex-col items-start gap-[10px]">
+          <p className="text-body font-semibold">{t('Fruitback {version} is out.', { version: update.version })}</p>
+          <p className="text-small text-muted">
+            {t('Back up every database first. Then, where docker-compose.yml is, run:')}
+          </p>
+          <Snippet label={t('The commands that update the instance')} className="self-stretch">
+            {UPGRADE_COMMANDS}
+          </Snippet>
+          <div className="flex flex-wrap items-center gap-x-[16px] gap-y-[8px]">
+            <Button tone="outline" onClick={copy}>
+              {copied === 'yes' ? t('Copied') : t('Copy the commands')}
+            </Button>
+            <LinkButton href={update.url} newTab>
+              {t('What changed')}
+            </LinkButton>
+            <LinkButton href={UPGRADE_GUIDE} newTab>
+              {t('Upgrade guide')}
+            </LinkButton>
+          </div>
+          {copied === 'refused' ? (
+            <p role="status" className="text-hint text-muted">
+              {t('The browser refused the copy. Select the commands above and copy them by hand.')}
+            </p>
+          ) : null}
+        </Callout>
+      )}
+    </section>
   );
 }
 

@@ -1,7 +1,8 @@
 {
   "compilerOptions": {
     "target": "ES2023",
-    "module": "ES2022",
+    "module": "ESNext",
+    "resolveJsonModule": true,
     "moduleResolution": "bundler",
     // Relative imports carry `.ts` so Node can run the sources directly, no build step, no loader.
     "allowImportingTsExtensions": true,

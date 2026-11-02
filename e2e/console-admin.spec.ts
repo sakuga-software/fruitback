@@ -26,6 +26,8 @@ type Facts = Record<string, unknown>;
 function facts(change: Facts = {}): Facts {
   return {
     startedAt: new Date(Date.now() - 12 * DAY - MINUTE).toISOString(),
+    version: '0.6.0',
+    update: null,
     store: 'postgres',
     database: { kind: 'postgresql', schema: 'public' },
     mail: {
@@ -540,15 +542,64 @@ test('in French, every sentence of the screen is French', async ({ page }) => {
     'My workspaces',
     'Self-hosted instance',
     'Self-hosting guide',
+    'This server runs',
   ];
   const text = (await page.locator('body').innerText()).replaceAll('\n', ' ');
   expect(english.filter((sentence) => text.includes(sentence))).toEqual([]);
 });
 
-test('at 390 px the document does not scroll sideways, and axe finds nothing', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
+/** A newer release, as `releaseCheck` of the worker gives it (FRU-520). */
+const UPDATE = { version: '0.7.0', url: 'https://github.com/sakuga-software/fruitback/releases/tag/v0.7.0' };
+const version = (page: Page) => page.getByRole('region', { name: 'Version' });
+
+test('« Version » says what the server runs, and a newer release with the commands of the guide (FRU-520)', async ({
+  page,
+}) => {
   await stub(page);
   await open(page);
+  await expect(version(page)).toContainText('This server runs Fruitback 0.6.0.');
+  await expect(version(page).locator('.kit-callout')).toHaveCount(0);
+
+  await stub(page, { instance: facts({ update: UPDATE }) });
+  await open(page);
+  await expect(version(page)).toContainText('Fruitback 0.7.0 is out.');
+  await expect(version(page).getByRole('region', { name: 'The commands that update the instance' })).toHaveText(
+    'docker compose pull\ndocker compose up -d --wait',
+  );
+  await expect(version(page).getByRole('link', { name: 'What changed' })).toHaveAttribute('href', UPDATE.url);
+  await expect(version(page).getByRole('link', { name: 'Upgrade guide' })).toHaveAttribute(
+    'href',
+    'https://fruitback.com/self-hosting/upgrade.html',
+  );
+  // « Version » comes first, before « Health ».
+  await expect(main(page).locator('h2').first()).toHaveText('Version');
+});
+
+test('a worker of before FRU-520 says no version, and the screen draws no « Version »', async ({ page }) => {
+  const { version: _version, update: _update, ...before } = facts();
+  await stub(page, { instance: before });
+  await open(page);
+  await expect(fact(page, 'Server').value).toHaveText('Answering');
+  await expect(version(page)).toHaveCount(0);
+});
+
+test('« Version » in French, with a newer release (FRU-520)', async ({ page }) => {
+  await stub(page, { locale: 'fr', instance: facts({ update: UPDATE }) });
+  await page.goto(`${CONSOLE}/admin`);
+  const section = page.getByRole('region', { name: 'Version' });
+  await expect(section).toContainText('Ce serveur fait tourner Fruitback 0.6.0.');
+  await expect(section).toContainText('Fruitback 0.7.0 est disponible.');
+  await expect(section).toContainText('Sauvegardez d’abord chaque base de données.');
+  await expect(section.getByRole('button', { name: 'Copier les commandes' })).toBeVisible();
+  await expect(section.getByRole('link', { name: 'Ce qui a changé' })).toBeVisible();
+  await expect(section.getByRole('link', { name: 'Guide de mise à jour' })).toBeVisible();
+});
+
+test('at 390 px the document does not scroll sideways, and axe finds nothing', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await stub(page, { instance: facts({ update: UPDATE }) });
+  await open(page);
+  await expect(page.getByRole('region', { name: 'Version' })).toContainText('Fruitback 0.7.0 is out.');
   await main(page).getByRole('button', { name: 'Show the workspaces' }).click();
   await expect(page.getByRole('table')).toBeVisible();
 

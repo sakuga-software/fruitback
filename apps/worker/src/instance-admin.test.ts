@@ -21,6 +21,7 @@ import { cursorOf } from './console-notes.ts';
 import type { Place } from './notes-index.ts';
 import { createPostgresNoteIndex } from './notes-index-postgres.ts';
 import { rowsOf, withoutOwnerRule } from './postgres.fixture.ts';
+import { WORKER_VERSION } from './release.ts';
 import { StoreError } from './store.ts';
 
 /**
@@ -282,6 +283,57 @@ describe('what the administrator reads (FRU-261)', () => {
       },
     ]);
     assert.ok(Number.isFinite(Date.parse(body.startedAt)));
+    assert.equal(body.version, WORKER_VERSION);
+    assert.equal(body.update, null, 'a worker with no check said a release');
+  });
+
+  it('says the last release when it is newer, and nothing when its check fails (FRU-520)', async () => {
+    const { on, ana } = await anInstance();
+    const release = { version: '99.0.0', url: 'https://github.com/sakuga-software/fruitback/releases/tag/v99.0.0' };
+    const newer = await callOn(
+      on,
+      'GET',
+      `${ADMIN_PATH}/instance`,
+      { token: ana.token },
+      { latestRelease: async () => release },
+    );
+    assert.equal(newer.status, 200);
+    assert.deepEqual(((await newer.json()) as { update: unknown }).update, release);
+
+    const broken = await callOn(
+      on,
+      'GET',
+      `${ADMIN_PATH}/instance`,
+      { token: ana.token },
+      {
+        latestRelease: async () => {
+          throw new Error('GitHub is down');
+        },
+      },
+    );
+    assert.equal(broken.status, 200);
+    assert.equal(((await broken.json()) as { update: unknown }).update, null);
+  });
+
+  it('asks nothing of the check for anybody but the administrator (FRU-520)', async () => {
+    const { on, bob } = await anInstance();
+    let asked = 0;
+    const answer = await callOn(
+      on,
+      'GET',
+      `${ADMIN_PATH}/instance`,
+      { token: bob.token },
+      {
+        latestRelease: async () => {
+          asked += 1;
+
+          return undefined;
+        },
+      },
+    );
+
+    assert.equal(answer.status, 404);
+    assert.equal(asked, 0);
   });
 
   it('reads the policy of sign-up from FRUITBACK_SIGN_UP, in both of its values', async () => {

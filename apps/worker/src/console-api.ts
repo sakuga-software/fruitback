@@ -113,6 +113,8 @@ export type ConsoleApiContext = {
   instance?: {
     reads?: InstanceAdminReads;
     facts: InstanceFacts;
+    /** The last release when it is newer than this worker (FRU-520). Absent: no question to GitHub. */
+    latestRelease?: InstanceAdminContext['latestRelease'];
     /** What the writes of an administrator in a workspace use beside the database (FRU-283). */
     writes?: Pick<InstanceAdminContext, 'mailInvitation' | 'oneAtATime'>;
   };
@@ -520,6 +522,7 @@ export async function handleConsoleApi(
         },
         ...(context.instance?.reads === undefined ? {} : { reads: context.instance.reads }),
         ...(context.instance === undefined ? {} : { facts: context.instance.facts }),
+        ...(context.instance?.latestRelease === undefined ? {} : { latestRelease: context.instance.latestRelease }),
         ...context.instance?.writes,
         ...(context.now === undefined ? {} : { now: context.now }),
       },
