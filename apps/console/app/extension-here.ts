@@ -1,3 +1,4 @@
+import { EXTERNAL_TYPES, EXTERNAL_VERSION, type ExternalAsk, parseExternalAnswer } from '@fruitback/shared';
 import { useCallback, useEffect, useState } from 'react';
 import { API, answerConnect, connectRequest } from './api.ts';
 import { CHROME_WEB_STORE } from './extension-store.ts';
@@ -69,7 +70,7 @@ const WORKER_ASK_TIMEOUT_MS = 15_000;
 /** One message to one extension: its answer, or `undefined` when none came. Never throws. */
 export function ask(
   id: string,
-  message: unknown,
+  message: ExternalAsk,
   chrome: Runtime | undefined = runtime(),
   timeoutMs: number = ASK_TIMEOUT_MS,
 ): Promise<unknown> {
@@ -93,18 +94,17 @@ export function ask(
 /** The extension in this browser: which id answered, and whether it holds a session of the Cloud. */
 export type Here = { id: string; signedIn: boolean };
 
-/** The answer to `hello`, key by key. */
+/** The answer to `hello`: whether the extension holds a session, or `undefined` for another answer. */
 export function parseHello(answer: unknown): boolean | undefined {
-  if (typeof answer !== 'object' || answer === null) return undefined;
-  const { v, ok, signedIn } = answer as Record<string, unknown>;
+  const read = parseExternalAnswer(answer);
 
-  return v === 1 && ok === true && typeof signedIn === 'boolean' ? signedIn : undefined;
+  return read?.ok === true && 'signedIn' in read ? read.signedIn : undefined;
 }
 
 /** The first extension of `ids` that answers, or `undefined`. */
 export async function findHere(ids: readonly string[], chrome?: Runtime): Promise<Here | undefined> {
   for (const id of ids) {
-    const signedIn = parseHello(await ask(id, { type: 'fruitback:hello', v: 1 }, chrome));
+    const signedIn = parseHello(await ask(id, { type: EXTERNAL_TYPES.hello, v: EXTERNAL_VERSION }, chrome));
     if (signedIn !== undefined) return { id, signedIn };
   }
 
@@ -158,13 +158,12 @@ export async function connectHere(id: string, seams: HereSeams = {}): Promise<He
 async function connectSteps(id: string, seams: HereSeams): Promise<HereResult> {
   const { read = connectRequest, approve = answerConnect } = seams;
   const wait = seams.wait ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
-  const started = (await ask(id, { type: 'fruitback:connect', v: 1 }, seams.chrome, WORKER_ASK_TIMEOUT_MS)) as Record<
-    string,
-    unknown
-  >;
-  if (started?.v !== 1 || started.ok !== true || typeof started.request !== 'string') {
+  const started = parseExternalAnswer(
+    await ask(id, { type: EXTERNAL_TYPES.connect, v: EXTERNAL_VERSION }, seams.chrome, WORKER_ASK_TIMEOUT_MS),
+  );
+  if (started?.ok !== true || !('request' in started)) {
     // Signed in since the screen asked: it is connected.
-    return started?.reason === 'signed-in' ? 'connected' : 'failed';
+    return started?.ok === false && started.reason === 'signed-in' ? 'connected' : 'failed';
   }
   const request = started.request;
 
@@ -180,16 +179,21 @@ async function connectSteps(id: string, seams: HereSeams): Promise<HereResult> {
   }
 
   for (let claim = 0; claim < CLAIMS; claim += 1) {
-    const answer = (await ask(id, { type: 'fruitback:claim', v: 1, request }, seams.chrome, WORKER_ASK_TIMEOUT_MS)) as
-      | Record<string, unknown>
-      | undefined;
+    const reply = await ask(
+      id,
+      { type: EXTERNAL_TYPES.claim, v: EXTERNAL_VERSION, request },
+      seams.chrome,
+      WORKER_ASK_TIMEOUT_MS,
+    );
     // Approved already: no answer this time is not a failure. The next ask, or the alarm, finishes it.
-    if (answer === undefined) {
+    if (reply === undefined) {
       await wait(CLAIM_EVERY_MS);
       continue;
     }
-    if (answer?.v === 1 && answer.ok === true && answer.state === 'signed-in') return 'connected';
-    if (answer?.ok !== true || (answer.state !== 'waiting' && answer.state !== 'unavailable')) return 'failed';
+    const answer = parseExternalAnswer(reply);
+    const state = answer?.ok === true && 'state' in answer ? answer.state : undefined;
+    if (state === 'signed-in') return 'connected';
+    if (state !== 'waiting' && state !== 'unavailable') return 'failed';
     await wait(CLAIM_EVERY_MS);
   }
 

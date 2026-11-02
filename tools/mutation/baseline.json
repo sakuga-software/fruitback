@@ -33,6 +33,10 @@
       "src/status-paint.ts": {
         "score": 94.11,
         "mutants": 17
+      },
+      "src/external-protocol.ts": {
+        "score": 99.51,
+        "mutants": 0
       }
     }
   },

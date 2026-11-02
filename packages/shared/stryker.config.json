@@ -7,6 +7,7 @@
   "mutate": [
     "src/attachments.ts",
     "src/contrast.ts",
+    "src/external-protocol.ts",
     "src/feedback-text.ts",
     "src/i18n-core.ts",
     "src/issue.ts",
