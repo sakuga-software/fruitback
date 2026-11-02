@@ -621,6 +621,46 @@ test('« New connector » opens a dialog with the sources as a grid of cards (FR
   await expect(opener).toBeFocused();
 });
 
+/**
+ * FRU-563: the panel of a connector unfolds when its card opens: its height grows from nothing and it
+ * fades in, 220 ms on the curve of the kit. With reduced motion it is there at once.
+ */
+test('the panel of a connector unfolds as its card opens, and is there at once with reduced motion (FRU-563)', async ({
+  page,
+}) => {
+  await workerWith(page);
+  await open(page);
+  /** The heights of the panel at the first frames after a press of the first row, then once it settled. */
+  const heights = () =>
+    page.evaluate(async () => {
+      const row = document.querySelector<HTMLButtonElement>('button[id^="source-row-"]')!;
+      row.click();
+      const frame = () => new Promise((resolve) => requestAnimationFrame(resolve));
+      const read = () => document.getElementById('source-panel')?.getBoundingClientRect().height ?? -1;
+      await frame();
+      await frame();
+      const early = read();
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      return { early, settled: read() };
+    });
+
+  const moving = await heights();
+  expect(moving.settled).toBeGreaterThan(100);
+  expect(moving.early, 'early in the move').toBeLessThan(moving.settled * 0.9);
+  expect
+    .soft(await styles(panel(page), ['animation-name', 'animation-duration']))
+    .toEqual({ 'animation-name': 'source-panel-open', 'animation-duration': '0.22s' });
+  // Settled, nothing is clipped, and focus is in the panel as before (FRU-197).
+  await expect(panel(page)).toHaveAttribute('data-settled', '');
+  await rows(page).first().click();
+  await expect(panel(page)).toHaveCount(0);
+
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const still = await heights();
+  expect(still.early, 'at once with reduced motion').toBe(still.settled);
+  expect.soft(await styles(panel(page), ['animation-name'])).toEqual({ 'animation-name': 'none' });
+});
+
 test('`?new` in the address opens « Add a connector », and leaves the address (FRU-562)', async ({ page }) => {
   await workerWith(page);
   await page.goto(`${CONSOLE}/w/w1/connectors?new=1`);

@@ -665,6 +665,10 @@ function rowId(connector: string): string {
  * focus goes to it: a screen reader says the name and reads on from there, and Tab goes to its first
  * control. **Escape closes it and gives focus back to the row.** A panel that appears by itself takes
  * no focus: the one of a source that Linear or GitHub just connected.
+ *
+ * **It unfolds** (FRU-563): its height grows from nothing and it fades in, 220 ms on the curve of the
+ * kit (`.source-panel` in `app.css`). With `prefers-reduced-motion` it is there at once. The page
+ * scrolls again once it has its height: at the start of the move it has none.
  */
 function Opened({
   label,
@@ -680,6 +684,8 @@ function Opened({
   children: ReactNode;
 }) {
   const held = useRef<HTMLDivElement>(null);
+  // Once unfolded, nothing is clipped: a focus ring at the edge of the panel shows whole.
+  const [settled, setSettled] = useState(false);
 
   useEffect(() => {
     if (takesFocus.current) {
@@ -698,14 +704,22 @@ function Opened({
       aria-label={label}
       tabIndex={-1}
       // Inside the frame of the list, with the rule of the list above it and the tint of a panel.
-      className="scroll-mt-4 border-t border-line bg-subtle"
+      className="source-panel scroll-mt-4 border-t border-line bg-subtle"
+      onAnimationEnd={(event) => {
+        // Only the move of the panel itself: one inside it bubbles here too.
+        if (event.target !== event.currentTarget) return;
+        setSettled(true);
+        held.current?.scrollIntoView({ block: 'nearest' });
+      }}
+      {...(settled ? { 'data-settled': '' } : {})}
       onKeyDown={(event) => {
         // `Confirmation` and an open list take their own Escape, and stop it before it gets here.
         if (event.key !== 'Escape' || event.defaultPrevented) return;
         onClose();
       }}
     >
-      {children}
+      {/* The part that the move clips while the panel grows. */}
+      <div className="source-panel__body">{children}</div>
     </div>
   );
 }
