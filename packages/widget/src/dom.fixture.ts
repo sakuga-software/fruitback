@@ -130,6 +130,25 @@ export function setDocumentSize(document: Document, width: number, height: numbe
   Object.defineProperty(document.documentElement, 'scrollHeight', { value: height, configurable: true });
 }
 
+/**
+ * A web component's shadow root, filled with `html` (FRU-580). Open by default; `closed` gives a
+ * host whose `shadowRoot` is `null`, as a browser does.
+ */
+export function attachShadowHtml(host: Element, html: string, mode: ShadowRootMode = 'open'): ShadowRoot {
+  const root = host.attachShadow({ mode });
+  root.innerHTML = html;
+
+  return root;
+}
+
+/** The one element `selector` matches in `root`, or a failure loud enough to read in the test output. */
+export function queryIn(root: ParentNode, selector: string): Element {
+  const element = root.querySelector(selector);
+  if (element === null) throw new Error(`nothing matches ${selector} in this root`);
+
+  return element;
+}
+
 /** Scroll offsets, so a pin captured below the fold lands at the right place in the document. */
 export function setScroll(view: Window, scrollX: number, scrollY: number): void {
   Object.defineProperty(view, 'scrollX', { value: scrollX, configurable: true });

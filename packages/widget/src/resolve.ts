@@ -1,5 +1,6 @@
 import { NOTE_ANCHOR_STRATEGIES, type NoteAnchor, type NoteAnchorStrategy, type NoteBounds } from '@fruitback/shared';
 import { readTextExcerpt } from './anchor.ts';
+import { isShadowRoot } from './dom.ts';
 
 /**
  * Finding the element again, on a page that has been redeployed since the note was written.
@@ -58,7 +59,19 @@ export type ResolveOptions = {
 };
 
 export function resolveAnchor(anchor: NoteAnchor, options: ResolveOptions = {}): AnchorResolution {
-  const root = options.document ?? globalThis.document;
+  const document = options.document ?? globalThis.document;
+  const { root, followed } = followHosts(anchor.hosts, document);
+
+  // The path of hosts broke: a host left, or its shadow root is closed. The selector, the test id,
+  // the text and the path all describe the element inside that root, so reading them in a root above
+  // it could recognise a stranger, and say it is sure. Only the position is left (FRU-580).
+  if (!followed) {
+    const element = FINDERS.bounds(anchor, root);
+
+    return element === null
+      ? { element: null, strategy: 'orphan', confident: false }
+      : { element, strategy: 'bounds', confident: false };
+  }
 
   // Iterated from the contract rather than copied out of it: the order is `packages/shared`'s to
   // decide, and a list repeated here would drift the first time one is added or renamed.
@@ -70,7 +83,29 @@ export function resolveAnchor(anchor: NoteAnchor, options: ResolveOptions = {}):
   return { element: null, strategy: 'orphan', confident: false };
 }
 
-type Finder = (anchor: NoteAnchor, root: Document) => Element | null;
+/** The document, or the shadow root of the last host of a note in a web component (FRU-580). */
+type Root = Document | ShadowRoot;
+
+/**
+ * Walks the hosts of the anchor down from the document, each one a unique match in the root above.
+ * `followed` is false when one is missing, repeated, or shows no open shadow root: `shadowRoot` is
+ * `null` for a closed one. `root` is then the deepest root reached. An anchor with no `hosts` is read
+ * in the document, as before FRU-580.
+ */
+function followHosts(hosts: readonly string[] | undefined, document: Document): { root: Root; followed: boolean } {
+  let root: Root = document;
+
+  for (const selector of hosts ?? []) {
+    const found = queryAll(root, selector);
+    const shadow = found.length === 1 ? found[0]?.shadowRoot : null;
+    if (!isShadowRoot(shadow)) return { root, followed: false };
+    root = shadow;
+  }
+
+  return { root, followed: true };
+}
+
+type Finder = (anchor: NoteAnchor, root: Root) => Element | null;
 
 const FINDERS: Record<NoteAnchorStrategy, Finder> = {
   /** The selector the capture judged most durable. Identity-bearing, so uniqueness is enough. */
@@ -150,7 +185,7 @@ const FINDERS: Record<NoteAnchorStrategy, Finder> = {
  * can edit. So it reaches the selector engine as untrusted input, and a `*` or a stray bracket has to
  * come back as "no match" rather than take the whole render down with it.
  */
-function queryAll(root: Document, selector: string): Element[] {
+function queryAll(root: Root, selector: string): Element[] {
   try {
     return [...root.querySelectorAll(selector)];
   } catch {
@@ -159,7 +194,7 @@ function queryAll(root: Document, selector: string): Element[] {
 }
 
 /** A selector is only an answer when it matches exactly one element, of the tag we captured. */
-function onlyMatch(root: Document, selector: string, anchor: NoteAnchor): Element | null {
+function onlyMatch(root: Root, selector: string, anchor: NoteAnchor): Element | null {
   try {
     const found = root.querySelectorAll(selector);
     if (found.length !== 1) return null;

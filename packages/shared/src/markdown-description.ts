@@ -1,4 +1,5 @@
 import {
+  anchorSelectorPath,
   canonicalizePageUrl,
   type Note,
   type NoteParseFailure,
@@ -135,7 +136,7 @@ export function buildIssueMetadata(note: Note, { locale }: DescriptionOptions = 
   const words = teamWords(locale);
   const lines = [
     `**${words.page}** · [${note.page.path}](${note.page.url})`,
-    `**${words.element}** · \`${note.anchor.selector}\` (\`<${note.anchor.tag}>\`)`,
+    `**${words.element}** · \`${anchorSelectorPath(note.anchor)}\` (\`<${note.anchor.tag}>\`)`,
   ];
 
   if (note.source?.component || note.source?.file) {
