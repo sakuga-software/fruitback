@@ -91,6 +91,7 @@ function cloudSeams(): CloudSeams {
   return {
     endpoints: async () => Object.keys(await sessions.list()),
     ensureAccess: (endpoint) => sessions.ensureAccess(endpoint),
+    renewAccess: (endpoint, refused) => sessions.renewAccess(endpoint, refused),
     remember: rememberPreviews,
     sessionOf: async (endpoint) => {
       const held = (await sessions.list())[endpoint];

@@ -550,6 +550,7 @@ function cloudSeams(): CloudSeams {
   return {
     endpoints: async () => Object.keys(await sessions.list()),
     ensureAccess: (endpoint) => sessions.ensureAccess(endpoint),
+    renewAccess: (endpoint, refused) => sessions.renewAccess(endpoint, refused),
     // FRU-103: what the worker lists now is what this browser grants, before the click stores a rule.
     remember: rememberPreviews,
     // The epoch of the session in place: an answer is kept only for the session that asked.
