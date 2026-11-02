@@ -112,6 +112,16 @@ export function SitePlaces({
   // An answer to a read that a newer one replaced is dropped.
   const readFor = useRef<string | undefined>(undefined);
   const generation = useRef(0);
+  // Whether the panel is on the page: an answer that comes after it left is dropped. The development
+  // mount runs this cleanup and this setup again, so the answer of the one read is kept there.
+  const mounted = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   useEffect(() => {
     const key = `${base} ${ids} ${reads}`;
     if (readFor.current === key) return;
@@ -134,7 +144,7 @@ export function SitePlaces({
         'GET',
         `${base}/connectors/${source.id}/${path}`,
       ).then((answer) => {
-        if (mine !== generation.current) return;
+        if (!mounted.current || mine !== generation.current) return;
         let offer: Offer = 'failed';
         if (answer.ok && source.kind === 'linear')
           offer = { kind: 'linear', list: teamListOf(answer.data, asked, typed.current) };
