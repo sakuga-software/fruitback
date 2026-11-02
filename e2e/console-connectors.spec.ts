@@ -630,6 +630,7 @@ test('the panel of a connector unfolds as its card opens, and is there at once w
 }) => {
   await workerWith(page);
   await open(page);
+  await expect(rows(page)).toHaveCount(2);
   /** The heights of the panel at the first frames after a press of the first row, then once it settled. */
   const heights = () =>
     page.evaluate(async () => {

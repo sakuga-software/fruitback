@@ -634,7 +634,8 @@ test('at 390 px a short screen leaves the rail at its own height', async ({ page
   await stubWorker(page);
   await open(page);
   const main = await box(page.locator('main'));
-  expect(main.y + main.height).toBeLessThan(1800);
+  // FRU-564: the room of the screen takes the rest of the window, and the rail does not.
+  expect(main.y + main.height).toBeCloseTo(1800, 0);
   // The mockup gives the rest of the window to the rail: 286 px of rail at 390 px. Here the rail is
   // its own height, whatever the font, and the screen starts right under it.
   const above = await box(rail(page));
