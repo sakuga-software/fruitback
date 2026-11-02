@@ -94,6 +94,9 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
   included, and the widget draws with the browser's own buttons. A root without `adoptedStyleSheets`
   gets a `<style>` element, so `style, script { display: none }` stays. Tests read the CSS with
   `stylesIn` of `dom.fixture.ts`; `e2e/csp.spec.ts` measures the page under that policy.
+- **The CSS of `<module>.ts` is the `STYLES` of `<module>.styles.ts`** (FRU-509), with the measures
+  the code shares with it (`WIDTH` of the composer, `BADGE_RISE` of a pin). `direction.test.ts`,
+  `motion.test.ts` and `theme.test.ts` read the sheets from there. `index.ts` does not re-export them.
 
 ### The reasons, and the history
 
@@ -765,9 +768,10 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
   nothing and asks for nothing, which is a stronger promise than one that hides itself — and the
   waiting has to live somewhere either way, so the promise only moved it.
 - **`transportFor` is one line and one place**, because a call site added later would otherwise take
-  the default and leave a host's relay out of the loop with nothing to see. `embed.test.ts` reads the
-  source and asserts two things: no bare `fetch(` survives, and the default is named exactly twice —
-  the import and that one line. The second check is what catches a bypass the first cannot, since
+  the default and leave a host's relay out of the loop with nothing to see. It lives in
+  `worker-client.ts` since FRU-509. `embed.test.ts` reads the sources and asserts two things: no bare
+  `fetch(` survives in `embed.ts` or `worker-client.ts`, and the default is named exactly twice in
+  `worker-client.ts` — the import and that one line — and never in `embed.ts`. The second check is what catches a bypass the first cannot, since
   calling the default directly is not calling `fetch`.
 - **That count includes comments**, which the first version learned by failing: a sentence naming the
   default sat in `transportFor`'s own docstring and made three.

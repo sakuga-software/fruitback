@@ -1,8 +1,7 @@
 /**
  * How a widget instance reaches the worker (FRU-56).
  *
- * `embed.ts` is the only file that knows the worker exists, and it builds every call. What it does
- * not decide is who carries them. The default carries them with `fetch`, from the page the widget
+ * `embed.ts` builds the calls and `worker-client.ts` sends them. Neither decides who carries them. The default carries them with `fetch`, from the page the widget
  * is mounted on. A host can hand over something else: the browser extension relays them through its
  * own session, so a team token never reaches the page's JavaScript.
  *

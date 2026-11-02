@@ -5,6 +5,7 @@ import {
   attachmentKindOf,
 } from '@fruitback/shared';
 import { base64OfBytes } from './transport.ts';
+import { errorOf } from './worker-client.ts';
 
 /**
  * The files of a note (FRU-332): a capture of the page or of an area, an image of the disk, any file.
@@ -78,14 +79,6 @@ export function refusalOf(response: { status: number; body: string }): AttachRef
   if (response.status === 429) return errorOf(response.body) === 'transit-full' ? 'full' : 'retry';
 
   return 'retry';
-}
-
-function errorOf(body: string): unknown {
-  try {
-    return (JSON.parse(body) as { error?: unknown }).error;
-  } catch {
-    return undefined;
-  }
 }
 
 /**
