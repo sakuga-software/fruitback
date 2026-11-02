@@ -10,6 +10,8 @@ import {
   type ListedNote,
   type NoteCursor,
   type NoteIndex,
+  type NoteList,
+  type NotePage,
   type NoteQuery,
   PAGE_SIZES,
   QUERY_LENGTH,
@@ -22,7 +24,8 @@ import {
  * The notes of a workspace, for the page « Notes » of the console (FRU-244).
  *
  * `GET /console/workspaces/<id>/notes?site=&stage=&place=&mine=1&q=&cursor=&limit=` reads one page of
- * the index of the notes (FRU-237), the newest first. `POST …/notes/<note>/retry` sends again a note
+ * the index of the notes (FRU-237), the newest first. `counts=none` leaves out `total` and `counts`,
+ * which read the whole filter: the console asks for them on the first page only (FRU-502). `POST …/notes/<note>/retry` sends again a note
  * whose delivery to a receiving connector did not arrive. `POST …/notes/<note>/status` puts a note the
  * worker keeps in a status of its site (FRU-384).
  *
@@ -102,6 +105,10 @@ export async function handleNotes(
   const query = queryOf(new URL(request.url).searchParams, context.account, { orders: true });
   if (!query.ok) return json(400, { error: query.error }, headers);
   if (query.query.place !== undefined && !seesTracker) return forbidden(context);
+  // FRU-502: `counts=none` reads the page alone. The counts read the whole filter, and the console
+  // holds them from the first page of the same filter.
+  const counts = new URL(request.url).searchParams.get('counts') ?? undefined;
+  if (counts !== undefined && counts !== 'none') return json(400, { error: 'invalid-counts' }, headers);
 
   // The sites the caller reads: a guest, the ones shared with them (FRU-250).
   const reach = await context.reach();
@@ -109,9 +116,13 @@ export async function handleNotes(
   const sites = reach.sites === 'every' ? {} : { sites: reach.sites };
   // A guest does not see the references: its search does not read them either, or it would find one
   // by trying words (review of #306).
-  const list = await answered(() =>
-    index.list(context.workspace, { ...query.query, ...sites, searchesReference: seesTracker }),
-  );
+  const asked = { ...query.query, ...sites, searchesReference: seesTracker };
+  const list = await answered(async (): Promise<NotePage & { counted?: NoteList }> => {
+    if (counts === 'none') return index.page(context.workspace, asked);
+    const whole = await index.list(context.workspace, asked);
+
+    return { ...whole, counted: whole };
+  });
   if (list === failed) return json(503, { error: 'index-unavailable' }, headers);
   const manages = context.allowed('manage-sites');
   const statuses = await statusesOf(context, list.notes);
@@ -120,19 +131,26 @@ export async function handleNotes(
     200,
     {
       notes: list.notes.map((note) => noteView(note, context.account, seesTracker, manages)),
-      total: list.total,
-      counts: {
-        all: [...list.byPlace.values()].reduce((sum, notes) => sum + notes, 0),
-        // FRU-551: the notes of the list by stage, for the heads of the groups of the table.
-        byStage: Object.fromEntries(list.byStage),
-        ...(seesTracker ? { byPlace: Object.fromEntries(list.byPlace), undelivered: list.undelivered } : {}),
-      },
+      ...(list.counted === undefined ? {} : countsView(list.counted, seesTracker)),
       searched: seesTracker ? SEARCHED : SEARCHED_WITHOUT_TRACKER,
       ...(statuses === undefined ? {} : { statuses }),
       ...(list.next === undefined ? {} : { next: cursorOf(list.next) }),
     },
     headers,
   );
+}
+
+/** The total and the counts of the filter: absent from a page read with `counts=none` (FRU-502). */
+function countsView(list: NoteList, seesTracker: boolean) {
+  return {
+    total: list.total,
+    counts: {
+      all: [...list.byPlace.values()].reduce((sum, notes) => sum + notes, 0),
+      // FRU-551: the notes of the list by stage, for the heads of the groups of the table.
+      byStage: Object.fromEntries(list.byStage),
+      ...(seesTracker ? { byPlace: Object.fromEntries(list.byPlace), undelivered: list.undelivered } : {}),
+    },
+  };
 }
 
 type Parsed = { ok: true; query: NoteQuery } | { ok: false; error: string };

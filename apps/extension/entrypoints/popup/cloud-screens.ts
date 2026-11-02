@@ -92,6 +92,7 @@ export function offered(origin: string, offer: Offer, account: Account | undefin
     origin,
     workspace: offer.workspace.name,
     ...(offer.site.destination === undefined ? {} : { destination: offer.site.destination.label }),
+    ...(offer.site.destination?.kind === undefined ? {} : { destinationKind: offer.site.destination.kind }),
     visibility: offer.site.visibility,
     ...(account === undefined ? {} : { account }),
     ...(change === undefined ? {} : { onChange: change }),
@@ -387,6 +388,7 @@ export async function siteOfWorkspaceOn(
           { workspace, on: site.enabled, onOpenPanel: openPanel },
           {
             ...(destination === undefined ? {} : { destination: destination.label }),
+            ...(destination?.kind === undefined ? {} : { destinationKind: destination.kind }),
             ...(change === undefined ? {} : { change }),
             ...(toCheck === undefined ? {} : { toCheck }),
             ...(notes === undefined ? {} : { open: notes.new + notes.todo + notes.progress }),
