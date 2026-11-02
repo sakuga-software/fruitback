@@ -67,6 +67,19 @@ describe('parseBridgeMessage', () => {
     assert.deepEqual(parseBridgeMessage({ channel: CHANNEL, kind: 'ready' }), { channel: CHANNEL, kind: 'ready' });
   });
 
+  // An array is no record (FRU-511): before, `heldBy: []` read as « held by a copy of no known version ».
+  it('reads no holder from a heldBy that is an array', () => {
+    assert.deepEqual(parseBridgeMessage({ channel: CHANNEL, kind: 'ready', heldBy: [] }), {
+      channel: CHANNEL,
+      kind: 'ready',
+    });
+    assert.deepEqual(parseBridgeMessage({ channel: CHANNEL, kind: 'ready', heldBy: {} }), {
+      channel: CHANNEL,
+      kind: 'ready',
+      heldBy: {},
+    });
+  });
+
   it('accepts an unmount', () => {
     assert.deepEqual(parseBridgeMessage({ channel: CHANNEL, kind: 'unmount' }), { channel: CHANNEL, kind: 'unmount' });
   });
