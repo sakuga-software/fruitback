@@ -1,5 +1,7 @@
+import { isOneOf } from './one-of.ts';
 import {
   type AccountStore,
+  type ConnectorKind,
   type Destination,
   MAX_DESTINATIONS,
   VISIBILITIES,
@@ -10,6 +12,7 @@ import { parseJsonObject, readBoundedBytes } from './bounded-body.ts';
 import { type TrackerContext, UnknownPlace, offerOf, placeOf } from './console-api.ts';
 import { isExtensionOrigin } from './cors.ts';
 import { StoreError } from './store.ts';
+import { destinationField } from './session-sites.ts';
 
 /**
  * `POST /session/sites/settings`: the popup changes who sees the notes of a site and where they go,
@@ -115,7 +118,7 @@ export async function setSessionSite(request: Request, context: SiteSettingsCont
   if (typeof siteId !== 'string' || siteId === '' || siteId.length > 100) {
     return { status: 400, body: { error: 'invalid-body' } };
   }
-  if (askedVisibility !== undefined && !(VISIBILITIES as readonly unknown[]).includes(askedVisibility)) {
+  if (askedVisibility !== undefined && !isOneOf(askedVisibility, VISIBILITIES)) {
     return { status: 400, body: { error: 'invalid-visibility' } };
   }
   const visibility = askedVisibility as Visibility | undefined;
@@ -169,6 +172,13 @@ export async function setSessionSite(request: Request, context: SiteSettingsCont
     places = [picked, ...others].slice(0, MAX_DESTINATIONS);
   }
 
+  // FRU-554: the kinds the answer names, read before anything is written. Read after, a store that
+  // fails there would answer an error for a change already made. A read that fails names no kind and
+  // blocks nothing: the label is what the answer said before FRU-554 (raised twice in review of #784).
+  const kinds = await context.accounts
+    .connectors(workspace)
+    .then((each) => new Map(each.map((connector) => [connector.id, connector.kind])))
+    .catch(() => new Map<string, ConnectorKind>());
   // On the site read above only: a site removed since is not made again (raised in review).
   if (visibility !== undefined && !(await context.accounts.setSiteVisibility(workspace, site.id, visibility))) {
     return { status: 404, body: { error: 'not-found' } };
@@ -178,7 +188,6 @@ export async function setSessionSite(request: Request, context: SiteSettingsCont
   }
 
   const [first] = places ?? site.destinations;
-  const label = first === undefined ? 'Fruitback' : first.label;
 
   return {
     status: 200,
@@ -188,7 +197,7 @@ export async function setSessionSite(request: Request, context: SiteSettingsCont
         origin: site.origin,
         visibility: visibility ?? site.visibility,
         workspace,
-        ...(label === undefined || label === '' ? {} : { destination: { label } }),
+        ...destinationField(first, kinds),
       },
     },
   };

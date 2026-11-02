@@ -52,7 +52,7 @@ const SENT = {
 
 const SEARCHED = ['excerpt', 'page', 'site', 'workspace', 'stage', 'reference'];
 
-type Notes = { notes: unknown[]; total: number; next?: string };
+type Notes = { notes: unknown[]; total?: number; next?: string };
 
 type Options = {
   admin?: boolean;
@@ -221,6 +221,30 @@ test('the workspace of the address is chosen, the filters read the list again, a
   }
   expect(sent.some((request) => request.startsWith('GET /console/admin/notes'))).toBe(true);
   expect(sent.filter((request) => !request.startsWith('GET ') && !request.startsWith('OPTIONS '))).toEqual([]);
+});
+
+test('« Next » keeps the total of the filter, and the worker reads the page alone (FRU-502)', async ({ page }) => {
+  const sent = watched(page);
+  await stub(page, {
+    notes: (query) => {
+      if (query.get('cursor') !== 'p2') return { notes: [KEPT], total: 2, next: 'p2' };
+
+      return query.get('counts') === 'none' ? { notes: [SENT] } : { notes: [SENT], total: 2 };
+    },
+  });
+  await open(page);
+  await expect(main(page).getByText('1 to 1 of 2')).toBeVisible();
+  await main(page).getByRole('button', { name: 'Next' }).click();
+  await expect(main(page).getByText('2 to 2 of 2')).toBeVisible();
+  expect(sent.filter((each) => each.startsWith('GET /console/admin/notes')).at(-1)).toBe(
+    'GET /console/admin/notes?cursor=p2&counts=none',
+  );
+  // A reload of the second page holds no total: the worker counts it.
+  await page.reload();
+  await expect(main(page).getByText('2 to 2 of 2')).toBeVisible();
+  expect(sent.filter((each) => each.startsWith('GET /console/admin/notes')).at(-1)).toBe(
+    'GET /console/admin/notes?cursor=p2',
+  );
 });
 
 test('an account that is not the administrator is sent to the front door, and reads no note', async ({ page }) => {

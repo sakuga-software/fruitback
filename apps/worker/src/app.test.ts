@@ -12,7 +12,7 @@ import { minimalNoteFixture, noteFixture } from '@fruitback/shared/note.fixture'
 import { handleRequest } from './app.ts';
 import { DATABASE_REQUIRED, type WorkerEnv } from './env.ts';
 import { beforePostgres } from './before-postgres.fixture.ts';
-import { installLinearStub, storedIssueFromNote } from './linear-stub.ts';
+import { installLinearStub, storedIssueFromNote } from './linear-stub.fixture.ts';
 import { signIdentityToken } from './identity.ts';
 import type { NoteStore } from './store.ts';
 import { type Kv, KvError, createMemoryKv, resetSharedKv } from './kv.ts';

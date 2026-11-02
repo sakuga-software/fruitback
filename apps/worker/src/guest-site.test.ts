@@ -9,7 +9,7 @@ import { CONSOLE, type World, memberOf, signInTo, workspaceIn, worlds } from './
 import { mutatedModule } from './conformance.fixture.ts';
 import { digest } from './session.ts';
 import { rowsOf } from './postgres.fixture.ts';
-import { createMemoryAttachmentStore } from './attachments.ts';
+import { createMemoryAttachmentStore } from './attachments-memory.fixture.ts';
 import type { CreatedIssue, NoteStore } from './store.ts';
 
 /**

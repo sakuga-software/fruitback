@@ -22,7 +22,7 @@ import { ADMIN_PATH, SUSPENSION_REASON_LENGTH } from './instance-admin.ts';
 import { ORGANIZATION_PATHS } from './organization-paths.ts';
 import { rowsOf } from './postgres.fixture.ts';
 import { deliverDue, deliveryBody, sealTarget } from './rest-connector.ts';
-import { createMemoryAttachmentStore } from './attachments.ts';
+import { createMemoryAttachmentStore } from './attachments-memory.fixture.ts';
 import { seal } from './secrets.ts';
 import { createPostgresNoteStore } from './notes-postgres.ts';
 import { createPairing, digest, redeemPairing } from './session.ts';

@@ -37,8 +37,8 @@ export const WITHOUT_DATABASE: unique symbol = Symbol('fruitback: the worker of 
  */
 export type WorkerEnv = {
   /**
-   * Which store this process runs on: `linear` (the default), `sqlite`, `github` or `memory`. See
-   * `stores.ts`.
+   * Which store this process runs on: `postgres` (the default), `linear`, `github` or `memory`. See
+   * `stores.ts`. `sqlite` is refused since FRU-225, with what to do instead.
    *
    * An unknown name is refused at boot rather than defaulted, and the variables each store reads
    * are declared by that store — the three below belong to `linear.ts`, and are listed here only so

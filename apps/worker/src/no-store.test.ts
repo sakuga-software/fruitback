@@ -25,12 +25,11 @@ describe('the JSON answers of the worker (FRU-506)', () => {
 
   it('are made by http.ts, and by no other source of the worker', () => {
     const dir = new URL('.', import.meta.url);
-    // Every source under `src/`, in a subdirectory too. `linear-stub.ts` fakes the answers of Linear
-    // for the unit tests: it answers no request of the worker.
+    // Every source under `src/`, in a subdirectory too. A test or a fixture answers no request of the worker.
     const sources = readdirSync(dir, { recursive: true })
       .map(String)
       .filter((name) => name.endsWith('.ts') && !/\.(test|fixture)\.ts$/.test(name))
-      .filter((name) => name !== 'http.ts' && name !== 'linear-stub.ts');
+      .filter((name) => name !== 'http.ts');
     // A body of JSON in a `Response`, or a function of its own named `json`, in any form.
     const own = [/new Response\(\s*JSON\.stringify\(/, /\bfunction json\s*\(/, /\b(const|let|var) json\s*=/];
     // The control: the patterns find the helper of `http.ts`, and the copy that each module had.
@@ -64,7 +63,7 @@ describe('the JSON answers of the worker (FRU-506)', () => {
     const dir = new URL('.', import.meta.url);
     const sources = readdirSync(dir, { recursive: true })
       .map(String)
-      .filter((name) => name.endsWith('.ts') && !/\.(test|fixture)\.ts$/.test(name) && name !== 'linear-stub.ts');
+      .filter((name) => name.endsWith('.ts') && !/\.(test|fixture)\.ts$/.test(name));
     const answer = /(?:new Headers|new Response|\.writeHead)\([^;]*?'application\/json'[^;]*;/g;
     // The control: the pattern finds the answer of `http.ts` and the 500 of `server.ts`.
     const statements = sources.flatMap((name) =>

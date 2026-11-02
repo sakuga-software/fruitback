@@ -148,6 +148,11 @@ export type NoteIndex = {
    */
   list(workspace: string, query: NoteQuery): Promise<NoteList>;
   /**
+   * The same page with no count (FRU-502): the notes and the cursor only. The counts read the whole
+   * filter, so a caller that holds them from the first page does not read them again on each page.
+   */
+  page(workspace: string, query: NoteQuery): Promise<NotePage>;
+  /**
    * The account that left each of these notes of a site, for the notes a member left (FRU-294). A note
    * of a visitor, of a token of the site, or of an account that is gone is absent. What decides who
    * may confirm or reopen a note, and which notes are a reader's own (`mine`).
@@ -264,6 +269,9 @@ export type NoteList = {
   /** Where the next page starts; absent on the last one. */
   next?: NoteCursor;
 };
+
+/** A page of `list` with no count: what `page` answers. */
+export type NotePage = Pick<NoteList, 'notes' | 'next'>;
 
 export type ForgetIndex = { notes: readonly { identifier: string; note: string }[] } | { ids: readonly string[] };
 

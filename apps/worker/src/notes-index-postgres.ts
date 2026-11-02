@@ -9,6 +9,7 @@ import {
   type NoteCursor,
   type NoteEntry,
   type NoteIndex,
+  type NoteList,
   type NoteQuery,
   type Place,
   type SiteNotes,
@@ -35,7 +36,136 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
       ? { place: 'connector', connector_id: place.connector }
       : { place: 'fruitback', connector_id: null };
 
-  return {
+  /** One page of the list, with its counts or without (FRU-502). */
+  async function list(workspace: string, query: NoteQuery, counts: boolean): Promise<NoteList> {
+    const keyOf = placeKey();
+
+    return run(async (db) => {
+      // The deliveries first: a few rows, read once, then matched to the notes by their key.
+      const pending = await pendingOf(db, workspace);
+      const narrowed = filtered(workspace, query);
+      // The list is `narrowed` (role, site, stage, author, search) and `inPlace`. The counts read
+      // `narrowed` once: by place for the chips, and by stage under `inPlace` for the groups, so a
+      // group counts what the list shows (FRU-551).
+      const inPlace = query.place === undefined ? undefined : placeIs(query.place);
+      const placed = inPlace === undefined ? narrowed : and(narrowed, inPlace);
+      // FRU-551: read by status, a page is ordered by the rank of its stage first. The cursor holds
+      // the rank of the last note: the next page starts after it in its stage, then the next stages.
+      // A note whose stage changes between two pages is where its stage is now: before the cursor,
+      // the walk does not read it; after, it may read it a second time. A note that does not move
+      // is read once (console.md, « The table is grouped by status »).
+      const byStatus = query.order === 'status';
+      const rank = rankOfStage();
+      const older = (cursor: NoteCursor) =>
+        sql`(${note_index.created_at}, ${note_index.site_id} COLLATE "C", ${note_index.note_id} COLLATE "C") < (${cursor.at}, ${cursor.site} COLLATE "C", ${cursor.note} COLLATE "C")`;
+      let after = placed;
+      if (query.after !== undefined && byStatus) {
+        const from = query.after.rank ?? 0;
+        after = and(placed, or(sql`${rank} > ${from}`, and(sql`${rank} = ${from}`, older(query.after))));
+      } else if (query.after !== undefined) after = and(placed, older(query.after));
+      const keys = [...pending.values()].map((delivery) => delivery.key);
+
+      const [page, counted, undelivered] = await Promise.all([
+        db
+          .select({
+            row: note_index,
+            connector: { id: connectors.id, kind: connectors.kind, label: connectors.label },
+            memberName: user.name,
+            memberRole: member.role,
+          })
+          .from(note_index)
+          .innerJoin(sites, eq(sites.id, note_index.site_id))
+          .leftJoin(connectors, eq(connectors.id, note_index.connector_id))
+          .leftJoin(
+            member,
+            and(eq(member.organizationId, note_index.workspace_id), eq(member.userId, note_index.author_account_id)),
+          )
+          .leftJoin(user, eq(user.id, member.userId))
+          .where(after)
+          // The order of `note_index_by_date`, so that a page reads its rows from it and stops. Read
+          // by status, the rank comes first: PostgreSQL sorts the rows of the filter (measured in #749).
+          .orderBy(
+            ...(byStatus ? [sql`${rank} ASC`] : []),
+            sql`${note_index.created_at} DESC NULLS LAST`,
+            sql`${note_index.site_id} COLLATE "C" DESC`,
+            sql`${note_index.note_id} COLLATE "C" DESC`,
+          )
+          .limit(query.limit + 1),
+        // FRU-502: a page without its counts reads none of the filter beyond the page.
+        !counts
+          ? Promise.resolve([])
+          : db
+              .select({
+                key: keyOf,
+                stage: note_index.stage,
+                notes: count(),
+                // The notes of the row in the place of the filter, by the SQL of the filter itself
+                // (`placeIs`): the counts by stage are those of the list (review of #764).
+                placed:
+                  inPlace === undefined ? count() : sql<number>`count(*) FILTER (WHERE ${inPlace})`.mapWith(Number),
+              })
+              .from(note_index)
+              .innerJoin(sites, eq(sites.id, note_index.site_id))
+              .where(narrowed)
+              .groupBy(keyOf, note_index.stage),
+        // The notes of the filter that have a delivery: those of its references, matched to their
+        // key here. A list of tuples given to PostgreSQL was planned as a loop: 298 ms, measured.
+        !counts || keys.length === 0
+          ? Promise.resolve([])
+          : db
+              .select({
+                connector: note_index.connector_id,
+                site: note_index.site_id,
+                reference: note_index.reference,
+              })
+              .from(note_index)
+              .innerJoin(sites, eq(sites.id, note_index.site_id))
+              .where(
+                and(narrowed, sql`${note_index.reference} = ANY(${sql.param(keys.map((key) => key[2]))}::text[])`),
+              ),
+      ]);
+
+      // One count by place and stage: the places of the filter without its place, the stages of the
+      // filter with it, counted by the condition that filters the list.
+      const byPlace = new Map<string, number>();
+      const byStage = new Map<NoteStage, number>();
+      for (const row of counted) {
+        byPlace.set(row.key, (byPlace.get(row.key) ?? 0) + Number(row.notes));
+        if (Number(row.placed) === 0) continue;
+        const stage = row.stage as NoteStage;
+        byStage.set(stage, (byStage.get(stage) ?? 0) + Number(row.placed));
+      }
+      const shown = page.slice(0, query.limit);
+      const kept = await keptOf(db, shown);
+      const last = shown.at(-1);
+
+      return {
+        notes: shown.map((row) =>
+          listedOf({ ...row, delivery: pending.get(keyOfNote(row.row)), kept: kept.get(keyOfNoteId(row.row)) }),
+        ),
+        total:
+          query.place === undefined
+            ? [...byPlace.values()].reduce((sum, notes) => sum + notes, 0)
+            : (byPlace.get(query.place) ?? 0),
+        byPlace,
+        byStage,
+        undelivered: undelivered.filter((row) => pending.has(JSON.stringify([row.connector, row.site, row.reference])))
+          .length,
+        ...(page.length > query.limit && last !== undefined
+          ? {
+              next: {
+                at: Number(last.row.created_at),
+                site: last.row.site_id,
+                note: last.row.note_id,
+                ...(byStatus ? { rank: rankOf(last.row.stage) } : {}),
+              },
+            }
+          : {}),
+      };
+    });
+  }
+
+  const index: NoteIndex = {
     async record(all, now) {
       // One row for one note: a second note of one site under the same id is the same note here.
       const entries = once(all, (entry) => `${entry.site}\n${entry.note.id}`);
@@ -257,129 +387,14 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
       }));
     },
 
-    async list(workspace, query) {
-      const keyOf = placeKey();
-      return run(async (db) => {
-        // The deliveries first: a few rows, read once, then matched to the notes by their key.
-        const pending = await pendingOf(db, workspace);
-        const narrowed = filtered(workspace, query);
-        // The list is `narrowed` (role, site, stage, author, search) and `inPlace`. The counts read
-        // `narrowed` once: by place for the chips, and by stage under `inPlace` for the groups, so a
-        // group counts what the list shows (FRU-551).
-        const inPlace = query.place === undefined ? undefined : placeIs(query.place);
-        const placed = inPlace === undefined ? narrowed : and(narrowed, inPlace);
-        // FRU-551: read by status, a page is ordered by the rank of its stage first. The cursor holds
-        // the rank of the last note: the next page starts after it in its stage, then the next stages.
-        // A note whose stage changes between two pages is where its stage is now: before the cursor,
-        // the walk does not read it; after, it may read it a second time. A note that does not move
-        // is read once (console.md, « The table is grouped by status »).
-        const byStatus = query.order === 'status';
-        const rank = rankOfStage();
-        const older = (cursor: NoteCursor) =>
-          sql`(${note_index.created_at}, ${note_index.site_id} COLLATE "C", ${note_index.note_id} COLLATE "C") < (${cursor.at}, ${cursor.site} COLLATE "C", ${cursor.note} COLLATE "C")`;
-        let after = placed;
-        if (query.after !== undefined && byStatus) {
-          const from = query.after.rank ?? 0;
-          after = and(placed, or(sql`${rank} > ${from}`, and(sql`${rank} = ${from}`, older(query.after))));
-        } else if (query.after !== undefined) after = and(placed, older(query.after));
-        const keys = [...pending.values()].map((delivery) => delivery.key);
+    async page(workspace, query) {
+      // FRU-502: the counts read the whole filter. A caller that holds them does not read them again.
+      const { notes, next } = await list(workspace, query, false);
 
-        const [page, counted, undelivered] = await Promise.all([
-          db
-            .select({
-              row: note_index,
-              connector: { id: connectors.id, kind: connectors.kind, label: connectors.label },
-              memberName: user.name,
-              memberRole: member.role,
-            })
-            .from(note_index)
-            .innerJoin(sites, eq(sites.id, note_index.site_id))
-            .leftJoin(connectors, eq(connectors.id, note_index.connector_id))
-            .leftJoin(
-              member,
-              and(eq(member.organizationId, note_index.workspace_id), eq(member.userId, note_index.author_account_id)),
-            )
-            .leftJoin(user, eq(user.id, member.userId))
-            .where(after)
-            // The order of `note_index_by_date`, so that a page reads its rows from it and stops. Read
-            // by status, the rank comes first: PostgreSQL sorts the rows of the filter (measured in #749).
-            .orderBy(
-              ...(byStatus ? [sql`${rank} ASC`] : []),
-              sql`${note_index.created_at} DESC NULLS LAST`,
-              sql`${note_index.site_id} COLLATE "C" DESC`,
-              sql`${note_index.note_id} COLLATE "C" DESC`,
-            )
-            .limit(query.limit + 1),
-          db
-            .select({
-              key: keyOf,
-              stage: note_index.stage,
-              notes: count(),
-              // The notes of the row in the place of the filter, by the SQL of the filter itself
-              // (`placeIs`): the counts by stage are those of the list (review of #764).
-              placed: inPlace === undefined ? count() : sql<number>`count(*) FILTER (WHERE ${inPlace})`.mapWith(Number),
-            })
-            .from(note_index)
-            .innerJoin(sites, eq(sites.id, note_index.site_id))
-            .where(narrowed)
-            .groupBy(keyOf, note_index.stage),
-          // The notes of the filter that have a delivery: those of its references, matched to their
-          // key here. A list of tuples given to PostgreSQL was planned as a loop: 298 ms, measured.
-          keys.length === 0
-            ? Promise.resolve([])
-            : db
-                .select({
-                  connector: note_index.connector_id,
-                  site: note_index.site_id,
-                  reference: note_index.reference,
-                })
-                .from(note_index)
-                .innerJoin(sites, eq(sites.id, note_index.site_id))
-                .where(
-                  and(narrowed, sql`${note_index.reference} = ANY(${sql.param(keys.map((key) => key[2]))}::text[])`),
-                ),
-        ]);
-
-        // One count by place and stage: the places of the filter without its place, the stages of the
-        // filter with it, counted by the condition that filters the list.
-        const byPlace = new Map<string, number>();
-        const byStage = new Map<NoteStage, number>();
-        for (const row of counted) {
-          byPlace.set(row.key, (byPlace.get(row.key) ?? 0) + Number(row.notes));
-          if (Number(row.placed) === 0) continue;
-          const stage = row.stage as NoteStage;
-          byStage.set(stage, (byStage.get(stage) ?? 0) + Number(row.placed));
-        }
-        const shown = page.slice(0, query.limit);
-        const kept = await keptOf(db, shown);
-        const last = shown.at(-1);
-
-        return {
-          notes: shown.map((row) =>
-            listedOf({ ...row, delivery: pending.get(keyOfNote(row.row)), kept: kept.get(keyOfNoteId(row.row)) }),
-          ),
-          total:
-            query.place === undefined
-              ? [...byPlace.values()].reduce((sum, notes) => sum + notes, 0)
-              : (byPlace.get(query.place) ?? 0),
-          byPlace,
-          byStage,
-          undelivered: undelivered.filter((row) =>
-            pending.has(JSON.stringify([row.connector, row.site, row.reference])),
-          ).length,
-          ...(page.length > query.limit && last !== undefined
-            ? {
-                next: {
-                  at: Number(last.row.created_at),
-                  site: last.row.site_id,
-                  note: last.row.note_id,
-                  ...(byStatus ? { rank: rankOf(last.row.stage) } : {}),
-                },
-              }
-            : {}),
-        };
-      });
+      return { notes, ...(next === undefined ? {} : { next }) };
     },
+
+    list: (workspace, query) => list(workspace, query, true),
 
     async deliveryOf(workspace, site, note) {
       return run(async (db) => {
@@ -411,6 +426,8 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
       return rows[0]?.page;
     },
   };
+
+  return index;
 }
 
 type Db = Parameters<Parameters<Database['run']>[0]>[0];

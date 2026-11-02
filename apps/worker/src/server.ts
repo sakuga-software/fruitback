@@ -38,9 +38,10 @@ export function createFruitbackServer(env: WorkerEnv, provided?: NoteStore): Ser
   /**
    * Built here, once, and handed to every request (FRU-29).
    *
-   * `app.ts` would build one per call otherwise. That is free for Linear and the in-memory store —
-   * both are stateless closures — and would open a SQLite connection per request as soon as FRU-31
-   * lands. A misconfigured process has no store: it only ever answers `/health` and the diagnostic.
+   * `app.ts` would build one per call otherwise. That is free for Linear and the in-memory store,
+   * which are stateless closures, and would open a pool of PostgreSQL connections per request for
+   * the store `postgres`. A misconfigured process has no store: it only answers `/health` and the
+   * diagnostic.
    */
   const store = provided ?? (config.ok ? storeFor(config.config) : undefined);
   // One per process, like the store. The handler falls back to this same instance.

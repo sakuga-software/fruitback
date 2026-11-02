@@ -4,6 +4,7 @@ import type { Auth, BetterAuthOptions, BetterAuthPlugin } from 'better-auth';
 export type { Auth };
 import { ACTIONS, ROLES } from './accounts.ts';
 import { newId, roleOf } from './account-rows.ts';
+import { apiOf } from './auth-internals.ts';
 import { type AdapterOfAuth, keepAtRest } from './auth-at-rest.ts';
 import { browserLabel } from './browser-label.ts';
 import type { Kv } from './kv.ts';
@@ -120,7 +121,7 @@ export async function sendLinkThrough(
   const ticket = crypto.randomUUID();
   deliveries.set(ticket, deliver);
   try {
-    await (auth.api as unknown as { signInMagicLink(input: object): Promise<unknown> }).signInMagicLink({
+    await apiOf(auth).signInMagicLink({
       body: { email, metadata: { ticket } },
       headers,
     });

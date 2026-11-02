@@ -58,7 +58,7 @@ export type WorkspaceSite = {
    * Where the notes of the site go (FRU-295): « Linear · Northwind », or « Fruitback ». Only for a
    * role that sees the tracker. Absent: not known, never « nowhere ».
    */
-  destination?: { label: string };
+  destination?: { label: string; kind?: DestinationKind };
   /**
    * The notes of the person that the team marked done and that they did not confirm (FRU-295), for
    * the session of an account. Absent: not known, never zero.
@@ -79,6 +79,11 @@ export type Offer = { endpoint: string; workspace: Workspace; site: WorkspaceSit
 export type CloudSeams = {
   endpoints: () => Promise<string[]>;
   ensureAccess: (endpoint: string) => Promise<AccessResult>;
+  /**
+   * A new access token, because the worker refused `refused` with `401` (FRU-511):
+   * `Sessions.renewAccess`. Absent: a `401` is the answer.
+   */
+  renewAccess?: (endpoint: string, refused: string) => Promise<AccessResult>;
   fetcher?: typeof fetch;
   /**
    * Keeps the previews a worker just listed (FRU-103), or forgets a worker that keeps no accounts.
@@ -154,14 +159,25 @@ export function parseWorkspaceSites(body: unknown): WorkspaceSites | undefined {
   };
 }
 
-/** The label of a destination: a short line of text, or nothing. */
-function destinationOf(value: unknown): { label: string } | undefined {
+/**
+ * The provider of a destination (FRU-554): a kind of source, or Fruitback with no tracker. A worker
+ * of before FRU-554 names none, and a kind this extension does not know is dropped: the popup then
+ * reads the label, as before.
+ */
+export type DestinationKind = Source['kind'] | 'fruitback';
+const DESTINATION_KINDS: ReadonlySet<string> = new Set<DestinationKind>(['linear', 'github', 'rest', 'fruitback']);
+
+/** The label of a destination: a short line of text, or nothing. With it, its kind when the worker said a known one. */
+function destinationOf(value: unknown): { label: string; kind?: DestinationKind } | undefined {
   if (typeof value !== 'object' || value === null) return undefined;
-  const { label } = value as Record<string, unknown>;
+  const { label, kind } = value as Record<string, unknown>;
   if (typeof label !== 'string') return undefined;
   const flat = label.replace(/\s+/gu, ' ').trim();
+  if (flat === '' || flat.length > 200) return undefined;
 
-  return flat === '' || flat.length > 200 ? undefined : { label: flat };
+  return typeof kind === 'string' && DESTINATION_KINDS.has(kind)
+    ? { label: flat, kind: kind as DestinationKind }
+    : { label: flat };
 }
 
 /** A count the worker gave: a whole number from zero, or nothing. */
@@ -316,15 +332,13 @@ export async function sitesOf(endpoint: string, seams: CloudSeams): Promise<Offe
  * worker that did not answer changes nothing: what it listed ages by itself.
  */
 async function listedBy(endpoint: string, seams: CloudSeams): Promise<WorkspaceSites | undefined> {
-  const { ensureAccess, fetcher = fetch, remember, now = Date.now } = seams;
+  const { remember, now = Date.now } = seams;
   if (!isSecureWorkerEndpoint(endpoint)) return undefined;
 
   const asking = await sessionMark(endpoint, seams);
   if (asking === undefined) return undefined;
-  const access = await ensureAccess(endpoint).catch(() => undefined);
-  if (access === undefined || !access.ok) return undefined;
 
-  const listed = await ask(endpoint, access.grant.accessToken, fetcher);
+  const listed = await ask(endpoint, seams);
   if (listed === undefined) return undefined;
   // WARNING: the answer took a call to the worker, and a logout or a new pairing can land in that
   // time. The background forgets the list at that instant (`session-previews.ts`), and an answer
@@ -333,12 +347,12 @@ async function listedBy(endpoint: string, seams: CloudSeams): Promise<WorkspaceS
   // So the session is read again, and the answer of a session that is gone is dropped.
   if ((await sessionMark(endpoint, seams)) !== asking) return undefined;
   await remember?.(endpoint, listed === NO_ACCOUNTS ? undefined : listedPreviews(listed.sites, now())).catch(
-    () => undefined,
+    warned('could not keep the previews a worker listed'),
   );
   // And once more after the write: the read above and the write are two steps, and the session can
   // end between them, after the background has already forgotten.
   if ((await sessionMark(endpoint, seams)) !== asking) {
-    await remember?.(endpoint, undefined).catch(() => undefined);
+    await remember?.(endpoint, undefined).catch(warned('could not forget the previews of a session that ended'));
 
     return undefined;
   }
@@ -357,6 +371,49 @@ export async function refreshPreviews(seams: CloudSeams): Promise<void> {
 /** The worker answered, and it keeps no accounts: a self-hosted worker. It is an answer, not an outage. */
 const NO_ACCOUNTS = 'no-accounts';
 
+/** What `withAccess` answers: the response of the worker, or why no request got one. */
+type Sent = { ok: true; response: Response } | { ok: false; reason: 'signed-out' | 'unavailable' };
+
+/**
+ * One request with the access token of the session at `endpoint`. Never rejects.
+ *
+ * A `401` refuses the token, not always the session: a token can be refused before the time this
+ * browser holds for it (a clock that is wrong, a key the worker rotated). So the token is renewed
+ * once and the request is sent once more, as `site-notes.ts` and `relay.ts` do (FRU-511). The worker
+ * did nothing with a request it refused with `401`, so a second POST adds nothing twice. Only a
+ * refresh that the worker refuses ends the session (`Sessions.renewAccess`).
+ */
+async function withAccess(
+  endpoint: string,
+  seams: Pick<CloudSeams, 'ensureAccess' | 'renewAccess'>,
+  send: (accessToken: string) => Promise<Response>,
+): Promise<Sent> {
+  const access = await seams.ensureAccess(endpoint).catch(warned('could not read the access to a worker'));
+  if (access === undefined) return { ok: false, reason: 'unavailable' };
+  if (!access.ok) return { ok: false, reason: access.reason === 'unavailable' ? 'unavailable' : 'signed-out' };
+
+  let response = await send(access.grant.accessToken).catch(() => undefined);
+  if (response?.status === 401 && seams.renewAccess !== undefined) {
+    const renewed = await seams
+      .renewAccess(endpoint, access.grant.accessToken)
+      .catch(warned('could not renew the access to a worker'));
+    if (renewed === undefined) return { ok: false, reason: 'unavailable' };
+    if (!renewed.ok) return { ok: false, reason: renewed.reason === 'unavailable' ? 'unavailable' : 'signed-out' };
+    response = await send(renewed.grant.accessToken).catch(() => undefined);
+  }
+
+  return response === undefined ? { ok: false, reason: 'unavailable' } : { ok: true, response };
+}
+
+/** A `.catch` that says the failure in the console of the extension, then answers nothing. */
+function warned(what: string): (error: unknown) => undefined {
+  return (error) => {
+    console.warn(`[fruitback] ${what}`, error);
+
+    return undefined;
+  };
+}
+
 /**
  * One bounded `GET /session/sites`.
  *
@@ -368,21 +425,19 @@ const NO_ACCOUNTS = 'no-accounts';
  */
 async function ask(
   endpoint: string,
-  accessToken: string,
-  fetcher: typeof fetch,
+  seams: Pick<CloudSeams, 'ensureAccess' | 'renewAccess' | 'fetcher'>,
 ): Promise<WorkspaceSites | typeof NO_ACCOUNTS | undefined> {
-  try {
-    const response = await fetcher(`${endpoint}/session/sites`, {
+  const fetcher = seams.fetcher ?? fetch;
+  const sent = await withAccess(endpoint, seams, (accessToken) =>
+    fetcher(`${endpoint}/session/sites`, {
       headers: { Authorization: `Bearer ${accessToken}` },
       signal: AbortSignal.timeout(ASK_TIMEOUT_MS),
-    });
+    }),
+  );
+  if (!sent.ok) return undefined;
+  if (sent.response.status === 405) return NO_ACCOUNTS;
 
-    if (response.status === 405) return NO_ACCOUNTS;
-
-    return response.ok ? parseWorkspaceSites(await response.json()) : undefined;
-  } catch {
-    return undefined;
-  }
+  return sent.response.ok ? parseWorkspaceSites(await sent.response.json().catch(() => undefined)) : undefined;
 }
 
 /**
@@ -392,18 +447,13 @@ async function ask(
  * other one said a language. The answer is no language only when every worker answered: with no
  * session at all, or with only workers that keep no accounts or hold no language.
  */
-export async function accountLanguage({
-  endpoints,
-  ensureAccess,
-  fetcher = fetch,
-}: CloudSeams): Promise<{ locale?: string; from?: string } | 'no-answer'> {
+export async function accountLanguage(seams: CloudSeams): Promise<{ locale?: string; from?: string } | 'no-answer'> {
   // WARNING: one worker that did not answer is enough to say nothing. The worker that is down can be
   // the one that holds the account, and « the others say no language » would then erase a language
   // that is still true.
   let silent = false;
-  for (const endpoint of (await endpoints()).filter(isSecureWorkerEndpoint)) {
-    const access = await ensureAccess(endpoint).catch(() => undefined);
-    const listed = access?.ok === true ? await ask(endpoint, access.grant.accessToken, fetcher) : undefined;
+  for (const endpoint of (await seams.endpoints()).filter(isSecureWorkerEndpoint)) {
+    const listed = await ask(endpoint, seams);
     if (listed === undefined) {
       silent = true;
       continue;
@@ -459,26 +509,22 @@ export async function addSite(
   endpoint: string,
   workspace: Workspace,
   origin: string,
-  seams: Pick<CloudSeams, 'ensureAccess' | 'fetcher'>,
+  seams: Pick<CloudSeams, 'ensureAccess' | 'renewAccess' | 'fetcher'>,
 ): Promise<AddResult> {
-  const access = await seams.ensureAccess(endpoint).catch(() => undefined);
-  if (access === undefined || (!access.ok && access.reason === 'unavailable'))
-    return { ok: false, reason: 'unavailable' };
-  if (!access.ok) return { ok: false, reason: 'signed-out' };
   // The worker would answer 400 `invalid-url`: no request for an answer known before it is asked.
   if (!addableFromPopup(origin)) return { ok: false, reason: 'insecure-origin' };
 
-  let response: Response;
-  try {
-    response = await (seams.fetcher ?? fetch)(`${endpoint}/session/sites`, {
+  const fetcher = seams.fetcher ?? fetch;
+  const sent = await withAccess(endpoint, seams, (accessToken) =>
+    fetcher(`${endpoint}/session/sites`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${access.grant.accessToken}`, 'Content-Type': 'application/json' },
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ workspace: workspace.id, origin }),
       signal: AbortSignal.timeout(ASK_TIMEOUT_MS),
-    });
-  } catch {
-    return { ok: false, reason: 'unavailable' };
-  }
+    }),
+  );
+  if (!sent.ok) return sent;
+  const { response } = sent;
   if (response.status === 403 || response.status === 404) return { ok: false, reason: 'forbidden' };
   if (response.status === 429) return { ok: false, reason: 'rate-limited' };
   if (response.status === 401) return { ok: false, reason: 'signed-out' };
@@ -524,18 +570,13 @@ export async function setSiteSettings(
   workspace: Workspace,
   site: string,
   settings: SiteSettings,
-  seams: Pick<CloudSeams, 'ensureAccess' | 'fetcher'>,
+  seams: Pick<CloudSeams, 'ensureAccess' | 'renewAccess' | 'fetcher'>,
 ): Promise<SettingsResult> {
-  const access = await seams.ensureAccess(endpoint).catch(() => undefined);
-  if (access === undefined || (!access.ok && access.reason === 'unavailable'))
-    return { ok: false, reason: 'unavailable' };
-  if (!access.ok) return { ok: false, reason: 'signed-out' };
-
-  let response: Response;
-  try {
-    response = await (seams.fetcher ?? fetch)(`${endpoint}/session/sites/settings`, {
+  const fetcher = seams.fetcher ?? fetch;
+  const sent = await withAccess(endpoint, seams, (accessToken) =>
+    fetcher(`${endpoint}/session/sites/settings`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${access.grant.accessToken}`, 'Content-Type': 'application/json' },
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         workspace: workspace.id,
         site,
@@ -554,10 +595,10 @@ export async function setSiteSettings(
             }),
       }),
       signal: AbortSignal.timeout(ASK_TIMEOUT_MS),
-    });
-  } catch {
-    return { ok: false, reason: 'unavailable' };
-  }
+    }),
+  );
+  if (!sent.ok) return sent;
+  const { response } = sent;
   if (response.status === 403 || response.status === 404) return { ok: false, reason: 'forbidden' };
   if (response.status === 409) return { ok: false, reason: 'several-places' };
   if (response.status === 400) return { ok: false, reason: 'unknown-place' };
@@ -584,7 +625,7 @@ export async function setSiteSettings(
 export async function finishAdd(
   pattern: string,
   intent: PendingAdd,
-  seams: Pick<CloudSeams, 'ensureAccess' | 'fetcher'>,
+  seams: Pick<CloudSeams, 'ensureAccess' | 'renewAccess' | 'fetcher'>,
 ): Promise<AddOutcome> {
   const added = await addSite(intent.endpoint, intent.workspace, pattern, seams);
   if (!added.ok) return added.reason === 'unavailable' ? 'again' : 'never';
@@ -606,20 +647,18 @@ export async function sourceOffer(
   endpoint: string,
   workspace: string,
   connector: string,
-  seams: Pick<CloudSeams, 'ensureAccess' | 'fetcher'>,
+  seams: Pick<CloudSeams, 'ensureAccess' | 'renewAccess' | 'fetcher'>,
 ): Promise<SourceOffer | undefined> {
-  const access = await seams.ensureAccess(endpoint).catch(() => undefined);
-  if (access === undefined || !access.ok) return undefined;
   const query = new URLSearchParams({ workspace, connector });
-  try {
-    const response = await (seams.fetcher ?? fetch)(`${endpoint}/session/sites/places?${query.toString()}`, {
-      headers: { Authorization: `Bearer ${access.grant.accessToken}` },
+  const fetcher = seams.fetcher ?? fetch;
+  const sent = await withAccess(endpoint, seams, (accessToken) =>
+    fetcher(`${endpoint}/session/sites/places?${query.toString()}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
       // A tracker is asked page after page: longer than a read of the worker alone.
       signal: AbortSignal.timeout(ASK_TIMEOUT_MS * 3),
-    });
+    }),
+  );
+  if (!sent.ok || !sent.response.ok) return undefined;
 
-    return response.ok ? parseSourceOffer(await response.json()) : undefined;
-  } catch {
-    return undefined;
-  }
+  return parseSourceOffer(await sent.response.json().catch(() => undefined));
 }
