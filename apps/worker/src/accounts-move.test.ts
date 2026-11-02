@@ -395,7 +395,7 @@ for (const { label, open, skip } of DATABASES) {
             id: 'site_acme',
             origin: 'https://staging.acme.dev',
             visibility: 'members',
-            destination: { label: 'Hook' },
+            destination: { label: 'Hook', kind: 'rest' },
           },
         ],
       });

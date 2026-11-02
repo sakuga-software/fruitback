@@ -598,6 +598,7 @@ function offered(origin: string, offer: Offer, account: Account | undefined): HT
     origin,
     workspace: offer.workspace.name,
     ...(offer.site.destination === undefined ? {} : { destination: offer.site.destination.label }),
+    ...(offer.site.destination?.kind === undefined ? {} : { destinationKind: offer.site.destination.kind }),
     visibility: offer.site.visibility,
     ...(account === undefined ? {} : { account }),
     ...(change === undefined ? {} : { onChange: change }),
@@ -888,6 +889,7 @@ async function siteOfWorkspaceOn(
           { workspace, on: site.enabled, onOpenPanel: openPanel },
           {
             ...(destination === undefined ? {} : { destination: destination.label }),
+            ...(destination?.kind === undefined ? {} : { destinationKind: destination.kind }),
             ...(change === undefined ? {} : { change }),
             ...(toCheck === undefined ? {} : { toCheck }),
             ...(notes === undefined ? {} : { open: notes.new + notes.todo + notes.progress }),

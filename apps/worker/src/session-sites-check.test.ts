@@ -5,6 +5,7 @@ import { type World, callOn, memberOf, shareWith, signInTo, workspaceIn, worlds 
 import { resetMemoryLinear, setMemoryIssueState } from './linear-memory.ts';
 import { rowsOf } from './postgres.fixture.ts';
 import { createPairing, digest, redeemPairing } from './session.ts';
+import { destinationField } from './session-sites.ts';
 
 /**
  * `GET /session/sites` (FRU-295): where the notes of each site go, for a role that sees the tracker,
@@ -21,7 +22,7 @@ afterEach(() => resetMemoryLinear());
 
 type Listed = {
   id: string;
-  destination?: { label: string };
+  destination?: { label: string; kind?: string };
   toCheck?: number;
   notes?: Record<string, number>;
 };
@@ -116,8 +117,10 @@ describe('where the notes of a site go, in GET /session/sites (FRU-295)', () => 
     const [forGuest] = await sitesOf(world, await sessionOf(world, carol));
     const [forPairing] = await sitesOf(world, await sessionOf(world, alice, workspace));
 
-    assert.deepEqual(forOwner?.destination, { label: 'Linear · Northwind' });
-    assert.deepEqual(forPairing?.destination, { label: 'Linear · Northwind' });
+    // FRU-554: the kind is the connector's, never read from the label: a REST connector whose
+    // destination reads « Linear · … » is `rest`.
+    assert.deepEqual(forOwner?.destination, { label: 'Linear · Northwind', kind: 'rest' });
+    assert.deepEqual(forPairing?.destination, { label: 'Linear · Northwind', kind: 'rest' });
     // The control is the owner above, on the same site: the guest's absence is the guard's.
     assert.equal(forGuest?.id, site.id);
     assert.equal('destination' in (forGuest ?? {}), false);
@@ -128,7 +131,33 @@ describe('where the notes of a site go, in GET /session/sites (FRU-295)', () => 
 
     const [listed] = await sitesOf(world, await sessionOf(world, alice));
 
-    assert.deepEqual(listed?.destination, { label: 'Fruitback' });
+    assert.deepEqual(listed?.destination, { label: 'Fruitback', kind: 'fruitback' });
+  });
+
+  it('names the kind of a GitHub and of a Linear connector (FRU-554)', async () => {
+    const { world, workspace, site, alice } = await acme();
+    for (const kind of ['github', 'linear'] as const) {
+      const connector = await world.accounts.addConnector(workspace, { kind, label: kind, sealed: 'x' });
+      assert.ok(
+        await world.accounts.setDestinations(workspace, site.id, [{ connector: connector.id, label: `${kind} place` }]),
+      );
+
+      const [listed] = await sitesOf(world, await sessionOf(world, alice));
+
+      assert.deepEqual(listed?.destination, { label: `${kind} place`, kind });
+    }
+  });
+});
+
+describe('destinationField (FRU-554)', () => {
+  it('names no kind for a connector it does not know, and no destination with no label', () => {
+    assert.deepEqual(destinationField({ connector: 'con_gone', label: 'Linear · Old' }, new Map()), {
+      destination: { label: 'Linear · Old' },
+    });
+    assert.deepEqual(destinationField({ connector: 'con_1' }, new Map([['con_1', 'linear']])), {});
+    assert.deepEqual(destinationField(undefined, new Map()), {
+      destination: { label: 'Fruitback', kind: 'fruitback' },
+    });
   });
 });
 
