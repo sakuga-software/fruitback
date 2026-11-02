@@ -58,7 +58,7 @@ A key writes 30 times a minute at most.
 An app that connects from a page, as a **custom connector of claude.ai**, needs no key: it asks you
 in the console, and gets tokens that it renews itself.
 
-1. In claude.ai, open « Settings », then « Connectors », and Add custom connector. Name it
+1. In claude.ai, open « Settings », then « Connectors », and « Add custom connector ». Name it
    Fruitback, and give the address `https://<your worker>/mcp`. Leave the fields of OAuth empty:
    claude.ai registers itself with your worker.
 2. « Connect ». claude.ai sends you to the console of Fruitback, at « Connect an agent ». Sign in if
@@ -69,7 +69,7 @@ in the console, and gets tokens that it renews itself.
    « Read and write » (never more than the app asked), the days it lives, and Only the notes of
    known people, as for a key. Then Allow claude.ai. You go back to claude.ai, connected.
 
-The connection is a row of « Agents », with the chip OAuth · claude.ai, its last use, its end and
+The connection is a row of « Agents », with the chip « OAuth · claude.ai », its last use, its end and
 its writes. « Revoke » ends it at once: its tokens stop, and claude.ai must ask you again. claude.ai
 holds a token of one hour, and renews it with a token that works once: a copy of that token used a
 second time ends the connection. The worker needs `FRUITBACK_PUBLIC_URL` and

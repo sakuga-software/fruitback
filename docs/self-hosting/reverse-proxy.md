@@ -110,7 +110,7 @@ few more reads than the limit.
 Dokploy is one way among others: it runs the containers behind its own Traefik, which gives the worker
 and the console their HTTPS names. Fruitback Cloud runs this way (`apps/worker/cloud/README.md`). This
 section was not replayed for this page. Create a **PostgreSQL** service in the project, then an
-Application for the worker with either source:
+« Application » for the worker with either source:
 
 | Setting    | From the image                                                      | From the repository                                          |
 | ---------- | ------------------------------------------------------------------- | ------------------------------------------------------------ |
