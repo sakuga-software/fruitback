@@ -89,6 +89,7 @@ test.describe('an invited reviewer (FRU-104)', () => {
     await expect(owner.getByRole('heading', { name: 'staging.acme.dev', exact: true })).toBeVisible();
 
     await owner.goto(`${CONSOLE}/w/${workspace}/members`);
+    await owner.getByRole('button', { name: 'Invite', exact: true }).click();
     await owner.getByRole('textbox', { name: 'Email', exact: true }).fill('paul@client.dev');
     await owner.getByRole('button', { name: 'Invite', exact: true }).click();
     const kept = owner.getByRole('status');
@@ -210,6 +211,7 @@ test.describe('an invited reviewer (FRU-104)', () => {
       (await worker.mail()).filter((each) => each.to === 'paul@client.dev').length;
 
     await owner.goto(`${CONSOLE}/w/${workspace}/members`);
+    await owner.getByRole('button', { name: 'Invite', exact: true }).click();
     await owner.getByRole('textbox', { name: 'Email', exact: true }).fill('paul@client.dev');
     await owner.getByRole('button', { name: 'Invite', exact: true }).click();
     const notice = owner.getByRole('status');
