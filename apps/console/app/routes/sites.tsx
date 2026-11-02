@@ -12,7 +12,7 @@ import {
 } from '../api';
 import { SITE_NOT_ADDED, SITE_PROBLEMS, problemOf } from '../problems';
 import { listedOf } from '../listed';
-import { Button, Field, LinkButton, LoadFailed, Menu, type MenuItem, Pick, Problem, StatusBar } from '../ui';
+import { Button, Dialog, Field, LinkButton, LoadFailed, Menu, type MenuItem, Pick, Problem, StatusBar } from '../ui';
 import { ago } from '../ago';
 import { NotePages } from './notes';
 import { PageHead, useWorkspace } from './workspace';
@@ -20,6 +20,7 @@ import { msg, t } from '../i18n';
 import { useLocale } from '../use-locale';
 import { siteAddress, siteName } from '../site-address';
 import { SiteIcon } from '../site-icon';
+import { SitePreview } from '../site-preview';
 import { ConnectorMark, type MarkedKind } from '../connector-marks';
 import { useTypedSearch } from '../typed-search';
 import { WritersPick } from '../writers-pick';
@@ -199,20 +200,23 @@ export default function Sites() {
 
       {listed ? (
         <>
-          {adding ? (
-            <section
-              aria-label={t('Add a site')}
-              className="mb-[16px] rounded-frame border border-line bg-subtle px-[22px] py-[20px]"
-            >
-              <AddSite
-                workspace={workspace}
-                draft={draft}
-                onDraft={setDraft}
-                onAdded={added}
-                onCancel={() => setAdding(false)}
-              />
-            </section>
-          ) : null}
+          {/* FRU-558: its own dialog, with the site it is about to add. The draft stays above it. */}
+          <Dialog
+            open={adding}
+            onClose={() => setAdding(false)}
+            title={t('Add a site')}
+            closeLabel={t('Close')}
+            className="add-site-dialog"
+          >
+            <AddSite
+              workspace={workspace}
+              draft={draft}
+              onDraft={setDraft}
+              onAdded={added}
+              onCancel={() => setAdding(false)}
+              preview
+            />
+          </Dialog>
           <div className="mb-[16px] max-w-[420px]">
             <Field
               label={t('Search sites')}
@@ -283,12 +287,15 @@ function AddSite({
   onDraft,
   onAdded,
   onCancel,
+  preview = false,
 }: {
   workspace: Workspace;
   draft: Draft;
   onDraft: (draft: Draft) => void;
   onAdded: (site: Site) => void;
   onCancel?: () => void;
+  /** The icon and the page of the typed address, under its field (FRU-558). */
+  preview?: boolean;
 }) {
   useLocale();
   const { url, visibility, writers } = draft;
@@ -321,6 +328,8 @@ function AddSite({
             inputMode="url"
             autoComplete="url"
             placeholder="staging.acme.dev"
+            // In the dialog, the field takes focus when it opens: the dialog is for this field.
+            autoFocus={preview}
             value={url}
             onChange={(event) => onDraft({ ...draft, url: event.target.value })}
           />
@@ -328,6 +337,7 @@ function AddSite({
         <Button type="submit">{t('Add site')}</Button>
       </div>
       {problem === undefined ? null : <Problem>{t(problem)}</Problem>}
+      {preview ? <TypedSite url={url} /> : null}
       <Pick
         label={t('Who sees the notes?')}
         value={visibility}
@@ -356,6 +366,49 @@ function AddSite({
         </div>
       )}
     </form>
+  );
+}
+
+/** How long the preview waits after the last key: a half-typed host is never asked. */
+const PREVIEW_PAUSE_MS = 600;
+
+/**
+ * The site that the form is about to add (FRU-558): its icon and domain, then its page in a frame,
+ * once the typed address is an address and nobody typed for a moment.
+ *
+ * The browser of the person asks the site, as the preview of the setup does (`site-preview.tsx`):
+ * `img-src https:` and `frame-src https: http:` of the console already allow it, no referrer goes,
+ * and the frame is sandboxed. The worker asks the site for nothing, so it fetches no address
+ * somebody typed.
+ */
+function TypedSite({ url }: { url: string }) {
+  useLocale();
+  const [origin, setOrigin] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    const address = siteAddress(url);
+    const timer = setTimeout(
+      () => setOrigin(address === undefined ? undefined : new URL(address).origin),
+      PREVIEW_PAUSE_MS,
+    );
+
+    return () => clearTimeout(timer);
+  }, [url]);
+  if (origin === undefined) return null;
+  const host = new URL(origin).host;
+
+  return (
+    <section aria-label={t('Preview of {site}', { site: host })} className="flex flex-col gap-[10px]">
+      <p className="flex items-center gap-[10px] text-body font-semibold">
+        <SiteIcon
+          key={origin}
+          origin={origin}
+          className="add-site-dialog__icon"
+          letterClassName="add-site-dialog__letter"
+        />
+        <span className="min-w-0 [overflow-wrap:anywhere]">{host}</span>
+      </p>
+      <SitePreview key={origin} origin={origin} />
+    </section>
   );
 }
 

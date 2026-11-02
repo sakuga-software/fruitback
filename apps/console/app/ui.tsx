@@ -12,6 +12,7 @@ import {
   Label,
   Link as HeroLink,
   ListBox,
+  Modal,
   Radio,
   RadioGroup,
   Select,
@@ -991,6 +992,50 @@ type SidePanelProps = {
   className?: string;
   children: ReactNode;
 };
+
+/**
+ * A dialog over the page (FRU-558): its title names it, focus stays inside while it is open, and
+ * Escape, the close button or a press outside close it. Focus goes back to what opened it. HeroUI's
+ * Modal, on the dialog of React Aria, does the trap, the labelling and the return.
+ */
+export function Dialog({
+  open,
+  onClose,
+  title,
+  closeLabel,
+  size = 'lg',
+  className = '',
+  children,
+}: {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  /** The name of the close button, e.g. « Close ». */
+  closeLabel: string;
+  size?: 'sm' | 'md' | 'lg';
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <Modal.Backdrop
+      isOpen={open}
+      isDismissable
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+    >
+      <Modal.Container size={size} scroll="inside">
+        <Modal.Dialog className={`kit-dialog ${className}`}>
+          <Modal.CloseTrigger aria-label={closeLabel} />
+          <Modal.Header>
+            <Modal.Heading className="kit-dialog__title">{title}</Modal.Heading>
+          </Modal.Header>
+          <Modal.Body>{children}</Modal.Body>
+        </Modal.Dialog>
+      </Modal.Container>
+    </Modal.Backdrop>
+  );
+}
 
 /** The panel beside a list: what is chosen in the list, with its settings. */
 export function SidePanel({

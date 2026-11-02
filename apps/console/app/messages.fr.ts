@@ -527,6 +527,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Where {workspace} collects notes, and where they stand.':
     'Là où {workspace} recueille des notes, et où elles en sont.',
   'Add a site': 'Ajouter un site',
+  'Preview of {site}': 'Aperçu de {site}',
   'The sites did not load': 'Les sites ne se sont pas chargés',
   'Your sites and notes are safe.': 'Vos sites et vos notes ne sont pas perdus.',
   'No site yet': 'Aucun site pour l’instant',
