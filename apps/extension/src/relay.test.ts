@@ -387,9 +387,10 @@ describe('the relay sends what the background decided, never what the page asked
  * addresses; `worker-client.ts` writes the headers (FRU-509).
  */
 describe('what the widget sends is what the relay allows', () => {
-  const source = (file: string) =>
-    readFileSync(fileURLToPath(new URL(`../../../packages/widget/src/${file}`, import.meta.url)), 'utf8');
-  const widget = `${source('embed.ts')}\n${source('worker-client.ts')}`;
+  const widget = [
+    readFileSync(fileURLToPath(new URL('../../../packages/widget/src/embed.ts', import.meta.url)), 'utf8'),
+    readFileSync(fileURLToPath(new URL('../../../packages/widget/src/worker-client.ts', import.meta.url)), 'utf8'),
+  ].join('\n');
 
   it('calls the paths the relay allows, and no other', () => {
     const paths = [...widget.matchAll(/\$\{options\.endpoint\}([^`?]*)/g)].map((match) => match[1]);
