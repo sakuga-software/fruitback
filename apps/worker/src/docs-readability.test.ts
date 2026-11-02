@@ -353,7 +353,10 @@ describe('the guard of the guides finds (the control)', () => {
   });
 
   it('what is planted in a copy of a real guide, and nothing else', () => {
-    const lines = readFileSync(new URL('README.md', ROOT), 'utf8').split('\n');
+    const readme = readFileSync(new URL('README.md', ROOT), 'utf8');
+    // The copy starts clean, so that only what is planted can be found. Review of #799.
+    assert.deepEqual(short(readme), [], 'README.md breaks the rule itself: the test of the guides says where');
+    const lines = readme.split('\n');
     const end = lines.length;
     lines.push('', '## Planted', 'Since FRU-561 — a **first** and a **second** bold.');
 
