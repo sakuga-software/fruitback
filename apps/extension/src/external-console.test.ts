@@ -1,10 +1,13 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { parseExternalAnswer } from '@fruitback/shared';
 import type { ConnectSeams, EndedConnect, PendingConnect } from './connect.ts';
 import type { ClaimResult, SessionResponse, StoredSession } from './session.ts';
 import {
   DEFAULT_CONSOLE,
+  type ExternalAnswer,
+  type ExternalMessage,
   type ExternalSender,
   acceptedExternal,
   cloudConsole,
@@ -188,7 +191,15 @@ function fakes({
       },
     },
   };
-  const answerConsole = createExternalConsole({ console: CONSOLE, cloud: CLOUD, connect, now: () => state.now });
+  const answering = createExternalConsole({ console: CONSOLE, cloud: CLOUD, connect, now: () => state.now });
+  // FRU-512: every answer of every case here is one that the console reads, whole, with the parser of
+  // `@fruitback/shared`: an answer with a key more, or two answers in one, fails the case that gave it.
+  const answerConsole = async (asked: ExternalMessage): Promise<ExternalAnswer> => {
+    const answer = await answering(asked);
+    assert.deepEqual(parseExternalAnswer(answer), answer, `the console does not read ${JSON.stringify(answer)}`);
+
+    return answer;
+  };
 
   return { answerConsole, state, posted, claimed, ended };
 }
