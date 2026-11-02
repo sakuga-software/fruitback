@@ -1,4 +1,5 @@
 import type { AccountStore } from './accounts.ts';
+import type { InternalAdapter } from './auth-internals.ts';
 
 /**
  * A provider linked from « My account » whose address is not the one of the account (FRU-415, step 1).
@@ -64,18 +65,6 @@ export function pendingLinkKey(userId: string): string {
   return `fruitback-link:${userId}`;
 }
 
-/** What this file reads and writes through the internal adapter of better-auth 1.7.10. */
-export type LinkAdapter = {
-  findUserByEmail(email: string): Promise<{ user: { id: string } } | null>;
-  findAccountByKey(key: { providerId: string; accountId: string }): Promise<{ userId: string } | null>;
-  findAccounts(userId: string): Promise<{ providerId: string }[]>;
-  createAccount(account: { userId: string; providerId: string; accountId: string }): Promise<unknown>;
-  createVerificationValue(data: { identifier: string; value: string; expiresAt: Date }): Promise<unknown>;
-  findVerificationValue(identifier: string): Promise<{ value: string; expiresAt: Date } | null>;
-  consumeVerificationValue(identifier: string): Promise<{ value: string; expiresAt: Date } | null>;
-  deleteVerificationByIdentifier(identifier: string): Promise<void>;
-};
-
 /** A row of `verification` read as a pending link, or `undefined` when it is not one or has expired. */
 export function readPending(row: { value: string; expiresAt: Date } | null, now = Date.now()): PendingLink | undefined {
   if (row === null || new Date(row.expiresAt).getTime() <= now) return undefined;
@@ -104,7 +93,7 @@ export function readPending(row: { value: string; expiresAt: Date } | null, now 
  * already, or `undefined` when it may be. Read at the way back, and again at the confirmation.
  */
 export async function refusalOf(
-  adapter: LinkAdapter,
+  adapter: InternalAdapter,
   link: { userId: string; providerId: string; accountId: string; email: string },
   /** The addresses of the accounts beside their primary one (FRU-450). */
   addresses: AddressBook,
@@ -236,7 +225,7 @@ export function guardLink(api: LinkApi, addresses: AddressBook, now: () => numbe
     const accountId = await accountIdOf(context, providerId, data.source.oauth?.profile);
     if (accountId === undefined) return { error: 'unable_to_get_user_info' };
 
-    const adapter = context.context.internalAdapter as LinkAdapter;
+    const adapter = context.context.internalAdapter as InternalAdapter;
     const refusal = await refusalOf(adapter, { userId, providerId, accountId, email }, addresses);
     // Linked to this person already: better-auth updates its row, which holds no token.
     if (refusal === 'linked') {
