@@ -12,7 +12,19 @@ import {
 } from '../api';
 import { SITE_NOT_ADDED, SITE_PROBLEMS, problemOf } from '../problems';
 import { listedOf } from '../listed';
-import { Button, Dialog, Field, LinkButton, LoadFailed, Menu, type MenuItem, Pick, Problem, StatusBar } from '../ui';
+import {
+  Button,
+  Dialog,
+  Field,
+  LinkButton,
+  LoadFailed,
+  Menu,
+  type MenuItem,
+  Pick,
+  Problem,
+  StatusBar,
+  Tip,
+} from '../ui';
 import { ago } from '../ago';
 import { NotePages } from './notes';
 import { PageHead, useWorkspace } from './workspace';
@@ -238,7 +250,8 @@ export default function Sites() {
           ) : (
             <ul
               aria-label={t('Sites')}
-              className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,280px),1fr))] gap-[16px]"
+              // FRU-568: every row as high as the highest card, so every card of the page has one size.
+              className="grid auto-rows-fr grid-cols-[repeat(auto-fill,minmax(min(100%,280px),1fr))] gap-[16px]"
             >
               {shown.map((site) => (
                 <SiteCard key={site.id} workspace={workspace} site={site} manages={manages} seesTracker={seesTracker} />
@@ -451,6 +464,11 @@ function GoesTo({ site }: { site: Site }) {
   if (late === 1) detail = t('1 not delivered yet');
   else if (late > 1) detail = t('{count} not delivered yet', { count: late });
 
+  const where =
+    others.length === 0
+      ? detail
+      : t('{place} and {count} more', { place: detail ?? t(place.name), count: others.length });
+
   return (
     <>
       {/* FRU-541: the logo of the tracker before its name, as in the Notes table (FRU-435). */}
@@ -458,11 +476,12 @@ function GoesTo({ site }: { site: Site }) {
         {kind === undefined ? null : <ConnectorMark kind={kind} />}
         <span className="min-w-0">{t(place.name)}</span>
       </span>
-      <span className="block text-hint leading-[inherit] text-muted [overflow-wrap:anywhere]">
-        {others.length === 0
-          ? detail
-          : t('{place} and {count} more', { place: detail ?? t(place.name), count: others.length })}
-      </span>
+      {/* FRU-567: a long team or project is cut to one line, and whole in a tooltip and to a screen reader. */}
+      {where === undefined ? null : (
+        <Tip tip={where} className="text-hint leading-[inherit] text-muted">
+          <span className="min-w-0 truncate">{where}</span>
+        </Tip>
+      )}
     </>
   );
 }
@@ -534,23 +553,22 @@ function SiteCard({ workspace, site, manages, seesTracker }: SiteCardProps) {
               ))}
             </Link>
           </h2>
-          {/* Who reads and who writes, on one line (FRU-432). FRU-330: the card says the exception only.
-              « Members only » is the default of a new site, and a worker of before, which sends no
-              `writers`, says nothing it could be wrong about. */}
-          <p className="mt-[2px] text-hint text-muted">
-            <span>
+          {/* Who reads and who writes (FRU-432), each a chip with its icon (FRU-566). FRU-330: the card
+              says the exception only. « Members only » is the default of a new site, and a worker of
+              before, which sends no `writers`, says nothing it could be wrong about. */}
+          <div className="mt-[6px] flex min-w-0 flex-wrap gap-[6px]">
+            <Access icon={site.visibility === 'members' ? 'members' : 'everyone'}>
               {site.visibility === 'members'
                 ? t('Members of {workspace}', { workspace: workspace.name })
                 : t('Everyone who visits')}
-            </span>
+            </Access>
             {site.visibility === 'members' && site.writers === 'anyone' ? (
               <>
-                <span aria-hidden="true"> · </span>
                 <span className="sr-only">, </span>
-                <span>{t('Notes from anyone on the page')}</span>
+                <Access icon="anyone">{t('Notes from anyone on the page')}</Access>
               </>
             ) : null}
-          </p>
+          </div>
         </div>
         <span className="-mt-[4px] -mr-[8px] inline-flex flex-none">
           <Menu trigger="icon" triggerLabel={t('More for {site}', { site: name })} items={items} onAction={go}>
@@ -595,6 +613,48 @@ function SiteCard({ workspace, site, manages, seesTracker }: SiteCardProps) {
             ))
         : null}
     </li>
+  );
+}
+
+/** The icons of the chips of a card, drawn as the icons of the rail: a grid of 24, a stroke of 2. */
+const ACCESS_PATHS = {
+  // Two people: the members of the workspace read the notes.
+  members:
+    'M16 20v-1.5a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4V20M9 3.5a3.5 3.5 0 1 0 0 7a3.5 3.5 0 1 0 0-7M22 20v-1.5a4 4 0 0 0-3-3.9M16 3.6a3.5 3.5 0 0 1 0 6.8',
+  // A globe: everyone who visits the site.
+  everyone: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M3 12h18M12 3c-3 3.2-3 14.8 0 18M12 3c3 3.2 3 14.8 0 18',
+  // A pencil: anyone on the page writes a note.
+  anyone: 'M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4',
+} as const;
+
+/**
+ * Who reads or who writes the notes of a site, as a chip (FRU-566): an icon, and the words cut to
+ * the room of the card. A cut name is whole in a tooltip, and a screen reader reads it whole.
+ */
+function Access({ icon, children }: { icon: keyof typeof ACCESS_PATHS; children: string }) {
+  return (
+    <Tip
+      tip={children}
+      className="h-[24px] rounded-full bg-chip px-[8px] text-hint leading-none font-medium text-ink-soft"
+    >
+      <svg
+        aria-hidden="true"
+        focusable="false"
+        viewBox="0 0 24 24"
+        data-access={icon}
+        className="size-[14px] flex-none"
+      >
+        <path
+          d={ACCESS_PATHS[icon]}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+      <span className="min-w-0 truncate">{children}</span>
+    </Tip>
   );
 }
 
