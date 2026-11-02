@@ -390,16 +390,17 @@ function viaOf(via: readonly ('script' | 'extension')[]): string {
 
 /**
  * The address of the site, a link to it in a new tab (FRU-575): the console stays where it is. Only an
- * `http` or `https` origin is a link; the worker keeps no other, and the words stay the address alone.
+ * `http` or `https` origin is a link, to the address it shows; the worker keeps no other.
  */
 function SiteLink({ origin }: { origin: string }) {
   useLocale();
+  // The link opens the address it shows: the origin as `siteLabel` reads it, never the raw value.
   const label = siteLabel(origin);
-  if (!/^https?:\/\//.test(origin)) return <span className="[overflow-wrap:anywhere]">{label}</span>;
+  if (!/^https?:\/\//.test(label)) return <span className="[overflow-wrap:anywhere]">{label}</span>;
 
   return (
     <a
-      href={origin}
+      href={label}
       target="_blank"
       rel="noreferrer"
       className="[overflow-wrap:anywhere] text-ink underline decoration-1 underline-offset-[3px] hover:text-accent-strong"
