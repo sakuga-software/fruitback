@@ -22,8 +22,8 @@ By hand, in Chrome, Edge, Brave or Arc:
 1. Download `fruitback-<version>-chrome.zip` from the
    [last release](https://github.com/sakuga-software/fruitback/releases/latest), and unzip it. Keep
    the folder: the browser loads the extension from it.
-2. Open `chrome://extensions` in a new tab, and turn on Developer mode, at the top right.
-3. Choose Load unpacked, and pick the folder you unzipped.
+2. Open `chrome://extensions` in a new tab, and turn on « Developer mode », at the top right.
+3. Choose « Load unpacked », and pick the folder you unzipped.
 4. A Fruitback tab opens by itself. Choose « Sign in with email », « Google » or « GitHub » there:
    section 2 goes on from there.
 5. To find Fruitback in the toolbar later, pin it: open the puzzle piece at the right of the address
@@ -31,7 +31,7 @@ By hand, in Chrome, Edge, Brave or Arc:
 
 By hand, in Firefox, to try a build that is not on addons.mozilla.org yet: download
 `fruitback-<version>-firefox.zip` from the same release, open
-`about:debugging#/runtime/this-firefox`, choose Load Temporary Add-on… and pick the archive.
+`about:debugging#/runtime/this-firefox`, choose « Load Temporary Add-on… » and pick the archive.
 Firefox keeps such an add-on until it restarts.
 
 An extension installed by hand does not update itself. Its popup and its page say so when a newer
