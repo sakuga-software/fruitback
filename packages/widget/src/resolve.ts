@@ -86,23 +86,41 @@ export function resolveAnchor(anchor: NoteAnchor, options: ResolveOptions = {}):
 /** The document, or the shadow root of the last host of a note in a web component (FRU-580). */
 type Root = Document | ShadowRoot;
 
+/** Where the walk of the hosts of an anchor went. */
+export type HostWalk = {
+  /** The shadow root of the last host, or the deepest root reached when the walk broke. */
+  root: Root;
+  /** False when a host is missing, repeated, or shows no open shadow root. */
+  followed: boolean;
+  /** The open shadow roots the walk entered, outermost first (FRU-582). */
+  roots: ShadowRoot[];
+  /**
+   * The host the walk stopped on: found once, but with no open shadow root. Its root is closed, or
+   * its custom element is not defined yet. `null` when the walk did not stop on a host.
+   */
+  stopped: Element | null;
+};
+
 /**
  * Walks the hosts of the anchor down from the document, each one a unique match in the root above.
  * `followed` is false when one is missing, repeated, or shows no open shadow root: `shadowRoot` is
  * `null` for a closed one. `root` is then the deepest root reached. An anchor with no `hosts` is read
- * in the document, as before FRU-580.
+ * in the document, as before FRU-580. The overlay observes the `roots` (FRU-582).
  */
-function followHosts(hosts: readonly string[] | undefined, document: Document): { root: Root; followed: boolean } {
+export function followHosts(hosts: readonly string[] | undefined, document: Document): HostWalk {
   let root: Root = document;
+  const roots: ShadowRoot[] = [];
 
   for (const selector of hosts ?? []) {
     const found = queryAll(root, selector);
-    const shadow = found.length === 1 ? found[0]?.shadowRoot : null;
-    if (!isShadowRoot(shadow)) return { root, followed: false };
+    const host = found.length === 1 ? (found[0] ?? null) : null;
+    const shadow = host?.shadowRoot;
+    if (!isShadowRoot(shadow)) return { root, followed: false, roots, stopped: host };
     root = shadow;
+    roots.push(shadow);
   }
 
-  return { root, followed: true };
+  return { root, followed: true, roots, stopped: null };
 }
 
 type Finder = (anchor: NoteAnchor, root: Root) => Element | null;
