@@ -2,7 +2,7 @@ import type { NoteComment, NoteIssue, NoteStatus } from './issue.ts';
 
 /**
  * The feedback of a page as plain text (FRU-109): the format of « Copy as text » in the widget, and
- * of the tool `feedback_as_text` of the worker (FRU-463).
+ * of the tool `notes_as_text` of the worker (FRU-463).
  *
  * The text holds what the reviewers wrote and where, and nothing more: no instruction and no
  * introduction. The person who pastes it writes the request around it.

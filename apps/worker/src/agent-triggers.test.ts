@@ -263,7 +263,7 @@ describe('a call when a person moves a note to To do (FRU-468)', () => {
         jsonrpc: '2.0',
         id: 1,
         method: 'tools/call',
-        params: { name: 'set_feedback_status', arguments: { id: noteIdOf(shop.id, 'sd_visitor'), status: 'own:todo' } },
+        params: { name: 'set_note_status', arguments: { id: noteIdOf(shop.id, 'sd_visitor'), status: 'own:todo' } },
       },
     });
     const answer = (await set.json()) as { result?: { isError?: boolean } };

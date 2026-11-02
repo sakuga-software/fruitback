@@ -4549,9 +4549,9 @@ protects.
   lists both, each with its `event`.
 - **Where it is called**: `postFeedback` and `postBatch`, after the index, for a note whose
   `authorOf` is not `visitor`; the status routes of the console (`console-notes.ts`) and of the
-  extension (`reply-routes.ts`), when the stage becomes `todo` from another one. `set_feedback_status`
+  extension (`reply-routes.ts`), when the stage becomes `todo` from another one. `set_note_status`
   of `/mcp` does not call it.
-- **The body holds ids only**: `note.id` is `noteIdOf(site, note)`, the id that `get_feedback` takes.
+- **The body holds ids only**: `note.id` is `noteIdOf(site, note)`, the id that `get_note` takes.
 
 ## The agent keys of a workspace (FRU-461)
 
@@ -4617,10 +4617,10 @@ framing; `SECURITY.md` says what is protected.
   (measured on 2026-10-28 with `claude -p --mcp-config`, a key of `POST /__dev/agent-key`).
 - **The key is read at each request** (`resolveAgentKey`), then the suspension of its workspace.
   Each refusal is `404`.
-- **A note comes from the index, its content from its page.** `list_feedback` reads one page of the
+- **A note comes from the index, its content from its page.** `list_notes` reads one page of the
   index (`list`, with `since` since this ticket), then each page of the notes through `readPage`, the
   read of `GET /feedback` with its cache, which refreshes the index as a read of the widget does.
-  `get_feedback` finds the page of a note with `pageOfNote`. So every store answers what its
+  `get_note` finds the page of a note with `pageOfNote`. So every store answers what its
   `findForPage` answers: the store conformance suite holds that read, and `mcp.test.ts` holds the
   tools on the store of a world.
 - **The id of a note is `noteIdOf` of the console**: its site and its note id, opaque. The id of the
@@ -4628,7 +4628,7 @@ framing; `SECURITY.md` says what is protected.
 - **`verifiedOnly` and `status` filter after the page of the index**, so an answer can hold fewer
   notes than its `limit`, and `next` still says that more wait. `status` is the key that each note
   gives in `status` (`own:<key>` for a status the worker keeps).
-- **`feedback_as_text` writes the text of `feedbackText`**, in English, with no placement: the worker
+- **`notes_as_text` writes the text of `feedbackText`**, in English, with no placement: the worker
   has no page to find a note on. A whole site is its newest `MAX_TEXT_NOTES` notes, one block a
   page, and `truncated: true` past them.
 
@@ -4636,7 +4636,7 @@ framing; `SECURITY.md` says what is protected.
 
 ### The rules, in short
 
-- **`reply_to_feedback` and `set_feedback_status` are given to a key whose grant says `write`**:
+- **`reply_to_note` and `set_note_status` are given to a key whose grant says `write`**:
   the key has the right, and its member has `manage-sites` now. Any other key does not list them, and
   `tools/call` answers `-32602`, as for a tool that does not exist.
 - **A reply goes through `store.reply` with the author `{ kind: 'agent', name }`**, the name of the

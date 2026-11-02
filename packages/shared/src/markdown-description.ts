@@ -111,7 +111,7 @@ export function buildIssueTitle(note: Note, options: { maxLength?: number } = {}
     .map((line) => line.trim())
     .find((line) => line.length > 0);
 
-  const title = firstLine ? firstLine.replace(/\s+/g, ' ') : `Feedback on <${note.anchor.tag}> — ${note.page.path}`;
+  const title = firstLine ? firstLine.replace(/\s+/g, ' ') : `Note on <${note.anchor.tag}> — ${note.page.path}`;
 
   return truncate(title, maxLength);
 }

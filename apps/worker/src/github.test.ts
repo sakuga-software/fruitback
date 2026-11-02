@@ -329,6 +329,23 @@ describe('create', () => {
     });
   });
 
+  /** FRU-518: a note with no words is titled by its element and its page, « Note on … ». */
+  it('titles the issue of a note with no words « Note on <tag> — path »', async () => {
+    const note = noteFixture({ text: '  \n ' });
+    const calls = fakeGithub({
+      ...installation(),
+      'POST /repos/acme/site/labels': () => json(201, {}),
+      'POST /repos/acme/site/issues': created,
+    });
+    const store = createGithubStore(CONFIG, { now: () => NOW });
+
+    await store.create(note, undefined, POLICY);
+
+    const sent = apiCalls(calls).find((call) => call.path === '/repos/acme/site/issues');
+    assert.ok(sent !== undefined, 'no issue was asked of GitHub');
+    assert.equal((sent.body as { title: string }).title, `Note on <${note.anchor.tag}> — ${note.page.path}`);
+  });
+
   /** The prose follows the worker's own locale, wherever the issues are kept (FRU-39). */
   it('writes the issue body in the locale the policy carries', async () => {
     const note = noteFixture();

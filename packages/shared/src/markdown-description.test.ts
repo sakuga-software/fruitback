@@ -173,7 +173,7 @@ describe('buildIssueTitle', () => {
   it('falls back to the element when the note is empty', () => {
     const note = minimalNoteFixture();
 
-    assert.equal(buildIssueTitle(note), 'Feedback on <h1> — /');
+    assert.equal(buildIssueTitle(note), 'Note on <h1> — /');
   });
 });
 

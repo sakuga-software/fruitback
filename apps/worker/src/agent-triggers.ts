@@ -33,7 +33,7 @@ export type AgentRequest = {
 };
 
 /**
- * The body of a call. `note.id` is the id that `get_feedback` of `/mcp` takes. No text, no file.
+ * The body of a call. `note.id` is the id that `get_note` of `/mcp` takes. No text, no file.
  */
 export function agentRequestBody(request: AgentRequest): string {
   return JSON.stringify({

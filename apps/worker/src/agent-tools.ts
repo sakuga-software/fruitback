@@ -52,11 +52,11 @@ export type AgentToolsContext = {
   route(site: string): Promise<ClientResolution>;
 };
 
-/** The most notes `feedback_as_text` writes for a whole site. */
+/** The most notes `notes_as_text` writes for a whole site. */
 export const MAX_TEXT_NOTES = 200;
 
 /**
- * The pages that `list_feedback` and `feedback_as_text` read at the same time (FRU-539). A read of a
+ * The pages that `list_notes` and `notes_as_text` read at the same time (FRU-539). A read of a
  * tracker calls it: GitHub counts the requests that run at the same time, and a page of GitHub
  * already fetches four threads at once.
  */
@@ -66,10 +66,10 @@ const NO_SITE = 'No site of this key has this id.';
 const NO_NOTE = 'No note of the sites of this key has this id.';
 const UNAVAILABLE = 'The store of the notes did not answer. Try again later.';
 
-/** The words of `feedback_as_text`: the English of the widget (FRU-109). */
+/** The words of `notes_as_text`: the English of the widget (FRU-109). */
 const WORDS: FeedbackWords = {
-  title: (url) => `Feedback on ${url}`,
-  empty: 'No feedback on this page.',
+  title: (url) => `Notes on ${url}`,
+  empty: 'No note on this page.',
   element: (element) => `Element: ${element}`,
   component: (component) => `Component: ${component}`,
   by: (name) => `By: ${name}`,
@@ -91,7 +91,7 @@ export function agentTools(context: AgentToolsContext): McpTool[] {
 
   return [
     {
-      name: 'list_feedback',
+      name: 'list_notes',
       description:
         'The notes of one site, newest first, each with its whole content: text, page, element, component, file and line, picture, replies, stage, status and reporter.',
       inputSchema: {
@@ -112,21 +112,21 @@ export function agentTools(context: AgentToolsContext): McpTool[] {
         required: ['site'],
         additionalProperties: false,
       },
-      call: (args) => listFeedback(context, seesTracker, args),
+      call: (args) => listNotes(context, seesTracker, args),
     },
     {
-      name: 'get_feedback',
-      description: 'One note, with its whole content, by the `id` that list_feedback gives.',
+      name: 'get_note',
+      description: 'One note, with its whole content, by the `id` that list_notes gives.',
       inputSchema: {
         type: 'object',
         properties: { id: { type: 'string' } },
         required: ['id'],
         additionalProperties: false,
       },
-      call: (args) => getFeedback(context, seesTracker, args),
+      call: (args) => getNote(context, seesTracker, args),
     },
     {
-      name: 'feedback_as_text',
+      name: 'notes_as_text',
       description: `The notes of one page, or of a whole site (${MAX_TEXT_NOTES} at most), as Markdown: each line a reviewer wrote is quoted.`,
       inputSchema: {
         type: 'object',
@@ -137,7 +137,7 @@ export function agentTools(context: AgentToolsContext): McpTool[] {
         required: ['site'],
         additionalProperties: false,
       },
-      call: (args) => feedbackAsText(context, seesTracker, args),
+      call: (args) => notesAsText(context, seesTracker, args),
     },
     ...(grant.write ? writeTools(context) : []),
   ];
@@ -154,33 +154,33 @@ export const AGENT_WRITE_LIMIT = 30;
 function writeTools(context: AgentToolsContext): McpTool[] {
   return [
     {
-      name: 'reply_to_feedback',
+      name: 'reply_to_note',
       description:
         'Adds a reply under a note, in its thread on the page. The reviewer reads it as a reply of an agent, under the name of this key.',
       inputSchema: {
         type: 'object',
         properties: {
-          id: { type: 'string', description: 'The `id` that list_feedback gives.' },
+          id: { type: 'string', description: 'The `id` that list_notes gives.' },
           body: { type: 'string', maxLength: context.replyLength },
         },
         required: ['id', 'body'],
         additionalProperties: false,
       },
-      call: (args) => replyToFeedback(context, args),
+      call: (args) => replyToNote(context, args),
     },
     {
-      name: 'set_feedback_status',
+      name: 'set_note_status',
       description: `Sets the status of a note that Fruitback keeps: a key of the statuses of its site, as \`${OWN_SOURCE}:<key>\`. A note in a tracker takes its status from the tracker.`,
       inputSchema: {
         type: 'object',
         properties: {
-          id: { type: 'string', description: 'The `id` that list_feedback gives.' },
+          id: { type: 'string', description: 'The `id` that list_notes gives.' },
           status: { type: 'string', description: `For example \`${OWN_SOURCE}:done\`.` },
         },
         required: ['id', 'status'],
         additionalProperties: false,
       },
-      call: (args) => setFeedbackStatus(context, args),
+      call: (args) => setNoteStatus(context, args),
     },
   ];
 }
@@ -225,7 +225,7 @@ function readable(context: AgentToolsContext, site: Site, issue: NoteIssue): boo
 }
 
 /**
- * A note as an agent reads it: the issue as `GET /feedback` gives it, with `id` for `get_feedback`
+ * A note as an agent reads it: the issue as `GET /feedback` gives it, with `id` for `get_note`
  * and its site. The id of the issue in its tracker is `issueId`, for a key that sees the tracker.
  */
 function noteView(site: Site, issue: NoteIssue, seesTracker: boolean): Record<string, unknown> {
@@ -237,7 +237,7 @@ function noteView(site: Site, issue: NoteIssue, seesTracker: boolean): Record<st
 /**
  * The issues of these notes of the index, in their order. Each page is read once, and
  * `PAGE_READS_AT_ONCE` pages at the same time (FRU-539): one page after the other made 50 reads in a
- * row for `list_feedback`, and 200 for `feedback_as_text`. A note that two pages hold is the one of
+ * row for `list_notes`, and 200 for `notes_as_text`. A note that two pages hold is the one of
  * the last page, as when the pages were read one after the other.
  */
 async function contentOf(site: Site, listed: readonly ListedNote[]): Promise<NoteIssue[]> {
@@ -279,7 +279,7 @@ async function guarded(work: () => Promise<ToolAnswer>): Promise<ToolAnswer> {
   }
 }
 
-function listFeedback(
+function listNotes(
   context: AgentToolsContext,
   seesTracker: boolean,
   args: Record<string, unknown>,
@@ -323,11 +323,7 @@ function listFeedback(
   });
 }
 
-function getFeedback(
-  context: AgentToolsContext,
-  seesTracker: boolean,
-  args: Record<string, unknown>,
-): Promise<ToolAnswer> {
+function getNote(context: AgentToolsContext, seesTracker: boolean, args: Record<string, unknown>): Promise<ToolAnswer> {
   return guarded(async () => {
     const key = typeof args.id === 'string' ? noteKeyOf(args.id) : undefined;
     const site = key === undefined ? undefined : await siteOf(context, key.site);
@@ -341,7 +337,7 @@ function getFeedback(
   });
 }
 
-function feedbackAsText(
+function notesAsText(
   context: AgentToolsContext,
   seesTracker: boolean,
   args: Record<string, unknown>,
@@ -436,7 +432,7 @@ function chargeKey(context: AgentToolsContext): Promise<boolean> {
 
 const LIMITED = `This key wrote ${AGENT_WRITE_LIMIT} times in the last minute. Try again later.`;
 
-function replyToFeedback(context: AgentToolsContext, args: Record<string, unknown>): Promise<ToolAnswer> {
+function replyToNote(context: AgentToolsContext, args: Record<string, unknown>): Promise<ToolAnswer> {
   return guarded(async () => {
     const body = args.body;
     if (typeof body !== 'string' || body.trim() === '' || [...body].length > context.replyLength) {
@@ -482,7 +478,7 @@ function replyToFeedback(context: AgentToolsContext, args: Record<string, unknow
   });
 }
 
-function setFeedbackStatus(context: AgentToolsContext, args: Record<string, unknown>): Promise<ToolAnswer> {
+function setNoteStatus(context: AgentToolsContext, args: Record<string, unknown>): Promise<ToolAnswer> {
   return guarded(async () => {
     const prefix = `${OWN_SOURCE}:`;
     const asked = args.status;

@@ -52,9 +52,9 @@ async function tool(key: string, name: string, args: Record<string, unknown>): P
 /** The note with this text, written by the agent and by a member of the workspace. */
 async function replyAsAgentAndMember(text: string): Promise<void> {
   const { secret } = await post('/__dev/agent-key', { write: true, verifiedOnly: false });
-  const { notes } = await tool(secret, 'list_feedback', { site: 'playground', q: text });
+  const { notes } = await tool(secret, 'list_notes', { site: 'playground', q: text });
   const note = notes.find((each: { note: { text: string } }) => each.note.text === text);
-  await tool(secret, 'reply_to_feedback', { id: note.id, body: 'Fixed in the next deploy.' });
+  await tool(secret, 'reply_to_note', { id: note.id, body: 'Fixed in the next deploy.' });
 
   const { code } = await post('/__dev/pair', { name: 'Ana Martin', endpoint: WORKER_ORIGIN });
   const paired = await post('/session/pair', { code });

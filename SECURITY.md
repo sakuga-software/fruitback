@@ -2561,7 +2561,7 @@ note », gives the framing.
 
 [docs/agents.md](docs/agents.md) is the guide for a team. An agent reads the notes of the sites of its
 agent key through `POST /mcp`, the Streamable
-HTTP transport of MCP. Three tools, all reads: `list_feedback`, `get_feedback`, `feedback_as_text`.
+HTTP transport of MCP. Three tools, all reads: `list_notes`, `get_note`, `notes_as_text`.
 
 - **No valid key, no route.** No key, a key of another shape, a revoked or expired key, a key whose
   member left or was suspended, and a key of a suspended workspace: `401` with
@@ -2590,7 +2590,7 @@ HTTP transport of MCP. Three tools, all reads: `list_feedback`, `get_feedback`, 
 - What a read costs a store: each page of the answer is one read of the page, through the read
   cache of `GET /feedback`. The rate limit per address applies.
 - A key writes only with the right `write`, and while its member may manage the sites:
-  `reply_to_feedback` and `set_feedback_status`. A key `read`, or a key whose member no longer has
+  `reply_to_note` and `set_note_status`. A key `read`, or a key whose member no longer has
   `manage-sites`, is not given them, and `tools/call` refuses them (`-32602`).
   test:`gives a key read no write tool, and refuses both when it calls them`.
 - A reply of an agent says that it is one, and never names the member who made the key: its
