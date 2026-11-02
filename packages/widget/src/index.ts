@@ -15,6 +15,7 @@ export * from './orphans.ts';
 export * from './overlay.ts';
 export * from './page.ts';
 export * from './panel.ts';
+export * from './relative-units.ts';
 export * from './resolve.ts';
 export * from './selector.ts';
 export * from './site-notes.ts';
