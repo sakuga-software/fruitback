@@ -597,6 +597,8 @@ test('« New connector » opens a dialog with the sources as a grid of cards (FR
       'padding-left': '16px',
     });
   expect.soft(await painted(card, 'borderTopColor')).toEqual(rgb(LINE));
+  // The dialog fades and zooms in (HeroUI's Modal): axe reads its contrast once it is there.
+  await page.evaluate(() => Promise.all(document.getAnimations().map((animation) => animation.finished)));
   const results = await new AxeBuilder({ page }).include('[role="dialog"]').analyze();
   expect.soft(results.violations.map((violation) => violation.id)).toEqual([]);
 
@@ -668,21 +670,26 @@ test('the panel of a connector unfolds as its card opens, and is there at once w
   await expect(panel(page)).toHaveAttribute('data-settled', '');
 });
 
-test('a move of the panel that is cancelled leaves it unclipped (FRU-563)', async ({ page }) => {
+test('a move of the panel that never ends leaves it unclipped (FRU-563)', async ({ page }) => {
   await workerWith(page);
   await open(page);
   await expect(rows(page)).toHaveCount(2);
-  // The move is taken away while it runs: the browser sends « animationcancel », and no end.
+  // The panel is hidden while it moves: its move sends no end (and Chromium no « animationcancel »).
   const settled = await page.evaluate(async () => {
     document.querySelector<HTMLButtonElement>('button[id^="source-row-"]')!.click();
     await new Promise((resolve) => requestAnimationFrame(resolve));
     const opened = document.getElementById('source-panel')!;
-    opened.style.animation = 'none';
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    const ends: string[] = [];
+    opened.addEventListener('animationend', () => ends.push('end'));
+    opened.style.display = 'none';
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    const after = { settled: opened.hasAttribute('data-settled'), ends: ends.length };
+    opened.style.display = '';
 
-    return opened.hasAttribute('data-settled');
+    return after;
   });
-  expect(settled).toBe(true);
+  // The control: no end came, so only the timer can have settled it.
+  expect(settled).toEqual({ settled: true, ends: 0 });
   await expect(panel(page).locator('.source-panel__body')).toHaveCSS('overflow-y', 'visible');
 });
 

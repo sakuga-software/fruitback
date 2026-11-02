@@ -647,6 +647,9 @@ function State({ connector, late, chosen }: { connector: Connector; late: Late |
   return <span className="flex-none text-hint leading-auto font-semibold text-done">{t('Connected')}</span>;
 }
 
+/** When the panel is settled even if its move sent no end: the move takes 220 ms (FRU-563). */
+const SETTLE_AFTER_MS = 400;
+
 /** The id of the open panel, which its row names in `aria-controls`. */
 const PANEL = 'source-panel';
 
@@ -697,18 +700,16 @@ function Opened({
   }, [takesFocus]);
 
   useEffect(() => {
-    // A move that is cancelled (its animation taken away, the panel hidden) sends no end, and the
-    // panel must not stay clipped (raised in review). React has no prop for this event.
     const opened = held.current;
     if (opened === null) return;
-    // No move at all (reduced motion): it is settled from the start, and sends neither event.
-    if (getComputedStyle(opened).animationName === 'none') setSettled(true);
-    const cancelled = (event: AnimationEvent) => {
-      if (event.target === opened) setSettled(true);
-    };
-    opened.addEventListener('animationcancel', cancelled);
+    // No move at all (reduced motion): it is settled from the start, and sends no end.
+    if (getComputedStyle(opened).animationName === 'none') return setSettled(true);
+    // A move that does not end (the panel hidden, the tab in the background) sends no end, and the
+    // panel must not stay clipped (raised in review). Chromium sends no « animationcancel » either
+    // (measured), so a timer settles it after the move of 220 ms in any case.
+    const late = window.setTimeout(() => setSettled(true), SETTLE_AFTER_MS);
 
-    return () => opened.removeEventListener('animationcancel', cancelled);
+    return () => window.clearTimeout(late);
   }, []);
 
   return (
