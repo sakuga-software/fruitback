@@ -2,6 +2,7 @@ import { normalizeWorkerEndpoint } from './endpoint.ts';
 import { complaint } from './site-form.ts';
 import { parseSitePattern } from './site-patterns.ts';
 import { type SiteConfig, parseSite } from './sites.ts';
+import { isRecord } from './guards.ts';
 
 /**
  * The sites map as a file a team can hand around (FRU-43).
@@ -75,8 +76,4 @@ export function importSites(text: string): SitesImport {
   }
 
   return { ok: true, sites, skipped };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
