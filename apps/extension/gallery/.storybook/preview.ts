@@ -6,7 +6,7 @@ import welcomeSheet from '../../entrypoints/welcome/style.css?inline';
 import kitSheet from '../../src/kit.css?inline';
 import { setLanguage } from '../../src/i18n.ts';
 import gallerySheet from '../gallery.css?inline';
-import { FROZEN_CLASS, freezeChildren, keepSheetSources } from '../freeze.ts';
+import { FROZEN_CLASS, freezeChildren } from '../freeze.ts';
 import { freezeWidget, unmountWidget } from '../widget-page.ts';
 
 type Sheets = { sheets: string[]; bodyClass?: string };
@@ -49,8 +49,6 @@ const surfaceOf: Decorator = (story, context) => {
  * « Frozen » (FRU-579): after the `play`, the story stays in its state and nothing on it reacts. A
  * pin window or a preview then stays open while the widget of Fruitback takes a note on it.
  */
-keepSheetSources();
-
 const preview: Preview = {
   decorators: [surfaceOf],
   afterEach: (context) => {

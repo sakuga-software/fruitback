@@ -2,7 +2,7 @@ import type { NoteIssue } from '@fruitback/shared';
 import { noteFixture, noteIssueFixture } from '@fruitback/shared/note.fixture';
 import { type Fruitback, init } from '@fruitback/widget';
 import type { TransportRequest, TransportResponse } from '@fruitback/widget';
-import { cornerBeside, flatten } from './freeze.ts';
+import { cloneHost, cornerBeside } from './freeze.ts';
 
 /**
  * The widget of Fruitback on a made-up page, for the gallery. A transport in this file answers in
@@ -189,7 +189,7 @@ export function unmountWidget(): void {
  */
 export function freezeWidget(): void {
   if (mountedHost === undefined || !mountedHost.isConnected) return;
-  const copy = flatten(mountedHost);
+  const copy = cloneHost(mountedHost);
   const live = [...document.querySelectorAll<HTMLElement>(HOSTS)].find((host) => host !== mountedHost);
   unmountWidget();
   if (live === undefined) {

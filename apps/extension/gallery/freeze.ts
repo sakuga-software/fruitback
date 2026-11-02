@@ -3,111 +3,11 @@
  * on it reacts. The widget of Fruitback can then take a note on any element of the story.
  *
  * - The children of the root of the story are replaced by copies. A copy has no listener.
- * - The widget of the story is copied out of its shadow root into the page, with its styles, and
- *   then destroyed. Its elements are then in the document, where a selector finds them.
+ * - The widget of the story is copied into a new open shadow root, with the same sheets, and then
+ *   destroyed. The widget of the extension anchors a note through an open shadow root (FRU-580).
  */
 
 export const FROZEN_CLASS = 'gallery-frozen';
-
-const SOURCES = new WeakMap<CSSStyleSheet, string>();
-
-const KEPT = Symbol('fruitback.gallery.keepSheetSources');
-
-/**
- * Keeps the text that each sheet of the document receives. Call it before the widget mounts. A second
- * call does nothing.
- *
- * `cssText` of a rule loses a shorthand with `var()` that a longhand follows: `border: 1px solid
- * var(--x)` then `border-bottom-width: 2px` comes back as `border-bottom-width: 2px` alone. The copy
- * uses the text that the widget gave.
- */
-export function keepSheetSources(prototype: CSSStyleSheet = CSSStyleSheet.prototype): void {
-  const patched = prototype as CSSStyleSheet & { [KEPT]?: true };
-  if (patched[KEPT]) return;
-  patched[KEPT] = true;
-  const { replaceSync, replace } = prototype;
-  prototype.replaceSync = function (this: CSSStyleSheet, text: string) {
-    SOURCES.set(this, text);
-    replaceSync.call(this, text);
-  };
-  prototype.replace = function (this: CSSStyleSheet, text: string) {
-    SOURCES.set(this, text);
-
-    return replace.call(this, text);
-  };
-}
-
-/** The text that `keepSheetSources` kept for `sheet`. */
-export function sourceOf(sheet: CSSStyleSheet): string | undefined {
-  return SOURCES.get(sheet);
-}
-
-/**
- * The rules of a shadow root, for a copy in the page. Out of the shadow root, a rule such as
- * `button { … }` applies to the whole page: so the text goes into `@scope` of the copy, and `:host`
- * becomes `:scope`, the copy. `@scope` cannot hold `@keyframes`, `@font-face` and `@property`, so
- * these are put outside too.
- */
-export function scopedCss(texts: readonly string[], globals: readonly string[]): string {
-  return [...globals, `@scope (.${FROZEN_CLASS}) {\n${texts.map(hostToScope).join('\n')}\n}`].join('\n');
-}
-
-/** `:host([a]) .b` → `:scope[a] .b`, and `:host` → `:scope`. The argument of `:host()` can hold parentheses. */
-export function hostToScope(css: string): string {
-  let out = '';
-  let from = 0;
-  for (let at = css.indexOf(':host', from); at !== -1; at = css.indexOf(':host', from)) {
-    const after = at + ':host'.length;
-    if (/[\w-]/.test(css[after] ?? '')) {
-      out += css.slice(from, after);
-      from = after;
-      continue;
-    }
-    out += css.slice(from, at) + ':scope';
-    from = after;
-    if (css[after] !== '(') continue;
-    const close = closingParenthesis(css, after);
-    out += css.slice(after + 1, close);
-    from = close + 1;
-  }
-
-  return out + css.slice(from);
-}
-
-function closingParenthesis(text: string, open: number): number {
-  let depth = 0;
-  for (let at = open; at < text.length; at += 1) {
-    if (text[at] === '(') depth += 1;
-    else if (text[at] === ')' && --depth === 0) return at;
-  }
-  throw new Error(`No closing parenthesis for the one at ${open}: ${text.slice(open, open + 40)}`);
-}
-
-function sheetsOf(root: ShadowRoot): { texts: string[]; globals: string[] } {
-  const styles = [...root.querySelectorAll('style')];
-  const sheets = [...root.adoptedStyleSheets, ...styles.map((style) => style.sheet)].filter(
-    (sheet): sheet is CSSStyleSheet => sheet !== null,
-  );
-  const texts = [
-    ...root.adoptedStyleSheets.map((sheet) => {
-      const text = sourceOf(sheet);
-      if (text === undefined) throw new Error('A sheet of the widget has no text: call keepSheetSources() first');
-
-      return text;
-    }),
-    ...styles.map((style) => style.textContent ?? ''),
-  ];
-  const globals = sheets.flatMap((sheet) =>
-    [...sheet.cssRules]
-      .filter(
-        (rule) =>
-          rule instanceof CSSKeyframesRule || rule instanceof CSSFontFaceRule || rule instanceof CSSPropertyRule,
-      )
-      .map((rule) => rule.cssText),
-  );
-
-  return { texts, globals };
-}
 
 /** A copy keeps the attributes, not the values that a script or a person typed: these come along. */
 function withValues<T extends Node>(source: T, copy: T): T {
@@ -125,8 +25,11 @@ function withValues<T extends Node>(source: T, copy: T): T {
   return copy;
 }
 
-/** A copy of `host` and of its shadow root, in the page, with no shadow root and no listener. */
-export function flatten(host: HTMLElement): HTMLElement {
+/**
+ * A copy of `host` and of its shadow root, with no listener. The copy adopts the sheets of the root:
+ * a sheet of one document can be adopted by more roots of that document.
+ */
+export function cloneHost(host: HTMLElement): HTMLElement {
   const root = host.shadowRoot;
   const copy = host.ownerDocument.createElement('div');
   for (const { name, value } of host.attributes) {
@@ -136,15 +39,9 @@ export function flatten(host: HTMLElement): HTMLElement {
   // The layers of the copy keep their `z-index` inside the copy, under the layers of a live widget.
   copy.style.isolation = 'isolate';
   if (root === null) return copy;
-  const style = host.ownerDocument.createElement('style');
-  const { texts, globals } = sheetsOf(root);
-  style.textContent = scopedCss(texts, globals);
-  copy.append(
-    style,
-    ...[...root.childNodes]
-      .filter((node) => node.nodeName !== 'STYLE')
-      .map((node) => withValues(node, node.cloneNode(true))),
-  );
+  const copyRoot = copy.attachShadow({ mode: 'open' });
+  copyRoot.adoptedStyleSheets = [...root.adoptedStyleSheets];
+  copyRoot.append(...[...root.childNodes].map((node) => withValues(node, node.cloneNode(true))));
 
   return copy;
 }
