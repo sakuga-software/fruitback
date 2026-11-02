@@ -562,6 +562,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Settings: 'Réglages',
   '1 new': '1 nouvelle',
   '{count} new': '{count} nouvelles',
+  'See the new note of {site}': 'Voir la nouvelle note de {site}',
+  'See the {count} new notes of {site}': 'Voir les {count} nouvelles notes de {site}',
   'No destination matches this search.': 'Aucune destination ne correspond à cette recherche.',
   'Search the destinations': 'Chercher une destination',
   'Show {more} more ({left} left)': 'En afficher {more} de plus ({left} restantes)',

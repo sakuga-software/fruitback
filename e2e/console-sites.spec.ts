@@ -357,7 +357,8 @@ test('the list is a grid of cards, each named by its address and its icon (FRU-4
   });
   expect.soft(await painted(foot, 'color')).toEqual(rgb(MUTED));
   const connect = foot.getByRole('link', { name: 'Connect a tracker' });
-  await expect(connect).toHaveAttribute('href', '/w/w1/connectors');
+  // FRU-571: it opens the dialog « Add a connector » of the Connectors screen (FRU-562).
+  await expect(connect).toHaveAttribute('href', '/w/w1/connectors?new=1');
   // And the way to the page of the notes (FRU-245).
   await expect(foot).toContainText('Connect a tracker or see where every note went');
   await expect(foot.getByRole('link', { name: 'see where every note went' })).toHaveAttribute('href', '/w/w1/notes');
@@ -424,6 +425,34 @@ test('who reads and who writes are chips, a long place is cut with a tooltip, an
   expect(heights).toHaveLength(5);
   expect(new Set(heights).size, `the heights: ${heights.join(', ')}`).toBe(1);
   await expectNoViolation(page, 'the cards with chips and a cut place');
+});
+
+test('the new notes of a card are on a line of their own, and lead to the notes of the site that are new (FRU-570)', async ({
+  page,
+}) => {
+  await workerWith(page);
+  await open(page);
+
+  // On every card, wide or narrow: the line of the new notes is under the bar, never beside it.
+  for (const [name, count] of [
+    ['staging.acme.dev', 3],
+    ['acme.dev', 6],
+    ['support.acme.dev', 2],
+  ] as const) {
+    const site = card(page, name);
+    const fresh = site.getByRole('link', { name: `See the ${count} new notes of ${name}`, exact: true });
+    await expect(fresh).toHaveText(`${count} new`);
+    const bar = await box(site.getByRole('img', { name: /notes:/ }));
+    const line = await box(fresh);
+    expect.soft(line.y, `the new notes of ${name} are under the bar`).toBeGreaterThanOrEqual(bar.y + bar.height);
+    expect.soft(Math.round(line.x), `the new notes of ${name} start the line`).toBeLessThanOrEqual(Math.round(bar.x));
+  }
+  // No new note: no link.
+  await expect(card(page, 'preview.lumen.studio').getByRole('link', { name: /new notes?/ })).toHaveCount(0);
+
+  // A press opens the Notes screen with this site and « New » chosen.
+  await card(page, 'acme.dev').getByRole('link', { name: 'See the 6 new notes of acme.dev', exact: true }).click();
+  await expect(page).toHaveURL(/\/w\/w1\/notes\?site=s2&stage=new$/);
 });
 
 test('the search keeps the sites whose address holds it, and a reload keeps it (FRU-408)', async ({ page }) => {
