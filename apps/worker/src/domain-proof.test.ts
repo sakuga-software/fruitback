@@ -341,6 +341,20 @@ describe('a domain in the console, and the previews it covers (FRU-103)', () => 
     assert.equal(covered.status, 200);
     assert.equal(((await covered.json()) as View).previewsSite, site);
     assert.deepEqual(await previewsSeen(env, extension), { [site]: ['https://*.preview.acme.dev'] });
+    // FRU-498: the list of the tab of a preview names the site whose previews cover it.
+    const ofTab = async (tab: string) => {
+      const answer = await call(env, 'GET', `/session/sites?origin=${encodeURIComponent(tab)}`, {
+        token: extension,
+        origin: EXTENSION,
+      });
+      assert.equal(answer.status, 200);
+
+      return ((await answer.json()) as { sites: { id: string }[] }).sites.map((each) => each.id);
+    };
+    assert.deepEqual(await ofTab('https://pr-12.preview.acme.dev'), [site]);
+    assert.deepEqual(await ofTab('http://pr-12.preview.acme.dev'), []);
+    assert.deepEqual(await ofTab('https://pr-12.preview.acme.dev:8443'), []);
+    assert.deepEqual(await ofTab('https://elsewhere.dev'), []);
 
     // Taken away from the console.
     await call(env, 'POST', `${base}/${domain.id}/previews`, { token: alice.token, body: { site: null } });

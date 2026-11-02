@@ -63,6 +63,36 @@ describe('the sites a session may turn on (FRU-101)', () => {
     assert.equal(response.headers.get('Access-Control-Allow-Origin'), EXTENSION);
   });
 
+  // FRU-498: the sites of the tab only, and the origin they were read for. Without it, the whole list.
+  it('answers the sites of one origin, for ?origin=, and refuses an origin that is not one', async () => {
+    const env = await envWith();
+    const { acme, site, token } = await setUp(env);
+    const ofTab = (query: string) => callOn(env, 'GET', `/session/sites?${query}`, { origin: EXTENSION, token });
+
+    const mine = await ofTab(`origin=${encodeURIComponent('https://staging.acme.dev')}`);
+    assert.equal(mine.status, 200);
+    assert.deepEqual(await mine.json(), {
+      workspace: { id: acme.id, name: 'Acme' },
+      origin: 'https://staging.acme.dev',
+      sites: [
+        {
+          id: site.id,
+          origin: 'https://staging.acme.dev',
+          visibility: 'members',
+          destination: { label: 'Fruitback', kind: 'fruitback' },
+          ...noNotes(),
+        },
+      ],
+    });
+    const none = await ofTab(`origin=${encodeURIComponent('https://acme.dev')}`);
+    assert.deepEqual(((await none.json()) as { sites: unknown[] }).sites, []);
+    for (const wrong of ['', 'acme.dev', 'https://staging.acme.dev/', 'ftp://staging.acme.dev', 'javascript:1']) {
+      const refused = await ofTab(`origin=${encodeURIComponent(wrong)}`);
+      assert.equal(refused.status, 400, wrong);
+      assert.deepEqual(await refused.json(), { error: 'invalid-origin' });
+    }
+  });
+
   it('answers the language of the account, when it holds one (FRU-131)', async () => {
     const env = await envWith();
     const { alice, token } = await setUp(env);

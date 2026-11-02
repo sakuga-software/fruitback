@@ -101,7 +101,8 @@ describe('the sites of the workspace (FRU-101)', () => {
       },
       pattern: 'https://staging.acme.dev',
     });
-    assert.deepEqual(asked, ['https://api.fruitback.test/session/sites']);
+    // FRU-498: the sites of the tab only. This worker answers the whole list, as one of before does.
+    assert.deepEqual(asked, ['https://api.fruitback.test/session/sites?origin=https%3A%2F%2Fstaging.acme.dev']);
   });
 
   it('offers nothing for a tab that is not a site of the workspace', async () => {
@@ -351,6 +352,16 @@ function area(initial: Record<string, unknown> = {}): LanguageArea & { values: R
 const PAIRED = { endpoints: async () => ['https://api.fruitback.test'], ensureAccess: async () => GRANTED };
 
 describe('the language of the account (FRU-131)', () => {
+  // FRU-498: the language alone, through the list of the worker's own origin, not the whole list.
+  it('asks for the language with the origin of the worker, not for every site', async () => {
+    const { fetcher, asked } = worker({ ...LISTED, locale: 'fr' });
+    assert.deepEqual(await accountLanguage({ ...PAIRED, fetcher }), {
+      locale: 'fr',
+      from: 'https://api.fruitback.test',
+    });
+    assert.deepEqual(asked, ['https://api.fruitback.test/session/sites?origin=https%3A%2F%2Fapi.fruitback.test']);
+  });
+
   it('is read from the answer of the worker, and a value that is no tag is left out', () => {
     assert.equal(parseWorkspaceSites({ ...LISTED, locale: 'fr' })?.locale, 'fr');
     assert.equal(parseWorkspaceSites({ ...LISTED, locale: 7 })?.locale, undefined);

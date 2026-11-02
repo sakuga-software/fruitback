@@ -67,6 +67,11 @@ export async function handleSessionSites(
 
   const verified = await verifyIdentityToken(token, secret, now);
   if (!verified.ok) return json(401, { error: 'identity-required', reason: verified.reason }, headers);
+  // FRU-498: `?origin=` asks for the sites of one tab. With no such parameter, the whole list, as an
+  // extension of before asks it.
+  const asked = new URL(request.url).searchParams.get('origin');
+  const origin = asked === null ? undefined : originOf(asked);
+  if (asked !== null && origin === undefined) return json(400, { error: 'invalid-origin' }, headers);
 
   const subject = verified.reporter.id;
   // A session of an account (FRU-238): the sites of every workspace it is a member of today. A
@@ -75,7 +80,7 @@ export async function handleSessionSites(
     if ((await accounts.account(subject))?.suspended === true) {
       return json(401, { error: 'identity-required', reason: 'no-account' }, headers);
     }
-    return json(200, await sitesOfAccount(accounts, subject, now ?? Date.now(), noteIndex), headers);
+    return json(200, await sitesOfAccount(accounts, subject, now ?? Date.now(), noteIndex, origin), headers);
   }
   const workspaceId = verified.workspace;
   if (subject === undefined || workspaceId === undefined) {
@@ -89,19 +94,22 @@ export async function handleSessionSites(
   }
 
   const workspace = membership?.workspace;
-  const sites = readableSites(await accounts.sites(workspaceId), reach);
+  const previewsOf = await previewsIn(accounts, workspaceId, now ?? Date.now());
+  const readable = readableSites(await accounts.sites(workspaceId), reach);
+  const sites = readable.filter((site) => origin === undefined || covers(site, previewsOf(site.id), origin));
   // The language the person reads (FRU-119), so the extension and its widget speak it too (FRU-131).
   const locale = (await accounts.account(subject))?.locale;
-  const previewsOf = await previewsIn(accounts, workspaceId, now ?? Date.now());
   // FRU-237: what the popup counts on a site (06, 07). What did not arrive stays in the console.
-  const notes = await notesIn(noteIndex, workspaceId);
-  const kinds = can(reach.role, 'see-tracker') ? await kindsIn(accounts, workspaceId) : new Map();
+  // FRU-498: not read for a tab that is no site of the workspace.
+  const notes = sites.length === 0 ? undefined : await notesIn(noteIndex, workspaceId);
+  const kinds = can(reach.role, 'see-tracker') && sites.length > 0 ? await kindsIn(accounts, workspaceId) : new Map();
 
   return json(
     200,
     {
       workspace: { id: workspaceId, name: workspace?.name ?? '' },
       ...(locale === undefined ? {} : { locale }),
+      ...(origin === undefined ? {} : { origin }),
       sites: sites.map((site) => {
         const previews = previewsOf(site.id);
 
@@ -140,35 +148,39 @@ async function previewsIn(accounts: AccountStore, workspace: string, now: number
  * No `workspace` in the singular: the extension of before reads this answer as « no list », and asks
  * nothing of a session it does not know.
  */
-async function sitesOfAccount(accounts: AccountStore, account: string, now: number, noteIndex?: NoteIndex) {
+async function sitesOfAccount(
+  accounts: AccountStore,
+  account: string,
+  now: number,
+  noteIndex?: NoteIndex,
+  origin?: string,
+) {
   const memberships = (await accounts.memberships(account)).filter((each) => each.suspension === undefined);
   const locale = (await accounts.account(account))?.locale;
-  const sites = [];
-  // FRU-453: the sources the popup offers, for a role that changes the place of a site, by workspace.
-  const sourcesIn = new Map<string, { id: string; kind: string; label: string }[]>();
-  for (const { workspace, role } of memberships) {
+  // FRU-498: the workspaces are read a few at a time, not one after the other: an account of an agency
+  // is a member of tens of them. The order of the answer stays the order of the memberships.
+  const read = await inBatches(memberships, WORKSPACES_AT_ONCE, async ({ workspace, role }) => {
     // Read again, with the sites of a guest (FRU-250). A membership that ended since reads none.
     const reach = await accounts.reach(workspace.id, account);
-    if (reach === undefined) continue;
+    if (reach === undefined) return undefined;
     const previewsOf = await previewsIn(accounts, workspace.id, now);
+    const all = readableSites(await accounts.sites(workspace.id), reach);
+    const readable = all.filter((site) => origin === undefined || covers(site, previewsOf(site.id), origin));
+    // FRU-498: a workspace with no site of the tab costs no count and no connector.
+    if (origin !== undefined && readable.length === 0) return { workspace: workspace.id, sites: [] };
     const notes = await notesIn(noteIndex, workspace.id);
     const toCheck = await toCheckIn(noteIndex, workspace.id, account);
     const manages = can(role, 'manage-sites');
     const connectors = can(reach.role, 'see-tracker') ? await accounts.connectors(workspace.id) : [];
     const kinds = new Map(connectors.map((each) => [each.id, each.kind]));
-    if (manages) {
-      sourcesIn.set(
-        workspace.id,
-        connectors.map((each) => ({
-          id: each.id,
-          kind: each.kind,
-          label: each.name ?? each.label,
-        })),
-      );
-    }
-    for (const site of readableSites(await accounts.sites(workspace.id), reach)) {
+    // FRU-453: the sources the popup offers, for a role that changes the place of a site.
+    const sources = manages
+      ? connectors.map((each) => ({ id: each.id, kind: each.kind, label: each.name ?? each.label }))
+      : undefined;
+    const sites = readable.map((site) => {
       const previews = previewsOf(site.id);
-      sites.push({
+
+      return {
         id: site.id,
         origin: site.origin,
         visibility: site.visibility,
@@ -180,13 +192,20 @@ async function sitesOfAccount(accounts: AccountStore, account: string, now: numb
         ...(notes === undefined ? {} : (notes.get(site.id) ?? noNotes())),
         // FRU-295: the notes of this person that the team marked done and that they did not confirm.
         ...(toCheck === undefined ? {} : { toCheck: toCheck.get(site.id) ?? 0 }),
-      });
-    }
-  }
+      };
+    });
+
+    return { workspace: workspace.id, sites, ...(sources === undefined ? {} : { sources }) };
+  });
+  const sourcesIn = new Map<string, { id: string; kind: string; label: string }[]>();
+  for (const each of read) if (each?.sources !== undefined) sourcesIn.set(each.workspace, each.sources);
+  const sites = read.flatMap((each) => each?.sites ?? []);
 
   return {
     account: true,
     ...(locale === undefined ? {} : { locale }),
+    // FRU-498: the origin this list was read for. An extension reads a list without it as the whole.
+    ...(origin === undefined ? {} : { origin }),
     // FRU-255: whether the popup may offer to add a site there, from the role read now.
     workspaces: memberships.map(({ workspace, role }) => ({
       id: workspace.id,
@@ -277,4 +296,47 @@ async function notesIn(noteIndex: NoteIndex | undefined, workspace: string) {
 
     return undefined;
   });
+}
+
+/** How many workspaces of an account are read at once (FRU-498). */
+const WORKSPACES_AT_ONCE = 4;
+
+/** `run` over `items`, `size` at a time, in their order. */
+async function inBatches<T, R>(items: readonly T[], size: number, run: (item: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = [];
+  for (let start = 0; start < items.length; start += size) {
+    out.push(...(await Promise.all(items.slice(start, start + size).map(run))));
+  }
+
+  return out;
+}
+
+/** The origin of a tab as `?origin=` gives it (FRU-498): an `http` or `https` origin, spelled as one, or `undefined`. */
+function originOf(value: string): string | undefined {
+  try {
+    const url = new URL(value);
+
+    return (url.protocol === 'https:' || url.protocol === 'http:') && url.origin === value ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Whether a site is one the extension offers on a tab of `origin` (FRU-498), as `offerFor` reads the
+ * whole list: the site of that origin, or a site whose workspace proved a preview that covers it
+ * (`https://*.domain`, FRU-103, read as `coversOrigin` of the extension reads it).
+ */
+function covers(site: Site, previews: readonly string[], origin: string): boolean {
+  return site.origin === origin || previews.some((pattern) => previewCovers(pattern, origin));
+}
+
+function previewCovers(pattern: string, origin: string): boolean {
+  if (!pattern.includes('://*.')) return false;
+  const [scheme = '', base = ''] = pattern.split('://*.');
+  const url = new URL(origin);
+
+  return (
+    url.protocol === `${scheme}:` && url.port === '' && (url.hostname === base || url.hostname.endsWith(`.${base}`))
+  );
 }
