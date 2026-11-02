@@ -176,7 +176,12 @@ test('at 1440 px the rail has the values of the mockup', async ({ page }) => {
   expect
     .soft(await styles(foot, ['padding', 'row-gap', 'margin-top']))
     .toMatchObject({ padding: '8px', 'row-gap': '14px' });
-  const logo = rail(page).getByRole('img', { name: 'Fruitback' });
+  // FRU-573: the logo leads to the site of Fruitback, in another tab.
+  const home = rail(page).getByRole('link', { name: 'Fruitback, its site, in a new tab', exact: true });
+  await expect(home).toHaveAttribute('href', 'https://fruitback.com');
+  await expect(home).toHaveAttribute('target', '_blank');
+  await expect(home).toHaveAttribute('rel', 'noreferrer');
+  const logo = home.getByRole('img', { name: 'Fruitback' });
   expectBox(await box(logo), { x: 20, y: 860, width: 82, height: 16 }, 2, 'the logo');
   expect.soft(await painted(logo.locator('path').first(), 'fill')).toEqual(rgb(WHITE));
   expect.soft(await painted(logo.locator('path').last(), 'fill')).toEqual(rgb(RAIL_ACCENT));

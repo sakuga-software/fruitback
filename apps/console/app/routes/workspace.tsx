@@ -298,6 +298,8 @@ export function RailFrame({
   children: ReactNode;
   foot: readonly RailLink[];
 }) {
+  useLocale();
+
   return (
     // From 888 px the rail is beside the screen, as high as the window, and stays in place while the
     // screen scrolls (FRU-402). A window lower than the rail scrolls the rail itself.
@@ -319,9 +321,14 @@ export function RailFrame({
           );
           if (link.status === undefined) return anchor;
 
-          // The line of the extension and its link read as one entry: 6 px apart, 14 px from the next.
+          // The line of the extension and its link read as one entry: 6 px apart. FRU-572: a card on a
+          // tint of the colour of its dot, 8 px further from the next entry than the 14 px of the foot.
           return (
-            <div key={link.href} className="flex min-w-0 flex-col gap-[6px]">
+            <div
+              key={link.href}
+              data-rail-extension=""
+              className="mb-[8px] flex min-w-0 flex-col gap-[6px] rounded-box border border-status-done/45 bg-status-done/20 px-[10px] py-[10px]"
+            >
               <p className="flex min-w-0 flex-col gap-[2px] text-small leading-auto">
                 <span className="flex items-center gap-[8px] whitespace-nowrap text-white">
                   <span aria-hidden="true" className="kit-drop flex-none bg-status-done" data-size="9" />
@@ -338,7 +345,16 @@ export function RailFrame({
             </div>
           );
         })}
-        <Logo on="rail" />
+        {/* FRU-573: the logo leads to the site of Fruitback, as « Help and docs » does, in another tab. */}
+        <a
+          href="https://fruitback.com"
+          target="_blank"
+          rel="noreferrer"
+          aria-label={t('Fruitback, its site, in a new tab')}
+          className="self-start rounded-[2px] opacity-100 hover:opacity-80"
+        >
+          <Logo on="rail" />
+        </a>
       </div>
     </aside>
   );

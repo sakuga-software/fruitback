@@ -538,6 +538,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Notes go to': 'Les notes vont vers',
   'A site with no tracker keeps its notes in Fruitback.': 'Un site sans outil de suivi garde ses notes dans Fruitback.',
   'Connect a tracker': 'Connecter un outil de suivi',
+  'Fruitback, its site, in a new tab': 'Fruitback, son site, dans un nouvel onglet',
   'Add site': 'Ajouter le site',
   'Who sees the notes?': 'Qui voit les notes ?',
   'Who can leave a note?': 'Qui peut laisser une note ?',
