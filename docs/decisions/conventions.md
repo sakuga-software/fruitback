@@ -244,8 +244,7 @@ make tickets.
 - A heading keeps its words, ticket included: its id is an address that other pages,
   `docs/_data/moved.yml` and the extension link to. Changing one is a move, with its line in
   `moved.yml`.
-- `apps/worker/src/docs-readability.test.ts` holds the three counts on the text outside code, HTML
-  comments and headings.
+- No test holds these counts yet: a guard is a ticket of its own.
 - A rewrite for readability never changes what a promise, a duty or a data practice says. On
   `SECURITY.md` and the privacy pages, the pull request lists each sentence whose meaning could be
   read differently, before and after.

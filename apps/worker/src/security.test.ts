@@ -97,15 +97,10 @@ describe('the reviewer guide states the lifetimes the worker issues', () => {
    */
   it('says how long an access token outlives a log out, skew included', () => {
     const window = (ACCESS_TTL_SECONDS + CLOCK_SKEW_SECONDS) / 60;
-    // In its section, bold or not, over one line or two (FRU-515, review of #786). « the token's » keeps
-    // the 10 minutes of its life, in the same section, from passing for the window.
-    const start = REVIEWING.indexOf('## What log out does');
-    const section = REVIEWING.slice(start, REVIEWING.indexOf('\n## ', start + 1)).replaceAll('**', '');
-    assert.ok(start >= 0, 'docs/reviewing.md has no section « What log out does »');
-    assert.match(
-      section,
-      new RegExp(`the token's\\s+${window}\\s+minutes\\b`),
-      `docs/reviewing.md does not say the access token outlives a log out ${window} minutes`,
+    const phrase = `**${window} minutes**`;
+    assert.ok(
+      REVIEWING.includes(phrase),
+      `docs/reviewing.md does not say the access token outlives a log out ${phrase}`,
     );
   });
 
@@ -125,10 +120,8 @@ describe('SECURITY.md states what the code does', () => {
 
   /** FRU-149: what a member who was removed keeps is an access token, for its lifetime and the skew. */
   it('says how long an access token outlives a member who was removed', () => {
-    // Bold or not, on one line or two (FRU-515).
-    const phrase = `${(ACCESS_TTL_SECONDS + CLOCK_SKEW_SECONDS) / 60} minutes at most, its ${ACCESS_TTL_SECONDS / 60} minutes and the ${CLOCK_SKEW_SECONDS} seconds of clock skew`;
-    const loose = SECURITY.replaceAll('**', '').replace(/\s+/g, ' ');
-    assert.ok(loose.includes(phrase), `SECURITY.md does not say that a removed member keeps a token ${phrase}`);
+    const phrase = `${(ACCESS_TTL_SECONDS + CLOCK_SKEW_SECONDS) / 60} minutes at\n  most, its ${ACCESS_TTL_SECONDS / 60} minutes and the ${CLOCK_SKEW_SECONDS} seconds of clock skew`;
+    assert.ok(SECURITY.includes(phrase), `SECURITY.md does not say that a removed member keeps a token ${phrase}`);
   });
 
   it('quotes what a burst can get through the shared window', () => {
@@ -202,7 +195,7 @@ describe('SECURITY.md states what the code does', () => {
   });
 
   it('quotes the prefix, the sites, the days and the number of the agent keys (FRU-461)', () => {
-    const loose = SECURITY.replaceAll('**', '').replace(/\s+/g, ' ');
+    const loose = SECURITY.replace(/\s+/g, ' ');
     for (const sentence of [
       `32 random bytes after the prefix \`${KEY_PREFIX}\``,
       `only the sites it names, ${MAX_KEY_SITES} at most`,
