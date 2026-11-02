@@ -18,6 +18,7 @@ import {
   storedTokens,
   test,
   type StoredToken,
+  sessionSitesOf,
 } from './extension.ts';
 import { WORKER_ORIGIN } from './pin.ts';
 import { AUTHENTICATED_WORKER_ORIGIN, noteWriters } from './worker-sessions.ts';
@@ -599,7 +600,7 @@ test('the popup, the options page and the mounted widget speak the language of t
   // The worker of the session says the account reads French. The E2E workers keep no accounts, so
   // the answer of that one route is given here; the popup asks it with its real session.
   const asked: (string | undefined)[] = [];
-  await extension.context.route(`${AUTHENTICATED_WORKER_ORIGIN}/session/sites`, (route) => {
+  await extension.context.route(sessionSitesOf(AUTHENTICATED_WORKER_ORIGIN), (route) => {
     asked.push(route.request().headers().authorization);
 
     return route.fulfill({ json: { workspace: { id: 'ws_1', name: 'Acme' }, sites: [], locale: 'fr' } });

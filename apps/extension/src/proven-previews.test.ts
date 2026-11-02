@@ -338,6 +338,112 @@ describe('the previews of a site, offered in one click (FRU-103)', () => {
   });
 });
 
+/**
+ * FRU-498: the popup asks the sites of its tab (`?origin=`). That list keeps no previews: written
+ * whole, it would take away those of every other site. A preview found in it is asked again in the
+ * whole list, which keeps them, as before.
+ */
+describe('the list of one tab (FRU-498)', () => {
+  const SITE = { id: 'site_1', origin: 'https://acme.dev', visibility: 'members', previews: [PREVIEWS] };
+  const OTHER = {
+    id: 'site_2',
+    origin: 'https://globex.dev',
+    visibility: 'members',
+    previews: ['https://*.globex.dev'],
+  };
+
+  /** A worker of FRU-498: `?origin=` answers the sites of that origin and names it; none, the whole list. */
+  function workerOfTabs(old = false) {
+    const asked: string[] = [];
+    const fetcher = (async (url: string) => {
+      asked.push(url);
+      const origin = new URL(url).searchParams.get('origin');
+      const whole = [SITE, OTHER];
+      const body =
+        origin === null || old
+          ? { workspace: { id: 'ws_1', name: 'Acme' }, sites: whole }
+          : {
+              workspace: { id: 'ws_1', name: 'Acme' },
+              origin,
+              sites: whole.filter(
+                (each) => each.origin === origin || each.previews.some((wildcard) => coversWildcard(wildcard, origin)),
+              ),
+            };
+
+      return new Response(JSON.stringify(body), { status: 200 });
+    }) as typeof fetch;
+
+    return { asked, fetcher };
+  }
+  const coversWildcard = (wildcard: string, origin: string): boolean =>
+    new URL(origin).hostname.endsWith(`.${wildcard.slice('https://*.'.length)}`);
+
+  function seamsOf(fetcher: typeof fetch) {
+    const remembered: [string, ListedPreviews | undefined][] = [];
+
+    return {
+      remembered,
+      seams: {
+        endpoints: async () => [WORKER],
+        ensureAccess: async () => GRANTED,
+        fetcher,
+        remember: async (endpoint: string, listed: ListedPreviews | undefined) =>
+          void remembered.push([endpoint, listed]),
+        now: () => NOW,
+      },
+    };
+  }
+
+  it('asks the sites of the tab, and keeps no previews from that list', async () => {
+    const { asked, fetcher } = workerOfTabs();
+    const { seams, remembered } = seamsOf(fetcher);
+
+    const offer = await offerFor('https://acme.dev', seams);
+
+    assert.equal(offer?.site.id, 'site_1');
+    assert.deepEqual(asked, [`${WORKER}/session/sites?origin=https%3A%2F%2Facme.dev`]);
+    assert.deepEqual(remembered, [], 'the list of one tab would take away the previews of site_2');
+  });
+
+  it('asks the whole list again for a preview, and keeps the previews of every site from it', async () => {
+    const { asked, fetcher } = workerOfTabs();
+    const { seams, remembered } = seamsOf(fetcher);
+
+    const offer = await offerFor('https://pr-12.preview.acme.dev', seams);
+
+    assert.equal(offer?.pattern, PREVIEWS);
+    assert.deepEqual(asked, [
+      `${WORKER}/session/sites?origin=https%3A%2F%2Fpr-12.preview.acme.dev`,
+      `${WORKER}/session/sites`,
+    ]);
+    assert.deepEqual(remembered, [
+      [WORKER, { at: NOW, previews: { [PREVIEWS]: 'site_1', 'https://*.globex.dev': 'site_2' } }],
+    ]);
+  });
+
+  it('reads the whole list of a worker of before as before: it keeps it, and asks once', async () => {
+    const { asked, fetcher } = workerOfTabs(true);
+    const { seams, remembered } = seamsOf(fetcher);
+
+    assert.equal((await offerFor('https://pr-12.preview.acme.dev', seams))?.pattern, PREVIEWS);
+    assert.equal(asked.length, 1);
+    assert.deepEqual(remembered, [
+      [WORKER, { at: NOW, previews: { [PREVIEWS]: 'site_1', 'https://*.globex.dev': 'site_2' } }],
+    ]);
+  });
+
+  it('believes no list read for another origin', async () => {
+    const fetcher = (async () =>
+      new Response(
+        JSON.stringify({ workspace: { id: 'ws_1', name: 'Acme' }, origin: 'https://globex.dev', sites: [SITE] }),
+      )) as unknown as typeof fetch;
+    const { seams, remembered } = seamsOf(fetcher);
+
+    assert.equal(await offerFor('https://acme.dev', seams), undefined);
+    assert.deepEqual(remembered, []);
+  });
+});
+
 describe('the access of the previews', () => {
   it('is kept while the worker does not list them, and given back like any other when the rule is off', () => {
     assert.ok(accessInUse({ [PREVIEWS]: RULE }, []).has(PREVIEWS));
