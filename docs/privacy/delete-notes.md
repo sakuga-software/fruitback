@@ -1,6 +1,6 @@
 # Delete a reporter's notes
 
-The widget asks for no e-mail address since FRU-91, so a note carries one in two cases only: the
+The widget asks for no e-mail address since 0.1.0, so a note carries one in two cases only: the
 integrator's identity token gave it, or the note was written before. A typed name is a claim, and
 so was a typed e-mail: a reporter can write somebody else's, and two reporters can write the same
 one. So list the notes first, read the list, and delete after.
@@ -9,7 +9,7 @@ one. So list the notes first, read the list, and delete after.
 nothing to search for at all. Each note has an identifier, and the thread of its pin shows it on the
 page.
 
-- **PostgreSQL:** the worker has a command for it. Run it in the container, like `pair`:
+- PostgreSQL: the worker has a command for it. Run it in the container, like `pair`:
 
   ```bash
   docker compose exec worker node server.mjs forget --email alice@example.com --dry-run
@@ -21,8 +21,8 @@ page.
   address is compared without case and without the spaces around it. You do not have to stop the
   worker: the database takes the deletion in one transaction. A page
   can still show a deleted note for up to 15 seconds, from the cache. Then delete it from your
-  backups too, or record when they expire. **On PostgreSQL the command reads the notes of every
-  site of the worker**, whatever their workspace: it is for whoever runs the worker, not for a
+  backups too, or record when they expire. On PostgreSQL the command reads the notes of every
+  site of the worker, whatever their workspace: it is for whoever runs the worker, not for a
   workspace.
 
   For a note with no address, list by name, then delete by identifier:
@@ -39,13 +39,13 @@ page.
   `forget --id FB-1 --dry-run` listed the note of the path of [self-hosting.md](../self-hosting.md), and
   deleted nothing.
 
-- **After an upgrade copied the notes of an instance of before FRU-225 into the database (FRU-220),
-  the file of before still holds them.** See [self-hosting/upgrade.md](../self-hosting/upgrade.md).
+- After an upgrade copied the notes of an instance of before 0.3.0 into the database,
+  the file of before still holds them. See [self-hosting/upgrade.md](../self-hosting/upgrade.md).
   `migrate-to-postgres --notes` copies and never writes the file, which is the way back. `forget`
   then deletes in the database only: a note that a person asked you to delete is still in the file
   and in the archives that hold it. Delete the file when the way back is no longer needed, and
   record when its archives expire.
-- **Linear and GitHub:** the notes are issues in your own workspace, so you delete them there, and
+- Linear and GitHub: the notes are issues in your own workspace, so you delete them there, and
   the command says so rather than deleting anything. Search the issues for the address, because the
   description states it, read them, and delete the ones that are this reporter's. On GitHub only an
   administrator of the repository can delete an issue. Closing an issue does not delete it.
