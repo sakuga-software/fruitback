@@ -27,6 +27,7 @@ import {
   parseAccessGrant,
   parseStoredSession,
 } from './session.ts';
+import { isRecord } from './guards.ts';
 
 /** The prefix of a key, per area. An endpoint is appended verbatim. */
 export const GRANT_PREFIX = 'fruitback:grant:';
@@ -445,8 +446,4 @@ function migrationOf<T>(
   }
 
   return { write };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
 }

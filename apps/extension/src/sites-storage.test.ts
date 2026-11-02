@@ -141,6 +141,13 @@ describe('sites.ts over storage', () => {
     assert.deepEqual(await readAll(), { 'https://globex.dev': globex });
   });
 
+  // An array is no map of sites (FRU-511): before, its indexes read as the origins « 0 », « 1 »...
+  it('reads no site from a stored array', async () => {
+    await fake.area.set({ sites: [acme] });
+
+    assert.deepEqual(await readAll(), {});
+  });
+
   /** The popup and the options page share no lock. Each change reads the map and replaces it. */
   it('keeps both of two changes made at the same time', async () => {
     await writeSite('https://old.dev', acme);
