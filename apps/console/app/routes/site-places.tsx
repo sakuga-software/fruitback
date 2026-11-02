@@ -28,8 +28,11 @@ import { ReadProblem } from '../read-problem';
  */
 type Offer =
   | { kind: 'linear'; list: TeamList }
-  /** `total`: how many GitHub counts, which can pass the list (FRU-500). */
-  | { kind: 'github'; repositories: Repository[]; total: number }
+  /**
+   * `listed`: how many GitHub listed; `total`: how many it counts, which can pass the list (FRU-500).
+   * A repository added by its name joins `repositories`, not `listed`.
+   */
+  | { kind: 'github'; repositories: Repository[]; listed: number; total: number }
   | { kind: 'rest' }
   | 'loading'
   | 'failed';
@@ -125,7 +128,8 @@ export function SitePlaces({
           offer = { kind: 'linear', list: teamListOf(answer.data, asked, typed.current) };
         if (answer.ok && source.kind === 'github') {
           const repositories = answer.data.repositories ?? [];
-          offer = { kind: 'github', repositories, total: answer.data.total ?? repositories.length };
+          const listed = repositories.length;
+          offer = { kind: 'github', repositories, listed, total: answer.data.total ?? listed };
         }
         setOffers((current) => ({ ...current, [source.id]: offer }));
       });
@@ -482,7 +486,7 @@ export function SitePlaces({
       {places.length < MAX_DESTINATIONS
         ? sources.map((source) => {
             const offer = offers[source.id];
-            if (typeof offer !== 'object' || offer.kind !== 'github' || offer.total <= offer.repositories.length) {
+            if (typeof offer !== 'object' || offer.kind !== 'github' || offer.total <= offer.listed) {
               return null;
             }
 
@@ -491,7 +495,7 @@ export function SitePlaces({
                 key={source.id}
                 base={base}
                 source={source}
-                listed={offer.repositories.length}
+                listed={offer.listed}
                 total={offer.total}
                 disabled={blocked}
                 onFound={(repository) => {

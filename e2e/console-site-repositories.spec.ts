@@ -101,6 +101,8 @@ test('a repository past the 1,000 listed is added by its name (FRU-500)', async 
   await expect.poll(() => worker.sent).toEqual([[{ connector: 'g1', repository: 'acme/repo-1203' }]]);
   await expect(panel(page).getByText('GitHub · acme/repo-1203', { exact: true })).toBeVisible();
   await expect(field).toHaveValue('');
+  // The count stays what GitHub listed: the repository added by its name is not one of them.
+  await expect(byName(page)).toContainText('GitHub lists 1000 of the 1250 repositories of acme.');
   expect(worker.asked).toEqual(['acme/elsewhere', 'acme', 'Acme/Repo-1203']);
 
   const results = await new AxeBuilder({ page }).include('main').analyze();
