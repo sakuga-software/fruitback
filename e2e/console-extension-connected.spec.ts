@@ -83,6 +83,34 @@ test.describe('the rail', () => {
     }
   });
 
+  test('says it in a card on a tint of its dot, further from the links under it (FRU-572)', async ({ page }) => {
+    await stubWorker(page, { answer: browsersAnswer([MAC]) });
+    await page.goto(`${CONSOLE}/w/w1/sites`);
+    const rail = page.locator('aside.kit-rail');
+    const card = rail.locator('[data-rail-extension]');
+    await expect(card).toContainText('Extension connected');
+    await expect(card.getByRole('link', { name: 'Connect another browser' })).toBeVisible();
+    // A background of its own, not the rail's, and a frame with rounded corners.
+    const look = await card.evaluate((element) => {
+      const style = getComputedStyle(element);
+      const rail = getComputedStyle(element.closest('aside') as Element);
+
+      return {
+        background: style.backgroundColor,
+        rail: rail.backgroundColor,
+        radius: style.borderTopLeftRadius,
+        bottom: style.marginBottom,
+      };
+    });
+    expect(look.background).not.toBe('rgba(0, 0, 0, 0)');
+    expect(look.background).not.toBe(look.rail);
+    expect(look.radius).toBe('10px');
+    // 14 px of the foot, and 8 more under the card.
+    const next = rail.getByRole('link', { name: 'Help and docs' });
+    const gap = (await next.boundingBox())!.y - ((await card.boundingBox())!.y + (await card.boundingBox())!.height);
+    expect(gap).toBeCloseTo(22, 0);
+  });
+
   test('offers to install the extension when no browser is connected', async ({ page }) => {
     await stubWorker(page, { answer: browsersAnswer([]) });
     await page.goto(`${CONSOLE}/w/w1/sites`);

@@ -2164,3 +2164,38 @@ textarea {
   font-size: 13px;
   font-weight: 700;
 }
+
+/*
+  FRU-563: the panel of a connector unfolds under its row. Its row of the grid grows from 0fr to 1fr,
+  and its body is clipped while it does. At once with reduced motion.
+*/
+.source-panel {
+  display: grid;
+  grid-template-rows: 1fr;
+  animation: source-panel-open var(--duration-fast) var(--ease-settle) both;
+}
+
+.source-panel__body {
+  min-height: 0;
+}
+
+.source-panel:not([data-settled]) > .source-panel__body {
+  overflow: hidden;
+}
+
+@keyframes source-panel-open {
+  from {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .source-panel {
+    animation: none;
+  }
+
+  .source-panel:not([data-settled]) > .source-panel__body {
+    overflow: visible;
+  }
+}
