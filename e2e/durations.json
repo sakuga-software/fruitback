@@ -45,6 +45,7 @@
   "console-site-address.spec.ts": 6.2,
   "console-site-page.spec.ts": 13.2,
   "console-site-places.spec.ts": 27.3,
+  "console-site-repositories.spec.ts": 3.5,
   "console-sites.spec.ts": 43.3,
   "console-source-panel.spec.ts": 5.4,
   "console-statuses.spec.ts": 31.3,

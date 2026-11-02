@@ -52,7 +52,13 @@ import {
   systemResolver,
 } from './domain-proof.ts';
 import { noteConnectorCall } from './connector-health.ts';
-import { type GithubApp, openInstallation, readGithubRepository } from './github-connector.ts';
+import {
+  type GithubApp,
+  GithubInstallationGone,
+  type ListedRepositories,
+  openInstallation,
+  readGithubRepository,
+} from './github-connector.ts';
 import { GITHUB_STATES } from './github.ts';
 import { githubAppTicket } from './github-app-flow.ts';
 import {
@@ -270,7 +276,10 @@ export async function offerOf(
   if (kept.kind === 'github') {
     if (context.githubApp === undefined || context.secretsKey === undefined) return undefined;
 
-    return { kind: 'github', repositories: await listRepositories(context, workspace, connector, kept.sealed) };
+    // The popup reads the list alone (FRU-453): its contract does not change with the count (FRU-500).
+    const { repositories } = await listRepositories(context, workspace, connector, kept.sealed);
+
+    return { kind: 'github', repositories };
   }
   if (context.secretsKey === undefined) return undefined;
 
@@ -346,11 +355,11 @@ async function listRepositories(
   workspace: string,
   connector: string,
   sealed: string,
-): Promise<{ fullName: string; private: boolean }[]> {
+): Promise<ListedRepositories> {
   const moment = context.now;
   const clock = moment === undefined ? undefined : () => moment;
   const app = context.githubApp as GithubApp;
-  let repositories: { fullName: string; private: boolean }[];
+  let repositories: ListedRepositories;
   try {
     repositories = await app.repositories(openInstallation(sealed, context.secretsKey));
   } catch (error) {
@@ -1353,11 +1362,33 @@ export async function handleConsoleApi(
       return json(404, CONNECTORS_UNAVAILABLE, headers);
     }
 
-    return json(
-      200,
-      { repositories: await listRepositories(context, workspaceId as string, id, kept.sealed) },
-      headers,
-    );
+    // FRU-500: one repository by its name, for one past the list. `undefined`: the installation does
+    // not cover it, or no such repository exists, which the console says the same way.
+    const name = new URL(request.url).searchParams.get('name');
+    if (name !== null) {
+      const wanted = readGithubRepository(name);
+      if (wanted === undefined) return json(400, { error: 'invalid-repository' }, headers);
+      let found: Awaited<ReturnType<GithubApp['repository']>>;
+      try {
+        found = await (context.githubApp as GithubApp).repository(
+          openInstallation(kept.sealed, context.secretsKey),
+          wanted,
+        );
+      } catch (error) {
+        // An installation that is gone makes the connector need attention, as the list does.
+        const moment = context.now;
+        await noteConnectorCall(context.accounts, id, error, moment === undefined ? undefined : () => moment);
+        // The console says what to do about it, where a GitHub that is down is « try again ».
+        if (error instanceof GithubInstallationGone) return json(502, { error: 'connection-ended' }, headers);
+        throw error;
+      }
+
+      return found === undefined
+        ? json(404, { error: 'repository-not-found' }, headers)
+        : json(200, { repository: found }, headers);
+    }
+
+    return json(200, await listRepositories(context, workspaceId as string, id, kept.sealed), headers);
   }
 
   const connector = /^\/connectors\/([A-Za-z0-9_-]+)(\/teams)?$/.exec(rest);
