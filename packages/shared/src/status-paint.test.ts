@@ -16,8 +16,8 @@ describe('the paint of a status (FRU-512)', () => {
     assert.equal(paintOfStatus('#a52a3a', undefined)?.ink, readableTextColor('#a52a3a', STATUS_INK));
   });
 
-  it('paints no status with no colour, or with one that is not #rrggbb: its stage is drawn', () => {
-    for (const color of [undefined, '', 'red', '#fff', 'var(--x)', 'url(x)', '#7dd3fc; x']) {
+  it('paints no status whose colour is not #rrggbb: its stage is drawn', () => {
+    for (const color of ['', 'red', '#fff', 'var(--x)', 'url(x)', '#7dd3fc; x']) {
       assert.equal(paintOfStatus(color, '#000000'), undefined, String(color));
     }
   });

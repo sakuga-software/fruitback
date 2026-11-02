@@ -31,8 +31,13 @@ export { STATUS_INK, type StatusPaint } from '@fruitback/shared';
  */
 export function statusPaint(issue: Pick<NoteIssue, 'stage'>, status: NoteStatus | undefined): StatusPaint {
   // A text colour that the team chose was measured at 4.5:1 by the worker on save. Else, computed.
+  const color = status?.color;
+
   return (
-    paintOfStatus(status?.color, status?.textColor) ?? { fill: stageToken(issue.stage), ink: onStageToken(issue.stage) }
+    (color === undefined ? undefined : paintOfStatus(color, status?.textColor)) ?? {
+      fill: stageToken(issue.stage),
+      ink: onStageToken(issue.stage),
+    }
   );
 }
 

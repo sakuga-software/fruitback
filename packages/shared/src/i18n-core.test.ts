@@ -20,6 +20,7 @@ describe('the language of a tag (FRU-512)', () => {
 describe('a sentence with its values (FRU-512)', () => {
   it('fills every {name} it has a value for, each time it appears, and leaves the others', () => {
     assert.equal(fillSentence('{n} of {n}, by {who}', { n: 3 }), '3 of 3, by {who}');
+    assert.equal(fillSentence('By {who}, {n} notes', { who: 'Ana', n: 0 }), 'By Ana, 0 notes');
     assert.equal(fillSentence('No value'), 'No value');
   });
 });

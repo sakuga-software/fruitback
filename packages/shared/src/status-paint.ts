@@ -18,16 +18,16 @@ export const STATUS_INK = '#18181b';
 export type StatusPaint = { fill: string; ink: string };
 
 /**
- * The fill and the ink of a status that has a colour, or `undefined` for one that has none: the
- * caller then draws its stage. A colour that is not `#rrggbb` is no colour, so nothing else reaches a
- * style. A text colour the team chose is kept when it is `#rrggbb`; else the text is computed on the
- * fill, the ink first.
+ * The fill and the ink of a status of this colour, or `undefined` when the colour is not `#rrggbb`:
+ * the caller then draws its stage, and nothing else reaches a style. A text colour the team chose is
+ * kept when it is `#rrggbb`; else the text is computed on the fill, the ink first.
  */
-export function paintOfStatus(color: string | undefined, textColor: string | undefined): StatusPaint | undefined {
-  if (color === undefined || !STATUS_COLOR.test(color)) return undefined;
-  if (textColor !== undefined && STATUS_COLOR.test(textColor)) return { fill: color, ink: textColor };
-  // `readableTextColor` answers for every `#rrggbb`, which `color` is: the ink is never the fallback.
-  return { fill: color, ink: readableTextColor(color, STATUS_INK) ?? STATUS_INK };
+export function paintOfStatus(color: string, textColor: string | undefined): StatusPaint | undefined {
+  // `undefined` exactly when `color` is not `#rrggbb`: the ink is.
+  const computed = readableTextColor(color, STATUS_INK);
+  if (computed === undefined) return undefined;
+
+  return { fill: color, ink: textColor !== undefined && STATUS_COLOR.test(textColor) ? textColor : computed };
 }
 
 /**

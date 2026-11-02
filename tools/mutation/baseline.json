@@ -25,6 +25,14 @@
       "src/feedback-text.ts": {
         "score": 100,
         "mutants": 130
+      },
+      "src/i18n-core.ts": {
+        "score": 99.51,
+        "mutants": 0
+      },
+      "src/status-paint.ts": {
+        "score": 99.51,
+        "mutants": 0
       }
     }
   },

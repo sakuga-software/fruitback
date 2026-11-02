@@ -9,7 +9,7 @@ export function nearestLanguage<L extends string>(
   languages: readonly L[],
   fallback: L,
 ): L {
-  const base = (tag ?? '').toLowerCase().split('-')[0];
+  const base = tag?.toLowerCase().split('-')[0];
 
   return languages.find((language) => language === base) ?? fallback;
 }

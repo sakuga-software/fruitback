@@ -17,7 +17,9 @@ export { STATUS_INK } from '@fruitback/shared';
  * `#rrggbb` by `parsePanelNotes`: nothing else reaches a style.
  */
 export function notePaint(note: Pick<PanelNote, 'status'>): { fill: string; ink: string } | undefined {
-  return paintOfStatus(note.status?.color, note.status?.textColor);
+  const color = note.status?.color;
+
+  return color === undefined ? undefined : paintOfStatus(color, note.status?.textColor);
 }
 
 /** The word of the state of a note: the name of its status, the word of its store, or of its stage. */
