@@ -42,6 +42,31 @@ export type PanelApis = {
 };
 
 /**
+ * The panel APIs that `browser` offers (FRU-560), typed, or `undefined` when it offers neither. A
+ * part counts only when its `open` is a function; `setPanelBehavior` only when it is one too. The
+ * objects of the browser are kept as they are, so each method is still called on its own object.
+ * One place reads the global, in place of a cast at each call.
+ */
+export function panelApis(browser: unknown): PanelApis | undefined {
+  if (typeof browser !== 'object' || browser === null) return undefined;
+  const { sidePanel, sidebarAction } = browser as Record<string, unknown>;
+  const apis: PanelApis = {};
+  if (opens(sidePanel)) {
+    const behavior = (sidePanel as { setPanelBehavior?: unknown }).setPanelBehavior;
+    apis.sidePanel = (
+      typeof behavior === 'function' ? sidePanel : { open: sidePanel.open.bind(sidePanel) }
+    ) as NonNullable<PanelApis['sidePanel']>;
+  }
+  if (opens(sidebarAction)) apis.sidebarAction = sidebarAction as NonNullable<PanelApis['sidebarAction']>;
+
+  return apis.sidePanel === undefined && apis.sidebarAction === undefined ? undefined : apis;
+}
+
+function opens(value: unknown): value is { open: (...args: never[]) => unknown } {
+  return typeof value === 'object' && value !== null && typeof (value as { open?: unknown }).open === 'function';
+}
+
+/**
  * Opens the panel of the browser, from the click that called it.
  *
  * **Call it before any `await` of the click.** Both browsers open the panel only inside the
@@ -51,7 +76,11 @@ export type PanelApis = {
  * Answers `undefined` when the browser has no panel to open, and the promise of the browser
  * otherwise, so that a refusal is reported.
  */
-export function openPanel(apis: PanelApis, where: { tabId?: number; windowId?: number }): Promise<void> | undefined {
+export function openPanel(
+  apis: PanelApis | undefined,
+  where: { tabId?: number; windowId?: number },
+): Promise<void> | undefined {
+  if (apis === undefined) return undefined;
   if (apis.sidePanel !== undefined) {
     // Chrome opens the panel of the whole window when it has no panel for this tab alone, which is
     // the case here: the manifest declares one global panel, and it follows the active tab.
@@ -71,7 +100,7 @@ export function openPanel(apis: PanelApis, where: { tabId?: number; windowId?: n
  * not answer either.
  */
 export async function openPanelOrPage(
-  apis: PanelApis,
+  apis: PanelApis | undefined,
   where: { tabId?: number; windowId?: number },
   inPage: () => Promise<boolean>,
 ): Promise<'panel' | 'page' | 'nothing'> {
@@ -116,8 +145,8 @@ export function iconOpensPanel(
   return wanted && site?.enabled === true && !sessionWanted;
 }
 
-export async function setPanelOnClick(apis: PanelApis, wanted: boolean, siteOn: boolean): Promise<void> {
-  await apis.sidePanel?.setPanelBehavior?.({ openPanelOnActionClick: wanted && siteOn });
+export async function setPanelOnClick(apis: PanelApis | undefined, wanted: boolean, siteOn: boolean): Promise<void> {
+  await apis?.sidePanel?.setPanelBehavior?.({ openPanelOnActionClick: wanted && siteOn });
 }
 
 /**
@@ -125,8 +154,8 @@ export async function setPanelOnClick(apis: PanelApis, wanted: boolean, siteOn: 
  * preference « Open notes in the sidebar » (FRU-302). Chrome's default is the same; it is written
  * here so that the choice is in the code, not in a default that can change.
  */
-export async function keepPopupOnActionClick(apis: PanelApis): Promise<void> {
-  await apis.sidePanel?.setPanelBehavior?.({ openPanelOnActionClick: false });
+export async function keepPopupOnActionClick(apis: PanelApis | undefined): Promise<void> {
+  await apis?.sidePanel?.setPanelBehavior?.({ openPanelOnActionClick: false });
 }
 
 /** What the panel shows: why it shows nothing, or the notes of the site of the tab. */
