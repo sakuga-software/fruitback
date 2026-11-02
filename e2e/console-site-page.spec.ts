@@ -222,7 +222,7 @@ test('an owner changes who sees the notes and who writes on the page, and the si
   await page.goto(`${CONSOLE}/w/w1/sites/s1`);
   const about = page.getByRole('region', { name: 'Site', exact: true });
   // The first read of the list has landed: the page is drawn.
-  await expect(about.locator('dd').first()).toHaveText('https://staging.acme.dev');
+  await expect(about.locator('dd').first()).toHaveText('https://staging.acme.dev (opens in a new tab)');
   const reads = worker.reads;
 
   // Cancel changes nothing, asks nothing, and gives the focus back to « Change ».
@@ -301,7 +301,7 @@ test('a site that everyone reads takes a note from anybody, and says so', async 
   await workerWith(page);
   await page.goto(`${CONSOLE}/w/w1/sites/s2`);
   await expect(page.getByRole('region', { name: 'Site', exact: true }).locator('dd')).toHaveText([
-    'https://acme.dev',
+    'https://acme.dev (opens in a new tab)',
     'Everyone who visits',
     'Anyone on the page',
     'None yet',
