@@ -24,15 +24,15 @@ they typed one. See [SECURITY.md](https://github.com/sakuga-software/fruitback/b
 
 1. In the settings of the account or organisation that owns the repository, open **Developer
    settings → GitHub Apps → New GitHub App**.
-2. Give it a name and a homepage URL. Clear **Webhook → Active**: the worker does not receive events.
-3. Under **Repository permissions**, set **Issues** to **Read and write**, and leave every other
-   permission at **No access**. GitHub adds **Metadata: Read-only** itself.
-4. Create the App and note its **App ID**. Under **Private keys**, click **Generate a private key**.
+2. Give it a name and a homepage URL. Clear Webhook → Active: the worker does not receive events.
+3. Under Repository permissions, set Issues to « Read and write », and leave every other
+   permission at « No access ». GitHub adds Metadata: Read-only itself.
+4. Create the App and note its App ID. Under Private keys, click Generate a private key.
    GitHub downloads a `.pem` file.
-5. Click **Install App**, choose the account, then **Only select repositories**, and select the
+5. Click Install App, choose the account, then Only select repositories, and select the
    repository that receives the notes.
 
-**Issues** is the only permission the worker uses: it creates issues and their two labels, lists
+Issues is the only permission the worker uses: it creates issues and their two labels, lists
 issues, and lists the comments of an issue. The App JWT finds the installation and mints the token.
 
 ## Configure the worker

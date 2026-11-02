@@ -229,6 +229,27 @@ where a note goes. « Worker » is the name of the code, not of anything a perso
 covers an address that receives as well as a tracker; « outil de suivi » is kept for the ones that
 make tickets.
 
+### The published guides (FRU-515)
+
+#### The rules, in short
+
+- A published guide is written for a reader outside the team. The guides are `README.md`,
+  `SECURITY.md` and every page of `docs/` but `docs/decisions/`. The pages here keep the history; a
+  guide says what is true now.
+- No ticket reference (`FRU-` and a number) in the text of a guide: a reader outside the team cannot
+  open one. A change that is dated says the version that brought it (« since 0.3.0 »).
+- No em dash. An aside goes in parentheses, an explanation after a colon.
+- One bold segment per section at most, so that it stands out. A bullet does not open with a bold
+  label.
+- A heading keeps its words, ticket included: its id is an address that other pages,
+  `docs/_data/moved.yml` and the extension link to. Changing one is a move, with its line in
+  `moved.yml`.
+- `apps/worker/src/docs-readability.test.ts` holds the three counts on the text outside code, HTML
+  comments and headings. Its list `NOT_YET` names the pages not rewritten yet.
+- A rewrite for readability never changes what a promise, a duty or a data practice says. On
+  `SECURITY.md` and the privacy pages, the pull request lists each sentence whose meaning could be
+  read differently, before and after.
+
 ## The checks, and where each one runs
 
 ### The rules, in short

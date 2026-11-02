@@ -97,9 +97,10 @@ describe('the reviewer guide states the lifetimes the worker issues', () => {
    */
   it('says how long an access token outlives a log out, skew included', () => {
     const window = (ACCESS_TTL_SECONDS + CLOCK_SKEW_SECONDS) / 60;
-    const phrase = `**${window} minutes**`;
+    // Bold or not (FRU-515): the guide keeps one bold segment per section.
+    const phrase = `the token's ${window} minutes`;
     assert.ok(
-      REVIEWING.includes(phrase),
+      REVIEWING.replaceAll('**', '').includes(phrase),
       `docs/reviewing.md does not say the access token outlives a log out ${phrase}`,
     );
   });

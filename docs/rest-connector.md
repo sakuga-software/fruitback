@@ -39,11 +39,11 @@ This page is the contract your receiver is written against.
 | `identifier` | What Fruitback calls the note. The thread of its pin shows it.                                     |
 | `note`       | The whole note, as the widget built it. [What the widget collects](privacy.md) lists every field.  |
 
-Version 2 came with FRU-378: the note is under `note`, its words in `text`. Version 1 had it under
+Version 2 came with 0.4.0: the note is under `note`, its words in `text`. Version 1 had it under
 another key, in the shape of before: a receiver written for it reads nothing from version 2, and is
 written again for this page. `parseNote` of `@fruitback/shared` 0.4.0 reads the note of version 2.
 
-A note can carry files (FRU-331): a capture of the page or of an area, an image, any file. A body
+A note can carry files: a capture of the page or of an area, an image, any file. A body
 then has one more field, `attachments`, with one entry for each file that still waits in the worker:
 
 ```text
@@ -79,7 +79,7 @@ And these headers:
 ### A call that starts an agent
 
 A site can call an address of the workspace when a note arrives, to start an agent of the team
-(FRU-468, [Connect an AI agent](agents.md#start-an-agent-on-a-note)). That call is a request of this
+([Connect an AI agent](agents.md#start-an-agent-on-a-note)). That call is a request of this
 page, with the same headers, signature and attempts, and `event: "agent.requested"`. Its body holds
 `reason`, the workspace, the site, `identifier` and `note.id`, and **no note**: neither its text nor
 its files. Answer it as any other.
@@ -102,10 +102,10 @@ function isFromFruitback(secret, headers, rawBody) {
 }
 ```
 
-- **Sign the bytes you received.** A body parsed and written again is not the same bytes.
-- **Refuse an old timestamp.** Five minutes is enough. The timestamp is signed, so a copy of a
+- Sign the bytes you received. A body parsed and written again is not the same bytes.
+- Refuse an old timestamp. Five minutes is enough. The timestamp is signed, so a copy of a
   request cannot be sent again later with a new time.
-- **Compare in constant time.**
+- Compare in constant time.
 
 To try it by hand:
 
@@ -129,7 +129,7 @@ delivery waits for somebody to ask again. Asking starts the seven attempts again
 There is no second attempt, and the delivery waits for somebody to ask again. If your receiver passes
 a request on to a Fruitback worker, do not pass that header on.
 
-**One note can arrive twice.** Your answer can be lost on the way back, and the next attempt then
+One note can arrive twice. Your answer can be lost on the way back, and the next attempt then
 sends the note again. `X-Fruitback-Delivery` is the same for both: keep the ids you took, and answer
 `2xx` to one you already have.
 

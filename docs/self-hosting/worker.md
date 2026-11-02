@@ -1,6 +1,6 @@
 # Worker responses
 
-A plain Node HTTP process — `node:http` adapted onto a web-standard handler, no framework.
+A plain Node HTTP process: `node:http` adapted onto a web-standard handler, no framework.
 
 | Route                            | Status                                                                                                                               |
 | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
@@ -9,7 +9,7 @@ A plain Node HTTP process — `node:http` adapted onto a web-standard handler, n
 | `OPTIONS /feedback`              | CORS preflight, never reaches the store                                                                                              |
 | `GET /health`                    | `200` when the configuration is valid, `503` naming what is wrong when it is not                                                     |
 
-The four below are the browser extension's session (FRU-42), and they are **exempt from
+The four below are the browser extension's session, and they are **exempt from
 `ALLOWED_ORIGINS`**: an extension's origin
 carries an id that differs between an unpacked build and a store build, so an operator cannot put it
 on a list. The rate limiter is what protects them, which is why it runs above the path dispatch.
@@ -21,10 +21,10 @@ on a list. The rate limiter is what protects them, which is why it runs above th
 | `POST /session/revoke`  | ends the session; `204` whether or not there was one to end |
 | `GET /pair`             | the page a pairing link opens: static, no script            |
 
-**A reviewer connects the extension from the console**: « Connect this browser », on « Put it on the
+A reviewer connects the extension from the console: « Connect this browser », on « Put it on the
 site » or on « Sites », opens the pairing link of your worker (on Fruitback Cloud the same button
-leads to the sign-in of the popup instead, FRU-313, and its worker answers `404` on the pairing routes, FRU-325). An operator can also mint a pairing code on the container, never over HTTP,
-for one workspace and one of its members (FRU-277). The workspace id is in the address of the console,
+leads to the sign-in of the popup instead, and its worker answers `404` on the pairing routes). An operator can also mint a pairing code on the container, never over HTTP,
+for one workspace and one of its members. The workspace id is in the address of the console,
 `/w/<id>/sites`, and the workspace must have a site. `--subject` is the id of the member's account,
 which the database gives from their address:
 
@@ -36,7 +36,7 @@ docker compose exec worker node server.mjs pair --subject <account id> --name "A
 
 With a [dedicated schema](database.md#in-a-database-you-already-run), add `SET search_path TO <schema>;` before the
 `SELECT`. The command refuses, and prints no code, when the workspace is missing, when it has no site,
-and when the account is not a member of it: the route would end such a session at once (FRU-149).
+and when the account is not a member of it: the route would end such a session at once.
 
 Add `--endpoint https://api.feedback.example.com`, the address reviewers reach this worker at, and the
 command also prints a link, `https://api.feedback.example.com/pair#<code>`. The reviewer opens it and
@@ -44,12 +44,12 @@ clicks the extension: nothing to copy. The code is after the `#`, so it reaches 
 log, yours included. An `http://` address is refused unless it is `localhost`. Measured: the command
 writes a code valid 15 minutes. Not measured for this page: a session of that code reading a site.
 
-**The two paragraphs below describe the `linear` store.** A worker on another store does the same job
-by its own means — see `apps/worker/src/store.ts`, where `findForPage` states the intention and never
+The two paragraphs below describe the `linear` store. A worker on another store does the same job
+by its own means: see `apps/worker/src/store.ts`, where `findForPage` states the intention and never
 the method.
 
 Labels are created on demand, so a new client site needs no manual Linear setup. A label that cannot
-be created is dropped and the feedback still goes through — losing a label is a triage annoyance,
+be created is dropped and the feedback still goes through: losing a label is a triage annoyance,
 losing the client's note is a bug.
 
 The read path is one Linear query, narrowed server-side by the `fruitback` label, the per-client
