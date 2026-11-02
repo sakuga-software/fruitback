@@ -1,3 +1,4 @@
+import { isOneOf } from './one-of.ts';
 import {
   type AccountStore,
   type ConnectorKind,
@@ -117,7 +118,7 @@ export async function setSessionSite(request: Request, context: SiteSettingsCont
   if (typeof siteId !== 'string' || siteId === '' || siteId.length > 100) {
     return { status: 400, body: { error: 'invalid-body' } };
   }
-  if (askedVisibility !== undefined && !(VISIBILITIES as readonly unknown[]).includes(askedVisibility)) {
+  if (askedVisibility !== undefined && !isOneOf(askedVisibility, VISIBILITIES)) {
     return { status: 400, body: { error: 'invalid-visibility' } };
   }
   const visibility = askedVisibility as Visibility | undefined;

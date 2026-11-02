@@ -1,3 +1,4 @@
+import { isOneOf } from './one-of.ts';
 import { AGENT_MOMENTS, type AccountStore, type AgentMoment } from './accounts.ts';
 import { noteIdOf } from './console-notes.ts';
 import { DELIVERY_VERSION } from './rest-connector.ts';
@@ -114,7 +115,7 @@ export async function handleAgentTrigger(
     return json(400, { error: 'invalid-connector' }, headers);
   }
   const moment = body?.moment;
-  if (!(AGENT_MOMENTS as readonly unknown[]).includes(moment)) return json(400, { error: 'invalid-moment' }, headers);
+  if (!isOneOf(moment, AGENT_MOMENTS)) return json(400, { error: 'invalid-moment' }, headers);
   if (typeof body?.enabled !== 'boolean') return json(400, { error: 'invalid-enabled' }, headers);
 
   const written = await accounts.setAgentTrigger(

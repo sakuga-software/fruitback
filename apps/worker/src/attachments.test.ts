@@ -20,6 +20,7 @@ import { DATABASES, MIGRATED_DATABASES, databasesOfACase } from './auth.fixture.
 import { migrationsThrough, rowsOf } from './postgres.fixture.ts';
 import { migrate } from './postgres-migrate.ts';
 import { createPostgresAttachmentStore } from './attachments-postgres.ts';
+import { createMemoryAttachmentStore } from './attachments-memory.fixture.ts';
 import {
   ATTACHMENTS_PATH,
   type AttachmentStore,
@@ -35,7 +36,6 @@ import {
   attachmentIdsOf,
   attachmentName,
   checkAttachment,
-  createMemoryAttachmentStore,
   signedAttachmentPath,
   verifiesSignedRead,
 } from './attachments.ts';

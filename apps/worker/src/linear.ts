@@ -276,7 +276,7 @@ export async function createCheck(
  * that the team or another integration added.
  *
  * Not measured on a real workspace (FRU-331): the shapes are the ones of the documentation of Linear
- * (« File upload », `fileUpload` and `attachmentCreate`), played against the double of `linear-stub.ts`.
+ * (« File upload », `fileUpload` and `attachmentCreate`), played against the double of `linear-stub.fixture.ts`.
  */
 const FILE_UPLOAD_MUTATION = `
   mutation FruitbackFileUpload($contentType: String!, $filename: String!, $size: Int!) {
@@ -1213,7 +1213,7 @@ export async function listLinearStates(apiKey: string, teamIds: readonly string[
  *
  * Everything above already existed; this is the adapter that lets `app.ts` stop importing it by
  * name. Bound to its configuration at construction rather than handed the worker's config per call,
- * which is what a store holding a connection — SQLite (FRU-31) — is going to need.
+ * as a store that holds a connection, such as `postgres`, needs.
  */
 export function createLinearStore(
   config: LinearConfig,

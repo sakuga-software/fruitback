@@ -20,7 +20,7 @@ import { type LanguageArea, storedLanguage } from './language.ts';
 import { rememberLanguage } from './language-sync.ts';
 import { CHANNEL, type BridgeMessage, parseBridgeMessage } from './protocol.ts';
 import { parseSite } from './sites.ts';
-import type { AccessResult } from './session.ts';
+import { type AccessResult, type Area, createSessions, type StoredSession } from './session.ts';
 
 const LISTED = {
   workspace: { id: 'ws_1', name: 'Acme' },
@@ -845,5 +845,202 @@ describe('an add that a permission prompt cut short, finished later (FRU-454)', 
     assert.equal(await finishAdd(at, INTENT, seams(answering(401, 200))), 'never');
     assert.equal(await finishAdd(at, INTENT, seams(answering(201, 502))), 'again');
     assert.equal(await finishAdd(at, INTENT, seams(answering(201, 403))), 'never');
+  });
+});
+
+/**
+ * A `401` refuses the token: `cloud.ts` renews it once and asks once more, as `site-notes.ts` does
+ * (FRU-511). Before, the popup said « signed out » to a session that only held a refused token.
+ */
+describe('a token the worker refuses (FRU-511)', () => {
+  const ENDPOINT = 'https://api.fruitback.test';
+  const SAKUGA = { id: 'ws_1', name: 'Sakuga', role: 'owner', canAddSite: true };
+  const SITE = { id: 'site_9', origin: 'https://preview.client.fr', visibility: 'members', workspace: 'ws_1' };
+  const STALE: AccessResult = {
+    ok: true,
+    grant: { accessToken: 'old', expiresAt: Date.now() + 600_000 },
+  } as AccessResult;
+
+  /** A worker that takes only `Bearer tok`, answers `body` to it, and records each token it was sent. */
+  function strict(body: unknown, status = 200) {
+    const tokens: string[] = [];
+    const fetcher = (async (_url: string, init?: RequestInit) => {
+      const token = new Headers(init?.headers).get('Authorization') ?? '';
+      tokens.push(token);
+
+      return token === 'Bearer tok'
+        ? new Response(JSON.stringify(body), { status })
+        : new Response(JSON.stringify({ error: 'invalid-token' }), { status: 401 });
+    }) as typeof fetch;
+
+    return { tokens, fetcher };
+  }
+
+  /** `renewAccess` that answers `answer`, and records the token each call said was refused. */
+  function renewing(answer: AccessResult | Error = GRANTED) {
+    const refused: string[] = [];
+    const renewAccess = async (_endpoint: string, token: string) => {
+      refused.push(token);
+      if (answer instanceof Error) throw answer;
+
+      return answer;
+    };
+
+    return { refused, renewAccess };
+  }
+
+  it('renews a refused token once, and asks each route once more with the new one', async () => {
+    const listing = strict({ ...ACCOUNT, workspaces: [SAKUGA] });
+    const renew = renewing();
+    const seams = { endpoints: async () => [ENDPOINT], ensureAccess: async () => STALE, fetcher: listing.fetcher };
+    assert.deepEqual(await addableWorkspaces(ENDPOINT, { ...seams, renewAccess: renew.renewAccess }), [SAKUGA]);
+    assert.deepEqual(listing.tokens, ['Bearer old', 'Bearer tok']);
+    assert.deepEqual(renew.refused, ['old']);
+
+    const adding = strict({ site: SITE }, 201);
+    const added = await addSite(ENDPOINT, SAKUGA, SITE.origin, {
+      ensureAccess: async () => STALE,
+      renewAccess: renewing().renewAccess,
+      fetcher: adding.fetcher,
+    });
+    assert.equal(added.ok, true);
+    assert.deepEqual(adding.tokens, ['Bearer old', 'Bearer tok']);
+
+    const setting = strict({ site: { ...SITE, visibility: 'everyone' } });
+    const set = await setSiteSettings(
+      ENDPOINT,
+      SAKUGA,
+      SITE.id,
+      { visibility: 'everyone' },
+      { ensureAccess: async () => STALE, renewAccess: renewing().renewAccess, fetcher: setting.fetcher },
+    );
+    assert.equal(set.ok, true);
+
+    const offering = strict({ kind: 'rest' });
+    const offer = await sourceOffer(ENDPOINT, 'ws_1', 'c_1', {
+      ensureAccess: async () => STALE,
+      renewAccess: renewing().renewAccess,
+      fetcher: offering.fetcher,
+    });
+    assert.deepEqual(offer, { kind: 'rest' });
+  });
+
+  it('says signed out when the worker refuses the refresh too, and unavailable when it does not answer it', async () => {
+    const ended = renewing({ ok: false, reason: 'session-revoked-or-expired' } as AccessResult);
+    const adding = strict({ site: SITE }, 201);
+    assert.deepEqual(
+      await addSite(ENDPOINT, SAKUGA, SITE.origin, {
+        ensureAccess: async () => STALE,
+        renewAccess: ended.renewAccess,
+        fetcher: adding.fetcher,
+      }),
+      { ok: false, reason: 'signed-out' },
+    );
+    assert.deepEqual(adding.tokens, ['Bearer old']);
+
+    for (const answer of [{ ok: false, reason: 'unavailable' } as AccessResult, new Error('storage')]) {
+      assert.deepEqual(
+        await addSite(ENDPOINT, SAKUGA, SITE.origin, {
+          ensureAccess: async () => STALE,
+          renewAccess: renewing(answer).renewAccess,
+          fetcher: strict({ site: SITE }, 201).fetcher,
+        }),
+        { ok: false, reason: 'unavailable' },
+      );
+    }
+  });
+
+  it('renews once only: a second 401 is the answer', async () => {
+    const renew = renewing({
+      ok: true,
+      grant: { accessToken: 'still-wrong', expiresAt: Date.now() + 1 },
+    } as AccessResult);
+    const listing = strict(LISTED);
+    const seams = {
+      endpoints: async () => [ENDPOINT],
+      ensureAccess: async () => STALE,
+      renewAccess: renew.renewAccess,
+      fetcher: listing.fetcher,
+    };
+    assert.equal(await sitesOf(ENDPOINT, seams), undefined);
+    assert.deepEqual(listing.tokens, ['Bearer old', 'Bearer still-wrong']);
+    assert.deepEqual(renew.refused, ['old']);
+    assert.deepEqual(
+      await addSite(ENDPOINT, SAKUGA, SITE.origin, { ...seams, fetcher: strict({ site: SITE }, 201).fetcher }),
+      { ok: false, reason: 'signed-out' },
+    );
+  });
+
+  it('keeps the language of a session whose token was only refused', async () => {
+    const kept = area({ language: 'fr' });
+    await rememberLanguage(kept, {
+      endpoints: async () => [ENDPOINT],
+      ensureAccess: async () => STALE,
+      renewAccess: renewing().renewAccess,
+      fetcher: strict({ ...ACCOUNT, locale: 'de' }).fetcher,
+    });
+    assert.equal(await storedLanguage(kept), 'de');
+  });
+
+  it('says in the console why it had no token', async (t) => {
+    const warn = t.mock.method(console, 'warn', () => undefined);
+    const failed = await addSite(ENDPOINT, SAKUGA, SITE.origin, {
+      ensureAccess: async () => Promise.reject(new Error('storage')),
+      fetcher: strict({ site: SITE }, 201).fetcher,
+    });
+    assert.deepEqual(failed, { ok: false, reason: 'unavailable' });
+    assert.equal(warn.mock.callCount(), 1);
+    assert.match(String(warn.mock.calls[0]?.arguments[0]), /access to a worker/);
+  });
+
+  /**
+   * Two screens at once (the popup and the side panel, or two windows) that hold the same refused
+   * token: the real `Sessions` refreshes once, and both requests go again with the new token.
+   */
+  it('refreshes once for two requests refused at the same time', async () => {
+    const memory = <T>(entries: Record<string, T>): Area<T> => {
+      const state = { ...entries };
+
+      return {
+        read: async () => ({ ...state }),
+        put: async (key, value) => {
+          state[key] = value;
+        },
+        drop: async (key) => {
+          delete state[key];
+        },
+      };
+    };
+    const identity = { subject: 'u_1' };
+    const backing = memory<StoredSession>({ [ENDPOINT]: { refreshToken: 'refresh.1', identity, generation: 'g' } });
+    const refreshes: string[] = [];
+    const sessions = createSessions({
+      sessions: { ...backing, end: async (endpoint) => backing.drop(endpoint) },
+      grants: memory({
+        [ENDPOINT]: { accessToken: 'old', expiresAt: Date.now() + 600_000, identity, generation: 'g' },
+      }),
+      epochs: memory<string>({}),
+      post: async (url) => {
+        refreshes.push(url);
+        await new Promise((resolve) => setTimeout(resolve, 10));
+
+        return { status: 200, body: { accessToken: 'tok', refreshToken: 'refresh.2', expiresIn: 600, identity } };
+      },
+      newGeneration: () => 'g',
+    });
+    const listing = strict(LISTED);
+    const seams = {
+      endpoints: async () => [ENDPOINT],
+      ensureAccess: (endpoint: string) => sessions.ensureAccess(endpoint),
+      renewAccess: (endpoint: string, refused: string) => sessions.renewAccess(endpoint, refused),
+      fetcher: listing.fetcher,
+    };
+
+    const [first, second] = await Promise.all([sitesOf(ENDPOINT, seams), sitesOf(ENDPOINT, seams)]);
+
+    assert.equal(first?.length, 2);
+    assert.equal(second?.length, 2);
+    assert.deepEqual(refreshes, [`${ENDPOINT}/session/refresh`]);
+    assert.deepEqual(listing.tokens.toSorted(), ['Bearer old', 'Bearer old', 'Bearer tok', 'Bearer tok']);
   });
 });

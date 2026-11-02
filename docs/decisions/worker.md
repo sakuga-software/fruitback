@@ -646,7 +646,7 @@ degradation the ticket asked to have written down rather than discovered.
   replicas (FRU-67), and in the process otherwise, **per replica**, so N containers multiply the
   ceiling by N.
 - Tests drive `handleRequest` with plain `Request` objects against a stubbed Linear
-  (`linear-stub.ts`); no container needed. The assertion that matters most is that the stored
+  (`linear-stub.fixture.ts`); no container needed. The assertion that matters most is that the stored
   description parses back into the exact note that was posted.
 - **`reporter.verified` is the worker's word, never the client's** (FRU-9). Anything arriving with
   that flag has it stripped, whatever else it says: without that, a browser posting
@@ -752,7 +752,7 @@ degradation the ticket asked to have written down rather than discovered.
 
 ## The conformance suite, and the matrix (FRU-34)
 
-- **The doubles keep what they receive.** `linear-stub.ts` answers from a fixed list and records the
+- **The doubles keep what they receive.** `linear-stub.fixture.ts` answers from a fixed list and records the
   calls, so it cannot serve a suite that writes and then reads. `fakeLinear` and `fakeGithub` in
   `store-conformance.test.ts` store the write and apply the filter of the read. A Linear label belongs
   to one team, and GitHub serves comments oldest first, as the real services do. So client isolation is
@@ -4246,7 +4246,7 @@ does.** `attachments.ts` is the mechanism, `SECURITY.md` says what is protected 
 - **Linear is not measured on a real workspace either.** The shapes are the ones of the guide of
   Linear (« How to upload a file to Linear »: `fileUpload(contentType, filename, size)`,
   `uploadUrl`, `assetUrl`, `headers`, a `PUT` from a server with `Content-Type` and
-  `Cache-Control`), played against `linear-stub.ts`. The guide names `attachmentCreate` for an
+  `Cache-Control`), played against `linear-stub.fixture.ts`. The guide names `attachmentCreate` for an
   issue only in passing; its limit of size is not written there. A first note with a file on a real
   workspace is the measurement this lacks.
 - **The rows of before** named no note: the note named `GET /screenshot/<id>`, which is gone. **The
