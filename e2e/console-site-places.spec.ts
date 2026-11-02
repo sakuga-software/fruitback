@@ -81,6 +81,8 @@ type Worker = {
   releaseTeams: () => void;
   /** The read of the sources fails. */
   connectorsFail: boolean;
+  /** How many reads of the sources the console asked for (FRU-557). */
+  connectorReads: number;
   /** The places of the one site, as the worker keeps them: a repository is in `teamId`. */
   places: Place[];
   /** Every list of places the console sent, as it sent it. */
@@ -108,6 +110,7 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
     teamReads: [],
     releaseTeams: () => {},
     connectorsFail: false,
+    connectorReads: 0,
     places: [],
     sent: [],
     silentReads: 0,
@@ -138,6 +141,7 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
     if (!pathname.startsWith('/console/workspaces/w1/')) return undefined;
     if (pathname.endsWith('/sites/s1/destinations') && request.method() === 'POST') return write(route);
     if (pathname.endsWith('/connectors')) {
+      worker.connectorReads += 1;
       if (worker.connectorsFail) return json({ error: 'unknown' }, 500);
 
       return json({ connectors: worker.connectors, available: true, linearOAuth: true, githubApp: true });
@@ -270,6 +274,26 @@ test('an owner chooses where the notes of a site go, on the page of the site (FR
   // Back on the grid, the card of the site says where its notes go now.
   await page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'Sites' }).click();
   await expect(card(page).locator('dd').first()).toHaveText('LinearTeam Web and 1 more');
+});
+
+test('the page of a site reads its sources once, and the teams and repositories of each once (FRU-557)', async ({
+  page,
+}) => {
+  const worker = await workerWith(page);
+  const teams: string[] = [];
+  page.on('request', (request) => {
+    if (/\/connectors\/\w+\/(teams|repositories)/.test(request.url())) teams.push(new URL(request.url()).pathname);
+  });
+  await openPlaces(page);
+  await expect(add(page)).toBeEnabled();
+  // Every read of the opening has landed: the page waits for nothing more.
+  await page.waitForLoadState('networkidle');
+
+  expect(worker.connectorReads).toBe(1);
+  expect(teams.sort()).toEqual([
+    '/console/workspaces/w1/connectors/c1/teams',
+    '/console/workspaces/w1/connectors/g1/repositories',
+  ]);
 });
 
 test('the places wait for a list to be kept before the next gesture (FRU-123)', async ({ page }) => {

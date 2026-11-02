@@ -107,8 +107,17 @@ export function SitePlaces({
 
   // The teams of each Linear and the repositories of each GitHub are read when the page draws them, and
   // again on « Try again », which starts each list of teams again. An address has nothing to choose.
+  // React runs an effect twice when it mounts in development: the lists are read once for each
+  // sources and « Try again » (FRU-557). Each read calls Linear or GitHub, 51 calls for 300 teams.
+  // An answer to a read that a newer one replaced is dropped.
+  const readFor = useRef<string | undefined>(undefined);
+  const generation = useRef(0);
   useEffect(() => {
-    let stale = false;
+    const key = `${base} ${ids} ${reads}`;
+    if (readFor.current === key) return;
+    readFor.current = key;
+    generation.current += 1;
+    const mine = generation.current;
     for (const source of sources) {
       if (source.kind === 'rest') {
         setOffers((current) => ({ ...current, [source.id]: { kind: 'rest' } }));
@@ -122,7 +131,7 @@ export function SitePlaces({
         'GET',
         `${base}/connectors/${source.id}/${path}`,
       ).then((answer) => {
-        if (stale) return;
+        if (mine !== generation.current) return;
         let offer: Offer = 'failed';
         if (answer.ok && source.kind === 'linear')
           offer = { kind: 'linear', list: teamListOf(answer.data, asked, typed.current) };
@@ -134,10 +143,6 @@ export function SitePlaces({
         setOffers((current) => ({ ...current, [source.id]: offer }));
       });
     }
-
-    return () => {
-      stale = true;
-    };
     // The sources are a new array at each render: the ids are what the reads depend on.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [base, ids, reads]);

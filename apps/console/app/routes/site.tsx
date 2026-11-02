@@ -114,8 +114,13 @@ export default function SitePage() {
     const answer = await call<{ connectors: Connector[] }>('GET', `${base}/connectors`);
     setConnectors(listedOf(answer, (data) => data.connectors));
   }, [base]);
+  // React runs an effect twice when it mounts in development: the sources are read once, or the lists
+  // of their teams start again behind them (FRU-557).
+  const readFor = useRef<unknown>(undefined);
   useEffect(() => {
-    if (manages && seesTracker) void readConnectors();
+    if (!manages || !seesTracker || readFor.current === readConnectors) return;
+    readFor.current = readConnectors;
+    void readConnectors();
   }, [manages, seesTracker, readConnectors]);
 
   const site = typeof read === 'string' ? undefined : read;
