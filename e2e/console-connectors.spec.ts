@@ -179,9 +179,13 @@ const sources = (page: Page) => catalogue(page).getByRole('listitem');
 async function openCatalogue(page: Page, name = 'New connector'): Promise<void> {
   await page.getByRole('button', { name, exact: true }).click();
   await expect(sources(page)).toHaveCount(8);
+  // The dialog zooms in (HeroUI's Modal): its boxes are measured once it is at its size.
+  await page.evaluate(() => Promise.all(document.getAnimations().map((animation) => animation.finished)));
 }
 
 async function expectNoViolation(page: Page, name: string): Promise<void> {
+  // A panel of a source unfolds and fades in (FRU-563): axe reads its contrast once it is there.
+  await expect(page.locator('#source-panel:not([data-settled])')).toHaveCount(0);
   const results = await new AxeBuilder({ page }).include('main').analyze();
   expect
     .soft(
