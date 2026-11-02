@@ -97,3 +97,8 @@ export async function internalAdapterOf(auth: Auth): Promise<InternalAdapter> {
 export function apiOf(auth: Auth): AuthApi {
   return auth.api as unknown as AuthApi;
 }
+
+/** The internal adapter of the context a hook of better-auth is called with: `ctx.context.internalAdapter`. */
+export function internalAdapterIn(context: { context: { internalAdapter: unknown } }): InternalAdapter {
+  return context.context.internalAdapter as InternalAdapter;
+}

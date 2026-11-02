@@ -1,5 +1,5 @@
 import type { AccountStore } from './accounts.ts';
-import type { InternalAdapter } from './auth-internals.ts';
+import { type InternalAdapter, internalAdapterIn } from './auth-internals.ts';
 
 /**
  * A provider linked from « My account » whose address is not the one of the account (FRU-415, step 1).
@@ -225,7 +225,7 @@ export function guardLink(api: LinkApi, addresses: AddressBook, now: () => numbe
     const accountId = await accountIdOf(context, providerId, data.source.oauth?.profile);
     if (accountId === undefined) return { error: 'unable_to_get_user_info' };
 
-    const adapter = context.context.internalAdapter as InternalAdapter;
+    const adapter = internalAdapterIn(context);
     const refusal = await refusalOf(adapter, { userId, providerId, accountId, email }, addresses);
     // Linked to this person already: better-auth updates its row, which holds no token.
     if (refusal === 'linked') {
