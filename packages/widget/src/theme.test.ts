@@ -105,9 +105,9 @@ describe('a foreground token is only ever used on the background it is named for
    * three into dark text on their unchanged dark fills.
    *
    * Read out of the source rather than off an export, because what is being checked *is* the
-   * stylesheet text and there is no value to import — the five `STYLES` are module-local, and
-   * `index.ts` re-exports with `export *`, so five identically named exports would collide and be
-   * dropped in silence.
+   * stylesheet text. Each `STYLES` lives in its own `*.styles.ts` (FRU-509), and `index.ts` does not
+   * re-export them: under its `export *`, identically named exports would collide and be dropped in
+   * silence.
    */
   const PAIRS: Record<string, string> = {
     'on-accent': '--fruitback-color-accent',
@@ -124,7 +124,7 @@ describe('a foreground token is only ever used on the background it is named for
     const blocks: { where: string; body: string }[] = [];
 
     for (const name of MODULES) {
-      const path = fileURLToPath(new URL(`./${name}.ts`, import.meta.url));
+      const path = fileURLToPath(new URL(`./${name}.styles.ts`, import.meta.url));
       const source = await readFile(path, 'utf8');
 
       // Rule bodies, crudely but sufficiently: these stylesheets are hand-written and flat.
