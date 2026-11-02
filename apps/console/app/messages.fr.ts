@@ -1604,4 +1604,15 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Chaque repère montre à quoi ressemble une note de ce statut sur la page. Le 3 est un numéro d’exemple.',
   'More teams of {source}…': 'Plus d’équipes de {source}…',
   '{source} did not answer with more teams. Try again.': '{source} n’a pas répondu avec d’autres équipes. Réessayez.',
+  Version: 'Version',
+  'This server runs Fruitback {version}.': 'Ce serveur fait tourner Fruitback {version}.',
+  'Fruitback {version} is out.': 'Fruitback {version} est disponible.',
+  'Back up every database first. Then, where docker-compose.yml is, run:':
+    'Sauvegardez d’abord chaque base de données. Puis, là où se trouve docker-compose.yml, lancez :',
+  'The commands that update the instance': 'Les commandes qui mettent à jour l’instance',
+  'Copy the commands': 'Copier les commandes',
+  'What changed': 'Ce qui a changé',
+  'Upgrade guide': 'Guide de mise à jour',
+  'The browser refused the copy. Select the commands above and copy them by hand.':
+    'Le navigateur a refusé la copie. Sélectionnez les commandes ci-dessus et copiez-les à la main.',
 };

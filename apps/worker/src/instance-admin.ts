@@ -18,6 +18,7 @@ import type { WorkerConfig } from './env.ts';
 import { lastMailSentAt } from './mail.ts';
 import type { AuthorKind, Channel, NoteCursor, NoteQuery } from './notes-index.ts';
 import type { SignUp } from './sign-up.ts';
+import { type Release, WORKER_VERSION } from './release.ts';
 
 /**
  * The administrator of the instance, and what they read (FRU-261).
@@ -603,6 +604,7 @@ export function signUpPolicyOf(config: WorkerConfig): { policy: SignUp; variable
 export function instanceFactsOf(config: WorkerConfig, mounted: { auth: boolean; email: boolean }) {
   return {
     startedAt: new Date(STARTED_AT).toISOString(),
+    version: WORKER_VERSION,
     store: config.store.provider,
     database: { kind: 'postgresql', schema: config.databaseSchema },
     mail: {
@@ -660,6 +662,11 @@ export type InstanceAdminContext = {
    */
   oneAtATime?: <T>(workspace: string, run: () => Promise<T>) => Promise<T>;
   facts?: InstanceFacts;
+  /**
+   * The last release when it is newer than this worker (FRU-520), from `releaseCheck`. Absent: the
+   * answer of the instance says no release.
+   */
+  latestRelease?: () => Promise<Release | undefined>;
   now?: number;
 };
 
@@ -1141,7 +1148,11 @@ export async function handleInstanceAdmin(
 
   switch (route.read) {
     case 'instance': {
-      const [counts, attention] = await Promise.all([reads.counts(), reads.attention()]);
+      const [counts, attention, update] = await Promise.all([
+        reads.counts(),
+        reads.attention(),
+        context.latestRelease?.().catch(() => undefined),
+      ]);
       await traced(attention.connectors.map((connector) => connector.workspace.id));
 
       return json(
@@ -1151,6 +1162,7 @@ export async function handleInstanceAdmin(
           mail: { ...facts.mail, lastSentAt: lastMailSentAt() ?? null },
           counts,
           attention: { count: attention.total, connectors: attention.connectors },
+          update: update ?? null,
         },
         headers,
       );

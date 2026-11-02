@@ -35,6 +35,14 @@ export function connectsBySignIn(api: string): boolean {
   return instanceOf(api).cloud;
 }
 
+/**
+ * The release that the screen « Instance » tells about (FRU-520), or `null`. Fruitback Cloud is
+ * updated by its release, so a console of the Cloud tells about none.
+ */
+export function releaseToShow<Release>(update: Release | null | undefined, api: string): Release | null {
+  return instanceOf(api).cloud ? null : (update ?? null);
+}
+
 /** The host of the worker of Fruitback Cloud. */
 export const CLOUD_API_HOST = 'api.fruitback.com';
 

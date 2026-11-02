@@ -810,7 +810,8 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   Cloud » when it is `api.fruitback.com` (`instanceOf` of `instance.ts`), else « Self-hosted
   instance »: the build holds no flag of the Cloud, and the host is known before any read.
   `routes/admin-instance.tsx` (`/admin`) reads `GET /console/admin/instance` and
-  `GET /console/admin/workspaces` and writes nothing. **Each setting comes from the environment**,
+  `GET /console/admin/workspaces` and writes nothing. « Version », first, says the version of the
+  worker and a newer release (FRU-520, `docs/decisions/worker.md`). **Each setting comes from the environment**,
   so each one says « Set by {variables} in the environment. », and the locked field and the radios
   are described by that sentence. **The workspaces are read on a click only** (« Show the workspaces »,
   Mathieu, 2026-10-19): the read leaves a trace in each workspace that the administrator is not a

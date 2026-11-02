@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
-import { DEVELOPMENT_API, apiFrom, connectsBySignIn, instanceOf } from './instance.ts';
+import { DEVELOPMENT_API, apiFrom, connectsBySignIn, instanceOf, releaseToShow } from './instance.ts';
 
 describe('the address of the worker of this instance (FRU-222)', () => {
   it('is what the container wrote when it started, before what the build holds', () => {
@@ -54,5 +54,19 @@ describe('the way « Connect this browser » connects (FRU-313)', () => {
     assert.equal(connectsBySignIn('https://feedback.acme.dev'), false);
     assert.equal(connectsBySignIn(DEVELOPMENT_API), false);
     assert.equal(connectsBySignIn('https://api.fruitback.com.evil.dev'), false);
+  });
+});
+
+describe('the release that « Instance » tells about (FRU-520)', () => {
+  const release = { version: '0.7.0', url: 'https://github.com/sakuga-software/fruitback/releases/tag/v0.7.0' };
+
+  it('is the one of the worker on a self-hosted console', () => {
+    assert.deepEqual(releaseToShow(release, 'https://api.acme.dev'), release);
+    assert.equal(releaseToShow(null, 'https://api.acme.dev'), null);
+    assert.equal(releaseToShow(undefined, 'https://api.acme.dev'), null);
+  });
+
+  it('is none on the console of Fruitback Cloud, which its release updates', () => {
+    assert.equal(releaseToShow(release, 'https://api.fruitback.com'), null);
   });
 });

@@ -11,6 +11,7 @@ import { fakeLinearDeprecationNotice, fakeLinearIgnoredReason } from './store-co
 import { isDevOnlyProvider } from './stores.ts';
 import { resolveClientIp } from './rate-limit.ts';
 import { type Kv, processKv } from './kv.ts';
+import { type Release, githubReleaseCheck } from './release.ts';
 import { createSender } from './rest-send.ts';
 
 /** How often the worker looks for a delivery that is due. A first attempt waits this long at most. */
@@ -46,9 +47,11 @@ export function createFruitbackServer(env: WorkerEnv, provided?: NoteStore): Ser
   const store = provided ?? (config.ok ? storeFor(config.config) : undefined);
   // One per process, like the store. The handler falls back to this same instance.
   const kv = config.ok ? kvFor(config.config) : processKv();
+  // One per process: it keeps the answer of GitHub for a day (FRU-520).
+  const latestRelease = config.ok && config.config.updateCheck ? githubReleaseCheck() : undefined;
 
   return createServer((incoming, response) => {
-    void respond(incoming, response, env, trustedProxyHops, store, kv);
+    void respond(incoming, response, env, trustedProxyHops, store, kv, latestRelease);
   });
 }
 
@@ -59,6 +62,7 @@ async function respond(
   trustedProxyHops: number,
   store: NoteStore | undefined,
   kv: Kv | undefined,
+  latestRelease: (() => Promise<Release | undefined>) | undefined,
 ): Promise<void> {
   try {
     const request = toWebRequest(incoming);
@@ -68,7 +72,12 @@ async function respond(
       trustedProxyHops,
     );
 
-    const result = await handleRequest(request, env, { clientIp, store, kv });
+    const result = await handleRequest(request, env, {
+      clientIp,
+      store,
+      kv,
+      ...(latestRelease === undefined ? {} : { latestRelease }),
+    });
     await writeWebResponse(result, response);
   } catch (error) {
     // Never leak an internal message to a client site; the details belong in the container logs.

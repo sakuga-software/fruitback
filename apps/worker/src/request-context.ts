@@ -15,6 +15,7 @@ import { seen } from './last-seen.ts';
 import type { Mailer } from './mail.ts';
 import type { Channel, NoteIndex } from './notes-index.ts';
 import type { SessionIdentity, SessionStore } from './session.ts';
+import type { Release } from './release.ts';
 import type { ReplyAuthor, NoteStore } from './store.ts';
 
 /**
@@ -66,6 +67,11 @@ export type RequestContext = {
   noteIndex?: NoteIndex;
   /** What the administrator of the instance reads (FRU-261). A suite hands over one on PGlite. */
   instanceAdmin?: InstanceAdminReads;
+  /**
+   * The release to tell the administrator of the instance about (FRU-520). Absent: no question to
+   * GitHub. The server builds one per process when `updateCheck` is on; a suite hands over a double.
+   */
+  latestRelease?: () => Promise<Release | undefined>;
   /**
    * The GitHub App of the connectors and its tokens (FRU-359). Absent, the one of the process for
    * `FRUITBACK_GITHUB_CONNECTOR`. A suite hands over one that calls a GitHub on a port of the machine.

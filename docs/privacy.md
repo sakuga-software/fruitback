@@ -385,6 +385,11 @@ what it writes each time.
   « Former member », with no name. `forget` deletes the notes of a person. The deletion leaves one
   row in `admin_actions` (`account-deleted`) for each workspace of the account, with the address of
   the account, and the owners of each workspace read it.
+- When an administrator opens « Instance », the worker asks GitHub for the number of the last
+  release of Fruitback, once a day at most. The request is `GET` on the API of GitHub. It
+  carries no cookie and nothing of the instance, its people or its notes, but GitHub sees the
+  address of the server. `FRUITBACK_NO_UPDATE_CHECK=1` stops it. The worker keeps the answer in its
+  memory, and nowhere else.
 
 ### What the extension declares to Firefox (FRU-333)
 
