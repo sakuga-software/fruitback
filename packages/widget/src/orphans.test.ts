@@ -110,12 +110,29 @@ describe('createOrphanList', () => {
     assert.equal(mark().style.getPropertyValue('--fruitback-pin-color'), '#a52a3a');
   });
 
+  it('says the name of the state in the tracker, as the pin does, and says it again when it changes (FRU-512)', () => {
+    const page = mount();
+    const label = () => page.document.querySelector('.fruitback-orphans-note')?.getAttribute('aria-label');
+    const shipped = (stateName: string) =>
+      noteIssueFixture({ note: noteFixture({ id: 'sd_1', text: 'Une note' }), stage: 'done', stateName });
+
+    list?.update([shipped('Shipped to prod')]);
+    assert.equal(label(), 'Shipped to prod · Une note');
+
+    // Another name of the same stage, as a team renames its column: the entry is drawn again.
+    list?.update([shipped('Released')]);
+    assert.equal(label(), 'Released · Une note');
+  });
+
   it('says the stage in words too, because colour alone is not a label', () => {
     // The mark is aria-hidden, so without this the stage reaches nobody using a screen reader — and
     // nobody who cannot separate the five colours either.
     const page = mount();
 
-    list?.update([noteIssueFixture({ note: noteFixture({ id: 'sd_1', text: 'Une note' }), stage: 'done' })]);
+    // No name of a state in a tracker: the word of the stage, from the catalog.
+    list?.update([
+      noteIssueFixture({ note: noteFixture({ id: 'sd_1', text: 'Une note' }), stage: 'done', stateName: '' }),
+    ]);
 
     assert.equal(page.document.querySelector('.fruitback-orphans-note')?.getAttribute('aria-label'), 'Done · Une note');
     assert.equal(page.document.querySelector('.fruitback-orphans-stage')?.getAttribute('aria-hidden'), 'true');

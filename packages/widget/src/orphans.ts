@@ -1,7 +1,7 @@
 import { type NoteIssue, type NoteStatus } from '@fruitback/shared';
 import { type Translator, createTranslator, languageOf } from './messages.ts';
 import { createIcon } from './icons.ts';
-import { statusPaint } from './status-paint.ts';
+import { statusLabel, statusPaint } from './status-paint.ts';
 import { CAPTURE_START } from './events.ts';
 import { adoptStyles } from './stylesheet.ts';
 import { excerpt } from './note-words.ts';
@@ -123,12 +123,13 @@ export function createOrphanList(options: OrphanListOptions): OrphanList {
       // a drop in its stage's colour. FRU-24 left this over-invalidating on purpose, pending the
       // ticket that would decide how a stage shows up here; that ticket is FRU-36, and this is the
       // answer. Drop the stage from this key and a note that changes stage keeps the colour it had.
-      // The status too since FRU-370, for the same reason: its colour and its name are drawn.
+      // The status too since FRU-370, for the same reason: its colour and its name are drawn. And the
+      // name of the state in the tracker, which the entry says when the team gave no status (FRU-512).
       const next = issues
         .map((issue) => {
           const status = options.statusOf?.(issue);
 
-          return `${issue.note.id}:${issue.stage}:${status === undefined ? '' : JSON.stringify(status)}`;
+          return `${issue.note.id}:${issue.stage}:${issue.stateName ?? ''}:${status === undefined ? '' : JSON.stringify(status)}`;
         })
         .join('|');
       if (next === drawn) return;
@@ -193,10 +194,11 @@ function entry(
   button.type = 'button';
   button.className = 'fruitback-orphans-note';
   button.textContent = summary(issue);
-  // The name of its status, when the team gave one (FRU-370).
+  // The word of its state, as its pin says it: the name of its status (FRU-370), else the name of its
+  // state in the tracker, else the word of its stage (FRU-512).
   button.setAttribute(
     'aria-label',
-    t.text('orphans.entry', { stage: status?.name || t.stage(issue.stage), note: summary(issue) }),
+    t.text('orphans.entry', { stage: statusLabel(issue, status, t), note: summary(issue) }),
   );
   button.addEventListener('click', () => onSelect?.(issue));
 
