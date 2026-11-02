@@ -682,6 +682,9 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   only), and never takes it from a request. The worker reads back only an address of
   `https://linear.app/`, and the console links only to one. A destination written before migration
   0041 has no `url` until its places are written again. Its card then shows the team as words.
+  A write of the places keeps the `url` that Linear's answer gives now, and never the stored one,
+  as for the label: a team key can be renamed at Linear. With no key in the answer, there is no link
+  until the next write.
 - **A site chooses where its notes go on its page** (FRU-399, Mathieu; FRU-433), and no longer in the
   panel of a source: a section of the page of the site, for an owner or an admin
   (`site-places.tsx`). It lists the places of the site in their order, with « Make it the default »
