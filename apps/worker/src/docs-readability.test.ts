@@ -44,6 +44,8 @@ type Finding = { line: number; column: number; what: What; detail: string };
 const HEADING = /^ {0,3}#{1,6}(?:[ \t]|$)/;
 const LIST_ITEM = /^[ \t]*(?:[-*+]|\d{1,9}[.)])[ \t]+/;
 const TABLE_ROW = /^[ \t]*\|/;
+/** All the text of a block before a pair, when the pair opens a list item. */
+const LIST_MARKER_ONLY = /^[ \t]*(?:[-*+]|\d{1,9}[.)])[ \t]+$/;
 const BLANK_LINE = /\n[ \t]*\n/;
 
 /**
@@ -206,9 +208,8 @@ function findingsIn(markdown: string): Finding[] {
         const opening = position(current, pair.index);
         bolds.push(opening);
         blank(left, pair.index, pair.index + pair[0].length, ' ');
-        // A list item whose text starts with the pair: the marker, then the bold, nothing between.
-        const before = current.text.slice(0, pair.index);
-        if (pair.index === (LIST_ITEM.exec(source[current.start] ?? '')?.[0].length ?? -1) && !before.includes('\n')) {
+        // A list item whose text starts with the pair: only its marker comes before it, in the block itself.
+        if (LIST_MARKER_ONLY.test(current.text.slice(0, pair.index))) {
           found.push({ ...opening, what: 'bold label', detail: 'a bullet opens with bold' });
         }
       }
