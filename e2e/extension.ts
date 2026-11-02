@@ -37,6 +37,14 @@ export const PLAYGROUND_ORIGIN = 'http://localhost:5177';
  */
 export const SITE_SWITCH = /^Fruitback (on|sur) /;
 
+/**
+ * `GET` and `POST /session/sites` of `worker`, with or without a query (FRU-498): the popup asks the
+ * sites of its tab with `?origin=`, which a route on the bare path does not catch.
+ */
+export function sessionSitesOf(worker: string): (url: URL) => boolean {
+  return (url) => url.origin === worker && url.pathname === '/session/sites';
+}
+
 export type LoadedExtension = { context: BrowserContext; worker: Worker; id: string };
 
 export const test = base.extend<{

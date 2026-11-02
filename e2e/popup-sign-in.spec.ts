@@ -1,6 +1,14 @@
 import AxeBuilder from '@axe-core/playwright';
 import { type BrowserContext, type Locator, type Page, type Route, expect } from '@playwright/test';
-import { type LoadedExtension, PLAYGROUND_ORIGIN, addRule, openBareSite, openPopup, test } from './extension.ts';
+import {
+  type LoadedExtension,
+  PLAYGROUND_ORIGIN,
+  addRule,
+  openBareSite,
+  openPopup,
+  test,
+  sessionSitesOf,
+} from './extension.ts';
 import { AUTHENTICATED_WORKER_ORIGIN } from './worker-sessions.ts';
 
 /**
@@ -64,7 +72,7 @@ async function signInRoutes(
   const state = { answer: 'pending' as 'pending' | 'approved' | 'refused' | 'expired' };
   const bodies: unknown[] = [];
   // What an account of no workspace reads (FRU-238): the worker of the suite does not know the token.
-  await context.route(`${CLOUD}/session/sites`, (route) =>
+  await context.route(sessionSitesOf(CLOUD), (route) =>
     route.fulfill({ json: { account: true, workspaces: [], sites: [] } }),
   );
   await context.route(`${CLOUD}/session/connect`, async (route) => {

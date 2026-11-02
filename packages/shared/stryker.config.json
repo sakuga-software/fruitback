@@ -8,9 +8,11 @@
     "src/attachments.ts",
     "src/contrast.ts",
     "src/feedback-text.ts",
+    "src/i18n-core.ts",
     "src/issue.ts",
     "src/markdown-description.ts",
-    "src/note.ts"
+    "src/note.ts",
+    "src/status-paint.ts"
   ],
   "inPlace": true,
   "coverageAnalysis": "perTest",

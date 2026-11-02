@@ -1,3 +1,4 @@
+import { fillSentence, nearestLanguage } from '@fruitback/shared';
 import { frenchSpaces } from './typography.ts';
 
 /**
@@ -40,9 +41,11 @@ const STORED = 'fruitback:locale';
 
 /** The language we have words for that is nearest to a tag: `fr-CA` reads French, `ja` reads English. */
 export function nearest(tag: string | undefined | null): LocaleTag {
-  const base = (tag ?? '').toLowerCase().split('-')[0];
-
-  return LOCALES.some((locale) => locale.tag === base) ? (base as LocaleTag) : 'en';
+  return nearestLanguage(
+    tag,
+    LOCALES.map((locale) => locale.tag),
+    'en',
+  );
 }
 
 function remembered(): string | null {
@@ -233,7 +236,5 @@ export function translate(
   sentence: string,
   values: Readonly<Record<string, string | number>> = {},
 ): string {
-  const words = CATALOGS[tag]?.[sentence] ?? sentence;
-
-  return words.replaceAll(/\{(\w+)\}/g, (whole, name: string) => (name in values ? String(values[name]) : whole));
+  return fillSentence(CATALOGS[tag]?.[sentence] ?? sentence, values);
 }

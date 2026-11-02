@@ -4,3 +4,5 @@ export * from './markdown-description.ts';
 export * from './attachments.ts';
 export * from './contrast.ts';
 export * from './feedback-text.ts';
+export * from './status-paint.ts';
+export * from './i18n-core.ts';

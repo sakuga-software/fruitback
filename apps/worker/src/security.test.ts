@@ -120,7 +120,7 @@ describe('SECURITY.md states what the code does', () => {
 
   /** FRU-149: what a member who was removed keeps is an access token, for its lifetime and the skew. */
   it('says how long an access token outlives a member who was removed', () => {
-    const phrase = `**${(ACCESS_TTL_SECONDS + CLOCK_SKEW_SECONDS) / 60} minutes at\n  most**, its ${ACCESS_TTL_SECONDS / 60} minutes and the ${CLOCK_SKEW_SECONDS} seconds of clock skew`;
+    const phrase = `${(ACCESS_TTL_SECONDS + CLOCK_SKEW_SECONDS) / 60} minutes at\n  most, its ${ACCESS_TTL_SECONDS / 60} minutes and the ${CLOCK_SKEW_SECONDS} seconds of clock skew`;
     assert.ok(SECURITY.includes(phrase), `SECURITY.md does not say that a removed member keeps a token ${phrase}`);
   });
 
@@ -198,7 +198,7 @@ describe('SECURITY.md states what the code does', () => {
     const loose = SECURITY.replace(/\s+/g, ' ');
     for (const sentence of [
       `32 random bytes after the prefix \`${KEY_PREFIX}\``,
-      `only the sites it names**, ${MAX_KEY_SITES} at most`,
+      `only the sites it names, ${MAX_KEY_SITES} at most`,
       `It lives ${DEFAULT_KEY_DAYS} days unless its creator chooses from 1 to ${MAX_KEY_DAYS} days`,
       `A workspace holds ${MAX_AGENT_KEYS} keys at most`,
     ]) {
@@ -223,7 +223,7 @@ describe('SECURITY.md states what the code does', () => {
   });
 
   it('quotes how old a session may be and still take a way to sign in away (FRU-249)', () => {
-    assert.ok(SECURITY.includes('**The session must be of the last day**'), 'SECURITY.md does not say it');
+    assert.ok(SECURITY.includes('The session must be of the last day'), 'SECURITY.md does not say it');
     assert.equal(SESSION_FRESH_SECONDS, 86_400, 'SECURITY.md says « of the last day »');
   });
 

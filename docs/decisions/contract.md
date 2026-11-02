@@ -39,7 +39,7 @@ first publish made it expensive.
   so `NOTE_VERSION` does not move, and a widget of before shows the name alone. The worker sets it
   on a read, from the first line it wrote for the agent (`markedAgent` of `reply-text.ts`).
 - **The text of the notes of a page is `feedbackText`** (FRU-109, moved by FRU-463): the widget's
-  « Copy as text » and the tool `feedback_as_text` of the worker write it. The contract holds the
+  « Copy as text » and the tool `notes_as_text` of the worker write it. The contract holds the
   format and no word: the caller gives `FeedbackWords`, in its language. `placement` is absent where
   the caller has no page to find a note on, and the text then says nothing of it.
 - **An issue says `checked: { by, at }` and `mine: true`** (FRU-294): `checked` on a done note whose

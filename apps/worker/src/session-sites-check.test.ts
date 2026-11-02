@@ -105,6 +105,64 @@ async function acme() {
   return { world, workspace, site, alice, bob, carol };
 }
 
+/**
+ * FRU-498: `?origin=` lists the sites of the tab only. The workspaces of the account are all named,
+ * and the counts and the connectors are read only for a workspace that has a site of the tab.
+ */
+describe('the sites of one origin, for an account (FRU-498)', () => {
+  it('lists the site of the tab with its counts, every workspace, and reads no count for a tab of none', async () => {
+    const { world, workspace, site, alice } = await acme();
+    const other = await workspaceIn(world, alice.token, 'Globex');
+    const elsewhere = await world.accounts.addSite(other, { origin: 'https://globex.dev', visibility: 'members' });
+    const token = await sessionOf(world, alice);
+    const index = world.context.noteIndex;
+    assert.ok(index !== undefined);
+    const counted: string[] = [];
+    const summary = index.summary.bind(index);
+    index.summary = async (each) => {
+      counted.push(each);
+
+      return summary(each);
+    };
+    const ofTab = async (tab: string) => {
+      const answer = await callOn(world, 'GET', `/session/sites?origin=${encodeURIComponent(tab)}`, {
+        origin: EXTENSION,
+        token,
+      });
+      assert.equal(answer.status, 200, await answer.clone().text());
+
+      return (await answer.json()) as {
+        origin?: string;
+        workspaces: { id: string }[];
+        sites: (Listed & { workspace: string })[];
+      };
+    };
+
+    const listed = await ofTab(ORIGIN);
+    assert.equal(listed.origin, ORIGIN);
+    assert.deepEqual(
+      listed.workspaces.map((each) => each.id),
+      [workspace, other],
+    );
+    assert.deepEqual(
+      listed.sites.map((each) => each.id),
+      [site.id],
+    );
+    assert.equal(listed.sites[0]?.toCheck, 0);
+    assert.deepEqual(counted, [workspace], 'the counts of the workspace of the tab only');
+
+    counted.length = 0;
+    const none = await ofTab('https://nobody.dev');
+    assert.deepEqual(none.sites, []);
+    assert.deepEqual(counted, [], 'no count for a tab that is no site');
+
+    // The control: with no origin, the whole list, and the counts of every workspace.
+    const whole = await sitesOf(world, token);
+    assert.deepEqual(whole.map((each) => each.id).toSorted(), [site.id, elsewhere.id].toSorted());
+    assert.deepEqual(counted.toSorted(), [workspace, other].toSorted());
+  });
+});
+
 describe('where the notes of a site go, in GET /session/sites (FRU-295)', () => {
   it('names the destination to a role that sees the tracker, and not to a guest', async () => {
     const { world, workspace, site, alice, carol } = await acme();

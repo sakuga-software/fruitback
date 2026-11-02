@@ -8,6 +8,7 @@ import {
   type NoteStage,
   type NoteStatus,
   contrastRatio,
+  STATUS_INK,
   readableTextColor,
 } from '@fruitback/shared';
 import type { TrackerState } from './store.ts';
@@ -135,13 +136,6 @@ export function isBuiltIn(source: string, key: string): boolean {
 export function originOf(source: string, key: string): StatusOrigin {
   return source === OWN_SOURCE && !isBuiltIn(source, key) ? 'team' : 'tracker';
 }
-
-/**
- * The ink of the widget's theme (`--fruitback-color-text` of packages/widget/src/theme.ts): the dark
- * text that `readableTextColor` tries first. The worker names it to compute the text of a status
- * whose team chose a background and no text; `theme.ts` stays the one source of the palette.
- */
-export const STATUS_INK = '#18181b';
 
 /** The states of one tracker a site sends to (FRU-368): the source is the id of its connector. */
 export type TrackerSource = { source: string; states: readonly TrackerState[] };
