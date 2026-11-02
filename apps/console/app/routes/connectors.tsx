@@ -118,10 +118,11 @@ export default function Connectors() {
   const [selected, setSelected] = useState<string | undefined>();
   // Whether the panel that is about to appear was opened by a press of its row: see `Opened`.
   const opening = useRef(false);
-  const [adding, setAdding] = useState<Connector['kind'] | undefined>();
-  // Whether the open form started on the page, with no source connected yet (FRU-562). It stays on the
-  // page when its source arrives in the list: in the dialog it would mount again, and lose its secret.
-  const [addingOnPage, setAddingOnPage] = useState(false);
+  // The form that is open, and where (FRU-562): on the page when no source was connected as it opened.
+  // It stays there when its source arrives in the list: in the dialog it would mount again, and lose
+  // its secret. One state, so the place never outlives its form.
+  const [form, setForm] = useState<{ kind: Connector['kind']; onPage: boolean } | undefined>();
+  const adding = form?.kind;
   // FRU-542, FRU-562: whether « New connector » opened the dialog of the sources to add. A way back from
   // Linear or GitHub that went wrong opens it: its sentence is under the source, in that dialog. So does
   // `?new` in the address (« Connect a tracker » of the Sites screen), once the read says that this
@@ -270,7 +271,7 @@ export default function Connectors() {
   //
   // FRU-562: with a source, the list is a grid of cards in a dialog. A form that started on the page,
   // before any source, stays there until it ends.
-  const formOnPage = adding !== undefined && addingOnPage;
+  const formOnPage = form?.onPage === true;
   const onPage = answered && (!connected || formOnPage);
   // A form open in the dialog keeps it, whatever a read since says: the secret of an address is shown
   // there once.
@@ -280,8 +281,7 @@ export default function Connectors() {
   const offersNew = connected && !cannot;
   /** Opens the form of a source, where the list of the sources is now. */
   const startAdding = (kind: Connector['kind']) => {
-    setAddingOnPage(!connected);
-    setAdding(kind);
+    setForm({ kind, onPage: !connected });
   };
   const sourcesToAdd = (
     <>
@@ -319,7 +319,7 @@ export default function Connectors() {
               <AddLinear
                 base={base}
                 onDone={(connector) => {
-                  setAdding(undefined);
+                  setForm(undefined);
                   if (connector !== undefined) {
                     setCatalogue(false);
                     // The list goes with the form that had focus: the panel of the new source takes it.
@@ -385,7 +385,7 @@ export default function Connectors() {
                   void load();
                 }}
                 onDone={() => {
-                  setAdding(undefined);
+                  setForm(undefined);
                   // « Cancel » closes the form only. « I kept it » closes the list too.
                   if (!restAdded.current) return;
                   setCatalogue(false);
