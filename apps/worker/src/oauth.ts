@@ -1,3 +1,4 @@
+import { isOneOf } from './one-of.ts';
 import { json } from './http.ts';
 import { type AccountStore, MAX_AGENT_KEYS, type OAuthClient, can } from './accounts.ts';
 import { type AgentGrant, DEFAULT_KEY_DAYS, daysOf, grantOf, sitesOf } from './agent-keys.ts';
@@ -304,7 +305,7 @@ async function register(
   const host = [...hosts][0] as string;
 
   const method = body.token_endpoint_auth_method ?? 'client_secret_basic';
-  if (!(AUTH_METHODS as readonly unknown[]).includes(method)) {
+  if (!isOneOf(method, AUTH_METHODS)) {
     return oauthError(
       400,
       'invalid_client_metadata',
@@ -593,10 +594,6 @@ export async function resolveAccessToken(
 // --- the console: the person approves ------------------------------------------------------------
 
 const CONSOLE_REQUEST = /^\/console\/oauth\/requests\/([^/]+)(\/approve|\/deny)?$/;
-
-export function isConsoleOAuthRoute(pathname: string): boolean {
-  return CONSOLE_REQUEST.test(pathname);
-}
 
 export type ConsoleOAuthContext = {
   accounts: AccountStore;

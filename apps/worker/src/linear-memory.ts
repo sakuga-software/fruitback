@@ -27,7 +27,7 @@ import { type StoreSpec, defineStore } from './store-config.ts';
  * So the dev loop exercises the round trip for real, and a note that stops parsing breaks the
  * playground the same way it would break production — which is the entire point of having one.
  *
- * `apps/worker/src/linear-stub.ts` is a different thing: it fakes `fetch` for the unit tests. This
+ * `apps/worker/src/linear-stub.fixture.ts` is a different thing: it fakes `fetch` for the unit tests. This
  * one is a store the running process serves from.
  */
 

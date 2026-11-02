@@ -10,7 +10,7 @@ import {
   stageForLinearState,
   toNoteIssue,
 } from './linear.ts';
-import { installLinearStub, storedIssueFromNote } from './linear-stub.ts';
+import { installLinearStub, storedIssueFromNote } from './linear-stub.fixture.ts';
 import { StoreError } from './store.ts';
 
 /**

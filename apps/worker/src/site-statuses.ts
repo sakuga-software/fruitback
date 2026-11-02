@@ -1,3 +1,4 @@
+import { isOneOf } from './one-of.ts';
 import {
   MAX_STATUSES,
   MIN_TEXT_CONTRAST,
@@ -90,7 +91,7 @@ export function readSiteStatus(
   if (typeof source !== 'string' || !SOURCE.test(source)) return refuse('invalid-source');
   if (typeof key !== 'string' || !KEY.test(key)) return refuse('invalid-key');
   if (name !== null && (typeof name !== 'string' || name.length > MAX_STATUS_NAME)) return refuse('invalid-name');
-  if (!(NOTE_STAGES as readonly unknown[]).includes(stage)) return refuse('invalid-stage');
+  if (!isOneOf(stage, NOTE_STAGES)) return refuse('invalid-stage');
   for (const one of [color, textColor]) {
     if (one !== null && (typeof one !== 'string' || !STATUS_COLOR.test(one))) return refuse('invalid-color');
   }
@@ -99,7 +100,7 @@ export function readSiteStatus(
     return refuse('text-under-contrast');
   }
   if (!Number.isSafeInteger(position) || (position as number) < 0) return refuse('invalid-position');
-  if (!(STATUS_ORIGINS as readonly unknown[]).includes(origin)) return refuse('invalid-origin');
+  if (!isOneOf(origin, STATUS_ORIGINS)) return refuse('invalid-origin');
   if (typeof hidden !== 'boolean') return refuse('invalid-hidden');
 
   return {

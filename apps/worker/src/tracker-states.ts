@@ -1,3 +1,4 @@
+import { isOneOf } from './one-of.ts';
 import { NOTE_STAGES, STATUS_COLOR } from '@fruitback/shared';
 import type { ClientConfig } from './clients.ts';
 import { type Kv, KvError } from './kv.ts';
@@ -67,7 +68,7 @@ function statesOf(value: string | undefined): TrackerState[] | undefined {
         each !== null &&
         typeof each.id === 'string' &&
         typeof each.name === 'string' &&
-        (NOTE_STAGES as readonly unknown[]).includes(each.stage) &&
+        isOneOf(each.stage, NOTE_STAGES) &&
         (each.color === undefined || (typeof each.color === 'string' && STATUS_COLOR.test(each.color))),
     );
 

@@ -14,7 +14,7 @@ import {
 } from './console-world.fixture.ts';
 import { ADMIN_PATH, type InstanceAdminReads, handleInstanceAdmin } from './instance-admin.ts';
 import { rowsOf } from './postgres.fixture.ts';
-import { createMemoryAttachmentStore } from './attachments.ts';
+import { createMemoryAttachmentStore } from './attachments-memory.fixture.ts';
 import { seal } from './secrets.ts';
 import { createPostgresNoteStore } from './notes-postgres.ts';
 import { createPairing, redeemPairing } from './session.ts';

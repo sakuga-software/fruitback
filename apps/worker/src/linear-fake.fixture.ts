@@ -5,7 +5,7 @@
  * in place of the network. It keeps the issues, the bytes of each file and each attachment, and
  * gives them back to the read of the page, so a pin comes back after a reload.
  *
- * It differs from `linear-stub.ts`: the stub answers each test with canned data, and this fake
+ * It differs from `linear-stub.fixture.ts`: the stub answers each test with canned data, and this fake
  * holds state for one process. `installLinearFake` puts it in front of `fetch`.
  */
 
