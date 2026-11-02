@@ -591,21 +591,26 @@ type PickProps<Value extends string> = {
   options: readonly { value: Value; label: string; detail: string }[];
 };
 
-/** One choice among a few, each with a line that says what it means: the radio cards of the mockup. */
+/**
+ * One choice among a few, each with a line that says what it means: the radio cards of the mockup.
+ *
+ * FRU-569: a press anywhere on a card chooses it. `Radio.Content` is the label of HeroUI, so it holds
+ * the detail too and fills the card. The detail is hidden from the name of the radio, and stays its
+ * description.
+ */
 export function Pick<Value extends string>({ label, value, onChange, options }: PickProps<Value>) {
   return (
     <RadioGroup value={value} onChange={(chosen) => onChange(chosen as Value)} className="kit-pick">
       <Label>{label}</Label>
       {options.map((option) => (
         <Radio key={option.value} value={option.value} className="kit-pick__card">
-          {/* The row of HeroUI holds the control and the label. The detail is under it, as a description. */}
           <Radio.Content>
             <Radio.Control>
               <Radio.Indicator />
             </Radio.Control>
             <Label>{option.label}</Label>
+            <Description aria-hidden="true">{option.detail}</Description>
           </Radio.Content>
-          <Description>{option.detail}</Description>
         </Radio>
       ))}
     </RadioGroup>

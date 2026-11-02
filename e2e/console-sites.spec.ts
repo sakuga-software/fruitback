@@ -809,6 +809,52 @@ test('« Who can leave a note? » is asked for a site that its members read, « 
   await expect(writers.getByRole('radio', { name: 'Members only' })).toBeChecked();
 });
 
+test('a press anywhere on a choice of the form chooses it, its detail and its corner too (FRU-569)', async ({
+  page,
+}) => {
+  await workerWith(page);
+  await open(page);
+  await page.getByRole('button', { name: 'Add a site', exact: true }).click();
+  const form = page.getByRole('dialog', { name: 'Add a site' });
+  const everyone = form.getByRole('radio', { name: 'Everyone who visits' });
+  const members = form.getByRole('radio', { name: /Members of Acme/ });
+  await expect(members).toBeChecked();
+
+  // The detail under the label: HeroUI made only the row of the radio a label.
+  await form.getByText('A public way to report a problem on a live site.', { exact: true }).click();
+  await expect(everyone).toBeChecked();
+
+  // The bottom right corner of the other card, in its padding, far from the radio and its words.
+  const card = form.locator('.kit-pick__card').filter({ has: page.getByRole('radio', { name: /Members of Acme/ }) });
+  const frame = await card.boundingBox();
+  if (frame === null) throw new Error('the card of « Members of Acme » has no box');
+  await page.mouse.click(frame.x + frame.width - 6, frame.y + frame.height - 6);
+  await expect(members).toBeChecked();
+
+  // The keyboard still walks the choices, and the detail is still the description of its radio.
+  await members.focus();
+  await page.keyboard.press('ArrowDown');
+  await expect(everyone).toBeChecked();
+  await expect(everyone).toHaveAccessibleDescription('A public way to report a problem on a live site.');
+  // The detail is in the label now: it must not join the name of the radio.
+  await expect(everyone).toHaveAccessibleName('Everyone who visits');
+  // The detail is `aria-hidden` and referenced by `aria-describedby`. What Chromium gives a screen
+  // reader, read in its own accessibility tree and not computed by Playwright: the name without the
+  // detail, and the detail as the description (raised in review).
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Accessibility.enable');
+  const { nodes } = (await cdp.send('Accessibility.getFullAXTree')) as {
+    nodes: { role?: { value?: string }; name?: { value?: string }; description?: { value?: string } }[];
+  };
+  const radios = nodes
+    .filter((node) => node.role?.value === 'radio')
+    .map((node) => ({ name: node.name?.value, description: node.description?.value }));
+  expect(radios).toContainEqual({
+    name: 'Everyone who visits',
+    description: 'A public way to report a problem on a live site.',
+  });
+});
+
 test('the menu of a card is walked with the keyboard, and leads to the page of the site (FRU-433)', async ({
   page,
 }) => {
