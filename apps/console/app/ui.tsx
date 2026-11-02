@@ -995,8 +995,11 @@ type SidePanelProps = {
 
 /**
  * A dialog over the page (FRU-558): its title names it, focus stays inside while it is open, and
- * Escape, the close button or a press outside close it. Focus goes back to what opened it. HeroUI's
- * Modal, on the dialog of React Aria, does the trap, the labelling and the return.
+ * Escape or the close button close it. Focus goes back to what opened it. HeroUI's Modal, on the
+ * dialog of React Aria, does the trap, the labelling and the return.
+ *
+ * A press outside does not close it: a selection of text released past its edge would hide a form
+ * and the sentence of its refusal (raised in review).
  */
 export function Dialog({
   open,
@@ -1019,7 +1022,7 @@ export function Dialog({
   return (
     <Modal.Backdrop
       isOpen={open}
-      isDismissable
+      isDismissable={false}
       onOpenChange={(next) => {
         if (!next) onClose();
       }}

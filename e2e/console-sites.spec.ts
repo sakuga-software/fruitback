@@ -681,6 +681,10 @@ test('« Add a site » opens a dialog, Escape closes it, and a refusal keeps wha
   await expect(opener).toBeFocused();
   await opener.click();
   await expect(field).toBeFocused();
+  // A press outside does not close it: the form and its refusal stay (raised in review).
+  await page.mouse.click(20, 880);
+  await expect(form).toBeVisible();
+  await field.focus();
   // Tab never leaves the dialog: the page under it is out of reach.
   for (let step = 0; step < 12; step += 1) {
     await page.keyboard.press('Tab');
