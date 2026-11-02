@@ -247,8 +247,13 @@ test('the list is a grid of cards, each named by its address and its icon (FRU-4
   expect.soft(await painted(name, 'color')).toEqual(rgb(INK));
   const audience = first.getByText('Members of Acme', { exact: true });
   expect.soft(await styles(audience, ['font-size'])).toEqual({ 'font-size': '13px' });
-  expect.soft(await painted(audience, 'color')).toEqual(rgb(MUTED));
+  // FRU-566: who reads is a chip with its icon, on the grey of a chip, at 4.5:1 at the least.
+  const chip = first.getByRole('group').filter({ hasText: 'Members of Acme' });
+  expect.soft(await painted(chip, 'backgroundColor')).toEqual(rgb(CHIP));
+  expect.soft(contrast(await painted(audience, 'color'), rgb(CHIP))).toBeGreaterThanOrEqual(4.5);
+  await expect(chip.locator('svg[data-access="members"]')).toBeVisible();
   await expect(card(page, 'support.acme.dev').getByText('Everyone who visits', { exact: true })).toBeVisible();
+  await expect(card(page, 'support.acme.dev').locator('svg[data-access="everyone"]')).toBeVisible();
 
   // The icon of each site, 28 px: its favicon, asked of the site itself with no referrer, or its
   // first letter when there is none.
@@ -352,7 +357,8 @@ test('the list is a grid of cards, each named by its address and its icon (FRU-4
   });
   expect.soft(await painted(foot, 'color')).toEqual(rgb(MUTED));
   const connect = foot.getByRole('link', { name: 'Connect a tracker' });
-  await expect(connect).toHaveAttribute('href', '/w/w1/connectors');
+  // FRU-571: it opens the dialog « Add a connector » of the Connectors screen (FRU-562).
+  await expect(connect).toHaveAttribute('href', '/w/w1/connectors?new=1');
   // And the way to the page of the notes (FRU-245).
   await expect(foot).toContainText('Connect a tracker or see where every note went');
   await expect(foot.getByRole('link', { name: 'see where every note went' })).toHaveAttribute('href', '/w/w1/notes');
@@ -360,6 +366,93 @@ test('the list is a grid of cards, each named by its address and its icon (FRU-4
   await expect(page.getByRole('navigation', { name: 'Pages of sites' })).toHaveCount(0);
 
   await expectNoViolation(page, 'the list');
+});
+
+test('who reads and who writes are chips, a long place is cut with a tooltip, and the cards are one size (FRU-566, FRU-567, FRU-568)', async ({
+  page,
+}) => {
+  const team = 'Sakuga-software · Coeur du Périgord, the long name of a project that does not fit';
+  const long = { connector: 'c1', teamId: 't9', label: `Linear · ${team}` };
+  await workerWith(page, 'owner', [
+    ...SITES,
+    {
+      id: 's5',
+      origin: 'https://review.acme.dev',
+      visibility: 'members',
+      writers: 'anyone',
+      destination: long,
+      destinations: [long],
+      notes: counts(16, 3, 2, 1, 0),
+      via: ['extension'],
+      lastNoteAt: since(5),
+      undelivered: 0,
+    },
+  ]);
+  await open(page);
+
+  // FRU-566: « Notes from anyone on the page » is a chip of its own, with a pencil.
+  const review = card(page, 'review.acme.dev');
+  const writes = review.getByRole('group').filter({ hasText: 'Notes from anyone on the page' });
+  await expect(writes.locator('svg[data-access="anyone"]')).toBeVisible();
+  await expect(review.locator('svg[data-access="members"]')).toBeVisible();
+
+  // FRU-567: the place is on one line, cut with « … », whole in the page for a screen reader.
+  const place = value(review, 'Notes go to').getByText(`Team ${team}`, { exact: true });
+  const cut = await place.evaluate((element) => ({
+    line: parseFloat(getComputedStyle(element).lineHeight),
+    height: element.getBoundingClientRect().height,
+    overflow: element.scrollWidth > element.clientWidth,
+    ellipsis: getComputedStyle(element).textOverflow,
+  }));
+  expect.soft(cut.height, 'one line').toBeLessThanOrEqual(cut.line + 1);
+  expect.soft(cut.overflow, 'the name is wider than its room').toBe(true);
+  expect.soft(cut.ellipsis).toBe('ellipsis');
+  // The pointer on it shows the whole name. Measured: a pointer that jumps onto the trigger in one
+  // move opened no tooltip here, and one that travels to it does, as a hand does.
+  const trigger = value(review, 'Notes go to').locator('.kit-tip-trigger');
+  await trigger.scrollIntoViewIfNeeded();
+  const at = await box(trigger);
+  await page.mouse.move(0, 0);
+  await page.mouse.move(at.x + 8, at.y + at.height / 2, { steps: 5 });
+  await expect(page.getByRole('tooltip')).toHaveText(`Team ${team}`);
+  await page.mouse.move(700, 800);
+  await expect(page.getByRole('tooltip')).toHaveCount(0);
+
+  // FRU-568: every card of the grid has the height of the highest one, in every row.
+  const heights = await grid(page)
+    .locator('li[data-site]')
+    .evaluateAll((cards) => cards.map((each) => Math.round(each.getBoundingClientRect().height)));
+  expect(heights).toHaveLength(5);
+  expect(new Set(heights).size, `the heights: ${heights.join(', ')}`).toBe(1);
+  await expectNoViolation(page, 'the cards with chips and a cut place');
+});
+
+test('the new notes of a card are on a line of their own, and lead to the notes of the site that are new (FRU-570)', async ({
+  page,
+}) => {
+  await workerWith(page);
+  await open(page);
+
+  // On every card, wide or narrow: the line of the new notes is under the bar, never beside it.
+  for (const [name, count] of [
+    ['staging.acme.dev', 3],
+    ['acme.dev', 6],
+    ['support.acme.dev', 2],
+  ] as const) {
+    const site = card(page, name);
+    const fresh = site.getByRole('link', { name: `See the ${count} new notes of ${name}`, exact: true });
+    await expect(fresh).toHaveText(`${count} new`);
+    const bar = await box(site.getByRole('img', { name: /notes:/ }));
+    const line = await box(fresh);
+    expect.soft(line.y, `the new notes of ${name} are under the bar`).toBeGreaterThanOrEqual(bar.y + bar.height);
+    expect.soft(Math.round(line.x), `the new notes of ${name} start the line`).toBeLessThanOrEqual(Math.round(bar.x));
+  }
+  // No new note: no link.
+  await expect(card(page, 'preview.lumen.studio').getByRole('link', { name: /new notes?/ })).toHaveCount(0);
+
+  // A press opens the Notes screen with this site and « New » chosen.
+  await card(page, 'acme.dev').getByRole('link', { name: 'See the 6 new notes of acme.dev', exact: true }).click();
+  await expect(page).toHaveURL(/\/w\/w1\/notes\?site=s2&stage=new$/);
 });
 
 test('the search keeps the sites whose address holds it, and a reload keeps it (FRU-408)', async ({ page }) => {
@@ -807,6 +900,52 @@ test('« Who can leave a note? » is asked for a site that its members read, « 
   // The next form starts from « Members only » again.
   await page.getByRole('button', { name: 'Add a site', exact: true }).click();
   await expect(writers.getByRole('radio', { name: 'Members only' })).toBeChecked();
+});
+
+test('a press anywhere on a choice of the form chooses it, its detail and its corner too (FRU-569)', async ({
+  page,
+}) => {
+  await workerWith(page);
+  await open(page);
+  await page.getByRole('button', { name: 'Add a site', exact: true }).click();
+  const form = page.getByRole('dialog', { name: 'Add a site' });
+  const everyone = form.getByRole('radio', { name: 'Everyone who visits' });
+  const members = form.getByRole('radio', { name: /Members of Acme/ });
+  await expect(members).toBeChecked();
+
+  // The detail under the label: HeroUI made only the row of the radio a label.
+  await form.getByText('A public way to report a problem on a live site.', { exact: true }).click();
+  await expect(everyone).toBeChecked();
+
+  // The bottom right corner of the other card, in its padding, far from the radio and its words.
+  const card = form.locator('.kit-pick__card').filter({ has: page.getByRole('radio', { name: /Members of Acme/ }) });
+  const frame = await card.boundingBox();
+  if (frame === null) throw new Error('the card of « Members of Acme » has no box');
+  await page.mouse.click(frame.x + frame.width - 6, frame.y + frame.height - 6);
+  await expect(members).toBeChecked();
+
+  // The keyboard still walks the choices, and the detail is still the description of its radio.
+  await members.focus();
+  await page.keyboard.press('ArrowDown');
+  await expect(everyone).toBeChecked();
+  await expect(everyone).toHaveAccessibleDescription('A public way to report a problem on a live site.');
+  // The detail is in the label now: it must not join the name of the radio.
+  await expect(everyone).toHaveAccessibleName('Everyone who visits');
+  // The detail is `aria-hidden` and referenced by `aria-describedby`. What Chromium gives a screen
+  // reader, read in its own accessibility tree and not computed by Playwright: the name without the
+  // detail, and the detail as the description (raised in review).
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Accessibility.enable');
+  const { nodes } = (await cdp.send('Accessibility.getFullAXTree')) as {
+    nodes: { role?: { value?: string }; name?: { value?: string }; description?: { value?: string } }[];
+  };
+  const radios = nodes
+    .filter((node) => node.role?.value === 'radio')
+    .map((node) => ({ name: node.name?.value, description: node.description?.value }));
+  expect(radios).toContainEqual({
+    name: 'Everyone who visits',
+    description: 'A public way to report a problem on a live site.',
+  });
 });
 
 test('the menu of a card is walked with the keyboard, and leads to the page of the site (FRU-433)', async ({

@@ -11,7 +11,7 @@ them) are one level down, in [decisions/](https://github.com/sakuga-software/fru
 
 Alternatives we looked at and dropped:
 
-- **SitePing**: closest match, but Prisma.
+- SitePing: closest match, but Prisma.
 - Quackback: no visual layer at all (a text form in a panel), AGPL-3.0, and oversized for the
   need: it brings boards, roadmap and changelog we do not want.
 - Full in-house: rebuilding auth, dashboard, API, MCP and integrations to reach parity with

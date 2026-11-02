@@ -5,7 +5,7 @@ A reverse proxy gives the worker and the console their HTTPS names, two names of
 `.env` to those two addresses: the console calls the first, and a sign-in link opens the second. When
 a proxy is in front:
 
-1. **Stop publishing the two ports to the internet.** A port of the worker that stays public lets a
+1. Stop publishing the two ports to the internet. A port of the worker that stays public lets a
    caller skip the proxy and write its own `X-Forwarded-For`. Which way depends on where the proxy runs:
    - The proxy runs on the host (nginx or Caddy installed with the system): set
      `FRUITBACK_PORT=127.0.0.1:8080` and `FRUITBACK_CONSOLE_PORT=127.0.0.1:8081` in `.env`. The port of
@@ -90,7 +90,7 @@ for i in $(seq 1 24); do
 done | sort | uniq -c
 ```
 
-- **24 × `200`: the count is too high, and anyone can escape the limit.** Lower it by one and check
+- 24 × `200`: the count is too high, and anyone can escape the limit. Lower it by one and check
   again.
 - 20 × `200` and 4 × `429`: the limit holds. Now, within the same minute, read once from a
   second network (a phone on mobile data):

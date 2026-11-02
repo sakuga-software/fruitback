@@ -696,10 +696,8 @@ textarea {
 .kit-pick__card {
   width: 100%;
   margin: 0;
-  padding: 14px 16px;
   border: 1px solid var(--color-line);
   border-radius: var(--radius-box);
-  gap: 2px;
   cursor: pointer;
 }
 
@@ -712,6 +710,22 @@ textarea {
   /* The words start 30 px after the radio starts: its 16 px, and a column of 20 px with 10 px after. */
   gap: 14px;
   min-height: 19px;
+}
+
+/*
+ * FRU-569: the label of HeroUI is the whole card, its padding too, so that a press anywhere chooses
+ * it. The radio and the label on the first row, the detail under the label.
+ */
+.kit-pick__card .radio__content {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  /* The row of the radio keeps its 19 px, as the row of HeroUI did. */
+  grid-template-rows: minmax(19px, auto);
+  align-items: center;
+  width: 100%;
+  padding: 14px 16px;
+  row-gap: 2px;
+  border-radius: inherit;
 }
 
 /* Ink when it is chosen, as the switch: the accent is the red of an alert. */
@@ -727,7 +741,7 @@ textarea {
 }
 
 .kit-pick__card .description {
-  padding-left: 30px;
+  grid-column: 2;
   color: var(--muted);
   font-size: var(--text-hint);
   line-height: var(--text-hint--line-height);

@@ -647,6 +647,9 @@ function State({ connector, late, chosen }: { connector: Connector; late: Late |
   return <span className="flex-none text-hint leading-auto font-semibold text-done">{t('Connected')}</span>;
 }
 
+/** When the panel is settled even if its move sent no end: the move takes 220 ms (FRU-563). */
+const SETTLE_AFTER_MS = 400;
+
 /** The id of the open panel, which its row names in `aria-controls`. */
 const PANEL = 'source-panel';
 
@@ -695,6 +698,19 @@ function Opened({
     }
     held.current?.scrollIntoView({ block: 'nearest' });
   }, [takesFocus]);
+
+  useEffect(() => {
+    const opened = held.current;
+    if (opened === null) return;
+    // No move at all (reduced motion): it is settled from the start, and sends no end.
+    if (getComputedStyle(opened).animationName === 'none') return setSettled(true);
+    // A move that does not end (the panel hidden, the tab in the background) sends no end, and the
+    // panel must not stay clipped (raised in review). Chromium sends no « animationcancel » either
+    // (measured), so a timer settles it after the move of 220 ms in any case.
+    const late = window.setTimeout(() => setSettled(true), SETTLE_AFTER_MS);
+
+    return () => window.clearTimeout(late);
+  }, []);
 
   return (
     <div

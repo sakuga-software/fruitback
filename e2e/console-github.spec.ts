@@ -148,6 +148,8 @@ async function picture(page: Page, name: string, { fullPage = true } = {}): Prom
 }
 
 async function expectNoViolation(page: Page, name: string): Promise<void> {
+  // A panel of a source unfolds and fades in (FRU-563): axe reads its contrast once it is there.
+  await expect(page.locator('#source-panel:not([data-settled])')).toHaveCount(0);
   const results = await new AxeBuilder({ page }).include('main').analyze();
   expect
     .soft(

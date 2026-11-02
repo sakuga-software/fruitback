@@ -522,7 +522,10 @@ test('the fields, the lists and the radio cards have the measures of the mockup 
     fontSize: '14px',
   });
 
-  const card = { paddingTop: '14px', paddingLeft: '16px', borderTopWidth: '1px', borderTopLeftRadius: '10px' };
+  // FRU-569: the padding of a card is the padding of its label, which fills the card so that a press
+  // anywhere on it chooses it. The frame is the card's.
+  const card = { borderTopWidth: '1px', borderTopLeftRadius: '10px' };
+  const inside = { paddingTop: '14px', paddingLeft: '16px' };
   await expectStyle(fields.locator('.kit-pick__card', { hasText: 'Members of Acme' }), 'radio card, chosen', {
     ...card,
     borderTopColor: INK,
@@ -531,6 +534,12 @@ test('the fields, the lists and the radio cards have the measures of the mockup 
     ...card,
     borderTopColor: LINE,
   });
+  for (const name of ['Members of Acme', 'Everyone who visits'])
+    await expectStyle(
+      fields.locator('.kit-pick__card', { hasText: name }).locator('.radio__content'),
+      `the label of the card ${name}`,
+      inside,
+    );
   await expectStyle(fields.locator('.kit-pick__card .radio__control').first(), 'radio, chosen', {
     width: '16px',
     height: '16px',

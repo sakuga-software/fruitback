@@ -77,6 +77,8 @@ for (const { width, height, locale } of [
 
       // It takes the width of its row, right under it, inside its card, and the next card comes after
       // it (FRU-542): the border of the card, 12 px, and the border of the next card.
+      // Measured once it unfolded (FRU-563).
+      await expect(panel(page)).toHaveAttribute('data-settled', '');
       const under = (await row.boundingBox())!;
       const opened = (await panel(page).boundingBox())!;
       expect(Math.abs(opened.x - under.x)).toBeLessThan(2);
