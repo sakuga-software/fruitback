@@ -1,3 +1,4 @@
+import { isOneOf } from './one-of.ts';
 import { json } from './http.ts';
 import type { AgentGrant } from './agent-keys.ts';
 import { readBoundedText } from './bounded-body.ts';
@@ -115,9 +116,7 @@ export async function handleMcp(request: Request, context: McpContext): Promise<
   switch (method) {
     case 'initialize': {
       const wanted = given.protocolVersion;
-      const version = (PROTOCOL_VERSIONS as readonly unknown[]).includes(wanted)
-        ? (wanted as string)
-        : PROTOCOL_VERSIONS[0];
+      const version = isOneOf(wanted, PROTOCOL_VERSIONS) ? (wanted as string) : PROTOCOL_VERSIONS[0];
 
       return result(id, {
         protocolVersion: version,

@@ -1,8 +1,9 @@
+import { isOneOf } from './one-of.ts';
 import { NOTE_STAGES, type NoteStage } from '@fruitback/shared';
 import { type SQL, and, asc, count, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { connectorOf, newId, roleOf } from './account-rows.ts';
-import { dropWorkspace, holdMembers } from './accounts-postgres.ts';
+import { dropWorkspace, holdMembers, insertWorkspaceWithOwner } from './accounts-postgres.ts';
 import { CONNECTOR_TROUBLES, can } from './accounts.ts';
 import { invitation, member, organization, session, user } from './auth-schema.ts';
 import type {
@@ -739,7 +740,7 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
       );
 
       return rows.flatMap((row): TracedRead[] => {
-        if (!(ADMIN_READS as readonly unknown[]).includes(row.what)) return [];
+        if (!isOneOf(row.what, ADMIN_READS)) return [];
 
         return [
           {
@@ -1143,13 +1144,8 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
         if (person === undefined) return { ok: false, refused: 'unknown-account' };
         if (person.suspended === true) return { ok: false, refused: 'suspended-account' };
         const owner = { id: String(person.id), email: String(person.email) };
-        // The rows of `createWorkspace` of `accounts-postgres.ts`: a slug that is the id, one owner.
         const workspace = { id: newId('ws'), name };
-        const at = new Date(now);
-        await db.insert(organization).values({ id: workspace.id, name, slug: workspace.id, createdAt: at });
-        await db
-          .insert(member)
-          .values({ id: newId('mem'), organizationId: workspace.id, userId: owner.id, role: 'owner', createdAt: at });
+        await insertWorkspaceWithOwner(db, workspace, owner.id, new Date(now));
         await db.insert(admin_actions).values({
           ...actionOf(actor, now, 'workspace-created', workspace.id),
           target_account_id: owner.id,

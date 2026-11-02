@@ -1,15 +1,15 @@
 import { json } from './http.ts';
 import { type AccountStore, can } from './accounts.ts';
 import { MAX_BODY_BYTES, readBoundedText } from './bounded-body.ts';
-import { type ClientConfig, normalizeClientId } from './clients.ts';
+import { normalizeClientId } from './clients.ts';
 import { type Kv, KvError } from './kv.ts';
 import {
   canonicalizeRequestedPage,
   indexed,
   invalidatePages,
   placeOf,
-  placedAt,
   routingFailure,
+  targetsOf,
 } from './note-helpers.ts';
 import type { NoteIndex } from './notes-index.ts';
 import { checkReplyLimit } from './rate-limit.ts';
@@ -90,11 +90,7 @@ export async function postReply(
       if (ended !== undefined) return ended;
     }
 
-    const places = route.client?.destinations ?? [];
-    const targets =
-      route.client === undefined || places.length < 2
-        ? [route.client]
-        : places.map((place) => placedAt(route.client as ClientConfig, place));
+    const targets = targetsOf(route.client);
     for (const target of targets) {
       const found = await findNote(store, { url, clientId, id: issue, by: 'issue' }, target, route.policy);
       if (found === undefined) continue;
@@ -226,11 +222,7 @@ export async function postCheck(
 
     // A guest reads a note by the id the widget gave it, never by the id of the tracker (FRU-250).
     const hidden = await hidesTracker(request, config, route.policy);
-    const places = route.client?.destinations ?? [];
-    const targets =
-      route.client === undefined || places.length < 2
-        ? [route.client]
-        : places.map((place) => placedAt(route.client as ClientConfig, place));
+    const targets = targetsOf(route.client);
     for (const target of targets) {
       // Read now in the store, never in the cache: the stage that decides is the store's.
       const found = await findNote(
@@ -393,11 +385,7 @@ export async function postStatus(
     else return json(400, { error: 'unknown-status' }, corsHeaders);
 
     const hidden = await hidesTracker(request, config, route.policy);
-    const places = route.client?.destinations ?? [];
-    const targets =
-      route.client === undefined || places.length < 2
-        ? [route.client]
-        : places.map((place) => placedAt(route.client as ClientConfig, place));
+    const targets = targetsOf(route.client);
     for (const target of targets) {
       // Read now in the store, never in the cache: the author and the place are the store's.
       const found = await findNote(

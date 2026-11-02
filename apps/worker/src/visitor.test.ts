@@ -10,7 +10,7 @@ import { WORKER, type World, callOn, signInTo, workspaceIn, worlds } from './con
 import { signIdentityToken } from './identity.ts';
 import { rowsOf } from './postgres.fixture.ts';
 import { createPostgresAttachmentStore } from './attachments-postgres.ts';
-import { createMemoryAttachmentStore } from './attachments.ts';
+import { createMemoryAttachmentStore } from './attachments-memory.fixture.ts';
 import type { AttachmentSeams } from './attachment-routes.ts';
 import { createMemoryKv } from './kv.ts';
 import type { NoteStore } from './store.ts';

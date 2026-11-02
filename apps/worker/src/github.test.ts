@@ -728,6 +728,28 @@ describe('findForPage', () => {
     assert.match(String(logged.mock.calls[0]?.[0]), /refused the search of a page \(403\)/);
   });
 
+  it('keeps the search pages it read when GitHub refuses a later one for its rate (review of #772)', async () => {
+    const full = Array.from({ length: 100 }, (_, index) => ({ id: 500 + index }));
+    const firstPage = [row({ id: 7, number: 7 }), ...Array.from({ length: 99 }, (_, index) => ({ id: 1000 + index }))];
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { issues } = readWith(full, {
+      'GET /search/issues': (call) =>
+        call.query.get('page') === '1'
+          ? json(200, { total_count: 300, incomplete_results: false, items: firstPage })
+          : new Response(JSON.stringify({ message: 'secondary rate limit' }), {
+              status: 403,
+              headers: { 'Content-Type': 'application/json', 'retry-after': '60' },
+            }),
+    });
+
+    const got = await issues;
+    assert.deepEqual(
+      got.map((issue) => issue.identifier),
+      ['#7'],
+    );
+    assert.match(String(logged.mock.calls[0]?.[0]), /refused page 2 of the search of a page \(403\)/);
+  });
+
   it('fails as a store failure when the search is refused for another reason', async () => {
     const full = Array.from({ length: 100 }, (_, index) => ({ id: index }));
     const { issues } = readWith(full, { 'GET /search/issues': () => json(422, { message: 'Validation Failed' }) });
