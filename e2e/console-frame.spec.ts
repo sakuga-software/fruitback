@@ -176,7 +176,12 @@ test('at 1440 px the rail has the values of the mockup', async ({ page }) => {
   expect
     .soft(await styles(foot, ['padding', 'row-gap', 'margin-top']))
     .toMatchObject({ padding: '8px', 'row-gap': '14px' });
-  const logo = rail(page).getByRole('img', { name: 'Fruitback' });
+  // FRU-573: the logo leads to the site of Fruitback, in another tab.
+  const home = rail(page).getByRole('link', { name: 'Fruitback, its site, in a new tab', exact: true });
+  await expect(home).toHaveAttribute('href', 'https://fruitback.com');
+  await expect(home).toHaveAttribute('target', '_blank');
+  await expect(home).toHaveAttribute('rel', 'noreferrer');
+  const logo = home.getByRole('img', { name: 'Fruitback' });
   expectBox(await box(logo), { x: 20, y: 860, width: 82, height: 16 }, 2, 'the logo');
   expect.soft(await painted(logo.locator('path').first(), 'fill')).toEqual(rgb(WHITE));
   expect.soft(await painted(logo.locator('path').last(), 'fill')).toEqual(rgb(RAIL_ACCENT));
@@ -402,7 +407,9 @@ test('the foot of the rail leads to the extension, then to the documentation, ea
   const help = rail(page).getByRole('link', { name: 'Aide et documentation' });
   // Both in the foot, the extension first, and the foot is still at the bottom of the window.
   const foot = rail(page).locator('> div').last();
-  await expect(foot.getByRole('link')).toHaveText(['Installer l’extension (bêta)', 'Aide et documentation']);
+  // FRU-573: then the logo, which leads to the site of Fruitback; its words are those of its image.
+  await expect(foot.getByRole('link')).toHaveText(['Installer l’extension (bêta)', 'Aide et documentation', '']);
+  await expect(foot.getByRole('link').last()).toHaveAccessibleName('Fruitback, son site, dans un nouvel onglet');
   expect((await box(extension)).y).toBeLessThan((await box(help)).y);
   expect.soft((await box(help)).y).toBeGreaterThan(900 - 80);
   // The administration has it too, above its guide.
@@ -424,6 +431,8 @@ test('the foot of the rail leads to the extension, then to the documentation, ea
   await expect(rail(page).locator('> div').last().getByRole('link')).toHaveText([
     'Installer l’extension (bêta)',
     'Guide d’auto-hébergement',
+    // FRU-573: the logo, whose words are those of its image.
+    '',
   ]);
 });
 
