@@ -33,6 +33,10 @@ describe('an answer of the extension to the console (FRU-512)', () => {
       { v: 1, ok: true },
       { v: 1, ok: false, reason: 'nope' },
       { v: 1, ok: false },
+      // Two answers in one: neither is read (review of the pull request).
+      { v: 1, ok: true, signedIn: true, request: 'req_1' },
+      { v: 1, ok: true, request: 'req_1', state: 'signed-in' },
+      { v: 1, ok: true, signedIn: false, state: 'waiting' },
     ]) {
       assert.equal(parseExternalAnswer(wrong), undefined, JSON.stringify(wrong));
     }

@@ -48,8 +48,9 @@ const isOneOf = <T extends string>(values: readonly T[], value: unknown): value 
 
 /**
  * An answer of the extension, key by key, or `undefined` for anything else: another version, a value
- * of the wrong kind, a state or a reason the protocol does not have. Keys it does not know are left
- * out of what it answers.
+ * of the wrong kind, a state or a reason the protocol does not have. A positive answer holds exactly
+ * one of `signedIn`, `request` and `state`: one that holds two is no answer, rather than read by the
+ * first. Keys it does not know are left out of what it answers.
  */
 export function parseExternalAnswer(answer: unknown): ExternalAnswer | undefined {
   if (typeof answer !== 'object' || answer === null) return undefined;
@@ -57,6 +58,7 @@ export function parseExternalAnswer(answer: unknown): ExternalAnswer | undefined
   if (v !== EXTERNAL_VERSION) return undefined;
   if (ok === false) return isOneOf(EXTERNAL_REFUSALS, reason) ? { v, ok, reason } : undefined;
   if (ok !== true) return undefined;
+  if ([signedIn, request, state].filter((value) => value !== undefined).length !== 1) return undefined;
   if (typeof signedIn === 'boolean') return { v, ok, signedIn };
   if (typeof request === 'string') return { v, ok, request };
   if (isOneOf(EXTERNAL_CONNECT_STATES, state)) return { v, ok, state };

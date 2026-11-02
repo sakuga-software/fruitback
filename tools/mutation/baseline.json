@@ -35,8 +35,8 @@
         "mutants": 17
       },
       "src/external-protocol.ts": {
-        "score": 99.51,
-        "mutants": 0
+        "score": 100,
+        "mutants": 35
       }
     }
   },
