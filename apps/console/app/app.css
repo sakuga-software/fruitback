@@ -719,6 +719,8 @@ textarea {
 .kit-pick__card .radio__content {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
+  /* The row of the radio keeps its 19 px, as the row of HeroUI did. */
+  grid-template-rows: minmax(19px, auto);
   align-items: center;
   width: 100%;
   padding: 14px 16px;

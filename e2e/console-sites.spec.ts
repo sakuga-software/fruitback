@@ -902,6 +902,21 @@ test('a press anywhere on a choice of the form chooses it, its detail and its co
   await expect(everyone).toHaveAccessibleDescription('A public way to report a problem on a live site.');
   // The detail is in the label now: it must not join the name of the radio.
   await expect(everyone).toHaveAccessibleName('Everyone who visits');
+  // The detail is `aria-hidden` and referenced by `aria-describedby`. What Chromium gives a screen
+  // reader, read in its own accessibility tree and not computed by Playwright: the name without the
+  // detail, and the detail as the description (raised in review).
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Accessibility.enable');
+  const { nodes } = (await cdp.send('Accessibility.getFullAXTree')) as {
+    nodes: { role?: { value?: string }; name?: { value?: string }; description?: { value?: string } }[];
+  };
+  const radios = nodes
+    .filter((node) => node.role?.value === 'radio')
+    .map((node) => ({ name: node.name?.value, description: node.description?.value }));
+  expect(radios).toContainEqual({
+    name: 'Everyone who visits',
+    description: 'A public way to report a problem on a live site.',
+  });
 });
 
 test('the menu of a card is walked with the keyboard, and leads to the page of the site (FRU-433)', async ({
