@@ -30,7 +30,7 @@ function published(): string[] {
   return ['README.md', 'SECURITY.md', ...docs].filter((file) => !NOT_YET.has(file)).sort();
 }
 
-type Finding = { line: number; what: 'ticket' | 'em dash' | 'second bold'; text: string };
+type Finding = { line: number; what: 'ticket' | 'em dash' | 'second bold' | 'unpaired bold'; text: string };
 
 /** What breaks the rule in one page of markdown. */
 export function findingsIn(markdown: string): Finding[] {
@@ -40,6 +40,13 @@ export function findingsIn(markdown: string): Finding[] {
   let front = false;
   let copied = false;
   let bold = 0;
+  let opened = { line: 0, text: '' };
+  // An odd count of marks at the end of a section is a mark with no pair: it shows as two asterisks,
+  // and it would shift the count of what follows. Review of #786.
+  const closeSection = () => {
+    if (bold % 2 === 1) found.push({ ...opened, what: 'unpaired bold' });
+    bold = 0;
+  };
   markdown.split('\n').forEach((line, index) => {
     const trimmed = line.trim();
     if (index === 0 && trimmed === '---') return void (front = true);
@@ -53,7 +60,7 @@ export function findingsIn(markdown: string): Finding[] {
       comment = !line.includes('-->');
       return;
     }
-    if (/^#{1,6} /.test(line)) return void (bold = 0);
+    if (/^#{1,6} /.test(line)) return closeSection();
     const prose = line.replaceAll(/`[^`]*`/g, '');
     const at = { line: index + 1, text: trimmed.slice(0, 120) };
     if (/FRU-\d/.test(prose)) found.push({ ...at, what: 'ticket' });
@@ -61,9 +68,11 @@ export function findingsIn(markdown: string): Finding[] {
     // Two marks a segment, which can span two lines: the third mark of a section opens the second.
     for (const _ of prose.matchAll(/\*\*/g)) {
       bold += 1;
+      if (bold % 2 === 1) opened = at;
       if (bold === 3) found.push({ ...at, what: 'second bold' });
     }
   });
+  closeSection();
 
   return found;
 }
@@ -98,13 +107,15 @@ describe('the published guides (FRU-515)', () => {
       '<!-- guide:start: written from the steps. -->',
       'A copied step (FRU-7) — **one** **two**.',
       '<!-- guide:end -->',
+      '## A section with a mark and no pair',
+      'A **mark that never closes.',
       '## Next section',
       'A **bold** again, the first of its section.',
     ].join('\n');
 
     assert.deepEqual(
       findingsIn(page).map((finding) => `${finding.line} ${finding.what}`),
-      ['2 ticket', '3 em dash', '4 second bold', '7 second bold'],
+      ['2 ticket', '3 em dash', '4 second bold', '7 second bold', '18 unpaired bold'],
     );
   });
 });
