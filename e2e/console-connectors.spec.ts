@@ -179,9 +179,13 @@ const sources = (page: Page) => catalogue(page).getByRole('listitem');
 async function openCatalogue(page: Page, name = 'New connector'): Promise<void> {
   await page.getByRole('button', { name, exact: true }).click();
   await expect(sources(page)).toHaveCount(8);
+  // The dialog zooms in (HeroUI's Modal): its boxes are measured once it is at its size.
+  await page.evaluate(() => Promise.all(document.getAnimations().map((animation) => animation.finished)));
 }
 
 async function expectNoViolation(page: Page, name: string): Promise<void> {
+  // A panel of a source unfolds and fades in (FRU-563): axe reads its contrast once it is there.
+  await expect(page.locator('#source-panel:not([data-settled])')).toHaveCount(0);
   const results = await new AxeBuilder({ page }).include('main').analyze();
   expect
     .soft(
@@ -593,6 +597,8 @@ test('« New connector » opens a dialog with the sources as a grid of cards (FR
       'padding-left': '16px',
     });
   expect.soft(await painted(card, 'borderTopColor')).toEqual(rgb(LINE));
+  // The dialog fades and zooms in (HeroUI's Modal): axe reads its contrast once it is there.
+  await page.evaluate(() => Promise.all(document.getAnimations().map((animation) => animation.finished)));
   const results = await new AxeBuilder({ page }).include('[role="dialog"]').analyze();
   expect.soft(results.violations.map((violation) => violation.id)).toEqual([]);
 
@@ -619,6 +625,72 @@ test('« New connector » opens a dialog with the sources as a grid of cards (FR
   await dialog.getByRole('button', { name: 'Close', exact: true }).click();
   await expect(dialog).toHaveCount(0);
   await expect(opener).toBeFocused();
+});
+
+/**
+ * FRU-563: the panel of a connector unfolds when its card opens: its height grows from nothing and it
+ * fades in, 220 ms on the curve of the kit. With reduced motion it is there at once.
+ */
+test('the panel of a connector unfolds as its card opens, and is there at once with reduced motion (FRU-563)', async ({
+  page,
+}) => {
+  await workerWith(page);
+  await open(page);
+  await expect(rows(page)).toHaveCount(2);
+  /** The heights of the panel at the first frames after a press of the first row, then once it settled. */
+  const heights = () =>
+    page.evaluate(async () => {
+      const row = document.querySelector<HTMLButtonElement>('button[id^="source-row-"]')!;
+      row.click();
+      const frame = () => new Promise((resolve) => requestAnimationFrame(resolve));
+      const read = () => document.getElementById('source-panel')?.getBoundingClientRect().height ?? -1;
+      await frame();
+      await frame();
+      const early = read();
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      return { early, settled: read() };
+    });
+
+  const moving = await heights();
+  expect(moving.settled).toBeGreaterThan(100);
+  expect(moving.early, 'early in the move').toBeLessThan(moving.settled * 0.9);
+  expect
+    .soft(await styles(panel(page), ['animation-name', 'animation-duration']))
+    .toEqual({ 'animation-name': 'source-panel-open', 'animation-duration': '0.22s' });
+  // Settled, nothing is clipped, and focus is in the panel as before (FRU-197).
+  await expect(panel(page)).toHaveAttribute('data-settled', '');
+  await rows(page).first().click();
+  await expect(panel(page)).toHaveCount(0);
+
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const still = await heights();
+  expect(still.early, 'at once with reduced motion').toBe(still.settled);
+  expect.soft(await styles(panel(page), ['animation-name'])).toEqual({ 'animation-name': 'none' });
+  // No move, so no event of its end: the panel is settled from the start (raised in review).
+  await expect(panel(page)).toHaveAttribute('data-settled', '');
+});
+
+test('a move of the panel that never ends leaves it unclipped (FRU-563)', async ({ page }) => {
+  await workerWith(page);
+  await open(page);
+  await expect(rows(page)).toHaveCount(2);
+  // The panel is hidden while it moves: its move sends no end (and Chromium no « animationcancel »).
+  const settled = await page.evaluate(async () => {
+    document.querySelector<HTMLButtonElement>('button[id^="source-row-"]')!.click();
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    const opened = document.getElementById('source-panel')!;
+    const ends: string[] = [];
+    opened.addEventListener('animationend', () => ends.push('end'));
+    opened.style.display = 'none';
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    const after = { settled: opened.hasAttribute('data-settled'), ends: ends.length };
+    opened.style.display = '';
+
+    return after;
+  });
+  // The control: no end came, so only the timer can have settled it.
+  expect(settled).toEqual({ settled: true, ends: 0 });
+  await expect(panel(page).locator('.source-panel__body')).toHaveCSS('overflow-y', 'visible');
 });
 
 test('`?new` in the address opens « Add a connector », and leaves the address (FRU-562)', async ({ page }) => {

@@ -222,6 +222,45 @@ test('the room of a screen is as wide as the column beside the rail, with the pa
   });
 });
 
+/**
+ * FRU-564: the room of a screen fills the height of the window, also when what it shows is short
+ * (Mathieu's note on the Connectors screen). Under 888 px it starts under the rail, which keeps its
+ * own height.
+ */
+test('the room of a screen fills the height of the window, under the rail on a phone (FRU-564)', async ({ page }) => {
+  await stubWorker(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  for (const screen of ['connectors', 'sites']) {
+    await open(page, screen);
+    // The control: the screen is shorter than the window, so a room sized by it would end higher.
+    const content = await page
+      .locator('main > *')
+      .evaluateAll((children) => Math.max(...children.map((child) => child.getBoundingClientRect().bottom)));
+    expect.soft(content, `what ${screen} shows`).toBeLessThan(900 - 72 - 40);
+    const room = await box(page.locator('main'));
+    expect.soft(room.y + room.height, `the bottom of the room of ${screen}`).toBeCloseTo(900, 0);
+  }
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await open(page, 'connectors');
+  const top = await box(rail(page));
+  const room = await box(page.locator('main'));
+  expect.soft(room.y, 'the room starts under the rail').toBeCloseTo(top.y + top.height, 0);
+  expect.soft(room.y + room.height, 'the bottom of the room at 390 px').toBeGreaterThanOrEqual(844 - 1);
+  // The rail keeps its own height: it takes none of what the screen leaves.
+  const natural = await rail(page).evaluate((element) => {
+    const copy = element.cloneNode(true) as HTMLElement;
+    copy.style.position = 'absolute';
+    copy.style.width = `${element.getBoundingClientRect().width}px`;
+    document.body.append(copy);
+    const height = copy.getBoundingClientRect().height;
+    copy.remove();
+    return height;
+  });
+  expect.soft(top.height).toBeCloseTo(natural, 0);
+  expect.soft(await sideScroll(page)).toBe(0);
+});
+
 test('the rail is as high as the window and stays while the screen scrolls; under 888 px it scrolls away (FRU-402)', async ({
   page,
 }) => {
@@ -595,7 +634,8 @@ test('at 390 px a short screen leaves the rail at its own height', async ({ page
   await stubWorker(page);
   await open(page);
   const main = await box(page.locator('main'));
-  expect(main.y + main.height).toBeLessThan(1800);
+  // FRU-564: the room of the screen takes the rest of the window, and the rail does not.
+  expect(main.y + main.height).toBeCloseTo(1800, 0);
   // The mockup gives the rest of the window to the rail: 286 px of rail at 390 px. Here the rail is
   // its own height, whatever the font, and the screen starts right under it.
   const above = await box(rail(page));

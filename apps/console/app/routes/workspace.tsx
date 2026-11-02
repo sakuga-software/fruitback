@@ -196,15 +196,18 @@ export default function WorkspaceFrame() {
  * `flex-nowrap` there: with a classic scroll bar the window is wider than the document, and the
  * column would wrap under a rail as high as the window.
  *
- * Under 888 px the rail is above the column. `content-start` keeps it at its own height there: the
- * frame is at least as high as the window, and a short screen left the rest of that height to the
- * rail, as the mockup does at 390 px (286 px of rail on « did not load »).
+ * Under 888 px the rail is above the column, at its own height, as the mockup draws it at 390 px
+ * (286 px of rail on « did not load »).
+ *
+ * **The screen fills the height of the window** (FRU-564): the column is a flex column, and `Screen`
+ * takes what is left under the banner of a suspended workspace. Under 888 px the frame is a column
+ * too, so the column of the screen takes the height under the rail, and the rail none of it.
  */
 export function Frame({ rail, children }: { rail: ReactNode; children?: ReactNode }) {
   return (
-    <div className="flex min-h-screen flex-wrap bg-page text-ink max-[887px]:content-start min-[888px]:flex-nowrap">
+    <div className="flex min-h-screen bg-page text-ink max-[887px]:flex-col">
       {rail}
-      <div className="min-w-0 flex-[999_1_640px]">{children}</div>
+      <div className="flex min-w-0 flex-[999_1_640px] flex-col max-[887px]:flex-[1_0_auto]">{children}</div>
     </div>
   );
 }
@@ -216,7 +219,7 @@ export function Frame({ rail, children }: { rail: ReactNode; children?: ReactNod
  */
 export function Screen({ className = '', children }: { className?: string; children: ReactNode }) {
   return (
-    <main className={`kit-screen box-border px-[clamp(16px,4vw,48px)] pt-[40px] pb-[72px] ${className}`}>
+    <main className={`kit-screen box-border flex-1 px-[clamp(16px,4vw,48px)] pt-[40px] pb-[72px] ${className}`}>
       {children}
     </main>
   );
@@ -298,7 +301,7 @@ export function RailFrame({
   return (
     // From 888 px the rail is beside the screen, as high as the window, and stays in place while the
     // screen scrolls (FRU-402). A window lower than the rail scrolls the rail itself.
-    <aside className="kit-rail box-border flex min-w-0 flex-[1_1_248px] flex-col gap-[20px] bg-rail px-[12px] py-[16px] text-white min-[888px]:sticky min-[888px]:top-0 min-[888px]:h-dvh min-[888px]:overflow-y-auto">
+    <aside className="kit-rail box-border flex min-w-0 flex-[1_1_248px] flex-col max-[887px]:flex-none gap-[20px] bg-rail px-[12px] py-[16px] text-white min-[888px]:sticky min-[888px]:top-0 min-[888px]:h-dvh min-[888px]:overflow-y-auto">
       {head}
       {children}
       <div className="mt-auto flex flex-col gap-[14px] p-[8px] max-[900px]:hidden">

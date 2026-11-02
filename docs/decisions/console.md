@@ -75,7 +75,10 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   goes to it when a press of its row opened it, and Escape closes it and gives focus back to the
   row. A panel that appears by itself takes none: the one of a source just connected. The same spec
   holds both. **Not measured: what VoiceOver and NVDA say**; the spec reads the role, the name
-  and where focus is.
+  and where focus is. **The panel unfolds** (FRU-563): its height grows from nothing and it fades
+  in, 220 ms on the curve of the kit, clipped only while it moves; the page scrolls to it again once
+  it has its height. With `prefers-reduced-motion` it is there at once. `e2e/console-connectors.spec.ts`
+  reads its heights frame by frame.
   **The console decides nothing about a domain** (FRU-103). The Sites screen shows, to an owner or an
   admin, the domains of the workspace (`domains.tsx`), in a section of the page of a site (FRU-433,
   `…/sites/<site>#previews`): the `TXT` record to write, « Check the DNS »,
@@ -357,7 +360,10 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   of the kit, and is at its place at once with reduced motion. `e2e/console-rail-drop.spec.ts` reads
   its animation during a move. No colour transition on the rail: `e2e/console-frame.spec.ts` reads the
   colours of a hovered entry and would read them halfway. `e2e/console-moves.spec.ts` reads every
-  frame of a move, with a control.
+  frame of a move, with a control. **The room of a screen fills the height of the window** (FRU-564):
+  the column beside the rail is a flex column and `Screen` grows in it; under 888 px the frame is a
+  column too, the rail at its own height and the screen under it. `e2e/console-frame.spec.ts` holds
+  both widths.
 - **The frame of a workspace is the rail of the mockup** (FRU-234, `routes/workspace.tsx`): the
   workspace, its sections as links with `aria-current="page"` on the one on screen, and the way to
   the documentation. **The rail shows a section only when its screen exists**: `SECTIONS` lists the

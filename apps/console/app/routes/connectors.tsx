@@ -118,10 +118,11 @@ export default function Connectors() {
   const [selected, setSelected] = useState<string | undefined>();
   // Whether the panel that is about to appear was opened by a press of its row: see `Opened`.
   const opening = useRef(false);
-  const [adding, setAdding] = useState<Connector['kind'] | undefined>();
-  // Whether the open form started on the page, with no source connected yet (FRU-562). It stays on the
-  // page when its source arrives in the list: in the dialog it would mount again, and lose its secret.
-  const [addingOnPage, setAddingOnPage] = useState(false);
+  // The form that is open, and where (FRU-562): on the page when no source was connected as it opened.
+  // It stays there when its source arrives in the list: in the dialog it would mount again, and lose
+  // its secret. One state, so the place never outlives its form.
+  const [form, setForm] = useState<{ kind: Connector['kind']; onPage: boolean } | undefined>();
+  const adding = form?.kind;
   // FRU-542, FRU-562: whether « New connector » opened the dialog of the sources to add. A way back from
   // Linear or GitHub that went wrong opens it: its sentence is under the source, in that dialog. So does
   // `?new` in the address (« Connect a tracker » of the Sites screen), once the read says that this
@@ -270,7 +271,7 @@ export default function Connectors() {
   //
   // FRU-562: with a source, the list is a grid of cards in a dialog. A form that started on the page,
   // before any source, stays there until it ends.
-  const formOnPage = adding !== undefined && addingOnPage;
+  const formOnPage = form?.onPage === true;
   const onPage = answered && (!connected || formOnPage);
   // A form open in the dialog keeps it, whatever a read since says: the secret of an address is shown
   // there once.
@@ -280,8 +281,7 @@ export default function Connectors() {
   const offersNew = connected && !cannot;
   /** Opens the form of a source, where the list of the sources is now. */
   const startAdding = (kind: Connector['kind']) => {
-    setAddingOnPage(!connected);
-    setAdding(kind);
+    setForm({ kind, onPage: !connected });
   };
   const sourcesToAdd = (
     <>
@@ -319,7 +319,7 @@ export default function Connectors() {
               <AddLinear
                 base={base}
                 onDone={(connector) => {
-                  setAdding(undefined);
+                  setForm(undefined);
                   if (connector !== undefined) {
                     setCatalogue(false);
                     // The list goes with the form that had focus: the panel of the new source takes it.
@@ -385,7 +385,7 @@ export default function Connectors() {
                   void load();
                 }}
                 onDone={() => {
-                  setAdding(undefined);
+                  setForm(undefined);
                   // « Cancel » closes the form only. « I kept it » closes the list too.
                   if (!restAdded.current) return;
                   setCatalogue(false);
@@ -647,6 +647,9 @@ function State({ connector, late, chosen }: { connector: Connector; late: Late |
   return <span className="flex-none text-hint leading-auto font-semibold text-done">{t('Connected')}</span>;
 }
 
+/** When the panel is settled even if its move sent no end: the move takes 220 ms (FRU-563). */
+const SETTLE_AFTER_MS = 400;
+
 /** The id of the open panel, which its row names in `aria-controls`. */
 const PANEL = 'source-panel';
 
@@ -665,6 +668,10 @@ function rowId(connector: string): string {
  * focus goes to it: a screen reader says the name and reads on from there, and Tab goes to its first
  * control. **Escape closes it and gives focus back to the row.** A panel that appears by itself takes
  * no focus: the one of a source that Linear or GitHub just connected.
+ *
+ * **It unfolds** (FRU-563): its height grows from nothing and it fades in, 220 ms on the curve of the
+ * kit (`.source-panel` in `app.css`). With `prefers-reduced-motion` it is there at once. The page
+ * scrolls again once it has its height: at the start of the move it has none.
  */
 function Opened({
   label,
@@ -680,6 +687,8 @@ function Opened({
   children: ReactNode;
 }) {
   const held = useRef<HTMLDivElement>(null);
+  // Once unfolded, nothing is clipped: a focus ring at the edge of the panel shows whole.
+  const [settled, setSettled] = useState(false);
 
   useEffect(() => {
     if (takesFocus.current) {
@@ -690,6 +699,19 @@ function Opened({
     held.current?.scrollIntoView({ block: 'nearest' });
   }, [takesFocus]);
 
+  useEffect(() => {
+    const opened = held.current;
+    if (opened === null) return;
+    // No move at all (reduced motion): it is settled from the start, and sends no end.
+    if (getComputedStyle(opened).animationName === 'none') return setSettled(true);
+    // A move that does not end (the panel hidden, the tab in the background) sends no end, and the
+    // panel must not stay clipped (raised in review). Chromium sends no « animationcancel » either
+    // (measured), so a timer settles it after the move of 220 ms in any case.
+    const late = window.setTimeout(() => setSettled(true), SETTLE_AFTER_MS);
+
+    return () => window.clearTimeout(late);
+  }, []);
+
   return (
     <div
       id={PANEL}
@@ -698,14 +720,22 @@ function Opened({
       aria-label={label}
       tabIndex={-1}
       // Inside the frame of the list, with the rule of the list above it and the tint of a panel.
-      className="scroll-mt-4 border-t border-line bg-subtle"
+      className="source-panel scroll-mt-4 border-t border-line bg-subtle"
+      onAnimationEnd={(event) => {
+        // Only the move of the panel itself: one inside it bubbles here too.
+        if (event.target !== event.currentTarget) return;
+        setSettled(true);
+        held.current?.scrollIntoView({ block: 'nearest' });
+      }}
+      {...(settled ? { 'data-settled': '' } : {})}
       onKeyDown={(event) => {
         // `Confirmation` and an open list take their own Escape, and stop it before it gets here.
         if (event.key !== 'Escape' || event.defaultPrevented) return;
         onClose();
       }}
     >
-      {children}
+      {/* The part that the move clips while the panel grows. */}
+      <div className="source-panel__body">{children}</div>
     </div>
   );
 }
