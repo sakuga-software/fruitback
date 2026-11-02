@@ -478,8 +478,8 @@ function GoesTo({ site }: { site: Site }) {
       </span>
       {/* FRU-567: a long team or project is cut to one line, and whole in a tooltip and to a screen reader. */}
       {where === undefined ? null : (
-        <Tip tip={where} className="text-hint leading-[inherit] text-muted">
-          <span className="min-w-0 truncate">{where}</span>
+        <Tip tip={where} className="text-muted">
+          <span className="min-w-0 truncate text-hint leading-[inherit]">{where}</span>
         </Tip>
       )}
     </>
@@ -635,7 +635,8 @@ function Access({ icon, children }: { icon: keyof typeof ACCESS_PATHS; children:
   return (
     <Tip
       tip={children}
-      className="h-[24px] rounded-full bg-chip px-[8px] text-hint leading-none font-medium text-ink-soft"
+      // The colour only: the merge of HeroUI keeps one `text-` class, and the size is on the words.
+      className="h-[24px] rounded-full bg-chip px-[8px] text-ink-soft"
     >
       <svg
         aria-hidden="true"
@@ -653,7 +654,7 @@ function Access({ icon, children }: { icon: keyof typeof ACCESS_PATHS; children:
           strokeLinejoin="round"
         />
       </svg>
-      <span className="min-w-0 truncate">{children}</span>
+      <span className="min-w-0 truncate text-hint leading-none font-medium">{children}</span>
     </Tip>
   );
 }

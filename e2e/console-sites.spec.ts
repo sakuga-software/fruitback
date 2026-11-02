@@ -406,10 +406,16 @@ test('who reads and who writes are chips, a long place is cut with a tooltip, an
   expect.soft(cut.height, 'one line').toBeLessThanOrEqual(cut.line + 1);
   expect.soft(cut.overflow, 'the name is wider than its room').toBe(true);
   expect.soft(cut.ellipsis).toBe('ellipsis');
-  // The pointer on it shows the whole name.
-  await place.hover();
-  await expect(page.locator('.kit-tip')).toHaveText(`Team ${team}`);
+  // The pointer on it shows the whole name. Measured: a pointer that jumps onto the trigger in one
+  // move opened no tooltip here, and one that travels to it does, as a hand does.
+  const trigger = value(review, 'Notes go to').locator('.kit-tip-trigger');
+  await trigger.scrollIntoViewIfNeeded();
+  const at = await box(trigger);
+  await page.mouse.move(0, 0);
+  await page.mouse.move(at.x + 8, at.y + at.height / 2, { steps: 5 });
+  await expect(page.getByRole('tooltip')).toHaveText(`Team ${team}`);
   await page.mouse.move(700, 800);
+  await expect(page.getByRole('tooltip')).toHaveCount(0);
 
   // FRU-568: every card of the grid has the height of the highest one, in every row.
   const heights = await grid(page)
@@ -883,7 +889,7 @@ test('a press anywhere on a choice of the form chooses it, its detail and its co
   await expect(everyone).toBeChecked();
 
   // The bottom right corner of the other card, in its padding, far from the radio and its words.
-  const card = form.locator('.kit-pick__card').filter({ has: members });
+  const card = form.locator('.kit-pick__card').filter({ has: page.getByRole('radio', { name: /Members of Acme/ }) });
   const frame = await card.boundingBox();
   if (frame === null) throw new Error('the card of « Members of Acme » has no box');
   await page.mouse.click(frame.x + frame.width - 6, frame.y + frame.height - 6);
