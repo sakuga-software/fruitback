@@ -47,7 +47,7 @@ for (const each of CASES) {
     const target = page.locator('[data-testid="card-latte"] .add');
     const released = await target.boundingBox();
     expect(released, 'the button is not laid out').not.toBeNull();
-    await page.getByRole('button', { name: rtl ? ARABIC['launch.label'] : 'Leave feedback' }).click();
+    await page.getByRole('button', { name: rtl ? ARABIC['launch.label'] : 'Leave a note' }).click();
     // The control: the width of the button when the widget reads it, at the click on it,
     // read before the widget reads it.
     await target.evaluate((element) => {

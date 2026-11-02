@@ -49,7 +49,7 @@ describe('the feedback of a page as text (FRU-109)', () => {
     assert.equal(
       text([{ issue, placement: 'found' }]),
       [
-        '# Feedback on https://staging.acme.dev/pricing',
+        '# Notes on https://staging.acme.dev/pricing',
         '',
         '## 1. FB-12 — To do',
         '',
@@ -126,7 +126,7 @@ describe('the feedback of a page as text (FRU-109)', () => {
   });
 
   it('says so when the page has no feedback', () => {
-    assert.equal(text([]), '# Feedback on https://staging.acme.dev/pricing\n\nNo feedback on this page.\n');
+    assert.equal(text([]), '# Notes on https://staging.acme.dev/pricing\n\nNo note on this page.\n');
   });
 
   it('says so when a note has no text', () => {
@@ -163,7 +163,7 @@ describe('what a reviewer wrote stays inside its quote', () => {
       .filter((line) => line !== '' && !line.startsWith('>'))
       .filter(
         (line) =>
-          !/^(# Feedback on |## \d+\. FB-12 — To do$|- (Element|Component|By|Written|Position|Picture): |Reply from )/.test(
+          !/^(# Notes on |## \d+\. FB-12 — To do$|- (Element|Component|By|Written|Position|Picture): |Reply from )/.test(
             line,
           ),
       );

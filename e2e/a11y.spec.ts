@@ -24,7 +24,7 @@ async function walkTo(page: Page, target: Locator): Promise<void> {
 
 test('a note can be planted with the keyboard alone', async ({ page }) => {
   await openPlayground(page, 'keyboard-plant');
-  const launch = page.getByRole('button', { name: /Leave feedback/ });
+  const launch = page.getByRole('button', { name: /Leave a note/ });
 
   await launch.focus();
   await page.keyboard.press('Enter');
@@ -67,7 +67,7 @@ test('a note can be planted with the keyboard alone', async ({ page }) => {
 
 test('Escape leaves the capture mode without scrolling the page or pressing anything', async ({ page }) => {
   await openPlayground(page, 'keyboard-escape');
-  await page.getByRole('button', { name: /Leave feedback/ }).focus();
+  await page.getByRole('button', { name: /Leave a note/ }).focus();
   await page.keyboard.press('Enter');
   const scrolled = await page.evaluate(() => window.scrollY);
 
@@ -94,7 +94,7 @@ test('the settings dialog holds focus, and gives it back to the gear', async ({ 
   await expect(dialog.getByRole('button', { name: 'Close settings' })).toBeFocused();
   // The last control of the panel, so the trap wraps from its first to its last.
   await page.keyboard.press('Shift+Tab');
-  await expect(dialog.getByRole('button', { name: 'Copy the feedback as text' })).toBeFocused();
+  await expect(dialog.getByRole('button', { name: 'Copy the notes as text' })).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(dialog.getByRole('button', { name: 'Close settings' })).toBeFocused();
 
@@ -144,7 +144,7 @@ for (const scheme of ['light', 'dark'] as const) {
 
     await scan('resting');
 
-    await page.getByRole('button', { name: /Leave feedback/ }).click();
+    await page.getByRole('button', { name: /Leave a note/ }).click();
     await page.keyboard.press('ArrowDown');
     await scan('capturing');
     await page.keyboard.press('Escape');
@@ -159,7 +159,7 @@ for (const scheme of ['light', 'dark'] as const) {
     await scan('settings');
     await page.keyboard.press('Escape');
 
-    await page.getByRole('button', { name: /Leave feedback/ }).click();
+    await page.getByRole('button', { name: /Leave a note/ }).click();
     await cta.click();
     await expect(page.getByRole('dialog', { name: 'New note' })).toBeVisible();
     await scan('composer');

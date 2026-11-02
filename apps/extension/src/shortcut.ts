@@ -25,7 +25,8 @@ export const SUGGESTED_KEY = 'Alt+Shift+F';
 export const MANIFEST_COMMANDS = {
   [LEAVE_FEEDBACK_COMMAND]: {
     suggested_key: { default: SUGGESTED_KEY },
-    description: 'Leave feedback on this page',
+    // `public/_locales/*/messages.json`: « Leave a note on this page », « Laisser une note sur cette page ».
+    description: '__MSG_leaveNoteCommand__',
   },
 } as const;
 

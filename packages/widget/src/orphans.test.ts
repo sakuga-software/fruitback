@@ -218,7 +218,7 @@ describe('announcing detached notes (FRU-51)', () => {
 
 describe('the chip in the capsule of the dock (FRU-303)', () => {
   it('is the first control of the capsule, says « 1 detached », and announces the whole sentence', () => {
-    const page = mountPage('<main></main><div id="dock"><button id="launch">Leave feedback</button></div>');
+    const page = mountPage('<main></main><div id="dock"><button id="launch">Leave a note</button></div>');
     const dock = page.query('#dock');
     list = createOrphanList({ document: page.document, host: page.document.body, dock });
 

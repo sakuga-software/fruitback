@@ -262,7 +262,7 @@ function NoteRow({ note }: { note: InstanceNote }) {
       <td>
         {place.kind === 'fruitback' ? <span className="block font-semibold">{t('In Fruitback')}</span> : null}
         {place.kind === 'removed' ? (
-          <span className="block font-semibold">{t('A source that was removed')}</span>
+          <span className="block font-semibold">{t('A connector that was removed')}</span>
         ) : null}
         {place.kind !== 'fruitback' && place.kind !== 'removed' ? (
           <>
@@ -293,7 +293,7 @@ function NoteText({ note }: { note: InstanceNote }) {
       {place.kind === 'fruitback' ? null : (
         <span className="mt-[2px] block text-hint text-muted">
           {place.kind === 'removed'
-            ? t('Kept in a source that was removed. Fruitback keeps the first 64 characters.')
+            ? t('Kept in a connector that was removed. Fruitback keeps the first 64 characters.')
             : t('Kept in {tool}. Fruitback keeps the first 64 characters.', { tool: toolOf(place) })}
         </span>
       )}

@@ -9,8 +9,8 @@ const before = (ms: number) => new Date(NOW - ms).toISOString();
 const MIN = 60_000;
 
 describe('how long ago something happened, in the words of the mockup', () => {
-  beforeEach(() => setLocale('en', false));
-  afterEach(() => setLocale('en', false));
+  beforeEach(() => void setLocale('en', false));
+  afterEach(() => void setLocale('en', false));
 
   it('says minutes, then hours, on the same day', () => {
     assert.equal(ago(before(20_000), NOW), 'Just now');
@@ -48,8 +48,8 @@ describe('how long ago something happened, in the words of the mockup', () => {
     assert.equal(ago('not a date', NOW), 'not a date');
   });
 
-  it('speaks French', () => {
-    setLocale('fr', false);
+  it('speaks French', async () => {
+    await setLocale('fr', false);
     assert.equal(ago(before(12 * MIN), NOW), 'il y a 12 min');
     assert.equal(ago(before(2 * 60 * MIN), NOW), 'il y a 2 h');
     assert.equal(ago(new Date(2026, 9, 12, 9, 0).toISOString(), NOW), 'Hier');
@@ -68,8 +68,8 @@ describe('how long ago something happened, in the words of the mockup', () => {
     assert.equal(ago(before(20_000), NOW), 'Just now');
   });
 
-  it('says it inside a French sentence too', () => {
-    setLocale('fr', false);
+  it('says it inside a French sentence too', async () => {
+    await setLocale('fr', false);
     assert.equal(agoInSentence(before(20_000), NOW), 'à l’instant');
     assert.equal(agoInSentence(new Date(2026, 9, 12, 9, 0).toISOString(), NOW), 'hier');
     assert.equal(agoInSentence(new Date(2026, 9, 3, 9, 0).toISOString(), NOW), 'le 3 oct.');

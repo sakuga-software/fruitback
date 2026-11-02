@@ -86,10 +86,10 @@ test('a pairing whose permission request throws gives « Pair » back, with the 
   await openOptions(page, extension.id);
   const card = page.locator(`.worker-card[data-endpoint="${AUTHENTICATED_WORKER_ORIGIN}"]`);
 
-  await card.getByLabel('Pairing code').fill('AAAA-BBBB-CCCC');
-  await card.getByRole('button', { name: 'Pair' }).click();
-  await expect(card.getByRole('status')).toContainText('Fruitback needs permission to reach that worker.');
-  await expect(card.getByRole('button', { name: 'Pair' })).toBeEnabled();
+  await card.getByLabel('Connection code').fill('AAAA-BBBB-CCCC');
+  await card.getByRole('button', { name: 'Connect' }).click();
+  await expect(card.getByRole('status')).toContainText('Fruitback needs permission to reach that server.');
+  await expect(card.getByRole('button', { name: 'Connect' })).toBeEnabled();
 });
 
 test('a pairing from the popup whose permission request throws gives the button back, with the reason (FRU-510)', async ({
@@ -102,10 +102,10 @@ test('a pairing from the popup whose permission request throws gives the button 
   const popup = await openPopup(extension, site);
 
   await popup.getByRole('button', { name: 'I have a code' }).click();
-  await popup.getByLabel('Pairing code').fill('AAAA-BBBB-CCCC');
-  const submit = popup.getByRole('button', { name: 'Pair with this worker' });
+  await popup.getByLabel('Connection code').fill('AAAA-BBBB-CCCC');
+  const submit = popup.getByRole('button', { name: 'Connect to this server' });
   await submit.click();
-  await expect(popup.getByText('Fruitback needs permission to reach that worker.')).toBeVisible();
+  await expect(popup.getByText('Fruitback needs permission to reach that server.')).toBeVisible();
   await expect(submit).toBeEnabled();
 });
 
@@ -115,15 +115,15 @@ test('a log out from the options page asks again which language to keep (FRU-510
   await openOptions(page, extension.id);
   const card = page.locator(`.worker-card[data-endpoint="${AUTHENTICATED_WORKER_ORIGIN}"]`);
   const { code } = await mintPairing('Camille Durand');
-  await card.getByLabel('Pairing code').fill(code);
-  await card.getByRole('button', { name: 'Pair' }).click();
+  await card.getByLabel('Connection code').fill(code);
+  await card.getByRole('button', { name: 'Connect' }).click();
   await expect(card.locator('.worker-who')).toContainText('Camille Durand');
 
   // The language that the account of this session said, as the popup keeps it.
   await extension.worker.evaluate(() => chrome.storage.local.set({ language: 'fr' }));
 
-  await card.getByRole('button', { name: /^(Log out|Se déconnecter)$/ }).click();
-  await expect(card.getByLabel(/^(Pairing code|Code de connexion)$/)).toBeVisible();
+  await card.getByRole('button', { name: /^(Sign out|Se déconnecter)$/ }).click();
+  await expect(card.getByLabel(/^(Connection code|Code de connexion)$/)).toBeVisible();
   // No session is left, so no account speaks for the language: the language of the browser is read.
   await expect
     .poll(() => extension.worker.evaluate(async () => (await chrome.storage.local.get('language')).language))

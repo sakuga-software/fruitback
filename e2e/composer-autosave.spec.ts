@@ -41,7 +41,7 @@ const field = (page: Page) => page.getByPlaceholder('What should change?');
 const status = (page: Page) => page.locator('[data-fruitback-status]');
 
 async function writeOnTheLatte(page: Page, note: string): Promise<void> {
-  await page.getByRole('button', { name: /Leave feedback/ }).click();
+  await page.getByRole('button', { name: /Leave a note/ }).click();
   await page.locator('[data-testid="card-latte"] .add').click();
   await field(page).fill(note);
 }
@@ -77,7 +77,7 @@ for (const [way, leave] of [
     await leave(page);
     await expect(field(page)).toBeHidden();
 
-    await page.getByRole('button', { name: /Leave feedback/ }).click();
+    await page.getByRole('button', { name: /Leave a note/ }).click();
     await page.locator('[data-testid="card-latte"] .add').click();
 
     await expect(field(page)).toHaveValue(NOTE);
@@ -91,7 +91,7 @@ test('another element opens empty, and a composer left with nothing typed saves 
   await page.keyboard.press('Escape');
 
   // Another element: its own, empty field.
-  await page.getByRole('button', { name: /Leave feedback/ }).click();
+  await page.getByRole('button', { name: /Leave a note/ }).click();
   await page.locator('#checkout-cta').click();
   await expect(field(page)).toHaveValue('');
   await expect(status(page)).toHaveText('');

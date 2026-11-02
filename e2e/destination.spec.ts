@@ -84,7 +84,7 @@ async function mount(page: Page, testCase: string): Promise<void> {
 }
 
 async function compose(page: Page, card: string): Promise<void> {
-  await page.getByRole('button', { name: 'Leave feedback' }).click();
+  await page.getByRole('button', { name: 'Leave a note' }).click();
   await page.locator(`[data-testid="${card}"] .add`).click();
   await expect(page.getByPlaceholder('What should change?')).toBeFocused();
 }

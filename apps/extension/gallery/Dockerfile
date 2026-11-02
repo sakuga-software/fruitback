@@ -20,6 +20,7 @@ COPY apps/extension/package.json apps/extension/
 RUN pnpm install --frozen-lockfile --ignore-scripts --filter @fruitback/extension...
 
 COPY packages/shared packages/shared
+COPY packages/widget packages/widget
 COPY apps/extension apps/extension
 # `.wxt/tsconfig.json`, which the tsconfig of the extension extends, is written by `wxt prepare`: a
 # clone has none, and Vite stops on the missing file.

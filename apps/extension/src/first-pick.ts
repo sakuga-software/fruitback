@@ -2,7 +2,7 @@ import type { TabCommandAnswer } from './tab-command.ts';
 
 /**
  * The first activation of a site from the welcome page opens the choice of an element (FRU-485):
- * the person turned the site on to leave a note, so « Leave feedback » is pressed for them, once.
+ * the person turned the site on to leave a note, so « Leave a note » is pressed for them, once.
  * The popup does not do it: there « Turn on » can come before a read of the notes.
  *
  * The seam is the command of the popup (`leave-feedback`, FRU-254): the widget knows no extension,

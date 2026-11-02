@@ -329,7 +329,7 @@ test('the popover and the thread open inside the window on a page scrolled sidew
     return box !== null && box.x >= 0 && box.x + box.width <= viewport!.width;
   };
 
-  await page.getByRole('button', { name: /Leave feedback/ }).click();
+  await page.getByRole('button', { name: /Leave a note/ }).click();
   await target.click();
   const composer = page.locator('[data-fruitback-composer]');
   await expect(page.getByPlaceholder('What should change?')).toBeVisible();

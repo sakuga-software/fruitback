@@ -67,7 +67,7 @@ on http and https pages. » (`notAWebPage`). The person went back to the setup, 
 signed in from the popup there, and went back to the site after the console. FRU-482 removed those
 three actions and the dead end (24 actions). FRU-483 removed the return to the setup, its link to
 the site and the two clicks on the icon, as « Turn on » moved to the welcome page (21 actions).
-FRU-484 made the pin a tip (19 actions). FRU-485 pressed « Leave feedback » for the person at the
+FRU-484 made the pin a tip (19 actions). FRU-485 pressed « Leave a note » for the person at the
 first activation (18 actions). The spec also measured that the setup goes on in its first tab after
 the link, while the tab of the link says « You are signed in … You can close this one »
 (`sign-in.tsx`, the choice P4 of the mockup).
@@ -150,7 +150,7 @@ site is fixed too (FRU-482): signed out, it offers the sign-in there as well.
 **Five steps, folded under the two cards of step 3** (`setup-guide.tsx`), with the version of the
 extension that took the captures: the welcome page and « Sign in with email », the word in the console
 and « Connect Chrome », « Turn on <site> », the note on the site, and the popup on a site that is on
-with « Leave feedback ». Folded, as the ticket proposed: the cards stay the first thing of the step,
+with « Leave a note ». Folded, as the ticket proposed: the cards stay the first thing of the step,
 and the guide is one click away for who wants it. Under the cards and not inside the card « Browser
 extension »: the column of the setup is narrow, and a capture inside the card would be smaller still.
 Measured at 1440 px: the column draws a capture 292 px wide, about half of its size, so a click on a

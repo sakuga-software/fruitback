@@ -31,7 +31,7 @@ async function mount(page: Page, testCase: string, extra: { showSelectors?: bool
 }
 
 async function plant(page: Page, note: string): Promise<void> {
-  await page.getByRole('button', { name: 'Leave feedback' }).click();
+  await page.getByRole('button', { name: 'Leave a note' }).click();
   await page.locator('[data-testid="card-espresso"] .add').click();
   await page.getByPlaceholder('What should change?').fill(note);
   await page.getByRole('button', { name: 'Send', exact: true }).click();

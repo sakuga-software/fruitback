@@ -19,7 +19,7 @@ import {
 import type { OtherCopy } from './copy.ts';
 
 /**
- * The popup's way to the widget of the tab it was opened on (FRU-254): « Leave feedback », « Show
+ * The popup's way to the widget of the tab it was opened on (FRU-254): « Leave a note », « Show
  * every note of the page », and the counts of « On this page ». And the side panel's (FRU-299): the
  * notes of the page, « Show on the page », and « Reply ».
  *

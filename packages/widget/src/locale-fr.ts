@@ -24,7 +24,7 @@ export const FRENCH: Catalog = {
   'settings.dialog': 'Réglages Fruitback',
   'settings.title': 'Réglages',
   'settings.close': 'Fermer les réglages',
-  'settings.stages': 'Repères affichés',
+  'settings.stages': 'Statuts affichés',
   'settings.hideResolved': 'Masquer les notes résolues',
   'settings.position': 'Position',
   'settings.position.topLeft': 'En haut à gauche',

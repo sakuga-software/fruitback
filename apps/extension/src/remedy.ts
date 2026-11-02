@@ -22,13 +22,13 @@ import type { SitesImport } from './site-transfer.ts';
 /** What a failed pairing is, in the words of the reviewer. */
 export const PAIRING_PROBLEM: Record<PairFailure | 'blocked', string> = {
   'code-spent-or-expired': 'That code has been used or has expired. Ask for a new one.',
-  unavailable: 'The worker did not answer. Try again.',
-  'insecure-endpoint': 'That worker is on plain http, and a session must not cross it. Use its https address.',
-  blocked: 'Fruitback needs permission to reach that worker.',
+  unavailable: 'The server did not answer. Try again.',
+  'insecure-endpoint': 'That server is on plain http, and a session must not cross it. Use its https address.',
+  blocked: 'Fruitback needs permission to reach that server.',
 };
 
-export const PAIRING_NEEDS_HTTPS = 'Pairing needs https (localhost excepted): a session must not cross http.';
-export const PAIRING_CODE_REQUIRED = 'The pairing code is required.';
+export const PAIRING_NEEDS_HTTPS = 'Connecting needs https (localhost excepted): a session must not cross http.';
+export const PAIRING_CODE_REQUIRED = 'The connection code is required.';
 
 export const IMPORT_PROBLEM: Record<Extract<SitesImport, { ok: false }>['reason'], string> = {
   'not-json': 'That file is not JSON. Choose the file that Export downloaded.',
@@ -57,10 +57,10 @@ export type Remedy =
 export const REMEDY_LABEL: Record<Remedy, string> = {
   retry: 'Try again',
   grant: 'Grant access',
-  change: 'Change the worker',
+  change: 'Change the server',
   list: 'Check the list',
   guide: 'How to get a code',
-  pair: 'Pair with this link',
+  pair: 'Connect with this link',
 };
 
 export type Problem = { text: string } & ({ remedy: Remedy } | { remedy: null; why: string });

@@ -81,7 +81,7 @@ test('the item is in the context menu, and its command captures an area in the o
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Nos formules' })).toBeVisible();
 
-  await page.getByRole('button', { name: 'Leave feedback' }).click();
+  await page.getByRole('button', { name: 'Leave a note' }).click();
   await page.locator('[data-testid="card-latte"] .add').click();
   const field = page.getByPlaceholder('What should change?');
   await field.fill('Capturé par le menu');

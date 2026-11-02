@@ -23,7 +23,7 @@ const CDN = 'https://cdn.published.test';
 const WAYS: { name: string; launch: RegExp; mount: (page: Page) => Promise<void> }[] = [
   {
     name: 'the snippet of the README',
-    launch: /Leave feedback/,
+    launch: /Leave feedback|Leave a note/,
     mount: async (page) => {
       // The snippet itself, with its `data-` attributes: `addScriptTag` cannot set them.
       await page.evaluate(
@@ -43,7 +43,7 @@ const WAYS: { name: string; launch: RegExp; mount: (page: Page) => Promise<void>
   },
   {
     name: "import { init } from 'fruitback'",
-    launch: /Leave feedback/,
+    launch: /Leave feedback|Leave a note/,
     mount: async (page) => {
       await page.addScriptTag({ path: PUBLISHED_IMPORT });
       await page.evaluate((endpoint) => {

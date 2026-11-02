@@ -151,7 +151,7 @@ function DeleteSection({ workspace }: { workspace: Workspace }) {
         {t('Delete the workspace')}
       </h2>
       <p className="text-small text-muted">
-        {t('Sites, members and pin positions go. Items already in your sources stay there.')}
+        {t('Sites, members and pin positions go. Items already in your trackers stay there.')}
       </p>
       {undeleted === undefined ? null : <Problem>{t(undeleted)}</Problem>}
       <div>

@@ -117,7 +117,8 @@ function fakeLinear() {
     }
     const { query, variables } = JSON.parse(init.body) as { query: string; variables: Record<string, unknown> };
     const operation = /Fruitback\w+/.exec(query)?.[0];
-    if (operation === 'FruitbackTeams') {
+    // The list of the teams, who the key is, and the places of a site by their ids (FRU-501): one answer.
+    if (operation === 'FruitbackTeams' || operation === 'FruitbackViewer' || operation === 'FruitbackPlaces') {
       return Response.json({
         data: {
           viewer: { name: 'Fruitback' },

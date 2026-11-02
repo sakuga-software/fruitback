@@ -32,7 +32,7 @@ export function WritersPick({
           value: 'members',
           label: t('Members only'),
           detail: t(
-            'A note needs the extension, connected by a member. Private mode carries no session: a site you review in private mode needs « Anyone on the page ».',
+            'A note needs the extension, connected by a member. In private mode the extension holds no session, so a site you review in private mode needs « Anyone on the page ».',
           ),
         },
         {

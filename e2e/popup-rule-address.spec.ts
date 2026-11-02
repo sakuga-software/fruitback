@@ -14,7 +14,7 @@ import { WORKER_ORIGIN } from './pin.ts';
 /** The one `chrome.*` call of this spec, from the service worker. */
 declare const chrome: { storage: { local: { set(items: Record<string, unknown>): Promise<void> } } };
 
-const SENTENCE = 'The worker of this rule does not answer. Check its address in the options.';
+const SENTENCE = 'The server of this rule does not answer. Check its address in the options.';
 
 for (const [name, endpoint, said] of [
   ['…/pair', `${WORKER_ORIGIN}/pair`, 1],
@@ -46,7 +46,7 @@ for (const [name, endpoint, said] of [
   });
 }
 
-test('the page of the extension refuses a pairing link as a worker, and « Pair with this link » opens its card with the code (review of #539)', async ({
+test('the page of the extension refuses a pairing link as a worker, and « Connect with this link » opens its card with the code (review of #539)', async ({
   extension,
 }) => {
   const options = await extension.context.newPage();
@@ -54,19 +54,19 @@ test('the page of the extension refuses a pairing link as a worker, and « Pair 
   await options.getByRole('button', { name: 'Add a site' }).click();
   await options.getByLabel('Sites', { exact: true }).fill(PLAYGROUND_ORIGIN);
   await options.getByLabel(/^Mode/).selectOption('private');
-  await options.getByLabel('Worker endpoint', { exact: true }).fill(`${WORKER_ORIGIN}/pair#ABCD-EFGH-JKLM`);
+  await options.getByLabel('Server address', { exact: true }).fill(`${WORKER_ORIGIN}/pair#ABCD-EFGH-JKLM`);
   await options.getByLabel('Client id', { exact: true }).fill('playground');
   await options.getByRole('button', { name: 'Add rule' }).click();
 
   await expect(
     options.getByText(
-      'This is a pairing link, not the address of a worker. Use it to pair, and give the rule the address before /pair.',
+      'This is a connection link, not the address of a server. Use it to connect, and give the rule the address before /pair.',
     ),
   ).toBeVisible();
   // Nothing was stored.
   await expect(options.locator(`tr.rule-row[data-pattern="${PLAYGROUND_ORIGIN}"]`)).toHaveCount(0);
 
-  await options.getByRole('button', { name: 'Pair with this link' }).click();
+  await options.getByRole('button', { name: 'Connect with this link' }).click();
   const card = options.locator(`.worker-card[data-endpoint="${WORKER_ORIGIN}"]`);
-  await expect(card.getByLabel('Pairing code')).toHaveValue('ABCD-EFGH-JKLM');
+  await expect(card.getByLabel('Connection code')).toHaveValue('ABCD-EFGH-JKLM');
 });

@@ -97,7 +97,7 @@ describe('the page of the extension (FRU-301)', () => {
 
     assert.deepEqual(
       [...table.querySelectorAll('th')].map((cell) => cell.textContent),
-      ['Site', 'Mode', 'Worker', 'Access', 'On'],
+      ['Site', 'Mode', 'Server', 'Access', 'On'],
     );
     const lines = [...table.querySelectorAll('tbody tr')];
     assert.deepEqual(
@@ -141,7 +141,7 @@ describe('the page of the extension (FRU-301)', () => {
     assert.equal(aside.querySelector('[role="tab"][aria-selected="true"]')?.textContent, 'Private');
     assert.equal(
       aside.querySelector('.panel-hint')?.textContent,
-      'The site ships nothing; the extension mounts the widget for you only.',
+      'The site needs no code: the extension shows the widget for you only.',
     );
     assert.equal((aside.querySelector('.panel-state') as HTMLElement).dataset.state, 'granted');
 
@@ -184,7 +184,7 @@ describe('the page of the extension (FRU-301)', () => {
     // Not « the site embeds a dormant widget »: the site embeds nothing.
     assert.equal(
       aside.querySelector('.panel-hint')?.textContent,
-      'The site ships nothing; the extension mounts the widget of Acme and carries your session.',
+      'The site needs no code: the extension shows the widget of Acme with your session.',
     );
     // The control: a team rule with no mount is the site's own widget, as before.
     const own = rulePanel(document, { row: TEAM, onGrant: nothing, onSave: nothing, onRemove: nothing });
@@ -223,7 +223,7 @@ describe('the page of the extension (FRU-301)', () => {
       onSave: nothing,
       onRemove: nothing,
     });
-    assert.equal(paired.querySelector('.panel-state-title')?.textContent, 'Paired as Camille Durand');
+    assert.equal(paired.querySelector('.panel-state-title')?.textContent, 'Connected as Camille Durand');
     assert.equal(
       paired.querySelector('.panel-state-text')?.textContent,
       'Your session with api.fruitback.com is attached in the background, never in the page.',

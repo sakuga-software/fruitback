@@ -674,7 +674,7 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
     );
     // The step says that it waits for the first note, and what to do on the site (FRU-237 tells it).
     await expect(page.getByRole('status').filter({ hasText: 'Waiting for your first note.' })).toContainText(
-      'Waiting for your first note. Open the site, click Leave feedback, then any part of the page.',
+      'Waiting for your first note. Open the site, click Leave a note, then any part of the page.',
     );
     await expect(page.getByRole('link', { name: 'Open https://staging.acme.dev' })).toHaveAttribute(
       'href',
@@ -726,7 +726,7 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
     await expect(scene).toBeVisible();
     await expect(scene).toHaveAttribute('aria-hidden', 'true');
     expect(await scene.evaluate((element) => (element as HTMLElement).inert)).toBe(true);
-    await expect(preview.locator('.scene__hint')).toHaveText('Click Leave feedback, then any part of the page.');
+    await expect(preview.locator('.scene__hint')).toHaveText('Click Leave a note, then any part of the page.');
     await expect(preview).toContainText('An example page. Pins show the same way on your site.');
     await expect(preview.locator('.site-preview__host')).toHaveCount(0);
     expect(await violations(page)).toEqual([]);

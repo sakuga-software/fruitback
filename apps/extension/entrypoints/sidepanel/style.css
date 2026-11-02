@@ -16,7 +16,7 @@ body.side-panel-page {
 
 .side-panel {
   /*
-    The side margin of every block of the panel (FRU-533): the head, « Leave feedback », « Ready to
+    The side margin of every block of the panel (FRU-533): the head, « Leave a note », « Ready to
     check », the tabs, the rows, the search and the foot. One value, so the blocks stay aligned.
   */
   --panel-gutter: 12px;
@@ -103,7 +103,7 @@ button.panel-close:hover {
   padding: 0;
 }
 
-/* « Leave feedback », and what to do next. */
+/* « Leave a note », and what to do next. */
 .panel-action {
   display: flex;
   flex-direction: column;
@@ -388,7 +388,7 @@ button.panel-send:disabled {
   min-height: 24px;
 }
 
-/* « Ready to check » (FRU-300): between « Leave feedback » and the tabs. */
+/* « Ready to check » (FRU-300): between « Leave a note » and the tabs. */
 .ready {
   display: flex;
   flex-direction: column;

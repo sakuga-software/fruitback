@@ -22,7 +22,7 @@ import { adoptStyles } from './stylesheet.ts';
  *
  * Since FRU-308 it is the board « Sidebar mode » of the mock-up of 2026-10-20: « This page », a
  * search, a chip for each status, a row for each note with the number its pin carries, the notes
- * whose element is gone at the bottom, and a foot with « Leave feedback » and « Show pins on the
+ * whose element is gone at the bottom, and a foot with « Leave a note » and « Show pins on the
  * page ». **It lies over the page and does not push it** (A19): the board narrows its example site,
  * and a margin put on the page of somebody else breaks a layout nobody here read.
  */
@@ -77,7 +77,7 @@ export type SidebarOptions = {
   onRetry?: () => void;
   /** The reviewer asked to sign in again, while the read state is `signed-out` (FRU-315). */
   onSignIn?: () => void;
-  /** Read on each draw: the worker takes no note of this reader here, and « Leave feedback » goes (FRU-330). */
+  /** Read on each draw: the worker takes no note of this reader here, and « Leave a note » goes (FRU-330). */
   closed?: () => boolean;
   /**
    * The notes kept for later in this tab, on every page (FRU-124). Read on each draw. They are listed

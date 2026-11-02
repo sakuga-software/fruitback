@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Links, Meta, Outlet, Scripts, ScrollRestoration } from 'react-router';
 import { type Left, call, checkTab, onLeft, onReachability, onSignedOut } from './api';
 import './app.css';
-import { t } from './i18n';
+import { ready, t } from './i18n';
 import { useLocale } from './use-locale';
 import { Button, Field } from './ui';
 
@@ -34,6 +34,22 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </body>
     </html>
   );
+}
+
+/**
+ * The map of the language of this browser, before the first screen (FRU-494). `HydrateFallback`,
+ * which holds no word, is shown until it is there, so a French browser never shows English first.
+ * The map of English is the code itself: an English browser waits for nothing.
+ */
+export async function clientLoader() {
+  await ready();
+
+  return null;
+}
+
+/** The map is loaded once. Each later change of language loads its own, in `setLocale`. */
+export function shouldRevalidate() {
+  return false;
 }
 
 export default function Root() {

@@ -21,7 +21,7 @@ export const STALE_TEAM_WILDCARD =
 
 /** For the previews of a site of a workspace, turned on in one click, whose worker does not list them now (FRU-103). */
 export const PREVIEWS_NOT_PROVEN =
-  'The workspace does not prove this domain now, so this rule runs nowhere. It runs again when the worker says the domain is proven.';
+  'The workspace does not prove this domain now, so this rule runs nowhere. It runs again when the server says the domain is proven.';
 
 /** For a rule that `storage.sync` cannot keep (FRU-264). The options page shows it on the row while the copy is on. */
 export const TOO_LARGE_FOR_ACCOUNT =
@@ -36,11 +36,11 @@ export const WILDCARD_TEAM_PROBLEM =
  * `<worker>/pair/feedback` and gets `404` on every page, with nothing on screen to say so.
  */
 export const PAIRING_LINK_PROBLEM =
-  'This is a pairing link, not the address of a worker. Use it to pair, and give the rule the address before /pair.';
+  'This is a connection link, not the address of a server. Use it to connect, and give the rule the address before /pair.';
 
 /** The same address with no code, or with a fragment that is no code. */
 export const PAIR_PATH_PROBLEM =
-  'An address that ends in /pair, or that carries a #, is a pairing link, not a worker. Give the address before /pair.';
+  'An address that ends in /pair, or that carries a #, is a connection link, not a server. Give the address before /pair.';
 
 /** Whether this address is a pairing link, or the page of one, rather than a worker. */
 export function isPairingAddress(value: string): boolean {
@@ -69,7 +69,7 @@ export function pairingLinkIn(value: string): PairLink | undefined {
  */
 export function complaint(values: SiteFields, pattern: string): string {
   if (lendsSession(pattern, values)) return WILDCARD_TEAM_PROBLEM;
-  if (values.endpoint === '') return 'The worker endpoint is required.';
+  if (values.endpoint === '') return 'The server address is required.';
   if (!isWorkerEndpoint(values.endpoint)) return 'The endpoint must be a full http:// or https:// URL.';
   if (isPairingAddress(values.endpoint)) {
     return pairingLinkIn(values.endpoint) === undefined ? PAIR_PATH_PROBLEM : PAIRING_LINK_PROBLEM;
@@ -80,7 +80,7 @@ export function complaint(values: SiteFields, pattern: string): string {
   // Team mode cannot work without a session, and a session may not be opened over plain http — so
   // this entry would be stored, shown as **On**, and refuse every call. Say it here instead.
   if (values.mode === 'team' && !isSecureWorkerEndpoint(values.endpoint)) {
-    return 'A team-mode worker must be on https (localhost excepted).';
+    return 'A team-mode server must be on https (localhost excepted).';
   }
 
   return '';

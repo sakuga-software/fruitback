@@ -85,7 +85,7 @@ test('with no position the dock stays at the bottom right, and a corner it does 
 
 test('moveDock moves the dock with no new widget: the note being written stays', async ({ page }) => {
   await mount(page, 'dock-move');
-  await page.getByRole('button', { name: /Leave feedback/ }).click();
+  await page.getByRole('button', { name: /Leave a note/ }).click();
   await page.locator('[data-testid="card-latte"] .add').click();
   await page.getByPlaceholder('What should change?').fill('Written before the move');
 

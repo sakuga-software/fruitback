@@ -270,7 +270,7 @@ export function problem(document: Document, options: ProblemOptions): HTMLElemen
 export type NotAWebPageOptions = {
   onSettings: () => void;
   account?: Account;
-  /** The keys of « Leave feedback », as the browser has them. None: the step names the icon alone. */
+  /** The keys of « Leave a note », as the browser has them. None: the step names the icon alone. */
   shortcut?: string[];
 };
 
@@ -599,7 +599,7 @@ export type SiteOnOptions = {
   origin: string;
   workspace: string;
   on: boolean;
-  /** The keys of « Leave feedback », as the browser has them. None: no line. */
+  /** The keys of « Leave a note », as the browser has them. None: no line. */
   shortcut?: string[];
   facts?: SiteFacts;
   account?: Account;
@@ -608,7 +608,7 @@ export type SiteOnOptions = {
   onToggle: (on: boolean) => void;
   /**
    * « Show Fruitback on this page » (FRU-444), for a site that is on. Absent: shown, and no switch.
-   * Hidden, the screen offers neither « Leave feedback » nor the side panel: the page has no widget.
+   * Hidden, the screen offers neither « Leave a note » nor the side panel: the page has no widget.
    */
   visibility?: { shown: boolean; onChange: (shown: boolean) => void };
   onLeaveFeedback: () => void;
@@ -661,7 +661,7 @@ export function visibilityRow(
   return row;
 }
 
-/** 3 · Site on (FRU-298): the switch, « Leave feedback », what waits, and the side panel. */
+/** 3 · Site on (FRU-298): the switch, « Leave a note », what waits, and the side panel. */
 export function siteOn(document: Document, options: SiteOnOptions): HTMLElement {
   const host = hostOf(options.origin);
   const row = make(document, 'div', 'site-row');
@@ -691,7 +691,7 @@ export function siteOn(document: Document, options: SiteOnOptions): HTMLElement 
   if (options.on && options.visibility !== undefined) body.push(visibilityRow(document, options.visibility));
   // Off, or hidden here: the widget left the tab, so there is nothing to leave and nothing to show.
   if (options.on && options.visibility?.shown !== false) {
-    // FRU-529: what waits stays under the site; « Leave feedback » goes to the bottom of the body,
+    // FRU-529: what waits stays under the site; « Leave a note » goes to the bottom of the body,
     // with the side panel beside it as a square button of one icon, and the keys under both.
     const waiting = make(document, 'div', 'site-lines');
     const leave = make(document, 'div', 'leave-block');
@@ -701,7 +701,7 @@ export function siteOn(document: Document, options: SiteOnOptions): HTMLElement 
     panel.setAttribute('aria-label', t('Show all notes in a sidebar'));
     panel.title = t('Show all notes in a sidebar');
     panel.append(panelIcon(document));
-    actions.append(primaryButton(document, t('Leave feedback'), options.onLeaveFeedback, { size: 'tall' }), panel);
+    actions.append(primaryButton(document, t('Leave a note'), options.onLeaveFeedback, { size: 'tall' }), panel);
     leave.append(actions);
     const keyNames = options.shortcut ?? [];
     if (keyNames.length > 0) {

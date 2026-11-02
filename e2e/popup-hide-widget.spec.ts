@@ -13,7 +13,7 @@ declare const chrome: {
   scripting: { getRegisteredContentScripts(): Promise<{ id: string; excludeMatches?: string[] }[]> };
 };
 
-const LEAVE = /Leave feedback/;
+const LEAVE = /Leave a note/;
 
 /** Enough time for a registered script to run and a widget to mount. An absence has no signal. */
 async function settle(page: Page): Promise<void> {

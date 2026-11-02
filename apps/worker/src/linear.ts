@@ -69,7 +69,19 @@ export class LinearKeyRefused extends StoreError {}
 /** Linear accepts the key, and the key does not have the rights for what was asked. */
 export class LinearKeyForbidden extends StoreError {}
 
-async function graphql<T>(config: LinearConfig, query: string, variables: Record<string, unknown>): Promise<T> {
+/**
+ * How long a read of the console waits for Linear (FRU-501), as the calls of `linear-oauth.ts` do. A
+ * write of a note has no limit: a write that Linear finishes after the worker gave up would be written
+ * twice when the widget tries again.
+ */
+export const READ_TIMEOUT_MS = 10_000;
+
+async function graphql<T>(
+  config: LinearConfig,
+  query: string,
+  variables: Record<string, unknown>,
+  timeoutMs?: number,
+): Promise<T> {
   let response: Response;
   try {
     response = await fetch(LINEAR_GRAPHQL_ENDPOINT, {
@@ -81,6 +93,7 @@ async function graphql<T>(config: LinearConfig, query: string, variables: Record
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ query, variables }),
+      ...(timeoutMs === undefined ? {} : { signal: AbortSignal.timeout(timeoutMs) }),
     });
   } catch {
     // A network failure is a store failure, so the widget keeps the note (FRU-34). A plain error
@@ -877,16 +890,15 @@ export type LinearTeam = {
 /**
  * A page of 50 teams with 50 projects each, then the projects that are left, team by team (FRU-458).
  * Linear prices a query by the nodes it may return: a page of 100 teams with the status of 50
- * projects each would weigh twice as much as the query of before.
+ * projects each would weigh twice as much as the query of before. `filter` holds the words a person
+ * looks for (FRU-501): Linear compares them with the name of each team, with no case.
  */
 // WARNING: Linear refuses a query whose complexity goes past its limit, with `400 Query too complex`.
 // 50 teams with 50 projects each went past it. 20 projects a team cost about 4,700; the projects
 // after the first 20 come from TEAM_PROJECTS_QUERY, one team at a time.
 const TEAMS_QUERY = `
-  query FruitbackTeams($after: String) {
-    viewer { name }
-    organization { name }
-    teams(first: 50, after: $after) {
+  query FruitbackTeams($after: String, $filter: TeamFilter) {
+    teams(first: 50, after: $after, filter: $filter) {
       nodes {
         id name key private color
         projects(first: 20) { nodes { id name color status { name type } } pageInfo { hasNextPage endCursor } }
@@ -907,8 +919,41 @@ const TEAM_PROJECTS_QUERY = `
   }
 `;
 
+/** Who a key belongs to, and its workspace of Linear (FRU-501): what a new connector is named after. */
+const VIEWER_QUERY = `
+  query FruitbackViewer {
+    viewer { name }
+    organization { name }
+  }
+`;
+
+/**
+ * Some teams, and some of their projects, by their ids (FRU-501): what the labels of the places of a
+ * site need, in one call. A filter, and not `team(id:)`: Linear answers an id it does not know with
+ * an error, and a filter with no node, which is how a place the key does not reach reads. Each
+ * `first` is the number of ids asked: Linear prices a query by the nodes it may return (see the
+ * warning above `TEAMS_QUERY`), and a site has 5 places at most.
+ */
+const PLACES_QUERY = `
+  query FruitbackPlaces($teams: [ID!]!, $projects: [ID!]!, $teamCount: Int!, $projectCount: Int!) {
+    teams(first: $teamCount, filter: { id: { in: $teams } }) {
+      nodes { id name projects(first: $projectCount, filter: { id: { in: $projects } }) { nodes { id name } } }
+    }
+  }
+`;
+
+/** As `PLACES_QUERY`, for places with no project. */
+const TEAM_PLACES_QUERY = `
+  query FruitbackPlaces($teams: [ID!]!, $teamCount: Int!) {
+    teams(first: $teamCount, filter: { id: { in: $teams } }) { nodes { id name } }
+  }
+`;
+
 /** How many pages a list reads at most: a key that reaches more is cut there, never read without end. */
 const MAX_PAGES = 20;
+
+/** The longest search of a team that is sent to Linear. */
+export const MAX_TEAM_SEARCH = 100;
 
 type PageInfo = { hasNextPage?: unknown; endCursor?: unknown };
 type ProjectNode = {
@@ -947,74 +992,144 @@ function projectsOf(nodes: ProjectNode[] | undefined): LinearProject[] {
 }
 
 /**
- * Who this key belongs to and the teams it reaches (FRU-121): what the console needs to offer a
- * destination, every team and every project, page after page (FRU-458). Throws a `StoreError` for a
- * key Linear refuses.
+ * Who this key belongs to, and the name of its workspace of Linear (FRU-501): asked before a connector
+ * is kept, so that a key or a token Linear refuses is never stored. Throws a `StoreError` for a key
+ * Linear refuses.
  */
-export async function listLinearTeams(
+export async function readLinearViewer(apiKey: string): Promise<{ viewer: string; organization: string }> {
+  const data = await graphql<{ viewer?: { name?: unknown }; organization?: { name?: unknown } }>(
+    { apiKey, teamId: 'none' },
+    VIEWER_QUERY,
+    {},
+    READ_TIMEOUT_MS,
+  );
+
+  return {
+    viewer: typeof data.viewer?.name === 'string' ? data.viewer.name : '',
+    // The workspace of Linear. A connector made with OAuth is named after it: its actor is the application.
+    organization: typeof data.organization?.name === 'string' ? data.organization.name : '',
+  };
+}
+
+/** A place of Linear as a destination names it: a team, and maybe one of its projects. */
+export type LinearPlace = { teamId: string; projectId?: string | undefined };
+
+/**
+ * The names of these places (FRU-501), in their order: the name of the team and of the project of
+ * each, or `undefined` for a place the key does not reach, or a team with no such project. One call to
+ * Linear for them all, never the list of the teams.
+ */
+export async function readLinearPlaces(
   apiKey: string,
-): Promise<{ viewer: string; organization: string; teams: LinearTeam[] }> {
-  let viewer = '';
-  let organization = '';
+  places: readonly LinearPlace[],
+): Promise<({ team: string; project?: string } | undefined)[]> {
+  if (places.length === 0) return [];
+  const teamIds = [...new Set(places.map((place) => place.teamId))];
+  const projectIds = [...new Set(places.flatMap((place) => (place.projectId === undefined ? [] : [place.projectId])))];
+  const data = await graphql<{
+    teams?: { nodes?: { id?: unknown; name?: unknown; projects?: { nodes?: ProjectNode[] } }[] };
+  }>(
+    { apiKey, teamId: 'none' },
+    projectIds.length === 0 ? TEAM_PLACES_QUERY : PLACES_QUERY,
+    projectIds.length === 0
+      ? { teams: teamIds, teamCount: teamIds.length }
+      : { teams: teamIds, projects: projectIds, teamCount: teamIds.length, projectCount: projectIds.length },
+    READ_TIMEOUT_MS,
+  );
+  const nodes = data.teams?.nodes ?? [];
+
+  return places.map(({ teamId, projectId }) => {
+    const team = nodes.find((node) => node.id === teamId);
+    if (typeof team?.name !== 'string') return undefined;
+    if (projectId === undefined) return { team: team.name };
+    const project = projectsOf(team.projects?.nodes).find((node) => node.id === projectId);
+
+    return project === undefined ? undefined : { team: team.name, project: project.name };
+  });
+}
+
+/**
+ * One page of the teams this key reaches, each with every one of its projects (FRU-458), and the
+ * cursor of the next page (FRU-501). `search`: only the teams whose name holds it, with no case, as
+ * Linear compares them. Throws a `StoreError` for a key Linear refuses.
+ */
+export async function readLinearTeams(
+  apiKey: string,
+  { search, after }: { search?: string; after?: string } = {},
+): Promise<{ teams: LinearTeam[]; next?: string }> {
+  const data = await graphql<{
+    teams?: {
+      nodes?: {
+        id?: unknown;
+        name?: unknown;
+        key?: unknown;
+        private?: unknown;
+        color?: unknown;
+        projects?: { nodes?: ProjectNode[]; pageInfo?: PageInfo };
+      }[];
+      pageInfo?: PageInfo;
+    };
+  }>(
+    { apiKey, teamId: 'none' },
+    TEAMS_QUERY,
+    {
+      ...(after === undefined ? {} : { after }),
+      ...(search === undefined || search === '' ? {} : { filter: { name: { containsIgnoreCase: search } } }),
+    },
+    READ_TIMEOUT_MS,
+  );
+
   const teams: LinearTeam[] = [];
   /** The teams whose projects go on past the first page, and where. */
   const more: { team: LinearTeam; after: string }[] = [];
-  let after: string | undefined;
-
-  for (let page = 0; page < MAX_PAGES; page += 1) {
-    const data = await graphql<{
-      viewer?: { name?: unknown };
-      organization?: { name?: unknown };
-      teams?: {
-        nodes?: {
-          id?: unknown;
-          name?: unknown;
-          key?: unknown;
-          private?: unknown;
-          color?: unknown;
-          projects?: { nodes?: ProjectNode[]; pageInfo?: PageInfo };
-        }[];
-        pageInfo?: PageInfo;
-      };
-    }>({ apiKey, teamId: 'none' }, TEAMS_QUERY, after === undefined ? {} : { after });
-
-    if (page === 0) {
-      viewer = typeof data.viewer?.name === 'string' ? data.viewer.name : '';
-      // The workspace of Linear. A connector made with OAuth is named after it: its actor is the application.
-      organization = typeof data.organization?.name === 'string' ? data.organization.name : '';
-    }
-    for (const node of data.teams?.nodes ?? []) {
-      if (typeof node.id !== 'string' || typeof node.name !== 'string') continue;
-      const team: LinearTeam = {
-        id: node.id,
-        name: node.name,
-        key: typeof node.key === 'string' ? node.key : '',
-        ...(typeof node.private === 'boolean' ? { private: node.private } : {}),
-        ...colorOf(node.color),
-        projects: projectsOf(node.projects?.nodes),
-      };
-      teams.push(team);
-      const next = nextOf(node.projects?.pageInfo);
-      if (next !== undefined) more.push({ team, after: next });
-    }
-    after = nextOf(data.teams?.pageInfo);
-    if (after === undefined) break;
+  for (const node of data.teams?.nodes ?? []) {
+    if (typeof node.id !== 'string' || typeof node.name !== 'string') continue;
+    const team: LinearTeam = {
+      id: node.id,
+      name: node.name,
+      key: typeof node.key === 'string' ? node.key : '',
+      ...(typeof node.private === 'boolean' ? { private: node.private } : {}),
+      ...colorOf(node.color),
+      projects: projectsOf(node.projects?.nodes),
+    };
+    teams.push(team);
+    const next = nextOf(node.projects?.pageInfo);
+    if (next !== undefined) more.push({ team, after: next });
   }
 
   for (const { team, after: first } of more) {
     let cursor: string | undefined = first;
     for (let page = 0; page < MAX_PAGES && cursor !== undefined; page += 1) {
-      const data: { team?: { projects?: { nodes?: ProjectNode[]; pageInfo?: PageInfo } } } = await graphql(
+      const read: { team?: { projects?: { nodes?: ProjectNode[]; pageInfo?: PageInfo } } } = await graphql(
         { apiKey, teamId: team.id },
         TEAM_PROJECTS_QUERY,
         { team: team.id, after: cursor },
+        READ_TIMEOUT_MS,
       );
-      team.projects.push(...projectsOf(data.team?.projects?.nodes));
-      cursor = nextOf(data.team?.projects?.pageInfo);
+      team.projects.push(...projectsOf(read.team?.projects?.nodes));
+      cursor = nextOf(read.team?.projects?.pageInfo);
     }
   }
+  const next = nextOf(data.teams?.pageInfo);
 
-  return { viewer, organization, teams };
+  return { teams, ...(next === undefined ? {} : { next }) };
+}
+
+/**
+ * Every team this key reaches, with every project (FRU-121, FRU-458): what the popup of the extension
+ * offers for a destination, page after page. Throws a `StoreError` for a key Linear refuses.
+ */
+export async function listLinearTeams(apiKey: string): Promise<{ teams: LinearTeam[] }> {
+  const teams: LinearTeam[] = [];
+  let after: string | undefined;
+  for (let page = 0; page < MAX_PAGES; page += 1) {
+    const read = await readLinearTeams(apiKey, after === undefined ? {} : { after });
+    teams.push(...read.teams);
+    after = read.next;
+    if (after === undefined) break;
+  }
+
+  return { teams };
 }
 
 /**
@@ -1032,9 +1147,10 @@ export type LinearState = {
 };
 
 const STATES_QUERY = `
-  query FruitbackStates($teams: [ID!]) {
-    workflowStates(first: 250, filter: { team: { id: { in: $teams } } }) {
+  query FruitbackStates($teams: [ID!], $after: String) {
+    workflowStates(first: 250, after: $after, filter: { team: { id: { in: $teams } } }) {
       nodes { id name type color position team { id name } }
+      pageInfo { hasNextPage endCursor }
     }
   }
 `;
@@ -1045,20 +1161,30 @@ const STATES_QUERY = `
  */
 export async function listLinearStates(apiKey: string, teamIds: readonly string[]): Promise<LinearState[]> {
   if (teamIds.length === 0) return [];
-  const data = await graphql<{
-    workflowStates?: {
-      nodes?: {
-        id?: unknown;
-        name?: unknown;
-        type?: unknown;
-        color?: unknown;
-        position?: unknown;
-        team?: { id?: unknown; name?: unknown };
-      }[];
-    };
-  }>({ apiKey, teamId: 'none' }, STATES_QUERY, { teams: [...teamIds] });
+  type StateNode = {
+    id?: unknown;
+    name?: unknown;
+    type?: unknown;
+    color?: unknown;
+    position?: unknown;
+    team?: { id?: unknown; name?: unknown };
+  };
+  // Every page (FRU-501): past 250 states, a list cut at the first page lost the states of the last teams.
+  const nodes: StateNode[] = [];
+  let after: string | undefined;
+  for (let page = 0; page < MAX_PAGES; page += 1) {
+    const data = await graphql<{ workflowStates?: { nodes?: StateNode[]; pageInfo?: PageInfo } }>(
+      { apiKey, teamId: 'none' },
+      STATES_QUERY,
+      { teams: [...teamIds], ...(after === undefined ? {} : { after }) },
+      READ_TIMEOUT_MS,
+    );
+    nodes.push(...(data.workflowStates?.nodes ?? []));
+    after = nextOf(data.workflowStates?.pageInfo);
+    if (after === undefined) break;
+  }
 
-  const states = (data.workflowStates?.nodes ?? []).flatMap((node) => {
+  const states = nodes.flatMap((node) => {
     const { id, name, type, color, position, team } = node;
     if (typeof id !== 'string' || typeof name !== 'string' || typeof type !== 'string') return [];
     if (typeof team?.id !== 'string' || !teamIds.includes(team.id)) return [];

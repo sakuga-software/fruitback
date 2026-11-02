@@ -632,7 +632,7 @@ describe('reading pins', () => {
     const both = widget.feedbackAsText();
     assert.match(both, /^## 1\. FB-1 — /m);
     assert.match(both, /^## 2\. FB-2 — Closed$/m);
-    assert.match(both, /^# Feedback on /m);
+    assert.match(both, /^# Notes on /m);
 
     (shadowOf(page).querySelector('[name="stage-closed"]') as HTMLInputElement).click();
 
@@ -1327,7 +1327,7 @@ describe('the language a mount speaks (FRU-37)', () => {
     });
 
     try {
-      assert.equal(shadow(page)?.querySelector('[data-fruitback-host-launch]')?.textContent, 'Leave feedback');
+      assert.equal(shadow(page)?.querySelector('[data-fruitback-host-launch]')?.textContent, 'Leave a note');
     } finally {
       widget.destroy();
     }
@@ -1980,7 +1980,7 @@ describe('a session of the host that ends, and comes back (FRU-315)', () => {
       '[data-fruitback-host-launch]',
     ) as HTMLButtonElement;
 
-  it('turns the launch button and « Leave feedback » into the sign-in, then reads again once back', async () => {
+  it('turns the launch button and « Leave a note » into the sign-in, then reads again once back', async () => {
     const page = mountPage('<main><button id="cta">Commander</button></main>');
     const seen = reads();
     const asked: number[] = [];
@@ -2002,7 +2002,7 @@ describe('a session of the host that ends, and comes back (FRU-315)', () => {
       assert.deepEqual(asked, [1, 1]);
 
       widget.signedOut(false);
-      assert.equal(launchOf(page).textContent, 'Leave feedback');
+      assert.equal(launchOf(page).textContent, 'Leave a note');
       await new Promise((resolve) => setTimeout(resolve, 0));
       assert.equal(seen.length, readsBefore + 1, 'back, the widget did not read the page again');
     } finally {
@@ -2016,7 +2016,7 @@ describe('a session of the host that ends, and comes back (FRU-315)', () => {
     const widget = init({ document: page.document, endpoint: 'https://worker.test', clientId: 'acme' });
     try {
       widget.signedOut(true);
-      assert.equal(launchOf(page).textContent, 'Leave feedback');
+      assert.equal(launchOf(page).textContent, 'Leave a note');
     } finally {
       widget.destroy();
     }

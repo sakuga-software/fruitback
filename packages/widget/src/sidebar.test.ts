@@ -966,7 +966,7 @@ describe('the list while the session of the host has ended (FRU-315)', () => {
       readState: () => state.read,
       onRetry: () => asked.push('retry'),
       onSignIn: () => asked.push('sign-in'),
-      leave: { label: 'Leave feedback', onLeave: () => asked.push('leave') },
+      leave: { label: 'Leave a note', onLeave: () => asked.push('leave') },
       translator: createTranslator({ locale: 'en' }),
     });
     cleanup.push(() => sidebar.destroy());

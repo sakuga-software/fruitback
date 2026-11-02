@@ -37,7 +37,7 @@ describe('createTranslator', () => {
     const t = createTranslator();
 
     assert.equal(t.locale, 'en');
-    assert.equal(t.text('launch.label'), 'Leave feedback');
+    assert.equal(t.text('launch.label'), 'Leave a note');
     assert.equal(t.plural('orphans.count', 1), '1 detached note');
     assert.equal(t.plural('orphans.count', 2), '2 detached notes');
   });

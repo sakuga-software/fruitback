@@ -66,7 +66,7 @@ async function replyAsAgentAndMember(text: string): Promise<void> {
 }
 
 async function plant(page: Page, text: string): Promise<void> {
-  await page.getByRole('button', { name: 'Leave feedback' }).click();
+  await page.getByRole('button', { name: 'Leave a note' }).click();
   await page.locator('[data-testid="card-espresso"] .add').click();
   await page.getByPlaceholder('What should change?').fill(text);
   await page.getByRole('button', { name: 'Send', exact: true }).click();

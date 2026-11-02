@@ -1,7 +1,7 @@
-import { describe, it } from 'node:test';
+import { before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { frenchSpaces as widgetSpaces } from '../../../packages/widget/src/typography.ts';
-import { translate } from './i18n.ts';
+import { loadLocale, translate } from './i18n.ts';
 import { frenchSpaces } from './typography.ts';
 
 const NARROW = ' ';
@@ -14,6 +14,9 @@ const SAMPLES = [
 ];
 
 describe('French typography (FRU-517)', () => {
+  // The French map is loaded when French is asked for (FRU-494). Not loaded, it reads English.
+  before(() => loadLocale('fr'));
+
   it('puts a narrow no-break space before : ; ? ! » and after «, where a space was', () => {
     assert.equal(frenchSpaces('Qui voit les notes ?'), `Qui voit les notes${NARROW}?`);
     assert.equal(

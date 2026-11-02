@@ -138,16 +138,25 @@ export function createLinearFake(): LinearFake {
         });
         return { attachmentCreate: { success: true } };
       }
+      case 'FruitbackViewer':
+        return { viewer: { name: 'Bench' }, organization: { name: 'Bench' } };
       case 'FruitbackTeams':
-        return {
-          viewer: { name: 'Bench' },
-          organization: { name: 'Bench' },
-          teams: { nodes: [{ id: LINEAR_FAKE_TEAM, name: 'Bench', key: 'BENCH', projects: { nodes: [] } }] },
-        };
+      case 'FruitbackPlaces': {
+        // A search, or the ids of the places of a site (FRU-501), as Linear filters them.
+        const search = (variables.filter as { name?: { containsIgnoreCase?: string } } | undefined)?.name
+          ?.containsIgnoreCase;
+        const ids = variables.teams as string[] | undefined;
+        const team = { id: LINEAR_FAKE_TEAM, name: 'Bench', key: 'BENCH', projects: { nodes: [] } };
+        const kept =
+          (search === undefined || team.name.toLowerCase().includes(search.toLowerCase())) &&
+          (ids === undefined || ids.includes(team.id));
+        return { teams: { nodes: kept ? [team] : [], pageInfo: { hasNextPage: false, endCursor: null } } };
+      }
       case 'FruitbackStates':
         return {
           workflowStates: {
             nodes: STATES.map((state) => ({ ...state, team: { id: LINEAR_FAKE_TEAM, name: 'Bench' } })),
+            pageInfo: { hasNextPage: false, endCursor: null },
           },
         };
       default:

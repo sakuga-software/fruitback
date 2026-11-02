@@ -146,7 +146,7 @@ test('the composer has no box of the picture when the host cannot take one (FRU-
       }),
     WORKER_ORIGIN,
   );
-  await page.getByRole('button', { name: 'Leave feedback' }).click();
+  await page.getByRole('button', { name: 'Leave a note' }).click();
   await page.locator('[data-testid="card-latte"] .add').click();
   await expect(page.getByPlaceholder('What should change?')).toBeVisible();
 

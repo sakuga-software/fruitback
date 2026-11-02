@@ -25,7 +25,8 @@ function linear(): void {
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
     if (linearState.down) return Response.json({ errors: [{ message: 'later' }] }, { status: 500 });
     const { query } = JSON.parse(String(init?.body)) as { query: string };
-    if (!/FruitbackTeams/.test(query)) return Response.json({ data: {} });
+    // The list of the teams, who the key is, and the places of a site by their ids (FRU-501): one answer.
+    if (!/FruitbackTeams|FruitbackViewer|FruitbackPlaces/.test(query)) return Response.json({ data: {} });
 
     return Response.json({
       data: {

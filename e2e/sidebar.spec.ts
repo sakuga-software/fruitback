@@ -28,7 +28,7 @@ async function mount(page: Page, testCase: string): Promise<void> {
 }
 
 async function plant(page: Page, card: string, note: string): Promise<void> {
-  await page.getByRole('button', { name: 'Leave feedback' }).click();
+  await page.getByRole('button', { name: 'Leave a note' }).click();
   await page.locator(`[data-testid="${card}"] .add`).click();
   await page.getByPlaceholder('What should change?').fill(note);
   await page.getByRole('button', { name: 'Send', exact: true }).click();
@@ -81,7 +81,7 @@ test('a note far down the page is brought into view when it is chosen', async ({
   await mount(page, 'sidebar-scroll');
   const target = page.locator('#checkout-cta');
   await target.scrollIntoViewIfNeeded();
-  await page.getByRole('button', { name: 'Leave feedback' }).click();
+  await page.getByRole('button', { name: 'Leave a note' }).click();
   await target.click();
   await page.getByPlaceholder('What should change?').fill('A note far down');
   await page.getByRole('button', { name: 'Send', exact: true }).click();
@@ -471,7 +471,7 @@ test('the list is the board « Sidebar mode »: its measures, its chips, its sea
   await page.keyboard.press('Escape');
   await expect(rows.nth(1)).not.toHaveAttribute('aria-current', 'true');
 
-  // The foot: « Leave feedback » and « Show pins on the page ».
+  // The foot: « Leave a note » and « Show pins on the page ».
   expect(await read('.fruitback-sidebar-foot', ['padding', 'gap', 'border-top-width'])).toMatchObject({
     padding: '12px 18px 18px',
     gap: '10px',
@@ -519,7 +519,7 @@ test('the list is the board « Sidebar mode »: its measures, its chips, its sea
   await page.getByRole('button', { name: 'Show every note in a sidebar' }).click();
   await expect(pins).toBeChecked();
 
-  // « Leave feedback » closes the list and starts a capture.
+  // « Leave a note » closes the list and starts a capture.
   await list.locator('[data-fruitback-leave]').click();
   await expect(list).toBeHidden();
   await expect(dock).toBeVisible();

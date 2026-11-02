@@ -182,7 +182,7 @@ async function plantFromTheDocumentedTag(
       script.src = 'https://cdn.acme.dev/fruitback.iife.js';
       script.dataset.fruitbackEndpoint = endpoint;
       script.dataset.fruitbackClient = 'playground';
-      script.dataset.fruitbackLabel = 'Leave feedback';
+      script.dataset.fruitbackLabel = 'Leave a note';
       for (const [name, value] of Object.entries(extra)) script.setAttribute(name, value);
       script.defer = true;
       document.head.append(script);
@@ -191,10 +191,10 @@ async function plantFromTheDocumentedTag(
   );
 
   // Nothing called `init`: the tag configured itself.
-  await expect(page.getByRole('button', { name: 'Leave feedback' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Leave a note' })).toBeVisible();
 
   // And it is a working widget, not just a button.
-  await page.getByRole('button', { name: 'Leave feedback' }).click();
+  await page.getByRole('button', { name: 'Leave a note' }).click();
   await page.locator('[data-testid="card-latte"] .add').click();
   await page.getByPlaceholder('What should change?').fill('Planté par le snippet du README');
   await page.getByRole('button', { name: 'Send', exact: true }).click();

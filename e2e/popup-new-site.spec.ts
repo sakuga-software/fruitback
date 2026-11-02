@@ -231,20 +231,20 @@ test('a site of no workspace: added to one and turned on, in one click, then scr
     'switch',
   );
   expectNear(
-    await boxOf(popup.getByRole('button', { name: 'Leave feedback' })),
+    await boxOf(popup.getByRole('button', { name: 'Leave a note' })),
     { x: 24, width: 268, height: 56 },
     'leave',
   );
-  // FRU-529: the side panel beside « Leave feedback », a square of 56 at the right of the column.
+  // FRU-529: the side panel beside « Leave a note », a square of 56 at the right of the column.
   expectNear(
     await boxOf(popup.getByRole('button', { name: 'Show all notes in a sidebar' })),
     { x: 300, width: 56, height: 56 },
     'sidebar',
   );
   {
-    const leave = await boxOf(popup.getByRole('button', { name: 'Leave feedback' }));
+    const leave = await boxOf(popup.getByRole('button', { name: 'Leave a note' }));
     const sidebar = await boxOf(popup.getByRole('button', { name: 'Show all notes in a sidebar' }));
-    expect(sidebar.y, 'the side panel is on the line of « Leave feedback »').toBe(leave.y);
+    expect(sidebar.y, 'the side panel is on the line of « Leave a note »').toBe(leave.y);
     await expect(popup.getByRole('button', { name: 'Show all notes in a sidebar' })).toHaveAttribute(
       'title',
       'Show all notes in a sidebar',

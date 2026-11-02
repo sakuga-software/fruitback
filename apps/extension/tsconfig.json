@@ -3,5 +3,6 @@
   "compilerOptions": {
     "allowImportingTsExtensions": true,
     "noEmit": true
-  }
+  },
+  "include": ["./**/*", "./gallery/.storybook/*.ts", "./.wxt/wxt.d.ts"]
 }
