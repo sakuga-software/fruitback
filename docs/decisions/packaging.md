@@ -50,9 +50,10 @@ is asserted.
   because the playground and the tests reach into the parts; only what `public.ts` names cannot
   change without a major version. `init` and what it hands back is all of it — deliberately **not**
   the config store, which would be a preference we could never change under a host.
-- **`embed.ts` is the only file that knows the worker exists.** `composer.ts` is still handed an
-  `onSubmit`; the transport lives in the assembly layer because that is the layer that was always
-  going to have to know.
+- **`embed.ts` and `worker-client.ts` are the only files that call the worker.** `composer.ts` is
+  still handed an `onSubmit`; the calls live in the assembly layer because that is the layer that was
+  always going to have to know. `attachments.ts` and `site-notes.ts` only read the shapes of its
+  answers.
 - **`init` patches `history.pushState`/`replaceState`** and restores them on `destroy`. A pin belongs
   to a URL, `popstate` does not fire for a `pushState`, and there is no framework to ask on a client's
   site. The alternative was polling `location.href` for ever.

@@ -74,8 +74,8 @@ How this repository is formatted, tested and documented, and which test holds ea
     has that file for its `build.ts` alone.
   - A new `.ts` file in a directory that no `include` names is read by nothing. Plant a type error
     in it and run `pnpm typecheck` to know.
-- **No backticks inside the CSS template literals** (`STYLES` in `host.ts`, `overlay.ts`,
-  `composer.ts`, `panel.ts`, `orphans.ts`, and `THEME_STYLES` in `theme.ts`). A comment quoting a
+- **No backticks inside the CSS template literals** (`STYLES` in each `*.styles.ts` of the widget,
+  and `THEME_STYLES` in `theme.ts`). A comment quoting a
   symbol closes the literal and the file stops parsing. It has now happened **five** times — twice
   while writing a comment about a different bug, and the fifth inside the paragraph of `theme.ts`
   that forbids it, three lines below the warning. Write `display:block`, not the same thing in

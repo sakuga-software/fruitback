@@ -32,7 +32,8 @@ import {
   readableName,
 } from './host.ts';
 import type { FruitbackTheme } from './theme.ts';
-import { type FruitbackTransport, fetchTransport } from './transport.ts';
+import type { FruitbackTransport } from './transport.ts';
+import { callWorker, errorOf, noteRoute, noteWriteFailure } from './worker-client.ts';
 import {
   type AttachOffer,
   type AttachRefusal,
@@ -83,9 +84,9 @@ import { linkedNote, withoutLinkedNote } from './page.ts';
  * lines of someone else's React. This is that assembly, owned here, so a client site writes one
  * call and a `<script>` tag gets an `init` for free.
  *
- * **This is the only file in the widget that knows the worker exists.** `composer.ts` is still handed
- * an `onSubmit` and stays ignorant of URLs and of auth; the transport lives here because this is the
- * layer that was always going to have to know.
+ * This file says what each call to the worker sends and what its answer means. `worker-client.ts`
+ * sends the calls: the transport, the token and the headers. `composer.ts` gets an `onSubmit` and
+ * knows no address and no token.
  */
 
 export type FruitbackOptions = {
@@ -398,17 +399,6 @@ export type PageNote = {
 
 /** What changed for a list outside the page: the notes, or the note opened on the page. */
 export type NotesChange = { kind: 'list' } | { kind: 'open'; id: string };
-
-/**
- * The transport this mount uses.
- *
- * One place, so a call site added later cannot quietly take the default and leave a host's relay
- * out of the loop. `embed.test.ts` asserts the default is named nowhere else in this file — and
- * that assertion counts every mention, this comment included, so do not spell it here.
- */
-function transportFor(options: FruitbackOptions): FruitbackTransport {
-  return options.transport ?? fetchTransport;
-}
 
 /**
  * How old the last read must be before a return to the tab reads again (FRU-87).
@@ -1284,18 +1274,17 @@ function createReader(
     const url = canonicalizePageUrl(view.location.href);
 
     try {
-      // Sent on reads too since FRU-40: a client configured `read: 'authenticated'` answers 401
-      // without one. Asked for per read rather than once, for the same reason the write path does —
-      // a short-lived token that expired mid-session would otherwise turn every later read into a
-      // 401 until the page is reloaded.
-      const token = await options.identityToken?.();
-      if (mine !== generation) return 'stale';
-
-      const response = await transportFor(options)({
-        url: `${options.endpoint}/feedback?url=${encodeURIComponent(url)}&client=${encodeURIComponent(options.clientId)}`,
-        method: 'GET',
-        headers: token === undefined ? {} : { Authorization: `Bearer ${token}` },
-      });
+      // The token goes on reads too (FRU-40): a client configured `read: 'authenticated'` answers
+      // 401 without one.
+      const response = await callWorker(
+        options,
+        {
+          url: `${options.endpoint}/feedback?url=${encodeURIComponent(url)}&client=${encodeURIComponent(options.clientId)}`,
+          method: 'GET',
+        },
+        () => mine === generation,
+      );
+      if (response === undefined) return 'stale';
       // A 401 lands here like any other failure, and that is deliberate: the pins already on screen
       // are correct, and blanking the page because a token expired would read as "my notes are
       // gone". Same rule as an unreachable worker below.
@@ -1405,16 +1394,12 @@ export async function plant({
   const { note: built, missedPicture } = made;
   onNote?.(built.id);
 
-  // Asked for per write rather than once at init: a short-lived token that expired mid-session would
-  // otherwise turn every later note into a 401.
-  const token = await options.identityToken?.();
-
-  const response = await transportFor(options)({
+  const response = await callWorker(options, {
     // The choice is in the query and nowhere else. The body stays the note, and the relay of the
-    // extension carries a query, and no header but the two below.
+    // extension carries a query, and no header but the type and the token.
     url: feedbackUrl(options, destination, attachments),
     method: 'POST',
-    headers: writeHeaders(token),
+    contentType: 'application/json',
     body: JSON.stringify(built),
   });
 
@@ -1518,11 +1503,10 @@ export async function uploadAttachment(
   const query = new URLSearchParams({ client: options.clientId, name: file.name });
   if (destination !== undefined) query.set('destination', destination);
   try {
-    const token = await options.identityToken?.();
-    const response = await transportFor(options)({
+    const response = await callWorker(options, {
       url: `${options.endpoint}/attachments?${query.toString()}`,
       method: 'POST',
-      headers: { 'Content-Type': file.type, ...(token === undefined ? {} : { Authorization: `Bearer ${token}` }) },
+      contentType: file.type,
       body: file.base64,
       encoding: 'base64',
     });
@@ -1546,20 +1530,18 @@ async function sendReply(
   body: string,
   name: string | undefined,
 ): Promise<NoteComment | ReplyFailure> {
-  const token = await options.identityToken?.();
-  const response = await transportFor(options)({
-    url: `${options.endpoint}/feedback/${encodeURIComponent(issue.id)}/replies?client=${encodeURIComponent(options.clientId)}`,
+  const response = await callWorker(options, {
+    url: noteRoute(options, issue.id, 'replies'),
     method: 'POST',
-    headers: writeHeaders(token),
+    contentType: 'application/json',
     body: JSON.stringify({
       url: canonicalizePageUrl(view.location.href),
       body,
       ...(name === undefined ? {} : { name }),
     }),
   });
-  if (response.status === 429) return 'wait';
-  if (response.status === 401) return 'signed-out';
-  if (!response.ok) return 'retry';
+  const failure = noteWriteFailure(response);
+  if (failure !== undefined) return failure;
   const comment = (JSON.parse(response.body) as { comment?: NoteComment }).comment;
 
   return comment === undefined ? 'retry' : comment;
@@ -1576,17 +1558,14 @@ async function sendEdit(
   issue: NoteIssue,
   text: string,
 ): Promise<EditAnswer | EditFailure> {
-  const token = await options.identityToken?.();
-  const response = await transportFor(options)({
-    url: `${options.endpoint}/feedback/${encodeURIComponent(issue.id)}/text?client=${encodeURIComponent(options.clientId)}`,
+  const response = await callWorker(options, {
+    url: noteRoute(options, issue.id, 'text'),
     method: 'POST',
-    headers: writeHeaders(token),
+    contentType: 'application/json',
     body: JSON.stringify({ url: canonicalizePageUrl(view.location.href), text }),
   });
-  if (response.status === 429) return 'wait';
-  if (response.status === 401) return 'signed-out';
-  if (response.status === 403 || response.status === 404 || response.status === 409) return 'refused';
-  if (!response.ok) return 'retry';
+  const failure = noteWriteFailure(response, (answer) => REFUSED.has(answer.status));
+  if (failure !== undefined) return failure;
   const body = JSON.parse(response.body) as { note?: unknown; comment?: unknown };
   const note = noteSchema.safeParse(body.note);
   if (!note.success) return 'retry';
@@ -1606,33 +1585,32 @@ async function sendCheck(
   issue: NoteIssue,
   verdict: 'fixed' | 'wrong',
 ): Promise<'sent' | ReplyFailure | 'refused'> {
-  const token = await options.identityToken?.();
-  const response = await transportFor(options)({
-    url: `${options.endpoint}/feedback/${encodeURIComponent(issue.id)}/check?client=${encodeURIComponent(options.clientId)}`,
+  const response = await callWorker(options, {
+    url: noteRoute(options, issue.id, 'check'),
     method: 'POST',
-    headers: writeHeaders(token),
+    contentType: 'application/json',
     body: JSON.stringify({ url: canonicalizePageUrl(view.location.href), verdict }),
   });
-  if (response.status === 429) return 'wait';
-  if (response.status === 401) return 'signed-out';
+
   // Another verdict on this note is being written (FRU-294): it is the moment, not a refusal, and a
   // second try once it is written is answered (raised in review).
-  if (response.status === 409 && errorOf(response.body) === 'check-in-progress') return 'retry';
-  if (response.status === 403 || response.status === 404 || response.status === 409) return 'refused';
-
-  return response.ok ? 'sent' : 'retry';
+  return (
+    noteWriteFailure(
+      response,
+      (answer) =>
+        REFUSED.has(answer.status) && !(answer.status === 409 && errorOf(answer.body) === 'check-in-progress'),
+    ) ?? 'sent'
+  );
 }
+
+/** What the worker answers to a write about a note it takes from nobody now: `403`, `404`, `409`. */
+const REFUSED = new Set([403, 404, 409]);
 
 /** The name a host suggests, trimmed, or nothing for an empty one. */
 function suggestedName(name: string | undefined): string | undefined {
   const trimmed = name?.trim();
 
   return trimmed === undefined || trimmed === '' ? undefined : trimmed;
-}
-
-/** Never the token in the body: the note is stored verbatim in a Linear description (FRU-9). */
-function writeHeaders(token: string | undefined): Record<string, string> {
-  return { 'Content-Type': 'application/json', ...(token !== undefined ? { Authorization: `Bearer ${token}` } : {}) };
 }
 
 /** A draft drawn on its page: no issue yet, so no identifier, no state and no link. */
@@ -1682,11 +1660,10 @@ export async function sendDrafts({
     if (first === undefined) continue;
     let response: { ok: boolean; status: number; body: string };
     try {
-      const token = await options.identityToken?.();
-      response = await transportFor(options)({
+      response = await callWorker(options, {
         url: feedbackUrl(options, first.destination),
         method: 'POST',
-        headers: writeHeaders(token),
+        contentType: 'application/json',
         body: offer === undefined ? JSON.stringify(first.note) : batchBody(request),
       });
     } catch {
@@ -1785,14 +1762,6 @@ export function failureOf(response: { status: number; body: string }): SendFailu
  */
 function membersOnly(body: string): boolean {
   return errorOf(body) === 'identity-required';
-}
-
-function errorOf(body: string): unknown {
-  try {
-    return (JSON.parse(body) as { error?: unknown }).error;
-  } catch {
-    return undefined;
-  }
 }
 
 /** Whether an address is this page, as a note keeps it. An address that does not parse is no page. */

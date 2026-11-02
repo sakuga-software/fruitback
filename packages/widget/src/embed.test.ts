@@ -1241,26 +1241,31 @@ describe('who carries the calls', () => {
    * Both paths, from the source. A call added later that goes straight to the network bypasses the
    * seam silently, and silently is exactly how the extension relay would stop relaying.
    */
-  it('has no call in embed.ts that goes around the transport', async () => {
-    const source = await readFile(new URL('./embed.ts', import.meta.url), 'utf8');
+  it('has no call in embed.ts or worker-client.ts that goes around the transport', async () => {
+    const source = async (file: string) => readFile(new URL(`./${file}`, import.meta.url), 'utf8');
+    const embed = await source('embed.ts');
+    const client = await source('worker-client.ts');
 
-    assert.equal(
-      /(?<!\w)fetch\(/.test(source),
-      false,
-      'embed.ts calls fetch directly; route it through transportFor(options)',
-    );
+    for (const [file, text] of [
+      ['embed.ts', embed],
+      ['worker-client.ts', client],
+    ] as const) {
+      assert.equal(/(?<!\w)fetch\(/.test(text), false, `${file} calls fetch directly; route it through callWorker`);
+    }
 
     // The lookbehind excludes a preceding word character and **not** a dot, on purpose: a
     // `globalThis.fetch(` or a `view.fetch(` is a bypass like any other, and the first version of
     // this check excluded the dot and let both through. Raised in review.
     //
-    // Twice and no more: the import, and the one line of `transportFor`. A third mention is a call
-    // site that took the default instead of asking, which the check above cannot see.
+    // Twice in worker-client.ts and no more: the import, and the one line of `transportFor`. A third
+    // mention is a call site that took the default instead of asking, which the check above cannot
+    // see. None in embed.ts, which calls the worker through `callWorker` only (FRU-509).
     assert.equal(
-      source.match(/fetchTransport/g)?.length,
+      client.match(/fetchTransport/g)?.length,
       2,
-      'fetchTransport is named outside transportFor; call transportFor(options) instead',
+      'fetchTransport is named outside transportFor; call callWorker instead',
     );
+    assert.equal(embed.match(/fetchTransport/g), null, 'embed.ts names fetchTransport; call callWorker instead');
   });
 });
 
