@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { afterEach, describe, it, vi } from 'vitest';
 import { CONSOLE, type World, memberOf, signInTo, workspaceIn, worlds } from './console-world.fixture.ts';
+import { ROLES, can } from './accounts.ts';
 import { rowsOf } from './postgres.fixture.ts';
 import { createPairing, digest, redeemPairing } from './session.ts';
 
@@ -306,6 +307,16 @@ describe('who sees the notes and where they go, set from the popup (FRU-453)', (
     const kept = await siteIn(env, id, second.id);
     assert.equal(kept.visibility, 'members');
     assert.deepEqual(kept.destinations, []);
+  });
+
+  // The answer names the destination, its label and its kind (FRU-554), with no check of its own: the
+  // route answers a role that manages the sites only. This holds while every such role sees the
+  // tracker, which `GET /session/sites` checks. A role that manages without seeing would read here
+  // what it may not (raised in review of #784).
+  it('answers only roles that see the tracker too', () => {
+    const managers = ROLES.filter((role) => can(role, 'manage-sites'));
+    assert.deepEqual(managers, ['owner', 'admin']);
+    for (const role of managers) assert.equal(can(role, 'see-tracker'), true, role);
   });
 
   // FRU-554: the kinds of the answer are read before the write. Read after, a store that fails there
