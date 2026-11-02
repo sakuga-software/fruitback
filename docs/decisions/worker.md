@@ -4418,8 +4418,12 @@ The console chooses the repository of a destination in a list. `GithubApp.reposi
   repositories and write nothing. A token that GitHub answers with another permission is refused.
   It never goes into the cache of the tokens: each list mints its own, and no issue call can get it.
 - **Every page of `GET /installation/repositories` is read, until `total_count`**, with
-  `MAX_LISTED_REPOSITORIES` (1,000, 10 pages of 100) as the hard cap. A person who installs the App
-  on more chooses among the first thousand that GitHub lists.
+  `MAX_LISTED_REPOSITORIES` (1,000, 10 pages of 100) as the hard cap. The answer gives `total`, the
+  count GitHub gives (FRU-500): past the cap, the page of a site says the list is cut, and how much,
+  and takes the name of another repository. `GET …/repositories?name=owner/name` reads that one alone,
+  with the token `repository()` mints for it (that repository, the metadata), so a repository of
+  another installation is not found. The popup's `GET /session/sites/places` keeps the list alone:
+  the contract of the extension does not move.
 - **The state of the connector follows FRU-359.** `404` on the mint is `connection-ended`, `403` or
   `422` is `key-lacks-access`. A list that GitHub answers ends `connection-ended` only: it says that
   the installation exists, and nothing of the repository of each destination.
