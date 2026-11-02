@@ -33,7 +33,7 @@ import {
 } from './host.ts';
 import type { FruitbackTheme } from './theme.ts';
 import type { FruitbackTransport } from './transport.ts';
-import { callWorker, errorOf, noteRoute, noteWriteFailure } from './worker-client.ts';
+import { callWorker, errorOf, noteWriteFailure } from './worker-client.ts';
 import {
   type AttachOffer,
   type AttachRefusal,
@@ -1531,7 +1531,7 @@ async function sendReply(
   name: string | undefined,
 ): Promise<NoteComment | ReplyFailure> {
   const response = await callWorker(options, {
-    url: noteRoute(options, issue.id, 'replies'),
+    url: `${options.endpoint}/feedback/${encodeURIComponent(issue.id)}/replies?client=${encodeURIComponent(options.clientId)}`,
     method: 'POST',
     contentType: 'application/json',
     body: JSON.stringify({
@@ -1559,7 +1559,7 @@ async function sendEdit(
   text: string,
 ): Promise<EditAnswer | EditFailure> {
   const response = await callWorker(options, {
-    url: noteRoute(options, issue.id, 'text'),
+    url: `${options.endpoint}/feedback/${encodeURIComponent(issue.id)}/text?client=${encodeURIComponent(options.clientId)}`,
     method: 'POST',
     contentType: 'application/json',
     body: JSON.stringify({ url: canonicalizePageUrl(view.location.href), text }),
@@ -1586,7 +1586,7 @@ async function sendCheck(
   verdict: 'fixed' | 'wrong',
 ): Promise<'sent' | ReplyFailure | 'refused'> {
   const response = await callWorker(options, {
-    url: noteRoute(options, issue.id, 'check'),
+    url: `${options.endpoint}/feedback/${encodeURIComponent(issue.id)}/check?client=${encodeURIComponent(options.clientId)}`,
     method: 'POST',
     contentType: 'application/json',
     body: JSON.stringify({ url: canonicalizePageUrl(view.location.href), verdict }),

@@ -381,15 +381,18 @@ describe('the relay sends what the background decided, never what the page asked
 /**
  * The widget is the only caller this relay serves, and the relay allows less than a `fetch` does.
  *
- * Both of the rules below are written against `packages/widget/src/embed.ts` rather than against a
- * list kept here, so a call the widget grows later fails this file instead of being dropped on a
- * reviewer's page with nothing to see. The same cross-package reading `security.test.ts` does.
+ * Both of the rules below are written against the widget's sources rather than against a list kept
+ * here, so a call the widget grows later fails this file instead of being dropped on a reviewer's page
+ * with nothing to see. The same cross-package reading `security.test.ts` does. `embed.ts` builds the
+ * addresses; `worker-client.ts` writes the headers (FRU-509).
  */
 describe('what the widget sends is what the relay allows', () => {
-  const embed = readFileSync(fileURLToPath(new URL('../../../packages/widget/src/embed.ts', import.meta.url)), 'utf8');
+  const source = (file: string) =>
+    readFileSync(fileURLToPath(new URL(`../../../packages/widget/src/${file}`, import.meta.url)), 'utf8');
+  const widget = `${source('embed.ts')}\n${source('worker-client.ts')}`;
 
   it('calls the paths the relay allows, and no other', () => {
-    const paths = [...embed.matchAll(/\$\{options\.endpoint\}([^`?]*)/g)].map((match) => match[1]);
+    const paths = [...widget.matchAll(/\$\{options\.endpoint\}([^`?]*)/g)].map((match) => match[1]);
 
     assert.ok(paths.length > 0, 'embed.ts no longer builds a URL from options.endpoint; this guard reads nothing');
     // The id of a note is a value of the widget: an id the relay takes stands in for it.
@@ -411,14 +414,14 @@ describe('what the widget sends is what the relay allows', () => {
   });
 
   it('names no header the relay would drop in silence', () => {
-    const names = new Set([...embed.matchAll(/(?:^|[{,\s])'?([A-Z][A-Za-z-]*)'?:\s/gm)].map((match) => match[1]));
+    const names = new Set([...widget.matchAll(/(?:^|[{,\s])'?([A-Z][A-Za-z-]*)'?:\s/gm)].map((match) => match[1]));
 
     assert.ok(names.has('Content-Type'), 'the detector found no Content-Type; it is selecting the wrong thing');
     assert.ok(names.has('Authorization'), 'the detector found no Authorization; it is selecting the wrong thing');
     assert.deepEqual(
       [...names].sort(),
       ['Authorization', 'Content-Type'],
-      'embed.ts sends a header the relay does not carry: add it to ALLOWED_HEADERS or stop sending it',
+      'the widget sends a header the relay does not carry: add it to ALLOWED_HEADERS or stop sending it',
     );
   });
 });

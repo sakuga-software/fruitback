@@ -55,11 +55,6 @@ export async function callWorker(
   });
 }
 
-/** The address of a route about one note: `/feedback/<id>/replies`, `/text` or `/check`. */
-export function noteRoute(options: WorkerOptions, id: string, route: 'replies' | 'text' | 'check'): string {
-  return `${options.endpoint}/feedback/${encodeURIComponent(id)}/${route}?client=${encodeURIComponent(options.clientId)}`;
-}
-
 /** The `error` of an answer of the worker, or `undefined` for a body that is not JSON. */
 export function errorOf(body: string): unknown {
   try {
