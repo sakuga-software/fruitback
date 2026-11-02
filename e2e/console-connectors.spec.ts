@@ -125,6 +125,8 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
 
           return json(key, 201);
         }
+        // A secret the person gave is not sent back: the worker shows only the one it made.
+        const given = (request.postDataJSON() as { secret?: string }).secret !== undefined;
         const made = {
           id: 'r2',
           kind: 'rest',
@@ -133,7 +135,7 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
         };
         worker.connectors = [...worker.connectors, made];
 
-        return json({ ...made, secret: 'made-by-fruitback-0123456789' }, 201);
+        return json(given ? made : { ...made, secret: 'made-by-fruitback-0123456789' }, 201);
       }
 
       return json({});
@@ -671,6 +673,55 @@ test('a first address takes focus in its panel, also when its read ends after «
   release();
   await expect(rows(page)).toHaveCount(1);
   await expect(panel(page)).toBeFocused();
+});
+
+test('an address with its own secret closes the list, and its panel takes focus once read (FRU-542)', async ({
+  page,
+}) => {
+  await workerWith(page);
+  await open(page);
+  await openCatalogue(page);
+  await page.getByRole('button', { name: 'Connect REST API', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Address of your receiver' }).fill('https://hooks.client.fr/notes');
+  await page.getByLabel('Secret (optional)').fill('my-own-secret-0123456789');
+  // The read of the list that follows the address is held: the list closes before the address is in it.
+  let release: () => void = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route(`${WORKER_ORIGIN}/console/workspaces/w1/connectors`, async (route) => {
+    if (route.request().method() === 'GET') await held;
+    await route.fallback();
+  });
+  await page.getByRole('button', { name: 'Connect', exact: true }).click();
+  // No secret to show: the list closes at once.
+  await expect(sources(page)).toHaveCount(0);
+  await expect(page.locator('[data-secret]')).toHaveCount(0);
+  await expect(rows(page)).toHaveCount(2);
+  release();
+  await expect(rows(page)).toHaveCount(3);
+  await expect(panel(page)).toHaveAttribute('aria-label', /hooks\.client\.fr\/notes/);
+  await expect(panel(page)).toBeFocused();
+});
+
+test('after an address whose read failed, « Cancel » of the next form closes only the form (FRU-542)', async ({
+  page,
+}) => {
+  const worker = await workerWith(page);
+  await open(page);
+  await openCatalogue(page);
+  await page.getByRole('button', { name: 'Connect REST API', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Address of your receiver' }).fill('https://hooks.client.fr/notes');
+  await page.getByLabel('Secret (optional)').fill('my-own-secret-0123456789');
+  // The address is kept, and the read that follows fails: no panel comes.
+  worker.down = true;
+  await page.getByRole('button', { name: 'Connect', exact: true }).click();
+  await expect(sources(page)).toHaveCount(0);
+  worker.down = false;
+  await openCatalogue(page);
+  await page.getByRole('button', { name: 'Connect REST API', exact: true }).click();
+  await page.locator('[data-source="REST API"]').getByRole('button', { name: 'Cancel', exact: true }).click();
+  // « Cancel » closes the form, and the list stays.
+  await expect(sources(page)).toHaveCount(8);
+  await expect(page.getByRole('button', { name: 'Connect REST API', exact: true })).toBeVisible();
 });
 
 test('a member reads the sources and changes none', async ({ page }) => {

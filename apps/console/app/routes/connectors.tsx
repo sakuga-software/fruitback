@@ -463,7 +463,18 @@ export default function Connectors() {
                     />
                   </Under>
                 ) : (
-                  <Button tone="outline" inset={16} disabled={cannot} onClick={() => setAdding('rest')}>
+                  <Button
+                    tone="outline"
+                    inset={16}
+                    disabled={cannot}
+                    onClick={() => {
+                      // A new form starts clean: an address whose read failed must not make its « Cancel »
+                      // close the list, nor send focus to a panel later.
+                      restAdded.current = false;
+                      toPanel.current = false;
+                      setAdding('rest');
+                    }}
+                  >
                     <Connect name={t(KINDS.rest.name)} />
                   </Button>
                 )}
