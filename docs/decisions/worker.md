@@ -4670,8 +4670,10 @@ framing; `SECURITY.md` says what is protected.
 - **One check per process, built in `server.ts`**, and handed to the requests as `latestRelease` of
   the context. A suite builds none, so no test asks GitHub. It keeps the answer in memory a day, and
   a failure an hour. Two visits at the same time share one request.
-- **The screen waits for it, 3 s at the most**, in parallel with the counts. A failure, a timeout or
-  an answer it cannot read gives `update: null` and a `200`: the line is never worth a problem.
+- **Only the first question of a process holds the screen, 3 s at the most**, in parallel with the
+  counts. A later question runs behind the visit, which gets what was known: a server with no way
+  out loses 3 s once per start, not once per hour (review of #816). A failure, a timeout or an
+  answer it cannot read gives `update: null` and a `200`: the line is never worth a problem.
 - **Only an administrator's read asks.** The guard of `ADMIN_ROUTES` runs first: any other account
   gets `404`, and GitHub is not asked.
 - **`FRUITBACK_NO_UPDATE_CHECK=1` stops it**, for an instance with no way out or one that does not

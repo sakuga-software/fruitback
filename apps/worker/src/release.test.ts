@@ -34,6 +34,9 @@ function check(overrides: Partial<ReleaseCheckDeps> & { answer?: () => Promise<u
   return { latest, clock, calls };
 }
 
+/** Lets a question that runs behind a visit end. */
+const settled = () => new Promise((resolve) => setTimeout(resolve, 0));
+
 describe('the version of the worker', () => {
   it('is the one of its package, which the release sets', () => {
     const own = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string };
@@ -110,6 +113,8 @@ describe('releaseCheck', () => {
     fail = true;
     clock.now += CHECK_EVERY_MS;
 
+    assert.deepEqual(await latest(), { version: '0.7.0', url: PAGE });
+    await settled();
     assert.deepEqual(await latest(), { version: '0.7.0', url: PAGE }, 'the failure forgot the release');
     clock.now += RETRY_AFTER_MS - 1;
     await latest();
@@ -125,6 +130,23 @@ describe('releaseCheck', () => {
     assert.equal(await latest(), undefined);
     clock.now += RETRY_AFTER_MS;
     await latest();
+    assert.equal(calls.fetches, 2);
+  });
+
+  it('holds only the first visit of the process: a later question runs behind the visit', async () => {
+    let answer: () => Promise<unknown> = async () => ({ ...RELEASE, tag_name: 'v0.6.1', html_url: `${PAGE}1` });
+    const { latest, clock, calls } = check({ answer: () => answer() });
+    assert.equal((await latest())?.version, '0.6.1', 'the first visit did not wait for its answer');
+
+    let release: (value: unknown) => void = () => {};
+    answer = () => new Promise((resolve) => (release = resolve));
+    clock.now += CHECK_EVERY_MS;
+    assert.equal((await latest())?.version, '0.6.1', 'a later visit waited for GitHub, or lost what was known');
+    assert.equal(calls.fetches, 2);
+
+    release(RELEASE);
+    await settled();
+    assert.equal((await latest())?.version, '0.7.0');
     assert.equal(calls.fetches, 2);
   });
 

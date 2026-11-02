@@ -30,8 +30,8 @@ export const CHECK_EVERY_MS = 24 * 60 * 60 * 1000;
 export const RETRY_AFTER_MS = 60 * 60 * 1000;
 
 /**
- * How long GitHub has to answer. The screen waits for it, so it stays short. After it, the screen
- * shows no line, and the next try waits `RETRY_AFTER_MS`.
+ * How long GitHub has to answer. Only the first question of a process holds the screen, so it stays
+ * short. After it, the screen shows no line, and the next try waits `RETRY_AFTER_MS`.
  */
 export const FETCH_TIMEOUT_MS = 3000;
 
@@ -101,11 +101,16 @@ async function withTimeout<T>(fetch: (signal: AbortSignal) => Promise<T>, ms: nu
 /**
  * The check of one process: a function that gives the release to tell the administrator about, or
  * `undefined`. It keeps the last answer in memory. Two visits at the same time share one request.
+ *
+ * Only the first question of the process holds the visit, `FETCH_TIMEOUT_MS` at the most. A later
+ * question runs behind the visit, which gets what was known: a server with no way out loses 3 s once
+ * per start, not once per hour.
  */
 export function releaseCheck(deps: ReleaseCheckDeps): () => Promise<Release | undefined> {
   let known: Release | undefined;
   let askAgainAt = 0;
   let asking: Promise<void> | undefined;
+  let first: Promise<void> | undefined;
 
   const ask = async (): Promise<void> => {
     try {
@@ -122,8 +127,9 @@ export function releaseCheck(deps: ReleaseCheckDeps): () => Promise<Release | un
       asking ??= ask().finally(() => {
         asking = undefined;
       });
-      await asking;
+      first ??= asking;
     }
+    await first;
 
     return known !== undefined && isNewer(known.version, deps.running) ? known : undefined;
   };
