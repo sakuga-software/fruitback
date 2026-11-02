@@ -2557,6 +2557,52 @@ The job `submit` reads these from the GitHub environment `stores` (**Settings �
 WARNING: a new archive during a review starts the review again. Wait for the end of one review
 before you push the next tag.
 
+## The widget in the frames of a page (FRU-578)
+
+### The rules, in short
+
+- **The two scripts are registered with `allFrames`**, and `src/tab-scripting-browser.ts` puts them
+  into the open tabs with `allFrames` too. **`src/frames.ts` decides which frame holds the widget**:
+  - a top frame with no declaration holds it, as before;
+  - a top frame that declares `<meta name="fruitback" content="frames">` holds none;
+  - a frame directly under such a top frame, of the same origin, holds it;
+  - any other frame holds none. A top frame of another origin is one that the browser does not let
+    the frame read.
+- **A frame with no widget runs no bridge.** `tabs.sendMessage` reaches every frame of the tab, and
+  the first answer wins: only the frame that holds the widget answers the popup and the side panel.
+  A tab where no frame holds the widget answers nothing, and the browser says so at once.
+- **A capture asked from a frame is moved into the tab.** The background captures the visible tab,
+  so `areaInTab` adds the place of the frame to the area. A capture of the page, from a frame, is
+  the area of the frame: the file is `area.png`, not `page.png`.
+- **A pair registered before this, with no `allFrames`, is registered again** at the next sync, as
+  a pair whose hidden origins changed (FRU-444).
+- The rules are in [SECURITY.md](../../SECURITY.md#the-widget-in-the-frames-of-a-page-fru-578).
+
+### Why a declaration, and not every frame
+
+Storybook shows each story in a frame of the same origin, and the extension mounted the widget in
+the top frame only. A note on a story needed the story opened alone. A widget in each frame of the
+same origin gives two widgets on any site that frames its own pages, and two answers to each command
+of the popup. The declaration costs one line to the page that wants it, and changes nothing for the
+others.
+
+### Measured
+
+`e2e/extension-frames.spec.ts`, in Chromium, with the built extension:
+
+- A note left in the frame of a page that declares its frames is filed under the address of the
+  frame, and its pin comes back after a reload. The top frame holds no widget, and the command of the
+  popup gets its answer from the frame.
+- A page that declares nothing keeps its widget, and its frame of the same origin holds none.
+- A page of another origin gets no widget in its frame of a site that is on, and no frame of the tab
+  hears the popup.
+- `executeScript` with `allFrames` skips a frame of an origin that the extension cannot reach, and
+  throws nothing: the top frame gets its scripts.
+
+The same file measures the place of a capture by its colours. Each control
+was planted and fails: a top frame that ignores the declaration, a top frame of another origin taken
+as `framed`, a bridge in each frame, a capture with no move. Not measured in Firefox or Safari.
+
 ## The gallery of the extension (FRU-523)
 
 ### The rules, in short
@@ -2589,19 +2635,21 @@ before you push the next tag.
   destroys the widget of the story before, so a document never holds two.
 - **The toolbar switches the language** of the screens and of the widget, English or French.
 - **It is served at https://gallery.fruitback.com**, so the widget of Fruitback can run on it: the
-  pages of the extension are `chrome-extension://`, where no widget runs. The extension registers
-  its scripts with no `allFrames`, so it mounts the widget in the top frame only. In the Storybook
-  page, that frame is Storybook itself: **to leave a note on a screen, open the story alone**
-  (« Open canvas in new tab », `/gallery/iframe.html?viewMode=story&id=…`). Dokploy builds
-  `apps/extension/gallery/Dockerfile` from `main`.
+  pages of the extension are `chrome-extension://`, where no widget runs.
+  `.storybook/manager-head.html` declares `<meta name="fruitback" content="frames">`, so the
+  extension puts its widget in the frame of the story and none in the interface of Storybook (see
+  « The widget in the frames of a page »). The page of a note is the address of that frame,
+  `/gallery/iframe.html?id=<story>&viewMode=story`: Storybook changes it at each story, and it is the
+  address of the story opened alone (« Open canvas in new tab »), so a note shows in both. Measured
+  in Chromium with Storybook 10.6.3. Dokploy builds `apps/extension/gallery/Dockerfile` from `main`.
 - **`.storybook/preview-body.html` deletes a React DevTools hook that is `undefined`.** The head of
   `iframe.html` copies the hook of the Storybook page into the frame; without a hook there, the copy
   is `undefined`, and react-grab, which the widget loads, stops the frame at load (measured in
   Chromium with Storybook 10.6.3).
 - **Not there:** the options page and the rule editor of the popup, which their entrypoints build
   with no function to call.
-- **Not measured:** a widget story opened alone, with the extension on for the gallery, holds the
-  widget of the story and the widget of the extension in one document.
+- **A story of the widget holds two widgets**: the one of the story and the one of the extension.
+  Measured: the two docks are in the same corner, one on the other.
 
 ## « Fruitback 0.6.0 is out », in the popup and the page (FRU-519)
 

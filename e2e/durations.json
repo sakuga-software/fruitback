@@ -71,6 +71,7 @@
   "extension-connect.spec.ts": 22.7,
   "extension-dock-position.spec.ts": 7,
   "extension-failures.spec.ts": 16,
+  "extension-frames.spec.ts": 9.1,
   "extension-page.spec.ts": 44.6,
   "extension-panel-button.spec.ts": 5.9,
   "extension-paste.spec.ts": 8.4,

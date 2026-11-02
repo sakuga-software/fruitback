@@ -19,6 +19,7 @@ import {
 } from '../src/page-api.ts';
 import { copyAddressOfStack, holderOf, proofOf, tagOf } from '../src/copy.ts';
 import { version as VERSION } from '../package.json';
+import { areaInTab, frameRole, holdsWidget } from '../src/frames.ts';
 
 /**
  * The page's own world, which mounts the widget in private mode and announces itself in team mode
@@ -61,6 +62,8 @@ export default defineContentScript({
   runAt: 'document_idle',
 
   main() {
+    const role = frameRole(window);
+    if (!holdsWidget(role)) return;
     // FRU-397: the tag of this copy on this page, and the proof that this copy drew it. See `copy.ts`.
     const address = copyAddressOfStack(new Error().stack);
     const tag = randomId(window);
@@ -112,6 +115,7 @@ export default defineContentScript({
       scale: number;
     }): Promise<CaptureResponseMessage['picture']> =>
       new Promise((resolve, reject) => {
+        const inTab = areaInTab(area, role === 'framed' ? window.frameElement : null, window.devicePixelRatio);
         const id = randomId(window);
         const timer = setTimeout(() => {
           pictures.delete(id);
@@ -130,7 +134,7 @@ export default defineContentScript({
           channel: CHANNEL,
           kind: 'capture-request',
           id,
-          ...(area === undefined ? {} : { area }),
+          ...(inTab === undefined ? {} : { area: inTab }),
         });
       });
     /** The asks for the side panel not answered yet, by the id of the request (FRU-469). */

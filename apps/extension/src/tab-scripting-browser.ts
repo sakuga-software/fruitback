@@ -5,6 +5,6 @@ import type { TabScripting } from './tab-injection.ts';
 export const browserTabScripting: TabScripting = {
   query: (matchPattern) => browser.tabs.query({ url: matchPattern }),
   execute: async (tabId, file, world) => {
-    await browser.scripting.executeScript({ target: { tabId }, files: [file], world });
+    await browser.scripting.executeScript({ target: { tabId, allFrames: true }, files: [file], world });
   },
 };
