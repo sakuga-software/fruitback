@@ -18,7 +18,7 @@ import {
   textButton,
   toggle,
 } from './kit.ts';
-import type { PlaceIds, Source, SourceOffer } from './cloud.ts';
+import type { DestinationKind, PlaceIds, Source, SourceOffer } from './cloud.ts';
 import { type Help, howItWorks, whoCanAdd } from './guide.ts';
 import { option, placeChoice, shownChoice, sourceMark } from './place-choice.ts';
 
@@ -339,6 +339,8 @@ export type TurnOnOptions = {
   workspace?: string;
   /** Where its notes go (FRU-295), when the worker said. None: the line is not drawn. */
   destination?: string;
+  /** The provider of `destination`, when the worker named it (FRU-554). None: read from the label. */
+  destinationKind?: DestinationKind;
   visibility: 'members' | 'everyone';
   /**
    * A site of no workspace: the workspaces where the account may add it. None: the screen says who
@@ -463,7 +465,7 @@ export function turnOnScreen(document: Document, options: TurnOnOptions): HTMLEl
   // FRU-530: the line of « Notes go to » with the mark of its provider, as on a site that is on.
   const destination =
     choices === undefined && options.destination !== undefined
-      ? destinationEntry(document, options.destination, change())
+      ? destinationEntry(document, options.destination, change(), options.destinationKind)
       : undefined;
   if (choices === undefined) {
     const who = change();
@@ -524,9 +526,6 @@ export function turnOnScreen(document: Document, options: TurnOnOptions): HTMLEl
   return frame(site, make(document, 'h1', '', t('Turn Fruitback on for this site?')), facts, act);
 }
 
-/** A provider of a destination, by the mark that draws it: a source, or Fruitback with no tracker. */
-export type DestinationKind = Source['kind'] | 'fruitback';
-
 /**
  * The words the worker writes first in the label of a destination (`KIND_NAMES` of the worker's
  * `console-api.ts`, and « Fruitback » in `session-sites.ts`): « Linear · Northwind ».
@@ -537,11 +536,23 @@ const KIND_WORDS: [DestinationKind, string][] = [
   ['rest', 'REST API'],
 ];
 
-/** The provider and the place of a label: « Linear · Northwind » → linear, « Northwind ». */
-export function readDestination(label: string): { kind?: DestinationKind; provider?: string; place: string } {
-  if (label === 'Fruitback') return { kind: 'fruitback', place: label };
-  for (const [kind, word] of KIND_WORDS) {
-    if (label.startsWith(`${word} · `)) return { kind, provider: word, place: label.slice(word.length + 3) };
+/**
+ * The provider and the place of a label: « Linear · Northwind » → linear, « Northwind ».
+ *
+ * `kind` is the provider as the worker named it (FRU-554): it decides the mark, and the label is then
+ * only read for the place. Without it, a worker of before FRU-554, the provider is read from the
+ * first words of the label.
+ */
+export function readDestination(
+  label: string,
+  kind?: DestinationKind,
+): { kind?: DestinationKind; provider?: string; place: string } {
+  if (kind === 'fruitback' || (kind === undefined && label === 'Fruitback')) return { kind: 'fruitback', place: label };
+  for (const [each, word] of KIND_WORDS) {
+    if (kind !== undefined && kind !== each) continue;
+    const prefix = `${word} · `;
+    if (label.startsWith(prefix)) return { kind: each, provider: word, place: label.slice(prefix.length) };
+    if (kind === each) return { kind, provider: word, place: label };
   }
 
   return { place: label };
@@ -551,10 +562,15 @@ export function readDestination(label: string): { kind?: DestinationKind; provid
  * « Notes go to », as a line of a list of terms (FRU-530): the mark of the provider, then the place.
  * The provider is said to a screen reader in words, since the mark is a drawing it skips.
  */
-export function destinationEntry(document: Document, label: string, action?: HTMLElement): HTMLElement {
+export function destinationEntry(
+  document: Document,
+  label: string,
+  action?: HTMLElement,
+  named?: DestinationKind,
+): HTMLElement {
   const entry = make(document, 'div', 'kit-dl-entry');
   entry.classList.add('destination-entry');
-  const { kind, provider, place } = readDestination(label);
+  const { kind, provider, place } = readDestination(label, named);
   const value = make(document, 'dd', 'destination-value');
   if (kind === 'fruitback') {
     const drop = dropMark(document, 'source-mark');
@@ -587,6 +603,8 @@ export type DestinationChange = {
 export type SiteFacts = {
   /** « Linear · Northwind ». */
   destination?: string;
+  /** The provider of `destination`, when the worker named it (FRU-554). None: read from the label. */
+  destinationKind?: DestinationKind;
   /** The lists that change it (FRU-530). Absent: a role that may not, and no « Change ». */
   change?: DestinationChange;
   /** The notes of the person the team marked done, not checked yet. */
@@ -746,7 +764,9 @@ export function showSiteFacts(
   // A role that may change the place gets the line even when the worker named none: « Not known », and
   // « Change » to set it (review of #736).
   const label = facts.destination ?? (facts.change === undefined ? undefined : t('Not known'));
-  if (where !== null && label !== undefined) showDestination(where, label, facts.change);
+  if (where !== null && label !== undefined) {
+    showDestination(where, label, facts.change, facts.destination === undefined ? undefined : facts.destinationKind);
+  }
   const lines = screen.querySelector('.site-lines');
   if (lines === null) return;
   const rows: HTMLElement[] = [];
@@ -784,7 +804,12 @@ export function showSiteFacts(
  * « Notes go to » of a site that is on (FRU-530), with « Change » for a role that may: it opens the
  * lists of « Turn on » in place of the line. A change the worker refuses puts the lists back.
  */
-function showDestination(list: HTMLElement, label: string, change: DestinationChange | undefined): void {
+function showDestination(
+  list: HTMLElement,
+  label: string,
+  change: DestinationChange | undefined,
+  kind: DestinationKind | undefined,
+): void {
   const document = list.ownerDocument;
   const open = (): void => {
     if (change === undefined) return;
@@ -798,7 +823,7 @@ function showDestination(list: HTMLElement, label: string, change: DestinationCh
     list.querySelector('select')?.focus();
   };
   const action = change === undefined ? undefined : textButton(document, t('Change'), open);
-  list.replaceChildren(destinationEntry(document, label, action));
+  list.replaceChildren(destinationEntry(document, label, action, kind));
 }
 
 /** One or many, by the rules of the language of the popup: « 1 fix », « 2 fixes ». */

@@ -1,5 +1,13 @@
 import { json } from './http.ts';
-import { type AccountStore, type Role, type Site, can, readableSites } from './accounts.ts';
+import {
+  type AccountStore,
+  type ConnectorKind,
+  type Destination,
+  type Role,
+  type Site,
+  can,
+  readableSites,
+} from './accounts.ts';
 import type { Kv } from './kv.ts';
 import { addSessionSite } from './session-site-add.ts';
 import { previewPattern, proofState } from './domain-proof.ts';
@@ -87,6 +95,7 @@ export async function handleSessionSites(
   const previewsOf = await previewsIn(accounts, workspaceId, now ?? Date.now());
   // FRU-237: what the popup counts on a site (06, 07). What did not arrive stays in the console.
   const notes = await notesIn(noteIndex, workspaceId);
+  const kinds = can(reach.role, 'see-tracker') ? await kindsIn(accounts, workspaceId) : new Map();
 
   return json(
     200,
@@ -101,7 +110,7 @@ export async function handleSessionSites(
           origin: site.origin,
           visibility: site.visibility,
           ...(previews.length === 0 ? {} : { previews }),
-          ...destinationFor(site, reach.role),
+          ...destinationFor(site, reach.role, kinds),
           ...(notes === undefined ? {} : (notes.get(site.id) ?? noNotes())),
         };
       }),
@@ -145,10 +154,12 @@ async function sitesOfAccount(accounts: AccountStore, account: string, now: numb
     const notes = await notesIn(noteIndex, workspace.id);
     const toCheck = await toCheckIn(noteIndex, workspace.id, account);
     const manages = can(role, 'manage-sites');
+    const connectors = can(reach.role, 'see-tracker') ? await accounts.connectors(workspace.id) : [];
+    const kinds = new Map(connectors.map((each) => [each.id, each.kind]));
     if (manages) {
       sourcesIn.set(
         workspace.id,
-        (await accounts.connectors(workspace.id)).map((each) => ({
+        connectors.map((each) => ({
           id: each.id,
           kind: each.kind,
           label: each.name ?? each.label,
@@ -163,7 +174,7 @@ async function sitesOfAccount(accounts: AccountStore, account: string, now: numb
         visibility: site.visibility,
         workspace: workspace.id,
         ...(previews.length === 0 ? {} : { previews }),
-        ...destinationFor(site, reach.role),
+        ...destinationFor(site, reach.role, kinds),
         // FRU-453: the ids of where its notes go now, so the lists of the popup start there.
         ...(manages ? placeIdsOf(site) : {}),
         ...(notes === undefined ? {} : (notes.get(site.id) ?? noNotes())),
@@ -208,12 +219,36 @@ function placeIdsOf(site: Site): { place: { connector: string; teamId?: string; 
  * its notes in the worker. A guest, and any role without `see-tracker`, gets nothing, as for the
  * places of `GET /feedback` (FRU-123). A destination with no label is not named: absent, not a guess.
  */
-function destinationFor(site: Site, role: Role): { destination?: { label: string } } {
-  if (!can(role, 'see-tracker')) return {};
-  const [first] = site.destinations;
-  if (first === undefined) return { destination: { label: 'Fruitback' } };
+function destinationFor(site: Site, role: Role, kinds: ReadonlyMap<string, ConnectorKind>): DestinationField {
+  return can(role, 'see-tracker') ? destinationField(site.destinations[0], kinds) : {};
+}
 
-  return first.label === undefined || first.label === '' ? {} : { destination: { label: first.label } };
+/** The kind of each connector of a workspace, by its id: what `destinationField` names. */
+async function kindsIn(accounts: AccountStore, workspace: string): Promise<Map<string, ConnectorKind>> {
+  return new Map((await accounts.connectors(workspace)).map((each) => [each.id, each.kind]));
+}
+
+/** The kind of provider of a destination (FRU-554): a kind of connector, or the worker's own store. */
+export type DestinationKind = ConnectorKind | 'fruitback';
+export type DestinationField = { destination?: { label: string; kind?: DestinationKind } };
+
+/**
+ * `destination` of a site in `GET /session/sites` and `POST /session/sites/settings`: the label of
+ * the first place, or « Fruitback » when there is none.
+ *
+ * `kind` (FRU-554) names the provider, so the popup draws its mark without reading the label. It is
+ * added beside `label`, which stays as it was: an extension of before reads the label alone. A
+ * connector removed since the place was written has no kind: `kind` is absent, not a guess.
+ */
+export function destinationField(
+  first: Destination | undefined,
+  kinds: ReadonlyMap<string, ConnectorKind>,
+): DestinationField {
+  if (first === undefined) return { destination: { label: 'Fruitback', kind: 'fruitback' } };
+  if (first.label === undefined || first.label === '') return {};
+  const kind = kinds.get(first.connector);
+
+  return { destination: { label: first.label, ...(kind === undefined ? {} : { kind }) } };
 }
 
 /**

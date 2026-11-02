@@ -193,6 +193,23 @@ describe('where the notes of a site go, and the fixes to check (FRU-295)', () =>
     // Absent on the wire: absent here, not zero.
     assert.equal('toCheck' in (parseWorkspaceSites(ACCOUNT)?.sites[0] ?? {}), false);
   });
+
+  // FRU-554: the worker names the provider. A worker of before names none, and a kind this extension
+  // does not know is dropped: the popup reads the label then, as before.
+  it('keeps the kind of a destination the worker names, and only a known one', () => {
+    const site = ACCOUNT.sites[0];
+    const read = (destination: unknown) =>
+      parseWorkspaceSites({ ...ACCOUNT, sites: [{ ...site, destination }] })?.sites[0]?.destination;
+    for (const kind of ['linear', 'github', 'rest', 'fruitback'] as const) {
+      assert.deepEqual(read({ label: 'Northwind', kind }), { label: 'Northwind', kind });
+    }
+    assert.deepEqual(read({ label: 'Linear · Northwind' }), { label: 'Linear · Northwind' });
+    for (const kind of ['jira', '', 3, null, ['linear'], { kind: 'linear' }]) {
+      assert.deepEqual(read({ label: 'Jira · Web', kind }), { label: 'Jira · Web' }, JSON.stringify(kind));
+    }
+    // A kind with no label names nothing: the label is what is said.
+    assert.equal(read({ kind: 'linear' }), undefined);
+  });
 });
 
 describe('the sites of every workspace of an account (FRU-254)', () => {

@@ -253,7 +253,7 @@ describe('who sees the notes and where they go, set from the popup (FRU-453)', (
         origin: 'https://other.client.fr',
         visibility: 'everyone',
         workspace: id,
-        destination: { label: 'Linear · Design · Site' },
+        destination: { label: 'Linear · Design · Site', kind: 'linear' },
       },
     });
     const stored = await siteIn(env, id, second.id);

@@ -58,7 +58,7 @@ export type WorkspaceSite = {
    * Where the notes of the site go (FRU-295): « Linear · Northwind », or « Fruitback ». Only for a
    * role that sees the tracker. Absent: not known, never « nowhere ».
    */
-  destination?: { label: string };
+  destination?: { label: string; kind?: DestinationKind };
   /**
    * The notes of the person that the team marked done and that they did not confirm (FRU-295), for
    * the session of an account. Absent: not known, never zero.
@@ -154,14 +154,25 @@ export function parseWorkspaceSites(body: unknown): WorkspaceSites | undefined {
   };
 }
 
-/** The label of a destination: a short line of text, or nothing. */
-function destinationOf(value: unknown): { label: string } | undefined {
+/**
+ * The provider of a destination (FRU-554): a kind of source, or Fruitback with no tracker. A worker
+ * of before FRU-554 names none, and a kind this extension does not know is dropped: the popup then
+ * reads the label, as before.
+ */
+export type DestinationKind = Source['kind'] | 'fruitback';
+const DESTINATION_KINDS: ReadonlySet<string> = new Set<DestinationKind>(['linear', 'github', 'rest', 'fruitback']);
+
+/** The label of a destination: a short line of text, or nothing. With it, its kind when the worker said a known one. */
+function destinationOf(value: unknown): { label: string; kind?: DestinationKind } | undefined {
   if (typeof value !== 'object' || value === null) return undefined;
-  const { label } = value as Record<string, unknown>;
+  const { label, kind } = value as Record<string, unknown>;
   if (typeof label !== 'string') return undefined;
   const flat = label.replace(/\s+/gu, ' ').trim();
+  if (flat === '' || flat.length > 200) return undefined;
 
-  return flat === '' || flat.length > 200 ? undefined : { label: flat };
+  return typeof kind === 'string' && DESTINATION_KINDS.has(kind)
+    ? { label: flat, kind: kind as DestinationKind }
+    : { label: flat };
 }
 
 /** A count the worker gave: a whole number from zero, or nothing. */

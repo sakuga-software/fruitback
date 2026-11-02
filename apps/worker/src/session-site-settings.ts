@@ -10,6 +10,7 @@ import { parseJsonObject, readBoundedBytes } from './bounded-body.ts';
 import { type TrackerContext, UnknownPlace, offerOf, placeOf } from './console-api.ts';
 import { isExtensionOrigin } from './cors.ts';
 import { StoreError } from './store.ts';
+import { destinationField } from './session-sites.ts';
 
 /**
  * `POST /session/sites/settings`: the popup changes who sees the notes of a site and where they go,
@@ -178,7 +179,7 @@ export async function setSessionSite(request: Request, context: SiteSettingsCont
   }
 
   const [first] = places ?? site.destinations;
-  const label = first === undefined ? 'Fruitback' : first.label;
+  const kinds = new Map((await context.accounts.connectors(workspace)).map((each) => [each.id, each.kind]));
 
   return {
     status: 200,
@@ -188,7 +189,7 @@ export async function setSessionSite(request: Request, context: SiteSettingsCont
         origin: site.origin,
         visibility: visibility ?? site.visibility,
         workspace,
-        ...(label === undefined || label === '' ? {} : { destination: { label } }),
+        ...destinationField(first, kinds),
       },
     },
   };
