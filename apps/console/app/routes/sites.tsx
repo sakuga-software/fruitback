@@ -393,7 +393,8 @@ function TypedSite({ url }: { url: string }) {
 
     return () => clearTimeout(timer);
   }, [url]);
-  if (origin === undefined) return null;
+  // An address that is no longer one hides the preview at once: only a valid one waits (raised in review).
+  if (origin === undefined || siteAddress(url) === undefined) return null;
   const host = new URL(origin).host;
 
   return (

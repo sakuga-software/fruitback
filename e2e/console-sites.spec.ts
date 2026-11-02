@@ -755,6 +755,10 @@ test('the dialog shows the icon and the page of the typed site, once it is an ad
   await expect(frame.getByRole('heading', { name: 'Acme docs' })).toBeVisible();
   await expect(preview.locator('iframe')).toHaveAttribute('referrerpolicy', 'no-referrer');
   await expectNoViolation(page, 'the dialog with its preview', '[role="dialog"]');
+
+  // An address that is no longer one hides the preview at once, not after the pause of 600 ms.
+  await field.fill('docs');
+  await expect(form.getByRole('region', { name: /^Preview of/ })).toHaveCount(0, { timeout: 300 });
 });
 
 test('« Who can leave a note? » is asked for a site that its members read, « Members only » first (FRU-330)', async ({
