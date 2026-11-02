@@ -2,6 +2,7 @@ import type { NoteIssue } from '@fruitback/shared';
 import { noteFixture, noteIssueFixture } from '@fruitback/shared/note.fixture';
 import { type Fruitback, init } from '@fruitback/widget';
 import type { TransportRequest, TransportResponse } from '@fruitback/widget';
+import { cloneHost, cornerBeside } from './freeze.ts';
 
 /**
  * The widget of Fruitback on a made-up page, for the gallery. A transport in this file answers in
@@ -170,11 +171,34 @@ export function galleryTransport(read: { canReply?: boolean; canWrite?: boolean;
 }
 
 let mounted: Fruitback | undefined;
+/** The host element of `mounted`. The document can hold the widget of the extension too. */
+let mountedHost: HTMLElement | undefined;
+
+const HOSTS = '[data-fruitback-host]';
 
 /** Destroys the widget of the last story. The decorator calls it before every story. */
 export function unmountWidget(): void {
   mounted?.destroy();
   mounted = undefined;
+  mountedHost = undefined;
+}
+
+/**
+ * Puts a copy of the widget of the story in the page, then destroys the widget (FRU-579). The copy
+ * shows the same state, and nothing on it reacts.
+ */
+export function freezeWidget(): void {
+  if (mountedHost === undefined || !mountedHost.isConnected) return;
+  const copy = cloneHost(mountedHost);
+  const live = [...document.querySelectorAll<HTMLElement>(HOSTS)].find((host) => host !== mountedHost);
+  unmountWidget();
+  if (live === undefined) {
+    document.body.append(copy);
+
+    return;
+  }
+  copy.dataset.fruitbackPosition = cornerBeside(live.dataset.fruitbackPosition);
+  live.before(copy);
 }
 
 export type WidgetStage = { widget: Fruitback; page: HTMLElement };
@@ -198,6 +222,7 @@ export function widgetPage(
     page,
     mount: async () => {
       unmountWidget();
+      const before = new Set(document.querySelectorAll(HOSTS));
       mounted = init({
         endpoint: ENDPOINT,
         clientId: 'acme',
@@ -205,6 +230,7 @@ export function widgetPage(
         transport: galleryTransport(read),
         reporterName: 'Ana Duval',
       });
+      mountedHost = [...document.querySelectorAll<HTMLElement>(HOSTS)].find((host) => !before.has(host));
       await mounted.refresh();
 
       return { widget: mounted, page };
