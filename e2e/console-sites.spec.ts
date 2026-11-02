@@ -825,7 +825,7 @@ test('a press anywhere on a choice of the form chooses it, its detail and its co
   await expect(everyone).toBeChecked();
 
   // The bottom right corner of the other card, in its padding, far from the radio and its words.
-  const card = form.locator('.kit-pick__card').filter({ has: members });
+  const card = form.locator('.kit-pick__card').filter({ has: page.getByRole('radio', { name: /Members of Acme/ }) });
   const frame = await card.boundingBox();
   if (frame === null) throw new Error('the card of « Members of Acme » has no box');
   await page.mouse.click(frame.x + frame.width - 6, frame.y + frame.height - 6);
