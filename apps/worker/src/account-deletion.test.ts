@@ -13,7 +13,7 @@ import {
 } from './console-world.fixture.ts';
 import { ADMIN_PATH } from './instance-admin.ts';
 import { rowsOf } from './postgres.fixture.ts';
-import { createMemoryAttachmentStore } from './attachments.ts';
+import { createMemoryAttachmentStore } from './attachments-memory.fixture.ts';
 import { createPostgresNoteStore } from './notes-postgres.ts';
 import { createPairing, digest, redeemPairing } from './session.ts';
 

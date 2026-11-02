@@ -707,6 +707,7 @@ function logout(endpoint: string, out: HTMLButtonElement): void {
       void rememberLanguage(browser.storage.local, {
         endpoints: async () => Object.keys(await sessions.list()),
         ensureAccess: (each) => sessions.ensureAccess(each),
+        renewAccess: (each, refused) => sessions.renewAccess(each, refused),
       }).catch(() => undefined);
 
       return renderWorkers();

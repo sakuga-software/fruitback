@@ -1,3 +1,4 @@
+import { isOneOf } from './one-of.ts';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createPostgresAccountStore } from './accounts-postgres.ts';
 import { type Visibility, WRITERS, type Writers } from './accounts.ts';
@@ -114,7 +115,7 @@ async function setWriters(
   response: ServerResponse,
 ): Promise<void> {
   const asked = await bodyOf(incoming);
-  if (!(WRITERS as readonly unknown[]).includes(asked.writers)) {
+  if (!isOneOf(asked.writers, WRITERS)) {
     response.writeHead(400, { 'Content-Type': 'application/json' }).end(JSON.stringify({ error: 'invalid-writers' }));
 
     return;

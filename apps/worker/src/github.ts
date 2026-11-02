@@ -585,7 +585,19 @@ export function createIssueStore({
     let incomplete = false;
     for (let page = 1; page <= SEARCH_MAX_PAGES; page += 1) {
       const params = new URLSearchParams({ q, per_page: String(ISSUES_PAGE_SIZE), page: String(page) });
-      const answer = searchAnswerSchema.safeParse(await call(repository, `/search/issues?${params}`));
+      let read: unknown;
+      try {
+        read = await call(repository, `/search/issues?${params}`);
+      } catch (error) {
+        // A page refused for the rate after the first keeps the pages read (review of #772).
+        if (page === 1 || !(error instanceof GithubResponseError) || !error.rateLimited) throw error;
+        console.error(
+          `[fruitback] GitHub refused page ${page} of the search of a page (${error.status}): older notes may be missing`,
+        );
+
+        return rows;
+      }
+      const answer = searchAnswerSchema.safeParse(read);
       if (!answer.success) throw new StoreError('GitHub returned no search');
       rows.push(...answer.data.items);
       incomplete ||= answer.data.incomplete_results === true;

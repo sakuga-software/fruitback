@@ -137,71 +137,12 @@ export type AttachmentStore = {
   sweep(now: number): Promise<number>;
 };
 
-/** For the tests of the routes. A worker keeps its files in PostgreSQL. */
-export function createMemoryAttachmentStore(): AttachmentStore & { size(): number; all(): StoredAttachment[] } {
-  const held = new Map<string, StoredAttachment>();
-  const live = (now: number) => [...held.values()].filter((each) => each.expiresAt > now);
-
-  return {
-    size: () => held.size,
-    all: () => [...held.values()],
-    async put(attachment) {
-      held.set(attachment.id, { ...attachment, content: new Uint8Array(attachment.content) });
-    },
-    async get(id, now) {
-      const found = held.get(id);
-
-      return found !== undefined && found.expiresAt > now ? found : undefined;
-    },
-    async heldBy(account, now) {
-      const mine = live(now).filter((each) => each.account === account && each.beforeTransit !== true);
-
-      return { files: mine.length, bytes: mine.reduce((sum, each) => sum + each.content.byteLength, 0) };
-    },
-    async claim(ids, note, now) {
-      const taken: StoredAttachment[] = [];
-      for (const id of ids) {
-        const found = held.get(id);
-        if (found === undefined || found.expiresAt <= now) continue;
-        if (found.note !== undefined && found.note !== note) continue;
-        found.note = note;
-        taken.push(found);
-      }
-
-      return taken;
-    },
-    async endAt(ids, at) {
-      for (const id of ids) {
-        const found = held.get(id);
-        if (found !== undefined && found.expiresAt > at) found.expiresAt = at;
-      }
-    },
-    async remove(ids) {
-      for (const id of ids) held.delete(id);
-    },
-    async sweep(now) {
-      let gone = 0;
-      for (const [id, each] of held) {
-        if (each.expiresAt > now) continue;
-        held.delete(id);
-        gone += 1;
-      }
-
-      return gone;
-    },
-  };
-}
-
 /** 128 bits that nobody guesses. The id is no secret all the same: only its sender names it. */
 export function newAttachmentId(): string {
   return `att_${crypto.randomUUID().replaceAll('-', '')}`;
 }
 
 const ID = /^att_[0-9a-f]{32}$/;
-
-export function isAttachmentId(value: string): boolean {
-  return ID.test(value);
-}
 
 /** The id of a picture of FRU-44, which the migration `0023` kept 7 days for a note on its way. */
 const LEGACY_ID = /^shot_[0-9a-f]{32}$/;
@@ -367,6 +308,3 @@ export function verifiesSignedRead(secretsKey: string, id: string, query: URLSea
 
 /** A file as a store sends it to a tracker. */
 export type OutgoingFile = { id: string; name: string; type: string; content: Uint8Array };
-
-/** What a store that sends the files answers of them, after the note. */
-export type FilesOutcome = { sent: number; lost: number; waiting: number };
