@@ -37,9 +37,9 @@ import { cloudEndpoint, wantsSession } from '../src/popup-state.ts';
 import {
   PANEL_ON_CLICK_KEY,
   PANEL_PORT,
-  type PanelApis,
   iconOpensPanel,
   keepPopupOnActionClick,
+  panelApis,
   pinsKeeper,
   setPanelOnClick,
 } from '../src/side-panel.ts';
@@ -348,9 +348,7 @@ export default defineBackground(() => {
     }
     // FRU-469: the side panel, opened at once for the tab of the sender, before any `await`.
     if (parsed?.kind === 'open-panel-request') {
-      void openPanelForTab(browser as unknown as PanelApis, sender.tab?.id, panelGate).then((opened) =>
-        sendResponse({ opened }),
-      );
+      void openPanelForTab(panelApis(browser), sender.tab?.id, panelGate).then((opened) => sendResponse({ opened }));
 
       return true;
     }
@@ -426,7 +424,7 @@ export default defineBackground(() => {
         siteOn = false;
       }
     }
-    await setPanelOnClick(browser as unknown as PanelApis, wanted, siteOn);
+    await setPanelOnClick(panelApis(browser), wanted, siteOn);
   };
   const followPanelOnClick = (): void =>
     void panelOnClick().catch((error: unknown) =>
@@ -461,7 +459,7 @@ export default defineBackground(() => {
     void sync();
     // FRU-296: the click on the icon opens the popup; the panel opens from it. The browser keeps the
     // behaviour, so it is set at install and at each update.
-    void keepPopupOnActionClick(browser as unknown as PanelApis)
+    void keepPopupOnActionClick(panelApis(browser))
       .then(() => panelOnClick())
       .catch((error: unknown) => console.error('[fruitback] could not keep the popup on the click of the icon', error));
     // A rule switched off before FRU-115 kept its access. An update gives it back, once.

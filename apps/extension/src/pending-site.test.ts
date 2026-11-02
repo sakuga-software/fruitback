@@ -10,6 +10,7 @@ import {
   parsePending,
 } from './pending-site.ts';
 import type { SiteConfig } from './sites.ts';
+import { popupSource } from './popup-source.fixture.ts';
 
 const SITE: SiteConfig = { mode: 'private', endpoint: 'https://worker.test', clientId: 'acme', enabled: true };
 const ORIGIN = 'https://staging.acme.dev';
@@ -259,7 +260,7 @@ describe('a site of no workspace, added when the access arrives (FRU-454)', () =
 });
 
 describe('the wiring of the pending site', () => {
-  const popup = readFileSync(new URL('../entrypoints/popup/main.ts', import.meta.url), 'utf8');
+  const popup = popupSource();
   const background = readFileSync(new URL('../entrypoints/background.ts', import.meta.url), 'utf8');
 
   it('remembers the site before the popup asks for access, and does not wait for it', () => {
