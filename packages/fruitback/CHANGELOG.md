@@ -1,5 +1,23 @@
 # fruitback
 
+## 0.7.0
+
+### Patch Changes
+
+- Updated dependencies [46c608c]
+- Updated dependencies [09282fc]
+- Updated dependencies [86c5798]
+- Updated dependencies [0255b8b]
+- Updated dependencies [e0e3ad1]
+- Updated dependencies [64a50c4]
+- Updated dependencies [bf65df2]
+- Updated dependencies [e3fea3b]
+- Updated dependencies [51a498f]
+- Updated dependencies [9b7ed99]
+- Updated dependencies [88971e2]
+  - @fruitback/widget@0.7.0
+  - @fruitback/shared@0.7.0
+
 ## 0.6.0
 
 ### Patch Changes
