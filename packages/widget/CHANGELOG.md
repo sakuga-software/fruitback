@@ -1,5 +1,27 @@
 # @fruitback/widget
 
+## 0.7.0
+
+### Minor Changes
+
+- 46c608c: The English of the widget says « note », as its French does: the button is « Leave a note » (was « Leave feedback »), the widget is named « Fruitback notes », the field of a note is « Your note », the settings say « Statuses shown », « Hide resolved notes » and « Copy the notes as text », and the copied text starts with « Notes on {url} ». A host that overrides these keys through `init({ messages })` keeps its own words; a test or a script that finds the button by « Leave feedback » needs the new name.
+- 09282fc: `@fruitback/widget` exports `RELATIVE_UNITS`, the units its relative dates count in, from a module of its own. The extension counts the ages of its side panel with them, and relays files with the widget's `base64OfBytes` and `bytesOfBase64` in place of its copies. Nothing it shows or sends changes.
+- e3fea3b: A note on an element inside a web component (an open shadow root) pins on that element again. The anchor carries an optional `hosts`: one selector for each shadow host between the document and the element, outermost first, and `selector`, `domPath`, `text` and `tag` are then read in the last shadow root. The widget writes it at capture and follows it when it places a pin; when a host is gone or its shadow root is closed, the pin falls back to its position and says so. `@fruitback/shared` exports `anchorSelectorPath`, which writes the hosts and the selector as one line (`#promo >>> button.buy`) in the issue description, the text of a page and the thread. Pointing at an element inside two nested open shadow roots no longer overflows the stack: the widget walks them itself, where react-grab 0.2.0 recursed for ever. A note without `hosts` reads and resolves as before, and `NOTE_VERSION` stays 3: a widget of before drops the field and places the pin as it did.
+
+### Patch Changes
+
+- 0255b8b: The French of the widget follows one glossary: a pin is a « repère » (« Note 3, statut nouveau » in place of « Note 3, nouveau »), an issue a « ticket », and a session that ended « a pris fin ». French is set with a narrow no-break space before « : », « ; », « ? », « ! » and « », and after « «, so a line never breaks there. A host that passes its own French through `init({ messages })` keeps its own words and spaces.
+- 64a50c4: A detached note says the word of its state as its pin does: the name of its status, else the name of its state in the tracker (« Shipped to prod »), else the word of its stage. It said the word of the stage, and missed the name the tracker gives.
+- bf65df2: The messages of a note, a reply or an edit that did not go say what to do next, with no dash: « Not sent. Your text is still here. Try again. » in place of « Did not go through — your text is kept, try again ». A file whose bytes do not match its type, or that did not upload, says how to fix it; the foot of the composer reads « Creates a new issue in {destination} »; and « Pick again » is « Choose another element ». A host that overrides these keys through `init({ messages })` keeps its own words.
+- 51a498f: A pin on an element inside a web component finds its element when the component draws its content after the widget placed the pins. The widget observes the open shadow roots that the `hosts` of the notes on the page go through, and waits for a custom element that is not defined yet. Before, the pin stayed an orphan until the document changed or the window resized. A note without `hosts` is resolved as before.
+- 9b7ed99: `@fruitback/shared` exports how a note is painted and named, and the core of the words of the console and the extension, written once: `STATUS_INK`, `paintOfStatus(color, textColor)`, `statusLabel(statusName, stateName, stageWord)`, `nearestLanguage(tag, languages, fallback)` and `fillSentence(sentence, values)`. The widget, the extension, the console and the worker use them in place of their own copies; what each draws and says does not change.
+- 88971e2: Internal tidy of the widget, with no change to what it shows or does: the CSS of each part moves to its own `*.styles.ts`, the calls to the worker go through one `worker-client.ts`, and the excerpt of a note, the date of a row and the failures of a write are written once. `init`, its options and the exported names do not change.
+- Updated dependencies [86c5798]
+- Updated dependencies [e0e3ad1]
+- Updated dependencies [e3fea3b]
+- Updated dependencies [9b7ed99]
+  - @fruitback/shared@0.7.0
+
 ## 0.6.0
 
 ### Patch Changes

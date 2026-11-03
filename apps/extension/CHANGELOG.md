@@ -1,5 +1,39 @@
 # @fruitback/extension
 
+## 0.7.0
+
+### Minor Changes
+
+- The extension, since 0.6.0:
+
+  - On a page that declares `<meta name="fruitback" content="frames">`, the widget goes into the frames of the same origin, and none in the top frame: a note in Storybook is left on the story itself and filed under the address of its frame. A page of another origin that frames an enabled site gets no widget in that frame. A page that declares nothing keeps the widget in its top frame, as before.
+  - Under a site that is on, the popup says where its notes go, with the mark of the provider (Linear, GitHub, REST API or Fruitback), and « Change » for a role that may.
+  - An install that no store updates (a folder loaded by hand, a temporary add-on) says « Fruitback x.y.z is out » in the popup when a newer release exists and on the options page, with a link to the release.
+  - Each state of the popup that blocks has a centred button to the guide.
+  - On an http site, the popup says to add the site from the console, in place of « Fruitback did not answer ».
+  - The screens follow the glossary: « Leave a note », « server », « Connect », « Connection code », « Sign out »; the manifest speaks French, and a failed call says the cause and what to do.
+  - A refused token of the Cloud is renewed once, and the access to a worker that does not parse says the sign-in did not start, with the buttons enabled again.
+
+### Patch Changes
+
+- 09282fc: `@fruitback/widget` exports `RELATIVE_UNITS`, the units its relative dates count in, from a module of its own. The extension counts the ages of its side panel with them, and relays files with the widget's `base64OfBytes` and `bytesOfBase64` in place of its copies. Nothing it shows or sends changes.
+- 86c5798: `@fruitback/shared` exports the messages between the console and the extension of the same browser: `EXTERNAL_VERSION`, `EXTERNAL_TYPES`, the types `ExternalAsk` and `ExternalAnswer`, the lists `EXTERNAL_CONNECT_STATES` and `EXTERNAL_REFUSALS`, and `parseExternalAnswer`. The console reads each answer of the extension through it in place of casts, and the extension answers with the same types. The messages themselves do not change.
+- 792ee35: The popup asks the worker for the sites of its tab only (`GET /session/sites?origin=…`), and for the language of the account through the list of the worker's own origin: it no longer reads every site of every workspace, with their counts, at each open. The worker reads the workspaces of an account four at a time, and counts the notes only of a workspace that has a site of the tab. Without the parameter, the answer is the whole list, as before, for the extensions already installed.
+- 9b7ed99: `@fruitback/shared` exports how a note is painted and named, and the core of the words of the console and the extension, written once: `STATUS_INK`, `paintOfStatus(color, textColor)`, `statusLabel(statusName, stateName, stageWord)`, `nearestLanguage(tag, languages, fallback)` and `fillSentence(sentence, values)`. The widget, the extension, the console and the worker use them in place of their own copies; what each draws and says does not change.
+- Updated dependencies [46c608c]
+- Updated dependencies [09282fc]
+- Updated dependencies [86c5798]
+- Updated dependencies [0255b8b]
+- Updated dependencies [e0e3ad1]
+- Updated dependencies [64a50c4]
+- Updated dependencies [bf65df2]
+- Updated dependencies [e3fea3b]
+- Updated dependencies [51a498f]
+- Updated dependencies [9b7ed99]
+- Updated dependencies [88971e2]
+  - @fruitback/widget@0.7.0
+  - @fruitback/shared@0.7.0
+
 ## 0.6.0
 
 ### Minor Changes
