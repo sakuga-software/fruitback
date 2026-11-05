@@ -45,6 +45,12 @@ export type ConfigPanelOptions = {
    * a choice that moves nothing is worse than no choice.
    */
   dockCorner?: () => DockPosition;
+  /**
+   * Hides the widget on this page (FRU-590): `hide` of `init`. Given, the panel ends with « Hide
+   * Fruitback on this page »; the host takes the widget away. Left out, no button: a button that
+   * hides nothing is worse than no button.
+   */
+  hide?: () => void;
 };
 
 export type ConfigPanel = {
@@ -195,6 +201,7 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanel {
   if (options.screenshotSupported === true) body.append(screenshotLabel);
   root.append(head, body);
   if (options.exportText !== undefined) root.append(copySection(options.exportText));
+  if (options.hide !== undefined) root.append(hideSection(options.hide));
   const style = adoptStyles(options.host, STYLES);
   options.host.append(root);
   const focus = holdFocus(root, () => panel.close());
@@ -274,6 +281,23 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanel {
     });
 
     section.append(button, status);
+
+    return section;
+  }
+
+  /** « Hide Fruitback on this page » (FRU-590): the panel closes, then the host hides the widget. */
+  function hideSection(hide: () => void): HTMLElement {
+    const section = document.createElement('div');
+    section.className = 'fruitback-config-hide';
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'fruitback-config-hide-button';
+    button.textContent = t.text('settings.hide');
+    button.addEventListener('click', () => {
+      panel.close();
+      hide();
+    });
+    section.append(button);
 
     return section;
   }

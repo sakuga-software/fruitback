@@ -740,7 +740,7 @@ holds `http://127.0.0.1/*`; a page of `http://127.0.0.1` with no rule, the panel
   was and the card says « This preference could not be saved. Try again. », so the page never shows
   a value the extension did not keep.
 
-## « Hide Fruitback on this page », in the popup (FRU-444, FRU-590)
+## « Hide Fruitback on this page », in the popup and in the settings of the widget (FRU-444, FRU-590)
 
 ### The rules, in short
 
@@ -762,8 +762,14 @@ holds `http://127.0.0.1/*`; a page of `http://127.0.0.1` with no rule, the panel
   gets neither script, so no widget and no `__fruitbackPageScript`. A pair whose hidden origins
   changed is unregistered and registered again, in its own call, like a new origin (FRU-74).
 - **A tab already open gets `unmount`.** The bridge reads the list with the rule, and a change of the
-  key applies its decision again: hidden is an `unmount`, the message of a site turned off. No new
-  message crosses to the page, and `protocol.ts` is unchanged.
+  key applies its decision again: hidden is an `unmount`, the message of a site turned off.
+- **The settings of the widget hide it too** (FRU-590): `hide` of `init` gives the panel « Hide
+  Fruitback on this page ». Its click posts `hide-request`, which carries no field, and the bridge
+  writes its own origin with `hideAsked`, only in a gesture of the person, as `open-panel-request`
+  (FRU-469). The write is the one of the popup, so every tab of the origin unmounts.
+  `e2e/widget-hide.spec.ts` hides from the gear, reloads, and sends the request from the page with
+  no gesture: nothing hides. **`evaluate` of Playwright runs as a gesture**: a request of the page
+  with none has to go from a timer, after the activation expired.
 - **Shown again, the popup injects both scripts into the open tabs of the origin**, as a site turned on
   does (`injectIntoOpenTabs`): a tab loaded while it was hidden has no bridge to hear the change.
 - **Hidden, « Leave a note » and the side panel stay, turned off**, under « Fruitback is hidden on

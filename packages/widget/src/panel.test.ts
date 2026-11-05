@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import type { NoteStage } from '@fruitback/shared';
 import { type ConfigPanel, createConfigPanel, createOfferedStages } from './panel.ts';
 import { createConfigStore, type WidgetConfig } from './config.ts';
+import { createTranslator } from './messages.ts';
 import { type MountedPage, mountPage, stylesIn } from './dom.fixture.ts';
 
 const DEFAULTS: WidgetConfig = {
@@ -234,6 +235,49 @@ describe('copying the feedback as text (FRU-109)', () => {
 
     assert.equal(manual(), null);
     assert.equal(status(), 'Copied');
+  });
+});
+
+describe('« Hide Fruitback on this page » (FRU-590)', () => {
+  it('has no button when the host cannot hide the widget', () => {
+    const { page } = mount();
+
+    assert.equal(page.document.querySelector('.fruitback-config-hide-button'), null);
+  });
+
+  it('closes the panel, then asks the host, in the click', () => {
+    const page: MountedPage = mountPage('<main></main>');
+    const store = createConfigStore({ defaults: DEFAULTS, storage: null });
+    const calls: string[] = [];
+    panel = createConfigPanel({
+      host: page.document.body,
+      store,
+      document: page.document,
+      hide: () => calls.push(`hide, open: ${panel?.isOpen}`),
+    });
+    panel.open();
+    const button = page.document.querySelector('.fruitback-config-hide-button') as HTMLButtonElement;
+
+    assert.equal(button.textContent, 'Hide Fruitback on this page');
+    assert.equal(button.type, 'button');
+    button.click();
+    assert.deepEqual(calls, ['hide, open: false']);
+  });
+
+  it('says it in French', () => {
+    const page: MountedPage = mountPage('<main></main>');
+    panel = createConfigPanel({
+      host: page.document.body,
+      store: createConfigStore({ defaults: DEFAULTS, storage: null }),
+      document: page.document,
+      translator: createTranslator({ language: 'fr' }),
+      hide: () => undefined,
+    });
+
+    assert.equal(
+      page.document.querySelector('.fruitback-config-hide-button')?.textContent,
+      'Masquer Fruitback sur cette page',
+    );
   });
 });
 

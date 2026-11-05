@@ -261,6 +261,7 @@ export default defineContentScript({
         message.kind === 'capture-request' ||
         message.kind === 'site-notes-request' ||
         message.kind === 'open-panel-request' ||
+        message.kind === 'hide-request' ||
         message.kind === 'command-response' ||
         message.kind === 'sign-in' ||
         message.kind === 'notes-changed'
@@ -475,6 +476,8 @@ export default defineContentScript({
         ...(message.relay === true ? { siteNotes } : {}),
         // FRU-469: the button that shows every note opens the side panel of the browser, in both modes.
         openSidebar,
+        // FRU-590: « Hide Fruitback on this page » of the settings: the bridge hides this origin.
+        hide: () => post({ channel: CHANNEL, kind: 'hide-request' }),
         // FRU-302: « Name on my notes », for a reporter who kept none on this site.
         ...(message.name !== undefined ? { reporterName: message.name } : {}),
         // FRU-411: the head of the composer writes the selector only with « Show CSS selectors ».

@@ -252,6 +252,7 @@ describe('every word the widget shows', () => {
       screenshotSupported: true,
       exportText: () => exported,
       dockCorner: () => 'bottom-right',
+      hide: () => undefined,
     });
     cleanup.push(() => panel.destroy());
     let answer: (planted: boolean | SendFailure | SentWithoutPicture | SentAs) => void = () => {};

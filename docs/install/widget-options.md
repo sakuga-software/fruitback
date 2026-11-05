@@ -16,6 +16,7 @@ back.
 | `transport`     | who carries the calls: the extension's, in [team mode](../install.md#team-mode-dormant-until-a-reviewer-arrives)                     |
 | `showSelectors` | `true` to show the CSS selector of the element in the thread of a pin: off by default; the issue keeps it                            |
 | `position`      | the corner of the dock: `bottom-right` (the default), `bottom-left`, `top-right` or `top-left`: `data-fruitback-position` on the tag |
+| `hide`          | a function that hides the widget on this page: the settings then end with « Hide Fruitback on this page », which calls it            |
 
 **One part of the fragment is the widget's**: `fruitback-note=<id>`. A link like
 `https://staging.acme.dev/pricing#fruitback-note=<id>` opens that note on its page, and the widget

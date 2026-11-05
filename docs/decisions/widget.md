@@ -894,6 +894,9 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
   out of `ConfigStore`, because a copy in `localStorage` would outlive a change of store. A stage the
   reporter hid stays hidden in the config. `.fruitback-config-chip[hidden]` needs its own
   `display: none`: the class sets `display: flex`, which beats the browser's rule for `hidden`.
+- **« Hide Fruitback on this page » ends the panel only for a host that gives `hide`** (FRU-590), the
+  browser extension for one. Its click closes the panel, then calls `hide`. The widget does not take
+  itself away: the host does, and holds the way to show it again.
 
 ### The reasons, and the history
 

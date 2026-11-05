@@ -35,6 +35,7 @@ export const FRENCH: Catalog = {
   'settings.copy': 'Copier les notes en texte',
   'settings.copied': 'Copié',
   'settings.copyManually': 'Copiez le texte d’ici',
+  'settings.hide': 'Masquer Fruitback sur cette page',
 
   'composer.attach': 'Pièces jointes',
   'composer.attachMenu': 'Joindre',

@@ -545,13 +545,21 @@ export type BridgeMessage =
   | SiteNotesRequestMessage
   | SiteNotesResponseMessage
   | OpenPanelRequestMessage
-  | OpenPanelResponseMessage;
+  | OpenPanelResponseMessage
+  | HideRequestMessage;
 
 /**
  * The button of the widget that shows every note asks for the side panel (FRU-469). The page can
  * send one too: `panel-request.ts` says what that buys it.
  */
 export type OpenPanelRequestMessage = { channel: typeof CHANNEL; kind: 'open-panel-request'; id: string };
+
+/**
+ * « Hide Fruitback on this page » of the settings of the widget (FRU-590). It carries nothing: the
+ * bridge hides its own origin. The page can send one too: `hideAsked` of `page-visibility.ts` says
+ * what that buys it.
+ */
+export type HideRequestMessage = { channel: typeof CHANNEL; kind: 'hide-request' };
 
 export type OpenPanelResponseMessage = {
   channel: typeof CHANNEL;
@@ -594,6 +602,7 @@ export function parseBridgeMessage(data: unknown): BridgeMessage | undefined {
   if (data.kind === 'hello') return { channel: CHANNEL, kind: 'hello' };
   if (data.kind === 'announce') return { channel: CHANNEL, kind: 'announce' };
   if (data.kind === 'sign-in') return { channel: CHANNEL, kind: 'sign-in' };
+  if (data.kind === 'hide-request') return { channel: CHANNEL, kind: 'hide-request' };
   if (data.kind === 'session') {
     return typeof data.signedOut === 'boolean'
       ? { channel: CHANNEL, kind: 'session', signedOut: data.signedOut }

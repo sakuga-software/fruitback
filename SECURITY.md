@@ -2366,6 +2366,16 @@ Chrome, `sidebar_action` on Firefox. It is a page of the extension, `sidepanel.h
   test:`is carried only while the window holds the activation of a gesture (review of #648)`). It
   gains nothing: the panel is a page of the extension that reads nothing of the site, and the answer
   says only whether it opened. A page where Fruitback is not on cannot reach the bridge.
+- « Hide Fruitback on this page » of the settings of the widget: the widget posts
+  `hide-request` on the bridge, which carries no field, and the bridge writes its own origin in
+  `hiddenOrigins` of the local storage. A script of a site the reviewer turned on can post that request
+  too. The condition that bounds it: the bridge writes only while the window holds the activation of
+  a gesture of the person, read in the isolated world, as for the side panel
+  (test:`hides the origin of the bridge in a gesture of the person, and writes nothing without one`;
+  `e2e/widget-hide.spec.ts` sends it from a timer of the page, after the activation expired, and
+  nothing is hidden). So a page can hide the widget on its own origin only, in that browser, in the
+  seconds after a click or a key of the person on it. It reads nothing and sends nothing, and the eye
+  of the popup shows the widget again.
 - What it reads. The address of the active tab of its window, as the popup does: the browser
   gives it only for a site the extension has access to, or after the click on its icon. With it, the
   rule of that site from the extension's storage. It reads no worker and keeps nothing.

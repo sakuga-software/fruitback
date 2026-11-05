@@ -248,6 +248,43 @@ describe('« All pages » of the list (FRU-470)', () => {
   });
 });
 
+describe('« Hide Fruitback on this page » of a host (FRU-590)', () => {
+  function mounted(hide?: () => void) {
+    const page = mountPage('<main></main>');
+    const widget = init({
+      document: page.document,
+      endpoint: 'https://worker.test',
+      clientId: 'acme',
+      ...(hide === undefined ? {} : { hide }),
+    });
+    const root = page.document.querySelector('[data-fruitback-host]')?.shadowRoot as ShadowRoot;
+    (root.querySelector('[aria-label="Open Fruitback settings"]') as HTMLButtonElement).click();
+
+    return { widget, root };
+  }
+
+  it('ends the settings with the button, which asks the host in the click', () => {
+    let asked = 0;
+    const { widget, root } = mounted(() => {
+      asked += 1;
+    });
+    const button = root.querySelector('.fruitback-config-hide-button') as HTMLButtonElement;
+    assert.equal(button.textContent, 'Hide Fruitback on this page');
+    button.click();
+    assert.equal(asked, 1);
+    assert.equal((root.querySelector('[data-fruitback-config]') as HTMLElement).hidden, true);
+    widget.destroy();
+  });
+
+  it('has no button for a host that cannot hide it', () => {
+    const { widget, root } = mounted();
+    // The control: the settings are open, so their other buttons are there.
+    assert.ok(root.querySelector('.fruitback-config-close') !== null);
+    assert.equal(root.querySelector('.fruitback-config-hide-button'), null);
+    widget.destroy();
+  });
+});
+
 describe('the button of the list and the side panel of a host (FRU-469)', () => {
   function mounted(openSidebar?: () => Promise<boolean>) {
     const page = mountPage('<main><button id="cta">Commander</button></main>');
