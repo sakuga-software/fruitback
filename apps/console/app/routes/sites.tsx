@@ -269,6 +269,7 @@ export default function Sites() {
               first={at === 1}
               last={at === pages}
               onPage={(to) => turn(to === 'next' ? at + 1 : at - 1)}
+              numbers={{ at, count: pages, onGo: turn }}
             />
           ) : null}
           {seesTracker ? (

@@ -234,7 +234,7 @@ test('« Next » keeps the total of the filter, and the worker reads the page al
   });
   await open(page);
   await expect(main(page).getByText('1 to 1 of 2')).toBeVisible();
-  await main(page).getByRole('button', { name: 'Next' }).click();
+  await main(page).getByRole('button', { name: 'Next page' }).click();
   await expect(main(page).getByText('2 to 2 of 2')).toBeVisible();
   expect(sent.filter((each) => each.startsWith('GET /console/admin/notes')).at(-1)).toBe(
     'GET /console/admin/notes?cursor=p2&counts=none',

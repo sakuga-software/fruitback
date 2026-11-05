@@ -951,8 +951,10 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Some connectors did not send their places. Try again in a moment.':
     'Des connecteurs n’ont pas envoyé leurs destinations. Réessayez dans un instant.',
   '{from} to {to} of {total}': '{from} à {to} sur {total}',
-  Previous: 'Précédentes',
-  Next: 'Suivantes',
+  'Previous page': 'Page précédente',
+  'First page': 'Première page',
+  'Next page': 'Page suivante',
+  'Page {page}': 'Page {page}',
   'The notes did not load': 'Les notes ne se sont pas chargées',
   'The members did not load': 'Les membres ne se sont pas chargés',
   'Your members are safe.': 'Vos membres ne sont pas perdus.',

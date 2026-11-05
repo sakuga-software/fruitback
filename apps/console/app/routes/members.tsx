@@ -551,6 +551,11 @@ export default function Members() {
                 first={offset === 0}
                 last={offset + people.length >= total}
                 onPage={(to) => setOffset((at) => (to === 'next' ? at + PAGE : Math.max(0, at - PAGE)))}
+                numbers={{
+                  at: Math.floor(offset / PAGE) + 1,
+                  count: Math.ceil(total / PAGE),
+                  onGo: (to) => setOffset((to - 1) * PAGE),
+                }}
               />
             ) : null}
           </div>
@@ -621,6 +626,11 @@ export default function Members() {
                   onPage={(to) =>
                     setInvitationsFrom(to === 'next' ? invitationsAt + PAGE : Math.max(0, invitationsAt - PAGE))
                   }
+                  numbers={{
+                    at: Math.floor(invitationsAt / PAGE) + 1,
+                    count: Math.ceil(found.length / PAGE),
+                    onGo: (to) => setInvitationsFrom((to - 1) * PAGE),
+                  }}
                 />
               ) : null}
             </div>

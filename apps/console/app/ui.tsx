@@ -324,6 +324,39 @@ export function IconButton({
   );
 }
 
+/**
+ * The number of a page of a list (FRU-587): a small square button, the page shown in ink. The page
+ * shown is `aria-current` and stays a button, which a press does nothing with: the focus of a press on
+ * a number stays on it once its page is drawn.
+ */
+export function PageNumber({
+  label,
+  current,
+  onClick,
+  children,
+}: {
+  /** « Page 3 »: the number alone says nothing to a screen reader that reads the buttons. */
+  label: string;
+  current: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <HeroButton
+      type="button"
+      variant="ghost"
+      aria-label={label}
+      aria-current={current ? 'page' : undefined}
+      onPress={() => {
+        if (!current) onClick();
+      }}
+      className="kit-page-number"
+    >
+      {children}
+    </HeroButton>
+  );
+}
+
 type IconLinkProps = {
   /** Where the link goes, said to a screen reader: its picture says it to the eye alone. */
   label: string;
@@ -1135,6 +1168,10 @@ export function DataTable({
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(element);
+    // The head of the columns too: one that grew, with the frame as it was, moves the heads of the
+    // groups under it (raised in review, FRU-586).
+    const head = element.querySelector('thead');
+    if (head !== null) observer.observe(head);
 
     return () => observer.disconnect();
   }, [stack, minWidth]);
