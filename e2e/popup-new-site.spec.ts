@@ -6,7 +6,8 @@ import {
   openBareSite,
   openPopup,
   test,
-  SITE_SWITCH,
+  SITE_MENU,
+  SITE_ON,
   sessionSitesOf,
 } from './extension.ts';
 import { AUTHENTICATED_WORKER_ORIGIN } from './worker-sessions.ts';
@@ -220,44 +221,26 @@ test('a site of no workspace: added to one and turned on, in one click, then scr
   await popup.getByRole('button', { name: 'Turn on' }).click();
 
   // 3: on, in Northwind. The site was asked for with the token, as one of the workspace chosen.
-  await expect(popup.getByRole('switch', { name: 'Fruitback on localhost:5177' })).toBeChecked();
+  await expect(popup.getByRole('img', { name: SITE_ON })).toBeVisible();
   // What the worker says of the site (FRU-295), once it answers: the tracker, and what waits.
-  // FRU-530: the state line names the workspace; where the notes go has its own line, with its mark.
+  // FRU-599: the state line names the workspace; « Sent to » has its own line, with its mark.
   await expect(popup.locator('.kit-site-state')).toHaveText('On · Northwind');
-  const destination = popup.locator('.site-destination .destination-entry');
-  await expect(destination.locator('.destination-place')).toHaveText('Northwind');
+  const destination = popup.locator('.site-destination');
+  await expect(destination.locator('.destination-place')).toHaveText('Linear / Northwind');
   await expect(destination.locator('svg.source-mark')).toHaveAttribute('data-kind', 'linear');
-  await expect(popup.locator('.site-lines .kit-row-title')).toHaveText(['2 fixes to check', '3 open notes']);
-  await expect(popup.locator('.site-lines .kit-row-subtitle')).toHaveText([
-    'Marked done by the team',
-    'New, to do or in progress',
-  ]);
-  // Screen 3 of an account, against the mock-up (`popup-3-site-on.png`).
-  expectNear(
-    await boxOf(popup.getByRole('switch', { name: SITE_SWITCH })),
-    { x: 312, width: 44, height: 26 },
-    'switch',
-  );
+  await expect(popup.locator('.panel-counts')).toHaveText('3 open notes · 2 to check');
+  // Screen 3 of an account, against the board P1 of FRU-598: 20 px around.
+  expectNear(await boxOf(popup.getByRole('button', { name: SITE_MENU })), { x: 328, width: 32, height: 32 }, 'menu');
   expectNear(
     await boxOf(popup.getByRole('button', { name: 'Leave a note' })),
-    { x: 24, width: 268, height: 56 },
+    { x: 20, width: 340, height: 56 },
     'leave',
   );
-  // FRU-529: the side panel beside « Leave a note », a square of 56 at the right of the column.
   expectNear(
-    await boxOf(popup.getByRole('button', { name: 'Show all notes in a sidebar' })),
-    { x: 300, width: 56, height: 56 },
+    await boxOf(popup.getByRole('button', { name: /^Show all notes in a sidebar/ })),
+    { x: 20, width: 340 },
     'sidebar',
   );
-  {
-    const leave = await boxOf(popup.getByRole('button', { name: 'Leave a note' }));
-    const sidebar = await boxOf(popup.getByRole('button', { name: 'Show all notes in a sidebar' }));
-    expect(sidebar.y, 'the side panel is on the line of « Leave a note »').toBe(leave.y);
-    await expect(popup.getByRole('button', { name: 'Show all notes in a sidebar' })).toHaveAttribute(
-      'title',
-      'Show all notes in a sidebar',
-    );
-  }
   expect(await popup.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(380);
   await clean(popup, 'the popup on a site that is on, for an account');
   expect(posted).toEqual([
@@ -445,7 +428,7 @@ test('a site whose add the prompt cut short is added and turned on when the popu
 
   const popup = await openPopup(extension, page);
   // No second « Turn on »: screen 3, on, in Sakuga.
-  await expect(popup.getByRole('switch', { name: 'Fruitback on localhost:5177' })).toBeChecked();
+  await expect(popup.getByRole('img', { name: SITE_ON })).toBeVisible();
   expect(posted.map((each) => each.body)).toEqual([{ workspace: 'ws_1', origin: PLAYGROUND_ORIGIN }]);
   expect(settings).toEqual([{ workspace: 'ws_1', site: 'site_1', visibility: 'everyone' }]);
   expect(

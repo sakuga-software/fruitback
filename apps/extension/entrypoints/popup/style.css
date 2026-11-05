@@ -762,24 +762,173 @@ body.popup-page {
 }
 
 /*
-  3 · Site on (FRU-298): 20 px above, 24 around, 20 between the blocks. The site and its switch, the
-  lines of what waits under it; at the bottom (FRU-529), « Leave a note » with the side panel
-  beside it as a square of one icon, and the keys under both.
+  3 · Site on (FRU-298, FRU-599): a launcher. 18 px above, 20 around, 16 between the blocks. The site
+  with its state and its menu « ⋯ », « Sent to », « Leave a note » and its keys, then the side panel
+  with what waits. The popup is as high as what it holds: no frame half empty.
 */
+.popup.popup-site-on {
+  min-height: 0;
+}
+
 .popup-screen-3 .popup-body {
-  gap: 20px;
-  padding: 20px 24px 24px;
+  gap: 16px;
+  padding: 18px 20px 20px;
 }
 
 .popup .site-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
 }
 
 .popup .site-row .kit-site {
+  flex: 1 1 auto;
   min-width: 0;
+}
+
+.popup .popup-icon {
+  width: 18px;
+  height: 18px;
+}
+
+/* The site is on: a mark of the size of « ⋯ », in the green of a site that works. */
+.popup .site-on-mark {
+  flex: none;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--success-line);
+  border-radius: var(--radius-action);
+  color: var(--success);
+}
+
+/* The menu « ⋯ » of the kit (FRU-599): over the screen, under its button, at the end of the line. */
+.popup .kit-menu {
+  position: relative;
+  flex: none;
+}
+
+.popup .kit-menu-trigger {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  min-height: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: var(--radius-action);
+}
+
+.popup .kit-menu-list {
+  position: absolute;
+  z-index: 2;
+  top: calc(100% + 6px);
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  width: 260px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  box-shadow: var(--shadow-popup);
+}
+
+.popup .kit-menu-list[hidden] {
+  display: none;
+}
+
+.popup .kit-menu-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: var(--radius-field);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.popup .kit-menu-item[hidden] {
+  display: none;
+}
+
+.popup .kit-menu-item:hover,
+.popup .kit-menu-item:focus-visible {
+  background: var(--surface-sunken);
+}
+
+.popup .kit-menu-label {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.popup .kit-menu-detail {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+/* « Sent to »: the mark, the provider and its place on one line, cut with « … », and the pencil. */
+.popup .site-destination:not(:empty) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 6px 6px 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-action);
+  background: var(--surface-raised);
+}
+
+.popup .site-destination:has(> .kit-dl) {
+  display: block;
+  padding: 0;
+  border: none;
+  background: none;
+}
+
+.popup .site-destination:empty {
+  display: none;
+}
+
+.popup .destination-label {
+  flex: none;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.popup .site-destination .destination-place {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.popup .destination-change {
+  flex: none;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  min-height: 32px;
+  height: 32px;
+  margin-left: auto;
+  padding: 0;
+  border-radius: var(--radius-field);
 }
 
 .popup .hidden-line {
@@ -797,29 +946,91 @@ body.popup-page {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-top: auto;
 }
 
-.popup .leave-row {
+/* The side panel, and what waits in it: a row of the height of a target, the counts under its name. */
+.popup .panel-row {
   display: flex;
-  gap: 8px;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 60px;
+  padding: 12px 14px;
+  border: 1px solid var(--line-control);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
-.popup .leave-row .kit-primary {
+.popup .panel-row:hover:not(:disabled) {
+  border-color: var(--ink);
+}
+
+.popup .panel-row:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.popup .panel-row-tile {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-action);
+  background: var(--surface-sunken);
+}
+
+.popup .panel-row-tile .popup-icon {
+  width: 22px;
+  height: 22px;
+}
+
+.popup .panel-row-words {
+  display: flex;
   flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
   min-width: 0;
 }
 
-/*
- * « Show all notes in a sidebar » and « Hide Fruitback on this page » (FRU-590): squares as high as
- * « Leave a note », each named in aria-label.
- */
-.popup .leave-row .icon-button {
+.popup .panel-row-title {
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.popup .panel-counts {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.popup .panel-counts:empty {
+  display: none;
+}
+
+.popup .panel-counts-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: var(--radius-pill);
+  background: var(--stage-done);
+}
+
+.popup .panel-row-caret {
   flex: none;
-  width: 56px;
-  height: 56px;
-  padding: 0;
-  border-radius: var(--radius-card);
+  color: var(--muted);
+}
+
+/* The square of « Hide Fruitback on this page » of the screen of a rule (FRU-590). */
+.popup .icon-button {
+  flex: none;
+  padding: 0 12px;
 }
 
 /* The host as the title of screen 3: the size of the host of the kit, not of a title. */
@@ -836,15 +1047,6 @@ body.popup-page {
   color: var(--subtle);
   font-size: 13px;
   text-align: center;
-}
-
-.popup .site-lines {
-  display: flex;
-  flex-direction: column;
-}
-
-.popup .site-lines:empty {
-  display: none;
 }
 
 .popup .action-block .kit-secondary {

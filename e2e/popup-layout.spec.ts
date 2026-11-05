@@ -7,7 +7,9 @@ import {
   openBareSite,
   openPopup,
   test,
-  SITE_SWITCH,
+  SITE_MENU,
+  SITE_ON,
+  STOP_REVIEWING,
   sessionSitesOf,
 } from './extension.ts';
 import { WORKER_ORIGIN } from './pin.ts';
@@ -142,31 +144,22 @@ for (const language of ['en', 'fr'] as const) {
     await expect(turnOn).toBeVisible();
     await expectLaidOut(offered, 'site of the workspace', 2);
 
-    // 5. The site turned on (FRU-298): the gear, the switch, « Leave a note » and the icons of the
-    // side panel and of « Hide Fruitback on this page » beside it (FRU-529, FRU-590); the head names the person of the pairing. The worker of this spec says nothing of
-    // the notes of the site, so no line of what waits.
+    // 5. The site turned on (FRU-298, FRU-599): the account, « ⋯ », « Leave a note » and the side
+    // panel; the head names the person of the pairing. The worker of this spec says nothing of the
+    // notes of the site, so the side panel has no counts.
     await turnOn.click();
-    await expect(offered.getByRole('switch', { name: SITE_SWITCH })).toBeChecked();
+    await expect(offered.getByRole('img', { name: SITE_ON })).toBeVisible();
     await expect(offered.getByRole('button', { name: /^(Account and settings|Compte et réglages)$/ })).toHaveText('Q');
     // The row of the pairing stays, with its log out.
     await expect(offered.getByText(/^(Connected as|Connecté en tant que) /)).toBeVisible();
-    await expectLaidOut(offered, 'site turned on', 6);
+    await expectLaidOut(offered, 'site turned on', 5);
 
     // The kit (FRU-293), read on computed styles in both schemes: the measures of the mock-up of
     // 2026-10-20, the accent of the extension, and no word cut.
     for (const colorScheme of ['light', 'dark'] as const) {
       await offered.emulateMedia({ colorScheme });
-      // Out of every button, and once the switch has its colour: its transition takes 0.2 s, and a
-      // fixed wait of 0.4 s read it half-way on CI once.
+      // Out of every button: a hover would change a colour.
       await offered.mouse.move(0, 0);
-      await expect
-        .poll(() =>
-          offered
-            .locator('.kit-switch')
-            .first()
-            .evaluate((node) => getComputedStyle(node).backgroundColor),
-        )
-        .toBe(ACCENT[colorScheme]);
       await expect
         .poll(() => offered.locator('.kit-primary').evaluate((node) => getComputedStyle(node).backgroundColor))
         .toBe(ACCENT[colorScheme]);
@@ -179,31 +172,30 @@ for (const language of ['en', 'fr'] as const) {
         font: '16px 650',
         fill: ACCENT[colorScheme],
       });
-      // « Show all notes in a sidebar » (FRU-529): a square of one icon, as high as « Leave a note ».
-      expect.soft(kit.secondary, `${where}: the button of the side panel`).toMatchObject({
-        height: 56,
-        width: 56,
-        radius: '12px',
-        font: '14px 600',
+      // « ⋯ » (FRU-599): a square of 32, the edge of a second button.
+      expect.soft(kit.secondary, `${where}: the menu of the site`).toMatchObject({
+        height: 32,
+        width: 32,
+        radius: '10px',
         edge: CONTROL_EDGE[colorScheme],
       });
-      expect.soft(kit.switch, `${where}: the switch`).toEqual({ width: 44, height: 26, fill: ACCENT[colorScheme] });
-      expect.soft(kit.knob, `${where}: the knob`).toEqual({ width: 20, height: 20, right: 3 });
       expect.soft(kit.cut, `${where}: a word cut`).toEqual([]);
     }
     await offered.emulateMedia({ colorScheme: 'light' });
 
-    // A switch is a button: Space and Enter press it.
-    const onOff = offered.getByRole('switch', { name: SITE_SWITCH });
-    await onOff.focus();
-    await offered.keyboard.press('Space');
-    await expect(offered.getByRole('switch', { name: SITE_SWITCH })).toHaveAttribute('aria-checked', 'false');
-    // The screen of a site that is off is drawn again, with no action: the next key goes to its switch.
-    await expect(offered.locator('.kit-primary')).toHaveCount(0);
-    await offered.getByRole('switch', { name: SITE_SWITCH }).focus();
+    // The keyboard turns the site off from « ⋯ », and « Turn on » turns it on again (FRU-599).
+    await offered.getByRole('button', { name: SITE_MENU }).focus();
     await offered.keyboard.press('Enter');
-    await expect(offered.getByRole('switch', { name: SITE_SWITCH })).toHaveAttribute('aria-checked', 'true');
-    await expect(offered.locator('.kit-primary')).toHaveCount(1);
+    await expect(offered.getByRole('menu')).toBeVisible();
+    await offered.getByRole('menuitem', { name: STOP_REVIEWING }).focus();
+    await offered.keyboard.press('Enter');
+    await expect(offered.getByRole('img', { name: SITE_ON })).toHaveCount(0);
+    const again = offered.getByRole('button', { name: /^(Turn on|Activer)$/ });
+    await expect(again).toBeVisible();
+    await again.focus();
+    await offered.keyboard.press('Enter');
+    await expect(offered.getByRole('img', { name: SITE_ON })).toBeVisible();
+    await expect(offered.getByRole('button', { name: /^(Leave a note|Laisser une note)$/ })).toBeVisible();
   });
 }
 
@@ -320,9 +312,7 @@ function readKit(popup: Page) {
       return { node, style: getComputedStyle(node), box: node.getBoundingClientRect() };
     };
     const primary = style('.kit-primary');
-    const secondary = style('.kit-secondary');
-    const toggle = style('.kit-switch');
-    const knob = style('.kit-knob');
+    const secondary = style('.kit-menu-trigger');
 
     return {
       primary: {
@@ -337,13 +327,6 @@ function readKit(popup: Page) {
         radius: secondary.style.borderRadius,
         font: `${secondary.style.fontSize} ${secondary.style.fontWeight}`,
         edge: secondary.style.borderTopColor,
-      },
-      switch: { width: toggle.box.width, height: toggle.box.height, fill: toggle.style.backgroundColor },
-      // Checked: the knob sits 3 px from the right end of the track.
-      knob: {
-        width: knob.box.width,
-        height: knob.box.height,
-        right: Math.round(toggle.box.right - knob.box.right),
       },
       cut: [...document.querySelectorAll<HTMLElement>('.kit-primary, .kit-secondary')]
         .filter((button) => button.scrollWidth > button.clientWidth)

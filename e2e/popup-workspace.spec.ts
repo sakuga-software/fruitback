@@ -7,7 +7,9 @@ import {
   openBareSite,
   openPopup,
   test,
-  SITE_SWITCH,
+  SITE_MENU,
+  SITE_ON,
+  STOP_REVIEWING,
 } from './extension.ts';
 import { AUTHENTICATED_WORKER_ORIGIN } from './worker-sessions.ts';
 
@@ -102,8 +104,8 @@ test('2 then 3: a site of the workspace turns on in one click, then the switch, 
   await clean(popup, 'the popup on a site of the workspace');
 
   await popup.getByRole('button', { name: 'Turn on' }).click();
-  // 3: on, with the switch; the widget is on the page.
-  await expect(popup.getByRole('switch', { name: 'Fruitback on localhost:5177' })).toBeChecked();
+  // 3: on, with its mark; the widget is on the page.
+  await expect(popup.getByRole('img', { name: SITE_ON })).toBeVisible();
   await expect(popup.locator('.kit-site-state')).toHaveText(/^On · /);
   await expect(page.getByRole('button', { name: 'Leave a note' })).toBeVisible();
 
@@ -119,11 +121,10 @@ test('2 then 3: a site of the workspace turns on in one click, then the switch, 
     .poll(
       async () => {
         popup = await reopen(extension, page, popup);
-        await expect(popup.getByRole('switch', { name: SITE_SWITCH })).toBeVisible();
+        await expect(popup.getByRole('img', { name: SITE_ON })).toBeVisible();
 
         return popup
-          .locator('.site-lines .kit-row-title')
-          .last()
+          .locator('.panel-counts')
           .textContent({ timeout: 3_000 })
           .catch(() => '');
       },
@@ -132,90 +133,60 @@ test('2 then 3: a site of the workspace turns on in one click, then the switch, 
     .toMatch(/^\d+ open notes?$/);
   await popup.setViewportSize({ width: 380, height: 580 });
   // A session of a pairing names no « fixes to check » (an account's only, FRU-295).
-  await expect(popup.locator('.kit-row-title', { hasText: /fix/ })).toHaveCount(0);
-  // The drop of the line: a mark of 12 px in the colour of In progress (FRU-293).
-  expect(
-    await popup.locator('.site-lines .kit-drop').evaluateAll((drops) =>
-      drops.map((drop) => {
-        const drawn = getComputedStyle(drop);
-
-        return `${drawn.width} ${drawn.height} ${drawn.backgroundColor}`;
-      }),
-    ),
-  ).toEqual(['12px 12px rgb(243, 187, 61)']);
-  // The boxes of the mock-up (`popup-3-site-on.png`).
-  expectNear(
-    await boxOf(popup.getByRole('switch', { name: SITE_SWITCH })),
-    { x: 312, width: 44, height: 26 },
-    'switch',
-  );
-  // FRU-590: « Leave a note » gives 64 px of the mock-up to « Hide Fruitback on this page ».
+  await expect(popup.locator('.panel-counts')).not.toContainText('to check');
+  // The boxes of the board P1 of FRU-598: 20 px around, « ⋯ » and the mark at the end of the site,
+  // « Leave a note » and the side panel across the column.
+  expectNear(await boxOf(popup.getByRole('button', { name: SITE_MENU })), { x: 328, width: 32, height: 32 }, 'menu');
+  expectNear(await boxOf(popup.getByRole('img', { name: SITE_ON })), { x: 284, width: 32, height: 32 }, 'on');
   expectNear(
     await boxOf(popup.getByRole('button', { name: 'Leave a note' })),
-    { x: 24, width: 204, height: 56 },
+    { x: 20, width: 340, height: 56 },
     'leave',
   );
-  // FRU-529: the side panel beside « Leave a note », a square of 56.
   expectNear(
-    await boxOf(popup.getByRole('button', { name: 'Show all notes in a sidebar' })),
-    { x: 236, width: 56, height: 56 },
+    await boxOf(popup.getByRole('button', { name: /^Show all notes in a sidebar/ })),
+    { x: 20, width: 340 },
     'sidebar',
-  );
-  // FRU-590: « Hide Fruitback on this page », a square of 56 at the right of the column.
-  expectNear(
-    await boxOf(popup.getByRole('button', { name: 'Hide Fruitback on this page' })),
-    { x: 300, width: 56, height: 56 },
-    'hide',
   );
   {
     const leave = await boxOf(popup.getByRole('button', { name: 'Leave a note' }));
-    const sidebar = await boxOf(popup.getByRole('button', { name: 'Show all notes in a sidebar' }));
-    expect(sidebar.y, 'the side panel is on the line of « Leave a note »').toBe(leave.y);
-    await expect(popup.getByRole('button', { name: 'Show all notes in a sidebar' })).toHaveAttribute(
-      'title',
-      'Show all notes in a sidebar',
-    );
+    const sidebar = await boxOf(popup.getByRole('button', { name: /^Show all notes in a sidebar/ }));
+    expect(sidebar.y, 'the side panel is under « Leave a note »').toBeGreaterThan(leave.y + leave.height);
   }
   // The keys of « Leave a note », as the browser has them (FRU-291).
   await expect(popup.locator('.shortcut-line')).toHaveText(/^or press .+ on the page$/);
   expect(await popup.locator('.shortcut-line kbd').count()).toBeGreaterThanOrEqual(2);
   // A session of a pairing keeps its row.
   await expect(popup.getByText(`Connected as ${NAME}`)).toBeVisible();
-  // The keyboard: the gear, the switch, the line of what waits, then « Leave a note », the side panel
-  // and « Hide Fruitback on this page » at the bottom (FRU-529, FRU-590).
+  // The keyboard: the account, « ⋯ », « Leave a note », then the side panel (FRU-599).
   await popup.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
   const stops: string[] = [];
-  for (let index = 0; index < 6; index += 1) {
+  for (let index = 0; index < 4; index += 1) {
     await popup.keyboard.press('Tab');
     stops.push(
       await popup.evaluate(
         () =>
           document.activeElement?.getAttribute('aria-label') ??
-          document.activeElement?.querySelector('.kit-row-title')?.textContent ??
+          document.activeElement?.querySelector('.panel-row-title')?.textContent ??
           document.activeElement?.textContent ??
           '',
       ),
     );
   }
-  expect(stops[0]).toBe('Account and settings');
-  expect(stops[1]).toBe('Fruitback on localhost:5177');
-  expect(stops[2]).toMatch(/open notes?$/);
-  expect(stops[3]).toBe('Leave a note');
-  expect(stops[4]).toBe('Show all notes in a sidebar');
-  expect(stops[5]).toBe('Hide Fruitback on this page');
+  expect(stops).toEqual(['Account and settings', 'More for this site', 'Leave a note', 'Show all notes in a sidebar']);
   expect(await popup.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(380);
   await clean(popup, 'the popup on a site that is on');
 
-  // A click on a line opens the side panel of the browser on the tab (FRU-296), and the popup goes.
-  // `e2e/side-panel.spec.ts` reads the panel.
+  // « Show all notes in a sidebar » opens the side panel of the browser on the tab (FRU-296), and the
+  // popup goes. `e2e/side-panel.spec.ts` reads the panel.
   const panels = () =>
     extension.worker.evaluate(async () => (await chrome.runtime.getContexts({ contextTypes: ['SIDE_PANEL'] })).length);
-  await clickThatClosesPopup(popup, popup.locator('.site-lines .kit-row').last());
+  await clickThatClosesPopup(popup, popup.getByRole('button', { name: /^Show all notes in a sidebar/ }));
   await expect.poll(panels).toBe(1);
 
-  // « Show all notes in a sidebar » opens it too. The panel is open already: the popup closes at once.
+  // Again: the panel is open already, and the popup closes at once.
   popup = await reopen(extension, page);
-  await clickThatClosesPopup(popup, popup.getByRole('button', { name: 'Show all notes in a sidebar' }));
+  await clickThatClosesPopup(popup, popup.getByRole('button', { name: /^Show all notes in a sidebar/ }));
   await expect.poll(panels).toBe(1);
 
   // « Leave a note »: the widget waits for an element.
@@ -238,16 +209,17 @@ test('2 then 3: a site of the workspace turns on in one click, then the switch, 
   await page.getByPlaceholder('What should change?').press('Escape');
   await expect(page.getByPlaceholder('What should change?')).toBeHidden();
 
-  // The switch, twice: the widget leaves, then comes back once.
+  // « Stop reviewing this site », then « Turn on »: the widget leaves, then comes back once (FRU-599).
   popup = await reopen(extension, page);
-  await popup.getByRole('switch', { name: SITE_SWITCH }).click();
-  await expect(popup.getByRole('switch', { name: SITE_SWITCH })).not.toBeChecked();
+  await popup.getByRole('button', { name: SITE_MENU }).click();
+  await popup.getByRole('menuitem', { name: STOP_REVIEWING }).click();
   await expect(popup.getByText('Off · Playground')).toBeVisible();
-  await expect(popup.locator('.site-lines')).toHaveCount(0);
+  await expect(popup.getByRole('img', { name: SITE_ON })).toHaveCount(0);
+  await expect(popup.locator('.panel-row')).toHaveCount(0);
   await expect(popup.getByRole('button', { name: 'Leave a note' })).toHaveCount(0);
   await expect(page.locator('[data-fruitback-host]')).toHaveCount(0);
-  await popup.getByRole('switch', { name: SITE_SWITCH }).click();
-  await expect(popup.getByRole('switch', { name: SITE_SWITCH })).toBeChecked();
+  await popup.getByRole('button', { name: 'Turn on', exact: true }).click();
+  await expect(popup.getByRole('img', { name: SITE_ON })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Leave a note' })).toBeVisible();
   await expect(page.locator('[data-fruitback-host]')).toHaveCount(1);
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
@@ -268,9 +240,9 @@ test('the popup on a site of the workspace speaks French', async ({ extension })
   expect(await popup.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(380);
   await clean(popup, 'the popup on a site of the workspace, in French');
   await popup.getByRole('button', { name: 'Activer', exact: true }).click();
-  await expect(popup.getByRole('switch', { name: 'Fruitback sur localhost:5177' })).toBeChecked();
+  await expect(popup.getByRole('img', { name: SITE_ON })).toBeVisible();
   await expect(popup.getByRole('button', { name: 'Laisser une note' })).toBeVisible();
-  await expect(popup.getByRole('button', { name: 'Voir toutes les notes dans un panneau' })).toBeVisible();
+  await expect(popup.getByRole('button', { name: /^Voir toutes les notes dans un panneau/ })).toBeVisible();
   expect(await popup.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(380);
   await clean(popup, 'the popup on a site that is on, in French');
 });
