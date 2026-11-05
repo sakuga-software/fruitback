@@ -336,6 +336,43 @@ describe('what the administrator reads (FRU-261)', () => {
     assert.equal(asked, 0);
   });
 
+  it('answers the version and the release alone on /release, and leaves no trace (FRU-520)', async () => {
+    const { on, ana, bob } = await anInstance();
+    const release = { version: '99.0.0', url: 'https://github.com/sakuga-software/fruitback/releases/tag/v99.0.0' };
+    let asked = 0;
+    const check = async () => {
+      asked += 1;
+
+      return release;
+    };
+    const traces = async () => (await rowsOf(on.database, 'SELECT count(*)::int AS n FROM admin_reads'))[0]?.n;
+    const before = await traces();
+
+    const answer = await callOn(on, 'GET', `${ADMIN_PATH}/release`, { token: ana.token }, { latestRelease: check });
+    assert.equal(answer.status, 200);
+    assert.deepEqual(await answer.json(), { version: WORKER_VERSION, update: release });
+    assert.equal(await traces(), before, 'the banner wrote a trace');
+
+    const broken = await callOn(
+      on,
+      'GET',
+      `${ADMIN_PATH}/release`,
+      { token: ana.token },
+      {
+        latestRelease: async () => {
+          throw new Error('GitHub is down');
+        },
+      },
+    );
+    assert.equal(broken.status, 200);
+    assert.equal(((await broken.json()) as { update: unknown }).update, null);
+
+    asked = 0;
+    const refused = await callOn(on, 'GET', `${ADMIN_PATH}/release`, { token: bob.token }, { latestRelease: check });
+    assert.equal(refused.status, 404);
+    assert.equal(asked, 0);
+  });
+
   it('reads the policy of sign-up from FRUITBACK_SIGN_UP, in both of its values', async () => {
     for (const policy of ['anyone', 'invited'] as const) {
       const on = await envOf({ env: { FRUITBACK_SIGN_UP: policy } });
@@ -584,7 +621,8 @@ describe('the trace of the reads of the administrator (FRU-261)', () => {
       },
     };
 
-    for (const path of pathsOf(beta)) {
+    // The release names no workspace, so it writes no trace (FRU-520).
+    for (const path of pathsOf(beta).filter((path) => path !== `${ADMIN_PATH}/release`)) {
       const answer = await callOn(on, 'GET', path, { token: ana.token }, { instanceAdmin: failing });
       const text = await answer.text();
       assert.equal(answer.status, 502, `${path}: ${text}`);

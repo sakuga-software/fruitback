@@ -4676,6 +4676,11 @@ framing; `SECURITY.md` says what is protected.
   answer it cannot read gives `update: null` and a `200`: the line is never worth a problem.
 - **Only an administrator's read asks.** The guard of `ADMIN_ROUTES` runs first: any other account
   gets `404`, and GitHub is not asked.
+- **`GET /console/admin/release` answers `version` and `update` alone**, for the banner of the
+  console. It is a read of `ADMIN_ROUTES` behind the same guard. It names no workspace, so it writes
+  no trace. Not in `/console/me`: each page of each member reads that one, and the first question of
+  a process holds 3 s. Not `/console/admin/instance`: its read traces the workspaces of the connectors
+  that need attention, at each page.
 - **`FRUITBACK_NO_UPDATE_CHECK=1` stops it**, for an instance with no way out or one that does not
   want GitHub to see its address.
 - **The console of the Cloud shows no release** (`releaseToShow` of `instance.ts`): its release
@@ -4683,10 +4688,11 @@ framing; `SECURITY.md` says what is protected.
 
 ### The reasons
 
-- The ticket asks for a button that updates the instance, as Dokploy does. The button needs the
-  version first, so it is a second step (Mathieu, 2026-11-02). Dokploy updates itself because its
-  container holds `/var/run/docker.sock`, which is the root of the host. The worker and the console do
-  not hold it: the console runs `read_only` with no capability. The button goes to a container of its
-  own, apart from both.
+- The ticket asks for a button that updates the instance, as Dokploy does. **There is no button**
+  (Mathieu, 2026-11-05): a guide by tag and a banner that the administrator dismisses. Dokploy
+  updates itself because its container holds `/var/run/docker.sock`, which is the root of the host.
+  The worker and the console do not hold it: the console runs `read_only` with no capability. And a
+  pull changes nothing for an instance that names a version or a digest, which is the choice to
+  update by hand: a button there would have to write its `.env`.
 - The commands that the screen gives are the two of `upgrade.md` for a moving tag (`edge`). The screen
   says to back up first, and links the guide for a pinned tag and for a rollback.

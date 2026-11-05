@@ -1609,8 +1609,13 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Version: 'Version',
   'This server runs Fruitback {version}.': 'Ce serveur fait tourner Fruitback {version}.',
   'Fruitback {version} is out.': 'Fruitback {version} est disponible.',
+  'New release': 'Nouvelle version',
+  'How to update': 'Comment mettre à jour',
+  Dismiss: 'Masquer',
   'Back up every database first. Then, where docker-compose.yml is, run:':
     'Sauvegardez d’abord chaque base de données. Puis, là où se trouve docker-compose.yml, lancez :',
+  'If FRUITBACK_IMAGE or FRUITBACK_CONSOLE_IMAGE in .env names a version such as 1.4.2, or a digest, set it to {version} before you run them: the pull keeps the image it names.':
+    'Si FRUITBACK_IMAGE ou FRUITBACK_CONSOLE_IMAGE dans .env nomme une version comme 1.4.2, ou un digest, remplacez-la par {version} avant de les lancer : le pull garde l’image qu’elle nomme.',
   'The commands that update the instance': 'Les commandes qui mettent à jour l’instance',
   'Copy the commands': 'Copier les commandes',
   'What changed': 'Ce qui a changé',

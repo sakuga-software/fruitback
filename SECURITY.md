@@ -2760,6 +2760,8 @@ l'interface, géré par better-auth avec le flag admin en base ». The Cloud run
   wait). No answer holds a secret, a token, a digest or a key of a connector, not even masked,
   and only `notes` holds a note:
   test:`answers no secret, no token, no digest and no key on any route, and a note on the route of the notes only`.
+  `GET /console/admin/release` answers the version of the worker and the last release alone, names
+  no workspace, and writes no trace: test:`answers the version and the release alone on /release, and leaves no trace (FRU-520)`.
   No route of the administrator writes anything but the trace, except the role, the suspension of
   an account, the suspension of a workspace, the deletion of a workspace, the writes in a
   workspace and the deletion of an account below.

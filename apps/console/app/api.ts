@@ -981,6 +981,17 @@ export type InstanceWorkspace = WorkspaceSuspension & {
   sites: number;
 };
 
+/** The version the worker runs, and the last release when it is newer (FRU-520). */
+export type ReleaseFacts = { version: string; update: { version: string; url: string } | null };
+
+/**
+ * The release, for the banner of the administrator (FRU-520). Quiet: the banner is not the screen, so
+ * a `401` there must not say a second time that the session ended. A worker of before answers `404`.
+ */
+export function releaseFacts(): Promise<Answer<ReleaseFacts>> {
+  return call<ReleaseFacts>('GET', '/console/admin/release', undefined, { quiet: true });
+}
+
 /** The facts of the instance. Only its administrator reads them. */
 export function instanceFacts(): Promise<Answer<InstanceFacts>> {
   return call<InstanceFacts>('GET', '/console/admin/instance');

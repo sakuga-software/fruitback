@@ -112,6 +112,8 @@ type Admin = {
   holdDeleted?: Promise<void>;
   /** The workspaces that an administrator deleted (FRU-284), none by default; a number: that status. */
   deleted?: readonly unknown[] | number;
+  /** The answer of `GET /console/admin/release` (FRU-520), no newer release by default; a number: that status. */
+  release?: unknown;
 };
 
 /** Every request the page sends to the worker, as `METHOD /path`. */
@@ -145,6 +147,13 @@ async function stub(page: Page, options: Admin = {}): Promise<void> {
           ? route.fulfill({ status: instance, json: { error: 'unavailable' } })
           : route.fulfill({ json: instance }),
       );
+    if (pathname === '/console/admin/release') {
+      const release = options.release ?? { version: '0.6.0', update: null };
+
+      return typeof release === 'number'
+        ? route.fulfill({ status: release, json: { error: 'not-found' } })
+        : route.fulfill({ json: release });
+    }
     if (pathname === '/console/admin/workspaces') return route.fulfill({ json: WORKSPACES });
     if (pathname === '/console/admin/actions') {
       const deleted = options.deleted ?? [];
@@ -566,6 +575,9 @@ test('« Version » says what the server runs, and a newer release with the comm
   await expect(version(page).getByRole('region', { name: 'The commands that update the instance' })).toHaveText(
     'docker compose pull\ndocker compose up -d --wait',
   );
+  await expect(version(page)).toContainText(
+    'names a version such as 1.4.2, or a digest, set it to 0.7.0 before you run them',
+  );
   await expect(version(page).getByRole('link', { name: 'What changed' })).toHaveAttribute('href', UPDATE.url);
   await expect(version(page).getByRole('link', { name: 'Upgrade guide' })).toHaveAttribute(
     'href',
@@ -605,6 +617,71 @@ test('at 390 px the document does not scroll sideways, and axe finds nothing', a
 
   expect(await sideScroll(page)).toBe(0);
   await axe(page, 'the instance at 390 px');
+});
+
+/** The banner of a newer release at the top of a frame (FRU-520). */
+const banner = (page: Page) => page.getByRole('complementary', { name: 'New release' });
+const RELEASE = { version: '0.6.0', update: UPDATE };
+
+test('the administrator reads a newer release in a banner of each frame, until they dismiss it (FRU-520)', async ({
+  page,
+}) => {
+  await stub(page, { release: RELEASE, instance: facts({ update: UPDATE }) });
+  await page.goto(`${CONSOLE}/w/w1/sites`);
+  await expect(banner(page)).toContainText('Fruitback 0.7.0 is out.');
+  await expect(banner(page).getByRole('link', { name: 'How to update' })).toHaveAttribute('href', '/admin');
+
+  // The screen « Instance » says it itself, so its frame draws no banner there.
+  await banner(page).getByRole('link', { name: 'How to update' }).click();
+  await expect(version(page)).toContainText('Fruitback 0.7.0 is out.');
+  await expect(banner(page)).toHaveCount(0);
+  await rail(page).getByRole('link', { name: 'Workspaces', exact: true }).click();
+  await expect(banner(page)).toBeVisible();
+
+  await banner(page).getByRole('button', { name: 'Dismiss' }).click();
+  await expect(banner(page)).toHaveCount(0);
+  await page.goto(`${CONSOLE}/w/w1/sites`);
+  await expect(main(page)).toBeVisible();
+  await expect(banner(page)).toHaveCount(0);
+
+  // A later release comes back.
+  const later = { version: '0.8.0', url: 'https://github.com/sakuga-software/fruitback/releases/tag/v0.8.0' };
+  await stub(page, { release: { version: '0.6.0', update: later } });
+  await page.goto(`${CONSOLE}/w/w1/sites`);
+  await expect(banner(page)).toContainText('Fruitback 0.8.0 is out.');
+});
+
+test('the banner asks nothing for a person who does not administer the instance (FRU-520)', async ({ page }) => {
+  for (const admin of [true, false]) {
+    const sent = watched(page);
+    await stub(page, { admin, release: RELEASE });
+    await page.goto(`${CONSOLE}/w/w1/sites`);
+    await expect(main(page)).toBeVisible();
+    await expect(banner(page)).toHaveCount(admin ? 1 : 0);
+    // The control: the administrator asks it, so its absence below is the rule and not a late call.
+    expect(sent.includes('GET /console/admin/release'), `admin: ${admin}`).toBe(admin);
+    page.removeAllListeners('request');
+  }
+});
+
+test('the banner says nothing when the worker is of before, or names no newer release (FRU-520)', async ({ page }) => {
+  for (const release of [404, { version: '0.6.0', update: null }]) {
+    await stub(page, { release });
+    await page.goto(`${CONSOLE}/w/w1/sites`);
+    await expect(main(page)).toBeVisible();
+    await expect(banner(page)).toHaveCount(0);
+  }
+});
+
+test('the banner in French, and at 390 px (FRU-520)', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await stub(page, { locale: 'fr', release: RELEASE });
+  await page.goto(`${CONSOLE}/w/w1/sites`);
+  const french = page.getByRole('complementary', { name: 'Nouvelle version' });
+  await expect(french).toContainText('Fruitback 0.7.0 est disponible.');
+  await expect(french.getByRole('link', { name: 'Comment mettre à jour' })).toBeVisible();
+  await expect(french.getByRole('button', { name: 'Masquer' })).toBeVisible();
+  expect(await sideScroll(page)).toBe(0);
 });
 
 /** Two workspaces that an administrator deleted, as `GET /console/admin/actions?kind=workspace-deleted` answers them. */
