@@ -1168,6 +1168,10 @@ export function DataTable({
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(element);
+    // The head of the columns too: one that grew, with the frame as it was, moves the heads of the
+    // groups under it (raised in review, FRU-586).
+    const head = element.querySelector('thead');
+    if (head !== null) observer.observe(head);
 
     return () => observer.disconnect();
   }, [stack, minWidth]);

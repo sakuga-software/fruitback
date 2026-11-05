@@ -118,6 +118,35 @@ test('the last page is offered once its cursor is known, and « Next page » is 
   await expect(summary(page)).toHaveText('226 to 250 of 263');
 });
 
+test('after the Back button of the browser, each number still reads its own page (review of #823)', async ({
+  page,
+}) => {
+  const asked = await open(page);
+  const first = page.getByRole('region', { name: 'Notes' }).locator('tbody tr:not(.kit-table-group)').first();
+  await number(page, 2).click();
+  await expect(summary(page)).toHaveText('26 to 50 of 263');
+  await number(page, 3).click();
+  await expect(summary(page)).toHaveText('51 to 75 of 263');
+  // The browser goes back a page: the address changes, and nothing the screen pressed.
+  await page.goBack();
+  await expect(summary(page)).toHaveText('26 to 50 of 263');
+  await expect(first).toContainText('Note 26 of the list');
+  await expect.poll(() => offered(page)).toEqual(['1', '[2]', '3', '…']);
+  // « Page 1 » reads the first page, with no cursor, and « Page 3 » the third with its own.
+  await number(page, 1).click();
+  await expect(summary(page)).toHaveText('1 to 25 of 263');
+  await expect(first).toContainText('Note 1 of the list');
+  expect(asked.at(-1)?.cursor).toBeUndefined();
+  await number(page, 2).click();
+  await number(page, 3).click();
+  await page.goBack();
+  await expect(summary(page)).toHaveText('26 to 50 of 263');
+  // « Previous page » too.
+  await pages(page).getByRole('button', { name: 'Previous page' }).click();
+  await expect(summary(page)).toHaveText('1 to 25 of 263');
+  await expect(first).toContainText('Note 1 of the list');
+});
+
 test('the pages of the sites offer every number, as the sites are read by their offset', async ({ page }) => {
   const many = Array.from({ length: 70 }, (_, index) => ({
     id: `m${index + 1}`,

@@ -181,9 +181,13 @@ export default function Notes() {
   // screen until its answer comes: only the first read says « Loading… ».
   const [shown, setShown] = useState<NotesAnswer | 'loading' | 'failed'>('loading');
   const [reading, setReading] = useState(false);
-  // The cursors of the pages before this one, for « Previous ». A reload starts it again: « Previous »
-  // then goes to the first page.
-  const [before, setBefore] = useState<string[]>([]);
+  // The cursor of each page shown since the filter, by its number (FRU-587): « Previous » and the
+  // numbers of the pages take them back. Kept by number, not as a pile, so that the buttons of the
+  // browser, which change the address and not this list, leave each page with its own cursor. A
+  // reload starts it again: « Previous » then goes to the first page.
+  const [known, setKnown] = useState<Readonly<Record<number, string>>>({});
+  const at = pageOf(from);
+  useEffect(() => setKnown((pages) => (pages[at] === cursor ? pages : { ...pages, [at]: cursor })), [at, cursor]);
   const asked = useRef(0);
   // The counts of the last filter that the worker counted, and whether the next read is a press of
   // « Next » or « Previous » (FRU-502).
@@ -240,7 +244,7 @@ export default function Notes() {
 
   /** Sets filters, and goes back to the first page: a page of another list means nothing. */
   function filter(changes: Partial<Record<(typeof FILTERS)[number], string>>, replace = false) {
-    setBefore([]);
+    setKnown({});
     setMovedOut(false);
     // From the address as it is when the change lands, not as it was when it was asked: the search
     // writes 300 ms after its key, and a list chosen meanwhile must not be undone by it. The setter of
@@ -260,32 +264,31 @@ export default function Notes() {
     paging.current = true;
     const next = new URLSearchParams(params);
     if (to === 'next' && answer.next !== undefined) {
-      setBefore((pages) => [...pages, cursor]);
       next.set('cursor', answer.next);
       next.set('from', String(from + answer.notes.length));
     } else {
-      const back = before.at(-1) ?? '';
-      setBefore((pages) => pages.slice(0, -1));
+      const back = known[at - 1] ?? '';
       if (back === '') next.delete('cursor');
       else next.set('cursor', back);
-      const at = from - answer.notes.length;
-      if (back === '' || at <= 1) next.delete('from');
-      else next.set('from', String(at));
+      const start = from - answer.notes.length;
+      if (back === '' || start <= 1) next.delete('from');
+      else next.set('from', String(start));
     }
     setParams(next);
   }
 
+  /** Whether a page has a known cursor: the first, the next one, and the pages shown since the filter. */
+  const reach = (to: number, answer: NotesAnswer) =>
+    to === 1 || (to === at + 1 && answer.next !== undefined) || known[to] !== undefined;
+
   /**
-   * Goes to a page by its number (FRU-587): the next one by its cursor, one before by the cursor kept
-   * when it was left, the first one with none. `reach` of the pages offers no other.
+   * Goes to a page by its number (FRU-587): the next one by its cursor, another by the cursor it was
+   * shown with, the first one with none. `reach` offers no other.
    */
   function go(to: number, answer: NotesAnswer) {
-    const at = pageOf(from);
     if (to === at + 1) return page('next', answer);
     paging.current = true;
-    const kept = before.length - (at - to);
-    const back = kept >= 0 ? (before[kept] ?? '') : '';
-    setBefore((pages) => (kept >= 0 ? pages.slice(0, kept) : []));
+    const back = to === 1 ? '' : (known[to] ?? '');
     const next = new URLSearchParams(params);
     if (back === '') next.delete('cursor');
     else next.set('cursor', back);
@@ -304,7 +307,7 @@ export default function Notes() {
     else changed.delete('view');
     changed.delete('cursor');
     changed.delete('from');
-    setBefore([]);
+    setKnown({});
     latest.current = changed;
     setParams(changed);
   }
@@ -524,13 +527,9 @@ export default function Notes() {
                 last={shown.next === undefined}
                 onPage={(to) => page(to, shown)}
                 numbers={{
-                  at: pageOf(from),
+                  at,
                   count: Math.ceil(shown.total / NOTES_PER_PAGE),
-                  // The first page, the next one, and the pages walked through to this one.
-                  reach: (to) =>
-                    to === 1 ||
-                    (to === pageOf(from) + 1 && shown.next !== undefined) ||
-                    (to < pageOf(from) && to >= pageOf(from) - before.length),
+                  reach: (to) => reach(to, shown),
                   onGo: (to) => go(to, shown),
                 }}
               />

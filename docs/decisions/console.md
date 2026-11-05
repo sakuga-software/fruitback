@@ -610,7 +610,9 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   one shown in ink and `aria-current`; a press on a number keeps the focus on it. `NotePages` is the
   same on the notes, the sites, the members and the invitations. **The notes are read by a cursor,
   so a number is offered only for a page whose cursor the screen knows**: the first, the next, and the
-  pages walked through to this one; « … » stands for the others. Numbering a page asks a size of
+  pages shown since the filter, their cursors kept by page number and not as a pile, so that the
+  Back button of the browser, which changes the address and nothing the screen holds, leaves each
+  number with its own page; « … » stands for the others. Numbering a page asks a size of
   page, so the console asks `limit=25` by name, the default of the worker. A jump to any page would
   take an offset in the index of the worker, which the walk by cursor was chosen against (FRU-551:
   a note is on one page and one only). The Notes of the instance keep « Previous » and « Next » only.
