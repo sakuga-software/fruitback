@@ -266,6 +266,12 @@ test('a status the select of a card could not save is said on the card, and the 
     'Only the person who left this note, or an owner or an admin, changes its status.',
   );
   await expect(column(page, 'New').locator('li')).toHaveText([/The headline/]);
+
+  // A second try that the worker saves: the sentence of the refusal goes, and the card moves.
+  worker.refuse = undefined;
+  await chooseWithKeyboard(page, 'The headline', 'Waiting');
+  await expect(column(page, 'Waiting').locator('li')).toHaveText([/The headline/]);
+  await expect(page.getByRole('alert')).toHaveCount(0);
 });
 
 test('the keyboard moves a note with the select of its card', async ({ page }) => {
