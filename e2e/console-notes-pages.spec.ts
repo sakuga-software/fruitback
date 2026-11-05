@@ -117,6 +117,11 @@ test('the last page is offered once its cursor is known, and « Next page » is 
   await expect(summary(page)).toHaveText('251 to 263 of 263');
   await expect(pages(page).getByRole('button', { name: 'Next page' })).toBeDisabled();
   await expect.poll(() => offered(page)).toEqual(['1', '…', '10', '[11]']);
+  // The arrow back from the last page, which holds 13 notes: the tenth page, from its first note.
+  await pages(page).getByRole('button', { name: 'Previous page' }).click();
+  await expect(summary(page)).toHaveText('226 to 250 of 263');
+  await expect(page).toHaveURL(/[?&]from=226(&|$)/);
+  await number(page, 11).click();
   await number(page, 10).click();
   await expect(summary(page)).toHaveText('226 to 250 of 263');
   // Still from the link: the arrow goes to the first page, and reads it.

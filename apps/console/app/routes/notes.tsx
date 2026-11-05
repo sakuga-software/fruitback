@@ -266,15 +266,12 @@ export default function Notes() {
     if (to === 'next' && answer.next !== undefined) {
       next.set('cursor', answer.next);
       next.set('from', String(from + answer.notes.length));
+      setParams(next);
     } else {
-      const back = known[at - 1] ?? '';
-      if (back === '') next.delete('cursor');
-      else next.set('cursor', back);
-      const start = from - answer.notes.length;
-      if (back === '' || start <= 1) next.delete('from');
-      else next.set('from', String(start));
+      // The page before by its cursor and its number; the first page when its cursor is not known.
+      // Never `from` less the notes of this page: the last page holds fewer than the others.
+      go(known[at - 1] === undefined ? 1 : at - 1, answer);
     }
-    setParams(next);
   }
 
   /** Whether a page has a known cursor: the first, the next one, and the pages shown since the filter. */
