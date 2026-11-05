@@ -872,7 +872,11 @@ function NoteCard({
                 note={note}
                 statuses={statuses}
                 choose={choose}
-                onSaved={onSaved}
+                onSaved={() => {
+                  // `NoteStatus` clears the refusal before each try; a save clears it here too.
+                  setStatusRefused(undefined);
+                  onSaved();
+                }}
                 onRefused={setStatusRefused}
                 bare
               />
