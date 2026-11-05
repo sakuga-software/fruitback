@@ -737,9 +737,17 @@ function NoteStatus({
   choose: (status: string) => Promise<Answer<{ status: string; stage: Stage }>>;
   /** Saved: the board reads the notes again, and the card goes to its column (FRU-436). */
   onSaved?: () => void;
-  /** The drop alone, its words for a screen reader (FRU-551): the status of a row of the table. */
+  /**
+   * The drop alone, its words for a screen reader (FRU-551): the status of a row of the table, and of
+   * a card of the board (FRU-589).
+   */
   bare?: boolean;
-  /** Where a refusal is said, for a bare select: under the note, where there is room for it. */
+  /**
+   * Where a refusal is said, for a bare select: under the note, where there is room for it. Called
+   * with `undefined` before each try, so a try clears the refusal of before; then, on a refusal, with
+   * the sentence of `statusProblemOf`: an English sentence, the key that `messages.fr.ts` maps, which
+   * the caller shows through `t()`.
+   */
   onRefused?: (refusal: string | undefined) => void;
 }) {
   useLocale();
@@ -750,6 +758,7 @@ function NoteStatus({
   const stageName = (of: Stage) => t(STAGE_NAMES[of]);
   const current = chosen === undefined ? undefined : statuses?.find((status) => status.key === chosen);
 
+  // The refusal goes to the caller when it shows it (`onRefused`), else under this select.
   const refuse = (refusal: string | undefined) => (onRefused === undefined ? setRefused(refusal) : onRefused(refusal));
 
   async function save(status: string) {
