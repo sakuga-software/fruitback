@@ -437,7 +437,9 @@ export function CutLink({ to, children, heading: Heading = 'h2', className = '',
   useEffect(() => {
     if (!open) return undefined;
     const close = (event: Event) => {
-      if (!(event.target instanceof Node) || ref.current?.contains(event.target) !== true) setOpen(false);
+      if (event.target instanceof Node && ref.current?.contains(event.target) === true) return;
+      press.current.held = false;
+      setOpen(false);
     };
     document.addEventListener('pointerdown', close, true);
 
@@ -477,7 +479,15 @@ export function CutLink({ to, children, heading: Heading = 'h2', className = '',
               if (moved > LONG_PRESS_SLOP) stop();
             }}
             onPointerUp={stop}
-            onPointerCancel={stop}
+            // A press that the browser takes for a scroll or a menu ends with no click: nothing to swallow.
+            onPointerCancel={() => {
+              stop();
+              press.current.held = false;
+            }}
+            // A key press that follows a long press is a new gesture: Enter follows the link.
+            onKeyDown={() => {
+              press.current.held = false;
+            }}
             // Android opens the menu of a link on a long press: on a cut link, the tooltip opens instead.
             onContextMenu={(event) => {
               if (!press.current.touch || !cut) return;
