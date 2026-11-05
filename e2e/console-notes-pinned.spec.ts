@@ -230,3 +230,40 @@ test('in the board the filters stay at the top too', async ({ page }) => {
   expect.soft(bar).toBeCloseTo(0, 0);
   await expect(page.getByRole('searchbox', { name: 'Search notes' })).toBeInViewport();
 });
+
+test('a long cell wraps in its column: the pinned frame, which clips, cuts nothing (review of #822)', async ({
+  page,
+}) => {
+  // An address that receives, whose host has no space and no hyphen to break at.
+  const host = 'hooks.averylongclientdomainnameforthefeedbackofthenotes.example.com';
+  const { ref: _ref, url: _url, ...first } = NOTES[0]!;
+  const long = { ...first, id: 'long', place: { kind: 'rest', connector: 'c2', label: `${host}/fruitback` } };
+  await stubWorker(page, {
+    workspaces: [ACME],
+    sites: SITES,
+    answer: (pathname, route) => {
+      if (pathname === '/console/workspaces/w1/connectors')
+        return route.fulfill({ json: { connectors: CONNECTORS, available: true } });
+      if (pathname !== '/console/workspaces/w1/notes') return undefined;
+
+      return route.fulfill({
+        json: { notes: [long, ...NOTES.slice(1, 8)], total: 8, counts: { all: 8, byPlace: { c1: 7, c2: 1 } } },
+      });
+    },
+  });
+  // A frame of about 760 px: just over the 720 px under which the notes are cards.
+  await page.setViewportSize({ width: 1100, height: 800 });
+  await page.goto(`${CONSOLE}/w/w1/notes`);
+  await expect(page.getByText(host)).toBeVisible();
+  await expect(frame(page)).toHaveAttribute('data-stacked', 'false');
+  const sizes = await frame(page).evaluate((element) => ({
+    over: element.scrollWidth - element.clientWidth,
+    table: element.querySelector('table')!.getBoundingClientRect().right - element.getBoundingClientRect().right,
+    cell:
+      element.querySelector('[data-place="rest"]')!.getBoundingClientRect().right -
+      element.getBoundingClientRect().right,
+  }));
+  expect(sizes.over).toBe(0);
+  expect(sizes.table).toBeLessThanOrEqual(0);
+  expect(sizes.cell).toBeLessThan(0);
+});
