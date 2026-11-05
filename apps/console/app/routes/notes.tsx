@@ -826,8 +826,12 @@ function ViewChoice({ view, onChoose }: { view: View; onChoose: (view: View) => 
 }
 
 /**
- * A note on the board (FRU-436): what a row of the table says, one under the other. Its status is a
- * select for whoever may change it: the way of the keyboard to another column.
+ * A note on the board (FRU-436): what a row of the table says, one under the other.
+ *
+ * FRU-589: the card writes no status, as its column says it. Whoever may change the status gets the
+ * drop of the table before the note: the select that is the way of the keyboard to another column.
+ * FRU-588: the card writes no address. The page opens from the icon at its foot, its address in the
+ * tooltip, as in the table.
  */
 function NoteCard({
   note,
@@ -845,22 +849,41 @@ function NoteCard({
   onSaved: () => void;
 }) {
   useLocale();
+  // A status the worker did not save: said under the note, the select keeps the choice.
+  const [statusRefused, setStatusRefused] = useState<string | undefined>();
   const opened = note.note ?? note.ref;
   const show = opened === undefined ? note.page.url : `${note.page.url}#fruitback-note=${encodeURIComponent(opened)}`;
   const visitor = note.author.kind === 'verified' || note.author.kind === 'anonymous';
   const who = visitor ? t('Visitor') : (note.author.name ?? t('Somebody of the workspace'));
+  // When `NoteStatus` draws a select. Any other status is only words, and the column says them.
+  const settable = note.canSetStatus === true && note.status !== undefined && statuses !== undefined;
 
   return (
     <div className="flex flex-col gap-[8px]">
-      <p className="line-clamp-3 text-body [overflow-wrap:anywhere]">{excerptOf(note.excerpt)}</p>
-      <p className="flex flex-wrap gap-x-[12px] gap-y-[2px] text-hint text-muted">
-        <span className="[overflow-wrap:anywhere]">{`${note.page.host}${note.page.path}`}</span>
-        <LinkButton space="inline" href={show} newTab>
-          {t('Show on the page')}
-        </LinkButton>
-      </p>
-      {/* Keyed by the status read: a read again that says another status starts the select from it. */}
-      <NoteStatus key={note.status ?? note.stage} note={note} statuses={statuses} choose={choose} onSaved={onSaved} />
+      <div>
+        <div className="flex items-start gap-[8px] text-body">
+          {settable ? (
+            <span className="-my-[4px] flex h-[28px] w-[28px] flex-none items-center justify-center">
+              {/* Keyed by the status read: a read again that says another status starts the select from it. */}
+              <NoteStatus
+                key={note.status ?? note.stage}
+                note={note}
+                statuses={statuses}
+                choose={choose}
+                onSaved={onSaved}
+                onRefused={setStatusRefused}
+                bare
+              />
+            </span>
+          ) : null}
+          <span className="line-clamp-3 min-w-0 [overflow-wrap:anywhere]">{excerptOf(note.excerpt)}</span>
+        </div>
+        {statusRefused === undefined ? null : (
+          <span className="mt-[6px] block">
+            <Problem>{t(statusRefused)}</Problem>
+          </span>
+        )}
+      </div>
       {seesTracker && note.place !== undefined ? (
         <div className="text-hint">
           <Place
@@ -879,10 +902,14 @@ function NoteCard({
           )}
         </div>
       ) : null}
-      <p className="flex flex-wrap justify-between gap-x-[12px] text-hint text-muted">
-        <span className="[overflow-wrap:anywhere]">{who}</span>
+      <div className="flex items-center gap-x-[12px] text-hint text-muted">
+        <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{who}</span>
         <span className="tabular-nums">{ago(note.createdAt)}</span>
-      </p>
+        {/* FRU-588: the page of the note in a new tab, its address in the tooltip, as in the table. */}
+        <IconLink label={t('Show on the page')} href={show} tip={note.page.url}>
+          <NoteIcon name="open" />
+        </IconLink>
+      </div>
     </div>
   );
 }
