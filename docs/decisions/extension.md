@@ -417,7 +417,8 @@ did not change: the fields of 760 px and the file input of the browser are as th
   (a rule typed here), `pairing.ts`, `site-actions.ts`, and `context.ts` for what they share. A screen
   draws the popup again with `render` of `context.ts`, which `main.ts` binds: no module imports
   `main.ts`. A test that reads the popup as text reads them all (`src/popup-source.fixture.ts`).
-- **The shell is 380 × 580 at least**, with the head of the kit. The button at the top right,
+- **The shell is 380 × 580 at least**, with the head of the kit, except screen 3, which is as high as
+  what it holds (FRU-599). The button at the top right,
   **Account and settings**, shows the initial of the account, or the gear when nobody is signed in,
   and opens the page of the extension. Screen 1 has no such button: its foot, **Use your own
   Fruitback server**, leads there.
@@ -744,16 +745,17 @@ holds `http://127.0.0.1/*`; a page of `http://127.0.0.1` with no rule, the panel
 
 ### The rules, in short
 
-- **A square button of one icon, beside the side panel**, on screen 3, and beside « Change » on the
-  screen of a rule, while the site is on: « Hide Fruitback on this page » (« Masquer Fruitback sur
-  cette page »), an eye, an eye with a slash while pressed. Its name stays the same, and
-  `aria-pressed` says the state. Pressed, the widget leaves every tab of that **origin**; the rule
-  stays on, keeps its access, and the other origins of a wildcard keep the widget. Pressed again, it
-  comes back with no prompt and no reload.
-- **One switch on the screen** (Mathieu, 2026-11-05): until FRU-590 it was a second switch under the
-  one of the site, and on a site of a workspace the two read as the same thing. The switch of the
-  site turns the rule off, in every browser of the account (FRU-72); the button hides the widget
-  here, in this browser.
+- **On screen 3, an entry of the menu « ⋯ » of the site** (FRU-599, Mathieu, 2026-11-05): « Hide the
+  widget on this site », then « Show the widget on this site » while it is hidden. **On the screen of
+  a rule, a square button of one icon beside « Change »** (FRU-590): « Hide Fruitback on this page »,
+  an eye, an eye with a slash while pressed; its name stays the same, and `aria-pressed` says the
+  state. Hidden, the widget leaves every tab of that **origin**; the rule stays on, keeps its access,
+  and the other origins of a wildcard keep the widget. Shown again, it comes back with no prompt and
+  no reload.
+- **No switch on screen 3** (FRU-599): until FRU-590 there were two, the site's and this one, and
+  on a site of a workspace they read as the same thing. « Stop reviewing this site » of the menu
+  turns the rule off, in every browser of the account (FRU-72); hiding the widget is here, in this
+  browser.
 - **Kept per origin in `chrome.storage.local`, under `hiddenOrigins`**, a list of origins
   (`src/page-visibility.ts`). It is no credential and no rule: it is not in the copy of the rules in
   the account of the browser (FRU-72). A read that fails shows the widget, as before the switch.
@@ -772,7 +774,7 @@ holds `http://127.0.0.1/*`; a page of `http://127.0.0.1` with no rule, the panel
   with none has to go from a timer, after the activation expired.
 - **Shown again, the popup injects both scripts into the open tabs of the origin**, as a site turned on
   does (`injectIntoOpenTabs`): a tab loaded while it was hidden has no bridge to hear the change.
-- **Hidden, « Leave a note » and the side panel stay, turned off**, under « Fruitback is hidden on
+- **Hidden, « Leave a note » and the row of the side panel stay, turned off**, under « Fruitback is hidden on
   this page. »: the page has no widget to take them, and the button stays where the eye was. The
   keys of « Leave a note » and the lines of what waits are not drawn. `e2e/popup-hide-widget.spec.ts`
   hides with the keyboard, reloads, reads the registered scripts, and shows again; axe runs on the
@@ -1180,15 +1182,22 @@ Web Store (it installs from there, so its id is the same), and Safari.
   account's (FRU-238) names its `workspaces`, each with the role held there, and each site says which
   it is of. A site of a workspace the answer does not list is dropped; counts that are not five whole
   numbers are dropped.
-- **Screen 3 (FRU-298), a site turned on here, by its own origin**: the site with a switch
-  (`role="switch"`, « On »), « On · notes go to {tracker} » (the tracker of the destination) or « On ·
-  {workspace} »; « Leave a note », the tall button of the kit, with « or press Alt Shift F on the
+- **Screen 3 (FRU-298, FRU-599), a site turned on here, by its own origin: a launcher**, as the
+  board P1 of FRU-598 draws it. The site, « On · {workspace} », a mark that says it is on (an
+  antenna, `role="img"`, « Fruitback is on for this site ») and the menu « ⋯ » of the kit
+  (`menuButton`: `role="menu"`, the arrows, Home, End, Escape). The menu holds « Hide the widget on
+  this site » (FRU-444), « Stop reviewing this site » (the rule off, with « Your notes are kept »:
+  the access stays, so the words claim no more), « Change where notes go » once the worker gives a
+  role the lists, and « All settings for this site ». Then « Sent to », the mark of the provider, the
+  provider, its team and its project cut with « … », and a pencil for a role that may change it
+  (FRU-530). Then « Leave a note », the tall button of the kit, with « or press Alt Shift F on the
   page » from `commands.getAll()` (no line without a shortcut; the signs of Chrome on macOS, `⌥⇧F`,
-  are one key each); « {n} fixes to check » (`toCheck`, an account's only, hidden at 0) and « {n} open
-  notes » (New, To do and In progress of the site, « No open note » at 0), plural by
-  `Intl.PluralRules`; and « Show all notes in a sidebar ». A line and « Show all notes in a sidebar »
-  open the side panel on the tab, in the click (FRU-296). A wildcard of previews keeps the screen of
-  before: the switch would turn off every site the rule covers. Off, the screen has the switch only.
+  are one key each). Last, « Show all notes in a sidebar », with « {n} open notes » (New, To do and
+  In progress of the site, « No open note » at 0, « 99+ » above 99) and « {n} to check » (`toCheck`,
+  an account's only, hidden at 0) under it, plural by `Intl.PluralRules`; it opens the side panel on
+  the tab, in the click (FRU-296). The popup is as high as what it holds. A wildcard of previews
+  keeps the screen of before: a turn off there turns off every site the rule covers. Off, the site,
+  « ⋯ » and « Turn on ».
 - **What the worker says of the site is added after the screen is drawn**: the switch does not wait
   for the worker. The lines come from `GET /session/sites` (`offerFor`), as screen 2 reads them; a
   worker that does not answer leaves them out rather than zeros. The counts of the page are no longer

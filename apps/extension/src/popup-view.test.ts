@@ -654,7 +654,7 @@ describe('2 · who sees the notes and where they go, chosen at the turn on (FRU-
   });
 });
 
-describe('3 · a site on (FRU-298)', () => {
+describe('3 · a site on (FRU-298, FRU-599)', () => {
   const on = (extra: Partial<Parameters<typeof siteOn>[1]> = {}, calls: string[] = []) =>
     siteOn(page(), {
       origin: ORIGIN,
@@ -664,9 +664,17 @@ describe('3 · a site on (FRU-298)', () => {
       onToggle: (value) => calls.push(`toggle:${value}`),
       onLeaveFeedback: () => calls.push('leave'),
       onOpenPanel: () => calls.push('panel'),
-      onSettings: nothing,
+      onSettings: () => calls.push('settings'),
       ...extra,
     });
+  const menuEntries = (screen: HTMLElement): string[] =>
+    [...screen.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')]
+      .filter((entry) => !entry.hidden)
+      .map((entry) => entry.querySelector('.kit-menu-label')?.textContent ?? '');
+  const press = (target: Element, key: string): void => {
+    const view = target.ownerDocument.defaultView as unknown as typeof globalThis;
+    target.dispatchEvent(new view.KeyboardEvent('keydown', { key, bubbles: true }));
+  };
 
   it('takes the foot it is given in place of the one of an account (FRU-319)', () => {
     const document = page();
@@ -687,128 +695,105 @@ describe('3 · a site on (FRU-298)', () => {
     );
   });
 
-  // FRU-444, FRU-590: the widget hidden on this page, its rule still on.
-  it('has « Hide Fruitback on this page » beside the side panel, and turns the page off while it is hidden', () => {
+  it('is a launcher: the site, its state and « ⋯ », where the notes go, « Leave a note », then the side panel', () => {
     const calls: string[] = [];
-    const shown = on({ visibility: { shown: true, onChange: (value) => calls.push(`shown:${value}`) } }, calls);
-    const eye = shown.querySelector<HTMLButtonElement>('.leave-row .visibility-button');
-
-    // The third square of the row, after « Leave a note » and the side panel; one switch only.
-    assert.deepEqual(
-      [...shown.querySelectorAll('.leave-row > button')].map(
-        (button) => button.getAttribute('aria-label') ?? button.textContent,
-      ),
-      ['Leave a note', 'Show all notes in a sidebar', 'Hide Fruitback on this page'],
+    const screen = on({ visibility: { shown: true, onChange: nothing } }, calls);
+    showSiteFacts(
+      screen,
+      { workspace: 'Acme', on: true, onOpenPanel: nothing },
+      { destination: 'Linear · Acme web', toCheck: 2, open: 7 },
     );
-    assert.equal(shown.querySelectorAll('[role="switch"]').length, 1);
-    assert.equal(eye?.textContent, '');
-    assert.equal(eye?.getAttribute('title'), 'Hide Fruitback on this page');
-    assert.equal(eye?.getAttribute('aria-pressed'), 'false');
-    eye?.click();
-    assert.deepEqual(calls, ['shown:false']);
-
-    const hiddenCalls: string[] = [];
-    const hidden = on({ visibility: { shown: false, onChange: (value) => hiddenCalls.push(`shown:${value}`) } });
-    const pressed = hidden.querySelector<HTMLButtonElement>('.visibility-button');
-    // The same name in both states: `aria-pressed` says which.
-    assert.equal(pressed?.getAttribute('aria-label'), 'Hide Fruitback on this page');
-    assert.equal(pressed?.getAttribute('aria-pressed'), 'true');
-    assert.equal(hidden.querySelector('.hidden-line')?.textContent, 'Fruitback is hidden on this page.');
-    // « Leave a note » and the side panel stay in place, turned off: the page has no widget.
-    assert.equal(hidden.querySelector<HTMLButtonElement>('.kit-primary')?.disabled, true);
-    assert.equal(hidden.querySelector<HTMLButtonElement>('.panel-button')?.disabled, true);
-    assert.equal(pressed?.disabled, false);
-    assert.equal(hidden.querySelector('.site-lines'), null);
-    assert.equal(hidden.querySelector('.shortcut-line'), null);
-    pressed?.click();
-    assert.deepEqual(hiddenCalls, ['shown:true']);
-
-    // Off: the rule is off, so there is no page to hide it on.
-    assert.equal(
-      on({ on: false, visibility: { shown: true, onChange: nothing } }).querySelector('.visibility-button'),
-      null,
-    );
-    // No visibility given: no third square.
-    assert.equal(on({}).querySelector('.visibility-button'), null);
-
-    setLanguage('fr');
-    const french = on({ visibility: { shown: false, onChange: nothing } });
-    assert.equal(
-      french.querySelector('.visibility-button')?.getAttribute('aria-label'),
-      'Masquer Fruitback sur cette page',
-    );
-    assert.equal(french.querySelector('.hidden-line')?.textContent, 'Fruitback est masqué sur cette page.');
-  });
-
-  it('has the site and its named switch, « Leave a note » with its keys, and the side panel', () => {
-    const calls: string[] = [];
-    const screen = on({}, calls);
-
-    assert.ok(screen.classList.contains('popup-screen-3'));
-    // The host is the title of the screen (axe `page-has-heading-one`).
-    assert.equal(screen.querySelector('h1')?.textContent, 'staging.acme.dev');
-    assert.equal(screen.querySelector('.kit-site-state')?.textContent, 'On · Acme');
-    assert.equal(screen.querySelector('[role="switch"]')?.getAttribute('aria-label'), 'Fruitback on staging.acme.dev');
-    assert.equal(screen.querySelector('.kit-switch-word')?.textContent, 'On');
-    assert.equal(screen.querySelector('.kit-primary')?.getAttribute('data-size'), 'tall');
-    assert.equal(screen.querySelector('.shortcut-line')?.textContent, 'or press Alt Shift F on the page');
-    assert.deepEqual(
-      [...screen.querySelectorAll('.shortcut-line kbd')].map((key) => key.textContent),
-      ['Alt', 'Shift', 'F'],
-    );
-    // No line of what waits before the worker said.
-    assert.equal(screen.querySelectorAll('.kit-row').length, 0);
-    assert.deepEqual(stops(screen), [
-      'button: Account and settings',
-      'button: Fruitback on staging.acme.dev',
-      'button: Leave a note',
-      'button: Show all notes in a sidebar',
-    ]);
-
-    screen.querySelector<HTMLButtonElement>('.kit-primary')?.click();
-    screen.querySelector<HTMLButtonElement>('.leave-row .panel-button')?.click();
-    screen.querySelector<HTMLButtonElement>('[role="switch"]')?.click();
-    assert.deepEqual(calls, ['leave', 'panel', 'toggle:false']);
-  });
-
-  it('puts « Leave a note » at the bottom, the side panel beside it as an icon, the keys under both (FRU-529)', () => {
-    const screen = on({ visibility: { shown: true, onChange: nothing } });
-    showSiteFacts(screen, { workspace: 'Acme', on: true, onOpenPanel: nothing }, { toCheck: 2, open: 3 });
     const body = screen.querySelector('.popup-body') as HTMLElement;
 
-    // The site, then what waits under it, then the block of « Leave a note », last of the body.
+    assert.ok(screen.classList.contains('popup-screen-3'));
+    assert.equal(screen.querySelector('h1')?.textContent, 'staging.acme.dev');
+    assert.equal(screen.querySelector('.kit-site-state')?.textContent, 'On · Acme');
+    // One state, no switch: the mark says the site is on.
+    assert.equal(screen.querySelectorAll('[role="switch"]').length, 0);
+    assert.equal(screen.querySelector('.site-on-mark')?.getAttribute('aria-label'), 'Fruitback is on for this site');
     assert.deepEqual(
       [...body.children].map((child) => child.className),
-      ['site-row', 'kit-dl site-destination', 'site-lines', 'leave-block'],
+      ['site-row', 'site-destination', 'leave-block', 'panel-row'],
     );
-    const leave = body.querySelector('.leave-block') as HTMLElement;
+    assert.equal(screen.querySelector('.kit-primary')?.getAttribute('data-size'), 'tall');
+    assert.equal(screen.querySelector('.shortcut-line')?.textContent, 'or press Alt Shift F on the page');
+    assert.equal(screen.querySelector('.panel-row-title')?.textContent, 'Show all notes in a sidebar');
+    assert.equal(screen.querySelector('.panel-counts')?.textContent, '7 open notes · 2 to check');
+    // The entries of the menu are no stops of Tab: the arrows walk them once it is open.
     assert.deepEqual(
-      [...leave.children].map((child) => child.className),
-      ['leave-row', 'shortcut-line'],
+      stops(screen).filter(
+        (_, index) =>
+          screen.querySelectorAll('button, a[href], input, select')[index]?.getAttribute('role') !== 'menuitem',
+      ),
+      [
+        'button: Account and settings',
+        'button: More for this site',
+        'button: Leave a note',
+        'button: Show all notes in a sidebar7 open notes · 2 to check',
+      ],
     );
-    const [feedback, panel] = [...leave.querySelectorAll('.leave-row > button')];
-    assert.equal(feedback?.textContent, 'Leave a note');
-    // The side panel: one icon, no word; its name in aria-label and in the tooltip.
-    assert.equal(panel?.textContent, '');
-    assert.equal(panel?.getAttribute('aria-label'), 'Show all notes in a sidebar');
-    assert.equal(panel?.getAttribute('title'), 'Show all notes in a sidebar');
-    assert.equal(panel?.querySelector('svg')?.getAttribute('aria-hidden'), 'true');
-    assert.equal(screen.querySelector('.action-block'), null);
+
+    screen.querySelector<HTMLButtonElement>('.kit-primary')?.click();
+    screen.querySelector<HTMLButtonElement>('.panel-row')?.click();
+    assert.deepEqual(calls, ['leave', 'panel']);
   });
 
-  it('keeps the layout with the foot of a paired session, and keeps the row when hidden (FRU-529, FRU-590)', () => {
-    const foot = page().createElement('div');
-    foot.className = 'popup-foot';
-    const paired = on({ foot });
-    assert.ok(paired.querySelector('.leave-row .panel-button') !== null);
-    assert.equal(paired.lastElementChild?.className, 'popup-foot');
+  it('has a menu « ⋯ » that the keyboard opens, walks and closes, and that says what each entry keeps', () => {
+    const calls: string[] = [];
+    const screen = on({ visibility: { shown: true, onChange: (shown) => calls.push(`shown:${shown}`) } }, calls);
+    screen.ownerDocument.body.append(screen);
+    const trigger = screen.querySelector<HTMLButtonElement>('.kit-menu-trigger') as HTMLButtonElement;
+    const list = screen.querySelector<HTMLElement>('[role="menu"]') as HTMLElement;
 
-    const hidden = on({ visibility: { shown: false, onChange: nothing } });
-    const leave = hidden.querySelector('.leave-block') as HTMLElement;
-    assert.deepEqual(
-      [...leave.children].map((child) => child.className),
-      ['hidden-line', 'leave-row'],
-    );
+    assert.equal(trigger.getAttribute('aria-haspopup'), 'menu');
+    assert.equal(trigger.getAttribute('aria-expanded'), 'false');
+    assert.equal(list.hidden, true);
+    // « Change where notes go » waits for the worker.
+    assert.deepEqual(menuEntries(screen), [
+      'Hide the widget on this site',
+      'Stop reviewing this site',
+      'All settings for this site',
+    ]);
+
+    trigger.click();
+    assert.equal(list.hidden, false);
+    assert.equal(trigger.getAttribute('aria-expanded'), 'true');
+    const doc = screen.ownerDocument;
+    assert.ok(doc.activeElement === list.querySelector('[data-menu-item="visibility"]'));
+    press(list, 'ArrowDown');
+    assert.ok(doc.activeElement === list.querySelector('[data-menu-item="stop"]'));
+    press(list, 'End');
+    assert.ok(doc.activeElement === list.querySelector('[data-menu-item="settings"]'));
+    press(list, 'ArrowDown');
+    assert.ok(doc.activeElement === list.querySelector('[data-menu-item="visibility"]'));
+    press(list, 'Escape');
+    assert.equal(list.hidden, true);
+    assert.ok(doc.activeElement === trigger);
+
+    trigger.click();
+    list.querySelector<HTMLButtonElement>('[data-menu-item="visibility"]')?.click();
+    assert.equal(list.hidden, true);
+    trigger.click();
+    list.querySelector<HTMLButtonElement>('[data-menu-item="stop"]')?.click();
+    trigger.click();
+    list.querySelector<HTMLButtonElement>('[data-menu-item="settings"]')?.click();
+    assert.deepEqual(calls, ['shown:false', 'toggle:false', 'settings']);
+    // An entry chosen gives the focus back to « ⋯ » (review of #828).
+    assert.ok(doc.activeElement === trigger);
+  });
+
+  it('hidden: says so, turns « Leave a note » and the side panel off, and the menu shows the widget again', () => {
+    const calls: string[] = [];
+    const screen = on({ visibility: { shown: false, onChange: (shown) => calls.push(`shown:${shown}`) } });
+    assert.equal(screen.querySelector('.hidden-line')?.textContent, 'Fruitback is hidden on this page.');
+    assert.equal(screen.querySelector<HTMLButtonElement>('.kit-primary')?.disabled, true);
+    assert.equal(screen.querySelector<HTMLButtonElement>('.panel-row')?.disabled, true);
+    assert.equal(screen.querySelector('.shortcut-line'), null);
+    assert.equal(screen.querySelectorAll('.visibility-button').length, 0);
+    const entry = screen.querySelector<HTMLButtonElement>('[data-menu-item="visibility"]');
+    assert.equal(entry?.querySelector('.kit-menu-label')?.textContent, 'Show the widget on this site');
+    entry?.click();
+    assert.deepEqual(calls, ['shown:true']);
   });
 
   it('has no line of keys when the browser has no shortcut', () => {
@@ -817,67 +802,49 @@ describe('3 · a site on (FRU-298)', () => {
     assert.equal(screen.querySelector('.shortcut-line'), null);
   });
 
-  it('off: says so, and has nothing else but the switch', () => {
-    const screen = on({ on: false });
+  it('off: says so, and « Turn on » in place of the rest', () => {
+    const calls: string[] = [];
+    const screen = on({ on: false }, calls);
 
     assert.equal(screen.querySelector('.kit-site-state')?.textContent, 'Off · Acme');
-    assert.equal(screen.querySelector('.kit-primary'), null);
-    assert.equal(screen.querySelector('.kit-secondary'), null);
+    assert.equal(screen.querySelector('.site-on-mark'), null);
+    assert.equal(screen.querySelector('.panel-row'), null);
+    assert.equal(screen.querySelector('.site-destination'), null);
+    assert.deepEqual(menuEntries(screen), ['All settings for this site']);
+    const turnOn = screen.querySelector<HTMLButtonElement>('.kit-primary');
+    assert.equal(turnOn?.textContent, 'Turn on');
+    turnOn?.click();
+    assert.deepEqual(calls, ['toggle:true']);
   });
 
-  it('adds what the worker says when it answers: the tracker, the fixes to check and the open notes, which open the panel', () => {
-    const calls: string[] = [];
-    const screen = on({}, calls);
-    showSiteFacts(
-      screen,
-      { workspace: 'Acme', on: true, onOpenPanel: () => calls.push('panel') },
-      { destination: 'Linear · Acme', toCheck: 2, open: 3 },
-    );
+  it('says the open notes and the fixes to check under the side panel: none at zero, one in the singular, 99+ above 99', () => {
+    const counts = (facts: { toCheck?: number; open?: number }): string | null | undefined => {
+      const screen = on();
+      showSiteFacts(screen, { workspace: 'Acme', on: true, onOpenPanel: nothing }, facts);
 
-    assert.equal(screen.querySelector('.kit-site-state')?.textContent, 'On · Acme');
-    assert.deepEqual(
-      [...screen.querySelectorAll('.kit-row')].map((row) => [
-        row.querySelector('.kit-row-title')?.textContent,
-        row.querySelector('.kit-row-subtitle')?.textContent,
-        row.querySelector('.kit-drop')?.getAttribute('data-stage'),
-      ]),
-      [
-        ['2 fixes to check', 'Marked done by the team', 'done'],
-        ['3 open notes', 'New, to do or in progress', 'progress'],
-      ],
-    );
-    for (const row of screen.querySelectorAll<HTMLButtonElement>('.kit-row')) row.click();
-    assert.deepEqual(calls, ['panel', 'panel']);
-  });
-
-  it('hides « fixes to check » at zero, says « No open note », and the singular of one', () => {
-    const screen = on();
-    showSiteFacts(screen, { workspace: 'Acme', on: true, onOpenPanel: nothing }, { toCheck: 0, open: 0 });
-    assert.deepEqual(
-      [...screen.querySelectorAll('.kit-row-title')].map((title) => title.textContent),
-      ['No open note'],
-    );
-    showSiteFacts(screen, { workspace: 'Acme', on: true, onOpenPanel: nothing }, { toCheck: 1, open: 1 });
-    assert.deepEqual(
-      [...screen.querySelectorAll('.kit-row-title')].map((title) => title.textContent),
-      ['1 fix to check', '1 open note'],
-    );
+      return screen.querySelector('.panel-counts')?.textContent;
+    };
+    assert.equal(counts({ toCheck: 0, open: 0 }), 'No open note');
+    assert.equal(counts({ toCheck: 1, open: 1 }), '1 open note · 1 to check');
+    assert.equal(counts({ open: 140, toCheck: 3 }), '99+ open notes · 3 to check');
+    // Before the worker says: nothing, rather than zeros.
+    assert.equal(counts({}), '');
   });
 
   it('speaks French, with the plural rules of French', () => {
     setLanguage('fr');
-    const screen = on();
+    const screen = on({ visibility: { shown: true, onChange: nothing } });
     showSiteFacts(screen, { workspace: 'Acme', on: true, onOpenPanel: nothing }, { toCheck: 2, open: 1 });
 
     assert.equal(screen.querySelector('.kit-primary')?.textContent, 'Laisser une note');
     assert.equal(screen.querySelector('.shortcut-line')?.textContent, 'ou appuyez sur Alt Shift F sur la page');
-    assert.deepEqual(
-      [...screen.querySelectorAll('.kit-row-title')].map((title) => title.textContent),
-      ['2 corrections à vérifier', '1 note ouverte'],
-    );
-    const panel = screen.querySelector('.leave-row .panel-button');
-    assert.equal(panel?.getAttribute('aria-label'), 'Voir toutes les notes dans un panneau');
-    assert.equal(panel?.getAttribute('title'), 'Voir toutes les notes dans un panneau');
+    assert.equal(screen.querySelector('.panel-row-title')?.textContent, 'Voir toutes les notes dans un panneau');
+    assert.equal(screen.querySelector('.panel-counts')?.textContent, '1 note ouverte · 2 à vérifier');
+    assert.deepEqual(menuEntries(screen), [
+      'Masquer le widget sur ce site',
+      'Arrêter la revue de ce site',
+      'Tous les réglages de ce site',
+    ]);
   });
 });
 
@@ -944,9 +911,9 @@ describe('where the notes of a site that is on go (FRU-530)', () => {
   it('draws the mark of the kind the worker names, on a site that is on and on « Turn on »', () => {
     const screen = on();
     showSiteFacts(screen, facts, { destination: 'acme/web', destinationKind: 'github' });
-    const line = screen.querySelector('.site-destination .destination-entry');
+    const line = screen.querySelector('.site-destination');
     assert.equal(line?.querySelector('svg.source-mark')?.getAttribute('data-kind'), 'github');
-    assert.equal(line?.querySelector('dd.destination-value')?.textContent, 'GitHub · acme/web');
+    assert.equal(line?.querySelector('.destination-place')?.textContent, 'GitHub / acme/web');
 
     const turnOn = turnOnScreen(page(), {
       origin: SITE,
@@ -960,24 +927,25 @@ describe('where the notes of a site that is on go (FRU-530)', () => {
     assert.equal(turnOn.querySelector('.destination-entry svg')?.getAttribute('data-kind'), 'rest');
   });
 
-  it('says « On · workspace » under the site, and where the notes go on a line of their own, with the mark', () => {
+  it('says « On · workspace » under the site, and « Sent to » on a line of its own above « Leave a note » (FRU-599)', () => {
     const screen = on();
     // Before the worker answers: no line yet.
-    assert.equal(screen.querySelector('.destination-entry'), null);
+    assert.equal(screen.querySelector('.site-destination')?.childElementCount, 0);
     showSiteFacts(screen, facts, { destination: 'Linear · Northwind', open: 0 });
 
     assert.equal(screen.querySelector('.kit-site-state')?.textContent, 'On · Acme');
-    const line = screen.querySelector('.site-destination .destination-entry') as HTMLElement;
-    assert.equal(line.querySelector('dt')?.textContent, 'Notes go to');
-    assert.equal(line.querySelector('.destination-place')?.textContent, 'Northwind');
+    const line = screen.querySelector('.site-destination') as HTMLElement;
+    assert.equal(line.querySelector('.destination-label')?.textContent, 'Sent to');
+    // The provider in words, then its place: what a screen reader reads too.
+    assert.equal(line.querySelector('.destination-place')?.textContent, 'Linear / Northwind');
     assert.equal(line.querySelector('svg.source-mark')?.getAttribute('data-kind'), 'linear');
     assert.equal(line.querySelector('svg.source-mark')?.getAttribute('aria-hidden'), 'true');
-    // The provider in words, for a screen reader.
-    assert.equal(line.querySelector('dd.destination-value')?.textContent, 'Linear · Northwind');
-    // A role that may not change it: no « Change ».
+    // A role that may not change it: no pencil, and no entry in the menu.
     assert.equal(line.querySelector('button'), null);
-    // It sits right under the site.
+    assert.equal(screen.querySelector<HTMLButtonElement>('[data-menu-item="destination"]')?.hidden, true);
+    // It sits between the site and « Leave a note ».
     assert.equal(screen.querySelector('.site-row')?.nextElementSibling?.classList.contains('site-destination'), true);
+    assert.equal(line.nextElementSibling?.classList.contains('leave-block'), true);
   });
 
   it('says « Not known » with « Change » when the worker names no place to a role that may set one', () => {
@@ -985,20 +953,20 @@ describe('where the notes of a site that is on go (FRU-530)', () => {
     showSiteFacts(screen, facts, {
       change: { sources: [LINEAR], loadOffer: async () => undefined, onPlace: async () => true },
     });
-    const line = screen.querySelector('.site-destination .destination-entry');
+    const line = screen.querySelector('.site-destination');
     assert.equal(line?.querySelector('.destination-place')?.textContent, 'Not known');
-    assert.equal(line?.querySelector('svg'), null);
-    assert.equal(line?.querySelector('button')?.textContent, 'Change');
+    assert.equal(line?.querySelector('svg.source-mark'), null);
+    assert.equal(line?.querySelector('button')?.getAttribute('aria-label'), 'Change where notes go');
     // Nothing named and nothing to change: no line.
     const reader = on();
     showSiteFacts(reader, facts, { open: 1 });
-    assert.equal(reader.querySelector('.destination-entry'), null);
+    assert.equal(reader.querySelector('.site-destination')?.childElementCount, 0);
   });
 
   it('draws the drop of Fruitback for a site that keeps its notes', () => {
     const screen = on();
     showSiteFacts(screen, facts, { destination: 'Fruitback' });
-    assert.equal(screen.querySelector('.destination-entry svg')?.getAttribute('data-kind'), 'fruitback');
+    assert.equal(screen.querySelector('.site-destination svg.source-mark')?.getAttribute('data-kind'), 'fruitback');
   });
 
   it('opens the lists of « Turn on » on « Change », and writes a new place at once', async () => {
@@ -1017,8 +985,8 @@ describe('where the notes of a site that is on go (FRU-530)', () => {
         },
       },
     });
-    const change = screen.querySelector<HTMLButtonElement>('.destination-entry button');
-    assert.equal(change?.textContent, 'Change');
+    const change = screen.querySelector<HTMLButtonElement>('.site-destination button');
+    assert.equal(change?.getAttribute('aria-label'), 'Change where notes go');
     change?.click();
     await settled();
 
@@ -1037,6 +1005,57 @@ describe('where the notes of a site that is on go (FRU-530)', () => {
     assert.deepEqual(asked, [{ connector: 'hook' }]);
   });
 
+  it('opens the lists once from the menu, however many times the worker answered (review of #828)', async () => {
+    let loads = 0;
+    const screen = on();
+    const change = {
+      sources: [LINEAR],
+      place: { connector: 'lin', teamId: 't1' },
+      loadOffer: async () => {
+        loads += 1;
+
+        return { kind: 'linear' as const, teams: [{ id: 't1', name: 'Northwind', key: 'NOR', projects: [] }] };
+      },
+      onPlace: async () => true,
+    };
+    showSiteFacts(screen, facts, { destination: 'Linear · Northwind', change });
+    showSiteFacts(screen, facts, { destination: 'Linear · Northwind', change });
+    const entry = screen.querySelector<HTMLButtonElement>('[data-menu-item="destination"]');
+    assert.equal(entry?.hidden, false);
+    assert.equal(entry?.querySelectorAll('.kit-menu-detail').length, 1);
+    entry?.click();
+    await settled();
+    assert.equal(loads, 1);
+    assert.ok(screen.querySelector('.site-destination select[name="provider"]') !== null);
+  });
+
+  it('hides « Change where notes go » again when facts read again give no right (review of #828)', async () => {
+    let loads = 0;
+    const screen = on();
+    const change = {
+      sources: [LINEAR],
+      place: { connector: 'lin', teamId: 't1' },
+      loadOffer: async () => {
+        loads += 1;
+
+        return undefined;
+      },
+      onPlace: async () => true,
+    };
+    showSiteFacts(screen, facts, { destination: 'Linear · Northwind', change });
+    showSiteFacts(screen, facts, { destination: 'Linear · Northwind' });
+    const entry = screen.querySelector<HTMLButtonElement>('[data-menu-item="destination"]');
+    assert.equal(entry?.hidden, true);
+    assert.equal(screen.querySelector('.site-destination button'), null);
+    screen
+      .querySelector('.site-row')
+      ?.dispatchEvent(
+        new (screen.ownerDocument.defaultView as unknown as typeof globalThis).Event('fruitback-change-destination'),
+      );
+    await settled();
+    assert.equal(loads, 0);
+  });
+
   it('puts the lists back as they were when the worker refuses the change', async () => {
     const screen = on();
     showSiteFacts(screen, facts, {
@@ -1048,7 +1067,7 @@ describe('where the notes of a site that is on go (FRU-530)', () => {
         onPlace: async () => false,
       },
     });
-    screen.querySelector<HTMLButtonElement>('.destination-entry button')?.click();
+    screen.querySelector<HTMLButtonElement>('.site-destination button')?.click();
     await settled();
     const provider = screen.querySelector<HTMLSelectElement>(
       '.site-destination select[name="provider"]',

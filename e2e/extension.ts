@@ -32,10 +32,14 @@ const IIFE = 'packages/widget/dist/fruitback.iife.js';
 export const PLAYGROUND_ORIGIN = 'http://localhost:5177';
 
 /**
- * The switch of the site on screen 3 of the popup, by its name in either language. It is the only
- * switch: « Hide Fruitback on this page » is a button since FRU-590.
+ * The mark that says a site is on, on screen 3 of the popup (FRU-599), by its name in either language.
+ * The switch of the site is gone: « Stop reviewing this site » of the menu « ⋯ » turns it off.
  */
-export const SITE_SWITCH = /^Fruitback (on|sur) /;
+export const SITE_ON = /^(Fruitback is on for this site|Fruitback est actif sur ce site)$/;
+
+/** « ⋯ » of screen 3, and one of its entries, in either language (FRU-599). */
+export const SITE_MENU = /^(More for this site|Plus pour ce site)$/;
+export const STOP_REVIEWING = /^(Stop reviewing this site|Arrêter la revue de ce site)/;
 
 /**
  * `GET` and `POST /session/sites` of `worker`, with or without a query (FRU-498): the popup asks the

@@ -2,6 +2,7 @@ import { language, t } from './i18n.ts';
 import {
   type Definition,
   alertBox,
+  button,
   definitions,
   dropMark,
   head,
@@ -9,18 +10,19 @@ import {
   hostOf,
   keys,
   linkButton,
-  listRow,
   make,
+  type MenuItem,
+  menuButton,
   primaryButton,
   providerButton,
   secondaryButton,
   siteLine,
   textButton,
-  toggle,
 } from './kit.ts';
 import type { DestinationKind, PlaceIds, Source, SourceOffer } from './cloud.ts';
 import { type Help, howItWorks, whoCanAdd } from './guide.ts';
 import { option, placeChoice, shownChoice, sourceMark } from './place-choice.ts';
+import { CARET, DOTS, EYE, EYE_SLASH, ON, PANEL, PENCIL } from './popup-icons.ts';
 
 /**
  * The screens of the popup. The shell and the screens 1 and 4 are those of the mock-up of 2026-10-20
@@ -669,12 +671,85 @@ export function visibilityButton(document: Document, options: Visibility): HTMLB
   node.setAttribute('aria-label', t('Hide Fruitback on this page'));
   node.setAttribute('aria-pressed', String(!options.shown));
   node.title = t('Hide Fruitback on this page');
-  node.append(eyeIcon(document, options.shown ? EYE : EYE_SLASH));
+  node.append(iconOf(document, options.shown ? EYE : EYE_SLASH, 'panel-icon'));
 
   return node;
 }
 
-/** 3 · Site on (FRU-298): the switch, « Leave a note », what waits, and the side panel. */
+/** The event that « Change where notes go » of the menu sends to the screen (FRU-599). */
+const CHANGE_DESTINATION = 'fruitback-change-destination';
+
+/** What « Change where notes go » opens, for each screen: one at a time, the last facts' own. */
+const destinationOpeners = new WeakMap<Element, () => void>();
+
+/** A drawing of `popup-icons.ts`, in the colour of the words around it. */
+function iconOf(document: Document, d: string, className = 'popup-icon'): SVGSVGElement {
+  const drawing = document.createElementNS(SVG, 'svg');
+  drawing.setAttribute('viewBox', '0 0 256 256');
+  drawing.setAttribute('aria-hidden', 'true');
+  drawing.setAttribute('focusable', 'false');
+  drawing.setAttribute('class', className);
+  const path = document.createElementNS(SVG, 'path');
+  path.setAttribute('fill', 'currentColor');
+  path.setAttribute('d', d);
+  drawing.append(path);
+
+  return drawing;
+}
+
+/**
+ * The menu « ⋯ » of a site (FRU-599): what was a second switch, a turn off and « Change ». Each entry
+ * says what it keeps. « Change where notes go » waits for the worker (`showSiteFacts`).
+ */
+function siteMenu(document: Document, options: SiteOnOptions, row: HTMLElement): HTMLElement {
+  const items: MenuItem[] = [];
+  if (options.on && options.visibility !== undefined) {
+    const { shown, onChange } = options.visibility;
+    items.push(
+      shown
+        ? {
+            id: 'visibility',
+            label: t('Hide the widget on this site'),
+            detail: t('Your notes stay. Show it again from here.'),
+            onSelect: () => onChange(false),
+          }
+        : {
+            id: 'visibility',
+            label: t('Show the widget on this site'),
+            detail: t('It comes back on every tab of this site.'),
+            onSelect: () => onChange(true),
+          },
+    );
+  }
+  if (options.on) {
+    items.push(
+      {
+        id: 'stop',
+        label: t('Stop reviewing this site'),
+        detail: t('Fruitback goes off here. Your notes are kept.'),
+        onSelect: () => options.onToggle(false),
+      },
+      {
+        id: 'destination',
+        label: t('Change where notes go'),
+        hidden: true,
+        // The event of the window of the screen: an event of another realm is refused.
+        onSelect: () => {
+          const view = row.ownerDocument.defaultView;
+          if (view !== null) row.dispatchEvent(new view.Event(CHANGE_DESTINATION));
+        },
+      },
+    );
+  }
+  items.push({ id: 'settings', label: t('All settings for this site'), onSelect: options.onSettings });
+
+  return menuButton(document, { label: t('More for this site'), icon: iconOf(document, DOTS), items }).root;
+}
+
+/**
+ * 3 · Site on (FRU-298, FRU-599): a launcher. The site and its state, its menu « ⋯ », where the notes
+ * go, « Leave a note », and the side panel with what waits. Off, « Turn on » in place of the rest.
+ */
 export function siteOn(document: Document, options: SiteOnOptions): HTMLElement {
   const host = hostOf(options.origin);
   const row = make(document, 'div', 'site-row');
@@ -686,43 +761,30 @@ export function siteOn(document: Document, options: SiteOnOptions): HTMLElement 
         on: options.on,
       }),
     ),
-    toggle(document, {
-      checked: options.on,
-      label: t('Fruitback on {host}', { host }),
-      word: options.on ? t('On') : t('Off'),
-      onChange: options.onToggle,
-    }),
   );
+  if (options.on) {
+    const on = make(document, 'span', 'site-on-mark');
+    on.setAttribute('role', 'img');
+    on.setAttribute('aria-label', t('Fruitback is on for this site'));
+    on.title = t('On for this site');
+    on.append(iconOf(document, ON));
+    row.append(on);
+  }
+  row.append(siteMenu(document, options, row));
 
   const body: Node[] = [row];
-  // FRU-530: where the notes go, under the site, once the worker says it (`showSiteFacts`).
-  if (options.on) {
-    const where = make(document, 'dl', 'kit-dl');
-    where.classList.add('site-destination');
-    body.push(where);
-  }
-  // Off: the widget left the tab, so there is nothing to leave and nothing to show.
-  if (options.on) {
+  if (!options.on) {
+    body.push(primaryButton(document, t('Turn on'), () => options.onToggle(true)));
+  } else {
     const hidden = options.visibility?.shown === false;
-    // FRU-529: what waits stays under the site; « Leave a note » goes to the bottom of the body,
-    // with the side panel and « Hide Fruitback on this page » beside it as square buttons of one
-    // icon (FRU-590), and the keys under them.
-    const waiting = make(document, 'div', 'site-lines');
+    // FRU-530: where the notes go, above « Leave a note », filled when the worker says it.
+    body.push(make(document, 'div', 'site-destination'));
     const leave = make(document, 'div', 'leave-block');
     if (hidden) leave.append(make(document, 'p', 'hidden-line', t('Fruitback is hidden on this page.')));
-    const actions = make(document, 'div', 'leave-row');
     const note = primaryButton(document, t('Leave a note'), options.onLeaveFeedback, { size: 'tall' });
-    const panel = secondaryButton(document, '', options.onOpenPanel);
-    panel.classList.add('icon-button', 'panel-button');
-    panel.setAttribute('aria-label', t('Show all notes in a sidebar'));
-    panel.title = t('Show all notes in a sidebar');
-    panel.append(panelIcon(document));
     // Hidden, the page has no widget to take a note or to fill the panel.
     note.disabled = hidden;
-    panel.disabled = hidden;
-    actions.append(note, panel);
-    if (options.visibility !== undefined) actions.append(visibilityButton(document, options.visibility));
-    leave.append(actions);
+    leave.append(note);
     const keyNames = hidden ? [] : (options.shortcut ?? []);
     if (keyNames.length > 0) {
       const [before, after] = t('or press {keys} on the page').split('{keys}');
@@ -730,7 +792,21 @@ export function siteOn(document: Document, options: SiteOnOptions): HTMLElement 
       line.append(before ?? '', keys(document, keyNames), after ?? '');
       leave.append(line);
     }
-    body.push(...(hidden ? [] : [waiting]), leave);
+    // The side panel, and what waits in it (FRU-599): the popup says how many, the panel checks them.
+    const panel = button(document, 'panel-row', '', options.onOpenPanel);
+    panel.disabled = hidden;
+    const tile = make(document, 'span', 'panel-row-tile');
+    tile.append(iconOf(document, PANEL));
+    const words = make(document, 'span', 'panel-row-words');
+    // Its name is what it shows, the counts included (axe `label-content-name-mismatch`).
+    words.append(
+      make(document, 'span', 'panel-row-title', t('Show all notes in a sidebar')),
+      make(document, 'span', 'panel-counts'),
+    );
+    const caret = iconOf(document, CARET);
+    caret.classList.add('panel-row-caret');
+    panel.append(tile, words, caret);
+    body.push(leave, panel);
   }
 
   const root = shell(
@@ -751,8 +827,8 @@ export function siteOn(document: Document, options: SiteOnOptions): HTMLElement 
 
 /**
  * What the worker says of the site, added to a screen 3 already drawn: the popup does not wait for
- * the worker before it shows the switch. The state line names the tracker; « fixes to check » is
- * drawn above 0, « open notes » whenever it is known.
+ * the worker before it shows « Leave a note ». The state line names the tracker; where the notes go
+ * gets its line; the side panel says the open notes and the fixes to check (FRU-599).
  */
 export function showSiteFacts(
   screen: HTMLElement,
@@ -763,56 +839,77 @@ export function showSiteFacts(
   const state = screen.querySelector('.kit-site-state');
   if (state !== null) state.textContent = onState(options.workspace, options.on);
   const where = screen.querySelector<HTMLElement>('.site-destination');
+  // Facts read again can take a right away: the entry of the menu waits again (review of #828).
+  forgetDestinationChange(screen);
   // A role that may change the place gets the line even when the worker named none: « Not known », and
-  // « Change » to set it (review of #736).
+  // the pencil to set it (review of #736).
   const label = facts.destination ?? (facts.change === undefined ? undefined : t('Not known'));
   if (where !== null && label !== undefined) {
-    showDestination(where, label, facts.change, facts.destination === undefined ? undefined : facts.destinationKind);
-  }
-  const lines = screen.querySelector('.site-lines');
-  if (lines === null) return;
-  const rows: HTMLElement[] = [];
-  if (facts.toCheck !== undefined && facts.toCheck > 0) {
-    rows.push(
-      listRow(document, {
-        title: plural(
-          facts.toCheck,
-          t('1 fix to check'),
-          t('{count} fixes to check', { count: String(facts.toCheck) }),
-        ),
-        subtitle: t('Marked done by the team'),
-        stage: 'done',
-        onClick: options.onOpenPanel,
-      }),
+    showDestination(
+      screen,
+      where,
+      label,
+      facts.change,
+      facts.destination === undefined ? undefined : facts.destinationKind,
     );
   }
+  const counts = screen.querySelector('.panel-counts');
+  if (counts === null) return;
+  const parts: Node[] = [];
   if (facts.open !== undefined) {
-    rows.push(
-      listRow(document, {
-        title:
-          facts.open === 0
-            ? t('No open note')
-            : plural(facts.open, t('1 open note'), t('{count} open notes', { count: String(facts.open) })),
-        subtitle: t('New, to do or in progress'),
-        stage: 'progress',
-        onClick: options.onOpenPanel,
-      }),
+    parts.push(
+      document.createTextNode(
+        facts.open === 0
+          ? t('No open note')
+          : plural(facts.open, t('1 open note'), t('{count} open notes', { count: shortCount(facts.open) })),
+      ),
     );
   }
-  lines.replaceChildren(...rows);
+  if (facts.toCheck !== undefined && facts.toCheck > 0) {
+    if (parts.length > 0) parts.push(document.createTextNode(' · '));
+    const dot = make(document, 'span', 'panel-counts-dot');
+    dot.setAttribute('aria-hidden', 'true');
+    parts.push(
+      dot,
+      document.createTextNode(
+        plural(facts.toCheck, t('1 to check'), t('{count} to check', { count: String(facts.toCheck) })),
+      ),
+    );
+  }
+  counts.replaceChildren(...parts);
+}
+
+/** « Change where notes go » of the menu hidden, and the opener of facts of before taken off. */
+function forgetDestinationChange(screen: HTMLElement): void {
+  const entry = screen.querySelector<HTMLButtonElement>('[data-menu-item="destination"]');
+  if (entry !== null) entry.hidden = true;
+  const row = screen.querySelector('.site-row');
+  const before = row === null ? undefined : destinationOpeners.get(row);
+  if (row !== null && before !== undefined) {
+    row.removeEventListener(CHANGE_DESTINATION, before);
+    destinationOpeners.delete(row);
+  }
+}
+
+/** « 99+ » above 99: a count of open notes on one line (P7 of FRU-598). */
+function shortCount(count: number): string {
+  return count > 99 ? '99+' : String(count);
 }
 
 /**
- * « Notes go to » of a site that is on (FRU-530), with « Change » for a role that may: it opens the
- * lists of « Turn on » in place of the line. A change the worker refuses puts the lists back.
+ * « Sent to » of a site that is on (FRU-530, FRU-599): the mark of the provider, the provider, its
+ * team and its project, and a pencil for a role that may change it. The pencil, and « Change where
+ * notes go » of the menu, open the lists of « Turn on » in place of the line. A change the worker
+ * refuses puts the lists back.
  */
 function showDestination(
-  list: HTMLElement,
+  screen: HTMLElement,
+  line: HTMLElement,
   label: string,
   change: DestinationChange | undefined,
   kind: DestinationKind | undefined,
 ): void {
-  const document = list.ownerDocument;
+  const document = line.ownerDocument;
   const open = (): void => {
     if (change === undefined) return;
     const { entries } = placeChoice(document, {
@@ -821,11 +918,49 @@ function showDestination(
       loadOffer: change.loadOffer,
       onPlace: change.onPlace,
     });
-    list.replaceChildren(...entries);
-    list.querySelector('select')?.focus();
+    const lists = make(document, 'dl', 'kit-dl');
+    lists.append(...entries);
+    line.replaceChildren(lists);
+    line.querySelector('select')?.focus();
   };
-  const action = change === undefined ? undefined : textButton(document, t('Change'), open);
-  list.replaceChildren(destinationEntry(document, label, action, kind));
+  const { kind: shown, provider, place } = readDestination(label, kind);
+  let mark: SVGSVGElement | undefined;
+  if (shown === 'fruitback') {
+    mark = dropMark(document, 'source-mark');
+    mark.dataset.kind = 'fruitback';
+  } else if (shown !== undefined) mark = sourceMark(document, shown);
+  const words = make(
+    document,
+    'span',
+    'destination-place',
+    [provider, ...place.split(' · ')].filter(Boolean).join(' / '),
+  );
+  words.title = words.textContent ?? '';
+  const sent = make(document, 'span', 'destination-label', t('Sent to'));
+  line.replaceChildren(sent, ...(mark === undefined ? [] : [mark]), words);
+  if (change !== undefined) {
+    const pencil = button(document, 'kit-secondary', '', open);
+    pencil.classList.add('destination-change');
+    pencil.setAttribute('aria-label', t('Change where notes go'));
+    pencil.title = t('Change where notes go');
+    pencil.append(iconOf(document, PENCIL));
+    line.append(pencil);
+    const menuEntry = screen.querySelector<HTMLButtonElement>('[data-menu-item="destination"]');
+    if (menuEntry) {
+      menuEntry.hidden = false;
+      const now = make(document, 'span', 'kit-menu-detail', t('Now: {place}', { place: words.textContent ?? '' }));
+      menuEntry.querySelector('.kit-menu-detail')?.remove();
+      menuEntry.append(now);
+    }
+    const row = screen.querySelector('.site-row');
+    if (row) {
+      // `showSiteFacts` can run again on the same screen: the listener of before goes first.
+      const before = destinationOpeners.get(row);
+      if (before !== undefined) row.removeEventListener(CHANGE_DESTINATION, before);
+      destinationOpeners.set(row, open);
+      row.addEventListener(CHANGE_DESTINATION, open);
+    }
+  }
 }
 
 /** One or many, by the rules of the language of the popup: « 1 fix », « 2 fixes ». */
@@ -834,55 +969,6 @@ function plural(count: number, one: string, other: string): string {
 }
 
 const SVG = 'http://www.w3.org/2000/svg';
-
-/** The eye and the eye with a slash of Phosphor (`ph:eye`, `ph:eye-slash`, @iconify-json/ph 1.2.2, MIT), in a box of 256. */
-const EYE =
-  'M247.31 124.76c-.35-.79-8.82-19.58-27.65-38.41C194.57 61.26 162.88 48 128 48S61.43 61.26 36.34 86.35C17.51 105.18 9 124 8.69 124.76a8 8 0 0 0 0 6.5c.35.79 8.82 19.57 27.65 38.4C61.43 194.74 93.12 208 128 208s66.57-13.26 91.66-38.34c18.83-18.83 27.3-37.61 27.65-38.4a8 8 0 0 0 0-6.5M128 192c-30.78 0-57.67-11.19-79.93-33.25A133.5 133.5 0 0 1 25 128a133.3 133.3 0 0 1 23.07-30.75C70.33 75.19 97.22 64 128 64s57.67 11.19 79.93 33.25A133.5 133.5 0 0 1 231.05 128c-7.21 13.46-38.62 64-103.05 64m0-112a48 48 0 1 0 48 48a48.05 48.05 0 0 0-48-48m0 80a32 32 0 1 1 32-32a32 32 0 0 1-32 32';
-const EYE_SLASH =
-  'M53.92 34.62a8 8 0 1 0-11.84 10.76l19.24 21.17C25 88.84 9.38 123.2 8.69 124.76a8 8 0 0 0 0 6.5c.35.79 8.82 19.57 27.65 38.4C61.43 194.74 93.12 208 128 208a127.1 127.1 0 0 0 52.07-10.83l22 24.21a8 8 0 1 0 11.84-10.76Zm47.33 75.84l41.67 45.85a32 32 0 0 1-41.67-45.85M128 192c-30.78 0-57.67-11.19-79.93-33.25A133.2 133.2 0 0 1 25 128c4.69-8.79 19.66-33.39 47.35-49.38l18 19.75a48 48 0 0 0 63.66 70l14.73 16.2A112 112 0 0 1 128 192m6-95.43a8 8 0 0 1 3-15.72a48.16 48.16 0 0 1 38.77 42.64a8 8 0 0 1-7.22 8.71a6 6 0 0 1-.75 0a8 8 0 0 1-8-7.26A32.09 32.09 0 0 0 134 96.57m113.28 34.69c-.42.94-10.55 23.37-33.36 43.8a8 8 0 1 1-10.67-11.92a132.8 132.8 0 0 0 27.8-35.14a133.2 133.2 0 0 0-23.12-30.77C185.67 75.19 158.78 64 128 64a118.4 118.4 0 0 0-19.36 1.57A8 8 0 1 1 106 49.79A134 134 0 0 1 128 48c34.88 0 66.57 13.26 91.66 38.35c18.83 18.83 27.3 37.62 27.65 38.41a8 8 0 0 1 0 6.5Z';
-
-/** An eye of `visibilityButton`, 20 px, in the colour of its button. */
-function eyeIcon(document: Document, d: string): SVGSVGElement {
-  const drawing = document.createElementNS(SVG, 'svg');
-  drawing.setAttribute('viewBox', '0 0 256 256');
-  drawing.setAttribute('aria-hidden', 'true');
-  drawing.setAttribute('focusable', 'false');
-  drawing.setAttribute('class', 'panel-icon');
-  const path = document.createElementNS(SVG, 'path');
-  path.setAttribute('fill', 'currentColor');
-  path.setAttribute('d', d);
-  drawing.append(path);
-
-  return drawing;
-}
-
-/** The panel of « Show all notes in a sidebar », 20 px, in the colour of its button. */
-function panelIcon(document: Document): SVGSVGElement {
-  const drawing = document.createElementNS(SVG, 'svg');
-  drawing.setAttribute('viewBox', '0 0 16 16');
-  drawing.setAttribute('aria-hidden', 'true');
-  drawing.setAttribute('class', 'panel-icon');
-  const frame = document.createElementNS(SVG, 'rect');
-  for (const [name, value] of [
-    ['x', '2'],
-    ['y', '3'],
-    ['width', '12'],
-    ['height', '10'],
-    ['rx', '2'],
-  ] as const) {
-    frame.setAttribute(name, value);
-  }
-  const bar = document.createElementNS(SVG, 'path');
-  bar.setAttribute('d', 'M6 3v10');
-  for (const shape of [frame, bar]) {
-    shape.setAttribute('fill', 'none');
-    shape.setAttribute('stroke', 'currentColor');
-    shape.setAttribute('stroke-width', '1.4');
-  }
-  drawing.append(frame, bar);
-
-  return drawing;
-}
 
 /**
  * The keys of a shortcut, as the kit draws them: `Alt+Shift+F` → Alt Shift F. Chrome on macOS writes

@@ -1,5 +1,5 @@
 import { expect } from '@playwright/test';
-import { PLAYGROUND_ORIGIN, clickThatClosesPopup, openBareSite, openPopup, test } from './extension.ts';
+import { PLAYGROUND_ORIGIN, clickThatClosesPopup, openBareSite, openPopup, test, SITE_ON } from './extension.ts';
 import { pinFor } from './pin.ts';
 import {
   paired,
@@ -65,7 +65,7 @@ test('a click in the popup opens the panel on the tab, and the panel follows the
   await openBareSite(page, 'side-panel');
   const popup = await openPopup(extension, page);
   await popup.getByRole('button', { name: /^(Turn on|Activer)$/ }).click();
-  await expect(popup.getByRole('switch', { name: 'Fruitback on localhost:5177' })).toBeChecked();
+  await expect(popup.getByRole('img', { name: SITE_ON })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Leave a note' })).toBeVisible();
 
   // No panel before the click: the icon opens the popup, and nothing opens a panel by itself.
@@ -77,7 +77,7 @@ test('a click in the popup opens the panel on the tab, and the panel follows the
 
   await clickThatClosesPopup(
     popup,
-    popup.getByRole('button', { name: /^(Show all notes in a sidebar|Voir toutes les notes dans un panneau)$/ }),
+    popup.getByRole('button', { name: /^(Show all notes in a sidebar|Voir toutes les notes dans un panneau)/ }),
   );
   await expect.poll(panels).toEqual([`chrome-extension://${extension.id}/sidepanel.html`]);
 
@@ -117,7 +117,7 @@ test('« Open Fruitback » of a panel on a page Fruitback is not on opens the po
   await expect(page.getByRole('button', { name: 'Leave a note' })).toBeVisible();
   await clickThatClosesPopup(
     popup,
-    popup.getByRole('button', { name: /^(Show all notes in a sidebar|Voir toutes les notes dans un panneau)$/ }),
+    popup.getByRole('button', { name: /^(Show all notes in a sidebar|Voir toutes les notes dans un panneau)/ }),
   );
   await expect.poll(async () => (await panelWords(page)).site).toBe(new URL(PLAYGROUND_ORIGIN).host);
   const said = await words(page);
@@ -180,7 +180,7 @@ test('« Notes on this page » lists the pins of the page, opens a row from a pi
   // The panel, from the popup.
   const again = await openPopup(extension, page);
   await again
-    .getByRole('button', { name: /^(Show all notes in a sidebar|Voir toutes les notes dans un panneau)$/ })
+    .getByRole('button', { name: /^(Show all notes in a sidebar|Voir toutes les notes dans un panneau)/ })
     .click();
   await expect.poll(async () => (await panelRows(page).catch(() => ({ tabs: [], rows: [] }))).tabs.length).toBe(2);
 
@@ -302,7 +302,7 @@ test('« Ready to check »: « Looks fixed » sends a note to Done, « Still wro
 
   const again = await openPopup(extension, page);
   await again
-    .getByRole('button', { name: /^(Show all notes in a sidebar|Voir toutes les notes dans un panneau)$/ })
+    .getByRole('button', { name: /^(Show all notes in a sidebar|Voir toutes les notes dans un panneau)/ })
     .click();
   await expect.poll(async () => (await readyBlock(page).catch(() => ({ items: [] }))).items.length).toBe(2);
   const said = await words(page);
@@ -359,7 +359,7 @@ test('a tab whose widget is gone does not leave the panel reading for ever (FRU-
 
   const again = await openPopup(extension, page);
   await again
-    .getByRole('button', { name: /^(Show all notes in a sidebar|Voir toutes les notes dans un panneau)$/ })
+    .getByRole('button', { name: /^(Show all notes in a sidebar|Voir toutes les notes dans un panneau)/ })
     .click();
   // The panel first follows the tab and reads: « Reading… » (`no-widget`). Polled on what it shows,
   // never on what it does not: a panel not drawn yet has no « Reading… » either (it made this flaky).
@@ -426,7 +426,7 @@ test('a row of the panel wears the colour and the name of the status its pin wea
 
   const again = await openPopup(extension, page);
   await again
-    .getByRole('button', { name: /^(Show all notes in a sidebar|Voir toutes les notes dans un panneau)$/ })
+    .getByRole('button', { name: /^(Show all notes in a sidebar|Voir toutes les notes dans un panneau)/ })
     .click();
   const drawn = () =>
     inPanel<{ word: string; fill: string; text: string; stage: string }[]>(

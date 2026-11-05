@@ -688,3 +688,89 @@ export function updateLine(document: Document, options: UpdateLineOptions): HTML
 
   return root;
 }
+
+/** One entry of `menuButton`: what it does, and the sentence that says what it keeps. */
+export type MenuItem = { id: string; label: string; detail?: string; onSelect: () => void; hidden?: boolean };
+
+/**
+ * A button of one icon that opens a menu (FRU-599): `role="menu"`, its entries `menuitem`. The
+ * arrows, Home and End move in it; Escape and Tab close it, and Escape gives the focus back to the
+ * button. A click outside closes it. An entry with `hidden` is left out until it is shown.
+ */
+export function menuButton(
+  document: Document,
+  options: { label: string; icon: Node; items: MenuItem[] },
+): { root: HTMLElement; trigger: HTMLButtonElement; entry: (id: string) => HTMLButtonElement | undefined } {
+  const root = make(document, 'div', 'kit-menu');
+  const trigger = button(document, 'kit-secondary');
+  trigger.classList.add('kit-menu-trigger');
+  trigger.setAttribute('aria-label', options.label);
+  trigger.title = options.label;
+  trigger.setAttribute('aria-haspopup', 'menu');
+  trigger.setAttribute('aria-expanded', 'false');
+  trigger.append(options.icon);
+  const menu = make(document, 'div', 'kit-menu-list');
+  menu.setAttribute('role', 'menu');
+  menu.setAttribute('aria-label', options.label);
+  menu.hidden = true;
+  const entries = new Map<string, HTMLButtonElement>();
+  for (const item of options.items) {
+    const entry = button(document, 'kit-menu-item');
+    entry.setAttribute('role', 'menuitem');
+    entry.tabIndex = -1;
+    entry.dataset.menuItem = item.id;
+    entry.hidden = item.hidden === true;
+    entry.append(make(document, 'span', 'kit-menu-label', item.label));
+    if (item.detail !== undefined) entry.append(make(document, 'span', 'kit-menu-detail', item.detail));
+    // The focus goes back to the button first: an entry that draws nothing new leaves it there.
+    entry.addEventListener('click', () => {
+      close(true);
+      item.onSelect();
+    });
+    entries.set(item.id, entry);
+    menu.append(entry);
+  }
+  const shown = (): HTMLButtonElement[] => [...entries.values()].filter((entry) => !entry.hidden);
+  const outside = (event: Event): void => {
+    // A screen drawn again while the menu was open leaves it out of the page: the listener goes too.
+    if (!root.isConnected) {
+      document.removeEventListener('pointerdown', outside, true);
+
+      return;
+    }
+    if (!root.contains(event.target as Node)) close(false);
+  };
+  function open(): void {
+    menu.hidden = false;
+    trigger.setAttribute('aria-expanded', 'true');
+    shown()[0]?.focus();
+    document.addEventListener('pointerdown', outside, true);
+  }
+  function close(refocus: boolean): void {
+    if (menu.hidden) return;
+    menu.hidden = true;
+    trigger.setAttribute('aria-expanded', 'false');
+    document.removeEventListener('pointerdown', outside, true);
+    if (refocus) trigger.focus();
+  }
+  trigger.addEventListener('click', () => (menu.hidden ? open() : close(true)));
+  menu.addEventListener('keydown', (event) => {
+    const list = shown();
+    const at = list.indexOf(document.activeElement as HTMLButtonElement);
+    const to = { ArrowDown: at + 1, ArrowUp: at - 1, Home: 0, End: list.length - 1 }[event.key];
+    if (to !== undefined) {
+      event.preventDefault();
+      list[(to + list.length) % list.length]?.focus();
+
+      return;
+    }
+    const does = LIST_KEYS[event.key];
+    if (does === 'close') {
+      event.preventDefault();
+      close(true);
+    } else if (does === 'leave') close(false);
+  });
+  root.append(trigger, menu);
+
+  return { root, trigger, entry: (id) => entries.get(id) };
+}
