@@ -123,7 +123,7 @@ export async function turnOn(pattern: string, site: SiteConfig): Promise<boolean
 }
 
 /**
- * « Show Fruitback on this page » (FRU-444). Hidden, the bridge of each tab of the origin posts
+ * « Hide Fruitback on this page » (FRU-444, FRU-590). Hidden, the bridge of each tab of the origin posts
  * `unmount` and the background leaves the origin out of the scripts. Shown again, the tabs that
  * loaded while it was hidden get the scripts now, as a site turned on does.
  */

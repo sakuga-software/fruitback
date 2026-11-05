@@ -73,7 +73,7 @@ describe('syncRegistration', () => {
     scripting = registrar();
   });
 
-  // FRU-444: « Show Fruitback on this page » turned off. The rule stays on; that origin gets no script.
+  // FRU-444: « Hide Fruitback on this page » pressed. The rule stays on; that origin gets no script.
   it('leaves a hidden origin out of the scripts of the rule that covers it, and gives it back when shown', async () => {
     const shop = scriptIdsFor('https://*.acme.dev');
     await syncRegistration(scripting, ['https://*.acme.dev', 'https://other.dev']);

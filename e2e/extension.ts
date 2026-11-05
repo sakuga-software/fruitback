@@ -32,8 +32,8 @@ const IIFE = 'packages/widget/dist/fruitback.iife.js';
 export const PLAYGROUND_ORIGIN = 'http://localhost:5177';
 
 /**
- * The switch of the site on screen 3 of the popup, by its name in either language. Since FRU-444 the
- * screen has a second one, « Show Fruitback on this page ».
+ * The switch of the site on screen 3 of the popup, by its name in either language. It is the only
+ * switch: « Hide Fruitback on this page » is a button since FRU-590.
  */
 export const SITE_SWITCH = /^Fruitback (on|sur) /;
 

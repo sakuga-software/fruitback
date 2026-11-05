@@ -18,7 +18,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
   // FRU-423: the item of the context menu of a page.
   'Capture with Fruitback': 'Capturer avec Fruitback',
   // FRU-444: the widget hidden on one site, its rule still on.
-  'Show Fruitback on this page': 'Afficher Fruitback sur cette page',
+  'Hide Fruitback on this page': 'Masquer Fruitback sur cette page',
+  'Fruitback is hidden on this page.': 'Fruitback est masqué sur cette page.',
   // FRU-298: the screens 2 and 3 of the popup.
   'Not in your sites yet': 'Pas encore dans vos sites',
   'In {workspace} · not on in this browser': 'Dans {workspace} · pas activé dans ce navigateur',

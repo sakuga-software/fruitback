@@ -142,8 +142,8 @@ for (const language of ['en', 'fr'] as const) {
     await expect(turnOn).toBeVisible();
     await expectLaidOut(offered, 'site of the workspace', 2);
 
-    // 5. The site turned on (FRU-298): the gear, the switch, « Show Fruitback on this page » (FRU-444),
-    // « Leave a note » and the icon of the side panel beside it (FRU-529); the head names the person of the pairing. The worker of this spec says nothing of
+    // 5. The site turned on (FRU-298): the gear, the switch, « Leave a note » and the icons of the
+    // side panel and of « Hide Fruitback on this page » beside it (FRU-529, FRU-590); the head names the person of the pairing. The worker of this spec says nothing of
     // the notes of the site, so no line of what waits.
     await turnOn.click();
     await expect(offered.getByRole('switch', { name: SITE_SWITCH })).toBeChecked();

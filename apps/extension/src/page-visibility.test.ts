@@ -13,7 +13,7 @@ function area(initial: Record<string, unknown> = {}) {
   };
 }
 
-describe('« Show Fruitback on this page » (FRU-444)', () => {
+describe('« Hide Fruitback on this page » (FRU-444, FRU-590)', () => {
   it('hides an origin, keeps the others, and removes the key when the last one is shown', async () => {
     const storage = area();
     await setHidden(storage, 'https://acme.dev', true);

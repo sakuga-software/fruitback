@@ -1,7 +1,7 @@
 import { coversOrigin } from './site-patterns.ts';
 
 /**
- * « Show Fruitback on this page » (FRU-444): the origins where the reviewer hid the widget.
+ * « Hide Fruitback on this page » (FRU-444, FRU-590): the origins where the reviewer hid the widget.
  *
  * A list of origins under one key of `chrome.storage.local`. It is no credential and no rule: the
  * rule of the site stays on, and keeps its access. A hidden origin gets no script (`excludeMatches`

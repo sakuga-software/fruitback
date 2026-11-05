@@ -625,10 +625,10 @@ export type SiteOnOptions = {
   foot?: HTMLElement;
   onToggle: (on: boolean) => void;
   /**
-   * « Show Fruitback on this page » (FRU-444), for a site that is on. Absent: shown, and no switch.
-   * Hidden, the screen offers neither « Leave a note » nor the side panel: the page has no widget.
+   * « Hide Fruitback on this page » (FRU-444, FRU-590), for a site that is on. Absent: shown, and no
+   * button. Hidden, « Leave a note » and the side panel stay, turned off: the page has no widget.
    */
-  visibility?: { shown: boolean; onChange: (shown: boolean) => void };
+  visibility?: Visibility;
   onLeaveFeedback: () => void;
   /** Opens the side panel: « Show all notes in a sidebar », and a click on a line. */
   onOpenPanel: () => void;
@@ -655,28 +655,23 @@ function onState(workspace: string, on: boolean): string {
   return on ? t('On · {workspace}', { workspace }) : t('Off · {workspace}', { workspace });
 }
 
-/**
- * « Show Fruitback on this page » (FRU-444): the words, and the switch they name. The rule stays on;
- * only this origin loses the widget, and gets it back with no prompt.
- */
-export function visibilityRow(
-  document: Document,
-  options: { shown: boolean; onChange: (shown: boolean) => void },
-): HTMLElement {
-  const row = make(document, 'div', 'visibility-row');
-  const words = make(document, 'span', 'visibility-words', t('Show Fruitback on this page'));
-  // The visible words are the name of the switch, so a voice command says what it reads.
-  words.setAttribute('aria-hidden', 'true');
-  row.append(
-    words,
-    toggle(document, {
-      checked: options.shown,
-      label: t('Show Fruitback on this page'),
-      onChange: options.onChange,
-    }),
-  );
+/** Whether the widget shows on this origin (FRU-444), and how to change it. */
+export type Visibility = { shown: boolean; onChange: (shown: boolean) => void };
 
-  return row;
+/**
+ * « Hide Fruitback on this page » (FRU-444, FRU-590): a square button of one icon, pressed while the
+ * widget is hidden. Its name stays the same in both states, and `aria-pressed` says the state. The
+ * rule stays on; only this origin loses the widget, and gets it back with no prompt.
+ */
+export function visibilityButton(document: Document, options: Visibility): HTMLButtonElement {
+  const node = secondaryButton(document, '', () => options.onChange(!options.shown));
+  node.classList.add('icon-button', 'visibility-button');
+  node.setAttribute('aria-label', t('Hide Fruitback on this page'));
+  node.setAttribute('aria-pressed', String(!options.shown));
+  node.title = t('Hide Fruitback on this page');
+  node.append(eyeIcon(document, options.shown ? EYE : EYE_SLASH));
+
+  return node;
 }
 
 /** 3 · Site on (FRU-298): the switch, « Leave a note », what waits, and the side panel. */
@@ -706,29 +701,36 @@ export function siteOn(document: Document, options: SiteOnOptions): HTMLElement 
     where.classList.add('site-destination');
     body.push(where);
   }
-  if (options.on && options.visibility !== undefined) body.push(visibilityRow(document, options.visibility));
-  // Off, or hidden here: the widget left the tab, so there is nothing to leave and nothing to show.
-  if (options.on && options.visibility?.shown !== false) {
+  // Off: the widget left the tab, so there is nothing to leave and nothing to show.
+  if (options.on) {
+    const hidden = options.visibility?.shown === false;
     // FRU-529: what waits stays under the site; « Leave a note » goes to the bottom of the body,
-    // with the side panel beside it as a square button of one icon, and the keys under both.
+    // with the side panel and « Hide Fruitback on this page » beside it as square buttons of one
+    // icon (FRU-590), and the keys under them.
     const waiting = make(document, 'div', 'site-lines');
     const leave = make(document, 'div', 'leave-block');
+    if (hidden) leave.append(make(document, 'p', 'hidden-line', t('Fruitback is hidden on this page.')));
     const actions = make(document, 'div', 'leave-row');
+    const note = primaryButton(document, t('Leave a note'), options.onLeaveFeedback, { size: 'tall' });
     const panel = secondaryButton(document, '', options.onOpenPanel);
-    panel.classList.add('panel-button');
+    panel.classList.add('icon-button', 'panel-button');
     panel.setAttribute('aria-label', t('Show all notes in a sidebar'));
     panel.title = t('Show all notes in a sidebar');
     panel.append(panelIcon(document));
-    actions.append(primaryButton(document, t('Leave a note'), options.onLeaveFeedback, { size: 'tall' }), panel);
+    // Hidden, the page has no widget to take a note or to fill the panel.
+    note.disabled = hidden;
+    panel.disabled = hidden;
+    actions.append(note, panel);
+    if (options.visibility !== undefined) actions.append(visibilityButton(document, options.visibility));
     leave.append(actions);
-    const keyNames = options.shortcut ?? [];
+    const keyNames = hidden ? [] : (options.shortcut ?? []);
     if (keyNames.length > 0) {
       const [before, after] = t('or press {keys} on the page').split('{keys}');
       const line = make(document, 'p', 'shortcut-line');
       line.append(before ?? '', keys(document, keyNames), after ?? '');
       leave.append(line);
     }
-    body.push(waiting, leave);
+    body.push(...(hidden ? [] : [waiting]), leave);
   }
 
   const root = shell(
@@ -832,6 +834,27 @@ function plural(count: number, one: string, other: string): string {
 }
 
 const SVG = 'http://www.w3.org/2000/svg';
+
+/** The eye and the eye with a slash of Phosphor (`ph:eye`, `ph:eye-slash`, @iconify-json/ph 1.2.2, MIT), in a box of 256. */
+const EYE =
+  'M247.31 124.76c-.35-.79-8.82-19.58-27.65-38.41C194.57 61.26 162.88 48 128 48S61.43 61.26 36.34 86.35C17.51 105.18 9 124 8.69 124.76a8 8 0 0 0 0 6.5c.35.79 8.82 19.57 27.65 38.4C61.43 194.74 93.12 208 128 208s66.57-13.26 91.66-38.34c18.83-18.83 27.3-37.61 27.65-38.4a8 8 0 0 0 0-6.5M128 192c-30.78 0-57.67-11.19-79.93-33.25A133.5 133.5 0 0 1 25 128a133.3 133.3 0 0 1 23.07-30.75C70.33 75.19 97.22 64 128 64s57.67 11.19 79.93 33.25A133.5 133.5 0 0 1 231.05 128c-7.21 13.46-38.62 64-103.05 64m0-112a48 48 0 1 0 48 48a48.05 48.05 0 0 0-48-48m0 80a32 32 0 1 1 32-32a32 32 0 0 1-32 32';
+const EYE_SLASH =
+  'M53.92 34.62a8 8 0 1 0-11.84 10.76l19.24 21.17C25 88.84 9.38 123.2 8.69 124.76a8 8 0 0 0 0 6.5c.35.79 8.82 19.57 27.65 38.4C61.43 194.74 93.12 208 128 208a127.1 127.1 0 0 0 52.07-10.83l22 24.21a8 8 0 1 0 11.84-10.76Zm47.33 75.84l41.67 45.85a32 32 0 0 1-41.67-45.85M128 192c-30.78 0-57.67-11.19-79.93-33.25A133.2 133.2 0 0 1 25 128c4.69-8.79 19.66-33.39 47.35-49.38l18 19.75a48 48 0 0 0 63.66 70l14.73 16.2A112 112 0 0 1 128 192m6-95.43a8 8 0 0 1 3-15.72a48.16 48.16 0 0 1 38.77 42.64a8 8 0 0 1-7.22 8.71a6 6 0 0 1-.75 0a8 8 0 0 1-8-7.26A32.09 32.09 0 0 0 134 96.57m113.28 34.69c-.42.94-10.55 23.37-33.36 43.8a8 8 0 1 1-10.67-11.92a132.8 132.8 0 0 0 27.8-35.14a133.2 133.2 0 0 0-23.12-30.77C185.67 75.19 158.78 64 128 64a118.4 118.4 0 0 0-19.36 1.57A8 8 0 1 1 106 49.79A134 134 0 0 1 128 48c34.88 0 66.57 13.26 91.66 38.35c18.83 18.83 27.3 37.62 27.65 38.41a8 8 0 0 1 0 6.5Z';
+
+/** An eye of `visibilityButton`, 20 px, in the colour of its button. */
+function eyeIcon(document: Document, d: string): SVGSVGElement {
+  const drawing = document.createElementNS(SVG, 'svg');
+  drawing.setAttribute('viewBox', '0 0 256 256');
+  drawing.setAttribute('aria-hidden', 'true');
+  drawing.setAttribute('focusable', 'false');
+  drawing.setAttribute('class', 'panel-icon');
+  const path = document.createElementNS(SVG, 'path');
+  path.setAttribute('fill', 'currentColor');
+  path.setAttribute('d', d);
+  drawing.append(path);
+
+  return drawing;
+}
 
 /** The panel of « Show all notes in a sidebar », 20 px, in the colour of its button. */
 function panelIcon(document: Document): SVGSVGElement {

@@ -25,7 +25,7 @@ function gated() {
 }
 
 describe('createApply', () => {
-  // FRU-444: « Show Fruitback on this page » turned off, the rule still on.
+  // FRU-444: « Hide Fruitback on this page » pressed, the rule still on.
   it('unmounts on an origin where the widget is hidden, and mounts again when it is shown', async () => {
     const posts: BridgeMessage[] = [];
     let hidden = false;
