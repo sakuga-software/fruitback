@@ -845,7 +845,13 @@ export function showSiteFacts(
   // the pencil to set it (review of #736).
   const label = facts.destination ?? (facts.change === undefined ? undefined : t('Not known'));
   if (where !== null && label !== undefined) {
-    showDestination(where, label, facts.change, facts.destination === undefined ? undefined : facts.destinationKind);
+    showDestination(
+      screen,
+      where,
+      label,
+      facts.change,
+      facts.destination === undefined ? undefined : facts.destinationKind,
+    );
   }
   const counts = screen.querySelector('.panel-counts');
   if (counts === null) return;
@@ -897,6 +903,7 @@ function shortCount(count: number): string {
  * refuses puts the lists back.
  */
 function showDestination(
+  screen: HTMLElement,
   line: HTMLElement,
   label: string,
   change: DestinationChange | undefined,
@@ -938,14 +945,14 @@ function showDestination(
     pencil.title = t('Change where notes go');
     pencil.append(iconOf(document, PENCIL));
     line.append(pencil);
-    const menuEntry = line.closest('.popup')?.querySelector<HTMLButtonElement>('[data-menu-item="destination"]');
+    const menuEntry = screen.querySelector<HTMLButtonElement>('[data-menu-item="destination"]');
     if (menuEntry) {
       menuEntry.hidden = false;
       const now = make(document, 'span', 'kit-menu-detail', t('Now: {place}', { place: words.textContent ?? '' }));
       menuEntry.querySelector('.kit-menu-detail')?.remove();
       menuEntry.append(now);
     }
-    const row = line.closest('.popup')?.querySelector('.site-row');
+    const row = screen.querySelector('.site-row');
     if (row) {
       // `showSiteFacts` can run again on the same screen: the listener of before goes first.
       const before = destinationOpeners.get(row);
