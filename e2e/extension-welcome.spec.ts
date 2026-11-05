@@ -24,6 +24,13 @@ test('a first install opens the page that signs in, with the pin as a tip', asyn
   await expect(welcome.getByRole('button', { name: 'Sign in with email' })).toBeVisible();
   await expect(welcome.getByRole('button', { name: 'Open Fruitback' })).toHaveCount(0);
 
+  // The video comes from the extension (FRU-531), by a path relative to the page (FRU-581).
+  const video = welcome.locator('figure.welcome-demo video');
+  await expect.poll(() => video.evaluate((each: HTMLVideoElement) => each.readyState)).toBeGreaterThanOrEqual(1);
+  expect(await video.evaluate((each: HTMLVideoElement) => each.currentSrc)).toBe(
+    `chrome-extension://${extension.id}/demo/first-note.webm`,
+  );
+
   // Only one welcome page: the background opens it at the install, not at each start.
   expect(extension.context.pages().filter((page) => page.url() === url)).toHaveLength(1);
 });

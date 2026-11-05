@@ -7,6 +7,8 @@ import type { StorybookConfig } from '@storybook/html-vite';
 const config: StorybookConfig = {
   stories: ['../*.stories.ts'],
   framework: '@storybook/html-vite',
+  // The video of the welcome page (FRU-581), next to `iframe.html` as it is next to `welcome.html`.
+  staticDirs: [{ from: '../../public/demo', to: '/demo' }],
   core: { disableTelemetry: true, disableWhatsNewNotifications: true },
   features: {
     actions: false,

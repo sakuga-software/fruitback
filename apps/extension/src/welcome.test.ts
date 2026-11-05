@@ -278,7 +278,8 @@ describe('the page that opens at install (FRU-318)', () => {
           [DEMO_FILES.mp4, 'video/mp4'],
         ],
       );
-      for (const file of Object.values(DEMO_FILES)) assert.match(file, /^\/demo\//, 'a file of the extension');
+      for (const file of Object.values(DEMO_FILES))
+        assert.match(file, /^demo\//, 'a file of the extension, relative to the page');
     });
 
     it('stays still when the person asked for less motion', () => {
@@ -301,7 +302,7 @@ describe('the page that opens at install (FRU-318)', () => {
     it('ships its files, under 1.5 MB together', () => {
       const publicDir = new URL('../public', import.meta.url);
       const sizes = Object.values(DEMO_FILES).map(
-        (file) => statSync(fileURLToPath(new URL(`.${file}`, `${publicDir.href}/`))).size,
+        (file) => statSync(fileURLToPath(new URL(file, `${publicDir.href}/`))).size,
       );
       const total = sizes.reduce((sum, size) => sum + size, 0);
       assert.ok(total < 1.5 * 1024 * 1024, `the video weighs ${total} bytes`);

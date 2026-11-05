@@ -26,11 +26,16 @@ export const DEMO_FRAMES: readonly DemoFrame[] = [
 /** The length of the video, in whole seconds. */
 export const DEMO_SECONDS = Math.round(DEMO_FRAMES.reduce((sum, frame) => sum + frame.seconds, 0));
 
-/** The files of the video, from the root of the extension. */
+/**
+ * The files of the video, relative to the page that shows them (FRU-581). In the extension, the
+ * welcome page is `/welcome.html` and the files are in `/demo/`. In the gallery, the story is
+ * `/gallery/iframe.html` and Storybook copies `public/demo/` to `/gallery/demo/`. A path from the
+ * root of the domain is a 404 in the gallery.
+ */
 export const DEMO_FILES = {
-  webm: '/demo/first-note.webm',
-  mp4: '/demo/first-note.mp4',
-  poster: '/demo/first-note.jpg',
+  webm: 'demo/first-note.webm',
+  mp4: 'demo/first-note.mp4',
+  poster: 'demo/first-note.jpg',
 } as const;
 
 /** `0:18`: the length as a player writes it. */
