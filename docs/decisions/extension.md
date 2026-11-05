@@ -1190,7 +1190,7 @@ Web Store (it installs from there, so its id is the same), and Safari.
   the access stays, so the words claim no more), « Change where notes go » once the worker gives a
   role the lists, and « All settings for this site ». Then « Sent to », the mark of the provider, the
   provider, its team and its project cut with « … », and a pencil for a role that may change it
-  (FRU-530). Then « Leave a note », the tall button of the kit, with « or press Alt Shift F on the
+  (FRU-530), which opens « Where notes go » (below). Then « Leave a note », the tall button of the kit, with « or press Alt Shift F on the
   page » from `commands.getAll()` (no line without a shortcut; the signs of Chrome on macOS, `⌥⇧F`,
   are one key each). Last, « Show all notes in a sidebar », with « {n} open notes » (New, To do and
   In progress of the site, « No open note » at 0, « 99+ » above 99) and « {n} to check » (`toCheck`,
@@ -1198,6 +1198,17 @@ Web Store (it installs from there, so its id is the same), and Safari.
   the tab, in the click (FRU-296). The popup is as high as what it holds. A wildcard of previews
   keeps the screen of before: a turn off there turns off every site the rule covers. Off, the site,
   « ⋯ » and « Turn on ».
+- **« Where notes go » is a screen of the popup (FRU-600)**, as the board P1b of FRU-598 draws it:
+  the pencil and the entry of « ⋯ » open it, and Back goes to screen 3 with nothing saved. One card
+  per place, in a `radiogroup`: Fruitback (« No tracker, the notes stay here ») and each source the
+  worker lists (« Connected · {place} »). The chosen card shows its lists (the team or the
+  repository, then the project). Save stays disabled until the place is whole; a refusal of the
+  worker keeps the choice and says « The place could not be saved. Try again. ». After a save,
+  screen 3 is drawn again with a notice, `role="status"`, « New notes now go to {place} », for
+  4 s; a pointer or the focus on it holds the time. « Notes already sent stay where they are. »:
+  the worker moves no note. A role with no right to change it sees the screen locked, with the
+  place, « Only an owner or an admin of {workspace} can change where the notes of this site go. »
+  and « Copy a message for an admin »; the entry of « ⋯ » then reads « Where notes go ».
 - **What the worker says of the site is added after the screen is drawn**: the switch does not wait
   for the worker. The lines come from `GET /session/sites` (`offerFor`), as screen 2 reads them; a
   worker that does not answer leaves them out rather than zeros. The counts of the page are no longer

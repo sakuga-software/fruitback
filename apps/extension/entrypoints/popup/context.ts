@@ -120,6 +120,9 @@ export type PopupTab = { id?: number; url?: string };
 /** Which drawing the screen is: each `render` and each sign-in counts one. */
 export const draws = { drawn: 0 };
 
+/** What screen 3 says once, when it is drawn again after « Where notes go » saved (FRU-600). */
+export const changed: { text?: string } = {};
+
 let drawer: (editing?: boolean, claimedNow?: ConnectState) => Promise<void> = async () => undefined;
 
 /** Draws the popup again. `main.ts` binds what draws (`drawWith`), so a screen needs no import of it. */

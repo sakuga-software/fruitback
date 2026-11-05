@@ -35,6 +35,8 @@ const VIEWS = [
   './popup-view.ts',
   // FRU-453: the lists of « Notes go to ».
   './place-choice.ts',
+  // FRU-600: « Where notes go », a screen of its own.
+  './destination-screen.ts',
   './kit.ts',
   './site-page.ts',
   './share-rules.ts',

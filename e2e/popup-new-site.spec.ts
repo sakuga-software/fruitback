@@ -255,16 +255,20 @@ test('a site of no workspace: added to one and turned on, in one click, then scr
     },
   ]);
 
-  // FRU-530: the site is on, and its destination changes from here: « Change » opens the lists of
-  // « Turn on », at the place of now, and a new provider is written at once.
-  await destination.getByRole('button', { name: 'Change' }).click();
-  const provider = popup.locator('.site-destination').getByRole('combobox', { name: 'Notes go to' });
-  await expect(provider).toHaveValue('conn_1');
-  await expect(popup.locator('.site-destination').getByRole('combobox', { name: 'Team' })).toHaveValue('team_1');
-  await provider.selectOption({ label: 'Fruitback (no tracker)' });
+  // FRU-600: the site is on, and its destination changes from here: the pencil opens « Where notes
+  // go », at the place of now. Nothing is written before « Save »; then screen 3 says what changed.
+  await destination.getByRole('button', { name: 'Change where notes go' }).click();
+  await expect(popup.getByRole('heading', { level: 1, name: 'Where notes go' })).toBeVisible();
+  await expect(popup.getByRole('radio', { name: /^Linear/ })).toBeChecked();
+  await expect(popup.getByRole('combobox', { name: 'Team' })).toHaveValue('team_1');
+  await clean(popup, 'where notes go');
+  await popup.getByRole('radio', { name: /^Fruitback/ }).check();
+  expect(settings.length).toBe(1);
+  await popup.getByRole('button', { name: 'Save' }).click();
   await expect.poll(() => settings.length).toBe(2);
   expect(settings[1]).toEqual({ workspace: 'ws_2', site: 'site_1', place: null });
-  await expect(provider).toBeEnabled();
+  await expect(popup.getByRole('status').filter({ hasText: 'New notes now go to Fruitback' })).toBeVisible();
+  await expect(popup.getByRole('img', { name: SITE_ON })).toBeVisible();
   const rules = await extension.worker.evaluate(async () => (await chrome.storage.local.get('sites')).sites);
   expect(rules).toEqual({
     [PLAYGROUND_ORIGIN]: {

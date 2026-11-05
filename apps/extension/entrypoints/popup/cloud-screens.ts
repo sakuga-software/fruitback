@@ -24,7 +24,8 @@ import {
 import { msg, t } from '../../src/i18n.ts';
 import { openPanelOrPage, panelApis } from '../../src/side-panel.ts';
 import { type Account, keysOfShortcut, showSiteFacts, turnOnScreen, siteOn } from '../../src/popup-view.ts';
-import { make } from '../../src/kit.ts';
+import { hostOf, make } from '../../src/kit.ts';
+import { changeNotice, destinationScreen } from '../../src/destination-screen.ts';
 
 import { pairedFoot, pairedRow } from './pairing.ts';
 import {
@@ -39,6 +40,7 @@ import {
 import { unreachableScreen } from './sign-in.ts';
 import {
   app,
+  changed,
   CLOUD,
   cloudSeams,
   draws,
@@ -55,6 +57,25 @@ import {
 
 /** FRU-537: the popup adds a site over https, or the loopback; another http site from the console. */
 export const HTTP_SITE = msg('This site is on http. Add it to a workspace from the console, then turn it on here.');
+
+/** The connectors of a workspace in the console, where « + Connect another tool » leads (FRU-600). */
+function consoleConnectors(account: Account | undefined, workspace: string): (() => void) | undefined {
+  if (account?.console === undefined) return undefined;
+  const base = account.console.endsWith('/') ? account.console : `${account.console}/`;
+  const url = new URL(`w/${encodeURIComponent(workspace)}/connectors`, base).toString();
+
+  return () => {
+    void browser.tabs.create({ url });
+    window.close();
+  };
+}
+
+/** Copies a text with the clipboard of the popup. `false`: the browser refused. */
+const copyText = (text: string): Promise<boolean> =>
+  navigator.clipboard.writeText(text).then(
+    () => true,
+    () => false,
+  );
 
 /** The sites of a workspace in the console, where « Change » leads (FRU-298). */
 export function consoleSites(account: Account | undefined, workspace: string): (() => void) | undefined {
@@ -343,6 +364,11 @@ export async function siteOfWorkspaceOn(
     onSettings: openSettings,
   });
   screen.querySelector('.popup-body')?.append(problem, otherCopyLine(tab, site.enabled));
+  // FRU-600: « Where notes go » saved, and screen 3 drawn again: it says what changed, once.
+  if (changed.text !== undefined) {
+    screen.querySelector('.popup-body')?.prepend(changeNotice(document, changed.text));
+    delete changed.text;
+  }
   // An account and a pairing with another worker (FRU-319): the foot is the account's, so the
   // pairing keeps its row and its « Log out » in the body.
   if (paired !== undefined && account !== undefined) {
@@ -358,6 +384,42 @@ export async function siteOfWorkspaceOn(
       .then((listed) => {
         if (listed === undefined || screenNow !== draws.drawn) return;
         const { notes, destination, toCheck } = listed.site;
+        // FRU-600: « Where notes go », a screen of its own, opened from the line and from the menu.
+        const showScreen = (sources: typeof listed.workspace.sources): void => {
+          draws.drawn += 1;
+          app?.replaceChildren(
+            destinationScreen(document, {
+              host: hostOf(origin),
+              workspace,
+              ...(sources === undefined ? {} : { sources }),
+              ...(listed.site.place === undefined ? {} : { place: listed.site.place }),
+              ...(destination === undefined ? {} : { label: destination.label }),
+              ...(destination?.kind === undefined ? {} : { kind: destination.kind }),
+              loadOffer: (connector: string) =>
+                sourceOffer(listed.endpoint, listed.workspace.id, connector, cloudSeams()),
+              onSave: async (place: PlaceIds | null, said: string) => {
+                const set = await setSiteSettings(
+                  listed.endpoint,
+                  listed.workspace,
+                  listed.site.id,
+                  { place },
+                  cloudSeams(),
+                );
+                if (!set.ok) return false;
+                changed.text = t('New notes now go to {place}', { place: said });
+                await render();
+
+                return true;
+              },
+              onBack: () => void render(),
+              ...(consoleConnectors(account, listed.workspace.id) === undefined
+                ? {}
+                : { onConnect: consoleConnectors(account, listed.workspace.id) as () => void }),
+              copy: copyText,
+            }),
+          );
+          app?.querySelector<HTMLElement>('input:checked, .destination-back')?.focus();
+        };
         // FRU-530: a role that may change where the notes go gets the sources of the workspace, and
         // « Change » writes through the route of « Turn on » (FRU-453): no route of its own.
         const sources = listed.workspace.sources;
@@ -382,6 +444,7 @@ export async function siteOfWorkspaceOn(
 
                   return set.ok;
                 },
+                open: () => showScreen(sources),
               };
         showSiteFacts(
           screen,
@@ -390,6 +453,7 @@ export async function siteOfWorkspaceOn(
             ...(destination === undefined ? {} : { destination: destination.label }),
             ...(destination?.kind === undefined ? {} : { destinationKind: destination.kind }),
             ...(change === undefined ? {} : { change }),
+            ...(change === undefined ? { locked: () => showScreen(undefined) } : {}),
             ...(toCheck === undefined ? {} : { toCheck }),
             ...(notes === undefined ? {} : { open: notes.new + notes.todo + notes.progress }),
           },
