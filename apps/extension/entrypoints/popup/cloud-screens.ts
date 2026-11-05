@@ -406,8 +406,11 @@ export async function siteOfWorkspaceOn(
                   cloudSeams(),
                 );
                 if (!set.ok) return false;
+                // The place is saved. A draw that fails, or that draws another screen, must not say
+                // otherwise, and must not keep the notice for a later screen 3.
                 changed.text = t('New notes now go to {place}', { place: said });
-                await render();
+                await render().catch(() => undefined);
+                delete changed.text;
 
                 return true;
               },
