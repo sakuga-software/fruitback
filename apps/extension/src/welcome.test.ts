@@ -282,6 +282,16 @@ describe('the page that opens at install (FRU-318)', () => {
         assert.match(file, /^demo\//, 'a file of the extension, relative to the page');
     });
 
+    it('finds its files from the page of the extension and from the story of the gallery (FRU-581)', () => {
+      for (const file of Object.values(DEMO_FILES)) {
+        // A welcome page in a folder (`/pages/welcome.html`) would ask for `/pages/demo/…`: a 404.
+        assert.equal(new URL(file, `chrome-extension://fruitback${WELCOME_PATH}`).pathname, `/${file}`);
+        // `staticDirs` of `gallery/.storybook/main.ts` copies `public/demo/` next to `iframe.html`.
+        const story = 'https://gallery.fruitback.com/gallery/iframe.html?id=extension-welcome-page--signed-out';
+        assert.equal(new URL(file, story).pathname, `/gallery/${file}`);
+      }
+    });
+
     it('stays still when the person asked for less motion', () => {
       const video = welcomeScreen(page(), { ...states[0]![1], reducedMotion: true }).querySelector(
         'video',
