@@ -2672,8 +2672,14 @@ as `framed`, a bridge in each frame, a capture with no move. Not measured in Fir
   `div.gallery-frozen`. After a reload, its pin comes back on the field, confident, and a click
   elsewhere closes nothing. The 68 stories freeze with no error. Against « Live », each element in the
   copy of the 10 stories of the widget has the same computed style, except the focus ring of a pin.
-  The pin under the copy and the two docks on one corner were seen before their fix. The welcome
-  page asks for `/demo/first-note.*`, which the gallery does not serve, in both modes: FRU-581.
+  The pin under the copy and the two docks on one corner were seen before their fix.
+- **The video of the welcome page has paths relative to the page** (`demo/first-note.*`, FRU-581),
+  and `staticDirs` of `.storybook/main.ts` copies `public/demo/` next to `iframe.html`. The page of
+  the extension is `/welcome.html`, so the files stay `/demo/` there; in the gallery they are
+  `/gallery/demo/`. With paths from the root of the domain, the 13 stories of the welcome page
+  asked for `/demo/first-note.*`, a 404 on gallery.fruitback.com. Not a `location /demo/` in
+  `nginx.conf`: the files are not in the image, and the build would still depend on its proxy.
+  `e2e/gallery-demo.spec.ts` builds the gallery, serves it under `/gallery/` alone, and loads the video.
 
 ## « Fruitback 0.6.0 is out », in the popup and the page (FRU-519)
 
