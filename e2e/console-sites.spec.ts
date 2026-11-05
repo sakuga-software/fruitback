@@ -241,14 +241,14 @@ test('the list is a grid of cards, each named by its address and its icon (FRU-4
   expect.soft(await painted(first, 'backgroundColor')).toEqual(rgb(WHITE));
 
   // The site: its address at 600 and 17 px, the largest words of the card (FRU-432), and who sees its
-  // notes under it.
+  // notes under the counts (FRU-584), with no name of the workspace (FRU-583).
   const name = first.getByRole('heading', { level: 2 });
   expect.soft(await styles(name, ['font-weight', 'font-size'])).toEqual({ 'font-weight': '600', 'font-size': '17px' });
   expect.soft(await painted(name, 'color')).toEqual(rgb(INK));
-  const audience = first.getByText('Members of Acme', { exact: true });
+  const audience = first.getByText('Members only', { exact: true });
   expect.soft(await styles(audience, ['font-size'])).toEqual({ 'font-size': '13px' });
   // FRU-566: who reads is a chip with its icon, on the grey of a chip, at 4.5:1 at the least.
-  const chip = first.getByRole('group').filter({ hasText: 'Members of Acme' });
+  const chip = first.getByRole('group').filter({ hasText: 'Members only' });
   expect.soft(await painted(chip, 'backgroundColor')).toEqual(rgb(CHIP));
   expect.soft(contrast(await painted(audience, 'color'), rgb(CHIP))).toBeGreaterThanOrEqual(4.5);
   await expect(chip.locator('svg[data-access="members"]')).toBeVisible();
@@ -425,6 +425,154 @@ test('who reads and who writes are chips, a long place is cut with a tooltip, an
   expect(heights).toHaveLength(5);
   expect(new Set(heights).size, `the heights: ${heights.join(', ')}`).toBe(1);
   await expectNoViolation(page, 'the cards with chips and a cut place');
+});
+
+for (const locale of ['en', 'fr'] as const) {
+  test(`who sees the notes is under the counts, and names no workspace, in ${locale} (FRU-583, FRU-584)`, async ({
+    page,
+  }) => {
+    const words =
+      locale === 'en'
+        ? { members: 'Members only', everyone: 'Everyone who visits', waiting: 'Waiting for the first note' }
+        : { members: 'Membres uniquement', everyone: 'Tous les visiteurs', waiting: 'En attente de la première note' };
+    await workerWith(
+      page,
+      'owner',
+      [...SITES, { id: 's9', origin: 'https://empty.acme.dev', visibility: 'members' }],
+      locale,
+    );
+    await open(page);
+
+    // FRU-583: « Members only », and the name of the workspace nowhere on a card.
+    await expect(grid(page).getByText(/Acme(?!\.)/)).toHaveCount(0);
+    await expect(card(page, 'staging.acme.dev').getByText(words.members, { exact: true })).toBeVisible();
+    await expect(card(page, 'support.acme.dev').getByText(words.everyone, { exact: true })).toBeVisible();
+
+    // FRU-584: the chips are out of the head of the card, under the counts and over the foot.
+    for (const [name, chip, counts] of [
+      ['staging.acme.dev', words.members, (site: Locator) => site.getByRole('img', { name: /notes?:/ })],
+      ['support.acme.dev', words.everyone, (site: Locator) => site.getByRole('img', { name: /notes?:/ })],
+      ['empty.acme.dev', words.members, (site: Locator) => site.getByText(words.waiting, { exact: true })],
+    ] as const) {
+      const site = card(page, name);
+      const head = await box(site.getByRole('heading', { level: 2 }));
+      const drawn = await box(site.getByRole('group').filter({ hasText: chip }));
+      const status = await box(counts(site));
+      const foot = await box(site.locator('dl'));
+      expect.soft(drawn.y, `the chip of ${name} is under its name`).toBeGreaterThan(head.y + head.height);
+      expect.soft(drawn.y, `the chip of ${name} is under its counts`).toBeGreaterThanOrEqual(status.y + status.height);
+      expect.soft(drawn.y + drawn.height, `the chip of ${name} is over its foot`).toBeLessThanOrEqual(foot.y);
+    }
+    await expectNoViolation(page, 'the cards with their chips under the counts');
+  });
+}
+
+/** A host longer than a card of 280 px, as the one Mathieu noted (FRU-585). */
+const LONG_HOST = 'coeur-du-perigord-preview-branch-42.deploy.sakuga.dev';
+const LONG_SITE = { ...SITES[0], id: 's7', origin: `https://${LONG_HOST}` };
+
+/** The words of a link, cut to one line: its height, its line, whether they overflow, and its ellipsis. */
+const cutOf = (link: Locator) =>
+  link.evaluate((element) => ({
+    lines: Math.round(element.getBoundingClientRect().height / parseFloat(getComputedStyle(element).lineHeight)),
+    overflow: element.scrollWidth > element.clientWidth,
+    ellipsis: getComputedStyle(element).textOverflow,
+  }));
+
+test('a long host is cut to one line, and whole in a tooltip for the pointer and the keyboard, only when cut (FRU-585)', async ({
+  page,
+}) => {
+  await workerWith(page, 'owner', [LONG_SITE, ...SITES.slice(1)]);
+  await open(page);
+  const long = card(page, LONG_HOST).getByRole('link', { name: LONG_HOST, exact: true });
+  const short = card(page, 'acme.dev').getByRole('link', { name: 'acme.dev', exact: true });
+
+  // Cut on one line with « … », and whole in the page: the heading is named by the whole host.
+  expect.soft(await cutOf(long)).toEqual({ lines: 1, overflow: true, ellipsis: 'ellipsis' });
+  expect.soft(await cutOf(short)).toEqual({ lines: 1, overflow: false, ellipsis: 'ellipsis' });
+  await expect(card(page, LONG_HOST).getByRole('heading', { level: 2 })).toHaveAccessibleName(LONG_HOST);
+
+  // The pointer: a host that fits has no tooltip (the control), a cut one shows it whole.
+  const hover = async (link: Locator) => {
+    const at = await box(link);
+    await page.mouse.move(0, 0);
+    await page.mouse.move(at.x + 8, at.y + at.height / 2, { steps: 5 });
+  };
+  await hover(short);
+  await page.waitForTimeout(700);
+  await expect(page.getByRole('tooltip')).toHaveCount(0);
+  await hover(long);
+  await expect(page.getByRole('tooltip')).toHaveText(LONG_HOST);
+  await page.mouse.move(700, 880);
+  await expect(page.getByRole('tooltip')).toHaveCount(0);
+
+  // The keyboard: the link before « More for … » takes focus, and the tooltip opens with it.
+  await more(page, 'acme.dev').focus();
+  await page.keyboard.press('Shift+Tab');
+  await expect(short).toBeFocused();
+  await page.waitForTimeout(400);
+  await expect(page.getByRole('tooltip')).toHaveCount(0);
+  await more(page, LONG_HOST).focus();
+  await page.keyboard.press('Shift+Tab');
+  await expect(long).toBeFocused();
+  await expect(page.getByRole('tooltip')).toHaveText(LONG_HOST);
+  // Escape closes it and leaves focus where it was; the link still leads to the page of the site.
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('tooltip')).toHaveCount(0);
+  await expect(long).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('tooltip')).toHaveText(LONG_HOST);
+  await expectNoViolation(page, 'a cut host with its tooltip');
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/\/w\/w1\/sites\/s7$/);
+});
+
+test.describe('on a phone, by touch', () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
+
+  test('a long press on a cut host shows it whole and stays on the grid; a tap follows the link (FRU-585)', async ({
+    page,
+  }) => {
+    await workerWith(page, 'owner', [LONG_SITE, ...SITES.slice(1)]);
+    await open(page);
+    const long = card(page, LONG_HOST).getByRole('link', { name: LONG_HOST, exact: true });
+    const short = card(page, 'acme.dev').getByRole('link', { name: 'acme.dev', exact: true });
+    expect.soft(await cutOf(long)).toEqual({ lines: 1, overflow: true, ellipsis: 'ellipsis' });
+    expect.soft(await sideScroll(page), 'the grid').toBe(0);
+
+    // A finger held on a link for 800 ms, as Chromium receives it.
+    const cdp = await page.context().newCDPSession(page);
+    const press = async (link: Locator, ms: number) => {
+      await link.scrollIntoViewIfNeeded();
+      const at = await box(link);
+      const point = { x: at.x + 12, y: at.y + at.height / 2 };
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [point] });
+      await page.waitForTimeout(ms);
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    };
+
+    // The control: a host that fits shows no tooltip under a long press.
+    await press(short, 800);
+    await page.waitForTimeout(300);
+    await expect(page.getByRole('tooltip')).toHaveCount(0);
+    await expect(page).toHaveURL(/\/w\/w1\/sites$/);
+
+    await press(long, 800);
+    await expect(page.getByRole('tooltip')).toHaveText(LONG_HOST);
+    await page.waitForTimeout(300);
+    await expect(page).toHaveURL(/\/w\/w1\/sites$/);
+    const tip = await box(page.getByRole('tooltip'));
+    expect.soft(tip.x, 'the tooltip is inside the screen').toBeGreaterThanOrEqual(0);
+    expect.soft(tip.x + tip.width, 'the tooltip is inside the screen').toBeLessThanOrEqual(390);
+
+    // A tap elsewhere closes it; a tap on the host follows the link.
+    await page.touchscreen.tap(195, 20);
+    await expect(page.getByRole('tooltip')).toHaveCount(0);
+    const at = await box(long);
+    await page.touchscreen.tap(at.x + 12, at.y + at.height / 2);
+    await expect(page).toHaveURL(/\/w\/w1\/sites\/s7$/);
+  });
 });
 
 test('the new notes of a card are on a line of their own, and lead to the notes of the site that are new (FRU-570)', async ({
@@ -1248,7 +1396,7 @@ test('every text of the list is at 4.5:1 on what is behind it', async ({ page })
   const texts: [string, Locator][] = [
     ['the last note', value(first, 'Last note')],
     ['an address', first.getByRole('heading', { level: 2 })],
-    ['who sees the notes', first.getByText('Members of Acme', { exact: true })],
+    ['who sees the notes', first.getByText('Members only', { exact: true })],
     ['a tracker', first.getByText('Linear', { exact: true })],
     ['a place in a tracker', first.getByText('Team Acme web', { exact: true })],
   ];

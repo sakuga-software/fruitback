@@ -424,9 +424,11 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
 - **The Sites screen is a grid of cards** (FRU-408, Mathieu, in place of the table of six columns
   of the mockup of FRU-243 and FRU-270, `routes/sites.tsx`). **A card is read from the top, in
   three parts** (FRU-432, Mathieu): the icon and the name of the site (`siteName`, 17 px, the largest
-  words of the card), with who sees its notes and, when it is the exception, who writes them, on
-  one line under it; then its status, the count of its notes at 20 px, a bar whose name says the
-  counts again, and how many are new in the accent, or « Waiting for the first note »; then a foot
+  words of the card); then its status, the count of its notes at 20 px, a bar whose name says the
+  counts again, and how many are new in the accent, or « Waiting for the first note », and under it
+  who sees its notes and, when it is the exception, who writes them (FRU-584, Mathieu: out of the head
+  of the card). Who sees them is « Members only » or « Everyone who visits », and names no workspace
+  (FRU-583, Mathieu): the card is in that workspace already. Then a foot
   under a line, where the notes go at the left, to whoever sees the tracker, after the logo of its
   tracker (FRU-541, the mark of the Notes table, read from the first word of the label of the
   worker: « Linear », « GitHub », « REST API »; a word it does not know has its name alone), and the
@@ -465,7 +467,13 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   last one. **No item changes who sees the notes of a site, nor who writes them**: the worker has
   no route for it, and a button that does nothing is not drawn; so the form that adds a site asks
   it, in the card of a workspace with no site too, where the mockup draws the address alone, and the
-  page of the site says them, read only. A host breaks after its dots first (`<wbr>`). The card and
+  page of the site says them, read only. **A host is on one line, cut with « … »** (FRU-585,
+  Mathieu, in place of the break after its dots of FRU-159): `CutLink` of the kit, whole in the page
+  for a screen reader, and whole in a tooltip **only when it is cut**, measured on the link
+  (`scrollWidth > clientWidth`, again on a resize and once the fonts load). The tooltip opens under the
+  pointer, with the focus of the keyboard (Escape closes it), and on a long press of a finger (500 ms,
+  and the `contextmenu` of Android), which then does not follow the link; the next press anywhere
+  closes it. The link clips itself, not its heading, so its focus ring is whole. The card and
   the alert are sized by their content (`box-content`), as the mockup sizes them: 640 px and 760 px
   inside their padding. **« Add a site » opens a dialog** (FRU-558, `Dialog` of `ui.tsx` on HeroUI's
   Modal): named by its title, focus in its field and kept inside, Escape or its close button close
