@@ -62,24 +62,24 @@ test.describe('the members of a large workspace (FRU-496)', () => {
     await expect(page.getByRole('heading', { name: 'Members 501', level: 2 })).toBeVisible();
     await expect(members.locator('tbody tr')).toHaveCount(50);
     await expect(pages).toContainText('1 to 50 of 501');
-    await expect(pages.getByRole('button', { name: 'Previous' })).toBeDisabled();
+    await expect(pages.getByRole('button', { name: 'Previous page' })).toBeDisabled();
     // The owner joined first: the first row. The 50th row is the 49th person of the crowd.
     await expect(members.locator('tbody tr').first()).toContainText('owner (you)');
     await expect(members.locator('tbody tr').last()).toContainText('p49@crowd.test');
 
     // Each page follows the one before, with no member twice and none skipped, to the 501st.
-    await pages.getByRole('button', { name: 'Next' }).click();
+    await pages.getByRole('button', { name: 'Next page' }).click();
     await expect(pages).toContainText('51 to 100 of 501');
     await expect(members.locator('tbody tr').first()).toContainText('p50@crowd.test');
     await expect(members.locator('tbody tr').last()).toContainText('p99@crowd.test');
-    await pages.getByRole('button', { name: 'Next' }).click();
+    await pages.getByRole('button', { name: 'Next page' }).click();
     await expect(pages).toContainText('101 to 150 of 501');
     await expect(members.locator('tbody tr').first()).toContainText('p100@crowd.test');
-    for (let at = 151; at <= 501; at += 50) await pages.getByRole('button', { name: 'Next' }).click();
+    for (let at = 151; at <= 501; at += 50) await pages.getByRole('button', { name: 'Next page' }).click();
     await expect(pages).toContainText('501 to 501 of 501');
     await expect(members.locator('tbody tr')).toHaveCount(1);
     await expect(members.locator('tbody tr')).toContainText('p500@crowd.test');
-    await expect(pages.getByRole('button', { name: 'Next' })).toBeDisabled();
+    await expect(pages.getByRole('button', { name: 'Next page' })).toBeDisabled();
 
     // A search by address, whatever its case, back on the first page of what it finds.
     await page.getByRole('searchbox', { name: 'Search members' }).fill('P321@CROWD');
@@ -110,7 +110,7 @@ test.describe('the members of a large workspace (FRU-496)', () => {
     const members = page.getByRole('region', { name: 'Members' });
     const pages = page.getByRole('navigation', { name: 'Pages of members' });
     await expect(pages).toContainText('1 to 50 of 501');
-    for (let at = 51; at <= 501; at += 50) await pages.getByRole('button', { name: 'Next' }).click();
+    for (let at = 51; at <= 501; at += 50) await pages.getByRole('button', { name: 'Next page' }).click();
     await expect(pages).toContainText('501 to 501 of 501');
 
     // The read of the page before is held a while: the row of Person 500 stays until it comes.
@@ -150,7 +150,7 @@ test.describe('the members of a large workspace (FRU-496)', () => {
     await expect(waiting.locator('tbody tr')).toHaveCount(50);
     await expect(pages).toContainText('1 to 50 of 300');
     await expect(waiting.locator('tbody tr').first()).toContainText('invitee1@client.test');
-    for (let at = 51; at <= 251; at += 50) await pages.getByRole('button', { name: 'Next' }).click();
+    for (let at = 51; at <= 251; at += 50) await pages.getByRole('button', { name: 'Next page' }).click();
     await expect(pages).toContainText('251 to 300 of 300');
     await expect(waiting.locator('tbody tr').last()).toContainText('invitee300@client.test');
 

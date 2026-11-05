@@ -441,6 +441,42 @@ textarea {
   cursor: not-allowed;
 }
 
+/*
+  The number of a page (FRU-587): as tall as a small icon button, as wide as its number, in the words
+  of the list. The page shown is in ink, as a chip that is pressed.
+*/
+.kit-page-number {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--spacing-control-small);
+  height: var(--spacing-control-small);
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--field-radius);
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--text-small);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transform: none;
+  transition: none;
+}
+
+.kit-page-number:hover:not([aria-current='page']),
+.kit-page-number[data-hovered='true']:not([aria-current='page']) {
+  background: var(--color-chip);
+  color: var(--color-ink);
+}
+
+.kit-page-number[aria-current='page'] {
+  background: var(--color-ink);
+  color: var(--surface);
+  font-weight: 600;
+  cursor: default;
+}
+
 /* A link that is a picture (FRU-546): a small icon button, opened in a new tab. */
 .kit-icon-link {
   display: inline-flex;

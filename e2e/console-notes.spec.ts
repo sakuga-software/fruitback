@@ -230,7 +230,8 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
     }
     if (pathname !== '/console/workspaces/w1/notes') return undefined;
     // The order is kept apart (FRU-551): the table asks `order=status`, the board does not.
-    const { order, ...asked } = Object.fromEntries(new URL(request.url()).searchParams);
+    // The size of a page too (FRU-587): this stub answers 8 notes a page whatever is asked.
+    const { order, limit: _limit, ...asked } = Object.fromEntries(new URL(request.url()).searchParams);
     worker.orders.push(order);
     worker.asked.push(asked);
     if (worker.read === 'fails') return route.fulfill({ status: 500, json: { error: 'unknown' } });
@@ -536,13 +537,13 @@ test('the page is the one of the mockup: chips, filters, the table and its pages
 
   // The pages.
   await expect(pages(page).locator('span').first()).toHaveText('1 to 8 of 10');
-  const previous = pages(page).getByRole('button', { name: 'Previous' });
+  // « Previous » and « Next » are small icon buttons (FRU-587, in place of the outlined buttons of the mockup).
+  const previous = pages(page).getByRole('button', { name: 'Previous page' });
   await expect(previous).toBeDisabled();
-  expect.soft(await styles(previous, ['height', 'padding-left', 'border-top-left-radius', 'font-size'])).toEqual({
-    height: '40px',
-    'padding-left': '14px',
+  expect.soft(await styles(previous, ['width', 'height', 'border-top-left-radius'])).toEqual({
+    width: '32px',
+    height: '32px',
     'border-top-left-radius': '6px',
-    'font-size': '14px',
   });
   expect
     .soft(await styles(pages(page), ['margin-top', 'font-size']))
@@ -676,8 +677,8 @@ test('a list chosen while the search waits its 300 ms is kept when the search la
 test('the pages go forward with the cursor and come back, « Previous » off on the first one', async ({ page }) => {
   const worker = await workerWith(page);
   await open(page);
-  const next = pages(page).getByRole('button', { name: 'Next' });
-  const previous = pages(page).getByRole('button', { name: 'Previous' });
+  const next = pages(page).getByRole('button', { name: 'Next page' });
+  const previous = pages(page).getByRole('button', { name: 'Previous page' });
   await expect(previous).toBeDisabled();
   await next.click();
   await expect(rows(page)).toHaveCount(2);
@@ -711,11 +712,11 @@ test('a link to a later page reads its range, and « Previous » goes to the fir
   // No count is held for this filter yet: the worker counts it (FRU-502).
   expect(worker.asked.length).toBeGreaterThan(0);
   expect(worker.asked.every((asked) => asked.counts === undefined)).toBe(true);
-  await pages(page).getByRole('button', { name: 'Previous' }).click();
+  await pages(page).getByRole('button', { name: 'Previous page' }).click();
   await expect(page).not.toHaveURL(/cursor=|from=/);
   await expect(rows(page)).toHaveCount(8);
   await expect(pages(page).locator('span').first()).toHaveText('1 to 8 of 10');
-  await expect(pages(page).getByRole('button', { name: 'Previous' })).toBeDisabled();
+  await expect(pages(page).getByRole('button', { name: 'Previous page' })).toBeDisabled();
   expect(worker.asked.at(-1)).toEqual({});
 });
 
@@ -743,15 +744,15 @@ test('« Send again » waits, then the row loses its alert; a refusal says so on
 test('a delivery the worker gave up says so, and « Send again » still sends it', async ({ page }) => {
   const worker = await workerWith(page);
   await open(page);
-  await pages(page).getByRole('button', { name: 'Next' }).click();
+  await pages(page).getByRole('button', { name: 'Next page' }).click();
   const given = row(page, 'The contact form');
   await expect(given.locator('td').nth(3)).toHaveText('REST APINot delivered: Fruitback stopped tryingSend again');
   const words = given.getByText('Not delivered: Fruitback stopped trying', { exact: true });
   expect.soft(await painted(words, 'color')).toEqual(rgb(ACCENT));
   // One that the worker still tries says « yet ».
-  await pages(page).getByRole('button', { name: 'Previous' }).click();
+  await pages(page).getByRole('button', { name: 'Previous page' }).click();
   await expect(row(page, 'The order form').getByText('Not delivered yet', { exact: true })).toBeVisible();
-  await pages(page).getByRole('button', { name: 'Next' }).click();
+  await pages(page).getByRole('button', { name: 'Next page' }).click();
   await given.getByRole('button', { name: 'Send again' }).click();
   await expect(given.getByText(/Not delivered/)).toHaveCount(0);
   expect(worker.sent).toEqual(['POST /console/workspaces/w1/notes/n10/retry']);
@@ -812,7 +813,7 @@ test('while a filter is read, the rows stay and nothing a pointer can reach move
     chip(page, /^Linear/),
     search(page),
     row(page, 'The order form').getByRole('button', { name: 'Send again' }),
-    pages(page).getByRole('button', { name: 'Next' }),
+    pages(page).getByRole('button', { name: 'Next page' }),
   ];
   const before = await Promise.all(reachable.map(box));
 

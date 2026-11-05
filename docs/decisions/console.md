@@ -133,7 +133,7 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   found nor removed. The worker gives the members a page at a time (`limit`, `offset`, `total`) and
   searches them (`q`, the name or the address); it gives every invitation that waits, which the
   screen cuts in pages and searches by address itself (`invitationsFound`, no case, no accent).
-  « 1 to 50 of 501 » and « Previous », « Next » are those of the Notes screen (`NotePages`), under a
+  « 1 to 50 of 501 », the arrows and the numbers of the pages are those of the Notes screen (`NotePages`), under a
   list longer than a page. The search is not in the address. A member removed is read again with
   its page: the next member moves into it. `e2e/console-members-many.spec.ts` holds it, on a
   workspace of 501 members and 300 invitations.
@@ -451,7 +451,7 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   **The search and the pages are done in the console** (FRU-408): the worker answers every site of
   a workspace at once and has no search. The search keeps the sites whose name holds what is typed,
   is written in the address (`q`) 300 ms after the last key (`useTypedSearch`), and goes back to the
-  first page. A page is 12 cards (rows of 1, 2, 3 or 4), with the « Previous » and « Next » of the
+  first page. A page is 12 cards (rows of 1, 2, 3 or 4), with the pages of the
   Notes page (`NotePages`), and lives in the address (`page`); a page past the last shows the last.
   A search that keeps nothing says so, with « Clear the search ». A new site is the last one: its
   page is shown, with no search. **This holds while a workspace has a few hundred sites**: past
@@ -603,7 +603,18 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   a frame that scrolls would hold its heads, not the window, so a pinned frame clips and never
   scrolls sideways, which the cards make possible. What takes focus is scrolled to under the heads
   (`scroll-margin-top`), never behind them. `e2e/console-notes-pinned.spec.ts` reads the heads at
-  each depth of the list at 1440, 1280, 1024 and 390 px, the keyboard, and the board. `e2e/console-notes.spec.ts` holds the values, every filter, the pages, « Send again », the
+  each depth of the list at 1440, 1280, 1024 and 390 px, the keyboard, and the board.
+  **The pages are icon buttons and numbers** (FRU-587, Mathieu): « Previous page » and « Next page »
+  are small icon buttons (`IconButton`), and between them the numbers of the first page, the last,
+  and the pages beside the one shown (`pageWindow` of `page-window.ts`, which has its own test), the
+  one shown in ink and `aria-current`; a press on a number keeps the focus on it. `NotePages` is the
+  same on the notes, the sites, the members and the invitations. **The notes are read by a cursor,
+  so a number is offered only for a page whose cursor the screen knows**: the first, the next, and the
+  pages walked through to this one; « … » stands for the others. Numbering a page asks a size of
+  page, so the console asks `limit=25` by name, the default of the worker. A jump to any page would
+  take an offset in the index of the worker, which the walk by cursor was chosen against (FRU-551:
+  a note is on one page and one only). The Notes of the instance keep « Previous » and « Next » only.
+  `e2e/console-notes-pages.spec.ts` holds it. `e2e/console-notes.spec.ts` holds the values, every filter, the pages, « Send again », the
   states, the roles, 390 px and axe.
 - **The notes are a table or a board, and the address says which** (FRU-436, decided by Mathieu on
   2026-10-24). « Table » and « Board », two pressed buttons at the right of the head, write

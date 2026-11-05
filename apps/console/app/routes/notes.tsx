@@ -10,11 +10,13 @@ import {
   DataTable,
   Field,
   FilterChip,
+  IconButton,
   IconLink,
   LinkButton,
   LoadFailed,
   Mark,
   PageHead,
+  PageNumber,
   Problem,
   StatusDot,
   Tip,
@@ -32,6 +34,7 @@ import { type StatusChoice, offeredFor, statusName, statusProblemOf } from '../n
 import { boardColumns } from '../board-columns';
 import { NotesBoard } from './notes-board';
 import { ReadProblem } from '../read-problem';
+import { pageWindow } from '../page-window';
 
 /** Who left a note, as the index of the notes says it (FRU-244). A name only for an account of the workspace. */
 export type NoteAuthor = {
@@ -129,6 +132,12 @@ const AUTHOR_WORDS: Readonly<Record<NoteAuthor['kind'], string>> = {
  * **Nothing that a pointer can reach moves when the list is read again**: the rows that are shown stay
  * until the answer replaces them, and the chips and the filters are above them (the rule of FRU-271).
  */
+/** The notes of a page (FRU-587): the default of the worker, asked for by name. */
+export const NOTES_PER_PAGE = 25;
+
+/** The page of the note at `from`, from 1. */
+const pageOf = (from: number) => Math.floor((from - 1) / NOTES_PER_PAGE) + 1;
+
 export default function Notes() {
   useLocale();
   const { workspace } = useWorkspace();
@@ -203,6 +212,8 @@ export default function Notes() {
     // The table groups the notes by status (FRU-551): the worker reads them in that order, so that a
     // group goes on from one page to the next. The board draws a page by date in its columns.
     if (view === 'table') query.set('order', 'status');
+    // The size of a page is asked, not left to the worker: the numbers of the pages count on it (FRU-587).
+    query.set('limit', String(NOTES_PER_PAGE));
     // FRU-502: the counts read the whole filter. « Next » and « Previous » keep the ones of the
     // filter, so the worker reads the page alone. Any other read counts again: a reload, a filter, a
     // status that a person changed.
@@ -261,6 +272,25 @@ export default function Notes() {
       if (back === '' || at <= 1) next.delete('from');
       else next.set('from', String(at));
     }
+    setParams(next);
+  }
+
+  /**
+   * Goes to a page by its number (FRU-587): the next one by its cursor, one before by the cursor kept
+   * when it was left, the first one with none. `reach` of the pages offers no other.
+   */
+  function go(to: number, answer: NotesAnswer) {
+    const at = pageOf(from);
+    if (to === at + 1) return page('next', answer);
+    paging.current = true;
+    const kept = before.length - (at - to);
+    const back = kept >= 0 ? (before[kept] ?? '') : '';
+    setBefore((pages) => (kept >= 0 ? pages.slice(0, kept) : []));
+    const next = new URLSearchParams(params);
+    if (back === '') next.delete('cursor');
+    else next.set('cursor', back);
+    if (back === '' || to <= 1) next.delete('from');
+    else next.set('from', String((to - 1) * NOTES_PER_PAGE + 1));
     setParams(next);
   }
 
@@ -493,6 +523,16 @@ export default function Notes() {
                 first={cursor === ''}
                 last={shown.next === undefined}
                 onPage={(to) => page(to, shown)}
+                numbers={{
+                  at: pageOf(from),
+                  count: Math.ceil(shown.total / NOTES_PER_PAGE),
+                  // The first page, the next one, and the pages walked through to this one.
+                  reach: (to) =>
+                    to === 1 ||
+                    (to === pageOf(from) + 1 && shown.next !== undefined) ||
+                    (to < pageOf(from) && to >= pageOf(from) - before.length),
+                  onGo: (to) => go(to, shown),
+                }}
               />
             </>
           )}
@@ -1058,7 +1098,22 @@ export function NotesFailed({ onRetry }: { onRetry: () => void }) {
   );
 }
 
-/** Where the page is in the list, and the way to the page before and after it. */
+/** The pages a press reaches directly (FRU-587), for a list that knows how many pages it has. */
+export type PageNumbers = {
+  /** The page shown, from 1. */
+  at: number;
+  count: number;
+  /** Whether a page has an address: a list read by a cursor knows few of them. Every page when none is given. */
+  reach?: (page: number) => boolean;
+  onGo: (page: number) => void;
+};
+
+/**
+ * Where the page is in the list, and the way to the pages around it (FRU-587, Mathieu): « Previous »
+ * and « Next » are icon buttons, and between them the numbers of the first page, the last, and the
+ * pages beside the one shown (`pageWindow`). The page shown is marked `aria-current`, and stays a
+ * button: a press on a number keeps the focus on it once its page is drawn.
+ */
 export function NotePages({
   label,
   from,
@@ -1067,6 +1122,7 @@ export function NotePages({
   first,
   last,
   onPage,
+  numbers,
 }: {
   /** What the pages are of: « Pages of notes » when none is given. */
   label?: string;
@@ -1076,6 +1132,7 @@ export function NotePages({
   first: boolean;
   last: boolean;
   onPage: (to: 'next' | 'previous') => void;
+  numbers?: PageNumbers;
 }) {
   useLocale();
 
@@ -1085,14 +1142,49 @@ export function NotePages({
       className="mt-[16px] flex flex-wrap items-center justify-between gap-[12px] text-small text-muted"
     >
       <span className="tabular-nums">{t('{from} to {to} of {total}', { from, to: from + shown - 1, total })}</span>
-      <span className="flex gap-[8px]">
-        <Button tone="outline" inset={14} disabled={first} onClick={() => onPage('previous')}>
-          {t('Previous')}
-        </Button>
-        <Button tone="outline" inset={14} disabled={last} onClick={() => onPage('next')}>
-          {t('Next')}
-        </Button>
+      <span className="flex items-center gap-[4px]">
+        <IconButton size="small" label={t('Previous page')} disabled={first} onClick={() => onPage('previous')}>
+          <Chevron to="previous" />
+        </IconButton>
+        {numbers === undefined
+          ? null
+          : pageWindow(numbers.at, numbers.count, numbers.reach).map((link, index) =>
+              link === 'gap' ? (
+                // Its place in the list is its key: two « … » are never at the same place.
+                <span key={`gap ${index}`} aria-hidden="true" className="w-[20px] text-center">
+                  …
+                </span>
+              ) : (
+                <PageNumber
+                  key={link}
+                  label={t('Page {page}', { page: link })}
+                  current={link === numbers.at}
+                  onClick={() => numbers.onGo(link)}
+                >
+                  {link}
+                </PageNumber>
+              ),
+            )}
+        <IconButton size="small" label={t('Next page')} disabled={last} onClick={() => onPage('next')}>
+          <Chevron to="next" />
+        </IconButton>
       </span>
     </nav>
+  );
+}
+
+/** The arrow of « Previous page » and « Next page »: the chevron of `Disclosure`, either way. */
+function Chevron({ to }: { to: 'previous' | 'next' }) {
+  return (
+    <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" className="size-[16px]">
+      <path
+        d={to === 'next' ? 'M9 6l6 6-6 6' : 'M15 6l-6 6 6 6'}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
