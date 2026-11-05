@@ -68,7 +68,7 @@ for (const width of [390, 320]) {
   }
 }
 
-test('at 390 px, the title follows the sections, and a long host reads in full', async ({ page }) => {
+test('at 390 px, the title follows the sections, and a long host is cut inside the screen', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await stubWorker(page, 'fr');
   await open(page, 'sites');
@@ -82,9 +82,12 @@ test('at 390 px, the title follows the sections, and a long host reads in full',
 
   const host = page.getByRole('heading', { level: 2, name: LONG_HOST, exact: true });
   await expect(host).toBeVisible();
-  // Read in full: nothing cut, and nothing past the right edge of the screen.
-  expect(await host.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
-  const box = await host.boundingBox();
+  // FRU-585: cut with « … » on one line, whole to a screen reader and in a tooltip (console-sites.spec.ts),
+  // and nothing past the right edge of the screen.
+  const link = host.getByRole('link');
+  expect(await link.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+  expect(await link.evaluate((element) => getComputedStyle(element).textOverflow)).toBe('ellipsis');
+  const box = await link.boundingBox();
   expect(box!.x + box!.width).toBeLessThanOrEqual(390);
 });
 
