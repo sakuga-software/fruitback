@@ -114,6 +114,8 @@ export function destinationScreen(document: Document, options: DestinationScreen
   group.setAttribute('aria-label', t('Where notes go'));
   const problem = make(document, 'p', 'problem');
   problem.setAttribute('role', 'alert');
+  const saved = make(document, 'p', 'destination-saved');
+  saved.setAttribute('role', 'status');
 
   const team = field(document, t('Team'), 'team');
   const project = field(document, t('Project'), 'project');
@@ -265,14 +267,16 @@ export function destinationScreen(document: Document, options: DestinationScreen
     if (place === undefined) return;
     save.disabled = true;
     problem.textContent = '';
+    saved.textContent = '';
     const said = placeWords(place === null ? undefined : sourceOf(place.connector), offer, place);
     void options
       .onSave(place, said)
       .catch(() => false)
       .then((holds) => {
-        if (holds) return;
         save.disabled = false;
-        problem.textContent = t('The place could not be saved. Try again.');
+        // Usually screen 3 replaces this screen. If it is still here, it says the save itself.
+        if (holds) saved.textContent = t('New notes now go to {place}', { place: said });
+        else problem.textContent = t('The place could not be saved. Try again.');
       });
   });
   actions.append(cancel, save);
@@ -284,7 +288,7 @@ export function destinationScreen(document: Document, options: DestinationScreen
     more.classList.add('destination-connect');
     body.append(more);
   }
-  body.append(problem, foot);
+  body.append(problem, saved, foot);
   choose(cards.has(chosen) ? chosen : FRUITBACK);
 
   return root;

@@ -292,6 +292,14 @@ button.long {
   color: var(--accent);
 }
 
+.destination-saved:empty {
+  display: none;
+}
+
+.destination-saved {
+  margin: 8px 0 0;
+}
+
 /* The pairing block sits under the site row, which already draws the separator above it. */
 .session label {
   margin-top: 10px;

@@ -96,6 +96,10 @@ describe('« Where notes go », a screen of the popup (FRU-600)', () => {
     root.querySelector<HTMLButtonElement>('.kit-primary')?.click();
     await settled();
     assert.deepEqual(calls, [{ place: { connector: 'gh', teamId: 'acme-org/site' }, said: 'GitHub / acme-org/site' }]);
+    // Screen 3 did not replace this screen: it says the save itself, and « Save » works again.
+    assert.equal(root.querySelector('.destination-saved')?.textContent, 'New notes now go to GitHub / acme-org/site');
+    assert.equal(root.querySelector('.problem')?.textContent, '');
+    assert.equal(root.querySelector<HTMLButtonElement>('.kit-primary')?.disabled, false);
   });
 
   it('saves « Fruitback » with no place, and keeps the screen with a problem when the worker refuses', async () => {
@@ -112,6 +116,7 @@ describe('« Where notes go », a screen of the popup (FRU-600)', () => {
     assert.deepEqual(calls, [null]);
     assert.equal(root.querySelector('.problem')?.textContent, 'The place could not be saved. Try again.');
     assert.equal(root.querySelector<HTMLButtonElement>('.kit-primary')?.disabled, false);
+    assert.equal(root.querySelector('.destination-saved')?.textContent, '');
   });
 
   it('goes back with « Back » and « Cancel », and opens the console for another tool', () => {
