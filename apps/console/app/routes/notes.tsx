@@ -1,4 +1,4 @@
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { type Answer, type Connector, type SiteChoice, STAGES, type Stage, call, siteChoices } from '../api';
 import { ago } from '../ago';
@@ -314,67 +314,71 @@ export default function Notes() {
       ) : null}
 
       {typeof shown === 'object' && (shown.counts.all > 0 || filtered) ? (
-        <>
-          {seesTracker ? (
-            <Places
-              counts={shown.counts}
-              connectors={connectors}
-              chosen={filters.place}
-              onChoose={(place) => filter({ place })}
-            />
-          ) : null}
-          <div className="mb-[16px] flex flex-wrap items-center gap-x-[16px] gap-y-[10px]">
-            <div className="min-w-0 flex-[999_1_240px]">
-              <Field
-                label={t('Search notes')}
-                labelHidden
-                compact
-                type="search"
-                // What the index searches (`searched` of FRU-244): the 64 characters, the page and the
-                // reference in the tracker. Not the author, which the mockup says.
-                // A guest reads no reference, and the route does not search one for them.
-                placeholder={
-                  seesTracker ? t('Search the text, the page or the reference') : t('Search the text or the page')
-                }
-                value={typed}
-                onChange={(event) => setTyped(event.target.value)}
-              />
-            </div>
-            <div className="min-w-0 flex-[1_1_170px]">
-              <Choice
-                label={t('Site')}
-                labelHidden
-                compact
-                value={filters.site === '' ? 'every' : filters.site}
-                onChange={(site) => filter({ site: site === 'every' ? '' : site })}
-                options={[
-                  { value: 'every', label: t('Every site') },
-                  ...(typeof sites === 'string'
-                    ? []
-                    : sites.map((site) => ({ value: site.id, label: siteLabel(site.origin) }))),
-                ]}
-              />
-            </div>
-            <div className="min-w-0 flex-[1_1_150px]">
-              <Choice
-                label={t('Status')}
-                labelHidden
-                compact
-                value={filters.stage === '' ? 'any' : filters.stage}
-                onChange={(stage) => filter({ stage: stage === 'any' ? '' : stage })}
-                options={[
-                  { value: 'any', label: t('Any status') },
-                  ...STAGES.map((stage) => ({ value: stage, label: t(STAGE_NAMES[stage]) })),
-                ]}
-              />
-            </div>
-            <Checkbox
-              label={t('Only my notes')}
-              checked={filters.mine === '1'}
-              onChange={(mine) => filter({ mine: mine ? '1' : '' })}
-            />
-          </div>
-
+        <Pinned
+          bar={
+            <>
+              {seesTracker ? (
+                <Places
+                  counts={shown.counts}
+                  connectors={connectors}
+                  chosen={filters.place}
+                  onChoose={(place) => filter({ place })}
+                />
+              ) : null}
+              <div className="flex flex-wrap items-center gap-x-[16px] gap-y-[10px]">
+                <div className="min-w-0 flex-[999_1_240px]">
+                  <Field
+                    label={t('Search notes')}
+                    labelHidden
+                    compact
+                    type="search"
+                    // What the index searches (`searched` of FRU-244): the 64 characters, the page and the
+                    // reference in the tracker. Not the author, which the mockup says.
+                    // A guest reads no reference, and the route does not search one for them.
+                    placeholder={
+                      seesTracker ? t('Search the text, the page or the reference') : t('Search the text or the page')
+                    }
+                    value={typed}
+                    onChange={(event) => setTyped(event.target.value)}
+                  />
+                </div>
+                <div className="min-w-0 flex-[1_1_170px]">
+                  <Choice
+                    label={t('Site')}
+                    labelHidden
+                    compact
+                    value={filters.site === '' ? 'every' : filters.site}
+                    onChange={(site) => filter({ site: site === 'every' ? '' : site })}
+                    options={[
+                      { value: 'every', label: t('Every site') },
+                      ...(typeof sites === 'string'
+                        ? []
+                        : sites.map((site) => ({ value: site.id, label: siteLabel(site.origin) }))),
+                    ]}
+                  />
+                </div>
+                <div className="min-w-0 flex-[1_1_150px]">
+                  <Choice
+                    label={t('Status')}
+                    labelHidden
+                    compact
+                    value={filters.stage === '' ? 'any' : filters.stage}
+                    onChange={(stage) => filter({ stage: stage === 'any' ? '' : stage })}
+                    options={[
+                      { value: 'any', label: t('Any status') },
+                      ...STAGES.map((stage) => ({ value: stage, label: t(STAGE_NAMES[stage]) })),
+                    ]}
+                  />
+                </div>
+                <Checkbox
+                  label={t('Only my notes')}
+                  checked={filters.mine === '1'}
+                  onChange={(mine) => filter({ mine: mine ? '1' : '' })}
+                />
+              </div>
+            </>
+          }
+        >
           {shown.notes.length === 0 ? (
             <div className="flex flex-wrap items-center gap-x-[12px] text-body text-muted">
               <p>{t('No note matches.')}</p>
@@ -424,7 +428,7 @@ export default function Notes() {
                 />
               ) : (
                 <div aria-busy={reading}>
-                  <DataTable label={t('Notes')} minWidth={960} hover stack>
+                  <DataTable label={t('Notes')} minWidth={720} hover stack pinned>
                     <thead>
                       <tr>
                         <th scope="col">{t('Note')}</th>
@@ -492,9 +496,40 @@ export default function Notes() {
               />
             </>
           )}
-        </>
+        </Pinned>
       ) : null}
     </>
+  );
+}
+
+/**
+ * The filters stay at the top of the window while the notes scroll under them, whatever the view and
+ * the width (FRU-586, Mathieu). Their height is written in `--kit-pinned-top`, under which the table
+ * pins its heads; it changes when the filters wrap on another line.
+ */
+function Pinned({ bar, children }: { bar: ReactNode; children: ReactNode }) {
+  const list = useRef<HTMLDivElement>(null);
+  const filters = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const element = filters.current;
+    if (element === null) return;
+    const measure = () =>
+      list.current?.style.setProperty('--kit-pinned-top', `${element.getBoundingClientRect().height}px`);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div ref={list}>
+      {/* The padding above is taken back by the margin: at rest the filters are where they were. */}
+      <div ref={filters} className="sticky top-0 z-[3] -mt-[12px] bg-page pt-[12px] pb-[16px]" data-pinned-filters="">
+        {bar}
+      </div>
+      {children}
+    </div>
   );
 }
 
