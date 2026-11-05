@@ -385,6 +385,11 @@ export function Tip({ tip, className = '', children }: TipProps) {
 export const LONG_PRESS_MS = 500;
 /** How far a finger moves before a long press is a scroll instead. */
 const LONG_PRESS_SLOP = 10;
+/**
+ * How long after the finger of a long press is lifted its click is ignored. The click of a touch
+ * comes right after its `pointerup`; any later click is a new gesture and follows the link.
+ */
+const LONG_PRESS_CLICK_MS = 1000;
 
 type CutLinkProps = {
   to: string;
@@ -403,8 +408,9 @@ type CutLinkProps = {
  * (FRU-585: the address of a site on its card). The tooltip opens:
  * - when the pointer rests on it, as `Tip`;
  * - when the keyboard gives the link focus (`:focus-visible`), and Escape closes it;
- * - on a long press of a finger (500 ms). That press does not follow the link. The next press
- *   anywhere closes the tooltip.
+ * - on a long press of a finger (500 ms). The click that ends that press does not follow the link;
+ *   only the click within 1 s of its `pointerup` is ignored, so no later tap, click or Enter is lost.
+ *   The next press anywhere closes the tooltip.
  *
  * The link has `overflow: hidden`, not its heading: an ancestor that clips cuts the focus ring.
  */
@@ -412,12 +418,16 @@ export function CutLink({ to, children, heading: Heading = 'h2', className = '',
   const ref = useRef<HTMLAnchorElement>(null);
   const [cut, setCut] = useState(false);
   const [open, setOpen] = useState(false);
-  const press = useRef<{ timer?: ReturnType<typeof setTimeout>; x: number; y: number; touch: boolean; held: boolean }>({
-    x: 0,
-    y: 0,
-    touch: false,
-    held: false,
-  });
+  // The press of a finger in progress: where it started, and whether it was held long enough to open
+  // the tooltip. `ignoreClickUntil` is the end of the window in which its click is ignored.
+  const press = useRef<{
+    timer?: ReturnType<typeof setTimeout>;
+    x: number;
+    y: number;
+    touch: boolean;
+    held: boolean;
+    ignoreClickUntil: number;
+  }>({ x: 0, y: 0, touch: false, held: false, ignoreClickUntil: 0 });
 
   // The link is cut when its words are wider than its box. The box follows the card, and a font that
   // loads late changes the width of the words.
@@ -438,7 +448,6 @@ export function CutLink({ to, children, heading: Heading = 'h2', className = '',
     if (!open) return undefined;
     const close = (event: Event) => {
       if (event.target instanceof Node && ref.current?.contains(event.target) === true) return;
-      press.current.held = false;
       setOpen(false);
     };
     document.addEventListener('pointerdown', close, true);
@@ -471,21 +480,28 @@ export function CutLink({ to, children, heading: Heading = 'h2', className = '',
             }}
             onBlur={() => setOpen(false)}
             onPointerDown={(event) => {
-              press.current = { x: event.clientX, y: event.clientY, touch: event.pointerType === 'touch', held: false };
+              stop();
+              press.current = {
+                x: event.clientX,
+                y: event.clientY,
+                touch: event.pointerType === 'touch',
+                held: false,
+                ignoreClickUntil: 0,
+              };
               if (press.current.touch && cut) press.current.timer = setTimeout(hold, LONG_PRESS_MS);
             }}
             onPointerMove={(event) => {
               const moved = Math.hypot(event.clientX - press.current.x, event.clientY - press.current.y);
               if (moved > LONG_PRESS_SLOP) stop();
             }}
-            onPointerUp={stop}
-            // A press that the browser takes for a scroll or a menu ends with no click: nothing to swallow.
-            onPointerCancel={() => {
+            onPointerUp={() => {
               stop();
+              if (press.current.held) press.current.ignoreClickUntil = performance.now() + LONG_PRESS_CLICK_MS;
               press.current.held = false;
             }}
-            // A key press that follows a long press is a new gesture: Enter follows the link.
-            onKeyDown={() => {
+            // A press that the browser takes for a scroll or a menu ends with no click: nothing to ignore.
+            onPointerCancel={() => {
+              stop();
               press.current.held = false;
             }}
             // Android opens the menu of a link on a long press: on a cut link, the tooltip opens instead.
@@ -495,9 +511,10 @@ export function CutLink({ to, children, heading: Heading = 'h2', className = '',
               hold();
             }}
             onClick={(event) => {
-              if (!press.current.held) return;
-              press.current.held = false;
-              event.preventDefault();
+              // Only a click of a pointer: Enter gives `detail` 0, and always follows the link.
+              const ignored = event.detail > 0 && performance.now() < press.current.ignoreClickUntil;
+              press.current.ignoreClickUntil = 0;
+              if (ignored) event.preventDefault();
             }}
           >
             {children}

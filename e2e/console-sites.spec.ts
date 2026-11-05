@@ -576,8 +576,16 @@ test.describe('on a phone, by touch', () => {
     await expect(page).toHaveURL(/\/w\/w1\/sites\/s7$/);
 
     await open(page);
+    // Only the click that ends the long press is ignored (review of FRU-585): a click with no press
+    // before it, a second after, follows the link.
+    await press(long, 800);
+    await expect(page.getByRole('tooltip')).toHaveText(LONG_HOST);
+    await page.waitForTimeout(1200);
+    await long.evaluate((element: HTMLElement) => element.click());
+    await expect(page).toHaveURL(/\/w\/w1\/sites\/s7$/);
+    await open(page);
     // A long press that ends with no click (the browser took it for a menu) does not swallow the next
-    // gesture: Enter on the link follows it (review of FRU-585).
+    // gesture: Enter on the link follows it.
     await long.dispatchEvent('pointerdown', { pointerType: 'touch', isPrimary: true });
     await page.waitForTimeout(800);
     await expect(page.getByRole('tooltip')).toHaveText(LONG_HOST);
