@@ -543,7 +543,7 @@ test('the page is the one of the mockup: chips, filters, the table and its pages
   expect.soft(await styles(previous, ['width', 'height', 'border-top-left-radius'])).toEqual({
     width: '32px',
     height: '32px',
-    'border-top-left-radius': '6px',
+    'border-top-left-radius': '8px',
   });
   expect
     .soft(await styles(pages(page), ['margin-top', 'font-size']))
