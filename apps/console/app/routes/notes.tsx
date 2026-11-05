@@ -181,13 +181,24 @@ export default function Notes() {
   // screen until its answer comes: only the first read says « Loading… ».
   const [shown, setShown] = useState<NotesAnswer | 'loading' | 'failed'>('loading');
   const [reading, setReading] = useState(false);
-  // The cursor of each page shown since the filter, by its number (FRU-587): « Previous » and the
-  // numbers of the pages take them back. Kept by number, not as a pile, so that the buttons of the
-  // browser, which change the address and not this list, leave each page with its own cursor. A
-  // reload starts it again: « Previous » then goes to the first page.
-  const [known, setKnown] = useState<Readonly<Record<number, string>>>({});
+  // The cursor of each page shown, by its number (FRU-587): « Previous » and the numbers of the
+  // pages take them back. Kept by number, not as a pile, so that the buttons of the browser, which
+  // change the address and not this list, leave each page with its own cursor; and for one list only,
+  // the filters and the view of the address, so that a Back across a filter finds none of another
+  // list. A reload starts it again: « Previous » then goes to the first page.
+  const list = JSON.stringify([view, ...FILTERS.map((name) => filters[name])]);
   const at = pageOf(from);
-  useEffect(() => setKnown((pages) => (pages[at] === cursor ? pages : { ...pages, [at]: cursor })), [at, cursor]);
+  const [kept, setKept] = useState<{ list: string; pages: Readonly<Record<number, string>> }>({ list, pages: {} });
+  const known: Readonly<Record<number, string>> = kept.list === list ? kept.pages : {};
+  useEffect(
+    () =>
+      setKept((was) => {
+        const pages = was.list === list ? was.pages : {};
+
+        return was.list === list && pages[at] === cursor ? was : { list, pages: { ...pages, [at]: cursor } };
+      }),
+    [list, at, cursor],
+  );
   const asked = useRef(0);
   // The counts of the last filter that the worker counted, and whether the next read is a press of
   // « Next » or « Previous » (FRU-502).
@@ -244,7 +255,6 @@ export default function Notes() {
 
   /** Sets filters, and goes back to the first page: a page of another list means nothing. */
   function filter(changes: Partial<Record<(typeof FILTERS)[number], string>>, replace = false) {
-    setKnown({});
     setMovedOut(false);
     // From the address as it is when the change lands, not as it was when it was asked: the search
     // writes 300 ms after its key, and a list chosen meanwhile must not be undone by it. The setter of
@@ -283,6 +293,8 @@ export default function Notes() {
    * shown with, the first one with none. `reach` offers no other.
    */
   function go(to: number, answer: NotesAnswer) {
+    // A page with no known cursor is not offered; a press that comes anyway reads nothing.
+    if (!reach(to, answer)) return;
     if (to === at + 1) return page('next', answer);
     paging.current = true;
     const back = to === 1 ? '' : (known[to] ?? '');
@@ -304,7 +316,6 @@ export default function Notes() {
     else changed.delete('view');
     changed.delete('cursor');
     changed.delete('from');
-    setKnown({});
     latest.current = changed;
     setParams(changed);
   }

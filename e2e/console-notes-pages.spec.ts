@@ -34,7 +34,11 @@ async function open(page: Page, query = '', locale: 'en' | 'fr' = 'en'): Promise
       if (pathname !== '/console/workspaces/w1/notes') return undefined;
       const { order: _order, ...params } = Object.fromEntries(new URL(route.request().url()).searchParams);
       asked.push(params);
-      const start = Number(params.cursor ?? 0);
+      // A cursor carries the status of its list, as a cursor of the worker belongs to one filter.
+      const list = params.stage ?? 'all';
+      const [of, at] = (params.cursor ?? `${list}:0`).split(':');
+      if (of !== list) return route.fulfill({ status: 400, json: { error: 'invalid-cursor' } });
+      const start = Number(at);
       const limit = Number(params.limit ?? 8);
 
       return route.fulfill({
@@ -42,7 +46,7 @@ async function open(page: Page, query = '', locale: 'en' | 'fr' = 'en'): Promise
           notes: NOTES.slice(start, start + limit),
           total: NOTES.length,
           counts: { all: NOTES.length, byPlace: { fruitback: NOTES.length }, undelivered: 0 },
-          ...(start + limit < NOTES.length ? { next: String(start + limit) } : {}),
+          ...(start + limit < NOTES.length ? { next: `${list}:${start + limit}` } : {}),
         },
       });
     },
@@ -85,7 +89,7 @@ test('the numbers go to the pages around, by the cursors the screen knows', asyn
   await expect(summary(page)).toHaveText('26 to 50 of 263');
   await expect(number(page, 2)).toHaveAttribute('aria-current', 'page');
   await expect(number(page, 2)).toBeFocused();
-  await expect(page).toHaveURL(/[?&]cursor=25(&|$)/);
+  await expect(page).toHaveURL(/[?&]cursor=all%3A25(&|$)/);
 
   // Three pages further by « Next page »: the pages walked through are offered back.
   for (let press = 0; press < 3; press += 1) await pages(page).getByRole('button', { name: 'Next page' }).click();
@@ -95,7 +99,7 @@ test('the numbers go to the pages around, by the cursors the screen knows', asyn
   // Back to the fourth page by its number: the cursor it was read with, and the counts kept (FRU-502).
   await number(page, 4).click();
   await expect(summary(page)).toHaveText('76 to 100 of 263');
-  expect(asked.at(-1)).toEqual({ limit: '25', cursor: '75', counts: 'none' });
+  expect(asked.at(-1)).toEqual({ limit: '25', cursor: 'all:75', counts: 'none' });
   await expect.poll(() => offered(page)).toEqual(['1', '2', '3', '[4]', '5', '…']);
 
   // The first page: no cursor in the address.
@@ -106,7 +110,7 @@ test('the numbers go to the pages around, by the cursors the screen knows', asyn
 });
 
 test('the last page is offered once its cursor is known, and « Next page » is off there', async ({ page }) => {
-  await open(page, '?cursor=225&from=226');
+  await open(page, '?cursor=all:225&from=226');
   await expect(summary(page)).toHaveText('226 to 250 of 263');
   // Opened from a link: the cursors before are not known, the first page and the next one are.
   await expect.poll(() => offered(page)).toEqual(['1', '…', '[10]', '11']);
@@ -159,6 +163,27 @@ test('after the Back button of the browser, each number still reads its own page
   await expect(first).toContainText('Note 1 of the list');
 });
 
+test('after a Back across a filter, no number reads a cursor of the other list (review of #823)', async ({ page }) => {
+  const asked = await open(page);
+  await number(page, 2).click();
+  await number(page, 3).click();
+  await expect(summary(page)).toHaveText('51 to 75 of 263');
+  // Another list: the status « New », and its second page.
+  await page.getByRole('button', { name: /Any status/ }).click();
+  await page.getByRole('option', { name: 'New', exact: true }).click();
+  await expect(page).toHaveURL(/[?&]stage=new(&|$)/);
+  await number(page, 2).click();
+  await expect(summary(page)).toHaveText('26 to 50 of 263');
+  // Back to the third page of every note: its own cursor, and no number of the other list.
+  await page.goBack();
+  await page.goBack();
+  await expect(summary(page)).toHaveText('51 to 75 of 263');
+  await expect.poll(() => offered(page)).toEqual(['1', '…', '[3]', '4', '…']);
+  await number(page, 1).click();
+  await expect(summary(page)).toHaveText('1 to 25 of 263');
+  expect(asked.every((each) => (each.cursor ?? `${each.stage ?? 'all'}:`).startsWith(each.stage ?? 'all'))).toBe(true);
+});
+
 test('the pages of the sites offer every number, as the sites are read by their offset', async ({ page }) => {
   const many = Array.from({ length: 70 }, (_, index) => ({
     id: `m${index + 1}`,
@@ -185,7 +210,7 @@ for (const [width, locale, label, previous, next] of [
 ] as const) {
   test(`the pages at ${width} px in ${locale}: one line, named, and nothing past the screen`, async ({ page }) => {
     await page.setViewportSize({ width, height: 844 });
-    await open(page, '?cursor=100&from=101', locale);
+    await open(page, '?cursor=all:100&from=101', locale);
     const nav = pages(page, label);
     await expect(nav.getByRole('button', { name: previous })).toBeEnabled();
     await expect(nav.getByRole('button', { name: next, exact: true })).toHaveCount(0);
