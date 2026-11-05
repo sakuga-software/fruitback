@@ -287,8 +287,10 @@ describe('the page that opens at install (FRU-318)', () => {
         // A welcome page in a folder (`/pages/welcome.html`) would ask for `/pages/demo/…`: a 404.
         assert.equal(new URL(file, `chrome-extension://fruitback${WELCOME_PATH}`).pathname, `/${file}`);
         // `staticDirs` of `gallery/.storybook/main.ts` copies `public/demo/` next to `iframe.html`.
-        const story = 'https://gallery.fruitback.com/gallery/iframe.html?id=extension-welcome-page--signed-out';
-        assert.equal(new URL(file, story).pathname, `/gallery/${file}`);
+        const story = new URL(
+          `https://gallery.fruitback.com/gallery/iframe.html?id=extension-welcome-page--signed-out`,
+        );
+        assert.equal(new URL(file, story.href).pathname, `/gallery/${file}`);
       }
     });
 
