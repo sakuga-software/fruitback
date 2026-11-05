@@ -82,8 +82,9 @@ async function scrollTo(page: Page, y: number): Promise<void> {
 
 /**
  * What is pinned, as the window shows it: the bottom of the filters, of the head of the columns, and
- * of the head of the group under them; the group of that head, as a point at its middle finds it, and
- * the group of the first note under the heads.
+ * of the head of the group under them; the group of that head, as a point just under the heads finds
+ * it; the group of the first note under it; and the head of the next group when it is arriving, its
+ * top on the bottom of the head shown and no note between them.
  */
 function pinned(page: Page) {
   return page.evaluate(() => {
@@ -94,19 +95,31 @@ function pinned(page: Page) {
     const under = stacked ? bar.bottom : head.bottom;
     const x = table.getBoundingClientRect().left + 40;
     const shownHead = document.elementFromPoint(x, under + 4)?.closest('tr.kit-table-group');
-    const headBottom = shownHead?.querySelector('th')?.getBoundingClientRect().bottom ?? under;
+    const shown = shownHead?.querySelector('th')?.getBoundingClientRect();
+    const headBottom = shown?.bottom ?? under;
     const firstNote = [...table.querySelectorAll<HTMLElement>('tbody tr:not(.kit-table-group)')].find(
       (row) => row.getBoundingClientRect().bottom > headBottom + 1,
     );
+    const noteTop = firstNote?.getBoundingClientRect().top ?? Infinity;
+    // The head of the next group, between the head shown and the first note: it slides over the head
+    // shown (a table) or pushes it up (cards) as the last note of the group above leaves.
+    const next = [...table.querySelectorAll<HTMLElement>('tr.kit-table-group th')].find((th) => {
+      const box = th.getBoundingClientRect();
+
+      return shown !== undefined && box.top > shown.top + 1 && box.top < noteTop;
+    });
 
     return {
       barTop: bar.top,
       barBottom: bar.bottom,
       headTop: head.top,
       under,
+      headBottom,
       headGroup: shownHead?.closest('tbody')?.dataset.group,
-      headTop2: shownHead?.querySelector('th')?.getBoundingClientRect().top,
+      headTop2: shown?.top,
       noteGroup: firstNote?.closest('tbody')?.dataset.group,
+      arriving: next?.closest('tbody')?.dataset.group,
+      arrivingTop: next?.getBoundingClientRect().top,
     };
   });
 }
@@ -116,14 +129,24 @@ async function expectPinnedDown(page: Page, stacked: boolean): Promise<void> {
   const height = await page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight);
   expect(height, 'the list is longer than the window').toBeGreaterThan(2000);
   const seen = new Set<string>();
-  for (let y = 400; y < height - 200; y += 350) {
+  for (let y = 400; y < height - 200; y += 30) {
     await scrollTo(page, y);
     const at = await pinned(page);
     expect.soft(at.barTop, `the filters at the top, at ${y}`).toBeCloseTo(0, 0);
     if (!stacked)
       expect.soft(at.headTop, `the head of the columns under the filters, at ${y}`).toBeCloseTo(at.barBottom, 0);
-    expect.soft(at.headTop2, `the head of a group under the heads, at ${y}`).toBeCloseTo(at.under, 0);
-    expect.soft(at.headGroup, `the head shown is the group of the first note, at ${y}`).toBe(at.noteGroup);
+    if (at.arriving === undefined) {
+      // A head that is just arriving reads a few pixels under the line, never more.
+      expect
+        .soft(Math.abs(at.headTop2! - at.under), `the head of a group under the heads, at ${y}`)
+        .toBeLessThanOrEqual(5);
+      expect.soft(at.headGroup, `the head shown is the group of the first note, at ${y}`).toBe(at.noteGroup);
+    } else {
+      // The last note of the group shown is gone: the head of the next one is on its way, on the
+      // head shown, with its own notes under it.
+      expect.soft(at.arriving, `the head arriving is the group of the first note, at ${y}`).toBe(at.noteGroup);
+      expect.soft(at.arrivingTop!, `no note between the heads, at ${y}`).toBeLessThanOrEqual(at.headBottom + 1);
+    }
     if (at.headGroup !== undefined) seen.add(at.headGroup);
   }
   // Every group had its head pinned on the way down.
