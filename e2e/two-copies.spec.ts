@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { type Page, expect } from '@playwright/test';
-import { type LoadedExtension, mintPairing, openPopup, test } from './extension.ts';
+import { type LoadedExtension, mintPairing, openPopup, test, SITE_ON } from './extension.ts';
 import { caseOf, hydrated } from './pin.ts';
 import { AUTHENTICATED_WORKER_ORIGIN } from './worker-sessions.ts';
 
@@ -59,7 +59,7 @@ for (const order of ['before', 'after'] as const) {
 
     let popup = await openPopup(extension, page);
     await popup.getByRole('button', { name: 'Turn on' }).click();
-    await expect(popup.getByRole('switch', { name: 'Fruitback on localhost:5177' })).toBeChecked();
+    await expect(popup.getByRole('img', { name: SITE_ON })).toBeVisible();
 
     // The tab says it once both scripts of the current copy run in it: asked again until then.
     await expect

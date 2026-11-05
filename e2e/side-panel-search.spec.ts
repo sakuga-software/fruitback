@@ -48,7 +48,7 @@ test('« Search and options »: the search, « Whole site » over three pages, t
 
   const again = await openPopup(extension, page);
   await again
-    .getByRole('button', { name: /^(Show all notes in a sidebar|Voir toutes les notes dans un panneau)$/ })
+    .getByRole('button', { name: /^(Show all notes in a sidebar|Voir toutes les notes dans un panneau)/ })
     .click();
   await expect.poll(async () => (await panelRows(page).catch(() => ({ tabs: [], rows: [] }))).rows.length).toBe(2);
 
@@ -162,7 +162,7 @@ test('« Show on the page » of a row of the whole site: another page opens in a
 
   const again = await openPopup(extension, page);
   await again
-    .getByRole('button', { name: /^(Show all notes in a sidebar|Voir toutes les notes dans un panneau)$/ })
+    .getByRole('button', { name: /^(Show all notes in a sidebar|Voir toutes les notes dans un panneau)/ })
     .click();
   await expect.poll(async () => (await panelRows(page).catch(() => ({ rows: [] }))).rows.length).toBeGreaterThan(0);
   expect(await clickPanel(page, 'button.panel-search')).toBe(true);
@@ -215,7 +215,7 @@ test('a new search during « Show more » draws no page of the words of before (
   await expect(page.locator('[data-fruitback-host-launch]')).toBeVisible();
   const again = await openPopup(extension, page);
   await again
-    .getByRole('button', { name: /^(Show all notes in a sidebar|Voir toutes les notes dans un panneau)$/ })
+    .getByRole('button', { name: /^(Show all notes in a sidebar|Voir toutes les notes dans un panneau)/ })
     .click();
   await expect
     .poll(() => inPanel<boolean>(page, `document.querySelector('button.panel-search') !== null`).catch(() => false))
@@ -330,7 +330,7 @@ test('beyond five statuses, the filter of the search is a list over the notes, c
 
   const again = await openPopup(extension, page);
   await again
-    .getByRole('button', { name: /^(Show all notes in a sidebar|Voir toutes les notes dans un panneau)$/ })
+    .getByRole('button', { name: /^(Show all notes in a sidebar|Voir toutes les notes dans un panneau)/ })
     .click();
   await expect
     .poll(async () => (await panelRows(page).catch(() => ({ tabs: [], rows: [] }))).rows.length)
