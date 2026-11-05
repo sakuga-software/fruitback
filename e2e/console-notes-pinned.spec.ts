@@ -203,6 +203,7 @@ test('in the board the filters stay at the top too', async ({ page }) => {
   const height = await page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight);
   expect(height).toBeGreaterThan(500);
   await scrollTo(page, height);
-  expect.soft((await pinned(page)).barTop).toBeCloseTo(0, 0);
+  const bar = await page.locator('[data-pinned-filters]').evaluate((element) => element.getBoundingClientRect().top);
+  expect.soft(bar).toBeCloseTo(0, 0);
   await expect(page.getByRole('searchbox', { name: 'Search notes' })).toBeInViewport();
 });
