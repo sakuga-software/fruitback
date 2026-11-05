@@ -77,7 +77,10 @@ import { type Release, WORKER_VERSION } from './release.ts';
 /** Where the routes of the administrator of the instance are. */
 export const ADMIN_PATH = '/console/admin';
 
-/** The reads that an administrator does, as the trace names them. */
+/**
+ * The reads that an administrator does, as the trace names them. `release` names no workspace, so no
+ * trace holds it (FRU-520).
+ */
 export const ADMIN_READS = ['instance', 'release', 'workspaces', 'workspace', 'users', 'notes', 'actions'] as const;
 export type AdminRead = (typeof ADMIN_READS)[number];
 
