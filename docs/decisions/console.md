@@ -598,7 +598,11 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   of a note it keeps (`POST …/notes/<note>/status`, FRU-384), for its author or an owner or an
   admin, so the drag adds no right; the keyboard moves it with the same select as the table. A drag
   is offered only where a column is a status. The card moves once the worker saved it (the list is
-  read again); a refusal is said above the board, and the card stays. **At 390 px the board scrolls
+  read again); a refusal is said above the board, and the card stays. **A card writes no status and
+  no address** (FRU-589, FRU-588, Mathieu on 2026-11-03): its column says the status, and whoever may
+  change it gets the drop of the table at the right of the note, the select of the keyboard, its words for a
+  screen reader only; a refusal of that select is said on the card. The page opens from the icon at
+  the foot of the card, its address in the tooltip, as in the table. **At 390 px the board scrolls
   in its frame** (columns of 272 px; the frame takes focus, and is `relative` so that what is placed
   absolutely in a card, the hidden select of HeroUI, does not widen the page). « Send again » stays
   in the table. `e2e/console-notes-board.spec.ts` holds the view in the address, the columns, the

@@ -222,6 +222,58 @@ test('a refused move is said, and the note stays where it was', async ({ page })
   await expect(column(page, 'New').locator('li')).toHaveText([/The headline/]);
 });
 
+test('a card writes neither its status nor its address, and opens its page from an icon (FRU-589, FRU-588)', async ({
+  page,
+}) => {
+  await workerWith(page);
+  await page.goto(`${CONSOLE}/w/w1/notes?view=board`);
+  const headline = card(page, 'The headline');
+  await expect(headline).toBeVisible();
+  // FRU-589: the column says the status. A note that cannot move has no status of its own on its card;
+  // a note that can has the drop of the table, its words for a screen reader only.
+  for (const excerpt of ['The price', 'The returns policy']) {
+    await expect(card(page, excerpt).locator('[data-status-of-note]')).toHaveCount(0);
+    await expect(card(page, excerpt).getByRole('button', { name: /Status of this note/ })).toHaveCount(0);
+  }
+  await expect(headline.locator('.kit-field')).toHaveAttribute('data-bare', 'true');
+  await expect(headline.locator('.select__value')).toHaveCSS('font-size', '0px');
+  // FRU-588: no address on a card, and no link written in words.
+  for (const excerpt of ['The headline', 'The price', 'The returns policy']) {
+    await expect(card(page, excerpt)).not.toContainText('staging.acme.dev');
+    await expect(card(page, excerpt)).not.toContainText('Show on the page');
+  }
+  const open = headline.getByRole('link', { name: 'Show on the page' });
+  await expect(open).toHaveAttribute('href', 'https://staging.acme.dev/');
+  await expect(open).toHaveAttribute('target', '_blank');
+  // React Aria opens a tooltip under a pointer it has seen move: the first move of the page is not one.
+  await page.mouse.move(0, 0);
+  await open.hover();
+  await expect(page.getByRole('tooltip')).toHaveText('https://staging.acme.dev/');
+  // The note in Linear opens by its issue, as the widget's link does (FRU-253).
+  await expect(card(page, 'The returns policy').getByRole('link', { name: 'Show on the page' })).toHaveAttribute(
+    'href',
+    'https://staging.acme.dev/help#fruitback-note=ACM-149',
+  );
+});
+
+test('a status the select of a card could not save is said on the card, and the card stays', async ({ page }) => {
+  const worker = await workerWith(page);
+  worker.refuse = { status: 403, error: 'not-allowed' };
+  await page.goto(`${CONSOLE}/w/w1/notes?view=board`);
+  await chooseWithKeyboard(page, 'The headline', 'Shipped');
+  await expect.poll(() => worker.sent.length).toBe(1);
+  await expect(card(page, 'The headline').getByRole('alert')).toHaveText(
+    'Only the person who left this note, or an owner or an admin, changes its status.',
+  );
+  await expect(column(page, 'New').locator('li')).toHaveText([/The headline/]);
+
+  // A second try that the worker saves: the sentence of the refusal goes, and the card moves.
+  worker.refuse = undefined;
+  await chooseWithKeyboard(page, 'The headline', 'Waiting');
+  await expect(column(page, 'Waiting').locator('li')).toHaveText([/The headline/]);
+  await expect(page.getByRole('alert')).toHaveCount(0);
+});
+
 test('the keyboard moves a note with the select of its card', async ({ page }) => {
   const worker = await workerWith(page);
   await page.goto(`${CONSOLE}/w/w1/notes?view=board`);
