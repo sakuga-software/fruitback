@@ -401,14 +401,13 @@ test('the page is the one of the mockup: chips, filters, the table and its pages
   });
   expect.soft(await styles(page.locator('.kit-checkbox .label'), ['font-size'])).toEqual({ 'font-size': '14px' });
 
-  // The table: 960 px at the least, the six columns (FRU-551: no column « Status », the rows are in its groups). The last one is the link to the page
-  // (FRU-546): its head is for a screen reader.
+  // The table, where its frame holds 720 px (FRU-586; cards under it), and its six columns (FRU-551: no
+  // column « Status », the rows are in its groups). The last one is the link to the page (FRU-546): its
+  // head is for a screen reader.
   const headers = table(page).locator('thead th');
   await expect(headers).toHaveText(['Note', 'Site', 'Left by', 'Went to', 'When', 'Page']);
-  expect.soft(await styles(table(page).locator('table'), ['min-width', 'font-size'])).toEqual({
-    'min-width': '960px',
-    'font-size': '14px',
-  });
+  await expect(table(page)).toHaveAttribute('data-stacked', 'false');
+  expect.soft(await styles(table(page).locator('table'), ['font-size'])).toEqual({ 'font-size': '14px' });
   expectBox(await box(table(page).locator('table')), { x: 298, y: 233 }, 2, 'the table');
   expect.soft(await styles(headers.nth(4), ['text-align'])).toEqual({ 'text-align': 'right' });
 
@@ -883,7 +882,7 @@ for (const locale of ['en', 'fr'] as const) {
     const head = page.locator('.kit-table-group th').first();
     await expect(head).toBeVisible();
     expect.soft((await box(head)).width).toBeGreaterThan(300);
-    // Under 640 px a row is a card (FRU-505): the frame does not scroll, and no cell is past it.
+    // Narrower than the table, a row is a card (FRU-505, FRU-586): the frame does not scroll, and no cell is past it.
     const frame = page.locator('.kit-table');
     expect.soft(await frame.evaluate((element) => element.scrollWidth - element.clientWidth)).toBe(0);
     expect

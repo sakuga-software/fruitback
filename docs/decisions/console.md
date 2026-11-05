@@ -582,8 +582,20 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   reach moves meanwhile. A workspace with no note says so, a filter that keeps nothing says so with
   « Clear the filters », and a read that failed is the alert of the Sites screen, never « No note
   yet ». The reference in a tracker is a link at 400, where a link of the kit is at 600 for an
-  action. **Under 640 px a note is a card** (FRU-505): the table scrolled in its frame, and only the
-  text of a note was on a phone, its status, author and day past the edge. `e2e/console-notes.spec.ts` holds the values, every filter, the pages, « Send again », the
+  action. **Where its frame is narrower than 720 px, a note is a card** (FRU-505, FRU-586): the table
+  scrolled in its frame, and only the text of a note was on a phone, its status, author and day past
+  the edge. `DataTable` with `stack` measures its frame, not the window: the rail and the padding of
+  the screen take a width that a media query does not know. 720 px is what the six columns take with
+  two lines of a note (665 px at the least, measured at 1528 px): a table from a window of about
+  1060 px with the rail, cards under it. **The notes scroll under their filters** (FRU-586, Mathieu
+  on 2026-11-03): the chips, the search and the lists stay at the top of the window in the table and
+  in the board, at every width; in the table, the head of the columns stays under them, and the head
+  of a group under it while a note of that group is on screen (`pinned` of `DataTable`, under
+  `--kit-pinned-top`, the height of the filters). The document scrolls, not the table (FRU-402):
+  a frame that scrolls would hold its heads, not the window, so a pinned frame clips and never
+  scrolls sideways, which the cards make possible. What takes focus is scrolled to under the heads
+  (`scroll-margin-top`), never behind them. `e2e/console-notes-pinned.spec.ts` reads the heads at
+  each depth of the list at 1440, 1280, 1024 and 390 px, the keyboard, and the board. `e2e/console-notes.spec.ts` holds the values, every filter, the pages, « Send again », the
   states, the roles, 390 px and axe.
 - **The notes are a table or a board, and the address says which** (FRU-436, decided by Mathieu on
   2026-10-24). « Table » and « Board », two pressed buttons at the right of the head, write

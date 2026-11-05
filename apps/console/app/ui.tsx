@@ -21,12 +21,12 @@ import {
   Tooltip,
 } from '@heroui/react';
 import {
-  type CSSProperties,
   type ChangeEvent,
   type FocusEvent,
   type KeyboardEvent,
   type ReactNode,
   type Ref,
+  useLayoutEffect,
   useRef,
   useState,
 } from 'react';
@@ -935,17 +935,24 @@ export function FilterChip({ pressed, onChange, count, alert = false, children }
 type DataTableProps = {
   /** What the table lists. It names the region, which a keyboard scrolls when the table is wider. */
   label: string;
-  /** The width under which the table scrolls in its frame, in pixels: 860 for the sites. */
+  /** The width under which the table scrolls in its frame, in pixels, or with `stack` is cards. */
   minWidth: number;
   /** 12 px above and under a cell, and not 14: the rows of people. */
   dense?: boolean;
   /** A row is tinted under the pointer: the rows that open something. */
   hover?: boolean;
   /**
-   * Under 640 px each row is a card, its cells one under the other, and the heads are for a screen
-   * reader only (FRU-505). For a table whose first cell must stay on screen with the others.
+   * Each row is a card where the frame is narrower than `minWidth`, its cells one under the other, and
+   * the heads are for a screen reader only (FRU-505, FRU-586). For a table whose first cell must stay
+   * on screen with the others: the frame never scrolls sideways.
    */
   stack?: boolean;
+  /**
+   * With `stack`: the heads stay at the top of the window while the page scrolls (FRU-586). The head
+   * of the columns, then the head of the group of the rows under it (`.kit-table-group`), until the
+   * group ends. They stay under `--kit-pinned-top`, the height of what the screen pins above them.
+   */
+  pinned?: boolean;
   /** `<thead>` and `<tbody>`. A cell with `data-align="end"` is aligned to the right. */
   children: ReactNode;
 };
@@ -954,12 +961,39 @@ type DataTableProps = {
  * A table in its frame. A table wider than the screen scrolls in the frame, and the page does not.
  * The frame takes focus, so a keyboard can scroll it (WCAG 2.1.1).
  */
-export function DataTable({ label, minWidth, dense = false, hover = false, stack = false, children }: DataTableProps) {
-  // A stacked table takes its width from the style sheet, which drops it under 640 px.
-  const width = stack ? ({ '--table-min-width': `${minWidth}px` } as CSSProperties) : { minWidth };
+export function DataTable({
+  label,
+  minWidth,
+  dense = false,
+  hover = false,
+  stack = false,
+  pinned = false,
+  children,
+}: DataTableProps) {
+  const frame = useRef<HTMLDivElement>(null);
+  // A stacked table is a table only where its frame holds `minWidth` (FRU-586). The frame is measured,
+  // not the window: the rail and the padding of the screen take a width that a media query does not
+  // know. The attributes are written before the paint, so no frame shows a table cut by its edge.
+  useLayoutEffect(() => {
+    const element = frame.current;
+    if (!stack || element === null) return;
+    const measure = () => {
+      const stacked = element.clientWidth < minWidth;
+      element.dataset.stacked = String(stacked);
+      // The heads of the groups stay under the head of the columns, which a card does not show.
+      const head = stacked ? 0 : (element.querySelector('thead')?.getBoundingClientRect().height ?? 0);
+      element.style.setProperty('--kit-table-head', `${head}px`);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+
+    return () => observer.disconnect();
+  }, [stack, minWidth]);
 
   return (
     <div
+      ref={frame}
       role="region"
       aria-label={label}
       tabIndex={0}
@@ -967,8 +1001,9 @@ export function DataTable({ label, minWidth, dense = false, hover = false, stack
       data-dense={dense}
       data-hover={hover}
       data-stack={stack}
+      data-pinned={stack && pinned}
     >
-      <table style={width}>{children}</table>
+      <table style={stack ? undefined : { minWidth }}>{children}</table>
     </div>
   );
 }
