@@ -16,6 +16,7 @@ import { extensionInstallFor } from '../extension-store';
 import { useConnectedExtension } from '../extension-connected';
 import { BY_SIGN_IN, CONNECT_PAGE } from '../install-options';
 import { PageHead as KitPageHead, Logo, Menu } from '../ui';
+import { ReleaseBanner } from '../release-banner';
 import { RailIcon, type RailIconName } from '../rail-icons';
 import { manages } from '../setup-stage';
 import { useLocale } from '../use-locale';
@@ -179,6 +180,7 @@ export default function WorkspaceFrame() {
         />
       }
     >
+      <ReleaseBanner show={context.me.instanceAdmin === true} />
       <SuspendedBanner workspace={context.workspace} />
       <Screen>
         <Outlet context={outlet} />

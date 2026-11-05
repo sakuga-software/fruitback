@@ -77,8 +77,11 @@ import { type Release, WORKER_VERSION } from './release.ts';
 /** Where the routes of the administrator of the instance are. */
 export const ADMIN_PATH = '/console/admin';
 
-/** The reads that an administrator does, as the trace names them. */
-export const ADMIN_READS = ['instance', 'workspaces', 'workspace', 'users', 'notes', 'actions'] as const;
+/**
+ * The reads that an administrator does, as the trace names them. `release` names no workspace, so no
+ * trace holds it (FRU-520).
+ */
+export const ADMIN_READS = ['instance', 'release', 'workspaces', 'workspace', 'users', 'notes', 'actions'] as const;
 export type AdminRead = (typeof ADMIN_READS)[number];
 
 /**
@@ -87,6 +90,7 @@ export type AdminRead = (typeof ADMIN_READS)[number];
  */
 export const ADMIN_ROUTES: readonly { read: AdminRead; pattern: RegExp; example: string }[] = [
   { read: 'instance', pattern: /^\/console\/admin\/instance$/, example: '/console/admin/instance' },
+  { read: 'release', pattern: /^\/console\/admin\/release$/, example: '/console/admin/release' },
   { read: 'workspaces', pattern: /^\/console\/admin\/workspaces$/, example: '/console/admin/workspaces' },
   {
     read: 'workspace',
@@ -1166,6 +1170,12 @@ export async function handleInstanceAdmin(
         },
         headers,
       );
+    }
+    case 'release': {
+      // Each page of the console asks it, for the banner. It names no workspace, so it leaves no trace.
+      const update = await context.latestRelease?.().catch(() => undefined);
+
+      return json(200, { version: WORKER_VERSION, update: update ?? null }, headers);
     }
     case 'workspaces': {
       const query = queryOf(url, WORKSPACE_FILTERS);

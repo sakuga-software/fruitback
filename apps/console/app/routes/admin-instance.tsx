@@ -145,6 +145,12 @@ function Version({ facts }: { facts: InstanceFacts }) {
           <Snippet label={t('The commands that update the instance')} className="self-stretch">
             {UPGRADE_COMMANDS}
           </Snippet>
+          <p className="text-small text-muted">
+            {t(
+              'If FRUITBACK_IMAGE or FRUITBACK_CONSOLE_IMAGE in .env names a version such as 1.4.2, or a digest, set it to {version} before you run them: the pull keeps the image it names.',
+              { version: update.version },
+            )}
+          </p>
           <div className="flex flex-wrap items-center gap-x-[16px] gap-y-[8px]">
             <Button tone="outline" onClick={copy}>
               {copied === 'yes' ? t('Copied') : t('Copy the commands')}

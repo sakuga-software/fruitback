@@ -1,10 +1,31 @@
 # Upgrade and roll back
 
 The screen « Instance » of the console says the version that the worker runs, and when a newer
-release is out, with the commands below. To know it, the worker asks GitHub once a day at most;
-`FRUITBACK_NO_UPDATE_CHECK=1` stops it ([environment variables](environment-variables.md)).
+release is out, with the commands below. When a release is out, a banner at the top of each other page
+of the console says it to the administrators of the instance, until each one dismisses it in their
+browser; the banner of the next release comes back. To know it, the worker asks GitHub once a day at
+most; `FRUITBACK_NO_UPDATE_CHECK=1` stops it, and the banner with it
+([environment variables](environment-variables.md)).
 
-**Upgrade:**
+## What a pull takes, by the image in `.env`
+
+`FRUITBACK_IMAGE` and `FRUITBACK_CONSOLE_IMAGE` name the two images. What `docker compose pull`
+then takes depends on how they name them:
+
+| `.env` names          | What it is                | What a pull takes                       |
+| --------------------- | ------------------------- | --------------------------------------- |
+| `:edge` (the default) | the last commit of `main` | the newest `main`, released or not      |
+| `:latest`             | the last release          | the last release                        |
+| `:0.7.0`, a version   | one release               | nothing new: set the next version first |
+| `@sha256:…`, a digest | one image, byte for byte  | nothing new: set the next digest first  |
+
+- `edge` says the version of the last release, with the commits merged since. The banner of a
+  release shows on it too: the next pull takes that release and what came after it.
+- A version or a digest is the choice to update by hand, on purpose: change the two lines of
+  `.env` to the new release, then pull. Write down the line of before: it is the way back.
+- Keep the worker and the console on the same release. Two different tags can run two releases.
+
+## Upgrade
 
 1. [Back up](backup.md#back-it-up) every database.
 2. Write down the image you run now, as a digest from the registry:
@@ -21,10 +42,11 @@ release is out, with the commands below. To know it, the worker asks GitHub once
    Keep the `ghcr.io/` line. An image that also has a local tag lists a name no registry serves, and
    on the containerd image store that name came first (measured).
 
-3. If `FRUITBACK_IMAGE` in `.env` names a digest, or a version such as `1.4.2`, set it to the new
-   one first: the pull below does not change a digest, and a version tag moves only when that release
-   is rebuilt. A moving tag (`edge`, `latest`, `1.4`) needs nothing set: the pull takes its new image.
-   Pull and restart, then check `/health` and a read:
+3. If `FRUITBACK_IMAGE` or `FRUITBACK_CONSOLE_IMAGE` in `.env` names a digest, or a version such as
+   `1.4.2`, set it to the new one first: the pull below does not change a digest, and a version tag
+   moves only when that release is rebuilt. A moving tag (`edge`, `latest`, `1.4`) needs nothing set:
+   the pull takes its new image (see the table above). Pull and restart, then check `/health` and a
+   read:
 
    ```bash
    docker compose pull

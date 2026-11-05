@@ -24,6 +24,7 @@ const APP = new URL('./', import.meta.url);
 // `extension-here.ts` says why the extension of this browser was not connected, at step 3 (FRU-487).
 // `read-problem.tsx` says why a read failed, for every screen that reads (FRU-516).
 // `authorize-answer.ts` says why « Connect an agent » refused an answer (FRU-467).
+// `release-banner.tsx` says a newer release to the administrator of the instance (FRU-520).
 const screens = [
   ...readdirSync(new URL('routes/', APP))
     .map((name) => `routes/${name}`)
@@ -46,6 +47,7 @@ const screens = [
   'extension-here.ts',
   'read-problem.tsx',
   'authorize-answer.ts',
+  'release-banner.tsx',
 ];
 const sources = new Map(screens.map((name) => [name, readFileSync(new URL(name, APP), 'utf8')]));
 

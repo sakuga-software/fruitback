@@ -848,7 +848,10 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   instance »: the build holds no flag of the Cloud, and the host is known before any read.
   `routes/admin-instance.tsx` (`/admin`) reads `GET /console/admin/instance` and
   `GET /console/admin/workspaces` and writes nothing. « Version », first, says the version of the
-  worker and a newer release (FRU-520, `docs/decisions/worker.md`). **Each setting comes from the environment**,
+  worker and a newer release (FRU-520, `docs/decisions/worker.md`). **The banner of a release**
+  (`release-banner.tsx`) is at the top of the frame of a workspace and of the administration, for the
+  administrator of the instance only, and not on « Instance », which says it itself. « Dismiss » keeps
+  the version in `localStorage` (`release-notice.ts`): the next release shows again. **Each setting comes from the environment**,
   so each one says « Set by {variables} in the environment. », and the locked field and the radios
   are described by that sentence. **The workspaces are read on a click only** (« Show the workspaces »,
   Mathieu, 2026-10-19): the read leaves a trace in each workspace that the administrator is not a

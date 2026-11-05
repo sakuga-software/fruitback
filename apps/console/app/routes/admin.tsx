@@ -4,6 +4,7 @@ import { API, type Me, callUntilAnswered, knownMe, saveLanguage } from '../api';
 import { adoptLanguage, msg, t } from '../i18n';
 import { instanceOf } from '../instance';
 import { type RailIconName } from '../rail-icons';
+import { ReleaseBanner } from '../release-banner';
 import { useLocale } from '../use-locale';
 import { Frame, RAIL_HEAD, RailFrame, RailNav, Screen, useExtensionLink } from './workspace';
 
@@ -64,6 +65,8 @@ export default function AdminFrame() {
 
   return (
     <Frame rail={<AdminRail current={current?.path} back={context.me.workspaces[0]?.id} />}>
+      {/* The screen « Instance » says the release itself. */}
+      <ReleaseBanner show={pathname !== '/admin'} />
       <Screen className={current?.layout ?? ''}>
         <Outlet context={context} />
       </Screen>
