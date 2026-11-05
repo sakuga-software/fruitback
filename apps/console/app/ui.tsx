@@ -26,6 +26,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
   type Ref,
+  useEffect,
   useLayoutEffect,
   useRef,
   useState,
@@ -374,6 +375,153 @@ export function Tip({ tip, className = '', children }: TipProps) {
       </Tooltip.Trigger>
       <Tooltip.Content placement="top" className="kit-tip">
         {tip}
+      </Tooltip.Content>
+    </Tooltip>
+  );
+}
+
+/** How long a finger holds a cut link before its tooltip opens: the long press of Android. */
+export const LONG_PRESS_MS = 500;
+/** How far a finger moves before a long press is a scroll instead. */
+const LONG_PRESS_SLOP = 10;
+/**
+ * How long after the finger of a long press is lifted its click is ignored. The click of a touch
+ * comes right after its `pointerup`; any later click is a new gesture and follows the link.
+ */
+const LONG_PRESS_CLICK_MS = 1000;
+
+type CutLinkProps = {
+  to: string;
+  /** The words of the link. They are in the page whole, so a screen reader says them all. */
+  children: string;
+  /** The heading that holds the link. The trigger of the tooltip is a `div`, so it goes around the heading. */
+  heading?: 'h2' | 'h3';
+  /** The classes of the heading: the size and the weight of the words. */
+  className?: string;
+  /** The classes of the link: its colour, its hover and its focus ring. */
+  linkClassName?: string;
+};
+
+/**
+ * A link on one line, cut with « … » to its room, and whole in a tooltip only when it is cut
+ * (FRU-585: the address of a site on its card). The tooltip opens:
+ * - when the pointer rests on it, as `Tip`;
+ * - when the keyboard gives the link focus (`:focus-visible`), and Escape closes it;
+ * - on a long press of a finger (500 ms). The click that ends that press does not follow the link;
+ *   only the click within 1 s of its `pointerup` is ignored, so no later tap, click or Enter is lost.
+ *   The next press anywhere closes the tooltip.
+ *
+ * The link has `overflow: hidden`, not its heading: an ancestor that clips cuts the focus ring.
+ */
+export function CutLink({ to, children, heading: Heading = 'h2', className = '', linkClassName = '' }: CutLinkProps) {
+  const ref = useRef<HTMLAnchorElement>(null);
+  const [cut, setCut] = useState(false);
+  const [open, setOpen] = useState(false);
+  // The press of a finger in progress: where it started, and whether it was held long enough to open
+  // the tooltip. `ignoreClickUntil` is the end of the window in which its click is ignored.
+  const press = useRef<{
+    timer?: ReturnType<typeof setTimeout>;
+    x: number;
+    y: number;
+    touch: boolean;
+    held: boolean;
+    ignoreClickUntil: number;
+  }>({ x: 0, y: 0, touch: false, held: false, ignoreClickUntil: 0 });
+
+  // The link is cut when its words are wider than its box. The box follows the card, and a font that
+  // loads late changes the width of the words.
+  useLayoutEffect(() => {
+    const link = ref.current;
+    if (link === null) return undefined;
+    const measure = () => setCut(link.scrollWidth > link.clientWidth);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(link);
+    void document.fonts?.ready.then(measure);
+
+    return () => observer.disconnect();
+  }, [children]);
+
+  // A tooltip that a finger opened closes on the next press, anywhere.
+  useEffect(() => {
+    if (!open) return undefined;
+    const close = (event: Event) => {
+      if (event.target instanceof Node && ref.current?.contains(event.target) === true) return;
+      setOpen(false);
+    };
+    document.addEventListener('pointerdown', close, true);
+
+    return () => document.removeEventListener('pointerdown', close, true);
+  }, [open]);
+
+  useEffect(() => () => clearTimeout(press.current.timer), []);
+
+  const stop = () => {
+    clearTimeout(press.current.timer);
+    press.current.timer = undefined;
+  };
+  const hold = () => {
+    stop();
+    press.current.held = true;
+    setOpen(true);
+  };
+
+  return (
+    <Tooltip delay={300} closeDelay={0} isOpen={open && cut} onOpenChange={setOpen}>
+      <Tooltip.Trigger role="group" tabIndex={-1} className="block min-w-0 cursor-auto">
+        <Heading className={className}>
+          <Link
+            ref={ref}
+            to={to}
+            className={`inline-block max-w-full truncate align-top ${cut ? '[-webkit-touch-callout:none]' : ''} ${linkClassName}`}
+            onFocus={(event) => {
+              if (event.currentTarget.matches(':focus-visible')) setOpen(true);
+            }}
+            onBlur={() => setOpen(false)}
+            onPointerDown={(event) => {
+              stop();
+              press.current = {
+                x: event.clientX,
+                y: event.clientY,
+                touch: event.pointerType === 'touch',
+                held: false,
+                ignoreClickUntil: 0,
+              };
+              if (press.current.touch && cut) press.current.timer = setTimeout(hold, LONG_PRESS_MS);
+            }}
+            onPointerMove={(event) => {
+              const moved = Math.hypot(event.clientX - press.current.x, event.clientY - press.current.y);
+              if (moved > LONG_PRESS_SLOP) stop();
+            }}
+            onPointerUp={() => {
+              stop();
+              if (press.current.held) press.current.ignoreClickUntil = performance.now() + LONG_PRESS_CLICK_MS;
+              press.current.held = false;
+            }}
+            // A press that the browser takes for a scroll or a menu ends with no click: nothing to ignore.
+            onPointerCancel={() => {
+              stop();
+              press.current.held = false;
+            }}
+            // Android opens the menu of a link on a long press: on a cut link, the tooltip opens instead.
+            onContextMenu={(event) => {
+              if (!press.current.touch || !cut) return;
+              event.preventDefault();
+              hold();
+            }}
+            onClick={(event) => {
+              // Only a click of a pointer: Enter gives `detail` 0, and always follows the link.
+              const ignored = event.detail > 0 && performance.now() < press.current.ignoreClickUntil;
+              press.current.ignoreClickUntil = 0;
+              if (ignored) event.preventDefault();
+            }}
+          >
+            {children}
+          </Link>
+        </Heading>
+      </Tooltip.Trigger>
+      <Tooltip.Content placement="top" className="kit-tip">
+        {children}
       </Tooltip.Content>
     </Tooltip>
   );

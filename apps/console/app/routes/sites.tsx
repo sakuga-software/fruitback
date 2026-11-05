@@ -1,4 +1,4 @@
-import { type FormEvent, Fragment, useCallback, useEffect, useRef, useState } from 'react';
+import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router';
 import {
   type Destination,
@@ -15,6 +15,7 @@ import { SITE_NOT_ADDED, SITE_PROBLEMS, problemOf } from '../problems';
 import { listedOf } from '../listed';
 import {
   Button,
+  CutLink,
   Dialog,
   Field,
   LinkButton,
@@ -548,50 +549,23 @@ function SiteCard({ workspace, site, manages, seesTracker }: SiteCardProps) {
       data-site={site.id}
       className="flex min-w-0 flex-col gap-[14px] rounded-frame border border-line bg-surface px-[20px] pt-[16px] pb-[14px]"
     >
-      <div className="flex items-start gap-[12px]">
+      <div className="flex items-center gap-[12px]">
         <SiteIcon
           origin={site.origin}
-          className="mt-[2px] size-[28px] flex-none rounded-button object-contain"
+          className="size-[28px] flex-none rounded-button object-contain"
           letterClassName="grid place-items-center border border-line bg-subtle text-hint font-bold text-ink"
         />
+        {/* FRU-585: the host is on one line, cut with « … », and whole in a tooltip when it is cut. */}
         <div className="min-w-0 flex-1">
-          {/* The host is what a person looks for here, so it wraps rather than being cut (FRU-159): after a
-                dot first, and inside a name only when one name is wider than the card. */}
-          <h2 className="text-[17px] leading-[1.35] font-semibold">
-            <Link
-              to={page}
-              className="rounded-[2px] text-ink hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-            >
-              {name.split('.').map((part, index) => (
-                <Fragment key={index}>
-                  {index === 0 ? null : (
-                    <>
-                      .<wbr />
-                    </>
-                  )}
-                  {part}
-                </Fragment>
-              ))}
-            </Link>
-          </h2>
-          {/* Who reads and who writes (FRU-432), each a chip with its icon (FRU-566). FRU-330: the card
-              says the exception only. « Members only » is the default of a new site, and a worker of
-              before, which sends no `writers`, says nothing it could be wrong about. */}
-          <div className="mt-[6px] flex min-w-0 flex-wrap gap-[6px]">
-            <Access icon={site.visibility === 'members' ? 'members' : 'everyone'}>
-              {site.visibility === 'members'
-                ? t('Members of {workspace}', { workspace: workspace.name })
-                : t('Everyone who visits')}
-            </Access>
-            {site.visibility === 'members' && site.writers === 'anyone' ? (
-              <>
-                <span className="sr-only">, </span>
-                <Access icon="anyone">{t('Notes from anyone on the page')}</Access>
-              </>
-            ) : null}
-          </div>
+          <CutLink
+            to={page}
+            className="text-[17px] leading-[1.35] font-semibold"
+            linkClassName="rounded-[2px] text-ink hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          >
+            {name}
+          </CutLink>
         </div>
-        <span className="-mt-[4px] -mr-[8px] inline-flex flex-none">
+        <span className="-my-[4px] -mr-[8px] inline-flex flex-none">
           <Menu trigger="icon" triggerLabel={t('More for {site}', { site: name })} items={items} onAction={go}>
             <svg aria-hidden="true" viewBox="0 0 24 24">
               <circle cx="5" cy="12" r="1.8" fill="currentColor" />
@@ -602,6 +576,21 @@ function SiteCard({ workspace, site, manages, seesTracker }: SiteCardProps) {
         </span>
       </div>
       <Counts site={site} name={name} notes={notesOf(workspace.id, site.id, 'new')} />
+      {/* Who reads and who writes (FRU-432), each a chip with its icon (FRU-566), under the counts of the
+          notes (FRU-584). FRU-330: the card says the exception only. « Members only » is the default of a
+          new site, and a worker of before, which sends no `writers`, says nothing it could be wrong about.
+          FRU-583: the chip names no workspace. */}
+      <div className="flex min-w-0 flex-wrap gap-[6px]">
+        <Access icon={site.visibility === 'members' ? 'members' : 'everyone'}>
+          {site.visibility === 'members' ? t('Members only') : t('Everyone who visits')}
+        </Access>
+        {site.visibility === 'members' && site.writers === 'anyone' ? (
+          <>
+            <span className="sr-only">, </span>
+            <Access icon="anyone">{t('Notes from anyone on the page')}</Access>
+          </>
+        ) : null}
+      </div>
       {/* The foot of the card (FRU-432): where the notes go at the left, the last one at the right. The
           terms are for a screen reader: the place and the moment say what they are to the eye. How the
           notes came is on the page of the site. */}
