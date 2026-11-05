@@ -731,6 +731,12 @@ export function menuButton(
   }
   const shown = (): HTMLButtonElement[] => [...entries.values()].filter((entry) => !entry.hidden);
   const outside = (event: Event): void => {
+    // A screen drawn again while the menu was open leaves it out of the page: the listener goes too.
+    if (!root.isConnected) {
+      document.removeEventListener('pointerdown', outside, true);
+
+      return;
+    }
     if (!root.contains(event.target as Node)) close(false);
   };
   function open(): void {

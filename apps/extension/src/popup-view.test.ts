@@ -1003,6 +1003,30 @@ describe('where the notes of a site that is on go (FRU-530)', () => {
     assert.deepEqual(asked, [{ connector: 'hook' }]);
   });
 
+  it('opens the lists once from the menu, however many times the worker answered (review of #828)', async () => {
+    let loads = 0;
+    const screen = on();
+    const change = {
+      sources: [LINEAR],
+      place: { connector: 'lin', teamId: 't1' },
+      loadOffer: async () => {
+        loads += 1;
+
+        return { kind: 'linear' as const, teams: [{ id: 't1', name: 'Northwind', key: 'NOR', projects: [] }] };
+      },
+      onPlace: async () => true,
+    };
+    showSiteFacts(screen, facts, { destination: 'Linear · Northwind', change });
+    showSiteFacts(screen, facts, { destination: 'Linear · Northwind', change });
+    const entry = screen.querySelector<HTMLButtonElement>('[data-menu-item="destination"]');
+    assert.equal(entry?.hidden, false);
+    assert.equal(entry?.querySelectorAll('.kit-menu-detail').length, 1);
+    entry?.click();
+    await settled();
+    assert.equal(loads, 1);
+    assert.ok(screen.querySelector('.site-destination select[name="provider"]') !== null);
+  });
+
   it('puts the lists back as they were when the worker refuses the change', async () => {
     const screen = on();
     showSiteFacts(screen, facts, {

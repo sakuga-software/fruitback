@@ -679,6 +679,9 @@ export function visibilityButton(document: Document, options: Visibility): HTMLB
 /** The event that « Change where notes go » of the menu sends to the screen (FRU-599). */
 const CHANGE_DESTINATION = 'fruitback-change-destination';
 
+/** What « Change where notes go » opens, for each screen: one at a time, the last facts' own. */
+const destinationOpeners = new WeakMap<Element, () => void>();
+
 /** A drawing of `popup-icons.ts`, in the colour of the words around it. */
 function iconOf(document: Document, d: string, className = 'popup-icon'): SVGSVGElement {
   const drawing = document.createElementNS(SVG, 'svg');
@@ -730,7 +733,11 @@ function siteMenu(document: Document, options: SiteOnOptions, row: HTMLElement):
         id: 'destination',
         label: t('Change where notes go'),
         hidden: true,
-        onSelect: () => row.dispatchEvent(new CustomEvent(CHANGE_DESTINATION)),
+        // The event of the window of the screen: an event of another realm is refused.
+        onSelect: () => {
+          const view = row.ownerDocument.defaultView;
+          if (view !== null) row.dispatchEvent(new view.Event(CHANGE_DESTINATION));
+        },
       },
     );
   }
@@ -924,7 +931,14 @@ function showDestination(
       menuEntry.querySelector('.kit-menu-detail')?.remove();
       menuEntry.append(now);
     }
-    line.closest('.popup')?.querySelector('.site-row')?.addEventListener(CHANGE_DESTINATION, open);
+    const row = line.closest('.popup')?.querySelector('.site-row');
+    if (row) {
+      // `showSiteFacts` can run again on the same screen: the listener of before goes first.
+      const before = destinationOpeners.get(row);
+      if (before !== undefined) row.removeEventListener(CHANGE_DESTINATION, before);
+      destinationOpeners.set(row, open);
+      row.addEventListener(CHANGE_DESTINATION, open);
+    }
   }
 }
 
