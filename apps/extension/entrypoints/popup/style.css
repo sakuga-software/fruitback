@@ -782,16 +782,14 @@ body.popup-page {
   min-width: 0;
 }
 
-.popup .visibility-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+.popup .hidden-line {
+  margin: 0;
   font-size: 14px;
+  color: var(--muted);
 }
 
 /* Under the row of a rule, apart from its buttons. */
-.popup .row + .visibility-row {
+.popup .row + .hidden-line {
   margin-top: 12px;
 }
 
@@ -812,8 +810,11 @@ body.popup-page {
   min-width: 0;
 }
 
-/* « Show all notes in a sidebar »: a square as high as « Leave a note », its name in aria-label. */
-.popup .leave-row .panel-button {
+/*
+ * « Show all notes in a sidebar » and « Hide Fruitback on this page » (FRU-590): squares as high as
+ * « Leave a note », each named in aria-label.
+ */
+.popup .leave-row .icon-button {
   flex: none;
   width: 56px;
   height: 56px;

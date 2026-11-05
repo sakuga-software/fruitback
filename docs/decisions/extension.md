@@ -740,14 +740,20 @@ holds `http://127.0.0.1/*`; a page of `http://127.0.0.1` with no rule, the panel
   was and the card says « This preference could not be saved. Try again. », so the page never shows
   a value the extension did not keep.
 
-## « Show Fruitback on this page », in the popup (FRU-444)
+## « Hide Fruitback on this page », in the popup (FRU-444, FRU-590)
 
 ### The rules, in short
 
-- **A switch under the switch of the site**, on screen 3 and on the screen of a rule, while the site
-  is on: « Show Fruitback on this page » (« Afficher Fruitback sur cette page »). Off, the widget
-  leaves every tab of that **origin**; the rule stays on, keeps its access, and the other origins of
-  a wildcard keep the widget. On again, it comes back with no prompt and no reload.
+- **A square button of one icon, beside the side panel**, on screen 3, and beside « Change » on the
+  screen of a rule, while the site is on: « Hide Fruitback on this page » (« Masquer Fruitback sur
+  cette page »), an eye, an eye with a slash while pressed. Its name stays the same, and
+  `aria-pressed` says the state. Pressed, the widget leaves every tab of that **origin**; the rule
+  stays on, keeps its access, and the other origins of a wildcard keep the widget. Pressed again, it
+  comes back with no prompt and no reload.
+- **One switch on the screen** (Mathieu, 2026-11-05): until FRU-590 it was a second switch under the
+  one of the site, and on a site of a workspace the two read as the same thing. The switch of the
+  site turns the rule off, in every browser of the account (FRU-72); the button hides the widget
+  here, in this browser.
 - **Kept per origin in `chrome.storage.local`, under `hiddenOrigins`**, a list of origins
   (`src/page-visibility.ts`). It is no credential and no rule: it is not in the copy of the rules in
   the account of the browser (FRU-72). A read that fails shows the widget, as before the switch.
@@ -760,10 +766,11 @@ holds `http://127.0.0.1/*`; a page of `http://127.0.0.1` with no rule, the panel
   message crosses to the page, and `protocol.ts` is unchanged.
 - **Shown again, the popup injects both scripts into the open tabs of the origin**, as a site turned on
   does (`injectIntoOpenTabs`): a tab loaded while it was hidden has no bridge to hear the change.
-- **Hidden, the screen offers neither « Leave a note » nor the side panel**: the page has no widget
-  to take them. The switch is a `role="switch"` of the kit, named by its words, in the order of the
-  keyboard after the switch of the site. `e2e/popup-hide-widget.spec.ts` hides, reloads, reads the
-  registered scripts, and shows again; axe runs on the popup in both schemes.
+- **Hidden, « Leave a note » and the side panel stay, turned off**, under « Fruitback is hidden on
+  this page. »: the page has no widget to take them, and the button stays where the eye was. The
+  keys of « Leave a note » and the lines of what waits are not drawn. `e2e/popup-hide-widget.spec.ts`
+  hides with the keyboard, reloads, reads the registered scripts, and shows again; axe runs on the
+  popup shown and hidden, in both schemes.
 - **Not verified on Firefox**: `excludeMatches` of `scripting.registerContentScripts` is in its
   documentation, and was not measured here.
 

@@ -13,7 +13,7 @@ import { type SiteConfig, type SiteMode, writeSite } from '../../src/sites.ts';
 import { whenNotAnswering } from '../../src/guide.ts';
 import { showProblem } from '../../src/problem-view.ts';
 import { msg, t } from '../../src/i18n.ts';
-import { type Account, problem, visibilityRow } from '../../src/popup-view.ts';
+import { type Account, problem, visibilityButton } from '../../src/popup-view.ts';
 import { hostOf, make } from '../../src/kit.ts';
 
 import { activateOpenTabs, turnOn, visibility } from './site-actions.ts';
@@ -207,7 +207,11 @@ export function status({ pattern, site }: ResolvedSite, shown?: Awaited<ReturnTy
 
   // The sentence of a rule that covers many sites is longer than the popup: that button may wrap.
   if (wide) toggle.classList.add('long');
-  const buttons = actions(change, toggle);
+  // FRU-590: « Hide Fruitback on this page » beside them, for this origin only, while the rule is on.
+  const buttons =
+    site.enabled && shown !== undefined
+      ? actions(change, toggle, visibilityButton(document, shown))
+      : actions(change, toggle);
 
   const row = document.createElement('div');
   row.className = 'row';
@@ -215,7 +219,9 @@ export function status({ pattern, site }: ResolvedSite, shown?: Awaited<ReturnTy
 
   const wrapper = document.createElement('div');
   wrapper.append(row);
-  if (site.enabled && shown !== undefined) wrapper.append(visibilityRow(document, shown));
+  if (site.enabled && shown?.shown === false) {
+    wrapper.append(make(document, 'p', 'hidden-line', t('Fruitback is hidden on this page.')));
+  }
   wrapper.append(problem);
 
   return wrapper;

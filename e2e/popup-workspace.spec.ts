@@ -149,16 +149,23 @@ test('2 then 3: a site of the workspace turns on in one click, then the switch, 
     { x: 312, width: 44, height: 26 },
     'switch',
   );
+  // FRU-590: « Leave a note » gives 64 px of the mock-up to « Hide Fruitback on this page ».
   expectNear(
     await boxOf(popup.getByRole('button', { name: 'Leave a note' })),
-    { x: 24, width: 268, height: 56 },
+    { x: 24, width: 204, height: 56 },
     'leave',
   );
-  // FRU-529: the side panel beside « Leave a note », a square of 56 at the right of the column.
+  // FRU-529: the side panel beside « Leave a note », a square of 56.
   expectNear(
     await boxOf(popup.getByRole('button', { name: 'Show all notes in a sidebar' })),
-    { x: 300, width: 56, height: 56 },
+    { x: 236, width: 56, height: 56 },
     'sidebar',
+  );
+  // FRU-590: « Hide Fruitback on this page », a square of 56 at the right of the column.
+  expectNear(
+    await boxOf(popup.getByRole('button', { name: 'Hide Fruitback on this page' })),
+    { x: 300, width: 56, height: 56 },
+    'hide',
   );
   {
     const leave = await boxOf(popup.getByRole('button', { name: 'Leave a note' }));
@@ -174,8 +181,8 @@ test('2 then 3: a site of the workspace turns on in one click, then the switch, 
   expect(await popup.locator('.shortcut-line kbd').count()).toBeGreaterThanOrEqual(2);
   // A session of a pairing keeps its row.
   await expect(popup.getByText(`Connected as ${NAME}`)).toBeVisible();
-  // The keyboard: the gear, the switch, « Show Fruitback on this page » (FRU-444), the line of what
-  // waits, then « Leave a note » and the side panel at the bottom (FRU-529).
+  // The keyboard: the gear, the switch, the line of what waits, then « Leave a note », the side panel
+  // and « Hide Fruitback on this page » at the bottom (FRU-529, FRU-590).
   await popup.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
   const stops: string[] = [];
   for (let index = 0; index < 6; index += 1) {
@@ -192,10 +199,10 @@ test('2 then 3: a site of the workspace turns on in one click, then the switch, 
   }
   expect(stops[0]).toBe('Account and settings');
   expect(stops[1]).toBe('Fruitback on localhost:5177');
-  expect(stops[2]).toBe('Show Fruitback on this page');
-  expect(stops[3]).toMatch(/open notes?$/);
-  expect(stops[4]).toBe('Leave a note');
-  expect(stops[5]).toBe('Show all notes in a sidebar');
+  expect(stops[2]).toMatch(/open notes?$/);
+  expect(stops[3]).toBe('Leave a note');
+  expect(stops[4]).toBe('Show all notes in a sidebar');
+  expect(stops[5]).toBe('Hide Fruitback on this page');
   expect(await popup.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(380);
   await clean(popup, 'the popup on a site that is on');
 

@@ -687,38 +687,57 @@ describe('3 · a site on (FRU-298)', () => {
     );
   });
 
-  // FRU-444: the widget hidden on this page, its rule still on.
-  it('has « Show Fruitback on this page », and offers nothing of the page while it is hidden', () => {
+  // FRU-444, FRU-590: the widget hidden on this page, its rule still on.
+  it('has « Hide Fruitback on this page » beside the side panel, and turns the page off while it is hidden', () => {
     const calls: string[] = [];
     const shown = on({ visibility: { shown: true, onChange: (value) => calls.push(`shown:${value}`) } }, calls);
-    const named = shown.querySelectorAll('[role="switch"]')[1];
+    const eye = shown.querySelector<HTMLButtonElement>('.leave-row .visibility-button');
 
-    assert.equal(named?.getAttribute('aria-label'), 'Show Fruitback on this page');
-    assert.equal(named?.getAttribute('aria-checked'), 'true');
-    assert.equal(shown.querySelector('.visibility-words')?.textContent, 'Show Fruitback on this page');
-    assert.ok(stops(shown).includes('button: Leave a note'));
-    (named as HTMLElement).click();
+    // The third square of the row, after « Leave a note » and the side panel; one switch only.
+    assert.deepEqual(
+      [...shown.querySelectorAll('.leave-row > button')].map(
+        (button) => button.getAttribute('aria-label') ?? button.textContent,
+      ),
+      ['Leave a note', 'Show all notes in a sidebar', 'Hide Fruitback on this page'],
+    );
+    assert.equal(shown.querySelectorAll('[role="switch"]').length, 1);
+    assert.equal(eye?.textContent, '');
+    assert.equal(eye?.getAttribute('title'), 'Hide Fruitback on this page');
+    assert.equal(eye?.getAttribute('aria-pressed'), 'false');
+    eye?.click();
     assert.deepEqual(calls, ['shown:false']);
 
-    const hidden = on({ visibility: { shown: false, onChange: nothing } });
-    assert.equal(hidden.querySelectorAll('[role="switch"]')[1]?.getAttribute('aria-checked'), 'false');
-    assert.equal(stops(hidden).includes('button: Leave a note'), false);
-    assert.equal(
-      stops(hidden).some((stop) => stop.includes('sidebar')),
-      false,
-    );
+    const hiddenCalls: string[] = [];
+    const hidden = on({ visibility: { shown: false, onChange: (value) => hiddenCalls.push(`shown:${value}`) } });
+    const pressed = hidden.querySelector<HTMLButtonElement>('.visibility-button');
+    // The same name in both states: `aria-pressed` says which.
+    assert.equal(pressed?.getAttribute('aria-label'), 'Hide Fruitback on this page');
+    assert.equal(pressed?.getAttribute('aria-pressed'), 'true');
+    assert.equal(hidden.querySelector('.hidden-line')?.textContent, 'Fruitback is hidden on this page.');
+    // « Leave a note » and the side panel stay in place, turned off: the page has no widget.
+    assert.equal(hidden.querySelector<HTMLButtonElement>('.kit-primary')?.disabled, true);
+    assert.equal(hidden.querySelector<HTMLButtonElement>('.panel-button')?.disabled, true);
+    assert.equal(pressed?.disabled, false);
+    assert.equal(hidden.querySelector('.site-lines'), null);
+    assert.equal(hidden.querySelector('.shortcut-line'), null);
+    pressed?.click();
+    assert.deepEqual(hiddenCalls, ['shown:true']);
 
-    // Off: the rule is off, so there is no page to show it on.
+    // Off: the rule is off, so there is no page to hide it on.
     assert.equal(
-      on({ on: false, visibility: { shown: true, onChange: nothing } }).querySelector('.visibility-row'),
+      on({ on: false, visibility: { shown: true, onChange: nothing } }).querySelector('.visibility-button'),
       null,
     );
+    // No visibility given: no third square.
+    assert.equal(on({}).querySelector('.visibility-button'), null);
 
     setLanguage('fr');
+    const french = on({ visibility: { shown: false, onChange: nothing } });
     assert.equal(
-      on({ visibility: { shown: true, onChange: nothing } }).querySelector('.visibility-words')?.textContent,
-      'Afficher Fruitback sur cette page',
+      french.querySelector('.visibility-button')?.getAttribute('aria-label'),
+      'Masquer Fruitback sur cette page',
     );
+    assert.equal(french.querySelector('.hidden-line')?.textContent, 'Fruitback est masqué sur cette page.');
   });
 
   it('has the site and its named switch, « Leave a note » with its keys, and the side panel', () => {
@@ -760,7 +779,7 @@ describe('3 · a site on (FRU-298)', () => {
     // The site, then what waits under it, then the block of « Leave a note », last of the body.
     assert.deepEqual(
       [...body.children].map((child) => child.className),
-      ['site-row', 'kit-dl site-destination', 'visibility-row', 'site-lines', 'leave-block'],
+      ['site-row', 'kit-dl site-destination', 'site-lines', 'leave-block'],
     );
     const leave = body.querySelector('.leave-block') as HTMLElement;
     assert.deepEqual(
@@ -777,7 +796,7 @@ describe('3 · a site on (FRU-298)', () => {
     assert.equal(screen.querySelector('.action-block'), null);
   });
 
-  it('keeps the layout with the foot of a paired session, and draws no button when hidden (FRU-529)', () => {
+  it('keeps the layout with the foot of a paired session, and keeps the row when hidden (FRU-529, FRU-590)', () => {
     const foot = page().createElement('div');
     foot.className = 'popup-foot';
     const paired = on({ foot });
@@ -785,8 +804,11 @@ describe('3 · a site on (FRU-298)', () => {
     assert.equal(paired.lastElementChild?.className, 'popup-foot');
 
     const hidden = on({ visibility: { shown: false, onChange: nothing } });
-    assert.equal(hidden.querySelector('.leave-block'), null);
-    assert.equal(hidden.querySelector('.panel-button'), null);
+    const leave = hidden.querySelector('.leave-block') as HTMLElement;
+    assert.deepEqual(
+      [...leave.children].map((child) => child.className),
+      ['hidden-line', 'leave-row'],
+    );
   });
 
   it('has no line of keys when the browser has no shortcut', () => {

@@ -23,7 +23,7 @@ export type BridgeSeams = {
   /** « Show CSS selectors » (FRU-349): said to a widget we mount, in either mode. */
   readShowSelectors?: () => Promise<boolean>;
   /**
-   * « Show Fruitback on this page » turned off for this origin (FRU-444): the widget leaves the page,
+   * « Hide Fruitback on this page » pressed for this origin (FRU-444): the widget leaves the page,
    * and the rule stays on. A read that fails shows it.
    */
   readHidden?: () => Promise<boolean>;

@@ -96,7 +96,8 @@ button.kit-primary:hover {
   background: var(--accent-strong);
 }
 
-button.kit-primary:disabled {
+button.kit-primary:disabled,
+button.kit-secondary:disabled {
   opacity: 0.5;
   cursor: default;
 }
