@@ -63,6 +63,8 @@ export const ENGLISH = {
   'settings.copy': 'Copy the notes as text',
   'settings.copied': 'Copied',
   'settings.copyManually': 'Copy the text from here',
+  // FRU-590: a host that can hide the widget on this page, the browser extension for one.
+  'settings.hide': 'Hide Fruitback on this page',
 
   // FRU-332: the files of a note. The worker takes them only when the note goes to a tracker.
   'composer.attach': 'Attachments',

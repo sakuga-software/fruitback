@@ -420,6 +420,16 @@ describe('the messages of the sign-in (FRU-315)', () => {
   });
 });
 
+describe('the message of « Hide Fruitback on this page » (FRU-590)', () => {
+  it('carries nothing, whatever the page puts in it', () => {
+    assert.deepEqual(parseBridgeMessage({ channel: CHANNEL, kind: 'hide-request', origin: 'https://evil.test' }), {
+      channel: CHANNEL,
+      kind: 'hide-request',
+    });
+    assert.equal(parseBridgeMessage({ channel: 'another', kind: 'hide-request' }), undefined);
+  });
+});
+
 describe('the message of « Show CSS selectors » (FRU-349)', () => {
   it('reads a boolean and nothing else, and carries no other field', () => {
     assert.deepEqual(parseBridgeMessage({ channel: CHANNEL, kind: 'selectors', shown: true, extra: 1 }), {

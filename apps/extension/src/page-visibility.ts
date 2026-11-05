@@ -51,6 +51,23 @@ export async function setHidden(area: VisibilityArea, origin: string, hidden: bo
   await area.set({ [HIDDEN_ORIGINS_KEY]: next });
 }
 
+/**
+ * « Hide Fruitback on this page » of the settings of the widget (FRU-590), carried by the bridge of
+ * `origin`. Written only while the window holds the activation of a gesture of the person (`gesture`,
+ * from `hasGesture`). Returns whether it hid.
+ *
+ * The page can send the request too, as every message of the bridge. A script of a site the reviewer
+ * turned on can then hide the widget on its own origin, in this browser, in the seconds after a click
+ * or a key of the person on that page. It reads nothing and sends nothing; the eye of the popup shows
+ * the widget again.
+ */
+export async function hideAsked(area: VisibilityArea, origin: string, gesture: boolean): Promise<boolean> {
+  if (!gesture || !isOrigin(origin)) return false;
+  await setHidden(area, origin, true);
+
+  return true;
+}
+
 /** The hidden origins a rule covers, which its scripts leave out. Sorted, so two lists compare. */
 export function hiddenUnder(pattern: string, hidden: readonly string[]): string[] {
   return hidden.filter((origin) => coversOrigin(pattern, origin)).sort();

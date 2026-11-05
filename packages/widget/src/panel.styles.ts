@@ -231,7 +231,8 @@ export const STYLES = `
   .fruitback-config-corner-drawing { border-color: CanvasText; }
   .fruitback-config-corner-drawing::after { background: CanvasText; }
 }
-.fruitback-config-copy {
+.fruitback-config-copy,
+.fruitback-config-hide {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -239,7 +240,8 @@ export const STYLES = `
   padding: 10px 16px 14px;
   border-top: 1px solid var(--fruitback-color-border);
 }
-.fruitback-config-copy-button {
+.fruitback-config-copy-button,
+.fruitback-config-hide-button {
   min-height: 36px;
   border: 1px solid var(--fruitback-color-border-strong);
   border-radius: var(--fruitback-radius-pill);
@@ -266,8 +268,9 @@ export const STYLES = `
   .fruitback-panel-config { inset-inline: 8px; width: auto; }
   :host([data-fruitback-position]) .fruitback-panel-config { left: 8px; right: 8px; }
 }
-/* A thumb, not a pointer (FRU-157): the copy button is 44 px. */
+/* A thumb, not a pointer (FRU-157): the buttons at the end of the panel are 44 px. */
 @media (pointer: coarse) {
-  .fruitback-config-copy-button { min-height: 44px; }
+  .fruitback-config-copy-button,
+  .fruitback-config-hide-button { min-height: 44px; }
 }
 `;

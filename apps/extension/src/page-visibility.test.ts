@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { HIDDEN_ORIGINS_KEY, hiddenUnder, isHidden, parseHidden, readHidden, setHidden } from './page-visibility.ts';
+import {
+  HIDDEN_ORIGINS_KEY,
+  hideAsked,
+  hiddenUnder,
+  isHidden,
+  parseHidden,
+  readHidden,
+  setHidden,
+} from './page-visibility.ts';
 
 function area(initial: Record<string, unknown> = {}) {
   const items: Record<string, unknown> = { ...initial };
@@ -59,5 +67,22 @@ describe('« Hide Fruitback on this page » (FRU-444, FRU-590)', () => {
     assert.deepEqual(hiddenUnder('https://*.acme.dev', hidden), ['https://acme.dev', 'https://shop.acme.dev']);
     assert.deepEqual(hiddenUnder('https://other.dev', hidden), ['https://other.dev']);
     assert.deepEqual(hiddenUnder('https://none.dev', hidden), []);
+  });
+});
+
+describe('« Hide Fruitback on this page » of the settings of the widget (FRU-590)', () => {
+  it('hides the origin of the bridge in a gesture of the person, and writes nothing without one', async () => {
+    const storage = area();
+    assert.equal(await hideAsked(storage, 'https://acme.dev', false), false);
+    assert.equal(HIDDEN_ORIGINS_KEY in storage.items, false);
+
+    assert.equal(await hideAsked(storage, 'https://acme.dev', true), true);
+    assert.deepEqual(storage.items[HIDDEN_ORIGINS_KEY], ['https://acme.dev']);
+  });
+
+  it('writes nothing for a value that is not an origin', async () => {
+    const storage = area();
+    assert.equal(await hideAsked(storage, 'null', true), false);
+    assert.equal(HIDDEN_ORIGINS_KEY in storage.items, false);
   });
 });

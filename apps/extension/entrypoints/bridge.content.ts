@@ -13,7 +13,7 @@ import {
   relayRefusal,
 } from '../src/protocol.ts';
 import { createApply } from '../src/bridge.ts';
-import { HIDDEN_ORIGINS_KEY, isHidden } from '../src/page-visibility.ts';
+import { HIDDEN_ORIGINS_KEY, hideAsked, isHidden } from '../src/page-visibility.ts';
 import { cloudEndpoint, wantsSession } from '../src/popup-state.ts';
 import { createSessionArea, touchesARefreshToken } from '../src/session-storage.ts';
 import { SIGN_IN_REQUEST } from '../src/sign-in-request.ts';
@@ -172,6 +172,15 @@ export default defineContentScript({
       }
 
       if (message?.kind === 'relay-request') void relay(message);
+      // FRU-590: « Hide Fruitback on this page » of the settings of the widget. The change of the key
+      // unmounts the widget in every tab of the origin, as the eye of the popup does.
+      if (message?.kind === 'hide-request') {
+        void hideAsked(browser.storage.local, origin, hasGesture(navigator)).catch((error: unknown) =>
+          console.error('[fruitback] could not hide the widget on this page', error),
+        );
+
+        return;
+      }
       // FRU-469: the side panel, asked in the click of the widget. Carried at once: the background
       // opens it before any `await`, and answers whether it did. Only while the window holds the
       // activation of a gesture of the person: this world reads it, and no script of the page makes

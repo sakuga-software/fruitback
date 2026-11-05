@@ -249,6 +249,12 @@ export type FruitbackOptions = {
    * button opens the list of the page, as before.
    */
   openSidebar?: () => Promise<boolean>;
+  /**
+   * Hides the widget on this page, for a host that can (FRU-590). Given, the settings end with « Hide
+   * Fruitback on this page », which closes them and calls it, in the click of the reporter. The widget
+   * stays: the host takes it away, and says how to show it again. Left out, no button.
+   */
+  hide?: () => void;
   document?: Document;
 };
 
@@ -1016,6 +1022,7 @@ export function init(options: FruitbackOptions): Fruitback {
     screenshotSupported: options.captureScreenshot !== undefined,
     // Left out, the dock stands at the bottom, at the end of the line (FRU-38).
     dockCorner: () => hostPosition ?? (translator.direction === 'rtl' ? 'bottom-left' : 'bottom-right'),
+    ...(options.hide === undefined ? {} : { hide: options.hide }),
   });
 
   // A note kept, or sent: the pins of the page and the list say it at once, with no request.
