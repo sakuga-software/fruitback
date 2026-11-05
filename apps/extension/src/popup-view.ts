@@ -839,6 +839,8 @@ export function showSiteFacts(
   const state = screen.querySelector('.kit-site-state');
   if (state !== null) state.textContent = onState(options.workspace, options.on);
   const where = screen.querySelector<HTMLElement>('.site-destination');
+  // Facts read again can take a right away: the entry of the menu waits again (review of #828).
+  forgetDestinationChange(screen);
   // A role that may change the place gets the line even when the worker named none: « Not known », and
   // the pencil to set it (review of #736).
   const label = facts.destination ?? (facts.change === undefined ? undefined : t('Not known'));
@@ -869,6 +871,18 @@ export function showSiteFacts(
     );
   }
   counts.replaceChildren(...parts);
+}
+
+/** « Change where notes go » of the menu hidden, and the opener of facts of before taken off. */
+function forgetDestinationChange(screen: HTMLElement): void {
+  const entry = screen.querySelector<HTMLButtonElement>('[data-menu-item="destination"]');
+  if (entry !== null) entry.hidden = true;
+  const row = screen.querySelector('.site-row');
+  const before = row === null ? undefined : destinationOpeners.get(row);
+  if (row !== null && before !== undefined) {
+    row.removeEventListener(CHANGE_DESTINATION, before);
+    destinationOpeners.delete(row);
+  }
 }
 
 /** « 99+ » above 99: a count of open notes on one line (P7 of FRU-598). */

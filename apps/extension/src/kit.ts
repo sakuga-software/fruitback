@@ -722,8 +722,9 @@ export function menuButton(
     entry.hidden = item.hidden === true;
     entry.append(make(document, 'span', 'kit-menu-label', item.label));
     if (item.detail !== undefined) entry.append(make(document, 'span', 'kit-menu-detail', item.detail));
+    // The focus goes back to the button first: an entry that draws nothing new leaves it there.
     entry.addEventListener('click', () => {
-      close(false);
+      close(true);
       item.onSelect();
     });
     entries.set(item.id, entry);

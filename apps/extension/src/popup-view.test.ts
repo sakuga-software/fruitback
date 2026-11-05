@@ -778,6 +778,8 @@ describe('3 · a site on (FRU-298, FRU-599)', () => {
     trigger.click();
     list.querySelector<HTMLButtonElement>('[data-menu-item="settings"]')?.click();
     assert.deepEqual(calls, ['shown:false', 'toggle:false', 'settings']);
+    // An entry chosen gives the focus back to « ⋯ » (review of #828).
+    assert.ok(doc.activeElement === trigger);
   });
 
   it('hidden: says so, turns « Leave a note » and the side panel off, and the menu shows the widget again', () => {
@@ -1025,6 +1027,33 @@ describe('where the notes of a site that is on go (FRU-530)', () => {
     await settled();
     assert.equal(loads, 1);
     assert.ok(screen.querySelector('.site-destination select[name="provider"]') !== null);
+  });
+
+  it('hides « Change where notes go » again when facts read again give no right (review of #828)', async () => {
+    let loads = 0;
+    const screen = on();
+    const change = {
+      sources: [LINEAR],
+      place: { connector: 'lin', teamId: 't1' },
+      loadOffer: async () => {
+        loads += 1;
+
+        return undefined;
+      },
+      onPlace: async () => true,
+    };
+    showSiteFacts(screen, facts, { destination: 'Linear · Northwind', change });
+    showSiteFacts(screen, facts, { destination: 'Linear · Northwind' });
+    const entry = screen.querySelector<HTMLButtonElement>('[data-menu-item="destination"]');
+    assert.equal(entry?.hidden, true);
+    assert.equal(screen.querySelector('.site-destination button'), null);
+    screen
+      .querySelector('.site-row')
+      ?.dispatchEvent(
+        new (screen.ownerDocument.defaultView as unknown as typeof globalThis).Event('fruitback-change-destination'),
+      );
+    await settled();
+    assert.equal(loads, 0);
   });
 
   it('puts the lists back as they were when the worker refuses the change', async () => {
