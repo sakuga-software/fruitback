@@ -612,7 +612,7 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   so a number is offered only for a page whose cursor the screen knows**: the first, the next, and the
   pages shown since the filter, their cursors kept by page number and not as a pile, so that the
   Back button of the browser, which changes the address and nothing the screen holds, leaves each
-  number with its own page; « … » stands for the others. Numbering a page asks a size of
+  number with its own page; « … » stands for the others. Opened from a link past the second page, the page before has no known cursor: the left arrow is then « First page », two chevrons, and goes there. Numbering a page asks a size of
   page, so the console asks `limit=25` by name, the default of the worker. A jump to any page would
   take an offset in the index of the worker, which the walk by cursor was chosen against (FRU-551:
   a note is on one page and one only). The Notes of the instance keep « Previous » and « Next » only.

@@ -526,6 +526,8 @@ export default function Notes() {
                 first={cursor === ''}
                 last={shown.next === undefined}
                 onPage={(to) => page(to, shown)}
+                // Opened from a link past the second page, the page before has no known cursor.
+                previousIsFirst={at > 2 && known[at - 1] === undefined}
                 numbers={{
                   at,
                   count: Math.ceil(shown.total / NOTES_PER_PAGE),
@@ -1122,6 +1124,7 @@ export function NotePages({
   last,
   onPage,
   numbers,
+  previousIsFirst = false,
 }: {
   /** What the pages are of: « Pages of notes » when none is given. */
   label?: string;
@@ -1132,6 +1135,11 @@ export function NotePages({
   last: boolean;
   onPage: (to: 'next' | 'previous') => void;
   numbers?: PageNumbers;
+  /**
+   * The page before is not known, and the arrow goes to the first page: a list read by a cursor,
+   * opened from a link past its second page. The arrow then says so, and draws « « ».
+   */
+  previousIsFirst?: boolean;
 }) {
   useLocale();
 
@@ -1142,8 +1150,13 @@ export function NotePages({
     >
       <span className="tabular-nums">{t('{from} to {to} of {total}', { from, to: from + shown - 1, total })}</span>
       <span className="flex items-center gap-[4px]">
-        <IconButton size="small" label={t('Previous page')} disabled={first} onClick={() => onPage('previous')}>
-          <Chevron to="previous" />
+        <IconButton
+          size="small"
+          label={previousIsFirst ? t('First page') : t('Previous page')}
+          disabled={first}
+          onClick={() => onPage('previous')}
+        >
+          <Chevron to={previousIsFirst ? 'first' : 'previous'} />
         </IconButton>
         {numbers === undefined
           ? null
@@ -1172,12 +1185,14 @@ export function NotePages({
   );
 }
 
-/** The arrow of « Previous page » and « Next page »: the chevron of `Disclosure`, either way. */
-function Chevron({ to }: { to: 'previous' | 'next' }) {
+/** The arrow of « Previous page » and « Next page »: the chevron of `Disclosure`, either way; two for « First page ». */
+const CHEVRONS = { next: 'M9 6l6 6-6 6', previous: 'M15 6l-6 6 6 6', first: 'M12 6l-6 6 6 6M18 6l-6 6 6 6' } as const;
+
+function Chevron({ to }: { to: keyof typeof CHEVRONS }) {
   return (
     <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" className="size-[16px]">
       <path
-        d={to === 'next' ? 'M9 6l6 6-6 6' : 'M15 6l-6 6 6 6'}
+        d={CHEVRONS[to]}
         fill="none"
         stroke="currentColor"
         strokeWidth="2"

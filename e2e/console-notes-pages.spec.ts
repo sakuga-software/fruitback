@@ -110,12 +110,19 @@ test('the last page is offered once its cursor is known, and « Next page » is 
   await expect(summary(page)).toHaveText('226 to 250 of 263');
   // Opened from a link: the cursors before are not known, the first page and the next one are.
   await expect.poll(() => offered(page)).toEqual(['1', '…', '[10]', '11']);
+  // The page before has no known cursor: the arrow says it goes to the first page (review of #823).
+  await expect(pages(page).getByRole('button', { name: 'Previous page' })).toHaveCount(0);
+  await expect(pages(page).getByRole('button', { name: 'First page' })).toBeEnabled();
   await number(page, 11).click();
   await expect(summary(page)).toHaveText('251 to 263 of 263');
   await expect(pages(page).getByRole('button', { name: 'Next page' })).toBeDisabled();
   await expect.poll(() => offered(page)).toEqual(['1', '…', '10', '[11]']);
   await number(page, 10).click();
   await expect(summary(page)).toHaveText('226 to 250 of 263');
+  // Still from the link: the arrow goes to the first page, and reads it.
+  await pages(page).getByRole('button', { name: 'First page' }).click();
+  await expect(summary(page)).toHaveText('1 to 25 of 263');
+  await expect(page).not.toHaveURL(/cursor=|from=/);
 });
 
 test('after the Back button of the browser, each number still reads its own page (review of #823)', async ({
@@ -168,8 +175,8 @@ test('the pages of the sites offer every number, as the sites are read by their 
 });
 
 for (const [width, locale, label, previous, next] of [
-  [1440, 'en', 'Pages of notes', 'Previous page', 'Page 2'],
-  [390, 'fr', 'Pages de notes', 'Page précédente', 'Page 2'],
+  [1440, 'en', 'Pages of notes', 'First page', 'Page 2'],
+  [390, 'fr', 'Pages de notes', 'Première page', 'Page 2'],
 ] as const) {
   test(`the pages at ${width} px in ${locale}: one line, named, and nothing past the screen`, async ({ page }) => {
     await page.setViewportSize({ width, height: 844 });
