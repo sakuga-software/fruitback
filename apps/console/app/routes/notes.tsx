@@ -829,7 +829,7 @@ function ViewChoice({ view, onChoose }: { view: View; onChoose: (view: View) => 
  * A note on the board (FRU-436): what a row of the table says, one under the other.
  *
  * FRU-589: the card writes no status, as its column says it. Whoever may change the status gets the
- * drop of the table before the note: the select that is the way of the keyboard to another column.
+ * drop of the table after the note: the select that is the way of the keyboard to another column.
  * FRU-588: the card writes no address. The page opens from the icon at its foot, its address in the
  * tooltip, as in the table.
  */
@@ -862,6 +862,8 @@ function NoteCard({
     <div className="flex flex-col gap-[8px]">
       <div>
         <div className="flex items-start gap-[8px] text-body">
+          <span className="line-clamp-3 min-w-0 flex-1 [overflow-wrap:anywhere]">{excerptOf(note.excerpt)}</span>
+          {/* At the right: the text of every card of a column starts at one edge, with a select or not. */}
           {settable ? (
             <span className="-my-[4px] flex h-[28px] w-[28px] flex-none items-center justify-center">
               {/* Keyed by the status read: a read again that says another status starts the select from it. */}
@@ -876,7 +878,6 @@ function NoteCard({
               />
             </span>
           ) : null}
-          <span className="line-clamp-3 min-w-0 [overflow-wrap:anywhere]">{excerptOf(note.excerpt)}</span>
         </div>
         {statusRefused === undefined ? null : (
           <span className="mt-[6px] block">
