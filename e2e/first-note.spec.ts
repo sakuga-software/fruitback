@@ -106,6 +106,10 @@ test('a first user goes from the setup to a first note (FRU-481)', async ({ exte
   // The card of the script tag, for `docs/install.md`. The id of the site is new at each run, and the
   // addresses are the ones of the test: the capture shows those of Fruitback Cloud.
   const scriptCard = goesOn.locator('.kit-option').filter({ has: goesOn.getByRole('heading', { name: 'Script tag' }) });
+  // A site of members recommends the extension, and folds the script tag under « Show » (FRU-610). The
+  // spec opens it for the capture: the person of the path has nothing to do with it, so it is not counted.
+  await expect(card.getByText('Recommended for a members site', { exact: true })).toBeVisible();
+  await scriptCard.getByRole('button', { name: 'Show' }).click();
   await scriptCard.getByRole('region', { name: 'Script tag' }).evaluate((snippet) => {
     const [only] = snippet.childNodes;
     if (snippet.childNodes.length !== 1 || only?.nodeType !== Node.TEXT_NODE)
@@ -119,8 +123,8 @@ test('a first user goes from the setup to a first note (FRU-481)', async ({ exte
   // The store is Chrome's: its tab opens, and goes no further here.
   await context.route('https://chromewebstore.google.com/**', (route) => route.abort());
   const storeOpens = context.waitForEvent('page');
-  await card.getByRole('link', { name: 'Install the extension (beta)' }).click();
-  did('console', 'click « Install the extension (beta) »: the store opens in a tab');
+  await card.getByRole('link', { name: 'Install the extension', exact: true }).click();
+  did('console', 'click « Install the extension »: the store opens in a tab');
   await (await storeOpens).close();
   did('store', 'click « Add to Chrome »');
   did('chrome', 'click « Add extension » in the dialog of Chrome');

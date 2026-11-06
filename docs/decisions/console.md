@@ -52,7 +52,8 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   (FRU-162): `listed.ts` gives a read `loading`, `failed` or the list, only a list shows the empty
   state or a count, and a failed read says so with « Try again ».
   **« Who can leave a note? » is asked for a site that its members read, and only there** (FRU-330):
-  `writers-pick.tsx`, in the form of the Sites screen and in the setup. « Members only » is chosen
+  `writers-pick.tsx`, in the form of the Sites screen and of the page of a site. Not in the setup any
+  more (FRU-610, below). « Members only » is chosen
   for a new site, and its detail says that private mode carries no session. The form sends `writers`
   only with `visibility: 'members'`. A row and the summary of the setup say the exception, « Notes
   from anyone on the page », and nothing for « Members only » or for a worker of before.
@@ -266,12 +267,42 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   **The setup ends at the first note on the site** (FRU-237 counts them): while the step waits it
   says « Waiting for your first note. », and reads the site again every five seconds while the tab
   is shown (`useFirstNote` in `setup.tsx`; a hidden tab asks nothing, a read that fails changes
-  nothing). At the first note the step is done by itself, and « Your first note is in » is said (`role="status"`, no move of the focus) with « Open the
-  console » and « Connect a tracker ». The sentence says « a tracker or your own API »: GitHub is
-  a source only where the worker has its App (FRU-361), and the setup does not ask which. « Open the console » stays under the cards while the step
-  waits, for a person who sends no note now. **Still waiting**: « Signs in with this account. No
-  code to type. » (a browser is still connected from here until the popup asks, FRU-238, FRU-251). **The script keeps `data-fruitback-endpoint`** (inventory A24): the widget finds
-  its worker by that attribute only.
+  nothing). At the first note the step is done by itself, and « Your first note is in » is said (`role="status"`, no move of the focus).
+  « Open the console » stays under the cards while the step waits, for a person who sends no note now.
+- **The setup asks no question of access** (FRU-610, board P6 of FRU-598). Step 2, « Your site », is
+  the address alone, « Any page of it will do. », and one sentence that says what applies: « Members
+  of {workspace} see and leave notes. You can open it to every visitor later, in Sites. » « Who sees
+  the notes? » and « Who can leave a note? » are the Sites screen's and the page of a site's.
+  - **A new site of the setup is `visibility: 'members'`, `writers: 'members'`**, sent by the console
+    (`NEW_SITE` of `setup-stage.ts`), not left to the defaults of the worker, so that the sentence
+    stays true on a worker that would default otherwise. These are the values the form chose by
+    default before: **what a visitor of a new site sees did not change**, only the choice to open it
+    there went.
+  - **« Change » with the same address asks nothing of the worker.** An add of an address that exists
+    changes that site (FRU-504), so a POST would write `members` over a site that somebody opened to
+    every visitor in Sites since. Another address is a new site, with the values above.
+  - **Step 3 recommends one way, after who sees the notes** (`recommendedWay`): a site of members gets
+    « Browser extension » first, with the badge « Recommended for a members site » and a primary
+    « Install the extension »; a site that every visitor sees (one opened in Sites) gets « Script
+    tag » first, « Recommended for a public site », as a visitor has no extension. The other card is
+    folded to its name under « Show », a button with `aria-expanded` and `aria-controls`.
+  - **On the Cloud the card of the extension has no « Connect this browser »**: « Add it to your
+    browser. The page that opens signs you in and turns on {site}. » is what happens, since the
+    welcome page signs in and turns the site on (FRU-482, FRU-483). The link beside the install sent
+    people to `/connect`, a page that waits for the popup, while the welcome page was already open. A
+    self-hosted console keeps it, as it opens the pairing link of its worker (FRU-238). The states of
+    the card when the extension is already here (FRU-441, FRU-487) are as they were.
+  - **The end shows the note that came**: its text and its page as the index keeps them (the first 64
+    characters, FRU-237), « Show on the page » that opens the page on it (`#fruitback-note=`, only
+    for a page of the site), then « Connect Linear or GitHub » (the Connectors screen) and « Open the
+    console ». **Not its selector nor its component**, which the board draws: the index keeps
+    neither, and the console reads no store of the notes. Showing them is a column of `note_index` and
+    a migration, left for a ticket of its own. A worker with no index answers `404` to the list, and
+    the end is said without the note. The sentence says « a tracker or your own API »: GitHub is a
+    source only where the worker has its App (FRU-361).
+  - **Still waiting**: « Signs in with this account. No code to type. » (a browser is still connected
+    from here until the popup asks, FRU-238, FRU-251). **The script keeps `data-fruitback-endpoint`**
+    (inventory A24): the widget finds its worker by that attribute only.
 - **An invitation has a screen, and joining says what comes next** (FRU-241, screen 03 of the mockup
   of 2026-10-13). `/invitations` shows the most recent invitation of the address that is signed in:
   the workspace that invites, the role and what it lets its person do, « Join », and « Decline »
@@ -285,7 +316,7 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   invites (the worker lists the workspace of an invitation, not its sender: the line says
   « {workspace} invited you »); « It signs in with this account. » about the extension, which a
   browser still joins with a code from the console (Q8).
-  **« Install the extension (beta) » leads Chrome and Edge on a computer to the Chrome Web Store,
+  **« Install the extension (beta) » (« Install the extension » at step 3 of the setup, FRU-610) leads Chrome and Edge on a computer to the Chrome Web Store,
   Firefox on a computer to addons.mozilla.org, and every other browser to the guide**
   (`extensionInstallFor` of `extension-store.ts`): the foot of both rails (FRU-406), `/connect`, the
   invitation and the step « Put it on your site » (FRU-409). The extension is on the Chrome Web Store
