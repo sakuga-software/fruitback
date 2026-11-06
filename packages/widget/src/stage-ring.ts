@@ -22,6 +22,17 @@ const RINGS: Record<NoteStage, { dashed?: true; fill: 0 | 0.5 | 1; mark?: string
   closed: { fill: 1, mark: 'M5.6 5.6 L10.4 10.4 M10.4 5.6 L5.6 10.4' },
 };
 
+/**
+ * The colour a round is drawn in: the colour of a status a team chose, else the token of its stage.
+ * The grey of New and of To do is 1.4:1 on the surface, under the 3:1 of a graphic: those two take
+ * the muted text instead, with the token as its fallback when a host has no muted text.
+ */
+export function ringColor(stage: NoteStage, teamColor: string | undefined, stageColor: string, muted: string): string {
+  if (teamColor !== undefined) return teamColor;
+
+  return stage === 'new' || stage === 'todo' ? muted : stageColor;
+}
+
 function element(document: Document, name: string, attributes: Record<string, string>): SVGElement {
   const node = document.createElementNS(SVG_NS, name);
   for (const [key, value] of Object.entries(attributes)) node.setAttribute(key, value);

@@ -1,5 +1,5 @@
 import type { Help } from './guide.ts';
-import { createStageRing } from '@fruitback/widget';
+import { createStageRing, ringColor } from '@fruitback/widget';
 import { t } from './i18n.ts';
 
 /**
@@ -259,7 +259,7 @@ export function statusDrop(document: Document, options: DropOptions): HTMLElemen
  */
 export function stageRing(document: Document, stage: Stage, paint?: { fill: string }): SVGSVGElement {
   const ring = createStageRing(document, stage, 'kit-stage-ring');
-  ring.style.color = paint?.fill ?? `var(--stage-${stage})`;
+  ring.style.color = ringColor(stage, paint?.fill, `var(--stage-${stage})`, 'var(--subtle)');
 
   return ring;
 }

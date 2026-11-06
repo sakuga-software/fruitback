@@ -6,7 +6,7 @@ import { deepActiveElement } from './focus.ts';
 import { createIcon } from './icons.ts';
 import { type Translator, createTranslator, languageOf } from './messages.ts';
 import { listLabel, statusPaint } from './status-paint.ts';
-import { createStageRing } from './stage-ring.ts';
+import { createStageRing, ringColor } from './stage-ring.ts';
 import { stageToken } from './theme.ts';
 import { type SiteNote, type SiteNotes, linkToNote } from './site-notes.ts';
 import { adoptStyles } from './stylesheet.ts';
@@ -270,7 +270,10 @@ export function createSidebar(options: SidebarOptions): Sidebar {
     if (name !== 'all') {
       // The round of the stage, for the eye: the chip says it in words (FRU-606).
       const ring = createStageRing(document, name);
-      ring.style.setProperty('color', stageToken(name));
+      ring.style.setProperty(
+        'color',
+        ringColor(name, undefined, stageToken(name), 'var(--fruitback-color-text-muted)'),
+      );
       button.append(ring);
     }
     const word = name === 'all' ? t.text('sidebar.all') : t.stage(name);
@@ -849,7 +852,14 @@ export function createSidebar(options: SidebarOptions): Sidebar {
     pin.style.setProperty('--fruitback-sidebar-stage', stageToken(note.stage));
     pin.append(document.createElement('span'));
 
-    const top = topLine(note.stage, t.stage(note.stage), stageToken(note.stage), note.reference, note.createdAt, '');
+    const top = topLine(
+      note.stage,
+      t.stage(note.stage),
+      ringColor(note.stage, undefined, stageToken(note.stage), 'var(--fruitback-color-text-muted)'),
+      note.reference,
+      note.createdAt,
+      '',
+    );
 
     const meta = document.createElement('span');
     meta.className = 'fruitback-sidebar-meta';
@@ -990,7 +1000,12 @@ export function createSidebar(options: SidebarOptions): Sidebar {
     const top = topLine(
       issue.stage,
       stateWord(entry),
-      paint.fill,
+      ringColor(
+        issue.stage,
+        entry.status?.color === undefined ? undefined : paint.fill,
+        paint.fill,
+        'var(--fruitback-color-text-muted)',
+      ),
       issue.identifier || undefined,
       issue.note.createdAt,
       issue.note.createdAt,

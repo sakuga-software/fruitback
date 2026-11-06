@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { NOTE_STAGES } from '@fruitback/shared';
 import { mountPage } from './dom.fixture.ts';
-import { createStageRing } from './stage-ring.ts';
+import { createStageRing, ringColor } from './stage-ring.ts';
 
 describe('the round of a stage, which fills as a note moves on (FRU-606)', () => {
   const page = mountPage('<main></main>');
@@ -41,5 +41,12 @@ describe('the round of a stage, which fills as a note moves on (FRU-606)', () =>
     assert.equal(ring.getAttribute('aria-hidden'), 'true');
     assert.equal(ring.getAttribute('focusable'), 'false');
     assert.equal(ring.getAttribute('class'), 'fruitback-stage-ring');
+  });
+
+  it('takes the colour of a team, else of its stage, and the muted text for the two pale greys', () => {
+    assert.equal(ringColor('new', '#7c3aed', 'var(--stage-new)', 'var(--muted)'), '#7c3aed');
+    assert.equal(ringColor('new', undefined, 'var(--stage-new)', 'var(--muted)'), 'var(--muted)');
+    assert.equal(ringColor('todo', undefined, 'var(--stage-todo)', 'var(--muted)'), 'var(--muted)');
+    assert.equal(ringColor('progress', undefined, 'var(--stage-progress)', 'var(--muted)'), 'var(--stage-progress)');
   });
 });
