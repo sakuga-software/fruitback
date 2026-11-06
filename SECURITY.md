@@ -2389,8 +2389,8 @@ visitor. It is public: no session, no cookie.
   that are not theirs: Fruitback then writes once to each of them, under its own name, about a note
   that its team marks done, 10 addresses a minute for that site at most. The message names the host
   of the site and holds nothing else that they wrote.
-- The extension does not carry this route: a reader of the relay has a session, and is never asked
-  for an address. test:`refuses the path of the address of a visitor (FRU-604)`.
+- The extension does not carry this route, and a widget it mounts never asks for an address
+  (`askForAddress: false`), in team mode and in private mode alike. test:`refuses the path of the address of a visitor (FRU-604)`.
 
 The badge on the icon of the extension shows `toCheck` of `GET /session/sites?origin=` for the
 site of the tab, as the popup reads it: no new data, and no new route.

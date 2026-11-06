@@ -41,6 +41,8 @@ const WANTED: Record<string, string> = {
   camera: 'camera-bold',
   paperclip: 'paperclip-bold',
   image: 'image-bold',
+  // « Add to batch », beside « Send » (FRU-608).
+  stackPlus: 'stack-plus-bold',
 };
 
 type IconifyInfo = {

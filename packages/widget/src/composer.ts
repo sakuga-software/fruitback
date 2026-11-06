@@ -37,7 +37,56 @@ import { MENU_GAP, STYLES, WIDTH } from './composer.styles.ts';
 const SENT_MS = 4_000;
 const KEPT_MS = 1_100;
 
-export type ComposerState = 'idle' | 'sending' | 'sent' | 'kept' | 'failed';
+export type ComposerState = 'idle' | 'sending' | 'sent' | 'kept' | 'failed' | 'receipt';
+
+/** A note of a batch that went (FRU-608): its identifier in the store and its address, when the reader may open it. */
+export type BatchSentNote = { id: string; text: string; identifier?: string | undefined; url?: string | undefined };
+
+/**
+ * What a send of the batch did (FRU-608). `unsent` are the notes still in the batch: they keep their
+ * text there. `inField`: the note of the composer did not leave the field, because its own send
+ * failed (a note with files is sent alone, before the batch); the composer then says why, as for a
+ * single note.
+ */
+export type BatchSent = {
+  sent: readonly BatchSentNote[];
+  unsent: readonly { id: string; text: string }[];
+  failure?: SendFailure;
+  inField?: boolean;
+};
+
+/**
+ * The batch of the notes waiting to be sent together (FRU-608, which replaced « Keep for later » of
+ * FRU-124). The host keeps the notes; the composer adds one, sends them all, and says what went.
+ */
+export type BatchSeam = {
+  /** Whether a note can wait in a batch here: the worker takes several notes in one request. */
+  offered(): boolean;
+  /** How many notes wait now. */
+  waiting(): number;
+  subscribe(listener: () => void): () => void;
+  /** Adds the note to the batch rather than sending it. */
+  add: (
+    note: string,
+    reporter?: NoteReporter,
+    destination?: string,
+  ) => Promise<true | SendFailure | SentWithoutPicture>;
+  /**
+   * Sends the note with the batch, in as few requests as the worker allows. `progress` is told how
+   * many notes went, of how many, after each request.
+   */
+  sendAll: (
+    note: string,
+    reporter: NoteReporter | undefined,
+    destination: string | undefined,
+    attachments: readonly string[],
+    progress: (done: number, total: number) => void,
+  ) => Promise<BatchSent>;
+  /** Sends again the notes left in the batch. */
+  resend: (progress: (done: number, total: number) => void) => Promise<BatchSent>;
+  /** Opens the list of every note, where a big batch is read whole. Left out: no such button. */
+  onShowAll?: () => void;
+};
 
 /** Sent, without the picture the reporter asked for (FRU-238). */
 export type SentWithoutPicture = { picture: 'missed' };
@@ -154,17 +203,10 @@ export type ComposerOptions = {
    */
   destinations?: DestinationChoice;
   /**
-   * Keep the note for later rather than send it (FRU-124). A second action beside « Send », shown
-   * at each open while `offered()` says so. « Send » keeps its meaning. Left out: no such action.
+   * The batch (FRU-608): « Add to batch » beside « Send », and « Send all N » once notes wait, with a
+   * menu for « Send only this note ». Shown at each open while `offered()` says so. Left out: no batch.
    */
-  keep?: {
-    offered(): boolean;
-    onKeep: (
-      note: string,
-      reporter?: NoteReporter,
-      destination?: string,
-    ) => Promise<true | SendFailure | SentWithoutPicture>;
-  };
+  batch?: BatchSeam;
   /**
    * The box « Attach a picture of this element » (FRU-258). It is the preference the settings panel
    * holds, shown beside the note it applies to: the composer reads it and writes it, and keeps
@@ -362,6 +404,31 @@ export function createComposer(options: ComposerOptions): Composer {
   const picture = part<HTMLInputElement>('[data-fruitback-picture]');
   const cancel = part<HTMLButtonElement>('[data-fruitback-cancel]');
   const keep = part<HTMLButtonElement>('[data-fruitback-keep]');
+  const keepCount = document.createElement('span');
+  keepCount.className = 'fruitback-composer-badge';
+  keepCount.setAttribute('aria-hidden', 'true');
+  const keepWords = hiddenWords(document, '');
+  keep.append(createIcon(document, 'stackPlus'), keepCount, keepWords);
+  const sendMore = part<HTMLButtonElement>('[data-fruitback-send-more]');
+  sendMore.append(createIcon(document, 'chevron'), hiddenWords(document, t.text('composer.sendMenu')));
+  sendMore.title = t.text('composer.sendMenu');
+  const sendMenu = part('[data-fruitback-send-menu]');
+  const sendAllItem = part<HTMLButtonElement>('[data-fruitback-send-all]');
+  const sendOnlyItem = part<HTMLButtonElement>('[data-fruitback-send-only]');
+  sendOnlyItem.textContent = t.text('composer.sendOnly');
+  const receipt = part('[data-fruitback-receipt]');
+  const receiptTitle = part('[data-fruitback-receipt-title]');
+  const receiptTo = part('[data-fruitback-receipt-to]');
+  const receiptRegion = part('[data-fruitback-receipt-region]');
+  receiptRegion.setAttribute('aria-label', t.text('composer.receiptList'));
+  const receiptList = part('[data-fruitback-receipt-list]');
+  const receiptAll = part<HTMLButtonElement>('[data-fruitback-receipt-all]');
+  receiptAll.textContent = t.text('composer.receiptShowAll');
+  const receiptRetry = part<HTMLButtonElement>('[data-fruitback-receipt-retry]');
+  receiptRetry.textContent = t.text('composer.receiptRetry');
+  const receiptClose = part<HTMLButtonElement>('[data-fruitback-receipt-close]');
+  receiptClose.textContent = t.text('composer.receiptClose');
+  const receiptStatus = part('[data-fruitback-receipt-status]');
   const signIn = part<HTMLButtonElement>('[data-fruitback-sign-in]');
   const status = part('[data-fruitback-status]');
   const who = part('[data-fruitback-who]');
@@ -417,12 +484,10 @@ export function createComposer(options: ComposerOptions): Composer {
   rememberLabel.hidden = memory === undefined;
   askForNameOrNot();
   cancel.textContent = t.text('composer.cancel');
-  keep.textContent = t.text('composer.keep');
   signIn.textContent = t.text('composer.signIn');
   // A button never wraps (FRU-611, P7): words longer than its room end in « … », and the tooltip
   // gives them whole.
-  for (const button of [pick, cancel, keep, signIn]) button.title = button.textContent ?? '';
-  send.title = t.text('composer.send');
+  for (const button of [pick, cancel, signIn]) button.title = button.textContent ?? '';
   placeList.setAttribute('aria-label', t.text('composer.destinations'));
   attachLabel.textContent = t.text('composer.attach');
   // Two icons at the foot of the field (FRU-607): the capture, then the file. Each says its name in
@@ -439,8 +504,49 @@ export function createComposer(options: ComposerOptions): Composer {
   avatar.setAttribute('aria-controls', 'fruitback-composer-who');
   attachNone.textContent = t.text('composer.attachNoTracker');
 
-  /** Whether « Keep for later » is offered at this open. A note with files is sent, never kept. */
+  /** Whether the batch is offered at this open. A note with files is sent, never added to it. */
   let keepOffered = false;
+  const batch = options.batch;
+
+  /**
+   * The foot of a batch (FRU-608). None waiting: « Send », and « Add to batch » as an icon. Some
+   * waiting: « Send all N », counting this note, the icon with the count, and a menu beside « Send »
+   * for « Send only this note », which leaves the batch in place.
+   */
+  function drawBatch(): void {
+    const waiting = keepOffered ? (batch?.waiting() ?? 0) : 0;
+    keep.hidden = !keepOffered || held.length > 0;
+    keepCount.textContent = waiting > 0 ? String(waiting) : '';
+    const named = waiting > 0 ? t.plural('composer.batchAddWaiting', waiting) : t.text('composer.batchAdd');
+    keepWords.textContent = named;
+    keep.title = named;
+    const all = t.text('composer.sendAll', { count: waiting + 1 });
+    sendWord.textContent = waiting > 0 ? all : t.text('composer.send');
+    send.title = sendWord.textContent;
+    sendAllItem.textContent = all;
+    sendMore.hidden = waiting === 0;
+    if (waiting === 0) closeSendMenu(false);
+  }
+
+  function openSendMenu(): void {
+    if (sendMore.disabled) return;
+    sendMenu.hidden = false;
+    sendMore.setAttribute('aria-expanded', 'true');
+    sendAllItem.focus();
+  }
+
+  function closeSendMenu(refocus: boolean): void {
+    if (sendMenu.hidden) return;
+    sendMenu.hidden = true;
+    sendMore.setAttribute('aria-expanded', 'false');
+    if (refocus) sendMore.focus();
+  }
+
+  /** The primary action: « Send all N » while notes wait, « Send » otherwise. */
+  function sendPrimary(): void {
+    if (keepOffered && (batch?.waiting() ?? 0) > 0) void submitAll();
+    else void submit();
+  }
 
   /**
    * The files of the note, and the ways to join one (FRU-332), as the worker offers them now for
@@ -459,7 +565,7 @@ export function createComposer(options: ComposerOptions): Composer {
     for (const way of [attachTrigger, attachPage, attachArea, attachFile])
       way.setAttribute('aria-disabled', String(full));
     if (full || offer !== 'offered') closeAttachMenu(false);
-    keep.hidden = !keepOffered || held.length > 0;
+    drawBatch();
     drawTools();
 
     const hadFocus = attachList.contains(deepActiveElement(document));
@@ -506,7 +612,7 @@ export function createComposer(options: ComposerOptions): Composer {
    * A file dropped, picked or captured then would go to the worker and be named by no note.
    */
   function joinable(): boolean {
-    return state !== 'sending' && state !== 'sent' && state !== 'kept';
+    return state !== 'sending' && state !== 'sent' && state !== 'kept' && state !== 'receipt';
   }
 
   /** Joins a file: refused at once when the widget can tell, sent on its way otherwise. */
@@ -650,10 +756,14 @@ export function createComposer(options: ComposerOptions): Composer {
     root.dataset.fruitbackState = next;
     // Disabled while in flight: a second click would plant the same note twice, and the worker has
     // no way to tell the difference.
-    send.disabled = next === 'sending' || next === 'sent' || next === 'kept';
+    send.disabled = next === 'sending' || next === 'sent' || next === 'kept' || next === 'receipt';
     keep.disabled = send.disabled;
+    sendMore.disabled = send.disabled;
+    // Nothing closes while a batch is on its way (FRU-608): its text is frozen, still readable.
+    cancel.disabled = next === 'sending' && batchInFlight;
+    if (send.disabled) closeSendMenu(false);
     // No way to join a file while the note is sent, or after (FRU-373): no note would name it.
-    const settled = next === 'sending' || next === 'sent' || next === 'kept';
+    const settled = next === 'sending' || next === 'sent' || next === 'kept' || next === 'receipt';
     for (const way of [attachTrigger, attachPage, attachArea, attachFile]) way.disabled = settled;
     if (settled) closeAttachMenu(false);
     field.readOnly = next === 'sending';
@@ -661,13 +771,15 @@ export function createComposer(options: ComposerOptions): Composer {
     // do. The sentence is the one of its cause (FRU-156).
     failedText.textContent = next === 'failed' ? t.text(FAILURES[failure]) : '';
     failedCard.hidden = next !== 'failed';
-    status.textContent = next === 'idle' || next === 'failed' || next === 'sent' ? '' : t.text(STATUS[next]);
+    status.textContent =
+      next === 'idle' || next === 'failed' || next === 'sent' || next === 'receipt' ? '' : t.text(STATUS[next]);
     // The one thing that makes this send work again, beside the sentence that says so (FRU-315).
     signIn.hidden = !(next === 'failed' && failure === 'signed-out' && options.onSignIn !== undefined);
     if (next !== 'sent') {
       sentCard.hidden = true;
       hideNotify();
     }
+    if (next !== 'receipt') receipt.hidden = true;
   }
 
   /** The question of a note sent (FRU-604), while it waits for an answer. */
@@ -808,8 +920,8 @@ export function createComposer(options: ComposerOptions): Composer {
       }
       const ids = held.flatMap((each) => (each.state === 'ready' && each.id !== undefined ? [each.id] : []));
       const result =
-        action === 'keep' && options.keep !== undefined
-          ? await options.keep.onKeep(field.value, reporterFromFields(), selected)
+        action === 'keep' && batch !== undefined
+          ? await batch.add(field.value, reporterFromFields(), selected)
           : await options.onSubmit(field.value, reporterFromFields(), selected, ids);
       if (result === false) failure = 'retry';
       else if (typeof result === 'string') failure = result;
@@ -864,6 +976,165 @@ export function createComposer(options: ComposerOptions): Composer {
     if (!sentOpen.hidden) sentOpen.focus();
     else sentCard.focus();
     closing = view?.setTimeout(close, SENT_MS) ?? 0;
+  }
+
+  /** Set while a batch is on its way: nothing closes the composer then (FRU-608). */
+  let batchInFlight = false;
+  /** The notes of the receipt that went, kept for a « Send again » that sends the rest. */
+  let receiptSent: BatchSentNote[] = [];
+
+  /** « Sending 2 of 3… », counting the note in flight. */
+  const progressOf = (mine: number) => (done: number, total: number) => {
+    if (mine !== session) return;
+    const words = t.text('composer.sendingOf', { done: Math.min(done + 1, total), total });
+    status.textContent = words;
+    receiptStatus.textContent = words;
+  };
+
+  /**
+   * « Send all N » (FRU-608): the note and the batch, in as few requests as the worker allows. The
+   * host puts the note in the batch first, so a note that does not go stays there with its text. A
+   * note with files goes alone first; when it fails, it is still in the field and says why.
+   */
+  async function submitAll(): Promise<void> {
+    if (state === 'sending' || batch === undefined) return;
+    const mine = session;
+    batchInFlight = true;
+    setState('sending');
+    if (asksForName && remember.checked) memory?.set(typedName());
+    let result: BatchSent;
+    try {
+      const inFlight = held.filter((each) => each.state === 'sending').map((each) => each.sent);
+      if (inFlight.length > 0) await Promise.all(inFlight);
+      const ids = held.flatMap((each) => (each.state === 'ready' && each.id !== undefined ? [each.id] : []));
+      progressOf(mine)(0, (batch.waiting() ?? 0) + 1);
+      result = await batch.sendAll(field.value, reporterFromFields(), selected, ids, progressOf(mine));
+    } catch {
+      result = { sent: [], unsent: [], failure: 'retry', inField: true };
+    } finally {
+      batchInFlight = false;
+    }
+    if (mine !== session) return;
+    if (result.inField === true) {
+      setState('failed', result.failure ?? 'retry');
+      field.focus();
+
+      return;
+    }
+    // The note left the field: it went, or it waits in the batch with its text.
+    held = [];
+    drawAttachments();
+    receiptSent = [...result.sent];
+    showReceipt(result);
+  }
+
+  /**
+   * The receipt of a batch (FRU-608): « 3 notes sent », where they went, each note with the link of
+   * its ticket, and « Close ». A partial send says « 2 sent, 1 not sent »; a note that did not go keeps
+   * its text, with « Copy text », and « Send again » sends the rest. The list scrolls past 420 px, in
+   * a region the keyboard reaches, and « Show all in the sidebar » opens the list of every note.
+   */
+  function showReceipt(result: BatchSent): void {
+    setState('receipt');
+    root.dataset.fruitbackState = 'receipt';
+    const whole = result.unsent.length === 0 && result.failure === undefined;
+    receiptTitle.textContent = whole
+      ? t.plural('composer.receiptSent', receiptSent.length)
+      : t.text('composer.receiptPartial', { sent: receiptSent.length, unsent: result.unsent.length });
+    receiptTo.textContent = whereItWent();
+    receiptStatus.textContent = whole || result.failure === undefined ? '' : failureText(t, result.failure);
+    receiptList.replaceChildren(
+      ...receiptSent.map((note) => receiptRow(note, 'sent')),
+      ...result.unsent.map((note) => receiptRow(note, 'unsent')),
+    );
+    receiptRetry.hidden = result.unsent.length === 0;
+    receiptRetry.disabled = false;
+    receiptAll.hidden = batch?.onShowAll === undefined || receiptSent.length + result.unsent.length <= RECEIPT_ROWS;
+    receipt.hidden = false;
+    fadeReceipt();
+    receipt.focus();
+  }
+
+  /** « To Linear · Website », or « Sent to the team » when the reader is not told the place. */
+  function whereItWent(): string {
+    const index = places.findIndex((place) => place.id === selected);
+    const place = places[index] ?? (places.length === 1 ? places[0] : undefined);
+    if (place === undefined) return t.text('composer.landsTeam');
+
+    return t.text('composer.receiptTo', { destination: nameOf(place, Math.max(index, 0)) });
+  }
+
+  function receiptRow(
+    note: { id: string; text: string; identifier?: string | undefined; url?: string | undefined },
+    kind: 'sent' | 'unsent',
+  ): HTMLElement {
+    const row = document.createElement('li');
+    row.className = 'fruitback-composer-receipt-row';
+    row.dataset.fruitbackReceiptRow = kind;
+    const head = document.createElement('span');
+    head.className = 'fruitback-composer-receipt-id';
+    if (kind === 'sent' && note.url !== undefined) {
+      const link = document.createElement('a');
+      link.href = note.url;
+      link.target = '_blank';
+      link.rel = 'noreferrer noopener';
+      link.textContent = note.identifier ?? t.text('composer.sentOpen');
+      head.append(link);
+    } else
+      head.textContent =
+        kind === 'sent' ? (note.identifier ?? t.text('composer.sent')) : t.text('composer.receiptNotSent');
+    const words = document.createElement('span');
+    words.className = 'fruitback-composer-receipt-text';
+    // The note is the reporter's text: text, never markup.
+    words.textContent = note.text;
+    words.title = note.text;
+    row.append(head, words);
+    if (kind === 'unsent') {
+      const copy = document.createElement('button');
+      copy.type = 'button';
+      copy.className = 'fruitback-composer-ghost fruitback-composer-receipt-copy';
+      copy.textContent = t.text('composer.receiptCopy');
+      copy.addEventListener('click', () => {
+        const clipboard = view?.navigator.clipboard;
+        void (clipboard?.writeText(note.text) ?? Promise.reject(new Error('no clipboard'))).then(
+          () => (copy.textContent = t.text('composer.receiptCopied')),
+          () => {
+            // The text stays readable in the row: selected, the person copies it by hand.
+            const range = document.createRange();
+            range.selectNodeContents(words);
+            view?.getSelection()?.removeAllRanges();
+            view?.getSelection()?.addRange(range);
+          },
+        );
+      });
+      row.append(copy);
+    }
+
+    return row;
+  }
+
+  /** The fade at the foot of the list, while rows are below. */
+  function fadeReceipt(): void {
+    const below = receiptRegion.scrollHeight - receiptRegion.clientHeight - receiptRegion.scrollTop;
+    receiptRegion.toggleAttribute('data-fruitback-more', below > 1);
+  }
+
+  async function resendBatch(): Promise<void> {
+    if (batch === undefined || batchInFlight) return;
+    const mine = session;
+    batchInFlight = true;
+    receiptRetry.disabled = true;
+    let result: BatchSent;
+    try {
+      result = await batch.resend(progressOf(mine));
+    } catch {
+      result = { sent: [], unsent: [], failure: 'retry' };
+    } finally {
+      batchInFlight = false;
+    }
+    if (mine !== session) return;
+    receiptSent = [...receiptSent, ...result.sent];
+    showReceipt(result);
   }
 
   /** The typed name is kept, hidden, and not sent: an identity that ends gives the field back with it. */
@@ -953,7 +1224,8 @@ export function createComposer(options: ComposerOptions): Composer {
     held = [];
     closeAttachMenu(false);
     box.toggleAttribute('data-fruitback-dragging', false);
-    keepOffered = options.keep?.offered() === true;
+    keepOffered = batch?.offered() === true;
+    receiptSent = [];
     showRememberedName();
     drawAvatar();
     // Folded at each open, on the place chosen last. The line says where, and that is enough for
@@ -1222,6 +1494,8 @@ export function createComposer(options: ComposerOptions): Composer {
   const checkedPlace = () => placeList.querySelector<HTMLInputElement>('input:checked');
 
   function close(): void {
+    // A batch on its way finishes in sight: its receipt says what went (FRU-608).
+    if (batchInFlight) return;
     if (closing !== 0) {
       view?.clearTimeout(closing);
       closing = 0;
@@ -1237,7 +1511,11 @@ export function createComposer(options: ComposerOptions): Composer {
 
   // A click anywhere else closes the card of a sent note at once (FRU-305).
   function onDocumentClick(event: Event): void {
-    if (root.hidden || state !== 'sent') return;
+    if (root.hidden || state !== 'sent') {
+      if (!sendMenu.hidden && !event.composedPath().includes(sendMenu) && !event.composedPath().includes(sendMore))
+        closeSendMenu(false);
+      return;
+    }
     if (event.composedPath().includes(root)) return;
     // A question that waits is answered, or closed with Escape or « No thanks »: a click away from it
     // is no answer (FRU-604).
@@ -1378,8 +1656,44 @@ export function createComposer(options: ComposerOptions): Composer {
   const stopFollowingPicture = options.picture?.subscribe?.(showPicture);
   showPicture();
 
-  send.addEventListener('click', () => void submit());
+  send.addEventListener('click', sendPrimary);
   keep.addEventListener('click', () => void submit('keep'));
+  sendMore.addEventListener('click', () => (sendMenu.hidden ? openSendMenu() : closeSendMenu(true)));
+  sendAllItem.addEventListener('click', () => {
+    closeSendMenu(false);
+    void submitAll();
+  });
+  sendOnlyItem.addEventListener('click', () => {
+    closeSendMenu(false);
+    void submit();
+  });
+  sendMenu.addEventListener('keydown', (event) => {
+    const items = [sendAllItem, sendOnlyItem];
+    const at = items.indexOf(deepActiveElement(document) as HTMLButtonElement);
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      closeSendMenu(true);
+    } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      items[(at + (event.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length]?.focus();
+    } else if (event.key === 'Tab') closeSendMenu(false);
+  });
+  sendMore.addEventListener('keydown', (event) => {
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+    event.preventDefault();
+    openSendMenu();
+  });
+  receiptClose.addEventListener('click', close);
+  receiptRetry.addEventListener('click', () => void resendBatch());
+  receiptAll.addEventListener('click', () => {
+    close();
+    batch?.onShowAll?.();
+  });
+  receiptRegion.addEventListener('scroll', fadeReceipt, { passive: true });
+  const stopFollowingBatch = batch?.subscribe(() => {
+    if (state === 'idle' || state === 'failed') drawBatch();
+  });
   signIn.addEventListener('click', () => options.onSignIn?.());
   cancel.addEventListener('click', close);
   // Each change is saved (FRU-311): a reload, Esc, « Cancel » or the cross no longer loses it. The
@@ -1410,7 +1724,7 @@ export function createComposer(options: ComposerOptions): Composer {
   }
   field.addEventListener('keydown', (event) => {
     // ⌘/Ctrl+Enter sends, because a plain Enter belongs to the note.
-    if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) void submit();
+    if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) sendPrimary();
   });
 
   setState('idle');
@@ -1441,6 +1755,7 @@ export function createComposer(options: ComposerOptions): Composer {
       stopFollowingPlaces?.();
       stopFollowingOffer?.();
       stopFollowingPicture?.();
+      stopFollowingBatch?.();
       root.remove();
       style.remove();
     },
@@ -1540,7 +1855,10 @@ const STATUS = {
   sending: 'composer.sending',
   sent: 'composer.sent',
   kept: 'composer.kept',
-} as const satisfies Record<Exclude<ComposerState, 'idle' | 'failed'>, MessageKey>;
+} as const satisfies Record<Exclude<ComposerState, 'idle' | 'failed' | 'receipt'>, MessageKey>;
+
+/** Past this many notes, the receipt offers the list of every note too (FRU-608). */
+const RECEIPT_ROWS = 5;
 
 /**
  * The sentence of a failed send, for another part of the widget that sends: the list of drafts
@@ -1919,17 +2237,123 @@ const TEMPLATE: readonly Markup[] = [
           hidden: '',
         },
       ],
+      ['button', { type: 'button', 'data-fruitback-cancel': '', class: 'fruitback-composer-ghost' }],
+      // « Add to batch », an icon with the count of the notes waiting (FRU-608).
       [
         'button',
         {
           type: 'button',
           'data-fruitback-keep': '',
-          class: 'fruitback-composer-ghost fruitback-composer-keep',
+          class: 'fruitback-composer-tool fruitback-composer-keep',
           hidden: '',
         },
       ],
-      ['button', { type: 'button', 'data-fruitback-cancel': '', class: 'fruitback-composer-ghost' }],
-      ['button', { type: 'button', 'data-fruitback-send': '', class: 'fruitback-composer-send' }],
+      [
+        'span',
+        { class: 'fruitback-composer-send-group' },
+        [
+          ['button', { type: 'button', 'data-fruitback-send': '', class: 'fruitback-composer-send' }],
+          [
+            'button',
+            {
+              type: 'button',
+              'data-fruitback-send-more': '',
+              class: 'fruitback-composer-send fruitback-composer-send-more',
+              'aria-haspopup': 'menu',
+              'aria-expanded': 'false',
+              'aria-controls': 'fruitback-composer-send-menu',
+              hidden: '',
+            },
+          ],
+          [
+            'ul',
+            {
+              'data-fruitback-send-menu': '',
+              id: 'fruitback-composer-send-menu',
+              class: 'fruitback-composer-attach-menu fruitback-composer-send-menu',
+              role: 'menu',
+              hidden: '',
+            },
+            [
+              [
+                'li',
+                { role: 'none' },
+                [
+                  [
+                    'button',
+                    {
+                      type: 'button',
+                      role: 'menuitem',
+                      tabindex: '-1',
+                      'data-fruitback-send-all': '',
+                      class: 'fruitback-composer-attach-item',
+                    },
+                  ],
+                ],
+              ],
+              [
+                'li',
+                { role: 'none' },
+                [
+                  [
+                    'button',
+                    {
+                      type: 'button',
+                      role: 'menuitem',
+                      tabindex: '-1',
+                      'data-fruitback-send-only': '',
+                      class: 'fruitback-composer-attach-item',
+                    },
+                  ],
+                ],
+              ],
+            ],
+          ],
+        ],
+      ],
+    ],
+  ],
+  // The receipt of a batch (FRU-608): it takes the place of the composer, like the card of a sent note.
+  [
+    'div',
+    { 'data-fruitback-receipt': '', class: 'fruitback-composer-receipt', tabindex: '-1', hidden: '' },
+    [
+      ['p', { 'data-fruitback-receipt-title': '', class: 'fruitback-composer-receipt-title', role: 'status' }],
+      ['p', { 'data-fruitback-receipt-to': '', class: 'fruitback-composer-receipt-to' }],
+      [
+        'div',
+        {
+          'data-fruitback-receipt-region': '',
+          class: 'fruitback-composer-receipt-region',
+          role: 'region',
+          tabindex: '0',
+        },
+        [['ul', { 'data-fruitback-receipt-list': '', class: 'fruitback-composer-receipt-list' }]],
+      ],
+      [
+        'p',
+        {
+          'data-fruitback-receipt-status': '',
+          class: 'fruitback-composer-receipt-status',
+          role: 'status',
+          'aria-live': 'polite',
+        },
+      ],
+      [
+        'div',
+        { class: 'fruitback-composer-receipt-actions' },
+        [
+          [
+            'button',
+            { type: 'button', 'data-fruitback-receipt-all': '', class: 'fruitback-composer-ghost', hidden: '' },
+          ],
+          [
+            'button',
+            { type: 'button', 'data-fruitback-receipt-retry': '', class: 'fruitback-composer-ghost', hidden: '' },
+          ],
+          ['button', { type: 'button', 'data-fruitback-receipt-close': '', class: 'fruitback-composer-send' }],
+        ],
+      ],
     ],
   ],
 ];

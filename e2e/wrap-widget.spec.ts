@@ -72,7 +72,8 @@ for (const width of WIDTHS) {
       await expectNothingRunsPast(page, `${at}: the composer`, `${at}-1-composer`);
 
       // The bubble of the note, once sent and read back with its long words.
-      await page.locator('.fruitback-composer-send').click();
+      // The send button by its own mark: since FRU-608 its class is shared by its menu and the receipt.
+      await page.locator('[data-fruitback-send]').click();
       await expect(page.locator('.fruitback-composer')).toBeHidden({ timeout: 10_000 });
       await page.locator('.fruitback-pin-badge').first().click();
       await expect(page.locator('.fruitback-thread')).toBeVisible();

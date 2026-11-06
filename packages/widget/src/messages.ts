@@ -144,12 +144,30 @@ export const ENGLISH = {
   'composer.failedRetry': 'Your text is still here. Try again, or copy it before you close the page.',
   'composer.sentWithoutPicture':
     'Sent without the picture, which could not be taken. The pin stays here and follows the issue’s status.',
-  'composer.keptWithoutPicture': 'Kept for later, without the picture',
+  'composer.keptWithoutPicture': 'Added to the batch, without the picture',
   // A note kept for later rather than sent (FRU-124): the second action, and what it says once done.
-  'composer.keep': 'Keep for later',
+  // FRU-608: the batch, which replaced « Keep for later ». The icon beside « Send », and its count.
+  'composer.batchAdd': 'Add to batch',
+  'composer.batchAddWaiting': { one: 'Add to batch · {count} waiting', other: 'Add to batch · {count} waiting' },
+  // `{count}` counts the note being written: two waiting and this one is « Send all 3 ».
+  'composer.sendAll': 'Send all {count}',
+  'composer.sendOnly': 'Send only this note',
+  'composer.sendMenu': 'More ways to send',
+  'composer.sendingOf': 'Sending {done} of {total}…',
+  // The receipt of a batch: what went, where, and what did not.
+  'composer.receiptSent': { one: '{count} note sent', other: '{count} notes sent' },
+  'composer.receiptPartial': '{sent} sent, {unsent} not sent',
+  'composer.receiptTo': 'To {destination}',
+  'composer.receiptList': 'Notes of this send',
+  'composer.receiptNotSent': 'Not sent',
+  'composer.receiptCopy': 'Copy text',
+  'composer.receiptCopied': 'Copied',
+  'composer.receiptRetry': 'Send again',
+  'composer.receiptShowAll': 'Show all in the sidebar',
+  'composer.receiptClose': 'Close',
   // The text left on this element came back, from a reload or a closed composer (FRU-311).
   'composer.restored': 'Draft restored',
-  'composer.kept': 'Kept for later',
+  'composer.kept': 'Added to the batch',
   'composer.failed': 'Not sent. Your text is still here. Try again.',
   // Why a send failed, when trying again at once will not help (FRU-156).
   'composer.failedWait': 'Too many notes just now. Your text is still here. Send it again in a minute.',

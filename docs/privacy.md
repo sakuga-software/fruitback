@@ -161,7 +161,8 @@ address and the message.
   The widget sends an address only after « Notify me ». It goes to the worker for that one note,
   with the language of the widget, and to nobody else: not to the tracker, not into the note,
   not into the index of the notes. A member is never asked, and neither is a reporter that the
-  site names with a token.
+  site names with a token, nor a reviewer whose widget the browser extension shows: the badge on
+  its icon tells them.
 - The message holds the host of the page and a link to the note on its page. It holds no word of
   the note, and no picture, so it says nothing of when it was opened.
 

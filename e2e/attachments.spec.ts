@@ -249,15 +249,15 @@ test('the menu of the capture floats under its icon, and the composer keeps its 
 });
 
 /**
- * Since FRU-607 the menu holds two ways, and the field ends above the foot of the composer: at the
- * three sizes of FRU-431 it fits under its icon. A window of 260 px is the case where it does not,
- * and the one that holds the way up.
+ * Since FRU-607 the menu holds two ways. At 1440 × 600 it fits under its icon. On a phone the sheet
+ * stands on the foot of the window and its foot is one row since FRU-608: under the icon remain
+ * 81 px for a menu of 82 (measured at 390 × 844), so it opens above, as at 1440 × 260.
  */
 for (const [width, height, up] of [
   [1440, 260, true],
   [1440, 600, false],
-  [390, 844, false],
-  [320, 568, false],
+  [390, 844, true],
+  [320, 568, true],
 ] as const) {
   test(`at ${width} × ${height}, the menu of the capture opens ${up ? 'above' : 'under'} its icon and stays in the window (FRU-431)`, async ({
     page,

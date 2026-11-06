@@ -1,5 +1,14 @@
 import { expect } from '@playwright/test';
-import { type LoadedExtension, PLAYGROUND_ORIGIN, openBareSite, openPopup, sessionSitesOf, test } from './extension.ts';
+import {
+  type LoadedExtension,
+  PLAYGROUND_ORIGIN,
+  addRule,
+  openBareSite,
+  openPopup,
+  sessionSitesOf,
+  test,
+} from './extension.ts';
+import { WORKER_ORIGIN } from './pin.ts';
 import { paired } from './side-panel.ts';
 import { AUTHENTICATED_WORKER_ORIGIN } from './worker-sessions.ts';
 
@@ -73,4 +82,28 @@ test('the icon shows the notes to check of the site of the tab, in the blue of d
   await page.bringToFront();
   await page.reload();
   await expect.poll(async () => (await badgeOf(extension, PLAYGROUND_ORIGIN))?.text, { timeout: 20_000 }).toBe('');
+});
+
+test('a widget the extension mounts never asks « Want to know when it’s fixed? » after a note', async ({
+  extension,
+}) => {
+  // Private mode on the public worker: the reviewer has no session there, so the worker takes the
+  // note as a visitor's and offers a token. The control: the answer carries it, so the absence below
+  // is the product's rule (the extension mounts with askForAddress: false), and not a missing token.
+  await addRule(extension, { mode: 'private', clientId: 'playground', endpoint: WORKER_ORIGIN });
+  const site = await extension.context.newPage();
+  await openBareSite(site, 'extension-no-question');
+  await site.locator('[data-fruitback-host-launch]').click();
+  await site.locator('[data-testid="card-latte"] .add').click();
+  await site.getByPlaceholder('What should change?').fill('A reviewer is never asked for an address.');
+  const answer = site.waitForResponse(
+    (response) => response.request().method() === 'POST' && new URL(response.url()).pathname === '/feedback',
+  );
+  await site.getByRole('button', { name: 'Send', exact: true }).click();
+  const body = (await (await answer).json()) as { notify?: { token?: unknown } };
+  expect(typeof body.notify?.token).toBe('string');
+  await expect(site.locator('[data-fruitback-pin]')).toHaveCount(1);
+  // No question, and the composer closes by itself, as before FRU-604.
+  await expect(site.locator('[data-fruitback-notify]')).toBeHidden();
+  await expect(site.locator('[data-fruitback-composer]')).toBeHidden({ timeout: 10_000 });
 });
