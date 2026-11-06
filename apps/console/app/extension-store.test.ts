@@ -51,9 +51,12 @@ const SCREENS = ['routes/connect-start.tsx', 'routes/setup-install.tsx', 'routes
   source: readFileSync(new URL(path, import.meta.url), 'utf8'),
 }));
 
-/** A control that leads somebody to install the extension, with its href and its words. */
+/**
+ * A control that leads somebody to install the extension, with its href and its words. Step 3 of the
+ * setup says « Install the extension », with no « (beta) » (FRU-610, board P6 of FRU-598).
+ */
 const INSTALL =
-  /href=\{([^}]+)\} newTab>\s*\{t\('(Install the extension \(beta\)|Install it in Firefox \(beta\))'\)\}/g;
+  /href=\{([^}]+)\}\s+newTab\s*>\s*\{t\('(Install the extension(?: \(beta\))?|Install it in Firefox \(beta\))'\)\}/g;
 
 function installLinks(source: string): { href: string; words: string }[] {
   return [...source.matchAll(INSTALL)].map(([, href = '', words = '']) => ({ href, words }));
@@ -62,7 +65,7 @@ function installLinks(source: string): { href: string; words: string }[] {
 describe('the screens that offer the extension (FRU-409)', () => {
   it('lead this browser where it installs it: the store for Chrome and Edge, the guide otherwise', () => {
     for (const { path, source } of SCREENS) {
-      const links = installLinks(source).filter(({ words }) => words === 'Install the extension (beta)');
+      const links = installLinks(source).filter(({ words }) => words.startsWith('Install the extension'));
       assert.deepEqual(
         links.map(({ href }) => href),
         ['extensionInstallFor(navigator.userAgent)'],

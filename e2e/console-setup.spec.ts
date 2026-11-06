@@ -71,8 +71,11 @@ test.describe('the setup, against a worker with accounts (FRU-239)', () => {
     await expect(page.getByText('Workspace Acme Studio')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Rename' })).toBeFocused();
     expect((await workspaces(page)).map((each) => each.name)).toEqual(['Acme Studio']);
-    // The new name is in the words of the second step too.
-    await expect(page.getByRole('radio', { name: /^Members of Acme Studio/ })).toBeChecked();
+    // The new name is in the words of the second step too. The step asks no question of access (FRU-610).
+    await expect(
+      page.getByText('Members of Acme Studio see and leave notes. You can open it to every visitor later, in Sites.'),
+    ).toBeVisible();
+    await expect(page.getByRole('radiogroup')).toHaveCount(0);
 
     // « Add site »: a host with no scheme, and the setup is at its last step.
     await page.getByRole('textbox', { name: 'Site address' }).fill('staging.acme.dev');
@@ -80,6 +83,21 @@ test.describe('the setup, against a worker with accounts (FRU-239)', () => {
     await expect(page.getByRole('heading', { name: `${CURRENT}Put it on the site` })).toBeVisible();
     await expect(page.getByText('https://staging.acme.dev', { exact: true }).first()).toBeVisible();
     await expect(page.getByText('Members of Acme Studio see the notes')).toBeVisible();
+    // The worker made it as the sentence said: the members see its notes, and only they leave one.
+    const [made] = await page.evaluate(async (origin) => {
+      const me = (await (await fetch(`${origin}/console/me`, { credentials: 'include' })).json()) as {
+        workspaces: { id: string }[];
+      };
+      const answer = await fetch(`${origin}/console/workspaces/${me.workspaces[0]!.id}/sites`, {
+        credentials: 'include',
+      });
+
+      return ((await answer.json()) as { sites: { visibility: string; writers?: string }[] }).sites;
+    }, WORKER_ORIGIN);
+    expect({ visibility: made?.visibility, writers: made?.writers }).toEqual({
+      visibility: 'members',
+      writers: 'members',
+    });
 
     // Somebody who comes back is where they left: the front door leads to the sites now.
     await page.goto(`${CONSOLE}/setup`);
@@ -142,6 +160,14 @@ test.describe('the setup, against a worker with accounts (FRU-239)', () => {
     await page.getByRole('button', { name: 'Add site' }).click();
     await expect(page.getByRole('heading', { name: `${CURRENT}Put it on the site` })).toBeVisible();
 
+    // The script tag is folded under « Show » for a site of members (FRU-610): it opens, and stays open.
+    const scriptCard = page.locator('.kit-option').filter({ has: page.getByRole('heading', { name: 'Script tag' }) });
+    const show = scriptCard.getByRole('button', { name: 'Show' });
+    await expect(show).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.getByRole('region', { name: 'Script tag' })).toHaveCount(0);
+    await show.click();
+    await expect(scriptCard.getByRole('button', { name: 'Hide' })).toHaveAttribute('aria-expanded', 'true');
+
     // The script names the site as the worker made it, and « Copy script » copies that script.
     const [workspace] = await workspaces(page);
     const site = await page.evaluate(
@@ -158,8 +184,14 @@ test.describe('the setup, against a worker with accounts (FRU-239)', () => {
     await page.getByRole('button', { name: 'Copy script' }).click();
     await expect(page.getByRole('button', { name: 'Copied' })).toBeVisible();
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(await script.innerText());
+    // Folded again, the card keeps what it holds: « Copied » is still there once it opens (review of #834).
+    await scriptCard.getByRole('button', { name: 'Hide' }).click();
+    await expect(script).toBeHidden();
+    await scriptCard.getByRole('button', { name: 'Show' }).click();
+    await expect(page.getByRole('button', { name: 'Copied' })).toBeVisible();
 
-    // « Connect this browser »: the pairing page of the worker opens, with a code after the `#`.
+    // « Connect this browser »: the pairing page of the worker opens, with a code after the `#`. This
+    // console is self-hosted: on the Cloud the welcome page of the extension connects it (FRU-610).
     const opened = context.waitForEvent('page');
     await page.getByRole('button', { name: 'Connect this browser' }).click();
     const pairing = await opened;
@@ -222,15 +254,14 @@ test.describe('the setup, against a worker with accounts (FRU-239)', () => {
       );
     const sites = async (): Promise<string[]> => (await listed()).map((site) => site.origin);
 
-    // A typing mistake, seen at once: the form opens with its values, and the site is replaced.
+    // A typing mistake, seen at once: the form opens with its address, and the site is replaced.
     await page.getByRole('button', { name: 'Change' }).click();
     const address = page.getByRole('textbox', { name: 'Site address' });
     // The address comes back with its scheme, so an http site stays http (FRU-314).
     await expect(address).toHaveValue('https://stagin.acme.dev');
     await address.fill('staging.acme.dev');
-    await page.getByText('Everyone who visits', { exact: true }).click();
     await page.getByRole('button', { name: 'Save' }).click();
-    await expect(page.getByText('Everyone who visits sees the notes')).toBeVisible();
+    await expect(page.getByText('Members of Acme see the notes')).toBeVisible();
     expect(await sites()).toEqual(['https://staging.acme.dev']);
 
     // « Cancel » and a form sent as it was change nothing.
@@ -238,17 +269,29 @@ test.describe('the setup, against a worker with accounts (FRU-239)', () => {
     await page.getByRole('button', { name: 'Cancel' }).click();
     await page.getByRole('button', { name: 'Change' }).click();
     await page.getByRole('button', { name: 'Save' }).click();
-    await expect(page.getByText('Everyone who visits sees the notes')).toBeVisible();
+    await expect(page.getByText('Members of Acme see the notes')).toBeVisible();
     expect(await sites()).toEqual(['https://staging.acme.dev']);
 
-    // The same address, another choice: the same site, changed, with its script (FRU-504). It was
-    // removed as « the site it replaces » before.
+    // A site opened to every visitor in Sites stays open: the same address asks nothing of the worker,
+    // which would write the values of a new site over it (FRU-610, FRU-504).
+    await page.evaluate(
+      async ([origin, id]) => {
+        await fetch(`${origin}/console/workspaces/${id}/sites`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: 'https://staging.acme.dev', visibility: 'everyone' }),
+        });
+      },
+      [WORKER_ORIGIN, workspace!.id],
+    );
     const [kept] = await listed();
+    expect(kept?.visibility).toBe('everyone');
+    await page.reload();
     await page.getByRole('button', { name: 'Change' }).click();
-    await page.getByText('Members of Acme', { exact: true }).click();
     await page.getByRole('button', { name: 'Save' }).click();
-    await expect(page.getByText('Members of Acme see the notes')).toBeVisible();
-    expect(await listed()).toEqual([{ ...kept, visibility: 'members' }]);
+    await expect(page.getByText('Everyone who visits sees the notes')).toBeVisible();
+    expect(await listed()).toEqual([kept]);
     await expect(page.getByRole('status').filter({ hasText: 'is still in your sites' })).toHaveCount(0);
 
     // Another visit: the site may hold notes now, so it is not removed behind the person's back.
@@ -327,6 +370,24 @@ type Stub = {
   notedFrom?: number;
   /** The worker counts the note and gives no day of the last one. */
   noDay?: boolean;
+  /** The worker has no index of the notes (no database): its list of the notes answers 404. */
+  noIndex?: boolean;
+  /** The console calls the worker of Fruitback Cloud, by the address `/config.js` gives it. */
+  cloud?: boolean;
+};
+
+const CLOUD_WORKER = 'https://api.fruitback.com';
+
+/** The first note of « sited », as the index of the notes lists it (FRU-610). */
+const FIRST_NOTE = {
+  id: 'n1',
+  excerpt: 'The price is hard to read.',
+  page: { url: 'https://staging.acme.dev/pricing', host: 'staging.acme.dev', path: '/pricing' },
+  site: { id: 's1' },
+  stage: 'new',
+  author: { kind: 'you' },
+  note: 'fb_1',
+  createdAt: '2026-11-06T08:00:00.000Z',
 };
 
 const LONG_HOST = 'preview-branch-feature-very-long-name-1234.staging.acme.dev';
@@ -344,7 +405,15 @@ async function stubWorker(page: Page, stub: Stub): Promise<string[]> {
   const account = { id: 'a1', email: EMAIL, name: 'Marianne', locale: stub.locale ?? 'en' };
   const site = { id: 's1', origin: 'https://staging.acme.dev', visibility: stub.audience ?? 'members' };
   let made = stub.as !== 'nobody';
-  await page.context().route(`${WORKER_ORIGIN}/**`, (route) => {
+  if (stub.cloud === true) {
+    await page.context().route(`${CONSOLE}/config.js`, (route) =>
+      route.fulfill({
+        contentType: 'text/javascript',
+        body: `globalThis.__FRUITBACK__ = { api: ${JSON.stringify(CLOUD_WORKER)} };`,
+      }),
+    );
+  }
+  await page.context().route(`${stub.cloud === true ? CLOUD_WORKER : WORKER_ORIGIN}/**`, (route) => {
     const request = route.request();
     const { pathname } = new URL(request.url());
     asked.push(`${request.method()} ${pathname}`);
@@ -367,6 +436,12 @@ async function stubWorker(page: Page, stub: Stub): Promise<string[]> {
       made = true;
 
       return json(workspace, 201);
+    }
+    // The first note of the site, for the end of the setup (FRU-610).
+    if (pathname === '/console/workspaces/w1/notes') {
+      if (stub.noIndex === true) return json({ error: 'not-found' }, 404);
+
+      return json({ notes: stub.notedFrom === undefined ? [] : [FIRST_NOTE] });
     }
     // The list, or the one site the setup reads again until its first note (FRU-497).
     const one = pathname === '/console/workspaces/w1/sites/s1' && request.method() === 'GET';
@@ -597,42 +672,24 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
       { x: 160, y: 413 - LEAD, width: 352.2, height: 44 },
       'field',
     );
-    // Under the field the mockup has a hint of two lines, and its second sentence waits for a
-    // decision on the previews (FRU-103): one line here, so what follows is 19.5 px higher.
-    const hint = 19.5;
-    const cards = page.locator('.kit-pick__card');
-    expectNear(await boxOf(cards.nth(0)), { x: 160, y: 546 - hint - LEAD, width: 352.2, height: 90 }, 'card, members');
-    expectNear(
-      await boxOf(cards.nth(1)),
-      { x: 160, y: 644 - hint - LEAD, width: 352.2, height: 70.5 },
-      'card, everyone',
-    );
-    // « Who can leave a note? » (FRU-330) is not on the board: it comes 20 px under the cards, the
-    // gap of the form, and what follows is that much lower.
-    const writers = await boxOf(page.getByRole('radiogroup', { name: 'Who can leave a note?' }));
-    expectNear(
-      { ...writers, height: 0 },
-      { x: 160, y: 644 + 70.5 + 20 - hint - LEAD, width: 352.2, height: 0 },
-      '« Who can leave a note? »',
-    );
-    const asked = writers.height + 20;
-    expectNear(
-      await boxOf(page.getByRole('button', { name: 'Add site' })),
-      { x: 160, y: 734 + asked - hint - LEAD, width: 98.6, height: 44 },
-      '« Add site »',
-    );
-    expectNear(
-      await boxOf(page.getByRole('heading', { name: 'Put it on the site', exact: true })),
-      { x: 160, y: 810 + asked - hint - LEAD, width: 352.2, height: 26 },
-      'step 3',
-    );
+    // FRU-610 (board P6 of FRU-598): the address alone. The two questions of access left the setup, and
+    // one sentence under the field says what applies: the cards of the mockup of 2026-10-13 are gone.
     await expect(page.getByText('Any page of it will do.')).toBeVisible();
     await expect(page.getByText(/preview\.acme\.dev/)).toHaveCount(0);
-
-    // The question is the name of its group, and the first answer is chosen.
-    const group = page.getByRole('radiogroup', { name: 'Who sees the notes?' });
-    await expect(group.getByRole('radio')).toHaveCount(2);
-    await expect(group.getByRole('radio', { name: /^Members of Havane/ })).toBeChecked();
+    const applies = page.getByText(
+      'Members of Havane see and leave notes. You can open it to every visitor later, in Sites.',
+    );
+    await expect(applies).toBeVisible();
+    await expect(page.getByRole('radiogroup')).toHaveCount(0);
+    await expect(page.getByRole('radio')).toHaveCount(0);
+    // The field, the sentence, then « Add site », in the order they read, and one column wide.
+    const field = await boxOf(page.getByRole('textbox', { name: 'Site address' }));
+    const sentence = await boxOf(applies);
+    const add = await boxOf(page.getByRole('button', { name: 'Add site' }));
+    expect(sentence.y).toBeGreaterThan(field.y + field.height);
+    expect(add.y).toBeGreaterThanOrEqual(sentence.y + sentence.height);
+    expect(sentence.x).toBe(field.x);
+    expect(sentence.width).toBeLessThanOrEqual(field.width);
     expect(await violations(page)).toEqual([]);
   });
 
@@ -654,9 +711,11 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
       { x: 405, y: 412 - LEAD, width: 51.8, height: 21 },
       '« Change »',
     );
+    // The name takes its own width since FRU-610: the badge of the recommended way is beside it.
+    const extensionHeading = await boxOf(page.getByRole('heading', { name: 'Browser extension' }));
     expectNear(
-      await boxOf(page.getByRole('heading', { name: 'Browser extension' })),
-      { x: 179, y: 553 - LEAD, width: 314.2, height: 18 },
+      extensionHeading,
+      { x: 179, y: 553 - LEAD, width: extensionHeading.width, height: 18 },
       'card of the extension',
     );
     // The cards are one under the other in this column, as on the mockup, and as wide.
@@ -668,11 +727,28 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
       'first card',
     );
     expect.soft((await boxOf(cards.nth(1))).x).toBe(160);
+    // A site of members: the extension is recommended, first and open, and the script tag is folded
+    // under « Show » (FRU-610, board P6 of FRU-598).
+    const extensionCard = cards.nth(0);
+    await expect(extensionCard.getByRole('heading', { name: 'Browser extension' })).toBeVisible();
+    await expect(extensionCard.getByText('Recommended for a members site', { exact: true })).toBeVisible();
+    const scriptCard = cards.nth(1);
+    await expect(scriptCard.getByRole('heading', { name: 'Script tag' })).toBeVisible();
+    await expect(scriptCard.getByText(/^Recommended/)).toHaveCount(0);
+    await expect(scriptCard.getByRole('button', { name: 'Show' })).toHaveAttribute('aria-expanded', 'false');
+    await expect(scriptCard.getByRole('region', { name: 'Script tag' })).toHaveCount(0);
+    // The text says the way the extension really goes. This console is self-hosted, so its pairing
+    // link stays; « on Fruitback Cloud » below holds the Cloud, where it goes.
+    await expect(extensionCard).toContainText(
+      'Add it, then connect this browser: a page opens, and you click the Fruitback icon there.',
+    );
     // Chromium installs from the Chrome Web Store (FRU-409); `console-extension-store.spec.ts` holds Firefox.
-    await expect(page.getByRole('link', { name: 'Install the extension (beta)' })).toHaveAttribute(
+    await expect(page.getByRole('link', { name: 'Install the extension', exact: true })).toHaveAttribute(
       'href',
       'https://chromewebstore.google.com/detail/fruitback/jjjemdloknmggncbickofjgbodplekoa',
     );
+    expect(await violations(page)).toEqual([]);
+    await scriptCard.getByRole('button', { name: 'Show' }).click();
     // The step says that it waits for the first note, and what to do on the site (FRU-237 tells it).
     await expect(page.getByRole('status').filter({ hasText: 'Waiting for your first note.' })).toContainText(
       'Waiting for your first note. Open the site, click Leave a note, then any part of the page.',
@@ -793,11 +869,23 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
     await expect(conclusion).toContainText(
       'It waits in the Havane workspace. Send your notes to a tracker or your own API whenever you like.',
     );
+    // The note that came (FRU-610): what the index keeps of it, its text and its page, and a link that
+    // opens the page on it. Then the two ways on, in the order of the board P6.
+    const note = conclusion.locator('figure');
+    await expect(note.locator('blockquote')).toHaveText('The price is hard to read.');
+    await expect(note).toContainText('On staging.acme.dev/pricing');
+    await expect(note.getByRole('link', { name: 'Show on the page' })).toHaveAttribute(
+      'href',
+      'https://staging.acme.dev/pricing#fruitback-note=fb_1',
+    );
+    const ways = conclusion.getByRole('link');
+    await expect(ways).toHaveText(['Show on the page', 'Connect Linear or GitHub', 'Open the console']);
     await expect(conclusion.getByRole('link', { name: 'Open the console' })).toHaveAttribute('href', '/w/w1/sites');
-    await expect(conclusion.getByRole('link', { name: 'Connect a tracker' })).toHaveAttribute(
+    await expect(conclusion.getByRole('link', { name: 'Connect Linear or GitHub' })).toHaveAttribute(
       'href',
       '/w/w1/connectors',
     );
+    expect(asked).toContain('GET /console/workspaces/w1/notes');
     expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
     // The preview stays the site itself: its pins are on the page, where the widget draws them.
     await expect(page.getByRole('region', { name: 'Preview of your site' }).locator('iframe')).toBeVisible();
@@ -844,6 +932,17 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
     await expect(page.getByRole('heading', { name: 'Your first note is in' })).toBeVisible();
   });
 
+  test('a worker with no index of the notes ends the setup all the same, with no note to show', async ({ page }) => {
+    await stubWorker(page, { as: 'sited', notedFrom: 1, noIndex: true });
+    await page.goto(`${CONSOLE}/setup`);
+    const conclusion = page
+      .getByRole('status')
+      .filter({ has: page.getByRole('heading', { name: 'Your first note is in' }) });
+    await expect(conclusion.getByRole('link', { name: 'Connect Linear or GitHub' })).toBeVisible();
+    await expect(conclusion.locator('figure')).toHaveCount(0);
+    await expect(page.getByRole('alert')).toHaveCount(0);
+  });
+
   test('a count with no day of the last note says no moment', async ({ page }) => {
     await stubWorker(page, { as: 'sited', notedFrom: 1, noDay: true });
     await page.goto(`${CONSOLE}/setup`);
@@ -858,12 +957,39 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
     await expect(page.getByRole('heading', { name: 'Put it on the site', exact: true })).toBeVisible();
   });
 
+  test('on Fruitback Cloud the card of the extension says the way of its welcome page, with no second way', async ({
+    page,
+  }) => {
+    await stubWorker(page, { as: 'sited', cloud: true });
+    await page.goto(`${CONSOLE}/setup`);
+    await expect(page.getByText(/Hosted in Europe/)).toBeVisible();
+    const card = page.locator('.kit-option').filter({ has: page.getByRole('heading', { name: 'Browser extension' }) });
+    await expect(card).toContainText(
+      'Add it to your browser. The page that opens signs you in and turns on https://staging.acme.dev.',
+    );
+    await expect(card.getByRole('link', { name: 'Install the extension', exact: true })).toBeVisible();
+    // FRU-610: no « Connect this browser » beside it. The welcome page of the extension connects it.
+    await expect(card.getByRole('link', { name: 'Connect this browser' })).toHaveCount(0);
+    await expect(card.getByRole('button', { name: 'Connect this browser' })).toHaveCount(0);
+    expect(await violations(page)).toEqual([]);
+  });
+
   test('the script card says who sees the pins of a site that everyone sees', async ({ page }) => {
     await stubWorker(page, { as: 'sited', audience: 'everyone' });
     await page.goto(`${CONSOLE}/setup`);
 
     await expect(page.getByText('Before the closing body tag. Every visitor sees the pins.')).toBeVisible();
     await expect(page.getByText('Everyone who visits sees the notes')).toBeVisible();
+    // A site that every visitor sees: the script tag is recommended, first and open, and the extension
+    // is folded under « Show » (FRU-610).
+    const cards = page.locator('.kit-option');
+    await expect(cards.nth(0).getByRole('heading', { name: 'Script tag' })).toBeVisible();
+    await expect(cards.nth(0).getByText('Recommended for a public site', { exact: true })).toBeVisible();
+    await expect(cards.nth(1).getByRole('heading', { name: 'Browser extension' })).toBeVisible();
+    await expect(cards.nth(1).getByRole('link', { name: 'Install the extension', exact: true })).toHaveCount(0);
+    await cards.nth(1).getByRole('button', { name: 'Show' }).click();
+    await expect(cards.nth(1).getByRole('link', { name: 'Install the extension', exact: true })).toBeVisible();
+    expect(await violations(page)).toEqual([]);
   });
 
   test('a copy the browser refuses says so, and the script stays to select', async ({ page }) => {
@@ -875,6 +1001,7 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
       });
     });
     await page.goto(`${CONSOLE}/setup`);
+    await page.getByRole('button', { name: 'Show', exact: true }).click();
     await page.getByRole('button', { name: 'Copy script' }).click();
 
     await expect(page.getByRole('alert')).toHaveText(
@@ -904,23 +1031,24 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
     expect(await focused.evaluate((element) => getComputedStyle(element).outline)).toBe('rgb(221, 44, 39) solid 2px');
   });
 
-  test('« Who can leave a note? » is « Members only » for a new site, and « Anyone on the page » is said once chosen (FRU-330)', async ({
+  test('a new site asks no question of access: the members see its notes and leave them (FRU-610)', async ({
     page,
   }) => {
+    const posted: unknown[] = [];
+    page.on('request', (request) => {
+      if (request.method() === 'POST' && request.url() === `${WORKER_ORIGIN}/console/workspaces/w1/sites`) {
+        posted.push(request.postDataJSON());
+      }
+    });
     await stubWorker(page, { as: 'named' });
     await page.goto(`${CONSOLE}/setup`);
-    const writers = page.getByRole('radiogroup', { name: 'Who can leave a note?' });
-    await expect(writers.getByRole('radio', { name: 'Members only' })).toBeChecked();
-    // A site that everyone reads is not asked: the question goes, and comes back with its answer.
-    await page.getByText('Everyone who visits', { exact: true }).click();
-    await expect(writers).toHaveCount(0);
-    await page.getByText(/^Members of Havane/).click();
-    await writers.getByText('Anyone on the page', { exact: true }).click();
-
+    await expect(page.getByRole('radiogroup')).toHaveCount(0);
     await page.getByRole('textbox', { name: 'Site address' }).fill('staging.acme.dev');
     await page.getByRole('button', { name: 'Add site' }).click();
 
-    await expect(page.getByText('Notes from anyone on the page')).toBeVisible();
+    await expect(page.getByText('Members of Havane see the notes')).toBeVisible();
+    expect(posted).toEqual([{ url: 'https://staging.acme.dev', visibility: 'members', writers: 'members' }]);
+    await expect(page.getByText('Notes from anyone on the page')).toHaveCount(0);
     expect(await violations(page)).toEqual([]);
   });
 
@@ -930,11 +1058,9 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
     await page.goto(`${CONSOLE}/setup`);
     const address = page.getByRole('textbox', { name: 'Site address' });
     await address.fill('staging.acme.dev');
-    await page.getByText('Everyone who visits', { exact: true }).click();
     await page.getByRole('button', { name: 'Add site' }).click();
     await expect(page.getByRole('alert')).toHaveText('Only an owner or an admin of the workspace adds a site.');
     await expect(address).toHaveValue('staging.acme.dev');
-    await expect(page.getByRole('radio', { name: /^Everyone who visits/ })).toBeChecked();
     await expect(page.getByRole('heading', { name: `${CURRENT}Your site` })).toBeVisible();
 
     // What is not an address: the sentence of the console, and nothing asked of the worker.
@@ -1097,6 +1223,8 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
       const host = page.getByText(`https://${LONG_HOST}`, { exact: true }).first();
       expect.soft(await host.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
       // The script breaks inside its attributes: nothing of it is past the edge of its card (FRU-321).
+      await page.getByRole('button', { name: locale === 'en' ? 'Show' : 'Afficher', exact: true }).click();
+      await check('step 3, with the script tag open');
       const script = page.locator('.kit-snippet').first();
       expect.soft(await script.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
       await expect(script).toContainText('fruitback.iife.js');
@@ -1114,7 +1242,11 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
     await expect(page.getByRole('heading', { name: 'Mettre en place Fruitback' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Étape en cours : Votre site' })).toBeVisible();
     await expect(page.getByText('Connecté en tant que marianne@acme.dev')).toBeVisible();
-    await expect(page.getByRole('radio', { name: /^Les membres de Havane/ })).toBeChecked();
+    await expect(
+      page.getByText(
+        'Les membres de Havane voient les notes et en laissent. Vous pourrez l’ouvrir à tous les visiteurs plus tard, dans Sites.',
+      ),
+    ).toBeVisible();
     await expect(page).toHaveTitle('Mettre en place Fruitback');
     await context.close();
   });
