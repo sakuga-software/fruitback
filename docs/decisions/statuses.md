@@ -508,3 +508,18 @@ the framing follows in brackets when the answer differs from it.
 3. **The colours of FRU-334 by default.** The tracker's colours are an option, off by default.
 4. **No GitHub labels as statuses.** Four fixed statuses.
 5. **No inbound REST route for now.** A REST site uses the statuses of the worker's store.
+
+## One list of the notes (FRU-606)
+
+### The rules, in short
+
+- **One list, in two places.** The side panel of the browser when it offers one; the same list in the
+  widget otherwise (decision of 2026-11-05 on FRU-598). Both have the same tabs, in the same words.
+- **Three tabs that follow the loop: To check, Open, Done.** `noteTab` of `@fruitback/shared` sorts a
+  note: « To check » is a note of the reader (`mine`) that the team marked done and that nobody
+  confirmed (`checked`); « Open » is new, to do and in progress; « Done » is done (checked, or of
+  somebody else) and closed. « Ready to check » is no longer a block of its own above the tabs.
+- **The tabs are by stage, like the filters.** A status of the team never moves a note between tabs:
+  its stage does.
+- **A list opens on « To check » while a note waits there, else on « Open »** (`firstTab`), until
+  the reader chooses a tab.

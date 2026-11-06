@@ -70,7 +70,8 @@ let followed:
     }
   | undefined;
 let notes: PanelNotes = 'reading';
-let tab: NotesTab = 'open';
+/** The tab the reader chose. Absent: the panel opens on « To check » while a note waits, else « Open » (FRU-606). */
+let tab: NotesTab | undefined;
 let open: string | undefined;
 let replying: PanelOptions['replying'];
 /** The verdict on its way, or why the last one did not go (FRU-300). */
@@ -157,7 +158,7 @@ async function look(): Promise<void> {
     focusOnOpen = pendingOpen;
     if (pendingOpen !== undefined) awaiting = undefined;
     replying = undefined;
-    tab = 'open';
+    tab = undefined;
     search = undefined;
     // A read or a search of the tab of before draws nothing here (review of #419).
     clearTimeout(siteTimer);
@@ -286,7 +287,7 @@ function draw(): void {
   app.replaceChildren(
     panelPage(document, {
       state: state(),
-      tab,
+      ...(tab === undefined ? {} : { tab }),
       ...(open === undefined ? {} : { open }),
       ...(replying === undefined ? {} : { replying }),
       ...(checking === undefined ? {} : { checking }),
@@ -432,7 +433,8 @@ async function openSiteNote(note: SiteNote): Promise<void> {
   if (note.page.path === followed.path) {
     search = undefined;
     open = note.note;
-    tab = 'open';
+    const here = Array.isArray(notes) ? notes.find((each) => each.id === note.note) : undefined;
+    tab = here === undefined ? undefined : tabOf(here);
     draw();
     void ask('mark-note', { note: note.note });
     void ask('focus-note', { note: note.note });
@@ -537,7 +539,7 @@ async function sendVerdict(id: string, verdict: CheckVerdict): Promise<void> {
     if (verdict === 'wrong') reopened[id] = new Date().toISOString();
     open = id;
     // The note is in Done when it looks fixed, back in Open when it is still wrong.
-    tab = verdict === 'fixed' ? 'finished' : 'open';
+    tab = verdict === 'fixed' ? 'done' : 'open';
     await readNotes();
 
     return;

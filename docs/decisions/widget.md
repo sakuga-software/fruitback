@@ -1558,7 +1558,19 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
   - **« Search notes »** reads the whole text of each note and the identifier of its store, in any
     case, in the notes the widget holds: no request. Its keys stay in the field: a site and the
     capture mode listen on the document. Escape still closes the list.
-  - **The chips of the statuses replace the tabs of FRU-259**: « All », « New », « To do », « In
+  - **Three tabs, To check, Open and Done (FRU-606)**, under the head, as the side panel of the
+    extension has them: one list of the notes, in the browser's panel when it offers one (FRU-469),
+    in the widget otherwise. `noteTab` of `@fruitback/shared` sorts a note into one tab: « To check »
+    is a note of the reader (`mine`) that the team marked done and nobody confirmed (`checked`),
+    « Open » is new, to do and in progress, « Done » is the rest. Absent a choice the list opens on
+    « To check » while a note waits there, else on « Open ». A `tablist` with the arrows, Home and
+    End; the rows are its `tabpanel`. The tabs count the notes a pin shows, and show once a read
+    answered. The notes kept for later head « Open ». The words are the side panel's, held by
+    `apps/extension/src/glossary.test.ts`.
+  - **« Search and options »**, the magnifier of the head (FRU-606), as in the side panel: it opens the
+    scope, the search and the chips below, and one filtered list stands in for the tabs. Closing it
+    gives the tabs back, with no words, every status and « This page ».
+  - **The chips of the statuses replace the tabs of FRU-259**, inside « Search and options »: « All », « New », « To do », « In
     progress », « Done », each with its number, `aria-pressed`, one at a time. « Closed » is not on
     the board: its chip shows while a note of the page is closed. The numbers count what the search
     found, and what the overlay draws: a stage the reporter hid in the settings is in no chip, like

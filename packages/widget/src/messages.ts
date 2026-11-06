@@ -342,6 +342,14 @@ export const ENGLISH = {
   'sidebar.draftsSent': { one: '{count} note sent', other: '{count} notes sent' },
   // The switch at the foot of the list: off, the pins go while the list is open (FRU-308).
   'sidebar.showPins': 'Show pins on the page',
+  // FRU-606: the three tabs of the loop, the words of the side panel of the extension.
+  'sidebar.tabCheck': 'To check · {count}',
+  'sidebar.tabOpen': 'Open · {count}',
+  'sidebar.tabDone': 'Done · {count}',
+  'sidebar.noneCheck': 'No note to check.',
+  'sidebar.noneOpen': 'No note is open.',
+  'sidebar.noneDone': 'No note is done yet.',
+  'sidebar.searchOptions': 'Search and options',
 
   // The words of the text a reviewer copies (FRU-109). They are labels in front of a value.
   'export.title': 'Notes on {url}',

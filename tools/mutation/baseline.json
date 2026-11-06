@@ -37,6 +37,10 @@
       "src/external-protocol.ts": {
         "score": 100,
         "mutants": 35
+      },
+      "src/note-tabs.ts": {
+        "score": 100,
+        "mutants": 35
       }
     }
   },

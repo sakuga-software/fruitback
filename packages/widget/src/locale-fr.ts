@@ -257,6 +257,13 @@ export const FRENCH: Catalog = {
   'sidebar.sendDrafts': { one: 'Envoyer {count} note', other: 'Envoyer les {count} notes' },
   'sidebar.draftsSent': { one: '{count} note envoyée', other: '{count} notes envoyées' },
   'sidebar.showPins': 'Afficher les repères sur la page',
+  'sidebar.tabCheck': 'À vérifier · {count}',
+  'sidebar.tabOpen': 'Ouvertes · {count}',
+  'sidebar.tabDone': 'Terminées · {count}',
+  'sidebar.noneCheck': 'Aucune note à vérifier.',
+  'sidebar.noneOpen': 'Aucune note n’est ouverte.',
+  'sidebar.noneDone': 'Aucune note n’est terminée pour l’instant.',
+  'sidebar.searchOptions': 'Recherche et options',
 
   'export.title': 'Notes sur {url}',
   'export.empty': 'Aucune note sur cette page.',

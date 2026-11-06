@@ -1,3 +1,4 @@
+import { type NoteTab, firstTab, noteTab } from '@fruitback/shared';
 import { RELATIVE_UNITS } from '@fruitback/widget';
 import { language, msg, t } from './i18n.ts';
 import { leaveAndFollow, whenNotAnswering } from './guide.ts';
@@ -177,7 +178,8 @@ export type PanelState =
       notes: PanelNotes;
     };
 
-export type NotesTab = 'open' | 'finished';
+/** The tabs of the list, as the widget has them (FRU-606): To check, Open, Done. */
+export type NotesTab = NoteTab;
 
 /**
  * The notes, or where their read is. `reading`: the widget has not read yet, or is not mounted yet;
@@ -227,8 +229,8 @@ export function openOnRead(asked: string | undefined, notes: PanelNotes): { open
 
 export type PanelOptions = {
   state: PanelState;
-  /** The tab of the list. */
-  tab: NotesTab;
+  /** The tab the reader chose. Absent: « To check » while a note waits for a verdict, else « Open » (`firstTab`). */
+  tab?: NotesTab;
   /** The note whose row is open. */
   open?: string;
   /** The note whose reply field is open, and what is written in it. */
@@ -337,17 +339,18 @@ const STAGE_WORD: Record<PanelNote['stage'], string> = {
   closed: msg('Closed'),
 };
 
-/** « Open » is what is left to do: new, to do, in progress. « Done » is done and closed. */
+/**
+ * The tab of a note (FRU-606), the one of the widget: « To check » for a note of the reader that the
+ * team marked done and nobody confirmed (FRU-300), « Open » for new, to do and in progress, « Done »
+ * for the rest. `mine` and `checked` are the worker's word (FRU-294).
+ */
 export function tabOf(note: PanelNote): NotesTab {
-  return note.stage === 'done' || note.stage === 'closed' ? 'finished' : 'open';
+  return noteTab(note);
 }
 
-/**
- * A note the reader left that the team marked done, and that nobody confirmed (FRU-300): it waits in
- * « Ready to check », and not in « Done ». `mine` and `checked` are the worker's word (FRU-294).
- */
+/** Whether a note waits for the verdict of its reader: the notes of « To check », and the badge (FRU-604). */
 export function toCheck(note: PanelNote): boolean {
-  return note.stage === 'done' && note.mine === true && note.checked === undefined;
+  return noteTab(note) === 'check';
 }
 
 /** The order of the pins: by their number, the notes with no number last. */
@@ -558,39 +561,40 @@ function notesPart(document: Document, options: PanelOptions, notes: PanelNotes)
     return [empty];
   }
 
-  const ready = notes.filter(toCheck).sort(byNumber);
-  const open = notes.filter((note) => tabOf(note) === 'open').sort(byNumber);
-  // A note to check waits in its block, not in « Done ».
-  const done = notes.filter((note) => tabOf(note) === 'finished' && !toCheck(note)).sort(byNumber);
+  const byTab: Record<NotesTab, PanelNote[]> = { check: [], open: [], done: [] };
+  for (const note of [...notes].sort(byNumber)) byTab[tabOf(note)].push(note);
+  const chosen = options.tab ?? firstTab(notes);
   const tabs = segmentedTabs(document, {
     label: t('Notes on this page'),
     size: 'panel',
     tabs: [
-      { id: 'open', label: t('Open · {count}', { count: open.length }) },
-      { id: 'finished', label: t('Done · {count}', { count: done.length }) },
+      { id: 'check', label: t('To check · {count}', { count: byTab.check.length }) },
+      { id: 'open', label: t('Open · {count}', { count: byTab.open.length }) },
+      { id: 'done', label: t('Done · {count}', { count: byTab.done.length }) },
     ],
-    selected: options.tab,
-    onSelect: (id) => options.onTab(id === 'finished' ? 'finished' : 'open'),
+    selected: chosen,
+    onSelect: (id) => options.onTab(id === 'check' || id === 'done' ? id : 'open'),
   });
   tabs.classList.add('panel-tabs');
-  const shown = options.tab === 'finished' ? done : open;
-  const list = make(document, 'ul', 'panel-list');
-  list.setAttribute('role', 'tabpanel');
-  list.setAttribute('aria-label', options.tab === 'finished' ? t('Done notes') : t('Open notes'));
-  for (const note of shown) list.append(noteRow(document, options, note));
-  const parts: Node[] = ready.length > 0 ? [readyBlock(document, options, ready), tabs, list] : [tabs, list];
-  if (shown.length === 0) {
-    parts.push(
-      make(document, 'p', 'panel-none', options.tab === 'finished' ? t('No note is done yet.') : t('No note is open.')),
-    );
+  const shown = byTab[chosen];
+  const parts: Node[] = [tabs];
+  if (chosen === 'check') {
+    parts.push(checkPart(document, options, shown));
+  } else {
+    const list = make(document, 'ul', 'panel-list');
+    list.setAttribute('role', 'tabpanel');
+    list.setAttribute('aria-label', chosen === 'done' ? t('Done notes') : t('Open notes'));
+    for (const note of shown) list.append(noteRow(document, options, note));
+    parts.push(list);
   }
+  if (shown.length === 0) parts.push(make(document, 'p', 'panel-none', t(NONE_IN_TAB[chosen])));
 
   return parts;
 }
 
 /**
  * The list while « Search and options » is open (FRU-307): one list, filtered by the search and the
- * chip, in place of « Ready to check » and the tabs; then the notes that lost their element. The
+ * chip, in place of the tabs; then the notes that lost their element. The
  * scope « Whole site » shows the site's.
  */
 function searchedPart(
@@ -624,6 +628,13 @@ function searchedPart(
 
   return parts;
 }
+
+/** What an empty tab says. */
+const NONE_IN_TAB: Record<NotesTab, string> = {
+  check: msg('No note to check.'),
+  open: msg('No note is open.'),
+  done: msg('No note is done yet.'),
+};
 
 /** A row: the drop with the number of the pin, the note, and who wrote it when. Open: the rest. */
 function noteRow(document: Document, options: PanelOptions, note: PanelNote): HTMLLIElement {
@@ -728,20 +739,18 @@ function fixedLine(note: PanelNote, now: number): string {
 }
 
 /**
- * « Ready to check » (FRU-300): the notes of the reader that the team says are fixed, each with
- * « Looks fixed » and « Still wrong ». After a verdict the panel reads the page again: the store
- * moved the note, and the list says where it is now. Nothing moves before that.
+ * The panel of « To check » (FRU-300, FRU-606): the notes of the reader that the team says are fixed,
+ * each with « Looks fixed » and « Still wrong ». After a verdict the panel reads the page again: the
+ * store moved the note, and the list says where it is now. Nothing moves before that.
  */
-function readyBlock(document: Document, options: PanelOptions, ready: PanelNote[]): HTMLElement {
+function checkPart(document: Document, options: PanelOptions, ready: PanelNote[]): HTMLElement {
   const now = options.now ?? Date.now();
-  const block = make(document, 'section', 'ready');
-  const title = make(document, 'h3', 'ready-title', t('Ready to check · {count}', { count: ready.length }));
-  title.id = 'ready-title';
-  block.setAttribute('aria-labelledby', title.id);
-  block.append(
-    title,
-    make(document, 'p', 'ready-text', t('The team says these are fixed. Do they look right to you?')),
-  );
+  const block = make(document, 'div', 'ready');
+  block.setAttribute('role', 'tabpanel');
+  block.setAttribute('aria-label', t('Notes to check'));
+  if (ready.length > 0) {
+    block.append(make(document, 'p', 'ready-text', t('The team says these are fixed. Do they look right to you?')));
+  }
   const list = make(document, 'ul', 'ready-list');
   for (const note of ready) {
     const item = make(document, 'li', 'ready-item');

@@ -328,7 +328,7 @@ it changes who is shown the feedback and never who may fetch it.
   Mathieu chose one accent everywhere on 2026-10-21, after the orange `#c2410c` of FRU-292.
 - **The tokens of the screens to come are declared now**, so that a screen takes a value and never
   writes one: `--surface-warm`, `--line-row`, `--line-control`, `--line-soft`, `--ink`,
-  `--on-ink-muted`, `--success-line`, the three of an alert, the three of « Ready to check »,
+  `--on-ink-muted`, `--success-line`, the three of an alert, the line of « To check » (two more until FRU-606),
   `--selection`, `--tile-on`, `--shadow-popup`, `--shadow-panel`, `--radius-card` (12 px),
   `--radius-panel` (14 px), `--font-sans` and `--font-mono`.
 - **The edge of a field is `--line-strong` (`#8a8a93`, 3.42:1), the field border of the console.**
@@ -606,7 +606,7 @@ did not change: the fields of 760 px and the file input of the browser are as th
   « Search and options » (FRU-307, see below).
 - **The panel lists the notes of the page (FRU-299)**: see the next section.
 - **One side margin, `--panel-gutter` (12 px), for every block of the panel** (FRU-533): the head,
-  « Leave a note », « Ready to check », the tabs, the rows, the search and the foot take it from
+  « Leave a note », the tabs, « To check », the rows, the search and the foot take it from
   `sidepanel/style.css`, and a row gives the words of its note `--panel-row-inset` inside the box an
   open row draws, so they sit on the gutter too. The page takes off the 14 px of padding that the
   body of `popup/style.css` gives (the panel links that sheet first): before, every block sat 14 px
@@ -675,8 +675,10 @@ holds `http://127.0.0.1/*`; a page of `http://127.0.0.1` with no rule, the panel
   open its thread), `mark-note` (the pin of the open row stands out: a fifth bigger, above the
   others) and `reply` (the reply path of the thread, then a read). A reply waits 20 s for its answer;
   the others 1.5 s, as before.
-- **Open and Done.** Open is New, To do and In progress; Done is Done and Closed (FRU-300 takes out
-  the notes to check). A row is the drop of the kit with the number of its pin, the note, and
+- **To check, Open and Done** (FRU-606), the tabs of the widget's list too: `noteTab` of
+  `@fruitback/shared`. To check holds the notes the reader is asked to check (FRU-300); Open is New,
+  To do and In progress; Done is Done and Closed. Absent a choice the panel opens on To check while a
+  note waits there, else on Open. A row is the drop of the kit with the number of its pin, the note, and
   « {stage} · {who} · {age} »: « You » for a note of the reader (`mine`), the name given, or
   « Anonymous ».
 - **A site that embeds its own widget (team mode with no mount) has no list in the panel.** That
@@ -686,7 +688,7 @@ holds `http://127.0.0.1/*`; a page of `http://127.0.0.1` with no rule, the panel
   of the store, then the word of the stage, and the drop in the colour the team chose. « Open » and
   « Done » stay by stage. See [statuses.md](statuses.md), « What the widget draws ».
 - **A note holds one line in a list, cut with « … »** (FRU-534): a closed row of « Open » and
-  « Done », « Ready to check », the rows of « Search and options » on the page and on the whole
+  « Done », « To check », the rows of « Search and options » on the page and on the whole
   site, and the detached notes. An open row shows the whole note. The sheet cuts it, never the
   code: the text stays whole in the DOM, so the name of the button of the row and the specs read
   all of it, and `title` gives it to a pointer.
@@ -725,7 +727,7 @@ holds `http://127.0.0.1/*`; a page of `http://127.0.0.1` with no rule, the panel
   and Tab close, the focus goes back to its button, and a click outside closes it. The panel keeps it
   open across a draw (`statusOpen`), on the option the keyboard is on (`statusActive`). « Whole site » reads the stage of a note only (FRU-306), so it
   never has more than five, and keeps its chips.
-- **While it is open, one list stands in for « Ready to check » and the tabs**: the chips do what
+- **While it is open, one list stands in for the tabs**: the chips do what
   Open and Done did. Closing it gives the panel of FRU-299 and FRU-300 back as it was.
 - **« This page » filters the notes the widget read**: every word of the search in the whole text of
   the note or the name of its author, without case or accents. The notes that lost their element
@@ -762,12 +764,13 @@ holds `http://127.0.0.1/*`; a page of `http://127.0.0.1` with no rule, the panel
 - **What somebody types in the search stays**: the field, its caret and its focus are put back after
   each draw, as for a reply.
 
-## « Ready to check », in the side panel (FRU-300)
+## « To check », in the side panel (FRU-300, FRU-606)
 
 ### The rules, in short
 
 - **A note is to check when the worker says so**: `done`, `mine: true`, and no `checked` (FRU-294).
-  It sits in « Ready to check · {n} », between « Leave a note » and the tabs, and not in « Done ».
+  It sits in the first tab, « To check · {n} » (FRU-606: no longer a block above the tabs), and not
+  in « Done ».
 - **« Fixed by {name} · {age}»** names the author of the newest reply of the note, as the store
   keeps it; with none, « Marked done · {age} », from `updatedAt`.
 - **« Looks fixed » and « Still wrong » go through the widget of the tab** (`check`, then
