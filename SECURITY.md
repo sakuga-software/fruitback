@@ -2346,6 +2346,64 @@ same transaction).
   `POST /feedback/<id>/check` under the same rules as a reply (the list below). The panel moves
   nothing itself: it reads the page again, and the store says where the note is.
 
+### An e-mail to the person who left a note done
+
+When a note is done, the worker can write once to the person who left it: a member at the address
+of their account, a visitor at the address they gave for that note. **Only on a site that offers
+it**: the switch « Offer visitors an e-mail when their note is done » of the site, off by default,
+and of no effect where only members leave notes (`offersDoneNotice`). A site that does not offer it,
+and a worker with no mailer (`FRUITBACK_SCALEWAY_TEM` unset), write to nobody, keep no row, offer no
+token and have no route below: `404 not-found`, the same answer in both cases, so the route says
+nothing of the switch. test:`is off for a new site: no token, no row of a member, and the route answers 404`.
+Turning the switch off deletes the rows of the site.
+test:`forgets every address of the site when it is turned off`. `docs/privacy.md` says what is kept
+and when it goes.
+
+`POST /feedback/<note>/notify?client=<site>` with `{ email, token, locale? }` takes the address of a
+visitor. It is public: no session, no cookie.
+
+- Which note. Only the note that the browser just sent. The answer `201` of `POST /feedback` for a
+  note of a visitor carries `notify: { token }`: an HMAC-SHA256 of the site, the id of the note and
+  an expiry, under a key derived from `FRUITBACK_AUTH_SECRET` for this use only. A token lasts
+  30 minutes, and opens that note of that site and no other: `403 invalid-token`.
+  test:`refuses a token of another note, and an address that is none, and writes nothing`.
+  The worker keeps nothing for a token that is never used.
+- Whose note. A token is given for a note of a visitor only, on a page of an origin of its site.
+  A member is told at the address of their account and is offered no token; a reporter that the
+  site signs is offered none either. test:`offers no token for a page of another origin than the site`.
+- Once. One address for a note, the first one: a second is `409 not-taken`, and so is a note that
+  the index of the notes does not hold.
+- What address. One `@`, a local part of 64 characters at most, a domain with a dot, 254 characters
+  at most, no space, no double quote, no angle bracket and no line break: `400 invalid-email`. An
+  apostrophe is taken, as in `o'brien@example.com`. It is not
+  proved: nothing is sent before the team marks the note done.
+- How much. 3 addresses a minute from one address of a caller, and 10 a minute for one site from
+  all callers, counted apart from the requests and in the same database, before any write: `429`.
+  test:`takes 3 addresses a minute from one caller, then answers 429`,
+  test:`takes 10 addresses a minute for one site, from many callers`.
+  The count of the site is taken before the write, so it holds strictly, and only for a note that
+  can still take an address: a request that would be `409` costs its caller alone, never the site, except a request sent twice at the same instant for one note.
+  test:`counts no refused request against the site`.
+- What is sent. One message for each note, when a read of its page or a change of its status says
+  that it is done. One statement claims the row for 10 minutes and answers it, so two reads at once
+  send one message (test:`answers a row to one of two takes at once`). The row goes once the
+  provider took the message. A message that did not leave, or a process that stopped while it sent,
+  leaves the row for the next read
+  (test:`keeps a row that a read took and did not send, and gives it again once its claim ran out`).
+  The one case that sends twice is a provider that took the message while the database refused the
+  removal of the row. The message holds the host of the
+  page and a link to the note on its page, written so that no mail client makes another link of
+  them, and no word of the note: whoever sends the note writes its text.
+- What it cannot stop. The owner of a site can send notes from their own pages and give addresses
+  that are not theirs: Fruitback then writes once to each of them, under its own name, about a note
+  that its team marks done, 10 addresses a minute for that site at most. The message names the host
+  of the site and holds nothing else that they wrote.
+- The extension does not carry this route, and a widget it mounts never asks for an address
+  (`askForAddress: false`), in team mode and in private mode alike. test:`refuses the path of the address of a visitor (FRU-604)`.
+
+The badge on the icon of the extension shows `toCheck` of `GET /session/sites?origin=` for the
+site of the tab, as the popup reads it: no new data, and no new route.
+
 ### The side panel of the browser (FRU-296)
 
 The extension declares a side panel: `side_panel.default_path` and the `sidePanel` permission on

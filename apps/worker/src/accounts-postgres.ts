@@ -46,6 +46,7 @@ import {
   type Reach,
   DEFAULT_CONNECTOR_SETTINGS,
   DEFAULT_WRITERS,
+  offersDoneNotice,
   type SharedSite,
   type Site,
   type WorkspaceSuspension,
@@ -64,6 +65,7 @@ import {
   agent_sessions,
   connectors,
   deliveries,
+  done_notices,
   site_agent_triggers,
   domains,
   invitation_sites,
@@ -138,6 +140,7 @@ const SITE_WITH_DESTINATION = {
   origin: sites.origin,
   visibility: sites.visibility,
   writers: sites.writers,
+  notify_done: sites.notify_done,
   connector_id: site_destinations.connector_id,
   team_id: site_destinations.team_id,
   project_id: site_destinations.project_id,
@@ -1346,7 +1349,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
       );
     },
 
-    async addSite(workspace, { origin, visibility, writers }) {
+    async addSite(workspace, { origin, visibility, writers, notifyDone }) {
       // Adding the same address twice is the same site, with the visibility asked for last. It keeps
       // the destinations it had, so the statement that writes it reads them too. It keeps who writes
       // there too, unless the caller says (FRU-330): a console of before closes nothing.
@@ -1360,6 +1363,8 @@ export function createPostgresAccountStore(database: Database): AccountStore {
               origin,
               visibility,
               writers: writers ?? DEFAULT_WRITERS,
+              // FRU-604: off unless the caller says, for a new site and for one that exists alike.
+              notify_done: notifyDone ?? false,
               created_at: Date.now(),
             })
             .onConflictDoUpdate({
@@ -1367,6 +1372,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
               set: {
                 visibility: sql`excluded.visibility`,
                 ...(writers === undefined ? {} : { writers }),
+                ...(notifyDone === undefined ? {} : { notify_done: notifyDone }),
               },
             })
             .returning({
@@ -1375,6 +1381,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
               origin: sites.origin,
               visibility: sites.visibility,
               writers: sites.writers,
+              notify_done: sites.notify_done,
             }),
         );
 
@@ -1386,6 +1393,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
             origin: site.origin,
             visibility: site.visibility,
             writers: site.writers,
+            notify_done: site.notify_done,
             connector_id: site_destinations.connector_id,
             team_id: site_destinations.team_id,
             project_id: site_destinations.project_id,
@@ -1399,6 +1407,10 @@ export function createPostgresAccountStore(database: Database): AccountStore {
       });
       const site = sitesFrom(rows)[0];
       if (site === undefined) throw new StoreError('The site could not be read back');
+      // FRU-604: a site that no longer offers the e-mail keeps no address, nor account, waiting for one.
+      if (!offersDoneNotice(site)) {
+        await run((db) => db.delete(done_notices).where(eq(done_notices.site_id, site.id)));
+      }
 
       return site;
     },
@@ -1470,6 +1482,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
             origin: sites.origin,
             visibility: sites.visibility,
             writers: sites.writers,
+            notify_done: sites.notify_done,
           })
           .from(sites)
           .where(

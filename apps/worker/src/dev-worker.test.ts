@@ -263,7 +263,7 @@ describe('the worker of development, as a process (FRU-223)', () => {
     assert.equal(await said(), false);
     const opened = await set('anyone');
     assert.equal(opened.status, 200);
-    assert.deepEqual(await opened.json(), { id: DEV_SITE, writers: 'anyone' });
+    assert.deepEqual(await opened.json(), { id: DEV_SITE, writers: 'anyone', notifyDone: false });
     assert.equal(await said(), undefined);
     assert.equal((await set('everyone')).status, 400);
     assert.equal(await said(), undefined);

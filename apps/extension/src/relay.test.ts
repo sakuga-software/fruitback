@@ -11,7 +11,7 @@ import {
   type RelaySeams,
   createRelay,
 } from './relay.ts';
-import { type RelayRequest, type RelayResponse, parseRelayRequest } from './protocol.ts';
+import { REFUSED_STATUS, type RelayRequest, type RelayResponse, parseRelayRequest } from './protocol.ts';
 import { resolveSite } from './site-patterns.ts';
 import type { SiteConfig } from './sites.ts';
 
@@ -386,6 +386,9 @@ describe('the relay sends what the background decided, never what the page asked
  * with nothing to see. The same cross-package reading `security.test.ts` does. `embed.ts` builds the
  * addresses; `worker-client.ts` writes the headers (FRU-509).
  */
+/** The one path the widget calls with no session only, so never through the relay (FRU-604). */
+const VISITOR_ONLY_PATH = '/feedback/issue_1/notify';
+
 describe('what the widget sends is what the relay allows', () => {
   const widget = [
     readFileSync(fileURLToPath(new URL('../../../packages/widget/src/embed.ts', import.meta.url)), 'utf8'),
@@ -402,7 +405,11 @@ describe('what the widget sends is what the relay allows', () => {
     assert.ok(resolved.includes('/feedback/issue_1/check'), 'the guard no longer sees the path of a verdict');
     assert.ok(resolved.includes('/feedback/issue_1/text'), 'the guard no longer sees the path of an edit (FRU-475)');
     assert.ok(resolved.includes(ATTACHMENTS_PATH), 'the guard no longer sees the path of a file (FRU-332)');
+    // FRU-604: the address of a visitor with no account. The relay carries the calls of a session,
+    // whose reader the worker names and never asks: it stays out of the relay (the case below).
+    assert.ok(resolved.includes(VISITOR_ONLY_PATH), 'the guard no longer sees the path of an address (FRU-604)');
     for (const path of resolved) {
+      if (path === VISITOR_ONLY_PATH) continue;
       assert.ok(
         path === FEEDBACK_PATH ||
           path === ATTACHMENTS_PATH ||
@@ -412,6 +419,24 @@ describe('what the widget sends is what the relay allows', () => {
         path ?? '',
       );
     }
+  });
+
+  it('refuses the path of the address of a visitor (FRU-604)', async () => {
+    const { relay, sent } = harness({
+      readSite: async () => ({ mode: 'team', endpoint: 'https://acme.dev/fruitback', enabled: true }),
+    });
+    const answer = await relay(
+      {
+        url: 'https://acme.dev/fruitback/feedback/issue_1/notify?client=acme',
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      },
+      'https://acme.dev',
+    );
+
+    assert.equal(answer.status, REFUSED_STATUS);
+    assert.equal(sent.length, 0);
   });
 
   it('names no header the relay would drop in silence', () => {

@@ -575,6 +575,13 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Address: 'Adresse',
   'Who sees the notes': 'Qui voit les notes',
   'Who can leave a note': 'Qui peut laisser une note',
+  // FRU-604: the e-mail of a note done, a switch of the site where anybody may leave a note.
+  'Offer visitors an e-mail when their note is done': 'Proposer aux visiteurs un e-mail quand leur note est faite',
+  'After a note, a visitor may give an address. Fruitback writes to it once, when the note is done, then deletes it.':
+    'Après une note, un visiteur peut donner une adresse. Fruitback y écrit une fois, quand la note est faite, puis l’efface.',
+  'E-mail when a note is done': 'E-mail quand une note est faite',
+  'Offered to visitors': 'Proposé aux visiteurs',
+  Off: 'Désactivé',
   'See its notes': 'Voir ses notes',
   'See its note': 'Voir sa note',
   'See its {count} notes': 'Voir ses {count} notes',

@@ -1,3 +1,4 @@
+import type { DoneNoticeSeams } from './done-notices.ts';
 import { isOneOf } from './one-of.ts';
 import { json } from './http.ts';
 import { handleNotes } from './console-notes.ts';
@@ -84,6 +85,8 @@ export type ConsoleApiContext = {
   kv?: Kv;
   /** The index of the notes (FRU-237). Absent: the sites are answered with no count. */
   noteIndex?: NoteIndex;
+  /** Who to tell when a note is done (FRU-604). */
+  done?: DoneNoticeSeams;
   /** The Linear application, when this worker has one: a workspace then connects Linear with no key. */
   linearOAuth?: LinearOAuth;
   /** The GitHub App of the connectors (FRU-360). Absent: a workspace does not install it here. */
@@ -187,6 +190,8 @@ type SiteView = {
   origin: string;
   visibility: Visibility;
   writers: Writers;
+  /** FRU-604: the switch « Offer visitors an e-mail when their note is done », as it is stored. */
+  notifyDone: boolean;
   destination?: Destination;
   destinations?: Destination[];
 };
@@ -205,6 +210,7 @@ function siteView(site: Site, seesTracker: boolean): SiteView {
     origin: site.origin,
     visibility: site.visibility,
     writers: site.writers,
+    notifyDone: site.notifyDone,
     ...(seesTracker && first !== undefined ? { destination: first, destinations: site.destinations } : {}),
   };
 }
@@ -703,6 +709,7 @@ export async function handleConsoleApi(
     reach: () => context.accounts.reach(workspaceId as string, account.id),
     allowed,
     noteIndex: context.noteIndex,
+    ...(context.done === undefined ? {} : { done: context.done }),
     accounts: context.accounts,
     kv: context.kv,
     now: context.now ?? Date.now(),
@@ -784,11 +791,17 @@ export async function handleConsoleApi(
     // FRU-330: absent, a new site is « Members only » and a site that exists keeps what it had.
     const writers = body?.writers === undefined ? undefined : writersOf(body.writers);
     if (body?.writers !== undefined && writers === undefined) return json(400, { error: 'invalid-writers' }, headers);
+    // FRU-604: absent, a new site offers no e-mail and a site that exists keeps what it had.
+    const notifyDone = body?.notifyDone;
+    if (notifyDone !== undefined && typeof notifyDone !== 'boolean') {
+      return json(400, { error: 'invalid-notify-done' }, headers);
+    }
 
     const site = await context.accounts.addSite(workspaceId as string, {
       origin,
       visibility,
       ...(writers === undefined ? {} : { writers }),
+      ...(notifyDone === undefined ? {} : { notifyDone }),
     });
 
     // A new site, as the list answers it (FRU-237): no note yet, and nothing waiting.

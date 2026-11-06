@@ -1,3 +1,4 @@
+import { type DoneNoticeSeams, sendDoneNotices } from './done-notices.ts';
 import { json } from './http.ts';
 import { requestAgent } from './agent-triggers.ts';
 import { readJsonObject } from './bounded-body.ts';
@@ -56,6 +57,8 @@ export type NotesContext = {
   /** The role and the sites of the caller, read when a route of the notes is asked (FRU-250). */
   reach: () => Promise<Reach | undefined>;
   noteIndex: NoteIndex | undefined;
+  /** Who to tell when a note is done (FRU-604). */
+  done?: DoneNoticeSeams;
   accounts: Pick<AccountStore, 'retryDelivery' | 'setNoteStatus' | 'siteStatuses' | 'agentTrigger' | 'enqueueDelivery'>;
   /** The cache of the reads of the pages: a status changed makes the read of its page wrong. */
   kv: Kv | undefined;
@@ -414,6 +417,12 @@ async function setStatus(id: string, request: Request, context: NotesContext): P
     }
   }
   if (context.kv !== undefined) await invalidatePages(context.kv, [answer.page]);
+  // FRU-604: a person moved the note to Done: whoever left it is told, once (`take` holds the once).
+  if (answer.stage === 'done' && answer.was !== 'done' && context.done !== undefined) {
+    void sendDoneNotices(context.done, note.site, [
+      { stage: 'done', note: { id: note.note, page: { url: answer.page } } },
+    ]);
+  }
   // FRU-468: a person moved the note to To do, from another stage: the trigger of its site may call.
   if (answer.stage === 'todo' && answer.was !== 'todo') {
     await requestAgent(

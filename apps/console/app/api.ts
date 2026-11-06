@@ -68,6 +68,11 @@ export type Site = {
   visibility: Visibility;
   /** Absent from a worker of before FRU-330, whose sites take a note from anybody. */
   writers?: Writers;
+  /**
+   * FRU-604: « Offer visitors an e-mail when their note is done », off by default. It counts only
+   * where anybody may leave a note. A worker of before sends nothing: off.
+   */
+  notifyDone?: boolean;
   destination?: Destination;
   destinations?: Destination[];
   /**

@@ -120,7 +120,10 @@ describe('a visitor with no account, on a site that everyone reads (FRU-224)', (
     const { site } = { site: (await rowsOf(world.database, 'SELECT id FROM sites'))[0]?.id as string };
     const kept = await visitor.send(SITE, noteFor(site, { text: 'The button is too small.' }));
     assert.equal(kept.status, 201, await kept.clone().text());
-    assert.deepEqual(await kept.json(), { issue: { id: '1', identifier: 'FB-1' } });
+    const answer = (await kept.json()) as { issue: unknown; notify?: { token?: unknown } };
+    assert.deepEqual(answer.issue, { id: '1', identifier: 'FB-1' });
+    // FRU-604: a new site offers no e-mail of a note done, so the answer gives no token.
+    assert.deepEqual(Object.keys(answer), ['issue']);
 
     assert.deepEqual(
       (await notesOf(await visitor.read(SITE))).map((read) => read.note),

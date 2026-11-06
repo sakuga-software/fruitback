@@ -1,5 +1,5 @@
 {
-  "id": "aabac4e7-ed95-4029-a76a-2171c49ff02c",
+  "id": "58ea9643-555f-49fb-bdfd-77524edebbd7",
   "prevId": "53e51965-47c5-4da6-96d0-0bcd3977110d",
   "version": "7",
   "dialect": "postgresql",
@@ -613,91 +613,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.agent_sessions": {
-      "name": "agent_sessions",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "connector_id": {
-          "name": "connector_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "site_id": {
-          "name": "site_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "identifiers": {
-          "name": "identifiers",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "session_url": {
-          "name": "session_url",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "started_at": {
-          "name": "started_at",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {
-        "agent_sessions_by_connector": {
-          "name": "agent_sessions_by_connector",
-          "columns": [
-            {
-              "expression": "connector_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "started_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "agent_sessions_connector_id_fkey": {
-          "name": "agent_sessions_connector_id_fkey",
-          "tableFrom": "agent_sessions",
-          "tableTo": "connectors",
-          "columnsFrom": [
-            "connector_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.agent_writes": {
       "name": "agent_writes",
       "schema": "",
@@ -1287,6 +1202,135 @@
           ]
         }
       },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.done_notices": {
+      "name": "done_notices",
+      "schema": "",
+      "columns": {
+        "site_id": {
+          "name": "site_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "note_id": {
+          "name": "note_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "account_id": {
+          "name": "account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "locale": {
+          "name": "locale",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "claimed_until": {
+          "name": "claimed_until",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "done_notices_by_account": {
+          "name": "done_notices_by_account",
+          "columns": [
+            {
+              "expression": "account_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "done_notices_by_expiry": {
+          "name": "done_notices_by_expiry",
+          "columns": [
+            {
+              "expression": "expires_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "done_notices_site_id_note_id_fkey": {
+          "name": "done_notices_site_id_note_id_fkey",
+          "tableFrom": "done_notices",
+          "tableTo": "note_index",
+          "columnsFrom": [
+            "site_id",
+            "note_id"
+          ],
+          "columnsTo": [
+            "site_id",
+            "note_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "done_notices_account_id_fkey": {
+          "name": "done_notices_account_id_fkey",
+          "tableFrom": "done_notices",
+          "tableTo": "user",
+          "columnsFrom": [
+            "account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "done_notices_pkey": {
+          "name": "done_notices_pkey",
+          "columns": [
+            "site_id",
+            "note_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -2877,6 +2921,13 @@
         },
         "tracker_colours": {
           "name": "tracker_colours",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "notify_done": {
+          "name": "notify_done",
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,

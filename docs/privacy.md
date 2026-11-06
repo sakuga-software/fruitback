@@ -156,6 +156,53 @@ text of before**. A reply under the note says who edited it and when, with no te
 the index of the notes is written again from the new text. A note sent to a tracker or to an address
 cannot be edited, so nothing is sent to them again.
 
+### An e-mail when a note is done
+
+When the team marks a note done, the worker can write once to the person who left it. **It is a
+setting of each site, off by default**: « Offer visitors an e-mail when their note is done », in
+the console, under « Who can leave a note? ». The console shows it only for a site where anybody
+may leave a note, and it does nothing on a site whose notes come from its members only. Off, the
+widget asks nobody, the worker keeps no address and no account for it, and sends nothing. Turned
+off, it deletes every address and account that waited for a message on that site. It needs a worker
+that sends e-mail too: one with `FRUITBACK_SCALEWAY_TEM` set. The mail provider receives the address
+and the message.
+
+On a site where it is on:
+
+- A member of the workspace is written to at the address of their account, in its language. The
+  worker keeps their account id with the note, and no address.
+- A visitor with no account is asked, just after the note is sent: « Want to know when it's fixed? ».
+  The widget sends an address only after « Notify me ». It goes to the worker for that one note,
+  with the language of the widget, and to nobody else: not to the tracker, not into the note,
+  not into the index of the notes. A member is never asked, and neither is a reporter that the
+  site names with a token, nor a reviewer whose widget the browser extension shows: the badge on
+  its icon tells them.
+- The message holds the host of the page and a link to the note on its page. It holds no word of
+  the note, and no picture, so it says nothing of when it was opened.
+
+The address of a visitor is deleted:
+
+- when the message leaves;
+- when its note leaves the index: the site is removed, the workspace is deleted, or `forget`
+  deletes the note;
+- 90 days after it was given, if the note is not done by then, or was closed without being done.
+  The worker looks for these each hour.
+
+A dump of the database taken while the address waits holds it, for as long as you keep the dump.
+The worker writes to nobody a second time for the same note, even when it is reopened and done again.
+
+The table `done_notices` keeps one row for each note that waits:
+
+| Column               | What it holds                                                                                   |
+| -------------------- | ----------------------------------------------------------------------------------------------- |
+| `site_id`, `note_id` | The note, as the index of the notes names it.                                                   |
+| `account_id`         | The account of the member who left the note. Empty for a visitor.                               |
+| `email`              | The address a visitor gave for this note, in lower case. Empty for a member.                    |
+| `locale`             | The language of the widget when the visitor gave the address, `en` or `fr`. Empty for a member. |
+| `created_at`         | When the row was written.                                                                       |
+| `expires_at`         | When the row goes if the note is not done by then: 90 days after `created_at`.                  |
+| `claimed_until`      | While a message is being sent, until when. Empty otherwise.                                     |
+
 ### What the worker keeps besides the note
 
 - No access log. The worker writes to its output at boot, on a configuration problem and on a
@@ -427,6 +474,9 @@ Since 0.2.0 an account also holds the language its person reads, taken from the 
   « Remember me in this browser »**. For a member of a team who chose where a note goes, the identifier of that place: an opaque
   value, with no name of the tracker. No e-mail, no note. In private mode the extension writes `fruitback:config:extension` into the site's
   storage, so a site can see that a reviewer used the extension on it.
+- `localStorage`, under `fruitback:notify-ask`: the answer to « Want to know when it's fixed? »,
+  `yes`, or `no` and its day. Never the address. After « Notify me » the widget asks no more in
+  this browser on this site; after « No thanks » it asks again after 30 days.
 - `sessionStorage`, under `fruitback:config:drafts` (or the `configKey` with `:drafts`): the notes a
   reporter chose to keep for later and has not sent yet, each a whole note, with the name
   they typed if any. Only after a click on « Keep for later ». They go when they are sent, and with

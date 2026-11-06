@@ -21,7 +21,7 @@ import { InstallOptions } from '../install-options';
 import { type Fetched, type Listed, listedOf } from '../listed';
 import { problemOf } from '../problems';
 import { siteLabel, siteName } from '../site-address';
-import { Button, Disclosure, KeyValue, LinkButton, LoadFailed, Pick, Problem } from '../ui';
+import { Button, Disclosure, KeyValue, LinkButton, LoadFailed, Pick, Problem, Toggle } from '../ui';
 import { useLocale } from '../use-locale';
 import { WritersPick } from '../writers-pick';
 import { SitePlaces } from '../parts/site-places';
@@ -38,8 +38,13 @@ const ACCESS_PROBLEMS: Readonly<Record<string, string>> = {
 };
 const ACCESS_NOT_CHANGED = msg('Who sees the notes did not change. Try again.');
 
-/** Who sees the notes of a site, and who leaves them. */
-type Access = { visibility: Visibility; writers?: Writers };
+/** Who sees the notes of a site, who leaves them, and whether a visitor is offered an e-mail (FRU-604). */
+type Access = { visibility: Visibility; writers?: Writers; notifyDone?: boolean };
+
+/** Whether anybody may leave a note on a site set so: the one case where the e-mail of FRU-604 counts. */
+function anyoneWrites(visibility: Visibility, writers: Writers): boolean {
+  return visibility === 'everyone' || writers === 'anyone';
+}
 
 /** The sections folded under « Advanced » (FRU-538): the page shows first what most people come for. */
 const ADVANCED: readonly string[] = ['statuses', 'agent', 'previews'];
@@ -165,6 +170,7 @@ export default function SitePage() {
             ...current,
             visibility: answered.visibility,
             ...(answered.writers === undefined ? {} : { writers: answered.writers }),
+            ...(answered.notifyDone === undefined ? {} : { notifyDone: answered.notifyDone }),
           },
     );
   }
@@ -260,6 +266,15 @@ export default function SitePage() {
                     ? t('Anyone on the page')
                     : t('Members only'),
               },
+              // FRU-604: said only where anybody may leave a note, as the switch is shown only there.
+              ...(anyoneWrites(site.visibility, site.writers ?? 'anyone')
+                ? [
+                    {
+                      term: t('E-mail when a note is done'),
+                      value: site.notifyDone === true ? t('Offered to visitors') : t('Off'),
+                    },
+                  ]
+                : []),
               {
                 // How its notes came: on the card until FRU-432, which kept the card to what is read first.
                 term: t('On the page with'),
@@ -450,6 +465,7 @@ function AccessForm({
   const [visibility, setVisibility] = useState<Visibility>(site.visibility);
   // A site of a worker of before has no `writers`: it takes a note from anybody (FRU-330).
   const [writers, setWriters] = useState<Writers>(site.writers ?? 'anyone');
+  const [notifyDone, setNotifyDone] = useState(site.notifyDone === true);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | undefined>();
   const [saved, setSaved] = useState(false);
@@ -460,6 +476,7 @@ function AccessForm({
   function start() {
     setVisibility(site.visibility);
     setWriters(site.writers ?? 'anyone');
+    setNotifyDone(site.notifyDone === true);
     setProblem(undefined);
     setSaved(false);
     setOpen(true);
@@ -472,8 +489,15 @@ function AccessForm({
   async function submit(event: FormEvent) {
     event.preventDefault();
     setProblem(undefined);
+    // FRU-604: the switch is sent where it is shown, where anybody may leave a note. Hidden, it is not
+    // sent: the worker keeps it, and it does nothing there.
+    const shown = anyoneWrites(visibility, writers);
     // Nothing changed: nothing is asked of the worker.
-    if (visibility === site.visibility && (visibility !== 'members' || writers === (site.writers ?? 'anyone'))) {
+    if (
+      visibility === site.visibility &&
+      (visibility !== 'members' || writers === (site.writers ?? 'anyone')) &&
+      (!shown || notifyDone === (site.notifyDone === true))
+    ) {
       return close();
     }
     setBusy(true);
@@ -481,6 +505,7 @@ function AccessForm({
       url: site.origin,
       visibility,
       ...(visibility === 'members' ? { writers } : {}),
+      ...(shown ? { notifyDone } : {}),
     });
     setBusy(false);
     // Another id would be another site: this one was not changed.
@@ -490,6 +515,7 @@ function AccessForm({
     onChanged({
       visibility: answer.data.visibility,
       ...(answer.data.writers === undefined ? {} : { writers: answer.data.writers }),
+      ...(answer.data.notifyDone === undefined ? {} : { notifyDone: answer.data.notifyDone }),
     });
     setSaved(true);
     close();
@@ -538,6 +564,17 @@ function AccessForm({
         ]}
       />
       <WritersPick visibility={visibility} value={writers} onChange={setWriters} />
+      {/* FRU-604: only where anybody may leave a note; with notes of members only it does nothing. */}
+      {anyoneWrites(visibility, writers) ? (
+        <Toggle
+          label={t('Offer visitors an e-mail when their note is done')}
+          hint={t(
+            'After a note, a visitor may give an address. Fruitback writes to it once, when the note is done, then deletes it.',
+          )}
+          value={notifyDone}
+          onChange={setNotifyDone}
+        />
+      ) : null}
       {problem === undefined ? null : <Problem>{t(problem)}</Problem>}
       <div className="flex flex-wrap items-center gap-x-[20px] gap-y-[10px]">
         <Button type="submit" disabled={busy}>

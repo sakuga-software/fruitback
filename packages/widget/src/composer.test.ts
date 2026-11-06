@@ -1122,7 +1122,13 @@ describe('saying who you are, or not', () => {
       typed.map((input) => input.type),
       ['text', 'checkbox'],
     );
-    assert.equal(page.document.querySelector('[type="email"]'), null);
+    // FRU-604: the one address field is the question asked after a visitor's note is sent, hidden
+    // until then, and not a field of the note. Compared as booleans: a failed compare of two elements
+    // makes node:assert diff the whole DOM.
+    const emails = [...page.document.querySelectorAll('[type="email"]')];
+    assert.equal(emails.length, 1);
+    assert.equal(emails[0]?.closest('[data-fruitback-notify]') !== null, true);
+    assert.equal((page.document.querySelector('[data-fruitback-notify]') as HTMLElement).hidden, true);
   });
 });
 

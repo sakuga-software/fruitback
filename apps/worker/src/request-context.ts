@@ -13,6 +13,7 @@ import type { InstanceAdminReads } from './instance-admin.ts';
 import type { Kv } from './kv.ts';
 import { seen } from './last-seen.ts';
 import type { Mailer } from './mail.ts';
+import type { DoneNoticeSeams, DoneNotices } from './done-notices.ts';
 import type { Channel, NoteIndex } from './notes-index.ts';
 import type { SessionIdentity, SessionStore } from './session.ts';
 import type { Release } from './release.ts';
@@ -65,6 +66,8 @@ export type RequestContext = {
   kv?: Kv;
   /** The index of the notes (FRU-237). A suite hands over one on PGlite. */
   noteIndex?: NoteIndex;
+  /** Who to tell when a note is done (FRU-604). A suite hands over one on PGlite. */
+  doneNotices?: DoneNotices;
   /** What the administrator of the instance reads (FRU-261). A suite hands over one on PGlite. */
   instanceAdmin?: InstanceAdminReads;
   /**
@@ -147,6 +150,8 @@ export type Verified = IdentityResult & { session?: true };
 
 /** The checks of the caller that `app.ts` keeps, and that its modules of routes call. */
 export type CallerChecks = {
+  /** Who to tell when a note is done, and what writes to them (FRU-604). */
+  done: DoneNoticeSeams;
   /** Which client a request belongs to, and what was decided for it: `routeFor` of `app.ts`. */
   routeFor: (request: Request, config: Served, clientId: string | undefined) => Promise<ClientResolution>;
   /** Who writes a reply, or why nobody may: `replyAuthorFor` of `app.ts`. */

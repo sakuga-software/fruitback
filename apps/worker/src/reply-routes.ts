@@ -13,6 +13,7 @@ import {
 } from './note-helpers.ts';
 import type { NoteIndex } from './notes-index.ts';
 import { checkReplyLimit } from './rate-limit.ts';
+import { sendDoneNotices } from './done-notices.ts';
 import { checkedOf } from './reply-text.ts';
 import type { CallerChecks, RequestContext, Served } from './request-context.ts';
 import {
@@ -413,6 +414,11 @@ export async function postStatus(
           verdicts,
         }),
       );
+
+      // FRU-604: a person moved the note to Done: whoever left it is told, once (`take` holds the once).
+      if (answer.stage === 'done' && answer.was !== 'done') {
+        void sendDoneNotices(checks.done, clientId, [{ stage: 'done', note: found.note }]);
+      }
 
       // FRU-468: a person moved the note to To do, from another stage: the trigger of its site may call.
       // `was` is read under the lock of the write: two moves at once call once.

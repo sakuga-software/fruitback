@@ -1128,3 +1128,18 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   it: the link is read where the worker was asked to send it.
 - **Measured in three engines, on `*.fruitback.localhost` over HTTPS** (2026-10-12, Playwright
   1.58.2): the pull request of FRU-148 has the table. Not measured: Safari itself.
+
+## « Offer visitors an e-mail when their note is done » (FRU-604)
+
+### The rules, in short
+
+- **A switch of the site, off by default** (Mathieu, 2026-11-06), in the form « Who sees the
+  notes » of the page of a site, under « Who can leave a note? ». It is shown, and sent as
+  `notifyDone`, only when anybody may leave a note there (everyone reads it, or « Anyone on the
+  page »). Hidden, it is not sent: the worker keeps the value, and it does nothing there.
+- **The summary of the site says it** (« E-mail when a note is done »: « Offered to visitors » or
+  « Off ») on the same condition, and says nothing of it on a site of members only.
+- The worker answers `notifyDone` in each site it lists, and takes it on `POST …/sites` (a boolean,
+  else `400 invalid-notify-done`). Absent, a new site is off and a site that exists keeps its value.
+- `e2e/console-site-page.spec.ts` holds the three cases: hidden for members only, shown and sent on,
+  and the summary.
