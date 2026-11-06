@@ -181,7 +181,8 @@ test('the rules go to the account of the browser only when the reviewer asks, an
     extension.worker.evaluate(async () => Object.keys(await chrome.storage.sync.get(null)).sort());
   await addRule(extension, { mode: 'private', clientId: 'playground', endpoint: WORKER_ORIGIN });
   const options = await extension.context.newPage();
-  await options.goto(`chrome-extension://${extension.id}/options.html`);
+  // FRU-591: the copy is a preference, on a page of its own; the rules are on « Sites ».
+  await options.goto(`chrome-extension://${extension.id}/options.html#prefs`);
   const box = options.getByLabel('Keep my rules in the account of this browser');
 
   // Off by default: a rule was added, and nothing left this browser.
@@ -203,6 +204,7 @@ test('the rules go to the account of the browser only when the reviewer asks, an
     });
   });
   // The page of the extension (FRU-301): the row says it, and its panel offers the grant.
+  await options.locator('a.page-entry[href="#sites"]').click();
   const arrived = options.locator('tr.rule-row[data-pattern="https://staging.elsewhere.example"]');
   await expect(arrived).toContainText('No access');
   await arrived.getByRole('button', { name: /staging\.elsewhere/ }).click();
@@ -220,7 +222,9 @@ test('the rules go to the account of the browser only when the reviewer asks, an
   await expect.poll(inAccount).toEqual([`site:${PLAYGROUND_ORIGIN}`]);
 
   // Turned off: the next change stays here.
+  await options.locator('a.page-entry[href="#prefs"]').click();
   await box.uncheck();
+  await options.locator('a.page-entry[href="#sites"]').click();
   await options.locator(`tr.rule-row[data-pattern="${PLAYGROUND_ORIGIN}"]`).getByRole('button').first().click();
   await options
     .getByRole('complementary', { name: 'Site details' })

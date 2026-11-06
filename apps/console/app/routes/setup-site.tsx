@@ -1,12 +1,11 @@
 import { type FormEvent, useState } from 'react';
-import { type Site, type Visibility, type Workspace, type Writers, call } from '../api';
+import { type Site, type Workspace, call } from '../api';
 import { t } from '../i18n';
 import { SITE_NOT_ADDED, SITE_PROBLEMS, problemOf } from '../problems';
-import { type Added, manages } from '../setup-stage';
+import { type Added, NEW_SITE, manages } from '../setup-stage';
 import { siteAddress, siteLabel } from '../site-address';
-import { Button, Field, LinkButton, Pick, Problem } from '../ui';
+import { Button, Field, LinkButton, Problem } from '../ui';
 import { useLocale } from '../use-locale';
-import { WritersPick } from '../writers-pick';
 
 /** Step 2 of the setup, « Your site » (FRU-239): the form that adds it, and its summary. */
 
@@ -18,11 +17,16 @@ type SiteFormProps = {
 };
 
 /**
- * Step 2: the address of the site, and who sees its notes.
+ * Step 2: the address of the site, and nothing else (FRU-610, board P6 of FRU-598).
+ *
+ * The setup asks no question of access. A new site takes the safe values: the members of the
+ * workspace see its notes, and only they leave one. A sentence under the field says so, and that
+ * the Sites screen opens it to every visitor. Who sees the notes is a choice of permissions, and a
+ * first visit is not the moment to make it by accident.
  *
  * The add of an address that exists changes that site: the same id, the same script (`addSite` of
- * the worker). So « Change » with the same address keeps the site, and only who sees and who writes
- * change (FRU-504).
+ * the worker). So « Change » with the same address keeps the site as it is, and asks nothing of the
+ * worker: its visibility, maybe opened to everyone in Sites, stays (FRU-504).
  *
  * WARNING: a site that is removed takes its notes with it. So « Change » with another address adds
  * another site, and removes the one it replaces only when that one was added in this visit: nothing
@@ -33,9 +37,6 @@ export function SiteForm({ workspace, replaces, onDone }: SiteFormProps) {
   useLocale();
   const before = replaces?.site;
   const [url, setUrl] = useState(before === undefined ? '' : siteLabel(before.origin));
-  const [visibility, setVisibility] = useState<Visibility>(before?.visibility ?? 'members');
-  // A site of a worker of before has no `writers`: it takes a note from anybody (FRU-330).
-  const [writers, setWriters] = useState<Writers>(before === undefined ? 'members' : (before.writers ?? 'anyone'));
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | undefined>();
 
@@ -45,29 +46,20 @@ export function SiteForm({ workspace, replaces, onDone }: SiteFormProps) {
     // The same reading as the Sites screen: a host with no scheme is https, or http when local (FRU-314).
     const address = siteAddress(url);
     if (address === undefined) return setProblem(SITE_PROBLEMS['invalid-url'] ?? SITE_NOT_ADDED);
-    // Nothing changed: the site stays as it is, and nothing is asked of the worker.
-    if (
-      replaces !== undefined &&
-      new URL(address).origin === before?.origin &&
-      visibility === before.visibility &&
-      (visibility !== 'members' || writers === (before.writers ?? 'anyone'))
-    ) {
-      return onDone(replaces);
-    }
+    // The same address: the site stays as it is, and nothing is asked of the worker. A POST would
+    // write the defaults below over a visibility that somebody chose in Sites.
+    if (replaces !== undefined && new URL(address).origin === before?.origin) return onDone(replaces);
     setBusy(true);
     const base = `/console/workspaces/${workspace.id}/sites`;
-    const added = await call<Site>('POST', base, {
-      url: address,
-      visibility,
-      ...(visibility === 'members' ? { writers } : {}),
-    });
+    // Said, not left to the worker: the sentence under the field names these two values.
+    const added = await call<Site>('POST', base, { url: address, ...NEW_SITE });
     if (!added.ok) {
       setBusy(false);
 
       // No failure clears the field: the address stays as it was typed.
       return setProblem(problemOf(added, SITE_PROBLEMS, SITE_NOT_ADDED));
     }
-    // The same address is the same site, changed: removing « the one it replaces » would remove it.
+    // The same site, found under another spelling of its address: removing « the one it replaces » would remove it.
     if (before !== undefined && added.data.id === before.id) {
       setBusy(false);
 
@@ -92,24 +84,11 @@ export function SiteForm({ workspace, replaces, onDone }: SiteFormProps) {
         value={url}
         onChange={(event) => setUrl(event.target.value)}
       />
-      <Pick
-        label={t('Who sees the notes?')}
-        value={visibility}
-        onChange={setVisibility}
-        options={[
-          {
-            value: 'members',
-            label: t('Members of {workspace}', { workspace: workspace.name }),
-            detail: t("Visitors of the site see nothing. Right for staging and for a client's site."),
-          },
-          {
-            value: 'everyone',
-            label: t('Everyone who visits'),
-            detail: t('A public way to report a problem on a live site.'),
-          },
-        ]}
-      />
-      <WritersPick visibility={visibility} value={writers} onChange={setWriters} />
+      <p className="-mt-1.5 text-small text-muted">
+        {t('Members of {workspace} see and leave notes. You can open it to every visitor later, in Sites.', {
+          workspace: workspace.name,
+        })}
+      </p>
       {problem === undefined ? null : <Problem>{t(problem)}</Problem>}
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2.5">
         <Button type="submit" disabled={busy}>

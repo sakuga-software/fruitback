@@ -20,9 +20,20 @@ declare const chrome: {
 /** A rule nobody granted: the copy of the extension holds access to the local origins only. */
 const FAR = 'https://staging.elsewhere.example';
 
-async function openPage(page: Page, id: string): Promise<void> {
-  await page.goto(`chrome-extension://${id}/options.html`);
-  await expect(page.getByRole('heading', { level: 1, name: /^Sites$/ })).toBeVisible();
+/** The pages of the page of the extension (FRU-591), and the name of each in the menu and in its `<h1>`. */
+const PAGES = { sites: 'Sites', workers: 'Servers and sessions', share: 'Share rules', prefs: 'Preferences' } as const;
+type PageName = keyof typeof PAGES;
+
+/** Opens a page of the page of the extension by its fragment: « Sites » has none. */
+async function openPage(page: Page, id: string, at: PageName = 'sites'): Promise<void> {
+  await page.goto(`chrome-extension://${id}/options.html${at === 'sites' ? '' : `#${at}`}`);
+  await expect(page.getByRole('heading', { level: 1, name: PAGES[at], exact: true })).toBeVisible();
+}
+
+/** Goes to another page from the menu, as a person does: the fragment changes, the page is not loaded again. */
+async function goTo(page: Page, at: PageName): Promise<void> {
+  await page.locator(`nav.page-menu a.page-entry[href="#${at}"]`).click();
+  await expect(page.getByRole('heading', { level: 1, name: PAGES[at], exact: true })).toBeVisible();
 }
 
 function rowOf(page: Page, pattern: string) {
@@ -219,6 +230,125 @@ for (const language of ['en', 'fr'] as const) {
   });
 }
 
+test('one page for each entry of the menu: the fragment chooses it, Back and Forward go between them, and nothing typed is lost (FRU-591)', async ({
+  extension,
+}) => {
+  await teamRuleOnTheSessionWorker(extension);
+  const page = await extension.context.newPage();
+  await openPage(page, extension.id);
+  // A mark on the window: a page loaded again would lose it.
+  await page.evaluate(() => Object.assign(window, { fru591: 'same page' }));
+  const menu = page.locator('nav.page-menu');
+
+  // Each page: its entry is marked, its title is the tab's, and the other sections are hidden.
+  for (const at of ['workers', 'share', 'prefs', 'sites'] as const) {
+    await goTo(page, at);
+    expect(new URL(page.url()).hash).toBe(`#${at}`);
+    await expect(menu.locator('a.page-entry[aria-current="page"]')).toHaveAttribute('href', `#${at}`);
+    await expect(menu.locator('a.page-entry[aria-current]')).toHaveCount(1);
+    await expect(page).toHaveTitle(`${PAGES[at]} · Fruitback`);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(PAGES[at]);
+    for (const other of Object.keys(PAGES) as PageName[]) {
+      if (other !== at) await expect(page.locator(`#page-${other}`)).toBeHidden();
+    }
+  }
+
+  // Something typed on three pages, and nothing of it saved.
+  await page.getByRole('button', { name: 'Add a site' }).click();
+  await page.getByLabel('Sites', { exact: true }).fill('https://*.typed.example');
+  await page.getByLabel('Server address', { exact: true }).fill('https://typed.example');
+  await goTo(page, 'workers');
+  const code = page
+    .locator(`.worker-card[data-endpoint="${AUTHENTICATED_WORKER_ORIGIN}"]`)
+    .getByLabel('Connection code');
+  await code.fill('TYPE-DBUT-NOTS');
+  await goTo(page, 'prefs');
+  await page.getByLabel('Name on my notes').fill('Camille');
+  await goTo(page, 'share');
+
+  // Back and Forward go from page to page.
+  await page.goBack();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Preferences');
+  await page.goBack();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Servers and sessions');
+  await expect(code).toHaveValue('TYPE-DBUT-NOTS');
+  await page.goForward();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Preferences');
+  await expect(page.getByLabel('Name on my notes')).toHaveValue('Camille');
+
+  // Back on « Sites », the form is open with what was typed in it.
+  await goTo(page, 'sites');
+  await expect(page.getByRole('button', { name: 'Add rule' })).toBeVisible();
+  await expect(page.getByLabel('Sites', { exact: true })).toHaveValue('https://*.typed.example');
+  await expect(page.getByLabel('Server address', { exact: true })).toHaveValue('https://typed.example');
+  // A change of storage on another page draws the table again, never the form.
+  await extension.worker.evaluate(async () => {
+    const { sites } = await chrome.storage.local.get('sites');
+    await chrome.storage.local.set({
+      sites: {
+        ...(sites as Record<string, unknown>),
+        'https://staging.other.example': { mode: 'team', endpoint: 'https://notes.other.example', enabled: false },
+      },
+    });
+  });
+  await expect(rowOf(page, 'https://staging.other.example')).toHaveCount(1);
+  await expect(page.getByLabel('Sites', { exact: true })).toHaveValue('https://*.typed.example');
+  await goTo(page, 'workers');
+  await expect(code).toHaveValue('TYPE-DBUT-NOTS');
+  expect(await page.evaluate(() => (window as unknown as { fru591?: string }).fru591)).toBe('same page');
+
+  // An address with no page in its fragment is « Sites ».
+  await page.goto(`chrome-extension://${extension.id}/options.html#nothing`);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Sites');
+});
+
+test('each page at 1440 and 390 px, in both schemes: axe, nothing wider than the window, and the menu a bar above the page at 390 px (FRU-591)', async ({
+  extension,
+}) => {
+  await teamRuleOnTheSessionWorker(extension);
+  await addRule(extension, { mode: 'private', clientId: 'playground', endpoint: WORKER_ORIGIN });
+  const page = await extension.context.newPage();
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    for (const at of Object.keys(PAGES) as PageName[]) {
+      await openPage(page, extension.id, at);
+      // The page opens at its top: no section has the id of a fragment, so the browser scrolls to none.
+      expect(await page.evaluate(() => window.scrollY), `${at} at ${width} px: scrolled`).toBe(0);
+      const menu = await page.locator('nav.page-menu').boundingBox();
+      const title = await page.getByRole('heading', { level: 1 }).boundingBox();
+      if (width === 390) {
+        // A bar: the width of the window, low, and above the title of the page.
+        expect(menu?.width).toBe(390);
+        expect(menu?.height ?? Number.POSITIVE_INFINITY).toBeLessThan(200);
+        expect((title?.y ?? 0) >= (menu?.y ?? 0) + (menu?.height ?? 0)).toBe(true);
+        expect((title?.y ?? Number.POSITIVE_INFINITY) - ((menu?.y ?? 0) + (menu?.height ?? 0))).toBeLessThan(48);
+      } else {
+        // A column, beside the page.
+        expect((title?.x ?? 0) >= (menu?.x ?? 0) + (menu?.width ?? 0)).toBe(true);
+      }
+      for (const colorScheme of ['light', 'dark'] as const) {
+        await page.emulateMedia({ colorScheme });
+        const where = `${at}, ${width} px, ${colorScheme}`;
+        const read = await page.evaluate(() => ({
+          cut: [...document.querySelectorAll<HTMLElement>('button, h1, th, .page-entry')]
+            .filter((node) => node.getClientRects().length > 0 && node.scrollWidth > node.clientWidth + 1)
+            .map((node) => node.textContent),
+          wide: document.documentElement.scrollWidth,
+        }));
+        expect.soft(read.cut, `${where}: a word cut`).toEqual([]);
+        expect.soft(read.wide, `${where}: wider than the window`).toBeLessThanOrEqual(width);
+        const { violations } = await new AxeBuilder({ page }).analyze();
+        expect
+          .soft(
+            violations.map((violation) => `${violation.id}: ${violation.nodes.map((node) => node.target).join(', ')}`),
+            where,
+          )
+          .toEqual([]);
+      }
+    }
+  }
+});
+
 /** A rules file, as « Download » writes it: one private rule nobody in this browser granted. */
 function rulesFile(pattern: string): string {
   return JSON.stringify({
@@ -235,12 +365,12 @@ test('« Share rules » downloads the rules, imports a file chosen or dropped, a
 }) => {
   await addRule(extension, { mode: 'private', clientId: 'playground', endpoint: WORKER_ORIGIN });
   const page = await extension.context.newPage();
-  await openPage(page, extension.id);
-  const share = page.locator('section#share');
+  await openPage(page, extension.id, 'share');
+  const share = page.locator('section#page-share');
   const result = share.getByRole('status');
 
   // Export: the count of the table, and the file of the mock-up.
-  await expect(share.getByRole('heading', { level: 2, name: 'Share rules' })).toBeVisible();
+  await expect(share.getByRole('heading', { level: 1, name: 'Share rules' })).toBeVisible();
   await expect(share.locator('.share-export')).toContainText('1 rule · fruitback-rules.json');
   const [download] = await Promise.all([
     page.waitForEvent('download'),
@@ -269,13 +399,17 @@ test('« Share rules » downloads the rules, imports a file chosen or dropped, a
     buffer: Buffer.from(rulesFile(FAR)),
   });
   await expect(result).toHaveText('Imported 1 rule.');
+  await expect(share.locator('.share-export')).toContainText('2 rules · fruitback-rules.json');
+  await goTo(page, 'sites');
   await expect(rowOf(page, FAR)).toContainText('This origin · imported');
   await expect(rowOf(page, FAR)).toContainText('No access');
-  await expect(share.locator('.share-export')).toContainText('2 rules · fruitback-rules.json');
   await rowOf(page, FAR).getByRole('button').first().click();
   const details = page.getByRole('complementary', { name: 'Site details' });
   await expect(details).toContainText('This rule came from a rules file, and access does not travel with it.');
   await expect(details.getByRole('button', { name: 'Grant access' })).toBeVisible();
+  // Back on « Share rules », the card still says what the import did.
+  await goTo(page, 'share');
+  await expect(result).toHaveText('Imported 1 rule.');
 
   // Dropped: the same, from a file put on the card. An older name is read the same way.
   const other = 'https://beta.legacy-shop.example';
@@ -335,7 +469,7 @@ test('« Share rules » downloads the rules, imports a file chosen or dropped, a
       choose: 34,
       gap: 12,
     });
-    const { violations } = await new AxeBuilder({ page }).include('section#share').analyze();
+    const { violations } = await new AxeBuilder({ page }).include('section#page-share').analyze();
     expect
       .soft(
         violations.map((violation) => violation.id),
@@ -365,7 +499,7 @@ test('« Servers and sessions » pairs with a code, says who, logs out, and take
 }) => {
   await teamRuleOnTheSessionWorker(extension);
   const page = await extension.context.newPage();
-  await openPage(page, extension.id);
+  await openPage(page, extension.id, 'workers');
   const card = page.locator(`.worker-card[data-endpoint="${AUTHENTICATED_WORKER_ORIGIN}"]`);
   await expect(card).toContainText(
     'Not connected. Private-mode sites read without a session; a team site would show nothing.',
@@ -409,7 +543,7 @@ test('« Servers and sessions » pairs with a code, says who, logs out, and take
 
   for (const colorScheme of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme });
-    const { violations } = await new AxeBuilder({ page }).include('section#workers').include('section#prefs').analyze();
+    const { violations } = await new AxeBuilder({ page }).include('section#page-workers').analyze();
     expect
       .soft(
         violations.map((violation) => violation.id),
@@ -424,7 +558,7 @@ test('a card is not drawn again while its pairing is in progress: « Pair » sta
 }) => {
   await teamRuleOnTheSessionWorker(extension);
   const page = await extension.context.newPage();
-  await openPage(page, extension.id);
+  await openPage(page, extension.id, 'workers');
   const card = page.locator(`.worker-card[data-endpoint="${AUTHENTICATED_WORKER_ORIGIN}"]`);
   await expect(card.getByLabel('Connection code')).toBeVisible();
 
@@ -478,8 +612,8 @@ test('« Preferences »: the name fills the composer in private mode, and the ic
 }) => {
   await addRule(extension, { mode: 'private', clientId: 'playground', endpoint: WORKER_ORIGIN });
   const page = await extension.context.newPage();
-  await openPage(page, extension.id);
-  const prefs = page.locator('section#prefs');
+  await openPage(page, extension.id, 'prefs');
+  const prefs = page.locator('section#page-prefs');
   await expect(prefs.locator('.pref-title')).toHaveText([
     'Open notes in the sidebar',
     'Name on my notes',
@@ -541,8 +675,8 @@ test('« Show CSS selectors »: off, the thread of a pin and the head of a note 
   await expect(site.locator('.fruitback-thread-component')).toHaveCount(0);
 
   const page = await extension.context.newPage();
-  await openPage(page, extension.id);
-  const selectors = page.locator('section#prefs').getByRole('switch', { name: 'Show CSS selectors' });
+  await openPage(page, extension.id, 'prefs');
+  const selectors = page.locator('section#page-prefs').getByRole('switch', { name: 'Show CSS selectors' });
   await expect(selectors).toHaveAttribute('aria-checked', 'false');
   await selectors.click();
   await expect

@@ -1,18 +1,9 @@
 import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router';
-import {
-  type Destination,
-  STAGES,
-  type Site,
-  type Stage,
-  type Visibility,
-  type Workspace,
-  type Writers,
-  call,
-  placesOf,
-} from '../api';
+import { STAGES, type Stage } from '../stages';
+import { type Destination, type Site, type Visibility, type Workspace, type Writers, call, placesOf } from '../api';
 import { SITE_NOT_ADDED, SITE_PROBLEMS, problemOf } from '../problems';
-import { listedOf } from '../listed';
+import { type Fetched, listedOf } from '../listed';
 import {
   Button,
   CutLink,
@@ -32,7 +23,7 @@ import { NotePages } from './notes';
 import { PageHead, useWorkspace } from './workspace';
 import { msg, t } from '../i18n';
 import { useLocale } from '../use-locale';
-import { siteAddress, siteName } from '../site-address';
+import { hostOf, siteAddress, siteName } from '../site-address';
 import { SiteIcon } from '../site-icon';
 import { SitePreview } from '../site-preview';
 import { ConnectorMark, type MarkedKind } from '../connector-marks';
@@ -65,7 +56,7 @@ export default function Sites() {
   useLocale();
   const { workspace } = useWorkspace();
   // One page of the grid, and how many sites hold the search (FRU-497). `loading` only before the first answer.
-  const [read, setRead] = useState<Page | 'loading' | 'failed'>('loading');
+  const [read, setRead] = useState<Fetched<Page>>('loading');
   const [adding, setAdding] = useState(false);
   // What is typed in the form that adds a site is kept here, above every state of the list: the
   // form goes when the list is read again, and what somebody typed must not go with it.
@@ -412,7 +403,7 @@ function TypedSite({ url }: { url: string }) {
   }, [url]);
   // An address that is no longer one hides the preview at once: only a valid one waits (raised in review).
   if (origin === undefined || siteAddress(url) === undefined) return null;
-  const host = new URL(origin).host;
+  const host = hostOf(origin);
 
   return (
     <section aria-label={t('Preview of {site}', { site: host })} className="flex flex-col gap-[10px]">

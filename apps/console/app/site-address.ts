@@ -67,6 +67,18 @@ function isLocalHost(hostname: string): boolean {
 }
 
 /**
+ * The host of an address, `staging.acme.dev` or `localhost:3000`, where a sentence names it. An address
+ * that is not one is said as it is written: `new URL` throws on it, and a screen must not.
+ */
+export function hostOf(address: string): string {
+  try {
+    return new URL(address).host;
+  } catch {
+    return address;
+  }
+}
+
+/**
  * A site as the console writes it: its origin, scheme included (FRU-314). Two sites that differ by
  * their scheme alone must not read as one, so no screen drops it.
  */

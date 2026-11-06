@@ -10,6 +10,7 @@
 
 import { locale } from './i18n.ts';
 import { WORKSPACE_SUSPENDED_ERROR } from './problems.ts';
+import type { Stage } from './stages.ts';
 import { API, UNREACHABLE, reach } from './transport.ts';
 
 export { API, UNREACHABLE, onReachability } from './transport.ts';
@@ -33,10 +34,14 @@ export type Workspace = Omit<WorkspaceSuspension, 'reason'> & {
 export type Visibility = 'members' | 'everyone';
 /** Who may leave a note on a site that its members read (FRU-330). `members` is « Members only ». */
 export type Writers = 'members' | 'anyone';
-/** Where the notes of a site go. Absent: they stay in the workspace. Only a member reads it. */
-/** A tracker has teams, so `teamId` is there for one. An address that only receives has none (FRU-122). */
-/** A GitHub destination keeps its repository, `owner/name` in lower case, in `teamId` (FRU-359). */
-/** `label` is what a member reads when they choose (FRU-123). The worker writes it, from what the tracker answers. */
+/**
+ * Where the notes of a site go. Absent: they stay in the workspace. Only a member reads it.
+ *
+ * A tracker has teams, so `teamId` is there for one. An address that only receives has none (FRU-122).
+ * A GitHub destination keeps its repository, `owner/name` in lower case, in `teamId` (FRU-359).
+ * `label` is what a member reads when they choose (FRU-123). The worker writes it, from what the
+ * tracker answers.
+ */
 export type Destination = {
   connector: string;
   teamId?: string;
@@ -137,22 +142,12 @@ export function placesOf(site: Site): Destination[] {
   return site.destination === undefined ? [] : [site.destination];
 }
 
-/**
- * Whether a site can take one more place from this source: it sends there already, or it has room.
- * The worker refuses a sixth place, so a screen says the limit and does not offer the choice.
- */
-export function hasRoomFor(site: Site, connector: string): boolean {
-  const places = placesOf(site);
-
-  return places.some((each) => each.connector === connector) || places.length < MAX_DESTINATIONS;
-}
-
 /** Whether two places are one: the same source, team and project. */
 export function samePlace(one: Destination, other: Destination): boolean {
   return one.connector === other.connector && one.teamId === other.teamId && one.projectId === other.projectId;
 }
 /** Why a source needs somebody (FRU-102): its tracker refuses it since `since`. Absent: it works. */
-export type ConnectorAttention = { reason: 'key-refused' | 'key-lacks-access' | 'connection-ended'; since: string };
+type ConnectorAttention = { reason: 'key-refused' | 'key-lacks-access' | 'connection-ended'; since: string };
 export type Connector = {
   id: string;
   kind: 'linear' | 'rest' | 'github';
@@ -164,9 +159,6 @@ export type Connector = {
   /** Absent from a worker of before FRU-102: the panel then has no settings to show. */
   settings?: ConnectorSettings;
 };
-/** The five stages of a pin, in the order of the widget. */
-export const STAGES = ['new', 'todo', 'progress', 'done', 'closed'] as const;
-export type Stage = (typeof STAGES)[number];
 /** What a workspace sets on a tracker (FRU-102): the replies, and the stages some states take. */
 export type ConnectorSettings = { showComments: boolean; stages: Record<string, Stage> };
 /** A note that did not reach the address of a connector yet. `nextAt` absent: the worker gave up. */
@@ -187,7 +179,7 @@ export type Delivery = {
  * Where a project stands in Linear (FRU-458): the name its workspace gave the status, and its kind,
  * `backlog`, `planned`, `started`, `paused`, `completed` or `canceled`. Absent from a worker of before.
  */
-export type ProjectStatus = { name: string; type: string };
+type ProjectStatus = { name: string; type: string };
 /**
  * `private`: only its members see the team in Linear (FRU-458). `color`: the one Linear draws the team
  * or the project with, as `#rrggbb` (FRU-459). Each is absent from a worker of before.
@@ -542,8 +534,7 @@ export async function signOut(): Promise<boolean> {
  * A session of the console of the person, as `GET /console/sessions` lists it (FRU-181): its id, and
  * never its token. `current` is the session of this browser. The worker also answers a user agent
  * when its operator switched that on; this type leaves it out, and no screen shows it (Q7 of FRU-230).
- */
-/**
+ *
  * `browser`: a short label the worker reads in the user agent (« Chrome on macOS », FRU-249), or
  * « A browser » when it cannot tell. Absent from a worker of before.
  */
@@ -579,6 +570,11 @@ export async function endExtensionBrowser(id: string): Promise<'ended' | 'unknow
 /** The providers that an account links (FRU-249). */
 export const LINKABLE = ['github', 'google'] as const;
 export type Linkable = (typeof LINKABLE)[number];
+
+/** Whether a word of the address names a provider an account links. Anybody writes the address. */
+export function isLinkable(word: string | null): word is Linkable {
+  return (LINKABLE as readonly (string | null)[]).includes(word);
+}
 
 /**
  * How the person signs in (FRU-249): `email` when this worker sends the link of an e-mail, and each
@@ -736,10 +732,6 @@ export async function signOutEverywhere(): Promise<boolean> {
 }
 
 /**
- * Whether the worker sends the message of an invitation (FRU-104). Without a mailer it keeps the
- * invitation all the same, and the person who invites sends `invitationLink()` by hand.
- */
-/**
  * Whether the worker signs anybody in (FRU-217). `false`: it answered, and offers no way at all,
  * which is a worker with accounts and no `FRUITBACK_AUTH_SECRET`. The sign-in screen then says so,
  * and shows no form: a link asked for there is never sent. `undefined`: the worker did not say, and
@@ -761,6 +753,10 @@ export async function signsInByOperatorOnly(): Promise<boolean> {
   return byOperator === true;
 }
 
+/**
+ * Whether the worker sends the message of an invitation (FRU-104). Without a mailer it keeps the
+ * invitation all the same, and the person who invites sends `invitationLink()` by hand.
+ */
 export async function sendsMail(): Promise<boolean> {
   if (mails === undefined) await signInProviders();
 
@@ -778,10 +774,10 @@ export function invitationLink(origin: string = window.location.origin): string 
 /** Where the routes of the organization plugin are, on the worker (FRU-149). */
 export const ORGANIZATION = '/console/auth/organization';
 
-/** A member of a workspace, as the worker lists them (FRU-149). */
 /** A site shared with a guest (FRU-250): its id and its address. */
 export type SharedSite = { id: string; origin: string };
 
+/** A member of a workspace, as the worker lists them (FRU-149). */
 export type Member = {
   id: string;
   userId: string;
@@ -931,7 +927,7 @@ export function setPlaces(
 export type InstanceSignIn = { on: boolean; variables: string[] };
 
 /** A connector that needs somebody, with its workspace (FRU-261). */
-export type AttentionConnector = {
+type AttentionConnector = {
   id: string;
   kind: string;
   label: string;
@@ -1175,7 +1171,7 @@ export function setWorkspaceSuspendedAsAdmin(
 }
 
 /** What went with a workspace that an administrator deleted (FRU-284), counted at the deletion. */
-export type WorkspaceGone = {
+type WorkspaceGone = {
   sites: number;
   members: number;
   invitations: number;
@@ -1310,7 +1306,7 @@ export type AgentKey = {
 };
 
 /** What the console sends to make a key: `days` from 1 to `MAX_AGENT_KEY_DAYS`. */
-export type NewAgentKey = {
+type NewAgentKey = {
   name: string;
   sites: string[];
   rights: 'read' | 'write';
@@ -1369,7 +1365,7 @@ export type AuthorizeRequest = {
 };
 
 /** What « Allow » sends: the choices of a key. */
-export type AuthorizeChoice = {
+type AuthorizeChoice = {
   workspace: string;
   sites: string[];
   rights: 'read' | 'write';

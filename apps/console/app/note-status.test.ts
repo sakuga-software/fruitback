@@ -1,17 +1,13 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { NOTE_STAGES as STAGES } from '@fruitback/shared';
-import {
-  STATUS_NOT_SAVED,
-  STATUS_PROBLEMS,
-  type StatusChoice,
-  offeredFor,
-  statusName,
-  statusProblemOf,
-} from './note-status.ts';
-import { SERVER_PROBLEM, UNREACHABLE_PROBLEM, WORKSPACE_SUSPENDED } from './problems.ts';
+import { STATUS_NOT_SAVED, STATUS_PROBLEMS, type StatusChoice, offeredFor, statusName } from './note-status.ts';
+import { SERVER_PROBLEM, UNREACHABLE_PROBLEM, WORKSPACE_SUSPENDED, problemOf } from './problems.ts';
 
 const [FIRST, SECOND] = STAGES;
+/** What the list of the notes says when a status was not saved: `routes/notes.tsx` asks the same. */
+const statusProblemOf = (failed: { status: number; error: string }) =>
+  problemOf(failed, STATUS_PROBLEMS, STATUS_NOT_SAVED);
 const waiting: StatusChoice = { key: 'own:waiting', name: 'Waiting', stage: SECOND };
 const parked: StatusChoice = { key: 'own:parked', name: 'Parked', stage: SECOND, hidden: true };
 const builtIn: StatusChoice = { key: `own:${FIRST}`, name: '', stage: FIRST };

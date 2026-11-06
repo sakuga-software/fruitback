@@ -220,7 +220,7 @@ test.describe('step 3 of the setup', () => {
         .locator('.kit-option')
         .filter({ has: page.getByRole('heading', { name: 'Browser extension' }) });
       await expect(card.getByText('Extension connected · Chrome on macOS')).toBeVisible();
-      await expect(card.getByRole('link', { name: 'Install the extension (beta)' })).toHaveCount(0);
+      await expect(card.getByRole('link', { name: 'Install the extension', exact: true })).toHaveCount(0);
       await expect(card.getByRole('button', { name: 'Connect this browser' })).toHaveCount(0);
       await expect(card.getByRole('button', { name: 'Connect another browser' })).toBeVisible();
       expect(await sideScroll(page)).toBe(0);
@@ -232,7 +232,7 @@ test.describe('step 3 of the setup', () => {
     await stubSetup(page, []);
     await page.goto(`${CONSOLE}/setup`);
     const card = page.locator('.kit-option').filter({ has: page.getByRole('heading', { name: 'Browser extension' }) });
-    await expect(card.getByRole('link', { name: 'Install the extension (beta)' })).toBeVisible();
+    await expect(card.getByRole('link', { name: 'Install the extension', exact: true })).toBeVisible();
     await expect(card.getByRole('button', { name: 'Connect this browser' })).toBeVisible();
     await expect(card.getByText(/Extension connected/)).toHaveCount(0);
   });

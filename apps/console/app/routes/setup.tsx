@@ -16,7 +16,7 @@ import {
 import { BrowserFrame, Button, EntryPage, Lead, Problem, Step, type StepState, Steps, Title } from '../ui';
 import { useLocale } from '../use-locale';
 import { Account, Ask, Sent, Unnamed } from './setup-account';
-import { PutDone, PutOnSite } from './setup-install';
+import { FirstNoteIn, PutDone, PutOnSite } from './setup-install';
 import { SiteForm, SiteSummary } from './setup-site';
 import { SitePreview } from '../site-preview';
 import { instanceOf } from '../instance';
@@ -76,7 +76,7 @@ function resolveOnce(): Promise<Stage> {
 }
 
 /** How often the site is read again while the setup waits for its first note (FRU-242). */
-export const FIRST_NOTE_EVERY_MS = 5_000;
+const FIRST_NOTE_EVERY_MS = 5_000;
 
 /**
  * Reads the site again every five seconds while the tab is shown, until its first note came: the
@@ -289,28 +289,7 @@ export default function Setup() {
             )}
           </Step>
         </Steps>
-        {stage.kind === 'install' && finished ? (
-          // Said once it appears, with no move of the focus: the person may be on the site, in another tab.
-          <div role="status" className="mt-9 flex flex-col gap-2.5 border-t border-line pt-7">
-            <h2 className="text-conclusion font-bold tracking-[-0.01em]">{t('Your first note is in')}</h2>
-            <p className="text-body leading-[1.55] text-muted">
-              {t(
-                'It waits in the {workspace} workspace. Send your notes to a tracker or your own API whenever you like.',
-                {
-                  workspace: stage.workspace.name,
-                },
-              )}
-            </p>
-            <div className="mt-2 flex flex-wrap gap-2.5">
-              <Button inset={22} to={`/w/${stage.workspace.id}/sites`}>
-                {t('Open the console')}
-              </Button>
-              <Button tone="outline" size="page" inset={18} to={`/w/${stage.workspace.id}/connectors`}>
-                {t('Connect a tracker')}
-              </Button>
-            </div>
-          </div>
-        ) : null}
+        {stage.kind === 'install' && finished ? <FirstNoteIn workspace={stage.workspace} site={stage.site} /> : null}
       </section>
 
       {/* Sticky: the steps grow longer than a screen, and the site stays in view beside them. */}

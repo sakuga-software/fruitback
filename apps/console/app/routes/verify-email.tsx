@@ -4,6 +4,7 @@ import { t } from '../i18n';
 import { Button, EntryPage, Lead, SuccessMark, Title } from '../ui';
 import { useLocale } from '../use-locale';
 import { ReadProblem } from '../read-problem';
+import { retryable } from '../problems';
 
 /**
  * Where the link that adds an address to an account lands (FRU-450). Its code is after the `#`: it
@@ -32,7 +33,7 @@ export default function VerifyEmail() {
       if (answer.ok) return setStage({ kind: 'added', email: answer.data.email });
       if (answer.status === 401) return setStage({ kind: 'signed-out' });
       if (answer.status === 409) return setStage({ kind: 'taken' });
-      if (answer.status === 0 || answer.status === 429 || answer.status >= 500) {
+      if (retryable(answer)) {
         return setStage({ kind: 'waiting', code });
       }
       setStage({ kind: 'spent' });

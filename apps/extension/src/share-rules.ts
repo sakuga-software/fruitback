@@ -1,5 +1,6 @@
 import { t } from './i18n.ts';
 import { make } from './kit.ts';
+import { sectionId } from './options-pages.ts';
 
 /**
  * The section « Share rules » of the page of the extension (FRU-290), as the mock-up of 2026-10-20
@@ -52,9 +53,8 @@ export function downloadedSummary(count: number): string {
 export function shareRules(document: Document, options: ShareOptions): ShareSection {
   const section = make(document, 'section', 'page-section');
   section.classList.add('share');
-  // The anchor of « Share rules » in the menu of the page.
-  section.id = 'share';
-  const title = make(document, 'h2', '', t('Share rules'));
+  section.id = sectionId('share');
+  const title = make(document, 'h1', '', t('Share rules'));
   title.id = 'share-title';
   section.setAttribute('aria-labelledby', title.id);
   const intro = make(

@@ -5,6 +5,7 @@ import { Choice } from '../ui';
 import { useLocale } from '../use-locale';
 import { AdminWrite, GIVEN_ROLES } from './admin-writes';
 import { ReadProblem } from '../read-problem';
+import { type Listed, listedOf } from '../listed';
 
 /**
  * The writes of an administrator on the workspaces of one person, in the panel of « Users »
@@ -77,16 +78,19 @@ export function ChangeRole({ user, onChanged }: { user: AdminUser; onChanged: (w
 }
 
 /** The workspaces the person may join, read when the form opens: the read leaves a trace with their owners. */
-function useOtherWorkspaces(user: AdminUser): { id: string; name: string }[] | 'loading' | 'failed' {
-  const [found, setFound] = useState<{ id: string; name: string }[] | 'loading' | 'failed'>('loading');
+function useOtherWorkspaces(user: AdminUser): Listed<{ id: string; name: string }> {
+  const [found, setFound] = useState<Listed<{ id: string; name: string }>>('loading');
 
   useEffect(() => {
     let live = true;
     void adminWorkspaces({ q: '', show: 'all' }).then((answer) => {
       if (!live) return;
-      if (!answer.ok || !Array.isArray(answer.data?.workspaces)) return setFound('failed');
       const mine = new Set(user.workspaces.map((each) => each.id));
-      setFound(answer.data.workspaces.filter((each) => !mine.has(each.id)).map(({ id, name }) => ({ id, name })));
+      setFound(
+        listedOf(answer, (data) =>
+          data.workspaces.filter((each) => !mine.has(each.id)).map(({ id, name }) => ({ id, name })),
+        ),
+      );
     });
 
     return () => {

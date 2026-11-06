@@ -9,7 +9,7 @@ import {
   setAgentTrigger,
 } from '../api';
 import { msg, t } from '../i18n';
-import { type Listed, known } from '../listed';
+import { type Fetched, type Listed, known } from '../listed';
 import { problemOf } from '../problems';
 import { Button, Callout, Choice, LinkButton, Pick, Problem, Snippet, Toggle } from '../ui';
 import { useLocale } from '../use-locale';
@@ -49,7 +49,7 @@ const TRIGGER_PROBLEMS: Readonly<Record<string, string>> = {
 };
 const NOT_SAVED = msg('The trigger was not saved. Try again.');
 
-type Read = AgentTrigger | null | 'loading' | 'failed';
+type Read = Fetched<AgentTrigger | null>;
 
 export function SiteAgent({
   workspace,

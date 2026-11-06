@@ -117,9 +117,9 @@ export async function findHere(ids: readonly string[], chrome?: Runtime): Promis
  * alarm claims it within a minute, and a new press claims the same request (`startConnect` gives it
  * back while it waits), with no second approval.
  */
-export type HereResult = 'connected' | 'approved' | 'failed' | 'signed-out';
+type HereResult = 'connected' | 'approved' | 'failed' | 'signed-out';
 
-export type HereSeams = {
+type HereSeams = {
   chrome?: Runtime;
   read?: typeof connectRequest;
   approve?: typeof answerConnect;

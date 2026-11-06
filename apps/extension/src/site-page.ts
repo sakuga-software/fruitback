@@ -18,7 +18,7 @@ export const GUIDES = {
 
 export type MenuEntry = { id: string; label: string; count?: number };
 
-/** The menu: the drop, « Fruitback » and its version, the sections of the page, and the two guides. */
+/** The menu: the drop, « Fruitback » and its version, the pages (FRU-591), and the two guides. */
 export function menu(
   document: Document,
   options: { version: string; entries: MenuEntry[]; current: string },
@@ -35,7 +35,8 @@ export function menu(
   for (const entry of options.entries) {
     const link = make(document, 'a', 'page-entry', entry.label);
     link.href = `#${entry.id}`;
-    if (entry.id === options.current) link.setAttribute('aria-current', 'true');
+    // FRU-591: each entry is a page of its own, and the menu marks the page that is shown.
+    if (entry.id === options.current) link.setAttribute('aria-current', 'page');
     if (entry.count !== undefined) link.append(make(document, 'span', 'page-count', String(entry.count)));
     nav.append(link);
   }

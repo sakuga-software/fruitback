@@ -62,7 +62,7 @@ export function Logo({ on = 'page' }: { on?: 'page' | 'rail' }) {
       aria-label="Fruitback"
       className="block flex-none"
     >
-      <path d={WORD} className={on === 'page' ? 'fill-ink' : 'fill-white'} />
+      <path d={WORD} className={on === 'page' ? 'fill-ink' : 'fill-on-ink'} />
       <path d={DROP} className={on === 'page' ? 'fill-accent' : 'fill-rail-accent'} />
     </svg>
   );

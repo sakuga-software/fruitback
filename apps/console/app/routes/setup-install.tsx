@@ -1,26 +1,40 @@
-import type { Site, Workspace } from '../api';
+import { type Site, type Workspace, call } from '../api';
 import { agoInSentence } from '../ago';
 import { t } from '../i18n';
 import { extensionInstallFor } from '../extension-store';
 import { useConnectedExtension } from '../extension-connected';
 import { EXTENSION_IDS, hereProblemOf, useExtensionHere } from '../extension-here';
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { BY_SIGN_IN, CONNECT_PAGE, snippetFor, useConnect, useCopy } from '../install-options';
-import { AutoGrid, Button, LinkButton, OptionCard, Problem, Snippet, StatusDot } from '../ui';
+import { Button, LinkButton, OptionCard, Problem, Snippet, SuccessMark } from '../ui';
 import { useLocale } from '../use-locale';
 import { siteLabel } from '../site-address';
 import { SetupGuide } from '../setup-guide';
+import {
+  type FirstNote,
+  type Way,
+  excerptShown,
+  firstNoteLink,
+  firstNoteOf,
+  firstNotePath,
+  recommendedWay,
+} from '../setup-stage';
 
 /** Step 3 of the setup, « Put it on the site » (FRU-242). */
 
 /**
  * Step 3: the two ways to put Fruitback on the site, each in its card, then what to do on the site.
  *
- * « Connect this browser » opens `/connect` on Fruitback Cloud (FRU-313): the popup signs in with the
- * account, as everywhere. A self-hosted console still opens the pairing link of its worker, with a
- * code that nobody types (FRU-238). The step waits
- * for the first note (`setup.tsx` reads the site again), and « Open the console » stays, for a person
- * who does not send one now.
+ * One way is recommended, after who sees the notes of the site (FRU-610, board P6 of FRU-598): the
+ * extension for a site of members, since only they need it and nothing is deployed; the script tag
+ * for a site that every visitor sees, since a visitor has no extension. The other card is folded
+ * under « Show ».
+ *
+ * On Fruitback Cloud the card of the extension has no « Connect this browser » beside « Install the
+ * extension »: the welcome page that opens at the install signs in and turns the site on (FRU-482,
+ * FRU-483), and a second way there sent people to a tab that waits for a popup. A self-hosted console
+ * keeps it: there it opens the pairing link of its worker, the only way that extension connects
+ * (FRU-238).
  *
  * With a browser of the extension already connected to the account, the card says so and names it,
  * and « Connect another browser » is the only way on (FRU-441): nothing asks to install it again.
@@ -29,7 +43,9 @@ import { SetupGuide } from '../setup-guide';
  * `extension-here.ts`): installed and signed out, « Connect this browser » connects it in place, with
  * no tab and no word. Installed and signed in, the card says so. Elsewhere, nothing changes.
  *
- * On Fruitback Cloud, the guide of the extension is folded under the cards (FRU-486).
+ * The step waits for the first note (`setup.tsx` reads the site again), and « Open the console »
+ * stays, for a person who does not send one now. On Fruitback Cloud, the guide of the extension is
+ * folded under the cards (FRU-486).
  */
 export function PutOnSite({ workspace, site }: { workspace: Workspace; site: Site }) {
   useLocale();
@@ -41,6 +57,16 @@ export function PutOnSite({ workspace, site }: { workspace: Workspace; site: Sit
   const { here, connect: connectHere } = useExtensionHere(EXTENSION_IDS);
   const [hereBusy, setHereBusy] = useState(false);
   const [hereProblem, setHereProblem] = useState<string | undefined>();
+  const recommended = recommendedWay(site);
+  // The card that is not recommended opens folded; « Show » opens it, and it stays open.
+  const [shown, setShown] = useState(false);
+  const fold = (way: Way) =>
+    way === recommended ? undefined : { open: shown, onToggle: setShown, show: t('Show'), hide: t('Hide') };
+  const badge = (way: Way) => {
+    if (way !== recommended) return undefined;
+
+    return way === 'extension' ? t('Recommended for a members site') : t('Recommended for a public site');
+  };
   const connectInPlace = async () => {
     if (hereBusy) return;
     setHereBusy(true);
@@ -74,7 +100,7 @@ export function PutOnSite({ workspace, site }: { workspace: Workspace; site: Sit
     card = (
       <>
         <p className="mb-1.5 flex items-center gap-2 text-small font-semibold">
-          <StatusDot status="done" size={10} />
+          <SuccessMark size="inline" />
           {t('Extension connected in this browser')}
         </p>
         <div className="mt-auto">
@@ -101,14 +127,23 @@ export function PutOnSite({ workspace, site }: { workspace: Workspace; site: Sit
     card = (
       <>
         <p className="mb-1.5 text-hint">
-          {t('Add it, then connect this browser: a page opens, and you click the Fruitback icon there.')}
+          {BY_SIGN_IN
+            ? t('Add it to your browser. The page that opens signs you in and turns on {site}.', { site: host })
+            : t('Add it, then connect this browser: a page opens, and you click the Fruitback icon there.')}
         </p>
         <div className="mt-auto flex flex-col gap-2">
-          <Button tone="outline" size="page" wide href={extensionInstallFor(navigator.userAgent)} newTab>
-            {t('Install the extension (beta)')}
+          <Button
+            tone={recommended === 'extension' ? 'primary' : 'outline'}
+            size="page"
+            wide
+            href={extensionInstallFor(navigator.userAgent)}
+            newTab
+          >
+            {t('Install the extension')}
             <Away />
           </Button>
-          <div>{connectLink}</div>
+          {/* The Cloud: the welcome page of the extension connects it. Self-hosted: the pairing link. */}
+          {BY_SIGN_IN ? null : <div>{connectLink}</div>}
         </div>
       </>
     );
@@ -116,54 +151,63 @@ export function PutOnSite({ workspace, site }: { workspace: Workspace; site: Sit
     card = (
       <>
         <p className="mb-1.5 flex items-center gap-2 text-small font-semibold">
-          <StatusDot status="done" size={10} />
+          <SuccessMark size="inline" />
           {t('Extension connected · {browser}', { browser: connected.browser })}
         </p>
         <div className="mt-auto">{connectLink}</div>
       </>
     );
   }
+  const cards: Record<Way, ReactNode> = {
+    extension: (
+      <OptionCard key="extension" title={t('Browser extension')} badge={badge('extension')} fold={fold('extension')}>
+        <p className="text-small text-muted">{t("Nothing to deploy. Right for a client's site you cannot touch.")}</p>
+        {card}
+        {problem === undefined ? null : <Problem>{t(problem)}</Problem>}
+        {hereProblem === undefined ? null : <Problem>{t(hereProblem)}</Problem>}
+        {link === undefined ? null : (
+          <p className="text-hint text-muted">
+            {t('A page opened in a new tab. If it did not, open')}{' '}
+            <LinkButton space="inline" href={link} newTab>
+              {t('this link')}
+            </LinkButton>
+            {t(': it works once, for fifteen minutes.')}
+          </p>
+        )}
+      </OptionCard>
+    ),
+    script: (
+      <OptionCard key="script" title={t('Script tag')} badge={badge('script')} fold={fold('script')}>
+        <p className="text-small text-muted">
+          {site.visibility === 'members'
+            ? t('Before the closing body tag. Members see their pins on every visit.')
+            : t('Before the closing body tag. Every visitor sees the pins.')}
+        </p>
+        <Snippet label={t('Script tag')} className="mb-1.5">
+          {snippet}
+        </Snippet>
+        <div className="mt-auto">
+          <Button tone={recommended === 'script' ? 'primary' : 'outline'} size="page" wide onClick={copy}>
+            {copied === 'yes' ? t('Copied') : t('Copy script')}
+          </Button>
+        </div>
+        {copied === 'refused' ? (
+          <p role="alert" className="text-hint text-muted">
+            {t('The browser refused the copy. Select the script above and copy it by hand.')}
+          </p>
+        ) : null}
+      </OptionCard>
+    ),
+  };
 
   return (
     <>
       <p className="mt-1 mb-4 text-body text-muted">{t('Use one, or both.')}</p>
-      <AutoGrid min={230}>
-        <OptionCard title={t('Browser extension')}>
-          <p className="text-small text-muted">{t("Nothing to deploy. Right for a client's site you cannot touch.")}</p>
-          {card}
-          {problem === undefined ? null : <Problem>{t(problem)}</Problem>}
-          {hereProblem === undefined ? null : <Problem>{t(hereProblem)}</Problem>}
-          {link === undefined ? null : (
-            <p className="text-hint text-muted">
-              {t('A page opened in a new tab. If it did not, open')}{' '}
-              <LinkButton space="inline" href={link} newTab>
-                {t('this link')}
-              </LinkButton>
-              {t(': it works once, for fifteen minutes.')}
-            </p>
-          )}
-        </OptionCard>
-        <OptionCard title={t('Script tag')}>
-          <p className="text-small text-muted">
-            {site.visibility === 'members'
-              ? t('Before the closing body tag. Members see their pins on every visit.')
-              : t('Before the closing body tag. Every visitor sees the pins.')}
-          </p>
-          <Snippet label={t('Script tag')} className="mb-1.5">
-            {snippet}
-          </Snippet>
-          <div className="mt-auto">
-            <Button tone="outline" size="page" wide onClick={copy}>
-              {copied === 'yes' ? t('Copied') : t('Copy script')}
-            </Button>
-          </div>
-          {copied === 'refused' ? (
-            <p role="alert" className="text-hint text-muted">
-              {t('The browser refused the copy. Select the script above and copy it by hand.')}
-            </p>
-          ) : null}
-        </OptionCard>
-      </AutoGrid>
+      {/* The recommended way first: the eye and the keyboard reach it before the other. */}
+      <div className="flex flex-col gap-3">
+        {cards[recommended]}
+        {cards[recommended === 'extension' ? 'script' : 'extension']}
+      </div>
       {/* The guide walks the sign-in of Fruitback Cloud, which a self-hosted console does not use. */}
       {BY_SIGN_IN ? <SetupGuide /> : null}
       {/* The drop beats while the page reads the site again. It hangs in the gutter: the words stay on the column. */}
@@ -180,7 +224,9 @@ export function PutOnSite({ workspace, site }: { workspace: Workspace; site: Sit
         </span>
       </p>
       <div className="mt-6">
-        <Button to={`/w/${workspace.id}/sites`}>{t('Open the console')}</Button>
+        <Button tone="outline" to={`/w/${workspace.id}/sites`}>
+          {t('Open the console')}
+        </Button>
       </div>
     </>
   );
@@ -215,6 +261,65 @@ function received(at: string | undefined): string {
   if (at === undefined) return t('First note received');
 
   return t('First note received {when}', { when: agoInSentence(at) });
+}
+
+/**
+ * The end of the setup (FRU-610, board P6 of FRU-598): the note that came, then the two ways on,
+ * « Connect Linear or GitHub » and « Open the console ».
+ *
+ * The note is what the index of the notes keeps of it (FRU-237): the first 64 characters of its text
+ * and its page. Never its whole text, its selector or its component: the index keeps none of them,
+ * and the console reads no store of the notes. The page opens on the note, where the widget shows
+ * all of it. A worker with no index answers no note: the end is said without it.
+ *
+ * Said once it appears, with no move of the focus: the person may be on the site, in another tab.
+ */
+export function FirstNoteIn({ workspace, site }: { workspace: Workspace; site: Site }) {
+  useLocale();
+  const [first, setFirst] = useState<FirstNote | undefined>();
+  useEffect(() => {
+    let live = true;
+    void call<unknown>('GET', firstNotePath(workspace, site), undefined, { quiet: true }).then((answer) => {
+      if (live) setFirst(firstNoteOf(answer));
+    });
+
+    return () => {
+      live = false;
+    };
+  }, [workspace, site]);
+  const link = first === undefined ? undefined : firstNoteLink(first, site);
+
+  return (
+    <div role="status" className="mt-9 flex flex-col gap-2.5 border-t border-line pt-7">
+      <h2 className="text-conclusion font-bold tracking-[-0.01em]">{t('Your first note is in')}</h2>
+      {first === undefined ? null : (
+        <figure className="flex flex-col gap-1.5 rounded-[12px] border border-line px-4 py-3.5">
+          <blockquote className="text-body font-semibold wrap-anywhere">{excerptShown(first.excerpt)}</blockquote>
+          <figcaption className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-small text-muted">
+            <span className="wrap-anywhere">{t('On {page}', { page: `${first.page.host}${first.page.path}` })}</span>
+            {link === undefined ? null : (
+              <LinkButton space="inline" href={link} newTab>
+                {t('Show on the page')}
+              </LinkButton>
+            )}
+          </figcaption>
+        </figure>
+      )}
+      <p className="text-body leading-[1.55] text-muted">
+        {t('It waits in the {workspace} workspace. Send your notes to a tracker or your own API whenever you like.', {
+          workspace: workspace.name,
+        })}
+      </p>
+      <div className="mt-2 flex flex-wrap gap-2.5">
+        <Button inset={22} to={`/w/${workspace.id}/connectors`}>
+          {t('Connect Linear or GitHub')}
+        </Button>
+        <Button tone="outline" size="page" inset={18} to={`/w/${workspace.id}/sites`}>
+          {t('Open the console')}
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 /** The arrow of a link that leaves the console. */
