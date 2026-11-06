@@ -6,10 +6,6 @@ import { msg, t } from '../i18n';
 import type { Listed } from '../listed';
 import { Chip, LinkButton, Problem } from '../ui';
 import { hostOf, siteLabel } from '../site-address';
-
-// FRU-508: the screens of the next pull request of the stack still read these here. It removes them.
-export { STAGE_NAMES } from '../stages';
-export { addressOf as hostOf };
 import { useLocale } from '../use-locale';
 import { ReadProblem } from '../read-problem';
 

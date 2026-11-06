@@ -31,10 +31,11 @@ import {
 import { useTypedSearch } from '../typed-search';
 import { NotePages } from './notes';
 import { useWorkspace } from './workspace';
-import { locale, msg, t } from '../i18n';
+import { msg, t } from '../i18n';
 import { useLocale } from '../use-locale';
 import { siteLabel } from '../site-address';
 import { ReadProblem } from '../read-problem';
+import { dayIn, seenOn } from '../ago';
 
 const ROLE_WORDS: Readonly<Record<Role, string>> = {
   owner: msg('Owner'),
@@ -74,38 +75,6 @@ const MEMBER_PROBLEMS: Readonly<Record<string, string>> = {
   YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_MEMBER: msg('Only an owner removes an owner.'),
   forbidden: msg('Only an owner or an admin of the workspace changes its members.'),
 };
-
-/** « 3 Oct », as the mockup writes a day: the day first, in the language of the console. */
-const DAYS = { en: 'en-GB', fr: 'fr' } as const;
-
-/** The day of a date of the worker, with its year when asked. Nothing for a date that is not one. */
-function dayOf(iso: string | undefined, year: boolean): string | undefined {
-  const date = new Date(iso ?? '');
-  if (Number.isNaN(date.getTime())) return undefined;
-
-  return date.toLocaleDateString(DAYS[locale()], {
-    day: 'numeric',
-    month: 'short',
-    ...(year ? { year: 'numeric' as const } : {}),
-  });
-}
-
-/**
- * « Last seen » (FRU-249, Q7): the worker keeps a day of UTC and no hour, so that a colleague does not
- * learn when somebody works. « Today », « Yesterday », « 3 days ago » for the week, then the day.
- */
-export function seenOn(day: string | undefined, now: number = Date.now()): string {
-  if (day === undefined) return t('Not seen yet');
-  const at = Date.parse(`${day}T00:00:00Z`);
-  if (Number.isNaN(at)) return day;
-  const today = Date.parse(`${new Date(now).toISOString().slice(0, 10)}T00:00:00Z`);
-  const days = Math.max(0, Math.round((today - at) / 86_400_000));
-  if (days === 0) return t('Today');
-  if (days === 1) return t('Yesterday');
-  if (days < 7) return t('{count} days ago', { count: days });
-
-  return new Date(at).toLocaleDateString(DAYS[locale()], { day: 'numeric', month: 'short', timeZone: 'UTC' });
-}
 
 /**
  * How many rows a page of the members, and of the invitations, shows (FRU-496). The worker gives the
@@ -506,7 +475,7 @@ export default function Members() {
                     // « Last seen » for who reads it, else the day somebody joined.
                     const lastOf = (one: Member) => {
                       if (seen === 'asking') return '';
-                      if (seen === undefined) return dayOf(one.createdAt, true) ?? '';
+                      if (seen === undefined) return dayIn(one.createdAt, 'always') ?? '';
 
                       return seenOn(seen[one.userId]);
                     };
@@ -580,8 +549,8 @@ export default function Members() {
                   </thead>
                   <tbody>
                     {found.slice(invitationsAt, invitationsAt + PAGE).map((invitation) => {
-                      const sent = dayOf(invitation.createdAt, false);
-                      const until = dayOf(invitation.expiresAt, false);
+                      const sent = dayIn(invitation.createdAt, 'never');
+                      const until = dayIn(invitation.expiresAt, 'never');
                       // No message left for this one: the worker has no mailer, or it said so when it kept
                       // the invitation (FRU-209). The invitation is kept, and its link is given by hand.
                       const went = messageOf(invitation, mailed) === 'sent';
