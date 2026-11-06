@@ -1,5 +1,6 @@
 import type { Stage } from './stages.ts';
 import { msg } from './i18n.ts';
+import { problemOf } from './problems.ts';
 
 /**
  * The status of a note the worker keeps, chosen in the list of the notes (FRU-384).
@@ -45,3 +46,8 @@ export const STATUS_PROBLEMS: Readonly<Record<string, string>> = {
   'not-found': msg('This note is no longer in Fruitback. Reload the page.'),
 };
 export const STATUS_NOT_SAVED = msg('The status was not saved. Try again.');
+
+/** FRU-508: `routes/notes.tsx` reads it until the next pull request of the stack, which removes it. */
+export function statusProblemOf(failed: { status: number; error: string }): string {
+  return problemOf(failed, STATUS_PROBLEMS, STATUS_NOT_SAVED);
+}

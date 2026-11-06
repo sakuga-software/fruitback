@@ -1,9 +1,8 @@
 import { type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
-import { STAGES, STAGE_NAMES, type Stage } from '../stages';
-import { type Answer, type Connector, type SiteChoice, call, siteChoices } from '../api';
+import { type Answer, type Connector, type SiteChoice, STAGES, type Stage, call, siteChoices } from '../api';
 import { ago } from '../ago';
-import { type Fetched, type Listed, listedOf } from '../listed';
+import { type Listed, listedOf } from '../listed';
 import {
   Button,
   Checkbox,
@@ -22,16 +21,16 @@ import {
   StatusDot,
   Tip,
 } from '../ui';
-import { KINDS, connectorName } from './connector-parts';
+import { KINDS, STAGE_NAMES, connectorName } from './connector-parts';
 import { ConnectorMark } from '../connector-marks';
 import { useWorkspace } from './workspace';
 import { msg, t } from '../i18n';
-import { failureOf, problemOf, writeProblemOf } from '../problems';
+import { failureOf, writeProblemOf } from '../problems';
 import { useTypedSearch } from '../typed-search';
 import { useLocale } from '../use-locale';
 import { domainOf, siteLabel } from '../site-address';
 import { NoteIcon } from '../note-icons';
-import { STATUS_NOT_SAVED, STATUS_PROBLEMS, type StatusChoice, offeredFor, statusName } from '../note-status';
+import { type StatusChoice, offeredFor, statusName, statusProblemOf } from '../note-status';
 import { boardColumns } from '../board-columns';
 import { NotesBoard } from './notes-board';
 import { ReadProblem } from '../read-problem';
@@ -44,14 +43,14 @@ export type NoteAuthor = {
 };
 
 /** Where a note went: Fruitback, a connector (its id and its name), or a connector removed since. */
-type NotePlace = {
+export type NotePlace = {
   kind: 'fruitback' | 'linear' | 'rest' | 'github' | 'removed';
   connector?: string;
   label?: string;
 };
 
 /** A note of the index (FRU-237, FRU-244): its first 64 characters, never its text (Q6). */
-type IndexedNote = {
+export type IndexedNote = {
   id: string;
   excerpt: string;
   page: { url: string; host: string; path: string };
@@ -78,7 +77,7 @@ type IndexedNote = {
   createdAt: string;
 };
 
-type NotesAnswer = {
+export type NotesAnswer = {
   notes: IndexedNote[];
   total: number;
   /** `byPlace` and `undelivered` go to whoever sees the tracker: not to a guest. */
@@ -107,7 +106,7 @@ type View = 'table' | 'board';
 export const GROUPS: readonly Stage[] = ['progress', 'todo', 'new', 'closed', 'done'];
 
 /** The notes of a page in their groups, each group in the order of the page. An empty group is not drawn. */
-function groupsOf<T extends { stage: Stage }>(notes: readonly T[]): { stage: Stage; notes: T[] }[] {
+export function groupsOf<T extends { stage: Stage }>(notes: readonly T[]): { stage: Stage; notes: T[] }[] {
   return GROUPS.map((stage) => ({ stage, notes: notes.filter((note) => note.stage === stage) })).filter(
     (group) => group.notes.length > 0,
   );
@@ -124,9 +123,6 @@ const AUTHOR_WORDS: Readonly<Record<NoteAuthor['kind'], string>> = {
   anonymous: msg('Anonymous'),
 };
 
-/** The notes of a page (FRU-587): the default of the worker, asked for by name. */
-const NOTES_PER_PAGE = 25;
-
 /**
  * Every note left on the sites of a workspace, and where it went: screen 10 of the mockup of
  * 2026-10-13 (FRU-245), read from the index of the notes (FRU-244). The page shows the first 64
@@ -136,6 +132,9 @@ const NOTES_PER_PAGE = 25;
  * **Nothing that a pointer can reach moves when the list is read again**: the rows that are shown stay
  * until the answer replaces them, and the chips and the filters are above them (the rule of FRU-271).
  */
+/** The notes of a page (FRU-587): the default of the worker, asked for by name. */
+export const NOTES_PER_PAGE = 25;
+
 /** The page of the note at `from`, from 1. */
 const pageOf = (from: number) => Math.floor((from - 1) / NOTES_PER_PAGE) + 1;
 
@@ -180,7 +179,7 @@ export default function Notes() {
 
   // The answer that is shown, and whether a read is on its way. A read again keeps the rows on the
   // screen until its answer comes: only the first read says « Loading… ».
-  const [shown, setShown] = useState<Fetched<NotesAnswer>>('loading');
+  const [shown, setShown] = useState<NotesAnswer | 'loading' | 'failed'>('loading');
   const [reading, setReading] = useState(false);
   // The cursor of each page shown, by its number (FRU-587): « Previous » and the numbers of the
   // pages take them back. Kept by number, not as a pile, so that the buttons of the browser, which
@@ -448,7 +447,7 @@ export default function Notes() {
                   }
                   move={async (note, status) => {
                     const answer = await choose(note, status);
-                    if (!answer.ok) return problemOf(answer, STATUS_PROBLEMS, STATUS_NOT_SAVED);
+                    if (!answer.ok) return statusProblemOf(answer);
                     await read();
 
                     return undefined;
@@ -830,7 +829,7 @@ function NoteStatus({
   /**
    * Where a refusal is said, for a bare select: under the note, where there is room for it. Called
    * with `undefined` before each try, so a try clears the refusal of before; then, on a refusal, with
-   * the sentence of `problemOf`: an English sentence, the key that `messages.fr.ts` maps, which
+   * the sentence of `statusProblemOf`: an English sentence, the key that `messages.fr.ts` maps, which
    * the caller shows through `t()`.
    */
   onRefused?: (refusal: string | undefined) => void;
@@ -852,7 +851,7 @@ function NoteStatus({
     refuse(undefined);
     const answer = await choose(status);
     setSaving(false);
-    if (!answer.ok) return refuse(problemOf(answer, STATUS_PROBLEMS, STATUS_NOT_SAVED));
+    if (!answer.ok) return refuse(statusProblemOf(answer));
     setStage(answer.data.stage);
     onSaved?.();
   }
@@ -1109,7 +1108,7 @@ export function NotesFailed({ onRetry }: { onRetry: () => void }) {
 }
 
 /** The pages a press reaches directly (FRU-587), for a list that knows how many pages it has. */
-type PageNumbers = {
+export type PageNumbers = {
   /** The page shown, from 1. */
   at: number;
   count: number;

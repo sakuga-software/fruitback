@@ -1,10 +1,10 @@
 import { SiteAgent } from './site-agent';
 import { type FormEvent, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router';
-import { STAGES } from '../stages';
 import {
   type Connector,
   type Destination,
+  STAGES,
   type Site,
   type SiteChoice,
   type Visibility,
@@ -18,7 +18,7 @@ import { Confirmation } from '../confirm';
 import { Domains } from '../domains';
 import { msg, t } from '../i18n';
 import { InstallOptions } from '../install-options';
-import { type Fetched, type Listed, listedOf } from '../listed';
+import { type Listed, listedOf } from '../listed';
 import { problemOf } from '../problems';
 import { siteLabel, siteName } from '../site-address';
 import { Button, Disclosure, KeyValue, LinkButton, LoadFailed, Pick, Problem } from '../ui';
@@ -40,6 +40,17 @@ const ACCESS_NOT_CHANGED = msg('Who sees the notes did not change. Try again.');
 
 /** Who sees the notes of a site, and who leaves them. */
 type Access = { visibility: Visibility; writers?: Writers };
+
+/** The sections of the page that an address reaches with its hash: `…/sites/<site>#install`. */
+export const SITE_SECTIONS = [
+  'install',
+  'destinations',
+  'advanced',
+  'statuses',
+  'agent',
+  'previews',
+  'remove',
+] as const;
 
 /** The sections folded under « Advanced » (FRU-538): the page shows first what most people come for. */
 const ADVANCED: readonly string[] = ['statuses', 'agent', 'previews'];
@@ -69,7 +80,7 @@ export default function SitePage() {
   // The worker says where the notes of a site go to whoever sees the tracker: not to a guest.
   const seesTracker = workspace.role !== 'guest';
   // `gone`: the worker answered 404, a site removed or of another workspace. Not a read that failed.
-  const [read, setRead] = useState<Fetched<Site> | 'gone'>('loading');
+  const [read, setRead] = useState<Site | 'loading' | 'failed' | 'gone'>('loading');
 
   const readOne = useCallback(async () => {
     setRead('loading');
