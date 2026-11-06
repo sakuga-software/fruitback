@@ -29,96 +29,106 @@ async function openAppearance(page: Page, id: string): Promise<void> {
   await expect(page.getByRole('heading', { level: 1, name: 'Appearance', exact: true })).toBeVisible();
 }
 
-test('the colour chosen in « Appearance » paints « Leave a note » and « Send », keeps the note being written, and is refused under 4.5:1 (FRU-601)', async ({
-  extension,
-}) => {
-  await addRule(extension, { mode: 'private', clientId: 'playground', endpoint: WORKER_ORIGIN });
-  const site = await extension.context.newPage();
-  await openBareSite(site, 'ext-action-color');
-  const launch = site.locator('[data-fruitback-host-launch]');
-  await launch.click();
-  await site.locator('[data-testid="card-latte"] .add').click();
-  const note = site.getByPlaceholder('What should change?');
-  await note.fill('Written before the colour changed');
-  const send = site.getByRole('button', { name: 'Send', exact: true });
-  // Nothing chosen: the accent of the widget.
-  await expect.poll(() => background(send)).toBe(FRUITBACK_RED);
+// The click on the toolbar gives the popup the address of the tab (`activeTab`): `tabs` stands for it.
+test.describe('with the address of the tab', () => {
+  test.use({ extraPermissions: ['tabs'] });
 
-  const options = await extension.context.newPage();
-  await openAppearance(options, extension.id);
-  const presets = options.getByRole('group', { name: 'Colour of the note button' });
-  await expect(presets.getByRole('radio', { name: 'Fruitback' })).toBeChecked();
-  await expect(options.getByRole('button', { name: 'Reset to Fruitback red' })).toBeDisabled();
+  test('the colour chosen in « Appearance » paints « Leave a note » and « Send », keeps the note being written, and is refused under 4.5:1 (FRU-601)', async ({
+    extension,
+  }) => {
+    await addRule(extension, { mode: 'private', clientId: 'playground', endpoint: WORKER_ORIGIN });
+    const site = await extension.context.newPage();
+    await openBareSite(site, 'ext-action-color');
+    const launch = site.locator('[data-fruitback-host-launch]');
+    await launch.click();
+    await site.locator('[data-testid="card-latte"] .add').click();
+    const note = site.getByPlaceholder('What should change?');
+    await note.fill('Written before the colour changed');
+    const send = site.getByRole('button', { name: 'Send', exact: true });
+    // Nothing chosen: the accent of the widget.
+    await expect.poll(() => background(send)).toBe(FRUITBACK_RED);
 
-  // Orange: stored, previewed, and « Send » of the open tab is orange with the note still there.
-  await presets.getByRole('radio', { name: 'Orange' }).check();
-  await expect.poll(() => stored(extension)).toBe('#c2410c');
-  const preview = options.getByRole('group', { name: 'Preview' });
-  expect(await background(preview.getByText('Leave a note'))).toBe(ORANGE);
-  expect(await background(preview.getByText('Send'))).toBe(ORANGE);
-  await expect.poll(() => background(send)).toBe(ORANGE);
-  expect(await color(send)).toBe(WHITE);
-  await expect(note).toHaveValue('Written before the colour changed');
-  await expect(site.locator('[data-fruitback-host]')).toHaveCount(1);
-  // The launch button of the widget keeps the accent: only « Send » takes the colour.
-  expect(await background(launch)).toBe(FRUITBACK_RED);
+    const options = await extension.context.newPage();
+    await openAppearance(options, extension.id);
+    const presets = options.getByRole('group', { name: 'Colour of the note button' });
+    await expect(presets.getByRole('radio', { name: 'Fruitback' })).toBeChecked();
+    await expect(options.getByRole('button', { name: 'Reset to Fruitback red' })).toBeDisabled();
 
-  // The popup: « Leave a note » in orange.
-  const popup = await openPopup(extension, site);
-  const leave = popup.getByRole('button', { name: 'Leave a note' });
-  await expect(leave).toBeVisible();
-  await expect.poll(() => background(leave)).toBe(ORANGE);
-  expect(await color(leave)).toBe(WHITE);
-  await popup.close();
+    // Orange: stored, previewed, and « Send » of the open tab is orange with the note still there.
+    await presets.getByRole('radio', { name: 'Orange' }).check();
+    await expect.poll(() => stored(extension)).toBe('#c2410c');
+    const preview = options.getByRole('group', { name: 'Preview' });
+    expect(await background(preview.getByText('Leave a note'))).toBe(ORANGE);
+    expect(await background(preview.getByText('Send'))).toBe(ORANGE);
+    await expect.poll(() => background(send)).toBe(ORANGE);
+    expect(await color(send)).toBe(WHITE);
+    await expect(note).toHaveValue('Written before the colour changed');
+    await expect(site.locator('[data-fruitback-host]')).toHaveCount(1);
+    // The launch button of the widget keeps the accent: only « Send » takes the colour.
+    expect(await background(launch)).toBe(FRUITBACK_RED);
 
-  // Ink: the drop stays red, on « Send » and in the preview.
-  await options.bringToFront();
-  await presets.getByRole('radio', { name: 'Ink' }).check();
-  await expect.poll(() => stored(extension)).toBe('#1c1917');
-  await expect.poll(() => background(send)).toBe(INK);
-  expect(await color(send.locator('svg'))).toBe(FRUITBACK_RED);
-  expect(await color(preview.locator('.appearance-send svg'))).toBe(FRUITBACK_RED);
-  await expect(note).toHaveValue('Written before the colour changed');
+    // The popup: « Leave a note » in orange.
+    const popup = await openPopup(extension, site);
+    const leave = popup.getByRole('button', { name: 'Leave a note' });
+    await expect(leave).toBeVisible();
+    await expect.poll(() => background(leave)).toBe(ORANGE);
+    expect(await color(leave)).toBe(WHITE);
+    await popup.close();
 
-  // A colour of your own under 4.5:1: said, refused, and nothing changes.
-  const own = options.getByLabel('Your own colour');
-  await own.fill('#facc15');
-  await own.press('Enter');
-  await expect(options.locator('#appearance-said')).toHaveText('1.5:1 with white text. Pick a darker colour.');
-  expect(await stored(extension)).toBe('#1c1917');
-  await expect(own).toHaveValue('#facc15');
-  // A colour that holds white text: kept when the field is left, and no radio says another one.
-  await own.fill('#1d4ed8');
-  await expect(options.locator('#appearance-said')).toHaveText('6.7:1 with white text.');
-  await own.press('Enter');
-  await expect.poll(() => stored(extension)).toBe('#1d4ed8');
-  await expect(presets.getByRole('radio', { checked: true })).toHaveCount(0);
-  await expect.poll(() => background(send)).toBe('rgb(29, 78, 216)');
+    // Ink: the drop stays red, on « Send » and in the preview.
+    await options.bringToFront();
+    await presets.getByRole('radio', { name: 'Ink' }).check();
+    await expect.poll(() => stored(extension)).toBe('#1c1917');
+    await expect.poll(() => background(send)).toBe(INK);
+    expect(await color(send.locator('svg'))).toBe(FRUITBACK_RED);
+    expect(await color(preview.locator('.appearance-send svg'))).toBe(FRUITBACK_RED);
+    await expect(note).toHaveValue('Written before the colour changed');
 
-  // Reset: no key, the accent again, and the note is still being written.
-  await options.getByRole('button', { name: 'Reset to Fruitback red' }).click();
-  await expect.poll(() => stored(extension)).toBeUndefined();
-  await expect(presets.getByRole('radio', { name: 'Fruitback' })).toBeChecked();
-  await expect.poll(() => background(send)).toBe(FRUITBACK_RED);
-  await expect(note).toHaveValue('Written before the colour changed');
+    // A colour of your own under 4.5:1: said, refused, and nothing changes.
+    const own = options.getByLabel('Your own colour');
+    await own.fill('#facc15');
+    await own.press('Enter');
+    await expect(options.locator('#appearance-said')).toHaveText('1.5:1 with white text. Pick a darker colour.');
+    expect(await stored(extension)).toBe('#1c1917');
+    await expect(own).toHaveValue('#facc15');
+    // A colour that holds white text: kept when the field is left, and no radio says another one.
+    await own.fill('#1d4ed8');
+    await expect(options.locator('#appearance-said')).toHaveText('6.7:1 with white text.');
+    await own.press('Enter');
+    await expect.poll(() => stored(extension)).toBe('#1d4ed8');
+    await expect(presets.getByRole('radio', { checked: true })).toHaveCount(0);
+    await expect.poll(() => background(send)).toBe('rgb(29, 78, 216)');
 
-  // A page loaded after a choice mounts with it.
-  await presets.getByRole('radio', { name: 'Deep red' }).check();
-  await expect.poll(() => stored(extension)).toBe('#b91c1c');
-  await site.reload();
-  await site.locator('[data-fruitback-host-launch]').click();
-  await site.locator('[data-testid="card-latte"] .add').click();
-  await expect.poll(() => background(site.getByRole('button', { name: 'Send', exact: true }))).toBe('rgb(185, 28, 28)');
+    // Reset: no key, the accent again, and the note is still being written.
+    await options.getByRole('button', { name: 'Reset to Fruitback red' }).click();
+    await expect.poll(() => stored(extension)).toBeUndefined();
+    await expect(presets.getByRole('radio', { name: 'Fruitback' })).toBeChecked();
+    await expect.poll(() => background(send)).toBe(FRUITBACK_RED);
+    await expect(note).toHaveValue('Written before the colour changed');
+
+    // A page loaded after a choice mounts with it.
+    await presets.getByRole('radio', { name: 'Deep red' }).check();
+    await expect.poll(() => stored(extension)).toBe('#b91c1c');
+    await site.reload();
+    await site.locator('[data-fruitback-host-launch]').click();
+    await site.locator('[data-testid="card-latte"] .add').click();
+    await expect
+      .poll(() => background(site.getByRole('button', { name: 'Send', exact: true })))
+      .toBe('rgb(185, 28, 28)');
+  });
 });
 
 test('« Appearance » at 1440 and 390 px, in both schemes and in French: axe, nothing wider than the window (FRU-601)', async ({
   extension,
 }) => {
-  const page = await extension.context.newPage();
   for (const language of ['en', 'fr'] as const) {
+    // The language of the browser, read by the page when it loads: for the pages opened after this.
     if (language === 'fr') {
-      await page.addInitScript(() => Object.defineProperty(navigator, 'language', { get: () => 'fr-FR' }));
+      await extension.context.addInitScript(() => {
+        Object.defineProperty(navigator, 'language', { get: () => 'fr-FR' });
+      });
     }
+    const page = await extension.context.newPage();
     for (const width of [1440, 390]) {
       await page.setViewportSize({ width, height: 900 });
       await page.goto(`chrome-extension://${extension.id}/options.html#appearance`);
