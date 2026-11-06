@@ -1558,18 +1558,29 @@ export function createComposer(options: ComposerOptions): Composer {
    */
   /**
    * On a narrow screen the composer is a sheet on the foot of the window (FRU-611, P7): the page
-   * scrolls so that its element stands above the sheet, in sight, when the page can scroll that far.
-   * An element taller than the room left keeps its top in sight. On a wider screen nothing moves.
+   * scrolls so that its element stands above the sheet, in sight. A page that cannot scroll that far
+   * (an element at its very foot) gets the sheet on the top of the window instead, under which the
+   * element stays in sight: the page of somebody else is never given a margin. On a wider screen
+   * nothing moves.
    */
   function keepInSight(anchor: ElementBox): void {
+    delete root.dataset.fruitbackSheet;
     if (view === null || view.matchMedia?.(NARROW).matches !== true) return;
+    const covered = (): boolean => {
+      const sheet = root.getBoundingClientRect();
+      const top = anchor.top - view.scrollY;
+      const bottom = anchor.bottom - view.scrollY;
+
+      return bottom + GAP > sheet.top || top < 0;
+    };
+    if (!covered()) return;
     const sheetTop = root.getBoundingClientRect().top;
-    const top = anchor.top - view.scrollY;
-    const bottom = anchor.bottom - view.scrollY;
-    if (bottom + GAP <= sheetTop && top >= 0) return;
     // The bottom of the element GAP over the sheet, or its top GAP under the top of the window.
-    const by = Math.min(bottom + GAP - sheetTop, top - GAP);
-    view.scrollBy({ top: by, behavior: 'instant' });
+    view.scrollBy({
+      top: Math.min(anchor.bottom - view.scrollY + GAP - sheetTop, anchor.top - view.scrollY - GAP),
+      behavior: 'instant',
+    });
+    if (covered()) root.dataset.fruitbackSheet = 'top';
   }
 
   function place(anchor: ElementBox): void {

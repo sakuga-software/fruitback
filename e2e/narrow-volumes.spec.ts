@@ -48,18 +48,38 @@ for (const scheme of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
     await mountAt(page, `/?widget=off&case=${caseOf(`narrow-${scheme}`)}`);
     await page.locator('[data-fruitback-host-launch]').click();
-    // An element at the foot of the page: the sheet would cover it if nothing moved it.
-    await page.locator('#checkout-cta').scrollIntoViewIfNeeded();
-    await page.locator('#checkout-cta').click();
     const composer = page.locator('[data-fruitback-composer]');
-    await expect(composer).toBeVisible();
 
-    const sheet = await box(page, '[data-fruitback-composer]');
+    // An element low in the window, on a page that can scroll: the page scrolls it above the sheet.
+    await page.evaluate(() => {
+      const card = document.querySelector('[data-testid="card-mocha"] .add') as HTMLElement;
+      window.scrollTo(0, card.getBoundingClientRect().bottom + window.scrollY - window.innerHeight + 4);
+    });
+    await page.locator('[data-testid="card-mocha"] .add').click();
+    await expect(composer).toBeVisible();
+    let sheet = await box(page, '[data-fruitback-composer]');
     expect(Math.round(sheet.bottom)).toBe(844);
     expect(Math.round(sheet.width)).toBe(390);
-    // The element stays in sight, above the sheet.
-    await expect.poll(async () => (await box(page, '#checkout-cta')).bottom).toBeLessThanOrEqual(sheet.top);
-    expect((await box(page, '#checkout-cta')).top).toBeGreaterThanOrEqual(0);
+    const card = await box(page, '[data-testid="card-mocha"] .add');
+    expect(card.bottom).toBeLessThanOrEqual(sheet.top);
+    expect(card.top).toBeGreaterThanOrEqual(0);
+    await page.keyboard.press('Escape');
+    await expect(composer).toBeHidden();
+
+    // The element at the very foot of a page that cannot scroll more: the sheet stands on the top,
+    // and the element stays in sight under it. The page gets no margin.
+    await page.locator('[data-fruitback-host-launch]').click();
+    await page.locator('#checkout-cta').scrollIntoViewIfNeeded();
+    const height = await page.evaluate(() => document.documentElement.scrollHeight);
+    await page.locator('#checkout-cta').click();
+    await expect(composer).toBeVisible();
+    await expect(composer).toHaveAttribute('data-fruitback-sheet', 'top');
+    sheet = await box(page, '[data-fruitback-composer]');
+    expect(Math.round(sheet.top)).toBe(0);
+    const cta = await box(page, '#checkout-cta');
+    expect(cta.top).toBeGreaterThanOrEqual(sheet.bottom);
+    expect(cta.bottom).toBeLessThanOrEqual(844);
+    expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBe(height);
 
     // « Send » on a line of its own, on the width of the foot.
     const send = await box(page, '.fruitback-composer-send-group');

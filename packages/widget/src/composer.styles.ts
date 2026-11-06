@@ -776,6 +776,16 @@ export const STYLES = `
   .fruitback-composer-send-group { flex: 1 1 100%; display: flex; }
   .fruitback-composer-send-group > .fruitback-composer-send:first-child { flex: 1 1 auto; justify-content: center; }
   .fruitback-composer-tool { width: 44px; height: 44px; }
+  .fruitback-composer-avatar { min-width: 44px; height: 44px; }
+  .fruitback-composer-check, .fruitback-composer-place { min-height: 44px; }
+  /* An element at the very foot of a page that cannot scroll more: the sheet stands on the top. */
+  .fruitback-composer[data-fruitback-sheet="top"] {
+    inset: 0 0 auto 0;
+    border-radius: 0 0 var(--fruitback-radius-lg) var(--fruitback-radius-lg);
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: 0;
+    animation-name: fruitback-composer-sheet-down;
+  }
 }
 
 /*
@@ -788,6 +798,11 @@ export const STYLES = `
   .fruitback-composer-tool { width: 44px; height: 44px; }
   .fruitback-composer-avatar { min-width: 36px; height: 36px; }
   .fruitback-composer-check, .fruitback-composer-place { min-height: 36px; }
+}
+
+@keyframes fruitback-composer-sheet-down {
+  from { transform: translateY(-100%); }
+  to { transform: none; }
 }
 
 @keyframes fruitback-composer-sheet-in {
