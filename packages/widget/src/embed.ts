@@ -1807,9 +1807,10 @@ async function sendCheck(
     (answer) => REFUSED.has(answer.status) && !(answer.status === 409 && errorOf(answer.body) === 'check-in-progress'),
   );
   if (failure !== undefined) return failure;
-  let answer: { comment?: unknown; stage?: unknown };
+  // `null` is JSON too: a body of `null` is an answer that says nothing, as no body is.
+  let answer: { comment?: unknown; stage?: unknown } | null;
   try {
-    answer = JSON.parse(response.body) as { comment?: unknown; stage?: unknown };
+    answer = JSON.parse(response.body) as { comment?: unknown; stage?: unknown } | null;
   } catch {
     return 'kept';
   }
