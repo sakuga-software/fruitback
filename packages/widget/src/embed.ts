@@ -46,6 +46,7 @@ import { pickArea } from './area.ts';
 import {
   type BatchSent,
   type Composer,
+  type ElementCapture,
   type SendFailure,
   type SentAs,
   type SentWithoutPicture,
@@ -531,6 +532,9 @@ export function init(options: FruitbackOptions): Fruitback {
       restoredOn = canonicalizePageUrl(view.location.href);
       // The frame stays on the element for as long as the composer is open on it (FRU-258).
       host.hold(selected.element);
+      // FRU-609: the capture of the element is taken now, before the composer stands over the page.
+      // A second choice over an open composer keeps the files it holds and takes none.
+      elementShot = keepsText ? undefined : shotOf(selected.element);
       composer.open(selected.element, headOf(selected.element, selected.source), readableName(selected.element), {
         selector: selectorHead(),
       });
@@ -786,9 +790,48 @@ export function init(options: FruitbackOptions): Fruitback {
    * the area is chosen too (`data-fruitback-shooting`), so the person sees what the file will show.
    * They come back in `finally`: after the capture, a cancel, or a capture that fails or throws.
    */
+  /** The capture of the element of the composer now (FRU-609), taken at the choice. */
+  let elementShot: Promise<ElementCapture | undefined> | undefined;
+
+  /**
+   * The element and some page around it, with where the element is in the picture. Only where the
+   * host captures the visible page (the extension), and only while the element is in the window.
+   * Nothing is said when it does not come: the person did not ask for it.
+   */
+  async function shotOf(element: Element): Promise<ElementCapture | undefined> {
+    if (options.captureVisible === undefined) return undefined;
+    const box = element.getBoundingClientRect();
+    const width = view.innerWidth;
+    const height = view.innerHeight;
+    const left = Math.max(0, box.left - SHOT_MARGIN);
+    const top = Math.max(0, box.top - SHOT_MARGIN);
+    const right = Math.min(width, box.right + SHOT_MARGIN);
+    const bottom = Math.min(height, box.bottom + SHOT_MARGIN);
+    if (right - left < 8 || bottom - top < 8) return undefined;
+    const area: CaptureArea = {
+      left,
+      top,
+      width: right - left,
+      height: bottom - top,
+      scale: view.devicePixelRatio || 1,
+    };
+    const taken = await captureArea(area).catch(() => undefined);
+    if (taken === undefined || typeof taken === 'string') return undefined;
+
+    return {
+      ...taken,
+      name: 'element.png',
+      frame: {
+        left: (box.left - left) / area.width,
+        top: (box.top - top) / area.height,
+        width: box.width / area.width,
+        height: box.height / area.height,
+      },
+    };
+  }
+
   async function captureFor(kind: 'page' | 'area'): Promise<PickedFile | 'cancelled' | 'permission' | undefined> {
-    const take = options.captureVisible;
-    if (take === undefined) return undefined;
+    if (options.captureVisible === undefined) return undefined;
     const container = host.root.host as HTMLElement;
     container.toggleAttribute('data-fruitback-shooting', true);
     try {
@@ -798,21 +841,30 @@ export function init(options: FruitbackOptions): Fruitback {
         if (chosen === undefined) return 'cancelled';
         area = { ...chosen, scale: view.devicePixelRatio || 1 };
       }
-      const visibility = container.style.visibility;
-      container.style.visibility = 'hidden';
-      try {
-        // Two frames: the page is painted without the widget before the browser takes it.
-        await new Promise((resolve) => view.requestAnimationFrame(() => view.requestAnimationFrame(resolve)));
 
-        return await take(area);
-      } catch (error) {
-        // FRU-423: refused for want of a gesture, the composer says what grants it.
-        return isCapturePermissionRefusal(error) ? 'permission' : undefined;
-      } finally {
-        container.style.visibility = visibility;
-      }
+      return await captureArea(area);
     } finally {
       container.toggleAttribute('data-fruitback-shooting', false);
+    }
+  }
+
+  /** The page without the widget over it, whole or an area of it. */
+  async function captureArea(area: CaptureArea | undefined): Promise<PickedFile | 'permission' | undefined> {
+    const take = options.captureVisible;
+    if (take === undefined) return undefined;
+    const container = host.root.host as HTMLElement;
+    const visibility = container.style.visibility;
+    container.style.visibility = 'hidden';
+    try {
+      // Two frames: the page is painted without the widget before the browser takes it.
+      await new Promise((resolve) => view.requestAnimationFrame(() => view.requestAnimationFrame(resolve)));
+
+      return await take(area);
+    } catch (error) {
+      // FRU-423: refused for want of a gesture, the composer says what grants it.
+      return isCapturePermissionRefusal(error) ? 'permission' : undefined;
+    } finally {
+      container.style.visibility = visibility;
     }
   }
 
@@ -859,6 +911,8 @@ export function init(options: FruitbackOptions): Fruitback {
       captures: () => options.captureVisible !== undefined,
       capture: (kind) => captureFor(kind),
       upload: (file, chosen) => uploadAttachment(options, file, destinationToSend(destinations.get(), chosen)),
+      // FRU-609: taken at the choice of the element, given to the composer as it opens.
+      captureElement: () => elementShot ?? Promise.resolve(undefined),
     },
     onClose: () => host.release(),
     autosave: {
@@ -868,6 +922,9 @@ export function init(options: FruitbackOptions): Fruitback {
       },
     },
     ...(options.onSignIn === undefined ? {} : { onSignIn: signIn }),
+    // FRU-609: a session of the host that ended is a site that takes notes from its team only, for
+    // this reader now. « Send » waits for the sign-in; the note stays.
+    signInToSend: () => ended,
     // Offered only while the worker takes several notes in one request (FRU-124, FRU-608).
     batch: {
       // Signed out too (FRU-315): a text added to the batch is sent once the reviewer is back.
@@ -1294,6 +1351,7 @@ export function init(options: FruitbackOptions): Fruitback {
       ended = endedNow;
       host.offerSignIn(ended ? { label: translator.text('launch.signIn'), onSignIn: signIn } : undefined);
       composer.identityChanged();
+      composer.signInChanged();
       sidebar.refresh();
       // Signed in again, the notes this session can read come from a read, not from what was held.
       if (!ended) {
@@ -1715,6 +1773,9 @@ function draftIssue(draft: Draft): NoteIssue {
 function isDraft(issue: NoteIssue): boolean {
   return issue.id.startsWith(DRAFT_PREFIX);
 }
+
+/** How much of the page around the element its capture takes, in CSS pixels (FRU-609). */
+const SHOT_MARGIN = 24;
 
 /**
  * Exported for its tests, never from `public.ts`. Sends the drafts, as few requests as the worker

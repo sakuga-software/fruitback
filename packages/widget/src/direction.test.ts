@@ -37,6 +37,8 @@ const GEOMETRY: Record<(typeof FILES)[number], readonly string[]> = {
     '.fruitback-composer[data-fruitback-side="left"] .fruitback-composer-tether',
     '.fruitback-composer[data-fruitback-side="below"] .fruitback-composer-tether',
     '.fruitback-composer[data-fruitback-side="above"] .fruitback-composer-tether',
+    // The frame of the element in its capture (FRU-609): a place in a picture, which no direction flips.
+    '.fruitback-composer-shot-ring',
   ],
   // FRU-472: a drawing of the window with a dot in one corner. A corner of the window is physical.
   'panel.ts': [
