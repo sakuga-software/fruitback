@@ -290,14 +290,21 @@ export async function deliverDue({
       const url = sessionUrlOf(answer);
       // The session first, then the delivery: a delivery settled first and a session not kept would
       // leave the console with nothing to show of a run that started.
+      // WARNING: the routine started. A session that cannot be kept is said in the log only: a throw
+      // here would leave the delivery due, and the next pass would start the routine a second time
+      // (raised in review).
       if (url !== undefined && call !== undefined) {
-        await accounts.keepAgentSession(delivery.connectorId, {
-          id: delivery.id,
-          site: call.site,
-          identifiers: call.notes.map((note) => note.identifier),
-          url,
-          at: now(),
-        });
+        await accounts
+          .keepAgentSession(delivery.connectorId, {
+            id: delivery.id,
+            site: call.site,
+            identifiers: call.notes.map((note) => note.identifier),
+            url,
+            at: now(),
+          })
+          .catch((failure: unknown) => {
+            console.error('[fruitback] the session of a routine that started was not kept', delivery.id, failure);
+          });
       } else {
         console.warn('[fruitback] a routine started with no address of a session in its answer', delivery.id);
       }

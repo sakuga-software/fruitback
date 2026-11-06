@@ -88,7 +88,11 @@ export function createSender({
           // same deadline: a body that is too long, or that never ends, is cut where it stands.
           const chunks: Buffer[] = [];
           let size = 0;
+          // Once: a body cut at the limit is destroyed here, which can still send `end` or `error`.
+          let done = false;
           const finish = (): void => {
+            if (done) return;
+            done = true;
             clearTimeout(deadline);
             resolve({ status, answer: Buffer.concat(chunks).subarray(0, limit).toString('utf8') });
             answer.destroy();

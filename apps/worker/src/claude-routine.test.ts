@@ -361,6 +361,42 @@ describe('the call of a trigger to a routine (FRU-594)', () => {
     assert.equal(FIRES_PER_HOUR_PER_TASK, 30);
   });
 
+  it('settles a call whose routine started even when its session cannot be kept: no second run (review)', async () => {
+    const { world, shop, member, fake, panel } = await acme();
+    await call(world, 'POST', `/feedback?client=${shop.id}`, {
+      origin: shop.origin,
+      body: noteOf(shop, 'sd_unkept'),
+      token: member,
+    });
+    // The store refuses the session, and only the session.
+    const failing = new Proxy(world.accounts, {
+      get: (target, key) =>
+        key === 'keepAgentSession' ? () => Promise.reject(new Error('the database is gone')) : Reflect.get(target, key),
+    });
+    const error = console.error;
+    console.error = () => {};
+    try {
+      await deliverPending(world.env, fake.send, () => LATER_MS, failing);
+      await deliverPending(world.env, fake.send, () => LATER_MS + 3_600_000, failing);
+    } finally {
+      console.error = error;
+    }
+
+    // The control is the count: the routine was started once, and the call is not due again.
+    assert.equal(fake.fires.length, 1);
+    assert.deepEqual((await panel()).deliveries, []);
+  });
+
+  it('reads an answer that is longer than its limit once, cut at the limit', async () => {
+    const { fake } = await acme();
+    fake.next.status = 200;
+    fake.next.body = `{"claude_code_session_url":"https://claude.ai/code/x","pad":"${'x'.repeat(40_000)}"}`;
+    const answered = await fake.send(FIRE_URL, { Authorization: `Bearer ${TOKEN}` }, '{}', { answerUpTo: 1_024 });
+    assert.equal(answered.status, 200);
+    assert.equal(answered.answer?.length, 1_024);
+    assert.equal(sessionUrlOf(answered.answer), undefined, 'a cut answer names no session');
+  });
+
   it('keeps no session for an answer that names none, and the call still arrived', async () => {
     const { world, shop, member, fake, deliver, panel } = await acme();
     fake.next.status = 200;

@@ -68,6 +68,10 @@ INSERT INTO deliveries (id, connector_id, body, created_at, next_at, event) VALU
 INSERT INTO site_agent_triggers (site_id, workspace_id, connector_id, moment, enabled, updated_at) VALUES
   ('site_drill1', 'ws_drill1', 'con_drill1', 'verified-note', true, 1);
 
+-- The session a Claude Code routine started for a call (FRU-594). No text of a note: identifiers.
+INSERT INTO agent_sessions (id, connector_id, site_id, identifiers, session_url, started_at) VALUES
+  ('dlv_drill3', 'con_drill1', 'site_drill1', '["FB-1"]', 'https://claude.ai/code/session_drill', 1);
+
 INSERT INTO email_links (code_hash, email, created_at, expires_at) VALUES
   ('drill-not-a-digest', 'alice@acme.dev', 1, 2);
 
