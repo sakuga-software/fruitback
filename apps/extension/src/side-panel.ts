@@ -858,6 +858,18 @@ function replyForm(
   return form;
 }
 
+/**
+ * Whether the field of a reply open now is the one a send came from (review of #857): the same note,
+ * and the text that went. The reader may have opened the reply of another note while it was on its
+ * way, or this note's again and typed a new text; the answer of the send then leaves that field open.
+ */
+export function sentFromHere(
+  open: { id: string; text: string } | undefined,
+  sent: { id: string; text: string },
+): boolean {
+  return open?.id === sent.id && open.text === sent.text;
+}
+
 /** The key that sends a reply, written as a key and not as a word, as the kit writes its keys. */
 const SENDS_A_REPLY: Readonly<Record<string, true>> = { Enter: true };
 

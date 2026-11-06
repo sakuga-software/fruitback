@@ -11,6 +11,7 @@ import {
   type PanelState,
   CHECK_PROBLEM,
   REPLY_PROBLEM,
+  sentFromHere,
   REPLY_MAX_LENGTH,
   ageOf,
   iconOpensPanel,
@@ -552,6 +553,15 @@ describe('the page of the panel (FRU-296, FRU-299)', () => {
     assert.deepEqual(options.calls, []);
     assert.equal(press({}), false);
     assert.deepEqual(options.calls, ['send']);
+  });
+
+  it('leaves open a reply field that is not the one a send came from (review of #857)', () => {
+    const sent = { id: 'b', text: 'Merci' };
+
+    assert.equal(sentFromHere({ id: 'b', text: 'Merci', sending: true } as { id: string; text: string }, sent), true);
+    assert.equal(sentFromHere({ id: 'a', text: '' }, sent), false, 'the reply of another note, opened meanwhile');
+    assert.equal(sentFromHere({ id: 'b', text: 'Merci, et aussi' }, sent), false, 'a new text typed for this note');
+    assert.equal(sentFromHere(undefined, sent), false);
   });
 
   it('shows « Sending… » and no second send while a reply is on its way', () => {

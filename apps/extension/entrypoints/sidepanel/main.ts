@@ -17,6 +17,7 @@ import {
   openOnRead,
   openPopupFrom,
   panelPage,
+  sentFromHere,
   tabOf,
   webHost,
 } from '../../src/side-panel.ts';
@@ -547,7 +548,7 @@ async function sendReply(): Promise<void> {
   const { outcome } = await ask('reply', { note: sending.id, body: sending.text });
   // The reader may have opened the reply of another note meanwhile, or this note's again and typed a
   // new text: that field is theirs, and the answer of this send does not close it (review of #857).
-  const stillHere = replying?.id === sending.id && replying.text === sending.text;
+  const stillHere = sentFromHere(replying, sending);
   if (outcome === 'sent') {
     if (stillHere) replying = undefined;
     // Only the text that went: a text typed for this note since the send stays (review of #857).
