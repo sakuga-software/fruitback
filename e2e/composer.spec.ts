@@ -456,11 +456,11 @@ test('a second capture while a note is on its way loses nothing, and the failure
  * « Send » ends the row of the foot, whatever the length of the words (FRU-317). In French, « Garder
  * pour plus tard », « Annuler » and « Envoyer » do not fit on one line of the popover of 360 px:
  * « Envoyer » fell alone on a second line, at the start. On the widget as `init` mounts it, which
- * offers « Keep for later » once the worker offers a batch.
+ * offers « Add to batch » once the worker offers a batch (an icon since FRU-608).
  */
 for (const [locale, keep, cancel, send] of [
-  ['fr-FR', 'Garder pour plus tard', 'Annuler', 'Envoyer'],
-  ['en-US', 'Keep for later', 'Cancel', 'Send'],
+  ['fr-FR', 'Ajouter au lot', 'Annuler', 'Envoyer'],
+  ['en-US', 'Add to batch', 'Cancel', 'Send'],
 ] as const) {
   test(`in ${locale}, « ${send} » ends the row of the foot, and the ghosts never go under it (FRU-317)`, async ({
     page,
@@ -472,7 +472,7 @@ for (const [locale, keep, cancel, send] of [
     await page.goto(`/?widget=off&case=${caseOf(`composer-foot-${locale}`)}`);
     await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
     await page.addScriptTag({ path: 'packages/widget/dist/fruitback.iife.js' });
-    // « Keep for later » is offered once the first read says the worker takes a batch.
+    // « Add to batch » is offered once the first read says the worker takes a batch.
     const firstRead = page.waitForResponse(
       (response) => response.request().method() === 'GET' && new URL(response.url()).pathname === '/feedback',
     );
@@ -529,8 +529,7 @@ test('long words never wrap in a button, and the field grows to 150 px then scro
         // German is not bundled: these are the words of the buttons, longer than the French.
         messages: {
           de: {
-            'composer.keep': 'Für später aufbewahren und erst zusammen mit den anderen senden',
-            'composer.cancel': 'Abbrechen und schließen',
+            'composer.cancel': 'Abbrechen und das Fenster schließen, ohne irgendetwas zu senden',
             'composer.send': 'Absenden',
             'composer.pickAgain': 'Ein anderes Element auf der Seite auswählen',
           },
@@ -541,10 +540,10 @@ test('long words never wrap in a button, and the field grows to 150 px then scro
   await firstRead;
   await page.locator('[data-fruitback-host-launch]').click();
   await page.locator('[data-testid="card-latte"] .add').click();
-  const keep = page.getByRole('button', { name: /^Für später aufbewahren/ });
-  await expect(keep).toBeVisible();
+  const longest = page.getByRole('button', { name: /^Abbrechen/ });
+  await expect(longest).toBeVisible();
 
-  for (const name of [/^Für später aufbewahren/, /^Abbrechen/, /^Absenden$/, /^Ein anderes Element/]) {
+  for (const name of [/^Abbrechen/, /^Absenden$/, /^Ein anderes Element/]) {
     const button = page.getByRole('button', { name });
     const drawn = await button.evaluate((node) => ({
       height: node.getBoundingClientRect().height,
@@ -560,8 +559,8 @@ test('long words never wrap in a button, and the field grows to 150 px then scro
     expect(drawn.title, String(name)).toBe(drawn.words);
   }
   // The control: the longest words do not fit, so they are cut, not wrapped.
-  expect(await keep.evaluate((node) => node.scrollWidth > node.clientWidth)).toBe(true);
-  expect(await keep.evaluate((node) => getComputedStyle(node).textOverflow)).toBe('ellipsis');
+  expect(await longest.evaluate((node) => node.scrollWidth > node.clientWidth)).toBe(true);
+  expect(await longest.evaluate((node) => getComputedStyle(node).textOverflow)).toBe('ellipsis');
 
   const field = page.locator('[data-fruitback-note]');
   const tall = () => field.evaluate((node) => Math.round(node.getBoundingClientRect().height));

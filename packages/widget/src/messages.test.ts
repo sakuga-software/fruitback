@@ -12,7 +12,14 @@ import {
 } from './messages.ts';
 import { FRENCH } from './locale-fr.ts';
 import { createCaptureHost } from './host.ts';
-import { type SendFailure, type SentAs, type SentWithoutPicture, createComposer, failureText } from './composer.ts';
+import {
+  type BatchSent,
+  type SendFailure,
+  type SentAs,
+  type SentWithoutPicture,
+  createComposer,
+  failureText,
+} from './composer.ts';
 import { createOfferedDestinations } from './destinations.ts';
 import { type AttachRefusal, readableSize } from './attachments.ts';
 import { pickArea } from './area.ts';
@@ -257,6 +264,8 @@ describe('every word the widget shows', () => {
     cleanup.push(() => panel.destroy());
     let answer: (planted: boolean | SendFailure | SentWithoutPicture | SentAs) => void = () => {};
     let keptAnswer: true | SentWithoutPicture = true;
+    let waiting = 0;
+    let batchAnswer: BatchSent = { sent: [], unsent: [] };
     let restoredText: string | undefined;
     const places = createOfferedDestinations();
     places.set([{ id: 'dst_one', label: 'PLACE ONE' }, { id: 'dst_two' }]);
@@ -265,8 +274,21 @@ describe('every word the widget shows', () => {
       host: host.panel,
       translator,
       onSubmit: () => new Promise<boolean | SendFailure | SentWithoutPicture | SentAs>((resolve) => (answer = resolve)),
-      // Offered, so « Keep for later » is drawn (FRU-124).
-      keep: { offered: () => true, onKeep: async () => keptAnswer },
+      // Offered, so « Add to batch » is drawn (FRU-124, FRU-608), with the notes waiting and a receipt.
+      batch: {
+        offered: () => true,
+        waiting: () => waiting,
+        subscribe: () => () => {},
+        add: async () => keptAnswer,
+        sendAll: async (_note, _reporter, _destination, _files, progress) => {
+          progress(1, 3);
+          snapshots.push(...shown(host.root));
+
+          return batchAnswer;
+        },
+        resend: async () => batchAnswer,
+        onShowAll: () => {},
+      },
       // A text saved for the element comes back with « Draft restored » (FRU-311).
       autosave: { read: () => restoredText, write: () => {} },
       // Two places, so the line of where a note goes is drawn. The second has no name of its own.
@@ -579,6 +601,40 @@ describe('every word the widget shows', () => {
     (composer.element.querySelector('[data-fruitback-keep]') as HTMLButtonElement).click();
     await settle();
     snapshots.push(...shown(host.root));
+    // FRU-608: two notes waiting, the menu of « Send », a send of the batch and its receipt, whole
+    // then partial, a big one, and a text copied.
+    waiting = 2;
+    composer.open({ left: 0, top: 0, bottom: 10, right: 10 });
+    (composer.element.querySelector('[data-fruitback-send-more]') as HTMLButtonElement).click();
+    snapshots.push(...shown(host.root));
+    batchAnswer = {
+      sent: Array.from({ length: 6 }, (_, n) => ({ id: `n${n}`, text: 'NOTE SAVED', identifier: 'ID-1' })),
+      unsent: [],
+    };
+    (composer.element.querySelector('[data-fruitback-send-all]') as HTMLButtonElement).click();
+    await settle();
+    snapshots.push(...shown(host.root));
+    composer.close();
+    batchAnswer = {
+      sent: [{ id: 'a', text: 'NOTE SAVED', identifier: 'ID-1' }],
+      unsent: [{ id: 'b', text: 'NOTE SAVED' }],
+      failure: 'wait',
+    };
+    // To one place: the receipt says where the notes went.
+    places.set([{ id: 'dst_one', label: 'PLACE ONE' }]);
+    composer.open({ left: 0, top: 0, bottom: 10, right: 10 });
+    send.click();
+    await settle();
+    snapshots.push(...shown(host.root));
+    Object.defineProperty(page.view.navigator, 'clipboard', {
+      value: { writeText: async (): Promise<void> => {} },
+      configurable: true,
+    });
+    (composer.element.querySelector('.fruitback-composer-receipt-copy') as HTMLButtonElement).click();
+    await settle();
+    snapshots.push(...shown(host.root));
+    waiting = 0;
+    places.set([]);
     // A text saved for this element, given back (FRU-311).
     composer.close();
     restoredText = 'NOTE SAVED';
@@ -739,6 +795,8 @@ describe('every word the widget shows', () => {
       readableSize(2_048, translator.locale),
       // FRU-475: the text the author typed in the field of an edit.
       'EDITED',
+      // FRU-608: the text of a note of a batch, in its receipt.
+      'NOTE SAVED',
       // What the worker writes of who edited it, in the language of the team (FRU-475).
       'member of WORKSPACE',
     ];

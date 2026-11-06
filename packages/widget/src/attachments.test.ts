@@ -60,7 +60,18 @@ function mount(seam: Partial<AttachSeam> = {}, more: { keep?: boolean } = {}) {
 
       return new Promise((resolve) => (reply = resolve));
     },
-    ...(more.keep === true ? { keep: { offered: () => true, onKeep: async () => true as const } } : {}),
+    ...(more.keep === true
+      ? {
+          batch: {
+            offered: () => true,
+            waiting: () => 0,
+            subscribe: () => () => {},
+            add: async () => true as const,
+            sendAll: async () => ({ sent: [], unsent: [] }),
+            resend: async () => ({ sent: [], unsent: [] }),
+          },
+        }
+      : {}),
     attachments: {
       offer: () => 'offered',
       subscribe: () => () => {},
@@ -105,7 +116,7 @@ describe('the files of a note in the composer (FRU-332)', () => {
     trigger.click();
     assert.equal(menu.hidden, false);
     assert.equal(trigger.getAttribute('aria-expanded'), 'true');
-    const ways = [...root.querySelectorAll('[role="menuitem"]')].map((way) => way.textContent);
+    const ways = [...menu.querySelectorAll('[role="menuitem"]')].map((way) => way.textContent);
     assert.deepEqual(ways, ['Capture an area', 'Capture the whole page']);
 
     q<HTMLButtonElement>('[data-fruitback-attach-page]').click();

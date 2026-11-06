@@ -306,6 +306,38 @@ async function verifiedNoteArrived(
   });
 }
 
+/**
+ * The notes of a batch that arrived (FRU-608): one call of the trigger for all of them, never one for
+ * each. The first note of a known person names the call, as a single note does; the others of known
+ * persons ride in `notes`. Notes of visitors start nothing, as alone (FRU-468).
+ */
+async function verifiedNotesArrived(
+  config: Served,
+  workspace: string,
+  origin: string | undefined,
+  site: string,
+  arrived: readonly { note: Note; issue: CreatedIssue }[],
+  channel: Channel,
+): Promise<void> {
+  const known = arrived.filter(({ note }) => authorOf(note, channel === 'extension').kind !== 'visitor');
+  const [first] = known;
+  if (config.requestAgent === undefined || first === undefined) return;
+  if (known.length === 1) {
+    await verifiedNoteArrived(config, workspace, origin, site, first.note, channel, first.issue);
+
+    return;
+  }
+  await config.requestAgent({
+    workspace,
+    site,
+    ...(origin === undefined ? {} : { origin }),
+    identifier: first.issue.identifier,
+    note: first.note.id,
+    reason: 'verified-note',
+    batch: known.map(({ note, issue }) => ({ identifier: issue.identifier, note: note.id })),
+  });
+}
+
 export async function postFeedback(
   request: Request,
   config: Served,
@@ -587,12 +619,15 @@ async function postBatch(
       return held[index] && issue !== undefined ? [noteEntry(workspace, clientId, note, channel, target, issue)] : [];
     });
     await indexed(noteIndex, (index) => index.record(entries, Date.now()));
-    for (const [index, note] of attributed.entries()) {
+    // FRU-608: a batch is one send, so it starts the agent once, with every note of it that arrived.
+    const arrived = attributed.flatMap((note, index) => {
       const result = results[index];
-      if (held[index] && result !== undefined && 'issue' in result && result.issue !== undefined) {
-        await verifiedNoteArrived(config, workspace, route.client?.origins?.[0], clientId, note, channel, result.issue);
-      }
-    }
+
+      return held[index] && result !== undefined && 'issue' in result && result.issue !== undefined
+        ? [{ note, issue: result.issue }]
+        : [];
+    });
+    await verifiedNotesArrived(config, workspace, route.client?.origins?.[0], clientId, arrived, channel);
   }
   await invalidatePages(
     kv,

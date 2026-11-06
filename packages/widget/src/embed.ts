@@ -43,7 +43,14 @@ import {
   refusalOf,
 } from './attachments.ts';
 import { pickArea } from './area.ts';
-import { type Composer, type SendFailure, type SentWithoutPicture, createComposer } from './composer.ts';
+import {
+  type BatchSent,
+  type Composer,
+  type SendFailure,
+  type SentAs,
+  type SentWithoutPicture,
+  createComposer,
+} from './composer.ts';
 import {
   type BatchOffer,
   type Draft,
@@ -861,66 +868,109 @@ export function init(options: FruitbackOptions): Fruitback {
       },
     },
     ...(options.onSignIn === undefined ? {} : { onSignIn: signIn }),
-    // Offered only while the worker takes several notes in one request (FRU-124).
-    keep: {
-      // Signed out too (FRU-315): a text kept for later is sent once the reviewer is back.
+    // Offered only while the worker takes several notes in one request (FRU-124, FRU-608).
+    batch: {
+      // Signed out too (FRU-315): a text added to the batch is sent once the reviewer is back.
       offered: () => readerIdentity.batch !== undefined || ended,
-      onKeep: async (note, reporter, chosen) => {
-        const destination = destinationToSend(destinations.get(), chosen);
-        const about = typingPlace;
-        const made = await noteFor({ text: note, target, place, reporter, config: config.get(), options });
-        if (made === undefined) return 'retry';
-        drafts.add({ note: made.note, ...(destination === undefined ? {} : { destination }) });
-        // A draft now: it is in the list, and its text is no longer only being written.
-        if (about !== undefined) typing.remove(about);
+      waiting: () => drafts.list().length,
+      subscribe: (listener) => drafts.subscribe(listener),
+      add: async (note, reporter, chosen) => addToBatch(note, reporter, chosen),
+      sendAll: async (note, reporter, chosen, attachments, progress) => {
+        // A note with files is never a draft: it goes alone first, with its files (FRU-332). When it
+        // fails it stays in the field, and the batch waits.
+        if (attachments.length > 0) {
+          const alone = await submitOne(note, reporter, chosen, attachments);
+          if (typeof alone === 'string') return { sent: [], unsent: [], failure: alone, inField: true };
+          const rest = await sendBatch(progress);
+          const one = { id: alone.id ?? '', text: note, ...(alone.sentAs ?? {}) };
 
-        return made.missedPicture ? { picture: 'missed' as const } : true;
+          return { ...rest, sent: [one, ...rest.sent] };
+        }
+        const added = await addToBatch(note, reporter, chosen);
+        if (typeof added === 'string') return { sent: [], unsent: [], failure: added, inField: true };
+
+        return sendBatch(progress);
       },
+      resend: (progress) => sendBatch(progress),
+      onShowAll: () => openList(),
     },
     onSubmit: async (note, reporter, chosen, attachments = []) => {
-      const destination = destinationToSend(destinations.get(), chosen);
-      // The element this note is about, as it was sent: the composer may stand on another by the answer.
-      const about = typingPlace;
-      let noteId: string | undefined;
-      const planted = await plant({
-        note,
-        target,
-        place,
-        reporter,
-        destination,
-        attachments,
-        config: config.get(),
-        options,
-        onNote: (id) => (noteId = id),
-      });
-      if (typeof planted !== 'string' && about !== undefined) typing.remove(about);
-      if (typeof planted === 'string') {
-        // The worker refuses a place the site no longer has, or a reader who lost the right to
-        // choose. The list on screen is then old, and a second try would be refused like the first.
-        // A read brings the list of now, and the composer says what changed.
-        if (destination !== undefined) await read();
+      const sent = await submitOne(note, reporter, chosen, attachments);
+      if (typeof sent === 'string') return sent;
+      const missed = sent.picture === 'missed' ? { picture: 'missed' as const } : {};
+      if (sent.sentAs !== undefined) return { sentAs: sent.sentAs, ...missed };
 
-        return forThisHost(planted);
-      }
-
-      // Re-read rather than assume: the pin the reporter is about to see is the one the worker gave
-      // back, which is also what proves the write landed somewhere the read path can find.
-      await read();
-
-      // The card of a sent note says what the read gave back for it (FRU-305): its identifier, the
-      // way to it when the reader may open it, and the number of its pin.
-      const shown = overlay.resolutions().find((entry) => entry.issue.note.id === noteId);
-      if (shown === undefined) return planted;
-
-      return {
-        sentAs: { identifier: shown.issue.identifier, url: shown.issue.url, number: shown.number },
-        ...(planted === true ? {} : { picture: 'missed' as const }),
-      };
+      return sent.picture === 'missed' ? { picture: 'missed' as const } : true;
     },
     // « Choose another element » starts a capture over the open composer: it keeps the text, and moves to the
     // element chosen (FRU-258, FRU-305).
     onPickAgain: () => host.start(),
   });
+
+  /** A note added to the batch: a draft of this tab, whose text is no longer only being written. */
+  async function addToBatch(
+    note: string,
+    reporter: NoteReporter | undefined,
+    chosen: string | undefined,
+  ): Promise<true | SendFailure | SentWithoutPicture> {
+    const destination = destinationToSend(destinations.get(), chosen);
+    const about = typingPlace;
+    const made = await noteFor({ text: note, target, place, reporter, config: config.get(), options });
+    if (made === undefined) return 'retry';
+    drafts.add({ note: made.note, ...(destination === undefined ? {} : { destination }) });
+    if (about !== undefined) typing.remove(about);
+
+    return made.missedPicture ? { picture: 'missed' as const } : true;
+  }
+
+  /** One note sent alone, and what the read after it gave back for it. */
+  async function submitOne(
+    note: string,
+    reporter: NoteReporter | undefined,
+    chosen: string | undefined,
+    attachments: readonly string[],
+  ): Promise<SendFailure | { id?: string; sentAs?: SentAs['sentAs']; picture?: 'missed' }> {
+    const destination = destinationToSend(destinations.get(), chosen);
+    // The element this note is about, as it was sent: the composer may stand on another by the answer.
+    const about = typingPlace;
+    let noteId: string | undefined;
+    const planted = await plant({
+      note,
+      target,
+      place,
+      reporter,
+      destination,
+      attachments,
+      config: config.get(),
+      options,
+      onNote: (id) => (noteId = id),
+    });
+    if (typeof planted !== 'string' && about !== undefined) typing.remove(about);
+    if (typeof planted === 'string') {
+      // The worker refuses a place the site no longer has, or a reader who lost the right to
+      // choose. The list on screen is then old, and a second try would be refused like the first.
+      // A read brings the list of now, and the composer says what changed.
+      if (destination !== undefined) await read();
+
+      return forThisHost(planted);
+    }
+
+    // Re-read rather than assume: the pin the reporter is about to see is the one the worker gave
+    // back, which is also what proves the write landed somewhere the read path can find.
+    await read();
+
+    // The card of a sent note says what the read gave back for it (FRU-305): its identifier, the
+    // way to it when the reader may open it, and the number of its pin.
+    const shown = overlay.resolutions().find((entry) => entry.issue.note.id === noteId);
+    const missed = planted === true ? {} : { picture: 'missed' as const };
+    if (shown === undefined) return { ...(noteId === undefined ? {} : { id: noteId }), ...missed };
+
+    return {
+      ...(noteId === undefined ? {} : { id: noteId }),
+      sentAs: { identifier: shown.issue.identifier, url: shown.issue.url, number: shown.number },
+      ...missed,
+    };
+  }
 
   /** The notes the overlay draws now, with how each one was found. The list and the copied text read it. */
   const entries = (): SidebarEntry[] =>
@@ -947,26 +997,36 @@ export function init(options: FruitbackOptions): Fruitback {
 
   /** One request after another, then a read: the pins the reviewer sees next are the worker's. */
   let sending = false;
-  const sendKept = async (): Promise<{ sent: number; failure?: SendFailure }> => {
-    if (sending) return { sent: 0 };
+  /** The batch sent, and what went: the receipt of the composer reads it whole (FRU-608). */
+  const sendBatch = async (onProgress?: (done: number, total: number) => void): Promise<BatchSent> => {
+    if (sending) return { sent: [], unsent: [] };
     sending = true;
     try {
-      const outcome = await sendDrafts({
-        drafts: withPlacesOfNow(drafts.list(), destinations.get()),
-        offer: readerIdentity.batch,
-        options,
-      });
+      const waiting = withPlacesOfNow(drafts.list(), destinations.get());
+      const outcome = await sendDrafts({ drafts: waiting, offer: readerIdentity.batch, options, onProgress });
       drafts.remove(outcome.kept);
       // After a failure too: the worker refuses a place the site no longer has, and the list of
       // places on screen is then old. The read brings the list of now, and the next try follows it.
       if (outcome.kept.length > 0 || outcome.failure !== undefined) await read();
 
       const failure = outcome.failure === undefined ? undefined : forThisHost(outcome.failure);
+      const went = new Set(outcome.kept);
 
-      return { sent: outcome.kept.length, ...(failure === undefined ? {} : { failure }) };
+      return {
+        sent: waiting
+          .filter((draft) => went.has(draft.note.id))
+          .map((draft) => ({ id: draft.note.id, text: draft.note.text, ...outcome.issues.get(draft.note.id) })),
+        unsent: drafts.list().map((draft) => ({ id: draft.note.id, text: draft.note.text })),
+        ...(failure === undefined ? {} : { failure }),
+      };
     } finally {
       sending = false;
     }
+  };
+  const sendKept = async (): Promise<{ sent: number; failure?: SendFailure }> => {
+    const outcome = await sendBatch();
+
+    return { sent: outcome.sent.length, ...(outcome.failure === undefined ? {} : { failure: outcome.failure }) };
   };
 
   const asText = (): string =>
@@ -1671,13 +1731,19 @@ export async function sendDrafts({
   drafts,
   offer,
   options,
+  onProgress,
 }: {
   drafts: readonly Draft[];
   offer: BatchOffer | undefined;
   options: FruitbackOptions;
-}): Promise<{ kept: string[]; failure?: SendFailure }> {
+  /** Told after each request how many notes went, of how many (FRU-608). */
+  onProgress?: (done: number, total: number) => void;
+}): Promise<{ kept: string[]; failure?: SendFailure; issues: Map<string, SentIssue> }> {
   const kept: string[] = [];
+  // FRU-608: the issue of each note kept, for the receipt: its identifier and its address.
+  const issues = new Map<string, SentIssue>();
   let partial = false;
+  const told = (): void => onProgress?.(kept.length, drafts.length);
 
   for (const request of cutIntoRequests(drafts, offer)) {
     const first = request[0];
@@ -1691,12 +1757,15 @@ export async function sendDrafts({
         body: offer === undefined ? JSON.stringify(first.note) : batchBody(request),
       });
     } catch {
-      return { kept, failure: 'retry' };
+      return { kept, failure: 'retry', issues };
     }
 
     if (offer === undefined) {
-      if (!response.ok) return { kept, failure: failureOf(response) };
+      if (!response.ok) return { kept, failure: failureOf(response), issues };
       kept.push(first.note.id);
+      const issue = issueIn(response.body);
+      if (issue !== undefined) issues.set(first.note.id, issue);
+      told();
       continue;
     }
 
@@ -1706,36 +1775,64 @@ export async function sendDrafts({
       // body: an answer the widget cannot read would leave notes the worker holds in the drafts, and
       // the next click would plant them a second time.
       kept.push(...ids);
+      for (const [id, issue] of keptIn(response.body)) issues.set(id, issue);
+      told();
       continue;
     }
 
     const answered = keptIn(response.body);
     kept.push(...ids.filter((id) => answered.has(id)));
+    for (const [id, issue] of answered) issues.set(id, issue);
+    told();
     if (response.status === 207) partial = true;
-    else return { kept, failure: failureOf(response) };
+    else return { kept, failure: failureOf(response), issues };
   }
 
-  return partial ? { kept, failure: 'retry' } : { kept };
+  return partial ? { kept, failure: 'retry', issues } : { kept, issues };
 }
 
-/** The ids the worker answered with an issue, in a `201`, a `207` or a `502` of a batch. */
-function keptIn(body: string): Set<string> {
+/** What the worker gave back for a note: its identifier, and its address when the reader may open it. */
+export type SentIssue = { identifier?: string; url?: string };
+
+/** The issue of a note, read leniently: a field that is not a string is dropped. */
+function sentIssueOf(value: unknown): SentIssue {
+  const { identifier, url } = (typeof value === 'object' && value !== null ? value : {}) as Record<string, unknown>;
+
+  return {
+    ...(typeof identifier === 'string' ? { identifier } : {}),
+    ...(typeof url === 'string' && /^https?:/.test(url) ? { url } : {}),
+  };
+}
+
+/** The issue of a single note, in the answer of its write. */
+function issueIn(body: string): SentIssue | undefined {
+  try {
+    const { issue } = JSON.parse(body) as { issue?: unknown };
+
+    return issue === undefined ? undefined : sentIssueOf(issue);
+  } catch {
+    return undefined;
+  }
+}
+
+/** The ids the worker answered with an issue, in a `201`, a `207` or a `502` of a batch, and that issue. */
+function keptIn(body: string): Map<string, SentIssue> {
   try {
     const { results } = JSON.parse(body) as { results?: unknown };
-    if (!Array.isArray(results)) return new Set();
+    if (!Array.isArray(results)) return new Map();
 
-    return new Set(
+    return new Map(
       results.flatMap((result: unknown) => {
         const { id, issue } = (typeof result === 'object' && result !== null ? result : {}) as {
           id?: unknown;
           issue?: unknown;
         };
 
-        return typeof id === 'string' && issue !== undefined ? [id] : [];
+        return typeof id === 'string' && issue !== undefined ? [[id, sentIssueOf(issue)] as const] : [];
       }),
     );
   } catch {
-    return new Set();
+    return new Map();
   }
 }
 

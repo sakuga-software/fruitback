@@ -45,8 +45,9 @@ async function keep(page: Page, card: string, note: string): Promise<void> {
   await page.locator('[data-fruitback-host-launch]').click();
   await page.locator(`[data-testid="${card}"] .add`).click();
   await page.locator('[data-fruitback-note]').fill(note);
-  await page.getByRole('button', { name: 'Keep for later' }).click();
-  await expect(page.locator('[data-fruitback-status]')).toHaveText('Kept for later');
+  // « Add to batch », the icon beside « Send » (FRU-608), with the count once notes wait.
+  await page.getByRole('button', { name: /^Add to batch/ }).click();
+  await expect(page.locator('[data-fruitback-status]')).toHaveText('Added to the batch');
   await expect(page.locator('[data-fruitback-state]')).toBeHidden({ timeout: 10_000 });
 }
 
@@ -123,9 +124,16 @@ for (const scheme of ['light', 'dark'] as const) {
     await keep(page, 'card-espresso', 'Une note gardée');
     await page.locator('[data-fruitback-host-launch]').click();
     await page.locator('[data-testid="card-latte"] .add').click();
-    await expect(page.getByRole('button', { name: 'Keep for later' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Add to batch · 1 waiting' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Send all 2', exact: true })).toBeVisible();
     const composer = await new AxeBuilder({ page }).include('[data-fruitback-host]').analyze();
     expect(composer.violations).toEqual([]);
+    // The menu of « Send » too (FRU-608).
+    await page.getByRole('button', { name: 'More ways to send' }).click();
+    await expect(page.getByRole('menuitem', { name: 'Send only this note' })).toBeFocused();
+    const menu = await new AxeBuilder({ page }).include('[data-fruitback-host]').analyze();
+    expect(menu.violations).toEqual([]);
+    await page.keyboard.press('Escape');
     await page.getByRole('button', { name: 'Cancel', exact: true }).click();
 
     await page.getByRole('button', { name: 'Show every note in a sidebar' }).click();
@@ -134,3 +142,96 @@ for (const scheme of ['light', 'dark'] as const) {
     expect(list.violations).toEqual([]);
   });
 }
+
+/**
+ * The batch sent from the composer (FRU-608): « Send all 3 » sends the note with the two that wait,
+ * in one request; « Sending 1 of 3… » while it goes, and nothing closes; a receipt after, with each
+ * ticket. A partial send keeps the note that did not go, and « Send again » sends it.
+ */
+test('« Send all 3 » sends the batch in one request, then gives a receipt, and a partial send keeps what did not go', async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const posted = writes(page);
+  await mount(page, 'drafts-send-all');
+  await keep(page, 'card-espresso', 'Lot : le prix est faux');
+  await keep(page, 'card-latte', 'Lot : le bouton est trop petit');
+
+  await page.locator('[data-fruitback-host-launch]').click();
+  await page.locator('[data-testid="card-mocha"] .add').click();
+  await page.locator('[data-fruitback-note]').fill('Lot : la carte moka');
+  await expect(page.getByRole('button', { name: 'Add to batch · 2 waiting' })).toBeVisible();
+  await expect(page.locator('.fruitback-composer-badge')).toHaveText('2');
+
+  // Held, to read the composer while the batch is on its way.
+  let release: () => void = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route(
+    (url) => url.origin === WORKER_ORIGIN && url.pathname === '/feedback',
+    async (route) => {
+      if (route.request().method() !== 'POST') return route.fallback();
+      await held;
+      return route.fallback();
+    },
+  );
+  await page.getByRole('button', { name: 'Send all 3', exact: true }).click();
+  await expect(page.locator('[data-fruitback-status]')).toHaveText('Sending 1 of 3…');
+  await expect(page.locator('[data-fruitback-note]')).toHaveJSProperty('readOnly', true);
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog', { name: 'New note' })).toBeVisible();
+  release();
+
+  const receipt = page.locator('[data-fruitback-receipt]');
+  await expect(receipt).toBeVisible();
+  await expect(page.locator('[data-fruitback-receipt-title]')).toHaveText('3 notes sent');
+  await expect(receipt.locator('[data-fruitback-receipt-row="sent"]')).toHaveCount(3);
+  // One request, an array of the three notes, the one of the composer last.
+  expect(posted).toHaveLength(1);
+  expect((JSON.parse(posted[0] ?? '') as { text: string }[]).map((note) => note.text)).toEqual([
+    'Lot : le prix est faux',
+    'Lot : le bouton est trop petit',
+    'Lot : la carte moka',
+  ]);
+  const region = page.getByRole('region', { name: 'Notes of this send' });
+  await expect(region).toBeVisible();
+  expect(await receipt.evaluate((node) => node.getBoundingClientRect().height)).toBeLessThanOrEqual(420);
+  const axe = await new AxeBuilder({ page }).include('[data-fruitback-host]').analyze();
+  expect(axe.violations).toEqual([]);
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(receipt).toBeHidden();
+  await expect(page.locator('[data-fruitback-pin][data-fruitback-draft]')).toHaveCount(0);
+  await page.unroute((url) => url.origin === WORKER_ORIGIN && url.pathname === '/feedback');
+
+  // A partial send: the worker keeps one of two, and the other keeps its text in the batch.
+  await keep(page, 'card-espresso', 'Partiel : gardée');
+  await page.locator('[data-fruitback-host-launch]').click();
+  await page.locator('[data-testid="card-latte"] .add').click();
+  await page.locator('[data-fruitback-note]').fill('Partiel : refusée une fois');
+  let refuse = true;
+  await page.route(
+    (url) => url.origin === WORKER_ORIGIN && url.pathname === '/feedback',
+    async (route) => {
+      if (route.request().method() !== 'POST' || !refuse) return route.fallback();
+      refuse = false;
+      const notes = JSON.parse(route.request().postData() ?? '[]') as { id: string }[];
+      const kept = await (await route.fetch({ postData: JSON.stringify(notes.slice(0, 1)) })).json();
+      await route.fulfill({
+        status: 207,
+        contentType: 'application/json',
+        headers: { 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({
+          results: [...(kept as { results: unknown[] }).results, { id: notes[1]?.id, error: 'store-unavailable' }],
+        }),
+      });
+    },
+  );
+  await page.getByRole('button', { name: 'Send all 2', exact: true }).click();
+  await expect(page.locator('[data-fruitback-receipt-title]')).toHaveText('1 sent, 1 not sent');
+  const unsent = page.locator('[data-fruitback-receipt-row="unsent"]');
+  await expect(unsent).toContainText('Partiel : refusée une fois');
+  await expect(unsent.getByRole('button', { name: 'Copy text' })).toBeVisible();
+  await page.getByRole('button', { name: 'Send again', exact: true }).click();
+  await expect(page.locator('[data-fruitback-receipt-title]')).toHaveText('2 notes sent');
+  await expect(unsent).toHaveCount(0);
+  expect((await storedNotes(page)).map((note) => note.text)).toContain('Partiel : refusée une fois');
+});

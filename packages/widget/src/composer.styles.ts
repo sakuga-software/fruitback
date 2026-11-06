@@ -479,9 +479,10 @@ export const STYLES = `
 .fruitback-composer-lands { flex: 1 1 0; min-width: min(4.5em, 100%); font-size: 12px; color: var(--fruitback-color-text-muted); }
 .fruitback-composer-lands .fruitback-composer-place-name { flex: 0 1 auto; }
 .fruitback-composer-lands[hidden] { display: none; }
-.fruitback-composer-send { order: 1; }
-.fruitback-composer-foot > .fruitback-composer-ghost:not(.fruitback-composer-keep) { order: 2; }
-.fruitback-composer-keep { order: 3; }
+.fruitback-composer-send-group { order: 1; }
+/* « Add to batch » stands beside « Send » (FRU-608), then the ghosts. */
+.fruitback-composer-keep { order: 2; }
+.fruitback-composer-foot > .fruitback-composer-ghost { order: 3; }
 .fruitback-composer-lands { order: 4; }
 .fruitback-composer-status { order: 5; }
 /* 34 px drawn, as the mock-up does, inside a transparent border that makes the target 44 px. */
@@ -529,6 +530,85 @@ export const STYLES = `
 /* « Sign in again » is the way out of the sentence above it: it reads as an action, in the text colour. */
 .fruitback-composer-sign-in { color: var(--fruitback-color-text); text-decoration: underline; text-underline-offset: 3px; }
 .fruitback-composer-keep[disabled] { opacity: 0.55; cursor: default; }
+/*
+  The batch (FRU-608). « Add to batch » is an icon with the count of the notes waiting on its corner.
+  « Send » and its menu are one pill split in two: the words, then the fold that opens « Send all N »
+  and « Send only this note ». The menu opens above: the foot is the end of the composer.
+*/
+.fruitback-composer-keep { width: 36px; height: 36px; }
+.fruitback-composer-badge {
+  position: absolute;
+  top: -2px;
+  inset-inline-end: -2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  box-sizing: border-box;
+  border-radius: var(--fruitback-radius-pill);
+  background: var(--fruitback-color-accent);
+  color: var(--fruitback-color-on-accent);
+  font: 700 10px/16px var(--fruitback-font-sans);
+  text-align: center;
+}
+.fruitback-composer-badge:empty { display: none; }
+.fruitback-composer-send-group { position: relative; display: inline-flex; min-width: 0; max-width: 100%; }
+.fruitback-composer-send-group .fruitback-composer-send:has(+ .fruitback-composer-send-more:not([hidden])) {
+  border-start-end-radius: 0;
+  border-end-end-radius: 0;
+  padding-inline-end: 10px;
+}
+.fruitback-composer-send-more {
+  padding-inline: 8px;
+  border-start-start-radius: 0;
+  border-end-start-radius: 0;
+  box-shadow: inset 1px 0 0 var(--fruitback-color-accent-strong);
+}
+.fruitback-composer-send-more[hidden] { display: none; }
+.fruitback-composer-send.fruitback-composer-send-more .fruitback-icon { width: 12px; height: 12px; }
+.fruitback-composer-send-more[aria-expanded="true"] .fruitback-icon { transform: rotate(180deg); }
+.fruitback-composer-send-menu { top: auto; bottom: calc(100% + ${MENU_GAP}px); inset-inline-start: auto; inset-inline-end: 0; }
+/*
+  The receipt of a batch (FRU-608): 420 px at most, its list scrolls in a region the keyboard reaches,
+  with a fade at its foot while rows are below.
+*/
+.fruitback-composer[data-fruitback-state="receipt"] .fruitback-composer-head,
+.fruitback-composer[data-fruitback-state="receipt"] .fruitback-composer-body,
+.fruitback-composer[data-fruitback-state="receipt"] .fruitback-composer-foot { display: none; }
+.fruitback-composer-receipt {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 420px;
+  box-sizing: border-box;
+  padding: 16px;
+  outline: 0;
+}
+.fruitback-composer-receipt[hidden] { display: none; }
+.fruitback-composer-receipt-title { margin: 0; font-size: 14px; font-weight: 600; color: var(--fruitback-color-text); }
+.fruitback-composer-receipt-to { margin: 0; font-size: 12px; color: var(--fruitback-color-text-muted); }
+.fruitback-composer-receipt-region { flex: 1 1 auto; min-height: 0; overflow-y: auto; margin-inline: -4px; padding-inline: 4px; }
+.fruitback-composer-receipt-region:focus-visible { outline: 2px solid var(--fruitback-color-accent); outline-offset: 0; }
+.fruitback-composer-receipt-region[data-fruitback-more] {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
+}
+.fruitback-composer-receipt-list { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+.fruitback-composer-receipt-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  border-bottom: 1px solid var(--fruitback-color-border);
+  font-size: 13px;
+}
+.fruitback-composer-receipt-id { flex: none; font: 600 12px/1.4 var(--fruitback-font-mono); }
+.fruitback-composer-receipt-id a { color: var(--fruitback-color-text); text-decoration: underline; text-underline-offset: 3px; }
+.fruitback-composer-receipt-row[data-fruitback-receipt-row="unsent"] .fruitback-composer-receipt-id { color: var(--fruitback-color-accent-strong); font-family: var(--fruitback-font-sans); }
+.fruitback-composer-receipt-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fruitback-color-text-muted); }
+.fruitback-composer-receipt-status { margin: 0; font-size: 12px; color: var(--fruitback-color-text-muted); }
+.fruitback-composer-receipt-status:empty { display: none; }
+.fruitback-composer-receipt-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+.fruitback-composer-receipt-actions [hidden] { display: none; }
 .fruitback-composer[data-fruitback-state="kept"] .fruitback-composer-status {
   color: var(--fruitback-color-success);
   font-weight: 600;

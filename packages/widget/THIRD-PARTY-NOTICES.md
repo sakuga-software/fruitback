@@ -83,7 +83,7 @@ SOFTWARE.
 
 <https://github.com/phosphor-icons/core>
 
-Seven icons — `gear-fill`, `x-bold`, `magnifying-glass-bold`, `dots-six-vertical-bold`, `camera-bold`, `paperclip-bold` and `image-bold` — read from `@iconify-json/ph` by
+Eight icons — `gear-fill`, `x-bold`, `magnifying-glass-bold`, `dots-six-vertical-bold`, `camera-bold`, `paperclip-bold`, `image-bold` and `stack-plus-bold` — read from `@iconify-json/ph` by
 `build-icons.ts` and written into `src/icon-data.ts`. Nothing of Iconify's own is distributed: it is the packaging, not the work.
 
 ```
