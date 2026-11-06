@@ -229,7 +229,12 @@ async function counted<T>(read: () => Promise<T> | undefined): Promise<T | undef
 }
 
 /** What the worker calls each kind of source in the label of a destination. */
-const KIND_NAMES: Record<ConnectorKind, string> = { linear: 'Linear', rest: 'REST API', github: 'GitHub' };
+const KIND_NAMES: Record<ConnectorKind, string> = {
+  linear: 'Linear',
+  rest: 'REST API',
+  github: 'GitHub',
+  'claude-routine': 'Claude Code routine',
+};
 
 /** The place does not exist in the tracker of the connector: nothing must be kept for it. */
 export class UnknownPlace extends Error {}
@@ -257,7 +262,8 @@ export async function offerOf(
   connector: string,
 ): Promise<SourceOffer | undefined> {
   const kept = await context.accounts.sealedKey(connector);
-  if (kept === undefined || kept.workspaceId !== workspace) return undefined;
+  // FRU-594: a routine is no place of a note, and offers nothing to choose.
+  if (kept === undefined || kept.workspaceId !== workspace || kept.kind === 'claude-routine') return undefined;
   if (kept.kind === 'rest') return { kind: 'rest' };
   if (kept.kind === 'github') {
     if (context.githubApp === undefined || context.secretsKey === undefined) return undefined;
@@ -430,6 +436,8 @@ const ID = /^[A-Za-z0-9_-]{1,80}$/;
 function destinationOf(body: Record<string, unknown> | undefined, kind: ConnectorKind): Destination | undefined {
   const { connector, teamId, projectId } = body ?? {};
   if (typeof connector !== 'string' || !ID.test(connector)) return undefined;
+  // FRU-594: a routine is what a trigger calls, never where a note goes.
+  if (kind === 'claude-routine') return undefined;
   // `null` is « none », as the route takes it for the project of a tracker.
   if (kind === 'rest')
     return (teamId ?? undefined) === undefined && (projectId ?? undefined) === undefined ? { connector } : undefined;

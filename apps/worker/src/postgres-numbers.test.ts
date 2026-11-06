@@ -121,6 +121,12 @@ async function withEveryTableFilled(open: () => Promise<PgDatabase>): Promise<Pg
     `INSERT INTO site_agent_triggers (site_id, workspace_id, connector_id, moment, enabled, updated_at)
        VALUES ('site_acme', 'ws_acme', 'con_linear', 'verified-note', false, 1)`,
   );
+  // The session a routine started for a call (FRU-594).
+  await rowsOf(
+    database,
+    `INSERT INTO agent_sessions (id, connector_id, site_id, identifiers, session_url, started_at)
+       VALUES ('dlv_1', 'con_linear', 'site_acme', '["FB-1"]', 'https://claude.ai/code/session_01', 1)`,
+  );
   // A write of that key (FRU-464).
   await rowsOf(
     database,
@@ -188,7 +194,7 @@ async function write({ table, column }: Bigint, database: PgDatabase, value: num
   await rowsOf(database, `UPDATE "${getTableConfig(table).name}" SET "${column.name}" = ${String(value)}`);
 }
 
-it('knows the fifty-three BIGINT columns of the worker, and that better-auth has none', () => {
+it('knows the fifty-four BIGINT columns of the worker, and that better-auth has none', () => {
   assert.deepEqual(BIGINTS.map(({ name }) => name).toSorted(), [
     'account_emails.created_at',
     'account_emails.verified_at',
@@ -197,6 +203,7 @@ it('knows the fifty-three BIGINT columns of the worker, and that better-auth has
     'agent_keys.created_at',
     'agent_keys.expires_at',
     'agent_keys.last_used_at',
+    'agent_sessions.started_at',
     'agent_writes.at',
     'connect_requests.answered_at',
     'connect_requests.claimed_at',

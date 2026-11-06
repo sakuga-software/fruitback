@@ -20,6 +20,8 @@ export const KINDS = {
   // « REST API » is said « API REST » in French: `msg` marks it for the guard of the words.
   rest: { name: msg('REST API') },
   github: { name: msg('GitHub Issues') },
+  // FRU-594: what the trigger of a site calls, never where a note goes.
+  'claude-routine': { name: msg('Claude Code routine') },
 } as const;
 
 /**
@@ -106,9 +108,15 @@ export function placeLabel(
   return cut < 0 ? `${connector.name} · ${label}` : `${connector.name}${label.slice(cut)}`;
 }
 
+/** The worker names a routine after the id of its trigger: `Claude Code routine · trig_01AB…` (FRU-594). */
+export function routineOf(connector: Pick<Connector, 'label'>): string {
+  return connector.label.replace(/^Claude Code routine · /, '');
+}
+
 /** How a source is connected, in one line under its name. */
 export function sourceLine(connector: Connector): string {
   if (connector.kind === 'rest') return addressOf(connector);
+  if (connector.kind === 'claude-routine') return t('Trigger {id}', { id: routineOf(connector) });
   if (connector.kind === 'github') return t('Installed on {account}', { account: accountOf(connector) });
   if (OAUTH_LABEL.test(connector.label)) {
     return t('Workspace {name}', { name: connector.label.replace(OAUTH_LABEL, '') });

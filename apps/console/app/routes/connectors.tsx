@@ -7,7 +7,7 @@ import { PageHead, useWorkspace } from './workspace';
 import { msg, t } from '../i18n';
 import { WORKSPACE_SUSPENDED, problemOf, writeProblemOf } from '../problems';
 import { useLocale } from '../use-locale';
-import { AddLinear, AddRest } from '../parts/connector-add';
+import { AddLinear, AddRest, AddRoutine } from '../parts/connector-add';
 import { GithubPanel } from '../parts/connector-github';
 import { LinearPanel } from '../parts/connector-linear';
 import { ConnectorName } from '../parts/connector-name';
@@ -21,6 +21,7 @@ import {
   sourceLine,
 } from '../parts/connector-parts';
 import { RestPanel } from '../parts/connector-rest';
+import { RoutinePanel } from '../parts/connector-routine';
 import type { LaterKind, MarkedKind } from '../connector-marks';
 import { ReadProblem } from '../read-problem';
 
@@ -85,6 +86,7 @@ const PANELS: Record<Connector['kind'], (props: PanelProps) => ReactNode> = {
   linear: LinearPanel,
   rest: RestPanel,
   github: GithubPanel,
+  'claude-routine': RoutinePanel,
 };
 
 /** The id of the title of the open panel. */
@@ -156,7 +158,10 @@ export default function Connectors() {
     // The notes that did not reach an address, for its row. A read that fails says nothing here: the
     // panel of the address says that it could not read them.
     if (listed.ok) {
-      const addresses = listed.data.connectors.filter((connector) => connector.kind === 'rest');
+      // FRU-594: a routine has calls that wait too, and no note.
+      const addresses = listed.data.connectors.filter(
+        (connector) => connector.kind === 'rest' || connector.kind === 'claude-routine',
+      );
       const counts = await Promise.all(
         addresses.map(async (connector) => {
           const read = await call<{ deliveries: Delivery[] }>('GET', `${base}/connectors/${connector.id}/deliveries`);
@@ -222,8 +227,9 @@ export default function Connectors() {
   const open = connectors?.find((connector) => connector.id === selected);
   const placed = known(sites);
   /** « · 3 sites », only from a list that was read. */
+  // FRU-594: no site sends its notes to a routine, so its row counts none.
   const countOf = (connector: Connector): string =>
-    placed === undefined
+    placed === undefined || connector.kind === 'claude-routine'
       ? ''
       : ` · ${siteCount(placed.filter((site) => placesOf(site).some((place) => place.connector === connector.id)).length)}`;
 
@@ -418,6 +424,36 @@ export default function Connectors() {
             </Button>
           </Source>
         ))}
+        {/* FRU-594: what the trigger of a site calls to start a Claude Code routine. No note goes there.
+            Last: the trackers come first, as the mockup orders them, and their rows do not move. */}
+        <Source
+          kind="claude-routine"
+          wide={adding === 'claude-routine'}
+          name={t(KINDS['claude-routine'].name)}
+          detail={t(
+            'Starts a routine of your team when the trigger of a site calls it. The routine reads the notes through the MCP server.',
+          )}
+        >
+          {adding === 'claude-routine' ? (
+            <Under>
+              <AddRoutine
+                base={base}
+                onDone={(connector) => {
+                  setForm(undefined);
+                  if (connector === undefined) return;
+                  setCatalogue(false);
+                  opening.current = true;
+                  setSelected(connector.id);
+                  void load();
+                }}
+              />
+            </Under>
+          ) : (
+            <Button tone="outline" inset={16} disabled={cannot} onClick={() => startAdding('claude-routine')}>
+              <Connect name={t(KINDS['claude-routine'].name)} />
+            </Button>
+          )}
+        </Source>
       </ul>
     </>
   );

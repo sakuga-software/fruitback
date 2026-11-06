@@ -157,7 +157,7 @@ const VIOLATIONS: Violation<AccountStore>[] = [
     breaks:
       'writes the trigger of a site to an address that receives of its workspace only, and drops it with its address',
     by: 'takes any source of the workspace as an address',
-    replace: { from: "              eq(connectors.kind, 'rest'),\n", to: '' },
+    replace: { from: '              inArray(connectors.kind, [...AGENT_RECEIVER_KINDS]),\n', to: '' },
   },
   {
     breaks:

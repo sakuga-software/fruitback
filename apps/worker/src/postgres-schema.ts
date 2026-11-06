@@ -195,6 +195,34 @@ export const deliveries = pgTable(
 );
 
 /**
+ * The session a Claude Code routine started for a call of a trigger (FRU-594, `claude-routine.ts`).
+ * The call was a delivery, and a delivery that arrived goes: this row keeps what its answer said, so
+ * that the console shows « Session started » on the row of the call. It holds no text of a note: the
+ * site, what Fruitback calls the notes, and the address of the session. `id` is the id of the
+ * delivery. A connector that goes takes its rows; the worker drops a row after 30 days.
+ */
+export const agent_sessions = pgTable(
+  'agent_sessions',
+  {
+    id: text('id').primaryKey(),
+    connector_id: text('connector_id').notNull(),
+    site_id: text('site_id'),
+    /** What Fruitback calls the notes of the call, in order, as a JSON array: `["FB-12"]`. */
+    identifiers: text('identifiers').notNull(),
+    session_url: text('session_url').notNull(),
+    started_at: instant('started_at').notNull(),
+  },
+  (table) => [
+    foreignKey({
+      name: 'agent_sessions_connector_id_fkey',
+      columns: [table.connector_id],
+      foreignColumns: [connectors.id],
+    }).onDelete('cascade'),
+    index('agent_sessions_by_connector').on(table.connector_id, table.started_at),
+  ],
+);
+
+/**
  * The domains a workspace says it owns, and what the DNS said of each (FRU-103): `domain-proof.ts`.
  * `verified_at` NULL: never proven. `lost_at` is the first answer of the DNS without the record.
  * `previews_site_id` names the one site whose previews the domain covers.

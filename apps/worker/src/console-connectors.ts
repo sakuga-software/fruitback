@@ -29,6 +29,7 @@ import {
 } from './linear.ts';
 import { isAcceptableSecret, newSecret, parseTargetUrl, sealTarget, targetLabel } from './rest-connector.ts';
 import { linearAuthorization, linearTicket, revokeLinear } from './linear-oauth.ts';
+import { isAcceptableToken, parseFireUrl, routineLabel, sealRoutine } from './claude-routine.ts';
 import { seal } from './secrets.ts';
 import { StoreError } from './store.ts';
 
@@ -202,6 +203,22 @@ export async function handleConnectors(
       // A secret the worker made is answered here, once. No route answers it again.
       return json(201, { ...connectorView(connector), ...(given === undefined ? { secret } : {}) }, headers);
     }
+    if (body?.kind === 'claude-routine') {
+      // FRU-594: the Fire URL and the token of a Claude Code routine. Only the `/fire` of a routine on
+      // api.anthropic.com is taken, and the token is sealed and never answered again. Nothing is
+      // asked of Anthropic now: a call would start a run. The first call says whether the token works.
+      const url = parseFireUrl(body.url);
+      if (url === undefined) return json(400, { error: 'invalid-fire-url' }, headers);
+      const token = typeof body.token === 'string' ? body.token.trim() : undefined;
+      if (!isAcceptableToken(token)) return json(400, { error: 'invalid-token' }, headers);
+      const connector = await context.accounts.addConnector(workspaceId as string, {
+        kind: 'claude-routine',
+        label: routineLabel(url),
+        sealed: sealRoutine({ url, token }, context.secretsKey),
+      });
+
+      return json(201, connectorView(connector), headers);
+    }
     const apiKey = typeof body?.apiKey === 'string' ? body.apiKey.trim() : '';
     if (body?.kind !== 'linear' || apiKey === '') return json(400, { error: 'invalid-connector' }, headers);
 
@@ -266,7 +283,17 @@ export async function handleConnectors(
       const kept = await context.accounts.sealedKey(id);
       if (kept === undefined || kept.workspaceId !== workspaceId) return json(404, { error: 'not-found' }, headers);
 
-      return json(200, { deliveries: await context.accounts.deliveries(workspaceId as string, id) }, headers);
+      const pending = await context.accounts.deliveries(workspaceId as string, id);
+      // FRU-594: a routine says the sessions its calls started, beside the calls that did not arrive.
+      if (kept.kind === 'claude-routine') {
+        return json(
+          200,
+          { deliveries: pending, sessions: await context.accounts.agentSessions(workspaceId as string, id) },
+          headers,
+        );
+      }
+
+      return json(200, { deliveries: pending }, headers);
     }
     if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
     if (!allowed('manage-sites')) return forbidden();

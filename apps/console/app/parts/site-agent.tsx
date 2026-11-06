@@ -13,7 +13,7 @@ import { type Fetched, type Listed, known } from '../listed';
 import { problemOf } from '../problems';
 import { Button, Callout, Choice, LinkButton, Pick, Problem, Snippet, Toggle } from '../ui';
 import { useLocale } from '../use-locale';
-import { connectorName, shortHost } from './connector-parts';
+import { KINDS, connectorName, routineOf, shortHost } from './connector-parts';
 import { ReadProblem } from '../read-problem';
 
 /**
@@ -25,6 +25,28 @@ import { ReadProblem } from '../read-problem';
 
 /** The guide of a team that starts its agent on a note: `docs/agents.md`. */
 const GUIDE = 'https://fruitback.com/agents.html#start-an-agent-on-a-note';
+
+/** Where a call goes: an address by its host, a routine by its trigger (FRU-594). */
+function placeOf(each: Connector): string {
+  return each.kind === 'claude-routine' ? `${t(KINDS['claude-routine'].name)} · ${routineOf(each)}` : shortHost(each);
+}
+
+/** How the list of « Call » names a source: its place, after the name its workspace gave it. */
+function receiverLabel(each: Connector): string {
+  return each.name === undefined ? placeOf(each) : `${connectorName(each)} · ${placeOf(each)}`;
+}
+
+/** What a call to a routine carries in `text` (FRU-594): identifiers only, as the worker writes it. */
+function routineTextOf(site: Site, moment: AgentMoment): string {
+  return [
+    'Fruitback asks an agent to work on these notes. This block holds identifiers only.',
+    `Reason: ${moment}`,
+    `Site: ${site.id} (${site.origin})`,
+    'MCP: https://…/mcp',
+    'Notes (read each with get_note):',
+    '- FB-12: …',
+  ].join('\n');
+}
 
 /** What a call carries, as the board shows it: ids, never the text. */
 function payloadOf(site: Site, moment: AgentMoment): string {
@@ -73,7 +95,8 @@ export function SiteAgent({
   const [saved, setSaved] = useState(false);
   const [problem, setProblem] = useState<string | undefined>();
   const connectors = known(listed);
-  const receivers = (connectors ?? []).filter((each) => each.kind === 'rest');
+  // FRU-594: an address that receives, or a Claude Code routine.
+  const receivers = (connectors ?? []).filter((each) => each.kind === 'rest' || each.kind === 'claude-routine');
 
   const load = useCallback(async () => {
     setRead('loading');
@@ -150,11 +173,11 @@ export function SiteAgent({
           <p className="text-small">
             {read.waiting === 1
               ? t('1 call did not arrive at {host}. Fruitback tries again; you can try now from the address.', {
-                  host: shortHost(waitingAt),
+                  host: placeOf(waitingAt),
                 })
               : t('{count} calls did not arrive at {host}. Fruitback tries again; you can try now from the address.', {
                   count: read.waiting,
-                  host: shortHost(waitingAt),
+                  host: placeOf(waitingAt),
                 })}{' '}
             <LinkButton space="inline" to={`/w/${workspace.id}/connectors`}>
               {t('See the calls')}
@@ -196,7 +219,7 @@ export function SiteAgent({
                 <Choice
                   label={t('Call')}
                   hint={t(
-                    'An address of the workspace that receives (Connectors). Fruitback signs each call with its secret.',
+                    'An address of the workspace that receives, or a Claude Code routine (Connectors). Fruitback signs each call to an address with its secret.',
                   )}
                   value={chosen}
                   onChange={(value) => {
@@ -205,7 +228,7 @@ export function SiteAgent({
                   }}
                   options={receivers.map((each) => ({
                     value: each.id,
-                    label: each.name === undefined ? shortHost(each) : `${connectorName(each)} · ${shortHost(each)}`,
+                    label: receiverLabel(each),
                   }))}
                 />
               </div>
@@ -233,7 +256,11 @@ export function SiteAgent({
                   },
                 ]}
               />
-              <Snippet label={t('What the call carries')}>{payloadOf(site, moment)}</Snippet>
+              <Snippet label={t('What the call carries')}>
+                {receivers.find((each) => each.id === chosen)?.kind === 'claude-routine'
+                  ? routineTextOf(site, moment)
+                  : payloadOf(site, moment)}
+              </Snippet>
             </>
           ) : null}
           <p className="text-hint text-muted">
