@@ -87,9 +87,11 @@ for (const scheme of ['light', 'dark'] as const) {
     await expect(page.getByRole('heading', { name: 'Nos formules' })).toBeVisible();
     await mount(page);
 
-    // A pin on the page first: a note with no file, to the worker of the suite.
+    // A pin on the page first: a note with no file, to the worker of the suite. The capture of the
+    // element joins the note at the open (FRU-609); its cross takes it away, and nothing of it goes.
     await page.getByRole('button', { name: 'Laisser une note' }).click();
     await page.locator('[data-testid="card-espresso"] .add').click();
+    await removeElementShot(page);
     await page.getByPlaceholder('Que faut-il changer\u202F?').fill('Une note pour son pin');
     await page.getByRole('button', { name: 'Envoyer', exact: true }).click();
     await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
@@ -98,6 +100,7 @@ for (const scheme of ['light', 'dark'] as const) {
 
     await page.getByRole('button', { name: 'Laisser une note' }).click();
     await page.locator('[data-testid="card-latte"] .add').click();
+    await removeElementShot(page);
     const files = page.getByRole('dialog', { name: 'Nouvelle note', exact: true });
     await expect(files).toBeVisible();
     await expect(page.locator('[data-fruitback-attach-file-input]')).toBeHidden();
@@ -141,8 +144,9 @@ for (const scheme of ['light', 'dark'] as const) {
     const taken = (await page.evaluate(() => (globalThis as unknown as { areas: unknown[] }).areas)) as {
       left: number;
     }[];
-    expect(taken).toHaveLength(1);
-    expect(taken[0]?.left).toBeCloseTo(390 * 0.25 + 10, 0);
+    // Two captures of the element first, one at each open (FRU-609), then the area chosen.
+    expect(taken).toHaveLength(3);
+    expect(taken[2]?.left).toBeCloseTo(390 * 0.25 + 10, 0);
 
     // Esc cancels, nothing is joined, the focus is back on the capture, and the pins are back.
     await page.keyboard.press('ArrowDown');
@@ -163,8 +167,10 @@ for (const scheme of ['light', 'dark'] as const) {
     await expect(page.locator('.fruitback-composer-file')).toHaveCount(2);
     await expect(page.locator('.fruitback-composer-file-detail').nth(1)).toHaveText('La capture n’a pas été prise');
     expect(await pinShown(page)).toBe(true);
-    // No capture saw a pin.
+    // No capture saw a pin: the two of the element, the area, the page.
     expect(await page.evaluate(() => (globalThis as unknown as { pinsSeen: boolean[] }).pinsSeen)).toEqual([
+      false,
+      false,
       false,
       false,
     ]);
@@ -211,12 +217,25 @@ async function boxes(page: Page): Promise<{ composer: Box; trigger: Box; menu: B
 }
 
 /** Opens the composer on the latte card, with a note typed: the text that nothing may clear. */
+/**
+ * The capture of the element joins the note at the open (FRU-609), framed, and waits for the note.
+ * These specs are about the other files: its cross takes it away, and the field is as before.
+ */
+async function removeElementShot(page: Page): Promise<void> {
+  const shot = page.locator('.fruitback-composer-file').filter({ hasText: 'element.png' });
+  await expect(shot).toHaveAttribute('data-fruitback-file', 'local');
+  await expect(shot.locator('[data-fruitback-file-thumb] img')).toHaveCount(1);
+  await shot.getByRole('button', { name: 'Retirer element.png' }).click();
+  await expect(page.locator('.fruitback-composer-file')).toHaveCount(0);
+}
+
 async function openOnLatte(page: Page, url: string): Promise<void> {
   await page.goto(url);
   await expect(page.getByRole('heading', { name: 'Nos formules' })).toBeVisible();
   await mount(page);
   await page.getByRole('button', { name: 'Laisser une note' }).click();
   await page.locator('[data-testid="card-latte"] .add').click();
+  await removeElementShot(page);
   await page.getByPlaceholder('Que faut-il changer\u202F?').fill('Le texte reste');
   // The composer rises and scales as it comes: its box is its own only once that is over.
   await page.evaluate(() =>

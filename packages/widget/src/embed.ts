@@ -854,6 +854,10 @@ export function init(options: FruitbackOptions): Fruitback {
     if (take === undefined) return undefined;
     const container = host.root.host as HTMLElement;
     const visibility = container.style.visibility;
+    // The pins hide by their own rule (FRU-351): a pin draws itself visible inside a hidden host. The
+    // capture of the element is taken with no area to choose, so it sets that rule here too (FRU-609).
+    const shooting = container.hasAttribute('data-fruitback-shooting');
+    container.toggleAttribute('data-fruitback-shooting', true);
     container.style.visibility = 'hidden';
     try {
       // Two frames: the page is painted without the widget before the browser takes it.
@@ -865,6 +869,7 @@ export function init(options: FruitbackOptions): Fruitback {
       return isCapturePermissionRefusal(error) ? 'permission' : undefined;
     } finally {
       container.style.visibility = visibility;
+      container.toggleAttribute('data-fruitback-shooting', shooting);
     }
   }
 
