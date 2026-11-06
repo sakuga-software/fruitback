@@ -98,6 +98,8 @@ export default defineContentScript({
     window[PAGE_HOLDER] = { tag, ...(proof === undefined ? {} : { proof }), version: VERSION };
 
     let widget: ReturnType<typeof init> | undefined;
+    /** The colour of « Appearance » said last (FRU-601). `undefined`: the accent of the widget. */
+    let actionColor: string | undefined;
     /** The captures asked for and not answered yet, by the id of the request (FRU-44). */
     const pictures = new Map<string, (answer: CaptureResponseMessage) => void>();
 
@@ -287,6 +289,16 @@ export default defineContentScript({
       // with no new widget: a note being written stays.
       if (message.kind === 'dock') {
         widget?.moveDock(message.position);
+
+        return;
+      }
+
+      // FRU-601: the colour of « Appearance », for « Send ». Only our widget hears it, and it paints
+      // with no new widget: a note being written stays.
+      if (message.kind === 'action-color') {
+        // Kept for the next widget too: a widget built later starts in this colour (raised in review).
+        actionColor = message.color;
+        widget?.setActionColor(message.color);
 
         return;
       }
@@ -482,6 +494,9 @@ export default defineContentScript({
         ...(message.name !== undefined ? { reporterName: message.name } : {}),
         // FRU-411: the head of the composer writes the selector only with « Show CSS selectors ».
         selectorInHead: 'with-selectors',
+        // FRU-601: the colour said last, so « Send » never shows the accent before the bridge says
+        // the colour again after this mount.
+        ...(actionColor !== undefined ? { actionColor } : {}),
       });
       mounted = signature;
       // FRU-299: the side panel asks for the notes again when they change, and opens the row of a

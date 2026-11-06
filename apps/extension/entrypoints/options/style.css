@@ -821,3 +821,135 @@ button.pref-link {
 .pref-problem:empty {
   display: none;
 }
+
+/*
+  « Appearance » (FRU-601): the four colours, a colour of your own, and the preview of « Leave a note »
+  and « Send » in the colour chosen. The preview reads the properties that src/action-color.ts
+  writes, as the popup and the side panel do: no colour chosen is the accent, in both schemes.
+*/
+.appearance-intro {
+  max-width: 620px;
+  color: var(--muted);
+}
+
+.appearance-presets {
+  margin: 0;
+  padding: 14px 16px;
+  border: 0;
+}
+
+.appearance-presets legend {
+  float: left;
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 0;
+}
+
+.appearance-swatches {
+  display: flex;
+  clear: both;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.appearance-swatch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 14px 0 10px;
+  border: 1px solid var(--line-control);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+
+.appearance-swatch:has(input:checked) {
+  border-color: var(--text);
+  box-shadow: 0 0 0 1px var(--text);
+  font-weight: 600;
+}
+
+.appearance-swatch input {
+  margin: 0;
+  accent-color: var(--text);
+}
+
+.appearance-chip {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+
+.appearance-own {
+  border-top: 1px solid var(--line-row);
+}
+
+.appearance-said {
+  flex: 1 0 100%;
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.appearance-said:empty {
+  display: none;
+}
+
+.appearance-said[data-refused='true'] {
+  color: var(--alert-text);
+}
+
+.appearance-foot {
+  border-top: 1px solid var(--line-row);
+}
+
+.appearance-preview {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.appearance-leave,
+.appearance-send {
+  display: inline-flex;
+  align-items: center;
+  background: var(--action, var(--accent));
+  color: var(--on-action, var(--on-accent));
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+/* « Leave a note » of the popup, at its height. */
+.appearance-leave {
+  gap: 10px;
+  height: 56px;
+  padding: 0 20px;
+  border-radius: var(--radius-card);
+  font-size: 16px;
+}
+
+/* « Send » of the composer: a pill of 13 px. */
+.appearance-send {
+  gap: 6px;
+  height: 30px;
+  padding: 0 14px 0 12px;
+  border-radius: var(--radius-pill);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.appearance-preview .appearance-mark {
+  color: var(--action-mark, currentColor);
+}
+
+.appearance-leave .appearance-mark {
+  width: 18px;
+  height: 18px;
+}
+
+.appearance-send .appearance-mark {
+  width: 12px;
+  height: 12px;
+}

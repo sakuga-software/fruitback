@@ -10,6 +10,7 @@ import { rememberLanguage } from '../../src/language-sync.ts';
 import { type ConnectState, type PendingConnect, pollConnect } from '../../src/connect.ts';
 import { type PopupState, decide } from '../../src/popup-state.ts';
 import { showUpdateLine } from '../../src/update-notice-browser.ts';
+import { followActionColor } from '../../src/action-color-browser.ts';
 import { keepInPopup } from '../../src/update-notice.ts';
 import {
   type Account,
@@ -91,6 +92,9 @@ let markFirstDrawn: () => void = () => undefined;
 const firstDrawn = new Promise<void>((resolve) => {
   markFirstDrawn = resolve;
 });
+
+// FRU-601: « Leave a note » in the colour of « Appearance ».
+followActionColor(document);
 
 /** The language of the account when the extension knows it, the browser's own otherwise. */
 const spoken = storedLanguage(browser.storage.local).then((kept) => {

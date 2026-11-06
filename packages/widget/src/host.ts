@@ -1,4 +1,5 @@
 import { type DockPosition, parseDockPosition } from './dock-position.ts';
+import { paintActionColor } from './action-color.ts';
 import type { NoteSource } from '@fruitback/shared';
 import { isElement } from './dom.ts';
 import { componentOf } from './capture.ts';
@@ -76,6 +77,8 @@ export type CaptureHostOptions = {
   translator?: Translator;
   /** The corner of the dock (FRU-443). Left out: the bottom corner at the end of the line. */
   position?: DockPosition;
+  /** The colour of « Send » (FRU-601), `#rrggbb`. Left out, or under 4.5:1 with white: the accent. */
+  actionColor?: string;
 };
 
 export type CaptureHost = {
@@ -90,6 +93,8 @@ export type CaptureHost = {
   dock: HTMLElement;
   /** Moves the dock, and what opens from it, to another corner (FRU-443). `undefined`: back to the default. */
   moveDock(position: DockPosition | undefined): void;
+  /** Paints « Send » in a colour (FRU-601). `undefined`, or a colour refused: the accent again. */
+  paintAction(color: string | undefined): void;
   start(): void;
   stop(): void;
   capturing(): boolean;
@@ -158,6 +163,9 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   // Written on the host element rather than into the stylesheet, so an inline custom property wins
   // over the `:host` declaration without needing a more specific selector.
   applyTheme(container, options.theme);
+  // FRU-601: after the theme, on the same element. Only « Send » reads these properties.
+  const paintAction = (color: string | undefined): void => paintActionColor(container, color);
+  paintAction(options.actionColor);
 
   const root = container.attachShadow({ mode: 'open' });
   // Tokens first: every other stylesheet in this root — the overlay's, the composer's, the panel's —
@@ -659,6 +667,7 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
     panel,
     dock,
     moveDock,
+    paintAction,
     start,
     stop,
     capturing: () => capturing,

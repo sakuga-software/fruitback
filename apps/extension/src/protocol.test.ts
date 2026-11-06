@@ -460,3 +460,21 @@ describe('the message of « Corner of the widget » (FRU-443)', () => {
     for (const corner of WIDGET_DOCK_POSITIONS) assert.equal(parseDockPosition(corner), corner);
   });
 });
+
+describe('the message of the colour of « Appearance » (FRU-601)', () => {
+  it('reads a colour « Send » can take, or none, and carries no other field', () => {
+    assert.deepEqual(parseBridgeMessage({ channel: CHANNEL, kind: 'action-color', color: '#C2410C', extra: 1 }), {
+      channel: CHANNEL,
+      kind: 'action-color',
+      color: '#c2410c',
+    });
+    assert.deepEqual(parseBridgeMessage({ channel: CHANNEL, kind: 'action-color' }), {
+      channel: CHANNEL,
+      kind: 'action-color',
+    });
+    // Not a colour, or a colour white text cannot be read on: no message.
+    for (const color of ['red', '#facc15', '#ffffff', 'url(x)', '', 1, null, {}]) {
+      assert.equal(parseBridgeMessage({ channel: CHANNEL, kind: 'action-color', color }), undefined, String(color));
+    }
+  });
+});

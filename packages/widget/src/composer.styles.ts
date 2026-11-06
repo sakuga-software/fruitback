@@ -378,15 +378,16 @@ export const STYLES = `
 }
 .fruitback-composer-ghost { padding: 0 12px; background: transparent; color: var(--fruitback-color-text-muted); }
 .fruitback-composer-ghost:hover:not([disabled]) { background: var(--fruitback-color-surface-sunken) padding-box; }
+/* FRU-601: the colour a host gives with actionColor, else the accent. */
 .fruitback-composer-send {
   padding-inline: 12px 14px;
-  background: var(--fruitback-color-accent) padding-box;
-  color: var(--fruitback-color-on-accent);
+  background: var(--fruitback-color-action, var(--fruitback-color-accent)) padding-box;
+  color: var(--fruitback-color-on-action, var(--fruitback-color-on-accent));
   letter-spacing: -0.006em;
 }
 /* The drop of the mark, 12 px tall. */
-.fruitback-composer-send .fruitback-icon { width: 10px; height: 12px; }
-.fruitback-composer-send:hover:not([disabled]) { background: var(--fruitback-color-accent-strong) padding-box; }
+.fruitback-composer-send .fruitback-icon { width: 10px; height: 12px; color: var(--fruitback-color-action-mark, currentColor); }
+.fruitback-composer-send:hover:not([disabled]) { background: var(--fruitback-color-action-strong, var(--fruitback-color-accent-strong)) padding-box; }
 .fruitback-composer-send[disabled] { opacity: 0.55; cursor: default; }
 .fruitback-composer-keep[hidden], .fruitback-composer-sign-in[hidden] { display: none; }
 /* « Sign in again » is the way out of the sentence above it: it reads as an action, in the text colour. */
