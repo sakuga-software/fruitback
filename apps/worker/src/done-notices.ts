@@ -40,6 +40,11 @@ export type DoneNotices = {
    */
   watch(notice: DoneNotice, now: number): Promise<boolean>;
   /**
+   * Whether this note of the site can take a person to tell now: the index holds it, and it has none.
+   * Read before the count of the site, so a request that `watch` would refuse costs the site nothing.
+   */
+  open(site: string, note: string): Promise<boolean>;
+  /**
    * Claims the rows of these notes of the site until `now + DONE_CLAIM_MS`, and answers them. A row
    * another read claimed, and that claim has not run out, is absent: two reads at once send one
    * message. The row stays until `sent`: a process that stops while it sends loses nothing.

@@ -149,6 +149,9 @@ function memoryNotices(rows: DoneNotice[] = []): DoneNotices & { rows: DoneNotic
 
       return true;
     },
+    async open(site, note) {
+      return !rows.some((row) => row.site === site && row.note === note);
+    },
     async take(site, notes) {
       const taken = rows.filter((row) => row.site === site && notes.includes(row.note) && !claimed.has(key(row)));
       for (const row of taken) claimed.add(key(row));
@@ -433,6 +436,40 @@ describe('POST /feedback/<note>/notify (FRU-604)', () => {
       );
     }
     assert.deepEqual(answers, [...Array.from({ length: NOTIFY_SITE_LIMIT }, () => 201), 429]);
+  });
+
+  it('counts no refused request against the site', async () => {
+    const { world, store, notices, site } = await aPublicSite();
+    const tokens: string[] = [];
+    for (const id of ['nq_0', 'nq_1']) {
+      const planted = await plant(
+        world,
+        store,
+        notices,
+        noteFixture({ id, page: { url: PAGE, path: '/pricing' }, client: { id: site, name: 'Acme' } }),
+      );
+      tokens.push(planted.body.notify.token as string);
+    }
+    assert.equal(
+      (await notify(world, notices, site, 'nq_0', { email: 'a@example.com', token: tokens[0] })).status,
+      201,
+    );
+    // Many callers ask again for the note that has its address: each is refused, and the site counts none.
+    for (let at = 0; at < NOTIFY_SITE_LIMIT + 2; at += 1) {
+      const again = await notify(
+        world,
+        notices,
+        site,
+        'nq_0',
+        { email: 'b@example.com', token: tokens[0] },
+        `203.0.113.${at + 100}`,
+      );
+      assert.equal(again.status, 409);
+    }
+    assert.equal(
+      (await notify(world, notices, site, 'nq_1', { email: 'c@example.com', token: tokens[1] })).status,
+      201,
+    );
   });
 
   it('is no route on a worker that sends no mail, and offers no token there', async () => {

@@ -2372,10 +2372,9 @@ visitor. It is public: no session, no cookie.
   all callers, counted apart from the requests and in the same database, before any write: `429`.
   test:`takes 3 addresses a minute from one caller, then answers 429`,
   test:`takes 10 addresses a minute for one site, from many callers`.
-  The count of the site is taken before the write, so it holds strictly, and a request that
-  then writes nothing (`409`) still counts. One caller is stopped at its own 3 first, and costs the
-  site 3 at most; keeping 10 others out for a minute takes 4 callers with a valid token each, which
-  each comes from a note planted under the limit of all requests.
+  The count of the site is taken before the write, so it holds strictly, and only for a note that
+  can still take an address: a request that would be `409` costs its caller alone, never the site.
+  test:`counts no refused request against the site`.
 - What is sent. One message for each note, when a read of its page or a change of its status says
   that it is done. One statement claims the row for 10 minutes and answers it, so two reads at once
   send one message (test:`answers a row to one of two takes at once`). The row goes once the

@@ -753,6 +753,22 @@ export function createPostgresDoneNotices(database: Database): DoneNotices {
       });
     },
 
+    async open(site, note) {
+      const [held] = await run((db) =>
+        db
+          .select({ note: note_index.note_id, waits: done_notices.note_id })
+          .from(note_index)
+          .leftJoin(
+            done_notices,
+            and(eq(done_notices.site_id, note_index.site_id), eq(done_notices.note_id, note_index.note_id)),
+          )
+          .where(and(eq(note_index.site_id, site), eq(note_index.note_id, note)))
+          .limit(1),
+      );
+
+      return held !== undefined && held.waits === null;
+    },
+
     async take(site, notes, now) {
       if (notes.length === 0) return [];
       // One statement: of two reads of one page at once, one claims each row, so one message leaves.

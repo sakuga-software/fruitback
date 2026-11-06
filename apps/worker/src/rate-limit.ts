@@ -129,21 +129,21 @@ export const NOTIFY_LIMIT = 3;
  */
 export const NOTIFY_SITE_LIMIT = 10;
 
-/** Whether this address may give one more address now, and this site take one. Each counts in its own key. */
-export async function checkNotifyLimit(
-  kv: Kv,
-  clientIp: string,
-  site: string,
-  now: number = Date.now(),
-): Promise<boolean> {
-  const caller = await chargeRateLimit(kv, clientIp, 1, {
+/** Whether this caller may give one more address now (FRU-604). Counted in its own key. */
+export function checkNotifyCaller(kv: Kv, clientIp: string, now: number = Date.now()): Promise<boolean> {
+  return chargeRateLimit(kv, clientIp, 1, {
     limit: NOTIFY_LIMIT,
     now,
     counter: (ip, window) => `fruitback:rate:notify:${JSON.stringify([ip, window])}`,
   });
-  // A caller over its own limit costs the site nothing: one caller cannot spend the limit of a site alone.
-  if (!caller) return false;
+}
 
+/**
+ * Whether this site may take one more address now (FRU-604), from every caller. Asked after the
+ * caller's count and after the note was found open, so one caller, or a request that would be refused,
+ * cannot spend the limit of a site.
+ */
+export function checkNotifySite(kv: Kv, site: string, now: number = Date.now()): Promise<boolean> {
   return chargeRateLimit(kv, site, 1, {
     limit: NOTIFY_SITE_LIMIT,
     now,

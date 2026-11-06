@@ -4,7 +4,7 @@ import { normalizeClientId } from './clients.ts';
 import { type DoneNotices, noticeLocale, readEmail, readNotifyToken } from './done-notices.ts';
 import { type Kv, KvError } from './kv.ts';
 import { routingFailure } from './note-helpers.ts';
-import { checkNotifyLimit } from './rate-limit.ts';
+import { checkNotifyCaller, checkNotifySite } from './rate-limit.ts';
 import type { CallerChecks, Served } from './request-context.ts';
 import { StoreError } from './store.ts';
 
@@ -18,7 +18,8 @@ import { StoreError } from './store.ts';
  * - **One address for a note, the first one** (`409 not-taken`): a second answer of the same widget,
  *   or a note that the index does not hold, writes nothing.
  * - **`NOTIFY_LIMIT` a minute from one caller, and `NOTIFY_SITE_LIMIT` for a site**, counted apart
- *   from the requests, before any write (`429`).
+ *   from the requests, before any write (`429`). The site counts only a request for a note that can
+ *   take an address: a `409` costs the caller alone.
  * - **A worker that cannot send, or keeps no index, has no such route** (`404`), as a worker with no
  *   mailer has no `/console/auth/email`.
  */
@@ -63,9 +64,11 @@ export async function postNotify(
   if (email === undefined) return json(400, { error: 'invalid-email' }, corsHeaders);
 
   try {
-    if (!(await checkNotifyLimit(kv, context.clientIp, site, now))) {
-      return json(429, { error: 'rate-limited' }, corsHeaders);
-    }
+    // The caller's count first, then whether the note can take an address, then the count of the
+    // site: a request that would be refused costs the caller, never the site.
+    if (!(await checkNotifyCaller(kv, context.clientIp, now))) return json(429, { error: 'rate-limited' }, corsHeaders);
+    if (!(await context.notices.open(site, note))) return json(409, { error: 'not-taken' }, corsHeaders);
+    if (!(await checkNotifySite(kv, site, now))) return json(429, { error: 'rate-limited' }, corsHeaders);
     const taken = await context.notices.watch({ site, note, email, locale: noticeLocale(body.locale) }, now);
 
     return taken ? json(201, { ok: true }, corsHeaders) : json(409, { error: 'not-taken' }, corsHeaders);
