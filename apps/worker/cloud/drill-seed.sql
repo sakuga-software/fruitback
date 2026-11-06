@@ -153,6 +153,12 @@ INSERT INTO note_index (site_id, note_id, workspace_id, page_url, excerpt, stage
   ('site_drill1', 'sd_drill1', 'ws_drill1', 'https://staging.acme.dev/pricing', 'The price is cut off on a phone.', 'new', 'script', 'visitor', NULL, 'fruitback', NULL, 'FB-1', NULL, 1, 1),
   ('site_drill1', 'sd_drill9', 'ws_drill1', 'https://staging.acme.dev/', 'Sent to the hook.', 'done', 'extension', 'member', 'acc_drill1', 'connector', 'con_drill1', 'hook-1', NULL, 2, 3);
 
+-- Who to tell when a note is done (FRU-604): the account of a member, and the address that a
+-- visitor gave for one note, which a read is sending now (`claimed_until`). Not a real address.
+INSERT INTO done_notices (site_id, note_id, account_id, email, locale, created_at, expires_at, claimed_until) VALUES
+  ('site_drill1', 'sd_drill9', 'acc_drill1', NULL, NULL, 1, 7776000001, NULL),
+  ('site_drill1', 'sd_drill1', NULL, 'visitor@example.com', 'fr', 2, 7776000002, 3);
+
 -- The day a member was last seen in the workspace (FRU-249).
 INSERT INTO last_seen (member_id, day) VALUES
   ('mem_drill1', '2026-10-11');

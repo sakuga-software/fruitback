@@ -13,6 +13,7 @@ import {
   type NoteSource,
   type NoteStage,
   type NoteStatus,
+  NOTE_STAGES,
   noteCommentSchema,
   noteSchema,
 } from '@fruitback/shared';
@@ -34,6 +35,7 @@ import {
 import type { FruitbackTheme } from './theme.ts';
 import type { FruitbackTransport } from './transport.ts';
 import { callWorker, errorOf, noteWriteFailure } from './worker-client.ts';
+import { type NotifyAsk, createNotifyAsk } from './notify-ask.ts';
 import {
   type AttachOffer,
   type AttachRefusal,
@@ -47,6 +49,7 @@ import {
   type BatchSent,
   type Composer,
   type ElementCapture,
+  type NotifyOffer,
   type SendFailure,
   type SentAs,
   type SentWithoutPicture,
@@ -71,6 +74,8 @@ import {
 } from './destinations.ts';
 import { type FruitbackMessages, createTranslator, languageOf } from './messages.ts';
 import {
+  type CheckAnswer,
+  type CheckFailure,
   type EditAnswer,
   type EditFailure,
   type Overlay,
@@ -209,6 +214,12 @@ export type FruitbackOptions = {
    * reader from a visitor of the site, and the rule of the product says no.
    */
   replies?: boolean;
+  /**
+   * Whether the widget asks a visitor for an address after a note, to write once when it is done
+   * (FRU-604). `false`: never. The extension sets it on every widget it mounts: whoever installed it
+   * is a reviewer, and the badge on its icon tells them already.
+   */
+  askForAddress?: boolean;
   /**
    * Open the sign-in of the host (FRU-315). Given, `signedOut(true)` turns the launch button into
    * « Sign in to leave notes », the list says to sign in, and a send refused for a session that ended
@@ -456,6 +467,9 @@ export function init(options: FruitbackOptions): Fruitback {
     language: languageOf(document),
   });
 
+  // FRU-604: whether this browser answered « Want to know when it's fixed? » already. See `notify-ask.ts`.
+  const notifyAsk = createNotifyAsk(storageOf(view));
+
   const config = createConfigStore({
     // `screenshot` off at the start: it is the reporter's to turn on, and an image of the page they
     // are looking at is not something to start sending because a default said so.
@@ -594,6 +608,26 @@ export function init(options: FruitbackOptions): Fruitback {
         return answer;
       },
     },
+    // FRU-603: the verdict of the author, from the thread of the note, in every mode. The worker
+    // decides who may: the read says `mine` to the author it names, and the thread offers it then.
+    // No read after it, as for an edit: the reply and the stage go on the issue, and the lists follow.
+    ...(options.replies === false
+      ? {}
+      : {
+          check: {
+            send: async (issue: NoteIssue, verdict: 'fixed' | 'wrong', body?: string) => {
+              const answer = await sendCheck(options, view, issue, verdict, body);
+              // Kept with no word of what the store made of it: no read here, which would close the
+              // thread (raised in review). The lists outside the page read again; the pins at the next read.
+              if (answer === 'kept') tellNotes({ kind: 'list' });
+              if (typeof answer === 'string') return answer;
+              sidebar.refresh();
+              tellNotes({ kind: 'list' });
+
+              return answer;
+            },
+          },
+        }),
   });
 
   const stages = createOfferedStages();
@@ -601,6 +635,8 @@ export function init(options: FruitbackOptions): Fruitback {
   // The worker's word at the last read that answered (FRU-112): it would sign a note of this reader.
   // And whether it takes several notes in one request (FRU-124).
   const readerIdentity: ReaderIdentity = { identified: false, canReply: false, canWrite: true };
+  /** Whether the worker names the reporter: a token of the host, a session of the extension, or one that ended. */
+  const identifiedNow = (): boolean => options.identityToken !== undefined || readerIdentity.identified || ended;
   /** The launch button offers no note (FRU-330): see `closeNotesIfRefused`. */
   let notesClosed = false;
   /** A read answered or failed, so `notesClosed` says what the worker said (FRU-330). */
@@ -912,7 +948,7 @@ export function init(options: FruitbackOptions): Fruitback {
     // extension does, and only the worker can say so: the widget holds a transport and no token.
     // Signed out (FRU-315), the note is a member's all the same: the name of a visitor would say it
     // can go without a session.
-    identified: () => options.identityToken !== undefined || readerIdentity.identified || ended,
+    identified: identifiedNow,
     // The places are the worker's word at the last read, and the choice is a preference of this
     // browser on this site, kept with the others (FRU-123).
     destinations: {
@@ -989,7 +1025,20 @@ export function init(options: FruitbackOptions): Fruitback {
       const sent = await submitOne(note, reporter, chosen, attachments);
       if (typeof sent === 'string') return sent;
       const missed = sent.picture === 'missed' ? { picture: 'missed' as const } : {};
-      if (sent.sentAs !== undefined) return { sentAs: sent.sentAs, ...missed };
+      // FRU-604: « Want to know when it's fixed? », for a visitor the worker gave a token to, once
+      // per browser. A member, a reporter the site names, and a widget the extension mounts
+      // (`askForAddress: false`) are never asked.
+      const notify =
+        options.askForAddress !== false &&
+        sent.token !== undefined &&
+        sent.id !== undefined &&
+        !identifiedNow() &&
+        notifyAsk.asks()
+          ? notifyOffer(options, translator.locale, sent.id, sent.token, notifyAsk)
+          : undefined;
+      if (sent.sentAs !== undefined || notify !== undefined) {
+        return { sentAs: sent.sentAs ?? {}, ...missed, ...(notify === undefined ? {} : { notify }) };
+      }
 
       return sent.picture === 'missed' ? { picture: 'missed' as const } : true;
     },
@@ -1020,12 +1069,15 @@ export function init(options: FruitbackOptions): Fruitback {
     reporter: NoteReporter | undefined,
     chosen: string | undefined,
     attachments: readonly string[],
-  ): Promise<SendFailure | { id?: string; sentAs?: SentAs['sentAs']; picture?: 'missed' }> {
+  ): Promise<SendFailure | { id?: string; sentAs?: SentAs['sentAs']; picture?: 'missed'; token?: string }> {
     const destination = destinationToSend(destinations.get(), chosen);
     // The element this note is about, as it was sent: the composer may stand on another by the answer.
     const about = typingPlace;
     let noteId: string | undefined;
+    // FRU-604: the token the worker gave to ask this visitor for an address, for this note.
+    let token: string | undefined;
     const planted = await plant({
+      onNotify: (given) => (token = given),
       note,
       target,
       place,
@@ -1054,12 +1106,14 @@ export function init(options: FruitbackOptions): Fruitback {
     // way to it when the reader may open it, and the number of its pin.
     const shown = overlay.resolutions().find((entry) => entry.issue.note.id === noteId);
     const missed = planted === true ? {} : { picture: 'missed' as const };
-    if (shown === undefined) return { ...(noteId === undefined ? {} : { id: noteId }), ...missed };
+    const given = token === undefined ? {} : { token };
+    if (shown === undefined) return { ...(noteId === undefined ? {} : { id: noteId }), ...missed, ...given };
 
     return {
       ...(noteId === undefined ? {} : { id: noteId }),
       sentAs: { identifier: shown.issue.identifier, url: shown.issue.url, number: shown.number },
       ...missed,
+      ...given,
     };
   }
 
@@ -1359,7 +1413,7 @@ export function init(options: FruitbackOptions): Fruitback {
       const issue = readIssues.find((each) => each.note.id === id);
       if (issue === undefined) return 'refused';
       const sent = await sendCheck(options, view, issue, verdict).catch((): ReplyFailure => 'retry');
-      if (sent !== 'sent') return sent;
+      if (sent !== 'kept' && typeof sent === 'string') return sent;
       // The store moved the note, or wrote the verdict: the next read says it, never a guess here.
       await read();
 
@@ -1549,6 +1603,7 @@ export async function plant({
   config,
   options,
   onNote,
+  onNotify,
   attachments = [],
 }: {
   note: string;
@@ -1564,6 +1619,8 @@ export async function plant({
   onNote?: (id: string) => void;
   /** The ids in transit of the files of the note (FRU-332). */
   attachments?: readonly string[];
+  /** The token the worker gave to ask for an address for this note (FRU-604), when it gave one. */
+  onNotify?: (token: string) => void;
 }): Promise<true | SentWithoutPicture | SendFailure> {
   const made = await noteFor({ text: note, target, place, reporter, config, options });
   if (made === undefined) return 'retry';
@@ -1580,8 +1637,70 @@ export async function plant({
   });
 
   if (!response.ok) return failureOf(response);
+  const token = notifyTokenOf(response.body);
+  if (token !== undefined) onNotify?.(token);
 
   return missedPicture ? { picture: 'missed' } : true;
+}
+
+/** The `localStorage` of the page, or `null` when the browser refuses it (a sandbox, a setting). */
+function storageOf(view: Window): Storage | null {
+  try {
+    return view.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * « Notify me » and « No thanks » of a note just sent (FRU-604): `POST /feedback/<note>/notify` with
+ * the address and the token of the note. The answer of the browser is kept only once the worker took
+ * the address, or when the note can take none any more.
+ */
+function notifyOffer(
+  options: FruitbackOptions,
+  locale: string,
+  noteId: string,
+  token: string,
+  ask: NotifyAsk,
+): NotifyOffer {
+  return {
+    async send(email) {
+      const response = await callWorker(options, {
+        url: `${options.endpoint}/feedback/${encodeURIComponent(noteId)}/notify?client=${encodeURIComponent(options.clientId)}`,
+        method: 'POST',
+        contentType: 'application/json',
+        body: JSON.stringify({ email, token, locale }),
+      }).catch(() => undefined);
+      if (response === undefined) return 'retry';
+      if (response.ok) {
+        ask.accepted();
+
+        return 'sent';
+      }
+      if (response.status === 400 && errorOf(response.body) === 'invalid-email') return 'invalid';
+      if (response.status === 429) return 'wait';
+      // The time of the token ran out, the note has an address, or the worker takes none now.
+      if (response.status === 403 || response.status === 404 || response.status === 409) return 'gone';
+
+      return 'retry';
+    },
+    decline() {
+      ask.declined();
+    },
+  };
+}
+
+/** `notify.token` of the answer to a note (FRU-604): a short string, or nothing. */
+function notifyTokenOf(body: string): string | undefined {
+  try {
+    const notify = (JSON.parse(body) as { notify?: { token?: unknown } } | null)?.notify;
+    const token = notify?.token;
+
+    return typeof token === 'string' && token.length > 0 && token.length <= 200 ? token : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -1753,30 +1872,51 @@ async function sendEdit(
 /**
  * A verdict on a note (FRU-294), through the transport of the host. `refused`: the worker said no for
  * this reader or this note (`403`, `404`, a `409` of a note not done or checked already); nothing
- * moved, and trying again does not change it. `409 check-in-progress` is `retry`.
+ * moved, and trying again does not change it. `409 check-in-progress` is `retry`. `body`: what the
+ * author typed under « Still wrong » (FRU-603), written in the same reply of the store.
+ *
+ * The answer: the reply the store wrote and the stage of the note now, as the worker answers them. A `2xx`
+ * that says neither is `kept`: the verdict went, and only a read says what the store made of it.
  */
 async function sendCheck(
   options: FruitbackOptions,
   view: Window & typeof globalThis,
   issue: NoteIssue,
   verdict: 'fixed' | 'wrong',
-): Promise<'sent' | ReplyFailure | 'refused'> {
+  body?: string,
+): Promise<CheckAnswer | CheckFailure | 'kept'> {
   const response = await callWorker(options, {
     url: `${options.endpoint}/feedback/${encodeURIComponent(issue.id)}/check?client=${encodeURIComponent(options.clientId)}`,
     method: 'POST',
     contentType: 'application/json',
-    body: JSON.stringify({ url: canonicalizePageUrl(view.location.href), verdict }),
+    body: JSON.stringify({
+      url: canonicalizePageUrl(view.location.href),
+      verdict,
+      ...(body === undefined ? {} : { body }),
+    }),
   });
 
   // Another verdict on this note is being written (FRU-294): it is the moment, not a refusal, and a
   // second try once it is written is answered (raised in review).
-  return (
-    noteWriteFailure(
-      response,
-      (answer) =>
-        REFUSED.has(answer.status) && !(answer.status === 409 && errorOf(answer.body) === 'check-in-progress'),
-    ) ?? 'sent'
+  const failure = noteWriteFailure(
+    response,
+    (answer) => REFUSED.has(answer.status) && !(answer.status === 409 && errorOf(answer.body) === 'check-in-progress'),
   );
+  if (failure !== undefined) return failure;
+  // Any JSON may come back: only an object can hold the reply and the stage. `null`, a string, a
+  // number or a boolean says nothing of them, as no body does.
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(response.body);
+  } catch {
+    return 'kept';
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return 'kept';
+  const answer = parsed as { comment?: unknown; stage?: unknown };
+  const comment = noteCommentSchema.safeParse(answer.comment);
+  const stage = NOTE_STAGES.find((each) => each === answer.stage);
+
+  return comment.success && stage !== undefined ? { comment: comment.data, stage } : 'kept';
 }
 
 /** What the worker answers to a write about a note it takes from nobody now: `403`, `404`, `409`. */

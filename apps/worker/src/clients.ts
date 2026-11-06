@@ -134,6 +134,11 @@ export type ClientConfig = z.infer<typeof clientSchema> & {
    * a site of a workspace says it, from its `writers`. Absent: `public`, what a note always was.
    */
   write?: WriteAccess;
+  /**
+   * FRU-604: the site offers a visitor one e-mail when their note is done (`offersDoneNotice`). Only
+   * a site of a workspace says it. Absent: no question, no token, no route, no message.
+   */
+  notifyDone?: true;
 };
 export type ClientMap = Record<string, ClientConfig>;
 

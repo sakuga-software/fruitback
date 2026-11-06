@@ -2,6 +2,7 @@ import type { AccountStore } from './accounts.ts';
 import type { Kv } from './kv.ts';
 import type { InstanceAdminReads } from './instance-admin.ts';
 import type { NoteIndex } from './notes-index.ts';
+import type { DoneNotices } from './done-notices.ts';
 import { z } from 'zod';
 import { type Database, databaseFor, databaseUrlOf, readDatabaseSchema } from './postgres.ts';
 import type { AttachmentStore } from './attachments.ts';
@@ -256,6 +257,20 @@ export function postgresNoteIndex(url: string, schema: string): NoteIndex {
     authors: true,
     toCheck: true,
     pageOfNote: true,
+  });
+}
+
+/** Who to tell when a note is done (FRU-604): in `notes-index-postgres.ts`, loaded at the first call. */
+export function postgresDoneNotices(url: string, schema: string): DoneNotices {
+  const database = databaseFor(url, schema);
+
+  return later(async () => (await import('./notes-index-postgres.ts')).createPostgresDoneNotices(database), {
+    watch: true,
+    open: true,
+    take: true,
+    sent: true,
+    release: true,
+    sweep: true,
   });
 }
 

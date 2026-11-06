@@ -104,6 +104,22 @@ export type SentWithoutPicture = { picture: 'missed' };
 export type SentAs = {
   sentAs: { identifier?: string | undefined; url?: string | undefined; number?: number | undefined };
   picture?: 'missed';
+  /** The question « Want to know when it's fixed? », under the card (FRU-604). Absent: not asked. */
+  notify?: NotifyOffer;
+};
+
+/**
+ * What became of an address given for a note done (FRU-604). `sent`: the worker keeps it for this
+ * note. `invalid`: not an address it takes. `retry`: no answer. `wait`: too many at once. `gone`:
+ * this note takes no address any more (its time ran out, or it has one).
+ */
+export type NotifyOutcome = 'sent' | 'invalid' | 'retry' | 'wait' | 'gone';
+
+/** The host sends the address, and keeps the answer of the question. */
+export type NotifyOffer = {
+  send(email: string): Promise<NotifyOutcome>;
+  /** « No thanks ». */
+  decline(): void;
 };
 
 /**
@@ -417,6 +433,15 @@ export function createComposer(options: ComposerOptions): Composer {
   const sentTitle = part('[data-fruitback-sent-title]');
   const sentText = part('[data-fruitback-sent-text]');
   const sentOpen = part<HTMLAnchorElement>('[data-fruitback-sent-open]');
+  const notifyForm = part<HTMLFormElement>('[data-fruitback-notify]');
+  const notifyTitle = part('[data-fruitback-notify-title]');
+  const notifyLabel = part('[data-fruitback-notify-label]');
+  const notifyEmail = part<HTMLInputElement>('[data-fruitback-notify-email]');
+  const notifyWhy = part('[data-fruitback-notify-why]');
+  const notifyError = part('[data-fruitback-notify-error]');
+  const notifyNo = part<HTMLButtonElement>('[data-fruitback-notify-no]');
+  const notifyYes = part<HTMLButtonElement>('[data-fruitback-notify-yes]');
+  const notifyDone = part('[data-fruitback-notify-done]');
   const pictureLabel = part<HTMLLabelElement>('[data-fruitback-picture-label]');
   const picture = part<HTMLInputElement>('[data-fruitback-picture]');
   const cancel = part<HTMLButtonElement>('[data-fruitback-cancel]');
@@ -509,6 +534,11 @@ export function createComposer(options: ComposerOptions): Composer {
   failedTitle.textContent = t.text('composer.failedTitle');
   sentText.textContent = t.text('composer.sentFollows');
   sentOpen.textContent = t.text('composer.sentOpen');
+  notifyTitle.textContent = t.text('composer.notifyTitle');
+  notifyLabel.textContent = t.text('composer.notifyEmail');
+  notifyWhy.textContent = t.text('composer.notifyWhy');
+  notifyNo.textContent = t.text('composer.notifyNo');
+  notifyYes.textContent = t.text('composer.notifyYes');
   part('[data-fruitback-remember-label] span').textContent = t.text('composer.remember');
   rememberLabel.hidden = memory === undefined;
   askForNameOrNot();
@@ -959,9 +989,105 @@ export function createComposer(options: ComposerOptions): Composer {
       !signInFailure && !(mustSignIn && options.onSignIn !== undefined && (next === 'idle' || next === 'failed'));
     // A reader who must sign in first sends nothing until then (FRU-609).
     if (mustSignIn && (next === 'idle' || next === 'failed')) send.disabled = true;
-    if (next !== 'sent') sentCard.hidden = true;
+    if (next !== 'sent') {
+      sentCard.hidden = true;
+      hideNotify();
+    }
     if (next !== 'receipt') receipt.hidden = true;
   }
+
+  /** The question of a note sent (FRU-604), while it waits for an answer. */
+  let notifyOffer: NotifyOffer | undefined;
+  let notifying = false;
+
+  function hideNotify(): void {
+    notifyOffer = undefined;
+    notifying = false;
+    notifyForm.hidden = true;
+    notifyDone.hidden = true;
+    notifyDone.textContent = '';
+    notifyError.textContent = '';
+    notifyEmail.value = '';
+    notifyEmail.removeAttribute('aria-invalid');
+  }
+
+  /** Asks under the card of the note just sent. The composer stays until the person answers. */
+  function showNotify(offer: NotifyOffer): void {
+    notifyOffer = offer;
+    notifyForm.hidden = false;
+    notifyDone.hidden = true;
+    notifyEmail.disabled = false;
+    notifyYes.disabled = false;
+    notifyNo.disabled = false;
+    // The question makes the composer taller than when it was placed: placed again, with its height
+    // of now, so « Notify me » is not below the bottom of the window.
+    if (placedAt !== undefined) place(placedAt);
+    notifyEmail.focus();
+  }
+
+  const NOTIFY_FAILURES = {
+    invalid: 'composer.notifyInvalid',
+    retry: 'composer.notifyRetry',
+    wait: 'composer.notifyWait',
+  } as const;
+
+  async function answerNotify(): Promise<void> {
+    const offer = notifyOffer;
+    if (offer === undefined || notifying) return;
+    const email = notifyEmail.value.trim();
+    // The browser says what an address looks like; the worker decides what it takes.
+    if (email === '' || !notifyEmail.checkValidity()) {
+      notifyError.textContent = t.text('composer.notifyInvalid');
+      notifyEmail.setAttribute('aria-invalid', 'true');
+      notifyEmail.focus();
+
+      return;
+    }
+    const mine = session;
+    notifying = true;
+    notifyYes.disabled = true;
+    notifyNo.disabled = true;
+    notifyError.textContent = '';
+    let outcome: NotifyOutcome;
+    try {
+      outcome = await offer.send(email);
+    } catch {
+      outcome = 'retry';
+    }
+    if (mine !== session || notifyOffer !== offer) return;
+    notifying = false;
+    notifyYes.disabled = false;
+    notifyNo.disabled = false;
+    if (outcome === 'sent' || outcome === 'gone') {
+      // Said where the question was, then the composer closes as a card of a note sent does.
+      notifyForm.hidden = true;
+      notifyOffer = undefined;
+      notifyDone.textContent = t.text(outcome === 'sent' ? 'composer.notifyDone' : 'composer.notifyGone');
+      notifyDone.hidden = false;
+      sentCard.focus();
+      closing = view?.setTimeout(close, SENT_MS) ?? 0;
+
+      return;
+    }
+    // The address stays in its field: a second try is one click.
+    notifyError.textContent = t.text(NOTIFY_FAILURES[outcome]);
+    if (outcome === 'invalid') notifyEmail.setAttribute('aria-invalid', 'true');
+    notifyEmail.focus();
+  }
+
+  notifyForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    void answerNotify();
+  });
+  notifyEmail.addEventListener('input', () => {
+    notifyEmail.removeAttribute('aria-invalid');
+    notifyError.textContent = '';
+  });
+  notifyNo.addEventListener('click', () => {
+    if (notifying) return;
+    notifyOffer?.decline();
+    close();
+  });
 
   /**
    * The card of a sent note (FRU-305): the drop of its new pin with its number, « Sent as DEV-3 », the
@@ -997,6 +1123,7 @@ export function createComposer(options: ComposerOptions): Composer {
     let failure: SendFailure | undefined;
     let withoutPicture = false;
     let sentAs: SentAs['sentAs'] | undefined;
+    let notify: NotifyOffer | undefined;
     try {
       // The files still on their way go first: the note names the ones the worker took. Awaited
       // only then: a note with no file in flight is sent in the same turn, as before FRU-332. A note
@@ -1014,7 +1141,10 @@ export function createComposer(options: ComposerOptions): Composer {
       else if (typeof result === 'string') failure = result;
       else if (typeof result === 'object' && result !== null) {
         withoutPicture = result.picture === 'missed';
-        if ('sentAs' in result) sentAs = result.sentAs;
+        if ('sentAs' in result) {
+          sentAs = result.sentAs;
+          notify = result.notify;
+        }
       }
     } catch {
       failure = 'retry';
@@ -1050,6 +1180,12 @@ export function createComposer(options: ComposerOptions): Composer {
     held = [];
     drawAttachments();
     showSent(sentAs, withoutPicture);
+    // FRU-604: a question waits for its answer. The composer does not close by itself under it.
+    if (notify !== undefined) {
+      showNotify(notify);
+
+      return;
+    }
     // The card is read where focus is: on its link when there is one, on the card otherwise.
     if (!sentOpen.hidden) sentOpen.focus();
     else sentCard.focus();
@@ -1617,6 +1753,9 @@ export function createComposer(options: ComposerOptions): Composer {
       return;
     }
     if (event.composedPath().includes(root)) return;
+    // A question that waits is answered, or closed with Escape or « No thanks »: a click away from it
+    // is no answer (FRU-604).
+    if (notifyOffer !== undefined) return;
     close();
   }
   document.addEventListener('click', onDocumentClick, true);
@@ -2262,6 +2401,70 @@ const TEMPLATE: readonly Markup[] = [
         },
       ],
     ],
+  ],
+  [
+    'form',
+    {
+      'data-fruitback-notify': '',
+      class: 'fruitback-composer-notify',
+      'aria-labelledby': 'fruitback-notify-title',
+      novalidate: '',
+      hidden: '',
+    },
+    [
+      [
+        'p',
+        { 'data-fruitback-notify-title': '', id: 'fruitback-notify-title', class: 'fruitback-composer-notify-title' },
+      ],
+      [
+        'label',
+        { class: 'fruitback-composer-notify-field' },
+        [
+          ['span', { 'data-fruitback-notify-label': '', class: 'fruitback-composer-notify-label' }],
+          [
+            'input',
+            {
+              'data-fruitback-notify-email': '',
+              type: 'email',
+              name: 'email',
+              autocomplete: 'email',
+              inputmode: 'email',
+              maxlength: '254',
+              spellcheck: 'false',
+              'aria-describedby': 'fruitback-notify-why fruitback-notify-error',
+            },
+          ],
+        ],
+      ],
+      ['p', { 'data-fruitback-notify-why': '', id: 'fruitback-notify-why', class: 'fruitback-composer-notify-why' }],
+      [
+        'p',
+        {
+          'data-fruitback-notify-error': '',
+          id: 'fruitback-notify-error',
+          class: 'fruitback-composer-notify-error',
+          role: 'alert',
+        },
+      ],
+      [
+        'div',
+        { class: 'fruitback-composer-notify-actions' },
+        [
+          ['button', { type: 'button', 'data-fruitback-notify-no': '', class: 'fruitback-composer-ghost' }],
+          ['button', { type: 'submit', 'data-fruitback-notify-yes': '', class: 'fruitback-composer-notify-yes' }],
+        ],
+      ],
+    ],
+  ],
+  [
+    'p',
+    {
+      'data-fruitback-notify-done': '',
+      class: 'fruitback-composer-notify-done',
+      role: 'status',
+      tabindex: '-1',
+      hidden: '',
+    },
   ],
   [
     'div',

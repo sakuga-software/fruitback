@@ -9,11 +9,14 @@ import type { InstanceAdminReads } from './instance-admin.ts';
 import { type Kv, processKv } from './kv.ts';
 import { type Mailer, createTemMailer } from './mail.ts';
 import type { NoteIndex } from './notes-index.ts';
+import type { DoneNotices } from './done-notices.ts';
+import { DEV_DATABASE_URL } from './postgres.ts';
 import {
   postgresAccountStore,
   postgresConnectStore,
   postgresInstanceAdmin,
   postgresKv,
+  postgresDoneNotices,
   postgresNoteIndex,
   postgresAttachmentStore,
   postgresSessionStore,
@@ -92,6 +95,22 @@ export async function announceFirstAdmin(
   }
 }
 
+/**
+ * The mailer of the worker of development (FRU-604): `dev-worker.fixture.ts` gives one that keeps
+ * what it would send, for `GET /__dev/mail`. Nothing else calls `provideDevDoneMailer`, and only the
+ * messages of a note done use it: the sign-in by link stays off in development.
+ */
+let devDoneMailer: Mailer | undefined;
+
+export function provideDevDoneMailer(mailer: Mailer): void {
+  devDoneMailer = mailer;
+}
+
+/** What writes to the person who left a note done (FRU-604): the mailer of the worker, else the one of development. */
+export function doneMailerFor(config: WorkerConfig): Mailer | undefined {
+  return mailerFor(config) ?? (config.databaseUrl === DEV_DATABASE_URL ? devDoneMailer : undefined);
+}
+
 /** What sends the e-mail of this worker, or `undefined` when it sends none (FRU-98). */
 export function mailerFor(config: WorkerConfig): Mailer | undefined {
   return config.mail === undefined ? undefined : createTemMailer(config.mail);
@@ -126,6 +145,11 @@ export function noteIndexFor(config: WorkerConfig): NoteIndex | undefined {
   return config.databaseUrl === undefined ? undefined : postgresNoteIndex(config.databaseUrl, config.databaseSchema);
 }
 
+/** Who to tell when a note is done (FRU-604), for a worker with a database: `done-notices.ts`. */
+export function doneNoticesFor(config: WorkerConfig): DoneNotices | undefined {
+  return config.databaseUrl === undefined ? undefined : postgresDoneNotices(config.databaseUrl, config.databaseSchema);
+}
+
 export function attachmentStoreFor(config: WorkerConfig): AttachmentStore | undefined {
   return config.databaseUrl === undefined
     ? undefined
@@ -148,6 +172,17 @@ export async function recheckPending(env: WorkerEnv, resolve: TxtResolver, now?:
   if (!config.ok || accounts === undefined) return;
 
   await recheckDomains(accounts, resolve, (now ?? Date.now)());
+}
+
+/**
+ * Removes the rows of `done_notices` whose time ran out (FRU-604): the address of a visitor whose
+ * note was not done in `DONE_NOTICE_KEEP_MS`. `server.ts` calls it on a timer. Answers how many went.
+ */
+export async function sweepDoneNotices(env: WorkerEnv, now: number = Date.now()): Promise<number> {
+  const config = readConfig(env);
+  if (!config.ok) return 0;
+
+  return (await doneNoticesFor(config.config)?.sweep(now)) ?? 0;
 }
 
 export async function deliverPending(

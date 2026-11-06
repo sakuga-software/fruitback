@@ -66,7 +66,18 @@ export function siteOf(row: Record<string, unknown>, destinations: Destination[]
   if (!isOneOf(row.writers, WRITERS)) return undefined;
   const writers = row.writers as Writers;
 
-  return { id: row.id, workspaceId: row.workspace_id, origin: row.origin, visibility, writers, destinations };
+  // FRU-604: anything but `true` is off, the default: a site offers no e-mail it did not say it offers.
+  const notifyDone = row.notify_done === true;
+
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    origin: row.origin,
+    visibility,
+    writers,
+    notifyDone,
+    destinations,
+  };
 }
 
 /** A row is parsed, never trusted. An instant that is not a number is an instant that is not there. */

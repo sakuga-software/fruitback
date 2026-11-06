@@ -181,6 +181,8 @@ for (const { label, open, skip } of DATABASES) {
           visibility: 'members',
           // A site of before takes notes from anybody, as it did (FRU-330).
           writers: 'anyone',
+          // FRU-604: a site of before offers no e-mail of a note done.
+          notifyDone: false,
           destinations: [{ connector: 'con_linear', teamId: 'team-design', label: 'Linear · Design' }],
         },
       ]);
