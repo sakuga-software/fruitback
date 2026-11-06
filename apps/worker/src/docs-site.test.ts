@@ -193,6 +193,33 @@ describe('the landing (FRU-418)', () => {
   });
 });
 
+/** Every link of the console to a page of the site with a fragment, as `[file, page, fragment]`. */
+function anchoredLinksOfConsole(): [string, string, string][] {
+  const app = new URL('../../console/app/', import.meta.url);
+
+  return readdirSync(app, { recursive: true, encoding: 'utf8' })
+    .filter((file) => /\.tsx?$/.test(file) && !/\.test\.tsx?$/.test(file))
+    .flatMap((file) =>
+      [
+        ...readFileSync(new URL(file, app), 'utf8').matchAll(/https:\/\/fruitback\.com\/([a-z-]+)\.html#([a-z0-9-]+)/g),
+      ].map((match): [string, string, string] => [file, match[1] as string, match[2] as string]),
+    );
+}
+
+describe('the console', () => {
+  it('names only fragments that are headings of their guide', () => {
+    const links = anchoredLinksOfConsole();
+    // The recipes with no code, the routine, the agent of a site, the install of the extension.
+    assert.ok(links.length >= 4, 'no anchored link found: the walk stopped matching');
+
+    assert.deepEqual(
+      links.filter(([, page, fragment]) => !headingIds(`${page}.md`).includes(fragment)),
+      [],
+      'these links of the console name a heading their guide does not have',
+    );
+  });
+});
+
 /** The six sections of the guides (FRU-417), as `_data/docs.yml` lists them. */
 type Section = { title: string; short?: string; pages: { title: string; url: string }[] };
 

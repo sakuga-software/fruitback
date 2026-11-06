@@ -10,21 +10,22 @@ import { ConnectorMark, type MarkedKind } from '../connector-marks';
  * to its steps in `docs/agents.md`. The cards of every recipe, with their board, are FRU-593.
  */
 
-/** Where the steps of each recipe are written. */
-const GUIDE = 'https://fruitback.com/agents.html';
-
-const RECIPES: readonly { kind: MarkedKind; name: string; detail: string; anchor: string }[] = [
+/**
+ * Each `href` names a heading of the guide in full, so `docs-site.test.ts` finds it and fails when
+ * the heading changes.
+ */
+const RECIPES: readonly { kind: MarkedKind; name: string; detail: string; href: string }[] = [
   {
     kind: 'linear',
     name: msg('An agent of Linear'),
     detail: msg('Each note becomes a Linear issue. Delegate it to an agent your Linear workspace installed.'),
-    anchor: 'delegate-to-an-agent-of-linear',
+    href: 'https://fruitback.com/agents.html#delegate-to-an-agent-of-linear',
   },
   {
     kind: 'github',
     name: msg('Claude Code in GitHub Actions'),
     detail: msg('Each note becomes a GitHub issue, and a workflow of your repository opens a pull request for it.'),
-    anchor: 'claude-code-in-github-actions-on-the-issue-of-a-note',
+    href: 'https://fruitback.com/agents.html#claude-code-in-github-actions-on-the-issue-of-a-note',
   },
 ];
 
@@ -44,9 +45,9 @@ export function NoCodeRecipes() {
       <ul className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,280px),1fr))] gap-[12px]">
         {RECIPES.map((recipe) => (
           <li
-            key={recipe.anchor}
+            key={recipe.href}
             className="flex min-w-0 flex-col gap-[12px] rounded-frame border border-line bg-surface p-[16px]"
-            data-recipe={recipe.anchor}
+            data-recipe={recipe.href.split('#')[1]}
           >
             <span className="flex items-start gap-[12px]">
               <span
@@ -64,11 +65,7 @@ export function NoCodeRecipes() {
               </span>
             </span>
             <div className="mt-auto">
-              <LinkButton
-                href={`${GUIDE}#${recipe.anchor}`}
-                newTab
-                label={t('Open the recipe: {name}', { name: t(recipe.name) })}
-              >
+              <LinkButton href={recipe.href} newTab label={t('Open the recipe: {name}', { name: t(recipe.name) })}>
                 {t('Open the recipe')}
               </LinkButton>
             </div>
