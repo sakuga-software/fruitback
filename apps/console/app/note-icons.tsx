@@ -28,7 +28,7 @@ const PATHS = {
   anonymous: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.4M12 17h.01',
 } as const satisfies Record<NoteAuthor['kind'] | 'open', string>;
 
-export type NoteIconName = keyof typeof PATHS;
+type NoteIconName = keyof typeof PATHS;
 
 /** An icon of a row of the notes: 16 px, in the colour of the words beside it. */
 export function NoteIcon({ name }: { name: NoteIconName }) {

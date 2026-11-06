@@ -3,7 +3,7 @@ import { useParams } from 'react-router';
 import { type ConnectRequest, type Me, answerConnect, call, connectRequest, signOut } from '../api';
 import { keepConnect } from '../connect-return';
 import { locale, msg, t } from '../i18n';
-import { SERVER_CAUSE, UNREACHABLE_CAUSE, failureOf } from '../problems';
+import { SERVER_CAUSE, UNREACHABLE_CAUSE, failureOf, retryable } from '../problems';
 import {
   AnotherAddress,
   EmailForm,
@@ -99,7 +99,7 @@ async function resolve(request: string): Promise<Stage> {
   }
   if (read.ok) return stageOf(read.data);
   if (read.status === 401) return { kind: 'signed-out' };
-  if (read.status === 0 || read.status === 429 || read.status >= 500) return { kind: 'silent', status: read.status };
+  if (retryable(read)) return { kind: 'silent', status: read.status };
 
   // 404: unknown, or answered by another account. 410: expired. Nothing to do here any more.
   return { kind: 'gone' };

@@ -30,13 +30,13 @@ export function newlyConnected(
 }
 
 /** What `watchConnection` needs of the document: whether the tab is shown, and when that changes. */
-export type ShownPage = {
+type ShownPage = {
   readonly visibilityState: DocumentVisibilityState;
   addEventListener: (type: 'visibilitychange', listener: () => void) => void;
   removeEventListener: (type: 'visibilitychange', listener: () => void) => void;
 };
 
-export type ConnectionWatch = {
+type ConnectionWatch = {
   read: () => Promise<Answer<ExtensionBrowser[]>>;
   page: ShownPage;
   now: () => number;

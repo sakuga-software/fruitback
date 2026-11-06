@@ -76,7 +76,7 @@ function resolveOnce(): Promise<Stage> {
 }
 
 /** How often the site is read again while the setup waits for its first note (FRU-242). */
-export const FIRST_NOTE_EVERY_MS = 5_000;
+const FIRST_NOTE_EVERY_MS = 5_000;
 
 /**
  * Reads the site again every five seconds while the tab is shown, until its first note came: the

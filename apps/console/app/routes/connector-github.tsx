@@ -5,7 +5,8 @@ import { writeProblemOf } from '../problems';
 import { known } from '../listed';
 import { Button, LinkButton, Problem, SidePanel } from '../ui';
 import { useLocale } from '../use-locale';
-import { Disconnect, KINDS, type PanelProps, SendersList, accountOf, moment, sourceLine } from './connector-parts';
+import { moment } from '../ago';
+import { Disconnect, KINDS, type PanelProps, SendersList, accountOf, sourceLine } from './connector-parts';
 import { useWorkspace } from './workspace';
 
 /**

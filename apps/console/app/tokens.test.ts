@@ -66,6 +66,7 @@ describe('the tokens of the console (FRU-232)', () => {
       '--color-rail-text': '#d4d4d8',
       '--color-rail-muted': '#a1a1aa',
       '--color-rail-accent': '#ec5b57',
+      '--color-on-ink': '#ffffff',
       '--color-google-blue': '#4285f4',
       '--color-google-green': '#34a853',
       '--color-google-yellow': '#fbbc05',
@@ -140,6 +141,20 @@ describe('the tokens of the console (FRU-232)', () => {
       ['planted.tsx: #dd2c27', 'planted.tsx: rgb(', 'planted.tsx: #fff'],
     );
     assert.ok(drawn().size > 12, `only ${drawn().size} files were read`);
+  });
+
+  // FRU-508: 12 `text-white` painted the rail, the banners and a check outside the palette.
+  it('writes no white or black of Tailwind: what is light on ink is `on-ink`', () => {
+    const named = /\b(?:text|bg|border|fill|stroke|outline|ring|decoration)-(?:white|black)\b/g;
+    const found = (sources: Map<string, string>) =>
+      [...sources].flatMap(([name, source]) => (source.match(named) ?? []).map((value) => `${name}: ${value}`));
+
+    assert.deepEqual(found(drawn()), []);
+    // The control: a class of Tailwind, under a variant or with an opacity, is found.
+    assert.deepEqual(found(new Map([['planted.tsx', '<a className="hover:text-white border-white/10" />']])), [
+      'planted.tsx: text-white',
+      'planted.tsx: border-white',
+    ]);
   });
 
   it('names no token that app.css does not define', () => {

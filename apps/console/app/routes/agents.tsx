@@ -1,4 +1,5 @@
 import { type FormEvent, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import { STAGE_NAMES, isStage } from '../stages';
 import {
   API,
   type AgentKey,
@@ -8,8 +9,6 @@ import {
   MAX_AGENT_KEYS,
   MAX_AGENT_KEY_SITES,
   type SiteChoice,
-  type Stage,
-  STAGES,
   agentKeys,
   agentWrites,
   makeAgentKey,
@@ -26,7 +25,6 @@ import { manages } from '../setup-stage';
 import { siteName } from '../site-address';
 import { Button, Callout, Checks, Field, LinkButton, Pick, Problem, Snippet, Toggle } from '../ui';
 import { useLocale } from '../use-locale';
-import { STAGE_NAMES } from './connector-parts';
 import { PageHead, useWorkspace } from './workspace';
 import { ReadProblem } from '../read-problem';
 
@@ -624,8 +622,6 @@ function KeyRow({ agentKey: key, now, onRevoked }: { agentKey: AgentKey; now: nu
   );
 }
 
-const STAGE_KEYS: readonly string[] = STAGES;
-
 /** What a key wrote, read when its row unfolds. */
 function Writes({ id, agentKey: key }: { id: string; agentKey: AgentKey }) {
   useLocale();
@@ -639,7 +635,7 @@ function Writes({ id, agentKey: key }: { id: string; agentKey: AgentKey }) {
 
   useEffect(() => void read(), [read]);
 
-  const hostOf = (site: string) => {
+  const siteOf = (site: string) => {
     const named = key.sites.find((each) => each.id === site);
 
     return named === undefined ? site : siteName(named.origin);
@@ -649,7 +645,7 @@ function Writes({ id, agentKey: key }: { id: string; agentKey: AgentKey }) {
     const status = statusKey(write.status);
 
     return t('Set the status to « {status} »', {
-      status: STAGE_KEYS.includes(status) ? t(STAGE_NAMES[status as Stage]) : status,
+      status: isStage(status) ? t(STAGE_NAMES[status]) : status,
     });
   };
 
@@ -684,7 +680,7 @@ function Writes({ id, agentKey: key }: { id: string; agentKey: AgentKey }) {
                 className="grid grid-cols-1 gap-[2px] border-t border-line py-[8px] first:border-t-0 md:grid-cols-[minmax(200px,1.4fr)_minmax(140px,1fr)_minmax(110px,auto)_110px] md:gap-[12px]"
               >
                 <span>{what(write)}</span>
-                <span className="[overflow-wrap:anywhere]">{hostOf(write.site)}</span>
+                <span className="[overflow-wrap:anywhere]">{siteOf(write.site)}</span>
                 <code className="font-mono text-hint">{write.note}</code>
                 <span className="text-muted md:text-right">{ago(write.at)}</span>
               </li>

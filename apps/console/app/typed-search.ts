@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 /** How long the search waits after a key before it reads: a word is typed, not each letter read. */
-export const TYPING_MS = 300;
+const TYPING_MS = 300;
 
 /**
  * A search field whose value lives in the address (FRU-279). `q` is the search of the address, and

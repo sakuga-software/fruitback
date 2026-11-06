@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { ago, agoInSentence } from './ago.ts';
+import { ago, agoInSentence, dayIn, dayOf, moment, seenOn } from './ago.ts';
 import { setLocale } from './i18n.ts';
 
 // Noon of a day, in the time zone of the machine: « Yesterday » is the day before, whatever the zone.
@@ -73,5 +73,58 @@ describe('how long ago something happened, in the words of the mockup', () => {
     assert.equal(agoInSentence(before(20_000), NOW), 'à l’instant');
     assert.equal(agoInSentence(new Date(2026, 9, 12, 9, 0).toISOString(), NOW), 'hier');
     assert.equal(agoInSentence(new Date(2026, 9, 3, 9, 0).toISOString(), NOW), 'le 3 oct.');
+  });
+});
+
+// FRU-508: `dayOf` was written three times, `moment` three times, and « Last seen » once more in Members.
+describe('a day, a moment and a day seen, in one module', () => {
+  beforeEach(() => void setLocale('en', false));
+  afterEach(() => void setLocale('en', false));
+
+  const thisYear = new Date().getFullYear();
+  const inThisYear = new Date(thisYear, 9, 3, 12).toISOString();
+  const lastYear = new Date(thisYear - 1, 9, 3, 12).toISOString();
+
+  it('writes a day first, with its year when it is not this year', () => {
+    assert.equal(dayOf(inThisYear), '3 Oct');
+    assert.equal(dayOf(lastYear), `3 Oct ${thisYear - 1}`);
+  });
+
+  it('writes the year always, or never, when asked', () => {
+    assert.equal(dayOf(inThisYear, 'always'), `3 Oct ${thisYear}`);
+    assert.equal(dayOf(lastYear, 'never'), '3 Oct');
+    assert.equal(dayIn(inThisYear, 'always'), `3 Oct ${thisYear}`);
+  });
+
+  it('shows a date that is not one as written, or as nothing when the caller has its own word', () => {
+    assert.equal(dayOf('not a date'), 'not a date');
+    assert.equal(dayIn('not a date'), undefined);
+    assert.equal(dayIn(undefined), undefined);
+  });
+
+  it('writes a day in French', async () => {
+    await setLocale('fr', false);
+    assert.equal(dayOf(inThisYear), '3 oct.');
+    assert.equal(dayOf(lastYear), `3 oct. ${thisYear - 1}`);
+  });
+
+  it('writes a moment with its time, and a moment that is not one as written', () => {
+    const at = new Date(2026, 9, 3, 14, 5).toISOString();
+    assert.equal(moment(at), new Date(at).toLocaleString('en', { dateStyle: 'medium', timeStyle: 'short' }));
+    assert.match(moment(at), /2026/);
+    assert.equal(moment('not a date'), 'not a date');
+  });
+
+  it('says the day somebody was last seen, in days of UTC', () => {
+    const now = Date.parse('2026-10-13T12:00:00Z');
+    assert.equal(seenOn(undefined, now), 'Not seen yet');
+    assert.equal(seenOn('2026-10-13', now), 'Today');
+    assert.equal(seenOn('2026-10-12', now), 'Yesterday');
+    assert.equal(seenOn('2026-10-10', now), '3 days ago');
+    assert.equal(seenOn('2026-10-07', now), '6 days ago');
+    assert.equal(seenOn('2026-10-06', now), '6 Oct');
+    // A day after today (a clock of the worker ahead) is today.
+    assert.equal(seenOn('2026-10-14', now), 'Today');
+    assert.equal(seenOn('not a day', now), 'not a day');
   });
 });
