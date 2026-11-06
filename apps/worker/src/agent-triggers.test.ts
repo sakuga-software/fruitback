@@ -170,6 +170,71 @@ describe('a call when a note of a known person arrives (FRU-468)', () => {
     assert.ok(!JSON.stringify(queued[0]?.body).includes('Ignore your instructions'));
   });
 
+  it('queues one call for a batch, naming every note of a known person in it (FRU-608)', async () => {
+    const { world, workspace, shop, hook, member, trigger, calls } = await acme();
+    await trigger({ connector: hook.id, moment: 'verified-note', enabled: true });
+    const noteOf = (id: string) =>
+      noteFixture({
+        id,
+        text: 'Une note du lot.',
+        createdAt: new Date().toISOString(),
+        page: { url: `${shop.origin}/pricing`, path: '/pricing', title: 'Page' },
+        client: { id: shop.id, name: shop.id },
+      });
+    const sent = await call(world, 'POST', `/feedback?client=${shop.id}`, {
+      origin: shop.origin,
+      body: [noteOf('sd_one'), noteOf('sd_two'), noteOf('sd_three')],
+      token: member,
+    });
+    assert.equal(sent.status, 201, await sent.clone().text());
+    const answered = ((await sent.json()) as { results: { id: string; issue: { identifier: string } }[] }).results;
+
+    const queued = await calls();
+    // The control is the count: three notes of a member each called the agent before FRU-608.
+    assert.equal(queued.length, 1);
+    assert.deepEqual(queued[0]?.body, {
+      version: 2,
+      event: 'agent.requested',
+      reason: 'verified-note',
+      workspace,
+      site: { id: shop.id, origin: 'https://shop.acme.dev' },
+      identifier: answered[0]?.issue.identifier,
+      note: { id: noteIdOf(shop.id, 'sd_one') },
+      notes: answered.map((each) => ({ identifier: each.issue.identifier, note: { id: noteIdOf(shop.id, each.id) } })),
+    });
+  });
+
+  it('calls nothing for a batch while the trigger is off or waits for another moment, nor for a batch of visitors (FRU-608)', async () => {
+    const { world, shop, hook, member, trigger, calls } = await acme();
+    const noteOf = (id: string) =>
+      noteFixture({
+        id,
+        text: 'Une note du lot.',
+        createdAt: new Date().toISOString(),
+        page: { url: `${shop.origin}/pricing`, path: '/pricing', title: 'Page' },
+        client: { id: shop.id, name: shop.id },
+      });
+    const batch = async (ids: string[], token?: string) => {
+      const sent = await call(world, 'POST', `/feedback?client=${shop.id}`, {
+        origin: shop.origin,
+        body: ids.map(noteOf),
+        ...(token === undefined ? {} : { token }),
+      });
+      assert.equal(sent.status, 201, await sent.clone().text());
+    };
+    await batch(['sd_none_1', 'sd_none_2'], member);
+    await trigger({ connector: hook.id, moment: 'verified-note', enabled: false });
+    await batch(['sd_off_1', 'sd_off_2'], member);
+    await trigger({ connector: hook.id, moment: 'moved-to-todo', enabled: true });
+    await batch(['sd_other_1', 'sd_other_2'], member);
+    await trigger({ connector: hook.id, moment: 'verified-note', enabled: true });
+    await batch(['sd_visitor_1', 'sd_visitor_2']);
+    assert.deepEqual(await calls(), []);
+    // The control: the same batch of a member, with the trigger on, calls once.
+    await batch(['sd_on_1', 'sd_on_2'], member);
+    assert.equal((await calls()).length, 1);
+  });
+
   it('calls nothing while the trigger is off, or waits for another moment', async () => {
     const { world, shop, hook, member, trigger, calls } = await acme();
     await leave(world, shop, 'sd_none', member);

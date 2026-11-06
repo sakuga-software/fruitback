@@ -1600,10 +1600,31 @@ describe('sending the drafts', () => {
       }),
     });
 
+  /** What `sendDrafts` says it kept and why it stopped; the issues are read in their own test (FRU-608). */
+  const sentOnly = async (args: Parameters<typeof sendDrafts>[0]) => {
+    const { issues: _issues, ...rest } = await sendDrafts(args);
+
+    return rest;
+  };
+
+  it('gives the issue of each note kept and tells its progress after each request (FRU-608)', async () => {
+    const { options } = transportAnswering(results(207, ['sd_a'], ['sd_b']));
+    const told: [number, number][] = [];
+    const outcome = await sendDrafts({
+      drafts: [draftOf('sd_a'), draftOf('sd_b')],
+      offer: { max: 10, maxBytes: 65_536 },
+      options,
+      onProgress: (done, total) => told.push([done, total]),
+    });
+
+    assert.deepEqual([...outcome.issues], [['sd_a', { identifier: 'DEV-sd_a' }]]);
+    assert.deepEqual(told, [[1, 2]]);
+  });
+
   it('sends one array for a batch, and says every note was kept', async () => {
     const { requests, options } = transportAnswering(results(201, ['sd_a', 'sd_b']));
 
-    const outcome = await sendDrafts({
+    const outcome = await sentOnly({
       drafts: [draftOf('sd_a'), draftOf('sd_b')],
       offer: { max: 10, maxBytes: 65_536 },
       options,
@@ -1624,10 +1645,10 @@ describe('sending the drafts', () => {
     const drafts = [draftOf('sd_a'), draftOf('sd_b')];
     const offer = { max: 10, maxBytes: 65_536 };
 
-    const first = await sendDrafts({ drafts, offer, options });
+    const first = await sentOnly({ drafts, offer, options });
     assert.deepEqual(first, { kept: ['sd_a'], failure: 'retry' });
 
-    const second = await sendDrafts({
+    const second = await sentOnly({
       drafts: drafts.filter((each) => !first.kept.includes(each.note.id)),
       offer,
       options,
@@ -1646,7 +1667,7 @@ describe('sending the drafts', () => {
       const { options } = transportAnswering(() => ({ ok: true, status: 201, body }));
 
       assert.deepEqual(
-        await sendDrafts({ drafts: [draftOf('sd_a'), draftOf('sd_b')], offer: { max: 10, maxBytes: 65_536 }, options }),
+        await sentOnly({ drafts: [draftOf('sd_a'), draftOf('sd_b')], offer: { max: 10, maxBytes: 65_536 }, options }),
         { kept: ['sd_a', 'sd_b'] },
         body,
       );
@@ -1658,7 +1679,7 @@ describe('sending the drafts', () => {
     const { options } = transportAnswering(results(502, [], ['sd_a', 'sd_b']));
 
     assert.deepEqual(
-      await sendDrafts({ drafts: [draftOf('sd_a'), draftOf('sd_b')], offer: { max: 10, maxBytes: 65_536 }, options }),
+      await sentOnly({ drafts: [draftOf('sd_a'), draftOf('sd_b')], offer: { max: 10, maxBytes: 65_536 }, options }),
       { kept: [], failure: 'retry' },
     );
   });
@@ -1666,7 +1687,7 @@ describe('sending the drafts', () => {
   it('keeps a note that a 207 does not name, and takes out only the ones it answers « kept »', async () => {
     const { options } = transportAnswering(() => ({ ok: true, status: 207, body: '{"results":[]}' }));
 
-    assert.deepEqual(await sendDrafts({ drafts: [draftOf('sd_a')], offer: { max: 10, maxBytes: 65_536 }, options }), {
+    assert.deepEqual(await sentOnly({ drafts: [draftOf('sd_a')], offer: { max: 10, maxBytes: 65_536 }, options }), {
       kept: [],
       failure: 'retry',
     });
@@ -1679,7 +1700,7 @@ describe('sending the drafts', () => {
       body: '{"error":"rate-limited"}',
     }));
 
-    const outcome = await sendDrafts({
+    const outcome = await sentOnly({
       drafts: ['sd_a', 'sd_b', 'sd_c', 'sd_d', 'sd_e'].map((id) => draftOf(id)),
       offer: { max: 2, maxBytes: 65_536 },
       options,
@@ -1695,7 +1716,7 @@ describe('sending the drafts', () => {
       () => ({ ok: false, status: 502, body: '{"error":"store-unavailable"}' }),
     );
 
-    const outcome = await sendDrafts({
+    const outcome = await sentOnly({
       drafts: [draftOf('sd_a', 'dst_design'), draftOf('sd_b')],
       offer: undefined,
       options,
@@ -1711,7 +1732,7 @@ describe('sending the drafts', () => {
       throw new Error('offline');
     });
 
-    assert.deepEqual(await sendDrafts({ drafts: [draftOf('sd_a')], offer: { max: 10, maxBytes: 65_536 }, options }), {
+    assert.deepEqual(await sentOnly({ drafts: [draftOf('sd_a')], offer: { max: 10, maxBytes: 65_536 }, options }), {
       kept: [],
       failure: 'retry',
     });

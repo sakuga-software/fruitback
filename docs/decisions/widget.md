@@ -1562,6 +1562,28 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
 
 ### The rules, in short
 
+- **The batch of FRU-608 replaced « Keep for later » in the composer** (board P5b of FRU-598). What
+  follows of FRU-124 still holds for the drafts, their storage and their requests; the composer now:
+  - **With none waiting: « Send », and « Add to batch » as an icon** beside it, named in its tooltip
+    and for a screen reader. With some waiting: « Send all N », N counting the note being written,
+    the count on the icon (« Add to batch · 2 waiting »), and a fold beside « Send » that opens
+    « Send all N » and « Send only this note », which leaves the batch in place.
+  - **« Send all N » puts the note in the batch first, then sends the batch** (`BatchSeam.sendAll`),
+    so a note that does not go stays a draft with its text, and nothing is lost. A note with files
+    is never a draft: it goes alone first, with its files, and when it fails it is still in the
+    field with the sentence of its cause, and the batch waits.
+  - **While it goes: « Sending 2 of 3… »**, counted after each request (`sendDrafts` takes
+    `onProgress`); the text is read-only and still readable, « Cancel » is disabled, and nothing
+    closes the composer, Escape included.
+  - **A receipt after**: « 3 notes sent », where they went, each note with the link of its ticket
+    (the identifier the worker answered, the link only when the reader may open it), and « Close ».
+    A partial send says « 2 sent, 1 not sent »; a note that did not go shows its text with « Copy
+    text », and « Send again » sends the rest. The receipt is 420 px at most; its list scrolls in a
+    region the keyboard reaches, with a fade at its foot, and past five notes « Show all in the
+    sidebar » opens the list of every note.
+  - **One call to an agent for a batch** (`verifiedNotesArrived`, `docs/decisions/agents.md`).
+  - Not changed here: the group « Kept for later, not sent yet » of the list keeps its words and its
+    button; the list is P4 (FRU-606).
 - **« Keep for later » is a second action of the composer**, beside « Send », which keeps its
   meaning. It is there **for everybody**, and only while the last read offered a batch
   (`batch: { max, maxBytes }`, the worker half of #171). Arbitrated by the orchestrator on
