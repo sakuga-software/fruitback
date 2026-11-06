@@ -185,8 +185,10 @@ async function moveStage(database: PgDatabase, incoming: IncomingMessage, respon
         "UPDATE notes SET stage = $1, updated_at = $3 WHERE (payload::jsonb ->> 'id') = $2",
         [asked.stage, asked.note, Date.now()],
       );
-      // FRU-604: a note of the Linear in memory, the store of the public site of development.
-      const count = (moved as { rowCount?: number | null }).rowCount || setMemoryNoteStage(asked.note, asked.stage);
+      // FRU-604: and a note of the Linear in memory, the store of the public site of development. Both
+      // stores are moved, and the counts added: an id in both is two notes, and each one moves.
+      const count =
+        ((moved as { rowCount?: number | null }).rowCount ?? 0) + setMemoryNoteStage(asked.note, asked.stage);
       response.writeHead(count > 0 ? 200 : 404, { 'Content-Type': 'application/json' }).end(JSON.stringify({ count }));
     } finally {
       client.release();
