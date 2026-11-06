@@ -295,11 +295,11 @@ async function canTriggerAction(context: BrowserContext): Promise<boolean> {
 }
 
 async function attach(site: Page, file: Attachment): Promise<void> {
-  const files = site.getByRole('group', { name: 'Attachments' });
+  const files = site.getByRole('dialog', { name: 'New note', exact: true });
   const items = site.locator('.fruitback-composer-file');
   const before = await items.count();
   if (file === 'page' || file === 'area') {
-    await files.getByRole('button', { name: 'Attach' }).click();
+    await files.getByRole('button', { name: 'Take a screenshot' }).click();
     await files.getByRole('menuitem', { name: file === 'page' ? 'Capture the whole page' : 'Capture an area' }).click();
     if (file === 'area') {
       // The area of the keyboard: drawn in the middle, moved, made larger, taken.

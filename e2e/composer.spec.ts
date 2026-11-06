@@ -123,7 +123,9 @@ test('the pin is a drop, and it says what it is to a screen reader', async ({ pa
   await expect(badge).toHaveAttribute('aria-label', /Un pin en goutte/);
 });
 
-test('the composer has the measures of the mock-up, above its element (FRU-258, FRU-305)', async ({ page }) => {
+test('the composer has the measures of the mock-up, beside its element, with the tools in its field (FRU-258, FRU-305, FRU-607)', async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await openPlayground(page, 'composer-measures');
@@ -172,17 +174,24 @@ test('the composer has the measures of the mock-up, above its element (FRU-258, 
   expect(await page.locator('[data-fruitback-composer]').evaluate((node) => getComputedStyle(node).boxShadow)).toBe(
     'rgba(24, 24, 27, 0.22) 0px 14px 40px 0px',
   );
-  // Above the element: it ends 40 px over its top, on the edge of the frame, 5 px off the element.
+  // Beside the element, on the right (FRU-607): 16 px off the frame, which stands 5 px off the
+  // element, its top on the top of the frame unless the window ends first.
   const target = (await button.boundingBox())!;
-  expect(Number(box.y) + Number(box.height)).toBeCloseTo(target.y - 40, 0);
-  expect(Number(box.x)).toBeCloseTo(target.x - 5, 0);
-  // The frame stays on the element the note is about, with the name of its component.
+  expect(Number(box.x)).toBeCloseTo(target.x + target.width + 5 + 16, 0);
+  expect(Number(box.y)).toBeCloseTo(Math.min(target.y - 5, 900 - Number(box.height) - 10), 0);
+  await expect(page.locator('[data-fruitback-composer]')).toHaveAttribute('data-fruitback-side', 'right');
+  // The tether: 2 px of the accent, from the edge of the composer to the frame, at the middle of the element.
+  const tether = await read('[data-fruitback-tether]', ['background-color']);
+  expect(tether).toMatchObject({ width: 16, height: 2, 'background-color': 'rgb(221, 44, 39)' });
+  expect(Number(tether.x) + 16).toBeCloseTo(Number(box.x), 0);
+  expect(Number(tether.y) + 1).toBeCloseTo(target.y + target.height / 2, 0);
+  // The frame stays on the element the note is about, named as the head names it.
   await expect(page.locator('[data-fruitback-host-highlight]')).toBeVisible();
-  await expect(page.locator('.fruitback-highlight-tag')).toHaveText('button#checkout-cta · <Button>');
+  await expect(page.locator('.fruitback-highlight-tag')).toHaveText('Commander · <Button>');
   // The capture is over: one click, one note.
   await expect(page.locator('[data-fruitback-host-launch]')).toHaveAttribute('aria-pressed', 'false');
 
-  // The head (FRU-305): the drop of a new note, what the note points at in mono, « Choose another element ».
+  // The head (FRU-305): the drop of a new note, what the element says (FRU-607), « Choose another element ».
   expect(
     await read('.fruitback-composer-head', ['padding', 'gap', 'background-color', 'border-bottom-width']),
   ).toMatchObject({
@@ -191,10 +200,22 @@ test('the composer has the measures of the mock-up, above its element (FRU-258, 
     'background-color': 'rgb(250, 250, 250)',
     'border-bottom-width': '1px',
   });
-  await expect(page.locator('.fruitback-composer-about')).toHaveText('button#checkout-cta · <Button>');
-  const about = await read('.fruitback-composer-about', ['font-size', 'font-family', 'white-space', 'text-overflow']);
-  expect(about).toMatchObject({ 'font-size': '12px', 'white-space': 'nowrap', 'text-overflow': 'ellipsis' });
-  expect(String(about['font-family'])).toMatch(/^ui-monospace/);
+  // The words of the element, not its selector: the selector waits for « Show CSS selectors ».
+  await expect(page.locator('.fruitback-composer-about')).toHaveText('Commander · <Button>');
+  const about = await read('.fruitback-composer-about', [
+    'font-size',
+    'font-weight',
+    'font-family',
+    'white-space',
+    'text-overflow',
+  ]);
+  expect(about).toMatchObject({
+    'font-size': '13px',
+    'font-weight': '600',
+    'white-space': 'nowrap',
+    'text-overflow': 'ellipsis',
+  });
+  expect(String(about['font-family'])).not.toMatch(/monospace/);
   // The drop is turned: its own box, not the one on screen, is 10 px.
   expect(
     await page
@@ -215,33 +236,41 @@ test('the composer has the measures of the mock-up, above its element (FRU-258, 
   await expect(page.getByRole('button', { name: 'Close without sending' })).toHaveCount(0);
 
   expect(await read('.fruitback-composer-body', ['padding', 'gap'])).toMatchObject({ padding: '14px', gap: '12px' });
-  await expect(page.getByLabel('Your note')).toBeVisible();
-  expect(await read('[data-fruitback-note-label]', ['font-size', 'color'])).toMatchObject({
-    'font-size': '12px',
-    color: 'rgb(107, 107, 116)',
-  });
-  const note = await read('[data-fruitback-note]', [
-    'border-top-width',
-    'border-top-color',
-    'border-top-left-radius',
-    'padding',
-    'resize',
-  ]);
-  expect(note).toMatchObject({
+  // « Your note » names the field for a screen reader; the eye reads the placeholder.
+  await expect(page.getByRole('textbox', { name: 'Your note' })).toBeVisible();
+  // The field (FRU-607): one box with the edge, the note in it with none, then the row of icons.
+  const field = await read('[data-fruitback-box]', ['border-top-width', 'border-top-color', 'border-top-left-radius']);
+  expect(field).toMatchObject({
     width: 330,
     'border-top-width': '1px',
     'border-top-color': 'rgb(138, 138, 147)',
     'border-top-left-radius': '6px',
-    padding: '10px 12px',
-    resize: 'vertical',
   });
+  const note = await read('[data-fruitback-note]', ['border-top-width', 'padding', 'resize']);
+  // It grows with its text instead of a handle to drag (FRU-611, P7).
+  expect(note).toMatchObject({ width: 328, 'border-top-width': '0px', padding: '10px 12px', resize: 'none' });
   expect(Number(note.height)).toBeGreaterThanOrEqual(96);
-  // « Name (optional) » is a field in sight, 36 px, in 13 px.
+  const tools = await read('[data-fruitback-tools]', []);
+  expect(Number(tools.y)).toBeGreaterThanOrEqual(Number(note.y) + Number(note.height) - 1);
+  expect(Number(tools.y) + Number(tools.height)).toBeLessThanOrEqual(Number(field.y) + Number(field.height));
+  // The signature, at the end of the field: « Guest », in dashes.
+  const avatar = page.getByRole('button', { name: 'Signed as Guest. Add your name' });
+  await expect(avatar).toHaveText('Guest');
+  expect(await read('[data-fruitback-avatar]', ['border-top-style'])).toMatchObject({
+    'border-top-style': 'dashed',
+    height: 28,
+  });
+  // A click opens « Name (optional) »: a field of 36 px, in 13 px.
   const name = page.getByLabel('Name (optional)');
+  await expect(name).toBeHidden();
+  await avatar.click();
   await expect(name).toBeVisible();
+  await expect(name).toBeFocused();
   expect(await name.evaluate((node) => [node.getBoundingClientRect().height, getComputedStyle(node).fontSize])).toEqual(
     [36, '13px'],
   );
+  await name.fill('Camille Durand');
+  await expect(page.getByRole('button', { name: 'Signed as Camille Durand. Change the name' })).toHaveText('CD');
 
   expect(
     await read('.fruitback-composer-foot', ['padding', 'gap', 'border-top-width', 'border-top-color']),
@@ -314,8 +343,9 @@ test('« Choose another element » keeps the text and moves the composer to the 
   const field = page.getByPlaceholder('What should change?');
   await field.fill('Written before picking again');
   await page.getByRole('button', { name: 'Choose another element' }).click();
-  await page.locator('[data-testid="card-mocha"] .add').click();
-  await expect(page.locator('.fruitback-composer-about')).toHaveText(/^button\.add · <Button>$/);
+  // The espresso card: the composer stands beside the latte card, over the mocha one (FRU-607).
+  await page.locator('[data-testid="card-espresso"] .add').click();
+  await expect(page.locator('.fruitback-composer-about')).toHaveText(/^Ajouter · <Button>$/);
   await expect(field).toHaveValue('Written before picking again');
 });
 
@@ -357,6 +387,7 @@ test('a sent note says « Sent as » its identifier, with the number of its pin 
 });
 
 test('it rises from the corner nearest to its element, with no fade', async ({ page }) => {
+  // Beside the element (FRU-607): it comes from its side, and grows from its top corner there.
   await page.setViewportSize({ width: 1440, height: 900 });
   await openPlayground(page, 'composer-rise');
   await page.locator('#checkout-cta').scrollIntoViewIfNeeded();
@@ -377,14 +408,14 @@ test('it rises from the corner nearest to its element, with no fade', async ({ p
     };
   });
   expect(motion).toMatchObject({
-    name: 'fruitback-composer-in',
+    name: 'fruitback-composer-from-left',
     duration: '0.42s',
     curve: 'cubic-bezier(0.16, 1, 0.3, 1)',
   });
-  // « bottom left », in the pixels of its own box.
+  // « top left », in the pixels of its own box: the corner on the side of the element.
   const [x, y] = motion.origin.split(' ').map((part) => Number.parseFloat(part));
   expect(x).toBe(0);
-  expect(Math.abs((y ?? 0) - motion.height)).toBeLessThanOrEqual(1);
+  expect(y).toBe(0);
 });
 
 test('a second capture while a note is on its way loses nothing, and the failure still says why', async ({ page }) => {
@@ -401,18 +432,19 @@ test('a second capture while a note is on its way loses nothing, and the failure
   await page.getByRole('button', { name: /Leave a note/ }).click();
   await page.locator('[data-testid="card-latte"] .add').click();
   const about = page.locator('.fruitback-composer-about');
-  await expect(about).toHaveText(/^button\.add/);
+  await expect(about).toHaveText(/^Ajouter · <Button>$/);
   const note = 'Written before a second capture';
   await page.getByPlaceholder('What should change?').fill(note);
   await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(page.locator('[data-fruitback-composer]')).toHaveAttribute('data-fruitback-state', 'sending');
 
   await page.locator('[data-fruitback-host-launch]').click();
-  // Another element, away from the composer, which stands over the card it is about.
-  await page.locator('[data-testid="card-mocha"] .add').click();
+  // Another element, away from the composer, which stands beside the card it is about, over the
+  // mocha card (FRU-607).
+  await page.locator('[data-testid="card-espresso"] .add').click();
 
   await expect(page.locator('[data-fruitback-composer]')).toHaveAttribute('data-fruitback-state', 'sending');
-  await expect(about).toHaveText(/^button\.add/);
+  await expect(about).toHaveText(/^Ajouter · <Button>$/);
   await expect(page.getByPlaceholder('What should change?')).toHaveValue(note);
 
   release();
@@ -472,3 +504,82 @@ for (const [locale, keep, cancel, send] of [
     }
   });
 }
+
+/**
+ * The truncation of P7 (FRU-611, point 1), on the composer of FRU-607: words 40 % longer than the
+ * English, the length of French and German, never wrap inside a button; they end in « … » with the
+ * tooltip. The field grows with the text up to 150 px, then scrolls, with a fade at its foot.
+ */
+test('long words never wrap in a button, and the field grows to 150 px then scrolls with a fade (FRU-611)', async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto(`/?widget=off&case=${caseOf('composer-long-words')}`);
+  await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
+  await page.addScriptTag({ path: 'packages/widget/dist/fruitback.iife.js' });
+  const firstRead = page.waitForResponse(
+    (response) => response.request().method() === 'GET' && new URL(response.url()).pathname === '/feedback',
+  );
+  await page.evaluate(
+    (endpoint) =>
+      (globalThis as unknown as { Fruitback: { init(options: unknown): unknown } }).Fruitback.init({
+        endpoint,
+        clientId: 'playground',
+        locale: 'de',
+        // German is not bundled: these are the words of the buttons, longer than the French.
+        messages: {
+          de: {
+            'composer.keep': 'Für später aufbewahren und erst zusammen mit den anderen senden',
+            'composer.cancel': 'Abbrechen und schließen',
+            'composer.send': 'Absenden',
+            'composer.pickAgain': 'Ein anderes Element auf der Seite auswählen',
+          },
+        },
+      }),
+    WORKER_ORIGIN,
+  );
+  await firstRead;
+  await page.locator('[data-fruitback-host-launch]').click();
+  await page.locator('[data-testid="card-latte"] .add').click();
+  const keep = page.getByRole('button', { name: /^Für später aufbewahren/ });
+  await expect(keep).toBeVisible();
+
+  for (const name of [/^Für später aufbewahren/, /^Abbrechen/, /^Absenden$/, /^Ein anderes Element/]) {
+    const button = page.getByRole('button', { name });
+    const drawn = await button.evaluate((node) => ({
+      height: node.getBoundingClientRect().height,
+      wrap: getComputedStyle(node).whiteSpace,
+      cut: node.scrollWidth > node.clientWidth,
+      title: node.getAttribute('title'),
+      words: node.textContent,
+    }));
+    // One line, 44 px to press, whatever the length of its words.
+    expect(drawn.height, String(name)).toBeLessThanOrEqual(44);
+    expect(drawn.wrap, String(name)).toBe('nowrap');
+    // Cut or not, the tooltip holds the whole words.
+    expect(drawn.title, String(name)).toBe(drawn.words);
+  }
+  // The control: the longest words do not fit, so they are cut, not wrapped.
+  expect(await keep.evaluate((node) => node.scrollWidth > node.clientWidth)).toBe(true);
+  expect(await keep.evaluate((node) => getComputedStyle(node).textOverflow)).toBe('ellipsis');
+
+  const field = page.locator('[data-fruitback-note]');
+  const tall = () => field.evaluate((node) => Math.round(node.getBoundingClientRect().height));
+  expect(await tall()).toBe(96);
+  await field.fill('Une ligne,\npuis une autre,\npuis une troisième,\npuis une quatrième.');
+  const grown = await tall();
+  expect(grown).toBeGreaterThan(96);
+  expect(grown).toBeLessThan(150);
+  await field.fill(Array.from({ length: 14 }, (_, n) => `Ligne ${n + 1} d’une longue note`).join('\n'));
+  expect(await tall()).toBe(150);
+  expect(await field.evaluate((node) => node.scrollHeight > node.clientHeight)).toBe(true);
+  expect(await field.evaluate((node) => getComputedStyle(node).maskImage)).toContain('linear-gradient');
+  // At the end of the text, no more fade: nothing is below.
+  await field.evaluate((node) => {
+    node.scrollTop = node.scrollHeight;
+    node.dispatchEvent(new Event('scroll'));
+  });
+  await expect(field).not.toHaveAttribute('data-fruitback-more', '');
+  // And the text is all there.
+  await expect(field).toHaveValue(/Ligne 14 d’une longue note$/);
+});

@@ -85,9 +85,11 @@ for (const each of CASES) {
       )
       .toEqual({ pressed: false, transform: 'matrix(1, 0, 0, 1, 0, 0)' });
 
-    // The frame stands 5 px off the element on every side (FRU-303). The composer meets the frame on
-    // its start edge: the left in English, the right in Arabic. Half a pixel absorbs the rounding of
-    // layout to 1/64 px. Before FRU-489 both stayed on the pressed box, 1.2 px off.
+    // The frame stands 5 px off the element on every side (FRU-303). The composer stands beside it
+    // since FRU-607, 16 px off the frame, on the end side first: the right in English, the left in
+    // Arabic; with no room there, on the other side; with room on neither, on its start edge. Half a
+    // pixel absorbs the rounding of layout to 1/64 px. Before FRU-489 both stayed on the pressed box,
+    // 1.2 px off.
     await expect
       .poll(
         async () => {
@@ -97,13 +99,23 @@ for (const each of CASES) {
             page.locator('[data-fruitback-composer]').boundingBox(),
           ]);
           if (element === null || frame === null || composer === null) return Number.POSITIVE_INFINITY;
-          // Unless the window holds it 10 px inside its edge, as `place` does.
           const width = page.viewportSize()!.width;
-          const start = rtl
+          const off = {
+            right: composer.x - (element.x + element.width + 21),
+            left: composer.x + composer.width - (element.x - 21),
+          };
+          const room = {
+            right: element.x + element.width + 21 + composer.width <= width - 10,
+            left: element.x - 21 - composer.width >= 10,
+          };
+          const side = (rtl ? (['left', 'right'] as const) : (['right', 'left'] as const)).find((each) => room[each]);
+          // Unless the window holds it 10 px inside its edge, as `place` does.
+          const above = rtl
             ? composer.x +
               composer.width -
               Math.max(10 + composer.width, Math.min(element.x + element.width + 5, width - 10))
             : composer.x - Math.min(Math.max(element.x - 5, 10), width - composer.width - 10);
+          const start = side === undefined ? above : off[side];
 
           return Math.max(
             Math.abs(frame.x - (element.x - 5)),

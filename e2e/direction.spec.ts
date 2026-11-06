@@ -5,7 +5,7 @@ import { caseOf, WORKER_ORIGIN } from './pin.ts';
  * The widget in a right-to-left language (FRU-38).
  *
  * What flips is layout: the dock moves to the reader's corner and the popover opens on the element's
- * right edge. What must not flip is geometry: a pin sits on the element it belongs to, whatever the
+ * end side, the left. What must not flip is geometry: a pin sits on the element it belongs to, whatever the
  * direction. No unit test sees either, because happy-dom neither resolves a logical property nor
  * lays anything out.
  */
@@ -57,9 +57,10 @@ test('in Arabic the dock and the popover move, and the pin stays on its element'
 
   await expect(page.getByPlaceholder(ARABIC['composer.placeholder']), 'the popover did not open').toBeVisible();
 
-  // Polled: the popover is placed after it opens. Its right edge meets the frame's, which stands 5 px
-  // off the element (FRU-303), unless the viewport clamps it. A left-to-right placement would miss by
-  // the popover's width less the element's. Half a pixel absorbs the rounding of layout to 1/64 px.
+  // Polled: the popover is placed after it opens. Beside the element since FRU-607, on the end side
+  // first, which is the left here: its right edge 16 px off the frame, which stands 5 px off the
+  // element (FRU-303). With no room on the left, on the right. A left-to-right placement would stand
+  // on the other side. Half a pixel absorbs the rounding of layout to 1/64 px.
   await expect
     .poll(
       async () => {
@@ -68,14 +69,13 @@ test('in Arabic the dock and the popover move, and the pin stays on its element'
           page.locator('[data-fruitback-composer]').boundingBox(),
         ]);
         if (element === null || composer === null) return Number.POSITIVE_INFINITY;
-        const expectedRight = Math.max(
-          10 + composer.width,
-          Math.min(element.x + element.width + 5, viewport!.width - 10),
-        );
+        const roomOnTheLeft = element.x - 21 - composer.width >= 10;
 
-        return Math.abs(composer.x + composer.width - expectedRight);
+        return roomOnTheLeft
+          ? Math.abs(composer.x + composer.width - (element.x - 21))
+          : Math.abs(composer.x - (element.x + element.width + 21));
       },
-      { message: 'the popover never met the element on its right edge' },
+      { message: 'the popover never stood beside the element on its end side' },
     )
     .toBeLessThanOrEqual(0.5);
 

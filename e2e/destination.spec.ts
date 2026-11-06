@@ -140,13 +140,14 @@ test('a reader the worker offers no place gets the composer with no line, and a 
   offered = [WEB, DESIGN];
   await mount(page, 'destination-none');
   await compose(page, 'card-espresso');
-  await expect(line(page)).toHaveText('Send to: Linear · Web');
+  await expect(line(page)).toHaveAccessibleName('Send to: Linear · Web');
   await expect(line(page)).toHaveAttribute('aria-expanded', 'false');
   await expect(places(page)).toBeHidden();
-  // One line of small text more than the composer of everybody else, and nothing else.
-  const withLine = await aboveFoot();
-  expect(withLine - plain.height).toBeGreaterThan(10);
-  expect(withLine - plain.height).toBeLessThan(40);
+  // The choice sits in the foot since FRU-607, in icons, where the line of where the note lands was:
+  // the composer of a member is as tall as the composer of everybody else above its foot.
+  expect(await aboveFoot()).toBe(plain.height);
+  await expect(composer(page).locator('.fruitback-composer-foot [data-fruitback-destination]')).toBeVisible();
+  await expect(line(page).locator('.fruitback-composer-place-name')).toHaveText('Web');
 });
 
 test('a member chooses a place with the keyboard, the note goes there, and the next note starts there', async ({
@@ -172,7 +173,7 @@ test('a member chooses a place with the keyboard, the note goes there, and the n
   // The arrows belong to the radios here, and not to the capture mode that opened this popover.
   await page.keyboard.press('ArrowDown');
   await expect(places(page).getByRole('radio', { name: 'Linear · Design' })).toBeChecked();
-  await expect(line(page)).toHaveText('Send to: Linear · Design');
+  await expect(line(page)).toHaveAccessibleName('Send to: Linear · Design');
 
   await send(page, 'A note for the design team');
   await landed(page, 'A note for the design team');
@@ -185,13 +186,13 @@ test('a member chooses a place with the keyboard, the note goes there, and the n
   // Another page load: the choice was kept for this site, and the line is folded on it.
   await mount(page, 'destination-choose');
   await compose(page, 'card-mocha');
-  await expect(line(page)).toHaveText('Send to: Linear · Design');
+  await expect(line(page)).toHaveAccessibleName('Send to: Linear · Design');
   await expect(places(page)).toBeHidden();
 
   // Back on the first place, the request is the one of a reader who has no choice.
   await line(page).click();
   await places(page).getByRole('radio', { name: 'Linear · Web' }).check();
-  await expect(line(page)).toHaveText('Send to: Linear · Web');
+  await expect(line(page)).toHaveAccessibleName('Send to: Linear · Web');
   await send(page, 'A note for the default place');
   await landed(page, 'A note for the default place');
   expect(sent.map((each) => each.query)).toEqual(['?destination=dst_design', '']);
@@ -222,7 +223,7 @@ test('a place the worker refuses keeps the note, and the line says where the not
   await expect(composer(page)).toContainText(/Not sent/);
   await expect(page.getByPlaceholder('What should change?')).toHaveValue(note);
   await expect(composer(page)).toContainText('Sending to Linear · Design is no longer possible.');
-  await expect(line(page)).toHaveText('Send to: Linear · Web');
+  await expect(line(page)).toHaveAccessibleName('Send to: Linear · Web');
   await expect(places(page).getByRole('radio')).toHaveCount(2);
   await expect(page.getByRole('button', { name: new RegExp(note) })).toHaveCount(0);
 

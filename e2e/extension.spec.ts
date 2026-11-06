@@ -281,10 +281,10 @@ test('team mode: a note joins a file of the disk, and its thread says how many f
 
   await page.getByRole('button', { name: 'Team feedback' }).click();
   await page.locator('[data-testid="card-latte"] .add').click();
-  const files = page.getByRole('group', { name: 'Attachments' });
+  const files = page.getByRole('dialog', { name: 'New note', exact: true });
   await expect(files).toBeVisible();
-  // FRU-351: the ways are in the menu of « Attach ».
-  await files.getByRole('button', { name: 'Attach' }).click();
+  // FRU-351, FRU-607: the captures are in the menu of the icon « Take a screenshot ».
+  await files.getByRole('button', { name: 'Take a screenshot' }).click();
   await expect(files.getByRole('menuitem', { name: 'Capture the whole page' })).toBeVisible();
   await expect(files.getByRole('menuitem', { name: 'Capture an area' })).toBeVisible();
   await page.keyboard.press('Escape');
@@ -417,8 +417,9 @@ test('team mode: paired from the popup, the site reads and writes through the re
 
   // The control of the absence below: before the pairing nobody names this reviewer, and the
   // composer asks (FRU-112).
-  // The name of the person, a field in sight since FRU-305, that a known reviewer no longer sees.
-  const nameField = page.locator('[data-fruitback-who]');
+  // The signature of the person, an avatar at the end of the field since FRU-607, that a known
+  // reviewer no longer sees: the worker signs for them.
+  const nameField = page.locator('[data-fruitback-avatar]');
   await page.getByRole('button', { name: 'Team feedback' }).click();
   await page.locator('[data-testid="card-latte"] .add').click();
   await expect(nameField).toBeVisible();

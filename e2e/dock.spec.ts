@@ -163,7 +163,7 @@ test('a capture plays end to end inside the capsule, with the mouse and then wit
   await expect(page.locator('.fruitback-banner-key')).toHaveText('Esc');
   await target.hover();
   await expect(frame).toBeVisible();
-  await expect(page.locator('.fruitback-highlight-tag')).toHaveText(/^button\.add/);
+  await expect(page.locator('.fruitback-highlight-tag')).toHaveText(/^Ajouter · <Button>$/);
   await target.click();
   await expect(dialog).toBeVisible();
   // The choice ends the capture: the capsule is light again, its banner empty, its button back.
