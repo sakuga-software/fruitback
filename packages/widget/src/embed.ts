@@ -792,6 +792,21 @@ export function init(options: FruitbackOptions): Fruitback {
    */
   /** The capture of the element of the composer now (FRU-609), taken at the choice. */
   let elementShot: Promise<ElementCapture | undefined> | undefined;
+  /**
+   * One capture at a time (FRU-609, raised in review): the capture of the element starts at the
+   * choice, and a capture of the page asked at once after it would hide the widget and set the
+   * « shooting » rule while the first one still holds them, and give them back too soon.
+   */
+  const captures = serialized();
+  /**
+   * The « shooting » rule hides the pins (FRU-351). An area chosen and a capture taken can overlap (the
+   * capture of the element still on its way): it stays on until the last of them lets it go.
+   */
+  let shootingHolds = 0;
+  function holdShooting(change: 1 | -1): void {
+    shootingHolds = Math.max(0, shootingHolds + change);
+    (host.root.host as HTMLElement).toggleAttribute('data-fruitback-shooting', shootingHolds > 0);
+  }
 
   /**
    * The element and some page around it, with where the element is in the picture. Only where the
@@ -832,8 +847,7 @@ export function init(options: FruitbackOptions): Fruitback {
 
   async function captureFor(kind: 'page' | 'area'): Promise<PickedFile | 'cancelled' | 'permission' | undefined> {
     if (options.captureVisible === undefined) return undefined;
-    const container = host.root.host as HTMLElement;
-    container.toggleAttribute('data-fruitback-shooting', true);
+    holdShooting(+1);
     try {
       let area: CaptureArea | undefined;
       if (kind === 'area') {
@@ -844,20 +858,23 @@ export function init(options: FruitbackOptions): Fruitback {
 
       return await captureArea(area);
     } finally {
-      container.toggleAttribute('data-fruitback-shooting', false);
+      holdShooting(-1);
     }
   }
 
-  /** The page without the widget over it, whole or an area of it. */
-  async function captureArea(area: CaptureArea | undefined): Promise<PickedFile | 'permission' | undefined> {
+  /** The page without the widget over it, whole or an area of it, one capture at a time. */
+  function captureArea(area: CaptureArea | undefined): Promise<PickedFile | 'permission' | undefined> {
+    return captures.run(() => captureNow(area));
+  }
+
+  async function captureNow(area: CaptureArea | undefined): Promise<PickedFile | 'permission' | undefined> {
     const take = options.captureVisible;
     if (take === undefined) return undefined;
     const container = host.root.host as HTMLElement;
     const visibility = container.style.visibility;
     // The pins hide by their own rule (FRU-351): a pin draws itself visible inside a hidden host. The
     // capture of the element is taken with no area to choose, so it sets that rule here too (FRU-609).
-    const shooting = container.hasAttribute('data-fruitback-shooting');
-    container.toggleAttribute('data-fruitback-shooting', true);
+    holdShooting(+1);
     container.style.visibility = 'hidden';
     try {
       // Two frames: the page is painted without the widget before the browser takes it.
@@ -869,7 +886,7 @@ export function init(options: FruitbackOptions): Fruitback {
       return isCapturePermissionRefusal(error) ? 'permission' : undefined;
     } finally {
       container.style.visibility = visibility;
-      container.toggleAttribute('data-fruitback-shooting', shooting);
+      holdShooting(-1);
     }
   }
 
@@ -1777,6 +1794,23 @@ function draftIssue(draft: Draft): NoteIssue {
 
 function isDraft(issue: NoteIssue): boolean {
   return issue.id.startsWith(DRAFT_PREFIX);
+}
+
+/**
+ * Runs tasks one after the other, in the order they were asked (FRU-609). A task that fails does not
+ * stop the next one. Exported for its tests.
+ */
+export function serialized(): { run<T>(task: () => Promise<T>): Promise<T> } {
+  let last: Promise<unknown> = Promise.resolve();
+
+  return {
+    run<T>(task: () => Promise<T>): Promise<T> {
+      const next = last.then(task, task);
+      last = next.catch(() => undefined);
+
+      return next;
+    },
+  };
 }
 
 /** How much of the page around the element its capture takes, in CSS pixels (FRU-609). */

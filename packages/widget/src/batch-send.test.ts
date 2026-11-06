@@ -2,7 +2,7 @@ import { afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { canonicalizePageUrl } from '@fruitback/shared';
 import { noteFixture, noteIssueFixture } from '@fruitback/shared/note.fixture';
-import { init } from './embed.ts';
+import { init, serialized } from './embed.ts';
 import { createDraftStore } from './drafts.ts';
 import { createTypingStore } from './typing.ts';
 import type { TransportRequest, TransportResponse } from './transport.ts';
@@ -128,5 +128,34 @@ describe('« Send all » with a file, through init (FRU-608)', () => {
       ['sd_waiting'],
       'the batch lost the note that did not go',
     );
+  });
+});
+
+describe('one capture at a time (FRU-609)', () => {
+  it('runs the captures one after the other, in their order, and a failure does not stop the next', async () => {
+    const queue = serialized();
+    let inFlight = 0;
+    let most = 0;
+    const order: string[] = [];
+    const task =
+      (name: string, fail = false) =>
+      async () => {
+        inFlight += 1;
+        most = Math.max(most, inFlight);
+        await settle(5);
+        order.push(name);
+        inFlight -= 1;
+        if (fail) throw new Error(name);
+
+        return name;
+      };
+    const element = queue.run(task('element', true));
+    const page = queue.run(task('page'));
+    const area = queue.run(task('area'));
+    await assert.rejects(element);
+    assert.equal(await page, 'page');
+    assert.equal(await area, 'area');
+    assert.equal(most, 1, 'two captures ran at once');
+    assert.deepEqual(order, ['element', 'page', 'area']);
   });
 });
