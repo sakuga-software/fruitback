@@ -578,6 +578,28 @@ describe('the rows of done_notices (FRU-604)', () => {
     assert.deepEqual(await rowsOf(world.database, 'SELECT * FROM done_notices'), []);
   });
 
+  it('takes no row for a note that leaves the index between its read and the write, and throws nothing', async () => {
+    const { world, store, notices, site } = await aPublicSite();
+    await plant(
+      world,
+      store,
+      notices,
+      noteFixture({ id: 'nr_6', page: { url: PAGE, path: '/pricing' }, client: { id: site, name: 'Acme' } }),
+    );
+    // The race, made certain: the row of the index goes just before the row of done_notices is written.
+    await rowsOf(
+      world.database,
+      `CREATE FUNCTION forget_first() RETURNS trigger LANGUAGE plpgsql AS $$
+         BEGIN DELETE FROM note_index WHERE site_id = NEW.site_id AND note_id = NEW.note_id; RETURN NEW; END $$`,
+    );
+    await rowsOf(
+      world.database,
+      'CREATE TRIGGER forget_first BEFORE INSERT ON done_notices FOR EACH ROW EXECUTE FUNCTION forget_first()',
+    );
+    assert.equal(await notices.watch({ site, note: 'nr_6', email: 'ana@example.com' }, Date.now()), false);
+    assert.deepEqual(await rowsOf(world.database, 'SELECT * FROM done_notices'), []);
+  });
+
   it('answers a row to one of two takes at once', async () => {
     const { world, store, notices, site } = await aPublicSite();
     await plant(

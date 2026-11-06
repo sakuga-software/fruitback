@@ -736,13 +736,20 @@ export function createPostgresDoneNotices(database: Database): DoneNotices {
           .where(and(eq(note_index.site_id, notice.site), eq(note_index.note_id, notice.note)))
           .limit(1);
         if (held === undefined) return false;
-        const written = await db
-          .insert(done_notices)
-          .values(row)
-          .onConflictDoNothing({ target: [done_notices.site_id, done_notices.note_id] })
-          .returning({ note: done_notices.note_id });
+        try {
+          const written = await db
+            .insert(done_notices)
+            .values(row)
+            .onConflictDoNothing({ target: [done_notices.site_id, done_notices.note_id] })
+            .returning({ note: done_notices.note_id });
 
-        return written.length > 0;
+          return written.length > 0;
+        } catch (error) {
+          // The note left the index between the read above and this write (`forget`, a site removed):
+          // a note of nowhere, as if the read had not found it.
+          if (isForeignKeyViolation(error)) return false;
+          throw error;
+        }
       });
     },
 
@@ -797,4 +804,13 @@ export function createPostgresDoneNotices(database: Database): DoneNotices {
       return gone.length;
     },
   };
+}
+
+/** Whether PostgreSQL refused a write for a foreign key: the row it names is gone. */
+function isForeignKeyViolation(error: unknown): boolean {
+  for (let cause = error; typeof cause === 'object' && cause !== null; cause = (cause as { cause?: unknown }).cause) {
+    if ((cause as { code?: unknown }).code === '23503') return true;
+  }
+
+  return false;
 }
