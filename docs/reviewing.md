@@ -95,8 +95,9 @@ client or a team? Use the email the invitation was sent to.
 ![The popup of a browser that is signed out: Sign in with email, Google, GitHub](assets/guide/popup-sign-in.png)
 
 On a site of one of your workspaces that is not on yet, the popup asks
-« Turn Fruitback on for this site? », says where its notes go and who sees them, and offers « Turn on ». One click: the
-browser asks for access to that site only, and the widget appears, reading and writing as you. On a
+« Leave notes on this site? », says where its notes go and who sees them, and offers « Turn on ». One click: the
+browser asks for access to that site only, and the widget appears, reading and writing as you.
+« Change before turning on » changes where the notes go and who sees them first. On a
 site of none of your workspaces, an owner or an admin gets the same question with « Turn on », and a
 list of the workspaces when there are several: the browser asks for access to the site, the site is
 added to that workspace, for its members only, and the widget appears.
@@ -335,14 +336,14 @@ then what to do.
 
 ### The sign-in did not finish
 
-The popup shows the sign-in buttons again, with the reason above them.
+The popup says what stopped it as its title, then why, then « Sign in again ».
 
-| The popup says                                                                                                   | Why                                                                 |
-| ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| `Someone declined it in the console. Sign in again to retry.`                                                    | Someone pressed « Not now » in the tab of the console.              |
-| `The console did not approve it within 15 minutes. Sign in again.`                                               | The request expired before anyone pressed **Connect Chrome** there. |
-| `Check the connection, then try again.`                                                                          | Fruitback could not be reached. Check that the browser is online.   |
-| `The browser did not give the extension access to Fruitback. Sign in again, and allow it when the browser asks.` | You refused the browser's prompt for Fruitback itself.              |
+| The popup says                                                                                | Why                                                                 |
+| --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `Someone pressed “Not now” in the console. Nothing changed in your sites.`                    | Someone pressed « Not now » in the tab of the console.              |
+| `The console did not approve it within 15 minutes.`                                           | The request expired before anyone pressed **Connect Chrome** there. |
+| `Check the connection, then try again.`                                                       | Fruitback could not be reached. Check that the browser is online.   |
+| `The browser did not give the extension access to Fruitback. Allow it when the browser asks.` | You refused the browser's prompt for Fruitback itself.              |
 
 While the popup waits for the console, it shows the word to check. If it reads
 `Fruitback did not answer. The popup asks again.`, it asks again by itself. « Start again » makes a
@@ -398,7 +399,9 @@ On a site of none of your workspaces:
 
 - If you are an owner or an admin of at least one workspace, the popup offers « Turn on ». It adds
   the site to the workspace you choose.
-- Otherwise the popup reads `Ask an admin of your workspace to add this site.`, and has no button.
+- Otherwise the popup reads `An admin of your workspace adds sites`, or names your workspace when
+  you are in one only. It gives a message for that admin, with the address of the site, and
+  « Copy the message ».
 - If your role changed in the meantime, « Turn on » answers
   `Your role in this workspace does not let you add a site.`
 

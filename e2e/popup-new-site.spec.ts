@@ -13,7 +13,7 @@ import {
 import { AUTHENTICATED_WORKER_ORIGIN } from './worker-sessions.ts';
 
 /**
- * A site of no workspace in the popup (FRU-255; screen 2 of FRU-298): « Turn Fruitback on for this
+ * A site of no workspace in the popup (FRU-255; screen 2 of FRU-298): « Leave notes on this
  * site? », its « Workspace » and « Turn on », then screen 3 with what the worker says of the site.
  *
  * The account is signed in through the routes of FRU-238, and `GET` and `POST /session/sites` are
@@ -191,23 +191,29 @@ test('a site of no workspace: added to one and turned on, in one click, then scr
 
   const popup = await openPopup(extension, page);
   await popup.setViewportSize({ width: 380, height: 580 });
-  await expect(popup.getByRole('heading', { level: 1, name: 'Turn Fruitback on for this site?' })).toBeVisible();
+  await expect(popup.getByRole('heading', { level: 1, name: 'Leave notes on this site?' })).toBeVisible();
   await expect(popup.locator('.kit-site-host')).toHaveText('localhost:5177');
   await expect(popup.getByText('Not in your sites yet')).toBeVisible();
   // Only where the account may add a site: not Lumen, where it is a guest.
   const list = popup.getByRole('combobox', { name: 'Workspace' });
   await expect(list.locator('option')).toHaveText(['Sakuga', 'Northwind']);
-  // FRU-453: who sees the notes and where they go are lists, for a role that manages the sites.
-  const who = popup.getByRole('combobox', { name: 'Who sees the notes' });
-  await expect(who).toHaveValue('members');
-  await expect(who.locator('option:checked')).toHaveText('Your team and invited guests');
-  const where = popup.getByRole('combobox', { name: 'Notes go to' });
-  await expect(where.locator('option')).toHaveText(['Fruitback (no tracker)']);
+  // P2 of FRU-598: the defaults in a summary, which follows the workspace chosen.
+  const summary = popup.locator('.turn-on-summary');
+  await expect(summary.locator('dd')).toHaveText(['Fruitback', 'Members of Sakuga']);
   await expect(popup.getByText(/preview build/i)).toHaveCount(0);
   expectNear(await boxOf(popup.getByRole('heading', { level: 1 })), { x: 24, width: 332 }, 'title');
   expectNear(await boxOf(popup.getByRole('button', { name: 'Turn on' })), { x: 24, width: 332, height: 46 }, 'turn on');
   expect(await popup.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(380);
   await clean(popup, 'the popup on a site of no workspace');
+
+  // FRU-453: who sees the notes and where they go are lists, for a role that manages the sites.
+  await popup.getByRole('button', { name: 'Change before turning on' }).click();
+  const who = popup.getByRole('combobox', { name: 'Who sees the notes' });
+  await expect(who).toHaveValue('members');
+  await expect(who.locator('option:checked')).toHaveText('Members of Sakuga');
+  const where = popup.getByRole('combobox', { name: 'Notes go to' });
+  await expect(where.locator('option')).toHaveText(['Fruitback (no tracker)']);
+  await clean(popup, 'the lists of « Change before turning on »');
 
   await list.selectOption('ws_2');
   // The providers follow the workspace chosen; then a team, then a project of it.
@@ -338,18 +344,33 @@ test('an add refused for its session keeps the buttons off until the popup is dr
   expect(posted).toEqual([]);
 });
 
-test('a site of no workspace, for an account that may add none: who can, and no button', async ({ extension }) => {
+test('a site of no workspace, for an account that may add none: a message for an admin, and no « Turn on »', async ({
+  extension,
+}) => {
   const page = await extension.context.newPage();
   await openBareSite(page, 'popup-new-site-none');
   const { posted } = await sitesRoute(extension.context, [
     { id: 'ws_3', name: 'Lumen', role: 'member', canAddSite: false },
   ]);
   await signedIn(extension, page, 'req_add_2');
+  await extension.context.grantPermissions(['clipboard-read', 'clipboard-write']);
 
   const popup = await openPopup(extension, page);
-  await expect(popup.getByText('Ask an admin of your workspace to add this site.')).toBeVisible();
+  await popup.setViewportSize({ width: 380, height: 580 });
+  // P2 of FRU-598: the one workspace of the account is named, and the message names the site.
+  await expect(popup.getByRole('heading', { level: 1, name: 'An admin of Lumen adds sites' })).toBeVisible();
+  const message = popup.getByRole('textbox', { name: 'Message to send them' });
+  await expect(message).toHaveValue(
+    'Could you add http://localhost:5177 to the Lumen workspace of Fruitback? I would like to leave notes on it.',
+  );
+  await expect(message).not.toBeEditable();
   await expect(popup.getByRole('button', { name: 'Turn on' })).toHaveCount(0);
   await clean(popup, 'the popup on a site of no workspace, without the right to add one');
+
+  await popup.getByRole('button', { name: 'Copy the message' }).click();
+  await expect(popup.getByRole('status')).toHaveText('Copied');
+  expect(await popup.evaluate(() => navigator.clipboard.readText())).toBe(await message.inputValue());
+  expect(await popup.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(380);
   expect(posted).toEqual([]);
 });
 
@@ -374,7 +395,7 @@ test('a Fruitback that does not answer is said, not read as « ask an admin »',
   const popup = await openPopup(extension, page);
   // Screen 4 (FRU-297): said in an alert, with « Try again ».
   await expect(popup.locator('.kit-alert-title')).toHaveText(/^Fruitback can't reach /);
-  await expect(popup.getByText('Ask an admin of your workspace to add this site.')).toHaveCount(0);
+  await expect(popup.getByText(/adds sites$/)).toHaveCount(0);
   down = false;
   await popup.getByRole('button', { name: 'Try again' }).click();
   await expect(popup.getByRole('button', { name: 'Turn on' })).toBeVisible();
@@ -392,7 +413,9 @@ test('a site of no workspace speaks French, with one workspace and no list', asy
   const popup = await openPopup(extension, page);
   await popup.setViewportSize({ width: 380, height: 580 });
   await expect(popup.getByText('Pas encore dans vos sites')).toBeVisible();
-  await expect(popup.getByRole('heading', { level: 1, name: 'Activer Fruitback sur ce site ?' })).toBeVisible();
+  await expect(popup.getByRole('heading', { level: 1, name: 'Laisser des notes sur ce site ?' })).toBeVisible();
+  await expect(popup.locator('.turn-on-summary dd')).toHaveText(['Fruitback', 'Les membres de Sakuga']);
+  await expect(popup.getByRole('button', { name: 'Modifier avant d’activer' })).toBeVisible();
   // One workspace: no list of workspaces (the lists of FRU-453 are about the site).
   await expect(popup.getByRole('combobox', { name: 'Workspace' })).toHaveCount(0);
   await expect(popup.getByRole('button', { name: 'Activer', exact: true })).toBeVisible();

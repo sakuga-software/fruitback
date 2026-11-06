@@ -163,18 +163,24 @@ export async function siteOfNoWorkspace(origin: string, account: Account | undef
       onSettings: openSettings,
     });
   }
-  const listed = CLOUD === undefined ? [] : await addableWorkspaces(CLOUD, cloudSeams());
+  const listed = CLOUD === undefined ? { addable: [], all: [] } : await addableWorkspaces(CLOUD, cloudSeams());
   // Fruitback said nothing: that is an outage, not « ask an admin ».
   if (listed === undefined) return unreachableScreen(account);
-  const workspaces = listed;
+  const workspaces = listed.addable;
+  // P2 of FRU-598: the message for an admin names the workspace when the account is in one only.
+  const [only, ...others] = listed.all;
   const problem = make(document, 'p', 'problem');
   // FRU-453: what is chosen here is written once the site is added, before it is turned on.
   const wanted: SiteSettings = {};
   const screen = turnOnScreen(document, {
     origin,
-    // A site is added for the members of its workspace: the worker's default.
+    // A site is added for the members of its workspace, and keeps its notes: the worker's defaults.
     visibility: 'members',
+    destination: 'Fruitback',
+    destinationKind: 'fruitback',
     workspaces,
+    ...(only !== undefined && others.length === 0 ? { adminOf: only.name } : {}),
+    copy: copyText,
     choices: {
       sources: Object.fromEntries(workspaces.map((each) => [each.id, each.sources ?? []])),
       place: null,

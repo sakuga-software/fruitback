@@ -1384,3 +1384,85 @@ body.popup-page {
     animation: none;
   }
 }
+
+/* P2 of FRU-598: what the defaults of « Turn on » do, in a card, with the link that changes them. */
+.popup .turn-on-summary {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 12px 14px 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-action);
+}
+
+/* One line for each fact, the term before its value, with no rule between them. */
+.popup .turn-on-summary .kit-dl {
+  align-self: stretch;
+  gap: 6px;
+  border: 0;
+}
+
+.popup .turn-on-summary .kit-dl-entry {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 6px;
+  padding: 0;
+  border: 0;
+  font-size: 13px;
+}
+
+.popup .turn-on-summary .kit-dl-entry > dd {
+  font-weight: 600;
+}
+
+/* The word of the link lines up with the facts: the 8 px of its target go out of the card. */
+.popup .turn-on-summary .kit-text {
+  margin-inline-start: -8px;
+  font-size: 13px;
+}
+
+/* The workspace of a site of no workspace: a field of its own, before the card. */
+.popup .turn-on-workspace {
+  border: 0;
+}
+
+.popup .turn-on-workspace .kit-dl-entry {
+  padding: 0;
+}
+
+/* P2 of FRU-598: the message for an admin, to read and to copy. */
+.popup .admin-message {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.popup .admin-message textarea {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 10px 12px;
+  /* The edge of a field needs 3:1 on the surface (WCAG 1.4.11). */
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-field);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.45;
+  resize: none;
+}
+
+.popup .admin-copied {
+  margin: 0;
+  font-size: 13px;
+  text-align: center;
+}
+
+.popup .admin-copied:empty {
+  display: none;
+}

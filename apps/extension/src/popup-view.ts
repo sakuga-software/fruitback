@@ -1,6 +1,5 @@
 import { language, t } from './i18n.ts';
 import {
-  type Definition,
   alertBox,
   button,
   definitions,
@@ -109,7 +108,7 @@ export type SignedOutOptions = {
   canSignIn: boolean;
   /** The session of the account ended: expired, or signed out from the console. */
   ended?: boolean;
-  /** A sign-in that did not finish: said in an alert, above the ways to sign in again. */
+  /** A sign-in that did not finish: its problem is the title, above the ways to sign in again. */
   stop?: SignInStop;
   onSignIn: () => void;
   onSettings: () => void;
@@ -120,25 +119,20 @@ export type SignedOutOptions = {
  * offers its own methods: the extension has no surface of authentication of its own.
  */
 export function signedOut(document: Document, options: SignedOutOptions): HTMLElement {
+  const { stop } = options;
+  let [title, lead] = [
+    t('Comment on any website, right on the page'),
+    t('Sign in once. Fruitback then works on every site your team reviews.'),
+  ];
+  if (stop !== undefined) [title, lead] = [stop.title, stop.text];
+  else if (options.ended === true) {
+    [title, lead] = [t('Your sign-in ended'), t('Sign in again to see and leave notes here.')];
+  }
   const intro = make(document, 'div', 'intro');
-  intro.append(
-    make(
-      document,
-      'h1',
-      '',
-      options.ended === true ? t('Your sign-in ended') : t('Comment on any website, right on the page'),
-    ),
-    make(
-      document,
-      'p',
-      'lead',
-      options.ended === true
-        ? t('Sign in again to see and leave notes here.')
-        : t('Sign in once. Fruitback then works on every site your team reviews.'),
-    ),
-  );
+  intro.append(make(document, 'h1', '', title), make(document, 'p', 'lead', lead));
+  // P2 of FRU-598: the problem is the title. The screen changed under the person, so it is said at once.
+  if (stop !== undefined) intro.setAttribute('role', 'alert');
   const body: Node[] = [intro];
-  if (options.stop !== undefined) body.push(alertBox(document, options.stop.title, options.stop.text));
 
   const own = t('Use your own Fruitback server');
   if (!options.canSignIn) {
@@ -154,13 +148,19 @@ export function signedOut(document: Document, options: SignedOutOptions): HTMLEl
     providerButton(document, 'google', options.onSignIn),
     providerButton(document, 'github', options.onSignIn),
   );
-  methods.append(primaryButton(document, t('Sign in with email'), options.onSignIn), others);
-  const invited = make(document, 'div', 'invited');
-  invited.append(
-    make(document, 'span', '', t('Invited by a client or a team?')),
-    make(document, 'span', '', t('Use the email the invitation was sent to.')),
+  methods.append(
+    primaryButton(document, stop === undefined ? t('Sign in with email') : t('Sign in again'), options.onSignIn),
+    others,
   );
-  body.push(methods, invited);
+  body.push(methods);
+  if (stop === undefined) {
+    const invited = make(document, 'div', 'invited');
+    invited.append(
+      make(document, 'span', '', t('Invited by a client or a team?')),
+      make(document, 'span', '', t('Use the email the invitation was sent to.')),
+    );
+    body.push(invited);
+  }
 
   const foot = make(document, 'div', 'popup-foot');
   foot.append(linkButton(document, own, options.onSettings));
@@ -204,21 +204,22 @@ export function connecting(document: Document, options: ConnectingOptions): HTML
 
 export type SignInProblem = 'refused' | 'expired' | 'unavailable' | 'untrusted' | 'blocked';
 
-/** What stopped a sign-in, in two sentences: the title of the alert, and its words. */
+/** What stopped a sign-in: the title of the screen, and the sentence under it. */
 export function signInStop(problem: SignInProblem): SignInStop {
   const said: Record<SignInProblem, [string, string]> = {
-    refused: [t('The sign-in did not finish.'), t('Someone declined it in the console. Sign in again to retry.')],
-    expired: [t('The sign-in did not finish.'), t('The console did not approve it within 15 minutes. Sign in again.')],
-    unavailable: [t('Fruitback could not be reached.'), t('Check the connection, then try again.')],
+    refused: [
+      t('The sign-in did not finish'),
+      t('Someone pressed “Not now” in the console. Nothing changed in your sites.'),
+    ],
+    expired: [t('The sign-in did not finish'), t('The console did not approve it within 15 minutes.')],
+    unavailable: [t('Fruitback could not be reached'), t('Check the connection, then try again.')],
     untrusted: [
-      t('The sign-in did not start.'),
+      t('The sign-in did not start'),
       t('Fruitback named a console that is not its own. Tell the person who runs your Fruitback.'),
     ],
     blocked: [
-      t('The sign-in did not start.'),
-      t(
-        'The browser did not give the extension access to Fruitback. Sign in again, and allow it when the browser asks.',
-      ),
+      t('The sign-in did not start'),
+      t('The browser did not give the extension access to Fruitback. Allow it when the browser asks.'),
     ],
   };
   const [title, text] = said[problem];
@@ -330,9 +331,9 @@ export function loading(document: Document, options: { onSettings: () => void })
   return shell(document, { onSettings: options.onSettings }, said);
 }
 
-/** « Who sees the notes », as the mock-up says each visibility. */
-export function visibilityWords(visibility: 'members' | 'everyone'): string {
-  return visibility === 'everyone' ? t('Everyone who visits the site') : t('Your team and invited guests');
+/** « Who sees the notes », in the words of the console (P2 of FRU-598): one label for each visibility. */
+export function visibilityWords(visibility: 'members' | 'everyone', workspace: string): string {
+  return visibility === 'everyone' ? t('Everyone who visits') : t('Members of {workspace}', { workspace });
 }
 
 export type TurnOnOptions = {
@@ -371,6 +372,13 @@ export type TurnOnOptions = {
    * and nothing to press.
    */
   unaddable?: string;
+  /**
+   * A site of no workspace, and no workspace where the account may add it (P2 of FRU-598): the
+   * workspace the message for an admin names, when the account is in one only.
+   */
+  adminOf?: string;
+  /** Copies the message for an admin. `false`: the browser refused, and the screen shows the text. */
+  copy?: (text: string) => Promise<boolean>;
   /** « Turn on », with the workspace chosen for a site of no workspace. */
   onTurnOn: (workspace?: string) => void;
   onSettings: () => void;
@@ -383,6 +391,7 @@ export type TurnOnOptions = {
 function visibilityChoice(
   document: Document,
   visibility: 'members' | 'everyone',
+  workspace: string,
   onVisibility: (visibility: 'members' | 'everyone') => Promise<boolean>,
 ): HTMLSelectElement {
   const select = make(document, 'select', '');
@@ -390,7 +399,7 @@ function visibilityChoice(
   select.setAttribute('aria-label', t('Who sees the notes'));
   select.append(
     shownChoice(document),
-    ...(['members', 'everyone'] as const).map((value) => option(document, value, visibilityWords(value))),
+    ...(['members', 'everyone'] as const).map((value) => option(document, value, visibilityWords(value, workspace))),
   );
   select.value = visibility;
   answered(select, () => onVisibility(select.value === 'everyone' ? 'everyone' : 'members'));
@@ -451,34 +460,12 @@ export function turnOnScreen(document: Document, options: TurnOnOptions): HTMLEl
   if (options.workspace === undefined && options.unaddable !== undefined) {
     return frame(hostAsTitle(site), make(document, 'p', 'lead', options.unaddable));
   }
-  if (options.workspace === undefined && first === undefined) {
-    return frame(
-      hostAsTitle(site),
-      make(document, 'p', 'lead', t('Ask an admin of your workspace to add this site.')),
-      helpLink(document, whoCanAdd()),
-    );
-  }
+  if (options.workspace === undefined && first === undefined) return frame(site, ...askAnAdmin(document, options));
 
-  const change = (): HTMLButtonElement | undefined =>
-    options.onChange === undefined ? undefined : textButton(document, t('Change'), options.onChange);
   const choices = options.choices;
   let chosen = first?.id;
-  const entries: Definition[] = [];
-  // FRU-530: the line of « Notes go to » with the mark of its provider, as on a site that is on.
-  const destination =
-    choices === undefined && options.destination !== undefined
-      ? destinationEntry(document, options.destination, change(), options.destinationKind)
-      : undefined;
-  if (choices === undefined) {
-    const who = change();
-    entries.push({
-      term: t('Who sees the notes'),
-      value: visibilityWords(options.visibility),
-      ...(who === undefined ? {} : { action: who }),
-    });
-  }
-  const facts = definitions(document, entries);
-  if (destination !== undefined) facts.prepend(destination);
+  const workspaceName = (): string =>
+    options.workspace ?? addable.find((workspace) => workspace.id === chosen)?.name ?? '';
   /** A line of the list whose value is a field: a `select` in its `dd`. */
   const field = (term: string, input: HTMLElement): HTMLElement => {
     const entry = make(document, 'div', 'kit-dl-entry');
@@ -489,8 +476,24 @@ export function turnOnScreen(document: Document, options: TurnOnOptions): HTMLEl
     return entry;
   };
 
-  // FRU-453: the place, then who sees the notes, each a list. The places follow the workspace chosen.
-  let refill: (() => void) | undefined;
+  // P2 of FRU-598: a summary of what the defaults do, so that one click turns the site on.
+  const summary = make(document, 'div', 'turn-on-summary');
+  const drawSummary = (): void => {
+    const facts = definitions(document, [
+      { term: t('Seen by'), value: visibilityWords(options.visibility, workspaceName()) },
+    ]);
+    // FRU-530: the line of « Notes go to » with the mark of its provider, as on a site that is on.
+    if (options.destination !== undefined) {
+      facts.prepend(destinationEntry(document, options.destination, undefined, options.destinationKind));
+    }
+    summary.querySelector('dl')?.remove();
+    summary.prepend(facts);
+  };
+  drawSummary();
+
+  // FRU-453: for a role that may, « Change before turning on » opens the place, then who sees the
+  // notes, each a list. The places follow the workspace chosen. Another role goes to the console.
+  let lists: { entries: HTMLElement; refill: () => void } | undefined;
   if (choices !== undefined) {
     const workspaceNow = (): string => chosen ?? choices.workspace ?? '';
     const place = placeChoice(document, {
@@ -499,14 +502,37 @@ export function turnOnScreen(document: Document, options: TurnOnOptions): HTMLEl
       loadOffer: (connector) => choices.loadOffer(workspaceNow(), connector),
       onPlace: choices.onPlace,
     });
-    facts.append(
-      ...place.entries,
-      field(t('Who sees the notes'), visibilityChoice(document, options.visibility, choices.onVisibility)),
-    );
-    // Another workspace offers other sources: the lists are drawn again, with « Fruitback » chosen.
-    refill = place.reset;
+    const seen = make(document, 'dd', '');
+    const drawSeen = (): void => {
+      const now = seen.querySelector('select')?.value;
+      const said = now === 'everyone' || now === 'members' ? now : options.visibility;
+      seen.replaceChildren(visibilityChoice(document, said, workspaceName(), choices.onVisibility));
+    };
+    drawSeen();
+    const seenEntry = make(document, 'div', 'kit-dl-entry');
+    seenEntry.append(make(document, 'dt', '', t('Who sees the notes')), seen);
+    const entries = make(document, 'dl', 'kit-dl');
+    entries.append(...place.entries, seenEntry);
+    lists = {
+      entries,
+      refill: () => {
+        place.reset();
+        // « Members of {workspace} » names the workspace chosen: the list is drawn again with it.
+        drawSeen();
+      },
+    };
   }
+  const open =
+    lists !== undefined
+      ? (): void => {
+          if (lists === undefined) return;
+          summary.replaceWith(lists.entries);
+          lists.entries.querySelector('select')?.focus();
+        }
+      : options.onChange;
+  if (open !== undefined) summary.append(textButton(document, t('Change before turning on'), open));
 
+  const body: Node[] = [site, make(document, 'h1', '', t('Leave notes on this site?'))];
   if (addable.length > 1) {
     const select = make(document, 'select', '');
     select.name = 'workspace';
@@ -514,18 +540,71 @@ export function turnOnScreen(document: Document, options: TurnOnOptions): HTMLEl
     select.append(shownChoice(document), ...addable.map((workspace) => option(document, workspace.id, workspace.name)));
     select.addEventListener('change', () => {
       chosen = select.value;
-      refill?.();
+      // Another workspace offers other sources: the lists are drawn again, with « Fruitback » chosen.
+      lists?.refill();
+      drawSummary();
     });
-    facts.prepend(field(t('Workspace'), select));
+    const workspaceList = make(document, 'dl', 'kit-dl');
+    workspaceList.classList.add('turn-on-workspace');
+    workspaceList.append(field(t('Workspace'), select));
+    body.push(workspaceList);
   }
 
   const act = make(document, 'div', 'action-block');
   act.append(
     action(document, t('Turn on'), () => options.onTurnOn(options.workspace === undefined ? chosen : undefined)),
-    make(document, 'p', 'note', t('Your browser will ask to allow this site once.')),
+    make(document, 'p', 'note', t('Your browser asks once for access to this site.')),
   );
 
-  return frame(site, make(document, 'h1', '', t('Turn Fruitback on for this site?')), facts, act);
+  return frame(...body, summary, act);
+}
+
+/**
+ * P2 of FRU-598: a site that only an admin can add. A message to send them, ready to copy, in place
+ * of a dead end. The names of the admins are not said: the worker does not give them to a member.
+ */
+function askAnAdmin(document: Document, options: TurnOnOptions): Node[] {
+  const workspace = options.adminOf;
+  const title =
+    workspace === undefined
+      ? t('An admin of your workspace adds sites')
+      : t('An admin of {workspace} adds sites', { workspace });
+  const message =
+    workspace === undefined
+      ? t('Could you add {origin} to our workspace of Fruitback? I would like to leave notes on it.', {
+          origin: options.origin,
+        })
+      : t('Could you add {origin} to the {workspace} workspace of Fruitback? I would like to leave notes on it.', {
+          origin: options.origin,
+          workspace,
+        });
+  const label = make(document, 'label', 'admin-message', t('Message to send them'));
+  const text = make(document, 'textarea', '');
+  text.readOnly = true;
+  text.rows = 4;
+  text.value = message;
+  label.append(text);
+  const nodes: Node[] = [make(document, 'h1', '', title), label];
+  const { copy } = options;
+  if (copy !== undefined) {
+    const said = make(document, 'p', 'admin-copied');
+    said.setAttribute('role', 'status');
+    const press = action(document, t('Copy the message'), () => {
+      said.textContent = '';
+      void copy(message).then((copied) => {
+        if (copied) said.textContent = t('Copied');
+        else {
+          // The browser refused: the text is chosen, so that the person copies it with the keys.
+          text.focus();
+          text.select();
+        }
+      });
+    });
+    nodes.push(press, said);
+  }
+  nodes.push(helpLink(document, whoCanAdd()));
+
+  return nodes;
 }
 
 /**
