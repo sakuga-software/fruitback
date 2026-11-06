@@ -547,7 +547,8 @@ async function sendReply(): Promise<void> {
   const { outcome } = await ask('reply', { note: sending.id, body: sending.text });
   if (outcome === 'sent') {
     replying = undefined;
-    replyTexts.delete(sending.id);
+    // Only the text that went: a text typed for this note since the send stays (review of #857).
+    if (replyTexts.get(sending.id) === sending.text) replyTexts.delete(sending.id);
     await readNotes();
     // The field and « Send » are gone: the focus goes back to « Reply » of the same row, not to the
     // body of the page (raised in review).
