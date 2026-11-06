@@ -185,14 +185,18 @@ export function firstNotePath(workspace: Workspace, site: Site): string {
 }
 
 /**
- * The first note of a page of the list, the newest first: its last one. `undefined` for a list that
- * did not come, or a note that is not what the index answers. The end of the setup is drawn without
- * it then: a worker with no index (no database) answers `404` there.
+ * The first note of the site, from one page of its list, the newest first: the last note of a page
+ * that is the whole list. A page with a `next` holds only the newest notes: its last one is not the
+ * first, so there is none to show (review of #834). The setup reads this list at its first note, so
+ * a page of 8 holds them all unless notes came fast or the site was in use before.
+ *
+ * `undefined` too for a list that did not come, or a note that is not what the index answers. The
+ * end of the setup is drawn without it then: a worker with no index (no database) answers `404`.
  */
 export function firstNoteOf(answer: Answer<unknown>): FirstNote | undefined {
   if (!answer.ok) return undefined;
-  const notes = (answer.data as { notes?: unknown } | null | undefined)?.notes;
-  if (!Array.isArray(notes)) return undefined;
+  const { notes, next } = (answer.data ?? {}) as { notes?: unknown; next?: unknown };
+  if (!Array.isArray(notes) || next !== undefined) return undefined;
   const last: unknown = notes.at(-1);
   if (typeof last !== 'object' || last === null) return undefined;
   const { excerpt, page, note } = last as { excerpt?: unknown; page?: unknown; note?: unknown };

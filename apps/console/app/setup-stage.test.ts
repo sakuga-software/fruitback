@@ -230,6 +230,12 @@ describe('the setup with no question of access (FRU-610)', () => {
     });
   });
 
+  it('has no first note when the page is not the whole list: its last note is only the 8th newest', () => {
+    assert.equal(firstNoteOf(yes({ notes: [indexed], next: 'c1' })), undefined);
+    // The control: the same page with no `next` is the whole list.
+    assert.notEqual(firstNoteOf(yes({ notes: [indexed] })), undefined);
+  });
+
   it('has no first note for a refusal, an empty list, or a note that is not what the index answers', () => {
     // A worker with no index (no database) answers 404 to the list.
     assert.equal(firstNoteOf(no(404, 'not-found')), undefined);

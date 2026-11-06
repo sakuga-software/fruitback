@@ -297,8 +297,10 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
     for a page of the site), then « Connect Linear or GitHub » (the Connectors screen) and « Open the
     console ». **Not its selector nor its component**, which the board draws: the index keeps
     neither, and the console reads no store of the notes. Showing them is a column of `note_index` and
-    a migration, left for a ticket of its own. A worker with no index answers `404` to the list, and
-    the end is said without the note. The sentence says « a tracker or your own API »: GitHub is a
+    a migration, left for a ticket of its own. The first note is the last of a page of 8, the newest
+    first, and only when that page is the whole list (no `next`): otherwise it is not the first, and
+    none is shown. A worker with no index answers `404` to the list, and the end is said without the
+    note. The sentence says « a tracker or your own API »: GitHub is a
     source only where the worker has its App (FRU-361).
   - **Still waiting**: « Signs in with this account. No code to type. » (a browser is still connected
     from here until the popup asks, FRU-238, FRU-251). **The script keeps `data-fruitback-endpoint`**
