@@ -575,6 +575,17 @@ test('long words never wrap in a button, and the field grows to 150 px then scro
   await field.fill(Array.from({ length: 14 }, (_, n) => `Ligne ${n + 1} d’une longue note`).join('\n'));
   expect(await tall()).toBe(150);
   expect(await field.evaluate((node) => node.scrollHeight > node.clientHeight)).toBe(true);
+  // The measure behind the comment below: after typing, the field is scrolled to its end.
+  const after = await field.evaluate((node) => node.scrollHeight - node.clientHeight - node.scrollTop);
+  expect(after).toBeLessThanOrEqual(1);
+  await expect(field).not.toHaveAttribute('data-fruitback-more', '');
+  // Typing leaves the caret, and the view, at the end of the text: nothing is below it then. Back at
+  // the top of the field, the rest of the text is below, and the foot fades.
+  await field.evaluate((node) => {
+    node.scrollTop = 0;
+    node.dispatchEvent(new Event('scroll'));
+  });
+  await expect(field).toHaveAttribute('data-fruitback-more', '');
   expect(await field.evaluate((node) => getComputedStyle(node).maskImage)).toContain('linear-gradient');
   // At the end of the text, no more fade: nothing is below.
   await field.evaluate((node) => {
@@ -582,6 +593,7 @@ test('long words never wrap in a button, and the field grows to 150 px then scro
     node.dispatchEvent(new Event('scroll'));
   });
   await expect(field).not.toHaveAttribute('data-fruitback-more', '');
+  expect(await field.evaluate((node) => getComputedStyle(node).maskImage)).toBe('none');
   // And the text is all there.
   await expect(field).toHaveValue(/Ligne 14 d’une longue note$/);
 });
