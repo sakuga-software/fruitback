@@ -50,6 +50,8 @@ async function send(page: Page, note: string): Promise<string> {
 
 test('a visitor gives an address after a note, and gets one e-mail when it is done', async ({ page }) => {
   test.slow();
+  // A window where the element sits low: the question makes the composer taller after the send.
+  await page.setViewportSize({ width: 1280, height: 800 });
   await openWidget(page, 'notify-guest');
   const id = await send(page, 'Le bouton Commander est trop petit');
 
@@ -57,6 +59,9 @@ test('a visitor gives an address after a note, and gets one e-mail when it is do
   await expect(question).toBeVisible();
   await expect(question.locator('#fruitback-notify-title')).toHaveText('Want to know when it’s fixed?');
   await expect(question).toHaveAttribute('aria-labelledby', 'fruitback-notify-title');
+  // Placed again with its new height: both answers are inside the window, with no scroll.
+  await expect(question.getByRole('button', { name: 'Notify me' })).toBeInViewport({ ratio: 1 });
+  await expect(question.getByRole('button', { name: 'No thanks' })).toBeInViewport({ ratio: 1 });
   await expect(question.getByRole('textbox', { name: 'Email' })).toBeFocused();
   // The composer stays open under the question: no timer closes it.
   await page.waitForTimeout(4_500);

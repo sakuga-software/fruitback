@@ -693,6 +693,9 @@ export function createComposer(options: ComposerOptions): Composer {
     notifyEmail.disabled = false;
     notifyYes.disabled = false;
     notifyNo.disabled = false;
+    // The question makes the composer taller than when it was placed: placed again, with its height
+    // of now, so « Notify me » is not below the bottom of the window.
+    if (placedAt !== undefined) place(placedAt);
     notifyEmail.focus();
   }
 
