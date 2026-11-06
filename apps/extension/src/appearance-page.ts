@@ -163,8 +163,9 @@ export function appearanceSection(document: Document, options: AppearanceOptions
   const show = (color: string | undefined): void => {
     for (const [value, radio] of radios) radio.checked = value === (color ?? FRUITBACK_RED);
     // A colour of your own is written in the field, and said: at the first draw, and when a write
-    // that failed puts it back after a radio cleared the field (raised in review).
-    if (color !== undefined && !radios.has(color)) {
+    // that failed puts it back after a radio cleared the field (raised in review). Never over what
+    // somebody typed in the field while the write was in flight (raised in review).
+    if (color !== undefined && !radios.has(color) && field.value.trim() === '') {
       field.value = color;
       const judged = judgeColor(color);
       said.textContent = judged.kind === 'empty' ? '' : judged.said;
