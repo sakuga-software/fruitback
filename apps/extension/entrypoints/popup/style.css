@@ -292,6 +292,14 @@ button.long {
   color: var(--accent);
 }
 
+.destination-saved:empty {
+  display: none;
+}
+
+.destination-saved {
+  margin: 8px 0 0;
+}
+
 /* The pairing block sits under the site row, which already draws the separator above it. */
 .session label {
   margin-top: 10px;
@@ -1100,4 +1108,279 @@ body.popup-page {
 .popup > .kit-update {
   padding: 0 16px;
   border-top: 1px solid var(--line);
+}
+
+/*
+  « Where notes go » (P1b of FRU-598, FRU-600): a screen of the popup of its own. The head goes back
+  to screen 3; a card for each source, the lists of the card chosen under its name; « Save » last.
+*/
+.popup.popup-destination {
+  min-height: 0;
+}
+
+.popup .destination-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.popup .destination-back {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  min-height: 32px;
+  height: 32px;
+  padding: 0;
+  border-color: transparent;
+  border-radius: var(--radius-field);
+}
+
+.popup .destination-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.popup-destination .popup-body {
+  gap: 10px;
+  padding: 16px 20px;
+}
+
+.popup .destination-intro {
+  margin: 0;
+  color: var(--subtle);
+  font-size: 12px;
+}
+
+.popup .destination-intro strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.popup .destination-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.popup .destination-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-action);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.popup .destination-card.is-chosen {
+  border: 1.5px solid var(--accent);
+  background: var(--alert-surface);
+}
+
+.popup .destination-card:has(input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.popup .destination-card-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.popup .destination-card-tile {
+  flex: none;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface-sunken);
+}
+
+.popup .destination-card-tile .source-mark {
+  width: 14px;
+  height: 14px;
+}
+
+.popup .destination-card-words {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.popup .destination-card-name {
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.popup .destination-card-detail {
+  overflow: hidden;
+  color: var(--subtle);
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.popup .destination-radio {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.popup .destination-lists {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding-left: 34px;
+}
+
+.popup .destination-lists[hidden],
+.popup .destination-field[hidden] {
+  display: none;
+}
+
+.popup .destination-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  color: var(--subtle);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.popup .destination-field select {
+  box-sizing: border-box;
+  width: 100%;
+  height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-field);
+  background: var(--surface);
+  color: var(--text);
+  font: 600 13px / 1 var(--font-sans);
+}
+
+.popup .destination-connect {
+  align-self: flex-start;
+  font-size: 12px;
+}
+
+.popup .destination-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 4px -20px -16px;
+  padding: 12px 20px 16px;
+  border-top: 1px solid var(--line);
+}
+
+.popup .destination-kept {
+  margin: 0;
+  color: var(--subtle);
+  font-size: 12px;
+}
+
+.popup .destination-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.popup .destination-locked {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-action);
+  background: var(--surface-raised);
+}
+
+.popup .destination-lock {
+  flex: none;
+  color: var(--muted);
+}
+
+.popup .destination-why,
+.popup .destination-copied {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.popup .destination-copied:empty {
+  display: none;
+}
+
+/* The confirmation of a change, on screen 3: it leaves after its time, the bar shows what is left. */
+.popup .change-notice {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+  padding: 10px 12px;
+  border-radius: var(--radius-action);
+  background: color-mix(in srgb, var(--success) 12%, var(--surface));
+  color: var(--success);
+  font-size: 13px;
+  font-weight: 600;
+  transition:
+    opacity 200ms ease,
+    max-height 200ms ease,
+    padding 200ms ease;
+  max-height: 80px;
+}
+
+.popup .change-notice-time {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 3px;
+  width: 100%;
+  background: var(--success-line);
+  transform-origin: left;
+  animation: change-notice-time linear forwards;
+}
+
+.popup .change-notice.is-held .change-notice-time {
+  animation-play-state: paused;
+}
+
+.popup .change-notice.is-leaving {
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  opacity: 0;
+}
+
+@keyframes change-notice-time {
+  from {
+    transform: scaleX(1);
+  }
+
+  to {
+    transform: scaleX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .popup .change-notice,
+  .popup .change-notice-time {
+    transition: none;
+    animation: none;
+  }
 }

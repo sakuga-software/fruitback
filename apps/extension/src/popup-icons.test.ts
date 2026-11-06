@@ -14,7 +14,7 @@ describe('the icons of screen 3 of the popup (FRU-599)', () => {
     for (const [, name, constant] of named) {
       const body = set.icons[name as string]?.body ?? '';
       assert.ok(
-        body.includes(`d="${(icons as Record<string, string>)[constant as string]}"`),
+        body.includes(`d="${(icons as unknown as Record<string, string>)[constant as string]}"`),
         `${constant} is not ph:${name}`,
       );
     }

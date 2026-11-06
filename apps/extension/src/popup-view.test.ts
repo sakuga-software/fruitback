@@ -1056,6 +1056,34 @@ describe('where the notes of a site that is on go (FRU-530)', () => {
     assert.equal(loads, 0);
   });
 
+  it('opens « Where notes go » from the pencil and from the menu, and locked for a role that may not (FRU-600)', () => {
+    const calls: string[] = [];
+    const screen = on();
+    showSiteFacts(screen, facts, {
+      destination: 'Linear · Northwind',
+      change: {
+        sources: [LINEAR],
+        loadOffer: async () => undefined,
+        onPlace: async () => true,
+        open: () => calls.push('open'),
+      },
+    });
+    screen.querySelector<HTMLButtonElement>('.site-destination button')?.click();
+    screen.querySelector<HTMLButtonElement>('[data-menu-item="destination"]')?.click();
+    assert.deepEqual(calls, ['open', 'open']);
+    // No lists in place of the line: the screen of its own holds them.
+    assert.equal(screen.querySelector('.site-destination select'), null);
+
+    const reader = on();
+    showSiteFacts(reader, facts, { destination: 'Linear · Northwind', locked: () => calls.push('locked') });
+    const entry = reader.querySelector<HTMLButtonElement>('[data-menu-item="destination"]');
+    assert.equal(entry?.hidden, false);
+    assert.equal(entry?.querySelector('.kit-menu-label')?.textContent, 'Where notes go');
+    assert.equal(reader.querySelector('.site-destination button'), null);
+    entry?.click();
+    assert.deepEqual(calls, ['open', 'open', 'locked']);
+  });
+
   it('puts the lists back as they were when the worker refuses the change', async () => {
     const screen = on();
     showSiteFacts(screen, facts, {

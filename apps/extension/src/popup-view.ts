@@ -22,7 +22,7 @@ import {
 import type { DestinationKind, PlaceIds, Source, SourceOffer } from './cloud.ts';
 import { type Help, howItWorks, whoCanAdd } from './guide.ts';
 import { option, placeChoice, shownChoice, sourceMark } from './place-choice.ts';
-import { CARET, DOTS, EYE, EYE_SLASH, ON, PANEL, PENCIL } from './popup-icons.ts';
+import { CARET, DOTS, EYE, EYE_SLASH, ON, PANEL, PENCIL, drawIcon } from './popup-icons.ts';
 
 /**
  * The screens of the popup. The shell and the screens 1 and 4 are those of the mock-up of 2026-10-20
@@ -599,6 +599,8 @@ export type DestinationChange = {
   loadOffer: (connector: string) => Promise<SourceOffer | undefined>;
   /** Answers whether the change holds: `false` puts the lists back as they were. */
   onPlace: (place: PlaceIds | null) => Promise<boolean>;
+  /** Opens « Where notes go » (FRU-600). Absent: the lists open in place of the line. */
+  open?: () => void;
 };
 
 /** What the worker says of a site that is on (FRU-295), read after the screen is drawn. */
@@ -609,6 +611,8 @@ export type SiteFacts = {
   destinationKind?: DestinationKind;
   /** The lists that change it (FRU-530). Absent: a role that may not, and no « Change ». */
   change?: DestinationChange;
+  /** Opens « Where notes go », locked, for a role that may not change it (FRU-600). */
+  locked?: () => void;
   /** The notes of the person the team marked done, not checked yet. */
   toCheck?: number;
   /** The notes of the site that are New, To do or In progress. */
@@ -682,20 +686,7 @@ const CHANGE_DESTINATION = 'fruitback-change-destination';
 /** What « Change where notes go » opens, for each screen: one at a time, the last facts' own. */
 const destinationOpeners = new WeakMap<Element, () => void>();
 
-/** A drawing of `popup-icons.ts`, in the colour of the words around it. */
-function iconOf(document: Document, d: string, className = 'popup-icon'): SVGSVGElement {
-  const drawing = document.createElementNS(SVG, 'svg');
-  drawing.setAttribute('viewBox', '0 0 256 256');
-  drawing.setAttribute('aria-hidden', 'true');
-  drawing.setAttribute('focusable', 'false');
-  drawing.setAttribute('class', className);
-  const path = document.createElementNS(SVG, 'path');
-  path.setAttribute('fill', 'currentColor');
-  path.setAttribute('d', d);
-  drawing.append(path);
-
-  return drawing;
-}
+const iconOf = drawIcon;
 
 /**
  * The menu « ⋯ » of a site (FRU-599): what was a second switch, a turn off and « Change ». Each entry
@@ -844,6 +835,16 @@ export function showSiteFacts(
   // A role that may change the place gets the line even when the worker named none: « Not known », and
   // the pencil to set it (review of #736).
   const label = facts.destination ?? (facts.change === undefined ? undefined : t('Not known'));
+  if (facts.change === undefined && facts.locked !== undefined && facts.destination !== undefined) {
+    const entry = screen.querySelector<HTMLButtonElement>('[data-menu-item="destination"]');
+    const row = screen.querySelector('.site-row');
+    if (entry !== null && row !== null) {
+      entry.hidden = false;
+      entry.querySelector('.kit-menu-label')!.textContent = t('Where notes go');
+      destinationOpeners.set(row, facts.locked);
+      row.addEventListener(CHANGE_DESTINATION, facts.locked);
+    }
+  }
   if (where !== null && label !== undefined) {
     showDestination(
       screen,
@@ -882,7 +883,11 @@ export function showSiteFacts(
 /** « Change where notes go » of the menu hidden, and the opener of facts of before taken off. */
 function forgetDestinationChange(screen: HTMLElement): void {
   const entry = screen.querySelector<HTMLButtonElement>('[data-menu-item="destination"]');
-  if (entry !== null) entry.hidden = true;
+  if (entry !== null) {
+    entry.hidden = true;
+    const words = entry.querySelector('.kit-menu-label');
+    if (words !== null) words.textContent = t('Change where notes go');
+  }
   const row = screen.querySelector('.site-row');
   const before = row === null ? undefined : destinationOpeners.get(row);
   if (row !== null && before !== undefined) {
@@ -912,6 +917,11 @@ function showDestination(
   const document = line.ownerDocument;
   const open = (): void => {
     if (change === undefined) return;
+    if (change.open !== undefined) {
+      change.open();
+
+      return;
+    }
     const { entries } = placeChoice(document, {
       sources: () => change.sources,
       ...(change.place === undefined ? {} : { place: change.place }),
@@ -967,8 +977,6 @@ function showDestination(
 function plural(count: number, one: string, other: string): string {
   return new Intl.PluralRules(language()).select(count) === 'one' ? one : other;
 }
-
-const SVG = 'http://www.w3.org/2000/svg';
 
 /**
  * The keys of a shortcut, as the kit draws them: `Alt+Shift+F` → Alt Shift F. Chrome on macOS writes

@@ -3,6 +3,23 @@
  * path in a box of 256. `popup-icons.test.ts` holds each one equal to the set.
  */
 
+const SVG = 'http://www.w3.org/2000/svg';
+
+/** One of these icons, in the colour of the words around it, skipped by a screen reader. */
+export function drawIcon(document: Document, d: string, className = 'popup-icon'): SVGSVGElement {
+  const drawing = document.createElementNS(SVG, 'svg');
+  drawing.setAttribute('viewBox', '0 0 256 256');
+  drawing.setAttribute('aria-hidden', 'true');
+  drawing.setAttribute('focusable', 'false');
+  drawing.setAttribute('class', className);
+  const path = document.createElementNS(SVG, 'path');
+  path.setAttribute('fill', 'currentColor');
+  path.setAttribute('d', d);
+  drawing.append(path);
+
+  return drawing;
+}
+
 /** `ph:dots-three-bold` */
 export const DOTS =
   'M144 128a16 16 0 1 1-16-16a16 16 0 0 1 16 16m-84-16a16 16 0 1 0 16 16a16 16 0 0 0-16-16m136 0a16 16 0 1 0 16 16a16 16 0 0 0-16-16';
@@ -38,3 +55,15 @@ export const GEAR =
 /** `ph:sidebar-simple` */
 export const PANEL =
   'M216 40H40a16 16 0 0 0-16 16v144a16 16 0 0 0 16 16h176a16 16 0 0 0 16-16V56a16 16 0 0 0-16-16M40 56h40v144H40Zm176 144H96V56h120z';
+
+/** `ph:lock-simple` */
+export const LOCK =
+  'M208 80h-32V56a48 48 0 0 0-96 0v24H48a16 16 0 0 0-16 16v112a16 16 0 0 0 16 16h160a16 16 0 0 0 16-16V96a16 16 0 0 0-16-16M96 56a32 32 0 0 1 64 0v24H96Zm112 152H48V96h160z';
+
+/** `ph:caret-left` */
+export const BACK =
+  'M165.66 202.34a8 8 0 0 1-11.32 11.32l-80-80a8 8 0 0 1 0-11.32l80-80a8 8 0 0 1 11.32 11.32L91.31 128Z';
+
+/** `ph:check` */
+export const CHECK =
+  'm229.66 77.66l-128 128a8 8 0 0 1-11.32 0l-56-56a8 8 0 0 1 11.32-11.32L96 188.69L218.34 66.34a8 8 0 0 1 11.32 11.32';
