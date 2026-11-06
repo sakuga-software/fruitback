@@ -210,14 +210,23 @@ describe('the setup with no question of access (FRU-610)', () => {
     page: { url: 'https://staging.acme.dev/pricing', host: 'staging.acme.dev', path: '/pricing' },
     site: { id: 's1' },
     note: 'fb_1',
+    createdAt: '2026-11-06T08:00:00.000Z',
   };
 
   it('reads the page of one site with no count, the size a worker takes at the least', () => {
     assert.equal(firstNotePath(owner, site), '/console/workspaces/w1/notes?site=s1&limit=8&counts=none');
   });
 
-  it('takes the oldest note of the page, the newest first, as the first one', () => {
-    const newer = { ...indexed, id: 'n2', excerpt: 'A second note', note: 'fb_2' };
+  it('takes the note created first, whatever the order of the page', () => {
+    const newer = {
+      ...indexed,
+      id: 'n2',
+      excerpt: 'A second note',
+      note: 'fb_2',
+      createdAt: '2026-11-06T09:00:00.000Z',
+    };
+    // The order of the list says nothing: the newest first, or the other way round, or by status.
+    assert.equal(firstNoteOf(yes({ notes: [indexed, newer] }))?.note, 'fb_1');
     assert.deepEqual(firstNoteOf(yes({ notes: [newer, indexed] })), {
       excerpt: 'The price is hard to read.',
       page: indexed.page,
@@ -245,6 +254,8 @@ describe('the setup with no question of access (FRU-610)', () => {
     assert.equal(firstNoteOf(yes({ notes: [{ ...indexed, excerpt: 3 }] })), undefined);
     assert.equal(firstNoteOf(yes({ notes: [{ ...indexed, page: { url: indexed.page.url } }] })), undefined);
     assert.equal(firstNoteOf(yes({ notes: [null] })), undefined);
+    assert.equal(firstNoteOf(yes({ notes: [{ ...indexed, createdAt: 'not a date' }] })), undefined);
+    assert.equal(firstNoteOf(yes({ notes: [indexed, { ...indexed, page: null }] })), undefined);
   });
 
   it('opens the page on the note, and draws no link to a page that is not on the site', () => {

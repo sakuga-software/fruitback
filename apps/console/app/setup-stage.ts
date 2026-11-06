@@ -185,10 +185,11 @@ export function firstNotePath(workspace: Workspace, site: Site): string {
 }
 
 /**
- * The first note of the site, from one page of its list, the newest first: the last note of a page
- * that is the whole list. A page with a `next` holds only the newest notes: its last one is not the
- * first, so there is none to show (review of #834). The setup reads this list at its first note, so
- * a page of 8 holds them all unless notes came fast or the site was in use before.
+ * The first note of the site, from one page of its list: the note created first, read by its
+ * `createdAt` and not by its place in the page, so the order the worker gives does not matter. Only
+ * when the page is the whole list: a page with a `next` holds a part of it, and the first note may
+ * be in another page, so there is none to show (review of #834). The setup reads this list at its
+ * first note, so a page of 8 holds them all unless notes came fast or the site was in use before.
  *
  * `undefined` too for a list that did not come, or a note that is not what the index answers. The
  * end of the setup is drawn without it then: a worker with no index (no database) answers `404`.
@@ -196,15 +197,35 @@ export function firstNotePath(workspace: Workspace, site: Site): string {
 export function firstNoteOf(answer: Answer<unknown>): FirstNote | undefined {
   if (!answer.ok) return undefined;
   const { notes, next } = (answer.data ?? {}) as { notes?: unknown; next?: unknown };
-  if (!Array.isArray(notes) || next !== undefined) return undefined;
-  const last: unknown = notes.at(-1);
-  if (typeof last !== 'object' || last === null) return undefined;
-  const { excerpt, page, note } = last as { excerpt?: unknown; page?: unknown; note?: unknown };
+  if (!Array.isArray(notes) || next !== undefined || notes.length === 0) return undefined;
+  const read = notes.map(indexedNote);
+  // One note that does not read is a list that is not what the index answers: no guess.
+  if (read.some((note) => note === undefined)) return undefined;
+  const dated = read as { note: FirstNote; at: number }[];
+  const first = dated.reduce((oldest, each) => (each.at < oldest.at ? each : oldest));
+
+  return first.note;
+}
+
+/** A note of the list as the end shows it, with the moment it was created, or `undefined`. */
+function indexedNote(entry: unknown): { note: FirstNote; at: number } | undefined {
+  if (typeof entry !== 'object' || entry === null) return undefined;
+  const { excerpt, page, note, createdAt } = entry as {
+    excerpt?: unknown;
+    page?: unknown;
+    note?: unknown;
+    createdAt?: unknown;
+  };
   if (typeof excerpt !== 'string' || typeof page !== 'object' || page === null) return undefined;
   const { url, host, path } = page as { url?: unknown; host?: unknown; path?: unknown };
   if (typeof url !== 'string' || typeof host !== 'string' || typeof path !== 'string') return undefined;
+  const at = typeof createdAt === 'string' ? Date.parse(createdAt) : Number.NaN;
+  if (Number.isNaN(at)) return undefined;
 
-  return { excerpt, page: { url, host, path }, ...(typeof note === 'string' && note !== '' ? { note } : {}) };
+  return {
+    note: { excerpt, page: { url, host, path }, ...(typeof note === 'string' && note !== '' ? { note } : {}) },
+    at,
+  };
 }
 
 /**

@@ -1684,7 +1684,7 @@ export function Disclosure({
  *
  * `badge`: a word beside the name, such as the way the screen recommends (FRU-610). `fold`: the card
  * opens folded to its name, with « Show » beside it. The button says whether it is expanded, and
- * names the part it opens.
+ * names the part it opens. The part stays mounted while folded, hidden.
  */
 export function OptionCard({
   title,
@@ -1718,13 +1718,14 @@ export function OptionCard({
           </HeroButton>
         )}
       </div>
-      {fold === undefined || fold.open ? (
-        <div id={body} className="contents">
-          {children}
-        </div>
-      ) : (
-        <div id={body} hidden />
-      )}
+      {/* Folded, the content stays mounted and is hidden: what it holds (a « Copied ») is kept. */}
+      <div
+        id={body}
+        hidden={fold !== undefined && !fold.open}
+        className={fold === undefined || fold.open ? 'contents' : ''}
+      >
+        {children}
+      </div>
     </div>
   );
 }

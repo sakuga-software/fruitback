@@ -184,6 +184,11 @@ test.describe('the setup, against a worker with accounts (FRU-239)', () => {
     await page.getByRole('button', { name: 'Copy script' }).click();
     await expect(page.getByRole('button', { name: 'Copied' })).toBeVisible();
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(await script.innerText());
+    // Folded again, the card keeps what it holds: « Copied » is still there once it opens (review of #834).
+    await scriptCard.getByRole('button', { name: 'Hide' }).click();
+    await expect(script).toBeHidden();
+    await scriptCard.getByRole('button', { name: 'Show' }).click();
+    await expect(page.getByRole('button', { name: 'Copied' })).toBeVisible();
 
     // « Connect this browser »: the pairing page of the worker opens, with a code after the `#`. This
     // console is self-hosted: on the Cloud the welcome page of the extension connects it (FRU-610).
