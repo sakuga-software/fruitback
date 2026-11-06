@@ -339,6 +339,8 @@ describe('a list of many notes, on a long host (FRU-611)', () => {
     const { sidebar, root, chipNames } = mount(many);
     sidebar.open();
 
+    // The 101 are done notes of the reader that nobody confirmed: `noteTab` puts them in « To check »,
+    // not in « Done » (FRU-606), so « Done » counts none.
     assert.deepEqual(
       [...root.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent),
       ['To check · 101', 'Open · 99+', 'Done · 0'],

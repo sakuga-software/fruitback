@@ -775,9 +775,13 @@ export const STYLES = `
   */
   .fruitback-composer-send-group { flex: 1 1 100%; display: flex; }
   .fruitback-composer-send-group > .fruitback-composer-send:first-child { flex: 1 1 auto; justify-content: center; }
-  .fruitback-composer-tool { width: 44px; height: 44px; }
-  .fruitback-composer-avatar { min-width: 44px; height: 44px; }
-  .fruitback-composer-check, .fruitback-composer-place { min-height: 44px; }
+  /*
+    One class more than the rules of a thumb below (review of #860): on a phone the pointer is coarse
+    too, and that block, later in the sheet, would set them back to 36 px.
+  */
+  .fruitback-composer .fruitback-composer-tool { width: 44px; height: 44px; }
+  .fruitback-composer .fruitback-composer-avatar { min-width: 44px; height: 44px; }
+  .fruitback-composer .fruitback-composer-check, .fruitback-composer .fruitback-composer-place { min-height: 44px; }
   /* An element at the very foot of a page that cannot scroll more: the sheet stands on the top. */
   .fruitback-composer[data-fruitback-sheet="top"] {
     inset: 0 0 auto 0;

@@ -95,6 +95,25 @@ for (const scheme of ['light', 'dark'] as const) {
   });
 }
 
+test.describe('on a phone, where the pointer is coarse too (review of #860)', () => {
+  test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
+
+  test('every target of the sheet is still 44 px', async ({ page }) => {
+    await mountAt(page, `/?widget=off&case=${caseOf('narrow-coarse')}`);
+    expect(await page.evaluate(() => matchMedia('(pointer: coarse)').matches)).toBe(true);
+    await page.locator('[data-fruitback-host-launch]').tap();
+    await page.locator('[data-testid="card-latte"] .add').tap();
+    const composer = page.locator('[data-fruitback-composer]');
+    await expect(composer).toBeVisible();
+    const short = await composer.evaluate((node) =>
+      [...node.querySelectorAll('button')]
+        .filter((button) => button.getClientRects().length > 0 && button.getBoundingClientRect().height < 44)
+        .map((button) => button.getAttribute('aria-label') ?? button.textContent?.trim() ?? ''),
+    );
+    expect(short).toEqual([]);
+  });
+});
+
 test('at 1440 px « Send » keeps its own width, the control of the sheet (FRU-611)', async ({ page }) => {
   await mountAt(page, `/?widget=off&case=${caseOf('wide-send')}`);
   await page.locator('[data-fruitback-host-launch]').click();
