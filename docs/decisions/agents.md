@@ -152,6 +152,12 @@ with no key, nothing leaves.
   workspace. A receiver of the team can start an agent with it today, with no other change.
 - The GitHub connector makes an issue of a note: a workflow `on: issues: opened` can run Claude Code
   on it today. The Linear connector makes a ticket that a team can give to an agent of Linear.
+  **Since FRU-595 both are recipes with no code** in `docs/agents.md`, « Recipes with no code », and
+  a card under « Your connectors », shown once its tracker is connected, leads to each. Neither asks for a Fruitback key:
+  the issue holds the whole note but its files, and a comment on it comes back to the thread. The
+  workflow names `fruitback-app[bot]` in `allowed_bots`, because the action refuses a bot that opened
+  an issue unless it is listed. Measured against the documentation of 2026-11-06, not run on a
+  repository: the PR of FRU-595 gives the steps of that first run.
 
 ## OAuth for MCP (v2, FRU-467)
 

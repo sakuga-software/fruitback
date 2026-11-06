@@ -22,6 +22,7 @@ import {
 } from '../parts/connector-parts';
 import { RestPanel } from '../parts/connector-rest';
 import { RoutinePanel } from '../parts/connector-routine';
+import { NoCodeRecipes } from '../parts/agent-recipes';
 import type { LaterKind, MarkedKind } from '../connector-marks';
 import { ReadProblem } from '../read-problem';
 
@@ -576,6 +577,8 @@ export default function Connectors() {
                 );
               })}
             </ul>
+            {/* FRU-595: the recipes start from the issue of a note, so they come with a tracker that makes one. */}
+            <NoCodeRecipes kinds={connectors.map((connector) => connector.kind)} />
           </section>
         ) : null}
       </div>
