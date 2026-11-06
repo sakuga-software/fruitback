@@ -709,6 +709,10 @@ holds `http://127.0.0.1/*`; a page of `http://127.0.0.1` with no rule, the panel
   caret and the focus are put back. A reply that did not go keeps its text and says why. « Cancel »,
   a row closed or another tab keep it too, by note, while the panel is open: « Reply » gives it back
   (FRU-606). Only a reply sent drops it.
+- **One send of a reply at a time per note** (FRU-620): while a reply is on its way its note is in a
+  set (`sendingReplies`), and its field is drawn as sending wherever it is opened again, after the
+  reply of another note: the field and « Send » held, « Sending… » (`replyField`). `sendReply` takes no
+  second send of that note. `side-panel.spec.ts` holds the worker's answer back and counts one POST.
 - **The field of a reply is the widget's** (FRU-606): two lines, Enter sends, Shift+Enter goes to
   the next line, and an Enter that composes a character (an IME) sends nothing.
 - **The foot names the host and the workspace of the rule**, which the extension stores. The

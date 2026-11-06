@@ -348,6 +348,94 @@ test('« To check »: « Looks fixed » sends a note to Done, « Still wrong » 
   await expect(page.locator('[data-fruitback-pin][data-fruitback-stage="new"]')).not.toHaveCount(0);
 });
 
+test('a reply on its way holds its field, opened again from another note: no second send (FRU-620)', async ({
+  extension,
+}) => {
+  test.slow();
+  await paired(extension);
+  const page = await extension.context.newPage();
+  await openBareSite(page, 'side-panel-reply-once');
+  const popup = await openPopup(extension, page);
+  await popup.getByRole('button', { name: /^(Turn on|Activer)$/ }).click();
+  await expect(page.locator('[data-fruitback-host-launch]')).toBeVisible();
+  await plantOn(page, '[data-testid="card-espresso"] .add', 'Reply once A');
+  await plantOn(page, '[data-testid="card-latte"] .add', 'Reply once B');
+  await expect(page.locator('[data-fruitback-pin]')).toHaveCount(2);
+
+  // The reply of « A » waits at the worker until the test lets it go.
+  let release: () => void = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const posts: string[] = [];
+  await extension.context.route(
+    (url) => url.origin === AUTHENTICATED_WORKER_ORIGIN && /\/feedback\/[^/]+\/replies$/.test(url.pathname),
+    async (route) => {
+      if (route.request().method() !== 'POST') return route.continue();
+      posts.push(route.request().postData() ?? '');
+      await held;
+      await route.continue();
+    },
+  );
+
+  const again = await openPopup(extension, page);
+  await again
+    .getByRole('button', { name: /^(Show all notes in a sidebar|Voir toutes les notes dans un panneau)/ })
+    .click();
+  await expect.poll(async () => (await panelRows(page).catch(() => ({ tabs: [], rows: [] }))).rows.length).toBe(2);
+  const said = await words(page);
+  const field = () =>
+    inPanel<{ value: string; field: boolean; send: boolean } | null>(
+      page,
+      `(() => { const field = document.querySelector('.panel-reply-field'); const send = document.querySelector('.panel-send'); return field === null ? null : { value: field.value, field: field.disabled, send: send?.disabled ?? false }; })()`,
+    );
+
+  // « A »: a reply, sent with Enter. It waits.
+  await clickInRow(page, 'Reply once A', 'row');
+  await expect.poll(() => clickInRow(page, 'Reply once A', said.reply)).toBe(true);
+  await inPanel(
+    page,
+    `(() => {
+      const field = document.querySelector('.panel-reply-field');
+      field.value = 'Sent once';
+      field.dispatchEvent(new Event('input', { bubbles: true }));
+      field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    })()`,
+  );
+  await expect.poll(() => posts.length).toBe(1);
+
+  // The reply of « B », then the one of « A » again: its field is held while its send runs.
+  await clickInRow(page, 'Reply once B', 'row');
+  await expect.poll(() => clickInRow(page, 'Reply once B', said.reply)).toBe(true);
+  await expect.poll(async () => (await field())?.field).toBe(false);
+  await clickInRow(page, 'Reply once A', 'row');
+  await expect.poll(() => clickInRow(page, 'Reply once A', said.reply)).toBe(true);
+  await expect.poll(field).toEqual({ value: 'Sent once', field: true, send: true });
+  // Enter and « Send » both do nothing there.
+  await inPanel(
+    page,
+    `(() => {
+      document.querySelector('.panel-reply-field').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+      document.querySelector('.panel-reply-form').requestSubmit();
+    })()`,
+  );
+
+  // The worker answers: one reply, and the field of « A » goes.
+  release();
+  await expect
+    .poll(() => inPanel<string>(page, `document.querySelector('.panel-replies')?.textContent ?? ''`), {
+      timeout: 20_000,
+    })
+    .toContain('Sent once');
+  expect(posts).toHaveLength(1);
+  expect(
+    await inPanel<number>(
+      page,
+      `[...document.querySelectorAll('.panel-reply-body')].filter((body) => body.textContent === 'Sent once').length`,
+    ),
+  ).toBe(1);
+});
+
 test('a tab whose widget is gone does not leave the panel reading for ever (FRU-299, review)', async ({
   extension,
 }) => {

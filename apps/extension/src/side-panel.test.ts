@@ -11,6 +11,7 @@ import {
   type PanelState,
   CHECK_PROBLEM,
   REPLY_PROBLEM,
+  replyField,
   sentFromHere,
   REPLY_MAX_LENGTH,
   ageOf,
@@ -553,6 +554,28 @@ describe('the page of the panel (FRU-296, FRU-299)', () => {
     assert.deepEqual(options.calls, []);
     assert.equal(press({}), false);
     assert.deepEqual(options.calls, ['send']);
+  });
+
+  it('holds the field of a note whose reply is on its way, opened again from another note (FRU-620)', () => {
+    const inFlight = new Set(['b']);
+    // The reader opened the reply of « a » during the send of « b », then the one of « b » again.
+    const reopened = replyField({ id: 'b', text: 'Merci' }, inFlight);
+    const root = panelPage(page(), {
+      ...handlers(),
+      state: on(NOTES),
+      tab: 'open',
+      open: 'b',
+      ...(reopened === undefined ? {} : { replying: reopened }),
+    });
+
+    assert.deepEqual(reopened, { id: 'b', text: 'Merci', sending: true });
+    assert.equal(root.querySelector<HTMLButtonElement>('.panel-send')?.disabled, true, 'no second « Send »');
+    assert.equal(root.querySelector<HTMLTextAreaElement>('textarea')?.disabled, true);
+    assert.equal(root.querySelector<HTMLTextAreaElement>('textarea')?.value, 'Merci');
+    // Another note, and a note once its send answered, keep their field as it is.
+    assert.deepEqual(replyField({ id: 'a', text: 'Oui' }, inFlight), { id: 'a', text: 'Oui' });
+    assert.deepEqual(replyField({ id: 'b', text: 'Merci' }, new Set()), { id: 'b', text: 'Merci' });
+    assert.equal(replyField(undefined, inFlight), undefined);
   });
 
   it('leaves open a reply field that is not the one a send came from (review of #857)', () => {
