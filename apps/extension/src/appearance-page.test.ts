@@ -161,6 +161,26 @@ describe('« Appearance » (FRU-601)', () => {
     assert.equal(section.querySelector('.pref-problem')?.textContent, COLOR_NOT_SAVED);
   });
 
+  it('writes a colour of your own back in the field when a radio chosen over it was not saved (review)', async () => {
+    const { section, radio, checked, field, said, preview, pick } = drawn('#1d4ed8', () =>
+      Promise.reject(new Error('QUOTA_BYTES')),
+    );
+    const error = console.error;
+    console.error = () => {};
+    try {
+      pick(radio('Orange'));
+      assert.equal(field.value, '', 'the radio clears the field at once');
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    } finally {
+      console.error = error;
+    }
+    assert.deepEqual(checked(), []);
+    assert.equal(field.value, '#1d4ed8');
+    assert.equal(said(), '6.7:1 with white text.');
+    assert.equal(preview.style.getPropertyValue('--action'), '#1d4ed8');
+    assert.equal(section.querySelector('.pref-problem')?.textContent, COLOR_NOT_SAVED);
+  });
+
   it('speaks French, with a decimal comma in the ratio', () => {
     setLanguage('fr');
     assert.equal(formatRatio(2.14), '2,1:1');

@@ -162,6 +162,14 @@ export function appearanceSection(document: Document, options: AppearanceOptions
   /** Shows a colour as chosen: its radio if it is one of the four, the preview, and « Reset » off for the red. */
   const show = (color: string | undefined): void => {
     for (const [value, radio] of radios) radio.checked = value === (color ?? FRUITBACK_RED);
+    // A colour of your own is written in the field, and said: at the first draw, and when a write
+    // that failed puts it back after a radio cleared the field (raised in review).
+    if (color !== undefined && !radios.has(color)) {
+      field.value = color;
+      const judged = judgeColor(color);
+      said.textContent = judged.kind === 'empty' ? '' : judged.said;
+      delete said.dataset.refused;
+    }
     paintAction(preview, color);
     reset.disabled = color === undefined;
   };
@@ -202,12 +210,6 @@ export function appearanceSection(document: Document, options: AppearanceOptions
     if (judged.kind === 'kept' && judged.color !== (kept ?? FRUITBACK_RED)) choose(judged.color);
   });
 
-  // A colour of your own that is stored is written in the field, and said.
-  if (kept !== undefined && !radios.has(kept)) {
-    field.value = kept;
-    const judged = judgeColor(kept);
-    if (judged.kind !== 'empty') said.textContent = judged.said;
-  }
   show(kept);
 
   card.append(presets, own, foot, problem);
