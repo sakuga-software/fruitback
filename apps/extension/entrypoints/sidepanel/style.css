@@ -185,7 +185,7 @@ button.panel-row-head {
 }
 
 /*
-  The words of a note hold one line, cut with « … » (FRU-534): in a closed row, « Ready to check »,
+  The words of a note hold one line, cut with « … » (FRU-534): in a closed row, « To check »,
   the rows of the search and the detached notes. The text stays whole in the DOM and in `title`.
 */
 .panel-row-note,
@@ -388,20 +388,12 @@ button.panel-send:disabled {
   min-height: 24px;
 }
 
-/* « Ready to check » (FRU-300): between « Leave a note » and the tabs. */
+/* « To check » (FRU-300), the first of the three tabs since FRU-606: its rows carry the verdict. */
 .ready {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 14px var(--panel-gutter) 6px;
-  border-bottom: 1px solid var(--ready-line);
-  background: var(--ready-surface);
-}
-
-.ready-title {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 700;
+  padding: 6px var(--panel-gutter) 6px;
 }
 
 .ready-text {
@@ -421,6 +413,10 @@ button.panel-send:disabled {
   gap: 10px;
   padding: 12px 0 14px;
   border-top: 1px solid var(--ready-divider);
+}
+
+.ready-item:first-child {
+  border-top: 0;
 }
 
 .ready-head {

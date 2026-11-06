@@ -1,4 +1,4 @@
-import { NOTE_STAGES, type NoteStage } from '@fruitback/shared';
+import { NOTE_STAGES, NOTE_TABS, type NoteStage, type NoteTab, firstTab, noteTab } from '@fruitback/shared';
 import { type SendFailure, failureText } from './composer.ts';
 import { type Draft } from './drafts.ts';
 import { type FeedbackEntry } from './export.ts';
@@ -132,6 +132,12 @@ const SEARCH_PAUSE_MS = 300;
  */
 type Chosen = 'all' | NoteStage;
 
+/** The words of each tab, with its count (FRU-606): the words of the side panel too. */
+const TAB_WORDS = { check: 'sidebar.tabCheck', open: 'sidebar.tabOpen', done: 'sidebar.tabDone' } as const;
+
+/** What an empty tab says. */
+const NONE_IN_TAB = { check: 'sidebar.noneCheck', open: 'sidebar.noneOpen', done: 'sidebar.noneDone' } as const;
+
 /** Whether this note has these words, in its text or in the identifier of its store. */
 function matches(entry: SidebarEntry, query: string): boolean {
   if (query === '') return true;
@@ -183,11 +189,26 @@ export function createSidebar(options: SidebarOptions): Sidebar {
   close.className = 'fruitback-sidebar-icon fruitback-sidebar-close';
   close.setAttribute('aria-label', t.text('sidebar.close'));
   close.append(createIcon(document, 'close'));
-  head.append(heading, floating, close);
+  // « Search and options » (FRU-606), the magnifier of the side panel of the extension: it opens the
+  // scope, the search and the chips, and one list stands in for the tabs while it is open.
+  const searchToggle = document.createElement('button');
+  searchToggle.type = 'button';
+  searchToggle.className = 'fruitback-sidebar-icon';
+  searchToggle.dataset.fruitbackSearchToggle = '';
+  searchToggle.setAttribute('aria-label', t.text('sidebar.searchOptions'));
+  searchToggle.title = t.text('sidebar.searchOptions');
+  searchToggle.setAttribute('aria-expanded', 'false');
+  searchToggle.setAttribute('aria-controls', 'fruitback-sidebar-actions');
+  searchToggle.append(createIcon(document, 'search'));
+  head.append(heading, searchToggle, floating, close);
 
   // « This page », the search and the chips of the statuses (FRU-308).
   const actions = document.createElement('div');
+  actions.id = 'fruitback-sidebar-actions';
   actions.className = 'fruitback-sidebar-actions';
+  actions.hidden = true;
+  /** « Search and options » is open: one list, filtered, in place of the tabs (FRU-606). */
+  let searching = false;
   // The scope of the board, with its one part: the script reads the notes of this page only, and has
   // no route for the whole site. Words, not a tab: a list of one tab chooses nothing.
   const scope = document.createElement('p');
@@ -266,6 +287,62 @@ export function createSidebar(options: SidebarOptions): Sidebar {
     chipGroup.append(button);
   }
   actions.append(site === undefined ? scope : scopes, searchBox, chipGroup);
+
+  // The three tabs of the loop (FRU-606), the ones of the side panel: To check, Open, Done. A note is
+  // in one of them (`noteTab` of `@fruitback/shared`). Absent a choice, the list opens on « To check »
+  // while a note waits for the verdict of its reader, else on « Open ».
+  let tab: NoteTab | undefined;
+  const tabRail = document.createElement('div');
+  tabRail.className = 'fruitback-sidebar-tabs';
+  tabRail.setAttribute('role', 'tablist');
+  tabRail.setAttribute('aria-label', t.text('sidebar.dialog'));
+  const tabs = new Map<NoteTab, HTMLButtonElement>();
+  for (const [index, name] of NOTE_TABS.entries()) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.id = `fruitback-sidebar-tab-${name}`;
+    button.className = 'fruitback-sidebar-tab';
+    button.setAttribute('role', 'tab');
+    button.setAttribute('aria-controls', 'fruitback-sidebar-panel');
+    button.dataset.fruitbackTab = name;
+    button.addEventListener('click', () => {
+      tab = name;
+      draw();
+    });
+    button.addEventListener('keydown', (event) => {
+      const last = NOTE_TABS.length - 1;
+      const to = { ArrowRight: index + 1, ArrowLeft: index - 1, Home: 0, End: last }[event.key];
+      if (to === undefined) return;
+      event.preventDefault();
+      event.stopPropagation();
+      tab = NOTE_TABS[(to + NOTE_TABS.length) % NOTE_TABS.length];
+      draw();
+      if (tab !== undefined) tabs.get(tab)?.focus();
+    });
+    tabs.set(name, button);
+    tabRail.append(button);
+  }
+
+  searchToggle.addEventListener('click', () => {
+    searching = !searching;
+    if (!searching) forgetSearch();
+    draw();
+    if (searching) search.focus();
+  });
+
+  /** The search closes as it opened: no words, every status, « This page » (FRU-606). */
+  function forgetSearch(): void {
+    searching = false;
+    query = '';
+    search.value = '';
+    chosen = 'all';
+    wide = false;
+    siteState = 'idle';
+    siteNotes = [];
+    asked += 1;
+    if (soon !== undefined) clearTimeout(soon);
+    soon = undefined;
+  }
 
   // The foot of the board: the way to a new note, and the switch of the pins.
   const foot = document.createElement('div');
@@ -455,7 +532,7 @@ export function createSidebar(options: SidebarOptions): Sidebar {
   home.className = 'fruitback-sidebar-home';
   detail.append(back, home);
 
-  root.append(head, actions, panel, detail, foot);
+  root.append(head, actions, tabRail, panel, detail, foot);
   const style = adoptStyles(options.host, STYLES);
   options.host.append(root);
 
@@ -485,14 +562,15 @@ export function createSidebar(options: SidebarOptions): Sidebar {
   /** The thread of this note in place of the rows. The rows come back when it closes. */
   function showNote(id: string): void {
     actions.hidden = true;
+    tabRail.hidden = true;
     panel.hidden = true;
     detail.hidden = false;
     // Marked after the choice: the thread of before closes during it, and `mark` must not take that
     // close for the close of this one.
     if (options.onSelect(id, home) === false) {
       detail.hidden = true;
-      actions.hidden = false;
       panel.hidden = false;
+      draw();
       return;
     }
     shown = id;
@@ -506,8 +584,8 @@ export function createSidebar(options: SidebarOptions): Sidebar {
     inThread = false;
     home.replaceChildren();
     detail.hidden = true;
-    actions.hidden = false;
     panel.hidden = false;
+    draw();
     if (!focus) return;
     const row = [...panel.querySelectorAll<HTMLElement>('[data-fruitback-note]')].find(
       (button) => button.dataset.fruitbackNote === id,
@@ -529,8 +607,12 @@ export function createSidebar(options: SidebarOptions): Sidebar {
   });
 
   function draw(): void {
+    // The rows of a thread shown in their place stay hidden, with what is above them.
+    actions.hidden = !searching || shown !== undefined;
+    searchToggle.setAttribute('aria-expanded', String(searching));
     drawScopes();
     if (wide) {
+      tabRail.hidden = true;
       drawSite();
 
       return;
@@ -544,8 +626,11 @@ export function createSidebar(options: SidebarOptions): Sidebar {
     const placed = entries.filter((entry) => entry.placement !== 'detached');
     const detached = entries.filter((entry) => entry.placement === 'detached');
     const found = placed.filter((entry) => matches(entry, query));
+    const tabbed = tab ?? firstTab(entries.map((entry) => entry.issue));
     const shownHere = (entry: SidebarEntry): boolean =>
-      matches(entry, query) && (chosen === 'all' || entry.issue.stage === chosen);
+      searching
+        ? matches(entry, query) && (chosen === 'all' || entry.issue.stage === chosen)
+        : noteTab(entry.issue) === tabbed;
     const rows = placed.filter(shownHere);
     const lostRows = detached.filter(shownHere);
     // The note that has focus keeps it across a draw: the pins change while somebody reads the list.
@@ -576,10 +661,24 @@ export function createSidebar(options: SidebarOptions): Sidebar {
       // « All 4 », with its space: two spans read as one word, « All4 », in an accessible name.
       button.setAttribute('aria-label', count.textContent === '' ? word : `${word} ${number}`);
     }
+    // The tabs, once a read answered: before, a count of zero would be a guess.
+    tabRail.hidden = searching || shown !== undefined || failing || !known;
+    for (const [name, button] of tabs) {
+      const count = placed.filter((entry) => noteTab(entry.issue) === name).length;
+      button.textContent = t.text(TAB_WORDS[name], { count });
+      button.setAttribute('aria-selected', String(name === tabbed));
+      button.tabIndex = name === tabbed ? 0 : -1;
+    }
+    if (searching) panel.removeAttribute('role');
+    else panel.setAttribute('role', 'tabpanel');
+    if (searching) panel.removeAttribute('aria-labelledby');
+    else panel.setAttribute('aria-labelledby', `fruitback-sidebar-tab-${tabbed}`);
     // The notes kept for later are what is left to do: at the head of the list, with every status.
-    drawDrafts(chosen === 'all');
+    drawDrafts(searching ? chosen === 'all' : tabbed === 'open');
 
-    let nothing: 'sidebar.noMatch' | 'sidebar.loading' | 'sidebar.empty' = 'sidebar.noMatch';
+    let nothing: 'sidebar.noMatch' | 'sidebar.loading' | 'sidebar.empty' | (typeof NONE_IN_TAB)[NoteTab] = searching
+      ? 'sidebar.noMatch'
+      : NONE_IN_TAB[tabbed];
     if (state === 'pending') nothing = 'sidebar.loading';
     else if (entries.length === 0) nothing = 'sidebar.empty';
     empty.textContent = t.text(nothing);
@@ -967,16 +1066,13 @@ export function createSidebar(options: SidebarOptions): Sidebar {
   function shut(): void {
     if (root.hidden) return;
     // The list opens again on « This page », and « All pages » asks the host again (FRU-470).
-    wide = false;
-    siteState = 'idle';
-    siteNotes = [];
-    asked += 1;
-    if (soon !== undefined) clearTimeout(soon);
-    soon = undefined;
     if (shown !== undefined) {
       options.onBack?.();
       showRows(false);
     }
+    // The list opens again on its tabs, with no search (FRU-606).
+    forgetSearch();
+    tab = undefined;
     const active = deepActiveElement(document);
     const inside = active !== null && root.contains(active);
     root.hidden = true;

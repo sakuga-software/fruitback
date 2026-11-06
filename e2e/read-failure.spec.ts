@@ -57,7 +57,12 @@ for (const [name, fail] of Object.entries(failures)) {
     await opener.click();
     await expect(list.getByRole('status')).toHaveText(/could not be read/);
     await expect(list.getByText('No note on this page yet.')).toBeHidden();
-    // No number on the scope or on a chip: zero notes would be a guess.
+    const retry = list.getByRole('button', { name: 'Try again' });
+    await expect(retry).toBeFocused();
+    // No tab: a count of zero would be a guess (FRU-606).
+    await expect(list.getByRole('tablist')).toBeHidden();
+    // No number on the scope or on a chip of « Search and options » either.
+    await list.getByRole('button', { name: 'Search and options' }).click();
     await expect(list.locator('.fruitback-sidebar-scope')).toHaveText('This page');
     await expect(list.getByRole('group', { name: 'Status' }).getByRole('button')).toHaveText([
       'All',
@@ -66,8 +71,6 @@ for (const [name, fail] of Object.entries(failures)) {
       'In progress',
       'Done',
     ]);
-    const retry = list.getByRole('button', { name: 'Try again' });
-    await expect(retry).toBeFocused();
 
     // The control: the same page, with a worker that answers an empty list, shows the empty state.
     failing = false;

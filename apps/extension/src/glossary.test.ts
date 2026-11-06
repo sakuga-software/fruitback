@@ -117,3 +117,29 @@ describe('the glossary of the screens (FRU-517)', () => {
     assert.ok(sentences(CONSOLE).length > 500);
   });
 });
+
+describe('the tabs of the list of the notes, one set of words in the widget and the side panel (FRU-606)', () => {
+  // The key of the side panel, the key of the widget: the same English and the same French.
+  const TABS = [
+    ['To check · {count}', 'sidebar.tabCheck'],
+    ['Open · {count}', 'sidebar.tabOpen'],
+    ['Done · {count}', 'sidebar.tabDone'],
+    ['No note to check.', 'sidebar.noneCheck'],
+    ['No note is open.', 'sidebar.noneOpen'],
+    ['No note is done yet.', 'sidebar.noneDone'],
+    ['Search and options', 'sidebar.searchOptions'],
+  ] as const;
+
+  it('says each tab in the same words, in English and in French', () => {
+    for (const [panel, widget] of TABS) {
+      assert.equal(WIDGET_ENGLISH[widget], panel, widget);
+      assert.equal(WIDGET[widget], (EXTENSION as Record<string, string>)[panel], widget);
+    }
+  });
+
+  it('calls the first tab « To check » and « À vérifier », as the glossary says', () => {
+    const row = glossary().find((each) => each.english === 'To check');
+    assert.deepEqual(row?.french, 'À vérifier');
+    assert.ok(row?.neverInEnglish.includes('Ready to check'));
+  });
+});

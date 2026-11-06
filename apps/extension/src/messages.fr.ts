@@ -416,14 +416,16 @@ export const FRENCH: Readonly<Record<string, string>> = {
   '{host} runs its own Fruitback.': '{host} a son propre Fruitback.',
   'Its notes are on the page, in its own list. This panel lists the notes of a site where the extension shows Fruitback.':
     'Ses notes sont sur la page, dans sa propre liste. Ce panneau liste les notes d’un site où Fruitback se monte.',
-  // FRU-300: « Ready to check ».
+  // FRU-300: « To check », a tab since FRU-606.
   'just now': 'à l’instant',
   'Checked by you · {age}': 'Vérifiée par vous · {age}',
   'Checked by {name} · {age}': 'Vérifiée par {name} · {age}',
   'Reopened by you · {age}': 'Rouverte par vous · {age}',
   'Fixed by {name} · {age}': 'Corrigée par {name} · {age}',
   'Marked done · {age}': 'Marquée terminée · {age}',
-  'Ready to check · {count}': 'À vérifier · {count}',
+  'To check · {count}': 'À vérifier · {count}',
+  'Notes to check': 'Notes à vérifier',
+  'No note to check.': 'Aucune note à vérifier.',
   'The team says these are fixed. Do they look right to you?': 'L’équipe dit que c’est corrigé. Est-ce bon pour vous ?',
   'Looks fixed': 'C’est corrigé',
   'Still wrong': 'Toujours pas',

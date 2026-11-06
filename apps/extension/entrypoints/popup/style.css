@@ -50,9 +50,7 @@
   --alert-surface: #fef2f2;
   --alert-line: #fca5a5;
   --alert-text: #b91c1c;
-  /* The block « Ready to check »: the raised grey, under a line of the accent. */
-  --ready-surface: #fafafa;
-  --ready-line: #fecaca;
+  /* The line between two notes of « To check » (FRU-300, FRU-606). */
   --ready-divider: #e4e4e7;
   --selection: #fecaca;
   /* The tile of a site that is on. */
@@ -133,8 +131,6 @@
     --alert-surface: #27272a;
     --alert-line: #991b1b;
     --alert-text: #f08a85;
-    --ready-surface: #1f1f23;
-    --ready-line: #7f1d1d;
     --ready-divider: #3f3f46;
     --selection: #7f1d1d;
     --avatar-surface: #3f3f46;

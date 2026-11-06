@@ -361,12 +361,13 @@ describe('the page of the panel (FRU-296, FRU-299)', () => {
     assert.deepEqual(options.calls, ['leave', 'settings']);
   });
 
-  it('counts « Open » and « Done », and lists each by the number of its pin', () => {
+  it('counts « To check », « Open » and « Done », and lists each by the number of its pin', () => {
     const root = panelPage(page(), { ...handlers(), state: on(NOTES), tab: 'open' });
 
     assert.deepEqual(
       [...root.querySelectorAll('[role="tab"]')].map((tab) => [tab.textContent, tab.getAttribute('aria-selected')]),
       [
+        ['To check · 0', 'false'],
         ['Open · 3', 'true'],
         ['Done · 1', 'false'],
       ],
@@ -422,7 +423,8 @@ describe('the page of the panel (FRU-296, FRU-299)', () => {
     assert.equal(row?.getAttribute('title'), long);
     // The name of the button of the row holds the whole note.
     assert.ok(root.querySelector('li[data-note="p"] button.panel-row-head')?.textContent?.includes(long));
-    assert.equal(root.querySelector('.ready-item .ready-note')?.getAttribute('title'), `${long} Ready.`);
+    const check = panelPage(page(), { ...handlers(), state: on(notes), tab: 'check' });
+    assert.equal(check.querySelector('.ready-item .ready-note')?.getAttribute('title'), `${long} Ready.`);
 
     const searched = panelPage(page(), {
       ...handlers(),
@@ -449,7 +451,7 @@ describe('the page of the panel (FRU-296, FRU-299)', () => {
   });
 
   it('lists done and closed notes under « Done »', () => {
-    const root = panelPage(page(), { ...handlers(), state: on(NOTES), tab: 'finished' });
+    const root = panelPage(page(), { ...handlers(), state: on(NOTES), tab: 'done' });
 
     assert.deepEqual(
       [...root.querySelectorAll('li[data-note]')].map((row) => row.getAttribute('data-note')),
@@ -485,7 +487,7 @@ describe('the page of the panel (FRU-296, FRU-299)', () => {
   });
 
   it('offers no « Reply » on a note the reader may not reply to', () => {
-    const root = panelPage(page(), { ...handlers(), state: on(NOTES), tab: 'finished', open: 'c' });
+    const root = panelPage(page(), { ...handlers(), state: on(NOTES), tab: 'done', open: 'c' });
 
     assert.deepEqual(
       [...root.querySelectorAll('li[data-note="c"] .panel-row-links button')].map((link) => link.textContent),
@@ -584,7 +586,7 @@ describe('the page of the panel (FRU-296, FRU-299)', () => {
     assert.ok([...root.querySelectorAll('button')].some((each) => each.textContent === 'Laisser une note'));
     assert.deepEqual(
       [...root.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent),
-      ['Ouvertes · 3', 'Terminées · 1'],
+      ['À vérifier · 0', 'Ouvertes · 3', 'Terminées · 1'],
     );
     assert.equal(root.querySelector('li[data-note="b"] .panel-row-meta')?.textContent, 'À faire · Vous · hier');
     assert.deepEqual(
@@ -594,7 +596,7 @@ describe('the page of the panel (FRU-296, FRU-299)', () => {
   });
 });
 
-describe('« Ready to check » (FRU-300)', () => {
+describe('« To check », the first tab (FRU-300, FRU-606)', () => {
   const NOW = Date.parse('2026-10-20T12:00:00Z');
   const base = {
     note: 'The email field is too short on mobile.',
@@ -657,16 +659,19 @@ describe('« Ready to check » (FRU-300)', () => {
     assert.deepEqual([READY, NOBODY, OTHERS, CHECKED, OPEN].map(toCheck), [true, true, false, false, false]);
   });
 
-  it('shows them between « Leave a note » and the tabs, with who fixed them, and takes them out of « Done »', () => {
-    const root = panelPage(page(), options());
-    const block = root.querySelector('section.ready');
+  it('is the first of three tabs, To check, Open and Done, and takes them out of « Done »', () => {
+    const root = panelPage(page(), options({ tab: 'check' }));
+    const block = root.querySelector('.ready[role="tabpanel"]');
 
-    assert.ok(block, 'no block');
-    assert.ok(
-      (block?.compareDocumentPosition(root.querySelector('[role="tablist"]') as Node) ?? 0) & 4,
-      'the block is not before the tabs',
+    assert.deepEqual(
+      [...root.querySelectorAll('[role="tab"]')].map((tab) => [tab.textContent, tab.getAttribute('aria-selected')]),
+      [
+        ['To check · 2', 'true'],
+        ['Open · 1', 'false'],
+        ['Done · 2', 'false'],
+      ],
     );
-    assert.equal(block?.querySelector('h3')?.textContent, 'Ready to check · 2');
+    assert.equal(root.querySelector('section.ready'), null, 'no block of its own above the tabs any more');
     assert.equal(
       block?.querySelector('.ready-text')?.textContent,
       'The team says these are fixed. Do they look right to you?',
@@ -675,15 +680,28 @@ describe('« Ready to check » (FRU-300)', () => {
       [...(block?.querySelectorAll('.ready-meta') ?? [])].map((line) => line.textContent),
       ['Fixed by Sakuga team · 2 hours ago', 'Marked done · 2 hours ago'],
     );
-    assert.deepEqual(
-      [...root.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent),
-      ['Open · 1', 'Done · 2'],
-    );
+  });
+
+  it('opens on « To check » while a note waits, and on « Open » when none does, until the reader chooses', () => {
+    const { tab: _tab, ...chosenNone } = options();
+    const waiting = panelPage(page(), chosenNone);
+    assert.equal(waiting.querySelector('[aria-selected="true"]')?.getAttribute('data-tab'), 'check');
+
+    const none = panelPage(page(), {
+      ...chosenNone,
+      state: { kind: 'on', host: 'staging.acme.dev', notes: [OTHERS, OPEN] },
+    });
+    assert.equal(none.querySelector('[aria-selected="true"]')?.getAttribute('data-tab'), 'open');
+
+    const chosen: string[] = [];
+    const rail = panelPage(page(), { ...chosenNone, onTab: (tab) => chosen.push(tab) });
+    for (const tab of rail.querySelectorAll<HTMLButtonElement>('[role="tab"]')) tab.click();
+    assert.deepEqual(chosen, ['check', 'open', 'done']);
   });
 
   it('sends « Looks fixed » and « Still wrong » for their note', () => {
     calls.length = 0;
-    const root = panelPage(page(), options());
+    const root = panelPage(page(), options({ tab: 'check' }));
     const item = root.querySelector('.ready-item[data-note="r2"]');
     const [fixed, wrong] = [...(item?.querySelectorAll<HTMLButtonElement>('.ready-actions button') ?? [])];
 
@@ -695,7 +713,7 @@ describe('« Ready to check » (FRU-300)', () => {
   });
 
   it('holds both buttons while a verdict is written, and says why one did not go', () => {
-    const sending = panelPage(page(), options({ checking: { id: 'r1', sending: 'fixed' } }));
+    const sending = panelPage(page(), options({ tab: 'check', checking: { id: 'r1', sending: 'fixed' } }));
     const buttons = [...sending.querySelectorAll<HTMLButtonElement>('.ready-item[data-note="r1"] button')];
     assert.deepEqual(
       buttons.map((button) => [button.textContent, button.disabled]),
@@ -705,7 +723,7 @@ describe('« Ready to check » (FRU-300)', () => {
       ],
     );
 
-    const failed = panelPage(page(), options({ checking: { id: 'r1', problem: CHECK_PROBLEM.retry } }));
+    const failed = panelPage(page(), options({ tab: 'check', checking: { id: 'r1', problem: CHECK_PROBLEM.retry } }));
     assert.equal(
       failed.querySelector('.ready-item[data-note="r1"] [role="alert"]')?.textContent,
       'Your answer was not sent. Try again.',
@@ -714,7 +732,7 @@ describe('« Ready to check » (FRU-300)', () => {
   });
 
   it('says « Checked by you » in Done, and « Reopened by you » in Open', () => {
-    const done = panelPage(page(), options({ tab: 'finished' }));
+    const done = panelPage(page(), options({ tab: 'done' }));
     assert.equal(
       done.querySelector('li[data-note="c1"] .panel-row-meta')?.textContent,
       'Done · Checked by you · just now',
@@ -727,15 +745,23 @@ describe('« Ready to check » (FRU-300)', () => {
     );
   });
 
-  it('is not drawn with no note to check', () => {
-    const root = panelPage(page(), options({ state: { kind: 'on', host: 'staging.acme.dev', notes: [OTHERS, OPEN] } }));
-    assert.equal(root.querySelector('section.ready'), null);
+  it('says so when no note is to check', () => {
+    const root = panelPage(
+      page(),
+      options({ tab: 'check', state: { kind: 'on', host: 'staging.acme.dev', notes: [OTHERS, OPEN] } }),
+    );
+    assert.equal(root.querySelector('.ready-item'), null);
+    assert.equal(root.querySelector('.ready-text'), null);
+    assert.equal(root.querySelector('.panel-none')?.textContent, 'No note to check.');
   });
 
   it('is in French for a French reader', () => {
     setLanguage('fr');
-    const root = panelPage(page(), options());
-    assert.equal(root.querySelector('section.ready h3')?.textContent, 'À vérifier · 2');
+    const root = panelPage(page(), options({ tab: 'check' }));
+    assert.deepEqual(
+      [...root.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent),
+      ['À vérifier · 2', 'Ouvertes · 1', 'Terminées · 2'],
+    );
     assert.deepEqual(
       [...root.querySelectorAll('.ready-item[data-note="r1"] button')].map((button) => button.textContent),
       ['C’est corrigé', 'Toujours pas'],
@@ -764,8 +790,8 @@ describe('the tab of a note, and its age', () => {
       'open',
       'open',
       'open',
-      'finished',
-      'finished',
+      'done',
+      'done',
     ]);
   });
 

@@ -427,6 +427,17 @@ describe('every word the widget shows', () => {
     cleanup.push(() => sidebar.destroy());
     sidebar.open();
     snapshots.push(...shown(host.root));
+    // Each of the three tabs, and « Search and options » with words that match nothing (FRU-606).
+    for (const tab of ['check', 'done', 'open']) {
+      (host.root.querySelector(`[data-fruitback-tab="${tab}"]`) as HTMLButtonElement).click();
+      snapshots.push(...shown(host.root));
+    }
+    (host.root.querySelector('[data-fruitback-search-toggle]') as HTMLButtonElement).click();
+    const searchField = host.root.querySelector('.fruitback-sidebar-search-field') as HTMLInputElement;
+    searchField.value = 'nothing has these words';
+    searchField.dispatchEvent(new (page.view as unknown as { Event: typeof Event }).Event('input'));
+    snapshots.push(...shown(host.root));
+    (host.root.querySelector('[data-fruitback-search-toggle]') as HTMLButtonElement).click();
     (host.root.querySelector('[data-fruitback-send-drafts]') as HTMLButtonElement).click();
     await new Promise((resolve) => setTimeout(resolve, 0));
     snapshots.push(...shown(host.root));
