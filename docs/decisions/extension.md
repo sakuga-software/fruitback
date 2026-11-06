@@ -706,7 +706,11 @@ holds `http://127.0.0.1/*`; a page of `http://127.0.0.1` with no rule, the panel
 - **A click on a pin opens its row once a list that holds its note is read**: the id waits until
   then (`openOnRead`).
 - **What somebody types in a reply stays.** The panel draws again at each change; the text, the
-  caret and the focus are put back. A reply that did not go keeps its text and says why.
+  caret and the focus are put back. A reply that did not go keeps its text and says why. « Cancel »,
+  a row closed or another tab keep it too, by note, while the panel is open: « Reply » gives it back
+  (FRU-606). Only a reply sent drops it.
+- **The field of a reply is the widget's** (FRU-606): two lines, Enter sends, Shift+Enter goes to
+  the next line, and an Enter that composes a character (an IME) sends nothing.
 - **The foot names the host and the workspace of the rule**, which the extension stores. The
   destination of FRU-295 is a read of the worker, which the panel does not make; it comes when the
   background holds it.

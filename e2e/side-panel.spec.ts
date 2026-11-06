@@ -220,14 +220,28 @@ test('« Notes on this page » lists the pins of the page, opens a row from a pi
 
   // « Reply »: the reply is in the thread of the widget.
   await expect.poll(() => clickInRow(page, target?.note ?? '', said.reply)).toBe(true);
+  // What is typed stays when the field closes, and comes back with it (FRU-606).
   await inPanel(
     page,
     `(() => {
       const field = document.querySelector('.panel-reply-field');
       field.value = 'Answered from the side panel';
       field.dispatchEvent(new Event('input', { bubbles: true }));
-      document.querySelector('.panel-reply-form').requestSubmit();
+      document.querySelector('.panel-reply-actions .panel-link').click();
     })()`,
+  );
+  await expect.poll(() => inPanel<number>(page, `document.querySelectorAll('.panel-reply-field').length`)).toBe(0);
+  await expect.poll(() => clickInRow(page, target?.note ?? '', said.reply)).toBe(true);
+  expect(
+    await inPanel<[string, string | null]>(
+      page,
+      `(() => { const field = document.querySelector('.panel-reply-field'); return [field?.value ?? '', field?.getAttribute('rows') ?? null]; })()`,
+    ),
+  ).toEqual(['Answered from the side panel', '2']);
+  // Enter sends, as in the thread of the widget.
+  await inPanel(
+    page,
+    `document.querySelector('.panel-reply-field').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))`,
   );
   await expect
     .poll(() => inPanel<string>(page, `document.querySelector('.panel-replies')?.textContent ?? ''`), {

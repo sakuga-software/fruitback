@@ -74,6 +74,11 @@ let notes: PanelNotes = 'reading';
 let tab: NotesTab | undefined;
 let open: string | undefined;
 let replying: PanelOptions['replying'];
+/**
+ * What the reader typed in the reply of each note, kept when its field closes (FRU-606): « Cancel », a
+ * row closed, another tab of the browser. The same field gives it back. Only a reply sent drops it.
+ */
+const replyTexts = new Map<string, string>();
 /** The verdict on its way, or why the last one did not go (FRU-300). */
 let checking: PanelOptions['checking'];
 /** The notes reopened from this panel, and when: « Reopened by you ». Gone with the panel. */
@@ -306,12 +311,14 @@ function draw(): void {
       },
       onShow: (id) => void ask('focus-note', { note: id }),
       onReplyOpen: (id) => {
-        replying = { id, text: '' };
+        replying = { id, text: replyTexts.get(id) ?? '' };
         draw();
         app.querySelector<HTMLElement>('.panel-reply-field')?.focus();
       },
       onReplyInput: (text) => {
-        if (replying !== undefined) replying = { ...replying, text };
+        if (replying === undefined) return;
+        replying = { ...replying, text };
+        replyTexts.set(replying.id, text);
       },
       onReplyCancel: () => {
         replying = undefined;
@@ -540,6 +547,7 @@ async function sendReply(): Promise<void> {
   const { outcome } = await ask('reply', { note: sending.id, body: sending.text });
   if (outcome === 'sent') {
     replying = undefined;
+    replyTexts.delete(sending.id);
     await readNotes();
     // The field and « Send » are gone: the focus goes back to « Reply » of the same row, not to the
     // body of the page (raised in review).

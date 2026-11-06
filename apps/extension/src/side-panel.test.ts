@@ -528,6 +528,32 @@ describe('the page of the panel (FRU-296, FRU-299)', () => {
     assert.deepEqual(options.calls, ['send']);
   });
 
+  it('replies as the thread of the widget does: two lines, Enter sends, Shift+Enter goes to the next line (FRU-606)', () => {
+    const options = handlers();
+    const root = panelPage(page(), {
+      ...options,
+      state: on(NOTES),
+      tab: 'open',
+      open: 'b',
+      replying: { id: 'b', text: 'Merci' },
+    });
+    const field = root.querySelector<HTMLTextAreaElement>('textarea.panel-reply-field');
+    const view = root.ownerDocument.defaultView as unknown as typeof globalThis;
+    // happy-dom submits a form only when it is in the document.
+    root.ownerDocument.body.append(root);
+    const press = (init: KeyboardEventInit) =>
+      field?.dispatchEvent(
+        new view.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true, ...init }),
+      );
+
+    assert.equal(field?.getAttribute('rows'), '2');
+    assert.equal(press({ shiftKey: true }), true, 'Shift+Enter is left to the field');
+    assert.equal(press({ isComposing: true }), true, 'an Enter that composes a character sends nothing');
+    assert.deepEqual(options.calls, []);
+    assert.equal(press({}), false);
+    assert.deepEqual(options.calls, ['send']);
+  });
+
   it('shows « Sending… » and no second send while a reply is on its way', () => {
     const root = panelPage(page(), {
       ...handlers(),

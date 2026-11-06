@@ -824,7 +824,8 @@ function replyForm(
   // The length the worker takes for a reply: nothing longer can be typed, so nothing is cut or refused.
   field.maxLength = REPLY_MAX_LENGTH;
   field.setAttribute('aria-label', t('Your reply'));
-  field.rows = 3;
+  // Two lines, as the reply of the thread of the widget (FRU-606).
+  field.rows = 2;
   field.value = replying.text;
   field.disabled = replying.sending === true;
   field.addEventListener('input', () => options.onReplyInput(field.value));
@@ -842,6 +843,13 @@ function replyForm(
     problem.setAttribute('role', 'alert');
     form.append(problem);
   }
+  // Enter sends, Shift+Enter goes to the next line, as in the thread of the widget (FRU-606). A
+  // key that composes a character (an IME) is not a send.
+  field.addEventListener('keydown', (event) => {
+    if (SENDS_A_REPLY[event.key] !== true || event.shiftKey || event.isComposing) return;
+    event.preventDefault();
+    form.requestSubmit();
+  });
   form.addEventListener('submit', (event) => {
     event.preventDefault();
     if (field.value.trim() !== '') options.onReplySend();
@@ -849,6 +857,9 @@ function replyForm(
 
   return form;
 }
+
+/** The key that sends a reply, written as a key and not as a word, as the kit writes its keys. */
+const SENDS_A_REPLY: Readonly<Record<string, true>> = { Enter: true };
 
 /** The longest reply the worker takes (`REPLY_LENGTH` of `apps/worker/src/app.ts`, FRU-257). */
 export const REPLY_MAX_LENGTH = 2000;
