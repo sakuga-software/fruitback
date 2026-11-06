@@ -295,21 +295,14 @@ async function verifiedNoteArrived(
   channel: Channel,
   issue: CreatedIssue,
 ): Promise<void> {
-  if (config.requestAgent === undefined || authorOf(note, channel === 'extension').kind === 'visitor') return;
-  await config.requestAgent({
-    workspace,
-    site,
-    ...(origin === undefined ? {} : { origin }),
-    identifier: issue.identifier,
-    note: note.id,
-    reason: 'verified-note',
-  });
+  await verifiedNotesArrived(config, workspace, origin, site, [{ note, issue }], channel);
 }
 
 /**
- * The notes of a batch that arrived (FRU-608): one call of the trigger for all of them, never one for
- * each. The first note of a known person names the call, as a single note does; the others of known
- * persons ride in `notes`. Notes of visitors start nothing, as alone (FRU-468).
+ * The notes of one send that arrived: one call of the trigger for all of them (FRU-608), and the one
+ * guard of a single note, a note of a visitor starts nothing (FRU-468). The trigger itself, on or off
+ * and its moment, is read by `requestAgent`, for one note and for a batch alike. The first note of a
+ * known person names the call; a batch of two or more adds every one of them in `batch`.
  */
 async function verifiedNotesArrived(
   config: Served,
@@ -322,11 +315,6 @@ async function verifiedNotesArrived(
   const known = arrived.filter(({ note }) => authorOf(note, channel === 'extension').kind !== 'visitor');
   const [first] = known;
   if (config.requestAgent === undefined || first === undefined) return;
-  if (known.length === 1) {
-    await verifiedNoteArrived(config, workspace, origin, site, first.note, channel, first.issue);
-
-    return;
-  }
   await config.requestAgent({
     workspace,
     site,
@@ -334,7 +322,9 @@ async function verifiedNotesArrived(
     identifier: first.issue.identifier,
     note: first.note.id,
     reason: 'verified-note',
-    batch: known.map(({ note, issue }) => ({ identifier: issue.identifier, note: note.id })),
+    ...(known.length > 1
+      ? { batch: known.map(({ note, issue }) => ({ identifier: issue.identifier, note: note.id })) }
+      : {}),
   });
 }
 
