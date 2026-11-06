@@ -199,11 +199,17 @@ export function startServer(env: WorkerEnv = process.env): Server {
     check.unref();
     server.on('close', () => clearInterval(check));
 
-    // FRU-604: the address of a visitor goes when its time runs out, even if no read comes.
+    // FRU-604: the address of a visitor goes when its time runs out, even if no read comes. The same
+    // one pass at a time as the two loops above.
+    let sweeping = false;
     const sweep = setInterval(() => {
-      void sweepDoneNotices(env).catch((error: unknown) =>
-        console.error('[fruitback] a pass over the addresses of the notes done did not finish', error),
-      );
+      if (sweeping) return;
+      sweeping = true;
+      void sweepDoneNotices(env)
+        .catch((error: unknown) =>
+          console.error('[fruitback] a pass over the addresses of the notes done did not finish', error),
+        )
+        .finally(() => (sweeping = false));
     }, DONE_SWEEP_MS);
     sweep.unref();
     server.on('close', () => clearInterval(sweep));
