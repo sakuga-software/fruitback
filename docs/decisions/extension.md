@@ -424,8 +424,10 @@ did not change: the fields of 760 px and the file input of the browser are as th
   Fruitback server**, leads there.
 - **E-mail, Google and GitHub all start the sign-in of the console** (FRU-238), which offers its
   own methods. The extension has no surface of authentication of its own: decided by the
-  orchestrator on 2026-10-20. A sign-in that did not finish is screen 1 with the alert of the kit
-  above the ways in.
+  orchestrator on 2026-10-20. A sign-in that did not finish is screen 1 with its problem as the
+  title (« The sign-in did not finish »), as the board P2 of FRU-598 draws it: one sentence says what
+  happened, then « Sign in again », Google and GitHub. The title and the sentence are one
+  `role="alert"`, because the screen changes under the person.
 - **`no-access` is a rule that is on, for sites the browser no longer grants**: access was removed
   in the settings of the browser. The popup asks `permissions.contains` for the rule's pattern.
   **Allow access again** calls `permissions.request` in the click itself (an await before it loses
@@ -1171,13 +1173,17 @@ Web Store (it installs from there, so its id is the same), and Safari.
 
 ### The rules, in short
 
-- **Screen 2 (FRU-298), « Turn Fruitback on for this site? »**: the tile and the host, « In {workspace}
-  · not on in this browser » for a site a workspace lists and this browser has not turned on, or « Not
-  in your sites yet » for a site of no workspace. Then the terms of the kit: « Notes go to » (the
-  `destination` of FRU-295; left out when the worker did not say, never « nowhere ») and « Who sees
-  the notes » (`members`: « Your team and invited guests »; `everyone`: « Everyone who visits the
-  site »), each with « Change », which opens the sites of the workspace in the console (none when the
-  console is not known). « Turn on » and « Your browser will ask to allow this site once. ».
+- **Screen 2 (FRU-298), « Leave notes on this site? »**, as the board P2 of FRU-598 draws it: the
+  tile and the host, « In {workspace} · not on in this browser » for a site a workspace lists and this
+  browser has not turned on, or « Not in your sites yet » for a site of no workspace. Then a summary of
+  what the defaults do, in a card: « Notes go to » (the `destination` of FRU-295; left out when the
+  worker did not say, never « nowhere ») and « Seen by », in the words of the console (`members`:
+  « Members of {workspace} »; `everyone`: « Everyone who visits »). Under it, « Change before turning
+  on » shows the lists of FRU-453 in place of the summary, for a role that may change them; for
+  another role, it opens the sites of the workspace in the console (no link when the console is not
+  known). « Turn on » and « Your browser asks once for access to this site. »: one click turns the
+  site on with the defaults. The browser is not named, because Firefox and Safari draw this screen
+  too.
   `GET /session/sites` is read in both shapes: a pairing's session names one `workspace`; an
   account's (FRU-238) names its `workspaces`, each with the role held there, and each site says which
   it is of. A site of a workspace the answer does not list is dropped; counts that are not five whole
@@ -1228,9 +1234,13 @@ Web Store (it installs from there, so its id is the same), and Safari.
 
 - **Screen 2, signed in on a site no workspace of the account lists**: « Not in your sites yet », the
   workspaces where the account may add a site (`canAddSite`, read now by the worker) as a « Workspace »
-  line with its list when there are several, « Who sees the notes » (a site is added for the members
-  of its workspace), and « Turn on ». None: « Ask an admin of your workspace to add this site. », and
-  no button. No « Every preview build too »: no preview without the proof of FRU-103 (Q4).
+  line with its list when there are several, the summary (« Notes go to » Fruitback, « Seen by » the
+  members of the workspace chosen: the defaults of the worker), and « Turn on ». None: « An admin of {workspace} adds sites » (P2 of FRU-598), a
+  message for that admin in a read-only field (the address of the site and the workspace), « Copy the
+  message » and « Copied » in a `role="status"` line. The workspace is named when the account is in
+  one only; else « An admin of your workspace adds sites ». If the browser refuses the copy, the text
+  is selected for the keys of the person. The names of the admins are not shown: the worker does not
+  give them to a member, and that is a decision for later. No « Turn on ». No « Every preview build too »: no preview without the proof of FRU-103 (Q4).
 - **The access to the site is asked for first, in the click**, then the site is added
   (`POST /session/sites`, the worker half), then the rule is stored as the one click of a site of a
   workspace stores it. A refusal of the browser adds nothing, and « Grant access » asks again. The
@@ -1246,9 +1256,10 @@ Web Store (it installs from there, so its id is the same), and Safari.
 
 ### The rules, in short
 
-- **Screen 2 shows lists in place of « Change »**, for a role that manages the sites of the
-  workspace (owner, admin: the worker lists `sources` for it in `GET /session/sites`, and the `place`
-  of each site by ids). Another role keeps the lines and their « Change », which opens the console.
+- **Screen 2 shows lists in place of its summary**, after « Change before turning on », for a role
+  that manages the sites of the workspace (owner, admin: the worker lists `sources` for it in
+  `GET /session/sites`, and the `place` of each site by ids). The focus goes to the first list.
+  Another role keeps the summary, and the link opens the console.
 - **« Notes go to » is three lists, as Mathieu asked in the review of #636**: the provider (« Fruitback
   (no tracker) », then each source of the workspace with its mark beside its name), then the team of a
   Linear or the repository of a GitHub, then a project of the team, which may be none. Each list is

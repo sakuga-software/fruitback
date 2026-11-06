@@ -212,23 +212,27 @@ describe('1, while the sign-in waits for the console', () => {
   });
 });
 
-describe('1, after a sign-in that did not finish', () => {
+describe('1, after a sign-in that did not finish (P2 of FRU-598)', () => {
   for (const [stopped, title, sentence] of [
-    ['refused', 'The sign-in did not finish.', 'Someone declined it in the console. Sign in again to retry.'],
-    ['expired', 'The sign-in did not finish.', 'The console did not approve it within 15 minutes. Sign in again.'],
-    ['unavailable', 'Fruitback could not be reached.', 'Check the connection, then try again.'],
+    [
+      'refused',
+      'The sign-in did not finish',
+      'Someone pressed “Not now” in the console. Nothing changed in your sites.',
+    ],
+    ['expired', 'The sign-in did not finish', 'The console did not approve it within 15 minutes.'],
+    ['unavailable', 'Fruitback could not be reached', 'Check the connection, then try again.'],
     [
       'untrusted',
-      'The sign-in did not start.',
+      'The sign-in did not start',
       'Fruitback named a console that is not its own. Tell the person who runs your Fruitback.',
     ],
     [
       'blocked',
-      'The sign-in did not start.',
-      'The browser did not give the extension access to Fruitback. Sign in again, and allow it when the browser asks.',
+      'The sign-in did not start',
+      'The browser did not give the extension access to Fruitback. Allow it when the browser asks.',
     ],
   ] as const) {
-    it(`says why in an alert when it was ${stopped}, above the ways to sign in again`, () => {
+    it(`makes the problem the title when it was ${stopped}, then « Sign in again », Google and GitHub`, () => {
       let again = 0;
       const root = signedOut(page(), {
         canSignIn: true,
@@ -238,15 +242,40 @@ describe('1, after a sign-in that did not finish', () => {
       });
 
       // Said at once: the screen changed under the person, and this is why.
-      const alert = root.querySelector('[role="alert"]');
-      assert.equal(alert?.querySelector('.kit-alert-title')?.textContent, title);
-      assert.equal(alert?.querySelector('.kit-alert-body')?.textContent, sentence);
-      // Above the ways in, as the ticket draws it.
-      assert.equal(alert?.nextElementSibling?.className, 'methods');
+      const said = root.querySelector('[role="alert"]');
+      assert.equal(said?.querySelector('h1')?.textContent, title);
+      assert.equal(said?.querySelector('.lead')?.textContent, sentence);
+      assert.equal(root.querySelectorAll('h1').length, 1);
+      assert.equal(root.querySelector('.kit-alert'), null, 'no second alert under the title');
+      assert.doesNotMatch(root.textContent ?? '', /Comment on any website|Invited by/);
+      assert.equal(said?.nextElementSibling?.className, 'methods');
+      assert.deepEqual(stops(root), [
+        'button: Sign in again',
+        'button: Google',
+        'button: GitHub',
+        'button: Use your own Fruitback server',
+      ]);
       (root.querySelector('.kit-primary') as HTMLElement).click();
       assert.equal(again, 1);
     });
   }
+
+  it('speaks French', () => {
+    setLanguage('fr');
+    const root = signedOut(page(), {
+      canSignIn: true,
+      stop: signInStop('refused'),
+      onSignIn: nothing,
+      onSettings: nothing,
+    });
+
+    assert.equal(root.querySelector('h1')?.textContent, 'La connexion n’a pas abouti');
+    assert.equal(
+      root.querySelector('.lead')?.textContent,
+      'Quelqu’un a appuyé sur «\u202FPas maintenant\u202F» dans la console. Rien n’a changé dans vos sites.',
+    );
+    assert.equal(root.querySelector('.kit-primary')?.textContent, 'Se reconnecter');
+  });
 });
 
 describe('4 · a problem, with its fix (FRU-297)', () => {
@@ -365,7 +394,7 @@ describe('2 · a site of a workspace, not on here (FRU-298)', () => {
       ...extra,
     });
 
-  it('asks the question of the mock-up, says where the notes go and who sees them, and turns on in one click', () => {
+  it('asks the question of P2, sums up where the notes go and who sees them, and turns on in one click', () => {
     const calls: string[] = [];
     const screen = offer({}, calls);
 
@@ -373,35 +402,35 @@ describe('2 · a site of a workspace, not on here (FRU-298)', () => {
     assert.equal(screen.querySelector('.kit-site-host')?.textContent, 'preview.northwind.io');
     assert.equal(screen.querySelector('.kit-site-state')?.textContent, 'In Northwind · not on in this browser');
     assert.equal(screen.querySelector('.kit-tile')?.getAttribute('data-on'), 'false');
-    assert.equal(screen.querySelector('h1')?.textContent, 'Turn Fruitback on for this site?');
+    assert.equal(screen.querySelector('h1')?.textContent, 'Leave notes on this site?');
+    // The summary, in the words of the console: no list, and one way to change it.
     assert.deepEqual(
-      [...screen.querySelectorAll('.kit-dl-entry')].map((entry) => [
+      [...screen.querySelectorAll('.turn-on-summary .kit-dl-entry')].map((entry) => [
         entry.querySelector('dt')?.textContent,
         entry.querySelector('dd')?.textContent,
-        entry.querySelector('button')?.textContent,
       ]),
       [
-        ['Notes go to', 'Linear · Northwind', 'Change'],
-        ['Who sees the notes', 'Your team and invited guests', 'Change'],
+        ['Notes go to', 'Linear · Northwind'],
+        ['Seen by', 'Members of Northwind'],
       ],
     );
+    assert.equal(screen.querySelector('select'), null);
     assert.equal(
       screen.querySelector('.action-block .note')?.textContent,
-      'Your browser will ask to allow this site once.',
+      'Your browser asks once for access to this site.',
     );
     assert.deepEqual(stops(screen), [
       'button: Account and settings',
-      'button: Change',
-      'button: Change',
+      'button: Change before turning on',
       'button: Turn on',
     ]);
 
     screen.querySelector<HTMLButtonElement>('.action-block button')?.click();
-    screen.querySelector<HTMLButtonElement>('.kit-dl button')?.click();
+    screen.querySelector<HTMLButtonElement>('.turn-on-summary .kit-text')?.click();
     assert.deepEqual(calls, ['turn-on:', 'change']);
   });
 
-  it('leaves « Notes go to » out when the worker did not say, « Change » out with no console, and says everyone', () => {
+  it('leaves « Notes go to » out when the worker did not say, the link out with no console, and says everyone', () => {
     const screen = offer({ visibility: 'everyone' });
     const bare = turnOnScreen(page(), {
       origin: 'https://preview.northwind.io',
@@ -412,34 +441,41 @@ describe('2 · a site of a workspace, not on here (FRU-298)', () => {
     });
 
     assert.equal(
-      screen.querySelectorAll('.kit-dl-entry')[1]?.querySelector('dd')?.textContent,
-      'Everyone who visits the site',
+      screen.querySelectorAll('.turn-on-summary .kit-dl-entry')[1]?.querySelector('dd')?.textContent,
+      'Everyone who visits',
     );
     assert.deepEqual(
       [...bare.querySelectorAll('.kit-dl-entry dt')].map((term) => term.textContent),
-      ['Who sees the notes'],
+      ['Seen by'],
     );
-    assert.equal(bare.querySelector('.kit-dl button'), null);
+    assert.equal(bare.querySelector('.turn-on-summary button'), null);
   });
 
   it('speaks French', () => {
     setLanguage('fr');
     const screen = offer();
 
-    assert.equal(screen.querySelector('h1')?.textContent, 'Activer Fruitback sur ce site\u202F?');
+    assert.equal(screen.querySelector('h1')?.textContent, 'Laisser des notes sur ce site\u202F?');
     assert.equal(screen.querySelector('.action-block button')?.textContent, 'Activer');
     assert.equal(screen.querySelector('dt')?.textContent, 'Les notes vont vers');
+    assert.equal(screen.querySelectorAll('dd')[1]?.textContent, 'Les membres de Northwind');
+    assert.equal(screen.querySelector('.turn-on-summary .kit-text')?.textContent, 'Modifier avant d’activer');
   });
 });
 
 describe('2 · a site of no workspace (FRU-298, FRU-255)', () => {
-  const fresh = (workspaces: { id: string; name: string }[], calls: string[] = []) =>
+  const fresh = (
+    workspaces: { id: string; name: string }[],
+    calls: string[] = [],
+    extra: Partial<Parameters<typeof turnOnScreen>[1]> = {},
+  ) =>
     turnOnScreen(page(), {
       origin: 'https://preview.northwind.io',
       visibility: 'members',
       workspaces,
       onTurnOn: (workspace) => calls.push(`turn-on:${workspace ?? ''}`),
       onSettings: nothing,
+      ...extra,
     });
 
   it('with one workspace: no list, and « Turn on » adds the site to it', () => {
@@ -466,21 +502,80 @@ describe('2 · a site of no workspace (FRU-298, FRU-255)', () => {
 
     assert.equal(screen.querySelector('.kit-dl-entry dt')?.textContent, 'Workspace');
     assert.equal(select.getAttribute('aria-label'), 'Workspace');
+    const seen = () => screen.querySelectorAll('.turn-on-summary dd')[0]?.textContent;
+    assert.equal(seen(), 'Members of Northwind');
     select.value = 'w2';
     select.dispatchEvent(new (select.ownerDocument.defaultView as unknown as typeof globalThis).Event('change'));
+    // The summary names the workspace chosen.
+    assert.equal(seen(), 'Members of Acme');
     screen.querySelector<HTMLButtonElement>('.action-block button')?.click();
     assert.deepEqual(calls, ['turn-on:w2']);
   });
 
-  it('with none: says who can add it, and leads to the guide that says who can (FRU-528)', () => {
-    const screen = fresh([]);
+  it('with none: a message for an admin of the one workspace, to copy, and the guide that says who can (FRU-528)', async () => {
+    const copied: string[] = [];
+    let answer = true;
+    const screen = fresh([], [], {
+      origin: 'https://staging.acme.dev',
+      adminOf: 'Acme',
+      copy: async (text) => {
+        copied.push(text);
 
-    assert.equal(screen.querySelector('.lead')?.textContent, 'Ask an admin of your workspace to add this site.');
-    assert.deepEqual(stops(screen), ['button: Account and settings', 'link: Who can add a site to a workspace?']);
+        return answer;
+      },
+    });
+    // Attached, so that it can take the focus.
+    screen.ownerDocument.body.append(screen);
+    const message =
+      'Could you add https://staging.acme.dev to the Acme workspace of Fruitback? I would like to leave notes on it.';
+
+    assert.equal(screen.querySelector('.kit-site-state')?.textContent, 'Not in your sites yet');
+    assert.equal(screen.querySelector('h1')?.textContent, 'An admin of Acme adds sites');
+    const text = screen.querySelector('textarea');
+    assert.ok(text?.readOnly);
+    assert.equal(text?.value, message);
+    // Its name is the label around it (axe `label`).
+    assert.equal(text?.closest('label')?.firstChild?.textContent, 'Message to send them');
+    assert.deepEqual(stops(screen), [
+      'button: Account and settings',
+      'button: Copy the message',
+      'link: Who can add a site to a workspace?',
+    ]);
     assert.equal(
       screen.querySelector<HTMLAnchorElement>('.kit-help a')?.href,
       'https://fruitback.com/reviewing.html#who-can-add-a-site-to-a-workspace',
     );
+
+    const said = screen.querySelector('[role="status"]');
+    screen.querySelector<HTMLButtonElement>('.action')?.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.deepEqual(copied, [message]);
+    assert.equal(said?.textContent, 'Copied');
+
+    // The browser refuses: no « Copied », and the text is chosen for the keys of the person.
+    answer = false;
+    screen.querySelector<HTMLButtonElement>('.action')?.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(said?.textContent, '');
+    assert.ok(screen.ownerDocument.activeElement === text);
+  });
+
+  it('with none, and an account in several workspaces or none: names no workspace', () => {
+    const screen = fresh([], [], { origin: 'https://staging.acme.dev', copy: async () => true });
+
+    assert.equal(screen.querySelector('h1')?.textContent, 'An admin of your workspace adds sites');
+    assert.equal(
+      screen.querySelector('textarea')?.value,
+      'Could you add https://staging.acme.dev to our workspace of Fruitback? I would like to leave notes on it.',
+    );
+  });
+
+  it('with none, speaks French', () => {
+    setLanguage('fr');
+    const screen = fresh([], [], { origin: 'https://staging.acme.dev', adminOf: 'Acme', copy: async () => true });
+
+    assert.equal(screen.querySelector('h1')?.textContent, 'Un admin de Acme ajoute les sites');
+    assert.equal(screen.querySelector('.action')?.textContent, 'Copier le message');
   });
 });
 
@@ -500,7 +595,7 @@ describe('2 · a site on http, which the popup does not add (FRU-537)', () => {
       screen.querySelector('.lead')?.textContent,
       'This site is on http. Add it to a workspace from the console, then turn it on here.',
     );
-    assert.doesNotMatch(screen.textContent ?? '', /Ask an admin/);
+    assert.doesNotMatch(screen.textContent ?? '', /admin/);
     assert.deepEqual(stops(screen), ['button: Account and settings']);
   });
 });
@@ -513,8 +608,14 @@ describe('2 · who sees the notes and where they go, chosen at the turn on (FRU-
     select.dispatchEvent(new (select.ownerDocument.defaultView as unknown as typeof globalThis).Event('change'));
   };
   const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+  /** « Change before turning on »: the summary gives its place to the lists. */
+  const openLists = (screen: HTMLElement): void => {
+    const link = screen.querySelector<HTMLButtonElement>('.turn-on-summary .kit-text');
+    if (link === null) throw new Error('no « Change before turning on »');
+    link.click();
+  };
 
-  it('shows the lists in place of « Change », in the order a keyboard meets them', async () => {
+  it('shows the lists in place of the summary on « Change before turning on », in the order a keyboard meets them', async () => {
     const calls: string[] = [];
     const screen = turnOnScreen(page(), {
       origin: 'https://preview.northwind.io',
@@ -544,7 +645,13 @@ describe('2 · who sees the notes and where they go, chosen at the turn on (FRU-
       onTurnOn: () => calls.push('turn-on'),
       onSettings: nothing,
     });
+    screen.ownerDocument.body.append(screen);
     await settle();
+    assert.equal(screen.querySelector('select'), null, 'the lists wait for the link');
+    openLists(screen);
+    assert.equal(screen.querySelector('.turn-on-summary'), null);
+    // The focus goes to the first list: the link it was on is gone.
+    assert.ok(screen.ownerDocument.activeElement === screen.querySelector('select'));
 
     assert.deepEqual(
       [...screen.querySelectorAll('select')]
@@ -553,13 +660,14 @@ describe('2 · who sees the notes and where they go, chosen at the turn on (FRU-
       ['Notes go to', 'Team', 'Who sees the notes'],
     );
     assert.equal(screen.querySelector('.kit-dl-action'), null, 'no « Change »');
+    assert.deepEqual(calls, [], 'a role that may change it stays in the popup');
     const visibility = screen.querySelector<HTMLSelectElement>('select[name="visibility"]');
     if (visibility === null) throw new Error('no list');
     assert.deepEqual(
       [...visibility.options].map((option) => [option.value, option.textContent, option.selected]),
       [
-        ['members', 'Your team and invited guests', true],
-        ['everyone', 'Everyone who visits the site', false],
+        ['members', 'Members of Northwind', true],
+        ['everyone', 'Everyone who visits', false],
       ],
     );
     change(visibility, 'everyone');
@@ -585,6 +693,7 @@ describe('2 · who sees the notes and where they go, chosen at the turn on (FRU-
       onTurnOn: nothing,
       onSettings: nothing,
     });
+    openLists(screen);
     const visibility = screen.querySelector<HTMLSelectElement>('select[name="visibility"]');
     if (visibility === null) throw new Error('no list');
 
@@ -622,9 +731,13 @@ describe('2 · who sees the notes and where they go, chosen at the turn on (FRU-
       onTurnOn: (workspace) => calls.push(`turn-on:${workspace ?? ''}`),
       onSettings: nothing,
     });
+    openLists(screen);
     const workspace = screen.querySelector<HTMLSelectElement>('select[name="workspace"]');
     const provider = screen.querySelector<HTMLSelectElement>('select[name="provider"]');
+    const members = () =>
+      screen.querySelector<HTMLSelectElement>('select[name="visibility"] option[value="members"]')?.textContent;
     if (workspace === null || provider === null) throw new Error('no lists');
+    assert.equal(members(), 'Members of Northwind');
 
     assert.deepEqual(
       [...provider.options].map((option) => option.textContent),
@@ -638,6 +751,7 @@ describe('2 · who sees the notes and where they go, chosen at the turn on (FRU-
       ['Fruitback (no tracker)', 'Linear · Acme'],
     );
     assert.equal(provider.value, '');
+    assert.equal(members(), 'Members of Acme');
     await settle();
     change(provider, 'lin');
     await settle();

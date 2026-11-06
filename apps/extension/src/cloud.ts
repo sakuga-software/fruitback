@@ -507,15 +507,22 @@ export async function accountLanguage(seams: CloudSeams): Promise<{ locale?: str
 }
 
 /**
- * The workspaces of the account behind `endpoint` where it may add a site (FRU-255), or `undefined`
- * when the worker said nothing. A session of a pairing adds none: it names one workspace, and stays a
- * reader.
+ * The workspaces of the account behind `endpoint` where it may add a site (FRU-255), and all of its
+ * workspaces (P2 of FRU-598, to name the one whose admin adds it), or `undefined` when the worker said
+ * nothing. A session of a pairing adds none: it names one workspace, and stays a reader.
  */
-export async function addableWorkspaces(endpoint: string, seams: CloudSeams): Promise<Workspace[] | undefined> {
+export async function addableWorkspaces(
+  endpoint: string,
+  seams: CloudSeams,
+): Promise<{ addable: Workspace[]; all: Workspace[] } | undefined> {
   const listed = await listedBy(endpoint, seams);
   if (listed === undefined) return undefined;
+  if (!listed.account) return { addable: [], all: [] };
 
-  return listed.account ? listed.workspaces.filter((workspace) => workspace.canAddSite === true) : [];
+  return {
+    addable: listed.workspaces.filter((workspace) => workspace.canAddSite === true),
+    all: listed.workspaces,
+  };
 }
 
 export type AddFailure = 'forbidden' | 'rate-limited' | 'signed-out' | 'unavailable' | 'insecure-origin';

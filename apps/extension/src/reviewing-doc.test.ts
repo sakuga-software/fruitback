@@ -179,10 +179,10 @@ describe('the guide quotes the popup this extension renders', () => {
     it('quotes only what the popup draws', () => {
       const troubleshooting = section('When Fruitback does not answer');
       const quotes = [
-        'Someone declined it in the console. Sign in again to retry.',
-        'The console did not approve it within 15 minutes. Sign in again.',
+        'Someone pressed “Not now” in the console. Nothing changed in your sites.',
+        'The console did not approve it within 15 minutes.',
         'Check the connection, then try again.',
-        'The browser did not give the extension access to Fruitback. Sign in again, and allow it when the browser asks.',
+        'The browser did not give the extension access to Fruitback. Allow it when the browser asks.',
         'Fruitback did not answer. The popup asks again.',
         'Your sign-in ended',
         "Fruitback can't reach",
@@ -230,7 +230,8 @@ describe('the guide quotes the popup this extension renders', () => {
       const adds = read('../../worker/src/session-site-add.ts');
 
       for (const quote of [
-        'Ask an admin of your workspace to add this site.',
+        'An admin of your workspace adds sites',
+        'Copy the message',
         'Your role in this workspace does not let you add a site.',
         'Too many sites were added in the last hour. Try again later.',
       ]) {

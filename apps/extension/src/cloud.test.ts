@@ -527,8 +527,14 @@ describe('adding the site of the tab to a workspace (FRU-255)', () => {
 
   it('offers the workspaces where the account may add a site, and none to a pairing', async () => {
     const { fetcher } = worker({ ...ACCOUNT, workspaces: [SAKUGA, NORTHWIND] });
-    assert.deepEqual(await addableWorkspaces('https://api.fruitback.test', seamsWith(fetcher)), [SAKUGA]);
-    assert.deepEqual(await addableWorkspaces('https://api.fruitback.test', seamsWith(worker().fetcher)), []);
+    assert.deepEqual(await addableWorkspaces('https://api.fruitback.test', seamsWith(fetcher)), {
+      addable: [SAKUGA],
+      all: [SAKUGA, NORTHWIND],
+    });
+    assert.deepEqual(await addableWorkspaces('https://api.fruitback.test', seamsWith(worker().fetcher)), {
+      addable: [],
+      all: [],
+    });
     assert.equal(await addableWorkspaces('https://api.fruitback.test', seamsWith(worker({}, 503).fetcher)), undefined);
   });
 
@@ -904,7 +910,9 @@ describe('a token the worker refuses (FRU-511)', () => {
     const listing = strict({ ...ACCOUNT, workspaces: [SAKUGA] });
     const renew = renewing();
     const seams = { endpoints: async () => [ENDPOINT], ensureAccess: async () => STALE, fetcher: listing.fetcher };
-    assert.deepEqual(await addableWorkspaces(ENDPOINT, { ...seams, renewAccess: renew.renewAccess }), [SAKUGA]);
+    assert.deepEqual((await addableWorkspaces(ENDPOINT, { ...seams, renewAccess: renew.renewAccess }))?.addable, [
+      SAKUGA,
+    ]);
     assert.deepEqual(listing.tokens, ['Bearer old', 'Bearer tok']);
     assert.deepEqual(renew.refused, ['old']);
 

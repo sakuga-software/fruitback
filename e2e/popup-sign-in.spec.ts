@@ -301,11 +301,15 @@ test('a sign-in refused in the console says so once, then the popup asks again',
   await expect(popup.getByText(WORD, { exact: true })).toBeVisible();
 
   claim.answer = 'refused';
-  // Screen 1, with what stopped the sign-in in an alert above the ways in (FRU-297).
-  await expect(popup.locator('.kit-alert-title')).toHaveText('The sign-in did not finish.', { timeout: 15_000 });
-  await expect(popup.locator('.kit-alert-body')).toHaveText(
-    'Someone declined it in the console. Sign in again to retry.',
+  // Screen 1, with what stopped the sign-in as its title, above the ways in (P2 of FRU-598).
+  await expect(popup.getByRole('heading', { level: 1 })).toHaveText('The sign-in did not finish', {
+    timeout: 15_000,
+  });
+  await expect(popup.getByRole('alert')).toContainText(
+    'Someone pressed “Not now” in the console. Nothing changed in your sites.',
   );
+  await expect(popup.getByText('Comment on any website, right on the page')).toHaveCount(0);
+  await expect(popup.getByRole('button', { name: 'Sign in again' })).toBeVisible();
   await clean(popup, 'the popup after a refusal');
   expect(await stored(extension, 'session')).not.toContain(CLAIM);
   // One popup at a time: `openPopup` finds the popup by its address.
@@ -337,11 +341,10 @@ test('a sign-in nobody approved in time, and « Start again »', async ({ extens
   expect(bodies.filter((body) => (body as { browser?: string }).browser !== undefined)).toHaveLength(2);
 
   claim.answer = 'expired';
-  await expect(popup.locator('.kit-alert-body')).toHaveText(
-    'The console did not approve it within 15 minutes. Sign in again.',
-    { timeout: 15_000 },
-  );
-  await expect(popup.getByRole('button', { name: 'Sign in with email' })).toBeVisible();
+  await expect(popup.locator('.intro .lead')).toHaveText('The console did not approve it within 15 minutes.', {
+    timeout: 15_000,
+  });
+  await expect(popup.getByRole('button', { name: 'Sign in again' })).toBeVisible();
 });
 
 test('a console of another site is not opened, and a Fruitback that does not answer is said', async ({ extension }) => {
@@ -353,7 +356,7 @@ test('a console of another site is not opened, and a Fruitback that does not ans
   const popup = await openPopup(extension, page);
   const pages = extension.context.pages().length;
   await popup.getByRole('button', { name: 'Sign in with email' }).click();
-  await expect(popup.locator('.kit-alert-body')).toHaveText(
+  await expect(popup.locator('.intro .lead')).toHaveText(
     'Fruitback named a console that is not its own. Tell the person who runs your Fruitback.',
   );
   expect(extension.context.pages()).toHaveLength(pages);
@@ -365,10 +368,10 @@ test('a console of another site is not opened, and a Fruitback that does not ans
   await signInRoutes(extension.context, requestOf('down'), { start: (route) => route.abort('connectionrefused') });
   const down = await openPopup(extension, page);
   await down.getByRole('button', { name: 'Sign in with email' }).click();
-  await expect(down.locator('.kit-alert-title')).toHaveText('Fruitback could not be reached.');
-  await expect(down.locator('.kit-alert-body')).toHaveText('Check the connection, then try again.');
+  await expect(down.getByRole('heading', { level: 1 })).toHaveText('Fruitback could not be reached');
+  await expect(down.locator('.intro .lead')).toHaveText('Check the connection, then try again.');
   // Screen 1: the ways in are what tries again.
-  await expect(down.getByRole('button', { name: 'Sign in with email' })).toBeVisible();
+  await expect(down.getByRole('button', { name: 'Sign in again' })).toBeVisible();
   await clean(down, 'the popup when Fruitback does not answer');
 });
 

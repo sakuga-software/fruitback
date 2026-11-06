@@ -14,7 +14,7 @@ import {
 import { AUTHENTICATED_WORKER_ORIGIN } from './worker-sessions.ts';
 
 /**
- * A site of a workspace in the popup (FRU-254, FRU-298): « Turn Fruitback on for this site? » (2),
+ * A site of a workspace in the popup (FRU-254, FRU-298): « Leave notes on this site? » (2),
  * then the switch, « Leave a note », what waits and the side panel (3), in the real extension,
  * against the second worker of the suite, whose workspace lists the playground.
  */
@@ -90,13 +90,15 @@ test('2 then 3: a site of the workspace turns on in one click, then the switch, 
   // 2: the question, who reads the notes, and one click.
   let popup = await reopen(extension, page);
   await popup.setViewportSize({ width: 380, height: 580 });
-  await expect(popup.getByRole('heading', { level: 1, name: 'Turn Fruitback on for this site?' })).toBeVisible();
+  await expect(popup.getByRole('heading', { level: 1, name: 'Leave notes on this site?' })).toBeVisible();
   await expect(popup.locator('.kit-site-host')).toHaveText('localhost:5177');
   await expect(popup.getByText('In Playground · not on in this browser')).toBeVisible();
-  await expect(
-    popup.locator('.kit-dl-entry').filter({ hasText: 'Who sees the notes' }).locator('dd:not(.kit-dl-action)'),
-  ).toHaveText(/^(Your team and invited guests|Everyone who visits the site)$/);
-  await expect(popup.getByText('Your browser will ask to allow this site once.')).toBeVisible();
+  // P2 of FRU-598: a summary in the words of the console, and no list before the link.
+  await expect(popup.locator('.turn-on-summary .kit-dl-entry').filter({ hasText: 'Seen by' }).locator('dd')).toHaveText(
+    /^(Members of Playground|Everyone who visits)$/,
+  );
+  await expect(popup.getByRole('combobox')).toHaveCount(0);
+  await expect(popup.getByText('Your browser asks once for access to this site.')).toBeVisible();
   await expect(popup.locator('.kit-avatar-dot', { hasText: /\S/ })).toHaveCount(0);
   // The boxes of the mock-up (`popup-2-site-not-added.png`): 24 px around, the title at 22 px.
   expectNear(await boxOf(popup.getByRole('heading', { level: 1 })), { x: 24, width: 332 }, 'title');
@@ -234,9 +236,9 @@ test('the popup on a site of the workspace speaks French', async ({ extension })
   await openBareSite(page, 'popup-workspace-fr');
   const popup = await openPopup(extension, page);
   await popup.setViewportSize({ width: 380, height: 580 });
-  await expect(popup.getByRole('heading', { level: 1, name: 'Activer Fruitback sur ce site ?' })).toBeVisible();
+  await expect(popup.getByRole('heading', { level: 1, name: 'Laisser des notes sur ce site ?' })).toBeVisible();
   await expect(popup.getByText(/^Dans Playground · pas activé dans ce navigateur$/)).toBeVisible();
-  await expect(popup.getByText('Votre navigateur demandera une fois l’accès à ce site.')).toBeVisible();
+  await expect(popup.getByText('Votre navigateur demande une fois l’accès à ce site.')).toBeVisible();
   expect(await popup.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(380);
   await clean(popup, 'the popup on a site of the workspace, in French');
   await popup.getByRole('button', { name: 'Activer', exact: true }).click();

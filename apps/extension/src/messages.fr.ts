@@ -23,7 +23,18 @@ export const FRENCH: Readonly<Record<string, string>> = {
   // FRU-298: the screens 2 and 3 of the popup.
   'Not in your sites yet': 'Pas encore dans vos sites',
   'In {workspace} · not on in this browser': 'Dans {workspace} · pas activé dans ce navigateur',
-  'Turn Fruitback on for this site?': 'Activer Fruitback sur ce site ?',
+  // P2 of FRU-598: one click to turn a site on, and a message for an admin.
+  'Leave notes on this site?': 'Laisser des notes sur ce site ?',
+  'Seen by': 'Vues par',
+  'Change before turning on': 'Modifier avant d’activer',
+  'An admin of your workspace adds sites': 'Un admin de votre espace de travail ajoute les sites',
+  'An admin of {workspace} adds sites': 'Un admin de {workspace} ajoute les sites',
+  'Message to send them': 'Message à lui envoyer',
+  'Could you add {origin} to our workspace of Fruitback? I would like to leave notes on it.':
+    'Pourrais-tu ajouter {origin} à notre espace de travail Fruitback ? J’aimerais y laisser des notes.',
+  'Could you add {origin} to the {workspace} workspace of Fruitback? I would like to leave notes on it.':
+    'Pourrais-tu ajouter {origin} à l’espace de travail {workspace} de Fruitback ? J’aimerais y laisser des notes.',
+  'Copy the message': 'Copier le message',
   'Notes go to': 'Les notes vont vers',
   'Who sees the notes': 'Qui voit les notes',
   'Fruitback (no tracker)': 'Fruitback (sans outil de suivi)',
@@ -41,9 +52,9 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'This site sends to several places. Change them in Fruitback.':
     'Ce site envoie vers plusieurs endroits. Modifiez-les dans Fruitback.',
   'Turn on': 'Activer',
-  'Your browser will ask to allow this site once.': 'Votre navigateur demandera une fois l’accès à ce site.',
-  'Your team and invited guests': 'Votre équipe et les invités',
-  'Everyone who visits the site': 'Tous ceux qui visitent le site',
+  'Your browser asks once for access to this site.': 'Votre navigateur demande une fois l’accès à ce site.',
+  'Members of {workspace}': 'Les membres de {workspace}',
+  'Everyone who visits': 'Tous les visiteurs',
   'or press {keys} on the page': 'ou appuyez sur {keys} sur la page',
   'No open note': 'Aucune note ouverte',
   '1 open note': '1 note ouverte',
@@ -167,14 +178,14 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Check that the tab shows the same word': 'Vérifiez que l’onglet affiche le même mot',
   'Waiting for you to connect in the tab…': 'En attente de votre connexion dans l’onglet…',
   'Start again': 'Recommencer',
-  'The sign-in did not finish.': 'La connexion n’a pas abouti.',
-  'Someone declined it in the console. Sign in again to retry.':
-    'Quelqu’un l’a refusée dans la console. Reconnectez-vous pour réessayer.',
-  'The console did not approve it within 15 minutes. Sign in again.':
-    'La console ne l’a pas approuvée dans les 15 minutes. Reconnectez-vous.',
-  'Fruitback could not be reached.': 'Fruitback est injoignable.',
+  'The sign-in did not finish': 'La connexion n’a pas abouti',
+  'Someone pressed “Not now” in the console. Nothing changed in your sites.':
+    'Quelqu’un a appuyé sur « Pas maintenant » dans la console. Rien n’a changé dans vos sites.',
+  'The console did not approve it within 15 minutes.': 'La console ne l’a pas approuvée dans les 15 minutes.',
+  'Fruitback could not be reached': 'Fruitback est injoignable',
   'Check the connection, then try again.': 'Vérifiez la connexion, puis réessayez.',
-  'The sign-in did not start.': 'La connexion n’a pas commencé.',
+  'The sign-in did not start': 'La connexion n’a pas commencé',
+  'Sign in again': 'Se reconnecter',
   'Fruitback named a console that is not its own. Tell the person who runs your Fruitback.':
     'Fruitback a indiqué une console qui n’est pas la sienne. Prévenez la personne qui gère votre Fruitback.',
   'Loading…': 'Chargement…',
@@ -205,8 +216,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Another copy of Fruitback ({version}) runs on this page. Reload the page. If this stays, remove that copy in {place}.':
     'Une autre copie de Fruitback ({version}) tourne sur cette page. Rechargez la page. Si cela reste, retirez cette copie dans {place}.',
   // A site of no workspace (FRU-255).
-  'Ask an admin of your workspace to add this site.':
-    'Demandez à un admin de votre espace de travail d’ajouter ce site.',
   Workspace: 'Espace de travail',
   'Your role in this workspace does not let you add a site.':
     'Votre rôle dans cet espace de travail ne permet pas d’ajouter un site.',
@@ -233,8 +242,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'The browser did not give access to this site. Press Turn on again, then allow it.':
     'Le navigateur n’a pas donné l’accès à ce site. Appuyez de nouveau sur Activer, puis autorisez-le.',
   'The site could not be turned on. Try again.': 'Le site n’a pas pu être activé. Réessayez.',
-  'The browser did not give the extension access to Fruitback. Sign in again, and allow it when the browser asks.':
-    'Le navigateur n’a pas donné à l’extension l’accès à Fruitback. Reconnectez-vous, et autorisez-le quand le navigateur le demande.',
+  'The browser did not give the extension access to Fruitback. Allow it when the browser asks.':
+    'Le navigateur n’a pas donné à l’extension l’accès à Fruitback. Autorisez-le quand le navigateur le demande.',
   // FRU-528: the buttons that open the guide.
   'How Fruitback works': 'Comment fonctionne Fruitback',
   'What to check when Fruitback does not answer': 'Que vérifier quand Fruitback ne répond pas',
