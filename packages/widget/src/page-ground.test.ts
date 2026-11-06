@@ -1,16 +1,30 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { mountPage } from './dom.fixture.ts';
-import { groundOf, markGround, opaqueHex, readGround } from './page-ground.ts';
+import { composeOnWhite, groundOf, markGround, parseRgb, readGround } from './page-ground.ts';
 
 describe('the ground of the page (FRU-611, P7)', () => {
-  it('reads an opaque computed colour, and nothing for a transparent one', () => {
-    assert.equal(opaqueHex('rgb(17, 17, 17)'), '#111111');
-    assert.equal(opaqueHex('rgba(221, 44, 39, 1)'), '#dd2c27');
-    assert.equal(opaqueHex('rgb(255 255 255 / 100%)'), '#ffffff');
-    assert.equal(opaqueHex('rgba(0, 0, 0, 0)'), undefined);
-    assert.equal(opaqueHex('rgba(0, 0, 0, 0.5)'), undefined);
-    assert.equal(opaqueHex('transparent'), undefined);
+  it('reads a computed rgb() with its alpha, and nothing for another notation', () => {
+    assert.deepEqual(parseRgb('rgb(17, 17, 17)'), [17, 17, 17, 1]);
+    assert.deepEqual(parseRgb('rgba(221, 44, 39, 0.5)'), [221, 44, 39, 0.5]);
+    assert.deepEqual(parseRgb('rgb(255 255 255 / 40%)'), [255, 255, 255, 0.4]);
+    assert.equal(parseRgb('oklch(0.2 0.02 260)'), undefined);
+  });
+
+  it('lays the layers on white, the top one first, as a browser paints them (review of #859)', () => {
+    assert.equal(composeOnWhite([]), '#ffffff');
+    assert.equal(composeOnWhite([[0, 0, 0, 0]]), '#ffffff');
+    // A body of black at 90 % on a transparent root: dark, not white.
+    assert.equal(composeOnWhite([[0, 0, 0, 0.9]]), '#1a1a1a');
+    assert.deepEqual(groundOf(composeOnWhite([[0, 0, 0, 0.9]])), { dark: true, faint: false });
+    // A body of red at 50 % over a root of near black.
+    assert.equal(
+      composeOnWhite([
+        [221, 44, 39, 0.5],
+        [17, 24, 39, 1],
+      ]),
+      '#772227',
+    );
   });
 
   it('is dark under a mid grey, and faint where the red of Fruitback is under 3:1', () => {

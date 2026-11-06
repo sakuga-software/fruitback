@@ -100,6 +100,34 @@ for (const scheme of ['light', 'dark'] as const) {
   }
 }
 
+for (const [name, css, expected] of [
+  // Tailwind 4 computes oklch: a slate 950, and a red 600.
+  ['an oklch dark ground', 'body { background: oklch(0.129 0.042 264.695) !important; }', 'dark'],
+  ['an oklch red ground', 'body { background: oklch(0.577 0.245 27.325) !important; }', 'faint'],
+  ['a color(srgb) dark ground', 'body { background: color(srgb 0.07 0.09 0.15) !important; }', 'dark'],
+  // A body at 90 % black over a transparent root, and over a white one.
+  ['a dark ground with alpha', 'body { background: rgb(0 0 0 / 90%) !important; }', 'dark'],
+] as const) {
+  test(`reads ${name} (review of #859)`, async ({ page }) => {
+    await page.goto(`/?widget=off&case=${caseOf(`ground-notation-${name.replaceAll(' ', '-')}`)}`);
+    await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
+    await page.addStyleTag({ content: `html { background: transparent !important; } ${css}` });
+    await page.addScriptTag({ path: IIFE });
+    await page.evaluate(
+      (endpoint) =>
+        (globalThis as unknown as { Fruitback: { init(options: Record<string, string>): unknown } }).Fruitback.init({
+          endpoint,
+          clientId: 'playground',
+          locale: 'en-US',
+        }),
+      WORKER_ORIGIN,
+    );
+    const host = page.locator('[data-fruitback-host]');
+    if (expected === 'dark') await expect(host).toHaveAttribute('data-fruitback-ground', 'dark');
+    else await expect(host).toHaveAttribute('data-fruitback-faint', '');
+  });
+}
+
 test('on a white site nothing changes: no ground, no ink (FRU-611, the control)', async ({ page }) => {
   await mountOn(page, 'ground-white', undefined);
   const host = page.locator('[data-fruitback-host]');

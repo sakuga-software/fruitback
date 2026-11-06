@@ -26,17 +26,49 @@ export const GROUND_INK = '#18181b';
 /** Under this relative luminance, a ground is dark: #767676 and darker. */
 const DARK_LUMINANCE = 0.2;
 
-/** `#rrggbb` of a computed `rgb()` or `rgba()` that is fully opaque, else `undefined`. */
-export function opaqueHex(computed: string): string | undefined {
-  const match = /^rgba?\(\s*(\d+)[\s,]+(\d+)[\s,]+(\d+)(?:[\s,/]+([\d.]+%?))?\s*\)$/.exec(computed.trim());
+/** A colour as its red, green, blue (0 to 255) and its alpha (0 to 1). */
+export type Rgba = [number, number, number, number];
+
+/** A computed `rgb()` or `rgba()`, the notation every browser computes an sRGB colour to. */
+export function parseRgb(computed: string): Rgba | undefined {
+  const match = /^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)(?:[\s,/]+([\d.]+%?))?\s*\)$/.exec(computed.trim());
   if (match === null) return undefined;
-  const alpha = match[4];
-  if (alpha !== undefined && (alpha.endsWith('%') ? Number.parseFloat(alpha) < 100 : Number(alpha) < 1)) {
-    return undefined;
+  const alpha = match[4] ?? '1';
+  const a = alpha.endsWith('%') ? Number.parseFloat(alpha) / 100 : Number(alpha);
+
+  return [Number(match[1]), Number(match[2]), Number(match[3]), Math.min(1, Math.max(0, a))];
+}
+
+/**
+ * Any colour a browser computes, `oklch()` and `color(srgb …)` too (Tailwind 4 writes oklch): read as
+ * `rgb()` first, else drawn on a canvas of one pixel and read back. `undefined` with no canvas.
+ */
+function readColor(computed: string, document: Document): Rgba | undefined {
+  const rgb = parseRgb(computed);
+  if (rgb !== undefined) return rgb;
+  const context = document.createElement('canvas').getContext?.('2d', { willReadFrequently: true });
+  if (context === null || context === undefined) return undefined;
+  context.clearRect(0, 0, 1, 1);
+  context.fillStyle = computed;
+  context.fillRect(0, 0, 1, 1);
+  const [r = 0, g = 0, b = 0, a = 0] = context.getImageData(0, 0, 1, 1).data;
+
+  return [r, g, b, a / 255];
+}
+
+/** The layers, the top one first, laid on white as a browser paints them: `#rrggbb`. */
+export function composeOnWhite(layers: readonly Rgba[]): string {
+  let under: [number, number, number] = [255, 255, 255];
+  for (const [r, g, b, a] of [...layers].reverse()) {
+    under = [r * a + under[0] * (1 - a), g * a + under[1] * (1 - a), b * a + under[2] * (1 - a)];
   }
 
-  return `#${[match[1], match[2], match[3]]
-    .map((channel) => Math.min(255, Number(channel)).toString(16).padStart(2, '0'))
+  return `#${under
+    .map((channel) =>
+      Math.round(Math.min(255, channel) + 1e-9)
+        .toString(16)
+        .padStart(2, '0'),
+    )
     .join('')}`;
 }
 
@@ -45,16 +77,22 @@ export function groundOf(hex: string): PageGround {
   return { dark: luminance(hex) < DARK_LUMINANCE, faint: contrastRatio(hex, FRUITBACK_RED) < 3 };
 }
 
-/** The ground of this document, as its body or its root paints it. */
+/**
+ * The ground of this document: the background of `<body>` laid on the one of `<html>`, laid on white
+ * (review of #859: a ground with alpha, or in a notation a regular expression does not read, was
+ * taken for white).
+ */
 export function readGround(document: Document): PageGround {
   const view = document.defaultView;
-  const painted = [document.body, document.documentElement]
+  const layers = [document.body, document.documentElement]
     .map((element) =>
-      element === null || view === null ? undefined : opaqueHex(view.getComputedStyle(element).backgroundColor),
+      element === null || view === null
+        ? undefined
+        : readColor(view.getComputedStyle(element).backgroundColor, document),
     )
-    .find((hex) => hex !== undefined);
+    .filter((layer): layer is Rgba => layer !== undefined);
 
-  return groundOf(painted ?? '#ffffff');
+  return groundOf(composeOnWhite(layers));
 }
 
 /** Writes the ground on the host element of the widget, where its stylesheets read it. */

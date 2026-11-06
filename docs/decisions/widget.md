@@ -1965,8 +1965,10 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
 ### The rules, in short
 
 - **The widget reads the ground of the page** (`page-ground.ts`) when it mounts and at each start of a
-  capture: the computed background of `<body>`, then of `<html>`, the first that is opaque; white when
-  both are transparent. A site that turns dark later is read again at its next capture.
+  capture: the background of `<body>` laid on the one of `<html>`, laid on white, alpha included. A
+  colour computed in another notation than `rgb()` (`oklch()`, which Tailwind 4 writes,
+  `color(srgb …)`) is drawn on a canvas of one pixel and read back (review of #859). A site that turns
+  dark later is read again at its next capture.
 - **A dark ground** (relative luminance under 0.2, `data-fruitback-ground="dark"` on the host): the
   widget keeps the scheme of the system, as before. What floats over the page (the dock, the composer,
   a thread, the panel of settings) takes a white line at 16 % and a denser shadow, through
