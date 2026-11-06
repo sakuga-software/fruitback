@@ -15,6 +15,8 @@ import {
   sendDoneNotices,
 } from './done-notices.ts';
 import type { MailMessage } from './mail.ts';
+import type { ClientPolicy } from './clients.ts';
+import { createMemoryStore, resetMemoryLinear, setMemoryNoteStage } from './linear-memory.ts';
 import { createPostgresDoneNotices } from './notes-index-postgres.ts';
 import { createPostgresNoteStore } from './notes-postgres.ts';
 import { invalidatePages } from './note-helpers.ts';
@@ -606,5 +608,30 @@ describe('the rows of done_notices (FRU-604)', () => {
     const { notices, site } = await aPublicSite();
     await assert.rejects(notices.watch({ site, note: 'x', email: 'a@b.co', account: 'acc' }, Date.now()), TypeError);
     await assert.rejects(notices.watch({ site, note: 'x' }, Date.now()), TypeError);
+  });
+});
+
+describe('POST /__dev/stage on the Linear in memory (FRU-604)', () => {
+  it('moves the note of that id, and not a note whose other fields hold the same words', async () => {
+    resetMemoryLinear();
+    const store = createMemoryStore();
+    const policy = { locale: 'en' } as unknown as ClientPolicy;
+    await store.create(noteFixture({ id: 'nd_1', page: { url: PAGE, path: '/pricing' } }), undefined, policy);
+    // The control: a name that is the id of the other note, which a search of the text would match.
+    await store.create(
+      noteFixture({ id: 'nd_2', page: { url: PAGE, path: '/pricing' }, reporter: { name: 'nd_1' } }),
+      undefined,
+      policy,
+    );
+
+    assert.equal(setMemoryNoteStage('nd_1', 'done'), 1);
+    const stages = (await store.findForPage({ url: PAGE, clientId: undefined }, undefined, policy)).map((each) => [
+      each.note.id,
+      each.stage,
+    ]);
+    assert.deepEqual(stages.toSorted(), [
+      ['nd_1', 'done'],
+      ['nd_2', 'progress'],
+    ]);
   });
 });
