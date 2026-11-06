@@ -37,7 +37,10 @@ type TrackerAccess = {
   githubApp: GithubApp | undefined;
 };
 
-const TRACKERS: Record<Exclude<ConnectorKind, 'rest'>, (kept: Kept, access: TrackerAccess) => Promise<NoteStore>> = {
+const TRACKERS: Record<
+  Exclude<ConnectorKind, 'rest' | 'claude-routine'>,
+  (kept: Kept, access: TrackerAccess) => Promise<NoteStore>
+> = {
   async linear({ connector, workspace, sealed, settings }, { accounts, secretsKey, oauth, now }) {
     // A token of OAuth near its end is refreshed here.
     const apiKey = await linearAuthorization(connector, sealed, { accounts, secretsKey, oauth, now });
@@ -246,6 +249,10 @@ export function createConnectorStores(
 
       return { ...noFiles, create: (note, client, policy) => receiving.create(note, client, policy) };
     }
+
+    // FRU-594: a routine is what a trigger calls, never where a note goes. The console offers it as
+    // no destination, and a row that names it anyway keeps no note.
+    if (kept.kind === 'claude-routine') throw new StoreError('A Claude Code routine is not a place for notes');
 
     const store = await TRACKERS[kept.kind](
       { connector, workspace, sealed: kept.sealed, settings: kept.settings },

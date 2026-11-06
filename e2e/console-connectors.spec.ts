@@ -178,7 +178,7 @@ const sources = (page: Page) => catalogue(page).getByRole('listitem');
 /** FRU-542, FRU-562: with a source connected, « New connector » opens the dialog of the sources to add. */
 async function openCatalogue(page: Page, name = 'New connector'): Promise<void> {
   await page.getByRole('button', { name, exact: true }).click();
-  await expect(sources(page)).toHaveCount(8);
+  await expect(sources(page)).toHaveCount(9);
   // The dialog zooms in (HeroUI's Modal): its boxes are measured once it is at its size.
   await page.evaluate(() => Promise.all(document.getAnimations().map((animation) => animation.finished)));
 }
@@ -458,7 +458,7 @@ test('with no source, and with a read that failed, the screen says which of the 
   await expectNoViolation(page, 'no source');
 
   // With no source, the screen is the list of the sources to add (FRU-542), and no « New connector ».
-  await expect(sources(page)).toHaveCount(8);
+  await expect(sources(page)).toHaveCount(9);
   await expect(page.getByRole('heading', { level: 2, name: 'Your connectors', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'New connector', exact: true })).toHaveCount(0);
 
@@ -489,10 +489,21 @@ test('« Add a connector » lists what connects, and what does not yet with a bu
   await open(page);
   await openCatalogue(page);
   // Each source has the mark of its tracker (FRU-543).
-  for (const [index, kind] of ['linear', 'github', 'rest', 'jira', 'gitlab', 'trello', 'notion', 'webhook'].entries()) {
+  // FRU-594: a Claude Code routine, last, which the trigger of a site calls.
+  for (const [index, kind] of [
+    'linear',
+    'github',
+    'rest',
+    'jira',
+    'gitlab',
+    'trello',
+    'notion',
+    'webhook',
+    'claude-routine',
+  ].entries()) {
     await expect(sources(page).nth(index).locator(`svg[data-mark="${kind}"]`), kind).toHaveCount(1);
   }
-  await expect(sources(page)).toHaveCount(8);
+  await expect(sources(page)).toHaveCount(9);
   // The sentences of the mockup.
   for (const [name, sentence] of [
     ['Jira', 'An issue in a Jira Cloud project.'],
@@ -566,7 +577,7 @@ test('« New connector » opens a dialog with the sources as a grid of cards (FR
   await opener.click();
   const dialog = page.getByRole('dialog', { name: 'Add a connector' });
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByRole('listitem')).toHaveCount(8);
+  await expect(dialog.getByRole('listitem')).toHaveCount(9);
   // Not in the page: the list of the connected sources stays where it is, under the dialog.
   await expect(page.locator('main').getByRole('region', { name: 'Add a connector' })).toHaveCount(0);
   // Focus is in the dialog, and Tab keeps it there.
@@ -697,7 +708,7 @@ test('`?new` in the address opens « Add a connector », and leaves the address 
   await workerWith(page);
   await page.goto(`${CONSOLE}/w/w1/connectors?new=1`);
   await expect(page.getByRole('dialog', { name: 'Add a connector' })).toBeVisible();
-  await expect(sources(page)).toHaveCount(8);
+  await expect(sources(page)).toHaveCount(9);
   await expect(page).toHaveURL(`${CONSOLE}/w/w1/connectors`);
 });
 
@@ -751,7 +762,7 @@ test('with no source, the sources to add are a grid of cards on the page (FRU-56
   const worker = await workerWith(page);
   worker.connectors = [];
   await open(page);
-  await expect(sources(page)).toHaveCount(8);
+  await expect(sources(page)).toHaveCount(9);
   await expect(page.getByRole('dialog')).toHaveCount(0);
   expect.soft(await styles(catalogue(page).getByRole('list'), ['display'])).toEqual({ display: 'grid' });
   const first = await box(sources(page).nth(0));
@@ -780,7 +791,7 @@ test('« Add a connector » waits for the list of the sources, and its buttons d
   await expect(connect).toHaveCount(0);
 
   release();
-  await expect(sources(page)).toHaveCount(8);
+  await expect(sources(page)).toHaveCount(9);
   await expect(rows(page)).toHaveCount(0);
   // The buttons came with the list: a press finds them where they stay.
   const before = await connect.boundingBox();
@@ -890,7 +901,7 @@ test('after an address whose read failed, « Cancel » of the next form closes o
   await page.getByRole('button', { name: 'Connect REST API', exact: true }).click();
   await page.locator('[data-source="REST API"]').getByRole('button', { name: 'Cancel', exact: true }).click();
   // « Cancel » closes the form, and the list stays.
-  await expect(sources(page)).toHaveCount(8);
+  await expect(sources(page)).toHaveCount(9);
   await expect(page.getByRole('button', { name: 'Connect REST API', exact: true })).toBeVisible();
 });
 

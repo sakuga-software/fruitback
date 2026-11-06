@@ -174,7 +174,10 @@ clear unless this list says otherwise:
 - The sessions, of the extension and of the console: SHA-256 digests of each code and token, never
   the token, with the name and the dates of each.
 - The key of each connector, encrypted with `FRUITBACK_SECRETS_KEY`, which is in no row. The notes
-  are not encrypted by that key.
+  are not encrypted by that key. The token of a Claude Code routine is one of them.
+- The sessions a Claude Code routine started for a call, in `agent_sessions`: the site,
+  what Fruitback calls the notes of the call, and the address of the session, never their text,
+  for 30 days.
 - The addresses of callers, for two minutes, in the table `kv` of the rate limit.
 - The logo of a workspace, when its owner or an admin sent one: the bytes of one image,
   in the table `workspace_logos`, until it is removed or replaced, or its workspace goes. See below.
@@ -2633,8 +2636,9 @@ note », gives the framing.
   test:`refuses a member and a guest, and a connector of another workspace`.
 - The address is an address that receives of the same workspace (a `rest` connector): the call is
   a delivery of the REST connector, with every guard above (https, no private address at each
-  attempt, no redirect, `508` on a loop), signed with its secret. A Linear or GitHub source, or an
-  address of another workspace, is refused.
+  attempt, no redirect, `508` on a loop), signed with its secret. It can also be a Claude
+  Code routine of the same workspace instead (below). A Linear or GitHub source, or an address of
+  another workspace, is refused.
   test:`writes the trigger of a site to an address that receives of its workspace only, and drops it with its address`.
 - The call carries ids only: the workspace, the site, the identifier and the id of the note. Not
   its text, not its files: an agent reads them through `/mcp`, so its key decides what it reads.
@@ -2649,6 +2653,46 @@ note », gives the framing.
 - What it does not protect: what the agent does once started is the team's. `docs/agents.md` says
   to let it open a pull request for review, and never push to a branch that deploys; Fruitback cannot
   hold that rule. A known person can start the agent as often as they leave notes.
+
+### The token of a Claude Code routine (FRU-594)
+
+A trigger of a site can call a Claude Code routine of the team in place of an address that receives:
+a `claude-routine` connector keeps the Fire URL and the token of the routine's API trigger.
+`docs/decisions/agents.md`, « Agents as destinations », gives the framing. **It is the one secret of
+a third party that is not a tracker which the Cloud holds**, and it is held only because the routine
+offers no OAuth.
+
+- The token is sealed with the URL, as the key of a connector (AES-256-GCM, `FRUITBACK_SECRETS_KEY`).
+  No route answers it, in the clear or encrypted: the console sends it once, and the label names the
+  id of the trigger only.
+  test:`keeps the token sealed, answers it nowhere, and labels the routine by its trigger`.
+- One host, fixed in the code: the URL must be `https://api.anthropic.com/v1/claude_code/routines/<trig_id>/fire`,
+  with no port, no name and password and no query. A connector cannot send the token to an address a
+  workspace chose. The request still goes through the guard of every delivery (no private address,
+  no redirect followed).
+  test:`takes the /fire of a routine on api.anthropic.com, and nothing else`,
+  test:`refuses a Fire URL of another host, and a token that is not one`.
+- What the token reaches, per the documentation of 2026-11-06: it starts that one routine, with
+  the prompt, the repository and the connectors the team saved in it, and nothing else. It reads no
+  conversation and buys no model use outside of that routine. The team regenerates or deletes it at
+  claude.ai/code/routines. A routine is limited to 30 fires an hour, and an account to 100.
+- The call carries identifiers only (`text`: the reason, the site, the address of `/mcp`, the
+  identifier and the id of each note), never the text of a note nor its files. The routine reads the
+  notes through `/mcp` with its own access, under `verifiedOnly` and the log. The routine receives
+  `text` wrapped as untrusted data.
+  test:`posts /fire with the token and the headers of the documentation, identifiers only, and keeps the session`.
+- Notes sent together call once. test:`calls once for a batch, naming every note of it (FRU-608)`.
+- A `401` or `403` gives the call up at once and puts the connector in « Needs attention »
+  (`key-refused`); a `404` (the routine or its trigger gone) gives it up too. Other answers are tried
+  again as a delivery.
+  test:`gives a refused token up at once, and puts the connector in « attention »`.
+- The answer is read up to 16 KiB, under the deadline of a delivery, and only its
+  `claude_code_session_url` is kept, if it is an `https` address of `claude.ai`; the console shows it
+  as a link to a member who may see the tracker. test:`takes the address of a session on claude.ai only`.
+- A routine is no place for notes: a site cannot choose it as a destination.
+  test:`is no place for notes: a site cannot send its notes to it`.
+- What it does not protect: what the routine does once started is the team's, as for any trigger.
+  Whoever holds a copy of the database and of `FRUITBACK_SECRETS_KEY` can start the routine.
 
 ### The remote MCP server, `/mcp` (FRU-463)
 

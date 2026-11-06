@@ -142,6 +142,12 @@ with no key, nothing leaves.
   connector's queue. The column `deliveries.event` keeps it apart from a note's own delivery: the
   list of the notes and the count of a site read `note.created` only. GitHub: the team's receiver
   calls `repository_dispatch` with its own token (`docs/agents.md`); Fruitback holds none.
+- **A Claude Code routine since FRU-594** (`claude-routine.ts`): a `claude-routine` connector keeps
+  the Fire URL (`api.anthropic.com` only) and the token, sealed. A trigger can name it, and its call
+  is a `POST /fire` with identifiers only in `text`; one call for a batch. The session it answers is
+  kept 30 days in `agent_sessions` and shown in the panel of the routine. A `401` or `403` gives the
+  call up and puts the connector in « attention ». Tested against a local `/fire` that follows the
+  documentation (`routine-fire.fixture.ts`); no real routine was called.
 - The REST connector (FRU-132) posts `note.created`, signed, with the whole note, to the address of a
   workspace. A receiver of the team can start an agent with it today, with no other change.
 - The GitHub connector makes an issue of a note: a workflow `on: issues: opened` can run Claude Code

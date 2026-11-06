@@ -388,8 +388,12 @@ export function destinationId(site: string, destination: Destination): string {
  *
  * A `github` connector keeps the id of an installation of the GitHub App of the worker (FRU-359),
  * and nothing more. The key of the App is in the environment of the worker.
+ *
+ * A `claude-routine` connector (FRU-594) is no place of a note: it is what the trigger of a site
+ * calls to start a Claude Code routine (`claude-routine.ts`). It keeps the Fire URL and the token,
+ * sealed.
  */
-export const CONNECTOR_KINDS = ['linear', 'rest', 'github'] as const;
+export const CONNECTOR_KINDS = ['linear', 'rest', 'github', 'claude-routine'] as const;
 export type ConnectorKind = (typeof CONNECTOR_KINDS)[number];
 
 export type DueDelivery = { id: string; connectorId: string; body: string; attempts: number };
@@ -405,6 +409,18 @@ export type DeliveryOutcome =
  */
 export const DELIVERY_EVENTS = ['note.created', 'agent.requested'] as const;
 export type DeliveryEvent = (typeof DELIVERY_EVENTS)[number];
+
+/** The kinds of connector the trigger of a site can call (FRU-468, FRU-594). */
+export const AGENT_RECEIVER_KINDS = ['rest', 'claude-routine'] as const satisfies readonly ConnectorKind[];
+
+/**
+ * The session a routine started for a call (FRU-594): the site and what Fruitback calls its notes,
+ * never their text, and the address the routine answered.
+ */
+export type AgentSession = { id: string; site?: string; identifiers: string[]; url: string; startedAt: string };
+
+/** A session is kept this long, then dropped with the deliveries given up. */
+export const AGENT_SESSION_KEPT_DAYS = 30;
 
 /** The moments a trigger of a site starts an agent at (FRU-468). */
 export const AGENT_MOMENTS = ['verified-note', 'moved-to-todo'] as const;
@@ -857,7 +873,7 @@ export type AccountStore = {
   agentTrigger(workspace: string, site: string): Promise<AgentTrigger | undefined>;
   /**
    * Writes the trigger of a site. `unknown-site`: the site is not of this workspace. `unknown-connector`:
-   * the connector is not an address that receives (`rest`) of this workspace.
+   * the connector is not one a trigger calls (`rest` or `claude-routine`, FRU-594) of this workspace.
    */
   setAgentTrigger(
     workspace: string,
@@ -886,6 +902,18 @@ export type AccountStore = {
   retryDelivery(workspace: string, connector: string, delivery: string, now: number): Promise<boolean>;
   /** Removes the deliveries that were given up before `before`. Answers how many. */
   dropAbandonedDeliveries(before: number): Promise<number>;
+  /**
+   * Keeps the session a routine started for a delivery (FRU-594), before the delivery is settled as
+   * arrived. The same delivery twice keeps the first.
+   */
+  keepAgentSession(
+    connector: string,
+    session: { id: string; site?: string; identifiers: readonly string[]; url: string; at: number },
+  ): Promise<void>;
+  /** The sessions a routine connector of this workspace started, newest first, 50 at most. */
+  agentSessions(workspace: string, connector: string): Promise<AgentSession[]>;
+  /** Removes the sessions started before `before`. Answers how many. */
+  dropAgentSessions(before: number): Promise<number>;
   /**
    * Keeps a domain for a workspace (FRU-103), not proven yet. The same domain twice is the same row,
    * as it stands. The caller gives the domain as `readDomain` wrote it, and bounds the count.

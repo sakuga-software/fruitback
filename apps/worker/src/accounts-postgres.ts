@@ -33,6 +33,8 @@ import {
 } from './account-rows.ts';
 import {
   type AccountStore,
+  AGENT_RECEIVER_KINDS,
+  type AgentSession,
   AGENT_KEY_USE_STEP_MS,
   AGENT_WRITES_LISTED,
   type AgentKey,
@@ -60,6 +62,7 @@ import {
   agent_key_sites,
   agent_keys,
   agent_writes,
+  agent_sessions,
   connectors,
   deliveries,
   done_notices,
@@ -2051,7 +2054,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
             and(
               eq(connectors.id, trigger.connector),
               eq(connectors.workspace_id, workspace),
-              eq(connectors.kind, 'rest'),
+              inArray(connectors.kind, [...AGENT_RECEIVER_KINDS]),
             ),
           );
         if (receiver === undefined) return 'unknown-connector' as const;
@@ -2190,6 +2193,68 @@ export function createPostgresAccountStore(database: Database): AccountStore {
             and(isNull(deliveries.next_at), sql`COALESCE(${deliveries.last_at}, ${deliveries.created_at}) < ${before}`),
           )
           .returning({ id: deliveries.id }),
+      );
+
+      return dropped.length;
+    },
+
+    async keepAgentSession(connector, session) {
+      given(session.at, 'keepAgentSession: at');
+      await run((db) =>
+        db
+          .insert(agent_sessions)
+          .values({
+            id: session.id,
+            connector_id: connector,
+            site_id: session.site ?? null,
+            identifiers: JSON.stringify(session.identifiers),
+            session_url: session.url,
+            started_at: session.at,
+          })
+          .onConflictDoNothing({ target: agent_sessions.id }),
+      );
+    },
+
+    async agentSessions(workspace, connector) {
+      const rows = await run((db) =>
+        db
+          .select({
+            id: agent_sessions.id,
+            site_id: agent_sessions.site_id,
+            identifiers: agent_sessions.identifiers,
+            session_url: agent_sessions.session_url,
+            started_at: agent_sessions.started_at,
+          })
+          .from(agent_sessions)
+          .innerJoin(connectors, eq(connectors.id, agent_sessions.connector_id))
+          .where(and(eq(connectors.workspace_id, workspace), eq(connectors.id, connector)))
+          .orderBy(desc(agent_sessions.started_at), agent_sessions.id)
+          .limit(50),
+      );
+
+      return rows.map((row): AgentSession => {
+        let identifiers: string[] = [];
+        try {
+          const parsed = JSON.parse(row.identifiers) as unknown;
+          if (Array.isArray(parsed)) identifiers = parsed.filter((each): each is string => typeof each === 'string');
+        } catch {
+          identifiers = [];
+        }
+
+        return {
+          id: row.id,
+          ...(row.site_id === null ? {} : { site: row.site_id }),
+          identifiers,
+          url: row.session_url,
+          startedAt: new Date(Number(row.started_at)).toISOString(),
+        };
+      });
+    },
+
+    async dropAgentSessions(before) {
+      given(before, 'dropAgentSessions: before');
+      const dropped = await run((db) =>
+        db.delete(agent_sessions).where(lt(agent_sessions.started_at, before)).returning({ id: agent_sessions.id }),
       );
 
       return dropped.length;

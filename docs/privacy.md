@@ -108,7 +108,10 @@ A workspace can make **agent keys** (see [Connect an AI agent](agents.md)). An a
 the notes of the sites it names, whole, name and e-mail of the reporter included, through `/mcp`.
 From there the notes go wherever that agent runs, and to the provider of the model your team
 uses: a processor of the notes that Fruitback does not choose and does not see. Fruitback calls no
-model itself. With no key, no note leaves this way. On a site that everyone reads, a key reads only
+model itself. When a site starts a Claude Code routine of your team, the call to Anthropic carries
+the identifiers of the notes and of the site, never their text: the routine reads the notes with
+its own access, as any agent does. Fruitback keeps the address of the session it started for 30
+days, to show it to your team. With no key, no note leaves this way. On a site that everyone reads, a key reads only
 the notes of a known person unless the team made it otherwise. A reply that an agent writes is
 stored where the note is, under the name of the key and the word « agent ».
 

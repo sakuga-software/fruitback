@@ -302,6 +302,13 @@
       "when": 1793973324083,
       "tag": "0042_done_notices",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1793976919239,
+      "tag": "0043_agent_sessions",
+      "breakpoints": true
     }
   ]
 }

@@ -1,7 +1,15 @@
 import { createHmac, randomBytes } from 'node:crypto';
 import { BlockList, isIP } from 'node:net';
 import type { Note } from '@fruitback/shared';
-import type { AccountStore, DueDelivery } from './accounts.ts';
+import { AGENT_SESSION_KEPT_DAYS, type AccountStore, type DueDelivery } from './accounts.ts';
+import {
+  FIRE_ANSWER_MAX_BYTES,
+  fireBody,
+  openRoutine,
+  routineCallOf,
+  routineHeaders,
+  sessionUrlOf,
+} from './claude-routine.ts';
 import { open, seal } from './secrets.ts';
 import { type AttachmentStore, SIGNED_URL_MS, legacyFileOf, signedAttachmentPath } from './attachments.ts';
 
@@ -203,9 +211,19 @@ export const RETRY_AFTER_SECONDS = [60, 300, 1_800, 7_200, 21_600, 86_400] as co
 /** A delivery nobody asked to try again is removed after this long. Its body holds a note. */
 export const ABANDONED_KEPT_DAYS = 30;
 
-export type SendResult = { status: number };
-/** Sends one request. It rejects when no answer came: a name that resolves to an internal address, a timeout. */
-export type Send = (url: string, headers: Record<string, string>, body: string) => Promise<SendResult>;
+/** `answer`: the body of the answer, read only when the call asked for it (`answerUpTo`). */
+export type SendResult = { status: number; answer?: string };
+/**
+ * Sends one request. It rejects when no answer came: a name that resolves to an internal address, a
+ * timeout. `answerUpTo`: read the body of a `2xx`, up to that many bytes (FRU-594, the session of a
+ * routine). Absent, the body is never read.
+ */
+export type Send = (
+  url: string,
+  headers: Record<string, string>,
+  body: string,
+  options?: { answerUpTo?: number },
+) => Promise<SendResult>;
 
 export type DeliverySeams = {
   accounts: AccountStore;
@@ -240,9 +258,96 @@ export async function deliverDue({
   let failed = 0;
   if (secretsKey === undefined) return { delivered, failed };
 
+  /**
+   * One call of a Claude Code routine (FRU-594): `POST /fire` with the token, identifiers only, and
+   * the session it answers kept for the console. `true` when the routine started.
+   */
+  const attemptRoutine = async (delivery: DueDelivery, sealed: string): Promise<boolean> => {
+    const target = openRoutine(sealed, secretsKey);
+    const call = routineCallOf(delivery.body);
+    let status: number | undefined;
+    let error: string | undefined;
+    let answer: string | undefined;
+    // A body that names no note is final: each attempt would send the same nothing.
+    let final = false;
+    if (target === undefined) {
+      error = 'The token of this routine could not be opened';
+    } else if (call === undefined) {
+      error = 'This call names no note';
+      final = true;
+    } else {
+      const mcp = publicUrl === undefined ? undefined : `${publicUrl.replace(/\/+$/, '')}/mcp`;
+      try {
+        ({ status, answer } = await send(target.url, routineHeaders(target.token), fireBody(call, mcp), {
+          answerUpTo: FIRE_ANSWER_MAX_BYTES,
+        }));
+      } catch (thrown) {
+        error = thrown instanceof Error ? thrown.message.slice(0, 200) : 'The request did not finish';
+      }
+    }
+
+    if (status !== undefined && status >= 200 && status < 300) {
+      const url = sessionUrlOf(answer);
+      // The session first, then the delivery: a delivery settled first and a session not kept would
+      // leave the console with nothing to show of a run that started.
+      // WARNING: the routine started. A session that cannot be kept is said in the log only: a throw
+      // here would leave the delivery due, and the next pass would start the routine a second time
+      // (raised in review).
+      if (url !== undefined && call !== undefined) {
+        await accounts
+          .keepAgentSession(delivery.connectorId, {
+            id: delivery.id,
+            site: call.site,
+            identifiers: call.notes.map((note) => note.identifier),
+            url,
+            at: now(),
+          })
+          .catch((failure: unknown) => {
+            console.error('[fruitback] the session of a routine that started was not kept', delivery.id, failure);
+          });
+      } else {
+        console.warn('[fruitback] a routine started with no address of a session in its answer', delivery.id);
+      }
+      await noteRoutine(delivery.connectorId, undefined);
+      await accounts.settleDelivery(delivery.id, { delivered: true });
+
+      return true;
+    }
+
+    // 401 and 403: the token is refused (deleted, or regenerated). It will be refused at each attempt
+    // left, so the call is given up now and the connector needs attention, as a key a tracker refuses.
+    // 404: the routine or its API trigger is gone. 429 and the others are tried again.
+    const refused = status === 401 || status === 403;
+    if (refused) {
+      error = 'The routine refused its token: generate a new one at claude.ai/code/routines';
+      await noteRoutine(delivery.connectorId, 'key-refused');
+    } else if (status === 404) {
+      error = 'The routine or its API trigger is gone';
+    }
+    const wait = refused || status === 404 || final ? undefined : RETRY_AFTER_SECONDS[delivery.attempts];
+    await accounts.settleDelivery(delivery.id, {
+      delivered: false,
+      attempts: delivery.attempts,
+      at: now(),
+      ...(status === undefined ? {} : { status }),
+      ...(error === undefined ? {} : { error }),
+      ...(wait === undefined ? {} : { nextAt: now() + wait * 1_000 }),
+    });
+
+    return false;
+  };
+
+  /** What `/fire` said of the token, on the connector (FRU-102). It never rejects. */
+  const noteRoutine = async (connector: string, trouble: 'key-refused' | undefined): Promise<void> => {
+    await accounts.noteConnector(connector, trouble, now()).catch((failure: unknown) => {
+      console.error('[fruitback] the state of a connector was not kept', connector, failure);
+    });
+  };
+
   /** One attempt. `true` when the note arrived. */
   const attempt = async (delivery: DueDelivery): Promise<boolean> => {
     const kept = await accounts.sealedKey(delivery.connectorId);
+    if (kept?.kind === 'claude-routine') return attemptRoutine(delivery, kept.sealed);
     const target = kept?.kind === 'rest' ? openTarget(kept.sealed, secretsKey) : undefined;
 
     let status: number | undefined;
@@ -317,6 +422,8 @@ export async function deliverDue({
   failed = arrived.length - delivered;
 
   await accounts.dropAbandonedDeliveries(now() - ABANDONED_KEPT_DAYS * 24 * 60 * 60 * 1_000);
+  // FRU-594: the sessions of the routines, shown 30 days on the panel of their connector.
+  await accounts.dropAgentSessions(now() - AGENT_SESSION_KEPT_DAYS * 24 * 60 * 60 * 1_000);
   // The files whose transit ended, whatever store they wait for (FRU-331). A sweep that fails is
   // tried again at the next pass: a file past its end already reads as absent.
   await attachments?.sweep(now()).catch((error: unknown) => {
