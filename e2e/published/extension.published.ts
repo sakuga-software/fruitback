@@ -42,7 +42,7 @@ async function addRule(
   await options.getByRole('button', { name: 'Add a site' }).click();
   await options.getByLabel('Sites', { exact: true }).fill(PLAYGROUND_ORIGIN);
   await options.getByLabel(/^Mode/).selectOption(rule.mode);
-  await options.getByLabel('Worker endpoint', { exact: true }).fill(rule.endpoint);
+  await options.getByLabel('Server address', { exact: true }).fill(rule.endpoint);
   if (rule.mode === 'private') await options.getByLabel('Client id', { exact: true }).fill(rule.clientId);
   await options.getByRole('button', { name: 'Add rule' }).click();
   await expect(options.locator(`tr.rule-row[data-pattern="${PLAYGROUND_ORIGIN}"]`)).toContainText('Granted');
@@ -63,9 +63,9 @@ async function pairFromPopup(extension: LoadedExtension, site: Page, code: strin
   if (popup === undefined) throw new Error('the popup did not open');
 
   await popup.getByRole('button', { name: 'I have a code' }).click();
-  await popup.getByLabel('Pairing code').fill(code);
-  await popup.getByRole('button', { name: 'Pair with this worker' }).click();
-  await expect(popup.getByText(`Paired as ${REVIEWER}`)).toBeVisible();
+  await popup.getByLabel('Connection code').fill(code);
+  await popup.getByRole('button', { name: 'Connect to this server' }).click();
+  await expect(popup.getByText(`Connected as ${REVIEWER}`)).toBeVisible();
   await popup.close();
 }
 
