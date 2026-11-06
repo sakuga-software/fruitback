@@ -74,7 +74,7 @@ export const MAX_EMAIL_LENGTH = 254;
 
 /**
  * An address the worker will send to: one `@`, a local part, and a domain with a dot, no space, no
- * control character, no quote and no angle bracket. Answered trimmed and in lower case, else
+ * control character, no double quote and no angle bracket (an apostrophe is taken: `o'brien@…`). Answered trimmed and in lower case, else
  * `undefined`. Not a proof that the address exists: nothing is sent before the note is done.
  */
 export function readEmail(value: unknown): string | undefined {

@@ -58,6 +58,11 @@ describe('readEmail', () => {
     assert.equal(readEmail('  Ana.Silva+qa@Example.CO.uk '), 'ana.silva+qa@example.co.uk');
   });
 
+  it('takes an apostrophe and refuses a double quote, as SECURITY.md says', () => {
+    assert.equal(readEmail("O'Brien@example.com"), "o'brien@example.com");
+    assert.equal(readEmail('o"brien@example.com'), undefined);
+  });
+
   it('refuses what is no address, and what would break a header or a line', () => {
     for (const value of [
       '',

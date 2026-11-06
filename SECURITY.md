@@ -2365,7 +2365,8 @@ visitor. It is public: no session, no cookie.
 - Once. One address for a note, the first one: a second is `409 not-taken`, and so is a note that
   the index of the notes does not hold.
 - What address. One `@`, a local part of 64 characters at most, a domain with a dot, 254 characters
-  at most, no space, no quote, no angle bracket and no line break: `400 invalid-email`. It is not
+  at most, no space, no double quote, no angle bracket and no line break: `400 invalid-email`. An
+  apostrophe is taken, as in `o'brien@example.com`. It is not
   proved: nothing is sent before the team marks the note done.
 - How much. 3 addresses a minute from one address of a caller, and 10 a minute for one site from
   all callers, counted apart from the requests and in the same database, before any write: `429`.
