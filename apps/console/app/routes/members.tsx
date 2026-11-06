@@ -29,7 +29,7 @@ import {
   folded,
 } from '../ui';
 import { useTypedSearch } from '../typed-search';
-import { NotePages } from './notes';
+import { NotePages } from '../parts/note-pages';
 import { useWorkspace } from './workspace';
 import { msg, t } from '../i18n';
 import { useLocale } from '../use-locale';
