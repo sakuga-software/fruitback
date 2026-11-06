@@ -7,6 +7,7 @@ import {
   type ExtensionBrowser,
   LINKABLE,
   type Linkable,
+  isLinkable,
   accountEmails,
   addAccountEmail,
   makePrimaryEmail,
@@ -28,8 +29,8 @@ import {
   signOutEverywhere,
   unlinkProvider,
 } from '../api';
-import { agoInSentence } from '../ago';
-import { type Listed, edited } from '../listed';
+import { agoInSentence, dayOf, moment } from '../ago';
+import { type Fetched, type Listed, edited } from '../listed';
 import { problemOf } from '../problems';
 import { Button, Choice, Field, LinkButton, Problem } from '../ui';
 import { Disconnect as AsksTwice } from './connector-parts';
@@ -118,8 +119,8 @@ const ACCOUNT_NOT_LINKED = msg('The account was not linked.');
  * provider in the closed list `LINKABLE`. Neither is ever shown as it is written there.
  */
 function linkProblem(code: string, provider: string | null, email: string): string {
-  if (provider === null || !(LINKABLE as readonly string[]).includes(provider)) return t(ACCOUNT_NOT_LINKED);
-  const named = PROVIDER_NAMES[provider as Linkable];
+  if (!isLinkable(provider)) return t(ACCOUNT_NOT_LINKED);
+  const named = PROVIDER_NAMES[provider];
   if (Object.hasOwn(LINK_PROBLEMS, code)) return t(LINK_PROBLEMS[code] as string, { provider: named, email });
 
   return t(LINK_FAILURES.has(code) ? LINK_FAILED : NOT_LINKED, { provider: named });
@@ -159,24 +160,6 @@ const NAME_PROBLEMS: Readonly<Record<string, string>> = {
   'invalid-name': msg('A name is one line of 1 to 80 characters.'),
 };
 const NAME_NOT_KEPT = msg('Your name was not changed. Try again.');
-
-/** « 12 Oct », as the mockup writes the day a browser connected. */
-function dayOf(iso: string): string {
-  const date = new Date(iso);
-
-  return Number.isNaN(date.getTime())
-    ? iso
-    : date.toLocaleDateString(locale() === 'fr' ? 'fr' : 'en-GB', { day: 'numeric', month: 'short' });
-}
-
-/** A day and a time, in the language of the console. */
-function moment(iso: string): string {
-  const date = new Date(iso);
-
-  return Number.isNaN(date.getTime())
-    ? iso
-    : date.toLocaleString(locale(), { dateStyle: 'medium', timeStyle: 'short' });
-}
 
 /** What the row of an address says under it: primary, which provider gives it, whether Fruitback proved it. */
 function addressWord(address: AccountEmail): string {
@@ -222,7 +205,7 @@ export default function Account() {
   // FRU-415: `?confirm=<provider>`, a link that came back from the provider and that the worker keeps
   // until the person says yes. The question names the provider account the worker read there.
   const [question, setQuestion] = useState<PendingLink | 'reading' | undefined>(() =>
-    (LINKABLE as readonly (string | null)[]).includes(params.get('confirm')) ? 'reading' : undefined,
+    isLinkable(params.get('confirm')) ? 'reading' : undefined,
   );
   const [answering, setAnswering] = useState(false);
   const [cancelled, setCancelled] = useState<Linkable | undefined>();
@@ -230,7 +213,7 @@ export default function Account() {
   useEffect(() => {
     if (question !== 'reading' || asked.current) return;
     asked.current = true;
-    const provider = params.get('confirm') as Linkable;
+    const provider = params.get('confirm');
     void pendingLink().then((read) => {
       if (read.ok && read.data !== 'none') return setQuestion(read.data);
       setQuestion(undefined);
@@ -352,7 +335,7 @@ export default function Account() {
   }
 
   // The addresses of the account (FRU-450). No list is not an empty list.
-  const [emails, setEmails] = useState<AccountEmails | 'loading' | 'failed'>('loading');
+  const [emails, setEmails] = useState<Fetched<AccountEmails>>('loading');
   const readEmails = useCallback(async () => {
     const listed = await accountEmails();
     setEmails(listed.ok ? listed.data : 'failed');
@@ -580,9 +563,9 @@ export default function Account() {
         <section aria-labelledby="signin-title">
           <SectionTitle id="signin-title">{t('How you sign in')}</SectionTitle>
           <SectionHelp>{t('Any of these opens the same account, in the console and in the extension.')}</SectionHelp>
-          {linked !== null && (LINKABLE as readonly string[]).includes(linked) ? (
+          {isLinkable(linked) ? (
             <p role="status" className="mb-[12px] text-small text-muted">
-              {t('{provider} is linked to your account.', { provider: PROVIDER_NAMES[linked as Linkable] })}
+              {t('{provider} is linked to your account.', { provider: PROVIDER_NAMES[linked] })}
             </p>
           ) : null}
           {linkError === null ? null : (
@@ -708,7 +691,7 @@ export default function Account() {
                     key={browser.id}
                     title={t('Extension · {browser}', { browser: browser.browser })}
                     detail={t('Connected {day} · used {last}', {
-                      day: dayOf(browser.connectedAt),
+                      day: dayOf(browser.connectedAt, 'never'),
                       last: agoInSentence(browser.usedAt),
                     })}
                     under={

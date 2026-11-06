@@ -11,9 +11,6 @@
 import { locale } from './i18n.ts';
 import { WORKSPACE_SUSPENDED_ERROR } from './problems.ts';
 import type { Stage } from './stages.ts';
-
-// FRU-508: the screens of the next pull request of the stack still read these here. It removes them.
-export { STAGES, type Stage } from './stages.ts';
 import { API, UNREACHABLE, reach } from './transport.ts';
 
 export { API, UNREACHABLE, onReachability } from './transport.ts';
