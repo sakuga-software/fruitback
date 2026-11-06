@@ -217,6 +217,22 @@ export const ENGLISH = {
   'thread.agent': 'Agent',
   /** The reply the worker writes when the author edits their note (FRU-475). */
   'thread.edited': 'Edited the note',
+  // FRU-603: the verdict of the author on a note the team marked done, in its thread.
+  /** Who marked the note done: the author of the newest reply of the team. */
+  'check.doneBy': '{name} marked it done',
+  'check.done': 'Marked done',
+  'check.ask': 'Does it look right to you?',
+  'check.fixed': 'Looks fixed',
+  'check.wrong': 'Still wrong',
+  'check.wrongLabel': 'What is still wrong?',
+  // The visible word is in the name: « Send » of a reply and of the composer can be on screen too.
+  'check.sendLabel': 'Send: still wrong',
+  'check.sentFixed': 'Thank you. The team knows it looks fixed.',
+  'check.sentWrong': 'Sent. The note is open again.',
+  'check.refused': 'Fruitback did not take this answer: the note may have moved. Reload the page to see where it is.',
+  /** The replies the worker writes for a verdict (FRU-294), in the words of the reader. */
+  'thread.checkedFixed': 'Checked: looks fixed',
+  'thread.reopened': 'Reopened: still wrong',
   'reply.label': 'Reply',
   'reply.placeholder': 'Reply to {name}',
   'reply.placeholderAnonymous': 'Write a reply',

@@ -1840,6 +1840,38 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
 - **Two « Send » can be on screen**, the one of the composer and this one: this one is named « Send
   reply », and its visible word is in its name.
 
+## The verdict of the author, in the thread of the pin (FRU-603)
+
+### The rules, in short
+
+- **A note done and not confirmed says who marked it done**, above its replies: « {name} marked it
+  done », the author of the newest reply of the team (as the side panel says it, FRU-300), else
+  « Marked done ». A reply from the page, an edit and a verdict are not the team's. Every reader sees it.
+- **The thread asks for a verdict when the read says so**: `done`, `mine` and no `checked`
+  (`checkOffered`). The worker decides who may (FRU-294): the author it can name, by a session of
+  the workspace, or a role that manages the sites. **Nothing on the page decides it.** So in public
+  mode and in private mode, where no session reaches the worker, the read says no `mine`, and the
+  thread asks nobody; in team mode it asks the author. A host that sets `replies: false` gets none:
+  the verdict is a reply of the store. The extension sets it in private mode (`page.content.ts`), so
+  there the thread would not ask even a read that said `mine` (measured on 2026-11-06, with a read changed in the browser).
+- **« Looks fixed » sends the verdict alone; « Still wrong » opens a field** (« What is still
+  wrong? »), and « Send » sends the verdict and the text in one `POST /feedback/<id>/check`, as
+  `checkNote` does (FRU-300). While it goes both buttons wait, and the one pressed says « Sending… ».
+- **The field to reply is not drawn while the verdict is asked**: « Still wrong » is the way to say
+  what is missing, and two fields would be two ways to say one thing. It comes back once the note is
+  confirmed or reopened.
+- **What a person typed is never lost**, as for a reply (FRU-257): a failure keeps the text and says
+  why, « Cancel » keeps it for the next « Still wrong », and it lives in a map by note, so a thread
+  built again shows it.
+- **No read after a verdict, as after an edit (FRU-475)**: a read draws the pins again and closes the
+  thread. The reply and the stage the worker answers go on the issue (`applyCheck`); the pins are
+  drawn again with this thread kept open, so a reopened note takes its colour, and the thread says
+  « Sent. The note is open again. » or « Thank you. The team knows it looks fixed. ». The store's
+  word of the stage of before is dropped until the next read.
+- **The reply of a verdict reads in the words of the reader** (`verdictFromPage`): the name, then
+  « Checked: looks fixed » or « Reopened: still wrong », and what was typed, from the text the worker
+  writes in either language of the team (`checkText`).
+
 ## The colour of « Send » (FRU-601)
 
 ### The rules, in short
