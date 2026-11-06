@@ -178,10 +178,10 @@ describe('the files of a note in the composer (FRU-332)', () => {
     composer?.open(ANCHOR);
     q<HTMLButtonElement>('[data-fruitback-attach-page]').click();
     await settle();
-    assert.deepEqual(files(root)[0]?.slice(0, 2), [
-      'big.png',
-      'Too large: 10 MB for an image, a PDF or a file, 2 MB for a text, 25 MB for a note',
-    ]);
+    // FRU-609: its size and the limit it passed; just over it, the size says its decimals.
+    assert.deepEqual(files(root)[0]?.slice(0, 2), ['big.png', 'Too large: 10.01 MB, the limit is 10 MB']);
+    assert.equal(files(root)[0]?.[2], 'refused');
+    assert.equal(q('[data-fruitback-file="refused"] .fruitback-composer-file-remove')?.textContent, 'Remove');
     assert.equal(uploads.length, 0);
 
     next = FILE;
@@ -452,6 +452,112 @@ describe('the menu of « Attach » (FRU-351)', () => {
   });
 });
 
+describe('the capture of the element, and the state of each file (FRU-609)', () => {
+  const SHOT = { ...FILE, name: 'element.png', frame: { left: 0.25, top: 0.2, width: 0.5, height: 0.6 } };
+
+  it('joins the capture of the element at the open, framed, and sends it only with the note', async () => {
+    const { root, q, uploads, submitted, reply, settle } = mount({ captureElement: async () => SHOT });
+    composer?.open(ANCHOR);
+    await settle();
+    assert.deepEqual(files(root), [['element.png', '0.1 kB · Goes with the note', 'local']]);
+    // Nothing left the page: the capture waits for the note.
+    assert.equal(uploads.length, 0);
+    const thumb = q<HTMLButtonElement>('[data-fruitback-file-thumb]');
+    assert.equal(thumb.getAttribute('aria-label'), 'Open element.png whole');
+    assert.equal(thumb.querySelector('img')?.getAttribute('src'), `data:image/png;base64,${FILE.base64}`);
+    const ring = thumb.querySelector('.fruitback-composer-shot-ring') as HTMLElement;
+    assert.deepEqual(
+      ['left', 'top', 'width', 'height'].map((side) =>
+        ring.style.getPropertyValue(`--fruitback-composer-shot-${side}`),
+      ),
+      ['25%', '20%', '50%', '60%'],
+    );
+
+    q<HTMLTextAreaElement>('[data-fruitback-note]').value = 'La note';
+    q<HTMLButtonElement>('[data-fruitback-send]').click();
+    await settle();
+    assert.equal(uploads.length, 1, 'the capture did not leave with the note');
+    assert.equal(q('[data-fruitback-status]').textContent, 'Waiting for 1 file…');
+    uploads[0]?.answer({ ok: true, id: ID });
+    await settle();
+    assert.deepEqual(submitted, [[ID]]);
+    reply(true);
+  });
+
+  it('opens the capture whole, and Esc gives the focus back to its thumbnail', async () => {
+    const { q, page, settle } = mount({ captureElement: async () => SHOT });
+    composer?.open(ANCHOR);
+    await settle();
+    const thumb = q<HTMLButtonElement>('[data-fruitback-file-thumb]');
+    thumb.click();
+    const lightbox = q<HTMLElement>('[data-fruitback-lightbox]');
+    assert.equal(lightbox.hidden, false);
+    assert.equal(lightbox.getAttribute('aria-label'), 'The capture of the element');
+    assert.ok(lightbox.querySelector('img'));
+    assert.equal(deepActiveElement(page.document)?.textContent, 'Close');
+    const KeyboardEvent = keyboardEventCtor(page);
+    lightbox.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    assert.equal(lightbox.hidden, true);
+    assert.equal(composer?.element.hidden, false, 'Esc of the capture closed the composer');
+    assert.equal(deepActiveElement(page.document), thumb);
+  });
+
+  it('removes the capture by its cross, and sends nothing of it', async () => {
+    const { root, q, uploads, submitted, settle } = mount({ captureElement: async () => SHOT });
+    composer?.open(ANCHOR);
+    await settle();
+    q<HTMLButtonElement>('[data-fruitback-file-remove]').click();
+    assert.deepEqual(files(root), []);
+    q<HTMLTextAreaElement>('[data-fruitback-note]').value = 'Sans capture';
+    q<HTMLButtonElement>('[data-fruitback-send]').click();
+    await settle();
+    assert.equal(uploads.length, 0);
+    assert.deepEqual(submitted, [[]]);
+  });
+
+  it('takes no capture where the note takes no file, nor at a second open on another element', async () => {
+    let taken = 0;
+    const none = mount({ offer: () => 'no-tracker', captureElement: async () => ((taken += 1), SHOT) });
+    composer?.open(ANCHOR);
+    await none.settle();
+    assert.equal(taken, 0);
+    assert.deepEqual(files(none.root), []);
+  });
+
+  it('says the part sent of a file on its way, when the host measures it', async () => {
+    let told: ((fraction: number) => void) | undefined;
+    const again = mount({
+      upload: (_file, _destination, progress) => {
+        told = progress;
+        return new Promise(() => {});
+      },
+    });
+    composer?.open(ANCHOR);
+    again.q<HTMLButtonElement>('[data-fruitback-attach-page]').click();
+    await again.settle();
+    assert.deepEqual(files(again.root), [['page.png', '0.1 kB · Sending…', 'sending']]);
+    told?.(0.42);
+    assert.deepEqual(files(again.root), [['page.png', '0.1 kB · Sending 42 %', 'sending']]);
+    assert.equal(
+      (again.q('.fruitback-composer-file') as HTMLElement).style.getPropertyValue('--fruitback-composer-file-progress'),
+      '42%',
+    );
+  });
+
+  it('sends the note with a refused file: a refusal costs that file only', async () => {
+    const { q, uploads, submitted, settle } = mount();
+    composer?.open(ANCHOR);
+    q<HTMLButtonElement>('[data-fruitback-attach-page]').click();
+    await settle();
+    uploads[0]?.answer({ ok: false, refusal: 'too-large' });
+    await settle();
+    q<HTMLTextAreaElement>('[data-fruitback-note]').value = 'Quand même';
+    q<HTMLButtonElement>('[data-fruitback-send]').click();
+    await settle();
+    assert.deepEqual(submitted, [[]]);
+  });
+});
+
 describe('a screenshot pasted in the composer (FRU-424)', () => {
   type View = { File: typeof File; Event: typeof Event };
 
@@ -560,6 +666,19 @@ describe('the area of a capture (FRU-332)', () => {
 
     assert.deepEqual(await chosen, { left: 250 + STEP, top: 240 + STEP, width: 500 - STEP, height: 320 });
     assert.equal(host.querySelector('[data-fruitback-area]'), null, 'the overlay is gone before the capture');
+  });
+
+  it('writes the size of the area as it is drawn, and takes the visible page whole in one click (FRU-609)', async () => {
+    const { host, chosen, press } = open();
+    const size = host.querySelector('[data-fruitback-area-size]') as HTMLElement;
+    assert.equal(size.textContent, '500 × 320');
+    assert.equal(size.getAttribute('aria-hidden'), 'true');
+    press('ArrowRight', true);
+    assert.equal(size.textContent, `${500 + STEP} × 320`);
+    const visible = host.querySelector('[data-fruitback-area-visible]') as HTMLButtonElement;
+    assert.equal(visible.textContent, 'Take the visible page');
+    visible.click();
+    assert.deepEqual(await chosen, { left: 0, top: 0, width: 1_000, height: 800 });
   });
 
   it('cancels on Esc, and takes the area of its button', async () => {

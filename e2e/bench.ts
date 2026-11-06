@@ -296,7 +296,8 @@ async function canTriggerAction(context: BrowserContext): Promise<boolean> {
 
 async function attach(site: Page, file: Attachment): Promise<void> {
   const files = site.getByRole('dialog', { name: 'New note', exact: true });
-  const items = site.locator('.fruitback-composer-file');
+  // The capture of the element joins at the open, by itself (FRU-609): the count is of the others.
+  const items = site.locator('.fruitback-composer-file').filter({ hasNotText: 'element.png' });
   const before = await items.count();
   if (file === 'page' || file === 'area') {
     await files.getByRole('button', { name: 'Take a screenshot' }).click();

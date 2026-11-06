@@ -46,6 +46,7 @@ import { pickArea } from './area.ts';
 import {
   type BatchSent,
   type Composer,
+  type ElementCapture,
   type SendFailure,
   type SentAs,
   type SentWithoutPicture,
@@ -531,6 +532,12 @@ export function init(options: FruitbackOptions): Fruitback {
       restoredOn = canonicalizePageUrl(view.location.href);
       // The frame stays on the element for as long as the composer is open on it (FRU-258).
       host.hold(selected.element);
+      // FRU-609: the capture of the element is taken now, before the composer stands over the page.
+      // A second choice over an open composer keeps the files it holds and takes none.
+      // A second choice over an open composer starts a generation too: a capture of the element of
+      // before that is still on its way is thrown away.
+      if (keepsText) elementShots.forget();
+      else elementShots.take(selected.element);
       composer.open(selected.element, headOf(selected.element, selected.source), readableName(selected.element), {
         selector: selectorHead(),
       });
@@ -786,11 +793,68 @@ export function init(options: FruitbackOptions): Fruitback {
    * the area is chosen too (`data-fruitback-shooting`), so the person sees what the file will show.
    * They come back in `finally`: after the capture, a cancel, or a capture that fails or throws.
    */
+  /** The capture of the element of the composer now (FRU-609), taken at the choice. */
+  const elementShots = createElementShots((element, live) => shotOf(element, live));
+  /**
+   * One capture at a time (FRU-609, raised in review): the capture of the element starts at the
+   * choice, and a capture of the page asked at once after it would hide the widget and set the
+   * « shooting » rule while the first one still holds them, and give them back too soon.
+   */
+  const captures = serialized();
+  /**
+   * The « shooting » rule hides the pins (FRU-351). An area chosen and a capture taken can overlap (the
+   * capture of the element still on its way): it stays on until the last of them lets it go.
+   */
+  let shootingHolds = 0;
+  function holdShooting(change: 1 | -1): void {
+    shootingHolds = Math.max(0, shootingHolds + change);
+    (host.root.host as HTMLElement).toggleAttribute('data-fruitback-shooting', shootingHolds > 0);
+  }
+
+  /**
+   * The element and some page around it, with where the element is in the picture. Only where the
+   * host captures the visible page (the extension), and only while the element is in the window.
+   * Nothing is said when it does not come: the person did not ask for it.
+   */
+  async function shotOf(element: Element, live: () => boolean): Promise<ElementCapture | undefined> {
+    if (options.captureVisible === undefined) return undefined;
+    const box = element.getBoundingClientRect();
+    const width = view.innerWidth;
+    const height = view.innerHeight;
+    const left = Math.max(0, box.left - SHOT_MARGIN);
+    const top = Math.max(0, box.top - SHOT_MARGIN);
+    const right = Math.min(width, box.right + SHOT_MARGIN);
+    const bottom = Math.min(height, box.bottom + SHOT_MARGIN);
+    if (right - left < 8 || bottom - top < 8) return undefined;
+    const area: CaptureArea = {
+      left,
+      top,
+      width: right - left,
+      height: bottom - top,
+      scale: view.devicePixelRatio || 1,
+    };
+    // In the queue, behind a capture that may last: a composer closed or pointed at another element
+    // by then takes none, and the widget is not hidden for it.
+    const taken = await captures
+      .run(() => (live() ? captureNow(area) : Promise.resolve(undefined)))
+      .catch(() => undefined);
+    if (taken === undefined || typeof taken === 'string') return undefined;
+
+    return {
+      ...taken,
+      name: 'element.png',
+      frame: {
+        left: (box.left - left) / area.width,
+        top: (box.top - top) / area.height,
+        width: box.width / area.width,
+        height: box.height / area.height,
+      },
+    };
+  }
+
   async function captureFor(kind: 'page' | 'area'): Promise<PickedFile | 'cancelled' | 'permission' | undefined> {
-    const take = options.captureVisible;
-    if (take === undefined) return undefined;
-    const container = host.root.host as HTMLElement;
-    container.toggleAttribute('data-fruitback-shooting', true);
+    if (options.captureVisible === undefined) return undefined;
+    holdShooting(+1);
     try {
       let area: CaptureArea | undefined;
       if (kind === 'area') {
@@ -798,21 +862,38 @@ export function init(options: FruitbackOptions): Fruitback {
         if (chosen === undefined) return 'cancelled';
         area = { ...chosen, scale: view.devicePixelRatio || 1 };
       }
-      const visibility = container.style.visibility;
-      container.style.visibility = 'hidden';
-      try {
-        // Two frames: the page is painted without the widget before the browser takes it.
-        await new Promise((resolve) => view.requestAnimationFrame(() => view.requestAnimationFrame(resolve)));
 
-        return await take(area);
-      } catch (error) {
-        // FRU-423: refused for want of a gesture, the composer says what grants it.
-        return isCapturePermissionRefusal(error) ? 'permission' : undefined;
-      } finally {
-        container.style.visibility = visibility;
-      }
+      return await captureArea(area);
     } finally {
-      container.toggleAttribute('data-fruitback-shooting', false);
+      holdShooting(-1);
+    }
+  }
+
+  /** The page without the widget over it, whole or an area of it, one capture at a time. */
+  function captureArea(area: CaptureArea | undefined): Promise<PickedFile | 'permission' | undefined> {
+    return captures.run(() => captureNow(area));
+  }
+
+  async function captureNow(area: CaptureArea | undefined): Promise<PickedFile | 'permission' | undefined> {
+    const take = options.captureVisible;
+    if (take === undefined) return undefined;
+    const container = host.root.host as HTMLElement;
+    const visibility = container.style.visibility;
+    // The pins hide by their own rule (FRU-351): a pin draws itself visible inside a hidden host. The
+    // capture of the element is taken with no area to choose, so it sets that rule here too (FRU-609).
+    holdShooting(+1);
+    container.style.visibility = 'hidden';
+    try {
+      // Two frames: the page is painted without the widget before the browser takes it.
+      await new Promise((resolve) => view.requestAnimationFrame(() => view.requestAnimationFrame(resolve)));
+
+      return await take(area);
+    } catch (error) {
+      // FRU-423: refused for want of a gesture, the composer says what grants it.
+      return isCapturePermissionRefusal(error) ? 'permission' : undefined;
+    } finally {
+      container.style.visibility = visibility;
+      holdShooting(-1);
     }
   }
 
@@ -859,8 +940,15 @@ export function init(options: FruitbackOptions): Fruitback {
       captures: () => options.captureVisible !== undefined,
       capture: (kind) => captureFor(kind),
       upload: (file, chosen) => uploadAttachment(options, file, destinationToSend(destinations.get(), chosen)),
+      // FRU-609: taken at the choice of the element, given to the composer as it opens.
+      captureElement: () => elementShots.current(),
     },
-    onClose: () => host.release(),
+    onClose: () => {
+      host.release();
+      // A capture of the element belongs to the open it was taken for, never to a later one, and one
+      // still waiting in the queue is not taken at all (review).
+      elementShots.forget();
+    },
     autosave: {
       read: () => (typingPlace === undefined ? undefined : typing.get(typingPlace)?.text),
       write: (text) => {
@@ -868,6 +956,9 @@ export function init(options: FruitbackOptions): Fruitback {
       },
     },
     ...(options.onSignIn === undefined ? {} : { onSignIn: signIn }),
+    // FRU-609: a session of the host that ended is a site that takes notes from its team only, for
+    // this reader now. « Send » waits for the sign-in; the note stays.
+    signInToSend: () => ended,
     // Offered only while the worker takes several notes in one request (FRU-124, FRU-608).
     batch: {
       // Signed out too (FRU-315): a text added to the batch is sent once the reviewer is back.
@@ -1294,6 +1385,7 @@ export function init(options: FruitbackOptions): Fruitback {
       ended = endedNow;
       host.offerSignIn(ended ? { label: translator.text('launch.signIn'), onSignIn: signIn } : undefined);
       composer.identityChanged();
+      composer.signInChanged();
       sidebar.refresh();
       // Signed in again, the notes this session can read come from a read, not from what was held.
       if (!ended) {
@@ -1715,6 +1807,62 @@ function draftIssue(draft: Draft): NoteIssue {
 function isDraft(issue: NoteIssue): boolean {
   return issue.id.startsWith(DRAFT_PREFIX);
 }
+
+/**
+ * Runs tasks one after the other, in the order they were asked (FRU-609). A task that fails does not
+ * stop the next one. Exported for its tests.
+ */
+export function serialized(): { run<T>(task: () => Promise<T>): Promise<T> } {
+  let last: Promise<unknown> = Promise.resolve();
+
+  return {
+    run<T>(task: () => Promise<T>): Promise<T> {
+      const next = last.then(task, task);
+      last = next.catch(() => undefined);
+
+      return next;
+    },
+  };
+}
+
+/**
+ * The capture of the element of the composer (FRU-609), by generation. Each choice starts one, and so
+ * do a close and a second choice over an open composer (`forget`). A capture is asked to check that it
+ * is still of the current generation before it hides the widget (`live`), and what arrives for a
+ * generation that is gone is thrown away. Exported for its tests.
+ */
+export function createElementShots<T>(take: (element: Element, live: () => boolean) => Promise<T | undefined>): {
+  take(element: Element): void;
+  forget(): void;
+  current(): Promise<T | undefined>;
+} {
+  let generation = 0;
+  let pending: Promise<T | undefined> = Promise.resolve(undefined);
+
+  return {
+    take(element) {
+      generation += 1;
+      const mine = generation;
+      const live = (): boolean => mine === generation;
+      pending = take(element, live).then(
+        (shot) => (live() ? shot : undefined),
+        () => undefined,
+      );
+    },
+    forget() {
+      generation += 1;
+      pending = Promise.resolve(undefined);
+    },
+    current() {
+      const mine = generation;
+
+      return pending.then((shot) => (mine === generation ? shot : undefined));
+    },
+  };
+}
+
+/** How much of the page around the element its capture takes, in CSS pixels (FRU-609). */
+const SHOT_MARGIN = 24;
 
 /**
  * Exported for its tests, never from `public.ts`. Sends the drafts, as few requests as the worker

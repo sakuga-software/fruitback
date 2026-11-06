@@ -62,10 +62,21 @@ export function pickArea(options: {
   cancel.type = 'button';
   cancel.className = 'fruitback-area-cancel';
   cancel.textContent = t.text('area.cancel');
+  // FRU-609: the visible part of the page, whole, in one click.
+  const visible = document.createElement('button');
+  visible.type = 'button';
+  visible.className = 'fruitback-area-cancel fruitback-area-visible';
+  visible.dataset.fruitbackAreaVisible = '';
+  visible.textContent = t.text('area.visible');
+  // FRU-609: the size of the area as it is drawn, in CSS pixels, on its corner.
+  const size = document.createElement('span');
+  size.className = 'fruitback-area-size';
+  size.dataset.fruitbackAreaSize = '';
+  size.setAttribute('aria-hidden', 'true');
   const bar = document.createElement('div');
   bar.className = 'fruitback-area-bar';
-  bar.append(help, cancel, take);
-  overlay.append(box, bar);
+  bar.append(help, cancel, visible, take);
+  overlay.append(box, size, bar);
   const style = adoptStyles(host, STYLES);
   host.append(overlay);
 
@@ -141,6 +152,7 @@ export function pickArea(options: {
       if (drawn.width >= MIN_SIDE && drawn.height >= MIN_SIDE) finish(clamp(drawn, width, height));
     });
     take.addEventListener('click', () => finish(area));
+    visible.addEventListener('click', () => finish({ left: 0, top: 0, width, height }));
     cancel.addEventListener('click', () => finish(undefined));
   });
 
@@ -149,6 +161,9 @@ export function pickArea(options: {
     box.style.top = `${area.top}px`;
     box.style.width = `${area.width}px`;
     box.style.height = `${area.height}px`;
+    size.textContent = `${Math.round(area.width)} × ${Math.round(area.height)}`;
+    size.style.left = `${area.left + area.width}px`;
+    size.style.top = `${area.top + area.height}px`;
   }
 }
 
