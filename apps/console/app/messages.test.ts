@@ -31,7 +31,7 @@ const screens = [
   ...['routes', 'parts'].flatMap((folder) =>
     readdirSync(new URL(`${folder}/`, APP))
       .map((name) => `${folder}/${name}`)
-      .filter((name) => name.endsWith('.tsx')),
+      .filter((name) => /\.tsx?$/.test(name) && !name.includes('.test.')),
   ),
   'root.tsx',
   'ui.tsx',
