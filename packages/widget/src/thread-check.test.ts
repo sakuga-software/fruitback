@@ -91,7 +91,7 @@ function kept(verdict: 'fixed' | 'wrong', typed?: string): CheckAnswer {
 
 /** A seam whose answers a case gives one at a time. */
 function answered() {
-  const pending: ((answer: CheckAnswer | CheckFailure) => void)[] = [];
+  const pending: ((answer: CheckAnswer | CheckFailure | 'kept') => void)[] = [];
   const sent: { issue: string; verdict: string; body: string | undefined }[] = [];
   const seam: CheckSeam = {
     send: (issue, verdict, body) => {
@@ -101,7 +101,7 @@ function answered() {
     },
   };
 
-  return { seam, sent, answer: (value: CheckAnswer | CheckFailure) => pending.shift()?.(value) };
+  return { seam, sent, answer: (value: CheckAnswer | CheckFailure | 'kept') => pending.shift()?.(value) };
 }
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -256,6 +256,24 @@ describe('« Looks fixed » (FRU-603)', () => {
       view.status(),
       'Fruitback did not take this answer: the note may have moved. Reload the page to see where it is.',
     );
+  });
+  it('keeps the thread open when the worker kept the verdict and said nothing of it, and asks again after a read', async () => {
+    const issue = aDoneNote();
+    const { seam, answer } = answered();
+    const page = mounted();
+    const view = open(page, issue, seam);
+
+    view.fixed()?.click();
+    answer('kept');
+    await settle();
+    assert.notEqual(view.thread(), null);
+    assert.equal(view.block(), null);
+    assert.equal(view.said(), 'Thank you. The team knows it looks fixed.');
+    // Nothing is guessed on the issue: the next read says where the note is.
+    assert.equal(issue.checked, undefined);
+    overlay?.render([issue]);
+    (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
+    assert.notEqual(view.block(), null);
   });
 });
 

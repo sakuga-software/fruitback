@@ -146,6 +146,26 @@ describe('the verdict from the thread of the pin, through init (FRU-603)', () =>
     );
   });
 
+  it('reads nothing after a verdict the worker kept with no answer: the thread stays open (review)', async () => {
+    const requests: TransportRequest[] = [];
+    const transport = async (request: TransportRequest): Promise<TransportResponse> => {
+      requests.push(request);
+      if (request.method === 'GET') {
+        return { ok: true, status: 200, body: JSON.stringify({ issues: [aDoneNote()], canReply: true }) };
+      }
+
+      return { ok: true, status: 204, body: '' };
+    };
+    const root = await threadOf(mounted(), { transport });
+    const reads = requests.filter((request) => request.method === 'GET').length;
+    (root.querySelector('.fruitback-thread-check-fixed') as HTMLButtonElement).click();
+    await settle();
+
+    assert.equal(requests.filter((request) => request.method === 'GET').length, reads);
+    assert.notEqual(root.querySelector('.fruitback-thread'), null);
+    assert.equal(root.querySelector('.fruitback-thread-check'), null);
+  });
+
   it('says the refusal of the worker, and keeps the question', async () => {
     const root = await threadOf(mounted(), {
       transport: worker(aDoneNote(), { status: 409, error: 'not-done' }).transport,
