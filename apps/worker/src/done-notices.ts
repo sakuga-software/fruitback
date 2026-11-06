@@ -10,10 +10,13 @@ import { type MailMessage, type Mailer, unlinked } from './mail.ts';
  *   sent. The answer of `POST /feedback` carries a `notify` token for that one note; the address
  *   comes back with it to `POST /feedback/<id>/notify` (`notify-route.ts`). Without the token, no
  *   address is taken: a caller cannot ask for messages about the note of somebody else.
- * - **One message per note, then the row goes.** `take` removes the rows of the notes that are done
- *   and answers them, in one statement: two reads of the page at once send one message. A message
- *   the provider refused is put back (`putBack`), and the next read that sees the note done tries
- *   again, until `expires_at`.
+ * - **One message per note, then the row goes.** `take` claims the rows of the notes that are done
+ *   and answers them, in one statement: two reads of the page at once send one message. The row goes
+ *   only once the provider took the message (`sent`). A message the provider refused releases its
+ *   claim (`release`), and a process that stopped while it sent leaves a claim that runs out
+ *   (`DONE_CLAIM_MS`): either way the next read that sees the note done tries again, until
+ *   `expires_at`. One case sends twice: the provider took the message, and the database refused the
+ *   removal of its row. A second message is the lesser harm: the other order loses the only one.
  * - **When**: when the worker learns that the note is done. That is a read of its page that asks
  *   the store (the read cache holds an answer for 15 seconds), or a change of its status in the
  *   console or the extension. A note moved in a tracker that nobody reads again sends nothing.
@@ -26,7 +29,7 @@ export type DoneNotice = {
   account?: string;
   email?: string;
   locale?: string;
-  /** When the row goes if no message left before. Written by `watch`; `putBack` keeps it. */
+  /** When the row goes if no message left before. Written by `watch`. */
   expiresAt?: number;
 };
 
@@ -36,10 +39,16 @@ export type DoneNotices = {
    * index of the site: nothing is written.
    */
   watch(notice: DoneNotice, now: number): Promise<boolean>;
-  /** Removes the rows of these notes of the site, and answers them. A note with no row is absent. */
+  /**
+   * Claims the rows of these notes of the site until `now + DONE_CLAIM_MS`, and answers them. A row
+   * another read claimed, and that claim has not run out, is absent: two reads at once send one
+   * message. The row stays until `sent`: a process that stops while it sends loses nothing.
+   */
   take(site: string, notes: readonly string[], now: number): Promise<DoneNotice[]>;
-  /** Writes again a row that `take` answered, when its message did not leave. */
-  putBack(notice: DoneNotice, now: number): Promise<void>;
+  /** The message of this note left, or nobody is left to tell: its row goes. */
+  sent(notice: Pick<DoneNotice, 'site' | 'note'>): Promise<void>;
+  /** The message did not leave: the claim goes, and the next read that sees the note done tries again. */
+  release(notice: Pick<DoneNotice, 'site' | 'note'>): Promise<void>;
   /** Removes the rows whose time ran out. Answers how many went. */
   sweep(now: number): Promise<number>;
 };
@@ -49,6 +58,13 @@ export type DoneNotices = {
  * team closed without doing it, is no longer « about to be fixed », and its address goes.
  */
 export const DONE_NOTICE_KEEP_MS = 90 * 24 * 60 * 60 * 1000;
+
+/**
+ * How long a read holds the rows it is sending: 10 minutes, well above the 10 seconds a message may
+ * take (`SEND_TIMEOUT_MS` of `mail.ts`) for each of the notes of one page. A read that stopped
+ * meanwhile leaves its rows to the next read after it.
+ */
+export const DONE_CLAIM_MS = 10 * 60 * 1000;
 
 /** How long the token of a note takes an address after the note was sent: 30 minutes. */
 export const NOTIFY_TOKEN_TTL_MS = 30 * 60 * 1000;
@@ -163,7 +179,7 @@ export function doneMessage(
   const html = `<!doctype html><html><body style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;color:#18181b;background:#ffffff;padding:32px">
 <p style="font-size:16px;font-weight:600">${escapeHtml(words.lead(host))}</p>
 <p>${escapeHtml(words.how)}</p>
-<p><a href="${href}" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 18px;border-radius:999px;text-decoration:none;font-weight:600">${escapeHtml(words.button)}</a></p>
+<p><a href="${href}" style="display:inline-block;background:#5560c4;color:#fff;padding:10px 18px;border-radius:999px;text-decoration:none;font-weight:600">${escapeHtml(words.button)}</a></p>
 <p style="color:#6b6b74;font-size:13px">${escapeHtml(once)}</p>
 <p style="color:#6b6b74;font-size:12px;word-break:break-all">${href}</p>
 </body></html>`;
@@ -214,20 +230,24 @@ export async function sendDoneNotices(
   let sent = 0;
   for (const notice of taken) {
     const page = pages.get(notice.note);
+    let left = false;
     try {
       const to =
         notice.email === undefined ? await accountTo(seams, notice) : { email: notice.email, locale: notice.locale };
-      // An account that is gone has nobody to tell: its row went with it, or goes now.
-      if (to === undefined || page === undefined) continue;
-      await mailer.send(doneMessage(to.email, page, notice.note, to.locale, notice.email !== undefined));
-      sent += 1;
+      if (to !== undefined && page !== undefined) {
+        await mailer.send(doneMessage(to.email, page, notice.note, to.locale, notice.email !== undefined));
+        sent += 1;
+      }
+      // An account that is gone, or suspended, has nobody to tell: its row goes as a message would.
+      left = true;
     } catch (error) {
-      // The message did not leave: the row comes back, and the next read that sees the note done tries again.
       console.error(`[fruitback] the message of a note done did not leave: ${String(error)}`);
-      await notices.putBack(notice, now).catch((again: unknown) => {
-        console.error('[fruitback] could not keep who to tell of a note done', again);
-      });
     }
+    // The row goes once the message left; else its claim goes, and the next read tries again. A
+    // failure here leaves the claim, which runs out by itself: nothing is lost.
+    await (left ? notices.sent(notice) : notices.release(notice)).catch((again: unknown) => {
+      console.error('[fruitback] could not write what became of the message of a note done', again);
+    });
   }
 
   return sent;

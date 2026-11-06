@@ -186,6 +186,7 @@ The table `done_notices` keeps one row for each note that waits:
 | `locale`             | The language of the widget when the visitor gave the address, `en` or `fr`. Empty for a member. |
 | `created_at`         | When the row was written.                                                                       |
 | `expires_at`         | When the row goes if the note is not done by then: 90 days after `created_at`.                  |
+| `claimed_until`      | While a message is being sent, until when. Empty otherwise.                                     |
 
 ### What the worker keeps besides the note
 

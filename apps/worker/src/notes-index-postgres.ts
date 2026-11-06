@@ -20,7 +20,7 @@ import {
 import type { Database } from './postgres.ts';
 import { migrated } from './postgres-migrate.ts';
 import { connectors, deliveries, done_notices, note_index, notes, sites } from './postgres-schema.ts';
-import { DONE_NOTICE_KEEP_MS, type DoneNotice, type DoneNotices } from './done-notices.ts';
+import { DONE_CLAIM_MS, DONE_NOTICE_KEEP_MS, type DoneNotice, type DoneNotices } from './done-notices.ts';
 import { isSameNote, keptRowOf } from './note-rows.ts';
 import { checkedOf } from './reply-text.ts';
 
@@ -748,15 +748,17 @@ export function createPostgresDoneNotices(database: Database): DoneNotices {
 
     async take(site, notes, now) {
       if (notes.length === 0) return [];
-      // One statement: two reads of one page at once remove each row once, so one message leaves.
+      // One statement: of two reads of one page at once, one claims each row, so one message leaves.
       const rows = await run((db) =>
         db
-          .delete(done_notices)
+          .update(done_notices)
+          .set({ claimed_until: now + DONE_CLAIM_MS })
           .where(
             and(
               eq(done_notices.site_id, site),
               inArray(done_notices.note_id, [...new Set(notes)]),
               gte(done_notices.expires_at, now),
+              or(isNull(done_notices.claimed_until), lt(done_notices.claimed_until, now)),
             ),
           )
           .returning(),
@@ -772,12 +774,18 @@ export function createPostgresDoneNotices(database: Database): DoneNotices {
       }));
     },
 
-    async putBack(notice, now) {
+    async sent({ site, note }) {
+      await run((db) =>
+        db.delete(done_notices).where(and(eq(done_notices.site_id, site), eq(done_notices.note_id, note))),
+      );
+    },
+
+    async release({ site, note }) {
       await run((db) =>
         db
-          .insert(done_notices)
-          .values(rowOf(notice, now))
-          .onConflictDoNothing({ target: [done_notices.site_id, done_notices.note_id] }),
+          .update(done_notices)
+          .set({ claimed_until: null })
+          .where(and(eq(done_notices.site_id, site), eq(done_notices.note_id, note))),
       );
     },
 

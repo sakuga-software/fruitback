@@ -6,6 +6,7 @@ CREATE TABLE "done_notices" (
 	"locale" text,
 	"created_at" bigint NOT NULL,
 	"expires_at" bigint NOT NULL,
+	"claimed_until" bigint,
 	CONSTRAINT "done_notices_pkey" PRIMARY KEY("site_id","note_id")
 );
 --> statement-breakpoint

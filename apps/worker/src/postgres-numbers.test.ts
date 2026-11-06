@@ -188,7 +188,7 @@ async function write({ table, column }: Bigint, database: PgDatabase, value: num
   await rowsOf(database, `UPDATE "${getTableConfig(table).name}" SET "${column.name}" = ${String(value)}`);
 }
 
-it('knows the fifty-two BIGINT columns of the worker, and that better-auth has none', () => {
+it('knows the fifty-three BIGINT columns of the worker, and that better-auth has none', () => {
   assert.deepEqual(BIGINTS.map(({ name }) => name).toSorted(), [
     'account_emails.created_at',
     'account_emails.verified_at',
@@ -211,6 +211,7 @@ it('knows the fifty-two BIGINT columns of the worker, and that better-auth has n
     'domains.created_at',
     'domains.lost_at',
     'domains.verified_at',
+    'done_notices.claimed_until',
     'done_notices.created_at',
     'done_notices.expires_at',
     'email_links.created_at',
@@ -284,7 +285,7 @@ for (const { label, open, skip } of [
         }
       }
 
-      assert.equal(nullable.length, 15);
+      assert.equal(nullable.length, 16);
       assert.deepEqual(wrong, []);
     });
 

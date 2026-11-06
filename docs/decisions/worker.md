@@ -1571,7 +1571,7 @@ Read on drizzle-orm 0.45.4 and drizzle-kit 0.31.11, the versions of the catalogu
   store of the accounts`, test:`decides a pairing and a session by their instants, on each side of
   2^32`.
 - **better-auth reads no `BIGINT` of its tables on that pool, and a count is one.** Its seven tables
-  have none (test:`knows the fifty-two BIGINT columns of the worker, and that better-auth has none`).
+  have none (test:`knows the fifty-three BIGINT columns of the worker, and that better-auth has none`).
   `count(*)` is a `BIGINT` whatever the table: the pool now answers it as a string, and better-auth
   reads it as a number, through its adapter and the layer of FRU-181
   (test:`gives better-auth a count as a string, which better-auth reads as a number`).
@@ -3215,7 +3215,7 @@ workspace too: the reason is free text, « impayé » for example.
 - **Why a table of its own, and not two columns of `organization`.** The ticket offered columns on
   `organization`. That table is of better-auth, and two tests hold it: `auth-schema.test.ts` compares
   its columns with the ones that better-auth makes, and
-  test:`knows the fifty-two BIGINT columns of the worker, and that better-auth has none` says that
+  test:`knows the fifty-three BIGINT columns of the worker, and that better-auth has none` says that
   better-auth reads no `BIGINT`, on a pool with no parser of ours. A `suspended_at` there breaks
   both, or is not a `BIGINT`. A row of the worker keeps the convention, cascades with the workspace,
   and makes « changed » one statement.
@@ -4703,9 +4703,15 @@ framing; `SECURITY.md` says what is protected.
 
 - **One row of `done_notices` for each note that waits, and one message, then the row goes.** A
   member's row names the account (`watch` when the note is planted), a visitor's row the address
-  they gave. `take` removes the rows of the notes done and answers them in one statement, so two
-  reads of one page send one message (test:`answers a row to one of two takes at once`). A message
-  the provider refused is put back (`putBack`) with its first expiry.
+  they gave. `take` claims the rows of the notes done for `DONE_CLAIM_MS` (10 minutes) and answers
+  them in one statement, so two reads of one page send one message
+  (test:`answers a row to one of two takes at once`). The row goes only after the provider took the
+  message (`sent`); a refusal releases the claim (`release`), and a process that stops while it
+  sends leaves a claim that runs out
+  (test:`keeps a row that a read took and did not send, and gives it again once its claim ran out`).
+  Kentō's review of #839 found the first version, which deleted the row before the send: a stop
+  between the two lost the only message. The order chosen sends twice in one case (the database
+  refuses the removal after the provider took the message), which is the lesser harm.
 - **When: when the worker learns that the note is done.** `readPage` calls `sendDoneNotices` after
   `refresh`, inside the read cache: a read that asked the store. The two routes of a status
   (`POST /feedback/<id>/status`, `POST /console/…/notes/<note>/status`) call it on a move to done.

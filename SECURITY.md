@@ -2372,8 +2372,13 @@ visitor. It is public: no session, no cookie.
   test:`takes 3 addresses a minute from one caller, then answers 429`,
   test:`takes 10 addresses a minute for one site, from many callers`.
 - What is sent. One message for each note, when a read of its page or a change of its status says
-  that it is done. The row is removed and answered in one statement, so two reads at once send one
-  message. test:`answers a row to one of two takes at once`. The message holds the host of the
+  that it is done. One statement claims the row for 10 minutes and answers it, so two reads at once
+  send one message (test:`answers a row to one of two takes at once`). The row goes once the
+  provider took the message. A message that did not leave, or a process that stopped while it sent,
+  leaves the row for the next read
+  (test:`keeps a row that a read took and did not send, and gives it again once its claim ran out`).
+  The one case that sends twice is a provider that took the message while the database refused the
+  removal of the row. The message holds the host of the
   page and a link to the note on its page, written so that no mail client makes another link of
   them, and no word of the note: whoever sends the note writes its text.
 - What it cannot stop. The owner of a site can send notes from their own pages and give addresses

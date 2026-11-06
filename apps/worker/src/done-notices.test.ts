@@ -3,6 +3,7 @@ import { describe, it } from 'vitest';
 import { noteFixture } from '@fruitback/shared/note.fixture';
 import { type World, callOn, memberOf, signInTo, workspaceIn, worlds } from './console-world.fixture.ts';
 import {
+  DONE_CLAIM_MS,
   DONE_NOTICE_KEEP_MS,
   type DoneNotice,
   type DoneNotices,
@@ -130,6 +131,9 @@ describe('the message of a note done', () => {
 
 /** A store of rows in memory, as `DoneNotices` says it behaves. */
 function memoryNotices(rows: DoneNotice[] = []): DoneNotices & { rows: DoneNotice[] } {
+  const claimed = new Set<string>();
+  const key = (notice: Pick<DoneNotice, 'site' | 'note'>) => `${notice.site} ${notice.note}`;
+
   return {
     rows,
     async watch(notice) {
@@ -139,13 +143,18 @@ function memoryNotices(rows: DoneNotice[] = []): DoneNotices & { rows: DoneNotic
       return true;
     },
     async take(site, notes) {
-      const taken = rows.filter((row) => row.site === site && notes.includes(row.note));
-      for (const row of taken) rows.splice(rows.indexOf(row), 1);
+      const taken = rows.filter((row) => row.site === site && notes.includes(row.note) && !claimed.has(key(row)));
+      for (const row of taken) claimed.add(key(row));
 
       return taken;
     },
-    async putBack(notice) {
-      rows.push(notice);
+    async sent(notice) {
+      const at = rows.findIndex((row) => key(row) === key(notice));
+      if (at >= 0) rows.splice(at, 1);
+      claimed.delete(key(notice));
+    },
+    async release(notice) {
+      claimed.delete(key(notice));
     },
     async sweep() {
       return 0;
@@ -181,7 +190,7 @@ describe('sendDoneNotices', () => {
     assert.deepEqual(notices.rows, [{ site: 's', note: 'n_todo', email: 'bo@example.com' }]);
   });
 
-  it('puts the row back when the provider refuses, and the next read sends it', async () => {
+  it('keeps the row when the provider refuses, and the next read sends it', async () => {
     const notices = memoryNotices([{ site: 's', note: 'n_1', email: 'ana@example.com' }]);
     let refuse = true;
     const sent: MailMessage[] = [];
@@ -523,6 +532,29 @@ describe('the rows of done_notices (FRU-604)', () => {
     );
     assert.equal(await notices.watch({ site, note: 'nr_1', email: 'ana@example.com' }, now), true);
     assert.equal(await notices.watch({ site, note: 'nr_1', email: 'eve@example.com' }, now), false);
+  });
+
+  it('keeps a row that a read took and did not send, and gives it again once its claim ran out', async () => {
+    const { world, store, notices, site } = await aPublicSite();
+    await plant(
+      world,
+      store,
+      notices,
+      noteFixture({ id: 'nr_5', page: { url: PAGE, path: '/pricing' }, client: { id: site, name: 'Acme' } }),
+    );
+    const at = Date.now();
+    await notices.watch({ site, note: 'nr_5', email: 'ana@example.com' }, at);
+    // A read takes the row, and its process stops before it sends: the row is still there.
+    assert.equal((await notices.take(site, ['nr_5'], at)).length, 1);
+    assert.equal((await rowsOf(world.database, 'SELECT * FROM done_notices')).length, 1);
+    // Another read meanwhile does not send it a second time; one after the claim ran out does.
+    assert.deepEqual(await notices.take(site, ['nr_5'], at + DONE_CLAIM_MS - 1), []);
+    assert.equal((await notices.take(site, ['nr_5'], at + DONE_CLAIM_MS + 1)).length, 1);
+    // Released, it is taken at once; sent, it is gone.
+    await notices.release({ site, note: 'nr_5' });
+    assert.equal((await notices.take(site, ['nr_5'], at + DONE_CLAIM_MS + 2)).length, 1);
+    await notices.sent({ site, note: 'nr_5' });
+    assert.deepEqual(await rowsOf(world.database, 'SELECT * FROM done_notices'), []);
   });
 
   it('answers a row to one of two takes at once', async () => {

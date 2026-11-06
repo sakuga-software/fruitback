@@ -267,7 +267,8 @@ export function postgresDoneNotices(url: string, schema: string): DoneNotices {
   return later(async () => (await import('./notes-index-postgres.ts')).createPostgresDoneNotices(database), {
     watch: true,
     take: true,
-    putBack: true,
+    sent: true,
+    release: true,
     sweep: true,
   });
 }

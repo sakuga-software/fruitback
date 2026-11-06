@@ -893,8 +893,9 @@ export const note_index = pgTable(
  *   address that the worker keeps for a person with no account, and it serves one message only.
  *
  * Exactly one of the two is set: `done-notices.ts` writes no other row. A row goes when its message
- * leaves, when its note leaves the index (`cascade`), when the account goes (`cascade`), and at
- * `expires_at` (`DONE_NOTICE_KEEP_MS` after it was written) for a note that is never done.
+ * has left (`sent`), when its note leaves the index (`cascade`), when the account goes (`cascade`),
+ * and at `expires_at` (`DONE_NOTICE_KEEP_MS` after it was written) for a note that is never done.
+ * `claimed_until`: a read sends its message now (`take`), and another read leaves it until then.
  * `docs/privacy.md` names each column.
  */
 export const done_notices = pgTable(
@@ -907,6 +908,9 @@ export const done_notices = pgTable(
     locale: text('locale'),
     created_at: instant('created_at').notNull(),
     expires_at: instant('expires_at').notNull(),
+    // Until when a read that took the row is sending its message. Empty: nobody is. Past: the read
+    // that took it stopped, and the next one takes it again.
+    claimed_until: instant('claimed_until'),
   },
   (table) => [
     primaryKey({ name: 'done_notices_pkey', columns: [table.site_id, table.note_id] }),
