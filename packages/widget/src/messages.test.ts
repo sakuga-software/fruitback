@@ -14,6 +14,7 @@ import { FRENCH } from './locale-fr.ts';
 import { createCaptureHost } from './host.ts';
 import {
   type BatchSent,
+  type ElementCapture,
   type NotifyOutcome,
   type SendFailure,
   type SentAs,
@@ -675,6 +676,9 @@ describe('every word the widget shows', () => {
     // failures of a send with files, then a note that stays in Fruitback, and the area of a capture.
     let offer: 'offered' | 'no-tracker' = 'offered';
     const uploads: ((answer: { ok: true; id: string } | { ok: false; refusal: AttachRefusal }) => void)[] = [];
+    let shot: ElementCapture | undefined;
+    let big = false;
+    let progressOf: ((fraction: number) => void) | undefined;
     const filed = createComposer({
       document: page.document,
       host: host.panel,
@@ -684,8 +688,17 @@ describe('every word the widget shows', () => {
         offer: () => offer,
         subscribe: () => () => {},
         captures: () => true,
-        capture: async () => ({ name: 'FILE.png', type: 'image/png', size: 2_048, base64: 'AA==' }),
-        upload: () => new Promise((resolve) => uploads.push(resolve)),
+        capture: async () => ({
+          name: 'FILE.png',
+          type: 'image/png',
+          size: big ? 30 * 1_024 * 1_024 : 2_048,
+          base64: 'AA==',
+        }),
+        upload: (_file, _destination, progress) => {
+          progressOf = progress;
+          return new Promise((resolve) => uploads.push(resolve));
+        },
+        captureElement: async () => shot,
       },
     });
     cleanup.push(() => filed.destroy());
@@ -725,10 +738,49 @@ describe('every word the widget shows', () => {
       snapshots.push(...shown(host.root));
       filed.close();
     }
+    // FRU-609: the capture of the element, waiting in the field with its thumbnail, then opened whole;
+    // a file on its way with the part sent, and « Send » that waits for it; a file over its limit.
+    shot = {
+      name: 'FILE.png',
+      type: 'image/png',
+      size: 2_048,
+      base64: 'AA==',
+      frame: { left: 0.1, top: 0.1, width: 0.8, height: 0.8 },
+    };
+    filed.open({ left: 0, top: 0, bottom: 10, right: 10 });
+    await settle();
+    snapshots.push(...shown(host.root));
+    (filed.element.querySelector('[data-fruitback-file-thumb]') as HTMLButtonElement).click();
+    snapshots.push(...shown(host.root));
+    shot = undefined;
+    filedSend.click();
+    progressOf?.(0.4);
+    snapshots.push(...shown(host.root));
+    filed.close();
+    big = true;
+    filed.open({ left: 0, top: 0, bottom: 10, right: 10 });
+    capturePage();
+    await settle();
+    snapshots.push(...shown(host.root));
+    big = false;
+    filed.close();
     offer = 'no-tracker';
     filed.open({ left: 0, top: 0, bottom: 10, right: 10 });
     snapshots.push(...shown(host.root));
     filed.close();
+    // FRU-609: a site that takes notes from its team only, for a reader who is not signed in.
+    const closedSite = createComposer({
+      document: page.document,
+      host: host.panel,
+      translator,
+      onSubmit: async () => true,
+      signInToSend: () => true,
+      onSignIn: () => {},
+    });
+    cleanup.push(() => closedSite.destroy());
+    closedSite.open({ left: 0, top: 0, bottom: 10, right: 10 });
+    snapshots.push(...shown(host.root));
+    closedSite.close();
     const area = pickArea({ document: page.document, host: host.root, translator });
     snapshots.push(...shown(host.root));
     const AreaKeyboardEvent = keyboardEventCtor(page);

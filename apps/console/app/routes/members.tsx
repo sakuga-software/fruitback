@@ -346,6 +346,9 @@ export default function Members() {
   const offersGuest = manages && sites !== undefined && sites.length > 0;
   const chosen: InvitedRole = role === 'guest' && !offersGuest ? 'member' : role;
   const shared = sites?.some((each) => each.id === site) ? site : sites?.[0]?.id;
+  // The list is drawn: the people were read, and the invitations did not fail. A read again keeps the
+  // list of before (`whileRead`), so nothing below moves while it is on its way.
+  const listed = typeof people !== 'string' && waiting !== 'failed';
 
   return (
     <>
@@ -353,7 +356,10 @@ export default function Members() {
         title={t('Members')}
         lead={t('Who sees and leaves notes, and who changes the workspace.')}
         className="mb-[24px]"
-        {...(manages
+        // FRU-616: « Invite » comes with the list. While it loads, or when its read failed, the page
+        // offers only the box of the failure and its « Try again ». The dialog stays mounted, so what
+        // was typed in it is kept.
+        {...(manages && listed
           ? {
               action: <Button onClick={() => setInviting(true)}>{t('Invite')}</Button>,
             }
@@ -426,7 +432,7 @@ export default function Members() {
         />
       ) : null}
 
-      {typeof people !== 'string' && waiting !== 'failed' ? (
+      {listed ? (
         <>
           {reads ? (
             <div className="mb-[20px] max-w-[420px]">

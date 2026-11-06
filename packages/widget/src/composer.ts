@@ -1,4 +1,10 @@
-import { MAX_ATTACHMENTS_PER_NOTE, type NoteReporter } from '@fruitback/shared';
+import {
+  MAX_ATTACHMENTS_PER_NOTE,
+  MAX_ATTACHMENT_BYTES,
+  MAX_ATTACHMENT_BYTES_PER_NOTE,
+  type NoteReporter,
+  attachmentKindOf,
+} from '@fruitback/shared';
 import type { Destination } from './destinations.ts';
 import { isElement } from './dom.ts';
 import { deepActiveElement, holdFocus } from './focus.ts';
@@ -228,6 +234,13 @@ export type ComposerOptions = {
    */
   onSignIn?: () => void;
   /**
+   * Whether this reader must sign in before a note can go (FRU-609): a site that takes notes from its
+   * team only, and a session that ended. Asked at each open and by `signInChanged`. Then « Send »
+   * says « Sign in to send » and waits, under a sentence that says why; the note, its files and the
+   * batch stay. Left out: never.
+   */
+  signInToSend?: () => boolean;
+  /**
    * Where the text being written is saved as it is typed (FRU-311). The host knows the element and
    * the page; the composer knows the text. Left out: nothing is saved, as before.
    */
@@ -261,21 +274,45 @@ export type AttachSeam = {
   captures(): boolean;
   /** A capture of the visible page, or of an area the person chooses. `cancelled`: Esc, or « Cancel ». */
   capture(kind: 'page' | 'area'): Promise<PickedFile | 'cancelled' | 'permission' | undefined>;
-  /** Sends one file on its way. Its id is what the note names. */
+  /**
+   * Sends one file on its way. Its id is what the note names. `progress` is told the part sent, from
+   * 0 to 1, by a host that can measure it; one that cannot says nothing, and the line says « Sending… ».
+   */
   upload(
     file: PickedFile,
     destination: string | undefined,
+    progress?: (fraction: number) => void,
   ): Promise<{ ok: true; id: string } | { ok: false; refusal: AttachRefusal }>;
+  /**
+   * A capture of the element the note is about, taken when the composer opens (FRU-609), with where
+   * the element is in it, in fractions of the picture. Left out, or `undefined`: none is joined.
+   */
+  captureElement?(): Promise<ElementCapture | undefined>;
 };
+
+/** The capture of an element (FRU-609): a picture, and the frame of the element in it, from 0 to 1. */
+export type ElementCapture = PickedFile & { frame: { left: number; top: number; width: number; height: number } };
 
 /** A file of the note in the composer, from the moment it is joined. */
 type Held = {
   key: number;
   name: string;
   size: number;
-  state: 'sending' | 'ready' | 'refused';
+  /**
+   * `local`: taken here and not sent yet (FRU-609). The capture of the element waits in the composer
+   * and leaves only with the note: a person who removes it, or who never sends, sent nothing.
+   */
+  state: 'local' | 'sending' | 'ready' | 'refused';
   id?: string;
   refusal?: AttachRefusal;
+  /** The limit it passed, for « Too large: 48 MB, the limit is 10 MB » (FRU-609). */
+  limit?: number;
+  /** The bytes of a `local` file, until it is sent. */
+  file?: PickedFile;
+  /** A picture to show in the field, and the frame of the element in it (FRU-609). */
+  preview?: { src: string; frame: ElementCapture['frame'] };
+  /** The part sent, from 0 to 1, when the host measures it. */
+  progress?: number;
   /** Settles when the worker answered for it. */
   sent?: Promise<void>;
 };
@@ -332,6 +369,11 @@ export type Composer = {
    * one takes it at its next open: a field must not leave under somebody who types in it.
    */
   identityChanged(): void;
+  /**
+   * The answer of `signInToSend` may be another one now (FRU-609). Taken at once, open or not: it
+   * removes nothing, so the person who signed in finds their note as they left it, ready to go.
+   */
+  signInChanged(): void;
   /**
    * Starts « Capture an area », as its item of the menu does (FRU-423): the context menu of the
    * extension. `false`, and nothing happens, when the composer is closed or sent, when the note takes
@@ -429,6 +471,23 @@ export function createComposer(options: ComposerOptions): Composer {
   const receiptClose = part<HTMLButtonElement>('[data-fruitback-receipt-close]');
   receiptClose.textContent = t.text('composer.receiptClose');
   const receiptStatus = part('[data-fruitback-receipt-status]');
+  const lightbox = part('[data-fruitback-lightbox]');
+  lightbox.setAttribute('aria-label', t.text('composer.attachShot'));
+  const lightboxClose = document.createElement('button');
+  lightboxClose.type = 'button';
+  lightboxClose.className = 'fruitback-composer-send fruitback-composer-lightbox-close';
+  lightboxClose.textContent = t.text('composer.receiptClose');
+  lightboxClose.addEventListener('click', () => closeLightbox());
+  lightbox.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    event.preventDefault();
+    event.stopPropagation();
+    closeLightbox();
+  });
+  let lightboxReturn: HTMLElement | undefined;
+  const signNeeded = part('[data-fruitback-sign-needed]');
+  /** Whether this reader must sign in before a note goes (FRU-609), as `signInToSend` said last. */
+  let mustSignIn = false;
   const signIn = part<HTMLButtonElement>('[data-fruitback-sign-in]');
   const status = part('[data-fruitback-status]');
   const who = part('[data-fruitback-who]');
@@ -522,11 +581,29 @@ export function createComposer(options: ComposerOptions): Composer {
     keep.title = named;
     const all = t.text('composer.sendAll', { count: waiting + 1 });
     sendWord.textContent = waiting > 0 ? all : t.text('composer.send');
+    if (mustSignIn) sendWord.textContent = t.text('composer.signInToSend');
     send.title = sendWord.textContent;
     sendAllItem.textContent = all;
-    sendMore.hidden = waiting === 0;
-    if (waiting === 0) closeSendMenu(false);
+    sendMore.hidden = waiting === 0 || mustSignIn;
+    if (sendMore.hidden) closeSendMenu(false);
   }
+
+  /**
+   * « Sign in to send » (FRU-609): « Send » waits, disabled, under « Only the team of this site can
+   * send notes here. », with the sign-in of the host beside it. Nothing of the note goes away.
+   */
+  function drawSignIn(): void {
+    mustSignIn = options.signInToSend?.() === true;
+    signNeeded.textContent = mustSignIn ? t.text('composer.signInOnlyTeam') : '';
+    signNeeded.hidden = !mustSignIn;
+    if (state === 'idle' || state === 'failed') {
+      send.disabled = mustSignIn;
+      signIn.hidden = !(mustSignIn && options.onSignIn !== undefined) && !(state === 'failed' && signInFailure);
+    }
+    drawBatch();
+  }
+  /** The last failure asked to sign in again (FRU-315). */
+  let signInFailure = false;
 
   function openSendMenu(): void {
     if (sendMore.disabled) return;
@@ -591,6 +668,18 @@ export function createComposer(options: ComposerOptions): Composer {
         remove.dataset.fruitbackFileRemove = String(each.key);
         remove.setAttribute('aria-label', t.text('composer.attachRemove', { name: each.name }));
         remove.append(createIcon(document, 'close'));
+        // A refused file says « Remove » in words (FRU-609): it is the one thing to do with it.
+        if (each.state === 'refused') {
+          remove.classList.add('fruitback-composer-file-remove-words');
+          const word = document.createElement('span');
+          word.setAttribute('aria-hidden', 'true');
+          word.textContent = t.text('composer.attachRemoveShort');
+          remove.append(word);
+        }
+        if (each.preview !== undefined) item.append(thumbOf(each, each.preview));
+        if (each.state === 'sending' && each.progress !== undefined) {
+          item.style.setProperty('--fruitback-composer-file-progress', `${Math.round(each.progress * 100)}%`);
+        }
         item.append(words, remove);
 
         return item;
@@ -599,12 +688,81 @@ export function createComposer(options: ComposerOptions): Composer {
     if (hadFocus) (attachList.querySelector('button') ?? attachTrigger).focus();
   }
 
-  /** What a line of the list says under the name: why it did not go, or its size. */
+  /**
+   * What a line of the list says under the name (FRU-609): ready, its size; on its way, the part sent
+   * when the host measures it; waiting for the note; or why it did not go, with the sizes for a file
+   * too large.
+   */
   function detailOf(each: Held): string {
-    if (each.state === 'refused') return t.text(REFUSALS[each.refusal ?? 'retry']);
-    const size = readableSize(each.size, t.locale);
+    if (each.state === 'refused') {
+      if (each.refusal === 'too-large' && each.limit !== undefined) {
+        const limit = readableSize(each.limit, t.locale);
+        // Just over the limit, both round to the same words: the size then says its decimals.
+        const size = readableSize(each.size, t.locale);
 
-    return each.state === 'sending' ? `${size} · ${t.text('composer.attachSending')}` : size;
+        return t.text('composer.attachTooLargeOf', {
+          size: size === limit ? preciseSize(each.size, t.locale) : size,
+          limit,
+        });
+      }
+
+      return t.text(REFUSALS[each.refusal ?? 'retry']);
+    }
+    const size = readableSize(each.size, t.locale);
+    if (each.state === 'local') return `${size} · ${t.text('composer.attachWithNote')}`;
+    if (each.state !== 'sending') return size;
+    if (each.progress === undefined) return `${size} · ${t.text('composer.attachSending')}`;
+
+    return `${size} · ${t.text('composer.attachPercent', { percent: Math.round(each.progress * 100) })}`;
+  }
+
+  /** The picture of a capture, in the field, with its element framed; a click opens it whole. */
+  function thumbOf(each: Held, preview: NonNullable<Held['preview']>): HTMLElement {
+    const thumb = document.createElement('button');
+    thumb.type = 'button';
+    thumb.className = 'fruitback-composer-file-thumb';
+    thumb.dataset.fruitbackFileThumb = String(each.key);
+    thumb.setAttribute('aria-label', t.text('composer.attachOpen', { name: each.name }));
+    thumb.append(pictureOf(preview));
+    thumb.addEventListener('click', () => openLightbox(preview, thumb));
+
+    return thumb;
+  }
+
+  /** The image and the frame of its element over it. An image the page refuses (its CSP) shows nothing. */
+  function pictureOf(preview: NonNullable<Held['preview']>): HTMLElement {
+    const frame = document.createElement('span');
+    frame.className = 'fruitback-composer-shot';
+    const image = document.createElement('img');
+    image.alt = '';
+    image.src = preview.src;
+    image.addEventListener('error', () => frame.toggleAttribute('data-fruitback-broken', true));
+    const ring = document.createElement('span');
+    ring.className = 'fruitback-composer-shot-ring';
+    ring.setAttribute('aria-hidden', 'true');
+    const { left, top, width, height } = preview.frame;
+    ring.style.setProperty('--fruitback-composer-shot-left', `${left * 100}%`);
+    ring.style.setProperty('--fruitback-composer-shot-top', `${top * 100}%`);
+    ring.style.setProperty('--fruitback-composer-shot-width', `${width * 100}%`);
+    ring.style.setProperty('--fruitback-composer-shot-height', `${height * 100}%`);
+    frame.append(image, ring);
+
+    return frame;
+  }
+
+  /** The capture whole, over the composer. Esc or « Close » gives the focus back to its thumbnail. */
+  function openLightbox(preview: NonNullable<Held['preview']>, from: HTMLElement): void {
+    lightbox.replaceChildren(pictureOf(preview), lightboxClose);
+    lightbox.hidden = false;
+    lightboxReturn = from;
+    lightboxClose.focus();
+  }
+
+  function closeLightbox(): void {
+    if (lightbox.hidden) return;
+    lightbox.hidden = true;
+    lightboxReturn?.focus();
+    lightboxReturn = undefined;
   }
 
   /**
@@ -615,23 +773,62 @@ export function createComposer(options: ComposerOptions): Composer {
     return state !== 'sending' && state !== 'sent' && state !== 'kept' && state !== 'receipt';
   }
 
-  /** Joins a file: refused at once when the widget can tell, sent on its way otherwise. */
-  function join(file: PickedFile): void {
+  /**
+   * Joins a file: refused at once when the widget can tell, sent on its way otherwise. `later`: it
+   * waits in the composer and leaves with the note (the capture of the element, FRU-609).
+   */
+  function join(file: PickedFile, more: { later?: boolean; preview?: Held['preview'] } = {}): void {
     if (!joinable()) return;
     const key = (heldKeys += 1);
-    const refusal = refusalBefore(
-      file,
-      held.filter((each) => each.state !== 'refused'),
-    );
+    const kept = held.filter((each) => each.state !== 'refused');
+    const refusal = refusalBefore(file, kept);
+    const shown = more.preview === undefined ? {} : { preview: more.preview };
     if (refusal !== undefined) {
-      held = [...held, { key, name: file.name, size: file.size, state: 'refused', refusal }];
+      const limit = refusal === 'too-large' ? limitPassed(file, kept) : undefined;
+      held = [
+        ...held,
+        {
+          key,
+          name: file.name,
+          size: file.size,
+          state: 'refused',
+          refusal,
+          ...(limit === undefined ? {} : { limit }),
+          ...shown,
+        },
+      ];
       drawAttachments();
 
       return;
     }
+    const entry: Held = { key, name: file.name, size: file.size, state: 'local', file, ...shown };
+    held = [...held, entry];
+    if (more.later !== true) startUpload(entry);
+    drawAttachments();
+  }
+
+  /** The limit a file too large passed: the one of its kind, or the one of the note (FRU-609). */
+  function limitPassed(file: { type: string; size: number }, kept: readonly { size: number }[]): number {
+    const ofKind = MAX_ATTACHMENT_BYTES[attachmentKindOf(file.type)];
+
+    return file.size > ofKind ? ofKind : MAX_ATTACHMENT_BYTES_PER_NOTE - kept.reduce((sum, each) => sum + each.size, 0);
+  }
+
+  /** Sends a held file on its way, and draws the part sent when the host measures it. */
+  function startUpload(entry: Held): void {
+    const file = entry.file;
+    if (file === undefined || entry.state !== 'local') return;
     const mine = session;
-    const entry: Held = { key, name: file.name, size: file.size, state: 'sending' };
-    entry.sent = (seam?.upload(file, selected) ?? Promise.resolve({ ok: false as const, refusal: 'retry' as const }))
+    entry.state = 'sending';
+    entry.file = undefined;
+    const progress = (fraction: number): void => {
+      if (mine !== session || entry.state !== 'sending') return;
+      entry.progress = Math.max(0, Math.min(1, fraction));
+      drawAttachments();
+    };
+    entry.sent = (
+      seam?.upload(file, selected, progress) ?? Promise.resolve({ ok: false as const, refusal: 'retry' as const })
+    )
       .catch(() => ({ ok: false as const, refusal: 'retry' as const }))
       .then((answer) => {
         if (mine !== session) return;
@@ -644,8 +841,21 @@ export function createComposer(options: ComposerOptions): Composer {
         }
         drawAttachments();
       });
-    held = [...held, entry];
+  }
+
+  /**
+   * The files that wait go first, then the note: « Send » waits for them and says so (FRU-609). A file
+   * refused does not stop the note.
+   */
+  function filesSettled(mine: number): true | Promise<boolean> {
+    for (const each of held) if (each.state === 'local') startUpload(each);
+    const inFlight = held.filter((each) => each.state === 'sending').map((each) => each.sent);
+    // Nothing on its way: the note goes in the same turn, as before FRU-332.
+    if (inFlight.length === 0) return true;
+    status.textContent = t.plural('composer.attachWaiting', inFlight.length);
     drawAttachments();
+
+    return Promise.all(inFlight).then(() => mine === session);
   }
 
   /** The ways of the menu that are shown now, in their order. */
@@ -774,7 +984,11 @@ export function createComposer(options: ComposerOptions): Composer {
     status.textContent =
       next === 'idle' || next === 'failed' || next === 'sent' || next === 'receipt' ? '' : t.text(STATUS[next]);
     // The one thing that makes this send work again, beside the sentence that says so (FRU-315).
-    signIn.hidden = !(next === 'failed' && failure === 'signed-out' && options.onSignIn !== undefined);
+    signInFailure = next === 'failed' && failure === 'signed-out' && options.onSignIn !== undefined;
+    signIn.hidden =
+      !signInFailure && !(mustSignIn && options.onSignIn !== undefined && (next === 'idle' || next === 'failed'));
+    // A reader who must sign in first sends nothing until then (FRU-609).
+    if (mustSignIn && (next === 'idle' || next === 'failed')) send.disabled = true;
     if (next !== 'sent') {
       sentCard.hidden = true;
       hideNotify();
@@ -912,11 +1126,11 @@ export function createComposer(options: ComposerOptions): Composer {
     let notify: NotifyOffer | undefined;
     try {
       // The files still on their way go first: the note names the ones the worker took. Awaited
-      // only then: a note with no file in flight is sent in the same turn, as before FRU-332.
-      const inFlight = held.filter((each) => each.state === 'sending').map((each) => each.sent);
-      if (inFlight.length > 0) {
-        await Promise.all(inFlight);
-        if (mine !== session) return;
+      // only then: a note with no file in flight is sent in the same turn, as before FRU-332. A note
+      // added to the batch takes no file: the capture waiting in the field stays there.
+      if (action === 'send') {
+        const ready = filesSettled(mine);
+        if (ready !== true && !(await ready)) return;
       }
       const ids = held.flatMap((each) => (each.state === 'ready' && each.id !== undefined ? [each.id] : []));
       const result =
@@ -1004,8 +1218,8 @@ export function createComposer(options: ComposerOptions): Composer {
     if (asksForName && remember.checked) memory?.set(typedName());
     let result: BatchSent;
     try {
-      const inFlight = held.filter((each) => each.state === 'sending').map((each) => each.sent);
-      if (inFlight.length > 0) await Promise.all(inFlight);
+      const ready = filesSettled(mine);
+      if (ready !== true && !(await ready)) return;
       const ids = held.flatMap((each) => (each.state === 'ready' && each.id !== undefined ? [each.id] : []));
       progressOf(mine)(0, (batch.waiting() ?? 0) + 1);
       result = await batch.sendAll(field.value, reporterFromFields(), selected, ids, progressOf(mine));
@@ -1226,6 +1440,8 @@ export function createComposer(options: ComposerOptions): Composer {
     box.toggleAttribute('data-fruitback-dragging', false);
     keepOffered = batch?.offered() === true;
     receiptSent = [];
+    closeLightbox();
+    mustSignIn = options.signInToSend?.() === true;
     showRememberedName();
     drawAvatar();
     // Folded at each open, on the place chosen last. The line says where, and that is enough for
@@ -1236,13 +1452,33 @@ export function createComposer(options: ComposerOptions): Composer {
     drawDestinations();
     drawAttachments();
     setState('idle');
+    drawSignIn();
     // Said, and quietly: the person finds the text they left, and knows why it is there.
     if (restored !== '') status.textContent = t.text('composer.restored');
+    takeElement();
     focus.remember();
     root.hidden = false;
     place(anchor);
     settleOn();
     field.focus();
+  }
+
+  /**
+   * The capture of the element, joined at the open (FRU-609), where the host captures and the note
+   * takes files. It waits in the field and leaves only with the note. Nothing is said when it does
+   * not come: the person did not ask for it, and the camera icon still takes one.
+   */
+  function takeElement(): void {
+    if (seam?.captureElement === undefined || !seam.captures() || seam.offer(selected) !== 'offered') return;
+    const mine = session;
+    void seam
+      .captureElement()
+      .catch(() => undefined)
+      .then((taken) => {
+        if (taken === undefined || mine !== session || !joinable()) return;
+        const { frame, ...file } = taken;
+        join(file, { later: true, preview: { src: `data:${file.type};base64,${file.base64}`, frame } });
+      });
   }
 
   /**
@@ -1736,6 +1972,9 @@ export function createComposer(options: ComposerOptions): Composer {
     identityChanged() {
       if (root.hidden) askForNameOrNot();
     },
+    signInChanged() {
+      drawSignIn();
+    },
     captureArea() {
       const offered = seam?.offer(selected) === 'offered' && seam.captures();
       if (root.hidden || !joinable() || !offered || attachArea.getAttribute('aria-disabled') === 'true') return false;
@@ -1831,6 +2070,22 @@ function placeIcons(document: Document, path: string, sentence: string): HTMLEle
     named,
     ...(after === '' ? [] : [hiddenWords(document, after)]),
   ];
+}
+
+/** A size in megabytes with two decimals, for a size that rounds to its limit (FRU-609). */
+function preciseSize(bytes: number, locale: string): string {
+  const value = bytes / (1_024 * 1_024);
+  try {
+    return new Intl.NumberFormat(locale, {
+      style: 'unit',
+      unit: 'megabyte',
+      unitDisplay: 'short',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(Math.ceil(value * 100) / 100);
+  } catch {
+    return `${(Math.ceil(value * 100) / 100).toFixed(2)} MB`;
+  }
 }
 
 /** The space `place` keeps between the composer and the edge of the window (FRU-258). */
@@ -2112,6 +2367,8 @@ const TEMPLATE: readonly Markup[] = [
       ],
     ],
   ],
+  // Why « Send » waits for a sign-in (FRU-609): above the foot, where a failure says why.
+  ['p', { 'data-fruitback-sign-needed': '', class: 'fruitback-composer-sign-needed', role: 'status', hidden: '' }],
   [
     'div',
     { 'data-fruitback-failed': '', class: 'fruitback-composer-failed', role: 'alert', hidden: '' },
@@ -2312,6 +2569,11 @@ const TEMPLATE: readonly Markup[] = [
         ],
       ],
     ],
+  ],
+  // The capture of the element, whole (FRU-609), over the composer.
+  [
+    'div',
+    { 'data-fruitback-lightbox': '', class: 'fruitback-composer-lightbox', role: 'dialog', tabindex: '-1', hidden: '' },
   ],
   // The receipt of a batch (FRU-608): it takes the place of the composer, like the card of a sent note.
   [

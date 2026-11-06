@@ -1046,13 +1046,14 @@ describe('saying who you are, or not', () => {
     assert.deepEqual(seen, [undefined]);
   });
 
-  it('opens « Name (optional) » from the avatar, which then shows the initials and the whole name (FRU-607)', () => {
+  it('opens « Name » from the avatar, which then shows the initials and the whole name (FRU-607)', () => {
     const { page } = mount(async () => true);
     composer?.open(ANCHOR);
     const avatar = query(page, '[data-fruitback-avatar]') as HTMLButtonElement;
     const who = query(page, '[data-fruitback-who]');
     const name = query(page, '[data-fruitback-name]') as HTMLInputElement;
-    assert.equal(name.closest('label')?.textContent?.trim(), 'Name (optional)');
+    // « Name », and « Remember me in this browser » (FRU-609).
+    assert.equal(name.closest('label')?.textContent?.trim(), 'Name');
     assert.equal(avatar.getAttribute('aria-expanded'), 'false');
     assert.equal(avatar.getAttribute('aria-controls'), who.id);
 
@@ -2040,6 +2041,79 @@ describe('the batch: send alone or together (FRU-608)', () => {
     assert.equal(keepButton().disabled, true);
     assert.deepEqual(kept, ['Pour le lot', 'Pour le lot']);
     assert.deepEqual(sent, [], 'adding a note to the batch sent it');
+  });
+});
+
+describe('« Sign in to send » (FRU-609)', () => {
+  it('waits for the sign-in with the note in place, says why, and sends once signed in', async () => {
+    let signedOut = true;
+    let asked = 0;
+    const sent: string[] = [];
+    const kept: string[] = [];
+    mount(async (note) => void sent.push(note), {
+      batch: batchOf({ add: async (note) => (kept.push(note), true) }),
+    });
+    composer?.destroy();
+    const page = mounted as MountedPage;
+    const host = page.document.createElement('div');
+    page.document.body.append(host);
+    composer = createComposer({
+      document: page.document,
+      host,
+      onSubmit: async (note) => void sent.push(note),
+      batch: batchOf({ add: async (note) => (kept.push(note), true) }),
+      signInToSend: () => signedOut,
+      onSignIn: () => (asked += 1),
+    });
+    composer.open(ANCHOR);
+    field().value = 'Écrite avant la connexion';
+    const notice = composer.element.querySelector('[data-fruitback-sign-needed]') as HTMLElement;
+    const signIn = composer.element.querySelector('[data-fruitback-sign-in]') as HTMLButtonElement;
+    assert.equal(sendButton().textContent, 'Sign in to send');
+    assert.equal(sendButton().disabled, true);
+    assert.equal(notice.hidden, false);
+    assert.equal(notice.textContent, 'Only the team of this site can send notes here.');
+    assert.equal(signIn.hidden, false);
+    signIn.click();
+    assert.equal(asked, 1);
+    sendButton().click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.deepEqual(sent, [], 'a reader who must sign in sent a note');
+
+    // Signed in: the composer, still open, has everything, and « Send » goes.
+    signedOut = false;
+    composer.signInChanged();
+    assert.equal(field().value, 'Écrite avant la connexion');
+    assert.equal(sendButton().textContent, 'Send');
+    assert.equal(sendButton().disabled, false);
+    assert.equal(notice.hidden, true);
+    assert.equal(signIn.hidden, true);
+    sendButton().click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.deepEqual(sent, ['Écrite avant la connexion']);
+  });
+
+  it('still adds a note to the batch while signed out: it goes once the reader is back', async () => {
+    const kept: string[] = [];
+    mount(async () => true, { batch: batchOf({ add: async (note) => (kept.push(note), true) }) });
+    composer?.destroy();
+    const page = mounted as MountedPage;
+    const host = page.document.createElement('div');
+    page.document.body.append(host);
+    composer = createComposer({
+      document: page.document,
+      host,
+      onSubmit: async () => true,
+      batch: batchOf({ add: async (note) => (kept.push(note), true) }),
+      signInToSend: () => true,
+    });
+    composer.open(ANCHOR);
+    field().value = 'Pour plus tard';
+    const keep = composer.element.querySelector('[data-fruitback-keep]') as HTMLButtonElement;
+    assert.equal(keep.disabled, false);
+    keep.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.deepEqual(kept, ['Pour plus tard']);
   });
 });
 

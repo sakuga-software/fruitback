@@ -56,6 +56,23 @@ export function isPermissionRefusal(error: unknown): boolean {
   return /activeTab|<all_urls>/.test(message);
 }
 
+/**
+ * Whether the browser refused `captureVisibleTab` for its rate: Chromium takes two captures a
+ * second, and says « This request exceeds the MAX_CAPTURE_VISIBLE_TAB_CALLS_PER_SECOND quota. ».
+ * Since FRU-609 the composer takes a capture of the element at the open, so a capture of the page
+ * asked at once after it can meet that limit.
+ */
+export function isRateRefusal(error: unknown): boolean {
+  let message = '';
+  if (error instanceof Error) message = error.message;
+  else if (typeof error === 'string') message = error;
+
+  return /MAX_CAPTURE_VISIBLE_TAB_CALLS_PER_SECOND/.test(message);
+}
+
+/** How long a capture refused for its rate waits before it is asked once more. */
+export const RATE_WAIT_MS = 1_000;
+
 export type CaptureSeams = {
   readSite: (origin: string) => Promise<SiteConfig | undefined>;
   ensureAccess: (endpoint: string) => Promise<AccessResult>;
@@ -65,6 +82,8 @@ export type CaptureSeams = {
   crop: (picture: Blob, area: CaptureArea) => Promise<Blob>;
   /** The same picture as a JPEG, for a PNG over the limit of the worker (a page of a large screen). */
   toJpeg?: (picture: Blob) => Promise<Blob>;
+  /** Waits, before a capture refused for its rate is asked again. A test gives one that waits nothing. */
+  wait?: (ms: number) => Promise<void>;
 };
 
 /** The name of a capture: a capture of the page, or of an area. */
@@ -84,7 +103,7 @@ export function createCapture(seams: CaptureSeams) {
 }
 
 async function take(
-  { readSite, ensureAccess, captureTab, crop, toJpeg }: CaptureSeams,
+  { readSite, ensureAccess, captureTab, crop, toJpeg, wait = sleep }: CaptureSeams,
   area: CaptureArea | undefined,
   origin: string | undefined,
 ): Promise<CapturedFile | TooLargeCapture | RefusedCapture | undefined> {
@@ -102,7 +121,10 @@ async function take(
     tab = await captureTab();
   } catch (error) {
     if (isPermissionRefusal(error)) return { refused: 'permission' };
-    throw error;
+    if (!isRateRefusal(error)) throw error;
+    // Refused for its rate: asked once more after a second, which the rate of the browser allows.
+    await wait(RATE_WAIT_MS);
+    tab = await captureTab();
   }
   const png = area === undefined ? tab : await crop(tab, area);
   const name = area === undefined ? CAPTURE_NAMES.page : CAPTURE_NAMES.area;
@@ -122,6 +144,10 @@ async function take(
   const bytes = new Uint8Array(await picture.arrayBuffer());
 
   return { name: named, type, size: bytes.byteLength, base64: base64Of(bytes) };
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**

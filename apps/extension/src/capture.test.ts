@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { type CaptureSeams, base64Of, bytesOf, createCapture, pixelsOf } from './capture.ts';
+import { type CaptureSeams, RATE_WAIT_MS, base64Of, bytesOf, createCapture, pixelsOf } from './capture.ts';
 import { MAX_ATTACHMENT_BYTES } from '@fruitback/shared';
 import type { SiteConfig } from './sites.ts';
 
@@ -118,6 +118,37 @@ describe('a capture of the page or of an area (FRU-332)', () => {
       },
     });
     assert.equal(await off.capture(AREA, 'https://acme.dev'), undefined);
+  });
+
+  it('asks once more, after a second, a capture the browser refused for its rate (FRU-609)', async () => {
+    const RATE = 'This request exceeds the MAX_CAPTURE_VISIBLE_TAB_CALLS_PER_SECOND quota.';
+    let asked = 0;
+    const waited: number[] = [];
+    const again = harness({
+      captureTab: async () => {
+        asked += 1;
+        if (asked === 1) throw new Error(RATE);
+
+        return TAB;
+      },
+      wait: async (ms) => void waited.push(ms),
+    });
+    const taken = await again.capture(undefined, 'https://acme.dev');
+    assert.equal(asked, 2);
+    assert.deepEqual(waited, [RATE_WAIT_MS]);
+    assert.equal((taken as { name?: string }).name, 'page.png');
+
+    // Refused twice: given up, as any other failure. Once more, never a loop.
+    asked = 0;
+    const twice = harness({
+      captureTab: async () => {
+        asked += 1;
+        throw new Error(RATE);
+      },
+      wait: async () => {},
+    });
+    assert.equal(await twice.capture(undefined, 'https://acme.dev'), undefined);
+    assert.equal(asked, 2);
   });
 
   it('turns bytes into base64 and back, past the size where a spread would overflow', () => {
