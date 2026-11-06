@@ -4,6 +4,7 @@ import { t } from '../i18n';
 import { Choice, Field, LinkButton, type Option, SidePanel } from '../ui';
 import { useTypedSearch } from '../typed-search';
 import { useLocale } from '../use-locale';
+import { type Fetched } from '../listed';
 
 /**
  * What « Workspaces » and « Users » of the administration share (FRU-263): the search and the filter
@@ -78,11 +79,11 @@ export function useListAddress() {
  * trace in each workspace of the list (FRU-261) for a change of one row.
  */
 export function useRead<T>(ask: () => Promise<T | 'failed'>): {
-  shown: T | 'loading' | 'failed';
+  shown: Fetched<T>;
   again: () => void;
   patch: (change: (shown: T) => T) => void;
 } {
-  const [shown, setShown] = useState<T | 'loading' | 'failed'>('loading');
+  const [shown, setShown] = useState<Fetched<T>>('loading');
   const asked = useRef(0);
   const again = useCallback(() => {
     const mine = (asked.current += 1);

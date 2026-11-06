@@ -5,8 +5,11 @@ import { sameAsThisBrowser } from '../extension-connected';
 import { watchConnection } from '../connect-watch';
 import { t } from '../i18n';
 import { extensionInstallFor } from '../extension-store';
-import { Button, EntryPage, Lead, LinkButton, StatusDot, Title } from '../ui';
+import { Button, EntryPage, Lead, LinkButton, SuccessMark, Title } from '../ui';
 import { useLocale } from '../use-locale';
+
+/** How long `/connect` waits for its reads before it shows the steps. */
+const DECIDE_MS = 2_000;
 
 /**
  * « Connect this browser », from the console (FRU-313). The console cannot talk to the extension, so
@@ -28,9 +31,6 @@ import { useLocale } from '../use-locale';
  * The page says « Loading… » while it reads, for `DECIDE_MS` at most: the steps never turn into « This
  * browser is already connected » under the eyes of the person. An answer after that changes nothing.
  */
-/** How long `/connect` waits for its reads before it shows the steps. */
-const DECIDE_MS = 2_000;
-
 export default function ConnectStart() {
   useLocale();
   const navigate = useNavigate();
@@ -101,7 +101,7 @@ export default function ConnectStart() {
           {t('The extension is signed in with your account here. Click the Fruitback icon on a site to see its notes.')}
         </Lead>
         <p className="mb-6 flex items-center gap-2 text-body font-semibold">
-          <StatusDot status="done" size={10} />
+          <SuccessMark size="inline" />
           {t('Extension connected · {browser}', { browser: already.browser })}
         </p>
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2.5">

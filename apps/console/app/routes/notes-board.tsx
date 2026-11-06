@@ -4,7 +4,7 @@ import { t } from '../i18n';
 import { statusName } from '../note-status';
 import { Problem, StatusDot } from '../ui';
 import { useLocale } from '../use-locale';
-import { STAGE_NAMES } from './connector-parts';
+import { STAGE_NAMES } from '../stages';
 
 /**
  * The board of the notes (FRU-436): a column per status of the site in view, or per stage, beside

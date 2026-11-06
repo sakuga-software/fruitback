@@ -17,7 +17,7 @@ import { useLocale } from '../use-locale';
  */
 
 /** The refusals that every write in a workspace can get, beside its own. */
-export const IN_WORKSPACE_PROBLEMS: Readonly<Record<string, string>> = {
+const IN_WORKSPACE_PROBLEMS: Readonly<Record<string, string>> = {
   'workspace-suspended': msg('This workspace is suspended. Restore it first.'),
   'not-found': msg('This workspace no longer exists, or you are no longer an instance admin. Reload the page.'),
 };

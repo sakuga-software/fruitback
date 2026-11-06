@@ -1,4 +1,4 @@
-import { STAGES, type Stage } from './api.ts';
+import { STAGES, type Stage } from './stages.ts';
 import type { StatusChoice } from './note-status.ts';
 
 /**

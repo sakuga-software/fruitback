@@ -1,5 +1,5 @@
 /** A page number of a list, or « … » for the pages between two that are not shown. */
-export type PageLink = number | 'gap';
+type PageLink = number | 'gap';
 
 /**
  * The pages a list offers to go to directly (FRU-587): the first, the one before, the one shown, the

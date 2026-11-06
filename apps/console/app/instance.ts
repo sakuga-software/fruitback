@@ -9,6 +9,8 @@
  * WARNING: nothing secret goes in that file. Every visitor of the sign-in screen reads it.
  */
 
+import { hostOf } from './site-address.ts';
+
 /** Where a worker answers in development, when nothing says otherwise. */
 export const DEVELOPMENT_API = 'http://localhost:8788';
 
@@ -44,19 +46,14 @@ export function releaseToShow<Release>(update: Release | null | undefined, api: 
 }
 
 /** The host of the worker of Fruitback Cloud. */
-export const CLOUD_API_HOST = 'api.fruitback.com';
+const CLOUD_API_HOST = 'api.fruitback.com';
 
 /**
  * The host of the worker at `api`, and whether it is Fruitback Cloud (FRU-262). The build holds no
  * flag for the Cloud, and the console knows its worker before any read: so the host decides.
  */
 export function instanceOf(api: string): { host: string; cloud: boolean } {
-  let host: string;
-  try {
-    host = new URL(api).host;
-  } catch {
-    host = api;
-  }
+  const host = hostOf(api);
 
   return { host, cloud: host === CLOUD_API_HOST };
 }

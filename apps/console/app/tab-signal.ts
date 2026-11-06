@@ -43,7 +43,7 @@ function word(data: unknown): Word | undefined {
  * How long the tab of the link waits. A tab that waits says « heard » at once, so a link opened
  * alone costs 400 ms. A tab that heard then asks the worker, which can take the time of a call.
  */
-export const WAITS: { heard: number; carried: number } = { heard: 400, carried: 5_000 };
+const WAITS: { heard: number; carried: number } = { heard: 400, carried: 5_000 };
 
 /**
  * From the tab of the link, once its token is spent: tells the other tabs, and answers `true` when

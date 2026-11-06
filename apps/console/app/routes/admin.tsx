@@ -17,7 +17,7 @@ import { Frame, RAIL_HEAD, RailFrame, RailNav, Screen, useExtensionLink } from '
  * to each route of the administration for them: this redirect protects nothing alone.
  */
 
-export type AdminContext = { me: Me };
+type AdminContext = { me: Me };
 
 export function useAdmin(): AdminContext {
   return useOutletContext<AdminContext>();

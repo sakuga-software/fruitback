@@ -8,7 +8,7 @@ import { WORKSPACE_SUSPENDED, WORKSPACE_SUSPENDED_ERROR, failureOf } from './pro
  * is a choice the worker refused before it spent the request (too many agents, a suspended
  * workspace, another account), so the page stays and says why (review of #664).
  */
-export type AnswerRefusal = { is: 'signed-out' } | { is: 'gone' } | { is: 'refused'; problem: string };
+type AnswerRefusal = { is: 'signed-out' } | { is: 'gone' } | { is: 'refused'; problem: string };
 
 const ANOTHER_ACCOUNT = msg(
   'This tab was open for another account, so it stopped: nothing was sent from it. Load it again to go on.',

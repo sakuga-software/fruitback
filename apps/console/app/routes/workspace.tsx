@@ -28,7 +28,7 @@ import { underSettings } from '../settings-path';
  * and at 900 px and under its sections are one row.
  */
 
-export type WorkspaceContext = {
+type WorkspaceContext = {
   me: Me;
   workspace: Workspace;
   /** The worker renamed the workspace (FRU-414): the rail shows the new name at once. */
@@ -65,7 +65,7 @@ export const SECTIONS: readonly Section[] = [
  * or an admin renames it, changes its logo and makes its agent keys there, and the owner deletes it.
  * Another role still reads them from the name of the workspace, at the top of the rail.
  */
-export function sectionsFor(workspace: Workspace): readonly Section[] {
+function sectionsFor(workspace: Workspace): readonly Section[] {
   return SECTIONS.filter((section) => section.built && (section.path !== 'settings' || manages(workspace)));
 }
 
@@ -233,7 +233,7 @@ export function Screen({ className = '', children }: { className?: string; child
  *
  * No reason: it is a note of the administrator of the instance, which the worker answers to them only.
  */
-export function SuspendedBanner({ workspace }: { workspace: Workspace }) {
+function SuspendedBanner({ workspace }: { workspace: Workspace }) {
   useLocale();
   if (workspace.suspended !== true) return null;
 
@@ -276,13 +276,13 @@ type RailProps = {
  * An entry of the rail: where it leads, its words, whether its screen is the one shown, and its icon
  * (FRU-477).
  */
-export type RailEntry = { to: string; label: string; current: boolean; icon?: RailIconName };
+type RailEntry = { to: string; label: string; current: boolean; icon?: RailIconName };
 
 /** The item of the menu of the workspaces that opens the settings: no workspace id has a space. */
 const SETTINGS = 'workspace settings';
 
 /** The classes of the box at the top of the rail: what the rail is of. */
-export const RAIL_HEAD = 'flex w-full items-center gap-[10px] rounded-box p-[8px] text-left text-white';
+export const RAIL_HEAD = 'flex w-full items-center gap-[10px] rounded-box p-[8px] text-left text-on-ink';
 
 /**
  * The dark rail of the mockup, for a workspace or for the instance (FRU-262): what it is of, its
@@ -305,7 +305,7 @@ export function RailFrame({
   return (
     // From 888 px the rail is beside the screen, as high as the window, and stays in place while the
     // screen scrolls (FRU-402). A window lower than the rail scrolls the rail itself.
-    <aside className="kit-rail box-border flex min-w-0 flex-[1_1_248px] flex-col max-[887px]:flex-none gap-[20px] bg-rail px-[12px] py-[16px] text-white min-[888px]:sticky min-[888px]:top-0 min-[888px]:h-dvh min-[888px]:overflow-y-auto">
+    <aside className="kit-rail box-border flex min-w-0 flex-[1_1_248px] flex-col max-[887px]:flex-none gap-[20px] bg-rail px-[12px] py-[16px] text-on-ink min-[888px]:sticky min-[888px]:top-0 min-[888px]:h-dvh min-[888px]:overflow-y-auto">
       {head}
       {children}
       <div className="mt-auto flex flex-col gap-[14px] p-[8px] max-[900px]:hidden">
@@ -316,7 +316,7 @@ export function RailFrame({
               href={link.href}
               target="_blank"
               rel="noreferrer"
-              className="self-start text-small leading-auto text-rail-text underline decoration-1 underline-offset-[3px] hover:text-white"
+              className="self-start text-small leading-auto text-rail-text underline decoration-1 underline-offset-[3px] hover:text-on-ink"
             >
               {link.label}
             </a>
@@ -332,7 +332,7 @@ export function RailFrame({
               className="mb-[8px] flex min-w-0 flex-col gap-[6px] rounded-box border border-status-done/45 bg-status-done/20 px-[10px] py-[10px]"
             >
               <p className="flex min-w-0 flex-col gap-[2px] text-small leading-auto">
-                <span className="flex items-center gap-[8px] whitespace-nowrap text-white">
+                <span className="flex items-center gap-[8px] whitespace-nowrap text-on-ink">
                   <span aria-hidden="true" className="kit-drop flex-none bg-status-done" data-size="9" />
                   {link.status}
                 </span>
@@ -483,7 +483,7 @@ export function WorkspaceMark({ workspace, size = 32 }: { workspace: Workspace; 
  * A link at the foot of a rail, which opens a new tab. `status`: a line above it, which is no link;
  * `detail` under it, the browser of the extension (FRU-456).
  */
-export type RailLink = { href: string; label: string; status?: string; detail?: string };
+type RailLink = { href: string; label: string; status?: string; detail?: string };
 
 /**
  * The way to the browser extension, at the foot of both rails (FRU-406). Chrome and Edge go to the
@@ -592,8 +592,8 @@ export function RailNav({ label, entries }: { label: string; entries: readonly R
             {...(active ? { 'aria-current': 'page' as const } : {})}
             className={`flex min-h-[40px] flex-none items-center gap-[10px] rounded-box text-body leading-auto whitespace-nowrap ${
               active
-                ? 'bg-rail-active px-[12px] font-semibold text-white'
-                : 'pr-[12px] pl-[31px] text-rail-text hover:bg-rail-active hover:text-white'
+                ? 'bg-rail-active px-[12px] font-semibold text-on-ink'
+                : 'pr-[12px] pl-[31px] text-rail-text hover:bg-rail-active hover:text-on-ink'
             }`}
           >
             {/* The drop of the entry on screen slides to the next one in a move (FRU-413): `kit-rail-drop`. */}

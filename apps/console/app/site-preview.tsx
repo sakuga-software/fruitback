@@ -3,7 +3,7 @@ import { type Refusal, refusalOf } from './frame-refusal';
 import { DESK, scaleOf } from './preview-scale';
 import { PreviewScene } from './preview-scene';
 import { msg, t } from './i18n';
-import { siteLabel } from './site-address';
+import { hostOf, siteLabel } from './site-address';
 import { SiteIcon } from './site-icon';
 import { BrowserFrame, LinkButton } from './ui';
 import { useLocale } from './use-locale';
@@ -71,7 +71,7 @@ export function SitePreview({ origin }: { origin: string }) {
   const refusal: Refusal | undefined = known ?? (asked ? 'asked' : undefined);
   const label = siteLabel(origin);
   // The domain alone, where a sentence names the site: `staging.acme.dev`, or `localhost:3000`.
-  const host = new URL(origin).host;
+  const host = hostOf(origin);
   const [box, scale] = useScale();
   // The example page of before (FRU-242), on demand, for a site that cannot show: not kept.
   const [example, setExample] = useState(false);

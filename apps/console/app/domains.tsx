@@ -1,13 +1,14 @@
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
 import { type Domain, type SiteChoice, type Workspace, call } from './api';
 import { Confirm } from './confirm';
-import { locale, msg, t } from './i18n';
+import { msg, t } from './i18n';
 import { type Listed, edited, known } from './listed';
 import { copyText, problemOf } from './problems';
 import { Button, Card, Chip, Choice, Field, Problem } from './ui';
 import { useLocale } from './use-locale';
 import { siteLabel } from './site-address';
 import { ReadProblem } from './read-problem';
+import { moment } from './ago';
 
 /**
  * The domains a workspace proves it owns, to cover the previews of a site (FRU-103).
@@ -30,12 +31,6 @@ const SITE_NOT_CHANGED = msg('The site of this domain did not change. Try again.
 const NOT_REMOVED = msg('The domain was not removed. Try again.');
 /** The value of the choice « no site ». */
 const NONE = 'none';
-
-function moment(iso: string | undefined): string {
-  const date = new Date(iso ?? '');
-
-  return Number.isNaN(date.getTime()) ? '' : date.toLocaleString(locale(), { dateStyle: 'medium', timeStyle: 'short' });
-}
 
 export function Domains({ workspace, sites }: { workspace: Workspace; sites: Listed<SiteChoice> }) {
   useLocale();

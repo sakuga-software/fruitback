@@ -23,7 +23,7 @@ import {
 import { useAdmin } from './admin';
 import { AccountDeletion, DELETION_HOLDS } from './admin-account-deletion';
 import { AddToWorkspace, ChangeRole } from './admin-user-workspaces';
-import { seenOn } from './members';
+import { seenOn } from '../ago';
 import { ReadProblem } from '../read-problem';
 
 /**

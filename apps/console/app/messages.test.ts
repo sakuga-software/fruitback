@@ -25,6 +25,7 @@ const APP = new URL('./', import.meta.url);
 // `read-problem.tsx` says why a read failed, for every screen that reads (FRU-516).
 // `authorize-answer.ts` says why « Connect an agent » refused an answer (FRU-467).
 // `release-banner.tsx` says a newer release to the administrator of the instance (FRU-520).
+// `stages.ts` names the five stages, for every screen that shows one (FRU-508).
 const screens = [
   ...readdirSync(new URL('routes/', APP))
     .map((name) => `routes/${name}`)
@@ -48,6 +49,7 @@ const screens = [
   'read-problem.tsx',
   'authorize-answer.ts',
   'release-banner.tsx',
+  'stages.ts',
 ];
 const sources = new Map(screens.map((name) => [name, readFileSync(new URL(name, APP), 'utf8')]));
 

@@ -143,7 +143,7 @@ export function onLocale(listener: () => void): () => void {
 export type Kept = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
 /** Sends a language to the account. `false` when the account did not take it. */
-export type SaveLanguage = (tag: LocaleTag) => Promise<boolean>;
+type SaveLanguage = (tag: LocaleTag) => Promise<boolean>;
 
 const UNSENT = 'fruitback:locale-unsent';
 

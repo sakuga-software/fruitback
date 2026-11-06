@@ -13,7 +13,7 @@ import {
 import { agoInSentence, dayOf } from '../ago';
 import { locale, msg, t } from '../i18n';
 import { useCopy } from '../install-options';
-import { type Listed, listedOf } from '../listed';
+import { type Fetched, type Listed, listedOf } from '../listed';
 import { Button, Callout, DataTable, Field, Lead, LinkButton, Problem, Radios, Snippet, Title } from '../ui';
 import { useLocale } from '../use-locale';
 import { ReadProblem } from '../read-problem';
@@ -51,8 +51,6 @@ const SIGN_UP = [
   { value: 'anyone', label: msg('Anyone') },
 ] as const;
 
-/** « 3 Oct », as the mockup writes a day: the day first, in the language of the console. */
-
 /** How long the worker answers since it started. */
 function uptime(startedAt: string, now: number): string {
   const past = now - Date.parse(startedAt);
@@ -73,7 +71,7 @@ function setBy(variables: readonly string[]): string {
 
 export default function AdminInstance() {
   useLocale();
-  const [facts, setFacts] = useState<InstanceFacts | 'loading' | 'failed'>('loading');
+  const [facts, setFacts] = useState<Fetched<InstanceFacts>>('loading');
 
   const read = useCallback(async () => {
     setFacts('loading');

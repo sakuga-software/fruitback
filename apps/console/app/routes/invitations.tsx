@@ -16,7 +16,7 @@ import { useConnectedExtension } from '../extension-connected';
 import { BY_SIGN_IN, CONNECT_PAGE } from '../install-options';
 import { problemOf } from '../problems';
 import { withStrong } from '../sign-in-form';
-import { Button, EntryPage, Initial, KeyValue, Lead, LinkButton, Problem, StatusDot, SuccessMark, Title } from '../ui';
+import { Button, EntryPage, Initial, KeyValue, Lead, LinkButton, Problem, SuccessMark, Title } from '../ui';
 import { useLocale } from '../use-locale';
 import { siteLabel } from '../site-address';
 import { ReadProblem } from '../read-problem';
@@ -402,7 +402,7 @@ function Joined({ workspace, name, site }: { workspace: string; name: string; si
       </p>
       {connected === undefined ? null : (
         <p className="mb-5 flex items-center gap-2 text-body font-semibold">
-          <StatusDot status="done" size={10} />
+          <SuccessMark size="inline" />
           {t('Extension connected · {browser}', { browser: connected.browser })}
         </p>
       )}
