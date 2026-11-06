@@ -45,8 +45,8 @@ export function releaseToShow<Release>(update: Release | null | undefined, api: 
   return instanceOf(api).cloud ? null : (update ?? null);
 }
 
-/** The host of the worker of Fruitback Cloud. */
-const CLOUD_API_HOST = 'api.fruitback.com';
+/** The host of the worker of Fruitback Cloud. `session-routes.test.ts` of the worker reads it here. */
+export const CLOUD_API_HOST = 'api.fruitback.com';
 
 /**
  * The host of the worker at `api`, and whether it is Fruitback Cloud (FRU-262). The build holds no

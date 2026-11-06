@@ -51,8 +51,8 @@ key, a token, a message key). « green » as in « the CI is green » is not cou
 | **Total**                                      | **109** | **896** |
 
 **Nobody reads these words today.** The widget, the extension and the console already say New, To
-do, In progress, Done and Closed (FRU-334), from `messages.ts`, `connector-parts.tsx` and the
-extension's catalog. So FRU-355 changes identifiers, data and documents, not what a person reads.
+do, In progress, Done and Closed (FRU-334), from `messages.ts`, `stages.ts` of the console (`connector-parts.tsx`
+before FRU-508) and the extension's catalog. So FRU-355 changes identifiers, data and documents, not what a person reads.
 
 Each kind of hit, and whether it crosses a boundary between two programs of different versions. The
 framing planned a compatibility for each crossing; decisions 3 and 4 dropped them all (below).
