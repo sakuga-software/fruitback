@@ -39,8 +39,8 @@
         "mutants": 35
       },
       "src/note-tabs.ts": {
-        "score": 99.51,
-        "mutants": 0
+        "score": 100,
+        "mutants": 35
       }
     }
   },

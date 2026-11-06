@@ -107,7 +107,7 @@ export const STYLES = `
 .fruitback-sidebar-tabs {
   flex: none;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 3px;
   margin: 0 18px 12px;
   padding: 3px;
@@ -115,14 +115,15 @@ export const STYLES = `
   background: var(--fruitback-color-surface-sunken);
 }
 .fruitback-sidebar-tab {
-  height: 32px;
-  padding: 0 6px;
+  /* « Terminées · 12 » on a phone: the words break on two lines, the tab grows, nothing runs past. */
+  min-height: 32px;
+  padding: 3px 6px;
   border: 0;
   border-radius: var(--fruitback-radius-field);
   background: none;
   color: var(--fruitback-color-text-muted);
-  font: 600 12px/1 var(--fruitback-font-sans);
-  white-space: nowrap;
+  font: 600 12px/1.2 var(--fruitback-font-sans);
+  overflow-wrap: anywhere;
   cursor: pointer;
 }
 .fruitback-sidebar-tab[aria-selected='true'] {
@@ -130,7 +131,7 @@ export const STYLES = `
   box-shadow: var(--fruitback-shadow-xs);
   color: var(--fruitback-color-text);
 }
-@media (pointer: coarse) { .fruitback-sidebar-tab { height: 44px; } }
+@media (pointer: coarse) { .fruitback-sidebar-tab { min-height: 44px; } }
 @media (forced-colors: active) {
   .fruitback-sidebar-tab[aria-selected='true'] { outline: 2px solid Highlight; }
 }
