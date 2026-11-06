@@ -14,8 +14,10 @@ test('a note is anonymous unless the reporter says otherwise', async ({ page }) 
 
   await page.getByRole('button', { name: /Leave a note/ }).click();
   await page.locator('[data-testid="card-latte"] .add').click();
-  // The fields are behind a disclosure: anonymous is what happens if you do nothing.
+  // The fields are behind the avatar, which says « Guest » (FRU-607): anonymous is what happens if
+  // you do nothing.
   await expect(page.locator('[data-fruitback-who]')).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Signed as Guest. Add your name' })).toHaveText('Guest');
   await page.getByPlaceholder('What should change?').fill('Personne ne saura qui je suis');
   await sendNote(page);
 
@@ -28,7 +30,12 @@ test('a typed name reaches Linear, and is stored as the claim it is', async ({ p
 
   await page.getByRole('button', { name: /Leave a note/ }).click();
   await page.locator('[data-testid="card-latte"] .add').click();
+  await page.getByRole('button', { name: 'Signed as Guest. Add your name' }).click();
   await page.getByLabel('Name (optional)').fill('Alice');
+  // The avatar takes the initial, and the whole name in its tooltip (FRU-607).
+  const avatar = page.getByRole('button', { name: 'Signed as Alice. Change the name' });
+  await expect(avatar).toHaveText('A');
+  await expect(avatar).toHaveAttribute('title', 'Alice');
   await page.getByPlaceholder('What should change?').fill('Signé Alice');
   await sendNote(page);
 
@@ -50,6 +57,7 @@ test('a reporter who asks to be remembered signs the next note too, until the bo
 
   await page.getByRole('button', { name: /Leave a note/ }).click();
   await latte.click();
+  await page.getByRole('button', { name: 'Signed as Guest. Add your name' }).click();
   await page.getByLabel('Name (optional)').fill('Alice');
   await page.getByLabel('Remember me on this site').check();
   await page.getByPlaceholder('What should change?').fill('Signé, et retenu');
@@ -61,6 +69,10 @@ test('a reporter who asks to be remembered signs the next note too, until the bo
   await expect(page.getByRole('heading', { name: 'Nos formules' })).toBeVisible();
   await page.getByRole('button', { name: /Leave a note/ }).click();
   await page.locator('[data-testid="card-mocha"] .add').click();
+  // Signed with the name kept, folded behind the avatar.
+  const kept = page.getByRole('button', { name: 'Signed as Alice. Change the name' });
+  await expect(kept).toHaveText('A');
+  await kept.click();
   await expect(page.getByLabel('Name (optional)')).toHaveValue('Alice');
   await expect(page.getByLabel('Remember me on this site')).toBeChecked();
   await page.getByPlaceholder('What should change?').fill('Signé sans rien retaper');
@@ -73,6 +85,7 @@ test('a reporter who asks to be remembered signs the next note too, until the bo
   await expect(page.getByRole('dialog', { name: 'New note' })).toBeHidden({ timeout: 10_000 });
   await page.getByRole('button', { name: /Leave a note/ }).click();
   await latte.click();
+  await page.getByRole('button', { name: 'Signed as Alice. Change the name' }).click();
   await page.getByLabel('Remember me on this site').uncheck();
   expect(await stored()).not.toContain('Alice');
 });

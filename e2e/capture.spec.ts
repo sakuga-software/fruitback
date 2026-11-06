@@ -114,9 +114,9 @@ test('the frame and the name on it have the measures of the mock-up (FRU-258, FR
   await launch.click();
   const button = page.locator('[data-testid="card-latte"] .add');
   await button.hover();
-  // A short selector, then the component: « button.add · <AddToCart> » in the mock-up.
+  // What the element says, then the component (FRU-607): the selector waits for « Show CSS selectors ».
   const tag = page.locator('.fruitback-highlight-tag');
-  await expect(tag).toHaveText(/^button\.add · <Button>$/);
+  await expect(tag).toHaveText(/^Ajouter · <Button>$/);
   const target = (await button.boundingBox())!;
   const corner = await button.evaluate((element) => Number.parseFloat(getComputedStyle(element).borderTopLeftRadius));
 

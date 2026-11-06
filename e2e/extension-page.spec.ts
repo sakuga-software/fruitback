@@ -21,7 +21,14 @@ declare const chrome: {
 const FAR = 'https://staging.elsewhere.example';
 
 /** The pages of the page of the extension (FRU-591), and the name of each in the menu and in its `<h1>`. */
-const PAGES = { sites: 'Sites', workers: 'Servers and sessions', share: 'Share rules', prefs: 'Preferences' } as const;
+const PAGES = {
+  sites: 'Sites',
+  workers: 'Servers and sessions',
+  share: 'Share rules',
+  prefs: 'Preferences',
+  // FRU-601.
+  appearance: 'Appearance',
+} as const;
 type PageName = keyof typeof PAGES;
 
 /** Opens a page of the page of the extension by its fragment: « Sites » has none. */
@@ -241,7 +248,7 @@ test('one page for each entry of the menu: the fragment chooses it, Back and For
   const menu = page.locator('nav.page-menu');
 
   // Each page: its entry is marked, its title is the tab's, and the other sections are hidden.
-  for (const at of ['workers', 'share', 'prefs', 'sites'] as const) {
+  for (const at of ['workers', 'share', 'prefs', 'appearance', 'sites'] as const) {
     await goTo(page, at);
     expect(new URL(page.url()).hash).toBe(`#${at}`);
     await expect(menu.locator('a.page-entry[aria-current="page"]')).toHaveAttribute('href', `#${at}`);

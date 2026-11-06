@@ -523,6 +523,13 @@ describe('every word the widget shows', () => {
     snapshots.push(...shown(host.root));
     composer.open({ left: 0, top: 0, bottom: 10, right: 10 }, 'ELEMENT');
     snapshots.push(...shown(host.root));
+    // A name typed behind the avatar: the avatar says who signs (FRU-607).
+    const typedName = composer.element.querySelector('[data-fruitback-name]') as HTMLInputElement;
+    typedName.value = 'REPORTER';
+    typedName.dispatchEvent(new (page.view as unknown as { Event: typeof Event }).Event('input', { bubbles: true }));
+    snapshots.push(...shown(host.root));
+    typedName.value = '';
+    typedName.dispatchEvent(new (page.view as unknown as { Event: typeof Event }).Event('input', { bubbles: true }));
     // A read takes the places away under the open popover, and the composer says so.
     places.set([]);
     snapshots.push(...shown(host.root));
@@ -747,6 +754,8 @@ describe('every word the widget shows', () => {
       '[data-testid="checkout-cta"]',
       // The initial of who edited the note, in its round (FRU-475).
       'R',
+      // The tile of the tool of a place, its first letter (FRU-607).
+      'P',
     ]);
     const untranslated = snapshots.filter((text) => {
       if (selectors.has(text)) return false;

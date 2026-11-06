@@ -195,7 +195,21 @@ for (const language of ['en', 'fr'] as const) {
     await again.focus();
     await offered.keyboard.press('Enter');
     await expect(offered.getByRole('img', { name: SITE_ON })).toBeVisible();
-    await expect(offered.getByRole('button', { name: /^(Leave a note|Laisser une note)$/ })).toBeVisible();
+    const leave = offered.getByRole('button', { name: /^(Leave a note|Laisser une note)$/ });
+    await expect(leave).toBeVisible();
+
+    // FRU-601: the colour of « Appearance » paints « Leave a note » of the open popup, with the drop
+    // red on Ink, and taking it away gives the accent back.
+    const paint = () => leave.evaluate((node) => getComputedStyle(node).backgroundColor);
+    await offered.mouse.move(0, 0);
+    await extension.worker.evaluate(() => chrome.storage.local.set({ actionColor: '#c2410c' }));
+    await expect.poll(paint).toBe('rgb(194, 65, 12)');
+    expect(await leave.evaluate((node) => getComputedStyle(node).color)).toBe('rgb(255, 255, 255)');
+    await extension.worker.evaluate(() => chrome.storage.local.set({ actionColor: '#1c1917' }));
+    await expect.poll(paint).toBe('rgb(28, 25, 23)');
+    expect(await leave.locator('svg').evaluate((node) => getComputedStyle(node).color)).toBe('rgb(221, 44, 39)');
+    await extension.worker.evaluate(() => chrome.storage.local.set({ actionColor: null }));
+    await expect.poll(paint).toBe(ACCENT.light);
   });
 }
 

@@ -852,6 +852,8 @@ export function siteOn(document: Document, options: SiteOnOptions): HTMLElement 
     const leave = make(document, 'div', 'leave-block');
     if (hidden) leave.append(make(document, 'p', 'hidden-line', t('Fruitback is hidden on this page.')));
     const note = primaryButton(document, t('Leave a note'), options.onLeaveFeedback, { size: 'tall' });
+    // FRU-601: in the colour of « Appearance ».
+    note.classList.add('kit-note');
     // Hidden, the page has no widget to take a note or to fill the panel.
     note.disabled = hidden;
     leave.append(note);

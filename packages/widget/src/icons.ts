@@ -44,7 +44,10 @@ export type IconName =
   | 'list'
   | 'mark'
   | 'markDashed'
-  | 'chevron';
+  | 'chevron'
+  | 'camera'
+  | 'paperclip'
+  | 'image';
 
 /**
  * The drop of the mark, as the mock-up of 2026-10-13 draws it on the launch button (FRU-252): a
@@ -62,6 +65,10 @@ const ICONS: Record<IconName, IconShape> = {
   search: ICON_DATA.search,
   // The handle that moves the bubble of a note (FRU-420): an action, so from the set.
   grip: ICON_DATA.grip,
+  // The capture, the file and the picture of the element, in the field of the composer (FRU-607).
+  camera: ICON_DATA.camera,
+  paperclip: ICON_DATA.paperclip,
+  image: ICON_DATA.image,
   drop: { viewBox: '0 0 16 16', paths: [{ fill: 'currentColor', d: DROP }] },
   mark: { viewBox: '16 6 96 116', paths: [{ fill: 'currentColor', d: MARK }] },
   // The mark in a dashed outline, for the notes that could not be placed (FRU-259): the stroke and
