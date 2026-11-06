@@ -139,6 +139,12 @@ async function withEveryTableFilled(open: () => Promise<PgDatabase>): Promise<Pg
     `INSERT INTO note_index (site_id, note_id, workspace_id, page_url, excerpt, stage, author_kind, place, created_at, checked_at)
        VALUES ('site_acme', 'sd_1', 'ws_acme', 'https://acme.dev/', 'A note', 'new', 'visitor', 'fruitback', 1, 1)`,
   );
+  // FRU-604: who to tell when the note of the index is done.
+  await rowsOf(
+    database,
+    `INSERT INTO done_notices (site_id, note_id, email, created_at, expires_at)
+       VALUES ('site_acme', 'sd_1', 'ana@example.com', 1, 1)`,
+  );
   // FRU-261: one read of an administrator of the instance.
   await rowsOf(
     database,
@@ -182,7 +188,7 @@ async function write({ table, column }: Bigint, database: PgDatabase, value: num
   await rowsOf(database, `UPDATE "${getTableConfig(table).name}" SET "${column.name}" = ${String(value)}`);
 }
 
-it('knows the fifty BIGINT columns of the worker, and that better-auth has none', () => {
+it('knows the fifty-three BIGINT columns of the worker, and that better-auth has none', () => {
   assert.deepEqual(BIGINTS.map(({ name }) => name).toSorted(), [
     'account_emails.created_at',
     'account_emails.verified_at',
@@ -205,6 +211,9 @@ it('knows the fifty BIGINT columns of the worker, and that better-auth has none'
     'domains.created_at',
     'domains.lost_at',
     'domains.verified_at',
+    'done_notices.claimed_until',
+    'done_notices.created_at',
+    'done_notices.expires_at',
     'email_links.created_at',
     'email_links.expires_at',
     'email_links.spent_at',
@@ -276,7 +285,7 @@ for (const { label, open, skip } of [
         }
       }
 
-      assert.equal(nullable.length, 15);
+      assert.equal(nullable.length, 16);
       assert.deepEqual(wrong, []);
     });
 

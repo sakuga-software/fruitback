@@ -69,7 +69,7 @@ describe('the words people paste', () => {
   });
 
   it('turns a site into a client of its workspace, read by members or by everyone', () => {
-    const site = { id: 'site_1', workspaceId: 'ws_1', origin: 'https://acme.dev', destinations: [] };
+    const site = { id: 'site_1', workspaceId: 'ws_1', origin: 'https://acme.dev', destinations: [], notifyDone: false };
     assert.deepEqual(clientOf({ ...site, visibility: 'members', writers: 'anyone' }), {
       workspace: 'ws_1',
       origins: ['https://acme.dev'],
@@ -80,7 +80,7 @@ describe('the words people paste', () => {
   });
 
   it('closes the writes of a site only where its members read it and its notes are « Members only » (FRU-330)', () => {
-    const site = { id: 'site_1', workspaceId: 'ws_1', origin: 'https://acme.dev', destinations: [] };
+    const site = { id: 'site_1', workspaceId: 'ws_1', origin: 'https://acme.dev', destinations: [], notifyDone: false };
     const table = (['members', 'everyone'] as const).flatMap((visibility) =>
       (['members', 'anyone'] as const).map((writers) => [
         visibility,

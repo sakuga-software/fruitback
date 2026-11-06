@@ -36,13 +36,24 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
     const json = (body: unknown, status = 200) => route.fulfill({ status, json: body });
     // The worker answers the site that exists to the add of its address, changed (FRU-504).
     if (pathname === '/console/workspaces/w1/sites' && route.request().method() === 'POST') {
-      const body = route.request().postDataJSON() as { url: string; visibility: string; writers?: string };
+      const body = route.request().postDataJSON() as {
+        url: string;
+        visibility: string;
+        writers?: string;
+        notifyDone?: boolean;
+      };
       worker.posted.push(body);
       if (worker.refuses !== undefined) return json({ error: worker.refuses }, 403);
       const site = SITES.find((each) => each.origin === body.url);
 
       return json(
-        { ...site, id: site?.id ?? 'new', visibility: body.visibility, writers: body.writers ?? site?.writers },
+        {
+          ...site,
+          id: site?.id ?? 'new',
+          visibility: body.visibility,
+          writers: body.writers ?? site?.writers,
+          notifyDone: body.notifyDone ?? false,
+        },
         site === undefined ? 201 : 200,
       );
     }
@@ -142,6 +153,8 @@ test('an owner reads everything of a site on its page, under the crumbs « Sites
     'https://staging.acme.dev (opens in a new tab)',
     'Members of Acme',
     'Anyone on the page',
+    // FRU-604: anybody leaves a note here, so the summary says whether the e-mail is offered.
+    'Off',
     'Extension, script',
   ]);
   // The address is a link to the site, in a new tab (FRU-575): the console stays where it is.
@@ -253,12 +266,53 @@ test('an owner changes who sees the notes and who writes on the page, and the si
   await form.getByText('Everyone who visits', { exact: true }).click();
   await expect(form.getByRole('radiogroup', { name: 'Who can leave a note?' })).toHaveCount(0);
   await form.getByRole('button', { name: 'Save' }).click();
-  expect(worker.posted.at(-1)).toEqual({ url: 'https://staging.acme.dev', visibility: 'everyone' });
+  // FRU-604: anybody may leave a note there, so the switch of the e-mail is shown, and sent off.
+  expect(worker.posted.at(-1)).toEqual({ url: 'https://staging.acme.dev', visibility: 'everyone', notifyDone: false });
   await expect(about.locator('dd').nth(1)).toHaveText('Everyone who visits');
   await expect(about.locator('dd').nth(2)).toHaveText('Anyone on the page');
   // The worker kept the site: the page did not read the list again, and the script is the same.
   expect(worker.reads).toBe(reads);
   await expect(page.locator('pre')).toContainText('s1');
+});
+
+test('« Offer visitors an e-mail when their note is done » is offered only where anybody leaves a note (FRU-604)', async ({
+  page,
+}) => {
+  const worker = await workerWith(page);
+  await page.goto(`${CONSOLE}/w/w1/sites/s1`);
+  const about = page.getByRole('region', { name: 'Site', exact: true });
+  const form = about.getByRole('form', { name: 'Who sees the notes of staging.acme.dev' });
+  const offer = form.getByRole('switch', { name: /Offer visitors an e-mail when their note is done/ });
+  // Members read it and anybody writes: the switch is there, off, and the summary says so.
+  await expect(about.getByRole('term').filter({ hasText: 'E-mail when a note is done' })).toHaveCount(1);
+  await about.getByRole('button', { name: 'Change who sees the notes of staging.acme.dev' }).click();
+  await expect(offer).not.toBeChecked();
+  // Members only: no note of a visitor, so no switch. The control: back to « Anyone », it is there again.
+  await form.getByText('Members only', { exact: true }).click();
+  await expect(offer).toHaveCount(0);
+  await form.getByText('Anyone on the page', { exact: true }).click();
+  await expect(offer).toHaveCount(1);
+  await expectNoViolation(page, 'the form with the switch of the e-mail');
+
+  // On: sent with the rest, and the summary says it is offered.
+  await form.getByText('Offer visitors an e-mail when their note is done', { exact: true }).click();
+  await expect(offer).toBeChecked();
+  await form.getByRole('button', { name: 'Save' }).click();
+  await expect(about.getByRole('status')).toHaveText('Saved. The script on the site stays the same.');
+  expect(worker.posted.at(-1)).toEqual({
+    url: 'https://staging.acme.dev',
+    visibility: 'members',
+    writers: 'anyone',
+    notifyDone: true,
+  });
+  await expect(about.locator('dd').nth(3)).toHaveText('Offered to visitors');
+
+  // Members only: the switch is hidden and not sent, and the summary no longer speaks of it.
+  await about.getByRole('button', { name: 'Change who sees the notes of staging.acme.dev' }).click();
+  await form.getByText('Members only', { exact: true }).click();
+  await form.getByRole('button', { name: 'Save' }).click();
+  expect(worker.posted.at(-1)).toEqual({ url: 'https://staging.acme.dev', visibility: 'members', writers: 'members' });
+  await expect(about.getByRole('term').filter({ hasText: 'E-mail when a note is done' })).toHaveCount(0);
 });
 
 test('a refusal keeps the form open and says why, and a member has nothing to change', async ({ page }) => {
@@ -304,6 +358,8 @@ test('a site that everyone reads takes a note from anybody, and says so', async 
     'https://acme.dev (opens in a new tab)',
     'Everyone who visits',
     'Anyone on the page',
+    // FRU-604: a worker of before sends no `notifyDone`: off.
+    'Off',
     'None yet',
   ]);
 });

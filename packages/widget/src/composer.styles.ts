@@ -548,6 +548,47 @@ export const STYLES = `
 .fruitback-composer-lands { flex: 1 1 0; min-width: min(4.5em, 100%); font-size: 12px; color: var(--fruitback-color-text-muted); }
 .fruitback-composer-lands .fruitback-composer-place-name { flex: 0 1 auto; }
 .fruitback-composer-lands[hidden] { display: none; }
+/*
+  « Want to know when it's fixed? » under the card of a note sent by a visitor (FRU-604): an address,
+  « No thanks », « Notify me ». Its own row of buttons: the foot is hidden while the card shows.
+*/
+.fruitback-composer-notify {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 14px 16px 16px;
+  border-top: 1px solid var(--fruitback-color-border);
+}
+.fruitback-composer-notify[hidden] { display: none; }
+.fruitback-composer-notify-title { margin: 0; font-size: 13px; font-weight: 600; }
+.fruitback-composer-notify-field { display: flex; flex-direction: column; gap: 4px; }
+.fruitback-composer-notify-label { font-size: 12px; color: var(--fruitback-color-text-muted); }
+.fruitback-composer-notify input[type="email"] {
+  min-width: 0;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--fruitback-color-border-strong);
+  border-radius: var(--fruitback-radius-sm);
+  font: 13px/1.4 var(--fruitback-font-sans);
+  color: inherit;
+  background: var(--fruitback-color-surface);
+}
+.fruitback-composer-notify input[type="email"]:focus-visible { outline: 2px solid var(--fruitback-color-accent); outline-offset: 2px; }
+.fruitback-composer-notify input[aria-invalid="true"] { border-color: var(--fruitback-color-accent); }
+.fruitback-composer-notify-why { margin: 0; font-size: 12px; color: var(--fruitback-color-text-muted); }
+/* Always in the tree, because a live region that was hidden announces nothing. Empty, it takes no room. */
+.fruitback-composer-notify-error { margin: 0; font-size: 12px; color: var(--fruitback-color-accent); }
+.fruitback-composer-notify-error:empty { display: none; }
+.fruitback-composer-notify-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.fruitback-composer-notify-done {
+  margin: 0;
+  padding: 0 16px 16px;
+  font-size: 12px;
+  color: var(--fruitback-color-success);
+  outline: 0;
+}
+.fruitback-composer-notify-done[hidden] { display: none; }
 .fruitback-composer-send-group { order: 1; }
 /* « Add to batch » stands beside « Send » (FRU-608), then the ghosts. */
 .fruitback-composer-keep { order: 2; }
@@ -555,7 +596,7 @@ export const STYLES = `
 .fruitback-composer-lands { order: 4; }
 .fruitback-composer-status { order: 5; }
 /* 34 px drawn, as the mock-up does, inside a transparent border that makes the target 44 px. */
-.fruitback-composer-ghost, .fruitback-composer-send {
+.fruitback-composer-ghost, .fruitback-composer-send, .fruitback-composer-notify-yes {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -584,8 +625,8 @@ export const STYLES = `
 .fruitback-composer-send { max-width: 100%; min-width: 0; white-space: nowrap; }
 .fruitback-composer-send > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .fruitback-composer-ghost:hover:not([disabled]) { background: var(--fruitback-color-surface-sunken) padding-box; }
-/* FRU-601: the colour a host gives with actionColor, else the accent. */
-.fruitback-composer-send {
+/* FRU-601: the colour a host gives with actionColor, else the accent. « Notify me » too (FRU-604). */
+.fruitback-composer-send, .fruitback-composer-notify-yes {
   padding-inline: 12px 14px;
   background: var(--fruitback-color-action, var(--fruitback-color-accent)) padding-box;
   color: var(--fruitback-color-on-action, var(--fruitback-color-on-accent));
@@ -593,8 +634,8 @@ export const STYLES = `
 }
 /* The drop of the mark, 12 px tall. */
 .fruitback-composer-send .fruitback-icon { width: 10px; height: 12px; color: var(--fruitback-color-action-mark, currentColor); }
-.fruitback-composer-send:hover:not([disabled]) { background: var(--fruitback-color-action-strong, var(--fruitback-color-accent-strong)) padding-box; }
-.fruitback-composer-send[disabled] { opacity: 0.55; cursor: default; }
+.fruitback-composer-send:hover:not([disabled]), .fruitback-composer-notify-yes:hover:not([disabled]) { background: var(--fruitback-color-action-strong, var(--fruitback-color-accent-strong)) padding-box; }
+.fruitback-composer-send[disabled], .fruitback-composer-notify-yes[disabled] { opacity: 0.55; cursor: default; }
 .fruitback-composer-keep[hidden], .fruitback-composer-sign-in[hidden] { display: none; }
 /* « Sign in again » is the way out of the sentence above it: it reads as an action, in the text colour. */
 .fruitback-composer-sign-in { color: var(--fruitback-color-text); text-decoration: underline; text-underline-offset: 3px; }
@@ -685,7 +726,7 @@ export const STYLES = `
   font-weight: 600;
 }
 @media (forced-colors: active) {
-  .fruitback-composer-ghost, .fruitback-composer-send, .fruitback-composer-pick { border-color: Canvas; }
+  .fruitback-composer-ghost, .fruitback-composer-send, .fruitback-composer-notify-yes, .fruitback-composer-pick { border-color: Canvas; }
   .fruitback-composer-send { outline: 1px solid ButtonText; outline-offset: -6px; }
 }
 
@@ -731,7 +772,8 @@ export const STYLES = `
   stays after the field loses focus. A box is toggled by its whole row, and the row is tall enough.
 */
 @media (pointer: coarse) {
-  .fruitback-composer textarea, .fruitback-composer-who input[type="text"] { font-size: 16px; }
+  .fruitback-composer textarea, .fruitback-composer-who input[type="text"],
+  .fruitback-composer-notify input[type="email"] { font-size: 16px; }
   .fruitback-composer-tool { width: 44px; height: 44px; }
   .fruitback-composer-avatar { min-width: 36px; height: 36px; }
   .fruitback-composer-check, .fruitback-composer-place { min-height: 36px; }

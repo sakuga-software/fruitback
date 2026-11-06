@@ -469,6 +469,8 @@ export default defineContentScript({
         // otherwise hand this instance its `endpoint` and `clientId` — the reviewer's notes going to
         // a worker nobody picked, with nothing on screen to say so. Raised in review.
         configKey: 'fruitback:config:extension',
+        // FRU-604: a reviewer is never asked for an address after a note: the badge of the icon tells them.
+        askForAddress: false,
         ...(message.label !== undefined ? { label: message.label } : {}),
         // The language of the reviewer's account. Left out, the widget reads the page's own.
         ...(message.locale !== undefined ? { locale: message.locale } : {}),

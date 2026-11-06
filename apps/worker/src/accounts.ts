@@ -335,6 +335,11 @@ export type Site = {
   /** Who may leave a note (FRU-330). It decides only on a site that `members` read. */
   writers: Writers;
   /**
+   * Whether a visitor is offered one e-mail when their note is done (FRU-604). Off by default, and of
+   * no effect on a site whose notes come from its members only: `offersDoneNotice`.
+   */
+  notifyDone: boolean;
+  /**
    * Where the notes of this site can go, in the order an admin gave (FRU-123). The first one is
    * where a note goes when nobody chose. Empty: the notes stay in the worker's own store.
    */
@@ -676,7 +681,10 @@ export type AccountStore = {
    * absent: `DEFAULT_WRITERS` for a new site, and what it was for a site that exists (FRU-330), so a
    * caller that does not know the field opens nothing and closes nothing.
    */
-  addSite(workspace: string, site: { origin: string; visibility: Visibility; writers?: Writers }): Promise<Site>;
+  addSite(
+    workspace: string,
+    site: { origin: string; visibility: Visibility; writers?: Writers; notifyDone?: boolean },
+  ): Promise<Site>;
   sites(workspace: string): Promise<Site[]>;
   /**
    * One site of a workspace by its id (FRU-497), with its destinations. `undefined` when the site is
@@ -924,6 +932,14 @@ export type AccountStore = {
 };
 
 /**
+ * Whether a site offers a visitor one e-mail when their note is done (FRU-604): its switch is on, and
+ * anybody may leave a note there. With notes of its members only, the switch is hidden and does nothing.
+ */
+export function offersDoneNotice(site: Pick<Site, 'notifyDone' | 'visibility' | 'writers'>): boolean {
+  return site.notifyDone && !(site.visibility === 'members' && site.writers === 'members');
+}
+
+/**
  * A site as a client of the routing (FRU-95): its workspace, its one origin, and who reads it.
  *
  * Exported because this projection is the whole contract between the accounts and the read path.
@@ -944,6 +960,8 @@ export function clientOf(site: Site): ClientMap[string] {
     read: site.visibility === 'members' ? 'authenticated' : 'public',
     // FRU-330: « Members only » closes the writes of a site that its members read, and only there.
     write: site.visibility === 'members' && site.writers === 'members' ? 'authenticated' : 'public',
+    // FRU-604: the e-mail of a note done, when the site offers it and takes notes from anyone.
+    ...(offersDoneNotice(site) ? { notifyDone: true } : {}),
     // The first place is where the client routes, as when a site had one destination.
     ...(first === undefined
       ? {}

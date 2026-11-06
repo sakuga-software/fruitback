@@ -46,6 +46,12 @@ export default defineConfig({
     viewport: { width: 1440, height: 900 },
     trace: 'on-first-retry',
     video: process.env.CI ? 'off' : 'retain-on-failure',
+    // FRU-604: a browser of the suite answered « Want to know when it's fixed? » already, so a note
+    // of a visitor closes its composer as before. `notify.spec.ts` starts from a browser that did not.
+    storageState: {
+      cookies: [],
+      origins: [{ origin: PLAYGROUND, localStorage: [{ name: 'fruitback:notify-ask', value: '{"answer":"yes"}' }] }],
+    },
   },
   webServer: [
     {

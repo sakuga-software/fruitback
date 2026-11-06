@@ -1,3 +1,4 @@
+import type { DoneNoticeSeams } from './done-notices.ts';
 import { json } from './http.ts';
 import type { AccountStore } from './accounts.ts';
 import { BodyTooLarge } from './bounded-body.ts';
@@ -42,6 +43,8 @@ export type ConsoleSeams = {
   accounts: AccountStore;
   kv: Kv;
   noteIndex: NoteIndex | undefined;
+  /** Who to tell when a note is done (FRU-604). */
+  done?: DoneNoticeSeams;
   /** The CORS decision of the console for this request, already allowed. */
   cors: CorsDecision;
   /** The GitHub App of the workspace connectors (FRU-359), when this worker has one. */
@@ -49,7 +52,7 @@ export type ConsoleSeams = {
 };
 
 export async function handleConsole(request: Request, pathname: string, seams: ConsoleSeams): Promise<Response> {
-  const { served, context, accounts, kv, noteIndex, cors, githubApp } = seams;
+  const { served, context, accounts, kv, noteIndex, done, cors, githubApp } = seams;
   const sessions = context.sessionStore ?? sessionStoreFor(served);
   if (sessions === undefined || served.identitySecret === undefined)
     return json(404, { error: 'not-found' }, cors.headers);
@@ -195,6 +198,7 @@ export async function handleConsole(request: Request, pathname: string, seams: C
         ...(served.secretsKey === undefined ? {} : { secretsKey: served.secretsKey }),
         kv,
         ...(noteIndex === undefined ? {} : { noteIndex }),
+        ...(done === undefined ? {} : { done }),
         ...(served.linearOAuth === undefined ? {} : { linearOAuth: served.linearOAuth }),
         ...(githubApp === undefined ? {} : { githubApp }),
         ...(served.publicUrl === undefined ? {} : { publicUrl: served.publicUrl }),
