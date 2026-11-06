@@ -128,7 +128,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   "Fruitback can't reach {server}": 'Fruitback ne joint pas {server}',
   // The page of the extension (FRU-301).
   Preferences: 'Préférences',
-  'Fruitback sites': 'Sites Fruitback',
   'No rules yet. Add one, or turn a site on from the toolbar.':
     'Aucune règle pour l’instant. Ajoutez-en une, ou activez un site depuis la barre d’outils.',
   'No rule matches this filter.': 'Aucune règle ne correspond à ce filtre.',

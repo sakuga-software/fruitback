@@ -69,4 +69,14 @@ test('the page of the extension refuses a pairing link as a worker, and « Conne
   await options.getByRole('button', { name: 'Connect with this link' }).click();
   const card = options.locator(`.worker-card[data-endpoint="${WORKER_ORIGIN}"]`);
   await expect(card.getByLabel('Connection code')).toHaveValue('ABCD-EFGH-JKLM');
+  // FRU-591: the card is on « Servers and sessions », a page of its own, and it has the focus.
+  await expect(options.getByRole('heading', { level: 1 })).toHaveText('Servers and sessions');
+  await expect(card.getByLabel('Connection code')).toBeFocused();
+  // Back on « Sites », the form still holds what was typed in it.
+  await options.goBack();
+  await expect(options.getByRole('heading', { level: 1 })).toHaveText('Sites');
+  await expect(options.getByLabel('Server address', { exact: true })).toHaveValue(
+    `${WORKER_ORIGIN}/pair#ABCD-EFGH-JKLM`,
+  );
+  await expect(options.getByLabel('Client id', { exact: true })).toHaveValue('playground');
 });

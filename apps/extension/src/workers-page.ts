@@ -4,6 +4,7 @@ import { button, keys, make, toggle } from './kit.ts';
 import { keysOfShortcut } from './popup-view.ts';
 import { parseDockPosition } from './protocol.ts';
 import { PAIRING_NEEDS_HTTPS } from './remedy.ts';
+import { sectionId } from './options-pages.ts';
 
 /**
  * « Servers and sessions » and « Preferences » of the page of the extension (FRU-302), as the mock-up
@@ -46,8 +47,8 @@ export function sitesCount(count: number): string {
 export function workersSection(document: Document, options: WorkersOptions): HTMLElement {
   const section = make(document, 'section', 'page-section');
   section.classList.add('workers');
-  section.id = 'workers';
-  const title = make(document, 'h2', '', t('Servers and sessions'));
+  section.id = sectionId('workers');
+  const title = make(document, 'h1', '', t('Servers and sessions'));
   title.id = 'workers-title';
   section.setAttribute('aria-labelledby', title.id);
   section.append(
@@ -303,8 +304,8 @@ export const shortcutKeys = keysOfShortcut;
 export function preferencesSection(document: Document, options: PreferencesOptions): HTMLElement {
   const section = make(document, 'section', 'page-section');
   section.classList.add('prefs');
-  section.id = 'prefs';
-  const title = make(document, 'h2', '', t('Preferences'));
+  section.id = sectionId('prefs');
+  const title = make(document, 'h1', '', t('Preferences'));
   title.id = 'prefs-title';
   section.setAttribute('aria-labelledby', title.id);
   const card = make(document, 'div', 'pref-card');

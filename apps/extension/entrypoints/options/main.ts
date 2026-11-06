@@ -61,6 +61,7 @@ import { PAIRING_CODE_REQUIRED, PAIRING_PROBLEM } from '../../src/remedy.ts';
 import { button, hostOf, make } from '../../src/kit.ts';
 import { DOCK_POSITION_KEY, NOTES_NAME_KEY, SHOW_SELECTORS_KEY, parseDockPosition } from '../../src/protocol.ts';
 import { PANEL_ON_CLICK_KEY, panelApis } from '../../src/side-panel.ts';
+import { type PageId, pageOf, sectionId, showPage } from '../../src/options-pages.ts';
 
 /**
  * Every site entry, wildcards included, and the rules file a team hands around (FRU-43).
@@ -94,8 +95,16 @@ const beginRender = latestOnly();
 // first element: every sentence below is written once.
 setLanguage((await storedLanguage(browser.storage.local)) ?? navigator.language);
 document.documentElement.lang = language();
-// FRU-555: the title of the tab, in the language of the page; the HTML holds the English one.
-document.title = t('Fruitback sites');
+/**
+ * The name of each page, in the menu, in its `<h1>` and in the title of the tab (FRU-591). The title
+ * is in the language of the page (FRU-555); the HTML holds the English one of « Sites ».
+ */
+const LABELS: Record<PageId, string> = {
+  sites: t('Sites'),
+  workers: t('Servers and sessions'),
+  share: t('Share rules'),
+  prefs: t('Preferences'),
+};
 
 const app = document.querySelector('#app');
 /** The table of the rules, drawn again at each change of storage or of a grant. */
@@ -138,10 +147,14 @@ const workers = make(document, 'div', 'workers-slot');
 let linked = linkedPairing(window.location.hash);
 /** The pairing link whose card already took the focus. */
 let focusedLink: typeof linked;
+/** The page of the fragment that is shown now (FRU-591). */
+let page = pageOf(window.location.hash);
+/** Shows the page of the fragment. Set when the page holds its sections. */
+let followHash: () => void = () => undefined;
 
 if (app !== null) {
   const sites = make(document, 'section', 'page-section');
-  sites.id = 'sites';
+  sites.id = sectionId('sites');
   const body = make(document, 'div', 'sites-body');
   body.append(table, panel);
   sites.append(
@@ -159,21 +172,26 @@ if (app !== null) {
   const share = transfer();
   const prefs = await preferences();
   const content = make(document, 'main', 'page-content');
+  // FRU-591: the four sections stay in the DOM, and only the section of the page is shown. A form
+  // that is open, or a code that is typed, is still there when the person comes back.
   content.append(sites, workers, share, prefs);
+  const nav = menu(document, {
+    version: browser.runtime.getManifest().version,
+    current: page,
+    entries: (Object.keys(LABELS) as PageId[]).map((id) => ({ id, label: LABELS[id] })),
+  });
+  const views: Record<PageId, HTMLElement> = { sites, workers, share, prefs };
+  showPage(document, { page, views, labels: LABELS, menu: nav });
+  followHash = () => {
+    const next = pageOf(window.location.hash);
+    if (next === page) return;
+    page = next;
+    showPage(document, { page, views, labels: LABELS, menu: nav });
+    // The page starts at its top, also when the menu is a bar above it (narrow windows).
+    window.scrollTo(0, 0);
+  };
   const frame = make(document, 'div', 'page');
-  frame.append(
-    menu(document, {
-      version: browser.runtime.getManifest().version,
-      current: 'sites',
-      entries: [
-        { id: 'sites', label: t('Sites') },
-        { id: 'workers', label: t('Servers and sessions') },
-        { id: 'share', label: t('Share rules') },
-        { id: 'prefs', label: t('Preferences') },
-      ],
-    }),
-    content,
-  );
+  frame.append(nav, content);
   app.append(frame);
   // FRU-519: « Fruitback 0.6.0 is out », under the version in the menu.
   void showUpdateLine((line) => frame.querySelector('.page-brand')?.after(line));
@@ -181,8 +199,11 @@ if (app !== null) {
 
 void renderList();
 void renderWorkers();
-// A pairing link opened from the popup while this page is open changes the fragment only.
+// A click in the menu, Back and Forward, and a pairing link opened from the popup while this page is
+// open change the fragment only. The page of the fragment is shown first: a card takes the focus
+// only when it is shown.
 window.addEventListener('hashchange', () => {
+  followHash();
   linked = linkedPairing(window.location.hash);
   if (linked !== undefined) void renderWorkers();
 });

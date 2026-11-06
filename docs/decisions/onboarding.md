@@ -39,7 +39,7 @@ the action happens: `console`, `mail`, `tab` (going back to a tab that is alread
 | 6   | tab     | go back to the tab of the setup                                    | stays (SPEC P4) |
 | 7   | console | type the address of the site                                       | stays           |
 | 8   | console | click « Add site »                                                 | stays           |
-| 9   | console | click « Install the extension (beta) »: the store opens in a tab   | stays           |
+| 9   | console | click « Install the extension »: the store opens in a tab          | stays           |
 | 10  | store   | click « Add to Chrome »                                            | stays           |
 | 11  | chrome  | click « Add extension » in the dialog of Chrome                    | stays           |
 | 12  | welcome | click « Sign in with email »: the console opens in a tab           | stays           |
@@ -75,6 +75,32 @@ the link, while the tab of the link says « You are signed in … You can close 
 The setup ends by itself at the first note (`setup-install.tsx`). The spec does not check it: the end
 reads `lastNoteAt` of the site, which comes from the index of the notes (`notes-index-postgres.ts`),
 and the worker of the tests has no index (its PostgreSQL is port 1, `cloud-worker.fixture.ts`).
+
+### What FRU-610 changed, and what it did not
+
+FRU-610 (board P6 of FRU-598) took the two questions of access out of step 2 of the setup, made one
+way the recommended one at step 3, took « Connect this browser » away from beside « Install the
+extension » on the Cloud, and shows the note that came at the end (`console.md`). Step 9 of the table
+is now « Install the extension », with no « (beta) ».
+
+**The table still counts 18 actions, measured.** The spec counts what the person clicks, types or
+switches to, and it never answered the two questions: it took the values the form had chosen, as a
+first user in a hurry does. So the questions were never rows of the table, and taking them away
+removes no row. What the person no longer does is read two groups of choices and decide who sees
+their notes before a single note exists: a decision, not a click, and the reason of the board P6.
+The link that went from step 3 was not a row either: the path goes through the welcome page, which
+the link competed with.
+
+The ticket asked for fewer than 18. **No row of this table can go without a change of the sign-in or
+of the tab of the link**, which FRU-610 does not make:
+
+- **Step 13, « Connect Chrome » after the word.** The console of the Cloud could ask the extension of
+  the same browser whether the request of the word is its own (the channel of FRU-487), and approve it
+  with no press when it is: 17 actions. That changes who may connect a browser with no word and no
+  press, so it is a decision on permissions, for a ticket of its own.
+- **Step 6, the return to the tab of the setup.** The tab of the link could carry on the setup in place
+  of the first one: 17 actions. The choice P4 of the mockup of 2026-10-13 is the opposite (the first
+  tab goes on, the tab of the link says to close it), so it is not changed here.
 
 ### The path after the tickets
 

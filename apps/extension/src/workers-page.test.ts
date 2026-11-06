@@ -39,8 +39,8 @@ describe('« Servers and sessions » (FRU-302)', () => {
       { endpoint: 'http://localhost:8787', host: 'localhost:8787', sites: 1, pairing: 'local' },
     ]);
 
-    assert.equal(section.id, 'workers');
-    assert.equal(section.querySelector('h2')?.textContent, 'Servers and sessions');
+    assert.equal(section.id, 'page-workers');
+    assert.equal(section.querySelector('h1')?.textContent, 'Servers and sessions');
     assert.equal(
       section.querySelector('.workers-intro')?.textContent,
       'You connect to a server, not to a site: one session covers every site that reports to it. Only team mode needs one.',
@@ -158,7 +158,7 @@ describe('« Servers and sessions » (FRU-302)', () => {
     setLanguage('fr');
     assert.equal(sitesCount(1), '1 site');
     assert.equal(sitesCount(3), '3 sites');
-    assert.equal(workers([]).querySelector('h2')?.textContent, 'Serveurs et sessions');
+    assert.equal(workers([]).querySelector('h1')?.textContent, 'Serveurs et sessions');
   });
 });
 
@@ -339,7 +339,7 @@ describe('« Preferences » (FRU-302)', () => {
   it('has the rows of the mock-up, and « Show CSS selectors » after the name (FRU-349), in order', () => {
     const section = preferencesSection(page(), options({ shortcut: 'Alt+Shift+F', onShortcut: nothing }));
 
-    assert.equal(section.id, 'prefs');
+    assert.equal(section.id, 'page-prefs');
     assert.deepEqual(
       [...section.querySelectorAll('.pref-title')].map((title) => title.textContent),
       [
