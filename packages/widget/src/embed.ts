@@ -534,7 +534,10 @@ export function init(options: FruitbackOptions): Fruitback {
       host.hold(selected.element);
       // FRU-609: the capture of the element is taken now, before the composer stands over the page.
       // A second choice over an open composer keeps the files it holds and takes none.
-      elementShot = keepsText ? undefined : shotOf(selected.element);
+      // A second choice over an open composer starts a generation too: a capture of the element of
+      // before that is still on its way is thrown away.
+      if (keepsText) elementShots.forget();
+      else elementShots.take(selected.element);
       composer.open(selected.element, headOf(selected.element, selected.source), readableName(selected.element), {
         selector: selectorHead(),
       });
@@ -791,7 +794,7 @@ export function init(options: FruitbackOptions): Fruitback {
    * They come back in `finally`: after the capture, a cancel, or a capture that fails or throws.
    */
   /** The capture of the element of the composer now (FRU-609), taken at the choice. */
-  let elementShot: Promise<ElementCapture | undefined> | undefined;
+  const elementShots = createElementShots((element, live) => shotOf(element, live));
   /**
    * One capture at a time (FRU-609, raised in review): the capture of the element starts at the
    * choice, and a capture of the page asked at once after it would hide the widget and set the
@@ -813,7 +816,7 @@ export function init(options: FruitbackOptions): Fruitback {
    * host captures the visible page (the extension), and only while the element is in the window.
    * Nothing is said when it does not come: the person did not ask for it.
    */
-  async function shotOf(element: Element): Promise<ElementCapture | undefined> {
+  async function shotOf(element: Element, live: () => boolean): Promise<ElementCapture | undefined> {
     if (options.captureVisible === undefined) return undefined;
     const box = element.getBoundingClientRect();
     const width = view.innerWidth;
@@ -830,7 +833,11 @@ export function init(options: FruitbackOptions): Fruitback {
       height: bottom - top,
       scale: view.devicePixelRatio || 1,
     };
-    const taken = await captureArea(area).catch(() => undefined);
+    // In the queue, behind a capture that may last: a composer closed or pointed at another element
+    // by then takes none, and the widget is not hidden for it.
+    const taken = await captures
+      .run(() => (live() ? captureNow(area) : Promise.resolve(undefined)))
+      .catch(() => undefined);
     if (taken === undefined || typeof taken === 'string') return undefined;
 
     return {
@@ -934,12 +941,13 @@ export function init(options: FruitbackOptions): Fruitback {
       capture: (kind) => captureFor(kind),
       upload: (file, chosen) => uploadAttachment(options, file, destinationToSend(destinations.get(), chosen)),
       // FRU-609: taken at the choice of the element, given to the composer as it opens.
-      captureElement: () => elementShot ?? Promise.resolve(undefined),
+      captureElement: () => elementShots.current(),
     },
     onClose: () => {
       host.release();
-      // A capture of the element belongs to the open it was taken for, never to a later one (review).
-      elementShot = undefined;
+      // A capture of the element belongs to the open it was taken for, never to a later one, and one
+      // still waiting in the queue is not taken at all (review).
+      elementShots.forget();
     },
     autosave: {
       read: () => (typingPlace === undefined ? undefined : typing.get(typingPlace)?.text),
@@ -1813,6 +1821,42 @@ export function serialized(): { run<T>(task: () => Promise<T>): Promise<T> } {
       last = next.catch(() => undefined);
 
       return next;
+    },
+  };
+}
+
+/**
+ * The capture of the element of the composer (FRU-609), by generation. Each choice starts one, and so
+ * do a close and a second choice over an open composer (`forget`). A capture is asked to check that it
+ * is still of the current generation before it hides the widget (`live`), and what arrives for a
+ * generation that is gone is thrown away. Exported for its tests.
+ */
+export function createElementShots<T>(take: (element: Element, live: () => boolean) => Promise<T | undefined>): {
+  take(element: Element): void;
+  forget(): void;
+  current(): Promise<T | undefined>;
+} {
+  let generation = 0;
+  let pending: Promise<T | undefined> = Promise.resolve(undefined);
+
+  return {
+    take(element) {
+      generation += 1;
+      const mine = generation;
+      const live = (): boolean => mine === generation;
+      pending = take(element, live).then(
+        (shot) => (live() ? shot : undefined),
+        () => undefined,
+      );
+    },
+    forget() {
+      generation += 1;
+      pending = Promise.resolve(undefined);
+    },
+    current() {
+      const mine = generation;
+
+      return pending.then((shot) => (mine === generation ? shot : undefined));
     },
   };
 }

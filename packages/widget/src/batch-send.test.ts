@@ -2,7 +2,7 @@ import { afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { canonicalizePageUrl } from '@fruitback/shared';
 import { noteFixture, noteIssueFixture } from '@fruitback/shared/note.fixture';
-import { init, serialized } from './embed.ts';
+import { createElementShots, init, serialized } from './embed.ts';
 import { createDraftStore } from './drafts.ts';
 import { createTypingStore } from './typing.ts';
 import type { TransportRequest, TransportResponse } from './transport.ts';
@@ -157,5 +157,53 @@ describe('one capture at a time (FRU-609)', () => {
     assert.equal(await area, 'area');
     assert.equal(most, 1, 'two captures ran at once');
     assert.deepEqual(order, ['element', 'page', 'area']);
+  });
+});
+
+describe('the capture of the element, by generation (FRU-609)', () => {
+  /** A capture that waits for `open()` before it looks whether it is still wanted, as one in the queue does. */
+  function gated() {
+    let open: () => void = () => {};
+    const gate = new Promise<void>((resolve) => (open = resolve));
+    const taken: string[] = [];
+    const shots = createElementShots<string>(async (element, live) => {
+      await gate;
+      if (!live()) return undefined;
+      taken.push(element.id);
+
+      return `shot of ${element.id}`;
+    });
+
+    return { shots, taken, open: () => open() };
+  }
+  const page = () => mountPage('<main><button id="a">A</button><button id="b">B</button></main>');
+
+  it('takes no capture once the composer closed before its turn, and gives none', async () => {
+    const mounted = page();
+    const { shots, taken, open } = gated();
+    shots.take(mounted.query('#a'));
+    const given = shots.current();
+    // The composer closes while the capture waits in the queue.
+    shots.forget();
+    open();
+    assert.equal(await given, undefined);
+    assert.deepEqual(taken, [], 'a capture was taken for a composer that had closed');
+  });
+
+  it('throws away a capture that arrives for an element that is no longer the one, and gives the new one', async () => {
+    const mounted = page();
+    let finish: (value: string) => void = () => {};
+    const shots = createElementShots<string>((element) =>
+      element.id === 'a' ? new Promise((resolve) => (finish = resolve)) : Promise.resolve(`shot of ${element.id}`),
+    );
+    shots.take(mounted.query('#a'));
+    const forA = shots.current();
+    // A second choice over the open composer: the capture of A is still on its way.
+    shots.forget();
+    finish('shot of a');
+    assert.equal(await forA, undefined, 'the capture of the element of before was given');
+    assert.equal(await shots.current(), undefined);
+    shots.take(mounted.query('#b'));
+    assert.equal(await shots.current(), 'shot of b');
   });
 });
