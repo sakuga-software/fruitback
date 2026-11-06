@@ -161,6 +161,51 @@ describe('« Appearance » (FRU-601)', () => {
     assert.equal(section.querySelector('.pref-problem')?.textContent, COLOR_NOT_SAVED);
   });
 
+  it('writes a colour of your own back in the field when a radio chosen over it was not saved (review)', async () => {
+    const { section, radio, checked, field, said, preview, pick } = drawn('#1d4ed8', () =>
+      Promise.reject(new Error('QUOTA_BYTES')),
+    );
+    const error = console.error;
+    console.error = () => {};
+    try {
+      pick(radio('Orange'));
+      assert.equal(field.value, '', 'the radio clears the field at once');
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    } finally {
+      console.error = error;
+    }
+    assert.deepEqual(checked(), []);
+    assert.equal(field.value, '#1d4ed8');
+    assert.equal(said(), '6.7:1 with white text.');
+    assert.equal(preview.style.getPropertyValue('--action'), '#1d4ed8');
+    assert.equal(section.querySelector('.pref-problem')?.textContent, COLOR_NOT_SAVED);
+  });
+
+  it('keeps what is typed in the field while a write that then fails was in flight (review)', async () => {
+    let fail: (error: Error) => void = () => {};
+    const { radio, checked, field, said, preview, pick, type } = drawn(
+      '#1d4ed8',
+      () =>
+        new Promise<void>((_, reject) => {
+          fail = reject;
+        }),
+    );
+    pick(radio('Orange'));
+    type('#0f766e');
+    const error = console.error;
+    console.error = () => {};
+    try {
+      fail(new Error('QUOTA_BYTES'));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    } finally {
+      console.error = error;
+    }
+    assert.equal(field.value, '#0f766e', 'what was typed is gone');
+    assert.equal(said(), '5.4:1 with white text.');
+    assert.deepEqual(checked(), []);
+    assert.equal(preview.style.getPropertyValue('--action'), '#1d4ed8');
+  });
+
   it('speaks French, with a decimal comma in the ratio', () => {
     setLanguage('fr');
     assert.equal(formatRatio(2.14), '2,1:1');
