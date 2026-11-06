@@ -843,6 +843,36 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
 
 ### The rules, in short
 
+- **The files in the field, and the state of each (FRU-609, board P5c of FRU-598).**
+  - **The capture of the element joins the note at the open**, where the host captures the visible
+    page (`captureVisible`, the extension) and the note takes files. `embed.ts` takes it at the
+    choice of the element, before the composer stands over the page (`shotOf`: the element and 24 px
+    around it), and hands it through `AttachSeam.captureElement`. It shows as a thumbnail with the
+    element framed (the frame is in fractions of the picture), a cross removes it, a click opens it
+    whole, and Esc gives the focus back to the thumbnail. **It waits in the composer (`local`) and
+    is sent only with the note**: a person who removes it, or who never sends, sent nothing. Nothing
+    is said when it does not come: the person did not ask for it, and the camera still takes one.
+  - **A note that holds it is not added to the batch**, as any note with files (FRU-124): the cross
+    takes it away first. An open question for the design: a batch of notes with their captures.
+  - **Each file says its state**: « Goes with the note », the part sent (« Sending 42 % ») when the
+    host measures it through the `progress` of `upload`, « Sending… » when it cannot, or why it did
+    not go. A file too large says its size and the limit it passed (« Too large: 48 MB, the limit is
+    10 MB »), with « Remove » in words. The limits are the ones of FRU-332, read from `shared`, not the
+    25 MB the ticket wrote for each file: 25 MB is the limit of the note. The transports of today
+    (`fetch`, the relay of the extension) measure no upload, so « Sending… » is what shows.
+  - **« Send » waits for the files on their way and says so** (« Waiting for 1 file… »); a refused
+    file does not stop the note. A note with nothing on its way still goes in the same turn.
+  - **The area of a capture writes its size** on its corner, and « Take the visible page » takes the
+    window whole. Esc cancels, and the composer is as it was.
+- **The signature by mode (FRU-609)**: « Guest » in dashes for a person nobody knows, the note goes
+  unsigned; a click opens « Name » and « Remember me in this browser ». The e-mail is asked after
+  the send (P3), never here.
+- **« Sign in to send » (FRU-609)**: `ComposerOptions.signInToSend` says a reader must sign in before
+  a note goes (`embed.ts`: a session of the host that ended, `signedOut(true)`). « Send » then says
+  « Sign in to send », disabled, under « Only the team of this site can send notes here. », with the
+  sign-in of the host beside it. The note, its files and the batch stay; `signInChanged()` takes the
+  new answer under an open composer, which then sends. The widget does not know the name of the team,
+  so the sentence names none.
 - **One text button, « Attach », opens a menu of the ways to join a file** (FRU-351, decision of
   Mathieu): « Add an attachment » (the file picker, any type), « Capture an area », « Capture the
   whole page » (both only with a `captureVisible` of the host) and « Drag and drop », a zone where a
