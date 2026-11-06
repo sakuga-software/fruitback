@@ -57,7 +57,12 @@ for (const [name, fail] of Object.entries(failures)) {
     await opener.click();
     await expect(list.getByRole('status')).toHaveText(/could not be read/);
     await expect(list.getByText('No note on this page yet.')).toBeHidden();
-    // No number on the scope or on a chip: zero notes would be a guess.
+    const retry = list.getByRole('button', { name: 'Try again' });
+    await expect(retry).toBeFocused();
+    // No tab: a count of zero would be a guess (FRU-606).
+    await expect(list.getByRole('tablist')).toBeHidden();
+    // No number on the scope or on a chip of « Search and options » either.
+    await list.getByRole('button', { name: 'Search and options' }).click();
     await expect(list.locator('.fruitback-sidebar-scope')).toHaveText('This page');
     await expect(list.getByRole('group', { name: 'Status' }).getByRole('button')).toHaveText([
       'All',
@@ -66,8 +71,6 @@ for (const [name, fail] of Object.entries(failures)) {
       'In progress',
       'Done',
     ]);
-    const retry = list.getByRole('button', { name: 'Try again' });
-    await expect(retry).toBeFocused();
 
     // The control: the same page, with a worker that answers an empty list, shows the empty state.
     failing = false;
@@ -101,7 +104,8 @@ test('a read that fails after a good one leaves the pins and the list as they we
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
   await page.getByRole('button', { name: 'Show every note in a sidebar' }).click();
   const list = page.getByRole('dialog', { name: 'Notes on this page' });
-  await list.getByRole('button', { name: 'All 1', exact: true }).click();
+  // The tabs of the read that answered: the note is still in « Open » (FRU-606).
+  await expect(list.getByRole('tab', { name: 'Open · 1' })).toHaveAttribute('aria-selected', 'true');
   await expect(list.locator('[data-fruitback-note]')).toHaveCount(1);
   await expect(list.getByText(/could not be read/)).toBeHidden();
 });

@@ -55,6 +55,19 @@ function mount(entries: SidebarEntry[] = [], more: Partial<Parameters<typeof cre
   return { page, state, chosen, sidebar, root, items, opener, chips, chipNames, chip, search, type };
 }
 
+/** A list opened with « Search and options » open too (FRU-606): the search and the chips show. */
+function mountSearching(entries: SidebarEntry[] = [], more: Partial<Parameters<typeof createSidebar>[0]> = {}) {
+  const mounted = mount(entries, more);
+  const open = mounted.sidebar.open.bind(mounted.sidebar);
+  mounted.sidebar.open = () => {
+    open();
+    const toggle = mounted.root.querySelector<HTMLElement>('[data-fruitback-search-toggle]');
+    if (toggle?.getAttribute('aria-expanded') === 'false') toggle.click();
+  };
+
+  return mounted;
+}
+
 /** The names of the chips that show, with their numbers: « All 8 », « New 2 »… */
 const chipNamesIn = (root: ParentNode): (string | null)[] =>
   [...root.querySelectorAll<HTMLElement>('[data-fruitback-chip]')]
@@ -190,6 +203,121 @@ describe('the list of every note of the page (FRU-129, FRU-308)', () => {
   });
 });
 
+describe('the three tabs of the list: To check, Open, Done (FRU-606)', () => {
+  const loop = (): SidebarEntry[] =>
+    (
+      [
+        ['a', 'new', 'The mug is too small', {}],
+        ['b', 'progress', 'Wrong colour on the button', {}],
+        ['c', 'done', 'Typo in the footer', { mine: true as const }],
+        [
+          'd',
+          'done',
+          'Logo too big',
+          { mine: true as const, checked: { by: 'Camille', at: '2026-10-09T11:00:00.000Z' } },
+        ],
+        ['e', 'closed', 'Not a bug', {}],
+        ['f', 'done', 'Somebody else’s fix', {}],
+      ] as const
+    ).map(([id, stage, text, said], index) => ({
+      issue: { ...note(id, text, stage), ...said },
+      placement: 'found',
+      number: index + 1,
+    }));
+  const ids = (items: HTMLElement[]) => items.map((item) => item.dataset.fruitbackNote).join('');
+  const tabsOf = (root: HTMLElement) =>
+    [...root.querySelectorAll<HTMLElement>('[role="tab"]')].map((tab) => [
+      tab.textContent,
+      tab.getAttribute('aria-selected'),
+    ]);
+
+  it('sorts each note into one tab, and opens on « To check » while a note waits for its verdict', () => {
+    const { sidebar, root, items } = mount(loop());
+    sidebar.open();
+
+    assert.equal(root.querySelector('[role="tablist"]')?.getAttribute('aria-label'), 'Notes on this page');
+    assert.deepEqual(tabsOf(root), [
+      ['To check · 1', 'true'],
+      ['Open · 2', 'false'],
+      ['Done · 3', 'false'],
+    ]);
+    assert.equal(ids(items()), 'c');
+    // The search and the chips wait behind « Search and options ».
+    assert.equal(root.querySelector<HTMLElement>('.fruitback-sidebar-actions')?.hidden, true);
+
+    (root.querySelector('[data-fruitback-tab="open"]') as HTMLElement).click();
+    assert.equal(ids(items()), 'ab');
+    (root.querySelector('[data-fruitback-tab="done"]') as HTMLElement).click();
+    assert.equal(ids(items()), 'def');
+    assert.equal(root.querySelector('.fruitback-sidebar-panel')?.getAttribute('role'), 'tabpanel');
+    assert.equal(
+      root.querySelector('.fruitback-sidebar-panel')?.getAttribute('aria-labelledby'),
+      'fruitback-sidebar-tab-done',
+    );
+  });
+
+  it('opens on « Open » when no note waits, says an empty tab, and moves with the arrows', () => {
+    const { sidebar, root, items, page } = mount(loop().filter((entry) => entry.issue.note.id !== 'c'));
+    sidebar.open();
+
+    assert.deepEqual(tabsOf(root)[1], ['Open · 2', 'true']);
+    const open = root.querySelector('[data-fruitback-tab="open"]') as HTMLElement;
+    open.focus();
+    const KeyboardEvent = keyboardEventCtor(page);
+    open.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+    assert.deepEqual(tabsOf(root)[0], ['To check · 0', 'true']);
+    assert.equal(deepActiveElement(page.document)?.getAttribute('data-fruitback-tab'), 'check');
+    assert.equal(items().length, 0);
+    assert.equal(root.querySelector<HTMLElement>('.fruitback-sidebar-empty')?.textContent, 'No note to check.');
+    assert.equal(root.querySelector<HTMLElement>('.fruitback-sidebar-empty')?.hidden, false);
+  });
+
+  it('gives way to one filtered list while « Search and options » is open, and comes back as it was', () => {
+    const { sidebar, root, items, chip } = mount(loop());
+    sidebar.open();
+    const toggle = root.querySelector('[data-fruitback-search-toggle]') as HTMLElement;
+    assert.equal(toggle.getAttribute('aria-label'), 'Search and options');
+    assert.equal(toggle.getAttribute('aria-expanded'), 'false');
+
+    toggle.click();
+    assert.equal(toggle.getAttribute('aria-expanded'), 'true');
+    assert.equal(root.querySelector<HTMLElement>('[role="tablist"]')?.hidden, true);
+    assert.equal(root.querySelector<HTMLElement>('.fruitback-sidebar-actions')?.hidden, false);
+    assert.equal(ids(items()), 'abcdef');
+    chip('done').click();
+    assert.equal(ids(items()), 'cdf');
+
+    toggle.click();
+    assert.equal(root.querySelector<HTMLElement>('[role="tablist"]')?.hidden, false);
+    assert.equal(ids(items()), 'c', 'the chip of the search goes with it');
+  });
+
+  it('keeps the notes kept for later at the head of « Open »', () => {
+    const draft: import('./drafts.ts').Draft = { note: noteFixture({ id: 'k', text: 'Kept one' }) };
+    const { sidebar, root } = mount(loop(), { drafts: () => [draft] });
+    sidebar.open();
+    const drafts = root.querySelector<HTMLElement>('[data-fruitback-drafts]');
+    assert.equal(drafts?.hidden, true, 'not in « To check »');
+
+    (root.querySelector('[data-fruitback-tab="open"]') as HTMLElement).click();
+    assert.equal(drafts?.hidden, false);
+  });
+
+  it('is in French for a French reader', () => {
+    const { sidebar, root } = mount(loop(), { translator: createTranslator({ locale: 'fr' }) });
+    sidebar.open();
+
+    assert.deepEqual(
+      tabsOf(root).map(([words]) => words),
+      ['À vérifier · 1', 'Ouvertes · 2', 'Terminées · 3'],
+    );
+    assert.equal(
+      root.querySelector('[data-fruitback-search-toggle]')?.getAttribute('aria-label'),
+      'Recherche et options',
+    );
+  });
+});
+
 describe('the search and the chips of the list (FRU-308)', () => {
   const eight = (): SidebarEntry[] =>
     (
@@ -207,10 +335,11 @@ describe('the search and the chips of the list (FRU-308)', () => {
   const ids = (items: HTMLElement[]) => items.map((item) => item.dataset.fruitbackNote).join('');
 
   it('counts each status, and a chip shows its notes only', () => {
-    const { sidebar, root, items, chips, chipNames, chip } = mount(eight());
+    const { sidebar, root, items, chips, chipNames, chip } = mountSearching(eight());
     sidebar.open();
 
-    assert.equal(root.querySelector('[role="tablist"]'), null, 'the tabs of FRU-259 are gone');
+    // « Search and options » is open: one list, filtered, stands in for the tabs (FRU-606).
+    assert.equal(root.querySelector<HTMLElement>('[role="tablist"]')?.hidden, true, 'the tabs give way to the chips');
     const group = root.querySelector('.fruitback-sidebar-chips');
     assert.equal(group?.getAttribute('role'), 'group');
     assert.equal(group?.getAttribute('aria-label'), 'Status');
@@ -237,7 +366,7 @@ describe('the search and the chips of the list (FRU-308)', () => {
   });
 
   it('has no chip « Closed » while no note of the page is closed', () => {
-    const { sidebar, chipNames, chip } = mount(eight().filter((entry) => entry.issue.stage !== 'closed'));
+    const { sidebar, chipNames, chip } = mountSearching(eight().filter((entry) => entry.issue.stage !== 'closed'));
     sidebar.open();
 
     assert.deepEqual(chipNames(), ['All 7', 'New 2', 'To do 2', 'In progress 2', 'Done 1']);
@@ -247,7 +376,7 @@ describe('the search and the chips of the list (FRU-308)', () => {
   it('searches the whole text of the notes and their identifier, whatever the case, and the chips count what it found', () => {
     const notes = eight();
     (notes[3] as SidebarEntry).issue.identifier = 'FRU-128';
-    const { sidebar, root, items, chipNames, chip, search, type } = mount(notes);
+    const { sidebar, root, items, chipNames, chip, search, type } = mountSearching(notes);
     sidebar.open();
     assert.equal(search.getAttribute('aria-label'), 'Search notes');
     assert.equal(search.placeholder, 'Search notes');
@@ -271,7 +400,7 @@ describe('the search and the chips of the list (FRU-308)', () => {
   });
 
   it('says that nothing matches, which is not that the page has no note', () => {
-    const { sidebar, root, type } = mount(eight());
+    const { sidebar, root, type } = mountSearching(eight());
     sidebar.open();
     const empty = root.querySelector('.fruitback-sidebar-empty') as HTMLElement;
     assert.equal(empty.hidden, true);
@@ -284,7 +413,7 @@ describe('the search and the chips of the list (FRU-308)', () => {
   });
 
   it('keeps the keys typed in the search from the page, and lets Escape close the list', () => {
-    const { page, sidebar, search } = mount(eight());
+    const { page, sidebar, search } = mountSearching(eight());
     let reached = 0;
     page.document.addEventListener('keydown', () => (reached += 1));
     sidebar.open();
@@ -298,7 +427,7 @@ describe('the search and the chips of the list (FRU-308)', () => {
   });
 
   it('filters the detached notes too', () => {
-    const { sidebar, root, chip, type } = mount([
+    const { sidebar, root, chip, type } = mountSearching([
       { issue: note('a', 'Found'), placement: 'found', number: 1 },
       { issue: note('c', 'Gone banner', 'progress'), placement: 'detached' },
     ]);
@@ -329,7 +458,7 @@ describe('the search and the chips of the list (FRU-308)', () => {
       number: 1,
     });
     let open: string | undefined = 'b';
-    const { sidebar, items } = mount([withReplies('a', 0), withReplies('b', 1), withReplies('c', 2)], {
+    const { sidebar, items } = mountSearching([withReplies('a', 0), withReplies('b', 1), withReplies('c', 2)], {
       current: () => open,
     });
     sidebar.open();
@@ -371,7 +500,7 @@ describe('the search and the chips of the list (FRU-308)', () => {
 
   it('says « further down » for a note under the part in sight, and follows the page while it scrolls', async () => {
     const under = new Set(['b']);
-    const { page, sidebar, items } = mount(
+    const { page, sidebar, items } = mountSearching(
       [
         { issue: note('a', 'In sight'), placement: 'found', number: 1 },
         { issue: note('b', 'Under the fold'), placement: 'found', number: 2 },
@@ -1024,7 +1153,7 @@ describe('« All pages », when the host reads the site (FRU-470)', () => {
     root.querySelector(`[data-fruitback-scope="${which}"]`) as HTMLButtonElement;
 
   it('is not offered when the host reads one page only: « This page » stays words', () => {
-    const { sidebar, root } = mount([{ issue: note('a', 'Here'), placement: 'found', number: 1 }]);
+    const { sidebar, root } = mountSearching([{ issue: note('a', 'Here'), placement: 'found', number: 1 }]);
     sidebar.open();
 
     assert.equal(root.querySelector('[data-fruitback-scope]'), null);
@@ -1033,9 +1162,12 @@ describe('« All pages », when the host reads the site (FRU-470)', () => {
 
   it('reads the site when chosen, lists its notes with their page, and says how many', async () => {
     const host = siteHost();
-    const { sidebar, root, items, chips } = mount([{ issue: note('a', 'Here'), placement: 'found', number: 1 }], {
-      site: { read: host.read, here: (url) => url === 'https://preview.acme.test/pricing' },
-    });
+    const { sidebar, root, items, chips } = mountSearching(
+      [{ issue: note('a', 'Here'), placement: 'found', number: 1 }],
+      {
+        site: { read: host.read, here: (url) => url === 'https://preview.acme.test/pricing' },
+      },
+    );
     sidebar.open();
     assert.equal(scope(root, 'page').getAttribute('aria-pressed'), 'true');
     assert.equal(scope(root, 'page').textContent, 'This page · 1');
@@ -1071,7 +1203,7 @@ describe('« All pages », when the host reads the site (FRU-470)', () => {
 
   it('opens a note of this page in the list, and refuses an address of another origin', async () => {
     const host = siteHost();
-    const { sidebar, root, chosen } = mount([{ issue: note('a', 'Here'), placement: 'found', number: 1 }], {
+    const { sidebar, root, chosen } = mountSearching([{ issue: note('a', 'Here'), placement: 'found', number: 1 }], {
       site: { read: host.read, here: (url) => url === 'https://preview.acme.test/pricing' },
     });
     sidebar.open();
@@ -1089,7 +1221,7 @@ describe('« All pages », when the host reads the site (FRU-470)', () => {
 
   it('searches through the host once the typing stops, and drops an older answer', async () => {
     const host = siteHost();
-    const { sidebar, root, type } = mount([], { site: { read: host.read, here: () => false } });
+    const { sidebar, root, type } = mountSearching([], { site: { read: host.read, here: () => false } });
     sidebar.open();
     scope(root, 'site').click();
     type('price');
@@ -1105,7 +1237,7 @@ describe('« All pages », when the host reads the site (FRU-470)', () => {
 
   it('shows more with the cursor of the host, and gives focus to the first note it brought', async () => {
     const host = siteHost();
-    const { sidebar, root, page } = mount([], { site: { read: host.read, here: () => false } });
+    const { sidebar, root, page } = mountSearching([], { site: { read: host.read, here: () => false } });
     sidebar.open();
     scope(root, 'site').click();
     host.answer({ ok: true, notes: [siteNote('1', '/a')], total: 2, next: 'c2' });
@@ -1127,7 +1259,7 @@ describe('« All pages », when the host reads the site (FRU-470)', () => {
 
   it('says a failed read, reads again on « Try again », and offers no retry where the host cannot read', async () => {
     const host = siteHost();
-    const { sidebar, root } = mount([], { site: { read: host.read, here: () => false } });
+    const { sidebar, root } = mountSearching([], { site: { read: host.read, here: () => false } });
     sidebar.open();
     scope(root, 'site').click();
     host.answer({ ok: false, reason: 'failed' });
@@ -1154,7 +1286,7 @@ describe('« All pages », when the host reads the site (FRU-470)', () => {
       new Promise<import('./site-notes.ts').SiteRead>((resolve) => {
         answers.push(resolve);
       });
-    const { sidebar, root } = mount([], { site: { read, here: () => false } });
+    const { sidebar, root } = mountSearching([], { site: { read, here: () => false } });
     sidebar.open();
     scope(root, 'site').click();
     sidebar.close();
@@ -1175,7 +1307,7 @@ describe('« All pages », when the host reads the site (FRU-470)', () => {
 
   it('gives focus back to the row of a note of this page, opened from « All pages » (review of #639)', async () => {
     const host = siteHost();
-    const { sidebar, root, page } = mount([{ issue: note('a', 'Here'), placement: 'found', number: 1 }], {
+    const { sidebar, root, page } = mountSearching([{ issue: note('a', 'Here'), placement: 'found', number: 1 }], {
       site: { read: host.read, here: (url) => url.endsWith('/pricing') },
     });
     sidebar.open();
@@ -1191,7 +1323,7 @@ describe('« All pages », when the host reads the site (FRU-470)', () => {
 
   it('opens again on « This page », and asks the host again', async () => {
     const host = siteHost();
-    const { sidebar, root } = mount([], { site: { read: host.read, here: () => false } });
+    const { sidebar, root } = mountSearching([], { site: { read: host.read, here: () => false } });
     sidebar.open();
     scope(root, 'site').click();
     host.answer({ ok: true, notes: [siteNote('1', '/a')], total: 1 });

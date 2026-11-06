@@ -100,8 +100,45 @@ export const STYLES = `
 @media (forced-colors: active) {
   .fruitback-sidebar-scopes > button[aria-pressed='true'] { outline: 2px solid Highlight; }
 }
+/*
+  FRU-606: To check, Open and Done, the tabs of the side panel, drawn as the rail of the scope.
+  Under the head while « Search and options » is closed.
+*/
+.fruitback-sidebar-tabs {
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 3px;
+  margin: 0 18px 12px;
+  padding: 3px;
+  border-radius: var(--fruitback-radius-md);
+  background: var(--fruitback-color-surface-sunken);
+}
+.fruitback-sidebar-tab {
+  /* « Terminées · 12 » on a phone: the words break on two lines, the tab grows, nothing runs past. */
+  min-height: 32px;
+  padding: 3px 6px;
+  border: 0;
+  border-radius: var(--fruitback-radius-field);
+  background: none;
+  color: var(--fruitback-color-text-muted);
+  font: 600 12px/1.2 var(--fruitback-font-sans);
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.fruitback-sidebar-tab[aria-selected='true'] {
+  background: var(--fruitback-color-surface);
+  box-shadow: var(--fruitback-shadow-xs);
+  color: var(--fruitback-color-text);
+}
+@media (pointer: coarse) { .fruitback-sidebar-tab { min-height: 44px; } }
+@media (forced-colors: active) {
+  .fruitback-sidebar-tab[aria-selected='true'] { outline: 2px solid Highlight; }
+}
 /* A class that sets a display beats the rule of the browser for hidden: « All pages » hides the chips. */
 .fruitback-sidebar-chips[hidden] { display: none; }
+.fruitback-sidebar-actions[hidden] { display: none; }
+.fruitback-sidebar-tabs[hidden] { display: none; }
 .fruitback-sidebar-more { align-self: center; margin: 4px auto 12px; display: block; }
 .fruitback-sidebar-more[hidden] { display: none; }
 .fruitback-sidebar-item[aria-disabled='true'] { cursor: default; opacity: 0.7; }

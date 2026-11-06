@@ -54,8 +54,8 @@ test('the list shows every note, and a note chosen there opens its thread', asyn
 
   await open.click();
   const entries = list.locator('[data-fruitback-note]');
-  // « All », the chip that is pressed when the list opens: every note, whatever its state.
-  await expect(list.getByRole('button', { name: 'All 2', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  // « Open », the tab chosen when the list opens with no note to check (FRU-606): two new notes.
+  await expect(list.getByRole('tab', { name: 'Open · 2' })).toHaveAttribute('aria-selected', 'true');
   await expect(entries).toHaveCount(2);
 
   // Choosing a note opens its thread in the column of the list, in place of the rows (FRU-312): the
@@ -210,6 +210,24 @@ test('the list is the board « Sidebar mode »: its measures, its chips, its sea
   });
   // The dock stands aside: the list covers its corner, and holds its own button to leave a note.
   await expect(dock).toBeHidden();
+
+  // The three tabs of the loop, under the head (FRU-606): « Open » holds the six notes left to do.
+  const tabs = list.getByRole('tablist', { name: 'Notes on this page' });
+  await expect(tabs.getByRole('tab')).toHaveText(['To check · 0', 'Open · 6', 'Done · 2']);
+  await expect(tabs.getByRole('tab', { name: 'Open · 6' })).toHaveAttribute('aria-selected', 'true');
+  expect(await read('.fruitback-sidebar-tabs', ['padding', 'border-radius', 'background-color'])).toMatchObject({
+    x: 1067,
+    y: 60,
+    width: 355,
+    padding: '3px',
+    'border-radius': '10px',
+    'background-color': 'rgb(244, 244, 245)',
+  });
+  // « Search and options » gives the board « Sidebar mode » of FRU-308: the scope, the search and the
+  // chips in place of the tabs, over one list of every note.
+  await list.getByRole('button', { name: 'Search and options' }).click();
+  await expect(tabs).toBeHidden();
+  await expect(list.getByRole('searchbox', { name: 'Search notes' })).toBeFocused();
 
   // The head: the drop, « Notes », the host, « Back to floating pins » and the cross.
   expect(await read('.fruitback-sidebar-head', ['padding', 'gap', 'border-bottom-width'])).toMatchObject({
@@ -580,8 +598,8 @@ test('a note whose element is gone is a detached note at the bottom, and not amo
   await expect(unplaced).toBeVisible();
   await expect(list.locator('.fruitback-sidebar-list [data-fruitback-note]')).toHaveCount(1);
   await expect(list.locator('.fruitback-sidebar-list')).not.toContainText('On a field that goes');
-  // The chips count the notes a pin shows on its element.
-  await expect(list.getByRole('button', { name: 'All 1', exact: true })).toBeVisible();
+  // The tabs count the notes a pin shows on its element (FRU-606).
+  await expect(list.getByRole('tab', { name: 'Open · 1' })).toBeVisible();
   // The board: the note, then its status, its identifier and what became of it.
   await expect(unplaced.locator('[data-fruitback-note]')).toHaveText(
     /^On a field that goes.+ · the element it pointed at is gone$/,
@@ -642,6 +660,11 @@ for (const scheme of ['light', 'dark'] as const) {
       );
     };
 
+    expect(await scan()).toEqual([]);
+    // The tabs and « Search and options » open (FRU-606).
+    await page.getByRole('tab', { name: /^Done/ }).click();
+    expect(await scan()).toEqual([]);
+    await page.getByRole('button', { name: 'Search and options' }).click();
     expect(await scan()).toEqual([]);
 
     // The control for the empty list: a byline as pale as the surface must be a finding.

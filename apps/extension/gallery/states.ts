@@ -498,7 +498,7 @@ function panelStates(): GalleryState[] {
       title: 'Open notes · a reply being written',
       build: panel(onWith(NOTES), { open: 'n1', replying: { id: 'n1', text: 'Same on the light card.' } }),
     },
-    { id: 'finished', title: 'Finished notes', build: panel(onWith(NOTES), { tab: 'finished' }) },
+    { id: 'finished', title: 'Finished notes', build: panel(onWith(NOTES), { tab: 'done' }) },
     {
       id: 'search',
       title: 'Search and options',

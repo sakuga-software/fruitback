@@ -215,6 +215,7 @@ How this repository is formatted, tested and documented, and which test holds ea
 | The mark of a note on the page                                        | pin           | repère                | pin, pins, épingles                    | —                     |
 | Something that works                                                  | works         | fonctionne            | marche                                 | —                     |
 | The Linear group of states that are not planned yet                   | Backlog       | Non planifiés         | backlog                                | —                     |
+| The tab of the notes the reader is asked to check (FRU-606)           | To check      | À vérifier            | Prêt à vérifier, Prêtes à vérifier     | Ready to check        |
 
 « Épingler » stays for the browser's own button that pins an extension to the toolbar: that is the
 word of the browser, not of Fruitback.

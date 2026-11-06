@@ -62,6 +62,8 @@ test('« All pages » lists the notes of the other pages of the site, and opens 
   });
   await page.getByRole('button', { name: /Show every note in a sidebar/ }).click();
   const list = page.getByRole('dialog', { name: 'Notes on this page' });
+  // « All pages » is a scope of « Search and options » (FRU-606), as « Whole site » of the side panel.
+  await list.getByRole('button', { name: 'Search and options' }).click();
   await list.getByRole('button', { name: /^All pages/ }).click();
   await list.getByRole('searchbox', { name: 'Search notes' }).fill(tag);
   const rows = list.locator('[data-fruitback-site-note]');

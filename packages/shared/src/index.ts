@@ -7,3 +7,4 @@ export * from './feedback-text.ts';
 export * from './status-paint.ts';
 export * from './i18n-core.ts';
 export * from './external-protocol.ts';
+export * from './note-tabs.ts';

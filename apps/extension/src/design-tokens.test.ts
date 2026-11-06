@@ -162,7 +162,6 @@ const PAIRS = [
   { foreground: 'success-line', background: 'surface', minimum: 3, where: 'the edge of « Looks fixed »' },
   { foreground: 'alert-text', background: 'alert-surface', minimum: 4.5, where: 'the title of a problem' },
   { foreground: 'text', background: 'alert-surface', minimum: 4.5, where: 'the words of a problem' },
-  { foreground: 'subtle', background: 'ready-surface', minimum: 4.5, where: 'the words of « Ready to check »' },
   { foreground: 'text', background: 'selection', minimum: 4.5, where: 'a selected text' },
   { foreground: 'on-tile', background: 'tile-on', minimum: 4.5, where: 'the initial of a site that is on' },
   // The page of the extension (FRU-301).

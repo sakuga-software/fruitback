@@ -92,7 +92,7 @@ export const WORDS = {
     done: 'Done',
     show: 'Show on the page',
     reply: 'Reply',
-    ready: 'Ready to check',
+    ready: 'To check',
     fixed: 'Looks fixed',
     wrong: 'Still wrong',
     markedDone: 'Marked done',
@@ -194,12 +194,12 @@ export function clickInRow(page: Page, note: string, label: string): Promise<unk
   );
 }
 
-/** What « Ready to check » shows: its title, and each note with the line of who fixed it. */
+/** What « To check » shows: the words of its tab, and each note with the line of who fixed it. */
 export function readyBlock(page: Page) {
   return inPanel<{ title: string | null; items: { note: string; meta: string }[]; problem: string | null }>(
     page,
     `({
-      title: document.querySelector('section.ready h3')?.textContent ?? null,
+      title: document.querySelector('[role="tab"][data-tab="check"]')?.textContent ?? null,
       items: [...document.querySelectorAll('.ready-item')].map((item) => ({
         note: item.querySelector('.ready-note')?.textContent ?? '',
         meta: item.querySelector('.ready-meta')?.textContent ?? '',
@@ -207,6 +207,11 @@ export function readyBlock(page: Page) {
       problem: document.querySelector('.ready-problem')?.textContent ?? null,
     })`,
   );
+}
+
+/** A click on a tab of the list: `check`, `open` or `done` (FRU-606). */
+export function chooseTab(page: Page, tab: 'check' | 'open' | 'done'): Promise<unknown> {
+  return inPanel(page, `document.querySelector('[role="tab"][data-tab=${JSON.stringify(tab)}]')?.click()`);
 }
 
 /** A click on « Looks fixed » or « Still wrong » of the note with these words. */

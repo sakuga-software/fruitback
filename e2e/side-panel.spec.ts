@@ -11,6 +11,7 @@ import {
   plantOn,
   panelRows,
   clickInRow,
+  chooseTab,
   readyBlock,
   verdict,
   rowMeta,
@@ -182,7 +183,7 @@ test('« Notes on this page » lists the pins of the page, opens a row from a pi
   await again
     .getByRole('button', { name: /^(Show all notes in a sidebar|Voir toutes les notes dans un panneau)/ })
     .click();
-  await expect.poll(async () => (await panelRows(page).catch(() => ({ tabs: [], rows: [] }))).tabs.length).toBe(2);
+  await expect.poll(async () => (await panelRows(page).catch(() => ({ tabs: [], rows: [] }))).tabs.length).toBe(3);
 
   // The same numbers as the pins; Open and Done count the stages of the pins.
   const pins = await page.locator('[data-fruitback-pin]').evaluateAll((all) =>
@@ -195,7 +196,7 @@ test('« Notes on this page » lists the pins of the page, opens a row from a pi
   const done = pins.filter((pin) => pin.done);
   const listed = await panelRows(page);
   const said = await words(page);
-  expect(listed.tabs).toEqual([`${said.open} · ${open.length}`, `${said.done} · ${done.length}`]);
+  expect(listed.tabs).toEqual([`${said.ready} · 0`, `${said.open} · ${open.length}`, `${said.done} · ${done.length}`]);
   expect(listed.rows.map((row) => row.number).sort()).toEqual(open.map((pin) => pin.number).sort());
 
   // A click on a pin opens its row in the panel.
@@ -252,7 +253,7 @@ test('« Notes on this page » lists the pins of the page, opens a row from a pi
   expect(fetched.filter((url) => !url.startsWith('chrome-extension://'))).toEqual([]);
 });
 
-test('« Ready to check »: « Looks fixed » sends a note to Done, « Still wrong » reopens one (FRU-300)', async ({
+test('« To check »: « Looks fixed » sends a note to Done, « Still wrong » reopens one (FRU-300, FRU-606)', async ({
   extension,
 }) => {
   test.slow();
@@ -311,8 +312,8 @@ test('« Ready to check »: « Looks fixed » sends a note to Done, « Still wro
   expect(ready.items.map((item) => item.note).sort()).toEqual(['Check note 2', 'Check note 3']);
   // No reply of the team: who marked it done is not known, only when.
   expect(ready.items.find((item) => item.note === 'Check note 3')?.meta).toMatch(new RegExp(`^${said.markedDone} · `));
-  // Not in Done while they wait to be checked.
-  expect((await panelRows(page)).tabs[1]).toBe(`${said.done} · 1`);
+  // The panel opens on « To check » while a note waits there, and they are not in Done.
+  expect((await panelRows(page)).tabs).toEqual([`${said.ready} · 2`, `${said.open} · 1`, `${said.done} · 1`]);
 
   // « Looks fixed »: the note is in Done, checked by the person.
   expect(await verdict(page, 'Check note 3', said.fixed)).toBe(true);
@@ -322,8 +323,9 @@ test('« Ready to check »: « Looks fixed » sends a note to Done, « Still wro
     .toBe(`${said.doneStage} · ${said.checkedByYou} · ${said.justNow}`);
 
   // « Still wrong »: the note is open again, New, reopened by the person.
+  await chooseTab(page, 'check');
   expect(await verdict(page, 'Check note 2', said.wrong)).toBe(true);
-  await expect.poll(async () => (await readyBlock(page)).title, { timeout: 20_000 }).toBeNull();
+  await expect.poll(async () => (await readyBlock(page)).title, { timeout: 20_000 }).toBe(`${said.ready} · 0`);
   await expect
     .poll(() => rowMeta(page, 'Check note 2'))
     .toBe(`${said.newStage} · ${said.reopenedByYou} · ${said.justNow}`);
