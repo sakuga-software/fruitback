@@ -19,7 +19,7 @@ import {
   Tip,
 } from '../ui';
 import { ago } from '../ago';
-import { NotePages } from './notes';
+import { NotePages } from '../parts/note-pages';
 import { PageHead, useWorkspace } from './workspace';
 import { msg, t } from '../i18n';
 import { useLocale } from '../use-locale';

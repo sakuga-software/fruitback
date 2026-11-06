@@ -4,7 +4,8 @@ import { readFileSync } from 'node:fs';
 
 /** The console has no DOM under `node --test`: the guard reads the source (FRU-435). */
 const source = readFileSync(new URL('connector-marks.tsx', import.meta.url), 'utf8');
-const notes = readFileSync(new URL('routes/notes.tsx', import.meta.url), 'utf8');
+// The column « Went to » of the Notes screen: its `Place` is a part of the screen (FRU-614).
+const notes = readFileSync(new URL('parts/note-parts.tsx', import.meta.url), 'utf8');
 const connectors = readFileSync(new URL('routes/connectors.tsx', import.meta.url), 'utf8');
 const parts = readFileSync(new URL('parts/connector-parts.tsx', import.meta.url), 'utf8');
 

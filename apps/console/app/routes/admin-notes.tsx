@@ -8,7 +8,8 @@ import { Choice, DataTable, Field, Lead, LinkButton, StatusDot, Title } from '..
 import { useTypedSearch } from '../typed-search';
 import { useLocale } from '../use-locale';
 import { kindName } from '../parts/connector-parts';
-import { NotePages, NotesFailed, Reference, excerptOf } from './notes';
+import { NotePages } from '../parts/note-pages';
+import { NotesFailed, Reference, excerptOf } from '../parts/note-parts';
 import { siteLabel } from '../site-address';
 import { type Fetched } from '../listed';
 
