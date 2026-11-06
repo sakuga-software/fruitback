@@ -13,6 +13,7 @@ import {
   type NoteSource,
   type NoteStage,
   type NoteStatus,
+  NOTE_STAGES,
   noteCommentSchema,
   noteSchema,
 } from '@fruitback/shared';
@@ -71,6 +72,8 @@ import {
 } from './destinations.ts';
 import { type FruitbackMessages, createTranslator, languageOf } from './messages.ts';
 import {
+  type CheckAnswer,
+  type CheckFailure,
   type EditAnswer,
   type EditFailure,
   type Overlay,
@@ -594,6 +597,26 @@ export function init(options: FruitbackOptions): Fruitback {
         return answer;
       },
     },
+    // FRU-603: the verdict of the author, from the thread of the note, in every mode. The worker
+    // decides who may: the read says `mine` to the author it names, and the thread offers it then.
+    // No read after it, as for an edit: the reply and the stage go on the issue, and the lists follow.
+    ...(options.replies === false
+      ? {}
+      : {
+          check: {
+            send: async (issue: NoteIssue, verdict: 'fixed' | 'wrong', body?: string) => {
+              const answer = await sendCheck(options, view, issue, verdict, body);
+              // Kept with no word of what the store made of it: no read here, which would close the
+              // thread (raised in review). The lists outside the page read again; the pins at the next read.
+              if (answer === 'kept') tellNotes({ kind: 'list' });
+              if (typeof answer === 'string') return answer;
+              sidebar.refresh();
+              tellNotes({ kind: 'list' });
+
+              return answer;
+            },
+          },
+        }),
   });
 
   const stages = createOfferedStages();
@@ -1359,7 +1382,7 @@ export function init(options: FruitbackOptions): Fruitback {
       const issue = readIssues.find((each) => each.note.id === id);
       if (issue === undefined) return 'refused';
       const sent = await sendCheck(options, view, issue, verdict).catch((): ReplyFailure => 'retry');
-      if (sent !== 'sent') return sent;
+      if (sent !== 'kept' && typeof sent === 'string') return sent;
       // The store moved the note, or wrote the verdict: the next read says it, never a guess here.
       await read();
 
@@ -1753,30 +1776,51 @@ async function sendEdit(
 /**
  * A verdict on a note (FRU-294), through the transport of the host. `refused`: the worker said no for
  * this reader or this note (`403`, `404`, a `409` of a note not done or checked already); nothing
- * moved, and trying again does not change it. `409 check-in-progress` is `retry`.
+ * moved, and trying again does not change it. `409 check-in-progress` is `retry`. `body`: what the
+ * author typed under « Still wrong » (FRU-603), written in the same reply of the store.
+ *
+ * The answer: the reply the store wrote and the stage of the note now, as the worker answers them. A `2xx`
+ * that says neither is `kept`: the verdict went, and only a read says what the store made of it.
  */
 async function sendCheck(
   options: FruitbackOptions,
   view: Window & typeof globalThis,
   issue: NoteIssue,
   verdict: 'fixed' | 'wrong',
-): Promise<'sent' | ReplyFailure | 'refused'> {
+  body?: string,
+): Promise<CheckAnswer | CheckFailure | 'kept'> {
   const response = await callWorker(options, {
     url: `${options.endpoint}/feedback/${encodeURIComponent(issue.id)}/check?client=${encodeURIComponent(options.clientId)}`,
     method: 'POST',
     contentType: 'application/json',
-    body: JSON.stringify({ url: canonicalizePageUrl(view.location.href), verdict }),
+    body: JSON.stringify({
+      url: canonicalizePageUrl(view.location.href),
+      verdict,
+      ...(body === undefined ? {} : { body }),
+    }),
   });
 
   // Another verdict on this note is being written (FRU-294): it is the moment, not a refusal, and a
   // second try once it is written is answered (raised in review).
-  return (
-    noteWriteFailure(
-      response,
-      (answer) =>
-        REFUSED.has(answer.status) && !(answer.status === 409 && errorOf(answer.body) === 'check-in-progress'),
-    ) ?? 'sent'
+  const failure = noteWriteFailure(
+    response,
+    (answer) => REFUSED.has(answer.status) && !(answer.status === 409 && errorOf(answer.body) === 'check-in-progress'),
   );
+  if (failure !== undefined) return failure;
+  // Any JSON may come back: only an object can hold the reply and the stage. `null`, a string, a
+  // number or a boolean says nothing of them, as no body does.
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(response.body);
+  } catch {
+    return 'kept';
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return 'kept';
+  const answer = parsed as { comment?: unknown; stage?: unknown };
+  const comment = noteCommentSchema.safeParse(answer.comment);
+  const stage = NOTE_STAGES.find((each) => each === answer.stage);
+
+  return comment.success && stage !== undefined ? { comment: comment.data, stage } : 'kept';
 }
 
 /** What the worker answers to a write about a note it takes from nobody now: `403`, `404`, `409`. */

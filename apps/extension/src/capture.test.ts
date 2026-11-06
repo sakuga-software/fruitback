@@ -151,6 +151,31 @@ describe('a capture of the page or of an area (FRU-332)', () => {
     assert.equal(asked, 2);
   });
 
+  it('names a refusal of permission on the second try « permission » too (FRU-617)', async () => {
+    const RATE = 'This request exceeds the MAX_CAPTURE_VISIBLE_TAB_CALLS_PER_SECOND quota.';
+    let asked = 0;
+    const refused = harness({
+      captureTab: async () => {
+        asked += 1;
+        throw new Error(asked === 1 ? RATE : "Either the '<all_urls>' or 'activeTab' permission is required.");
+      },
+      wait: async () => {},
+    });
+
+    assert.deepEqual(await refused.capture(undefined, 'https://acme.dev'), { refused: 'permission' });
+    assert.equal(asked, 2);
+    // The control: any other failure of the second try is still given up, never said « permission ».
+    asked = 0;
+    const failed = harness({
+      captureTab: async () => {
+        asked += 1;
+        throw new Error(asked === 1 ? RATE : 'Cannot access contents of url "chrome://newtab/".');
+      },
+      wait: async () => {},
+    });
+    assert.equal(await failed.capture(undefined, 'https://acme.dev'), undefined);
+  });
+
   it('turns bytes into base64 and back, past the size where a spread would overflow', () => {
     const big = new Uint8Array(200_000).map((_, index) => index % 251);
     assert.deepEqual(bytesOf(base64Of(big)), big);
