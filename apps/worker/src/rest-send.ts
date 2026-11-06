@@ -48,7 +48,7 @@ export function createSender({
   allows = isPublicAddress,
   timeoutMs = DELIVERY_TIMEOUT_MS,
 }: SenderSeams = {}): Send {
-  return (url, headers, body) =>
+  return (url, headers, body, options = {}) =>
     new Promise((resolve, reject) => {
       // WARNING: a socket does not resolve an IP address, so the lookup below never sees one. An
       // address written in the URL is checked here. The console refuses one when a connector is
@@ -73,11 +73,33 @@ export function createSender({
           lookup: guardedLookup(lookup, allows),
         },
         (answer) => {
-          // The status is all the worker reads, so the exchange ends here. The body is not read: it
-          // can be endless. A redirect is an answer like another: it is not followed.
-          clearTimeout(deadline);
-          resolve({ status: answer.statusCode ?? 0 });
-          answer.destroy();
+          const status = answer.statusCode ?? 0;
+          const limit = options.answerUpTo;
+          // The status is all a REST delivery reads, so the exchange ends here. The body is not read:
+          // it can be endless. A redirect is an answer like another: it is not followed.
+          if (limit === undefined || status < 200 || status >= 300) {
+            clearTimeout(deadline);
+            resolve({ status });
+            answer.destroy();
+
+            return;
+          }
+          // FRU-594: the answer of a routine names its session. Read up to `limit` bytes, under the
+          // same deadline: a body that is too long, or that never ends, is cut where it stands.
+          const chunks: Buffer[] = [];
+          let size = 0;
+          const finish = (): void => {
+            clearTimeout(deadline);
+            resolve({ status, answer: Buffer.concat(chunks).subarray(0, limit).toString('utf8') });
+            answer.destroy();
+          };
+          answer.on('data', (chunk: Buffer) => {
+            chunks.push(chunk);
+            size += chunk.length;
+            if (size >= limit) finish();
+          });
+          answer.on('end', finish);
+          answer.on('error', finish);
         },
       );
       sent.on('error', (error) => {

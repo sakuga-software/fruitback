@@ -10,7 +10,8 @@ const connectors = readFileSync(new URL('routes/connectors.tsx', import.meta.url
 const parts = readFileSync(new URL('parts/connector-parts.tsx', import.meta.url), 'utf8');
 
 /** The kinds that have a mark: the keys of `MARKS`. */
-const marked = new Set([...source.matchAll(/^ {2}(\w+): \{/gm)].map((match) => match[1]));
+// A key may be quoted: 'claude-routine' (FRU-594).
+const marked = new Set([...source.matchAll(/^ {2}'?([\w-]+)'?: \{/gm)].map((match) => match[1]));
 
 /** What would load a mark from elsewhere: an image, a `use` of another file, a font, a `src`. */
 const FETCHES = /<(?:image|img|use|link)\b|\b(?:src|href|xlinkHref)=/;
@@ -41,10 +42,11 @@ describe('the marks of the sources (FRU-435)', () => {
   });
 
   it('has one for each source of the Connectors screen, connected or to add (FRU-543)', () => {
-    // The sources to add that do not exist yet, and the three that do.
+    // The sources to add that do not exist yet, and the four that do.
     const later = [...connectors.matchAll(/\{ kind: '(\w+)', name: '/g)].map((match) => match[1]);
     assert.deepEqual(later, ['jira', 'gitlab', 'trello', 'notion', 'webhook']);
-    for (const kind of [...later, 'linear', 'github', 'rest']) assert.ok(marked.has(kind), `a mark for ${kind}`);
+    for (const kind of [...later, 'linear', 'github', 'rest', 'claude-routine'])
+      assert.ok(marked.has(kind), `a mark for ${kind}`);
     // The control: a kind with no mark is found.
     assert.equal(marked.has('asana'), false);
   });
@@ -52,7 +54,8 @@ describe('the marks of the sources (FRU-435)', () => {
   it('is drawn before the name of every source of the Connectors screen (FRU-543)', () => {
     // Every source to add and every connected one names its kind to the box of the mark.
     const sources = connectors.match(/<Source\b[^>]*>/gs) ?? [];
-    assert.equal(sources.length, 4);
+    // Linear, GitHub, an address, a Claude Code routine (FRU-594), and the sources of later.
+    assert.equal(sources.length, 5);
     for (const each of sources) assert.match(each, /\bkind=\{?["'\w.]/);
     assert.match(connectors, /<SourceMark kind=\{connector\.kind\} \/>/);
     // The box draws the mark, and no letter any more (the « L », « G », « { } » of the mockup).

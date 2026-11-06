@@ -1517,8 +1517,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Activé. Un appel qui échoue attend dans la file de l’adresse, et est réessayé.',
   'Off. Nothing is called.': 'Désactivé. Rien n’est appelé.',
   Call: 'Appeler',
-  'An address of the workspace that receives (Connectors). Fruitback signs each call with its secret.':
-    'Une adresse de l’espace de travail qui reçoit (Connecteurs). Fruitback signe chaque appel avec son secret.',
+  'An address of the workspace that receives, or a Claude Code routine (Connectors). Fruitback signs each call to an address with its secret.':
+    'Une adresse de l’espace de travail qui reçoit, ou une routine Claude Code (Connecteurs). Fruitback signe chaque appel vers une adresse avec son secret.',
   'A note of a known person arrives': 'Une note d’une personne connue arrive',
   'A member, or a reviewer your site identified. A note of a visitor starts nothing: anybody can write one.':
     'Un membre, ou un relecteur que votre site a identifié. La note d’un visiteur ne lance rien : n’importe qui peut en écrire une.',
@@ -1633,4 +1633,34 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Upgrade guide': 'Guide de mise à jour',
   'The browser refused the copy. Select the commands above and copy them by hand.':
     'Le navigateur a refusé la copie. Sélectionnez les commandes ci-dessus et copiez-les à la main.',
+  // FRU-594: a Claude Code routine, what the trigger of a site calls.
+  'Claude Code routine': 'Routine Claude Code',
+  'Trigger {id}': 'Déclencheur {id}',
+  'This is not the Fire URL of a routine. Copy it from claude.ai/code/routines: it starts with https://api.anthropic.com/v1/claude_code/routines/.':
+    'Ce n’est pas la Fire URL d’une routine. Copiez-la depuis claude.ai/code/routines : elle commence par https://api.anthropic.com/v1/claude_code/routines/.',
+  'This is not a token of a routine. Generate one in the API trigger of the routine, and paste it.':
+    'Ce n’est pas un jeton de routine. Générez-en un dans le déclencheur API de la routine, puis collez-le.',
+  'The routine could not be kept just now. Try again.': 'La routine n’a pas pu être enregistrée. Réessayez.',
+  'Fire URL': 'Fire URL',
+  'In the routine, at claude.ai/code/routines: Edit, then Trigger, then API.':
+    'Dans la routine, sur claude.ai/code/routines : Modifier, puis Déclencheur, puis API.',
+  Token: 'Jeton',
+  'Shown once by claude.ai when you generate it. It starts this routine only. Fruitback keeps it encrypted.':
+    'Montré une seule fois par claude.ai quand vous le générez. Il ne lance que cette routine. Fruitback le garde chiffré.',
+  'The routine answered {status}': 'La routine a répondu {status}',
+  'The triggers that call it stop, and the calls that waited are not sent.':
+    'Les déclencheurs qui l’appellent s’arrêtent, et les appels en attente ne partent pas.',
+  'The routine refused its token. Generate a new token at claude.ai/code/routines, then connect the routine again.':
+    'La routine a refusé son jeton. Générez un nouveau jeton sur claude.ai/code/routines, puis connectez la routine à nouveau.',
+  'The trigger of a site calls it when a note arrives. The call carries ids only: the routine reads the notes through the MCP server.':
+    'Le déclencheur d’un site l’appelle quand une note arrive. L’appel ne porte que des identifiants : la routine lit les notes par le serveur MCP.',
+  'Set up the routine': 'Configurer la routine',
+  Sessions: 'Sessions',
+  'No call started the routine yet.': 'Aucun appel n’a encore lancé la routine.',
+  'Session started': 'Session lancée',
+  'Open the session': 'Ouvrir la session',
+  'Calls that did not start it': 'Appels qui ne l’ont pas lancée',
+  'Every call arrived.': 'Tous les appels sont arrivés.',
+  'Starts a routine of your team when the trigger of a site calls it. The routine reads the notes through the MCP server.':
+    'Lance une routine de votre équipe quand le déclencheur d’un site l’appelle. La routine lit les notes par le serveur MCP.',
 };

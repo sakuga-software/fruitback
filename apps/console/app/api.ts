@@ -150,7 +150,8 @@ export function samePlace(one: Destination, other: Destination): boolean {
 type ConnectorAttention = { reason: 'key-refused' | 'key-lacks-access' | 'connection-ended'; since: string };
 export type Connector = {
   id: string;
-  kind: 'linear' | 'rest' | 'github';
+  /** `claude-routine` (FRU-594): what the trigger of a site calls to start a Claude Code routine. */
+  kind: 'linear' | 'rest' | 'github' | 'claude-routine';
   label: string;
   /** The name the workspace gave it (FRU-404). Absent: none, or a worker of before. */
   name?: string;
@@ -161,6 +162,11 @@ export type Connector = {
 };
 /** What a workspace sets on a tracker (FRU-102): the replies, and the stages some states take. */
 export type ConnectorSettings = { showComments: boolean; stages: Record<string, Stage> };
+/**
+ * The session a Claude Code routine started for a call (FRU-594): what Fruitback calls the notes of
+ * the call, never their text, and the address of the session on claude.ai.
+ */
+export type AgentSession = { id: string; site?: string; identifiers: string[]; url: string; startedAt: string };
 /** A note that did not reach the address of a connector yet. `nextAt` absent: the worker gave up. */
 export type Delivery = {
   id: string;

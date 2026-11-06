@@ -169,3 +169,72 @@ export function AddRest({
     </form>
   );
 }
+
+/** What a refused routine means for the person, and what to do (FRU-594). */
+const ROUTINE_PROBLEMS: Record<string, string> = {
+  'invalid-fire-url': msg(
+    'This is not the Fire URL of a routine. Copy it from claude.ai/code/routines: it starts with https://api.anthropic.com/v1/claude_code/routines/.',
+  ),
+  'invalid-token': msg(
+    'This is not a token of a routine. Generate one in the API trigger of the routine, and paste it.',
+  ),
+  'connectors-unavailable': msg('This Fruitback cannot keep a key yet. Its operator must set FRUITBACK_SECRETS_KEY.'),
+  forbidden: msg('Only an owner or an admin of the workspace adds a connector.'),
+};
+
+/**
+ * A Claude Code routine (FRU-594): its Fire URL and its token, typed once and sent once. The worker
+ * keeps the token encrypted and never answers it. Nothing is asked of Anthropic here: a call would
+ * start a run, so the first call of a trigger says whether the token works.
+ */
+export function AddRoutine({ base, onDone }: { base: string; onDone: (connector: Connector | undefined) => void }) {
+  useLocale();
+  const [url, setUrl] = useState('');
+  const [token, setToken] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | undefined>();
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setProblem(undefined);
+    const added = await call<Connector>('POST', `${base}/connectors`, { kind: 'claude-routine', url, token });
+    setBusy(false);
+    if (added.ok) return onDone(added.data);
+    setProblem(
+      ROUTINE_PROBLEMS[added.error] ?? writeProblemOf(added, msg('The routine could not be kept just now. Try again.')),
+    );
+  }
+
+  return (
+    <form onSubmit={submit} className="flex max-w-[520px] flex-col gap-[12px]">
+      <Field
+        label={t('Fire URL')}
+        type="url"
+        autoComplete="off"
+        placeholder="https://api.anthropic.com/v1/claude_code/routines/trig_…/fire"
+        value={url}
+        onChange={(event) => setUrl(event.target.value)}
+        hint={t('In the routine, at claude.ai/code/routines: Edit, then Trigger, then API.')}
+      />
+      <Field
+        label={t('Token')}
+        type="password"
+        autoComplete="off"
+        placeholder="sk-ant-oat01-…"
+        value={token}
+        onChange={(event) => setToken(event.target.value)}
+        hint={t(
+          'Shown once by claude.ai when you generate it. It starts this routine only. Fruitback keeps it encrypted.',
+        )}
+      />
+      {problem === undefined ? null : <Problem>{t(problem)}</Problem>}
+      <div className="flex flex-wrap items-center gap-x-[16px] gap-y-[8px]">
+        <Button type="submit" size="panel" disabled={busy || url.trim() === '' || token.trim() === ''}>
+          {busy ? t('Checking…') : t('Connect')}
+        </Button>
+        <LinkButton onClick={() => onDone(undefined)}>{t('Cancel')}</LinkButton>
+      </div>
+    </form>
+  );
+}

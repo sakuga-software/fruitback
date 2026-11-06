@@ -9,11 +9,13 @@ import { GITHUB_MARK } from './provider-icons';
  * - REST API: two braces, the « { } » that the mockup writes for an address, drawn as lines. A text
  *   would join the words of its cell.
  * - Webhook: the `webhook` icon of Lucide 0.5 (`@iconify-json/lucide`, ISC), drawn as lines too.
+ * - Claude Code routine (FRU-594): the `terminal` icon of Lucide (ISC), drawn as lines. No logo of a
+ *   third party is copied: the name beside it says whose routine it is.
  *
  * The name beside it says the kind, so a mark is `aria-hidden` and takes no focus. It takes the colour
  * of the name: one colour for every mark, so that no logo is louder than the state of its row.
  */
-export type MarkedKind = 'linear' | 'github' | 'rest';
+export type MarkedKind = 'linear' | 'github' | 'rest' | 'claude-routine';
 
 /** The sources that the Connectors screen lists and that do not exist yet: they have a mark too. */
 export type LaterKind = 'jira' | 'gitlab' | 'trello' | 'notion' | 'webhook';
@@ -27,6 +29,7 @@ const MARKS: Readonly<Record<MarkedKind | LaterKind, Drawn>> = {
     path: 'M2.886 4.18A11.982 11.982 0 0 1 11.99 0C18.624 0 24 5.376 24 12.009c0 3.64-1.62 6.903-4.18 9.105L2.887 4.18ZM1.817 5.626l16.556 16.556c-.524.33-1.075.62-1.65.866L.951 7.277c.247-.575.537-1.126.866-1.65ZM.322 9.163l14.515 14.515c-.71.172-1.443.282-2.195.322L0 11.358a12 12 0 0 1 .322-2.195Zm-.17 4.862 9.823 9.824a12.02 12.02 0 0 1-9.824-9.824Z',
   },
   github: { box: 16, path: GITHUB_MARK },
+  'claude-routine': { box: 24, lines: true, path: 'M4 17l6-6-6-6M12 19h8' },
   rest: {
     box: 16,
     lines: true,
