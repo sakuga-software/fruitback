@@ -12,7 +12,8 @@ const read = (name: string) => readFileSync(new URL(name, import.meta.url), 'utf
 
 /** The screens whose main read fails into the box, and what the box says did not load. */
 const SCREENS: Readonly<Record<string, string>> = {
-  'routes/notes.tsx': 'The notes did not load',
+  // The box of Notes is `NotesFailed`, which Admin notes draws too (FRU-614).
+  'parts/note-parts.tsx': 'The notes did not load',
   'routes/sites.tsx': 'The sites did not load',
   'routes/site.tsx': 'The site did not load',
   'routes/members.tsx': 'The members did not load',

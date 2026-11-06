@@ -4,7 +4,7 @@
  * of 24, a stroke of 2 in `currentColor` with round ends. No icon set, no request. An icon is
  * `aria-hidden`: the name of its link, or of its tooltip, says it.
  */
-import type { NoteAuthor } from './routes/notes';
+import type { NoteAuthor } from './parts/notes-model';
 
 const PATHS = {
   // A box with an arrow out of it: the page opens in a new tab.
