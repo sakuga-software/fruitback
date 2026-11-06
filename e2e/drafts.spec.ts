@@ -130,7 +130,9 @@ for (const scheme of ['light', 'dark'] as const) {
     expect(composer.violations).toEqual([]);
     // The menu of « Send » too (FRU-608).
     await page.getByRole('button', { name: 'More ways to send' }).click();
-    await expect(page.getByRole('menuitem', { name: 'Send only this note' })).toBeFocused();
+    // The menu opens on its first way, the default one.
+    await expect(page.getByRole('menuitem', { name: 'Send all 2' })).toBeFocused();
+    await expect(page.getByRole('menuitem', { name: 'Send only this note' })).toBeVisible();
     const menu = await new AxeBuilder({ page }).include('[data-fruitback-host]').analyze();
     expect(menu.violations).toEqual([]);
     await page.keyboard.press('Escape');

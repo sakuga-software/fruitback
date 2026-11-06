@@ -85,7 +85,8 @@ for (const language of LANGUAGES) {
     await site.locator('[data-fruitback-host-launch]').click();
     await site.locator('[data-testid="card-latte"] .add').click();
     await site.locator('.fruitback-composer textarea').fill(LONG_NOTE);
-    await site.locator('.fruitback-composer-send').click();
+    // The send button by its own mark: since FRU-608 its class is shared by its menu and the receipt.
+    await site.locator('[data-fruitback-send]').click();
     await expect(site.locator('[data-fruitback-pin]')).toHaveCount(1, { timeout: 10_000 });
     const page = await extension.context.newPage();
     for (const width of WIDTHS) {

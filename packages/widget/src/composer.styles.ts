@@ -192,7 +192,7 @@ export const STYLES = `
   cursor: pointer;
 }
 .fruitback-composer-tool .fruitback-icon { width: 18px; height: 18px; }
-.fruitback-composer-tool:hover:not([disabled]):not([aria-disabled="true"]) { background: var(--fruitback-color-surface-sunken); color: var(--fruitback-color-text); }
+.fruitback-composer-tool:hover:not([disabled]):not([aria-disabled="true"]) { background: var(--fruitback-color-surface-sunken) padding-box; color: var(--fruitback-color-text); }
 .fruitback-composer-tool:focus-visible, .fruitback-composer-toggle:has(input:focus-visible) { outline: 2px solid var(--fruitback-color-accent); outline-offset: 1px; }
 .fruitback-composer-tool[disabled], .fruitback-composer-tool[aria-disabled="true"] { opacity: 0.55; cursor: default; }
 .fruitback-composer-tool[hidden] { display: none; }
@@ -535,7 +535,9 @@ export const STYLES = `
   « Send » and its menu are one pill split in two: the words, then the fold that opens « Send all N »
   and « Send only this note ». The menu opens above: the foot is the end of the composer.
 */
-.fruitback-composer-keep { width: 36px; height: 36px; }
+/* 44 px to press, as « Send » beside it: a transparent border gives back the size drawn. */
+.fruitback-composer-keep { width: 44px; height: 44px; margin-block: -5px; border: 5px solid transparent; border-radius: var(--fruitback-radius-sm); }
+.fruitback-composer-keep:hover:not([disabled]) { background: var(--fruitback-color-surface-sunken) padding-box; }
 .fruitback-composer-badge {
   position: absolute;
   top: -2px;
