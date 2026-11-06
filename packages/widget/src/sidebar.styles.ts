@@ -38,8 +38,24 @@ export const STYLES = `
 .fruitback-sidebar-heading { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; }
 .fruitback-sidebar-heading .fruitback-icon { flex: none; width: 16px; height: 16px; color: var(--fruitback-color-accent); }
 .fruitback-sidebar-title { flex: none; font-weight: 650; font-size: 15px; letter-spacing: -0.01em; }
-/* anywhere: a host has no space to wrap at. */
-.fruitback-sidebar-address { min-width: 0; font-size: 12px; color: var(--fruitback-color-text-muted); overflow-wrap: anywhere; }
+.fruitback-sidebar-address {
+  display: flex;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--fruitback-color-text-muted);
+  white-space: pre;
+}
+/* FRU-611: the host is written right to left, so « … » takes the start of a long host and its end stays. */
+.fruitback-host-tail {
+  min-width: 0;
+  overflow: hidden;
+  direction: rtl;
+  /* The end of a box written right to left is the left: a host that fits starts there. */
+  text-align: end;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fruitback-host-tail > span { direction: ltr; unicode-bidi: isolate; }
 .fruitback-sidebar-icon {
   flex: none;
   display: flex;

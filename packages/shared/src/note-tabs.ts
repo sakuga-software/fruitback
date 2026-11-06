@@ -29,3 +29,11 @@ export function noteTab(note: TabbedNote): NoteTab {
 export function firstTab(notes: readonly TabbedNote[]): NoteTab {
   return notes.some((note) => noteTab(note) === 'check') ? 'check' : 'open';
 }
+
+/**
+ * A count as a list writes it (FRU-611, P7): « 99+ » above 99, so a tab or a chip keeps its width. The
+ * count of the notes to check is never shortened: it is what the reader has to do, and it is exact.
+ */
+export function shortCount(count: number): string {
+  return count > 99 ? '99+' : String(count);
+}

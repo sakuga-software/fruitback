@@ -1422,6 +1422,7 @@ export function createComposer(options: ComposerOptions): Composer {
     // the parts itself might.
     if (!root.hidden && (state === 'idle' || state === 'failed' || state === 'sending')) {
       place(anchor);
+      keepInSight(anchor);
       settleOn();
       field.focus();
 
@@ -1459,6 +1460,7 @@ export function createComposer(options: ComposerOptions): Composer {
     focus.remember();
     root.hidden = false;
     place(anchor);
+    keepInSight(anchor);
     settleOn();
     field.focus();
   }
@@ -1554,6 +1556,22 @@ export function createComposer(options: ComposerOptions): Composer {
    * On a narrow screen the rules below take over entirely and pin it to the bottom of the viewport, so
    * the position set here stops mattering — which is why it is set with `style` and overridden by a media query.
    */
+  /**
+   * On a narrow screen the composer is a sheet on the foot of the window (FRU-611, P7): the page
+   * scrolls so that its element stands above the sheet, in sight, when the page can scroll that far.
+   * An element taller than the room left keeps its top in sight. On a wider screen nothing moves.
+   */
+  function keepInSight(anchor: ElementBox): void {
+    if (view === null || view.matchMedia?.(NARROW).matches !== true) return;
+    const sheetTop = root.getBoundingClientRect().top;
+    const top = anchor.top - view.scrollY;
+    const bottom = anchor.bottom - view.scrollY;
+    if (bottom + GAP <= sheetTop && top >= 0) return;
+    // The bottom of the element GAP over the sheet, or its top GAP under the top of the window.
+    const by = Math.min(bottom + GAP - sheetTop, top - GAP);
+    view.scrollBy({ top: by, behavior: 'instant' });
+  }
+
   function place(anchor: ElementBox): void {
     const width = view?.innerWidth ?? 0;
     const height = view?.innerHeight ?? 0;
@@ -2096,6 +2114,9 @@ const GAP = 10;
  */
 const RISE = 40;
 const FRAME = 5;
+/** Where the composer is a sheet on the foot of the window: the media query of its stylesheet. */
+const NARROW = '(max-width: 640px)';
+
 /** The tallest the field grows with its text before it scrolls (FRU-611, P7). */
 export const FIELD_MAX = 150;
 /** How far beside its element the composer stands: the length of the tether across (FRU-607). */

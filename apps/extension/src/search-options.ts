@@ -1,3 +1,4 @@
+import { shortCount } from '@fruitback/shared';
 import { msg, t } from './i18n.ts';
 import { linkButton, make, segmentedTabs, stageRing, statusDrop, toggle } from './kit.ts';
 import { listWord } from './note-status.ts';
@@ -163,11 +164,15 @@ export function searchControls(
       tabs: [
         {
           id: 'page',
-          label: pageNotes === undefined ? t('This page') : t('This page · {count}', { count: pageNotes.length }),
+          label:
+            pageNotes === undefined
+              ? t('This page')
+              : t('This page · {count}', { count: shortCount(pageNotes.length) }),
         },
         {
           id: 'site',
-          label: siteTotal === undefined ? t('Whole site') : t('Whole site · {count}', { count: siteTotal }),
+          label:
+            siteTotal === undefined ? t('Whole site') : t('Whole site · {count}', { count: shortCount(siteTotal) }),
         },
       ],
       selected: state.scope,
@@ -207,7 +212,7 @@ export function searchControls(
     if (filter !== 'all') chip.append(stageRing(document, filter));
     chip.append(
       make(document, 'span', 'search-chip-word', t(FILTER_WORD[filter])),
-      make(document, 'span', 'search-chip-count', String(counts[filter])),
+      make(document, 'span', 'search-chip-count', shortCount(counts[filter])),
     );
     chip.addEventListener('click', () => handlers.onStage(filter));
     chips.append(chip);
