@@ -130,7 +130,8 @@ for (const colorScheme of ['light', 'dark'] as const) {
     // Every note in one list, whatever its tab (FRU-606).
     await list.getByRole('button', { name: 'Search and options' }).click();
     const row = list.locator('[data-fruitback-note]').filter({ hasText: NOTES.dark.note });
-    await expect(row.locator('.fruitback-sidebar-status')).toHaveText(NOTES.dark.name);
+    // The stage first, then the name of the status (FRU-606).
+    await expect(row.locator('.fruitback-sidebar-status')).toHaveText(new RegExp(` · (Linear: )?${NOTES.dark.name}$`));
     await expect(row.locator('.fruitback-sidebar-pin')).toHaveCSS('background-color', 'rgb(124, 58, 237)');
     await expect(list.getByRole('button', { name: 'All 2', exact: true })).toBeVisible();
     const chips = await list.locator('button[aria-pressed]').allTextContents();

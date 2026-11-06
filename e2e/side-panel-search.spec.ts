@@ -282,7 +282,7 @@ test('a new search during « Show more » draws no page of the words of before (
     .toEqual(['The note of the new words']);
 });
 
-test('beyond five statuses, the filter of the search is a list over the notes, chosen with the keyboard (FRU-535)', async ({
+test('with seven statuses, the filter keeps its five stages, and the search finds a state of the tracker (FRU-606)', async ({
   extension,
 }) => {
   test.slow();
@@ -319,6 +319,7 @@ test('beyond five statuses, the filter of the search is a list over the notes, c
         id: `${planted.id}-s${index}`,
         stage,
         status: `e2e:${index}`,
+        url: `https://linear.app/acme/issue/ACME-${index}`,
         note: { ...planted.note, text: `Status ${name}` },
       }));
       const statuses = SEVEN.map(([stage, name, color], index) => ({ key: `e2e:${index}`, name, stage, color }));
@@ -338,81 +339,32 @@ test('beyond five statuses, the filter of the search is a list over the notes, c
   expect(await clickPanel(page, 'button.panel-search')).toBe(true);
 
   const read = () =>
-    inPanel<{
-      chips: number;
-      trigger: string | null;
-      expanded: string | null;
-      options: string[];
-      focus: string;
-      notesTop: number;
-      listBottom: number | null;
-      rows: string[];
-    }>(
+    inPanel<{ chips: string[]; listbox: boolean; rows: string[]; stages: string[]; rings: string[] }>(
       page,
-      `(() => {
-        const list = document.querySelector('.search-status [role="listbox"]');
-        const active = document.activeElement;
-        return {
-          chips: document.querySelectorAll('button.search-chip').length,
-          trigger: document.querySelector('.search-status .kit-select-trigger')?.textContent ?? null,
-          expanded: document.querySelector('.search-status .kit-select-trigger')?.getAttribute('aria-expanded') ?? null,
-          options: [...(list?.querySelectorAll('[role="option"]') ?? [])].map((option) => option.querySelector('.kit-select-name')?.textContent ?? ''),
-          focus: active?.classList.contains('kit-select-trigger') ? 'button' : active?.getAttribute('role') ?? active?.tagName ?? '',
-          notesTop: document.querySelector('.panel-notes')?.getBoundingClientRect().top ?? -1,
-          listBottom: list?.getBoundingClientRect().bottom ?? null,
-          rows: [...document.querySelectorAll('.panel-notes li[data-note] .panel-row-note')].map((row) => row.textContent),
-        };
-      })()`,
-    );
-  /** A key, as the keyboard sends it to what has the focus in the panel. */
-  const press = (key: string) =>
-    inPanel(
-      page,
-      `(document.activeElement ?? document.body).dispatchEvent(new KeyboardEvent('keydown', { key: ${JSON.stringify(key)}, bubbles: true, cancelable: true }))`,
+      `({
+        chips: [...document.querySelectorAll('button.search-chip')].map((chip) => chip.dataset.stage),
+        listbox: document.querySelector('[role="listbox"]') !== null,
+        rows: [...document.querySelectorAll('.panel-notes li[data-note] .panel-row-note')].map((row) => row.textContent),
+        stages: [...document.querySelectorAll('.panel-notes li[data-note] .panel-row-stage')].map((row) => row.textContent),
+        rings: [...document.querySelectorAll('.panel-notes li[data-note] .kit-stage-ring')].map((ring) => ring.dataset.stage),
+      })`,
     );
 
-  // Seven statuses: no chip, the button says every status and how many notes.
-  await expect.poll(async () => (await read()).trigger).toMatch(/^(Status · All · 7|Statut · Toutes · 7)▾$/);
-  const closed = await read();
-  expect(closed.chips).toBe(0);
-  expect(closed.rows).toHaveLength(7);
+  // Seven statuses, and the same chips as with none: All and the five stages. No list of statuses.
+  await expect.poll(async () => (await read()).rows.length).toBe(7);
+  const seven = await read();
+  expect(seven.chips).toEqual(['all', 'new', 'todo', 'progress', 'done', 'closed']);
+  expect(seven.listbox).toBe(false);
+  // The stage of Fruitback first, then the tracker and its word; the round of the stage before it.
+  expect(seven.stages).toContain('In progress · Linear: In Review');
+  expect(seven.stages.some((stage) => /^(New|Nouveau) · Linear: Triage$/.test(stage))).toBe(true);
+  expect(seven.rings).toEqual(['new', 'todo', 'todo', 'progress', 'progress', 'done', 'closed']);
 
-  // The arrow on the button opens the list over the notes: the notes do not move.
-  await inPanel(page, `document.querySelector('.search-status .kit-select-trigger').focus()`);
-  await press('ArrowDown');
-  const open = await read();
-  expect(open.expanded).toBe('true');
-  expect(open.focus).toBe('listbox');
-  expect(open.options.slice(1)).toEqual([
-    'Triage',
-    'Backlog',
-    'Ready',
-    'In Progress',
-    'In Review',
-    'Shipped',
-    'Canceled',
-  ]);
-  expect(open.notesTop).toBe(closed.notesTop);
-  expect(open.listBottom).toBeGreaterThan(open.notesTop);
-
-  // Escape closes it, and the focus is back on its button.
-  await press('Escape');
-  expect(await read()).toMatchObject({ expanded: 'false', options: [], focus: 'button' });
-
-  // Down five times from « All »: « In Review », chosen with Enter.
-  await press('ArrowDown');
-  for (let step = 0; step < 5; step += 1) await press('ArrowDown');
-  await press('Enter');
-  await expect.poll(async () => (await read()).rows).toEqual(['Status In Review']);
-  expect(await read()).toMatchObject({ expanded: 'false', focus: 'button' });
-  expect((await read()).trigger).toMatch(/^(Status|Statut) · In Review · 1▾$/);
-
-  // A click outside closes an open list.
-  await press('ArrowDown');
-  expect((await read()).expanded).toBe('true');
+  // The state of the tracker is found by the search.
   await inPanel(
     page,
-    `document.querySelector('.panel-notes').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))`,
+    `(() => { const field = document.querySelector('input.search-input'); field.value = 'in review'; field.dispatchEvent(new Event('input', { bubbles: true })); })()`,
   );
-  expect((await read()).expanded).toBe('false');
+  await expect.poll(async () => (await read()).rows).toEqual(['Status In Review']);
+  expect((await read()).chips).toHaveLength(6);
 });
