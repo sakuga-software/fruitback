@@ -168,10 +168,16 @@ test('an invitation that the organization plugin refuses while suspended says so
   // The guard of the worker answers the routes of the organization plugin with the same `409`.
   await stubWorker(page, {
     workspaces: [ACME, LUMEN],
-    answer: (pathname, route) =>
-      route.request().method() === 'POST' && pathname.endsWith('/invite-member')
-        ? route.fulfill({ status: 409, json: { error: 'workspace-suspended', suspendedAt: SUSPENDED_AT } })
-        : undefined,
+    answer: (pathname, route) => {
+      if (route.request().method() === 'POST' && pathname.endsWith('/invite-member')) {
+        return route.fulfill({ status: 409, json: { error: 'workspace-suspended', suspendedAt: SUSPENDED_AT } });
+      }
+      // « Invite » comes with the list of the members (FRU-616): the lists are read, and hold nobody.
+      if (pathname.endsWith('/list-members')) return route.fulfill({ json: { members: [], total: 0 } });
+      if (pathname.endsWith('/list-invitations')) return route.fulfill({ json: [] });
+
+      return undefined;
+    },
   });
   await open(page, 'members');
   await page.locator('main header').getByRole('button', { name: 'Invite', exact: true }).click();
