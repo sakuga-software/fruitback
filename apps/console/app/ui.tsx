@@ -28,6 +28,7 @@ import {
   type Ref,
   useEffect,
   useLayoutEffect,
+  useId,
   useRef,
   useState,
 } from 'react';
@@ -1678,12 +1679,52 @@ export function Disclosure({
   );
 }
 
-/** One way among a few to do a thing, in its card: its name, then what the screen puts in it. */
-export function OptionCard({ title, children }: { title: string; children: ReactNode }) {
+/**
+ * One way among a few to do a thing, in its card: its name, then what the screen puts in it.
+ *
+ * `badge`: a word beside the name, such as the way the screen recommends (FRU-610). `fold`: the card
+ * opens folded to its name, with « Show » beside it. The button says whether it is expanded, and
+ * names the part it opens.
+ */
+export function OptionCard({
+  title,
+  badge,
+  fold,
+  children,
+}: {
+  title: string;
+  badge?: string;
+  fold?: { open: boolean; onToggle: (open: boolean) => void; show: string; hide: string };
+  children: ReactNode;
+}) {
+  const body = useId();
+
   return (
-    <div className="kit-option">
-      <h3 className="kit-option__title">{title}</h3>
-      {children}
+    <div className="kit-option" data-folded={fold !== undefined && !fold.open ? '' : undefined}>
+      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+        <h3 className="kit-option__title">{title}</h3>
+        {badge === undefined ? null : <Chip tone="accent">{badge}</Chip>}
+        {fold === undefined ? null : (
+          <HeroButton
+            type="button"
+            variant="ghost"
+            className="kit-link ml-auto"
+            data-space="flush"
+            aria-expanded={fold.open}
+            aria-controls={body}
+            onPress={() => fold.onToggle(!fold.open)}
+          >
+            {fold.open ? fold.hide : fold.show}
+          </HeroButton>
+        )}
+      </div>
+      {fold === undefined || fold.open ? (
+        <div id={body} className="contents">
+          {children}
+        </div>
+      ) : (
+        <div id={body} hidden />
+      )}
     </div>
   );
 }

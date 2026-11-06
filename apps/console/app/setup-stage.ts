@@ -1,4 +1,4 @@
-import type { Account, Answer, Invitation, Me, Site, Workspace } from './api.ts';
+import type { Account, Answer, Invitation, Me, Site, Visibility, Workspace, Writers } from './api.ts';
 import { NAME_PROBLEMS, WORKSPACE_NOT_CREATED, problemOf } from './problems.ts';
 import { workspaceNameFrom } from './workspace-name.ts';
 
@@ -55,6 +55,29 @@ export type SetupCalls = {
   /** Runs `task` alone in every tab of the browser, when the browser has a lock. */
   alone: <T>(task: () => Promise<T>) => Promise<T>;
 };
+
+/**
+ * What a site added by the setup is (FRU-610): seen by the members of the workspace, and noted by
+ * them only. The setup asks no question of access: these are the safe answers, and the Sites screen
+ * opens a site to every visitor. They are the defaults of the worker too, but they are sent, so a
+ * worker that would default otherwise cannot open a new site behind the sentence of the setup.
+ */
+export const NEW_SITE: Readonly<{ visibility: Visibility; writers: Writers }> = {
+  visibility: 'members',
+  writers: 'members',
+};
+
+/** A way to put Fruitback on a site, as step 3 of the setup draws them: a card each. */
+export type Way = 'extension' | 'script';
+
+/**
+ * The way step 3 recommends for a site (FRU-610). A site of members: the extension, as only members
+ * see its notes and the extension needs nothing on the site. A site that every visitor sees: the
+ * script tag, as a visitor has no extension.
+ */
+export function recommendedWay(site: Pick<Site, 'visibility'>): Way {
+  return site.visibility === 'everyone' ? 'script' : 'extension';
+}
 
 /** Who changes the name of a workspace and adds a site: `can` of the worker says the same. */
 export function manages(workspace: Workspace): boolean {
@@ -143,4 +166,65 @@ export function leaveFor(stage: Stage): string | undefined {
   if (stage.kind === 'waiting') return `/w/${stage.workspace.id}/sites`;
 
   return undefined;
+}
+
+/** The first note of the site, as the end of the setup shows it (FRU-610): what the index keeps of it. */
+export type FirstNote = {
+  /** Its first 64 characters: the index keeps no more of a text (FRU-237). */
+  excerpt: string;
+  page: { url: string; host: string; path: string };
+  /** The id the widget gave it, which `#fruitback-note=` opens on its page (FRU-253). */
+  note?: string;
+};
+
+/** The address of the list that holds the first note of a site: one page, with no count. */
+export function firstNotePath(workspace: Workspace, site: Site): string {
+  const query = new URLSearchParams({ site: site.id, limit: '8', counts: 'none' });
+
+  return `/console/workspaces/${workspace.id}/notes?${query.toString()}`;
+}
+
+/**
+ * The first note of a page of the list, the newest first: its last one. `undefined` for a list that
+ * did not come, or a note that is not what the index answers. The end of the setup is drawn without
+ * it then: a worker with no index (no database) answers `404` there.
+ */
+export function firstNoteOf(answer: Answer<unknown>): FirstNote | undefined {
+  if (!answer.ok) return undefined;
+  const notes = (answer.data as { notes?: unknown } | null | undefined)?.notes;
+  if (!Array.isArray(notes)) return undefined;
+  const last: unknown = notes.at(-1);
+  if (typeof last !== 'object' || last === null) return undefined;
+  const { excerpt, page, note } = last as { excerpt?: unknown; page?: unknown; note?: unknown };
+  if (typeof excerpt !== 'string' || typeof page !== 'object' || page === null) return undefined;
+  const { url, host, path } = page as { url?: unknown; host?: unknown; path?: unknown };
+  if (typeof url !== 'string' || typeof host !== 'string' || typeof path !== 'string') return undefined;
+
+  return { excerpt, page: { url, host, path }, ...(typeof note === 'string' && note !== '' ? { note } : {}) };
+}
+
+/**
+ * Where a link to the first note leads: its page, opened on the note when the worker gave its id.
+ * `undefined` for a page that is not on the site: a console draws no link it did not check.
+ */
+export function firstNoteLink(first: FirstNote, site: Pick<Site, 'origin'>): string | undefined {
+  let origin: string;
+  try {
+    origin = new URL(first.page.url).origin;
+  } catch {
+    return undefined;
+  }
+  if (origin !== site.origin) return undefined;
+
+  return first.note === undefined
+    ? first.page.url
+    : `${first.page.url}#fruitback-note=${encodeURIComponent(first.note)}`;
+}
+
+/** The length of an excerpt of the index (`EXCERPT_LENGTH` of the worker), in characters. */
+const EXCERPT_LENGTH = 64;
+
+/** An excerpt as the list of the notes shows it: cut with « … » when the index cut it. */
+export function excerptShown(excerpt: string): string {
+  return [...excerpt].length >= EXCERPT_LENGTH ? `${excerpt.trimEnd()}…` : excerpt;
 }

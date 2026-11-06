@@ -1,7 +1,21 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Answer, Workspace } from './api.ts';
-import { type SetupCalls, firstWorkspace, leaveFor, noted, resolveStage, siteNow, siteStage } from './setup-stage.ts';
+import {
+  NEW_SITE,
+  type SetupCalls,
+  excerptShown,
+  firstNoteLink,
+  firstNoteOf,
+  firstNotePath,
+  firstWorkspace,
+  leaveFor,
+  noted,
+  recommendedWay,
+  resolveStage,
+  siteNow,
+  siteStage,
+} from './setup-stage.ts';
 
 /**
  * Where the setup takes a person (FRU-239), with a worker of fakes: each case says what the worker
@@ -177,5 +191,69 @@ describe('where the setup takes a person (FRU-239)', () => {
     assert.deepEqual(await siteNow(fake({ sites: 1 }).calls, owner, site), site);
     assert.equal(await siteNow(fake({ sites: 0 }).calls, owner, site), undefined);
     assert.equal(await siteNow(fake({ sites: no(503) }).calls, owner, site), undefined);
+  });
+});
+
+describe('the setup with no question of access (FRU-610)', () => {
+  it('adds a site that the members see and note, and says both values to the worker', () => {
+    assert.deepEqual(NEW_SITE, { visibility: 'members', writers: 'members' });
+  });
+
+  it('recommends the extension for a site of members, and the script tag for a site that everyone sees', () => {
+    assert.equal(recommendedWay(site), 'extension');
+    assert.equal(recommendedWay({ visibility: 'everyone' }), 'script');
+  });
+
+  const indexed = {
+    id: 'n1',
+    excerpt: 'The price is hard to read.',
+    page: { url: 'https://staging.acme.dev/pricing', host: 'staging.acme.dev', path: '/pricing' },
+    site: { id: 's1' },
+    note: 'fb_1',
+  };
+
+  it('reads the page of one site with no count, the size a worker takes at the least', () => {
+    assert.equal(firstNotePath(owner, site), '/console/workspaces/w1/notes?site=s1&limit=8&counts=none');
+  });
+
+  it('takes the oldest note of the page, the newest first, as the first one', () => {
+    const newer = { ...indexed, id: 'n2', excerpt: 'A second note', note: 'fb_2' };
+    assert.deepEqual(firstNoteOf(yes({ notes: [newer, indexed] })), {
+      excerpt: 'The price is hard to read.',
+      page: indexed.page,
+      note: 'fb_1',
+    });
+    // A worker that gives no id of the widget: the note has none.
+    assert.deepEqual(firstNoteOf(yes({ notes: [{ ...indexed, note: undefined }] })), {
+      excerpt: indexed.excerpt,
+      page: indexed.page,
+    });
+  });
+
+  it('has no first note for a refusal, an empty list, or a note that is not what the index answers', () => {
+    // A worker with no index (no database) answers 404 to the list.
+    assert.equal(firstNoteOf(no(404, 'not-found')), undefined);
+    assert.equal(firstNoteOf(yes({ notes: [] })), undefined);
+    assert.equal(firstNoteOf(yes({})), undefined);
+    assert.equal(firstNoteOf(yes(null)), undefined);
+    assert.equal(firstNoteOf(yes({ notes: [{ ...indexed, excerpt: 3 }] })), undefined);
+    assert.equal(firstNoteOf(yes({ notes: [{ ...indexed, page: { url: indexed.page.url } }] })), undefined);
+    assert.equal(firstNoteOf(yes({ notes: [null] })), undefined);
+  });
+
+  it('opens the page on the note, and draws no link to a page that is not on the site', () => {
+    const first = firstNoteOf(yes({ notes: [indexed] }))!;
+    assert.equal(firstNoteLink(first, site), 'https://staging.acme.dev/pricing#fruitback-note=fb_1');
+    assert.equal(firstNoteLink({ ...first, note: undefined }, site), 'https://staging.acme.dev/pricing');
+    const away = (url: string) => firstNoteLink({ ...first, page: { ...first.page, url } }, site);
+    assert.equal(away('javascript:alert(1)'), undefined);
+    assert.equal(away('https://evil.example/pricing'), undefined);
+    assert.equal(away('not an address'), undefined);
+  });
+
+  it('cuts an excerpt with « … » where the index cut it, and leaves a shorter one as it is', () => {
+    assert.equal(excerptShown('The price is hard to read.'), 'The price is hard to read.');
+    assert.equal(excerptShown(`${'a'.repeat(63)} `), `${'a'.repeat(63)}…`);
+    assert.equal(excerptShown('é'.repeat(64)), `${'é'.repeat(64)}…`);
   });
 });
