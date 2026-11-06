@@ -1575,6 +1575,9 @@ export function createComposer(options: ComposerOptions): Composer {
     };
     if (!covered()) return;
     const sheetTop = root.getBoundingClientRect().top;
+    // An element taller than the room over the sheet cannot be in sight whole, nor under a sheet on
+    // the top: it stays where it is, as before, the sheet on the foot (thread-side.spec.ts, fallback).
+    if (anchor.bottom - anchor.top + 2 * GAP > sheetTop) return;
     // The bottom of the element GAP over the sheet, or its top GAP under the top of the window.
     view.scrollBy({
       top: Math.min(anchor.bottom - view.scrollY + GAP - sheetTop, anchor.top - view.scrollY - GAP),

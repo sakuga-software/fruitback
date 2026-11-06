@@ -684,7 +684,7 @@ export function createSidebar(options: SidebarOptions): Sidebar {
     for (const [name, button] of tabs) {
       const count = placed.filter((entry) => noteTab(entry.issue) === name).length;
       // « 99+ » above 99 (FRU-611), but « To check », which is exact: it is what the reader has to do.
-      button.textContent = t.text(TAB_WORDS[name], { count: name === 'check' ? String(count) : shortCount(count) });
+      button.textContent = t.text(TAB_WORDS[name], { count: name === 'check' ? count : shortCount(count) });
       button.setAttribute('aria-selected', String(name === tabbed));
       button.tabIndex = name === tabbed ? 0 : -1;
     }
