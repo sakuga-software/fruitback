@@ -195,6 +195,11 @@ The trusted publisher must publish within 2 days, or npm forgets it: publish the
 - The ESM build is left readable (the consumer's bundler minifies it); the IIFE is minified because it
   lands on a page exactly as built. **102 kB gzipped** (measured on FRU-38), guarded by a test that trips at 150 kB — a
   tripwire for a dependency that should have been bundled out, not a budget.
+- **The comments of the stylesheets stay out of `dist`** (FRU-609). A stylesheet is a template literal
+  in a `*.styles.ts`, and no minifier touches a string: every comment that explains a rule went to the
+  page of the host. `build.ts` drops the block comments of those files as it bundles them. Measured on
+  the IIFE: 199 kB gzipped before (over the tripwire, which is now 200 kB, in the CI), 189 kB after,
+  for no change of behaviour.
 - **The README snippet is executed by the suite**, not merely quoted: `package.spec.ts` serves the
   built IIFE through `page.route` and appends the documented tag with its `data-` attributes, which
   is the only way to exercise the auto-mount — `addScriptTag` cannot set attributes. A snippet in a

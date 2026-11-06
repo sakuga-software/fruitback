@@ -96,7 +96,10 @@ test('the item is in the context menu, and its command captures an area in the o
   expect(sent).toMatchObject({ done: true });
   await expect(page.getByRole('dialog', { name: 'Choose an area of the page' })).toBeVisible();
   await page.keyboard.press('Enter');
-  await expect(page.locator('.fruitback-composer-file')).toHaveAttribute('data-fruitback-file', 'ready');
-  await expect(page.locator('.fruitback-composer-file-name')).toHaveText('area.png');
+  // The capture of the element joined at the open and waits for the note (FRU-609): the area of the
+  // command is the second file of the field, and the one that goes on its way at once.
+  const area = page.locator('.fruitback-composer-file').filter({ hasText: 'area.png' });
+  await expect(area).toHaveAttribute('data-fruitback-file', 'ready');
+  await expect(page.locator('.fruitback-composer-file-name')).toHaveText(['element.png', 'area.png']);
   await expect(field).toHaveValue('Capturé par le menu');
 });
