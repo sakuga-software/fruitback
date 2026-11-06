@@ -5,18 +5,19 @@ back.
 
 ## What else `init` takes
 
-| Option          | Why you would                                                                                                                        |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `label`         | the text on the floating button                                                                                                      |
-| `locale`        | the language to show, as a tag like `fr` or `pt-BR`: the browser's by default                                                        |
-| `messages`      | your own words for that language: see [Another language](../translating.md#another-language)                                         |
-| `ignore`        | elements the pointer must skip: your own chrome, a support chat, a cookie banner                                                     |
-| `identityToken` | a signed token, so a reporter is _verified_: not on a site of the console yet, see [Identified reporters](identified-reporters.md)   |
-| `includeEnv`    | `true` to send the reporter's user agent, language and platform: off by default                                                      |
-| `transport`     | who carries the calls: the extension's, in [team mode](../install.md#team-mode-dormant-until-a-reviewer-arrives)                     |
-| `showSelectors` | `true` to show the CSS selector of the element in the thread of a pin: off by default; the issue keeps it                            |
-| `position`      | the corner of the dock: `bottom-right` (the default), `bottom-left`, `top-right` or `top-left`: `data-fruitback-position` on the tag |
-| `hide`          | a function that hides the widget on this page: the settings then end with « Hide Fruitback on this page », which calls it            |
+| Option           | Why you would                                                                                                                                                                                             |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `label`          | the text on the floating button                                                                                                                                                                           |
+| `locale`         | the language to show, as a tag like `fr` or `pt-BR`: the browser's by default                                                                                                                             |
+| `messages`       | your own words for that language: see [Another language](../translating.md#another-language)                                                                                                              |
+| `ignore`         | elements the pointer must skip: your own chrome, a support chat, a cookie banner                                                                                                                          |
+| `identityToken`  | a signed token, so a reporter is _verified_: not on a site of the console yet, see [Identified reporters](identified-reporters.md)                                                                        |
+| `includeEnv`     | `true` to send the reporter's user agent, language and platform: off by default                                                                                                                           |
+| `transport`      | who carries the calls: the extension's, in [team mode](../install.md#team-mode-dormant-until-a-reviewer-arrives)                                                                                          |
+| `showSelectors`  | `true` to show the CSS selector of the element in the thread of a pin and in the head of a new note: off by default; the issue keeps it                                                                   |
+| `selectorInHead` | `always` to write the CSS selector in the head of a new note whatever `showSelectors` says. Since FRU-607 the default is `with-selectors`: the head writes what the element says (`Commander · <Button>`) |
+| `position`       | the corner of the dock: `bottom-right` (the default), `bottom-left`, `top-right` or `top-left`: `data-fruitback-position` on the tag                                                                      |
+| `hide`           | a function that hides the widget on this page: the settings then end with « Hide Fruitback on this page », which calls it                                                                                 |
 
 **One part of the fragment is the widget's**: `fruitback-note=<id>`. A link like
 `https://staging.acme.dev/pricing#fruitback-note=<id>` opens that note on its page, and the widget
