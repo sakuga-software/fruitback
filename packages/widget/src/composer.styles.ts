@@ -1,3 +1,4 @@
+import { GROUND_INK } from './page-ground.ts';
 /** The width of the mock-up (FRU-258): `place` clamps against it, so the stylesheet uses it too. */
 export const WIDTH = 360;
 /** The space between « Attach » and its menu. */
@@ -62,6 +63,8 @@ export const STYLES = `
 .fruitback-composer[data-fruitback-side="below"] .fruitback-composer-tether { bottom: calc(100% + 1px); left: calc(var(--fruitback-composer-tether, 24px) - 2px); }
 .fruitback-composer[data-fruitback-side="above"] .fruitback-composer-tether { top: calc(100% + 1px); left: calc(var(--fruitback-composer-tether, 24px) - 2px); }
 .fruitback-composer:not([data-fruitback-side]) .fruitback-composer-tether { display: none; }
+/* A red site (FRU-611, P7): the tether takes the ink, with a white contour, as the frame does. */
+:host([data-fruitback-faint]) .fruitback-composer-tether { background: ${GROUND_INK}; box-shadow: 0 0 0 1px #ffffff; }
 @media (forced-colors: active) {
   .fruitback-composer-tether { background: CanvasText; }
 }

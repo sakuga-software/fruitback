@@ -1,3 +1,4 @@
+import { GROUND_INK } from './page-ground.ts';
 /**
  * `all: initial` on every element, because a Shadow root stops the page's *selectors* but not its
  * inherited properties: `body { font-family: Papyrus }` reaches in here otherwise.
@@ -210,6 +211,21 @@ li { display: list-item; }
   text-overflow: ellipsis;
 }
 .fruitback-highlight-tag[hidden] { display: none; }
+/*
+  The ground of the page (FRU-611, P7, page-ground.ts). Dark: the frame takes a light halo, so it
+  reads on the page and not only on the element. Faint, a red site: the frame and its name take the
+  ink with a white contour, as the red would vanish there.
+*/
+:host([data-fruitback-ground="dark"]) .fruitback-highlight { box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.55); }
+:host([data-fruitback-faint]) .fruitback-highlight {
+  border-color: ${GROUND_INK};
+  box-shadow: 0 0 0 2px #ffffff;
+}
+:host([data-fruitback-faint]) .fruitback-highlight-tag {
+  background: ${GROUND_INK};
+  color: #ffffff;
+  box-shadow: 0 0 0 1px #ffffff;
+}
 .fruitback-highlight[data-fruitback-tag-inside] .fruitback-highlight-tag { top: 2px; }
 /*
   The banner of a capture (FRU-303) lives in the capsule. Empty at rest, and still in the tree: no
