@@ -1686,7 +1686,7 @@ async function sendEdit(
  * moved, and trying again does not change it. `409 check-in-progress` is `retry`. `body`: what the
  * author typed under « Still wrong » (FRU-603), written in the same reply of the store.
  *
- * Kept: the reply the store wrote and the stage of the note now, as the worker answers them. A `2xx`
+ * The answer: the reply the store wrote and the stage of the note now, as the worker answers them. A `2xx`
  * that says neither is `kept`: the verdict went, and only a read says what the store made of it.
  */
 async function sendCheck(
