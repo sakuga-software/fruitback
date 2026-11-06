@@ -24,7 +24,7 @@ import { type MountedPage, mountPage, setDocumentSize, setRect } from './dom.fix
  * the author (`mine`), and nobody else.
  */
 
-const t = createTranslator('en');
+const t = createTranslator({ locale: 'en' });
 let overlay: Overlay | null = null;
 
 afterEach(() => {
