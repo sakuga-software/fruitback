@@ -5,6 +5,7 @@ import {
   buildIssueDescription,
   buildIssueLabels,
   buildIssueTitle,
+  parseNoteFromDescription,
 } from '@fruitback/shared';
 import { z } from 'zod';
 import type { ClientPolicy } from './clients.ts';
@@ -186,6 +187,35 @@ export function setMemoryIssueState(id: string, state: { name: string; type: str
   const issue = issues.find((each) => each.id === id);
   if (issue === undefined) throw new Error(`no issue ${id} in the dev store`);
   issue.state = state;
+}
+
+/**
+ * Dev seam (FRU-604): the note `noteId` goes to `stage`, as a team moves its issue in Linear.
+ * `POST /__dev/stage` of the worker of development calls it for a note that is not in the database.
+ * Answers how many issues moved: those whose description parses to the note `noteId`.
+ */
+export function setMemoryNoteStage(noteId: string, stage: string): number {
+  const states: Record<string, { name: string; type: string }> = {
+    new: DEV_STATES[0],
+    todo: DEV_STATES[1],
+    progress: DEV_STATES[2],
+    done: DEV_STATES[3],
+    closed: DEV_STATES[4],
+  };
+  const state = states[stage];
+  if (state === undefined) return 0;
+  // The note read back from the description, as a read finds it: never a part of its text.
+  const moved = issues.filter((issue) => {
+    const parsed = parseNoteFromDescription(issue.description);
+
+    return parsed.ok && parsed.note.id === noteId;
+  });
+  for (const issue of moved) {
+    issue.state = { name: state.name, type: state.type };
+    issue.updatedAt = new Date().toISOString();
+  }
+
+  return moved.length;
 }
 
 /** Test seam, and what makes each playground run start from an empty page. */

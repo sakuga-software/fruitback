@@ -43,11 +43,15 @@ import { placedAt, routingFailure } from './note-helpers.ts';
 import {
   accountStoreFor,
   attachmentStoreFor,
+  doneMailerFor,
+  doneNoticesFor,
   kvFor,
   noteIndexFor,
   sessionStoreFor,
   storeFor,
 } from './worker-stores.ts';
+import { NOTIFY_PATH, postNotify } from './notify-route.ts';
+import type { DoneNoticeSeams } from './done-notices.ts';
 
 export type { RequestContext, Verified } from './request-context.ts';
 export { createPairingCommand } from './session-routes.ts';
@@ -59,6 +63,7 @@ export {
   attachmentStoreFor,
   connectStoreFor,
   deliverPending,
+  sweepDoneNotices,
   instanceAdminFor,
   kvFor,
   mailerFor,
@@ -349,6 +354,18 @@ async function routed(
   const kv = context.kv ?? kvFor(served);
   // FRU-237: the notes of the sites of the accounts are indexed, in the database of the accounts.
   const noteIndex = accounts === undefined ? undefined : (context.noteIndex ?? noteIndexFor(served));
+  // FRU-604: who to tell when a note is done, and what writes to them. Nothing without accounts.
+  const done: DoneNoticeSeams = {
+    notices: accounts === undefined ? undefined : (context.doneNotices ?? doneNoticesFor(served)),
+    mailer: context.mailer ?? doneMailerFor(served),
+    accountOf: async (id) => {
+      const account = await accounts?.account(id);
+      // A suspended account is told nothing: it signs in to nothing either.
+      if (account === undefined || account.suspended === true) return undefined;
+
+      return { email: account.email, ...(account.locale === undefined ? {} : { locale: account.locale }) };
+    },
+  };
   let allowed: boolean;
 
   try {
@@ -389,6 +406,7 @@ async function routed(
       accounts,
       kv,
       noteIndex,
+      done,
       cors,
       ...githubAppOf(context, served),
     });
@@ -496,8 +514,10 @@ async function routed(
   const checkOf = CHECK_PATH.exec(pathname)?.[1];
   const statusOfNote = STATUS_PATH.exec(pathname)?.[1];
   const editOf = EDIT_PATH.exec(pathname)?.[1];
+  const notifyOf = NOTIFY_PATH.exec(pathname)?.[1];
   if (
     pathname !== '/feedback' &&
+    notifyOf === undefined &&
     replyTo === undefined &&
     checkOf === undefined &&
     statusOfNote === undefined &&
@@ -524,7 +544,23 @@ async function routed(
     signsNotes,
     attributionFor,
     chosenPlace,
+    done,
   };
+
+  // FRU-604: the address a visitor with no account gives for the note they just sent.
+  if (notifyOf !== undefined) {
+    if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, cors.headers);
+
+    return postNotify(
+      request,
+      notifyOf,
+      served,
+      kv,
+      cors.headers,
+      { clientIp: context.clientIp, notices: done.notices, sends: done.mailer !== undefined },
+      checks,
+    );
+  }
 
   if (replyTo !== undefined) {
     if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, cors.headers);

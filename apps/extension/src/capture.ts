@@ -118,13 +118,18 @@ async function take(
 
   let tab: Blob;
   try {
-    tab = await captureTab();
+    try {
+      tab = await captureTab();
+    } catch (error) {
+      if (!isRateRefusal(error)) throw error;
+      // Refused for its rate: asked once more after a second, which the rate of the browser allows.
+      await wait(RATE_WAIT_MS);
+      tab = await captureTab();
+    }
   } catch (error) {
+    // A refusal of permission says what to do, on the first try or on the second (FRU-617).
     if (isPermissionRefusal(error)) return { refused: 'permission' };
-    if (!isRateRefusal(error)) throw error;
-    // Refused for its rate: asked once more after a second, which the rate of the browser allows.
-    await wait(RATE_WAIT_MS);
-    tab = await captureTab();
+    throw error;
   }
   const png = area === undefined ? tab : await crop(tab, area);
   const name = area === undefined ? CAPTURE_NAMES.page : CAPTURE_NAMES.area;

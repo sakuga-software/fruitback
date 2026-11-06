@@ -103,6 +103,9 @@ export const sites = pgTable(
     // FRU-368: the states of the site's tracker take the tracker's colours. Off by default (decision 3
     // of docs/decisions/statuses.md): the colours of the stages, which a host can still set.
     tracker_colours: boolean('tracker_colours').notNull().default(false),
+    // FRU-604: a visitor is offered one e-mail when their note is done. Off by default (decision of
+    // Mathieu, 2026-11-06), and of no effect on a site whose notes come from its members only.
+    notify_done: boolean('notify_done').notNull().default(false),
   },
   (table) => [
     foreignKey({
@@ -881,6 +884,53 @@ export const note_index = pgTable(
       sql`"site_id" COLLATE "C" DESC`,
       sql`"note_id" COLLATE "C" DESC`,
     ),
+  ],
+);
+
+/**
+ * The person to tell when a note is done (FRU-604): one row per note, sent once, then removed.
+ *
+ * - `account_id`: a member left the note. The address is read from the account when the message
+ *   leaves, so this table holds no address for a member.
+ * - `email`: a visitor with no account gave this address just after the note was sent. It is the one
+ *   address that the worker keeps for a person with no account, and it serves one message only.
+ *
+ * Exactly one of the two is set: `done-notices.ts` writes no other row. A row goes when its message
+ * has left (`sent`), when its note leaves the index (`cascade`), when the account goes (`cascade`),
+ * and at `expires_at` (`DONE_NOTICE_KEEP_MS` after it was written) for a note that is never done.
+ * `claimed_until`: a read sends its message now (`take`), and another read leaves it until then.
+ * `docs/privacy.md` names each column.
+ */
+export const done_notices = pgTable(
+  'done_notices',
+  {
+    site_id: text('site_id').notNull(),
+    note_id: text('note_id').notNull(),
+    account_id: text('account_id'),
+    email: text('email'),
+    locale: text('locale'),
+    created_at: instant('created_at').notNull(),
+    expires_at: instant('expires_at').notNull(),
+    // Until when a read that took the row is sending its message. Empty: nobody is. Past: the read
+    // that took it stopped, and the next one takes it again.
+    claimed_until: instant('claimed_until'),
+  },
+  (table) => [
+    primaryKey({ name: 'done_notices_pkey', columns: [table.site_id, table.note_id] }),
+    foreignKey({
+      name: 'done_notices_site_id_note_id_fkey',
+      columns: [table.site_id, table.note_id],
+      foreignColumns: [note_index.site_id, note_index.note_id],
+    }).onDelete('cascade'),
+    foreignKey({
+      name: 'done_notices_account_id_fkey',
+      columns: [table.account_id],
+      foreignColumns: [user.id],
+    }).onDelete('cascade'),
+    // What `ON DELETE CASCADE` of an account looks for.
+    index('done_notices_by_account').on(table.account_id),
+    // The sweep of the rows whose time ran out.
+    index('done_notices_by_expiry').on(table.expires_at),
   ],
 );
 

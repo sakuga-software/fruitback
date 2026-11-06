@@ -102,10 +102,10 @@ for (const scheme of ['light', 'dark'] as const) {
     await page.keyboard.press('Escape');
     await page.getByRole('button', { name: 'Show every note in a sidebar' }).click();
     // « All »: whether the store in memory made the note an open one or a done one is not this test's.
-    await page
-      .getByRole('dialog', { name: 'Notes on this page' })
-      .getByRole('button', { name: 'All 1', exact: true })
-      .click();
+    // A chip of « Search and options » since FRU-606.
+    const sidebar = page.getByRole('dialog', { name: 'Notes on this page' });
+    await sidebar.getByRole('button', { name: 'Search and options' }).click();
+    await sidebar.getByRole('button', { name: 'All 1', exact: true }).click();
     // A column since FRU-308: not the `inline` the reset of the host leaves.
     expect(await display(page, 'ul.fruitback-sidebar-list')).toBe('flex');
   });
@@ -377,6 +377,7 @@ test('at 390 px, a note with a long address wraps in the thread and in the list'
   await page.keyboard.press('Escape');
 
   await page.getByRole('button', { name: 'Show every note in a sidebar' }).click();
+  await page.getByRole('button', { name: 'Search and options' }).click();
   await page.getByRole('button', { name: 'All 1', exact: true }).click();
   await expect(page.locator('.fruitback-sidebar-note')).toBeVisible();
   expect(await overflowsSideways(page, '.fruitback-sidebar-note')).toBe(0);

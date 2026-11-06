@@ -105,7 +105,8 @@ test('a read that fails after a good one leaves the pins and the list as they we
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
   await page.getByRole('button', { name: 'Show every note in a sidebar' }).click();
   const list = page.getByRole('dialog', { name: 'Notes on this page' });
-  await list.getByRole('button', { name: 'All 1', exact: true }).click();
+  // The tabs of the read that answered: the note is still in « Open » (FRU-606).
+  await expect(list.getByRole('tab', { name: 'Open · 1' })).toHaveAttribute('aria-selected', 'true');
   await expect(list.locator('[data-fruitback-note]')).toHaveCount(1);
   await expect(list.getByText(/could not be read/)).toBeHidden();
 });

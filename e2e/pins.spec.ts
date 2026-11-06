@@ -97,6 +97,8 @@ for (const [width, height] of [
 
     await page.getByRole('button', { name: 'Show every note in a sidebar' }).click();
     const list = page.getByRole('dialog', { name: 'Notes on this page' });
+    // « All » of « Search and options » (FRU-606): the note whatever its tab.
+    await list.getByRole('button', { name: 'Search and options' }).click();
     await list.getByRole('button', { name: 'All 1', exact: true }).click();
     const row = list.locator('[data-fruitback-note]');
     await row.click();
@@ -138,6 +140,7 @@ for (const scheme of ['light', 'dark'] as const) {
 
     await page.getByRole('button', { name: 'Voir toutes les notes dans un panneau' }).click();
     const list = page.getByRole('dialog', { name: 'Notes de cette page' });
+    await list.getByRole('button', { name: 'Recherche et options' }).click();
     await list.getByRole('button', { name: /^Toutes 1$/ }).click();
     await list.locator('[data-fruitback-note]').click();
     await expect(list.getByRole('button', { name: 'Toutes les notes' })).toBeVisible();

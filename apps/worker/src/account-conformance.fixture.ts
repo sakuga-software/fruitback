@@ -231,6 +231,8 @@ export function accountCases(it: Declare<AccountStore>): void {
       origin: 'https://acme.dev',
       visibility: 'members',
       writers: 'members',
+      // FRU-604: off for a new site.
+      notifyDone: false,
       destinations: [],
     });
     assert.deepEqual(await store.sites(workspace.id), [{ ...first, visibility: 'everyone' }]);
