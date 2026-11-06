@@ -12,6 +12,7 @@
     "src/i18n-core.ts",
     "src/issue.ts",
     "src/markdown-description.ts",
+    "src/note-tabs.ts",
     "src/note.ts",
     "src/status-paint.ts"
   ],
