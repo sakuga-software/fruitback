@@ -28,15 +28,15 @@ export type NotifyAsk = {
 };
 
 /**
- * The answer, in `storage` (the `localStorage` of the page), or in memory when the browser refuses
+ * The answer, in `area` (the `localStorage` of the page), or in memory when the browser refuses
  * it: then the question is asked once for this page, and comes back on the next load.
  */
-export function createNotifyAsk(storage: Storage | null, now: () => number = Date.now): NotifyAsk {
+export function createNotifyAsk(area: Storage | null, now: () => number = Date.now): NotifyAsk {
   let memory: string | null = null;
   const read = (): unknown => {
     let raw: string | null = memory;
     try {
-      raw = storage?.getItem(NOTIFY_ASK_KEY) ?? memory;
+      raw = area?.getItem(NOTIFY_ASK_KEY) ?? memory;
     } catch {
       raw = memory;
     }
@@ -50,7 +50,7 @@ export function createNotifyAsk(storage: Storage | null, now: () => number = Dat
   const write = (value: object): void => {
     memory = JSON.stringify(value);
     try {
-      storage?.setItem(NOTIFY_ASK_KEY, memory);
+      area?.setItem(NOTIFY_ASK_KEY, memory);
     } catch {
       // A full or refused storage keeps the answer for this page only.
     }

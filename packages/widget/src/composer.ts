@@ -1729,7 +1729,7 @@ const TEMPLATE: readonly Markup[] = [
         { class: 'fruitback-composer-notify-actions' },
         [
           ['button', { type: 'button', 'data-fruitback-notify-no': '', class: 'fruitback-composer-ghost' }],
-          ['button', { type: 'submit', 'data-fruitback-notify-yes': '', class: 'fruitback-composer-send' }],
+          ['button', { type: 'submit', 'data-fruitback-notify-yes': '', class: 'fruitback-composer-notify-yes' }],
         ],
       ],
     ],
