@@ -58,9 +58,10 @@ test('what the shortcut sends starts a capture on the tab, and Esc stops it', as
 
 test('the options page shows the key, and the way to change it', async ({ extension }) => {
   const options = await extension.context.newPage();
-  await options.goto(`chrome-extension://${extension.id}/options.html`);
+  // FRU-591: « Preferences » is a page of its own.
+  await options.goto(`chrome-extension://${extension.id}/options.html#prefs`);
   // FRU-302: the line is a row of « Preferences », the keys in the `kbd` of the kit.
-  const row = options.locator('section#prefs .pref-row').filter({ hasText: 'Leave a note shortcut' });
+  const row = options.locator('section#page-prefs .pref-row').filter({ hasText: 'Leave a note shortcut' });
 
   await expect(row.locator('kbd')).toHaveText([/^(Alt|⌥)$/, /^(Shift|⇧)$/, 'F']);
 

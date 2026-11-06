@@ -46,8 +46,9 @@ test('the preferences of the Safari build name Safari, and offer no panel and no
   extension,
 }) => {
   const options = await extension.context.newPage();
-  await options.goto(`chrome-extension://${extension.id}/options.html`);
-  const prefs = options.locator('section#prefs');
+  // FRU-591: « Preferences » is a page of its own.
+  await options.goto(`chrome-extension://${extension.id}/options.html#prefs`);
+  const prefs = options.locator('section#page-prefs');
   // The control is `extension-page.spec.ts`: the Chrome build has « Open notes in the sidebar » first.
   await expect(prefs.locator('.pref-title')).toHaveText([
     'Name on my notes',
