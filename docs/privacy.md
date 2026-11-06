@@ -40,12 +40,16 @@ If your staging site shows real customer records, keep that in mind before you i
 - A reporter who does nothing is anonymous. The name field sits behind a disclosure, is
   optional, and is sent only when filled in. The widget asks for no e-mail address.
 - The widget remembers nobody who did not ask. The name stays in the reporter's browser only if
-  the reporter ticks « Remember me on this site », and unticking the box erases it at once.
+  the reporter ticks « Remember me in this browser », and unticking the box erases it at once.
 - No picture leaves the page unless somebody chose it. The widget bundles no screen capture.
   The setting is absent unless the integrator supplied `captureScreenshot`, and present, it starts
   off: the reporter turns it on. The picture goes to your storage, and the note holds only its
   URL: whether that URL is public is your decision. A file that a person joins to a note through
   the worker goes to the ticket of the tracker, never into the note: see below.
+- In the extension, the composer joins a capture of the element to a note by default, where the
+  note takes files: it is shown in the field as a thumbnail, with a cross that removes it. It is
+  taken in the browser and stays there until the person sends the note: removed, or never sent, it
+  leaves nothing. Sent, it is a file of the note like any other, below.
 - The identity token never enters the note. It travels in an `Authorization` header and is
   verified, not stored. The note is kept verbatim for as long as the issue exists, and a credential
   in it would outlive its expiry by months.
@@ -417,7 +421,7 @@ Since 0.2.0 an account also holds the language its person reads, taken from the 
 - `localStorage`, under `fruitback:config` (or the `configKey` the integrator chose): the stages the
   reporter hid, the screenshot switch, and the corner of the dock once the reporter chose one in the
   settings. The reporter's name too, **only if the reporter ticked
-  « Remember me on this site »**. For a member of a team who chose where a note goes, the identifier of that place: an opaque
+  « Remember me in this browser »**. For a member of a team who chose where a note goes, the identifier of that place: an opaque
   value, with no name of the tracker. No e-mail, no note. In private mode the extension writes `fruitback:config:extension` into the site's
   storage, so a site can see that a reviewer used the extension on it.
 - `sessionStorage`, under `fruitback:config:drafts` (or the `configKey` with `:drafts`): the notes a

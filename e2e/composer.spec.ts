@@ -260,8 +260,8 @@ test('the composer has the measures of the mock-up, beside its element, with the
     'border-top-style': 'dashed',
     height: 28,
   });
-  // A click opens « Name (optional) »: a field of 36 px, in 13 px.
-  const name = page.getByLabel('Name (optional)');
+  // A click opens « Name » (FRU-609): a field of 36 px, in 13 px.
+  const name = page.getByLabel('Name', { exact: true });
   await expect(name).toBeHidden();
   await avatar.click();
   await expect(name).toBeVisible();

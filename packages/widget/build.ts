@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
 import { readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { promisify } from 'node:util';
-import { build } from 'esbuild';
+import { type Plugin, build } from 'esbuild';
 
 /**
  * Two files, both self-contained (FRU-16).
@@ -20,12 +20,38 @@ const OUT = 'dist';
 
 await rm(OUT, { recursive: true, force: true });
 
-const shared = { bundle: true, target: 'es2022', sourcemap: true, logLevel: 'info' } as const;
+/**
+ * The comments of the stylesheets stay in the sources and out of `dist` (FRU-609).
+ *
+ * A stylesheet of the widget is a template literal (`*.styles.ts`), and a string is never minified:
+ * every comment written to explain a rule shipped to the page of the host, 12 kB gzipped of them,
+ * against the tripwire of `package.test.ts`. A `*.styles.ts` holds nothing but its stylesheet, its
+ * width constants and the comments around them, so every block comment of the file can go: none sits
+ * inside a value. `stylesheet.test.ts` reads the sources, where the comments are.
+ */
+const stylesWithoutComments: Plugin = {
+  name: 'styles-without-comments',
+  setup(on) {
+    on.onLoad({ filter: /\.styles\.ts$/ }, async ({ path }) => ({
+      contents: (await readFile(path, 'utf8')).replace(/\/\*[\s\S]*?\*\//g, ''),
+      loader: 'ts',
+    }));
+  },
+};
+
+const shared = {
+  bundle: true,
+  target: 'es2022',
+  sourcemap: true,
+  logLevel: 'info',
+} as const;
+const plugins = [stylesWithoutComments];
 
 // Left readable on purpose: it goes through the consumer's own bundler, which will minify it with
 // everything else. Minifying twice buys nothing and costs them a legible stack trace.
 await build({
   ...shared,
+  plugins,
   entryPoints: ['src/public.ts'],
   format: 'esm',
   minify: false,
@@ -37,6 +63,7 @@ await build({
 // thing debuggable.
 await build({
   ...shared,
+  plugins,
   entryPoints: ['src/global.ts'],
   format: 'iife',
   globalName: 'Fruitback',

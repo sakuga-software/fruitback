@@ -16,6 +16,17 @@ export const STYLES = `
   box-shadow: 0 0 0 100vmax color-mix(in srgb, var(--fruitback-color-ink) 45%, transparent);
   pointer-events: none;
 }
+.fruitback-area-size {
+  position: fixed;
+  transform: translate(-100%, 6px);
+  padding: 2px 6px;
+  border-radius: var(--fruitback-radius-sm);
+  background: var(--fruitback-color-ink);
+  color: var(--fruitback-color-on-ink);
+  font: 600 11px/1.4 var(--fruitback-font-mono);
+  pointer-events: none;
+  white-space: nowrap;
+}
 .fruitback-area:focus-visible .fruitback-area-box { outline: 2px solid var(--fruitback-color-on-accent); outline-offset: 2px; }
 .fruitback-area-bar {
   position: fixed;

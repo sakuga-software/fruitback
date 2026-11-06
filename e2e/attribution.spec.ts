@@ -31,7 +31,7 @@ test('a typed name reaches Linear, and is stored as the claim it is', async ({ p
   await page.getByRole('button', { name: /Leave a note/ }).click();
   await page.locator('[data-testid="card-latte"] .add').click();
   await page.getByRole('button', { name: 'Signed as Guest. Add your name' }).click();
-  await page.getByLabel('Name (optional)').fill('Alice');
+  await page.getByLabel('Name', { exact: true }).fill('Alice');
   // The avatar takes the initial, and the whole name in its tooltip (FRU-607).
   const avatar = page.getByRole('button', { name: 'Signed as Alice. Change the name' });
   await expect(avatar).toHaveText('A');
@@ -58,8 +58,8 @@ test('a reporter who asks to be remembered signs the next note too, until the bo
   await page.getByRole('button', { name: /Leave a note/ }).click();
   await latte.click();
   await page.getByRole('button', { name: 'Signed as Guest. Add your name' }).click();
-  await page.getByLabel('Name (optional)').fill('Alice');
-  await page.getByLabel('Remember me on this site').check();
+  await page.getByLabel('Name', { exact: true }).fill('Alice');
+  await page.getByLabel('Remember me in this browser').check();
   await page.getByPlaceholder('What should change?').fill('Signé, et retenu');
   await sendNote(page);
   expect(await stored()).toContain('Alice');
@@ -73,8 +73,8 @@ test('a reporter who asks to be remembered signs the next note too, until the bo
   const kept = page.getByRole('button', { name: 'Signed as Alice. Change the name' });
   await expect(kept).toHaveText('A');
   await kept.click();
-  await expect(page.getByLabel('Name (optional)')).toHaveValue('Alice');
-  await expect(page.getByLabel('Remember me on this site')).toBeChecked();
+  await expect(page.getByLabel('Name', { exact: true })).toHaveValue('Alice');
+  await expect(page.getByLabel('Remember me in this browser')).toBeChecked();
   await page.getByPlaceholder('What should change?').fill('Signé sans rien retaper');
   await sendNote(page);
 
@@ -86,7 +86,7 @@ test('a reporter who asks to be remembered signs the next note too, until the bo
   await page.getByRole('button', { name: /Leave a note/ }).click();
   await latte.click();
   await page.getByRole('button', { name: 'Signed as Alice. Change the name' }).click();
-  await page.getByLabel('Remember me on this site').uncheck();
+  await page.getByLabel('Remember me in this browser').uncheck();
   expect(await stored()).not.toContain('Alice');
 });
 

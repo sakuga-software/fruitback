@@ -78,6 +78,17 @@ export const ENGLISH = {
   // Said in place of the four ways, when the note stays in Fruitback (`canAttach: false`).
   'composer.attachNoTracker': 'This note stays in Fruitback, with no tracker: it takes no file.',
   'composer.attachRemove': 'Remove {name}',
+  // FRU-609: the word of the button of a refused file, the part sent, and a capture that waits.
+  'composer.attachRemoveShort': 'Remove',
+  'composer.attachPercent': 'Sending {percent} %',
+  'composer.attachWithNote': 'Goes with the note',
+  'composer.attachTooLargeOf': 'Too large: {size}, the limit is {limit}',
+  'composer.attachOpen': 'Open {name} whole',
+  'composer.attachShot': 'The capture of the element',
+  'composer.attachWaiting': { one: 'Waiting for {count} file…', other: 'Waiting for {count} files…' },
+  // FRU-609: a site that takes notes from its team only, for a reader who is not signed in.
+  'composer.signInToSend': 'Sign in to send',
+  'composer.signInOnlyTeam': 'Only the team of this site can send notes here.',
   'composer.attachSending': 'Sending…',
   // Why a file did not go, under its name. The text of the note stays in every case.
   'composer.attachTooLarge': 'Too large: 10 MB for an image, a PDF or a file, 2 MB for a text, 25 MB for a note',
@@ -100,6 +111,8 @@ export const ENGLISH = {
     'Drag to draw an area. The arrows move it, Shift and the arrows change its size, Enter takes it, Esc cancels.',
   'area.take': 'Take this area',
   'area.cancel': 'Cancel',
+  // FRU-609: the visible part of the page, whole.
+  'area.visible': 'Take the visible page',
   'composer.placeholder': 'What should change?',
   // The label above the field of the note (FRU-305), which names it.
   'composer.label': 'Your note',
@@ -110,12 +123,12 @@ export const ENGLISH = {
   // The same preference as `settings.screenshot`, said beside the note it applies to.
   'composer.picture': 'Attach a picture of the element',
   'composer.namePlaceholder': 'Your name',
-  'composer.nameLabel': 'Name (optional)',
+  'composer.nameLabel': 'Name',
   // FRU-607: the signature, as an avatar at the end of the field. A click opens the name.
   'composer.guest': 'Guest',
   'composer.signedGuest': 'Signed as Guest. Add your name',
   'composer.signedAs': 'Signed as {name}. Change the name',
-  'composer.remember': 'Remember me on this site',
+  'composer.remember': 'Remember me in this browser',
   'composer.cancel': 'Cancel',
   'composer.send': 'Send',
   'composer.sending': 'Sending…',

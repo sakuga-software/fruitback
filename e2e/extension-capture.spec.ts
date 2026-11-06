@@ -41,10 +41,20 @@ test('a capture of the page and one of an area go through the relay to the ticke
   await page.getByRole('button', { name: 'Team feedback' }).click();
   await page.locator('[data-testid="card-latte"] .add').click();
   const files = page.getByRole('dialog', { name: 'New note', exact: true });
+  // FRU-609: the capture of the element joins the note at the open, framed, and waits for the note.
+  const shot = page.locator('.fruitback-composer-file').first();
+  await expect(shot).toHaveAttribute('data-fruitback-file', 'local');
+  await expect(page.locator('.fruitback-composer-file-name').first()).toHaveText('element.png');
+  await expect(shot.locator('[data-fruitback-file-thumb] img')).toHaveJSProperty('complete', true);
+  expect(
+    await shot.locator('[data-fruitback-file-thumb] img').evaluate((image) => (image as HTMLImageElement).naturalWidth),
+  ).toBeGreaterThan(0);
   await files.getByRole('button', { name: 'Take a screenshot' }).click();
   await files.getByRole('menuitem', { name: 'Capture the whole page' }).click();
-  await expect(page.locator('.fruitback-composer-file').first()).toHaveAttribute('data-fruitback-file', 'ready');
-  await expect(page.locator('.fruitback-composer-file-name').first()).toHaveText('page.png');
+  await expect(page.locator('.fruitback-composer-file').nth(1)).toHaveAttribute('data-fruitback-file', 'ready');
+  await expect(page.locator('.fruitback-composer-file-name').nth(1)).toHaveText('page.png');
+  // Still waiting: nothing of it left the page before the note.
+  await expect(shot).toHaveAttribute('data-fruitback-file', 'local');
 
   // The area, with the keyboard: the menu of the capture (FRU-351, FRU-607), then the area is drawn in the
   // middle, moved, sized, and taken.
@@ -57,20 +67,21 @@ test('a capture of the page and one of an area go through the relay to the ticke
   await page.keyboard.press('ArrowRight');
   await page.keyboard.press('Shift+ArrowDown');
   await page.keyboard.press('Enter');
-  await expect(page.locator('.fruitback-composer-file')).toHaveCount(2);
-  await expect(page.locator('.fruitback-composer-file').nth(1)).toHaveAttribute('data-fruitback-file', 'ready');
-  await expect(page.locator('.fruitback-composer-file-name')).toHaveText(['page.png', 'area.png']);
+  await expect(page.locator('.fruitback-composer-file')).toHaveCount(3);
+  await expect(page.locator('.fruitback-composer-file').nth(2)).toHaveAttribute('data-fruitback-file', 'ready');
+  await expect(page.locator('.fruitback-composer-file-name')).toHaveText(['element.png', 'page.png', 'area.png']);
 
   await page.getByPlaceholder('What should change?').fill('Deux captures');
   await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
   await page.getByRole('button', { name: /^Note 1\b/ }).click();
-  await expect(page.locator('[data-fruitback-files]')).toHaveText(/^2 attachments · in \S+$/);
+  await expect(page.locator('[data-fruitback-files]')).toHaveText(/^3 attachments · in \S+$/);
 
-  // The double of the tracker holds the two files of the note, by their names.
+  // The double of the tracker holds the three files of the note, by their names: the capture of the
+  // element went with the note, at the send.
   const access = (await storedTokens(extension.worker)).find((token) => token.area === 'session')?.value;
   const read = await readNoteIssues(page, WORKER_ORIGIN, access);
   const { issues } = (await read.json()) as { issues: { note: { text: string }; attachments?: { name: string }[] }[] };
   const note = issues.find((issue) => issue.note.text === 'Deux captures');
-  expect(note?.attachments?.map((file) => file.name)).toEqual(['page.png', 'area.png']);
+  expect(note?.attachments?.map((file) => file.name)).toEqual(['element.png', 'page.png', 'area.png']);
 });

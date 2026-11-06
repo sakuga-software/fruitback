@@ -52,7 +52,9 @@ test('the bench sends a note in team mode, with a capture after the click on the
   const received = await bench.trackerReceived();
   const issue = received.issues.find((each) => each.description.includes('Note du banc'));
   expect(issue).toBeDefined();
+  // The capture of the element joined the note at the open, and went with it (FRU-609).
   expect(received.attachments.filter((each) => each.issueId === issue?.id).map((each) => each.title)).toEqual([
+    'element.png',
     'area.png',
     'bench.log',
   ]);
@@ -71,7 +73,7 @@ test('the bench sends a note in team mode, with a capture after the click on the
   await mountTheSiteWidget(site, bench.worker);
   await expect(site.locator('[data-fruitback-pin]')).toHaveCount(1);
   await site.getByRole('button', { name: /^Note 1\b/ }).click();
-  await expect(site.locator('[data-fruitback-files]')).toHaveText(/^2 attachments · in \S+$/);
+  await expect(site.locator('[data-fruitback-files]')).toHaveText(/^3 attachments · in \S+$/);
 });
 
 test('the bench loads a second copy of the extension beside the first, with an id of its own (FRU-397)', async () => {

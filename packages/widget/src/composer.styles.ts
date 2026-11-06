@@ -329,6 +329,75 @@ export const STYLES = `
   cursor: pointer;
 }
 .fruitback-composer-file-remove .fruitback-icon { width: 12px; height: 12px; }
+/*
+  FRU-609: a capture shows as a thumbnail with its element framed, a click opens it whole. A file on
+  its way draws the part sent under its line, when the host measures it. A refused file says
+  « Remove » in words.
+*/
+.fruitback-composer-file { position: relative; }
+.fruitback-composer-file[data-fruitback-file="sending"]::after {
+  content: "";
+  position: absolute;
+  inset-inline-start: 0;
+  bottom: 0;
+  width: var(--fruitback-composer-file-progress, 0%);
+  height: 2px;
+  background: var(--fruitback-color-accent);
+}
+.fruitback-composer-file-thumb {
+  flex: none;
+  display: block;
+  width: 56px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid var(--fruitback-color-border);
+  border-radius: var(--fruitback-radius-sm);
+  overflow: hidden;
+  background: var(--fruitback-color-surface);
+  cursor: zoom-in;
+}
+.fruitback-composer-file-thumb:focus-visible { outline: 2px solid var(--fruitback-color-accent); outline-offset: 1px; }
+.fruitback-composer-shot { position: relative; display: block; width: 100%; height: 100%; }
+.fruitback-composer-shot img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.fruitback-composer-shot[data-fruitback-broken] img { visibility: hidden; }
+.fruitback-composer-shot-ring {
+  position: absolute;
+  left: var(--fruitback-composer-shot-left, 0%);
+  top: var(--fruitback-composer-shot-top, 0%);
+  width: var(--fruitback-composer-shot-width, 100%);
+  height: var(--fruitback-composer-shot-height, 100%);
+  box-sizing: border-box;
+  border: 2px solid var(--fruitback-color-accent);
+  border-radius: 2px;
+  pointer-events: none;
+}
+.fruitback-composer-file-remove-words { width: auto; padding-inline: 8px; gap: 4px; grid-auto-flow: column; font: 600 12px/1 var(--fruitback-font-sans); }
+.fruitback-composer-lightbox {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 10px;
+  box-sizing: border-box;
+  border-radius: var(--fruitback-radius-lg);
+  background: var(--fruitback-color-surface);
+  outline: 0;
+}
+.fruitback-composer-lightbox[hidden] { display: none; }
+.fruitback-composer-lightbox .fruitback-composer-shot { flex: 1; min-height: 0; }
+.fruitback-composer-lightbox .fruitback-composer-shot img { object-fit: contain; }
+/* Why « Send » waits for a sign-in (FRU-609), above the foot. */
+.fruitback-composer-sign-needed {
+  margin: 0;
+  padding: 10px 14px 0;
+  border-top: 1px solid var(--fruitback-color-border);
+  font-size: 12px;
+  color: var(--fruitback-color-text-muted);
+}
+.fruitback-composer-sign-needed[hidden] { display: none; }
 .fruitback-composer-file-remove:hover { background: var(--fruitback-color-surface); color: var(--fruitback-color-text); }
 .fruitback-composer-file-remove:focus-visible { outline: 2px solid var(--fruitback-color-accent); outline-offset: 1px; }
 /* Where the note goes, when there are several places (FRU-123). */
