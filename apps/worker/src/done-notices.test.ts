@@ -214,6 +214,20 @@ describe('sendDoneNotices', () => {
     assert.equal(sent.length, 1);
   });
 
+  it('releases a row whose page the read does not hold, and never deletes it unsent', async () => {
+    // A store that answers a row it was not asked for: the read has no page for it.
+    const notices = memoryNotices([{ site: 's', note: 'n_other', email: 'ana@example.com' }]);
+    const sent: MailMessage[] = [];
+    const seams = {
+      notices: { ...notices, take: async () => [...notices.rows] },
+      mailer: { send: async (message: MailMessage) => void sent.push(message) },
+      accountOf: async () => undefined,
+    };
+    assert.equal(await sendDoneNotices(seams, 's', [issue('n_1', 'done')]), 0);
+    assert.deepEqual(sent, []);
+    assert.deepEqual(notices.rows, [{ site: 's', note: 'n_other', email: 'ana@example.com' }]);
+  });
+
   it('tells nobody for an account that is gone, and sends nothing without a mailer', async () => {
     const notices = memoryNotices([{ site: 's', note: 'n_1', account: 'gone' }]);
     assert.equal(

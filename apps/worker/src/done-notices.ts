@@ -234,12 +234,15 @@ export async function sendDoneNotices(
     try {
       const to =
         notice.email === undefined ? await accountTo(seams, notice) : { email: notice.email, locale: notice.locale };
-      if (to !== undefined && page !== undefined) {
+      if (to === undefined) {
+        // An account that is gone, or suspended, has nobody to tell: its row goes as a message would.
+        left = true;
+      } else if (page !== undefined) {
         await mailer.send(doneMessage(to.email, page, notice.note, to.locale, notice.email !== undefined));
         sent += 1;
+        left = true;
       }
-      // An account that is gone, or suspended, has nobody to tell: its row goes as a message would.
-      left = true;
+      // A row whose page this read does not hold is not this read's to send: it is released below.
     } catch (error) {
       console.error(`[fruitback] the message of a note done did not leave: ${String(error)}`);
     }
