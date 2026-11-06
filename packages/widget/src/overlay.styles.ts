@@ -1,3 +1,4 @@
+import { GROUND_INK } from './page-ground.ts';
 /**
  * How far apart the badges of one spot sit (FRU-155). The stylesheet multiplies it by
  * `--fruitback-pin-slot`: a 28 px drop and a 2 px gap.
@@ -111,6 +112,11 @@ export const STYLES = `
 }
 /* Found by position, not by identity: the same drop, its ring dashed. The number stays. */
 .fruitback-pin-uncertain .fruitback-pin-badge { border-style: dashed; }
+/*
+  A red site (FRU-611, P7): the drop keeps the colour of its status, and its edge takes the ink with a
+  white contour, so a red drop on a red page still has a shape.
+*/
+:host([data-fruitback-faint]) .fruitback-pin-badge { border-color: ${GROUND_INK}; box-shadow: 0 0 0 2px #ffffff; }
 /* Open: the drop grows, above the others. */
 .fruitback-pin[data-fruitback-open] .fruitback-pin-badge { transform: rotate(-45deg) scale(1.15); }
 .fruitback-pin-glyph {

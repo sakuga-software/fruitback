@@ -320,6 +320,17 @@ export const THEME_STYLES = `
 }
 
 /*
+  A dark site (FRU-611, P7, page-ground.ts): the widget keeps its scheme, and what floats over the
+  page (the dock, the composer, a thread, the panel) takes a white line at 16 % and a denser shadow,
+  or its edge melts into the page. After the dark scheme, so it holds in both.
+*/
+:host([data-fruitback-ground="dark"]) {
+  --fruitback-shadow-md: 0 0 0 1px rgba(255, 255, 255, 0.16), 0 4px 18px rgba(0, 0, 0, 0.6);
+  --fruitback-shadow-lg: 0 0 0 1px rgba(255, 255, 255, 0.16), 0 10px 30px rgba(0, 0, 0, 0.6);
+  --fruitback-shadow-xl: 0 0 0 1px rgba(255, 255, 255, 0.16), 0 14px 40px rgba(0, 0, 0, 0.65);
+}
+
+/*
   Borders and muted text are where a low-contrast palette actually fails someone, so those are what
   harden. A widget laid over a page that was audited for contrast must not be the thing that fails it.
 */

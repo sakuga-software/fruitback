@@ -1959,3 +1959,27 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
   not carry the route either (`relay.test.ts`).
 - The field is `type="email"`, `autocomplete="email"`, labelled « Email », described by the sentence
   that says the address is deleted after one message; the error is a live region.
+
+## The ground of the page: a dark site, a red site (FRU-611)
+
+### The rules, in short
+
+- **The widget reads the ground of the page** (`page-ground.ts`) when it mounts and at each start of a
+  capture: the background of `<body>` laid on the one of `<html>`, laid on white, alpha included. A
+  colour computed in another notation than `rgb()` (`oklch()`, which Tailwind 4 writes,
+  `color(srgb …)`) is drawn on a canvas of one pixel and read back (review of #859). A site that turns
+  dark later is read again at its next capture.
+- **A dark ground** (relative luminance under 0.2, `data-fruitback-ground="dark"` on the host): the
+  widget keeps the scheme of the system, as before. What floats over the page (the dock, the composer,
+  a thread, the panel of settings) takes a white line at 16 % and a denser shadow, through
+  `--fruitback-shadow-md/lg/xl`. The frame of a capture takes a light halo.
+- **A faint ground**, where the red of Fruitback is under 3:1 (WCAG 1.4.11), a red site
+  (`data-fruitback-faint`): the frame of a capture, its name, the tether of the composer and the edge
+  of each drop take the ink of the theme, `#18181b`, with a white contour (the board writes `#1c1917`,
+  a stone grey FRU-334 took out of the widget). A drop keeps the colour of its status: that
+  colour says something.
+- `e2e/page-ground.spec.ts` holds both at 1440 and 390 px, in both schemes, with a white site as its
+  control; each case fails with the ground not written.
+- Chosen, the board drawing none of it: « le widget reste clair » is read as « the widget does not take
+  the colours of the site », not as « a dark system scheme is ignored ». The scheme of the system stays
+  the one switch of the widget's colours.

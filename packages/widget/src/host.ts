@@ -11,6 +11,7 @@ import { type CaptureEngine, reactGrabEngine } from './engine.ts';
 import { createIcon } from './icons.ts';
 import { type Translator, createTranslator, languageOf } from './messages.ts';
 import { framesOf, settle } from './settle.ts';
+import { markGround, readGround } from './page-ground.ts';
 import { adoptStyles } from './stylesheet.ts';
 import { STYLES } from './host.styles.ts';
 
@@ -159,6 +160,9 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   };
   moveDock(options.position);
   document.body.append(container);
+  // FRU-611: a dark ground, or one the red of Fruitback is hard to see on, read once the host is in
+  // the page, and again at each start of a capture.
+  markGround(container, readGround(document));
 
   // Written on the host element rather than into the stylesheet, so an inline custom property wins
   // over the `:host` declaration without needing a more specific selector.
@@ -532,6 +536,7 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
     // FRU-330: no note can start that the worker refuses, whoever asks for the capture.
     if (closed !== undefined) return;
     capturing = true;
+    markGround(container, readGround(document));
     // `chosen` is left as it is: a capture started over an open composer must give the frame back
     // to the element the composer is about when it stops.
     sources = new WeakMap();
