@@ -26,7 +26,7 @@ type Worker = { connectors: unknown[]; added: unknown[]; triggers: unknown[] };
 
 async function workerWith(
   page: Page,
-  options: { connectors?: unknown[]; locale?: 'en' | 'fr'; refused?: boolean } = {},
+  options: { connectors?: unknown[]; locale?: 'en' | 'fr'; refused?: boolean; trigger?: unknown } = {},
 ): Promise<Worker> {
   const worker: Worker = { connectors: options.connectors ?? [ROUTINE], added: [], triggers: [] };
   const answer = (pathname: string, route: Route) => {
@@ -68,7 +68,7 @@ async function workerWith(
       });
     }
     if (pathname === '/console/workspaces/w1/sites/s1/agent-trigger') {
-      if (route.request().method() === 'GET') return json({ trigger: null });
+      if (route.request().method() === 'GET') return json({ trigger: options.trigger ?? null });
       const body = route.request().postDataJSON() as Record<string, unknown>;
       worker.triggers.push(body);
 
@@ -152,6 +152,17 @@ test('the trigger of a site can call a routine, and says what its call carries: 
   await expect(agent).not.toContainText('"event": "agent.requested"');
   await agent.getByRole('button', { name: 'Save' }).click();
   await expect.poll(() => worker.triggers.at(-1)).toEqual({ connector: 'c3', moment: 'verified-note', enabled: true });
+});
+
+test('the calls that wait for a routine are said with its trigger, not as an address (review)', async ({ page }) => {
+  await workerWith(page, {
+    connectors: [HOOK, ROUTINE],
+    trigger: { connector: 'c3', moment: 'verified-note', enabled: true, waiting: 2 },
+  });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`${CONSOLE}/w/w1/sites/s1#agent`);
+  const agent = page.getByRole('region', { name: 'Start an agent', exact: true });
+  await expect(agent).toContainText('2 calls did not arrive at Claude Code routine · trig_01ABCDEFGHJKLMNOPQRSTUVW.');
 });
 
 test('at 390 px in French, the panel says « Session lancée », and nothing scrolls sideways', async ({ page }) => {

@@ -26,12 +26,14 @@ import { ReadProblem } from '../read-problem';
 /** The guide of a team that starts its agent on a note: `docs/agents.md`. */
 const GUIDE = 'https://fruitback.com/agents.html#start-an-agent-on-a-note';
 
-/** How the list of « Call » names a source: an address by its host, a routine by its trigger (FRU-594). */
-function receiverLabel(each: Connector): string {
-  const place =
-    each.kind === 'claude-routine' ? `${t(KINDS['claude-routine'].name)} · ${routineOf(each)}` : shortHost(each);
+/** Where a call goes: an address by its host, a routine by its trigger (FRU-594). */
+function placeOf(each: Connector): string {
+  return each.kind === 'claude-routine' ? `${t(KINDS['claude-routine'].name)} · ${routineOf(each)}` : shortHost(each);
+}
 
-  return each.name === undefined ? place : `${connectorName(each)} · ${place}`;
+/** How the list of « Call » names a source: its place, after the name its workspace gave it. */
+function receiverLabel(each: Connector): string {
+  return each.name === undefined ? placeOf(each) : `${connectorName(each)} · ${placeOf(each)}`;
 }
 
 /** What a call to a routine carries in `text` (FRU-594): identifiers only, as the worker writes it. */
@@ -171,11 +173,11 @@ export function SiteAgent({
           <p className="text-small">
             {read.waiting === 1
               ? t('1 call did not arrive at {host}. Fruitback tries again; you can try now from the address.', {
-                  host: shortHost(waitingAt),
+                  host: placeOf(waitingAt),
                 })
               : t('{count} calls did not arrive at {host}. Fruitback tries again; you can try now from the address.', {
                   count: read.waiting,
-                  host: shortHost(waitingAt),
+                  host: placeOf(waitingAt),
                 })}{' '}
             <LinkButton space="inline" to={`/w/${workspace.id}/connectors`}>
               {t('See the calls')}
