@@ -326,7 +326,26 @@ button.kit-switch[aria-checked='true'] .kit-knob {
 .kit-site-host {
   font-size: 15px;
   font-weight: 650;
-  overflow-wrap: anywhere;
+}
+
+/*
+  A host cut at its start (FRU-611, P7): the box is written from right to left, so « … » takes the start
+  and the end stays in sight; the words inside run from left to right, isolated, as a host reads.
+*/
+.kit-host-tail {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  direction: rtl;
+  /* The end of a box written right to left is the left: a host that fits starts there. */
+  text-align: end;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kit-host-tail > span {
+  direction: ltr;
+  unicode-bidi: isolate;
 }
 
 .kit-site-state {

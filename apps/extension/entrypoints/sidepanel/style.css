@@ -399,6 +399,17 @@ button.panel-send:disabled {
   gap: 12px;
 }
 
+/* The host, cut at its start when long (FRU-611), then the workspace, which keeps its words. */
+.panel-where {
+  display: flex;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.panel-where-workspace {
+  flex: none;
+}
+
 .panel-foot button.panel-link {
   min-height: 24px;
 }

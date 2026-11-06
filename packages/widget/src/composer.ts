@@ -1422,6 +1422,7 @@ export function createComposer(options: ComposerOptions): Composer {
     // the parts itself might.
     if (!root.hidden && (state === 'idle' || state === 'failed' || state === 'sending')) {
       place(anchor);
+      keepInSight(anchor);
       settleOn();
       field.focus();
 
@@ -1459,6 +1460,7 @@ export function createComposer(options: ComposerOptions): Composer {
     focus.remember();
     root.hidden = false;
     place(anchor);
+    keepInSight(anchor);
     settleOn();
     field.focus();
   }
@@ -1554,6 +1556,36 @@ export function createComposer(options: ComposerOptions): Composer {
    * On a narrow screen the rules below take over entirely and pin it to the bottom of the viewport, so
    * the position set here stops mattering — which is why it is set with `style` and overridden by a media query.
    */
+  /**
+   * On a narrow screen the composer is a sheet on the foot of the window (FRU-611, P7): the page
+   * scrolls so that its element stands above the sheet, in sight. A page that cannot scroll that far
+   * (an element at its very foot) gets the sheet on the top of the window instead, under which the
+   * element stays in sight: the page of somebody else is never given a margin. On a wider screen
+   * nothing moves.
+   */
+  function keepInSight(anchor: ElementBox): void {
+    delete root.dataset.fruitbackSheet;
+    if (view === null || view.matchMedia?.(NARROW).matches !== true) return;
+    const covered = (): boolean => {
+      const sheet = root.getBoundingClientRect();
+      const top = anchor.top - view.scrollY;
+      const bottom = anchor.bottom - view.scrollY;
+
+      return bottom + GAP > sheet.top || top < 0;
+    };
+    if (!covered()) return;
+    const sheetTop = root.getBoundingClientRect().top;
+    // An element taller than the room over the sheet cannot be in sight whole, nor under a sheet on
+    // the top: it stays where it is, as before, the sheet on the foot (thread-side.spec.ts, fallback).
+    if (anchor.bottom - anchor.top + 2 * GAP > sheetTop) return;
+    // The bottom of the element GAP over the sheet, or its top GAP under the top of the window.
+    view.scrollBy({
+      top: Math.min(anchor.bottom - view.scrollY + GAP - sheetTop, anchor.top - view.scrollY - GAP),
+      behavior: 'instant',
+    });
+    if (covered()) root.dataset.fruitbackSheet = 'top';
+  }
+
   function place(anchor: ElementBox): void {
     const width = view?.innerWidth ?? 0;
     const height = view?.innerHeight ?? 0;
@@ -2096,6 +2128,9 @@ const GAP = 10;
  */
 const RISE = 40;
 const FRAME = 5;
+/** Where the composer is a sheet on the foot of the window: the media query of its stylesheet. */
+const NARROW = '(max-width: 640px)';
+
 /** The tallest the field grows with its text before it scrolls (FRU-611, P7). */
 export const FIELD_MAX = 150;
 /** How far beside its element the composer stands: the length of the tether across (FRU-607). */

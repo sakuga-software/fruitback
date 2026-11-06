@@ -1,4 +1,4 @@
-import { NOTE_STAGES, NOTE_TABS, type NoteStage, type NoteTab, firstTab, noteTab } from '@fruitback/shared';
+import { NOTE_STAGES, NOTE_TABS, type NoteStage, type NoteTab, firstTab, noteTab, shortCount } from '@fruitback/shared';
 import { type SendFailure, failureText } from './composer.ts';
 import { type Draft } from './drafts.ts';
 import { type FeedbackEntry } from './export.ts';
@@ -180,6 +180,22 @@ export function createSidebar(options: SidebarOptions): Sidebar {
   const address = document.createElement('span');
   address.className = 'fruitback-sidebar-address';
   heading.append(createIcon(document, 'drop'), title, address);
+  /**
+   * « · {host} », the host cut at its start when it is longer than its room (FRU-611, P7): its end says
+   * which site. The words run left to right inside a box written right to left; `title` holds them all.
+   */
+  const addressBox = document.createElement('span');
+  addressBox.className = 'fruitback-host-tail';
+  const addressHost = document.createElement('span');
+  addressHost.dir = 'ltr';
+  addressBox.append(addressHost);
+  function writeAddress(): void {
+    const host = view?.location.host ?? '';
+    addressBox.title = host;
+    addressHost.textContent = host;
+    if (host === '') address.replaceChildren();
+    else if (addressBox.parentNode !== address) address.replaceChildren('· ', addressBox);
+  }
   const floating = document.createElement('button');
   floating.type = 'button';
   floating.className = 'fruitback-sidebar-icon';
@@ -649,25 +665,26 @@ export function createSidebar(options: SidebarOptions): Sidebar {
     const asking = failing || retrying;
     const known = state === 'read' || entries.length > 0;
 
-    address.textContent = view === null ? '' : `· ${view.location.host}`;
+    writeAddress();
     // No number while no read answered: zero notes would be a guess. The scope counts the notes a pin
     // shows, like the chips: the detached ones have their own count, at the bottom.
     scopeWords.textContent =
-      failing || !known ? t.text('sidebar.scope') : t.text('sidebar.scopeCount', { count: placed.length });
+      failing || !known ? t.text('sidebar.scope') : t.text('sidebar.scopeCount', { count: shortCount(placed.length) });
     for (const [name, { button, word, gap, count }] of chips) {
       const number = found.filter((entry) => name === 'all' || entry.issue.stage === name).length;
       button.setAttribute('aria-pressed', String(name === chosen));
-      count.textContent = failing || !known ? '' : String(number);
+      count.textContent = failing || !known ? '' : shortCount(number);
       // The visible text has the space too. The rule label-content-name-mismatch of axe-core compares it with the aria-label.
       gap.data = count.textContent === '' ? '' : ' ';
       // « All 4 », with its space: two spans read as one word, « All4 », in an accessible name.
-      button.setAttribute('aria-label', count.textContent === '' ? word : `${word} ${number}`);
+      button.setAttribute('aria-label', count.textContent === '' ? word : `${word} ${count.textContent}`);
     }
     // The tabs, once a read answered: before, a count of zero would be a guess.
     tabRail.hidden = searching || shown !== undefined || failing || !known;
     for (const [name, button] of tabs) {
       const count = placed.filter((entry) => noteTab(entry.issue) === name).length;
-      button.textContent = t.text(TAB_WORDS[name], { count });
+      // « 99+ » above 99 (FRU-611), but « To check », which is exact: it is what the reader has to do.
+      button.textContent = t.text(TAB_WORDS[name], { count: name === 'check' ? count : shortCount(count) });
       button.setAttribute('aria-selected', String(name === tabbed));
       button.tabIndex = name === tabbed ? 0 : -1;
     }
@@ -785,16 +802,20 @@ export function createSidebar(options: SidebarOptions): Sidebar {
     const entries = options.entries();
     const known = (state === 'read' || entries.length > 0) && state !== 'failed' && state !== 'signed-out';
     const placed = entries.filter((entry) => entry.placement !== 'detached').length;
-    pageScope.textContent = known ? t.text('sidebar.scopeCount', { count: placed }) : t.text('sidebar.scope');
+    pageScope.textContent = known
+      ? t.text('sidebar.scopeCount', { count: shortCount(placed) })
+      : t.text('sidebar.scope');
     siteScope.textContent =
-      siteState === 'read' ? t.text('sidebar.allPagesCount', { count: siteTotal }) : t.text('sidebar.allPages');
+      siteState === 'read'
+        ? t.text('sidebar.allPagesCount', { count: shortCount(siteTotal) })
+        : t.text('sidebar.allPages');
     pageScope.setAttribute('aria-pressed', String(!wide));
     siteScope.setAttribute('aria-pressed', String(wide));
   }
 
   /** « All pages »: the rows the host gave, and what its read said. */
   function drawSite(): void {
-    address.textContent = view === null ? '' : `· ${view.location.host}`;
+    writeAddress();
     chipGroup.hidden = true;
     drafted.hidden = true;
     unplaced.hidden = true;

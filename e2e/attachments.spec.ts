@@ -273,10 +273,14 @@ test('the menu of the capture floats under its icon, and the composer keeps its 
  * 81 px for a menu of 82 (measured at 390 × 844), so it opens above, as at 1440 × 260.
  */
 for (const [width, height, up] of [
+  // Too short to open under its icon: the menu falls back above it.
   [1440, 260, true],
   [1440, 600, false],
-  [390, 844, true],
-  [320, 568, true],
+  // On a phone, P7 (FRU-611) made the foot of the sheet taller: « Send » on a line of its own and
+  // targets of 44 px. 121 px stand under the icon at both sizes (measured), for a menu of 82 px: it
+  // opens under it.
+  [390, 844, false],
+  [320, 568, false],
 ] as const) {
   test(`at ${width} × ${height}, the menu of the capture opens ${up ? 'above' : 'under'} its icon and stays in the window (FRU-431)`, async ({
     page,

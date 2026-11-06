@@ -768,6 +768,28 @@ export const STYLES = `
   }
   /* A sheet stands on the foot of the window, away from its element: no line goes to it. */
   .fruitback-composer-tether { display: none; }
+  /*
+    FRU-611 (P7): « Send » takes the whole width of the sheet, on a line of its own under the others
+    (the foot wraps in reverse, its first item at the bottom), and every target is 44 px, whatever
+    points at it.
+  */
+  .fruitback-composer-send-group { flex: 1 1 100%; display: flex; }
+  .fruitback-composer-send-group > .fruitback-composer-send:first-child { flex: 1 1 auto; justify-content: center; }
+  /*
+    One class more than the rules of a thumb below (review of #860): on a phone the pointer is coarse
+    too, and that block, later in the sheet, would set them back to 36 px.
+  */
+  .fruitback-composer .fruitback-composer-tool { width: 44px; height: 44px; }
+  .fruitback-composer .fruitback-composer-avatar { min-width: 44px; height: 44px; }
+  .fruitback-composer .fruitback-composer-check, .fruitback-composer .fruitback-composer-place { min-height: 44px; }
+  /* An element at the very foot of a page that cannot scroll more: the sheet stands on the top. */
+  .fruitback-composer[data-fruitback-sheet="top"] {
+    inset: 0 0 auto 0;
+    border-radius: 0 0 var(--fruitback-radius-lg) var(--fruitback-radius-lg);
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: 0;
+    animation-name: fruitback-composer-sheet-down;
+  }
 }
 
 /*
@@ -780,6 +802,11 @@ export const STYLES = `
   .fruitback-composer-tool { width: 44px; height: 44px; }
   .fruitback-composer-avatar { min-width: 36px; height: 36px; }
   .fruitback-composer-check, .fruitback-composer-place { min-height: 36px; }
+}
+
+@keyframes fruitback-composer-sheet-down {
+  from { transform: translateY(-100%); }
+  to { transform: none; }
 }
 
 @keyframes fruitback-composer-sheet-in {

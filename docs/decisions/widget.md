@@ -1967,7 +1967,7 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
 - **The widget reads the ground of the page** (`page-ground.ts`) when it mounts and at each start of a
   capture: the background of `<body>` laid on the one of `<html>`, laid on white, alpha included. A
   colour computed in another notation than `rgb()` (`oklch()`, which Tailwind 4 writes,
-  `color(srgb …)`) is drawn on a canvas of one pixel and read back (review of #859). A site that turns
+  `color(srgb …)`) is drawn on a canvas of one pixel, one per document, and read back (review of #859). A site that turns
   dark later is read again at its next capture.
 - **A dark ground** (relative luminance under 0.2, `data-fruitback-ground="dark"` on the host): the
   widget keeps the scheme of the system, as before. What floats over the page (the dock, the composer,
@@ -1983,3 +1983,23 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
 - Chosen, the board drawing none of it: « le widget reste clair » is read as « the widget does not take
   the colours of the site », not as « a dark system scheme is ignored ». The scheme of the system stays
   the one switch of the widget's colours.
+
+## A narrow screen and large volumes (FRU-611)
+
+### The rules, in short
+
+- **Under 640 px the composer is a sheet** (FRU-157), and since FRU-611: « Send » takes the whole width
+  of the sheet on a line of its own, and every target is 44 px (the tools, the avatar, the rows),
+  whatever points at it.
+- **The element stays in sight.** The page scrolls so that the element stands above the sheet. A page
+  that cannot scroll that far (an element at its very foot) gets the sheet on the top of the window,
+  with the element under it (`data-fruitback-sheet="top"`). The page of somebody else is never given a
+  margin to make room.
+- **« 99+ » above 99** in a tab, a chip and a scope of the list (`shortCount` of `@fruitback/shared`),
+  as the popup and the badge of the extension do. **« To check » is always exact**: it is what the
+  reader has to do.
+- **A long host is cut at its start** (`.fruitback-host-tail`): the end, which says which site, stays
+  in sight, and the tooltip holds it whole. The words run left to right, isolated, inside a box written
+  right to left, so the sheet puts « … » at the start.
+- `e2e/narrow-volumes.spec.ts` holds the four, with 1440 px as the control of the sheet; each case
+  fails on the widget of before.

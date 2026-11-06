@@ -1,8 +1,18 @@
-import { type NoteTab, firstTab, noteTab } from '@fruitback/shared';
+import { type NoteTab, firstTab, noteTab, shortCount } from '@fruitback/shared';
 import { RELATIVE_UNITS } from '@fruitback/widget';
 import { language, msg, t } from './i18n.ts';
 import { leaveAndFollow, whenNotAnswering } from './guide.ts';
-import { dropMark, helpLink, linkButton, make, primaryButton, segmentedTabs, stageRing, statusDrop } from './kit.ts';
+import {
+  dropMark,
+  helpLink,
+  hostTail,
+  linkButton,
+  make,
+  primaryButton,
+  segmentedTabs,
+  stageRing,
+  statusDrop,
+} from './kit.ts';
 import type { CheckVerdict, NotesReading, PanelNote, ReplyOutcome } from './protocol.ts';
 import { listWord, notePaint } from './note-status.ts';
 import {
@@ -477,13 +487,24 @@ export function panelPage(document: Document, options: PanelOptions): HTMLElemen
   if (search !== undefined) foot.append(pinsSwitch(document, search.state, search.handlers));
   const line = make(document, 'div', 'panel-foot-line');
   line.append(
-    make(document, 'span', 'panel-where', state.where === undefined ? state.host : `${state.host} · ${state.where}`),
+    whereLine(document, state.host, state.where),
     linkButton(document, t('Settings'), options.onSettings, 'panel-link'),
   );
   foot.append(line);
   root.append(foot);
 
   return root;
+}
+
+/**
+ * The foot names the host, cut at its start when it is long (FRU-611), then the workspace of the rule.
+ */
+function whereLine(document: Document, host: string, where: string | undefined): HTMLElement {
+  const line = make(document, 'span', 'panel-where');
+  line.append(hostTail(document, host, 'panel-where-host'));
+  if (where !== undefined) line.append(make(document, 'span', 'panel-where-workspace', ` · ${where}`));
+
+  return line;
 }
 
 /** The list part: reading, failed, empty, or the tabs and the rows. */
@@ -569,8 +590,9 @@ function notesPart(document: Document, options: PanelOptions, notes: PanelNotes)
     size: 'panel',
     tabs: [
       { id: 'check', label: t('To check · {count}', { count: byTab.check.length }) },
-      { id: 'open', label: t('Open · {count}', { count: byTab.open.length }) },
-      { id: 'done', label: t('Done · {count}', { count: byTab.done.length }) },
+      // « 99+ » above 99 (FRU-611), but « To check », which is exact: it is what the reader has to do.
+      { id: 'open', label: t('Open · {count}', { count: shortCount(byTab.open.length) }) },
+      { id: 'done', label: t('Done · {count}', { count: shortCount(byTab.done.length) }) },
     ],
     selected: chosen,
     onSelect: (id) => options.onTab(id === 'check' || id === 'done' ? id : 'open'),

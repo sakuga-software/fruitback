@@ -324,6 +324,42 @@ describe('the three tabs of the list: To check, Open, Done (FRU-606)', () => {
   });
 });
 
+describe('a list of many notes, on a long host (FRU-611)', () => {
+  it('says « 99+ » above 99 in a tab, a chip and the scope, and the notes to check exactly', () => {
+    const many: SidebarEntry[] = [
+      ...Array.from({ length: 120 }, (_, index) => ({
+        issue: note(`o${index}`, `Open ${index}`, 'new'),
+        placement: 'found' as const,
+      })),
+      ...Array.from({ length: 101 }, (_, index) => ({
+        issue: { ...note(`c${index}`, `Check ${index}`, 'done'), mine: true as const },
+        placement: 'found' as const,
+      })),
+    ];
+    const { sidebar, root, chipNames } = mount(many);
+    sidebar.open();
+
+    // The 101 are done notes of the reader that nobody confirmed: `noteTab` puts them in « To check »,
+    // not in « Done » (FRU-606), so « Done » counts none.
+    assert.deepEqual(
+      [...root.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent),
+      ['To check · 101', 'Open · 99+', 'Done · 0'],
+    );
+    assert.deepEqual(chipNames().slice(0, 2), ['All 99+', 'New 99+']);
+    assert.equal(root.querySelector('.fruitback-sidebar-scope')?.textContent, 'This page · 99+');
+  });
+
+  it('writes the host in a box cut at its start, the whole host in its tooltip', () => {
+    const { sidebar, root, page } = mount([]);
+    sidebar.open();
+    const box = root.querySelector<HTMLElement>('.fruitback-sidebar-address .fruitback-host-tail');
+
+    assert.equal(root.querySelector('.fruitback-sidebar-address')?.textContent, `· ${page.view.location.host}`);
+    assert.equal(box?.title, page.view.location.host);
+    assert.equal(box?.querySelector('span')?.getAttribute('dir'), 'ltr');
+  });
+});
+
 describe('the search and the chips of the list (FRU-308)', () => {
   const eight = (): SidebarEntry[] =>
     (

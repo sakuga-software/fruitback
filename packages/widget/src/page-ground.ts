@@ -39,15 +39,29 @@ export function parseRgb(computed: string): Rgba | undefined {
   return [Number(match[1]), Number(match[2]), Number(match[3]), Math.min(1, Math.max(0, a))];
 }
 
+/** One canvas of one pixel per document, made at the first read that needs it (review of #859). */
+const PIXELS = new WeakMap<Document, CanvasRenderingContext2D | null>();
+
+function pixelOf(document: Document): CanvasRenderingContext2D | undefined {
+  if (!PIXELS.has(document)) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1;
+    canvas.height = 1;
+    PIXELS.set(document, canvas.getContext?.('2d', { willReadFrequently: true }) ?? null);
+  }
+
+  return PIXELS.get(document) ?? undefined;
+}
+
 /**
  * Any colour a browser computes, `oklch()` and `color(srgb …)` too (Tailwind 4 writes oklch): read as
  * `rgb()` first, else drawn on a canvas of one pixel and read back. `undefined` with no canvas.
  */
-function readColor(computed: string, document: Document): Rgba | undefined {
+export function readColor(computed: string, document: Document): Rgba | undefined {
   const rgb = parseRgb(computed);
   if (rgb !== undefined) return rgb;
-  const context = document.createElement('canvas').getContext?.('2d', { willReadFrequently: true });
-  if (context === null || context === undefined) return undefined;
+  const context = pixelOf(document);
+  if (context === undefined) return undefined;
   context.clearRect(0, 0, 1, 1);
   context.fillStyle = computed;
   context.fillRect(0, 0, 1, 1);
