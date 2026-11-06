@@ -859,6 +859,21 @@ function replyForm(
 }
 
 /**
+ * The field of a reply as the panel draws it (FRU-620): a note whose reply is on its way is drawn as
+ * sending, its field and « Send » held, whichever field asked for that send. Opening the reply of
+ * another note during a send and coming back to this one used to give a field with no `sending`,
+ * and a second « Send » of the same text.
+ */
+export function replyField<T extends { id: string; sending?: boolean }>(
+  open: T | undefined,
+  inFlight: ReadonlySet<string>,
+): T | undefined {
+  if (open === undefined || !inFlight.has(open.id) || open.sending === true) return open;
+
+  return { ...open, sending: true };
+}
+
+/**
  * Whether the field of a reply open now is the one a send came from (review of #857): the same note,
  * and the text that went. The reader may have opened the reply of another note while it was on its
  * way, or this note's again and typed a new text; the answer of the send then leaves that field open.

@@ -17,6 +17,7 @@ import {
   openOnRead,
   openPopupFrom,
   panelPage,
+  replyField,
   sentFromHere,
   tabOf,
   webHost,
@@ -80,6 +81,8 @@ let replying: PanelOptions['replying'];
  * row closed, another tab of the browser. The same field gives it back. Only a reply sent drops it.
  */
 const replyTexts = new Map<string, string>();
+/** The notes whose reply is on its way (FRU-620): their field is held, wherever it is opened again. */
+const sendingReplies = new Set<string>();
 /** The verdict on its way, or why the last one did not go (FRU-300). */
 let checking: PanelOptions['checking'];
 /** The notes reopened from this panel, and when: « Reopened by you ». Gone with the panel. */
@@ -295,7 +298,7 @@ function draw(): void {
       state: state(),
       ...(tab === undefined ? {} : { tab }),
       ...(open === undefined ? {} : { open }),
-      ...(replying === undefined ? {} : { replying }),
+      ...(replying === undefined ? {} : { replying: replyField(replying, sendingReplies) }),
       ...(checking === undefined ? {} : { checking }),
       reopened,
       onClose: () => window.close(),
@@ -542,10 +545,14 @@ async function sendVerdict(id: string, verdict: CheckVerdict): Promise<void> {
 
 async function sendReply(): Promise<void> {
   const sending = replying;
-  if (sending === undefined || sending.text.trim() === '') return;
+  // One send of a note at a time: its field, opened again during the send, is held (FRU-620).
+  if (sending === undefined || sending.text.trim() === '' || sendingReplies.has(sending.id)) return;
+  sendingReplies.add(sending.id);
   replying = { id: sending.id, text: sending.text, sending: true };
   draw();
-  const { outcome } = await ask('reply', { note: sending.id, body: sending.text });
+  const { outcome } = await ask('reply', { note: sending.id, body: sending.text }).finally(() =>
+    sendingReplies.delete(sending.id),
+  );
   // The reader may have opened the reply of another note meanwhile, or this note's again and typed a
   // new text: that field is theirs, and the answer of this send does not close it (review of #857).
   const stillHere = sentFromHere(replying, sending);
