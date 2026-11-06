@@ -1807,15 +1807,18 @@ async function sendCheck(
     (answer) => REFUSED.has(answer.status) && !(answer.status === 409 && errorOf(answer.body) === 'check-in-progress'),
   );
   if (failure !== undefined) return failure;
-  // `null` is JSON too: a body of `null` is an answer that says nothing, as no body is.
-  let answer: { comment?: unknown; stage?: unknown } | null;
+  // Any JSON may come back: only an object can hold the reply and the stage. `null`, a string, a
+  // number or a boolean says nothing of them, as no body does.
+  let parsed: unknown;
   try {
-    answer = JSON.parse(response.body) as { comment?: unknown; stage?: unknown } | null;
+    parsed = JSON.parse(response.body);
   } catch {
     return 'kept';
   }
-  const comment = noteCommentSchema.safeParse(answer?.comment);
-  const stage = NOTE_STAGES.find((each) => each === answer?.stage);
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return 'kept';
+  const answer = parsed as { comment?: unknown; stage?: unknown };
+  const comment = noteCommentSchema.safeParse(answer.comment);
+  const stage = NOTE_STAGES.find((each) => each === answer.stage);
 
   return comment.success && stage !== undefined ? { comment: comment.data, stage } : 'kept';
 }

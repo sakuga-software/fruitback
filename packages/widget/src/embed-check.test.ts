@@ -146,7 +146,7 @@ describe('the verdict from the thread of the pin, through init (FRU-603)', () =>
     );
   });
 
-  for (const body of ['', 'null'])
+  for (const body of ['', 'null', '"ok"', '42', 'true', '[]'])
     it(`reads nothing after a verdict the worker kept with no answer (${body || 'empty'}): the thread stays open (review)`, async () => {
       const requests: TransportRequest[] = [];
       const transport = async (request: TransportRequest): Promise<TransportResponse> => {
