@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { mountPage } from './dom.fixture.ts';
-import { composeOnWhite, groundOf, markGround, parseRgb, readGround } from './page-ground.ts';
+import { composeOnWhite, groundOf, markGround, parseRgb, readColor, readGround } from './page-ground.ts';
 
 describe('the ground of the page (FRU-611, P7)', () => {
   it('reads a computed rgb() with its alpha, and nothing for another notation', () => {
@@ -54,5 +54,19 @@ describe('the ground of the page (FRU-611, P7)', () => {
     markGround(host, { dark: false, faint: false });
     assert.equal(host.dataset.fruitbackGround, undefined);
     assert.equal(host.dataset.fruitbackFaint, undefined);
+  });
+
+  it('makes one canvas for a document, whatever the count of reads (review of #859)', () => {
+    const page = mountPage('<main></main>');
+    const made: string[] = [];
+    const create = page.document.createElement.bind(page.document);
+    page.document.createElement = ((name: string) => {
+      made.push(name);
+      return create(name);
+    }) as typeof page.document.createElement;
+    // happy-dom computes no oklch: the notation goes straight to the reader of colours.
+    for (let read = 0; read < 3; read += 1) readColor('oklch(0.2 0.02 260)', page.document);
+
+    assert.equal(made.filter((name) => name === 'canvas').length, 1);
   });
 });
