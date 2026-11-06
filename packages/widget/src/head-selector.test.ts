@@ -7,9 +7,9 @@ import { createTypingStore } from './typing.ts';
 import { type MountedPage, mountPage, setDocumentSize, setRect } from './dom.fixture.ts';
 
 /**
- * The selector in the head of the composer, on request (FRU-411). The extension asks for
- * `selectorInHead: 'with-selectors'`: the head writes the selector only while « Show CSS selectors »
- * is on, and what a person reads for the element otherwise. A site's own widget keeps it always.
+ * The selector in the head of the composer, on request (FRU-411). Since FRU-607 every widget
+ * writes it only while « Show CSS selectors » is on (`with-selectors`, the default), and what a
+ * person reads for the element otherwise. A site asks for `always` to keep it in every case.
  */
 
 const cleanup: (() => void)[] = [];
@@ -66,8 +66,9 @@ async function headOn(options: Partial<Parameters<typeof init>[0]>, then?: (widg
 }
 
 describe('the selector in the head of the composer (FRU-411)', () => {
-  it('is written always by default, as on a site that embeds the widget', async () => {
-    assert.equal(await headOn({}), 'button.add');
+  it('is left out by default, for the words of the element (FRU-607), and written always on request', async () => {
+    assert.equal(await headOn({}), 'Commander');
+    assert.equal(await headOn({ selectorInHead: 'always' }), 'button.add');
   });
 
   it('is left out with « with-selectors » while the selectors are hidden, for the name of the element', async () => {

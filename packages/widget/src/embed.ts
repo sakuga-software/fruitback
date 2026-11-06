@@ -222,9 +222,10 @@ export type FruitbackOptions = {
   showSelectors?: boolean;
   /**
    * Whether the head of the composer writes the short selector of the element, « button.add ·
-   * <AddToCart> » (FRU-411). `always`, the default. `with-selectors`: only while `showSelectors` is on;
-   * otherwise the head writes what a person reads for the element, and its component. The extension
-   * asks for it, so « Show CSS selectors » of its preferences governs the head too.
+   * <AddToCart> » (FRU-411). `with-selectors`, the default since FRU-607: only while `showSelectors`
+   * is on; otherwise the head writes what a person reads for the element, « €29 / month », and its
+   * component. `always`: the selector in every case, as before FRU-607. The extension asks for
+   * `with-selectors`, so « Show CSS selectors » of its preferences governs the head.
    */
   selectorInHead?: 'always' | 'with-selectors';
   /**
@@ -480,16 +481,16 @@ export function init(options: FruitbackOptions): Fruitback {
 
   /** « Show CSS selectors », as the host said it last (FRU-349). The head follows it on request (FRU-411). */
   let selectorsShown = options.showSelectors === true;
+  /** The head writes the selector only on request (FRU-607): what a person reads comes first. */
+  const selectorHead = (): boolean => options.selectorInHead === 'always' || selectorsShown;
   const headOf = (element: Element, source: NoteSource | undefined): string =>
-    options.selectorInHead !== 'with-selectors' || selectorsShown
-      ? aboutTarget(element, source)
-      : plainHead(element, source);
+    selectorHead() ? aboutTarget(element, source) : plainHead(element, source);
   const host: CaptureHost = createCaptureHost({
     document,
     translator,
     label: options.label,
     // FRU-411: on request, the frame names the element as the head of the composer will.
-    ...(options.selectorInHead === 'with-selectors' ? { nameOf: headOf } : {}),
+    ...(options.selectorInHead === 'always' ? {} : { nameOf: headOf }),
     ignore: options.ignore,
     ...(options.theme !== undefined ? { theme: options.theme } : {}),
     ...(dockPosition() !== undefined ? { position: dockPosition() } : {}),
@@ -523,7 +524,9 @@ export function init(options: FruitbackOptions): Fruitback {
       restoredOn = canonicalizePageUrl(view.location.href);
       // The frame stays on the element for as long as the composer is open on it (FRU-258).
       host.hold(selected.element);
-      composer.open(selected.element, headOf(selected.element, selected.source), readableName(selected.element));
+      composer.open(selected.element, headOf(selected.element, selected.source), readableName(selected.element), {
+        selector: selectorHead(),
+      });
     },
   });
 

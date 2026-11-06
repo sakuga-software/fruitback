@@ -56,7 +56,7 @@ test('a reload opens the composer again on its element, with the text and « Dra
   await expect(field(page)).toBeFocused();
   await expect(status(page)).toHaveText('Draft restored');
   // On the element it was written about: the frame of the capture holds the Latte's button.
-  await expect(page.getByRole('dialog', { name: 'New note' })).toContainText('button.add');
+  await expect(page.getByRole('dialog', { name: 'New note' })).toContainText('Ajouter · <Button>');
 
   // Sent, it is gone: the next reload opens nothing.
   await page.getByRole('button', { name: 'Send', exact: true }).click();

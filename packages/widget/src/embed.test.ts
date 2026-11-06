@@ -480,12 +480,13 @@ describe('reading pins', () => {
       clientId: 'acme',
       identityToken: () => 't',
     });
-    assert.equal((shadowOf(named).querySelector('[data-fruitback-who]') as HTMLElement).hidden, true);
+    // The name stands behind the avatar since FRU-607: the avatar is what asks.
+    assert.equal((shadowOf(named).querySelector('[data-fruitback-avatar]') as HTMLElement).hidden, true);
     withToken.destroy();
 
     const anonymous = mountWithCta();
     const without = init({ document: anonymous.document, endpoint: ENDPOINT, clientId: 'acme' });
-    assert.equal((shadowOf(anonymous).querySelector('[data-fruitback-who]') as HTMLElement).hidden, false);
+    assert.equal((shadowOf(anonymous).querySelector('[data-fruitback-avatar]') as HTMLElement).hidden, false);
     without.destroy();
   });
 
@@ -569,7 +570,7 @@ describe('reading pins', () => {
 
     assert.deepEqual(await shown(), { line: false, radios: 0 });
     assert.deepEqual(await shown(), { line: true, radios: 2 });
-    assert.equal(line().textContent, 'Send to: Linear · Web');
+    assert.equal(line().textContent, 'LSend to: Linear · Web', 'the tile, then the sentence');
     assert.deepEqual(await shown(), { line: false, radios: 0 });
     assert.deepEqual(await shown(), { line: true, radios: 2 });
     assert.deepEqual(await shown(), { line: false, radios: 0 });
@@ -598,7 +599,7 @@ describe('reading pins', () => {
     const asked = async () => {
       await widget.refresh();
 
-      return !(shadowOf(page).querySelector('[data-fruitback-who]') as HTMLElement).hidden;
+      return !(shadowOf(page).querySelector('[data-fruitback-avatar]') as HTMLElement).hidden;
     };
 
     assert.deepEqual(

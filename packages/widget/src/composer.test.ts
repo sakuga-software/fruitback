@@ -8,7 +8,10 @@ import {
   type SendFailure,
   type SentAs,
   type SentWithoutPicture,
+  FIELD_MAX,
   createComposer,
+  initialsOf,
+  placeParts,
 } from './composer.ts';
 import type { Destination } from './destinations.ts';
 import { deepActiveElement, focusables } from './focus.ts';
@@ -97,20 +100,32 @@ describe('what the popover looks like (FRU-36)', () => {
     assert.equal(about().querySelector('img'), null);
   });
 
-  it('labels the note « Your comment » and the name « Name (optional) », and asks for the name in the open (FRU-305)', () => {
+  it('holds the note, its files, its tools and the signature in one field, three zones in all (FRU-607)', () => {
     mount(async () => {});
     composer?.open(ANCHOR);
-    const labels = [...(composer?.element.querySelectorAll('.fruitback-composer-label') ?? [])].map(
-      (label) => label.textContent,
+    const root = composer?.element as HTMLElement;
+    // The head, the body, the foot: no row of chips between the field and the foot.
+    assert.deepEqual(
+      [...root.children].filter((child) => !(child as HTMLElement).hidden).map((child) => child.className),
+      ['fruitback-composer-tether', 'fruitback-composer-head', 'fruitback-composer-body', 'fruitback-composer-foot'],
     );
+    const box = root.querySelector('[data-fruitback-box]') as HTMLElement;
+    for (const inside of ['[data-fruitback-note]', '[data-fruitback-attach-list]', '[data-fruitback-tools]'])
+      assert.ok(box.contains(root.querySelector(inside)), `${inside} is not in the field`);
+    // The files come above the icons.
+    const order = [...box.querySelectorAll('[data-fruitback-attach-list], [data-fruitback-tools]')];
+    assert.deepEqual(
+      order.map((each) => each.hasAttribute('data-fruitback-tools')),
+      [false, true],
+    );
+    // « Your note » still names the field, for a screen reader: the label wraps it.
+    assert.equal(field().closest('label')?.querySelector('[data-fruitback-note-label]')?.textContent, 'Your note');
     // « Attachments » is in the tree, hidden while no host offers files (FRU-332).
-    assert.deepEqual(labels, ['Your note', 'Name (optional)', 'Attachments']);
-    assert.equal(composer?.element.querySelector('[data-fruitback-attach]')?.hasAttribute('hidden'), true);
-    // A label wraps its field: it is the name of the field.
-    assert.equal(field().closest('label')?.querySelector('.fruitback-composer-label')?.textContent, 'Your note');
-    const name = composer?.element.querySelector('[data-fruitback-name]') as HTMLInputElement;
-    assert.equal(name.closest('[data-fruitback-who]')?.hasAttribute('hidden'), false);
-    assert.equal(composer?.element.querySelector('[data-fruitback-identify]'), null);
+    assert.equal(root.querySelector('[data-fruitback-attach]')?.hasAttribute('hidden'), true);
+    // The name stands behind the avatar, folded.
+    const name = root.querySelector('[data-fruitback-name]') as HTMLInputElement;
+    assert.equal(name.closest('[data-fruitback-who]')?.hasAttribute('hidden'), true);
+    assert.equal(root.querySelector('[data-fruitback-identify]'), null);
   });
 
   it('says where the note lands in the foot: the one place, or the team (FRU-305)', () => {
@@ -132,10 +147,23 @@ describe('what the popover looks like (FRU-36)', () => {
         },
       });
       composer.open(ANCHOR);
-      assert.equal(
-        lands().textContent,
-        places.length === 0 ? 'Sent to the team' : 'Creates a new issue in Linear · Northwind',
-      );
+      if (places.length === 0) assert.equal(lands().textContent, 'Sent to the team');
+      else {
+        // In icons (FRU-607): the tile of the tool and the most precise name, the whole path in the
+        // tooltip and for a screen reader.
+        assert.equal(lands().querySelector('.fruitback-composer-tile')?.textContent, 'L');
+        assert.equal(lands().querySelector('.fruitback-composer-place-name')?.textContent, 'Northwind');
+        // Heard whole: « Creates a new issue in Linear · », then the name in sight.
+        assert.equal(lands().querySelector('.fruitback-composer-sr')?.textContent, 'Creates a new issue in Linear · ');
+        assert.equal(
+          [...lands().childNodes]
+            .slice(1)
+            .map((node) => node.textContent)
+            .join(''),
+          'Creates a new issue in Linear · Northwind',
+        );
+        assert.equal(lands().title, 'Linear · Northwind');
+      }
       composer.destroy();
       composer = null;
     }
@@ -194,8 +222,8 @@ describe('what the popover looks like (FRU-36)', () => {
     assert.equal(field().value, 'Half a note');
     assert.equal(name.value, 'Bob', 'the name that was typed gave way to the one remembered');
     assert.equal(composer?.element.querySelector('[data-fruitback-about]')?.textContent, 'The second element');
-    // On the start edge of the frame, 5 px off the element (FRU-303).
-    assert.equal(composer?.element.style.getPropertyValue('--fruitback-composer-left'), '395px');
+    // Beside the new element, 16 px off its frame, which stands 5 px off the element (FRU-607).
+    assert.equal(composer?.element.style.getPropertyValue('--fruitback-composer-left'), '621px');
 
     // The control: closed and opened again, it is a new note.
     composer?.close();
@@ -583,8 +611,9 @@ describe('createComposer', () => {
     assert.equal(composer.element.querySelector('b'), null);
   });
 
-  it('opens on the element’s start edge, which is its right in a right-to-left language (FRU-38)', () => {
-    const anchor = { left: 500, top: 200, bottom: 240, right: 700 };
+  it('above or below, opens on the element’s start edge, which is its right in a right-to-left language (FRU-38)', () => {
+    // As wide as no side has room beside it (FRU-607).
+    const anchor = { left: 300, top: 200, bottom: 240, right: 700 };
     const placedLeft = (translator: ReturnType<typeof createTranslator>) => {
       const page = mountPage('<main></main>', { width: 1_000, height: 1_000 });
       const host = page.document.createElement('div');
@@ -598,7 +627,7 @@ describe('createComposer', () => {
     };
 
     // On the edge of the frame, which stands 5 px off the element (FRU-258, FRU-303).
-    assert.equal(placedLeft(createTranslator()), '495px');
+    assert.equal(placedLeft(createTranslator()), '295px');
     // 705 minus the popover’s 360: its right edge sits on the right edge of the frame.
     assert.equal(
       placedLeft(createTranslator({ locale: 'ar', messages: { ar: { 'composer.send': 'أرسل' } } })),
@@ -610,8 +639,9 @@ describe('createComposer', () => {
     const placedLeft = (
       anchor: { left: number; top: number; bottom: number; right: number },
       translator = createTranslator(),
+      width = 1_000,
     ) => {
-      const page = mountPage('<main></main>', { width: 1_000, height: 1_000 });
+      const page = mountPage('<main></main>', { width, height: 1_000 });
       page.view.scrollTo(1_500, 0);
       const host = page.document.createElement('div');
       page.document.body.append(host);
@@ -623,15 +653,16 @@ describe('createComposer', () => {
       return left;
     };
 
-    // The element is on screen at document x 2000, so the popover opens there.
-    assert.equal(placedLeft({ left: 2_000, top: 200, bottom: 240, right: 2_100 }), '1995px');
-    // Near the right edge of the window it stops 10px short of it: 1500 + 1000 - 360 - 10.
-    assert.equal(placedLeft({ left: 2_400, top: 200, bottom: 240, right: 2_450 }), '2130px');
+    // The element is on screen at document x 2000, so the popover opens beside it: 2100 + 5 + 16.
+    assert.equal(placedLeft({ left: 2_000, top: 200, bottom: 240, right: 2_100 }), '2121px');
+    // In a window of 600 px, with room on no side, it stops 10px short of its edge: 1500 + 600 - 360 - 10.
+    assert.equal(placedLeft({ left: 1_850, top: 200, bottom: 240, right: 1_890 }, createTranslator(), 600), '1730px');
     // Right to left, near the left edge of the window, it stops 10px after it: 1500 + 10.
     assert.equal(
       placedLeft(
-        { left: 1_520, top: 200, bottom: 240, right: 1_600 },
+        { left: 1_520, top: 200, bottom: 240, right: 1_720 },
         createTranslator({ locale: 'ar', messages: { ar: { 'composer.send': 'أرسل' } } }),
+        600,
       ),
       '1510px',
     );
@@ -651,7 +682,8 @@ describe('createComposer', () => {
     // `rect` is in the window, as `getBoundingClientRect` answers.
     const at = (element: Element, rect: { top: number }) =>
       Object.defineProperty(element, 'getBoundingClientRect', {
-        value: () => ({ left: 20, right: 140, top: rect.top, bottom: rect.top + 30 }),
+        // As wide as no side has room beside it (FRU-607): this test is about above and below.
+        value: () => ({ left: 20, right: 900, top: rect.top, bottom: rect.top + 30 }),
         configurable: true,
       });
     const scroll = (y: number) => {
@@ -663,10 +695,10 @@ describe('createComposer', () => {
     const fixed = page.query('#fixed');
     at(fixed, { top: 400 });
     opened.open(fixed);
-    // 400 − 40 − 240, above the link.
-    assert.equal(top(), '120px');
+    // 430 + 5 + 10, below the link: below comes before above (FRU-607).
+    assert.equal(top(), '445px');
     scroll(300);
-    assert.equal(top(), '420px', 'the composer left a link that stays in the window');
+    assert.equal(top(), '745px', 'the composer left a link that stays in the window');
 
     // A paragraph of the document: the window moves over it, and the composer stays with it.
     opened.close();
@@ -675,40 +707,39 @@ describe('createComposer', () => {
     const where = { top: 600 };
     at(prose, where);
     opened.open(prose);
-    assert.equal(top(), '320px');
+    assert.equal(top(), '645px');
     where.top = 300;
     scroll(300);
-    assert.equal(top(), '320px', 'the composer slid along the window');
+    assert.equal(top(), '645px', 'the composer slid along the window');
 
     // Closed, it follows nothing.
     opened.close();
     at(fixed, { top: 400 });
     scroll(500);
-    assert.equal(top(), '320px');
+    assert.equal(top(), '645px');
 
     // An element of the document that shifts by 2 px as the page scrolls: the composer moves by as
-    // much, on the side it opened on, though the room above is out of the window now.
+    // much, and keeps the side it opened on.
     opened.close();
     scroll(0);
-    const shifting = { top: 300 };
+    const shifting = { top: 700 };
     at(prose, shifting);
     opened.open(prose);
-    assert.equal(top(), '20px');
-    assert.equal(opened.element.dataset.fruitbackSide, 'above');
-    shifting.top = 102;
+    assert.equal(top(), '745px');
+    assert.equal(opened.element.dataset.fruitbackSide, 'below');
+    shifting.top = 502;
     scroll(200);
-    assert.equal(top(), '22px', 'the composer jumped to the other side of its element');
-    assert.equal(opened.element.dataset.fruitbackSide, 'above');
+    assert.equal(top(), '747px', 'the composer jumped to the other side of its element');
+    assert.equal(opened.element.dataset.fruitbackSide, 'below');
 
     // An element that a box scrolls sideways out of the window: the composer follows it down, and
     // stays inside the window across, 10 px from its edge (1000 - 360 - 10).
-    shifting.top = 102;
     Object.defineProperty(prose, 'getBoundingClientRect', {
-      value: () => ({ left: 1_500, right: 1_620, top: 112, bottom: 142, width: 120, height: 30 }),
+      value: () => ({ left: 1_500, right: 1_620, top: 512, bottom: 542, width: 120, height: 30 }),
       configurable: true,
     });
     scroll(200);
-    assert.equal(top(), '32px');
+    assert.equal(top(), '757px');
     assert.equal(opened.element.style.getPropertyValue('--fruitback-composer-left'), '630px');
 
     // An element the page hides, still in the document, measures as a box of nothing: the composer stays.
@@ -717,23 +748,24 @@ describe('createComposer', () => {
       configurable: true,
     });
     scroll(400);
-    assert.equal(top(), '32px', 'the composer followed an element that is hidden');
+    assert.equal(top(), '757px', 'the composer followed an element that is hidden');
 
     // An element the page took away: the composer stays where it was, not at the top of the page.
     scroll(0);
     opened.open(fixed);
-    assert.equal(top(), '120px');
+    assert.equal(top(), '445px');
     fixed.remove();
     at(fixed, { top: -40 });
     scroll(300);
-    assert.equal(top(), '120px', 'the composer followed an element that is gone');
+    assert.equal(top(), '445px', 'the composer followed an element that is gone');
   });
 
   it('follows its element as it grows back from a press, on the edges it was placed against (FRU-489)', () => {
     // A button at `scale(0.97)` while pressed: 116 px of its 120, around the same centre. The click
     // places the composer on that box; React Aria takes the press off some frames later.
-    const pressed = { left: 21.8, right: 138.2, top: 300.45, bottom: 329.55 };
-    const released = { left: 20, right: 140, top: 300, bottom: 330 };
+    // As wide as no side has room beside it (FRU-607): this test is about above and below.
+    const pressed = { left: 21.8, right: 838.2, top: 300.45, bottom: 329.55 };
+    const released = { left: 20, right: 840, top: 300, bottom: 330 };
     const opened = (translator = createTranslator(), box = { ...pressed }) => {
       const page = mountPage('<main><button id="add">Ajouter</button></main>', { width: 1_000, height: 1_000 });
       const frames = useHandFrames(page.view);
@@ -756,26 +788,23 @@ describe('createComposer', () => {
 
     // Left to right, on the left edge of the frame: 21.8 − 5, then 20 − 5 once released.
     const ltr = opened();
-    assert.deepEqual(ltr.at(), { left: 16.8, top: 20.45 });
+    // Below it, by its bottom edge: 329.55 + 5 + 10.
+    assert.deepEqual(ltr.at(), { left: 16.8, top: 344.55 });
     for (let frame = 0; frame < 5; frame += 1) ltr.frames.next();
     Object.assign(ltr.box, released);
     ltr.frames.next();
-    assert.deepEqual(ltr.at(), { left: 15, top: 20 }, 'the composer stayed on the pressed box');
+    assert.deepEqual(ltr.at(), { left: 15, top: 345 }, 'the composer stayed on the pressed box');
     while (ltr.frames.next());
     ltr.made.destroy();
 
     // Right to left, on the right edge of the frame: it moves by that edge, the other way.
-    const rtl = opened(createTranslator({ locale: 'ar', messages: { ar: { 'composer.send': 'أرسل' } } }));
-    // 138.2 + 5 − 360, kept 10 px inside the window: the window starts at 0.
-    assert.equal(rtl.at().left, 10);
-    rtl.made.destroy();
     const room = opened(createTranslator({ locale: 'ar', messages: { ar: { 'composer.send': 'أرسل' } } }), {
       ...pressed,
-      left: 521.8,
+      left: 121.8,
       right: 638.2,
     });
     assert.equal(room.at().left, 283.2);
-    Object.assign(room.box, { ...released, left: 520, right: 640 });
+    Object.assign(room.box, { ...released, left: 120, right: 640 });
     room.frames.next();
     assert.equal(room.at().left, 285, 'the composer moved by the left edge of its element');
     room.made.destroy();
@@ -793,7 +822,7 @@ describe('createComposer', () => {
     assert.equal(low.frames.next(), false, 'a closed composer still watched its element');
   });
 
-  it('opens above its element, 40 px over its top, and below when there is no room above (FRU-258)', () => {
+  it('opens beside its element, then below, and above only when nothing else fits (FRU-258, FRU-607)', () => {
     const placed = (anchor: { left: number; top: number; bottom: number; right: number }, scrollY = 0) => {
       const page = mountPage('<main></main>', { width: 1_000, height: 1_000 });
       page.view.scrollTo(0, scrollY);
@@ -812,14 +841,68 @@ describe('createComposer', () => {
       return result;
     };
 
-    // 600 − 40 − 240: its bottom edge ends 40 px over the element, the name of the component between them.
-    assert.deepEqual(placed({ left: 100, top: 600, bottom: 640, right: 300 }), { top: '320px', side: 'above' });
-    // No room above: under the frame, 6 px off the element, and 10 px more.
-    assert.deepEqual(placed({ left: 100, top: 200, bottom: 240, right: 300 }), { top: '255px', side: 'below' });
-    // The window, not the document, says what room there is: scrolled, the same element has none above.
-    assert.deepEqual(placed({ left: 100, top: 600, bottom: 640, right: 300 }, 400), { top: '655px', side: 'below' });
-    // Room on neither side, for an element as tall as the window: it stays in the window, at its bottom.
-    assert.deepEqual(placed({ left: 100, top: 100, bottom: 950, right: 300 }), { top: '750px', side: 'below' });
+    // Elements as wide as no side has room beside them (FRU-607): below comes first, then above.
+    // No room below: 600 − 40 − 240, its bottom edge ends 40 px over the element, the name of the
+    // component between them.
+    assert.deepEqual(placed({ left: 100, top: 600, bottom: 800, right: 700 }), { top: '320px', side: 'above' });
+    // Room below: under the frame, 5 px off the element, and 10 px more.
+    assert.deepEqual(placed({ left: 100, top: 600, bottom: 640, right: 700 }), { top: '655px', side: 'below' });
+    // The window, not the document, says what room there is: scrolled, the same element has room above only.
+    assert.deepEqual(placed({ left: 100, top: 1_000, bottom: 1_200, right: 700 }, 400), {
+      top: '720px',
+      side: 'above',
+    });
+    // Room on no side, for an element as tall as the window: it stays in the window, at its bottom.
+    assert.deepEqual(placed({ left: 100, top: 100, bottom: 950, right: 700 }), { top: '750px', side: 'below' });
+  });
+
+  it('opens beside its element on the end side, then the start side, with a tether to its middle (FRU-607)', () => {
+    const placed = (
+      anchor: { left: number; top: number; bottom: number; right: number },
+      translator = createTranslator(),
+    ) => {
+      const page = mountPage('<main></main>', { width: 1_000, height: 1_000 });
+      const host = page.document.createElement('div');
+      page.document.body.append(host);
+      const opened = createComposer({ document: page.document, host, onSubmit: async () => true, translator });
+      opened.element.getBoundingClientRect = () => ({ height: 240 }) as DOMRect;
+      opened.open(anchor);
+      const read = (name: string) => opened.element.style.getPropertyValue(`--fruitback-composer-${name}`);
+      const result = {
+        left: read('left'),
+        top: read('top'),
+        side: opened.element.dataset.fruitbackSide,
+        tether: read('tether'),
+        length: read('tether-length'),
+      };
+      opened.destroy();
+
+      return result;
+    };
+    const rtl = createTranslator({ locale: 'ar', messages: { ar: { 'composer.send': 'أرسل' } } });
+
+    // To the right: 300 + 5 + 16, its top on the top of the frame, the tether on the middle of the element.
+    assert.deepEqual(placed({ left: 100, top: 400, bottom: 440, right: 300 }), {
+      left: '321px',
+      top: '395px',
+      side: 'right',
+      tether: '25px',
+      length: '16px',
+    });
+    // No room to the right: to the left, 700 − 5 − 16 − 360.
+    assert.deepEqual(placed({ left: 700, top: 400, bottom: 440, right: 900 }).left, '319px');
+    assert.deepEqual(placed({ left: 700, top: 400, bottom: 440, right: 900 }).side, 'left');
+    // Right to left, the end side is the left.
+    assert.deepEqual(placed({ left: 500, top: 400, bottom: 440, right: 600 }, rtl).side, 'left');
+    assert.deepEqual(placed({ left: 100, top: 400, bottom: 440, right: 300 }, rtl).side, 'right');
+    // Near the foot of the window, it stays in it, and the tether stays on its edge, off its corner.
+    assert.deepEqual(placed({ left: 100, top: 980, bottom: 995, right: 300 }), {
+      left: '321px',
+      top: '750px',
+      side: 'right',
+      tether: '222px',
+      length: '16px',
+    });
   });
 
   it('shows the box of the picture only when a picture can be taken, and never ticks it itself (FRU-258)', () => {
@@ -877,6 +960,42 @@ describe('createComposer', () => {
     assert.equal((label().querySelector('input') as HTMLInputElement).checked, false);
   });
 
+  it('grows the field with its text up to 150 px, then fades its foot while text is below (FRU-611, P7)', () => {
+    mount(async () => {});
+    composer?.open(ANCHOR);
+    const input = new ((mounted as MountedPage).view as unknown as { Event: typeof Event }).Event('input', {
+      bubbles: true,
+    });
+    // happy-dom lays nothing out: the heights are given, as a browser would measure them.
+    let content = 120;
+    Object.defineProperty(field(), 'scrollHeight', { get: () => content, configurable: true });
+    Object.defineProperty(field(), 'clientHeight', {
+      get: () => Number.parseFloat(field().style.height) || 96,
+      configurable: true,
+    });
+    field().dispatchEvent(input);
+    assert.equal(field().style.height, '120px');
+    assert.equal(field().hasAttribute('data-fruitback-more'), false);
+
+    content = 400;
+    field().dispatchEvent(input);
+    assert.equal(field().style.height, `${FIELD_MAX}px`);
+    assert.equal(field().hasAttribute('data-fruitback-more'), true);
+    // Scrolled to its end, the fade goes.
+    field().scrollTop = 250;
+    field().dispatchEvent(new ((mounted as MountedPage).view as unknown as { Event: typeof Event }).Event('scroll'));
+    assert.equal(field().hasAttribute('data-fruitback-more'), false);
+  });
+
+  it('gives each button of words its words in a tooltip, for the one that ends in « … » (FRU-611, P7)', () => {
+    mount(async () => {}, { keep: { offered: () => true, onKeep: async () => true } });
+    composer?.open(ANCHOR);
+    for (const name of ['cancel', 'keep', 'send']) {
+      const button = composer?.element.querySelector(`[data-fruitback-${name}]`) as HTMLElement;
+      assert.equal(button.title, button.textContent, `${name} has no tooltip of its words`);
+    }
+  });
+
   it('takes its own DOM with it when destroyed', () => {
     const { host } = mount(async () => true);
 
@@ -898,7 +1017,12 @@ describe('saying who you are, or not', () => {
     const { page } = mount(async (_note, reporter) => void seen.push(reporter));
     composer?.open(ANCHOR);
 
-    assert.equal((query(page, '[data-fruitback-who]') as HTMLElement).hidden, false);
+    // Signed « Guest », in dashes, and the name folded behind it (FRU-607).
+    const avatar = query(page, '[data-fruitback-avatar]');
+    assert.equal(avatar.dataset.fruitbackAvatar, 'guest');
+    assert.equal(avatar.textContent, 'Guest');
+    assert.equal(avatar.getAttribute('aria-label'), 'Signed as Guest. Add your name');
+    assert.equal((query(page, '[data-fruitback-who]') as HTMLElement).hidden, true);
     assert.equal((query(page, '[data-fruitback-name]') as HTMLInputElement).value, '');
     (query(page, '[data-fruitback-note]') as HTMLTextAreaElement).value = 'Une note';
     query(page, '[data-fruitback-send]').click();
@@ -907,13 +1031,42 @@ describe('saying who you are, or not', () => {
     assert.deepEqual(seen, [undefined]);
   });
 
-  it('names the field « Name (optional) » by its label, with no link to open it (FRU-305)', () => {
+  it('opens « Name (optional) » from the avatar, which then shows the initials and the whole name (FRU-607)', () => {
     const { page } = mount(async () => true);
     composer?.open(ANCHOR);
-
-    assert.equal(page.document.querySelector('[data-fruitback-identify]'), null);
-    const name = query(page, '[data-fruitback-name]');
+    const avatar = query(page, '[data-fruitback-avatar]') as HTMLButtonElement;
+    const who = query(page, '[data-fruitback-who]');
+    const name = query(page, '[data-fruitback-name]') as HTMLInputElement;
     assert.equal(name.closest('label')?.textContent?.trim(), 'Name (optional)');
+    assert.equal(avatar.getAttribute('aria-expanded'), 'false');
+    assert.equal(avatar.getAttribute('aria-controls'), who.id);
+
+    avatar.click();
+    assert.equal(who.hidden, false);
+    assert.equal(avatar.getAttribute('aria-expanded'), 'true');
+    assert.equal(deepActiveElement(page.document), name);
+
+    name.value = 'Camille Durand';
+    name.dispatchEvent(new (page.view as unknown as { Event: typeof Event }).Event('input', { bubbles: true }));
+    assert.equal(avatar.textContent, 'CD');
+    assert.equal(avatar.title, 'Camille Durand');
+    assert.equal(avatar.dataset.fruitbackAvatar, 'named');
+    assert.equal(avatar.getAttribute('aria-label'), 'Signed as Camille Durand. Change the name');
+
+    // Folded again, the name stays: nothing typed goes.
+    avatar.click();
+    assert.equal(who.hidden, true);
+    assert.equal(name.value, 'Camille Durand');
+    assert.equal(avatar.textContent, 'CD');
+  });
+
+  it('writes the initials of a name by its first and last words, and by code point', () => {
+    assert.equal(initialsOf('Camille Durand'), 'CD');
+    assert.equal(initialsOf('  camille  '), 'C');
+    assert.equal(initialsOf('Jean Pierre de la Fontaine'), 'JF');
+    assert.equal(initialsOf('𝒜da Lovelace'), '𝒜L');
+    assert.equal(initialsOf('   '), '');
+    assert.equal(initialsOf('ilker', 'tr'), 'İ');
   });
 
   it('passes what was typed, trimmed, and leaves an empty field out', async () => {
@@ -1036,7 +1189,9 @@ describe('remembering the name, when the reporter asks (FRU-91)', () => {
 
     assert.equal(input(page, '[data-fruitback-name]').value, 'Alice');
     assert.equal(input(page, '[data-fruitback-remember]').checked, true);
-    assert.equal(query(page, '[data-fruitback-who]').hidden, false, 'the name the note is signed with is hidden');
+    // The name the note is signed with shows on the avatar (FRU-607).
+    assert.equal(query(page, '[data-fruitback-avatar]').textContent, 'A');
+    assert.equal(query(page, '[data-fruitback-avatar]').title, 'Alice');
   });
 
   it('keeps the name when the send fails, because the choice was made before it', async () => {
@@ -1087,6 +1242,8 @@ describe('remembering the name, when the reporter asks (FRU-91)', () => {
     composer?.open(ANCHOR);
 
     assert.equal(query(page, '[data-fruitback-who]').hidden, true);
+    // No avatar either: the worker signs, and the widget does not know the name (FRU-112).
+    assert.equal(query(page, '[data-fruitback-avatar]').hidden, true);
     await send(page);
 
     assert.deepEqual(seen, [undefined]);
@@ -1098,7 +1255,7 @@ describe('remembering the name, when the reporter asks (FRU-91)', () => {
     const seen: (NoteReporter | undefined)[] = [];
     let identified = false;
     const { page } = mount(async (_note, reporter) => void seen.push(reporter), { identified: () => identified });
-    const asked = () => !query(page, '[data-fruitback-who]').hidden;
+    const asked = () => !query(page, '[data-fruitback-avatar]').hidden;
 
     composer?.open(ANCHOR);
     assert.equal(asked(), true);
@@ -1108,7 +1265,6 @@ describe('remembering the name, when the reporter asks (FRU-91)', () => {
     identified = true;
     composer?.identityChanged();
     assert.equal(asked(), true);
-    assert.equal(query(page, '[data-fruitback-who]').hidden, false);
     await send(page);
     composer?.close();
 
@@ -1331,6 +1487,12 @@ describe('where the note goes (FRU-123)', () => {
   }
 
   const line = () => composer?.element.querySelector('[data-fruitback-destination]') as HTMLButtonElement;
+  /** What the button says (FRU-607): the whole path for the ear, but the tile drawn for the eye. */
+  const said = () =>
+    [...line().childNodes]
+      .filter((node) => !(node as Element).classList?.contains('fruitback-composer-tile'))
+      .map((node) => node.textContent)
+      .join('');
   const list = () => composer?.element.querySelector('[data-fruitback-destinations]') as HTMLElement;
   const radios = () => [...list().querySelectorAll('input')] as HTMLInputElement[];
   const notice = () => composer?.element.querySelector('[data-fruitback-destination-gone]')?.textContent ?? '';
@@ -1372,7 +1534,12 @@ describe('where the note goes (FRU-123)', () => {
     composer?.open(ANCHOR);
 
     assert.equal(line().hidden, false);
-    assert.equal(line().textContent, 'Send to: Linear · Web');
+    assert.equal(said(), 'Send to: Linear · Web');
+    // In icons, in the foot: the tile of the tool, then the most precise name; the path in the tooltip.
+    assert.equal(line().closest('.fruitback-composer-foot') !== null, true);
+    assert.equal(line().querySelector('.fruitback-composer-tile')?.textContent, 'L');
+    assert.equal(line().querySelector('.fruitback-composer-place-name')?.textContent, 'Web');
+    assert.equal(line().title, 'Linear · Web');
     assert.equal(line().getAttribute('aria-expanded'), 'false');
     assert.equal(list().hidden, true);
   });
@@ -1407,7 +1574,7 @@ describe('where the note goes (FRU-123)', () => {
     line().click();
     choose(DESIGN.id);
 
-    assert.equal(line().textContent, 'Send to: Linear · Design');
+    assert.equal(said(), 'Send to: Linear · Design');
     // Before any send, so a failed send does not lose the choice.
     assert.deepEqual(choice.writes, [DESIGN.id]);
 
@@ -1420,7 +1587,7 @@ describe('where the note goes (FRU-123)', () => {
     mountWith(choiceOf([WEB, DESIGN], DESIGN.id));
     composer?.open(ANCHOR);
 
-    assert.equal(line().textContent, 'Send to: Linear · Design');
+    assert.equal(said(), 'Send to: Linear · Design');
     assert.equal(list().hidden, true);
     assert.deepEqual(
       radios().map((radio) => radio.checked),
@@ -1433,7 +1600,7 @@ describe('where the note goes (FRU-123)', () => {
     // offers this reader, and nothing more.
     const seen = await sent(choiceOf([WEB, DESIGN], 'dst_of_another_site'));
 
-    assert.equal(line().textContent, 'Send to: Linear · Web');
+    assert.equal(said(), 'Send to: Linear · Web');
     assert.deepEqual(seen, [WEB.id]);
   });
 
@@ -1449,7 +1616,7 @@ describe('where the note goes (FRU-123)', () => {
 
     assert.equal(composer?.state(), 'failed');
     assert.equal(field().value, 'Une note pour le design');
-    assert.equal(line().textContent, 'Send to: Linear · Design');
+    assert.equal(said(), 'Send to: Linear · Design');
   });
 
   it('follows a list that a read changed under the open popover, and says when its place is gone', () => {
@@ -1461,13 +1628,13 @@ describe('where the note goes (FRU-123)', () => {
 
     // A new place, and the chosen one still there: the choice holds, and there is nothing to say.
     choice.offer([WEB, DESIGN, OLD, { id: 'dst_new', label: 'Linear · Support' }]);
-    assert.equal(line().textContent, 'Send to: Linear · Design');
+    assert.equal(said(), 'Send to: Linear · Design');
     assert.equal(radios().length, 4);
     assert.equal(notice(), '');
 
     // An admin took the place off the list. The line goes back to the first one, in words.
     choice.offer([WEB, OLD]);
-    assert.equal(line().textContent, 'Send to: Linear · Web');
+    assert.equal(said(), 'Send to: Linear · Web');
     assert.match(notice(), /Sending to Linear · Design is no longer possible/);
 
     // A choice made after that is an answer to the notice.
@@ -1519,7 +1686,7 @@ describe('where the note goes (FRU-123)', () => {
 
     composer?.open(ANCHOR);
     assert.equal(notice(), '');
-    assert.equal(line().textContent, 'Send to: Linear · Web');
+    assert.equal(said(), 'Send to: Linear · Web');
   });
 
   it('writes the name of a place as text, never as markup', () => {
@@ -1528,8 +1695,16 @@ describe('where the note goes (FRU-123)', () => {
     composer?.open(ANCHOR);
 
     assert.equal(composer?.element.querySelector('img'), null);
-    assert.equal(line().textContent, 'Send to: <img src=x onerror=alert(1)>');
+    assert.equal(said(), 'Send to: <img src=x onerror=alert(1)>');
     assert.equal(names()[0], '<img src=x onerror=alert(1)>');
+  });
+
+  it('takes the tool from the start of the path and the most precise name from its end (FRU-607)', () => {
+    assert.deepEqual(placeParts('Linear · Design · Website'), { tool: 'Linear', name: 'Website' });
+    assert.deepEqual(placeParts('Linear · Design'), { tool: 'Linear', name: 'Design' });
+    assert.deepEqual(placeParts('GitHub · acme/site'), { tool: 'GitHub', name: 'acme/site' });
+    // A place the worker named in one word, or not at all, is its own tool and name.
+    assert.deepEqual(placeParts('Destination 2'), { tool: 'Destination 2', name: 'Destination 2' });
   });
 
   it('keeps the unfolded list in the Tab cycle of the dialog, and out of it while folded', () => {
@@ -1568,7 +1743,7 @@ describe('where the note goes (FRU-123)', () => {
     const styles = stylesIn((mounted as MountedPage).document);
 
     assert.match(styles, /\.fruitback-composer-places\[hidden\] \{ display: none; \}/);
-    assert.match(styles, /\.fruitback-composer-identify\[hidden\] \{ display: none; \}/);
+    assert.match(styles, /\.fruitback-composer-destination\[hidden\] \{ display: none; \}/);
   });
 });
 
