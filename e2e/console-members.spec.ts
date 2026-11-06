@@ -942,16 +942,38 @@ test('a read that failed says so with « Try again », and is never a table with
   expect.soft(await painted(frame, 'borderTopColor')).toEqual(rgb(CONTROL));
   expect.soft(contrast(await painted(alert.locator('p'), 'color'), rgb(WHITE))).toBeGreaterThanOrEqual(4.5);
   await expect(table(page)).toHaveCount(0);
+  // FRU-616: « Invite » comes with the list. A read that failed offers « Try again » and nothing else.
+  await expect(opener(page)).toHaveCount(0);
   await expectNoViolation(page, 'a read that failed');
-  // The form is still there, and what was typed in it stays through « Try again ».
-  await inviting(page);
-  await email(page).fill('zoe@client.fr');
-  await page.keyboard.press('Escape');
 
   worker.members = 'list';
   await page.getByRole('button', { name: 'Try again', exact: true }).click();
   await expect(row(page, 'Tom')).toBeVisible();
   await expect(alert).toHaveCount(0);
+  // The control: with the list, « Invite » is in the head of the page.
+  await expect(opener(page)).toBeVisible();
+});
+
+test('what was typed in the invitation stays through a read that failed, and « Invite » comes back with the list (FRU-616)', async ({
+  page,
+}) => {
+  const worker = await workerWith(page);
+  await open(page);
+  await inviting(page);
+  await email(page).fill('zoe@client.fr');
+  // A message that did not leave makes the screen read its lists again, and that read fails.
+  worker.members = 'fails';
+  worker.refuses = { status: 503, error: 'mail-unavailable' };
+  await invite(page).click();
+  await expect(dialog(page).getByRole('alert')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('heading', { level: 2, name: 'The members did not load' })).toBeVisible();
+  await expect(opener(page)).toHaveCount(0);
+
+  worker.members = 'list';
+  worker.refuses = undefined;
+  await page.getByRole('button', { name: 'Try again', exact: true }).click();
+  await expect(row(page, 'Tom')).toBeVisible();
   await inviting(page);
   await expect(email(page)).toHaveValue('zoe@client.fr');
 });
@@ -1038,7 +1060,8 @@ test('while the members are read, the screen says so and draws no table', async 
   await expect(page.locator('main').getByText('Loading…')).toBeVisible();
   await expect(table(page)).toHaveCount(0);
   await expect(page.getByRole('alert')).toHaveCount(0);
-  await expect(opener(page)).toBeVisible();
+  // FRU-616: « Invite » waits for the list too.
+  await expect(opener(page)).toHaveCount(0);
 });
 
 for (const width of [390, 320]) {
