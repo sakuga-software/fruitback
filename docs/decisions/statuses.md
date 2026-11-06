@@ -523,3 +523,13 @@ the framing follows in brackets when the answer differs from it.
   its stage does.
 - **A list opens on « To check » while a note waits there, else on « Open »** (`firstTab`), until
   the reader chooses a tab.
+- **The stage of Fruitback first, the tracker second.** A row says « In progress · Linear: In Review »:
+  the word of the stage, then the tracker, read off the address of the issue (`trackerOf`), then the
+  name of its status or the word of the tracker. The stage alone when there is no name, or when the
+  name says the stage again. The word of a store with no tracker named is left out: « À faire · To do »
+  would say the stage twice, in two languages.
+- **Each stage has a round that fills, beside its colour**, as Linear draws its states: a dashed ring
+  for New, an empty one for To do, half full for In progress, full with a tick for Done, full with a
+  cross for Closed. A stage is said by its shape as well as by its colour.
+- **The filter is the five stages, always.** A team's own statuses are found by the search, never by
+  a control whose shape depends on how many statuses a site has.

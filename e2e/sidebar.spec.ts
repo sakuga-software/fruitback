@@ -325,7 +325,7 @@ test('the list is the board « Sidebar mode »: its measures, its chips, its sea
   });
   expect(await read('.fruitback-sidebar-search svg', [])).toMatchObject({ x: 1077, y: 115, width: 15, height: 15 });
   const chips = list.getByRole('group', { name: 'Status' }).getByRole('button');
-  // « Closed » is not on the board: it shows because the fifth note is closed.
+  // The five stages, always (FRU-606): the filter never changes its shape.
   await expect(chips).toHaveText(['All 8', 'New 2', 'To do 2', 'In progress 2', 'Done 1', 'Closed 1']);
   await expect(list.getByRole('button', { name: 'All 8', exact: true })).toHaveAttribute('aria-pressed', 'true');
   expect(
@@ -352,17 +352,12 @@ test('the list is the board « Sidebar mode »: its measures, its chips, its sea
     'border-top-color': 'rgb(228, 228, 231)',
     'background-color': 'rgb(255, 255, 255)',
   });
-  // Its own box, not the one it is turned in: a drop of 9 px, at 45°.
-  expect(await read('[data-fruitback-chip="progress"] .fruitback-sidebar-dot', ['background-color'])).toMatchObject({
-    width: 12.7,
-    height: 12.7,
-    'background-color': 'rgb(243, 187, 61)',
+  // The round of its stage, half full for « In progress », in the colour of the stage (FRU-606).
+  expect(await read('[data-fruitback-chip="progress"] .fruitback-stage-ring', ['color'])).toMatchObject({
+    width: 12,
+    height: 12,
+    color: 'rgb(243, 187, 61)',
   });
-  expect(
-    await page
-      .locator('[data-fruitback-chip="progress"] .fruitback-sidebar-dot')
-      .evaluate((node) => [getComputedStyle(node).width, getComputedStyle(node).height]),
-  ).toEqual(['9px', '9px']);
   expect(await read('[data-fruitback-chip="all"] .fruitback-sidebar-count', ['color', 'font-weight'])).toMatchObject({
     color: 'rgb(107, 107, 116)',
     'font-weight': '500',

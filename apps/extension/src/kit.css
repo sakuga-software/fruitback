@@ -344,6 +344,26 @@ button.kit-switch[aria-checked='true'] .kit-knob {
   pixel of --stage-edge outside it (FRU-334): the grey of « to do » is 1.39:1 on white, the edge
   3.42:1, and blueberry and cherry are under 3:1 on the dark surface, where the edge is 5.18:1.
 */
+/* The round of a stage (FRU-606), before its word: 13 px, in the colour of the stage or its status. */
+.kit-stage-ring {
+  --fruitback-stage-ring-mark: var(--surface);
+  flex: none;
+  width: 13px;
+  height: 13px;
+  margin-inline-end: 5px;
+  vertical-align: -2px;
+}
+
+.search-chip .kit-stage-ring {
+  margin-inline-end: 0;
+}
+
+@media (forced-colors: active) {
+  .kit-stage-ring {
+    color: CanvasText !important;
+  }
+}
+
 .kit-drop {
   box-sizing: border-box;
   display: inline-flex;

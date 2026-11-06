@@ -1,6 +1,6 @@
 import { msg, t } from './i18n.ts';
-import { type DropOptions, linkButton, listSelect, make, segmentedTabs, statusDrop, toggle } from './kit.ts';
-import { notePaint, stateWord } from './note-status.ts';
+import { linkButton, make, segmentedTabs, stageRing, statusDrop, toggle } from './kit.ts';
+import { listWord } from './note-status.ts';
 import type { PanelNote } from './protocol.ts';
 import type { SiteNote, SiteStage } from './site-notes.ts';
 
@@ -19,8 +19,11 @@ import type { SiteNote, SiteStage } from './site-notes.ts';
 
 export type Scope = 'page' | 'site';
 
-/** The chips: every note, or one status. « Closed » has no chip; « All » counts it. */
-export const STAGE_FILTERS = ['all', 'new', 'todo', 'progress', 'done'] as const;
+/**
+ * The chips: every note, or one stage. Always the five stages, whatever the statuses of a team
+ * (FRU-606): the filter never changes its shape. A status of the tracker is found by the search.
+ */
+export const STAGE_FILTERS = ['all', 'new', 'todo', 'progress', 'done', 'closed'] as const;
 export type StageFilter = (typeof STAGE_FILTERS)[number];
 
 /** The notes of the whole site, or where their read is. */
@@ -43,25 +46,12 @@ export type SearchState = {
   pinsShown: boolean;
   /** The address of the tab, `path` and query: the rows of the site on it say « This page ». */
   path?: string;
-  /**
-   * The status chosen in the list of more than `MAX_CHIPS` statuses (FRU-535), by its key
-   * (`statusKey`). Absent: every status. The chips filter by `stage` instead.
-   */
-  status?: string;
-  /** The list of the statuses is open: a page drawn again keeps it open. */
-  statusOpen?: boolean;
-  /** The option of the open list the keyboard is on (`''` for « All »): a draw puts it back. */
-  statusActive?: string;
 };
 
 export type SearchHandlers = {
   onScope: (scope: Scope) => void;
   onQuery: (q: string) => void;
   onStage: (stage: StageFilter) => void;
-  /** A status of the list (FRU-535), or `undefined` for every one. */
-  onStatus: (status: string | undefined) => void;
-  onStatusOpen: (open: boolean) => void;
-  onStatusActive: (id: string) => void;
   onSiteNote: (note: SiteNote) => void;
   onSiteRetry: () => void;
   onMore: () => void;
@@ -83,6 +73,7 @@ const FILTER_WORD: Record<StageFilter, string> = {
   todo: msg('To do'),
   progress: msg('In progress'),
   done: msg('Done'),
+  closed: msg('Closed'),
 };
 
 /** The words of a search: lower case, no accent, so « cafe » finds « Café ». */
@@ -90,94 +81,28 @@ function folded(text: string): string {
   return text.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
 }
 
-/** Whether every word of `q` is in the text of this note, or in the name of who wrote it. */
+/**
+ * Whether every word of `q` is in the text of this note, the name of who wrote it, or the state of its
+ * tracker: the name of its status or the word of its store, « In Review » (FRU-606).
+ */
 export function matchesPage(note: PanelNote, q: string): boolean {
   const words = folded(q).split(/\s+/).filter(Boolean);
   if (words.length === 0) return true;
-  const text = folded(`${note.note} ${note.author ?? ''}`);
+  const text = folded([note.note, note.author, note.status?.name, note.stateName].filter(Boolean).join(' '));
 
   return words.every((word) => text.includes(word));
 }
 
 /** How many notes of each chip: `all` counts every one. */
 export function countsOf(notes: readonly { stage: SiteStage }[]): Record<StageFilter, number> {
-  const counts = { all: notes.length, new: 0, todo: 0, progress: 0, done: 0 };
-  for (const note of notes) if (note.stage !== 'closed') counts[note.stage] += 1;
+  const counts = { all: notes.length, new: 0, todo: 0, progress: 0, done: 0, closed: 0 };
+  for (const note of notes) counts[note.stage] += 1;
 
   return counts;
 }
 
 export function passes(stage: SiteStage, filter: StageFilter): boolean {
   return filter === 'all' || stage === filter;
-}
-
-/** Up to this many statuses, the chips stay; beyond, a list (FRU-535). */
-export const MAX_CHIPS = 5;
-
-/** A note as the filter of the statuses reads it: a note of the page has its status, one of the site its stage. */
-type Statused = { stage: SiteStage; status?: PanelNote['status']; stateName?: string };
-
-/**
- * The key of the status of a note (FRU-535): the name a team gave it, the word of its store
- * (Linear's « In Review »), or its stage. Two notes with the same name are one status.
- */
-export function statusKey(note: Statused): string {
-  const named = note.status?.name || note.stateName;
-
-  return named === undefined || named === '' ? `stage:${note.stage}` : `name:${named}`;
-}
-
-const STAGE_ORDER: readonly SiteStage[] = ['new', 'todo', 'progress', 'done', 'closed'];
-
-export type StatusChoice = {
-  key: string;
-  word: string;
-  stage: SiteStage;
-  paint?: { fill: string; ink: string };
-  count: number;
-};
-
-/**
- * The statuses of these notes, each with its word, its colour and how many notes wear it (FRU-535).
- * In the order of the stages, then of the words.
- */
-export function statusesOf(notes: readonly Statused[]): StatusChoice[] {
-  const found = new Map<string, StatusChoice>();
-  for (const note of notes) {
-    const key = statusKey(note);
-    const known = found.get(key);
-    if (known !== undefined) {
-      known.count += 1;
-      continue;
-    }
-    const paint = notePaint(note);
-    found.set(key, {
-      key,
-      word: stateWord(note, t(STAGE_WORD[note.stage])),
-      stage: note.stage,
-      ...(paint === undefined ? {} : { paint }),
-      count: 1,
-    });
-  }
-
-  return [...found.values()].sort(
-    (a, b) => STAGE_ORDER.indexOf(a.stage) - STAGE_ORDER.indexOf(b.stage) || a.word.localeCompare(b.word),
-  );
-}
-
-/**
- * Which notes the filter keeps (FRU-535): the chips filter by stage while there are `MAX_CHIPS`
- * statuses or fewer; beyond, the list filters by status. `scope` are all the notes of the scope,
- * before the search: words typed never switch the list to chips, nor hide a status chosen in it
- * (review of #730).
- */
-export function statusFilter(state: SearchState, scope: readonly Statused[]): (note: Statused) => boolean {
-  const statuses = statusesOf(scope);
-  if (statuses.length <= MAX_CHIPS) return (note) => passes(note.stage, state.stage);
-  // A status no note wears any more (a note moved, another search) is every status, as the list says.
-  const chosen = statuses.some((status) => status.key === state.status) ? state.status : undefined;
-
-  return (note) => chosen === undefined || statusKey(note) === chosen;
 }
 
 /**
@@ -269,21 +194,7 @@ export function searchControls(
     root.append(hint);
   }
 
-  const among = chipNotes(state, pageNotes);
-  // The list or the chips: decided on the notes of the scope, before the search (review of #730).
-  const statuses = statusesOf(scopeNotes(state, pageNotes));
-  if (statuses.length > MAX_CHIPS) {
-    // Every status of the scope stays offered; its number counts what the search found.
-    const found = statusesOf(among);
-    const counted = statuses.map((status) => ({
-      ...status,
-      count: found.find((each) => each.key === status.key)?.count ?? 0,
-    }));
-    root.append(statusList(document, state, handlers, counted, among.length));
-
-    return root;
-  }
-  const counts = countsOf(among);
+  const counts = countsOf(chipNotes(state, pageNotes));
   const chips = make(document, 'div', 'search-chips');
   chips.setAttribute('role', 'group');
   chips.setAttribute('aria-label', t('Status'));
@@ -292,7 +203,8 @@ export function searchControls(
     chip.type = 'button';
     chip.dataset.stage = filter;
     chip.setAttribute('aria-pressed', String(state.stage === filter));
-    if (filter !== 'all') chip.append(statusDrop(document, { stage: filter }));
+    // The round of the stage, which fills as a note moves on (FRU-606).
+    if (filter !== 'all') chip.append(stageRing(document, filter));
     chip.append(
       make(document, 'span', 'search-chip-word', t(FILTER_WORD[filter])),
       make(document, 'span', 'search-chip-count', String(counts[filter])),
@@ -305,53 +217,8 @@ export function searchControls(
   return root;
 }
 
-/**
- * More than `MAX_CHIPS` statuses (FRU-535): « Status · {choice} · {count} », and the list of every
- * status with its colour, its name and its number of notes, over the notes.
- */
-function statusList(
-  document: Document,
-  state: SearchState,
-  handlers: SearchHandlers,
-  statuses: readonly StatusChoice[],
-  total: number,
-): HTMLElement {
-  const chosen = statuses.find((status) => status.key === state.status);
-  const dropOf = (status: StatusChoice): DropOptions => ({
-    stage: status.stage,
-    ...(status.paint === undefined ? {} : { paint: status.paint }),
-  });
-  const select = listSelect(document, {
-    label: t('Status'),
-    trigger: t('Status · {choice} · {count}', {
-      choice: chosen?.word ?? t('All'),
-      count: chosen?.count ?? total,
-    }),
-    options: [
-      { id: '', label: t('All'), count: total },
-      ...statuses.map((status) => ({ id: status.key, label: status.word, count: status.count, drop: dropOf(status) })),
-    ],
-    selected: chosen?.key ?? '',
-    open: state.statusOpen === true,
-    onOpenChange: handlers.onStatusOpen,
-    ...(state.statusActive === undefined ? {} : { active: state.statusActive }),
-    onActiveChange: handlers.onStatusActive,
-    onSelect: (id) => handlers.onStatus(id === '' ? undefined : id),
-  });
-  select.classList.add('search-status');
-
-  return select;
-}
-
-/** Every note of the scope, before the search: the page's, or the site's that were read. */
-export function scopeNotes(state: SearchState, pageNotes: readonly PanelNote[] | undefined): readonly Statused[] {
-  if (state.scope === 'site') return typeof state.site === 'object' ? state.site.notes : [];
-
-  return pageNotes ?? [];
-}
-
 /** The notes the chips count: the page's that match the search, or the site's that were read. */
-function chipNotes(state: SearchState, pageNotes: readonly PanelNote[] | undefined): readonly Statused[] {
+function chipNotes(state: SearchState, pageNotes: readonly PanelNote[] | undefined): readonly { stage: SiteStage }[] {
   if (state.scope === 'site') return typeof state.site === 'object' ? state.site.notes : [];
 
   return (pageNotes ?? []).filter((note) => matchesPage(note, state.q));
@@ -403,7 +270,7 @@ export function detachedPart(document: Document, notes: readonly PanelNote[]): H
         document,
         'p',
         'search-detached-meta',
-        t('{stage} · the element it pointed at is gone', { stage: stateWord(note, t(STAGE_WORD[note.stage])) }),
+        t('{stage} · the element it pointed at is gone', { stage: listWord(note, t(STAGE_WORD[note.stage])) }),
       ),
     );
     list.append(card);
@@ -444,8 +311,7 @@ export function siteList(
   }
   if (site === 'failed') return [failed(document, handlers.onSiteRetry)];
 
-  const keeps = statusFilter(state, site.notes);
-  const shown = site.notes.filter(keeps);
+  const shown = site.notes.filter((note) => passes(note.stage, state.stage));
   const parts: Node[] = [];
   if (shown.length === 0) {
     parts.push(make(document, 'p', 'panel-none', t('No note matches.')));
@@ -526,6 +392,7 @@ function siteRow(
   const who = note.mine === true ? t('You') : (note.author ?? t('Anonymous'));
   const meta = make(document, 'span', 'panel-row-meta');
   meta.append(
+    stageRing(document, note.stage),
     make(document, 'strong', 'panel-row-stage', t(STAGE_WORD[note.stage])),
     ` · ${who} · ${here ? t('This page') : note.page.path} · ${age(note.createdAt, now)}`,
   );

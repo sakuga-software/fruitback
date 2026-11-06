@@ -938,6 +938,8 @@ describe('every word the widget shows', () => {
       'ELEMENT',
       // The word of the store for a state, which the row of a note shows as the thread does (FRU-259).
       'In Progress',
+      // The tracker of an issue, a product name read off its address, after the stage (FRU-606).
+      'Linear',
       // The identifier of the store, which the top line of a row shows (FRU-308).
       'SKG-901',
       // A note kept for later, and the path of its page (FRU-124).

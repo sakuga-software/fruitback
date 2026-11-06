@@ -92,17 +92,23 @@ describe('the list of every note of the page (FRU-129, FRU-308)', () => {
 
     assert.equal(root.hidden, false);
     assert.equal(root.querySelector('.fruitback-sidebar-scope')?.textContent, 'This page · 2');
-    assert.deepEqual(chipNames(), ['All 2', 'New 1', 'To do 0', 'In progress 1', 'Done 0']);
+    assert.deepEqual(chipNames(), ['All 2', 'New 1', 'To do 0', 'In progress 1', 'Done 0', 'Closed 0']);
     // The board: « In progress · A … 2 hours ago », the note on one run of words, then who and the replies.
     assert.deepEqual(items().map(rowOf), [
       [
         '1',
-        ['In Progress', 'A', '2 hours ago'],
+        ['', 'In progress', 'A', '2 hours ago'],
         'The price should say per month. Second line',
         'Alice · no reply · further down',
       ],
-      ['2', ['In Progress', 'B', '2 hours ago'], 'Wrong colour', 'Alice · no reply · further down'],
+      // The stage of Fruitback first, then the word of the tracker of the issue, a Linear one (FRU-606).
+      ['2', ['', 'New · Linear: In Progress', 'B', '2 hours ago'], 'Wrong colour', 'Alice · no reply · further down'],
     ]);
+    // The round of each stage, before its word, in the colour of its pin.
+    assert.deepEqual(
+      items().map((item) => item.querySelector<SVGElement>('.fruitback-stage-ring')?.dataset.stage),
+      ['progress', 'new'],
+    );
     // « further down » is in the row for when the page scrolls, and hidden: nothing here says it is below.
     assert.deepEqual(
       items().map((item) => (item.querySelector('[data-fruitback-below]') as HTMLElement).hidden),
@@ -127,7 +133,7 @@ describe('the list of every note of the page (FRU-129, FRU-308)', () => {
     );
     // The note whose element is gone is apart, in a group with a name, and the counts leave it out (FRU-259).
     assert.equal(root.querySelector('.fruitback-sidebar-scope')?.textContent, 'This page · 2');
-    assert.deepEqual(chipNames(), ['All 2', 'New 2', 'To do 0', 'In progress 0', 'Done 0']);
+    assert.deepEqual(chipNames(), ['All 2', 'New 2', 'To do 0', 'In progress 0', 'Done 0', 'Closed 0']);
     const unplaced = root.querySelector('[data-fruitback-unplaced]') as HTMLElement;
     assert.equal(unplaced.hidden, false);
     assert.equal(unplaced.getAttribute('role'), 'group');
@@ -135,7 +141,7 @@ describe('the list of every note of the page (FRU-129, FRU-308)', () => {
     const lost = unplaced.querySelector('[data-fruitback-note]') as HTMLElement;
     assert.deepEqual(
       [...lost.children].map((child) => child.textContent),
-      ['Gone', 'In Progress · C · the element it pointed at is gone'],
+      ['Gone', 'In progress · C · the element it pointed at is gone'],
     );
     // It still opens its thread, which holds the replies and the way to the store.
     lost.click();
@@ -185,7 +191,7 @@ describe('the list of every note of the page (FRU-129, FRU-308)', () => {
     assert.equal((root.querySelector('.fruitback-sidebar-empty') as HTMLElement).hidden, false);
     assert.equal((root.querySelector('.fruitback-sidebar-list') as HTMLElement).hidden, true);
     assert.equal(root.querySelector('.fruitback-sidebar-empty')?.textContent, 'No note on this page yet.');
-    assert.deepEqual(chipNamesIn(root), ['All 0', 'New 0', 'To do 0', 'In progress 0', 'Done 0']);
+    assert.deepEqual(chipNamesIn(root), ['All 0', 'New 0', 'To do 0', 'In progress 0', 'Done 0', 'Closed 0']);
   });
 
   it('draws the notes again when they change, and only while it is open', () => {
@@ -365,12 +371,12 @@ describe('the search and the chips of the list (FRU-308)', () => {
     assert.equal(ids(items()), 'abcdefgh');
   });
 
-  it('has no chip « Closed » while no note of the page is closed', () => {
+  it('keeps its five stages, « Closed » too, while no note of the page is closed (FRU-606)', () => {
     const { sidebar, chipNames, chip } = mountSearching(eight().filter((entry) => entry.issue.stage !== 'closed'));
     sidebar.open();
 
-    assert.deepEqual(chipNames(), ['All 7', 'New 2', 'To do 2', 'In progress 2', 'Done 1']);
-    assert.equal(chip('closed').hidden, true);
+    assert.deepEqual(chipNames(), ['All 7', 'New 2', 'To do 2', 'In progress 2', 'Done 1', 'Closed 0']);
+    assert.equal(chip('closed').hidden, false);
   });
 
   it('searches the whole text of the notes and their identifier, whatever the case, and the chips count what it found', () => {
@@ -383,7 +389,7 @@ describe('the search and the chips of the list (FRU-308)', () => {
 
     type('mug');
     assert.equal(ids(items()), 'aeh');
-    assert.deepEqual(chipNames(), ['All 3', 'New 2', 'To do 1', 'In progress 0', 'Done 0']);
+    assert.deepEqual(chipNames(), ['All 3', 'New 2', 'To do 1', 'In progress 0', 'Done 0', 'Closed 0']);
     // The scope counts the page, not the search.
     assert.equal(root.querySelector('.fruitback-sidebar-scope')?.textContent, 'This page · 8');
 
@@ -977,7 +983,7 @@ describe('the list before a read answered (FRU-153)', () => {
     sidebar.open();
 
     // No number while no read answered: zero notes would be a guess.
-    assert.deepEqual(chipNamesIn(root), ['Toutes', 'Nouveau', 'À faire', 'En cours', 'Terminé']);
+    assert.deepEqual(chipNamesIn(root), ['Toutes', 'Nouveau', 'À faire', 'En cours', 'Terminé', 'Fermé']);
     assert.equal(text('.fruitback-sidebar-scope'), 'Cette page');
     assert.equal(text('.fruitback-sidebar-empty'), 'Lecture des notes de cette page…');
     assert.equal(shown('.fruitback-sidebar-failed'), false);
@@ -989,7 +995,7 @@ describe('the list before a read answered (FRU-153)', () => {
     sidebar.open();
 
     assert.equal(shown('.fruitback-sidebar-empty'), false);
-    assert.deepEqual(chipNamesIn(root), ['Toutes', 'Nouveau', 'À faire', 'En cours', 'Terminé']);
+    assert.deepEqual(chipNamesIn(root), ['Toutes', 'Nouveau', 'À faire', 'En cours', 'Terminé', 'Fermé']);
     assert.match(text('[role="status"]'), /n’ont pas pu être lues/);
     const retry = root.querySelector('.fruitback-sidebar-retry') as HTMLElement;
     assert.equal(retry.textContent, 'Réessayer');

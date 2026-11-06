@@ -436,7 +436,8 @@ test('a row of the panel wears the colour and the name of the status its pin wea
       `[...document.querySelectorAll('li[data-note]')].map((row) => {
         const drop = row.querySelector('.kit-drop');
         return {
-          word: row.querySelector('.panel-row-stage')?.textContent ?? '',
+          // The stage first, then the status (FRU-606): the status is what follows the stage.
+          word: (row.querySelector('.panel-row-stage')?.textContent ?? '').split(' · ').slice(1).join(' · '),
           fill: getComputedStyle(drop).backgroundColor,
           text: getComputedStyle(drop.querySelector('.kit-drop-number')).color,
           stage: drop.dataset.stage,

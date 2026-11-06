@@ -90,6 +90,8 @@ describe('the notes of the page for a list outside it (FRU-299)', () => {
       stage: 'todo',
       // The word of the store, which the side panel writes in place of the stage's (FRU-370).
       stateName: MINE.stateName,
+      // The tracker of the issue, by its address, for « In progress · Linear: In Review » (FRU-606).
+      tracker: 'Linear',
       note: 'Could the title mention Bordeaux?',
       mine: true,
       createdAt: MINE.note.createdAt,

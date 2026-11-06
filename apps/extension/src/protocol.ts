@@ -15,7 +15,7 @@
  */
 
 import type { SiteNote, SiteRead } from '@fruitback/widget';
-import { STATUS_COLOR } from '@fruitback/shared';
+import { STATUS_COLOR, TRACKER_NAMES } from '@fruitback/shared';
 import { parseActionColor } from './action-color.ts';
 import type { DockPosition, TransportRequest, TransportResponse } from '@fruitback/widget';
 import { isWorkerEndpoint } from './endpoint.ts';
@@ -390,6 +390,8 @@ export type PanelNote = {
   stage: (typeof STAGES)[number];
   /** The word of its store, Linear's « In Review » (FRU-370). Left out when the store named nothing. */
   stateName?: string;
+  /** The tracker of its issue, « Linear » or « GitHub » (FRU-606). Left out when the widget did not know it. */
+  tracker?: string;
   /**
    * Its status (FRU-370): the name and the colours a team chose, always of the note's stage. A colour
    * is `#rrggbb`, and a text colour comes only with a colour. Left out, the note is drawn by its stage.
@@ -465,6 +467,8 @@ export function parsePanelNotes(value: unknown): PanelNote[] | undefined {
     const author = entry.author === undefined ? undefined : boundedString(entry.author, PANEL_LIMITS.name);
     // A word, or nothing: a word too long, or not a word, is left out, and the note keeps its stage word.
     const stateName = boundedString(entry.stateName, PANEL_LIMITS.name);
+    // The page writes in this world: a tracker is one of the names `trackerOf` gives, or none (FRU-606).
+    const tracker = TRACKER_NAMES.find((name) => name === entry.tracker);
     const number =
       typeof entry.number === 'number' && Number.isSafeInteger(entry.number) && entry.number > 0
         ? entry.number
@@ -509,6 +513,7 @@ export function parsePanelNotes(value: unknown): PanelNote[] | undefined {
       ...(number === undefined ? {} : { number }),
       stage,
       ...(stateName === undefined || stateName === '' ? {} : { stateName }),
+      ...(tracker === undefined ? {} : { tracker }),
       ...(status === undefined ? {} : { status }),
       note,
       ...(author === undefined ? {} : { author }),

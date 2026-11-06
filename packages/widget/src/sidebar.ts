@@ -5,7 +5,8 @@ import { type FeedbackEntry } from './export.ts';
 import { deepActiveElement } from './focus.ts';
 import { createIcon } from './icons.ts';
 import { type Translator, createTranslator, languageOf } from './messages.ts';
-import { statusPaint, statusLabel } from './status-paint.ts';
+import { listLabel, statusPaint } from './status-paint.ts';
+import { createStageRing, ringColor } from './stage-ring.ts';
 import { stageToken } from './theme.ts';
 import { type SiteNote, type SiteNotes, linkToNote } from './site-notes.ts';
 import { adoptStyles } from './stylesheet.ts';
@@ -127,8 +128,8 @@ const EXCERPT_MAX_LENGTH = 90;
 const SEARCH_PAUSE_MS = 300;
 
 /**
- * A chip of the board (FRU-308): « All », then a stage each, in the order of `NOTE_STAGES`. « Closed »
- * is not on the board: its chip shows only while a note of the page is closed, or while it is chosen.
+ * A chip of the board (FRU-308): « All », then a stage each, in the order of `NOTE_STAGES`. The five
+ * are always there, with their counts: the filter never changes its shape (FRU-606).
  */
 type Chosen = 'all' | NoteStage;
 
@@ -138,14 +139,16 @@ const TAB_WORDS = { check: 'sidebar.tabCheck', open: 'sidebar.tabOpen', done: 's
 /** What an empty tab says. */
 const NONE_IN_TAB = { check: 'sidebar.noneCheck', open: 'sidebar.noneOpen', done: 'sidebar.noneDone' } as const;
 
-/** Whether this note has these words, in its text or in the identifier of its store. */
+/**
+ * Whether this note has these words: in its text, the identifier of its store, or the state of its
+ * tracker (FRU-606: « In Review » is found by the search, the chips stay the five stages).
+ */
 function matches(entry: SidebarEntry, query: string): boolean {
   if (query === '') return true;
   const words = query.toLocaleLowerCase();
 
-  return (
-    entry.issue.note.text.toLocaleLowerCase().includes(words) ||
-    (entry.issue.identifier ?? '').toLocaleLowerCase().includes(words)
+  return [entry.issue.note.text, entry.issue.identifier, entry.status?.name, entry.issue.stateName].some((said) =>
+    (said ?? '').toLocaleLowerCase().includes(words),
   );
 }
 
@@ -265,12 +268,13 @@ export function createSidebar(options: SidebarOptions): Sidebar {
     button.className = 'fruitback-sidebar-chip';
     button.dataset.fruitbackChip = name;
     if (name !== 'all') {
-      // The drop of the status, for the eye: the chip says it in words.
-      const dot = document.createElement('span');
-      dot.className = 'fruitback-sidebar-dot';
-      dot.setAttribute('aria-hidden', 'true');
-      dot.style.setProperty('--fruitback-sidebar-stage', stageToken(name));
-      button.append(dot);
+      // The round of the stage, for the eye: the chip says it in words (FRU-606).
+      const ring = createStageRing(document, name);
+      ring.style.setProperty(
+        'color',
+        ringColor(name, undefined, stageToken(name), 'var(--fruitback-color-text-muted)'),
+      );
+      button.append(ring);
     }
     const word = name === 'all' ? t.text('sidebar.all') : t.stage(name);
     const label = document.createElement('span');
@@ -653,8 +657,6 @@ export function createSidebar(options: SidebarOptions): Sidebar {
     for (const [name, { button, word, gap, count }] of chips) {
       const number = found.filter((entry) => name === 'all' || entry.issue.stage === name).length;
       button.setAttribute('aria-pressed', String(name === chosen));
-      // « Closed » is not on the board: shown while a note of the page is closed, or while chosen.
-      button.hidden = name === 'closed' && number === 0 && chosen !== 'closed';
       count.textContent = failing || !known ? '' : String(number);
       // The visible text has the space too. The rule label-content-name-mismatch of axe-core compares it with the aria-label.
       gap.data = count.textContent === '' ? '' : ' ';
@@ -850,7 +852,14 @@ export function createSidebar(options: SidebarOptions): Sidebar {
     pin.style.setProperty('--fruitback-sidebar-stage', stageToken(note.stage));
     pin.append(document.createElement('span'));
 
-    const top = topLine(t.stage(note.stage), note.reference, note.createdAt, '');
+    const top = topLine(
+      note.stage,
+      t.stage(note.stage),
+      ringColor(note.stage, undefined, stageToken(note.stage), 'var(--fruitback-color-text-muted)'),
+      note.reference,
+      note.createdAt,
+      '',
+    );
 
     const meta = document.createElement('span');
     meta.className = 'fruitback-sidebar-meta';
@@ -927,13 +936,23 @@ export function createSidebar(options: SidebarOptions): Sidebar {
    * « In progress · FRU-128 … 2 days ago », the top line of a row as the board writes it. A date that
    * does not parse shows `unknown`, and no title.
    */
-  function topLine(state: string, reference: string | undefined, written: string, unknown: string): HTMLElement {
+  function topLine(
+    stage: NoteStage,
+    state: string,
+    color: string,
+    reference: string | undefined,
+    written: string,
+    unknown: string,
+  ): HTMLElement {
     const top = document.createElement('span');
     top.className = 'fruitback-sidebar-top';
+    // The round of its stage, which fills as the note moves on (FRU-606), in the colour of its pin.
+    const ring = createStageRing(document, stage);
+    ring.style.setProperty('color', color);
     const status = document.createElement('span');
     status.className = 'fruitback-sidebar-status';
     status.textContent = state;
-    top.append(status);
+    top.append(ring, status);
     if (reference !== undefined) {
       const id = document.createElement('span');
       id.className = 'fruitback-sidebar-id';
@@ -950,12 +969,9 @@ export function createSidebar(options: SidebarOptions): Sidebar {
     return top;
   }
 
-  /**
-   * The status in the words of the team or of the store, like the thread, and the stage when it has
-   * none (FRU-370).
-   */
+  /** The stage first, then the status of the team or the word of the tracker (FRU-370, FRU-606). */
   function stateWord({ issue, status }: SidebarEntry): string {
-    return statusLabel(issue, status, t);
+    return listLabel(issue, status, t);
   }
 
   function item(entry: SidebarEntry, current: string | undefined): HTMLElement {
@@ -981,7 +997,19 @@ export function createSidebar(options: SidebarOptions): Sidebar {
     digit.textContent = number === undefined ? '' : String(number);
     pin.append(digit);
 
-    const top = topLine(stateWord(entry), issue.identifier || undefined, issue.note.createdAt, issue.note.createdAt);
+    const top = topLine(
+      issue.stage,
+      stateWord(entry),
+      ringColor(
+        issue.stage,
+        entry.status?.color === undefined ? undefined : paint.fill,
+        paint.fill,
+        'var(--fruitback-color-text-muted)',
+      ),
+      issue.identifier || undefined,
+      issue.note.createdAt,
+      issue.note.createdAt,
+    );
 
     const meta = document.createElement('span');
     meta.className = 'fruitback-sidebar-meta';
