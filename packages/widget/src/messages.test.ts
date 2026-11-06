@@ -29,7 +29,14 @@ import { type ListState, createSidebar } from './sidebar.ts';
 import type { SiteRead } from './site-notes.ts';
 import { feedbackAsText, placementOf } from './export.ts';
 import { createConfigStore } from './config.ts';
-import { type EditAnswer, type EditFailure, type ReplyFailure, createOverlay } from './overlay.ts';
+import {
+  type CheckAnswer,
+  type CheckFailure,
+  type EditAnswer,
+  type EditFailure,
+  type ReplyFailure,
+  createOverlay,
+} from './overlay.ts';
 import {
   globalNavigatorSpeaks,
   keyboardEventCtor,
@@ -306,6 +313,8 @@ describe('every word the widget shows', () => {
     const replyAnswers: ((answer: NoteComment | ReplyFailure) => void)[] = [];
     // And each edit of a note (FRU-475).
     const editAnswers: ((answer: EditAnswer | EditFailure) => void)[] = [];
+    // And each verdict on a note marked done (FRU-603).
+    const checkAnswers: ((answer: CheckAnswer | CheckFailure) => void)[] = [];
     const overlay = createOverlay({
       document: page.document,
       host: host.root,
@@ -314,6 +323,7 @@ describe('every word the widget shows', () => {
       isDraft: (issue) => issue === draftIssue,
       reply: { allowed: () => true, send: () => new Promise((resolve) => replyAnswers.push(resolve)) },
       edit: { send: () => new Promise((resolve) => editAnswers.push(resolve)) },
+      check: { send: () => new Promise((resolve) => checkAnswers.push(resolve)) },
     });
     cleanup.push(() => overlay.destroy());
 
@@ -373,7 +383,31 @@ describe('every word the widget shows', () => {
     });
     const kept = noteIssueFixture({ id: 'draft:sd_kept', note: noteFixture({ id: 'sd_kept', text: 'NOTE KEPT' }) });
     draftIssue = kept;
-    overlay.render([found, detached, placedByPosition, kept]);
+    // FRU-603: two notes of the reader that the team marked done, one with a reply that names who did.
+    const doneNote = (id: string, comments: NoteComment[]) =>
+      noteIssueFixture({
+        id: `issue_${id}`,
+        identifier: `ID-${id}`,
+        stage: 'done',
+        stateName: '',
+        mine: true,
+        comments,
+        note: noteFixture({
+          id,
+          text: 'NOTE DONE',
+          anchor: {
+            selector: '[data-testid="cta"]',
+            tag: 'button',
+            text: 'Commander',
+            bounds: { xPct: 10, yPct: 20, wPct: 20, hPct: 4 },
+          },
+        }),
+      });
+    const doneNamed = doneNote('sd_done', [
+      { id: 'c5', body: 'BODY', createdAt: '2026-08-01T12:00:00.000Z', author: 'TEAM' },
+    ]);
+    const doneUnnamed = doneNote('sd_done_2', []);
+    overlay.render([found, detached, placedByPosition, kept, doneNamed, doneUnnamed]);
 
     const snapshots: string[] = [];
     // The preview of a pin (FRU-422): under a mouse, then on the focus of the keyboard.
@@ -541,6 +575,38 @@ describe('every word the widget shows', () => {
         createdAt: '2026-08-01T12:00:00.000Z',
       },
     });
+    await settleReply();
+    snapshots.push(...shown(host.root));
+    // The verdict of the author on a note marked done (FRU-603): « Looks fixed » in flight, each
+    // failure, then kept; then « Still wrong », its field, and kept.
+    const verdictOf = (verdict: string) => ({
+      comment: {
+        id: `c-${verdict}`,
+        body: `**REPORTER** via Fruitback · member of WORKSPACE\n${verdict}`,
+        createdAt: '2026-08-01T12:00:00.000Z',
+      },
+      stage: verdict === 'Checked: looks fixed' ? ('done' as const) : ('new' as const),
+    });
+    overlay.select(doneNamed.note.id);
+    snapshots.push(...shown(host.root));
+    for (const answer of ['wait', 'signed-out', 'retry', 'refused'] as const) {
+      (host.root.querySelector('.fruitback-thread-check-fixed') as HTMLButtonElement).click();
+      snapshots.push(...shown(host.root));
+      checkAnswers.shift()?.(answer);
+      await settleReply();
+      snapshots.push(...shown(host.root));
+    }
+    (host.root.querySelector('.fruitback-thread-check-fixed') as HTMLButtonElement).click();
+    checkAnswers.shift()?.(verdictOf('Checked: looks fixed'));
+    await settleReply();
+    snapshots.push(...shown(host.root));
+    overlay.select(doneUnnamed.note.id);
+    snapshots.push(...shown(host.root));
+    (host.root.querySelector('.fruitback-thread-check-wrong') as HTMLButtonElement).click();
+    snapshots.push(...shown(host.root));
+    (host.root.querySelector('.fruitback-thread-check-field') as HTMLTextAreaElement).value = 'WRONG';
+    (host.root.querySelector('.fruitback-thread-check-form') as HTMLFormElement).requestSubmit();
+    checkAnswers.shift()?.(verdictOf('Reopened: still wrong'));
     await settleReply();
     snapshots.push(...shown(host.root));
     composer.open({ left: 0, top: 0, bottom: 10, right: 10 }, 'ELEMENT');
@@ -799,6 +865,12 @@ describe('every word the widget shows', () => {
       'NOTE SAVED',
       // What the worker writes of who edited it, in the language of the team (FRU-475).
       'member of WORKSPACE',
+      // FRU-603: the notes marked done, their identifiers, and the name of the team that marked one.
+      'NOTE DONE',
+      'ID-sd_done_2',
+      'ID-sd_done',
+      'TEAM',
+      'WRONG',
     ];
     // The short selector the frame of a capture writes (FRU-303), the tag of an element of the page.
     // Matched whole: as a part, « i » would take that letter out of every other text.
@@ -814,6 +886,8 @@ describe('every word the widget shows', () => {
       'R',
       // The tile of the tool of a place, its first letter (FRU-607).
       'P',
+      // The initial of the team that marked a note done, in its round (FRU-603).
+      'T',
     ]);
     const untranslated = snapshots.filter((text) => {
       if (selectors.has(text)) return false;

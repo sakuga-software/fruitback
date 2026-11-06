@@ -3,6 +3,7 @@ import {
   type NoteBounds,
   type NoteComment,
   type NoteIssue,
+  type NoteStage,
   type NoteStatus,
   anchorSelectorPath,
 } from '@fruitback/shared';
@@ -132,6 +133,12 @@ export type OverlayOptions = {
    */
   edit?: EditSeam;
   /**
+   * How the author of a note the team marked done says whether it looks fixed (FRU-603): « Looks
+   * fixed » or « Still wrong » in its thread. Offered when the read says the note is `done`, `mine`
+   * and not `checked`. Left out: no thread offers it.
+   */
+  check?: CheckSeam;
+  /**
    * Show the CSS selector of the element in a thread (FRU-349). Off by default: a reviewer reads the
    * note, and the selector is for a developer. The note and the issue keep it either way.
    */
@@ -165,6 +172,24 @@ export type EditAnswer = { note: Note; comment?: NoteComment };
 /** A seam like `ReplySeam` (FRU-475): `send` answers the note as the store kept it. */
 export type EditSeam = {
   send(issue: NoteIssue, text: string): Promise<EditAnswer | EditFailure>;
+};
+
+/** « Looks fixed » or « Still wrong » (FRU-294), as the worker names them. */
+export type CheckVerdict = 'fixed' | 'wrong';
+
+/** What the store kept of a verdict (FRU-603): the reply it wrote, and the stage of the note now. */
+export type CheckAnswer = { comment: NoteComment; stage: NoteStage };
+
+/**
+ * Why a verdict did not go. `refused`: the worker takes none from this reader on this note now (a
+ * note moved since the read, or checked already), and trying again does not change it.
+ */
+export type CheckFailure = ReplyFailure | 'refused';
+
+/** A seam like `ReplySeam` (FRU-603): `send` answers what the store kept of the verdict. */
+export type CheckSeam = {
+  /** `kept`: the store took it and said nothing of it; the host reads the notes again. */
+  send(issue: NoteIssue, verdict: CheckVerdict, body?: string): Promise<CheckAnswer | CheckFailure | 'kept'>;
 };
 
 export type Overlay = {
@@ -714,13 +739,18 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
 
   /** The note a list outside the page has open (FRU-299): its pin stays marked across a draw. */
   let marked: string | undefined;
+  /** The note whose thread on the page a draw keeps open: the one a verdict just changed (FRU-603). */
+  let keeping: string | undefined;
 
   function draw(): void {
     const refocus = focusedTarget();
     // A thread drawn in the list (FRU-312) is not on the page and outlives a draw: a read that
     // answers while somebody reads it must not send the list back to its rows. It is built again
     // below on the new pin of its note, or closed if the note is no longer drawn.
-    const homed = threadHome === null ? undefined : thread?.dataset.fruitbackThread;
+    const open = thread?.dataset.fruitbackThread;
+    // A verdict changed the stage of a note (FRU-603): its pin takes its new colour, and its thread,
+    // on the page, stays open with the answer in it.
+    const homed = threadHome !== null || (keeping !== undefined && keeping === open) ? open : undefined;
     if (homed === undefined) closeThread(false);
     // The preview is a child of the container, and goes with the pins it was about.
     preview = null;
@@ -890,6 +920,54 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
           said: editSaid,
           settled: editSettled,
         };
+  // FRU-603: the verdict of the author outlives its thread too. `checkWriting` holds the notes whose
+  // field « What is still wrong? » is open.
+  const checkWriting = new Set<string>();
+  const checkTexts = new Map<string, string>();
+  const checksInFlight = new Map<string, CheckVerdict>();
+  const checkSaid = new Map<string, string>();
+  /**
+   * Draws the thread of `issue` again, if it is open, and puts focus where the person goes next. A
+   * verdict the store kept may have changed the stage: the pins are drawn again, this thread kept.
+   */
+  const checkSettled = (issue: NoteIssue, focus: CheckFocus, kept?: { verdict: CheckVerdict; answer: CheckAnswer }) => {
+    const entry = placed.find((candidate) => candidate.issue.id === issue.id);
+    if (kept !== undefined) {
+      // A read may have drawn the note again since: the answer goes on the issue that is on screen too.
+      if (entry !== undefined && entry.issue !== issue) applyCheck(entry.issue, kept.verdict, kept.answer);
+    }
+    if (entry === undefined || thread?.dataset.fruitbackThread !== issue.note.id) return;
+    const focused = threadHasFocus();
+    if (kept !== undefined) {
+      keeping = issue.note.id;
+      try {
+        draw();
+      } finally {
+        keeping = undefined;
+      }
+    } else reopenThread(entry);
+    if (!focused && focus !== 'field') return;
+    const target = {
+      field: '.fruitback-thread-check-field',
+      wrong: '.fruitback-thread-check-wrong',
+      said: '.fruitback-thread-check-said',
+      close: '.fruitback-thread-close',
+    }[focus];
+    (
+      thread?.querySelector<HTMLElement>(target) ?? thread?.querySelector<HTMLElement>('.fruitback-thread-close')
+    )?.focus();
+  };
+  const checkFor = (issue: NoteIssue): CheckFooter | undefined =>
+    options.check === undefined || DRAFTS.has(issue)
+      ? undefined
+      : {
+          seam: options.check,
+          writing: checkWriting,
+          texts: checkTexts,
+          inFlight: checksInFlight,
+          said: checkSaid,
+          settled: checkSettled,
+        };
   const replyFor = (issue: NoteIssue): ReplyFooter | undefined =>
     options.reply === undefined || DRAFTS.has(issue) || !options.reply.allowed(issue)
       ? undefined
@@ -922,6 +1000,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
       selectorsShown,
       threadHome === null,
       editFor(entry.issue),
+      checkFor(entry.issue),
     );
     wireThread(thread);
     mountThread(thread, entry);
@@ -966,6 +1045,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
       selectorsShown,
       home === null,
       editFor(entry.issue),
+      checkFor(entry.issue),
     );
     wireThread(thread);
     mountThread(thread, entry);
@@ -980,6 +1060,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     // The last word of a reply is said once: a thread opened again starts with an empty status.
     replySaid.clear();
     editSaid.clear();
+    checkSaid.clear();
     const opener = placed.find((entry) => entry.pin.dataset.fruitbackOpen !== undefined);
     const wasOpen = thread !== null;
     // A thread in the list gives focus back through the list, to the row of its note (FRU-312): the
@@ -1277,7 +1358,7 @@ function replies(document: Document, issue: NoteIssue, t: Translator): HTMLEleme
   for (const comment of issue.comments) {
     const item = document.createElement('li');
     item.className = 'fruitback-thread-reply';
-    const fromPage = replyFromPage(comment.body) ?? editFromPage(comment.body, t);
+    const fromPage = replyFromPage(comment.body) ?? editFromPage(comment.body, t) ?? verdictFromPage(comment.body, t);
     const who = fromPage === undefined ? (comment.author ?? t.text('thread.team')) : fromPage.name;
     // FRU-465: the worker says that an agent wrote it. The word is the reader's, not the line's.
     const qualifier = comment.by === 'agent' ? t.text('thread.agent') : fromPage?.who;
@@ -1371,6 +1452,7 @@ function buildThread(
   showSelector: boolean,
   movable: boolean,
   edit?: EditFooter,
+  check?: CheckFooter,
 ): HTMLElement {
   const thread = document.createElement('div');
   thread.className = 'fruitback-thread';
@@ -1427,8 +1509,14 @@ function buildThread(
       // checks; a reader who is told nothing believes it.
       ...uncertaintyNote(document, resolution, t),
     ]),
+    ...doneLine(document, issue, t),
     ...replies(document, issue, t),
-    ...(reply === undefined ? [] : [replyForm(document, issue, t, reply)]),
+    ...(check === undefined ? [] : checkBlock(document, issue, t, check)),
+    // The author answers a note marked done by its verdict (FRU-603): « Still wrong » opens the field
+    // that says what is missing. A second field to reply under it would be two ways to say one thing.
+    ...(reply === undefined || (check !== undefined && checkOffered(issue))
+      ? []
+      : [replyForm(document, issue, t, reply)]),
   );
 
   return thread;
@@ -1609,6 +1697,260 @@ export function editFromPage(body: string, t: Translator): { name: string; who: 
   const match = EDITED.exec(body);
 
   return match === null ? undefined : { name: match[1] ?? '', who: match[2] ?? '', text: t.text('thread.edited') };
+}
+
+/**
+ * The reply the worker writes for a verdict (FRU-294, `checkText`): the line of who wrote it, the
+ * line of the verdict in the language of the team, then what the author typed, quoted. The page shows
+ * the name, its own words for the verdict, and the text. Any other comment is `undefined`.
+ */
+const VERDICT = new RegExp(
+  '^\\*\\*([^*\\n]+)\\*\\* via Fruitback · ([^\\n]+)\\n' +
+    '(Checked: looks fixed|Vérifié : semble corrigé|Reopened: still wrong|Rouvert : toujours faux)' +
+    '(?:\\n\\n((?:>(?: [^\\n]*)?(?:\\n|$))+))?$',
+  'u',
+);
+
+export function verdictFromPage(
+  body: string,
+  t: Translator,
+): { name: string; who: string; text: string; verdict: CheckVerdict } | undefined {
+  const match = VERDICT.exec(body);
+  if (match === null) return undefined;
+  const verdict: CheckVerdict = match[3]?.startsWith('Checked') || match[3]?.startsWith('Vérifié') ? 'fixed' : 'wrong';
+  const typed = (match[4] ?? '')
+    .replace(/\n$/u, '')
+    .split('\n')
+    .map((line) => line.replace(/^> ?/u, ''))
+    .join('\n');
+  const words = t.text(verdict === 'fixed' ? 'thread.checkedFixed' : 'thread.reopened');
+
+  return { name: match[1] ?? '', who: match[2] ?? '', text: typed === '' ? words : `${words}\n${typed}`, verdict };
+}
+
+/** Where focus goes when a thread is built again for a verdict (FRU-603). */
+type CheckFocus = 'field' | 'wrong' | 'said' | 'close';
+
+/** What the verdicts of the notes share, by note, as `ReplyFooter` (FRU-603). */
+type CheckFooter = {
+  seam: CheckSeam;
+  writing: Set<string>;
+  texts: Map<string, string>;
+  inFlight: Map<string, CheckVerdict>;
+  said: Map<string, string>;
+  settled: (issue: NoteIssue, focus: CheckFocus, kept?: { verdict: CheckVerdict; answer: CheckAnswer }) => void;
+};
+
+const CHECK_FAILURES = {
+  retry: 'check.failed',
+  wait: 'check.failedWait',
+  'signed-out': 'check.failedSignedOut',
+  refused: 'check.refused',
+} as const;
+
+/**
+ * Whether the reader is asked for a verdict (FRU-603): the worker says the note is `done`, that the
+ * reader left it (`mine`), and that nobody confirmed it yet (`checked`). The worker decides who may
+ * (FRU-294): the author it can name, by a session of the workspace. Nothing on the page decides it.
+ */
+export function checkOffered(issue: NoteIssue): boolean {
+  return issue.stage === 'done' && issue.mine === true && issue.checked === undefined;
+}
+
+/**
+ * Who marked the note done (FRU-603): the author of the newest reply of the team, as the side panel
+ * of the extension says it (FRU-300). A reply from the page, an edit or a verdict is not the team's.
+ */
+export function doneByOf(issue: NoteIssue, t: Translator): string | undefined {
+  for (const comment of [...(issue.comments ?? [])].reverse()) {
+    const fromPage = replyFromPage(comment.body) ?? editFromPage(comment.body, t) ?? verdictFromPage(comment.body, t);
+    if (fromPage === undefined && comment.author !== undefined && comment.author.trim() !== '') return comment.author;
+  }
+
+  return undefined;
+}
+
+/** « Marc Petit marked it done », above the replies of a note done and not confirmed yet (FRU-603). */
+function doneLine(document: Document, issue: NoteIssue, t: Translator): HTMLElement[] {
+  if (DRAFTS.has(issue) || issue.stage !== 'done' || issue.checked !== undefined) return [];
+  const name = doneByOf(issue, t);
+  const line = element(
+    document,
+    'p',
+    'fruitback-thread-done',
+    name === undefined ? t.text('check.done') : t.text('check.doneBy', { name }),
+  );
+  // When: in its title, as the state of the head says since when (FRU-419).
+  const since = stateSince(issue, t);
+  if (since !== undefined) line.title = since;
+
+  return [line];
+}
+
+/**
+ * The verdict of the author (FRU-603): « Does it look right to you? », « Looks fixed » and « Still
+ * wrong ». « Still wrong » opens a field to say what is missing; « Send » writes the verdict and the
+ * text together, as one reply of the store.
+ *
+ * WARNING: nothing here clears the field but a verdict that the store kept. A failure keeps the text
+ * and says why. The text lives in `texts` too, so a thread built again shows it again.
+ */
+function checkBlock(document: Document, issue: NoteIssue, t: Translator, check: CheckFooter): HTMLElement[] {
+  const said = check.said.get(issue.id);
+  if (!checkOffered(issue)) {
+    // The answer of a verdict the store kept, said once in the thread it was given in.
+    if (said === undefined) return [];
+    const line = element(document, 'p', 'fruitback-thread-check-said', said);
+    line.setAttribute('role', 'status');
+    line.tabIndex = -1;
+
+    return [line];
+  }
+
+  const block = document.createElement('div');
+  block.className = 'fruitback-thread-check';
+  const askId = `fruitback-check-${issue.note.id}`;
+  const ask = element(document, 'p', 'fruitback-thread-check-ask', t.text('check.ask'));
+  ask.id = askId;
+
+  const sending = check.inFlight.get(issue.id);
+  const writing = check.writing.has(issue.id);
+  const fixed = document.createElement('button');
+  fixed.type = 'button';
+  fixed.className = 'fruitback-thread-check-fixed';
+  fixed.textContent = sending === 'fixed' ? t.text('check.sending') : t.text('check.fixed');
+  const wrong = document.createElement('button');
+  wrong.type = 'button';
+  wrong.className = 'fruitback-thread-check-wrong';
+  wrong.textContent = t.text('check.wrong');
+  wrong.setAttribute('aria-expanded', String(writing));
+  fixed.disabled = sending !== undefined;
+  wrong.disabled = sending !== undefined;
+  const actions = element(document, 'div', 'fruitback-thread-check-actions', [fixed, wrong]);
+  actions.setAttribute('role', 'group');
+  actions.setAttribute('aria-labelledby', askId);
+
+  const status = document.createElement('span');
+  status.className = 'fruitback-thread-check-status';
+  status.setAttribute('role', 'status');
+  status.setAttribute('aria-live', 'polite');
+  status.textContent = sending === undefined ? (said ?? '') : t.text('check.sending');
+
+  const send = (verdict: CheckVerdict, body?: string): void => {
+    if (check.inFlight.has(issue.id)) return;
+    check.inFlight.set(issue.id, verdict);
+    check.said.delete(issue.id);
+    check.settled(issue, verdict === 'wrong' ? 'field' : 'said');
+    void check.seam
+      .send(issue, verdict, body)
+      .catch((): CheckFailure => 'retry')
+      .then((answer) => {
+        check.inFlight.delete(issue.id);
+        if (answer === 'kept') {
+          check.writing.delete(issue.id);
+          check.texts.delete(issue.id);
+          check.settled(issue, 'close');
+
+          return;
+        }
+        if (typeof answer === 'string') {
+          check.said.set(issue.id, t.text(CHECK_FAILURES[answer]));
+          check.settled(issue, verdict === 'wrong' ? 'field' : 'wrong');
+
+          return;
+        }
+        applyCheck(issue, verdict, answer);
+        check.writing.delete(issue.id);
+        check.texts.delete(issue.id);
+        check.said.set(issue.id, t.text(verdict === 'fixed' ? 'check.sentFixed' : 'check.sentWrong'));
+        check.settled(issue, 'said', { verdict, answer });
+      });
+  };
+
+  fixed.addEventListener('click', () => send('fixed'));
+  wrong.addEventListener('click', () => {
+    if (check.writing.has(issue.id)) {
+      check.writing.delete(issue.id);
+      check.settled(issue, 'wrong');
+    } else {
+      check.writing.add(issue.id);
+      check.settled(issue, 'field');
+    }
+  });
+
+  block.append(ask, actions);
+  if (writing) {
+    const form = document.createElement('form');
+    form.className = 'fruitback-thread-check-form';
+    const field = document.createElement('textarea');
+    field.className = 'fruitback-thread-check-field';
+    field.rows = 2;
+    field.setAttribute('aria-label', t.text('check.wrongLabel'));
+    field.placeholder = t.text('check.wrongLabel');
+    field.value = check.texts.get(issue.id) ?? '';
+    field.readOnly = sending !== undefined;
+    const submit = document.createElement('button');
+    submit.type = 'submit';
+    submit.className = 'fruitback-thread-check-send';
+    submit.textContent = t.text('check.send');
+    // The visible word is in the name: « Send » of a reply and of the composer can be on screen too.
+    submit.setAttribute('aria-label', t.text('check.sendLabel'));
+    submit.disabled = sending !== undefined;
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.className = 'fruitback-thread-check-cancel';
+    cancel.textContent = t.text('check.cancel');
+    cancel.disabled = sending !== undefined;
+    field.addEventListener('input', () => {
+      check.texts.set(issue.id, field.value);
+      check.said.delete(issue.id);
+      status.textContent = '';
+    });
+    field.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
+      event.preventDefault();
+      form.requestSubmit();
+    });
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const typed = field.value.trim();
+      send('wrong', typed === '' ? undefined : field.value);
+    });
+    // The text stays in `texts`: « Still wrong » again gives it back.
+    cancel.addEventListener('click', () => {
+      check.writing.delete(issue.id);
+      check.settled(issue, 'wrong');
+    });
+    form.append(field, element(document, 'div', 'fruitback-thread-check-form-actions', [submit, cancel]));
+    block.append(form);
+  }
+  block.append(status);
+
+  return [block];
+}
+
+/**
+ * What a verdict that the store kept changes on the issue on screen (FRU-603), with no read: a read
+ * draws the pins again and closes the thread the person is in. The reply goes under the note, the note
+ * takes the stage the store answered, and « Looks fixed » marks it confirmed, as the next read will.
+ */
+export function applyCheck(issue: NoteIssue, verdict: CheckVerdict, answer: CheckAnswer): void {
+  if (issue.comments !== undefined) {
+    issue.comments = [...(issue.comments ?? []).filter((each) => each.id !== answer.comment.id), answer.comment];
+  }
+  if (answer.stage !== issue.stage) {
+    issue.stage = answer.stage;
+    // The store's word was for the stage of before: the stage says it until the next read.
+    issue.stateName = '';
+  }
+  if (verdict === 'fixed') {
+    issue.checked = { by: replyAuthor(answer.comment), at: answer.comment.createdAt };
+  } else delete issue.checked;
+}
+
+/** The name on a reply the worker wrote for the page, or its author as the store keeps it. */
+function replyAuthor(comment: NoteComment): string {
+  return /^\*\*([^*\n]+)\*\*/u.exec(comment.body)?.[1] ?? comment.author ?? '';
 }
 
 const REPLY_FAILURES = {
