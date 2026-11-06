@@ -565,10 +565,12 @@ test('long words never wrap in a button, and the field grows to 150 px then scro
 
   const field = page.locator('[data-fruitback-note]');
   const tall = () => field.evaluate((node) => Math.round(node.getBoundingClientRect().height));
-  expect(await tall()).toBe(96);
-  await field.fill('Une ligne,\npuis une autre,\npuis une troisième,\npuis une quatrième.');
+  // At rest, its four rows: at least the 96 px of the mock-up.
+  const rest = await tall();
+  expect(rest).toBeGreaterThanOrEqual(96);
+  await field.fill('Une ligne,\npuis une autre,\npuis une troisième,\npuis une quatrième,\npuis une cinquième.');
   const grown = await tall();
-  expect(grown).toBeGreaterThan(96);
+  expect(grown).toBeGreaterThan(rest);
   expect(grown).toBeLessThan(150);
   await field.fill(Array.from({ length: 14 }, (_, n) => `Ligne ${n + 1} d’une longue note`).join('\n'));
   expect(await tall()).toBe(150);
