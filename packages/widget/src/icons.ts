@@ -47,7 +47,8 @@ export type IconName =
   | 'chevron'
   | 'camera'
   | 'paperclip'
-  | 'image';
+  | 'image'
+  | 'stackPlus';
 
 /**
  * The drop of the mark, as the mock-up of 2026-10-13 draws it on the launch button (FRU-252): a
@@ -69,6 +70,8 @@ const ICONS: Record<IconName, IconShape> = {
   camera: ICON_DATA.camera,
   paperclip: ICON_DATA.paperclip,
   image: ICON_DATA.image,
+  // « Add to batch » (FRU-608): an action, so from the set.
+  stackPlus: ICON_DATA.stackPlus,
   drop: { viewBox: '0 0 16 16', paths: [{ fill: 'currentColor', d: DROP }] },
   mark: { viewBox: '16 6 96 116', paths: [{ fill: 'currentColor', d: MARK }] },
   // The mark in a dashed outline, for the notes that could not be placed (FRU-259): the stroke and

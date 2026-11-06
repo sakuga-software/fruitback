@@ -30,6 +30,11 @@ export type AgentRequest = {
   /** The id of the note in its site. */
   note: string;
   reason: AgentMoment;
+  /**
+   * The notes of one send of a batch (FRU-608), the first one included: a batch starts the agent once.
+   * Absent for a single note.
+   */
+  batch?: readonly { identifier: string; note: string }[];
 };
 
 /**
@@ -44,6 +49,16 @@ export function agentRequestBody(request: AgentRequest): string {
     site: { id: request.site, ...(request.origin === undefined ? {} : { origin: request.origin }) },
     identifier: request.identifier,
     note: { id: noteIdOf(request.site, request.note) },
+    // FRU-608: every note of a batch, in its order, so one call names them all. Additive: a receiver
+    // that reads `note` alone still gets the first one.
+    ...(request.batch === undefined
+      ? {}
+      : {
+          notes: request.batch.map((each) => ({
+            identifier: each.identifier,
+            note: { id: noteIdOf(request.site, each.note) },
+          })),
+        }),
   });
 }
 

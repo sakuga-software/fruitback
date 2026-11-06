@@ -124,6 +124,11 @@ with no key, nothing leaves.
   pushes to a branch that deploys. Fruitback cannot hold that rule: the agent and its rights are the
   team's. The worker can, and does, keep the key of the agent to the notes of its sites.
 - **Off by default**, like a key: a site with no trigger calls nothing.
+- **A batch starts the agent once** (FRU-608). The notes sent together in one request are one send:
+  the call names the first note of a known person in `identifier` and `note`, as a single note does,
+  and every note of known persons of that request in `notes` (`[{ identifier, note: { id } }]`). The
+  field is additive, so a receiver that reads `note` alone still starts on the first one. A note of a
+  visitor in the batch starts nothing, as alone. Held by `agent-triggers.test.ts`.
 
 ### What exists today
 

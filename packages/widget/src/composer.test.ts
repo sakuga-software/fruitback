@@ -2,6 +2,8 @@ import { afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { NoteReporter } from '@fruitback/shared';
 import {
+  type BatchSeam,
+  type BatchSent,
   type Composer,
   type ComposerOptions,
   type DestinationChoice,
@@ -26,6 +28,19 @@ import { createTranslator } from './messages.ts';
 
 const ANCHOR = { left: 100, top: 200, bottom: 240, right: 300 };
 
+/** A batch as `embed.ts` gives it (FRU-608), with the parts a test changes. */
+function batchOf(more: Partial<BatchSeam> & { count?: () => number } = {}): BatchSeam {
+  return {
+    offered: () => true,
+    waiting: more.count ?? (() => 0),
+    subscribe: () => () => {},
+    add: async () => true,
+    sendAll: async (note) => ({ sent: [{ id: 'n1', text: note }], unsent: [] }),
+    resend: async () => ({ sent: [], unsent: [] }),
+    ...more,
+  };
+}
+
 let composer: Composer | null = null;
 
 afterEach(() => {
@@ -42,7 +57,7 @@ function mount(
   ) => Promise<boolean | void | SendFailure | SentWithoutPicture | SentAs>,
   more: Pick<
     ComposerOptions,
-    'memory' | 'identified' | 'keep' | 'picture' | 'onClose' | 'autosave' | 'suggestName'
+    'memory' | 'identified' | 'batch' | 'picture' | 'onClose' | 'autosave' | 'suggestName'
   > = {},
 ) {
   const page = mountPage('<main><button id="cta">Commander</button></main>', { width: 1_000, height: 1_000 });
@@ -318,9 +333,9 @@ describe('what the popover looks like (FRU-36)', () => {
     assert.equal(composer.element.hidden, true);
   });
 
-  it('says when a note kept for later has no picture, and not that it was sent (FRU-238)', async () => {
+  it('says when a note added to the batch has no picture, and not that it was sent (FRU-238, FRU-608)', async () => {
     mount(async () => true, {
-      keep: { offered: () => true, onKeep: async () => ({ picture: 'missed' as const }) },
+      batch: batchOf({ add: async () => ({ picture: 'missed' as const }) }),
     });
     composer?.open(ANCHOR);
     field().value = 'Une note';
@@ -329,7 +344,7 @@ describe('what the popover looks like (FRU-36)', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     assert.equal(composer?.state(), 'kept');
-    assert.equal(statusText(), 'Kept for later, without the picture');
+    assert.equal(statusText(), 'Added to the batch, without the picture');
   });
 
   it('says when the note went without the picture it asked for (FRU-238)', async () => {
@@ -988,9 +1003,9 @@ describe('createComposer', () => {
   });
 
   it('gives each button of words its words in a tooltip, for the one that ends in « … » (FRU-611, P7)', () => {
-    mount(async () => {}, { keep: { offered: () => true, onKeep: async () => true } });
+    mount(async () => {}, { batch: batchOf() });
     composer?.open(ANCHOR);
-    for (const name of ['cancel', 'keep', 'send']) {
+    for (const name of ['cancel', 'send']) {
       const button = composer?.element.querySelector(`[data-fruitback-${name}]`) as HTMLElement;
       assert.equal(button.title, button.textContent, `${name} has no tooltip of its words`);
     }
@@ -1747,12 +1762,16 @@ describe('where the note goes (FRU-123)', () => {
   });
 });
 
-describe('keep for later (FRU-124)', () => {
+describe('the batch: send alone or together (FRU-608)', () => {
   const keepButton = () => composer?.element.querySelector('[data-fruitback-keep]') as HTMLButtonElement;
+  const more = () => composer?.element.querySelector('[data-fruitback-send-more]') as HTMLButtonElement;
+  const menu = () => composer?.element.querySelector('[data-fruitback-send-menu]') as HTMLElement;
+  const q = <T extends Element = HTMLElement>(selector: string) => composer?.element.querySelector(selector) as T;
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
   it('is offered only while the worker takes several notes, asked at each open', () => {
     let offered = false;
-    mount(async () => true, { keep: { offered: () => offered, onKeep: async () => true } });
+    mount(async () => true, { batch: batchOf({ offered: () => offered }) });
 
     composer?.open(ANCHOR);
     assert.equal(keepButton().hidden, true);
@@ -1760,40 +1779,261 @@ describe('keep for later (FRU-124)', () => {
     offered = true;
     composer?.open(ANCHOR);
     assert.equal(keepButton().hidden, false);
-    assert.equal(keepButton().textContent, 'Keep for later');
   });
 
-  it('is not there at all for a host that gives no way to keep a note', () => {
+  it('is not there at all for a host that gives no batch', () => {
     mount(async () => true);
     composer?.open(ANCHOR);
 
     assert.equal(keepButton().hidden, true);
+    assert.equal(more().hidden, true);
   });
 
-  it('keeps the note rather than send it, says so, and keeps the text when keeping fails', async () => {
+  it('with none waiting: « Send », and « Add to batch » as an icon named in its tooltip', () => {
+    mount(async () => true, { batch: batchOf() });
+    composer?.open(ANCHOR);
+    assert.equal(sendButton().textContent, 'Send');
+    assert.ok(keepButton().querySelector('svg.fruitback-icon'));
+    assert.equal(keepButton().title, 'Add to batch');
+    assert.equal(keepButton().textContent, 'Add to batch', 'its name, for a screen reader');
+    assert.equal(more().hidden, true, 'no menu with nothing to choose');
+  });
+
+  it('with two waiting: « Send all 3 », the count on the icon, and a menu for « Send only this note »', async () => {
+    let waiting = 2;
+    const listeners: (() => void)[] = [];
+    const sentAlone: string[] = [];
+    const sentTogether: string[] = [];
+    mount(async (note) => void sentAlone.push(note), {
+      batch: batchOf({
+        count: () => waiting,
+        subscribe: (listener) => (listeners.push(listener), () => {}),
+        sendAll: async (note) => (sentTogether.push(note), { sent: [{ id: 'a', text: note }], unsent: [] }),
+      }),
+    });
+    composer?.open(ANCHOR);
+    assert.equal(sendButton().textContent, 'Send all 3');
+    assert.equal(keepButton().title, 'Add to batch · 2 waiting');
+    assert.equal(q('.fruitback-composer-badge').textContent, '2');
+    assert.equal(more().hidden, false);
+    assert.equal(more().getAttribute('aria-haspopup'), 'menu');
+
+    more().click();
+    assert.equal(menu().hidden, false);
+    assert.deepEqual(
+      [...menu().querySelectorAll('[role="menuitem"]')].map((item) => item.textContent),
+      ['Send all 3', 'Send only this note'],
+    );
+    assert.equal(deepActiveElement((mounted as MountedPage).document), q('[data-fruitback-send-all]'));
+
+    // « Send only this note » sends it alone, and leaves the batch in place.
+    field().value = 'Seule';
+    q<HTMLButtonElement>('[data-fruitback-send-only]').click();
+    await settle();
+    assert.deepEqual(sentAlone, ['Seule']);
+    assert.deepEqual(sentTogether, []);
+    composer?.close();
+
+    // A note added elsewhere: the foot counts it at once.
+    waiting = 3;
+    for (const listener of listeners) listener();
+    composer?.open(ANCHOR);
+    assert.equal(sendButton().textContent, 'Send all 4');
+    field().value = 'Ensemble';
+    sendButton().click();
+    await settle();
+    assert.deepEqual(sentTogether, ['Ensemble']);
+  });
+
+  it('says « Sending 2 of 3… » while the batch goes, freezes the text, and closes on nothing', async () => {
+    let progress: (done: number, total: number) => void = () => {};
+    let finish: (value: BatchSent) => void = () => {};
+    mount(async () => true, {
+      batch: batchOf({
+        count: () => 2,
+        sendAll: (_note, _reporter, _destination, _files, told) => {
+          progress = told;
+          return new Promise((resolve) => (finish = resolve));
+        },
+      }),
+    });
+    composer?.open(ANCHOR);
+    field().value = 'La troisième';
+    sendButton().click();
+    await settle();
+    assert.equal(composer?.state(), 'sending');
+    assert.equal(statusText(), 'Sending 1 of 3…');
+    progress(1, 3);
+    assert.equal(statusText(), 'Sending 2 of 3…');
+    assert.equal(field().readOnly, true);
+    assert.equal(field().value, 'La troisième', 'the text is still there to read');
+    assert.equal(cancelButton().disabled, true);
+    composer?.close();
+    press('Escape');
+    assert.equal(composer?.element.hidden, false, 'a batch on its way closed the composer');
+
+    finish({
+      sent: [
+        { id: 'a', text: 'Une' },
+        { id: 'b', text: 'Deux' },
+        { id: 'c', text: 'La troisième' },
+      ],
+      unsent: [],
+    });
+    await settle();
+    assert.equal(composer?.state(), 'receipt');
+  });
+
+  it('gives a receipt: « 3 notes sent », where, each ticket with its link, and « Close »', async () => {
+    mount(async () => true, {
+      batch: batchOf({
+        count: () => 2,
+        sendAll: async () => ({
+          sent: [
+            { id: 'a', text: 'Une', identifier: 'WEB-1', url: 'https://linear.app/x/WEB-1' },
+            { id: 'b', text: 'Deux', identifier: 'WEB-2' },
+            { id: 'c', text: '<img src=x onerror=alert(1)>' },
+          ],
+          unsent: [],
+        }),
+      }),
+    });
+    composer?.open(ANCHOR);
+    sendButton().click();
+    await settle();
+    const receipt = q('[data-fruitback-receipt]');
+    assert.equal(receipt.hidden, false);
+    assert.equal(composer?.element.dataset.fruitbackState, 'receipt');
+    assert.equal(q('[data-fruitback-receipt-title]').textContent, '3 notes sent');
+    assert.equal(q('[data-fruitback-receipt-to]').textContent, 'Sent to the team');
+    const rows = [...receipt.querySelectorAll('[data-fruitback-receipt-row]')];
+    assert.deepEqual(
+      rows.map((row) => row.querySelector('.fruitback-composer-receipt-id')?.textContent),
+      ['WEB-1', 'WEB-2', 'Sent'],
+    );
+    assert.equal(rows[0]?.querySelector('a')?.getAttribute('href'), 'https://linear.app/x/WEB-1');
+    assert.equal(rows[1]?.querySelector('a'), null, 'a link to an issue the reader may not open');
+    assert.equal(receipt.querySelector('img'), null, 'a note was written as markup');
+    // The list is a region the keyboard reaches, named.
+    const region = q('[data-fruitback-receipt-region]');
+    assert.equal(region.getAttribute('role'), 'region');
+    assert.equal(region.getAttribute('tabindex'), '0');
+    assert.equal(region.getAttribute('aria-label'), 'Notes of this send');
+    assert.equal(q<HTMLButtonElement>('[data-fruitback-receipt-retry]').hidden, true);
+    assert.equal(
+      q<HTMLButtonElement>('[data-fruitback-receipt-all]').hidden,
+      true,
+      'a small batch fits in the receipt',
+    );
+    q<HTMLButtonElement>('[data-fruitback-receipt-close]').click();
+    assert.equal(composer?.element.hidden, true);
+  });
+
+  it('says « 2 sent, 1 not sent », keeps the text of the one that did not go, and sends it again', async () => {
+    let tries = 0;
+    let shown = 0;
+    mount(async () => true, {
+      batch: batchOf({
+        count: () => 2,
+        sendAll: async () => ({
+          sent: [
+            { id: 'a', text: 'Une', identifier: 'WEB-1' },
+            { id: 'b', text: 'Deux', identifier: 'WEB-2' },
+          ],
+          unsent: [{ id: 'c', text: 'La troisième, entière' }],
+          failure: 'wait',
+        }),
+        resend: async () => (
+          (tries += 1),
+          { sent: [{ id: 'c', text: 'La troisième, entière', identifier: 'WEB-3' }], unsent: [] }
+        ),
+        onShowAll: () => (shown += 1),
+      }),
+    });
+    composer?.open(ANCHOR);
+    sendButton().click();
+    await settle();
+    assert.equal(q('[data-fruitback-receipt-title]').textContent, '2 sent, 1 not sent');
+    assert.match(q('[data-fruitback-receipt-status]').textContent ?? '', /Too many notes just now/);
+    const unsent = q('[data-fruitback-receipt-row="unsent"]');
+    assert.equal(unsent.querySelector('.fruitback-composer-receipt-text')?.textContent, 'La troisième, entière');
+    assert.equal(unsent.querySelector('.fruitback-composer-receipt-id')?.textContent, 'Not sent');
+    assert.equal(unsent.querySelector('button')?.textContent, 'Copy text');
+    const retry = q<HTMLButtonElement>('[data-fruitback-receipt-retry]');
+    assert.equal(retry.hidden, false);
+    assert.equal(retry.textContent, 'Send again');
+
+    retry.click();
+    await settle();
+    assert.equal(tries, 1);
+    assert.equal(q('[data-fruitback-receipt-title]').textContent, '3 notes sent');
+    assert.equal(q('[data-fruitback-receipt-row="unsent"]'), null);
+    assert.equal(retry.hidden, true);
+    assert.equal(shown, 0);
+  });
+
+  it('offers « Show all in the sidebar » for a big batch, which closes the receipt and opens the list', async () => {
+    let shown = 0;
+    const many = Array.from({ length: 12 }, (_, n) => ({ id: `n${n}`, text: `Note ${n}`, identifier: `WEB-${n}` }));
+    mount(async () => true, {
+      batch: batchOf({
+        count: () => 11,
+        sendAll: async () => ({ sent: many, unsent: [] }),
+        onShowAll: () => (shown += 1),
+      }),
+    });
+    composer?.open(ANCHOR);
+    sendButton().click();
+    await settle();
+    assert.equal(q('[data-fruitback-receipt-title]').textContent, '12 notes sent');
+    const all = q<HTMLButtonElement>('[data-fruitback-receipt-all]');
+    assert.equal(all.hidden, false);
+    assert.equal(all.textContent, 'Show all in the sidebar');
+    all.click();
+    assert.equal(shown, 1);
+    assert.equal(composer?.element.hidden, true);
+  });
+
+  it('keeps the text in the field when the note with files that goes first fails', async () => {
+    mount(async () => true, {
+      batch: batchOf({
+        count: () => 1,
+        sendAll: async () => ({ sent: [], unsent: [], failure: 'retry', inField: true }),
+      }),
+    });
+    composer?.open(ANCHOR);
+    field().value = 'Avec un fichier';
+    sendButton().click();
+    await settle();
+    assert.equal(composer?.state(), 'failed');
+    assert.equal(field().value, 'Avec un fichier');
+    assert.match(failedText(), /Not sent/);
+  });
+
+  it('adds the note to the batch rather than send it, says so, and keeps the text when adding fails', async () => {
     const sent: string[] = [];
     const kept: string[] = [];
     let answer: true | SendFailure = 'retry';
     mount(async (note) => void sent.push(note), {
-      keep: { offered: () => true, onKeep: async (note) => (kept.push(note), answer) },
+      batch: batchOf({ add: async (note) => (kept.push(note), answer) }),
     });
     composer?.open(ANCHOR);
-    field().value = 'Pour plus tard';
+    field().value = 'Pour le lot';
 
     keepButton().click();
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await settle();
     assert.equal(composer?.state(), 'failed');
-    assert.equal(field().value, 'Pour plus tard');
+    assert.equal(field().value, 'Pour le lot');
 
     answer = true;
     keepButton().click();
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await settle();
     assert.equal(composer?.state(), 'kept');
-    assert.equal(statusText(), 'Kept for later');
+    assert.equal(statusText(), 'Added to the batch');
     assert.equal(sendButton().disabled, true);
     assert.equal(keepButton().disabled, true);
-    assert.deepEqual(kept, ['Pour plus tard', 'Pour plus tard']);
-    assert.deepEqual(sent, [], 'keeping a note sent it');
+    assert.deepEqual(kept, ['Pour le lot', 'Pour le lot']);
+    assert.deepEqual(sent, [], 'adding a note to the batch sent it');
   });
 });
 
