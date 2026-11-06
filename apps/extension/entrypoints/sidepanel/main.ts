@@ -545,11 +545,15 @@ async function sendReply(): Promise<void> {
   replying = { id: sending.id, text: sending.text, sending: true };
   draw();
   const { outcome } = await ask('reply', { note: sending.id, body: sending.text });
+  // The reader may have opened the reply of another note meanwhile: that field is theirs, and the
+  // answer of this send does not close it (review of #857).
+  const stillHere = replying?.id === sending.id;
   if (outcome === 'sent') {
-    replying = undefined;
+    if (stillHere) replying = undefined;
     // Only the text that went: a text typed for this note since the send stays (review of #857).
     if (replyTexts.get(sending.id) === sending.text) replyTexts.delete(sending.id);
     await readNotes();
+    if (!stillHere) return;
     // The field and « Send » are gone: the focus goes back to « Reply » of the same row, not to the
     // body of the page (raised in review).
     const row = app?.querySelector(`li[data-note="${CSS.escape(sending.id)}"]`);
@@ -559,7 +563,12 @@ async function sendReply(): Promise<void> {
 
     return;
   }
-  // Not sent: the text stays in the field, with why.
+  // Not sent: the text stays in its note, and in its field with why when that field is still open.
+  if (!stillHere) {
+    draw();
+
+    return;
+  }
   replying = { id: sending.id, text: sending.text, problem: REPLY_PROBLEM[outcome ?? 'retry'] };
   draw();
   document.querySelector<HTMLElement>('.panel-reply-field')?.focus();
