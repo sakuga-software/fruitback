@@ -149,7 +149,11 @@ describe('a read that carries statuses (FRU-364, FRU-370)', () => {
     );
 
     widget.showEveryNote();
-    assert.equal(root.querySelector('.fruitback-sidebar-status')?.textContent, 'Waiting for the client');
+    // The list says the stage first, then the tracker of the issue and its status (FRU-606).
+    assert.equal(
+      root.querySelector('.fruitback-sidebar-status')?.textContent,
+      'In progress · Linear: Waiting for the client',
+    );
     const drop = root.querySelector<HTMLElement>('.fruitback-sidebar-pin');
     assert.equal(drop?.style.getPropertyValue('--fruitback-sidebar-stage'), '#fde68a');
     // A light colour the team chose: the ink, computed.

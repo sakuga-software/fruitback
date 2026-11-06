@@ -22,3 +22,4 @@ export * from './site-notes.ts';
 export * from './source.ts';
 export * from './transport.ts';
 export * from './typography.ts';
+export * from './stage-ring.ts';

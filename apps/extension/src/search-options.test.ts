@@ -6,12 +6,10 @@ import type { PanelNote } from './protocol.ts';
 import {
   type SearchHandlers,
   type SearchState,
-  MAX_CHIPS,
+  STAGE_FILTERS,
   countsOf,
   matchesPage,
   noteLink,
-  statusFilter,
-  statusesOf,
 } from './search-options.ts';
 import { type PanelOptions, type PanelState, panelPage } from './side-panel.ts';
 import type { SiteNote } from './site-notes.ts';
@@ -66,9 +64,6 @@ function draw(search: Partial<SearchState> | undefined, notes: PanelState = on(N
     onSiteRetry: () => calls.push('site-retry'),
     onMore: () => calls.push('more'),
     onPins: (shown) => calls.push(`pins:${shown}`),
-    onStatus: (status) => calls.push(`status:${status ?? 'all'}`),
-    onStatusOpen: (open) => calls.push(`status-open:${open}`),
-    onStatusActive: (id) => calls.push(`status-active:${id}`),
   };
   const options: PanelOptions = {
     state: notes,
@@ -155,7 +150,7 @@ describe('« This page » (FRU-307)', () => {
         (chip) =>
           `${chip.querySelector('.search-chip-word')?.textContent} ${chip.querySelector('.search-chip-count')?.textContent} ${chip.getAttribute('aria-pressed')}`,
       ),
-      ['All 4 false', 'New 1 false', 'To do 1 false', 'In progress 2 true', 'Done 0 false'],
+      ['All 4 false', 'New 1 false', 'To do 1 false', 'In progress 2 true', 'Done 0 false', 'Closed 0 false'],
     );
     chips[2]?.click();
     assert.deepEqual(calls, ['stage:todo']);
@@ -268,7 +263,7 @@ describe('« Whole site » (FRU-307)', () => {
     const { root, calls } = draw({ scope: 'site', stage: 'done', site: { q: '', notes: SITE, total: 3 } });
     assert.deepEqual(rows(root), ['s3']);
     const counts = [...root.querySelectorAll('.search-chip-count')].map((count) => count.textContent);
-    assert.deepEqual(counts, ['3', '0', '1', '1', '1']);
+    assert.deepEqual(counts, ['3', '0', '1', '1', '1', '0']);
     root.querySelector<HTMLButtonElement>('.site-row .panel-row-head')?.click();
     assert.deepEqual(calls, ['site-note:s3']);
   });
@@ -321,7 +316,7 @@ describe('« Whole site » (FRU-307)', () => {
   });
 });
 
-describe('more than five statuses: a list in place of the chips (FRU-535)', () => {
+describe('the filter never changes its shape (FRU-606)', () => {
   /** Seven statuses of a tracker, Linear's: one note each, « In Review » twice. */
   const TEAM: [PanelNote['stage'], string, string][] = [
     ['new', 'Triage', '#e0f2fe'],
@@ -334,162 +329,54 @@ describe('more than five statuses: a list in place of the chips (FRU-535)', () =
   ];
   const statused: PanelNote[] = [
     ...TEAM.map(([stage, name, color], index) =>
-      note({ id: `s${index}`, number: index + 1, stage, status: { name, stage, color }, note: `Note ${name}` }),
+      note({ id: `s${index}`, number: index + 1, stage, status: { name, stage, color }, note: `Note ${index}` }),
     ),
-    note({ id: 'twice', number: 9, stage: 'progress', stateName: 'In Review', note: 'Note In Review again' }),
+    note({ id: 'twice', number: 9, stage: 'progress', stateName: 'In Review', tracker: 'Linear', note: 'Again' }),
   ];
+  const chips = (root: HTMLElement) => [...root.querySelectorAll('.search-chip')].map((chip) => chip.textContent);
 
-  it('keeps the chips up to five statuses', () => {
-    assert.equal(MAX_CHIPS, 5);
-    const { root } = draw({}, on(statused.slice(0, 5)));
+  it('is All and the five stages, with seven statuses as with none', () => {
+    assert.deepEqual(STAGE_FILTERS, ['all', 'new', 'todo', 'progress', 'done', 'closed']);
+    const seven = draw({}, on(statused)).root;
+    const none = draw({}, on(statused.map(({ status: _status, ...plain }) => plain))).root;
 
-    assert.equal(root.querySelectorAll('button.search-chip').length, 5);
-    assert.equal(root.querySelector('.search-status'), null);
-  });
-
-  it('draws « Status · All · {count} » and no chip beyond five', () => {
-    const { root, calls } = draw({}, on(statused));
-
-    assert.equal(root.querySelectorAll('button.search-chip').length, 0);
-    const trigger = root.querySelector<HTMLButtonElement>('.search-status button.kit-select-trigger');
-    assert.equal(trigger?.textContent?.includes('Status · All · 8'), true);
-    trigger?.click();
-    const options = [...root.querySelectorAll('.search-status [role="option"]')];
-    // Each status of the team, in the order of the stages, with its colour and its number of notes.
+    assert.deepEqual(chips(seven), ['All8', 'New1', 'To do2', 'In progress3', 'Done1', 'Closed1']);
+    assert.deepEqual(chips(none), chips(seven));
+    assert.equal(seven.querySelector('[role="listbox"]'), null, 'no list of the statuses any more');
+    // Each chip of a stage carries the round of its stage.
     assert.deepEqual(
-      options.map((option) => option.textContent),
-      ['All8', 'Triage1', 'Backlog1', 'Ready1', 'In Progress1', 'In Review2', 'Done1', 'Canceled1'],
+      [...seven.querySelectorAll<SVGElement>('.search-chip .kit-stage-ring')].map((ring) => ring.dataset.stage),
+      ['new', 'todo', 'progress', 'done', 'closed'],
     );
-    assert.equal(options[5]?.querySelector<HTMLElement>('.kit-drop')?.style.background, '#7c3aed');
-    (options[5] as HTMLElement | undefined)?.click();
-    assert.deepEqual(calls, ['status-open:true', 'status-open:false', 'status:name:In Review']);
   });
 
-  it('lists the notes of the status chosen, and says it on its button', () => {
-    const { root } = draw({ status: 'name:In Review' }, on(statused));
+  it('finds the state of a tracker by the search: the name of a status, or the word of the store', () => {
+    const { root } = draw({ q: 'in review' }, on(statused));
 
     assert.deepEqual(rows(root), ['s4', 'twice']);
-    assert.equal(
-      root.querySelector('.search-status .kit-select-trigger')?.textContent?.includes('Status · In Review · 2'),
-      true,
-    );
+    assert.deepEqual(chips(root), ['All2', 'New0', 'To do0', 'In progress2', 'Done0', 'Closed0']);
   });
 
-  it('keeps the list, and the status chosen, when the search finds five statuses or fewer (review of #730)', () => {
-    // « In » finds three statuses: the list stays, with every status of the page, and still filters.
-    const { root } = draw({ status: 'name:In Review', q: 'In' }, on(statused));
-
-    assert.equal(root.querySelectorAll('button.search-chip').length, 0);
-    assert.deepEqual(rows(root), ['s4', 'twice']);
-    assert.equal(
-      root.querySelector('.search-status .kit-select-trigger')?.textContent?.includes('Status · In Review · 2'),
-      true,
-    );
-    root.querySelector<HTMLButtonElement>('.search-status .kit-select-trigger')?.click();
-    assert.deepEqual(
-      [...root.querySelectorAll('.search-status [role="option"]')].map((option) => option.textContent),
-      ['All3', 'Triage0', 'Backlog0', 'Ready0', 'In Progress1', 'In Review2', 'Done0', 'Canceled0'],
-    );
-  });
-
-  it('keeps the option the keyboard is on when the panel draws again between two arrows (review of #730)', () => {
-    // The panel as `main.ts` holds it: its state, and a draw that builds the page again from it.
-    let state: SearchState = { scope: 'page', q: '', stage: 'all', pinsShown: true };
-    const chosen: (string | undefined)[] = [];
-    const document = page();
-    const handlers: SearchHandlers = {
-      onScope: () => undefined,
-      onQuery: () => undefined,
-      onStage: () => undefined,
-      onSiteNote: () => undefined,
-      onSiteRetry: () => undefined,
-      onMore: () => undefined,
-      onPins: () => undefined,
-      onStatus: (status) => void chosen.push(status),
-      onStatusOpen: (open) => {
-        const { statusActive: _active, ...rest } = state;
-        state = { ...rest, statusOpen: open };
-      },
-      onStatusActive: (id) => {
-        state = { ...state, statusActive: id };
-      },
-    };
-    const draw = (): void => {
-      const root = panelPage(document, {
-        state: on(statused),
-        tab: 'open',
-        now: NOW,
-        onClose: () => {},
-        onLeave: () => {},
-        onTab: () => {},
-        onToggle: () => {},
-        onShow: () => {},
-        onReplyOpen: () => {},
-        onReplyInput: () => {},
-        onReplySend: () => {},
-        onReplyCancel: () => {},
-        onRetry: () => {},
-        onReload: () => {},
-        onSettings: () => {},
-        onVerdict: () => {},
-        onSearch: () => {},
-        search: { state, handlers },
-      });
-      document.body.replaceChildren(root);
-    };
-    const key = (name: string): void => {
-      document
-        .querySelector('.search-status [role="listbox"]')
-        ?.dispatchEvent(
-          new document.defaultView!.KeyboardEvent('keydown', { key: name, bubbles: true }) as unknown as Event,
-        );
-    };
-    draw();
-    document.querySelector<HTMLButtonElement>('.search-status .kit-select-trigger')?.click();
-    key('ArrowDown');
-    // The widget read the page again: the panel draws, the list stays open.
-    draw();
-    key('ArrowDown');
-    key('Enter');
-
-    // All → Triage → Backlog: the second arrow goes on from Triage, not from All.
-    assert.deepEqual(chosen, ['name:Backlog']);
-  });
-
-  it('is drawn open over the notes when the panel kept it open', () => {
-    const { root } = draw({ statusOpen: true }, on(statused));
-
-    assert.notEqual(root.querySelector('.search-status [role="listbox"]'), null);
-    // The list is in the options, before the notes: the sheet lays it over them (`kit.css`).
-    assert.equal(root.querySelector('.panel-notes [role="listbox"]'), null);
-  });
-
-  it('counts a status by its name, and a note with none by its stage', () => {
-    assert.deepEqual(
-      statusesOf([
-        { stage: 'progress', stateName: 'In Review' },
-        { stage: 'progress', status: { name: 'In Review', stage: 'progress' } },
-        { stage: 'progress' },
-      ]).map((status) => `${status.key} ${status.word} ${status.count}`),
-      ['stage:progress In progress 1', 'name:In Review In Review 2'],
-    );
-  });
-
-  it('keeps every note for a status no note wears any more, as its button says « All »', () => {
-    const keeps = statusFilter({ scope: 'page', q: '', stage: 'all', pinsShown: true, status: 'name:Gone' }, statused);
-
-    assert.equal(statused.filter(keeps).length, statused.length);
-  });
-
-  it('keeps the chips for the whole site, whose notes say their stage only', () => {
+  it('filters the whole site by its stage too', () => {
     const notes = TEAM.map(([stage], index) => siteNote({ note: `n${index}`, stage }));
-    const keeps = statusFilter({ scope: 'site', q: '', stage: 'progress', pinsShown: true }, notes);
+    const { root } = draw(
+      { scope: 'site', stage: 'progress', site: { q: '', notes, total: notes.length } },
+      on(statused),
+    );
 
-    assert.ok(statusesOf(notes).length <= MAX_CHIPS);
     assert.deepEqual(
-      notes.filter(keeps).map((each) => each.note),
+      [...root.querySelectorAll<HTMLElement>('.site-row')].map((row) => row.dataset.note),
       ['n3', 'n4'],
     );
+  });
+
+  it('says the stage first and the tracker second on a row (FRU-606)', () => {
+    const { root } = draw(undefined, on(statused));
+    const meta = (id: string) => root.querySelector(`li[data-note="${id}"] .panel-row-stage`)?.textContent;
+
+    assert.equal(meta('twice'), 'In progress · Linear: In Review');
+    assert.equal(meta('s1'), 'To do · Backlog');
+    assert.equal(meta('s5'), undefined, 'in Done, not in Open');
   });
 });
 
@@ -503,13 +390,14 @@ describe('noteLink (FRU-434)', () => {
 });
 
 describe('the helpers of the search (FRU-307)', () => {
-  it('counts every note in All, and Closed in no chip of its own', () => {
+  it('counts every note in All, and each stage in its chip, Closed too (FRU-606)', () => {
     assert.deepEqual(countsOf([{ stage: 'closed' }, { stage: 'done' }, { stage: 'done' }]), {
       all: 3,
       new: 0,
       todo: 0,
       progress: 0,
       done: 2,
+      closed: 1,
     });
   });
 

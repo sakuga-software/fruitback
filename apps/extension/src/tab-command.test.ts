@@ -245,6 +245,10 @@ describe('the commands of the side panel (FRU-299)', () => {
       { ...NOTE, checked: { by: 'Camille', at: '2026-10-20T10:00:00Z' } },
     ]);
     assert.deepEqual(parsePanelNotes([{ ...NOTE, checked: { by: 'Camille' } }]), [NOTE]);
+    // FRU-606: a tracker is one that `trackerOf` names, or nothing. The page writes in this world.
+    assert.deepEqual(parsePanelNotes([{ ...NOTE, tracker: 'Linear' }]), [{ ...NOTE, tracker: 'Linear' }]);
+    assert.deepEqual(parsePanelNotes([{ ...NOTE, tracker: 'GitHub' }]), [{ ...NOTE, tracker: 'GitHub' }]);
+    assert.deepEqual(parsePanelNotes([{ ...NOTE, tracker: 'Linear: <b>owned</b>' }]), [NOTE]);
     // `mine` is `true` or nothing.
     const { mine: _mine, ...notMine } = NOTE;
     assert.deepEqual(parsePanelNotes([{ ...NOTE, mine: 'yes' }]), [notMine]);

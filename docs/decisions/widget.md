@@ -1570,12 +1570,16 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
   - **« Search and options »**, the magnifier of the head (FRU-606), as in the side panel: it opens the
     scope, the search and the chips below, and one filtered list stands in for the tabs. Closing it
     gives the tabs back, with no words, every status and « This page ».
-  - **The chips of the statuses replace the tabs of FRU-259**, inside « Search and options »: « All », « New », « To do », « In
-    progress », « Done », each with its number, `aria-pressed`, one at a time. « Closed » is not on
-    the board: its chip shows while a note of the page is closed. The numbers count what the search
-    found, and what the overlay draws: a stage the reporter hid in the settings is in no chip, like
-    the copied text. The detached notes are in no number: they have their own, at the bottom.
-  - **A row of the board**: the drop of the pin (24 px, its number in white), « {Status} · {ID} … {when} »,
+  - **The chips of the statuses replace the tabs of FRU-259**, inside « Search and options »:
+    « All », « New », « To do », « In progress », « Done » and « Closed », each with the round of its
+    stage and its number, `aria-pressed`, one at a time. The five stages are always there (FRU-606):
+    the filter never changes its shape. The numbers count what the search found, and what the
+    overlay draws: a stage the reporter hid in the settings is in no chip, like the copied text. The
+    detached notes are in no number: they have their own, at the bottom. The search finds the name of
+    a status and the word of a tracker too.
+  - **A row of the board**: the drop of the pin (24 px, its number in white), the round of its stage
+    (`createStageRing`, FRU-606), « {Stage} · {Tracker}: {Status} · {ID} … {when} » (the stage of
+    Fruitback first, the tracker second: `listLabel`; the tracker is read off the address of the issue),
     the note cut at two lines, and « {who} · {n} replies » or « no reply », then « Approximate
     position » when it is the case.
   - **« further down »** when the top of the frame of the note is under the bottom of the window

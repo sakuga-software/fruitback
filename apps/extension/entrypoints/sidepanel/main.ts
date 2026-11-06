@@ -481,24 +481,6 @@ const searchHandlers: SearchHandlers = {
     search = { ...search, stage };
     draw();
   },
-  // FRU-535: the list of more than five statuses. The list closed itself and gave the focus back to
-  // its button before this draw, which puts it back on the new one.
-  onStatus: (status: string | undefined) => {
-    if (search === undefined) return;
-    const { status: _before, statusActive: _active, ...rest } = search;
-    search = { ...rest, statusOpen: false, ...(status === undefined ? {} : { status }) };
-    draw();
-  },
-  onStatusOpen: (open: boolean) => {
-    if (search === undefined) return;
-    // A list opened again starts on the option selected.
-    const { statusActive: _active, ...rest } = search;
-    search = { ...rest, statusOpen: open };
-  },
-  // The option the keyboard is on: a draw while the list is open puts it back (review of #730).
-  onStatusActive: (id: string) => {
-    if (search !== undefined) search = { ...search, statusActive: id };
-  },
   onSiteNote: (note) => void openSiteNote(note),
   onSiteRetry: () => void readWholeSite(),
   onMore: () => void readWholeSite(true),

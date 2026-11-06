@@ -684,8 +684,11 @@ holds `http://127.0.0.1/*`; a page of `http://127.0.0.1` with no rule, the panel
 - **A site that embeds its own widget (team mode with no mount) has no list in the panel.** That
   widget is the site's, and answers the extension nothing: the panel says that its notes are in its
   own list on the page, rather than wait for them and report a failed read.
-- **A row says the status of its note, in its colour** (FRU-370): the name of the status, then the word
-  of the store, then the word of the stage, and the drop in the colour the team chose. « Open » and
+- **A row says the stage first and the tracker second** (FRU-606): « In progress · Linear: In Review »,
+  after the round of the stage, which fills as a note moves on (`createStageRing` of the widget), and
+  the drop in the colour the team chose (FRU-370). The name of a status follows always; the word of the
+  store only when the widget named the tracker of the issue (`tracker`, read off its address: one of
+  `TRACKER_NAMES`, or nothing). « Open » and
   « Done » stay by stage. See [statuses.md](statuses.md), « What the widget draws ».
 - **A note holds one line in a list, cut with « … »** (FRU-534): a closed row of « Open » and
   « Done », « To check », the rows of « Search and options » on the page and on the whole
@@ -716,17 +719,13 @@ holds `http://127.0.0.1/*`; a page of `http://127.0.0.1` with no rule, the panel
 
 - **Behind the magnifier of the head** (`ExtSidebar`), the controls of the board « Sidebar mode »:
   the scope « This page · {n} » / « Whole site · {n} », « Search notes », the chips All, New, To do,
-  In progress and Done with their counts (`aria-pressed`), and « Show pins on the page » at the foot.
+  In progress, Done and Closed with their counts (`aria-pressed`), and « Show pins on the page » at the foot.
   `src/search-options.ts` draws them, with no `browser`.
-- **Beyond five statuses, the chips become a list** (FRU-535): a team's own statuses (Linear's
-  « In Review », FRU-370) can make more than `MAX_CHIPS`. Then « Status · {choice} · {count} » opens
-  `listSelect` of the kit: « All », then each status with the drop in its colour, its name and its
-  number of notes, in the order of the stages. It filters by the status, by its name, where the chips
-  filter by stage. The list lies over the notes and pushes nothing (`position: absolute`). It is a
-  `listbox`, never a native `select`: the arrows, Home and End move, Enter and Space choose, Escape
-  and Tab close, the focus goes back to its button, and a click outside closes it. The panel keeps it
-  open across a draw (`statusOpen`), on the option the keyboard is on (`statusActive`). « Whole site » reads the stage of a note only (FRU-306), so it
-  never has more than five, and keeps its chips.
+- **The filter never changes its shape** (FRU-606): All and the five stages, Closed too, whatever
+  the statuses of a team. The list of FRU-535, which took the place of the chips beyond five statuses,
+  is gone: a filter whose controls change with the data of the site is one a reader has to learn
+  again on each site. The name of a status and the word of a tracker (Linear's « In Review ») are
+  found by the search instead (`matchesPage`). « Whole site » filters by the stage too.
 - **While it is open, one list stands in for the tabs**: the chips do what
   Open and Done did. Closing it gives the panel of FRU-299 and FRU-300 back as it was.
 - **« This page » filters the notes the widget read**: every word of the search in the whole text of
