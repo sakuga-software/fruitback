@@ -517,26 +517,12 @@ export const STYLES = `
   .fruitback-thread-reply-field { font-size: 16px; }
   .fruitback-thread-reply-send { min-height: 44px; }
 }
-/* FRU-603: a note the team marked done, and the verdict of its author. */
-.fruitback-thread-done {
-  margin: 0;
-  padding: 10px 16px 0;
-  font: 600 12px/1.5 var(--fruitback-font-sans);
-  color: var(--fruitback-color-text-muted);
-  overflow-wrap: anywhere;
-}
-.fruitback-thread-check {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 12px 16px 14px;
-  border-top: 1px solid var(--fruitback-color-border);
-}
-.fruitback-thread-check-ask { margin: 0; font: 600 13px/1.4 var(--fruitback-font-sans); color: var(--fruitback-color-text); }
+/* FRU-603: a note the team marked done, and the verdict of its author. Its field and « Send » are the edit's. */
+.fruitback-thread-done { margin: 0; padding: 10px 16px 0; font: 600 12px/1.5 var(--fruitback-font-sans); color: var(--fruitback-color-text-muted); }
+.fruitback-thread-check { display: flex; flex-direction: column; gap: 10px; padding: 12px 16px 14px; border-top: 1px solid var(--fruitback-color-border); }
+.fruitback-thread-check-ask { margin: 0; font: 600 13px/1.4 var(--fruitback-font-sans); }
 .fruitback-thread-check-actions, .fruitback-thread-check-form-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .fruitback-thread-check-fixed, .fruitback-thread-check-wrong, .fruitback-thread-check-cancel {
-  display: inline-flex;
-  align-items: center;
   height: 32px;
   padding: 0 14px;
   border: 1px solid var(--fruitback-color-border-strong);
@@ -546,55 +532,14 @@ export const STYLES = `
   font: 600 13px/1 var(--fruitback-font-sans);
   cursor: pointer;
 }
-.fruitback-thread-check-fixed:hover:not([disabled]), .fruitback-thread-check-wrong:hover:not([disabled]),
-.fruitback-thread-check-cancel:hover:not([disabled]) { background: var(--fruitback-color-surface-sunken); }
-.fruitback-thread-check-wrong[aria-expanded='true'] { background: var(--fruitback-color-surface-sunken); }
-.fruitback-thread-check-send {
-  display: inline-flex;
-  align-items: center;
-  height: 32px;
-  padding: 0 14px;
-  border: 0;
-  border-radius: var(--fruitback-radius-pill);
-  background: var(--fruitback-color-accent);
-  color: var(--fruitback-color-on-accent);
-  font: 600 13px/1 var(--fruitback-font-sans);
-  cursor: pointer;
-}
-.fruitback-thread-check-send:hover:not([disabled]) { background: var(--fruitback-color-accent-strong); }
+.fruitback-thread-check button:hover:not([disabled]), .fruitback-thread-check-wrong[aria-expanded='true'] { background: var(--fruitback-color-surface-sunken); }
+.fruitback-thread-check .fruitback-thread-edit-save:hover:not([disabled]) { background: var(--fruitback-color-accent-strong); }
 .fruitback-thread-check [disabled] { opacity: 0.55; cursor: default; }
-.fruitback-thread-check button:focus-visible {
-  outline: 2px solid var(--fruitback-color-accent);
-  outline-offset: 2px;
-}
-.fruitback-thread-check-form { display: flex; flex-direction: column; gap: 8px; }
-.fruitback-thread-check-field {
-  min-height: 56px;
-  max-height: 160px;
-  resize: vertical;
-  field-sizing: content;
-  border: 1px solid var(--fruitback-color-border-strong);
-  border-radius: var(--fruitback-radius-field);
-  padding: 7px 10px;
-  font: 14px/1.5 var(--fruitback-font-sans);
-  background: var(--fruitback-color-surface);
-  color: inherit;
-  caret-color: var(--fruitback-color-accent);
-}
-.fruitback-thread-check-field:focus-visible { outline: 2px solid var(--fruitback-color-accent); outline-offset: 1px; }
-.fruitback-thread-check-status { font-size: 12px; color: var(--fruitback-color-text-muted); }
+.fruitback-thread-check button:focus-visible { outline: 2px solid var(--fruitback-color-accent); outline-offset: 2px; }
+.fruitback-thread-check-status, .fruitback-thread-check-said { margin: 0; font-size: 12px; color: var(--fruitback-color-text-muted); }
 .fruitback-thread-check-status:empty { display: none; }
-.fruitback-thread-check-said {
-  margin: 0;
-  padding: 10px 16px 12px;
-  border-top: 1px solid var(--fruitback-color-border);
-  font-size: 12px;
-  color: var(--fruitback-color-text-muted);
-}
-.fruitback-thread-check-said:focus { outline: none; }
+.fruitback-thread-check-said { padding: 10px 16px 12px; border-top: 1px solid var(--fruitback-color-border); outline: none; }
 @media (pointer: coarse) {
-  .fruitback-thread-check-field { font-size: 16px; }
-  .fruitback-thread-check-fixed, .fruitback-thread-check-wrong, .fruitback-thread-check-send,
-  .fruitback-thread-check-cancel { min-height: 44px; }
+  .fruitback-thread-check button { min-height: 44px; }
 }
 `;

@@ -599,8 +599,9 @@ export function init(options: FruitbackOptions): Fruitback {
           check: {
             send: async (issue: NoteIssue, verdict: 'fixed' | 'wrong', body?: string) => {
               const answer = await sendCheck(options, view, issue, verdict, body);
-              // Kept, with no word of what the store made of it: the next read says it.
-              if (answer === 'kept') await read();
+              // Kept with no word of what the store made of it: no read here, which would close the
+              // thread (raised in review). The lists outside the page read again; the pins at the next read.
+              if (answer === 'kept') tellNotes({ kind: 'list' });
               if (typeof answer === 'string') return answer;
               sidebar.refresh();
               tellNotes({ kind: 'list' });

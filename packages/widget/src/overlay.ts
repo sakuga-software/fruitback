@@ -188,7 +188,7 @@ export type CheckFailure = ReplyFailure | 'refused';
 
 /** A seam like `ReplySeam` (FRU-603): `send` answers what the store kept of the verdict. */
 export type CheckSeam = {
-  /** `kept`: the store took it and said nothing of it; the host reads the notes again. */
+  /** `kept`: the store took it and said nothing of it; the next read says where the note is. */
   send(issue: NoteIssue, verdict: CheckVerdict, body?: string): Promise<CheckAnswer | CheckFailure | 'kept'>;
 };
 
@@ -730,6 +730,8 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     // A copy: `refilter` draws from this later, and a caller who keeps mutating the array they
     // passed would otherwise change what is on screen with no render of their own.
     source = [...issues];
+    // A read says where each note is now: a verdict answered with no word is asked again if it must be.
+    checkAnswered.clear();
     draw();
   }
 
@@ -923,6 +925,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
   // FRU-603: the verdict of the author outlives its thread too. `checkWriting` holds the notes whose
   // field « What is still wrong? » is open.
   const checkWriting = new Set<string>();
+  const checkAnswered = new Set<string>();
   const checkTexts = new Map<string, string>();
   const checksInFlight = new Map<string, CheckVerdict>();
   const checkSaid = new Map<string, string>();
@@ -962,6 +965,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
       ? undefined
       : {
           seam: options.check,
+          answered: checkAnswered,
           writing: checkWriting,
           texts: checkTexts,
           inFlight: checksInFlight,
@@ -1734,6 +1738,8 @@ type CheckFocus = 'field' | 'wrong' | 'said' | 'close';
 /** What the verdicts of the notes share, by note, as `ReplyFooter` (FRU-603). */
 type CheckFooter = {
   seam: CheckSeam;
+  /** Answered, and the store said nothing of what it made of it: asked no more until a read. */
+  answered: Set<string>;
   writing: Set<string>;
   texts: Map<string, string>;
   inFlight: Map<string, CheckVerdict>;
@@ -1742,9 +1748,10 @@ type CheckFooter = {
 };
 
 const CHECK_FAILURES = {
-  retry: 'check.failed',
-  wait: 'check.failedWait',
-  'signed-out': 'check.failedSignedOut',
+  // The words of a reply that did not go: the text and its cause are the same.
+  retry: 'reply.failed',
+  wait: 'reply.failedWait',
+  'signed-out': 'reply.failedSignedOut',
   refused: 'check.refused',
 } as const;
 
@@ -1797,7 +1804,7 @@ function doneLine(document: Document, issue: NoteIssue, t: Translator): HTMLElem
  */
 function checkBlock(document: Document, issue: NoteIssue, t: Translator, check: CheckFooter): HTMLElement[] {
   const said = check.said.get(issue.id);
-  if (!checkOffered(issue)) {
+  if (!checkOffered(issue) || check.answered.has(issue.id)) {
     // The answer of a verdict the store kept, said once in the thread it was given in.
     if (said === undefined) return [];
     const line = element(document, 'p', 'fruitback-thread-check-said', said);
@@ -1818,7 +1825,7 @@ function checkBlock(document: Document, issue: NoteIssue, t: Translator, check: 
   const fixed = document.createElement('button');
   fixed.type = 'button';
   fixed.className = 'fruitback-thread-check-fixed';
-  fixed.textContent = sending === 'fixed' ? t.text('check.sending') : t.text('check.fixed');
+  fixed.textContent = sending === 'fixed' ? t.text('reply.sending') : t.text('check.fixed');
   const wrong = document.createElement('button');
   wrong.type = 'button';
   wrong.className = 'fruitback-thread-check-wrong';
@@ -1834,7 +1841,7 @@ function checkBlock(document: Document, issue: NoteIssue, t: Translator, check: 
   status.className = 'fruitback-thread-check-status';
   status.setAttribute('role', 'status');
   status.setAttribute('aria-live', 'polite');
-  status.textContent = sending === undefined ? (said ?? '') : t.text('check.sending');
+  status.textContent = sending === undefined ? (said ?? '') : t.text('reply.sending');
 
   const send = (verdict: CheckVerdict, body?: string): void => {
     if (check.inFlight.has(issue.id)) return;
@@ -1847,9 +1854,13 @@ function checkBlock(document: Document, issue: NoteIssue, t: Translator, check: 
       .then((answer) => {
         check.inFlight.delete(issue.id);
         if (answer === 'kept') {
+          // Kept, and the worker said nothing of it: no read, which would close this thread. The
+          // question goes, and the next read says where the note is.
+          check.answered.add(issue.id);
           check.writing.delete(issue.id);
           check.texts.delete(issue.id);
-          check.settled(issue, 'close');
+          check.said.set(issue.id, t.text(verdict === 'fixed' ? 'check.sentFixed' : 'check.sentWrong'));
+          check.settled(issue, 'said');
 
           return;
         }
@@ -1881,9 +1892,9 @@ function checkBlock(document: Document, issue: NoteIssue, t: Translator, check: 
   block.append(ask, actions);
   if (writing) {
     const form = document.createElement('form');
-    form.className = 'fruitback-thread-check-form';
+    form.className = 'fruitback-thread-edit-form fruitback-thread-check-form';
     const field = document.createElement('textarea');
-    field.className = 'fruitback-thread-check-field';
+    field.className = 'fruitback-thread-edit-field fruitback-thread-check-field';
     field.rows = 2;
     field.setAttribute('aria-label', t.text('check.wrongLabel'));
     field.placeholder = t.text('check.wrongLabel');
@@ -1891,15 +1902,15 @@ function checkBlock(document: Document, issue: NoteIssue, t: Translator, check: 
     field.readOnly = sending !== undefined;
     const submit = document.createElement('button');
     submit.type = 'submit';
-    submit.className = 'fruitback-thread-check-send';
-    submit.textContent = t.text('check.send');
+    submit.className = 'fruitback-thread-edit-save fruitback-thread-check-send';
+    submit.textContent = t.text('reply.send');
     // The visible word is in the name: « Send » of a reply and of the composer can be on screen too.
     submit.setAttribute('aria-label', t.text('check.sendLabel'));
     submit.disabled = sending !== undefined;
     const cancel = document.createElement('button');
     cancel.type = 'button';
     cancel.className = 'fruitback-thread-check-cancel';
-    cancel.textContent = t.text('check.cancel');
+    cancel.textContent = t.text('edit.cancel');
     cancel.disabled = sending !== undefined;
     field.addEventListener('input', () => {
       check.texts.set(issue.id, field.value);

@@ -212,16 +212,10 @@ export const ENGLISH = {
   'check.fixed': 'Looks fixed',
   'check.wrong': 'Still wrong',
   'check.wrongLabel': 'What is still wrong?',
-  'check.send': 'Send',
   // The visible word is in the name: « Send » of a reply and of the composer can be on screen too.
   'check.sendLabel': 'Send: still wrong',
-  'check.cancel': 'Cancel',
-  'check.sending': 'Sending…',
   'check.sentFixed': 'Thank you. The team knows it looks fixed.',
   'check.sentWrong': 'Sent. The note is open again.',
-  'check.failed': 'Not sent. Your text is still here. Try again.',
-  'check.failedWait': 'Too many requests just now. Your text is still here. Send it again in a minute.',
-  'check.failedSignedOut': 'Your session has ended. Your text is still here. Sign in again, then send it.',
   'check.refused': 'Fruitback did not take this answer: the note may have moved. Reload the page to see where it is.',
   /** The replies the worker writes for a verdict (FRU-294), in the words of the reader. */
   'thread.checkedFixed': 'Checked: looks fixed',
