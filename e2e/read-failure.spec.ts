@@ -70,6 +70,7 @@ for (const [name, fail] of Object.entries(failures)) {
       'To do',
       'In progress',
       'Done',
+      'Closed',
     ]);
 
     // The control: the same page, with a worker that answers an empty list, shows the empty state.

@@ -456,9 +456,6 @@ function panelStates(): GalleryState[] {
     onScope: nothing,
     onQuery: nothing,
     onStage: nothing,
-    onStatus: nothing,
-    onStatusOpen: nothing,
-    onStatusActive: nothing,
     onSiteNote: nothing,
     onSiteRetry: nothing,
     onMore: nothing,
@@ -506,21 +503,14 @@ function panelStates(): GalleryState[] {
     },
     {
       id: 'search-statuses',
-      title: 'Search and options · seven statuses, the list closed',
+      title: 'Search and options · seven statuses, the five chips',
       build: panel(onWith(STATUSED), { search: { state: search, handlers: searchHandlers } }),
     },
     {
-      id: 'search-statuses-open',
-      title: 'Search and options · seven statuses, the list open',
+      id: 'search-status-searched',
+      title: 'Search and options · « In Review » found by the search',
       build: panel(onWith(STATUSED), {
-        search: { state: { ...search, statusOpen: true }, handlers: searchHandlers },
-      }),
-    },
-    {
-      id: 'search-status-chosen',
-      title: 'Search and options · seven statuses, « In Review » chosen',
-      build: panel(onWith(STATUSED), {
-        search: { state: { ...search, status: 'name:In Review' }, handlers: searchHandlers },
+        search: { state: { ...search, q: 'In Review' }, handlers: searchHandlers },
       }),
     },
   ];

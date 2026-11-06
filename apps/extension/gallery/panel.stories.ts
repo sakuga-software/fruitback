@@ -21,14 +21,10 @@ export const Replying: StoryObj = { name: 'Open notes · a reply being written',
 export const Finished: StoryObj = { name: 'Finished notes', ...stateStory('panel', 'finished') };
 export const Search: StoryObj = { name: 'Search and options', ...stateStory('panel', 'search') };
 export const SearchStatuses: StoryObj = {
-  name: 'Search and options · seven statuses, the list closed',
+  name: 'Search and options · seven statuses, the five chips',
   ...stateStory('panel', 'search-statuses'),
 };
-export const SearchStatusesOpen: StoryObj = {
-  name: 'Search and options · seven statuses, the list open',
-  ...stateStory('panel', 'search-statuses-open'),
-};
-export const SearchStatusChosen: StoryObj = {
-  name: 'Search and options · seven statuses, « In Review » chosen',
-  ...stateStory('panel', 'search-status-chosen'),
+export const SearchStatusSearched: StoryObj = {
+  name: 'Search and options · « In Review » found by the search',
+  ...stateStory('panel', 'search-status-searched'),
 };

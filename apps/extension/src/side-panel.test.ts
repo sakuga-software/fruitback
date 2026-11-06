@@ -395,14 +395,25 @@ describe('the page of the panel (FRU-296, FRU-299)', () => {
         stage: 'progress',
         status: { stage: 'progress', name: 'Waiting for the client', color: '#fef9c3' },
       }),
-      note({ id: 'q', number: 2, stage: 'todo', stateName: 'Backlog' }),
+      note({ id: 'q', number: 2, stage: 'todo', stateName: 'Backlog', tracker: 'Linear' }),
+      note({ id: 'r', number: 3, stage: 'todo', stateName: 'Backlog' }),
     ];
     const root = panelPage(page(), { ...handlers(), state: on(notes), tab: 'open' });
     const painted = root.querySelector<HTMLElement>('li[data-note="p"] .kit-drop');
     const plain = root.querySelector<HTMLElement>('li[data-note="q"] .kit-drop');
 
-    assert.equal(root.querySelector('li[data-note="p"] .panel-row-stage')?.textContent, 'Waiting for the client');
-    assert.equal(root.querySelector('li[data-note="q"] .panel-row-stage')?.textContent, 'Backlog');
+    // The stage first, then the status of the team or the word of the tracker (FRU-606). The word of a
+    // store the widget did not name is left out: « À faire · To do » would say the stage twice.
+    assert.equal(
+      root.querySelector('li[data-note="p"] .panel-row-stage')?.textContent,
+      'In progress · Waiting for the client',
+    );
+    assert.equal(root.querySelector('li[data-note="q"] .panel-row-stage')?.textContent, 'To do · Linear: Backlog');
+    assert.equal(root.querySelector('li[data-note="r"] .panel-row-stage')?.textContent, 'To do');
+    // The round of the stage, half full for « In progress », in the colour of the status.
+    const ring = root.querySelector<SVGElement>('li[data-note="p"] .kit-stage-ring');
+    assert.equal(ring?.dataset.stage, 'progress');
+    assert.equal(ring?.style.color, '#fef9c3');
     assert.equal(painted?.style.background, '#fef9c3');
     assert.equal(painted?.style.getPropertyValue('--drop-on'), '#18181b');
     // The stage stays on the drop, and a note with no colour keeps the class of its stage.
@@ -440,9 +451,6 @@ describe('the page of the panel (FRU-296, FRU-299)', () => {
           onSiteRetry: () => undefined,
           onMore: () => undefined,
           onPins: () => undefined,
-          onStatus: () => undefined,
-          onStatusOpen: () => undefined,
-          onStatusActive: () => undefined,
         },
       },
     });

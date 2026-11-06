@@ -5,6 +5,8 @@ import {
   offeredStages,
   offeredStatuses,
   statusOf,
+  trackerOf,
+  type TrackerName,
   type Note,
   type NoteComment,
   type NoteIssue,
@@ -401,6 +403,8 @@ export type PageNote = {
    * writes the word of the stage.
    */
   stateName?: string;
+  /** The tracker of its issue, by its address (FRU-606): « Linear », « GitHub », or left out. */
+  tracker?: TrackerName;
   /**
    * Its status, from the `statuses` of the read (FRU-370): its name and the colours a team chose. Always
    * of the note's stage. Left out, the note is drawn by its stage. A colour is `#rrggbb`, as
@@ -423,6 +427,13 @@ export type PageNote = {
   canReply: boolean;
   placement: FeedbackPlacement;
 };
+
+/** The tracker of an issue for a list outside the page, or nothing (FRU-606). The read is cast, not parsed. */
+function trackerPart(url: unknown): { tracker?: TrackerName } {
+  const tracker = typeof url === 'string' ? trackerOf(url) : undefined;
+
+  return tracker === undefined ? {} : { tracker };
+}
 
 /** What changed for a list outside the page: the notes, or the note opened on the page. */
 export type NotesChange = { kind: 'list' } | { kind: 'open'; id: string };
@@ -1297,6 +1308,7 @@ export function init(options: FruitbackOptions): Fruitback {
           stage: issue.stage,
           // The read is cast, not parsed: only a word is passed on.
           ...(typeof issue.stateName === 'string' && issue.stateName !== '' ? { stateName: issue.stateName } : {}),
+          ...trackerPart(issue.url),
           ...(status === undefined ? {} : { status }),
           note: issue.note.text,
           ...(issue.note.reporter?.name === undefined ? {} : { author: issue.note.reporter.name }),

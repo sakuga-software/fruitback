@@ -1,4 +1,5 @@
 import type { Help } from './guide.ts';
+import { createStageRing } from '@fruitback/widget';
 import { t } from './i18n.ts';
 
 /**
@@ -250,6 +251,17 @@ export function statusDrop(document: Document, options: DropOptions): HTMLElemen
   }
 
   return drop;
+}
+
+/**
+ * The round of a stage, which fills as a note moves on (FRU-606): the one of the widget's list
+ * (`createStageRing`), in the colour of the stage, or of the status a team painted.
+ */
+export function stageRing(document: Document, stage: Stage, paint?: { fill: string }): SVGSVGElement {
+  const ring = createStageRing(document, stage, 'kit-stage-ring');
+  ring.style.color = paint?.fill ?? `var(--stage-${stage})`;
+
+  return ring;
 }
 
 export type RowOptions = { title: string; subtitle?: string; stage?: Stage; onClick?: () => void };

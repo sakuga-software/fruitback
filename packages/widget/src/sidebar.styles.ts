@@ -197,15 +197,8 @@ export const STYLES = `
 }
 .fruitback-sidebar-count { color: var(--fruitback-color-text-muted); font-weight: 500; }
 .fruitback-sidebar-count:empty { display: none; }
-/* The drop of a status, 9 px, the point down. */
-.fruitback-sidebar-dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 50% 50% 50% 0;
-  transform: rotate(-45deg);
-  background: var(--fruitback-sidebar-stage);
-  box-shadow: 0 0 0 1px var(--fruitback-color-stage-edge);
-}
+/* The round of a stage in a chip (FRU-606): 12 px, no margin of its own. */
+.fruitback-sidebar-chip .fruitback-stage-ring { width: 12px; height: 12px; margin: 0; }
 .fruitback-sidebar-panel {
   flex: 1 1 auto;
   min-height: 0;
@@ -293,6 +286,10 @@ export const STYLES = `
 .fruitback-sidebar-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .fruitback-sidebar-top { display: flex; align-items: center; gap: 8px; font-size: 12px; line-height: 1.5; }
 .fruitback-sidebar-status { font-weight: 600; letter-spacing: -0.006em; }
+/* The round of the stage (FRU-606), before its word, in the colour of the pin of the note. */
+.fruitback-stage-ring { flex: none; width: 14px; height: 14px; margin-inline-end: -3px; }
+.fruitback-sidebar { --fruitback-stage-ring-mark: var(--fruitback-color-surface); }
+@media (forced-colors: active) { .fruitback-stage-ring { color: CanvasText !important; } }
 /* An identifier is a label: DEV-002 never breaks at its dash (FRU-350). */
 .fruitback-sidebar-id { color: var(--fruitback-color-text-muted); white-space: nowrap; }
 .fruitback-sidebar-age { margin-inline-start: auto; color: var(--fruitback-color-text-muted); white-space: nowrap; }

@@ -37,3 +37,38 @@ export function paintOfStatus(color: string, textColor: string | undefined): Sta
 export function statusLabel(statusName: string | undefined, stateName: string | undefined, stageWord: string): string {
   return statusName || stateName || stageWord;
 }
+
+/** The trackers `trackerOf` names: a reader of a page keeps one of these, or none. */
+export const TRACKER_NAMES = ['Linear', 'GitHub'] as const;
+export type TrackerName = (typeof TRACKER_NAMES)[number];
+
+/**
+ * The tracker an issue lives in, by the address of the issue (FRU-606): « Linear », « GitHub », or
+ * `undefined` for any other address, for none, and for an address that does not parse. A product name,
+ * the same in every language.
+ */
+export function trackerOf(url: string | undefined): TrackerName | undefined {
+  if (url === undefined) return undefined;
+  let host: string;
+  try {
+    host = new URL(url).hostname;
+  } catch {
+    return undefined;
+  }
+  if (host === 'linear.app' || host.endsWith('.linear.app')) return 'Linear';
+  if (host === 'github.com') return 'GitHub';
+
+  return undefined;
+}
+
+/**
+ * The state of a note in a list, the Fruitback stage first and the tracker second (FRU-606):
+ * « In progress · Linear: In Review ». `name` is the name of its status, or the word of its tracker.
+ * The stage alone when there is no name, or when the name says the stage again (« Done · Done »).
+ */
+export function stageFirstLabel(stageWord: string, name: string | undefined, tracker: string | undefined): string {
+  const said = name?.trim() ?? '';
+  if (said === '' || said.toLocaleLowerCase() === stageWord.toLocaleLowerCase()) return stageWord;
+
+  return `${stageWord} · ${tracker === undefined ? '' : `${tracker}: `}${said}`;
+}

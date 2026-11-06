@@ -2,9 +2,9 @@ import { type NoteTab, firstTab, noteTab } from '@fruitback/shared';
 import { RELATIVE_UNITS } from '@fruitback/widget';
 import { language, msg, t } from './i18n.ts';
 import { leaveAndFollow, whenNotAnswering } from './guide.ts';
-import { dropMark, helpLink, linkButton, make, primaryButton, segmentedTabs, statusDrop } from './kit.ts';
+import { dropMark, helpLink, linkButton, make, primaryButton, segmentedTabs, stageRing, statusDrop } from './kit.ts';
 import type { CheckVerdict, NotesReading, PanelNote, ReplyOutcome } from './protocol.ts';
-import { notePaint, stateWord } from './note-status.ts';
+import { listWord, notePaint } from './note-status.ts';
 import {
   type SearchHandlers,
   type SearchState,
@@ -12,10 +12,10 @@ import {
   magnifier,
   matchesPage,
   noteWords,
+  passes,
   pinsSwitch,
   searchControls,
   siteList,
-  statusFilter,
 } from './search-options.ts';
 
 /**
@@ -607,9 +607,7 @@ function searchedPart(
   if (state.scope === 'site') return siteList(document, state, handlers, options.now ?? Date.now(), ageOf);
   if (!Array.isArray(notes) || notes.length === 0) return notesPart(document, options, notes);
 
-  const matching = notes.filter((note) => matchesPage(note, state.q));
-  const keeps = statusFilter(state, notes);
-  const found = matching.filter(keeps).sort(byNumber);
+  const found = notes.filter((note) => matchesPage(note, state.q) && passes(note.stage, state.stage)).sort(byNumber);
   const placed = found.filter((note) => note.placement !== 'detached');
   const parts: Node[] = [];
   if (placed.length === 0) {
@@ -660,8 +658,10 @@ function noteRow(document: Document, options: PanelOptions, note: PanelNote): HT
   const reopenedAt = options.reopened?.[note.id];
   // FRU-300: a verdict says itself on its row: the store moved the note, the panel names who did.
   meta.append(
-    // The name of its status, or the word of its store, as the widget writes it (FRU-370).
-    make(document, 'strong', 'panel-row-stage', stateWord(note, t(STAGE_WORD[note.stage]))),
+    // The round of its stage, then the stage first and the tracker second, as the widget writes it
+    // (FRU-370, FRU-606): « In progress · Linear: In Review ».
+    stageRing(document, note.stage, notePaint(note)),
+    make(document, 'strong', 'panel-row-stage', listWord(note, t(STAGE_WORD[note.stage]))),
     ` · ${saidOf(note, now, reopenedAt)}`,
   );
   words.append(noteWords(document, 'span', 'panel-row-note', note.note), meta);

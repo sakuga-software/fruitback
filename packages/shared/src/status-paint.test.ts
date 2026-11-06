@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { STATUS_INK, paintOfStatus, statusLabel } from './status-paint.ts';
+import { STATUS_INK, paintOfStatus, stageFirstLabel, statusLabel, trackerOf } from './status-paint.ts';
 import { readableTextColor } from './contrast.ts';
 
 describe('the paint of a status (FRU-512)', () => {
@@ -33,5 +33,27 @@ describe('the word of a state (FRU-512)', () => {
   it('takes an empty name for no name', () => {
     assert.equal(statusLabel('', '', 'To do'), 'To do');
     assert.equal(statusLabel('', 'Todo', 'To do'), 'Todo');
+  });
+});
+
+describe('the state of a note in a list, the stage first (FRU-606)', () => {
+  it('says the stage, then the tracker and its word', () => {
+    assert.equal(stageFirstLabel('In progress', 'In Review', 'Linear'), 'In progress · Linear: In Review');
+    assert.equal(stageFirstLabel('En cours', 'Waiting for the client', undefined), 'En cours · Waiting for the client');
+  });
+
+  it('says the stage alone with no name, a blank one, or one that says the stage again', () => {
+    assert.equal(stageFirstLabel('Done', undefined, 'Linear'), 'Done');
+    assert.equal(stageFirstLabel('Done', '  ', 'Linear'), 'Done');
+    assert.equal(stageFirstLabel('Done', 'done', 'GitHub'), 'Done');
+  });
+
+  it('names Linear and GitHub by the address of the issue, and no other', () => {
+    assert.equal(trackerOf('https://linear.app/acme/issue/ACME-12/title'), 'Linear');
+    assert.equal(trackerOf('https://github.com/acme/web/issues/4'), 'GitHub');
+    assert.equal(trackerOf('https://linear.app.evil.test/x'), undefined);
+    assert.equal(trackerOf('https://console.fruitback.com/notes/1'), undefined);
+    assert.equal(trackerOf('not an address'), undefined);
+    assert.equal(trackerOf(undefined), undefined);
   });
 });

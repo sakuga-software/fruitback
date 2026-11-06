@@ -3,7 +3,9 @@ import {
   type NoteStatus,
   type StatusPaint,
   paintOfStatus,
+  stageFirstLabel,
   statusLabel as labelOfState,
+  trackerOf,
 } from '@fruitback/shared';
 import type { Translator } from './messages.ts';
 import { onStageToken, stageToken } from './theme.ts';
@@ -51,4 +53,20 @@ export function statusLabel(
   t: Translator,
 ): string {
   return labelOfState(status?.name, issue.stateName, t.stage(issue.stage));
+}
+
+/**
+ * The state of a note in the list, the stage of Fruitback first and the tracker second (FRU-606):
+ * « In progress · Linear: In Review ». The word of the store follows only when the tracker is known
+ * by the address of the issue; the name a team gave a status follows always.
+ */
+export function listLabel(
+  issue: Pick<NoteIssue, 'stage' | 'stateName' | 'url'>,
+  status: NoteStatus | undefined,
+  t: Translator,
+): string {
+  const tracker = trackerOf(issue.url);
+  const name = status?.name || (tracker === undefined ? undefined : issue.stateName);
+
+  return stageFirstLabel(t.stage(issue.stage), name, tracker);
 }
