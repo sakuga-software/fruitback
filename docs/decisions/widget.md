@@ -1973,7 +1973,8 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
   `--fruitback-shadow-md/lg/xl`. The frame of a capture takes a light halo.
 - **A faint ground**, where the red of Fruitback is under 3:1 (WCAG 1.4.11), a red site
   (`data-fruitback-faint`): the frame of a capture, its name, the tether of the composer and the edge
-  of each drop take the ink `#1c1917` with a white contour. A drop keeps the colour of its status: that
+  of each drop take the ink of the theme, `#18181b`, with a white contour (the board writes `#1c1917`,
+  a stone grey FRU-334 took out of the widget). A drop keeps the colour of its status: that
   colour says something.
 - `e2e/page-ground.spec.ts` holds both at 1440 and 390 px, in both schemes, with a white site as its
   control; each case fails with the ground not written.

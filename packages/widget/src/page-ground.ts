@@ -9,15 +9,19 @@ import { FRUITBACK_RED, contrastRatio, luminance } from './action-color.ts';
  *   its scheme draws it, with a white line at 16 % and a denser shadow around its surfaces, and the
  *   frame of an element takes a light halo.
  * - **faint**: the red of Fruitback is under 3:1 on the ground (WCAG 1.4.11), a red site. The frame
- *   of an element, its name, the tether of the composer and the edge of a pin take the ink `#1c1917`
+ *   of an element, its name, the tether of the composer and the edge of a pin take the ink of the theme
  *   with a white contour.
  *
  * Read again at each start of a capture: a site may change its ground (a dark mode switched on).
  */
 export type PageGround = { dark: boolean; faint: boolean };
 
-/** The ink a frame and a pin take on a red ground. */
-export const GROUND_INK = '#1c1917';
+/**
+ * The ink a frame and a pin take on a red ground: the ink of the theme, `--fruitback-color-ink`. The
+ * board writes `#1c1917`, a stone grey that FRU-334 took out of the widget (`design-tokens.test.ts`
+ * of the extension refuses it); the zinc ink is the same near black, 1.01:1 from it.
+ */
+export const GROUND_INK = '#18181b';
 
 /** Under this relative luminance, a ground is dark: #767676 and darker. */
 const DARK_LUMINANCE = 0.2;

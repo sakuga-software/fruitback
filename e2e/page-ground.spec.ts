@@ -7,7 +7,7 @@ import { WORKER_ORIGIN, caseOf } from './pin.ts';
  * each start of a capture.
  */
 const IIFE = 'packages/widget/dist/fruitback.iife.js';
-const INK = 'rgb(28, 25, 23)';
+const INK = 'rgb(24, 24, 27)';
 
 async function mountOn(page: Page, testCase: string, ground: string | undefined): Promise<void> {
   await page.goto(`/?widget=off&case=${caseOf(testCase)}`);
