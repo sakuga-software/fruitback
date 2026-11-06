@@ -852,6 +852,10 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
     whole, and Esc gives the focus back to the thumbnail. **It waits in the composer (`local`) and
     is sent only with the note**: a person who removes it, or who never sends, sent nothing. Nothing
     is said when it does not come: the person did not ask for it, and the camera still takes one.
+    The widget is hidden for the two frames of that capture, as for any capture (FRU-351): at the
+    choice, before the composer is drawn, the frame of the element blinks once. Every capture goes
+    through one queue (`serialized`), so a capture of the page asked at once waits for it. A capture
+    of the element is forgotten when the composer closes: it is never given to a later open.
   - **A note that holds it is not added to the batch**, as any note with files (FRU-124): the cross
     takes it away first. An open question for the design: a batch of notes with their captures.
   - **Each file says its state**: « Goes with the note », the part sent (« Sending 42 % ») when the

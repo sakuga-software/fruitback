@@ -936,7 +936,11 @@ export function init(options: FruitbackOptions): Fruitback {
       // FRU-609: taken at the choice of the element, given to the composer as it opens.
       captureElement: () => elementShot ?? Promise.resolve(undefined),
     },
-    onClose: () => host.release(),
+    onClose: () => {
+      host.release();
+      // A capture of the element belongs to the open it was taken for, never to a later one (review).
+      elementShot = undefined;
+    },
     autosave: {
       read: () => (typingPlace === undefined ? undefined : typing.get(typingPlace)?.text),
       write: (text) => {
