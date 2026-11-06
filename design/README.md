@@ -131,6 +131,7 @@ every value is named once, in `apps/console/app/app.css`, and a screen writes th
 | `done`                                                           | `#15803d`                                                        | « Connected », a step that is done                           |
 | `status-new`, `-todo`, `-progress`, `-done`, `-closed`, `-edge`  | `#bec2c8`, `#d9dbdf`, `#f3bb3d`, `#5560c4`, `#a52a3a`, `#8a8a93` | the status of a note (FRU-334), and the edge of its drop     |
 | `rail`, `rail-active`, `rail-text`, `rail-muted`, `rail-accent`  | `#18181b`, `#27272a`, `#d4d4d8`, `#a1a1aa`, `#ec5b57`            | the dark rail of a workspace (FRU-234)                       |
+| `on-ink` | `#ffffff` | what is written on ink: the rail, a banner, the check of a success drop (FRU-508) |
 | `avatar`                                                         | `#3f3f46`                                                        | the round initial of a person                                |
 | `text-title`, `-title-setup`, `-conclusion`                      | `28px/1.15`, `30px/1.15`, `22px/1.25`                            | a title, weight 700                                          |
 | `text-section`, `-step`, `-lead`                                 | `18px`, `17px/26px`, `16px/1.5`                                  | a section, a step, the sentence under a title                |

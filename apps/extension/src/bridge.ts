@@ -29,6 +29,8 @@ export type BridgeSeams = {
   readHidden?: () => Promise<boolean>;
   /** « Corner of the widget » (FRU-443): said to a widget we mount. `undefined`: the default corner. */
   readDockPosition?: () => Promise<DockPosition | undefined>;
+  /** The colour of « Appearance » (FRU-601): said to a widget we mount. `undefined`: the accent. */
+  readActionColor?: () => Promise<string | undefined>;
   post: (message: BridgeMessage) => void;
 };
 
@@ -40,6 +42,7 @@ export function createApply({
   readShowSelectors,
   readHidden,
   readDockPosition,
+  readActionColor,
   post,
 }: BridgeSeams): (force?: boolean) => Promise<void> {
   // What was last posted, so an unchanged decision is not posted again.
@@ -57,6 +60,8 @@ export function createApply({
   let selectorsSaid: boolean | undefined;
   /** The corner as last said, for the same reason. `null`: no widget to say it to. */
   let cornerSaid: DockPosition | undefined | null = null;
+  /** The colour as last said, for the same reason. `null`: no widget to say it to. */
+  let colorSaid: string | undefined | null = null;
 
   // Three sources call this, and it awaits in the middle: the first run, the page world's handshake,
   // and every storage change. So two can be in flight, and the older one can resolve last and post a
@@ -68,7 +73,7 @@ export function createApply({
 
   return async (force = false): Promise<void> => {
     const mine = ++generation;
-    const [site, locale, name, selectors, hidden, corner] = await Promise.all([
+    const [site, locale, name, selectors, hidden, corner, color] = await Promise.all([
       readSite(),
       readLanguage?.().catch(() => undefined),
       readName?.().catch(() => undefined),
@@ -77,6 +82,8 @@ export function createApply({
       readHidden?.().catch(() => false),
       // A read that fails keeps the corner said last: a dock that jumps back is a dock that moved.
       readDockPosition?.().catch(() => (cornerSaid === null ? undefined : cornerSaid)),
+      // A read that fails keeps the colour said last, for the same reason.
+      readActionColor?.().catch(() => (colorSaid === null ? undefined : colorSaid)),
     ]);
     // FRU-315: said apart from the mount, so a session that ends or comes back changes what the
     // widget offers without building it again over a note being written.
@@ -129,6 +136,15 @@ export function createApply({
       cornerSaid = corner;
     } else if (message.kind !== 'mount') {
       cornerSaid = null;
+    }
+    // FRU-601: after the mount too, and again with each mount, like the corner.
+    if (message.kind === 'mount' && readActionColor !== undefined) {
+      if (mounting || color !== colorSaid) {
+        post({ channel: CHANNEL, kind: 'action-color', ...(color === undefined ? {} : { color }) });
+      }
+      colorSaid = color;
+    } else if (message.kind !== 'mount') {
+      colorSaid = null;
     }
   };
 }

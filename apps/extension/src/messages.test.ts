@@ -51,6 +51,8 @@ const VIEWS = [
   './browser-family.ts',
   // FRU-528: the words of the buttons that open the guide.
   './guide.ts',
+  // FRU-601: « Appearance », the colour of the note button.
+  './appearance-page.ts',
 ] as const;
 /** The modules whose constants are sentences a page shows through `showProblem` or `t`. */
 // FRU-423: `context-menu.ts` holds the words of the item of the context menu.

@@ -21,13 +21,13 @@ import { useLocale } from './use-locale';
  */
 
 /** What a refused sign-in link means for the person, and what to do. */
-export const SEND_PROBLEMS: Record<string, string> = {
+const SEND_PROBLEMS: Record<string, string> = {
   'invalid-email': msg('That is not an e-mail address. Check it and send again.'),
   'too-many-links': msg('Several links went to this address already. Use the last one, or wait fifteen minutes.'),
 };
 
 /** Any other refusal, and no answer. */
-export const LINK_NOT_SENT = msg('The link could not be sent just now. Try again in a minute.');
+const LINK_NOT_SENT = msg('The link could not be sent just now. Try again in a minute.');
 
 /** The state of the sign-in is not in this browser: another browser, or a page left open too long. */
 const SIGN_IN_RESTARTED = msg('The sign-in started in another browser, or too long ago. Start it again from here.');

@@ -229,9 +229,10 @@ export type FruitbackOptions = {
   showSelectors?: boolean;
   /**
    * Whether the head of the composer writes the short selector of the element, « button.add ·
-   * <AddToCart> » (FRU-411). `always`, the default. `with-selectors`: only while `showSelectors` is on;
-   * otherwise the head writes what a person reads for the element, and its component. The extension
-   * asks for it, so « Show CSS selectors » of its preferences governs the head too.
+   * <AddToCart> » (FRU-411). `with-selectors`, the default since FRU-607: only while `showSelectors`
+   * is on; otherwise the head writes what a person reads for the element, « €29 / month », and its
+   * component. `always`: the selector in every case, as before FRU-607. The extension asks for
+   * `with-selectors`, so « Show CSS selectors » of its preferences governs the head.
    */
   selectorInHead?: 'always' | 'with-selectors';
   /**
@@ -241,6 +242,13 @@ export type FruitbackOptions = {
    * left. Anything else is ignored. Change it later with `moveDock`.
    */
   position?: DockPosition;
+  /**
+   * The colour of « Send » in the composer (FRU-601), as `#rrggbb` or `#rgb`. The label stays white,
+   * so a colour under 4.5:1 with white is ignored, as is anything that is not a colour: « Send » keeps
+   * the accent. Only « Send » takes it: the pins, the stages and the launch button do not change.
+   * Change it later with `setActionColor`.
+   */
+  actionColor?: string;
   /**
    * The notes of every page of the site (FRU-470), for a host that can read them: the extension, with
    * the session of its reviewer. Given, the list offers « All pages » beside « This page »; left out,
@@ -354,6 +362,11 @@ export type Fruitback = {
    * new widget: a note being written stays. `undefined` puts it back where it stands by default.
    */
   moveDock(position: DockPosition | undefined): void;
+  /**
+   * Paints « Send » in another colour (FRU-601), as the `actionColor` option does at `init`, with no
+   * new widget: a note being written stays. `undefined` gives « Send » the accent again.
+   */
+  setActionColor(color: string | undefined): void;
   /**
    * A reply under a note, by the path of its thread (FRU-257), then a read: the pins, the thread
    * and the list say it. `refused`: the worker does not let this reader reply, or the note is not here.
@@ -478,19 +491,20 @@ export function init(options: FruitbackOptions): Fruitback {
 
   /** « Show CSS selectors », as the host said it last (FRU-349). The head follows it on request (FRU-411). */
   let selectorsShown = options.showSelectors === true;
+  /** The head writes the selector only on request (FRU-607): what a person reads comes first. */
+  const selectorHead = (): boolean => options.selectorInHead === 'always' || selectorsShown;
   const headOf = (element: Element, source: NoteSource | undefined): string =>
-    options.selectorInHead !== 'with-selectors' || selectorsShown
-      ? aboutTarget(element, source)
-      : plainHead(element, source);
+    selectorHead() ? aboutTarget(element, source) : plainHead(element, source);
   const host: CaptureHost = createCaptureHost({
     document,
     translator,
     label: options.label,
     // FRU-411: on request, the frame names the element as the head of the composer will.
-    ...(options.selectorInHead === 'with-selectors' ? { nameOf: headOf } : {}),
+    ...(options.selectorInHead === 'always' ? {} : { nameOf: headOf }),
     ignore: options.ignore,
     ...(options.theme !== undefined ? { theme: options.theme } : {}),
     ...(dockPosition() !== undefined ? { position: dockPosition() } : {}),
+    ...(options.actionColor !== undefined ? { actionColor: options.actionColor } : {}),
     onConfigure: () => panel.toggle(),
     onList: () => openList(),
     onSelect: (selected) => {
@@ -520,7 +534,9 @@ export function init(options: FruitbackOptions): Fruitback {
       restoredOn = canonicalizePageUrl(view.location.href);
       // The frame stays on the element for as long as the composer is open on it (FRU-258).
       host.hold(selected.element);
-      composer.open(selected.element, headOf(selected.element, selected.source), readableName(selected.element));
+      composer.open(selected.element, headOf(selected.element, selected.source), readableName(selected.element), {
+        selector: selectorHead(),
+      });
     },
   });
 
@@ -1191,6 +1207,7 @@ export function init(options: FruitbackOptions): Fruitback {
       if (config.get().position !== undefined) config.set({ position: undefined });
       else host.moveDock(hostPosition);
     },
+    setActionColor: (color) => host.paintAction(color),
     async replyTo(id, body) {
       const issue = readIssues.find((each) => each.note.id === id);
       if (issue === undefined || options.replies === false || !readerIdentity.canReply || body.trim() === '') {

@@ -62,6 +62,8 @@ import { button, hostOf, make } from '../../src/kit.ts';
 import { DOCK_POSITION_KEY, NOTES_NAME_KEY, SHOW_SELECTORS_KEY, parseDockPosition } from '../../src/protocol.ts';
 import { PANEL_ON_CLICK_KEY, panelApis } from '../../src/side-panel.ts';
 import { type PageId, pageOf, sectionId, showPage } from '../../src/options-pages.ts';
+import { appearanceSection } from '../../src/appearance-page.ts';
+import { ACTION_COLOR_KEY, parseActionColor } from '../../src/action-color.ts';
 
 /**
  * Every site entry, wildcards included, and the rules file a team hands around (FRU-43).
@@ -104,6 +106,7 @@ const LABELS: Record<PageId, string> = {
   workers: t('Servers and sessions'),
   share: t('Share rules'),
   prefs: t('Preferences'),
+  appearance: t('Appearance'),
 };
 
 const app = document.querySelector('#app');
@@ -171,16 +174,17 @@ if (app !== null) {
   );
   const share = transfer();
   const prefs = await preferences();
+  const appearance = await appearancePage();
   const content = make(document, 'main', 'page-content');
   // FRU-591: the four sections stay in the DOM, and only the section of the page is shown. A form
   // that is open, or a code that is typed, is still there when the person comes back.
-  content.append(sites, workers, share, prefs);
+  content.append(sites, workers, share, prefs, appearance);
   const nav = menu(document, {
     version: browser.runtime.getManifest().version,
     current: page,
     entries: (Object.keys(LABELS) as PageId[]).map((id) => ({ id, label: LABELS[id] })),
   });
-  const views: Record<PageId, HTMLElement> = { sites, workers, share, prefs };
+  const views: Record<PageId, HTMLElement> = { sites, workers, share, prefs, appearance };
   showPage(document, { page, views, labels: LABELS, menu: nav });
   followHash = () => {
     const next = pageOf(window.location.hash);
@@ -733,6 +737,22 @@ function logout(endpoint: string, out: HTMLButtonElement): void {
 
       return renderWorkers();
     });
+}
+
+/**
+ * « Appearance » (FRU-601): the colour of the note button, kept in the local area of this browser.
+ * The red of Fruitback is no key.
+ */
+async function appearancePage(): Promise<HTMLElement> {
+  const stored = await browser.storage.local.get(ACTION_COLOR_KEY).catch(() => ({}) as Record<string, unknown>);
+
+  return appearanceSection(document, {
+    color: parseActionColor(stored[ACTION_COLOR_KEY]),
+    onColor: (color) =>
+      color === undefined
+        ? browser.storage.local.remove(ACTION_COLOR_KEY)
+        : browser.storage.local.set({ [ACTION_COLOR_KEY]: color }),
+  });
 }
 
 /** « Preferences » (FRU-302): the panel on the icon, the name, the shortcut, the copy of the rules. */

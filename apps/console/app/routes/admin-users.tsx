@@ -19,11 +19,11 @@ import {
   rowId,
   useListAddress,
   useRead,
-} from './admin-list';
+} from '../parts/admin-list';
 import { useAdmin } from './admin';
-import { AccountDeletion, DELETION_HOLDS } from './admin-account-deletion';
-import { AddToWorkspace, ChangeRole } from './admin-user-workspaces';
-import { seenOn } from './members';
+import { AccountDeletion, DELETION_HOLDS } from '../parts/admin-account-deletion';
+import { AddToWorkspace, ChangeRole } from '../parts/admin-user-workspaces';
+import { seenOn } from '../ago';
 import { ReadProblem } from '../read-problem';
 
 /**

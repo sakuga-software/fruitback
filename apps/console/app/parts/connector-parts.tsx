@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { type Connector, type Destination, type Repository, type Site, type Stage, placesOf } from '../api';
+import { type Connector, type Destination, type Repository, type Site, placesOf } from '../api';
 import { Confirmation } from '../confirm';
 import { ConnectorMark, type LaterKind, type MarkedKind } from '../connector-marks';
-import { locale, msg, t } from '../i18n';
+import { msg, t } from '../i18n';
 import type { Listed } from '../listed';
 import { Chip, LinkButton, Problem } from '../ui';
-import { siteLabel } from '../site-address';
+import { hostOf, siteLabel } from '../site-address';
 import { useLocale } from '../use-locale';
 import { ReadProblem } from '../read-problem';
 
@@ -22,6 +22,14 @@ export const KINDS = {
   github: { name: msg('GitHub Issues') },
 } as const;
 
+/**
+ * The name of a kind the worker sent, to translate with `t`, or `undefined` for a kind this console
+ * does not know: a worker of after can send one. Own keys only, so `constructor` is no kind.
+ */
+export function kindName(kind: string): string | undefined {
+  return Object.hasOwn(KINDS, kind) ? KINDS[kind as keyof typeof KINDS].name : undefined;
+}
+
 /** What a refused key means for the person, and what to do. */
 export const KEY_PROBLEMS: Record<string, string> = {
   'key-refused': msg('Linear refused this key. Copy it again from Linear, in Settings, then Security and access.'),
@@ -31,15 +39,6 @@ export const KEY_PROBLEMS: Record<string, string> = {
   ),
   forbidden: msg('Only an owner or an admin of the workspace adds a connector.'),
   'store-unavailable': msg('Linear did not answer just now. Your key is not kept: try again in a minute.'),
-};
-
-/** The names of the five stages, as the widget shows them on a pin. */
-export const STAGE_NAMES: Record<Stage, string> = {
-  new: msg('New'),
-  todo: msg('To do'),
-  progress: msg('In progress'),
-  done: msg('Done'),
-  closed: msg('Closed'),
 };
 
 /**
@@ -58,19 +57,14 @@ export function SourceMark({ kind }: { kind: MarkedKind | LaterKind }) {
   );
 }
 
-/** The host a receiving connector sends to, as the worker named it: `REST · hooks.acme.dev`. */
-export function hostOf(connector: Connector): string {
+/** The address a receiving connector sends to, as the worker named it: `REST · hooks.acme.dev`. */
+export function addressOf(connector: Connector): string {
   return connector.label.replace(/^REST · /, '');
 }
 
 /** The host of an address alone, so a button that names it fits the panel (FRU-165). */
 export function shortHost(connector: Connector): string {
-  const address = hostOf(connector);
-  try {
-    return new URL(address).host;
-  } catch {
-    return address;
-  }
+  return hostOf(addressOf(connector));
 }
 
 /** The person whose key this is, as the worker named the connector: `Linear · Camille`. */
@@ -114,7 +108,7 @@ export function placeLabel(
 
 /** How a source is connected, in one line under its name. */
 export function sourceLine(connector: Connector): string {
-  if (connector.kind === 'rest') return hostOf(connector);
+  if (connector.kind === 'rest') return addressOf(connector);
   if (connector.kind === 'github') return t('Installed on {account}', { account: accountOf(connector) });
   if (OAUTH_LABEL.test(connector.label)) {
     return t('Workspace {name}', { name: connector.label.replace(OAUTH_LABEL, '') });
@@ -123,21 +117,12 @@ export function sourceLine(connector: Connector): string {
   return t('Key of {person}', { person: personOf(connector) });
 }
 
-/** A moment, in the language of the console. */
-export function moment(iso: string): string {
-  const date = new Date(iso);
-
-  return Number.isNaN(date.getTime())
-    ? iso
-    : date.toLocaleString(locale(), { dateStyle: 'medium', timeStyle: 'short' });
-}
-
 export function siteCount(count: number): string {
   return count === 1 ? t('{count} site', { count }) : t('{count} sites', { count });
 }
 
 /** What the list of sites of a panel says before its rows: loading, not read, or none (FRU-162). */
-export function SitesState({ sites }: { sites: Listed<Site> }) {
+function SitesState({ sites }: { sites: Listed<Site> }) {
   useLocale();
   if (sites === 'loading') return <p className="text-small text-muted">{t('Loading…')}</p>;
   if (sites === 'failed')
@@ -263,11 +248,7 @@ export function SendersList({
             const places = placesOf(site);
 
             return (
-              <li
-                key={site.id}
-                className="border-b border-line py-[8px] text-small"
-                data-site={new URL(site.origin).host}
-              >
+              <li key={site.id} className="border-b border-line py-[8px] text-small" data-site={hostOf(site.origin)}>
                 <p className="flex items-baseline gap-[12px]">
                   <span className="min-w-0 flex-1 font-semibold [overflow-wrap:anywhere]">
                     {siteLabel(site.origin)}

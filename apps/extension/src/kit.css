@@ -102,6 +102,23 @@ button.kit-secondary:disabled {
   cursor: default;
 }
 
+/*
+  FRU-601: « Leave a note », in the colour the person chose in « Appearance ». No colour chosen: the
+  accent, in both schemes. A colour chosen holds white text at 4.5:1 or more (src/action-color.ts).
+*/
+button.kit-primary.kit-note {
+  background: var(--action, var(--accent));
+  color: var(--on-action, var(--on-accent));
+}
+
+button.kit-primary.kit-note:hover {
+  background: var(--action-strong, var(--accent-strong));
+}
+
+button.kit-primary.kit-note[data-size] .kit-mark {
+  color: var(--action-mark, currentColor);
+}
+
 /* The action of a site: 56 px, the drop before the words. */
 button.kit-primary[data-size='tall'] {
   height: 56px;

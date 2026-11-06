@@ -1,9 +1,9 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
+import { STAGES } from '../stages';
 import {
   type AdminConnector,
   type AdminWorkspace,
   type AdminWorkspaceDetail,
-  STAGES,
   SUSPENSION_REASON_LENGTH,
   type StageCounts,
   type WorkspaceSuspension,
@@ -35,11 +35,12 @@ import {
   rowId,
   useListAddress,
   useRead,
-} from './admin-list';
-import { AdminWrite, GIVEN_ROLES, INVITED_ROLES } from './admin-writes';
-import { KINDS } from './connector-parts';
+} from '../parts/admin-list';
+import { AdminWrite, GIVEN_ROLES, INVITED_ROLES } from '../parts/admin-writes';
+import { kindName } from '../parts/connector-parts';
 import { siteLabel } from '../site-address';
 import { ReadProblem } from '../read-problem';
+import { type Fetched } from '../listed';
 
 /**
  * The workspaces of the instance, as screen 18 of the mockup of 2026-10-13 draws them (FRU-263):
@@ -298,9 +299,9 @@ function ownersOf(workspace: { owners: readonly { email: string }[] }): string {
 
 /** The name of a kind of connector: « Linear », « REST API ». */
 function kindOf(connector: AdminConnector): string {
-  const kind = KINDS[connector.kind as keyof typeof KINDS];
+  const kind = kindName(connector.kind);
 
-  return kind === undefined ? connector.label : t(kind.name);
+  return kind === undefined ? connector.label : t(kind);
 }
 
 /** Where the notes of a workspace go: its connectors, or Fruitback itself. */
@@ -400,7 +401,7 @@ function Panel({
   onSuspension,
 }: {
   workspace: AdminWorkspace;
-  detail: AdminWorkspaceDetail | 'loading' | 'failed';
+  detail: Fetched<AdminWorkspaceDetail>;
   onRetry: () => void;
   wide: boolean;
   takesFocus: { current: boolean };

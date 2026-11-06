@@ -11,6 +11,7 @@ import {
   WORKSPACE_SUSPENDED,
   copyText,
   problemOf,
+  retryable,
   writeProblemOf,
 } from './problems.ts';
 
@@ -88,5 +89,17 @@ describe('a copy the browser can refuse (FRU-164)', () => {
 
     assert.equal(await copyText('<script>', refusing), false);
     assert.equal(await copyText('<script>', undefined), false);
+  });
+});
+
+// FRU-508: the sign-in, the connection of a browser and the check of an address wrote this test three times.
+describe('a refusal that may pass when it is sent again', () => {
+  it('is no answer, too many calls, or an error of the server', () => {
+    for (const status of [0, 429, 500, 502, 503]) assert.equal(retryable({ status }), true, String(status));
+  });
+
+  it('is never an answer that says no', () => {
+    for (const status of [400, 401, 403, 404, 409, 410, 422])
+      assert.equal(retryable({ status }), false, String(status));
   });
 });

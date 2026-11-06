@@ -16,6 +16,7 @@
 
 import type { SiteNote, SiteRead } from '@fruitback/widget';
 import { STATUS_COLOR } from '@fruitback/shared';
+import { parseActionColor } from './action-color.ts';
 import type { DockPosition, TransportRequest, TransportResponse } from '@fruitback/widget';
 import { isWorkerEndpoint } from './endpoint.ts';
 import { isNonEmptyString, isRecord } from './guards.ts';
@@ -148,6 +149,18 @@ export type DockMessage = {
   channel: typeof CHANNEL;
   kind: 'dock';
   position?: DockPosition;
+};
+
+/**
+ * The colour of the note button of « Appearance » (FRU-601), for the widget we mounted: « Send » takes
+ * it. Absent: the accent of the widget. Said apart from the mount, like `dock`, so a change does not
+ * build the widget again over a note being written. The page can read and forge it: it paints
+ * « Send » on this page, and the widget refuses a colour under 4.5:1 with white.
+ */
+export type ActionColorMessage = {
+  channel: typeof CHANNEL;
+  kind: 'action-color';
+  color?: string;
 };
 
 /**
@@ -541,6 +554,7 @@ export type BridgeMessage =
   | SessionMessage
   | SelectorsMessage
   | DockMessage
+  | ActionColorMessage
   | SignInMessage
   | SiteNotesRequestMessage
   | SiteNotesResponseMessage
@@ -617,6 +631,13 @@ export function parseBridgeMessage(data: unknown): BridgeMessage | undefined {
     const position = parseDockPosition(data.position);
 
     return position === undefined ? undefined : { channel: CHANNEL, kind: 'dock', position };
+  }
+  if (data.kind === 'action-color') {
+    // Absent is the accent. A value that is not a colour the button can take is no message.
+    if (data.color === undefined) return { channel: CHANNEL, kind: 'action-color' };
+    const color = parseActionColor(data.color);
+
+    return color === undefined ? undefined : { channel: CHANNEL, kind: 'action-color', color };
   }
   if (data.kind === 'relay-request') return parseRelayRequestMessage(data);
   if (data.kind === 'relay-response') return parseRelayResponseMessage(data);

@@ -8,7 +8,7 @@ import { type AgentKey, MAX_AGENT_KEY_DAYS } from './api.ts';
 const DAY_MS = 86_400_000;
 
 /** How many days before its end a key is said to end soon: decision 8 of `agents.md`. */
-export const ENDS_SOON_DAYS = 7;
+const ENDS_SOON_DAYS = 7;
 
 /**
  * Where a key stands: `ended` at its end and after, `soon` with the whole days left (1 to 7, a part

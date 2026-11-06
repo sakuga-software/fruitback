@@ -37,6 +37,10 @@ const WANTED: Record<string, string> = {
   close: 'x-bold',
   search: 'magnifying-glass-bold',
   grip: 'dots-six-vertical-bold',
+  // The tools at the foot of the field of the composer (FRU-607): actions, so from the set.
+  camera: 'camera-bold',
+  paperclip: 'paperclip-bold',
+  image: 'image-bold',
 };
 
 type IconifyInfo = {

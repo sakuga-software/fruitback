@@ -7,7 +7,6 @@ import {
   type ConfigPanel,
   type ConfigStore,
   type Overlay,
-  aboutTarget,
   captureNote,
   createCaptureHost,
   createComposer,
@@ -18,6 +17,7 @@ import {
   feedbackAsText,
   languageOf,
   placementOf,
+  plainHead,
   readableName,
 } from '@fruitback/widget';
 import { useEffect, useRef, useState } from 'react';
@@ -76,6 +76,8 @@ export function Fruitback() {
     });
 
     const host = createCaptureHost({
+      // Like `init` since FRU-607: the frame and the head say what the element says, not its selector.
+      nameOf: plainHead,
       onSelect: (selected) => {
         // Like \`init\`: a choice made while a note is on its way is let go, and the frame goes
         // back to the element of that note (FRU-258).
@@ -90,8 +92,8 @@ export function Fruitback() {
         widget.current?.host.hold(selected.element);
         widget.current?.composer.open(
           selected.element,
-          // What the note points at, in the head (FRU-305), and what the element says, as its title.
-          aboutTarget(selected.element, selected.source),
+          // What the note points at, in the head (FRU-305, FRU-607), and what the element says, as its title.
+          plainHead(selected.element, selected.source),
           readableName(selected.element),
         );
         setStatus(selected.source?.component ? `cible : <${selected.source.component}>` : 'cible sélectionnée');

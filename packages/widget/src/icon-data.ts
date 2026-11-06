@@ -13,7 +13,15 @@ export const ICON_SOURCE = {
   name: 'Phosphor',
   version: '1.2.2',
   license: 'MIT',
-  names: { gear: 'gear-fill', close: 'x-bold', search: 'magnifying-glass-bold', grip: 'dots-six-vertical-bold' },
+  names: {
+    gear: 'gear-fill',
+    close: 'x-bold',
+    search: 'magnifying-glass-bold',
+    grip: 'dots-six-vertical-bold',
+    camera: 'camera-bold',
+    paperclip: 'paperclip-bold',
+    image: 'image-bold',
+  },
 } as const;
 
 export type IconShape = { viewBox: string; paths: Record<string, string>[] };
@@ -55,6 +63,33 @@ export const ICON_DATA = {
       {
         fill: 'currentColor',
         d: 'M108 60a16 16 0 1 1-16-16a16 16 0 0 1 16 16m56 16a16 16 0 1 0-16-16a16 16 0 0 0 16 16m-72 36a16 16 0 1 0 16 16a16 16 0 0 0-16-16m72 0a16 16 0 1 0 16 16a16 16 0 0 0-16-16m-72 68a16 16 0 1 0 16 16a16 16 0 0 0-16-16m72 0a16 16 0 1 0 16 16a16 16 0 0 0-16-16',
+      },
+    ],
+  },
+  camera: {
+    viewBox: '0 0 256 256',
+    paths: [
+      {
+        fill: 'currentColor',
+        d: 'M208 52h-25.58L170 33.34A12 12 0 0 0 160 28H96a12 12 0 0 0-10 5.34L73.57 52H48a28 28 0 0 0-28 28v112a28 28 0 0 0 28 28h160a28 28 0 0 0 28-28V80a28 28 0 0 0-28-28m4 140a4 4 0 0 1-4 4H48a4 4 0 0 1-4-4V80a4 4 0 0 1 4-4h32a12 12 0 0 0 10-5.34L102.42 52h51.15L166 70.66A12 12 0 0 0 176 76h32a4 4 0 0 1 4 4ZM128 84a48 48 0 1 0 48 48a48.05 48.05 0 0 0-48-48m0 72a24 24 0 1 1 24-24a24 24 0 0 1-24 24',
+      },
+    ],
+  },
+  paperclip: {
+    viewBox: '0 0 256 256',
+    paths: [
+      {
+        fill: 'currentColor',
+        d: 'm212.48 136.49l-82.06 82a60 60 0 0 1-84.85-84.88l98.16-97.89a40 40 0 0 1 56.56 56.59l-.17.16l-95.8 92.22a12 12 0 1 1-16.64-17.3l95.71-92.12a16 16 0 0 0-22.7-22.56l-98.16 97.86a36 36 0 0 0 50.93 50.91l82.06-82a12 12 0 0 1 17 17Z',
+      },
+    ],
+  },
+  image: {
+    viewBox: '0 0 256 256',
+    paths: [
+      {
+        fill: 'currentColor',
+        d: 'M144 96a16 16 0 1 1 16 16a16 16 0 0 1-16-16m92-40v144a20 20 0 0 1-20 20H40a20 20 0 0 1-20-20V56a20 20 0 0 1 20-20h176a20 20 0 0 1 20 20M44 60v79.72l33.86-33.86a20 20 0 0 1 28.28 0L147.31 147l17.18-17.17a20 20 0 0 1 28.28 0L212 149.09V60Zm0 136h118.34L92 125.66l-48 48Zm168 0v-13l-33.37-33.37L164.28 164l32 32Z',
       },
     ],
   },

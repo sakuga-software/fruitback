@@ -174,12 +174,12 @@ function Unreachable() {
   return (
     <div
       role="alert"
-      className="flex flex-wrap items-center justify-center gap-3 border-b border-rail-active bg-ink px-4 py-2 text-sm text-white"
+      className="flex flex-wrap items-center justify-center gap-3 border-b border-rail-active bg-ink px-4 py-2 text-sm text-on-ink"
     >
       <span>{t('Fruitback cannot reach its server. Check your connection.')}</span>
       <Button
         tone="outline"
-        className="border-white bg-transparent text-white hover:bg-white/10"
+        className="border-on-ink bg-transparent text-on-ink hover:bg-on-ink/10"
         onClick={() => window.location.reload()}
       >
         {t('Try again')}
@@ -211,7 +211,7 @@ function SignedOut() {
   return (
     <div
       role="alert"
-      className="flex flex-wrap items-center justify-center gap-3 border-b border-rail-active bg-ink px-4 py-2 text-sm text-white"
+      className="flex flex-wrap items-center justify-center gap-3 border-b border-rail-active bg-ink px-4 py-2 text-sm text-on-ink"
     >
       <span>
         {still
@@ -222,13 +222,13 @@ function SignedOut() {
         href="/sign-in"
         target="_blank"
         rel="noopener"
-        className="rounded-full border border-white px-3 py-1 font-semibold hover:bg-white/10"
+        className="rounded-full border border-on-ink px-3 py-1 font-semibold hover:bg-on-ink/10"
       >
         {t('Sign in')}
       </a>
       <Button
         tone="outline"
-        className="border-white bg-transparent text-white hover:bg-white/10"
+        className="border-on-ink bg-transparent text-on-ink hover:bg-on-ink/10"
         onClick={() => void resume()}
       >
         {t('Continue')}

@@ -13,20 +13,26 @@ import {
 } from '../api';
 import { ConnectorMark } from '../connector-marks';
 import { msg, t } from '../i18n';
-import type { Listed } from '../listed';
+import { type Fetched, type Listed } from '../listed';
 import { writeProblemOf } from '../problems';
 import { Button, Chip, Field, LinkButton, type OptionGroup, Problem, SearchChoice } from '../ui';
 import { type TeamList, type TeamListEvent, offersMore, searchToAsk, stepTeamList, teamListOf } from '../team-list';
 import { useLocale } from '../use-locale';
-import { KINDS, accountOf, hostOf, sourceLine } from './connector-parts';
+import { KINDS, accountOf, addressOf, sourceLine } from './connector-parts';
 import { GITHUB_APP_PAGE } from './connector-github';
 import { ReadProblem } from '../read-problem';
+import { hostOf } from '../site-address';
+
+/** A source in a sentence: its kind, then how it is connected. « Linear · Workspace Acme ». */
+function sourceName(source: Connector): string {
+  return `${t(KINDS[source.kind].name)} · ${sourceLine(source)}`;
+}
 
 /**
  * What a source offers: its teams, its repositories, or nothing to choose for an address. The teams of
  * a Linear come a page at a time, and a search asks the worker (FRU-501): `team-list.ts` holds them.
  */
-type Offer =
+type Offer = Fetched<
   | { kind: 'linear'; list: TeamList }
   /**
    * `listed`: how many GitHub listed; `total`: how many it counts, which can pass the list (FRU-500).
@@ -34,8 +40,7 @@ type Offer =
    */
   | { kind: 'github'; repositories: Repository[]; listed: number; total: number }
   | { kind: 'rest' }
-  | 'loading'
-  | 'failed';
+>;
 
 /**
  * Where the notes of a site go (FRU-399): its places in their order, and the places of every source
@@ -209,7 +214,7 @@ export function SitePlaces({
     if (each.label !== undefined) return each.label;
     const source = sourceOf(each);
     if (source === undefined) return t('A tracker');
-    if (source.kind === 'rest') return `${t(KINDS.rest.name)} · ${hostOf(source)}`;
+    if (source.kind === 'rest') return `${t(KINDS.rest.name)} · ${addressOf(source)}`;
     if (source.kind === 'github') return `GitHub · ${each.teamId ?? ''}`;
     const offer = offers[source.id];
     const team =
@@ -276,7 +281,7 @@ export function SitePlaces({
       return [
         {
           heading: t(KINDS.rest.name),
-          options: [{ value: `${source.id}||`, label: hostOf(source).replace(/^https?:\/\//, '') }],
+          options: [{ value: `${source.id}||`, label: addressOf(source).replace(/^https?:\/\//, '') }],
         },
       ];
     if (offer.kind === 'linear')
@@ -342,7 +347,7 @@ export function SitePlaces({
     chosen === undefined || chosenTeam === undefined ? [] : projectGroupsOf(chosen.source, chosenTeam, free);
   const silent = sources.filter((source) => offers[source.id] === 'failed');
   const reading = sources.some((source) => offers[source.id] === 'loading');
-  const host = new URL(site.origin).host;
+  const host = hostOf(site.origin);
   const addId = useId();
 
   return (
@@ -560,17 +565,15 @@ export function SitePlaces({
       {teamsFailed.length === 0 ? null : (
         <Problem>
           {t('{source} did not answer with more teams. Try again.', {
-            source: teamsFailed.map((source) => `${t(KINDS[source.kind].name)} · ${sourceLine(source)}`).join(', '),
+            source: teamsFailed.map(sourceName).join(', '),
           })}
         </Problem>
       )}
       {silent.length === 0 ? null : (
         <div className="flex flex-col items-start gap-[8px]">
           <Problem>
-            {silent.length === 1
-              ? t('{source} did not send its places. Try again in a moment.', {
-                  source: `${t(KINDS[silent[0]?.kind ?? 'linear'].name)} · ${sourceLine(silent[0] as Connector)}`,
-                })
+            {silent.length === 1 && silent[0] !== undefined
+              ? t('{source} did not send its places. Try again in a moment.', { source: sourceName(silent[0]) })
               : t('Some connectors did not send their places. Try again in a moment.')}
           </Problem>
           <Button tone="outline" onClick={() => setReads((count) => count + 1)}>

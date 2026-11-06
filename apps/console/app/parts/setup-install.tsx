@@ -6,7 +6,7 @@ import { useConnectedExtension } from '../extension-connected';
 import { EXTENSION_IDS, hereProblemOf, useExtensionHere } from '../extension-here';
 import { type ReactNode, useEffect, useState } from 'react';
 import { BY_SIGN_IN, CONNECT_PAGE, snippetFor, useConnect, useCopy } from '../install-options';
-import { Button, LinkButton, OptionCard, Problem, Snippet, StatusDot } from '../ui';
+import { Button, LinkButton, OptionCard, Problem, Snippet, SuccessMark } from '../ui';
 import { useLocale } from '../use-locale';
 import { siteLabel } from '../site-address';
 import { SetupGuide } from '../setup-guide';
@@ -100,7 +100,7 @@ export function PutOnSite({ workspace, site }: { workspace: Workspace; site: Sit
     card = (
       <>
         <p className="mb-1.5 flex items-center gap-2 text-small font-semibold">
-          <StatusDot status="done" size={10} />
+          <SuccessMark size="inline" />
           {t('Extension connected in this browser')}
         </p>
         <div className="mt-auto">
@@ -151,7 +151,7 @@ export function PutOnSite({ workspace, site }: { workspace: Workspace; site: Sit
     card = (
       <>
         <p className="mb-1.5 flex items-center gap-2 text-small font-semibold">
-          <StatusDot status="done" size={10} />
+          <SuccessMark size="inline" />
           {t('Extension connected · {browser}', { browser: connected.browser })}
         </p>
         <div className="mt-auto">{connectLink}</div>

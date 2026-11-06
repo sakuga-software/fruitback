@@ -524,6 +524,34 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
 
 ### The rules, in short
 
+- **The composer of P5 (FRU-607), the structure of the board P5d of FRU-598.** Where it differs from
+  the mock-up of 2026-10-20 below, this is what holds:
+  - **Beside its element, not above it.** `place` tries the end side (the right in a left-to-right
+    language), then the start side, 16 px off the frame, its top on the top of the frame and kept in
+    the window; then below; above only when nothing else fits. A tether of 2 px, in the accent, goes
+    from its edge to the middle of the element (`--fruitback-composer-tether`), and a sheet on a
+    phone draws none. It grows from its top corner on the side of the element. `follow` moves it by
+    the edge it stands against. Held by `composer.test.ts` and `e2e/composer.spec.ts`.
+  - **Three zones: the head, the field, the foot.** The field is one box that holds the note, then
+    its files, then a row of icons: the picture of the element (the same box of the preference,
+    drawn as an icon), the capture with its menu of the area and the page, and the file. The row of
+    chips « Attach » is gone, and so is the drop zone: a file dropped on the field joins the note, a
+    drag of text stays the field's. « Your note » still names the field, for a screen reader.
+  - **The signature is an avatar at the end of the field**: the initials of the name the note goes
+    with, the whole name as its tooltip, « Guest » in dashes when it goes with none. A click opens
+    « Name (optional) » and « Remember me on this site », folded at each open. A signed reader sees
+    none: the worker signs, and the widget does not know the name (FRU-112).
+  - **The head writes what the element says**, « Commander · <Button> », in the font of the text.
+    `selectorInHead` is `with-selectors` by default now: the selector, in mono, only with
+    « Show CSS selectors ». `always` keeps the selector, as before.
+  - **Where the note goes, in icons, in the foot**: a tile with the first letter of the tool, then
+    the last part of the path the worker writes (« Linear · Design · Website » shows « Website »),
+    the whole path as the tooltip and for a screen reader. A button that opens the choice when a
+    member has two places or more; words otherwise.
+  - **Not here, and why.** The tile carries a letter, not the logo of the tool: no logo of Linear is
+    in a maintained icon set, and drawing a vendor's mark is a licence question. The canvas of
+    FRU-598 could not be read by the agent that built this (no access to the artifact): the
+    structure follows the words of the ticket, and a difference with the board is a follow-up.
 - **The capture and the composer have the measures of the mock-up** (FRU-258, screen 15). Read in
   its CSS, held by `e2e/capture.spec.ts` and `e2e/composer.spec.ts` on computed styles.
   - **A capture turns the capsule of the dock dark** (FRU-303): the ink of the mock-up, in both
@@ -579,7 +607,7 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
     the first does not come back. While a note is sending, a choice is let go: the note in flight
     is about the element before, and a failure must still find its text.
   - **The composer of the mock-up of 2026-10-20** (FRU-305): 360 px with a border of 1 px. It
-    opens **above** its element, 40 px over its top, on the edge of the frame (5 px off the
+    opened **above** its element (beside it since FRU-607, above it as the last resort), 40 px over its top, on the edge of the frame (5 px off the
     element); below when there is no room above. It rises from the corner nearest to its element,
     with no fade. Held by `e2e/composer.spec.ts` on computed styles.
     - **The head**, on the warm surface: the drop of « new », what the note points at in mono
@@ -1755,6 +1783,22 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
   line and show another name on the page: they are people of the team of the site.
 - **Two « Send » can be on screen**, the one of the composer and this one: this one is named « Send
   reply », and its visible word is in its name.
+
+## The colour of « Send » (FRU-601)
+
+### The rules, in short
+
+- **`actionColor` of `init` paints « Send » of the composer**, and `setActionColor(color)` of the
+  handle changes it with no new widget: a note being written stays. `undefined` gives « Send » the
+  accent again. The extension calls it with the colour its person chose in « Appearance ».
+- **Only « Send » takes it.** The launch button, the pins, the stages and the other uses of the
+  accent do not change: a colour chosen by one person must not change what the pins of a team say.
+- **The label stays white, so a colour under 4.5:1 with white is ignored**, as is anything that is not
+  `#rrggbb` or `#rgb`: « Send » keeps the accent. Under the pointer the colour is 15 % darker. The
+  drop is red where the red of Fruitback stands out on the colour at 3:1, white otherwise.
+- **Custom properties on the host element**, as `applyTheme` writes: `--fruitback-color-action`,
+  `-action-strong`, `-on-action` and `-action-mark`, read only by `.fruitback-composer-send`, each with
+  the accent as its fallback (`src/action-color.ts`, `action-color.test.ts`).
 
 ## The corner of the dock (FRU-443)
 

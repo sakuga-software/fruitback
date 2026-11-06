@@ -278,8 +278,11 @@ export type Composer = {
    * `anchor` is the element, or its edges in document coordinates. Given the element, the composer
    * follows it when it moves against the document: a fixed sidebar at a scroll, a row in a box that
    * scrolls (FRU-457).
+   *
+   * `head.selector` says that `about` is a selector, written in mono. Left out, it is the words of
+   * the element (FRU-607), in the font of the text.
    */
-  open(anchor: Element | ElementBox, about?: string, name?: string): void;
+  open(anchor: Element | ElementBox, about?: string, name?: string, head?: { selector?: boolean }): void;
   close(): void;
   state(): ComposerState;
   /**
@@ -376,11 +379,9 @@ export function createComposer(options: ComposerOptions): Composer {
   const attachPage = part<HTMLButtonElement>('[data-fruitback-attach-page]');
   const attachArea = part<HTMLButtonElement>('[data-fruitback-attach-area]');
   const attachFile = part<HTMLButtonElement>('[data-fruitback-attach-file]');
-  const attachDrop = part<HTMLButtonElement>('[data-fruitback-attach-drop]');
-  const dropZone = part('[data-fruitback-attach-dropzone]');
-  const dropWords = part('[data-fruitback-attach-dropzone-words]');
-  const dropChoose = part<HTMLButtonElement>('[data-fruitback-attach-dropzone-choose]');
-  const dropPaste = part('[data-fruitback-attach-dropzone-paste]');
+  const box = part('[data-fruitback-box]');
+  const tools = part('[data-fruitback-tools]');
+  const avatar = part<HTMLButtonElement>('[data-fruitback-avatar]');
   const fileInput = part<HTMLInputElement>('[data-fruitback-attach-file-input]');
   const attachNone = part('[data-fruitback-attach-none]');
   const attachList = part('[data-fruitback-attach-list]');
@@ -392,6 +393,7 @@ export function createComposer(options: ComposerOptions): Composer {
   const isIdentified = (): boolean =>
     typeof options.identified === 'function' ? options.identified() : options.identified === true;
   let asksForName = true;
+  let whoOpen = false;
   const choice = options.destinations;
 
   // Set after the build and never part of TEMPLATE: a host translation is text, not markup.
@@ -417,16 +419,24 @@ export function createComposer(options: ComposerOptions): Composer {
   cancel.textContent = t.text('composer.cancel');
   keep.textContent = t.text('composer.keep');
   signIn.textContent = t.text('composer.signIn');
+  // A button never wraps (FRU-611, P7): words longer than its room end in « … », and the tooltip
+  // gives them whole.
+  for (const button of [pick, cancel, keep, signIn]) button.title = button.textContent ?? '';
+  send.title = t.text('composer.send');
   placeList.setAttribute('aria-label', t.text('composer.destinations'));
   attachLabel.textContent = t.text('composer.attach');
-  attachTrigger.append(document.createTextNode(t.text('composer.attachMenu')), createIcon(document, 'chevron'));
+  // Two icons at the foot of the field (FRU-607): the capture, then the file. Each says its name in
+  // a tooltip, and to a screen reader in its own words.
+  attachTrigger.append(createIcon(document, 'camera'), hiddenWords(document, t.text('composer.captureMenu')));
+  attachTrigger.title = t.text('composer.captureMenu');
   attachPage.textContent = t.text('composer.attachPage');
   attachArea.textContent = t.text('composer.attachArea');
-  attachFile.textContent = t.text('composer.attachFile');
-  attachDrop.textContent = t.text('composer.attachDrop');
-  dropWords.textContent = t.text('composer.attachDropHere');
-  dropChoose.textContent = t.text('composer.attachDropChoose');
-  dropPaste.textContent = t.text('composer.attachPaste', { keys: pasteKeys(document) });
+  attachFile.append(createIcon(document, 'paperclip'), hiddenWords(document, t.text('composer.attachFile')));
+  // The paste has no button of its own: the tooltip of the file says it (FRU-424).
+  attachFile.title = `${t.text('composer.attachFile')} · ${t.text('composer.attachPaste', { keys: pasteKeys(document) })}`;
+  part('[data-fruitback-picture-label]').prepend(createIcon(document, 'image'));
+  pictureLabel.title = t.text('composer.picture');
+  avatar.setAttribute('aria-controls', 'fruitback-composer-who');
   attachNone.textContent = t.text('composer.attachNoTracker');
 
   /** Whether « Keep for later » is offered at this open. A note with files is sent, never kept. */
@@ -443,16 +453,14 @@ export function createComposer(options: ComposerOptions): Composer {
     attachWays.hidden = offer !== 'offered';
     attachNone.hidden = offer !== 'no-tracker';
     const captures = seam?.captures() === true;
-    (attachPage.parentElement as HTMLElement).hidden = !captures;
-    (attachArea.parentElement as HTMLElement).hidden = !captures;
+    // The capture is an icon of its own, there only where the host can take one (FRU-607).
+    attachTrigger.hidden = !captures;
     const full = held.filter((each) => each.state !== 'refused').length >= MAX_FILES;
-    for (const way of [attachTrigger, attachPage, attachArea, attachFile, attachDrop, dropChoose])
+    for (const way of [attachTrigger, attachPage, attachArea, attachFile])
       way.setAttribute('aria-disabled', String(full));
-    if (full || offer !== 'offered') {
-      closeAttachMenu(false);
-      dropZone.hidden = true;
-    }
+    if (full || offer !== 'offered') closeAttachMenu(false);
     keep.hidden = !keepOffered || held.length > 0;
+    drawTools();
 
     const hadFocus = attachList.contains(deepActiveElement(document));
     attachList.hidden = held.length === 0;
@@ -536,9 +544,7 @@ export function createComposer(options: ComposerOptions): Composer {
 
   /** The ways of the menu that are shown now, in their order. */
   function menuItems(): HTMLButtonElement[] {
-    return [attachFile, attachArea, attachPage, attachDrop].filter(
-      (item) => !(item.parentElement as HTMLElement).hidden,
-    );
+    return [attachArea, attachPage];
   }
 
   /**
@@ -648,12 +654,8 @@ export function createComposer(options: ComposerOptions): Composer {
     keep.disabled = send.disabled;
     // No way to join a file while the note is sent, or after (FRU-373): no note would name it.
     const settled = next === 'sending' || next === 'sent' || next === 'kept';
-    for (const way of [attachTrigger, attachPage, attachArea, attachFile, attachDrop, dropChoose])
-      way.disabled = settled;
-    if (settled) {
-      closeAttachMenu(false);
-      dropZone.hidden = true;
-    }
+    for (const way of [attachTrigger, attachPage, attachArea, attachFile]) way.disabled = settled;
+    if (settled) closeAttachMenu(false);
     field.readOnly = next === 'sending';
     // A failure is a card of its own above the foot (FRU-305): « Not sent », then what to
     // do. The sentence is the one of its cause (FRU-156).
@@ -864,8 +866,41 @@ export function createComposer(options: ComposerOptions): Composer {
   /** The typed name is kept, hidden, and not sent: an identity that ends gives the field back with it. */
   function askForNameOrNot(): void {
     asksForName = !isIdentified();
-    // « Name (optional) » is a field of the body (FRU-305), where a link opened it before.
-    who.hidden = !asksForName;
+    foldWho(whoOpen);
+    drawAvatar();
+  }
+
+  /**
+   * The name and « Remember me » stand behind the avatar (FRU-607): a note is signed « Guest » until
+   * somebody opens them. Nothing typed goes when they fold: the name stays in its field.
+   */
+  function foldWho(open: boolean): void {
+    whoOpen = open;
+    who.hidden = !(asksForName && open);
+    avatar.setAttribute('aria-expanded', String(!who.hidden));
+  }
+
+  /**
+   * The signature, as an avatar at the end of the field (FRU-607): the initials of the name the note
+   * goes with, the whole name in the tooltip, and « Guest » in dashes when it goes with none. A signed
+   * reader sees none: the worker names them, and the widget does not know the name (FRU-112).
+   */
+  function drawAvatar(): void {
+    avatar.hidden = !asksForName;
+    const signed = typedName();
+    avatar.dataset.fruitbackAvatar = signed === undefined ? 'guest' : 'named';
+    avatar.textContent = signed === undefined ? t.text('composer.guest') : initialsOf(signed, t.locale);
+    avatar.title = signed ?? t.text('composer.guest');
+    avatar.setAttribute(
+      'aria-label',
+      signed === undefined ? t.text('composer.signedGuest') : t.text('composer.signedAs', { name: signed }),
+    );
+    drawTools();
+  }
+
+  /** The row of icons goes when it holds none: a signed reader on a site that takes no file. */
+  function drawTools(): void {
+    tools.hidden = avatar.hidden && pictureLabel.hidden && attachWays.hidden;
   }
 
   /** The box shows the preference as it is now. It is never ticked by anything but its reporter. */
@@ -873,9 +908,10 @@ export function createComposer(options: ComposerOptions): Composer {
     const offered = options.picture?.offered() === true;
     pictureLabel.hidden = !offered;
     picture.checked = offered && options.picture?.get() === true;
+    drawTools();
   }
 
-  function open(target: Element | ElementBox, subject = '', readable = ''): void {
+  function open(target: Element | ElementBox, subject = '', readable = '', head: { selector?: boolean } = {}): void {
     following = isElement(target) ? target : null;
     const anchor = isElement(target) ? boxOf(target) : target;
     placedAt = anchor;
@@ -887,6 +923,7 @@ export function createComposer(options: ComposerOptions): Composer {
     // As text: it is whatever the page called its element and its component.
     about.textContent = subject;
     about.title = readable;
+    about.toggleAttribute('data-fruitback-selector', head.selector === true);
     // Somebody is writing, and points the open composer at another element: a second capture over
     // it does that. **Nothing they set is set again**: the note, the name they typed, the place
     // they chose and the sentence of a failed send all stay. Only what the note is about changes,
@@ -906,13 +943,16 @@ export function createComposer(options: ComposerOptions): Composer {
     session += 1;
     const restored = options.autosave?.read() ?? '';
     field.value = restored;
+    fitField();
     showPicture();
+    whoOpen = false;
     askForNameOrNot();
     held = [];
     closeAttachMenu(false);
-    dropZone.hidden = true;
+    box.toggleAttribute('data-fruitback-dragging', false);
     keepOffered = options.keep?.offered() === true;
     showRememberedName();
+    drawAvatar();
     // Folded at each open, on the place chosen last. The line says where, and that is enough for
     // the many notes that go where the one before went.
     selected = undefined;
@@ -970,8 +1010,11 @@ export function createComposer(options: ComposerOptions): Composer {
     const now = boxOf(following);
     // By the edges it was placed against: the start edge across, and the side it opened on. An element
     // that only moved moves them all alike; one that grows back from a press (FRU-489) does not.
-    const dx = t.direction === 'rtl' ? now.right - placedAt.right : now.left - placedAt.left;
-    const dy = root.dataset.fruitbackSide === 'below' ? now.bottom - placedAt.bottom : now.top - placedAt.top;
+    // Beside the element, the edge it stands against; above or below, its start edge.
+    const side = root.dataset.fruitbackSide;
+    const byRight = side === 'right' || ((side === 'above' || side === 'below') && t.direction === 'rtl');
+    const dx = byRight ? now.right - placedAt.right : now.left - placedAt.left;
+    const dy = side === 'below' ? now.bottom - placedAt.bottom : now.top - placedAt.top;
     if (dx === 0 && dy === 0) return;
     placedAt = now;
     // Across, it stays inside the window, as `place` keeps it: an element that a box scrolls sideways
@@ -988,40 +1031,68 @@ export function createComposer(options: ComposerOptions): Composer {
   view?.addEventListener('resize', follow, { passive: true });
 
   /**
-   * Above the element it belongs to, 40 px over its top, as the mock-up draws it (FRU-258): the frame
-   * and the name of the component stay in sight under it. Below when there is no room above, and
-   * inside the window when there is room on neither side. Aligned on the start edge of the frame:
-   * its left in a left-to-right language, its right otherwise. The value stays a physical left,
-   * because it is a position against the page (FRU-38).
+   * Beside the element it belongs to, on the side with room (FRU-607): the end side first (the right
+   * in a left-to-right language), then the start side, then below, and above only when nothing else
+   * fits. Above, it ends 40 px over the top of the element, so the label of the frame stays in
+   * sight (FRU-258). With room nowhere it stays under the element, as far down as the window lets it.
+   *
+   * A line joins it to the frame (the tether), from its edge to the middle of the element, kept
+   * inside its own edge. The values stay physical, because they are positions against the page
+   * (FRU-38).
    *
    * On a narrow screen the rules below take over entirely and pin it to the bottom of the viewport, so
    * the position set here stops mattering — which is why it is set with `style` and overridden by a media query.
    */
-  function place(anchor: { left: number; top: number; bottom: number; right: number }): void {
+  function place(anchor: ElementBox): void {
     const width = view?.innerWidth ?? 0;
     const height = view?.innerHeight ?? 0;
     const scrollX = view?.scrollX ?? 0;
     const scrollY = view?.scrollY ?? 0;
     const own = root.getBoundingClientRect();
+    const minLeft = scrollX + GAP;
+    const maxLeft = scrollX + width - WIDTH - GAP;
+    const minTop = scrollY + GAP;
+    const maxTop = Math.max(minTop, scrollY + height - own.height - GAP);
+    const right = anchor.right + FRAME + SIDE;
+    const left = anchor.left - FRAME - SIDE - WIDTH;
     const above = anchor.top - RISE - own.height;
     const below = anchor.bottom + FRAME + GAP;
-    const fitsAbove = above >= scrollY + GAP;
-    const fitsBelow = below + own.height <= scrollY + height;
     const start = t.direction === 'rtl' ? anchor.right + FRAME - WIDTH : anchor.left - FRAME;
-    // With room on neither side it stays under the element, as far down as the window lets it.
-    const under = fitsBelow ? below : Math.max(scrollY + GAP, scrollY + height - own.height - GAP);
-    const top = fitsAbove ? above : under;
+    const fits: Record<Side, boolean> = {
+      right: right <= maxLeft,
+      left: left >= minLeft,
+      below: below + own.height <= scrollY + height,
+      above: above >= minTop,
+    };
+    const order: readonly Side[] =
+      t.direction === 'rtl' ? ['left', 'right', 'below', 'above'] : ['right', 'left', 'below', 'above'];
+    const side = order.find((each) => fits[each]) ?? 'below';
+    const across = side === 'right' || side === 'left';
+    const startLeft = Math.max(minLeft, Math.min(start, maxLeft));
+    const sideTop = Math.max(minTop, Math.min(anchor.top - FRAME, maxTop));
+    const underTop = fits.below ? below : maxTop;
+    // Where it stands on each side, and how long the tether is from its edge to the frame.
+    const at: Record<Side, { x: number; y: number; length: number }> = {
+      right: { x: right, y: sideTop, length: SIDE },
+      left: { x: left, y: sideTop, length: SIDE },
+      // With room nowhere it can cover the element: the tether then has no length.
+      below: { x: startLeft, y: underTop, length: Math.max(0, underTop - anchor.bottom - FRAME) },
+      above: { x: startLeft, y: above, length: RISE - FRAME },
+    };
+    const { x, y, length } = at[side];
 
     // Where it grows from: the corner nearest to its element.
-    root.dataset.fruitbackSide = fitsAbove ? 'above' : 'below';
+    root.dataset.fruitbackSide = side;
     // Custom properties rather than inline `left`/`top`: an inline style would beat the media query
     // below and leave the mobile sheet offset by whatever the element's position happened to be.
-    // `start` is in document coordinates, so the window it must stay inside starts at `scrollX` (FRU-68).
-    root.style.setProperty(
-      '--fruitback-composer-left',
-      `${Math.max(scrollX + GAP, Math.min(start, scrollX + width - WIDTH - GAP))}px`,
-    );
-    root.style.setProperty('--fruitback-composer-top', `${top}px`);
+    // In document coordinates, so the window it must stay inside starts at `scrollX` (FRU-68).
+    root.style.setProperty('--fruitback-composer-left', `${x}px`);
+    root.style.setProperty('--fruitback-composer-top', `${y}px`);
+    // The tether meets the middle of the element, and stays on the edge of the composer.
+    const along = across ? (anchor.top + anchor.bottom) / 2 - y : (anchor.left + anchor.right) / 2 - x;
+    const most = (across ? own.height : WIDTH) - TETHER_INSET;
+    root.style.setProperty('--fruitback-composer-tether', `${Math.max(TETHER_INSET, Math.min(along, most))}px`);
+    root.style.setProperty('--fruitback-composer-tether-length', `${length}px`);
   }
 
   /**
@@ -1120,14 +1191,29 @@ export function createComposer(options: ComposerOptions): Composer {
   function showSelected(): void {
     const index = places.findIndex((place) => place.id === selected);
     const place = places[index];
-    destination.textContent =
-      place === undefined ? '' : t.text('composer.destination', { destination: nameOf(place, index) });
+    // In icons (FRU-607): the tile of the tool, then the most precise name. The whole path is the
+    // tooltip and the accessible name, and the button opens the choice.
+    if (place === undefined) destination.replaceChildren();
+    else {
+      const path = nameOf(place, index);
+      destination.replaceChildren(
+        ...placeIcons(document, path, t.text('composer.destination', { destination: path })),
+        createIcon(document, 'chevron'),
+      );
+      destination.title = path;
+    }
     // The foot says where the note lands (FRU-305): the one place a member sees, or « to the team ».
-    // With several places, the line of the body above says it and lets them choose.
+    // With several places, the button above says it and lets them choose.
     const only = places.length === 1 ? places[0] : undefined;
     lands.hidden = places.length >= 2;
-    lands.textContent =
-      only === undefined ? t.text('composer.landsTeam') : t.text('composer.lands', { destination: nameOf(only, 0) });
+    if (only === undefined) {
+      lands.textContent = t.text('composer.landsTeam');
+      lands.removeAttribute('title');
+    } else {
+      const path = nameOf(only, 0);
+      lands.replaceChildren(...placeIcons(document, path, t.text('composer.lands', { destination: path })));
+      lands.title = path;
+    }
   }
 
   const checkedPlace = () => placeList.querySelector<HTMLInputElement>('input:checked');
@@ -1159,6 +1245,12 @@ export function createComposer(options: ComposerOptions): Composer {
 
   pick.addEventListener('click', () => options.onPickAgain?.());
 
+  avatar.addEventListener('click', () => {
+    foldWho(!whoOpen);
+    if (!who.hidden) name.focus();
+  });
+  name.addEventListener('input', drawAvatar);
+
   // Unticked, the box forgets at once. The reporter does not have to send a note to be forgotten.
   remember.addEventListener('change', () => {
     if (!remember.checked) memory?.set(undefined);
@@ -1188,37 +1280,28 @@ export function createComposer(options: ComposerOptions): Composer {
   const stopFollowingOffer = seam?.subscribe(drawAttachments);
   attachPage.addEventListener('click', () => void capture('page', attachTrigger));
   attachArea.addEventListener('click', () => void capture('area', attachTrigger));
-  attachDrop.addEventListener('click', () => {
-    if (attachDrop.getAttribute('aria-disabled') === 'true') return;
-    closeAttachMenu(false);
-    dropZone.hidden = false;
-    dropZone.focus();
-  });
-  dropChoose.addEventListener('click', () => {
-    if (dropChoose.getAttribute('aria-disabled') !== 'true') fileInput.click();
-  });
-  dropZone.addEventListener('keydown', (event) => {
-    if (event.key !== 'Escape') return;
-    event.preventDefault();
-    event.stopPropagation();
-    dropZone.hidden = true;
-    attachTrigger.focus();
-  });
+  // A file dropped on the field joins the note (FRU-607): the field is where the files are.
+  const takesDrop = (): boolean => seam?.offer(selected) === 'offered' && !attachFile.disabled;
   for (const type of ['dragenter', 'dragover'] as const) {
-    dropZone.addEventListener(type, (event) => {
+    box.addEventListener(type, (event) => {
+      if (!takesDrop() || ![...(event.dataTransfer?.types ?? [])].includes('Files')) return;
       event.preventDefault();
-      dropZone.toggleAttribute('data-fruitback-dragging', true);
+      box.toggleAttribute('data-fruitback-dragging', true);
     });
   }
-  dropZone.addEventListener('dragleave', () => dropZone.toggleAttribute('data-fruitback-dragging', false));
-  dropZone.addEventListener('drop', (event) => {
-    event.preventDefault();
-    dropZone.toggleAttribute('data-fruitback-dragging', false);
-    if (dropZone.getAttribute('aria-disabled') === 'true') return;
+  box.addEventListener('dragleave', (event) => {
+    // Leaving the field for one of its own children is not leaving it.
+    if (isElement(event.relatedTarget) && box.contains(event.relatedTarget)) return;
+    box.toggleAttribute('data-fruitback-dragging', false);
+  });
+  box.addEventListener('drop', (event) => {
+    box.toggleAttribute('data-fruitback-dragging', false);
     const files = [...(event.dataTransfer?.files ?? [])];
     if (files.length === 0) return;
-    dropZone.hidden = true;
-    void joinFiles(files, session).then(() => attachTrigger.focus());
+    // A drop of text stays a drop of text, in the field: only files are taken from it.
+    event.preventDefault();
+    if (!takesDrop() || attachFile.getAttribute('aria-disabled') === 'true') return;
+    void joinFiles(files, session);
   });
   // A screenshot pasted anywhere in the composer joins the note (FRU-424), as a file chosen does.
   root.addEventListener('paste', (event) => {
@@ -1266,7 +1349,7 @@ export function createComposer(options: ComposerOptions): Composer {
   });
   attachFile.addEventListener('click', () => {
     if (attachFile.getAttribute('aria-disabled') === 'true') return;
-    closeAttachMenu(true);
+    closeAttachMenu(false);
     fileInput.click();
   });
   // A click out of the menu closes it, as Esc does, and leaves the focus where the click put it.
@@ -1301,7 +1384,27 @@ export function createComposer(options: ComposerOptions): Composer {
   field.addEventListener('input', () => {
     options.autosave?.write(field.value);
     if (state === 'idle') status.textContent = '';
+    fitField();
   });
+  field.addEventListener('scroll', fadeField, { passive: true });
+
+  /**
+   * The field grows with its text up to 150 px, then scrolls (FRU-611, P7). Its own height is set
+   * from its content; the stylesheet keeps the 96 px of the mock-up as the least.
+   */
+  function fitField(): void {
+    field.style.removeProperty('height');
+    const tall = field.scrollHeight;
+    // No layout (a closed composer, a DOM with no layout): the stylesheet decides.
+    if (tall > 0) field.style.setProperty('height', `${Math.min(tall, FIELD_MAX)}px`);
+    fadeField();
+  }
+
+  /** A fade at the foot of the field says there is more text below, while there is. */
+  function fadeField(): void {
+    const below = field.scrollHeight - field.clientHeight - field.scrollTop;
+    field.toggleAttribute('data-fruitback-more', below > 1);
+  }
   field.addEventListener('keydown', (event) => {
     // ⌘/Ctrl+Enter sends, because a plain Enter belongs to the note.
     if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) void submit();
@@ -1341,6 +1444,77 @@ export function createComposer(options: ComposerOptions): Composer {
   };
 }
 
+/**
+ * Words a screen reader reads and the eye does not: the name of an icon, the whole path of a place.
+ */
+function hiddenWords(document: Document, words: string): HTMLElement {
+  const span = document.createElement('span');
+  span.className = 'fruitback-composer-sr';
+  span.textContent = words;
+
+  return span;
+}
+
+/**
+ * The initials of a name, as an avatar writes them (FRU-607): the first letter of its first word and
+ * of its last, « CD » for « Camille Durand », « C » for « Camille ». By code point, so a letter outside
+ * the basic plane is not cut in two.
+ */
+export function initialsOf(name: string, locale?: string): string {
+  const words = name
+    .trim()
+    .split(/\s+/u)
+    .filter((word) => word !== '');
+  const first = words[0];
+  if (first === undefined) return '';
+  const last = words.length > 1 ? words[words.length - 1] : undefined;
+  const letter = (word: string | undefined): string => (word === undefined ? '' : (Array.from(word)[0] ?? ''));
+
+  return (letter(first) + letter(last)).toLocaleUpperCase(locale);
+}
+
+/**
+ * A place in icons (FRU-607): the tile of its tool, then its most precise name. The worker writes
+ * the path « Linear · Design · Website », from the tool to the project (FRU-123); the tile takes the
+ * first letter of the tool, the name is the last part. A path of one part is its own tool and name.
+ */
+export function placeParts(path: string): { tool: string; name: string } {
+  const parts = path
+    .split(' · ')
+    .map((part) => part.trim())
+    .filter((part) => part !== '');
+  const tool = parts[0] ?? path;
+
+  return { tool, name: parts[parts.length - 1] ?? path };
+}
+
+/**
+ * The tile, then `sentence` with the name in sight and the rest for a screen reader only: « Send to:
+ * Linear · » is heard, « Website » is seen and heard. The name a reader hears holds the words they
+ * see (WCAG 2.5.3), in the order of any language, because the sentence is split where the name is.
+ */
+function placeIcons(document: Document, path: string, sentence: string): HTMLElement[] {
+  const { tool, name } = placeParts(path);
+  const tile = document.createElement('span');
+  tile.className = 'fruitback-composer-tile';
+  tile.setAttribute('aria-hidden', 'true');
+  tile.textContent = Array.from(tool)[0]?.toUpperCase() ?? '';
+  const named = document.createElement('span');
+  named.className = 'fruitback-composer-place-name';
+  named.textContent = name;
+  const at = sentence.lastIndexOf(name);
+  if (at < 0) return [tile, hiddenWords(document, sentence), named];
+  const before = sentence.slice(0, at);
+  const after = sentence.slice(at + name.length);
+
+  return [
+    tile,
+    ...(before === '' ? [] : [hiddenWords(document, before)]),
+    named,
+    ...(after === '' ? [] : [hiddenWords(document, after)]),
+  ];
+}
+
 /** The space `place` keeps between the composer and the edge of the window (FRU-258). */
 const GAP = 10;
 /**
@@ -1349,6 +1523,15 @@ const GAP = 10;
  */
 const RISE = 40;
 const FRAME = 5;
+/** The tallest the field grows with its text before it scrolls (FRU-611, P7). */
+export const FIELD_MAX = 150;
+/** How far beside its element the composer stands: the length of the tether across (FRU-607). */
+const SIDE = 16;
+/** The tether keeps this far from a corner of the composer, so it never meets the rounded edge. */
+const TETHER_INSET = 18;
+
+/** The side of its element the composer opens on (FRU-607). */
+type Side = 'right' | 'left' | 'below' | 'above';
 
 const STATUS = {
   sending: 'composer.sending',
@@ -1418,6 +1601,8 @@ function build(document: Document, [tag, attributes, children = []]: Markup): El
 }
 
 const TEMPLATE: readonly Markup[] = [
+  // The line from the composer to the frame of its element (FRU-607). Drawn, never read.
+  ['span', { 'data-fruitback-tether': '', class: 'fruitback-composer-tether', 'aria-hidden': 'true' }],
   [
     'div',
     { class: 'fruitback-composer-head' },
@@ -1431,17 +1616,147 @@ const TEMPLATE: readonly Markup[] = [
     'div',
     { class: 'fruitback-composer-body' },
     [
+      // The field holds the note, its files and the tools that add them, and the signature (FRU-607).
       [
-        'label',
-        { class: 'fruitback-composer-field' },
+        'div',
+        { 'data-fruitback-box': '', class: 'fruitback-composer-box' },
         [
-          ['span', { 'data-fruitback-note-label': '', class: 'fruitback-composer-label' }],
-          ['textarea', { 'data-fruitback-note': '', rows: '4' }],
+          [
+            'label',
+            { class: 'fruitback-composer-field' },
+            [
+              ['span', { 'data-fruitback-note-label': '', class: 'fruitback-composer-sr' }],
+              ['textarea', { 'data-fruitback-note': '', rows: '4' }],
+            ],
+          ],
+          [
+            'div',
+            {
+              'data-fruitback-attach': '',
+              class: 'fruitback-composer-attach',
+              role: 'group',
+              'aria-labelledby': 'fruitback-composer-attach-label',
+              hidden: '',
+            },
+            [
+              [
+                'span',
+                {
+                  'data-fruitback-attach-label': '',
+                  id: 'fruitback-composer-attach-label',
+                  class: 'fruitback-composer-sr',
+                },
+              ],
+              ['p', { 'data-fruitback-attach-none': '', class: 'fruitback-composer-attach-none', hidden: '' }],
+              ['ul', { 'data-fruitback-attach-list': '', class: 'fruitback-composer-files', hidden: '' }],
+            ],
+          ],
+          [
+            'div',
+            { 'data-fruitback-tools': '', class: 'fruitback-composer-tools' },
+            [
+              [
+                'label',
+                {
+                  'data-fruitback-picture-label': '',
+                  class: 'fruitback-composer-tool fruitback-composer-toggle',
+                  hidden: '',
+                },
+                [
+                  ['input', { 'data-fruitback-picture': '', type: 'checkbox', name: 'fruitback-picture' }],
+                  ['span', { class: 'fruitback-composer-sr' }],
+                ],
+              ],
+              [
+                'div',
+                { 'data-fruitback-attach-ways': '', class: 'fruitback-composer-attach-ways' },
+                [
+                  [
+                    'button',
+                    {
+                      type: 'button',
+                      'data-fruitback-attach-trigger': '',
+                      class: 'fruitback-composer-tool fruitback-composer-attach-trigger',
+                      'aria-haspopup': 'menu',
+                      'aria-expanded': 'false',
+                      'aria-controls': 'fruitback-composer-attach-menu',
+                    },
+                  ],
+                  [
+                    'ul',
+                    {
+                      'data-fruitback-attach-menu': '',
+                      id: 'fruitback-composer-attach-menu',
+                      class: 'fruitback-composer-attach-menu',
+                      role: 'menu',
+                      'aria-labelledby': 'fruitback-composer-attach-label',
+                      hidden: '',
+                    },
+                    [
+                      [
+                        'li',
+                        { role: 'none' },
+                        [
+                          [
+                            'button',
+                            {
+                              type: 'button',
+                              role: 'menuitem',
+                              tabindex: '-1',
+                              'data-fruitback-attach-area': '',
+                              class: 'fruitback-composer-attach-item',
+                            },
+                          ],
+                        ],
+                      ],
+                      [
+                        'li',
+                        { role: 'none' },
+                        [
+                          [
+                            'button',
+                            {
+                              type: 'button',
+                              role: 'menuitem',
+                              tabindex: '-1',
+                              'data-fruitback-attach-page': '',
+                              class: 'fruitback-composer-attach-item',
+                            },
+                          ],
+                        ],
+                      ],
+                    ],
+                  ],
+                  ['button', { type: 'button', 'data-fruitback-attach-file': '', class: 'fruitback-composer-tool' }],
+                  [
+                    'input',
+                    {
+                      'data-fruitback-attach-file-input': '',
+                      type: 'file',
+                      multiple: '',
+                      tabindex: '-1',
+                      'aria-hidden': 'true',
+                      hidden: '',
+                    },
+                  ],
+                ],
+              ],
+              [
+                'button',
+                {
+                  type: 'button',
+                  'data-fruitback-avatar': 'guest',
+                  class: 'fruitback-composer-avatar',
+                  'aria-expanded': 'false',
+                },
+              ],
+            ],
+          ],
         ],
       ],
       [
         'div',
-        { 'data-fruitback-who': '', class: 'fruitback-composer-who' },
+        { 'data-fruitback-who': '', id: 'fruitback-composer-who', class: 'fruitback-composer-who', hidden: '' },
         [
           [
             'label',
@@ -1460,177 +1775,6 @@ const TEMPLATE: readonly Markup[] = [
             ],
           ],
         ],
-      ],
-      [
-        'label',
-        { 'data-fruitback-picture-label': '', class: 'fruitback-composer-check', hidden: '' },
-        [
-          ['input', { 'data-fruitback-picture': '', type: 'checkbox', name: 'fruitback-picture' }],
-          ['span', {}],
-        ],
-      ],
-      [
-        'div',
-        {
-          'data-fruitback-attach': '',
-          class: 'fruitback-composer-attach',
-          role: 'group',
-          'aria-labelledby': 'fruitback-composer-attach-label',
-          hidden: '',
-        },
-        [
-          [
-            'span',
-            {
-              'data-fruitback-attach-label': '',
-              id: 'fruitback-composer-attach-label',
-              class: 'fruitback-composer-label',
-            },
-          ],
-          [
-            'div',
-            { 'data-fruitback-attach-ways': '', class: 'fruitback-composer-attach-ways' },
-            [
-              [
-                'button',
-                {
-                  type: 'button',
-                  'data-fruitback-attach-trigger': '',
-                  class: 'fruitback-composer-attach-way fruitback-composer-attach-trigger',
-                  'aria-haspopup': 'menu',
-                  'aria-expanded': 'false',
-                  'aria-controls': 'fruitback-composer-attach-menu',
-                },
-              ],
-              [
-                'ul',
-                {
-                  'data-fruitback-attach-menu': '',
-                  id: 'fruitback-composer-attach-menu',
-                  class: 'fruitback-composer-attach-menu',
-                  role: 'menu',
-                  'aria-labelledby': 'fruitback-composer-attach-label',
-                  hidden: '',
-                },
-                [
-                  [
-                    'li',
-                    { role: 'none' },
-                    [
-                      [
-                        'button',
-                        {
-                          type: 'button',
-                          role: 'menuitem',
-                          tabindex: '-1',
-                          'data-fruitback-attach-file': '',
-                          class: 'fruitback-composer-attach-item',
-                        },
-                      ],
-                    ],
-                  ],
-                  [
-                    'li',
-                    { role: 'none' },
-                    [
-                      [
-                        'button',
-                        {
-                          type: 'button',
-                          role: 'menuitem',
-                          tabindex: '-1',
-                          'data-fruitback-attach-area': '',
-                          class: 'fruitback-composer-attach-item',
-                        },
-                      ],
-                    ],
-                  ],
-                  [
-                    'li',
-                    { role: 'none' },
-                    [
-                      [
-                        'button',
-                        {
-                          type: 'button',
-                          role: 'menuitem',
-                          tabindex: '-1',
-                          'data-fruitback-attach-page': '',
-                          class: 'fruitback-composer-attach-item',
-                        },
-                      ],
-                    ],
-                  ],
-                  [
-                    'li',
-                    { role: 'none' },
-                    [
-                      [
-                        'button',
-                        {
-                          type: 'button',
-                          role: 'menuitem',
-                          tabindex: '-1',
-                          'data-fruitback-attach-drop': '',
-                          class: 'fruitback-composer-attach-item',
-                        },
-                      ],
-                    ],
-                  ],
-                ],
-              ],
-              [
-                'input',
-                {
-                  'data-fruitback-attach-file-input': '',
-                  type: 'file',
-                  multiple: '',
-                  tabindex: '-1',
-                  'aria-hidden': 'true',
-                  hidden: '',
-                },
-              ],
-            ],
-          ],
-          [
-            'div',
-            {
-              'data-fruitback-attach-dropzone': '',
-              class: 'fruitback-composer-dropzone',
-              tabindex: '-1',
-              role: 'group',
-              'aria-labelledby': 'fruitback-composer-dropzone-words',
-              hidden: '',
-            },
-            [
-              [
-                'p',
-                {
-                  'data-fruitback-attach-dropzone-words': '',
-                  id: 'fruitback-composer-dropzone-words',
-                  class: 'fruitback-composer-dropzone-words',
-                },
-              ],
-              [
-                'button',
-                { type: 'button', 'data-fruitback-attach-dropzone-choose': '', class: 'fruitback-composer-attach-way' },
-              ],
-              ['p', { 'data-fruitback-attach-dropzone-paste': '', class: 'fruitback-composer-dropzone-paste' }],
-            ],
-          ],
-          ['p', { 'data-fruitback-attach-none': '', class: 'fruitback-composer-attach-none', hidden: '' }],
-          ['ul', { 'data-fruitback-attach-list': '', class: 'fruitback-composer-files', hidden: '' }],
-        ],
-      ],
-      [
-        'button',
-        {
-          type: 'button',
-          'data-fruitback-destination': '',
-          class: 'fruitback-composer-identify',
-          'aria-expanded': 'false',
-          hidden: '',
-        },
       ],
       [
         'div',
@@ -1753,6 +1897,16 @@ const TEMPLATE: readonly Markup[] = [
         { 'data-fruitback-status': '', class: 'fruitback-composer-status', role: 'status', 'aria-live': 'polite' },
       ],
       ['span', { 'data-fruitback-lands': '', class: 'fruitback-composer-lands' }],
+      [
+        'button',
+        {
+          type: 'button',
+          'data-fruitback-destination': '',
+          class: 'fruitback-composer-destination',
+          'aria-expanded': 'false',
+          hidden: '',
+        },
+      ],
       [
         'button',
         {

@@ -32,8 +32,8 @@ test('the bench sends a note in team mode, with a capture after the click on the
   if (bench.gesture === 'click') {
     await site.getByRole('button', { name: 'Team feedback' }).click();
     await site.locator('[data-testid="card-latte"] .add').click();
-    const files = site.getByRole('group', { name: 'Attachments' });
-    await files.getByRole('button', { name: 'Attach' }).click();
+    const files = site.getByRole('dialog', { name: 'New note', exact: true });
+    await files.getByRole('button', { name: 'Take a screenshot' }).click();
     await files.getByRole('menuitem', { name: 'Capture an area' }).click();
     await expect(site.getByRole('dialog', { name: 'Choose an area of the page' })).toBeVisible();
     await site.keyboard.press('Enter');

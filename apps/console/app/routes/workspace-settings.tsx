@@ -7,19 +7,9 @@ import { manages } from '../setup-stage';
 import { Button, Field, FilePick, Problem, SubNav } from '../ui';
 import { useLocale } from '../use-locale';
 import { LOGO_NOT_REMOVED, LOGO_NOT_SAVED, LOGO_PROBLEMS, logoRefusal } from '../workspace-logo';
-import { RENAME_PROBLEMS, WORKSPACE_NOT_RENAMED } from './setup-account';
+import { RENAME_PROBLEMS, WORKSPACE_NOT_RENAMED } from '../parts/setup-account';
 import { PageHead, WorkspaceMark, useWorkspace } from './workspace';
 
-/**
- * The settings of a workspace (FRU-414): « Settings » in the rail for an owner or an admin (FRU-503),
- * and the name of the workspace at the top of the rail for every role. No board draws it: it is the
- * kit, as « My account » lays it out.
- *
- * It holds what the worker lets a workspace change today, for an owner or an admin: its name
- * (FRU-236) and its logo (FRU-428). Every member reads both. The owner deletes the workspace at the
- * end (FRU-503). What an agent needs is on the page « AI » of the settings (FRU-544,
- * `workspace-settings-ai.tsx`), the second link of `SettingsNav`.
- */
 /** The pages of the settings (FRU-544): « General », here, and « AI », what an agent needs. */
 export function SettingsNav({ workspace, current }: { workspace: Workspace; current: 'general' | 'ai' }) {
   useLocale();
@@ -38,6 +28,16 @@ export function SettingsNav({ workspace, current }: { workspace: Workspace; curr
   );
 }
 
+/**
+ * The settings of a workspace (FRU-414): « Settings » in the rail for an owner or an admin (FRU-503),
+ * and the name of the workspace at the top of the rail for every role. No board draws it: it is the
+ * kit, as « My account » lays it out.
+ *
+ * It holds what the worker lets a workspace change today, for an owner or an admin: its name
+ * (FRU-236) and its logo (FRU-428). Every member reads both. The owner deletes the workspace at the
+ * end (FRU-503). What an agent needs is on the page « AI » of the settings (FRU-544,
+ * `workspace-settings-ai.tsx`), the second link of `SettingsNav`.
+ */
 export default function WorkspaceSettings() {
   const { workspace } = useWorkspace();
 

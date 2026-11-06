@@ -1,5 +1,5 @@
 import { MAX_STATUSES, MIN_TEXT_CONTRAST, NOTE_STAGES, STATUS_COLOR, contrastRatio } from '@fruitback/shared';
-import type { Stage } from './api';
+import type { Stage } from './stages.ts';
 
 /**
  * The statuses of a site (FRU-371), as the screen holds them: what the worker keeps for the site
@@ -59,7 +59,7 @@ export type ScreenStatus = StatusRow & {
 export type TrackerState = { id: string; name: string; type: string; stage: Stage; color?: string };
 
 /** The four states of a GitHub issue (FRU-369), and the stage of each (FRU-32). */
-export const GITHUB_STATES: readonly { key: string; stage: Stage }[] = [
+const GITHUB_STATES: readonly { key: string; stage: Stage }[] = [
   { key: 'open', stage: 'new' },
   { key: 'closed:completed', stage: 'done' },
   { key: 'closed:not_planned', stage: 'closed' },
@@ -222,7 +222,7 @@ export function keyFor(name: string, taken: Iterable<string>, random: () => numb
 }
 
 /** Whether `value` is a colour the worker keeps: `#rrggbb`. */
-export function isColour(value: string): boolean {
+function isColour(value: string): boolean {
   return STATUS_COLOR.test(value);
 }
 

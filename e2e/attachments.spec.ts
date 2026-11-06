@@ -4,8 +4,8 @@ import { caseOf, WORKER_ORIGIN } from './pin.ts';
 
 /**
  * The files of a note in the composer (FRU-332), in French, at 390 px, with axe, in both schemes:
- * « Joindre » and its menu, the area, a capture that fails and the drop zone (FRU-351), and no pin
- * on the page while a capture is taken.
+ * the two icons at the foot of the field (FRU-607), the menu of the capture, the area, a capture that
+ * fails and a file dropped on the field (FRU-351), and no pin on the page while a capture is taken.
  *
  * The bundle is mounted with a transport that answers the read with `canAttach: true` and keeps a
  * file as the worker does, and with a capture of the host that answers a PNG: what the extension
@@ -78,7 +78,7 @@ async function pinShown(page: Page): Promise<boolean> {
 }
 
 for (const scheme of ['light', 'dark'] as const) {
-  test(`in French at 390 px, « Joindre », its menu, the area and the drop zone work with the keyboard, the pins are not on a capture, and axe finds nothing (${scheme})`, async ({
+  test(`in French at 390 px, the icons of the field, the menu of the capture, the area and a drop on the field work, the pins are not on a capture, and axe finds nothing (${scheme})`, async ({
     page,
   }) => {
     await page.setViewportSize({ width: 390, height: 844 });
@@ -98,10 +98,12 @@ for (const scheme of ['light', 'dark'] as const) {
 
     await page.getByRole('button', { name: 'Laisser une note' }).click();
     await page.locator('[data-testid="card-latte"] .add').click();
-    const files = page.getByRole('group', { name: 'Pièces jointes' });
+    const files = page.getByRole('dialog', { name: 'Nouvelle note', exact: true });
     await expect(files).toBeVisible();
     await expect(page.locator('[data-fruitback-attach-file-input]')).toBeHidden();
-    const trigger = files.getByRole('button', { name: 'Joindre' });
+    // Two icons at the foot of the field (FRU-607): the capture, with its menu, and the file.
+    await expect(files.getByRole('button', { name: 'Ajouter une pièce jointe', exact: true })).toBeVisible();
+    const trigger = files.getByRole('button', { name: 'Prendre une capture' });
     await expect(trigger).toHaveAttribute('aria-haspopup', 'menu');
 
     // The menu, with the keyboard only: it opens on its first way, and the arrows go round.
@@ -109,13 +111,8 @@ for (const scheme of ['light', 'dark'] as const) {
     await page.keyboard.press('ArrowDown');
     const menu = files.getByRole('menu');
     await expect(menu).toBeVisible();
-    await expect(menu.getByRole('menuitem')).toHaveText([
-      'Ajouter une pièce jointe',
-      'Capturer une zone',
-      'Capturer la page entière',
-      'Glisser-déposer',
-    ]);
-    await expect(menu.getByRole('menuitem', { name: 'Ajouter une pièce jointe' })).toBeFocused();
+    await expect(menu.getByRole('menuitem')).toHaveText(['Capturer une zone', 'Capturer la page entière']);
+    await expect(menu.getByRole('menuitem', { name: 'Capturer une zone' })).toBeFocused();
     const axeMenu = await new AxeBuilder({ page }).include('[data-fruitback-host]').analyze();
     expect(axeMenu.violations).toEqual([]);
     expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBe(
@@ -126,7 +123,6 @@ for (const scheme of ['light', 'dark'] as const) {
     await expect(trigger).toBeFocused();
 
     // The area: the pins go while it is chosen, and come back after.
-    await page.keyboard.press('ArrowDown');
     await page.keyboard.press('ArrowDown');
     await expect(menu.getByRole('menuitem', { name: 'Capturer une zone' })).toBeFocused();
     await page.keyboard.press('Enter');
@@ -148,8 +144,7 @@ for (const scheme of ['light', 'dark'] as const) {
     expect(taken).toHaveLength(1);
     expect(taken[0]?.left).toBeCloseTo(390 * 0.25 + 10, 0);
 
-    // Esc cancels, nothing is joined, the focus is back on « Joindre », and the pins are back.
-    await page.keyboard.press('ArrowDown');
+    // Esc cancels, nothing is joined, the focus is back on the capture, and the pins are back.
     await page.keyboard.press('ArrowDown');
     await page.keyboard.press('Enter');
     await expect(area).toBeVisible();
@@ -174,12 +169,8 @@ for (const scheme of ['light', 'dark'] as const) {
       false,
     ]);
 
-    // The drop zone: a file dropped on it joins the note.
-    await trigger.click();
-    await menu.getByRole('menuitem', { name: 'Glisser-déposer' }).click();
-    const zone = page.locator('[data-fruitback-attach-dropzone]');
-    await expect(zone).toBeVisible();
-    await expect(zone).toContainText('Déposez vos fichiers ici');
+    // A file dropped on the field joins the note, in the field, above its icons (FRU-607).
+    const zone = page.locator('[data-fruitback-box]');
     const dataTransfer = await page.evaluateHandle(() => {
       const transfer = new DataTransfer();
       transfer.items.add(new File(['une ligne'], 'journal.txt', { type: 'text/plain' }));
@@ -189,7 +180,8 @@ for (const scheme of ['light', 'dark'] as const) {
     await zone.dispatchEvent('dragover', { dataTransfer });
     await zone.dispatchEvent('drop', { dataTransfer });
     await expect(page.locator('.fruitback-composer-file-name')).toHaveText(['zone.png', 'page.png', 'journal.txt']);
-    await expect(zone).toBeHidden();
+    await expect(zone.locator('.fruitback-composer-file')).toHaveCount(3);
+    await expect(zone).not.toHaveAttribute('data-fruitback-dragging', '');
 
     const axe = await new AxeBuilder({ page }).include('[data-fruitback-host]').analyze();
     expect(axe.violations).toEqual([]);
@@ -198,7 +190,7 @@ for (const scheme of ['light', 'dark'] as const) {
 
 type Box = { top: number; bottom: number; left: number; right: number; height: number };
 
-/** The boxes of the composer, of « Attach » and of its menu, and the window, in CSS px of the viewport. */
+/** The boxes of the composer, of the icon of the capture and of its menu, and the window, in CSS px of the viewport. */
 async function boxes(page: Page): Promise<{ composer: Box; trigger: Box; menu: Box; width: number; height: number }> {
   return page.evaluate(() => {
     const shadow = (document.querySelector('[data-fruitback-host]') as Element).shadowRoot as ShadowRoot;
@@ -234,10 +226,10 @@ async function openOnLatte(page: Page, url: string): Promise<void> {
   );
 }
 
-test('the menu « Joindre » floats under its button, and the composer keeps its size (FRU-431)', async ({ page }) => {
+test('the menu of the capture floats under its icon, and the composer keeps its size (FRU-431)', async ({ page }) => {
   await openOnLatte(page, `/?case=${caseOf('attachments-float')}&widget=off`);
-  const files = page.getByRole('group', { name: 'Pièces jointes' });
-  const trigger = files.getByRole('button', { name: 'Joindre' });
+  const files = page.getByRole('dialog', { name: 'Nouvelle note', exact: true });
+  const trigger = files.getByRole('button', { name: 'Prendre une capture' });
   const menu = files.getByRole('menu');
   const closed = await boxes(page);
 
@@ -256,31 +248,38 @@ test('the menu « Joindre » floats under its button, and the composer keeps its
   expect((await boxes(page)).composer.height).toBeCloseTo(closed.composer.height, 1);
 });
 
-for (const [width, height] of [
-  [1440, 600],
-  [390, 844],
-  [320, 568],
+/**
+ * Since FRU-607 the menu holds two ways, and the field ends above the foot of the composer: at the
+ * three sizes of FRU-431 it fits under its icon. A window of 260 px is the case where it does not,
+ * and the one that holds the way up.
+ */
+for (const [width, height, up] of [
+  [1440, 260, true],
+  [1440, 600, false],
+  [390, 844, false],
+  [320, 568, false],
 ] as const) {
-  test(`at ${width} × ${height}, at the foot of the window, the menu « Joindre » opens above its button and stays in the window (FRU-431)`, async ({
+  test(`at ${width} × ${height}, the menu of the capture opens ${up ? 'above' : 'under'} its icon and stays in the window (FRU-431)`, async ({
     page,
   }) => {
     await page.setViewportSize({ width, height });
     await openOnLatte(page, `/?case=${caseOf(`attachments-up-${width}`)}&widget=off`);
-    const files = page.getByRole('group', { name: 'Pièces jointes' });
-    const trigger = files.getByRole('button', { name: 'Joindre' });
+    const files = page.getByRole('dialog', { name: 'Nouvelle note', exact: true });
+    const trigger = files.getByRole('button', { name: 'Prendre une capture' });
     const menu = files.getByRole('menu');
     await trigger.focus();
     await page.keyboard.press('ArrowDown');
     await expect(menu).toBeVisible();
     const open = await boxes(page);
-    // The premise of the case: the menu does not fit under « Joindre ».
-    expect(open.height - open.trigger.bottom).toBeLessThan(open.menu.height);
-    expect(open.menu.bottom).toBeLessThanOrEqual(open.trigger.top);
+    // The premise of the case: whether the menu fits under its icon.
+    expect(open.height - open.trigger.bottom < open.menu.height).toBe(up);
+    if (up) expect(open.menu.bottom).toBeLessThanOrEqual(open.trigger.top);
+    else expect(open.menu.top).toBeGreaterThanOrEqual(open.trigger.bottom);
     expect(open.menu.top).toBeGreaterThanOrEqual(0);
     expect(open.menu.left).toBeGreaterThanOrEqual(0);
     expect(open.menu.right).toBeLessThanOrEqual(open.width);
     expect(open.menu.bottom).toBeLessThanOrEqual(open.height);
-    await expect(menu.getByRole('menuitem', { name: 'Ajouter une pièce jointe' })).toBeFocused();
+    await expect(menu.getByRole('menuitem', { name: 'Capturer une zone' })).toBeFocused();
 
     await page.keyboard.press('Escape');
     await expect(menu).toBeHidden();
@@ -288,8 +287,8 @@ for (const [width, height] of [
 
     // A way of the menu above takes a click: nothing clips or covers it.
     await trigger.click();
-    await menu.getByRole('menuitem', { name: 'Glisser-déposer' }).click();
-    await expect(page.locator('[data-fruitback-attach-dropzone]')).toBeVisible();
+    await menu.getByRole('menuitem', { name: 'Capturer la page entière' }).click();
+    await expect(page.locator('.fruitback-composer-file-name')).toHaveText(['page.png']);
     await expect(page.getByPlaceholder('Que faut-il changer\u202F?')).toHaveValue('Le texte reste');
   });
 }

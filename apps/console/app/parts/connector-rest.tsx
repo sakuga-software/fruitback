@@ -4,17 +4,9 @@ import { msg, t } from '../i18n';
 import { writeProblemOf } from '../problems';
 import { Button, LinkButton, Problem, SidePanel } from '../ui';
 import { useLocale } from '../use-locale';
-import {
-  BlockTitle,
-  Disconnect,
-  KINDS,
-  type PanelProps,
-  SendersList,
-  hostOf,
-  moment,
-  shortHost,
-} from './connector-parts';
-import { useWorkspace } from './workspace';
+import { moment } from '../ago';
+import { BlockTitle, Disconnect, KINDS, type PanelProps, SendersList, addressOf, shortHost } from './connector-parts';
+import { useWorkspace } from '../routes/workspace';
 import { ReadProblem } from '../read-problem';
 
 /** Where the contract of the request is written, for whoever writes the receiver. */
@@ -66,7 +58,7 @@ export function RestPanel({ id, base, connector, sites, manages, onChanged, onRe
       id={id}
       flush
       title={t(KINDS.rest.name)}
-      detail={t('Sends to {host}', { host: hostOf(connector) })}
+      detail={t('Sends to {host}', { host: addressOf(connector) })}
       {...(manages
         ? {
             foot: (

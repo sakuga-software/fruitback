@@ -18,6 +18,7 @@ import { announceSignIn } from '../tab-signal';
 import { Button, EntryPage, Lead, LinkButton, Problem, SuccessMark, Title } from '../ui';
 import { useLocale } from '../use-locale';
 import { ReadProblem } from '../read-problem';
+import { retryable } from '../problems';
 
 /**
  * The sign-in page (FRU-235, screen 02 of the mockup of 2026-10-13), and where a sign-in link lands.
@@ -61,7 +62,7 @@ export default function SignIn() {
         }
         // No answer, or a refusal that is not about the link (FRU-205): the link was not spent, or
         // the next try says that it was.
-        if (redeemed.status === 0 || redeemed.status === 429 || redeemed.status >= 500) {
+        if (retryable(redeemed)) {
           return setStage({ kind: 'waiting', code });
         }
         // The link worked, and this Fruitback creates no account for that address (FRU-278).

@@ -56,8 +56,8 @@ test('a capture refused for want of a gesture says to click the icon, and keeps 
   await page.locator('[data-testid="card-latte"] .add').click();
   const field = page.getByPlaceholder('What should change?');
   await field.fill('La capture est refusée');
-  const files = page.getByRole('group', { name: 'Attachments' });
-  await files.getByRole('button', { name: 'Attach' }).click();
+  const files = page.getByRole('dialog', { name: 'New note', exact: true });
+  await files.getByRole('button', { name: 'Take a screenshot' }).click();
   await files.getByRole('menuitem', { name: 'Capture the whole page' }).click();
   const refused = page.locator('.fruitback-composer-file');
   await expect(refused).toHaveAttribute('data-fruitback-file', 'refused');

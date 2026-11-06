@@ -4,17 +4,9 @@ import { msg, t } from '../i18n';
 import { writeProblemOf } from '../problems';
 import { Problem, SidePanel, Toggle } from '../ui';
 import { useLocale } from '../use-locale';
-import {
-  Disconnect,
-  KINDS,
-  OAUTH_LABEL,
-  type PanelProps,
-  SendersList,
-  moment,
-  personOf,
-  sourceLine,
-} from './connector-parts';
-import { useWorkspace } from './workspace';
+import { moment } from '../ago';
+import { Disconnect, KINDS, OAUTH_LABEL, type PanelProps, SendersList, personOf, sourceLine } from './connector-parts';
+import { useWorkspace } from '../routes/workspace';
 
 /**
  * What to do about a source that its tracker refuses (FRU-102), by what the tracker said. `{when}` is

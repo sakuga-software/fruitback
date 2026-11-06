@@ -30,7 +30,14 @@ const GEOMETRY: Record<(typeof FILES)[number], readonly string[]> = {
     ".fruitback-thread[data-fruitback-arrow='left']::before",
     ".fruitback-thread[data-fruitback-arrow='right']::before",
   ],
-  'composer.ts': ['.fruitback-composer'],
+  // The tether goes from the edge of the composer to the element, on the side place() chose (FRU-607).
+  'composer.ts': [
+    '.fruitback-composer',
+    '.fruitback-composer[data-fruitback-side="right"] .fruitback-composer-tether',
+    '.fruitback-composer[data-fruitback-side="left"] .fruitback-composer-tether',
+    '.fruitback-composer[data-fruitback-side="below"] .fruitback-composer-tether',
+    '.fruitback-composer[data-fruitback-side="above"] .fruitback-composer-tether',
+  ],
   // FRU-472: a drawing of the window with a dot in one corner. A corner of the window is physical.
   'panel.ts': [
     ".fruitback-config-corner-drawing[data-fruitback-corner$='-left']::after",

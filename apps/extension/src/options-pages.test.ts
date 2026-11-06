@@ -15,6 +15,7 @@ const LABELS: Record<PageId, string> = {
   workers: 'Servers and sessions',
   share: 'Share rules',
   prefs: 'Preferences',
+  appearance: 'Appearance',
 };
 
 function page() {
@@ -49,6 +50,7 @@ describe('the pages of the page of the extension (FRU-591)', () => {
     assert.equal(pageOf('#workers'), 'workers');
     assert.equal(pageOf('#share'), 'share');
     assert.equal(pageOf('#prefs'), 'prefs');
+    assert.equal(pageOf('#appearance'), 'appearance');
     assert.equal(pageOf('#nothing'), 'sites');
     assert.equal(pageOf('#PREFS'), 'sites');
     assert.equal(pageOf('#prefsx'), 'sites');

@@ -8,8 +8,8 @@
  * reads this on happy-dom.
  */
 
-/** The pages, in the order of the menu. */
-export const PAGES = ['sites', 'workers', 'share', 'prefs'] as const;
+/** The pages, in the order of the menu. « Appearance » came with FRU-601. */
+export const PAGES = ['sites', 'workers', 'share', 'prefs', 'appearance'] as const;
 
 export type PageId = (typeof PAGES)[number];
 

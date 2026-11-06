@@ -507,6 +507,42 @@ did not change: the fields of 760 px and the file input of the browser are as th
   Back and Forward and what stays typed, and runs axe on each page at 1440 and 390 px, in both
   schemes.
 
+## « Appearance », the colour of the note button (FRU-601)
+
+### The rules, in short
+
+- **« Appearance » is a page of the page of the extension** (`#appearance`, after « Preferences »,
+  FRU-591), built by `src/appearance-page.ts` with no `browser`.
+- **The red of Fruitback `#dd2c27` by default, and four colours ready**: Fruitback, Deep red
+  `#b91c1c`, Orange `#c2410c` and Ink `#1c1917`, as radios. **A colour of your own** in hex (`#rrggbb`
+  or `#rgb`): its contrast with white text is said as it is typed (« 2.1:1 with white text. Pick a
+  darker colour. », « 2,1:1 » in French, rounded down so that 4.5:1 is never said of a colour that
+  is refused). It is stored when the field is left (Enter or Tab), and only at 4.5:1 or more: the
+  label of the button stays white. **A preview** of « Leave a note » and « Send », and **Reset to
+  Fruitback red**.
+- **The choice is personal and local**: `actionColor` in `storage.local`, no key for the red of
+  Fruitback. It is not in the copy of the rules to the account (FRU-72), it goes to no worker, and it
+  changes nothing for the team or on the site.
+- **It paints « Leave a note »** of the popup and of the side panel (`kit-note` in `kit.css`, from
+  the properties `--action`, `--action-strong`, `--on-action` and `--action-mark` that
+  `followActionColor` writes on the root of the page), and **« Send » of a widget the extension
+  mounts**: the bridge says it with an `action-color` message after each mount and at each change,
+  as `dock` says the corner (FRU-443), and the page script calls `setActionColor`. No new widget: a
+  note being written stays. The launch button of the widget, the pins and the colours of the stages
+  do not change, and the blue of Done is not offered. With no colour chosen, the accent stays, in
+  both schemes.
+- **With Ink, the drop stays red**: the drop is red where the red stands out on the colour at 3:1
+  (WCAG 1.4.11), white otherwise. Of the four, only Ink.
+- **The rules of the colour are written twice**, in `packages/widget/src/action-color.ts` and in
+  `src/action-color.ts`, so that the bridge and the pages do not import the widget.
+  `src/action-color.test.ts` holds the two equal. The message is parsed with the same rule: a colour
+  white text cannot be read on is no message.
+- `e2e/extension-appearance.spec.ts` plays the choice with a note being written, the popup, Ink and
+  its drop, a colour refused and one kept, the reset and a reload, and runs axe at 1440 and 390 px in
+  both schemes, in English and in French, with the contrast of each colour in the preview. Not seen:
+  the board P1c of the canvas of FRU-598, which this machine cannot open; the page follows the words
+  of FRU-601.
+
 ## The key that starts a note (FRU-291)
 
 ### The rules, in short

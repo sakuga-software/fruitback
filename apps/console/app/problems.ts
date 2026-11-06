@@ -29,6 +29,14 @@ export function failureOf(failed: { status: number }): string {
   return failed.status === 0 ? UNREACHABLE_PROBLEM : SERVER_PROBLEM;
 }
 
+/**
+ * Whether a refused call may work when it is sent again (FRU-205): no answer, too many calls (`429`),
+ * or an error of the server. Any other refusal is the answer, and the same call gets it again.
+ */
+export function retryable(failed: { status: number }): boolean {
+  return failed.status === 0 || failed.status === 429 || failed.status >= 500;
+}
+
 /** What the worker answers to a write of a suspended workspace (FRU-282), with `409`. */
 export const WORKSPACE_SUSPENDED_ERROR = 'workspace-suspended';
 

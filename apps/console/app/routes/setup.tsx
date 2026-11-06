@@ -15,9 +15,9 @@ import {
 } from '../setup-stage';
 import { BrowserFrame, Button, EntryPage, Lead, Problem, Step, type StepState, Steps, Title } from '../ui';
 import { useLocale } from '../use-locale';
-import { Account, Ask, Sent, Unnamed } from './setup-account';
-import { FirstNoteIn, PutDone, PutOnSite } from './setup-install';
-import { SiteForm, SiteSummary } from './setup-site';
+import { Account, Ask, Sent, Unnamed } from '../parts/setup-account';
+import { FirstNoteIn, PutDone, PutOnSite } from '../parts/setup-install';
+import { SiteForm, SiteSummary } from '../parts/setup-site';
 import { SitePreview } from '../site-preview';
 import { instanceOf } from '../instance';
 import { ReadProblem } from '../read-problem';
@@ -76,7 +76,7 @@ function resolveOnce(): Promise<Stage> {
 }
 
 /** How often the site is read again while the setup waits for its first note (FRU-242). */
-export const FIRST_NOTE_EVERY_MS = 5_000;
+const FIRST_NOTE_EVERY_MS = 5_000;
 
 /**
  * Reads the site again every five seconds while the tab is shown, until its first note came: the

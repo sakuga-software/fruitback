@@ -68,13 +68,11 @@ export const ENGLISH = {
 
   // FRU-332: the files of a note. The worker takes them only when the note goes to a tracker.
   'composer.attach': 'Attachments',
-  'composer.attachMenu': 'Attach',
+  // FRU-607: the icon of the capture, at the foot of the field. Its menu holds the area and the page.
+  'composer.captureMenu': 'Take a screenshot',
   'composer.attachFile': 'Add an attachment',
   'composer.attachArea': 'Capture an area',
   'composer.attachPage': 'Capture the whole page',
-  'composer.attachDrop': 'Drag and drop',
-  'composer.attachDropHere': 'Drop your files here',
-  'composer.attachDropChoose': 'Choose a file',
   // `{keys}`: « ⌘V » on a Mac, « Ctrl+V » elsewhere (FRU-424).
   'composer.attachPaste': 'Paste a screenshot ({keys})',
   // Said in place of the four ways, when the note stays in Fruitback (`canAttach: false`).
@@ -113,6 +111,10 @@ export const ENGLISH = {
   'composer.picture': 'Attach a picture of the element',
   'composer.namePlaceholder': 'Your name',
   'composer.nameLabel': 'Name (optional)',
+  // FRU-607: the signature, as an avatar at the end of the field. A click opens the name.
+  'composer.guest': 'Guest',
+  'composer.signedGuest': 'Signed as Guest. Add your name',
+  'composer.signedAs': 'Signed as {name}. Change the name',
   'composer.remember': 'Remember me on this site',
   'composer.cancel': 'Cancel',
   'composer.send': 'Send',

@@ -1,3 +1,4 @@
+import { ACTION_COLOR_KEY, parseActionColor } from '../src/action-color.ts';
 import {
   CHANNEL,
   LEGACY_CHANNEL,
@@ -93,6 +94,8 @@ export default defineContentScript({
       readHidden: () => isHidden(browser.storage.local, origin),
       readDockPosition: async () =>
         parseDockPosition((await browser.storage.local.get(DOCK_POSITION_KEY))[DOCK_POSITION_KEY]),
+      readActionColor: async () =>
+        parseActionColor((await browser.storage.local.get(ACTION_COLOR_KEY))[ACTION_COLOR_KEY]),
       readShowSelectors: async () => (await browser.storage.local.get(SHOW_SELECTORS_KEY))[SHOW_SELECTORS_KEY] === true,
       readSignedOut: async (site) => {
         const held = Object.fromEntries(Object.keys(await sessions.read()).map((endpoint) => [endpoint, true]));
@@ -270,6 +273,7 @@ export default defineContentScript({
           changes[SHOW_SELECTORS_KEY] !== undefined ||
           changes[HIDDEN_ORIGINS_KEY] !== undefined ||
           changes[DOCK_POSITION_KEY] !== undefined ||
+          changes[ACTION_COLOR_KEY] !== undefined ||
           touchesARefreshToken(keys))
       ) {
         void apply();
