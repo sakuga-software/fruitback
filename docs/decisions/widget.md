@@ -1846,6 +1846,9 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
   pins again and closes the thread.
 - **Enter sends, Shift+Enter goes to the next line.** Escape closes the thread, as everywhere; the
   text waits for it to open again.
+- **A field of two lines, the same everywhere a reader replies** (FRU-606): the thread of a pin, the
+  thread in the list, the field of « Still wrong », and the reply of the side panel of the extension.
+  Two lines, Enter sends, Shift+Enter goes to the next line, and the text is kept until a reply goes.
 - **The name of a visitor is the one the reporter asked the widget to remember**, and none for a
   reader the worker names: the worker would not read it.
 - **A reply from the page reads as a reply.** The worker writes a first line for the tracker

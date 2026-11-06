@@ -483,7 +483,8 @@ export const STYLES = `
 }
 .fruitback-thread-reply-field {
   flex: 1 1 160px;
-  min-height: 36px;
+  /* Two lines and the padding (FRU-606), the field of a reply in the side panel too. */
+  min-height: calc(2lh + 16px);
   max-height: 120px;
   resize: none;
   field-sizing: content;

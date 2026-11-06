@@ -1982,7 +1982,8 @@ function replyForm(document: Document, issue: NoteIssue, t: Translator, reply: R
   form.className = 'fruitback-thread-reply-form';
   const field = document.createElement('textarea');
   field.className = 'fruitback-thread-reply-field';
-  field.rows = 1;
+  // Two lines, as everywhere a reader replies (FRU-606): the side panel has the same field.
+  field.rows = 2;
   field.setAttribute('aria-label', t.text('reply.label'));
   const author = issue.note.reporter?.name;
   field.placeholder =

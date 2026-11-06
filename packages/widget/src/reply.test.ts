@@ -186,6 +186,13 @@ describe('the field to reply to a note (FRU-257)', () => {
     assert.equal(sent.length, 1);
   });
 
+  it('is a field of two lines, the one of the side panel too (FRU-606)', () => {
+    const page = mounted();
+    const thread = open(page, anIssue(), answered().seam);
+
+    assert.equal(thread.field()?.getAttribute('rows'), '2');
+  });
+
   it('keeps the text a person typed when the thread is built again under it', () => {
     const page = mounted();
     const issue = anIssue();

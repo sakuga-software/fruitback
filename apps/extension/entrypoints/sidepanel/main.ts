@@ -17,6 +17,7 @@ import {
   openOnRead,
   openPopupFrom,
   panelPage,
+  sentFromHere,
   tabOf,
   webHost,
 } from '../../src/side-panel.ts';
@@ -74,6 +75,11 @@ let notes: PanelNotes = 'reading';
 let tab: NotesTab | undefined;
 let open: string | undefined;
 let replying: PanelOptions['replying'];
+/**
+ * What the reader typed in the reply of each note, kept when its field closes (FRU-606): « Cancel », a
+ * row closed, another tab of the browser. The same field gives it back. Only a reply sent drops it.
+ */
+const replyTexts = new Map<string, string>();
 /** The verdict on its way, or why the last one did not go (FRU-300). */
 let checking: PanelOptions['checking'];
 /** The notes reopened from this panel, and when: « Reopened by you ». Gone with the panel. */
@@ -306,12 +312,14 @@ function draw(): void {
       },
       onShow: (id) => void ask('focus-note', { note: id }),
       onReplyOpen: (id) => {
-        replying = { id, text: '' };
+        replying = { id, text: replyTexts.get(id) ?? '' };
         draw();
         app.querySelector<HTMLElement>('.panel-reply-field')?.focus();
       },
       onReplyInput: (text) => {
-        if (replying !== undefined) replying = { ...replying, text };
+        if (replying === undefined) return;
+        replying = { ...replying, text };
+        replyTexts.set(replying.id, text);
       },
       onReplyCancel: () => {
         replying = undefined;
@@ -538,9 +546,15 @@ async function sendReply(): Promise<void> {
   replying = { id: sending.id, text: sending.text, sending: true };
   draw();
   const { outcome } = await ask('reply', { note: sending.id, body: sending.text });
+  // The reader may have opened the reply of another note meanwhile, or this note's again and typed a
+  // new text: that field is theirs, and the answer of this send does not close it (review of #857).
+  const stillHere = sentFromHere(replying, sending);
   if (outcome === 'sent') {
-    replying = undefined;
+    if (stillHere) replying = undefined;
+    // Only the text that went: a text typed for this note since the send stays (review of #857).
+    if (replyTexts.get(sending.id) === sending.text) replyTexts.delete(sending.id);
     await readNotes();
+    if (!stillHere) return;
     // The field and « Send » are gone: the focus goes back to « Reply » of the same row, not to the
     // body of the page (raised in review).
     const row = app?.querySelector(`li[data-note="${CSS.escape(sending.id)}"]`);
@@ -550,7 +564,12 @@ async function sendReply(): Promise<void> {
 
     return;
   }
-  // Not sent: the text stays in the field, with why.
+  // Not sent: the text stays in its note, and in its field with why when that field is still open.
+  if (!stillHere) {
+    draw();
+
+    return;
+  }
   replying = { id: sending.id, text: sending.text, problem: REPLY_PROBLEM[outcome ?? 'retry'] };
   draw();
   document.querySelector<HTMLElement>('.panel-reply-field')?.focus();
