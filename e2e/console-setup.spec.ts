@@ -706,9 +706,11 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
       { x: 405, y: 412 - LEAD, width: 51.8, height: 21 },
       '« Change »',
     );
+    // The name takes its own width since FRU-610: the badge of the recommended way is beside it.
+    const extensionHeading = await boxOf(page.getByRole('heading', { name: 'Browser extension' }));
     expectNear(
-      await boxOf(page.getByRole('heading', { name: 'Browser extension' })),
-      { x: 179, y: 553 - LEAD, width: 314.2, height: 18 },
+      extensionHeading,
+      { x: 179, y: 553 - LEAD, width: extensionHeading.width, height: 18 },
       'card of the extension',
     );
     // The cards are one under the other in this column, as on the mockup, and as wide.
@@ -958,7 +960,7 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
     await expect(page.getByText(/Hosted in Europe/)).toBeVisible();
     const card = page.locator('.kit-option').filter({ has: page.getByRole('heading', { name: 'Browser extension' }) });
     await expect(card).toContainText(
-      'Add it to your browser. The page that opens signs you in and turns on staging.acme.dev.',
+      'Add it to your browser. The page that opens signs you in and turns on https://staging.acme.dev.',
     );
     await expect(card.getByRole('link', { name: 'Install the extension', exact: true })).toBeVisible();
     // FRU-610: no « Connect this browser » beside it. The welcome page of the extension connects it.
@@ -994,7 +996,7 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
       });
     });
     await page.goto(`${CONSOLE}/setup`);
-    await page.getByRole('button', { name: 'Show' }).click();
+    await page.getByRole('button', { name: 'Show', exact: true }).click();
     await page.getByRole('button', { name: 'Copy script' }).click();
 
     await expect(page.getByRole('alert')).toHaveText(
@@ -1216,7 +1218,7 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
       const host = page.getByText(`https://${LONG_HOST}`, { exact: true }).first();
       expect.soft(await host.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
       // The script breaks inside its attributes: nothing of it is past the edge of its card (FRU-321).
-      await page.getByRole('button', { name: locale === 'en' ? 'Show' : 'Afficher' }).click();
+      await page.getByRole('button', { name: locale === 'en' ? 'Show' : 'Afficher', exact: true }).click();
       await check('step 3, with the script tag open');
       const script = page.locator('.kit-snippet').first();
       expect.soft(await script.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
