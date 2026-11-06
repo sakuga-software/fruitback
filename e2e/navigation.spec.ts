@@ -76,7 +76,9 @@ test('a note sent after a navigation goes to the page where it was written', asy
   await page.goBack();
   await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
   await open.click();
-  // « All »: whether the store in memory made it an open note or a done one is not this test's.
+  // « All »: whether the store in memory made it an open note or a done one is not this test's. It is
+  // a chip of « Search and options » since FRU-606.
+  await list.getByRole('button', { name: 'Search and options' }).click();
   await list.getByRole('button', { name: 'All 1', exact: true }).click();
   const entry = list.locator('[data-fruitback-note]');
   await expect(entry).toHaveCount(1);

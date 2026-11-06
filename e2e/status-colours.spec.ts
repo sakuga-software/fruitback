@@ -127,6 +127,8 @@ for (const colorScheme of ['light', 'dark'] as const) {
     // The list names it too, and its chips stay the stages.
     await page.getByRole('button', { name: 'Show every note in a sidebar' }).click();
     const list = page.getByRole('dialog', { name: 'Notes on this page' });
+    // Every note in one list, whatever its tab (FRU-606).
+    await list.getByRole('button', { name: 'Search and options' }).click();
     const row = list.locator('[data-fruitback-note]').filter({ hasText: NOTES.dark.note });
     await expect(row.locator('.fruitback-sidebar-status')).toHaveText(NOTES.dark.name);
     await expect(row.locator('.fruitback-sidebar-pin')).toHaveCSS('background-color', 'rgb(124, 58, 237)');

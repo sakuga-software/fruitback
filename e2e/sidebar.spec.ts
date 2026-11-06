@@ -598,8 +598,8 @@ test('a note whose element is gone is a detached note at the bottom, and not amo
   await expect(unplaced).toBeVisible();
   await expect(list.locator('.fruitback-sidebar-list [data-fruitback-note]')).toHaveCount(1);
   await expect(list.locator('.fruitback-sidebar-list')).not.toContainText('On a field that goes');
-  // The chips count the notes a pin shows on its element.
-  await expect(list.getByRole('button', { name: 'All 1', exact: true })).toBeVisible();
+  // The tabs count the notes a pin shows on its element (FRU-606).
+  await expect(list.getByRole('tab', { name: 'Open · 1' })).toBeVisible();
   // The board: the note, then its status, its identifier and what became of it.
   await expect(unplaced.locator('[data-fruitback-note]')).toHaveText(
     /^On a field that goes.+ · the element it pointed at is gone$/,
