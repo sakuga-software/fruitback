@@ -2345,10 +2345,16 @@ same transaction).
 
 ### An e-mail to the person who left a note done
 
-When a note is done, the worker writes once to the person who left it: a member at the address of
-their account, a visitor at the address they gave for that note. A worker with no mailer
-(`FRUITBACK_SCALEWAY_TEM` unset) writes to nobody, keeps no row, offers no token and has no route
-below (`404`). `docs/privacy.md` says what is kept and when it goes.
+When a note is done, the worker can write once to the person who left it: a member at the address
+of their account, a visitor at the address they gave for that note. **Only on a site that offers
+it**: the switch « Offer visitors an e-mail when their note is done » of the site, off by default,
+and of no effect where only members leave notes (`offersDoneNotice`). A site that does not offer it,
+and a worker with no mailer (`FRUITBACK_SCALEWAY_TEM` unset), write to nobody, keep no row, offer no
+token and have no route below: `404 not-found`, the same answer in both cases, so the route says
+nothing of the switch. test:`is off for a new site: no token, no row of a member, and the route answers 404`.
+Turning the switch off deletes the rows of the site.
+test:`forgets every address of the site when it is turned off`. `docs/privacy.md` says what is kept
+and when it goes.
 
 `POST /feedback/<note>/notify?client=<site>` with `{ email, token, locale? }` takes the address of a
 visitor. It is public: no session, no cookie.

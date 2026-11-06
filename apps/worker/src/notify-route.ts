@@ -21,7 +21,8 @@ import { StoreError } from './store.ts';
  *   from the requests, before any write (`429`). The site counts only a request for a note that can
  *   take an address: a `409` costs the caller alone.
  * - **A worker that cannot send, or keeps no index, has no such route** (`404`), as a worker with no
- *   mailer has no `/console/auth/email`.
+ *   mailer has no `/console/auth/email`. **Nor has a site that does not offer the e-mail** (FRU-604,
+ *   Mathieu 2026-11-06): its switch is off by default, and does nothing where only members write.
  */
 export const NOTIFY_PATH = /^\/feedback\/([A-Za-z0-9_-]{1,100})\/notify$/;
 
@@ -51,7 +52,9 @@ export async function postNotify(
   const site = normalizeClientId(new URL(request.url).searchParams.get('client'));
   const route = await checks.routeFor(request, config, site);
   if (!route.ok) return routingFailure(route, corsHeaders);
-  if (site === undefined || route.client?.workspace === undefined) {
+  // A site that does not offer the e-mail (its switch off, or notes of its members only) has no such
+  // route, as a worker with no mailer: `404`, the same answer, so the route says nothing of the switch.
+  if (site === undefined || route.client?.workspace === undefined || route.client.notifyDone !== true) {
     return json(404, { error: 'not-found' }, corsHeaders);
   }
 

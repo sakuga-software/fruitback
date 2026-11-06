@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { type Page, expect, test } from '@playwright/test';
 import { WORKER_ORIGIN, caseOf, hydrated } from './pin.ts';
+import { addRule, openBareSite, test as extensionTest } from './extension.ts';
 
 /**
  * « Want to know when it's fixed? » (FRU-604), on the playground, as a visitor with no account: the
@@ -9,8 +10,50 @@ import { WORKER_ORIGIN, caseOf, hydrated } from './pin.ts';
  *
  * The other specs start from a browser that answered the question (`storageState` of the
  * configuration); these start from one that never saw it.
+ *
+ * The question is a switch of the site, off by default (Mathieu, 2026-11-06). Its tests are in this
+ * one file, which runs in order: the switch is off first, then on, and off again at the end, so a
+ * file that runs beside it on CI meets the default.
  */
 test.use({ storageState: { cookies: [], origins: [] } });
+
+/** « Offer visitors an e-mail when their note is done » of the site of the playground. */
+async function offer(on: boolean): Promise<void> {
+  const set = await fetch(`${WORKER_ORIGIN}/__dev/writers`, {
+    method: 'POST',
+    body: JSON.stringify({ writers: 'anyone', notifyDone: on }),
+  });
+  expect(set.status).toBe(200);
+  expect(((await set.json()) as { notifyDone?: unknown }).notifyDone).toBe(on);
+}
+
+test.afterAll(async () => {
+  await offer(false);
+});
+
+test('switch off, the default: no question after a note, and the route refuses', async ({ page }) => {
+  await offer(false);
+  await openWidget(page, 'notify-off');
+  await page.locator('[data-fruitback-host-launch]').click();
+  await page.locator('#checkout-cta').click();
+  await page.getByPlaceholder('What should change?').fill('A note on a site that offers no e-mail');
+  const answer = page.waitForResponse(
+    (response) => response.request().method() === 'POST' && new URL(response.url()).pathname === '/feedback',
+  );
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  const body = (await (await answer).json()) as { notify?: unknown };
+  expect(body.notify).toBeUndefined();
+  await expect(page.locator('[data-fruitback-notify]')).toBeHidden();
+  await expect(page.locator('[data-fruitback-composer]')).toBeHidden({ timeout: 10_000 });
+
+  const id = (await page.locator('[data-fruitback-pin]').last().getAttribute('data-fruitback-pin')) as string;
+  const refused = await fetch(`${WORKER_ORIGIN}/feedback/${id}/notify?client=playground`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: 'http://localhost:5177' },
+    body: JSON.stringify({ email: 'ana@example.com', token: '1.x' }),
+  });
+  expect(refused.status).toBe(404);
+});
 
 type Mail = { to: string; subject: string; text: string; html: string };
 
@@ -48,8 +91,9 @@ async function send(page: Page, note: string): Promise<string> {
   return (await page.locator('[data-fruitback-pin]').last().getAttribute('data-fruitback-pin')) as string;
 }
 
-test('a visitor gives an address after a note, and gets one e-mail when it is done', async ({ page }) => {
+test('switch on: a visitor gives an address after a note, and gets one e-mail when it is done', async ({ page }) => {
   test.slow();
+  await offer(true);
   // A window where the element sits low: the question makes the composer taller after the send.
   await page.setViewportSize({ width: 1280, height: 800 });
   await openWidget(page, 'notify-guest');
@@ -124,7 +168,8 @@ test('a visitor gives an address after a note, and gets one e-mail when it is do
   await expect(page.locator('[data-fruitback-composer]')).toBeHidden({ timeout: 10_000 });
 });
 
-test('« No thanks » closes the composer, and the question is not asked again', async ({ page }) => {
+test('switch on: « No thanks » closes the composer, and the question is not asked again', async ({ page }) => {
+  await offer(true);
   await openWidget(page, 'notify-no-thanks');
   await send(page, 'Une note sans adresse');
   const question = page.locator('[data-fruitback-notify]');
@@ -139,3 +184,29 @@ test('« No thanks » closes the composer, and the question is not asked again',
   await send(page, 'Une autre note');
   await expect(page.locator('[data-fruitback-notify]')).toBeHidden();
 });
+
+extensionTest(
+  'switch on: a widget the extension mounts never asks « Want to know when it’s fixed? » after a note',
+  async ({ extension }) => {
+    await offer(true);
+    // Private mode on the public worker: the reviewer has no session there, so the worker takes the
+    // note as a visitor's and offers a token. The control: the answer carries it, so the absence below
+    // is the product's rule (the extension mounts with askForAddress: false), and not a missing token.
+    await addRule(extension, { mode: 'private', clientId: 'playground', endpoint: WORKER_ORIGIN });
+    const site = await extension.context.newPage();
+    await openBareSite(site, 'extension-no-question');
+    await site.locator('[data-fruitback-host-launch]').click();
+    await site.locator('[data-testid="card-latte"] .add').click();
+    await site.getByPlaceholder('What should change?').fill('A reviewer is never asked for an address.');
+    const answer = site.waitForResponse(
+      (response) => response.request().method() === 'POST' && new URL(response.url()).pathname === '/feedback',
+    );
+    await site.getByRole('button', { name: 'Send', exact: true }).click();
+    const body = (await (await answer).json()) as { notify?: { token?: unknown } };
+    expect(typeof body.notify?.token).toBe('string');
+    await expect(site.locator('[data-fruitback-pin]')).toHaveCount(1);
+    // No question, and the composer closes by itself, as before FRU-604.
+    await expect(site.locator('[data-fruitback-notify]')).toBeHidden();
+    await expect(site.locator('[data-fruitback-composer]')).toBeHidden({ timeout: 10_000 });
+  },
+);

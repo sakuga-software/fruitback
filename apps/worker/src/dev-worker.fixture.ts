@@ -43,7 +43,7 @@ import { setMemoryNoteStage } from './linear-memory.ts';
  *   command is another process: it cannot reach a database that lives in this one.
  * - **`POST /__dev/agent-key`** `{ write?, verifiedOnly? }` (FRU-463): an agent key of the owner on the
  *   site, which it answers once, for `claude mcp add` and the specs of `/mcp`.
- * - **`POST /__dev/writers`** `{ writers }` (FRU-330), who may leave a note on the site: `members`,
+ * - **`POST /__dev/writers`** `{ writers, notifyDone? }` (FRU-330), who may leave a note on the site: `members`,
  *   the default of a new site, or `anyone`. A spec about one of the two says it, rather than
  *   reading the default. Through `addSite`, as the console writes it.
  * - **`GET /__dev/mail`** (FRU-604): the messages of a note done that the worker would have sent,
@@ -126,14 +126,22 @@ async function setWriters(
 
     return;
   }
+  if (asked.notifyDone !== undefined && typeof asked.notifyDone !== 'boolean') {
+    response
+      .writeHead(400, { 'Content-Type': 'application/json' })
+      .end(JSON.stringify({ error: 'invalid-notify-done' }));
+
+    return;
+  }
   const site = await createPostgresAccountStore(database).addSite(workspace, {
     origin: DEV_PLAYGROUND,
     visibility,
     writers: asked.writers as Writers,
+    ...(asked.notifyDone === undefined ? {} : { notifyDone: asked.notifyDone }),
   });
   response
     .writeHead(200, { 'Content-Type': 'application/json' })
-    .end(JSON.stringify({ id: site.id, writers: site.writers }));
+    .end(JSON.stringify({ id: site.id, writers: site.writers, notifyDone: site.notifyDone }));
 }
 
 /**

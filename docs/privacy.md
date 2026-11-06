@@ -151,9 +151,16 @@ cannot be edited, so nothing is sent to them again.
 
 ### An e-mail when a note is done
 
-When the team marks a note done, the worker writes once to the person who left it. Only a worker
-that sends e-mail does it: one with `FRUITBACK_SCALEWAY_TEM` set. The mail provider receives the
-address and the message.
+When the team marks a note done, the worker can write once to the person who left it. **It is a
+setting of each site, off by default**: « Offer visitors an e-mail when their note is done », in
+the console, under « Who can leave a note? ». The console shows it only for a site where anybody
+may leave a note, and it does nothing on a site whose notes come from its members only. Off, the
+widget asks nobody, the worker keeps no address and no account for it, and sends nothing. Turned
+off, it deletes every address and account that waited for a message on that site. It needs a worker
+that sends e-mail too: one with `FRUITBACK_SCALEWAY_TEM` set. The mail provider receives the address
+and the message.
+
+On a site where it is on:
 
 - A member of the workspace is written to at the address of their account, in its language. The
   worker keeps their account id with the note, and no address.

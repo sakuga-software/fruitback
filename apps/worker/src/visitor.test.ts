@@ -122,9 +122,8 @@ describe('a visitor with no account, on a site that everyone reads (FRU-224)', (
     assert.equal(kept.status, 201, await kept.clone().text());
     const answer = (await kept.json()) as { issue: unknown; notify?: { token?: unknown } };
     assert.deepEqual(answer.issue, { id: '1', identifier: 'FB-1' });
-    // FRU-604: a visitor may give an address for this note, and the answer says how.
-    assert.deepEqual(Object.keys(answer).toSorted(), ['issue', 'notify']);
-    assert.equal(typeof answer.notify?.token, 'string');
+    // FRU-604: a new site offers no e-mail of a note done, so the answer gives no token.
+    assert.deepEqual(Object.keys(answer), ['issue']);
 
     assert.deepEqual(
       (await notesOf(await visitor.read(SITE))).map((read) => read.note),

@@ -299,7 +299,8 @@ export async function readPage({
 
 /**
  * A note a member left waits for its stage done (FRU-604): its row names the account, never an
- * address. Nothing is written by a worker that cannot send. A failure costs the note nothing.
+ * address. Only on a site that offers the e-mail (the caller asks `notifyDone`), and nothing is
+ * written by a worker that cannot send. A failure costs the note nothing.
  */
 async function watchForDone(done: DoneNoticeSeams, entries: readonly NoteEntry[], now: number): Promise<void> {
   const { notices } = done;
@@ -487,8 +488,11 @@ export async function postFeedback(
     if (workspace !== undefined && clientId !== undefined) {
       const entry = noteEntry(workspace, clientId, attributed, identity.channel, target, issue);
       await indexed(noteIndex, (index) => index.record([entry], Date.now()));
-      await watchForDone(checks.done, [entry], Date.now());
-      notify = notifyOffer(checks.done, config, entry, route.client?.origins, Date.now());
+      // FRU-604: only on a site that offers it (Mathieu, 2026-11-06), for a visitor and a member alike.
+      if (route.client?.notifyDone === true) {
+        await watchForDone(checks.done, [entry], Date.now());
+        notify = notifyOffer(checks.done, config, entry, route.client.origins, Date.now());
+      }
       await verifiedNoteArrived(
         config,
         workspace,
@@ -674,7 +678,7 @@ async function postBatch(
     await indexed(noteIndex, (index) => index.record(entries, Date.now()));
     // FRU-604: a member is told when each note is done. A batch offers a visitor no address: it asks
     // after one note sent, and the widget keeps a batch for a reader it may write for later.
-    await watchForDone(checks.done, entries, Date.now());
+    if (route.client?.notifyDone === true) await watchForDone(checks.done, entries, Date.now());
     // FRU-608: a batch is one send, so it starts the agent once, with every note of it that arrived.
     const arrived = attributed.flatMap((note, index) => {
       const result = results[index];

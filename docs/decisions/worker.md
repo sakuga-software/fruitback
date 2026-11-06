@@ -4717,6 +4717,12 @@ framing; `SECURITY.md` says what is protected.
   (`POST /feedback/<id>/status`, `POST /console/…/notes/<note>/status`) call it on a move to done.
   Not awaited: the mail provider never holds a read, and `sendDoneNotices` never throws. A note
   moved in a tracker that nobody reads again sends nothing, as its index row stays old.
+- **Only on a site that offers it** (Mathieu, 2026-11-06): `sites.notify_done`, off by default, in
+  migration `0042`, and of no effect where only members write (`offersDoneNotice`, carried to the
+  routes as `notifyDone` of the client). Off: no token, no row for a member either, `404` on the
+  route as with no mailer, nothing sent. Turned off, `addSite` deletes the rows of the site. The
+  member's e-mail is behind the same switch: the decision is about the visitor, and a member's
+  e-mail is never on by default either.
 - **A visitor gives an address only for the note they just sent**: `POST /feedback` answers
   `notify: { token }` (HMAC of the site, the note and an expiry, under a key derived from
   `FRUITBACK_AUTH_SECRET`), and `POST /feedback/<note>/notify` takes `{ email, token }`

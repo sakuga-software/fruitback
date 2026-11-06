@@ -85,7 +85,7 @@
   "host.spec.ts": 13.2,
   "navigation.spec.ts": 7.2,
   "note-edit.spec.ts": 17.2,
-  "notify.spec.ts": 30,
+  "notify.spec.ts": 46,
   "overflow.spec.ts": 0.1,
   "overlay.spec.ts": 35.3,
   "package.spec.ts": 12.7,

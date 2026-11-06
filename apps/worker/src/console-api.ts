@@ -190,6 +190,8 @@ type SiteView = {
   origin: string;
   visibility: Visibility;
   writers: Writers;
+  /** FRU-604: the switch « Offer visitors an e-mail when their note is done », as it is stored. */
+  notifyDone: boolean;
   destination?: Destination;
   destinations?: Destination[];
 };
@@ -208,6 +210,7 @@ function siteView(site: Site, seesTracker: boolean): SiteView {
     origin: site.origin,
     visibility: site.visibility,
     writers: site.writers,
+    notifyDone: site.notifyDone,
     ...(seesTracker && first !== undefined ? { destination: first, destinations: site.destinations } : {}),
   };
 }
@@ -780,11 +783,17 @@ export async function handleConsoleApi(
     // FRU-330: absent, a new site is « Members only » and a site that exists keeps what it had.
     const writers = body?.writers === undefined ? undefined : writersOf(body.writers);
     if (body?.writers !== undefined && writers === undefined) return json(400, { error: 'invalid-writers' }, headers);
+    // FRU-604: absent, a new site offers no e-mail and a site that exists keeps what it had.
+    const notifyDone = body?.notifyDone;
+    if (notifyDone !== undefined && typeof notifyDone !== 'boolean') {
+      return json(400, { error: 'invalid-notify-done' }, headers);
+    }
 
     const site = await context.accounts.addSite(workspaceId as string, {
       origin,
       visibility,
       ...(writers === undefined ? {} : { writers }),
+      ...(notifyDone === undefined ? {} : { notifyDone }),
     });
 
     // A new site, as the list answers it (FRU-237): no note yet, and nothing waiting.

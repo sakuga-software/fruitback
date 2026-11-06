@@ -354,6 +354,7 @@ describe('SECURITY.md states what the code does', () => {
         origin: 'https://a.test',
         visibility: 'members',
         writers: 'anyone',
+        notifyDone: false,
         destinations: [],
       }).read,
       'authenticated',
@@ -365,6 +366,7 @@ describe('SECURITY.md states what the code does', () => {
         origin: 'https://a.test',
         visibility: 'everyone',
         writers: 'anyone',
+        notifyDone: false,
         destinations: [],
       }).read,
       'public',
@@ -399,6 +401,7 @@ describe('SECURITY.md states what the code does', () => {
       origin: 'https://a.test',
       visibility: 'members' as const,
       destinations: [],
+      notifyDone: false,
     };
     assert.equal(clientOf({ ...site, writers: 'members' }).write, 'authenticated');
     assert.equal(clientOf({ ...site, writers: 'anyone' }).write, 'public');

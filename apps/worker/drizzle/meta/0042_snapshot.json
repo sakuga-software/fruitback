@@ -1,5 +1,5 @@
 {
-  "id": "54c2698e-e17c-4f0d-bfca-cea1a282621b",
+  "id": "58ea9643-555f-49fb-bdfd-77524edebbd7",
   "prevId": "53e51965-47c5-4da6-96d0-0bcd3977110d",
   "version": "7",
   "dialect": "postgresql",
@@ -2921,6 +2921,13 @@
         },
         "tracker_colours": {
           "name": "tracker_colours",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "notify_done": {
+          "name": "notify_done",
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,

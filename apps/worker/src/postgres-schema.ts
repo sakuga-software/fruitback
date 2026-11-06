@@ -103,6 +103,9 @@ export const sites = pgTable(
     // FRU-368: the states of the site's tracker take the tracker's colours. Off by default (decision 3
     // of docs/decisions/statuses.md): the colours of the stages, which a host can still set.
     tracker_colours: boolean('tracker_colours').notNull().default(false),
+    // FRU-604: a visitor is offered one e-mail when their note is done. Off by default (decision of
+    // Mathieu, 2026-11-06), and of no effect on a site whose notes come from its members only.
+    notify_done: boolean('notify_done').notNull().default(false),
   },
   (table) => [
     foreignKey({

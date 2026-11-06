@@ -10,7 +10,7 @@ deployment:
 > and is visible to _[our team / anyone who can open this page]_ until we delete it. To have your
 > notes erased, write to _[address]_.
 
-If your worker sends e-mail, add: "If you give your e-mail address after a note, we write to you once,
+If the site offers visitors an e-mail when their note is done (a setting of the site, off by default), add: "If you give your e-mail address after a note, we write to you once,
 when the note is fixed, and then delete the address. We delete it after 90 days in any case."
 
 If your team connects an AI agent to Fruitback, add: "An AI assistant of our team may read your note,

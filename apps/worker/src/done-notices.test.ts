@@ -15,6 +15,7 @@ import {
   sendDoneNotices,
 } from './done-notices.ts';
 import type { MailMessage } from './mail.ts';
+import { clientOf, offersDoneNotice } from './accounts.ts';
 import type { ClientPolicy } from './clients.ts';
 import { createMemoryStore, resetMemoryLinear, setMemoryNoteStage } from './linear-memory.ts';
 import { createPostgresDoneNotices } from './notes-index-postgres.ts';
@@ -255,15 +256,24 @@ describe('sendDoneNotices', () => {
   });
 });
 
-/** A site that everybody reads and anybody writes on, with its notes in the database. */
-async function aPublicSite(more: { env?: Record<string, string> } = {}) {
-  const world = await open(more);
+/**
+ * A site that everybody reads and anybody writes on, with its notes in the database. It offers the
+ * e-mail of a note done unless `notifyDone` says otherwise: the switch is off by default (FRU-604).
+ */
+async function aPublicSite(more: { env?: Record<string, string>; notifyDone?: boolean } = {}) {
+  const world = await open(more.env === undefined ? {} : { env: more.env });
   const store = createPostgresNoteStore(world.database);
   const notices = createPostgresDoneNotices(world.database);
   const alice = await signInTo(world, 'alice@acme.dev');
   const workspace = await workspaceIn(world, alice.token, 'Acme');
-  const site = (await world.accounts.addSite(workspace, { origin: ORIGIN, visibility: 'everyone', writers: 'anyone' }))
-    .id;
+  const site = (
+    await world.accounts.addSite(workspace, {
+      origin: ORIGIN,
+      visibility: 'everyone',
+      writers: 'anyone',
+      notifyDone: more.notifyDone ?? true,
+    })
+  ).id;
 
   return { world, store, notices, alice, workspace, site };
 }
@@ -519,6 +529,81 @@ async function sessionOf(world: World, account: string, workspace: string): Prom
 
   return redeemed.session.accessToken;
 }
+
+describe('the switch of the site, off by default (FRU-604, Mathieu 2026-11-06)', () => {
+  it('is off for a new site: no token, no row of a member, and the route answers 404', async () => {
+    const world = await open();
+    const store = createPostgresNoteStore(world.database);
+    const notices = createPostgresDoneNotices(world.database);
+    const alice = await signInTo(world, 'alice@acme.dev');
+    const workspace = await workspaceIn(world, alice.token, 'Acme');
+    const added = await world.accounts.addSite(workspace, {
+      origin: ORIGIN,
+      visibility: 'everyone',
+      writers: 'anyone',
+    });
+    assert.equal(added.notifyDone, false);
+    const site = added.id;
+
+    const planted = await plant(
+      world,
+      store,
+      notices,
+      noteFixture({ id: 'no_1', page: { url: PAGE, path: '/pricing' }, client: { id: site, name: 'Acme' } }),
+    );
+    assert.equal(planted.status, 201);
+    assert.equal(planted.body.notify, undefined);
+    const token = notifyToken(world.env.FRUITBACK_AUTH_SECRET as string, site, 'no_1', Date.now());
+    assert.deepEqual(await notify(world, notices, site, 'no_1', { email: 'ana@example.com', token }), {
+      status: 404,
+      body: { error: 'not-found' },
+    });
+    // A member's note keeps no row either: the e-mail of a member is behind the same switch.
+    const bob = await signInTo(world, 'bob@acme.dev');
+    await memberOf(world, workspace, bob.id, 'member');
+    const session = await sessionOf(world, bob.id, workspace);
+    await plant(
+      world,
+      store,
+      notices,
+      noteFixture({ id: 'no_2', page: { url: PAGE, path: '/pricing' }, client: { id: site, name: 'Acme' } }),
+      session,
+    );
+    assert.deepEqual(await rowsOf(world.database, 'SELECT * FROM done_notices'), []);
+  });
+
+  it('does nothing on a site whose notes come from its members only, even when it is on', async () => {
+    const world = await open();
+    const alice = await signInTo(world, 'alice@acme.dev');
+    const workspace = await workspaceIn(world, alice.token, 'Acme');
+    const site = await world.accounts.addSite(workspace, {
+      origin: ORIGIN,
+      visibility: 'members',
+      writers: 'members',
+      notifyDone: true,
+    });
+    assert.equal(site.notifyDone, true);
+    assert.equal(offersDoneNotice(site), false);
+    assert.equal(clientOf(site).notifyDone, undefined);
+    assert.equal(clientOf({ ...site, writers: 'anyone' }).notifyDone, true);
+  });
+
+  it('forgets every address of the site when it is turned off', async () => {
+    const { world, store, notices, workspace, site } = await aPublicSite();
+    const planted = await plant(
+      world,
+      store,
+      notices,
+      noteFixture({ id: 'no_3', page: { url: PAGE, path: '/pricing' }, client: { id: site, name: 'Acme' } }),
+    );
+    const token = planted.body.notify.token as string;
+    assert.equal((await notify(world, notices, site, 'no_3', { email: 'ana@example.com', token })).status, 201);
+    assert.equal((await rowsOf(world.database, 'SELECT * FROM done_notices')).length, 1);
+
+    await world.accounts.addSite(workspace, { origin: ORIGIN, visibility: 'everyone', notifyDone: false });
+    assert.deepEqual(await rowsOf(world.database, 'SELECT * FROM done_notices'), []);
+  });
+});
 
 describe('a member is told at the address of their account (FRU-604)', () => {
   it('keeps the account and no address, offers no token, and writes once when the note is done', async () => {
