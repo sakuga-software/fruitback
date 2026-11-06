@@ -456,8 +456,6 @@ export default function Connectors() {
           )}
         </Source>
       </ul>
-      {/* FRU-595: the recipes that start an agent with no code, under the sources. */}
-      <NoCodeRecipes />
     </>
   );
 
@@ -579,6 +577,8 @@ export default function Connectors() {
                 );
               })}
             </ul>
+            {/* FRU-595: the recipes start from the issue of a note, so they come with a tracker that makes one. */}
+            <NoCodeRecipes kinds={connectors.map((connector) => connector.kind)} />
           </section>
         ) : null}
       </div>

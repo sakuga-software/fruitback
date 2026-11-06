@@ -1,20 +1,22 @@
+import type { Connector } from '../api';
 import { msg, t } from '../i18n';
 import { Chip, LinkButton } from '../ui';
 import { useLocale } from '../use-locale';
 import { ConnectorMark, type MarkedKind } from '../connector-marks';
 
 /**
- * The recipes that start an agent with no code (FRU-595), under the sources to add of « Connectors »:
- * Linear delegates the issue of a note to an agent of its workspace, and GitHub Actions runs Claude
- * Code on the issue of a note. Neither has a field: no secret goes to Fruitback, and each card leads
- * to its steps in `docs/agents.md`. The cards of every recipe, with their board, are FRU-593.
+ * The recipes that start an agent with no code (FRU-595), under « Your connectors »: Linear
+ * delegates the issue of a note to an agent of its workspace, and GitHub Actions runs Claude Code on
+ * the issue of a note. Each recipe starts from that issue, so its card shows once a tracker of its
+ * kind is connected. Neither has a field: no secret goes to Fruitback, and each card leads to its
+ * steps in `docs/agents.md`. The cards of every recipe, with their board, are FRU-593.
  */
 
 /**
  * Each `href` names a heading of the guide in full, so `docs-site.test.ts` finds it and fails when
  * the heading changes.
  */
-const RECIPES: readonly { kind: MarkedKind; name: string; detail: string; href: string }[] = [
+const RECIPES: readonly { kind: MarkedKind & Connector['kind']; name: string; detail: string; href: string }[] = [
   {
     kind: 'linear',
     name: msg('An agent of Linear'),
@@ -29,8 +31,10 @@ const RECIPES: readonly { kind: MarkedKind; name: string; detail: string; href: 
   },
 ];
 
-export function NoCodeRecipes() {
+export function NoCodeRecipes({ kinds }: { kinds: readonly Connector['kind'][] }) {
   useLocale();
+  const shown = RECIPES.filter((recipe) => kinds.includes(recipe.kind));
+  if (shown.length === 0) return null;
 
   return (
     <section aria-labelledby="no-code-title" className="mt-[24px] flex flex-col gap-[10px]" data-recipes>
@@ -43,7 +47,7 @@ export function NoCodeRecipes() {
         </p>
       </div>
       <ul className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,280px),1fr))] gap-[12px]">
-        {RECIPES.map((recipe) => (
+        {shown.map((recipe) => (
           <li
             key={recipe.href}
             className="flex min-w-0 flex-col gap-[12px] rounded-frame border border-line bg-surface p-[16px]"

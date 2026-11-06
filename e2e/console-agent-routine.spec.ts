@@ -179,22 +179,28 @@ test('at 390 px in French, the panel says « Session lancée », and nothing scr
 });
 
 /**
- * FRU-595: the recipes that start an agent with no code, under the sources to add of « Connectors »:
- * an agent of Linear, and Claude Code in GitHub Actions. Each is a card with « No code » and a link
- * to its steps in `docs/agents.md`; neither has a field.
+ * FRU-595: the recipes that start an agent with no code, under « Your connectors »: an agent of
+ * Linear, and Claude Code in GitHub Actions. Each starts from the issue its tracker makes of a note,
+ * so its card shows once that tracker is connected. Each is a card with « No code » and a link to its
+ * steps in `docs/agents.md`; neither has a field.
  */
 const GUIDE = 'https://fruitback.com/agents.html';
+const LINEAR = { id: 'c4', kind: 'linear', label: 'Linear OAuth · Acme', createdAt: '2026-10-01T10:00:00.000Z' };
+const GITHUB = { id: 'c5', kind: 'github', label: 'GitHub · acme/web', createdAt: '2026-10-02T10:00:00.000Z' };
 
-async function openRecipes(page: Page, locale: 'en' | 'fr' = 'en'): Promise<void> {
-  await stubWorker(page, { locale, workspaces: [{ ...ACME, role: 'owner' }] });
+async function openRecipes(page: Page, connectors: unknown[], locale: 'en' | 'fr' = 'en'): Promise<void> {
+  await workerWith(page, { connectors, locale });
   await page.goto(`${CONSOLE}/w/w1/connectors`);
+  await expect(
+    page.getByRole('heading', { name: locale === 'en' ? 'Your connectors' : 'Vos connecteurs' }),
+  ).toBeVisible();
 }
 
-test('the two recipes with no code sit under the sources to add, each with its steps in the guide', async ({
+test('the two recipes with no code sit under the trackers that make an issue, each with its steps in the guide', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await openRecipes(page);
+  await openRecipes(page, [LINEAR, GITHUB, HOOK]);
   const recipes = page.getByRole('region', { name: 'Start an agent, with no code' });
   await expect(recipes).toBeVisible();
   await expect(recipes.getByRole('listitem')).toHaveCount(2);
@@ -211,14 +217,27 @@ test('the two recipes with no code sit under the sources to add, each with its s
   }
   // No field: a recipe with no code takes nothing, and keeps no secret.
   await expect(recipes.getByRole('textbox')).toHaveCount(0);
-  // The control: the sources above it still have their own buttons.
-  await expect(page.locator('li[data-source]')).toHaveCount(9);
   await expectNoViolation(page);
+});
+
+test('a recipe shows only with its tracker: Linear alone, then none with no tracker that makes an issue', async ({
+  page,
+}) => {
+  await openRecipes(page, [LINEAR, HOOK]);
+  const recipes = page.getByRole('region', { name: 'Start an agent, with no code' });
+  await expect(recipes.getByRole('listitem')).toHaveCount(1);
+  await expect(recipes.locator('[data-recipe="delegate-to-an-agent-of-linear"]')).toBeVisible();
+
+  await page.unrouteAll({ behavior: 'ignoreErrors' });
+  await openRecipes(page, [HOOK, ROUTINE]);
+  // The control: the list of the connectors is there, and the recipes are not.
+  await expect(page.getByRole('listitem').filter({ hasText: 'REST' })).toBeVisible();
+  await expect(recipes).toHaveCount(0);
 });
 
 test('at 390 px in French, the recipes say « Sans code », and nothing scrolls sideways', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await openRecipes(page, 'fr');
+  await openRecipes(page, [LINEAR, GITHUB], 'fr');
   const recipes = page.getByRole('region', { name: 'Lancer un agent, sans code' });
   await recipes.scrollIntoViewIfNeeded();
   await expect(recipes.getByText('Sans code', { exact: true })).toHaveCount(2);

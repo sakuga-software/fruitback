@@ -153,7 +153,7 @@ with no key, nothing leaves.
 - The GitHub connector makes an issue of a note: a workflow `on: issues: opened` can run Claude Code
   on it today. The Linear connector makes a ticket that a team can give to an agent of Linear.
   **Since FRU-595 both are recipes with no code** in `docs/agents.md`, « Recipes with no code », and
-  two cards under the sources to add of « Connectors » lead there. Neither asks for a Fruitback key:
+  a card under « Your connectors », shown once its tracker is connected, leads to each. Neither asks for a Fruitback key:
   the issue holds the whole note but its files, and a comment on it comes back to the thread. The
   workflow names `fruitback-app[bot]` in `allowed_bots`, because the action refuses a bot that opened
   an issue unless it is listed. Measured against the documentation of 2026-11-06, not run on a
