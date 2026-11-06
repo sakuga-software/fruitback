@@ -1,6 +1,7 @@
 import { PROOF_GRACE_MS, RECHECK_MS } from './domain-proof.ts';
 import { describe, it } from 'vitest';
 import assert from 'node:assert/strict';
+import { MAX_EMAIL_LENGTH, NOTIFY_TOKEN_TTL_MS } from './done-notices.ts';
 import { SESSION_FRESH_SECONDS, SESSION_RENEWAL_SECONDS, SESSION_TTL_SECONDS } from './auth.ts';
 import { ADDRESSES_PER_HOUR, VERIFY_ADDRESS_HOURS, VERIFY_LINKS_PER_MAILBOX } from './account-emails.ts';
 import { readFileSync } from 'node:fs';
@@ -16,7 +17,7 @@ import {
 // The constants come from the modules, never from their text: a mutation run rewrites that text (FRU-179).
 import { ALGORITHM, CLOCK_SKEW_SECONDS, MAX_TOKEN_BYTES, stripClaimedVerification } from './identity.ts';
 import { DEFAULT_TRUSTED_PROXY_HOPS } from './env.ts';
-import { DEFAULT_LIMIT } from './rate-limit.ts';
+import { DEFAULT_LIMIT, NOTIFY_LIMIT, NOTIFY_SITE_LIMIT } from './rate-limit.ts';
 import {
   CONNECTS_PER_ADDRESS,
   POLL_WINDOW_SECONDS,
@@ -201,6 +202,17 @@ describe('SECURITY.md states what the code does', () => {
       `only the sites it names, ${MAX_KEY_SITES} at most`,
       `It lives ${DEFAULT_KEY_DAYS} days unless its creator chooses from 1 to ${MAX_KEY_DAYS} days`,
       `A workspace holds ${MAX_AGENT_KEYS} keys at most`,
+    ]) {
+      assert.ok(loose.includes(sentence), `SECURITY.md does not say: ${sentence}`);
+    }
+  });
+
+  it('quotes the lifetime of the token of a note, and the limits of the addresses of visitors (FRU-604)', () => {
+    const loose = SECURITY.replace(/\s+/g, ' ');
+    for (const sentence of [
+      `A token lasts ${NOTIFY_TOKEN_TTL_MS / 60_000} minutes`,
+      `${NOTIFY_LIMIT} addresses a minute from one address of a caller, and ${NOTIFY_SITE_LIMIT} a minute for one site`,
+      `${MAX_EMAIL_LENGTH} characters at most`,
     ]) {
       assert.ok(loose.includes(sentence), `SECURITY.md does not say: ${sentence}`);
     }

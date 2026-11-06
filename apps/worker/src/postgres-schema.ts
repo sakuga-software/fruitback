@@ -885,6 +885,49 @@ export const note_index = pgTable(
 );
 
 /**
+ * The person to tell when a note is done (FRU-604): one row per note, sent once, then removed.
+ *
+ * - `account_id`: a member left the note. The address is read from the account when the message
+ *   leaves, so this table holds no address for a member.
+ * - `email`: a visitor with no account gave this address just after the note was sent. It is the one
+ *   address that the worker keeps for a person with no account, and it serves one message only.
+ *
+ * Exactly one of the two is set: `done-notices.ts` writes no other row. A row goes when its message
+ * leaves, when its note leaves the index (`cascade`), when the account goes (`cascade`), and at
+ * `expires_at` (`DONE_NOTICE_KEEP_MS` after it was written) for a note that is never done.
+ * `docs/privacy.md` names each column.
+ */
+export const done_notices = pgTable(
+  'done_notices',
+  {
+    site_id: text('site_id').notNull(),
+    note_id: text('note_id').notNull(),
+    account_id: text('account_id'),
+    email: text('email'),
+    locale: text('locale'),
+    created_at: instant('created_at').notNull(),
+    expires_at: instant('expires_at').notNull(),
+  },
+  (table) => [
+    primaryKey({ name: 'done_notices_pkey', columns: [table.site_id, table.note_id] }),
+    foreignKey({
+      name: 'done_notices_site_id_note_id_fkey',
+      columns: [table.site_id, table.note_id],
+      foreignColumns: [note_index.site_id, note_index.note_id],
+    }).onDelete('cascade'),
+    foreignKey({
+      name: 'done_notices_account_id_fkey',
+      columns: [table.account_id],
+      foreignColumns: [user.id],
+    }).onDelete('cascade'),
+    // What `ON DELETE CASCADE` of an account looks for.
+    index('done_notices_by_account').on(table.account_id),
+    // The sweep of the rows whose time ran out.
+    index('done_notices_by_expiry').on(table.expires_at),
+  ],
+);
+
+/**
  * The reads of an administrator of the instance in a workspace they are not a member of (FRU-261):
  * who, which read, and when. The owners of the workspace read them (`instance-admin.ts`).
  *

@@ -122,6 +122,17 @@ export const ENGLISH = {
   'composer.sentAs': 'Sent as {identifier}',
   'composer.sentFollows': 'The pin stays here and follows the issue’s status.',
   'composer.sentOpen': 'Open →',
+  // FRU-604: asked of a visitor with no account, under the card of the note they just sent.
+  'composer.notifyTitle': 'Want to know when it’s fixed?',
+  'composer.notifyEmail': 'Email',
+  'composer.notifyWhy': 'One email, when the team marks this note done. Your address is then deleted.',
+  'composer.notifyYes': 'Notify me',
+  'composer.notifyNo': 'No thanks',
+  'composer.notifyDone': 'We’ll email you once, when it’s fixed.',
+  'composer.notifyGone': 'This note can no longer take an address.',
+  'composer.notifyInvalid': 'Enter an email address, like name@example.com.',
+  'composer.notifyRetry': 'Not saved. Try again.',
+  'composer.notifyWait': 'Too many tries. Wait a minute, then try again.',
   // Where the note lands, in the foot (FRU-305): the place a member sees, or the team.
   'composer.lands': 'Creates a new issue in {destination}',
   'composer.landsTeam': 'Sent to the team',

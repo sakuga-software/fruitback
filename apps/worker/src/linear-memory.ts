@@ -188,6 +188,30 @@ export function setMemoryIssueState(id: string, state: { name: string; type: str
   issue.state = state;
 }
 
+/**
+ * Dev seam (FRU-604): the note `noteId` goes to `stage`, as a team moves its issue in Linear.
+ * `POST /__dev/stage` of the worker of development calls it for a note that is not in the database.
+ * Answers how many issues moved: the description holds the id of its note, as the read finds it.
+ */
+export function setMemoryNoteStage(noteId: string, stage: string): number {
+  const states: Record<string, { name: string; type: string }> = {
+    new: DEV_STATES[0],
+    todo: DEV_STATES[1],
+    progress: DEV_STATES[2],
+    done: DEV_STATES[3],
+    closed: DEV_STATES[4],
+  };
+  const state = states[stage];
+  if (state === undefined) return 0;
+  const moved = issues.filter((issue) => (issue.description ?? '').includes(JSON.stringify(noteId)));
+  for (const issue of moved) {
+    issue.state = { name: state.name, type: state.type };
+    issue.updatedAt = new Date().toISOString();
+  }
+
+  return moved.length;
+}
+
 /** Test seam, and what makes each playground run start from an empty page. */
 export function resetMemoryLinear(): void {
   issues.length = 0;

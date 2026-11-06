@@ -2744,3 +2744,19 @@ as `framed`, a bridge in each frame, a capture with no move. Not measured in Fir
 - **One line, `updateLine` of the kit**: the muted grey, the link in the accent in a target of 44 px,
   `role="status"`. Above the foot of every screen of the popup, and under the version in the menu of
   the page.
+
+## The badge on the icon: the notes to check of the tab (FRU-604)
+
+### The rules, in short
+
+- **The count is `toCheck` of `GET /session/sites?origin=`** for the origin of the tab, by
+  `offerFor`, as the popup reads it (FRU-295): notes of the reviewer that the team marked done and
+  that they did not confirm. No new route, and no cache: a stale count says there is nothing to check.
+- **By tab** (`tabId` on each call of `action`), in the blue of « done » (`--stage-done`,
+  `#5560c4`) with white text, `99+` above 99. Empty for zero, for no answer and for a site that is
+  not on in team mode: never « 0 ».
+- **Asked when the tab changes** (`tabs.onActivated`, a new address or a load in `tabs.onUpdated`,
+  `windows.onFocusChanged`), when a site or a session changes, and every 5 minutes for the active tab
+  (`fruitback-badge`): a tracker tells the extension nothing. Each tab keeps the answer of its last
+  question only (`createBadge`).
+- `src/badge.ts`, held by `badge.test.ts`. No permission: `action` needs none.

@@ -1571,7 +1571,7 @@ Read on drizzle-orm 0.45.4 and drizzle-kit 0.31.11, the versions of the catalogu
   store of the accounts`, test:`decides a pairing and a session by their instants, on each side of
   2^32`.
 - **better-auth reads no `BIGINT` of its tables on that pool, and a count is one.** Its seven tables
-  have none (test:`knows the fifty BIGINT columns of the worker, and that better-auth has none`).
+  have none (test:`knows the fifty-two BIGINT columns of the worker, and that better-auth has none`).
   `count(*)` is a `BIGINT` whatever the table: the pool now answers it as a string, and better-auth
   reads it as a number, through its adapter and the layer of FRU-181
   (test:`gives better-auth a count as a string, which better-auth reads as a number`).
@@ -3215,7 +3215,7 @@ workspace too: the reason is free text, « impayé » for example.
 - **Why a table of its own, and not two columns of `organization`.** The ticket offered columns on
   `organization`. That table is of better-auth, and two tests hold it: `auth-schema.test.ts` compares
   its columns with the ones that better-auth makes, and
-  test:`knows the fifty BIGINT columns of the worker, and that better-auth has none` says that
+  test:`knows the fifty-two BIGINT columns of the worker, and that better-auth has none` says that
   better-auth reads no `BIGINT`, on a pool with no parser of ours. A `suspended_at` there breaks
   both, or is not a `BIGINT`. A row of the worker keeps the convention, cascades with the workspace,
   and makes « changed » one statement.
@@ -4696,3 +4696,46 @@ framing; `SECURITY.md` says what is protected.
   update by hand: a button there would have to write its `.env`.
 - The commands that the screen gives are the two of `upgrade.md` for a moving tag (`edge`). The screen
   says to back up first, and links the guide for a pinned tag and for a rollback.
+
+## The person who left a note is told when it is done (FRU-604)
+
+### The rules, in short
+
+- **One row of `done_notices` for each note that waits, and one message, then the row goes.** A
+  member's row names the account (`watch` when the note is planted), a visitor's row the address
+  they gave. `take` removes the rows of the notes done and answers them in one statement, so two
+  reads of one page send one message (test:`answers a row to one of two takes at once`). A message
+  the provider refused is put back (`putBack`) with its first expiry.
+- **When: when the worker learns that the note is done.** `readPage` calls `sendDoneNotices` after
+  `refresh`, inside the read cache: a read that asked the store. The two routes of a status
+  (`POST /feedback/<id>/status`, `POST /console/…/notes/<note>/status`) call it on a move to done.
+  Not awaited: the mail provider never holds a read, and `sendDoneNotices` never throws. A note
+  moved in a tracker that nobody reads again sends nothing, as its index row stays old.
+- **A visitor gives an address only for the note they just sent**: `POST /feedback` answers
+  `notify: { token }` (HMAC of the site, the note and an expiry, under a key derived from
+  `FRUITBACK_AUTH_SECRET`), and `POST /feedback/<note>/notify` takes `{ email, token }`
+  (`notify-route.ts`). Stateless: a visitor who gives nothing costs no row.
+- **No token for a member** (told at the account's address), **for a reporter the site signs**
+  (nobody the worker can write to), nor **for a page of another origin than the site**: the link of
+  the message opens that page.
+- **No word of the note in the message**, and the host is written with `unlinked`: the text is the
+  sender's, and the message leaves under the name of Fruitback.
+- **Nothing without a mailer.** No row, no token, `404` on the route. The worker of development has
+  no provider: `dev-worker.fixture.ts` gives `provideDevDoneMailer` a mailer that keeps the messages
+  for `GET /__dev/mail`, and only these messages use it (`doneMailerFor`), so the sign-in by link
+  stays off in development. `POST /__dev/stage` also moves a note of the Linear in memory.
+- **The rows go after `DONE_NOTICE_KEEP_MS` (90 days)**: `sweepDoneNotices` each hour
+  (`DONE_SWEEP_MS`), and `take` skips a row whose time ran out. They also go with the row of the
+  index (`done_notices_site_id_note_id_fkey`, `cascade`) and with the account.
+- **Migration `0042_done_notices` only adds a table**: no row moves.
+
+### The reasons
+
+- The ticket asked for « une seule fois par navigateur »: the widget asks once in a browser on a
+  site, and the address serves one note. A second note of the same visitor is not followed: keeping
+  the address in the browser, to give it again, would put it in the `localStorage` of the client's
+  page, which any script of the page reads. The safer reading was chosen.
+- The token is the whole of the protection of the route: without it, anybody could put an address
+  on the note of somebody else and have Fruitback write to it. The two limits (3 a minute from a
+  caller, 10 a minute for a site) bound what an owner of a site can still do with their own notes,
+  which SECURITY.md says.

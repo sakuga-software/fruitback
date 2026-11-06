@@ -21,7 +21,8 @@ import {
   targetsOf,
   withoutTracker,
 } from './note-helpers.ts';
-import { type Channel, type NoteIndex, authorOf } from './notes-index.ts';
+import { type Channel, type NoteEntry, type NoteIndex, authorOf } from './notes-index.ts';
+import { type DoneNoticeSeams, notifyToken, sendDoneNotices } from './done-notices.ts';
 import { chargeRateLimit, maxBatch } from './rate-limit.ts';
 import { checkedOf, markedAgent } from './reply-text.ts';
 import type { CallerChecks, RequestContext, Served } from './request-context.ts';
@@ -105,7 +106,16 @@ export async function getFeedback(
     // a note by where it is. Each place has its own entry: the scope of the store names it.
     const places = route.client?.destinations ?? [];
     const targets = targetsOf(route.client);
-    const all = await readPage({ store, kv, noteIndex, client: route.client, clientId, url, policy: route.policy });
+    const all = await readPage({
+      store,
+      kv,
+      noteIndex,
+      client: route.client,
+      clientId,
+      url,
+      policy: route.policy,
+      done: checks.done,
+    });
     // Asked at each request, after the cache, whose answer every reader of the page shares.
     const hidden = await hidesTracker(request, config, route.policy);
     // FRU-294: the notes of this reader, and the confirmation of each note done. Never in the cached
@@ -227,6 +237,7 @@ export async function readPage({
   clientId,
   url,
   policy,
+  done,
 }: {
   store: NoteStore;
   kv: Kv;
@@ -235,6 +246,8 @@ export async function readPage({
   clientId: string | undefined;
   url: string;
   policy: ClientPolicy;
+  /** Who to tell when a note is done (FRU-604). Absent: nobody is told by this read. */
+  done?: DoneNoticeSeams;
 }): Promise<NoteIssue[]> {
   // The store says what separates one tenant from another — a team for Linear, nothing extra for
   // the in-memory one. The client id is in the key regardless, so two clients reading the same URL
@@ -260,6 +273,9 @@ export async function readPage({
           await indexed(noteIndex, (index) =>
             index.refresh(workspace, clientId, placeOf(target), issues, Date.now(), { verdicts }),
           );
+          // FRU-604: the person who left a note now done is told, once. Not awaited: the provider of
+          // the mail does not hold the read of the page, and `sendDoneNotices` never throws.
+          if (done !== undefined) void sendDoneNotices(done, clientId, issues);
         }
 
         return issues;
@@ -279,6 +295,48 @@ export async function readPage({
   return issues.map((issue) =>
     issue.comments === undefined ? issue : { ...issue, comments: issue.comments.map(markedAgent) },
   );
+}
+
+/**
+ * A note a member left waits for its stage done (FRU-604): its row names the account, never an
+ * address. Nothing is written by a worker that cannot send. A failure costs the note nothing.
+ */
+async function watchForDone(done: DoneNoticeSeams, entries: readonly NoteEntry[], now: number): Promise<void> {
+  const { notices } = done;
+  if (notices === undefined || done.mailer === undefined) return;
+  for (const entry of entries) {
+    const account = entry.author.kind === 'member' ? entry.author.account : undefined;
+    if (account === undefined) continue;
+    await notices.watch({ site: entry.site, note: entry.note.id, account }, now).catch((error: unknown) => {
+      console.error('[fruitback] could not keep who to tell when a note is done', error);
+    });
+  }
+}
+
+/**
+ * The token a visitor gives an address with, for the note they just sent (FRU-604). Only for a note
+ * of a visitor (a member is told at the address of their account; a reporter that the site signed is
+ * nobody the worker can write to), by a worker that sends, and on a page of an origin of the site:
+ * the link of the message opens that page.
+ */
+function notifyOffer(
+  done: DoneNoticeSeams,
+  config: Served,
+  entry: NoteEntry,
+  origins: readonly string[] | undefined,
+  now: number,
+): { token: string } | undefined {
+  if (entry.author.kind !== 'visitor' || done.notices === undefined || done.mailer === undefined) return undefined;
+  if (config.authSecret === undefined) return undefined;
+  let origin: string;
+  try {
+    origin = new URL(entry.note.page.url).origin;
+  } catch {
+    return undefined;
+  }
+  if (origins === undefined || !origins.includes(origin)) return undefined;
+
+  return { token: notifyToken(config.authSecret, entry.site, entry.note.id, now) };
 }
 
 /**
@@ -401,10 +459,14 @@ export async function postFeedback(
     // A file that a delivery carries later stays until that delivery arrives, or its transit ends.
     const filesOutcome = taken?.ok === true ? await settleFiles(taken.store, taken.files, answered) : undefined;
     await invalidatePages(kv, [attributed.page.url]);
+    // FRU-604: the token a visitor gives an address with, for this note.
+    let notify: { token: string } | undefined;
     const workspace = route.client?.workspace;
     if (workspace !== undefined && clientId !== undefined) {
       const entry = noteEntry(workspace, clientId, attributed, identity.channel, target, issue);
       await indexed(noteIndex, (index) => index.record([entry], Date.now()));
+      await watchForDone(checks.done, [entry], Date.now());
+      notify = notifyOffer(checks.done, config, entry, route.client?.origins, Date.now());
       await verifiedNoteArrived(
         config,
         workspace,
@@ -423,6 +485,7 @@ export async function postFeedback(
       {
         issue: hidden ? withoutTracker(issue, attributed.id) : issue,
         ...(filesOutcome === undefined ? {} : { attachments: filesOutcome }),
+        ...(notify === undefined ? {} : { notify }),
         // The note named a picture that its place takes no file for: it goes without it, and says why.
         ...(legacy?.notTaken === undefined
           ? {}
@@ -587,6 +650,9 @@ async function postBatch(
       return held[index] && issue !== undefined ? [noteEntry(workspace, clientId, note, channel, target, issue)] : [];
     });
     await indexed(noteIndex, (index) => index.record(entries, Date.now()));
+    // FRU-604: a member is told when each note is done. A batch offers a visitor no address: it asks
+    // after one note sent, and the widget keeps a batch for a reader it may write for later.
+    await watchForDone(checks.done, entries, Date.now());
     for (const [index, note] of attributed.entries()) {
       const result = results[index];
       if (held[index] && result !== undefined && 'issue' in result && result.issue !== undefined) {

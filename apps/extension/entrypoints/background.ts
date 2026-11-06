@@ -1,6 +1,7 @@
 import { browser } from 'wxt/browser';
 import { readAll, readFreshPreviews, readSite, rememberPreviews, replaceAll } from '../src/sites.ts';
-import { finishAdd, refreshPreviews } from '../src/cloud.ts';
+import { finishAdd, offerFor, refreshPreviews } from '../src/cloud.ts';
+import { createBadge } from '../src/badge.ts';
 import { PREVIEWS_REFRESH_MS, touchesPreviews } from '../src/proven-previews.ts';
 import { accessOf, patternsOf } from '../src/access-return.ts';
 import { createBrowserAccessReturn } from '../src/access-return-browser.ts';
@@ -47,6 +48,13 @@ import { tabCommand } from '../src/tab-command.ts';
 import { WELCOME_PATH, opensWelcome } from '../src/welcome-install.ts';
 import { type ExternalAnswer, acceptedExternal, cloudConsole, createExternalConsole } from '../src/external-console.ts';
 import { browserFamily } from '../src/browser-family.ts';
+
+/**
+ * The alarm that asks the worker again how many notes of the tab are to check (FRU-604): the team
+ * marks a note done in its tracker, and nothing tells the extension.
+ */
+const BADGE_ALARM = 'fruitback-badge';
+const BADGE_REFRESH_MINUTES = 5;
 
 /** Named once: the alarm is created, cleared and answered in three different places. */
 const SESSION_ALARM = 'fruitback-session-refresh';
@@ -435,6 +443,38 @@ export default defineBackground(() => {
     if (tab.active && change.url !== undefined) followPanelOnClick();
   });
   browser.windows.onFocusChanged.addListener(followPanelOnClick);
+
+  // FRU-604: the notes to check of the site of the tab, on the icon. See `src/badge.ts`.
+  const badge = createBadge({
+    action: browser.action as Parameters<typeof createBadge>[0]['action'],
+    readSite,
+    offer: (origin) =>
+      offerFor(origin, {
+        endpoints: async () => Object.keys(await sessions.list()),
+        ensureAccess: (endpoint) => sessions.ensureAccess(endpoint),
+        renewAccess: (endpoint, refused) => sessions.renewAccess(endpoint, refused),
+        remember: rememberPreviews,
+        sessionOf: async (endpoint) => {
+          const held = (await sessions.list())[endpoint];
+
+          return held === undefined ? undefined : (held.epoch ?? '');
+        },
+      }),
+  });
+  const badgeActiveTab = (): void =>
+    void browser.tabs
+      .query({ active: true, lastFocusedWindow: true })
+      .then(([active]) => (active === undefined ? undefined : badge(active)))
+      .catch((error: unknown) => console.warn('[fruitback] could not set the badge of the tab', error));
+  browser.tabs.onActivated.addListener(badgeActiveTab);
+  browser.tabs.onUpdated.addListener((_id, change, tab) => {
+    // A page loaded, or another page in the tab: its count, or none.
+    if (change.url !== undefined || change.status === 'complete') void badge(tab);
+  });
+  browser.windows.onFocusChanged.addListener(badgeActiveTab);
+  void browser.alarms
+    .create(BADGE_ALARM, { periodInMinutes: BADGE_REFRESH_MINUTES })
+    .catch((error: unknown) => console.error('[fruitback] could not set the alarm of the badge', error));
   // The local area only, by its own event: the listener of every area below stays the one that reads
   // the sessions (`session-previews.test.ts`).
   // A session made or ended changes it too: a site whose session ended opens the popup (review).
@@ -445,6 +485,8 @@ export default defineBackground(() => {
     if (changes[PANEL_ON_CLICK_KEY] !== undefined || changes.sites !== undefined || touchesARefreshToken(keys)) {
       followPanelOnClick();
     }
+    // A site turned on or off, a session made or ended: the count of the tab, or none.
+    if (changes.sites !== undefined || touchesARefreshToken(keys)) badgeActiveTab();
   });
 
   browser.runtime.onInstalled.addListener((details) => {
@@ -530,6 +572,7 @@ export default defineBackground(() => {
     if (alarm.name === SESSION_ALARM) void refreshSessions();
     if (alarm.name === PREVIEWS_ALARM) void refreshProven();
     if (alarm.name === CONNECT_ALARM) void claimSignIn();
+    if (alarm.name === BADGE_ALARM) badgeActiveTab();
   });
   // FRU-423: « Capture with Fruitback ». Its click grants `activeTab` for the tab. See `src/context-menu.ts`.
   browser.contextMenus.onClicked.addListener((info, tab) =>

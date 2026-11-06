@@ -12,7 +12,14 @@ import {
 } from './messages.ts';
 import { FRENCH } from './locale-fr.ts';
 import { createCaptureHost } from './host.ts';
-import { type SendFailure, type SentAs, type SentWithoutPicture, createComposer, failureText } from './composer.ts';
+import {
+  type NotifyOutcome,
+  type SendFailure,
+  type SentAs,
+  type SentWithoutPicture,
+  createComposer,
+  failureText,
+} from './composer.ts';
 import { createOfferedDestinations } from './destinations.ts';
 import { type AttachRefusal, readableSize } from './attachments.ts';
 import { pickArea } from './area.ts';
@@ -579,6 +586,33 @@ describe('every word the widget shows', () => {
     snapshots.push(...shown(host.root));
     restoredText = undefined;
     composer.close();
+
+    // FRU-604: the question of a note sent by a visitor, and each answer of the worker.
+    const outcomes: NotifyOutcome[] = ['retry', 'wait', 'invalid', 'gone', 'sent'];
+    const asking = createComposer({
+      document: page.document,
+      host: host.panel,
+      translator,
+      onSubmit: async () => ({
+        sentAs: {},
+        notify: { send: async () => outcomes.shift() ?? 'sent', decline: () => undefined },
+      }),
+    });
+    cleanup.push(() => asking.destroy());
+    for (const round of [3, 1]) {
+      asking.open({ left: 0, top: 0, bottom: 10, right: 10 });
+      (asking.element.querySelector('[data-fruitback-note]') as HTMLTextAreaElement).value = 'NOTE';
+      (asking.element.querySelector('[data-fruitback-send]') as HTMLButtonElement).click();
+      await settle();
+      snapshots.push(...shown(host.root));
+      (asking.element.querySelector('[data-fruitback-notify-email]') as HTMLInputElement).value = 'a@b.co';
+      for (let at = 0; at <= round; at += 1) {
+        (asking.element.querySelector('[data-fruitback-notify-yes]') as HTMLButtonElement).click();
+        await settle();
+        snapshots.push(...shown(host.root));
+      }
+      asking.close();
+    }
 
     // FRU-332: the files of a note. The four ways, a capture on its way, each refusal, the two
     // failures of a send with files, then a note that stays in Fruitback, and the area of a capture.

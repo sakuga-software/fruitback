@@ -13,6 +13,9 @@ import { DEFAULT_DATABASE_SCHEMA, DEV_DATABASE, type PgDatabase, provideDevDatab
 import { migrate } from './postgres-migrate.ts';
 import { seal } from './secrets.ts';
 import { startServer } from './server.ts';
+import type { MailMessage } from './mail.ts';
+import { provideDevDoneMailer } from './worker-stores.ts';
+import { setMemoryNoteStage } from './linear-memory.ts';
 
 /**
  * The worker of development (FRU-223): the worker of `main.ts`, on a PostgreSQL in the process.
@@ -34,7 +37,7 @@ import { startServer } from './server.ts';
  *   database serves the sites of its workspaces and nothing else, and the playground signs nobody in.
  *   `FRUITBACK_DEV_VISIBILITY=members` makes the site one that only a session of the workspace reads.
  * - **`POST /__dev/stage`** `{ note, stage }` (FRU-300), which moves a note of the database to a
- *   stage, as a team moves an issue in its tracker. No route of the worker does it: the store is the
+ *   stage, as a team moves an issue in its tracker, or a note of the Linear in memory (FRU-604). No route of the worker does it: the store is the
  *   tracker's. The specs of « Looks fixed » need a note the team marked done.
  * - **`POST /__dev/pair`**, which answers a pairing code and its link for the workspace. The `pair`
  *   command is another process: it cannot reach a database that lives in this one.
@@ -43,6 +46,9 @@ import { startServer } from './server.ts';
  * - **`POST /__dev/writers`** `{ writers }` (FRU-330), who may leave a note on the site: `members`,
  *   the default of a new site, or `anyone`. A spec about one of the two says it, rather than
  *   reading the default. Through `addSite`, as the console writes it.
+ * - **`GET /__dev/mail`** (FRU-604): the messages of a note done that the worker would have sent,
+ *   oldest first. The worker of development has no provider: it keeps them in this process. Only
+ *   these messages: the sign-in by link stays off.
  * - **`FRUITBACK_DEV_LINEAR=fake`** (FRU-426): the site sends its notes through a Linear connector
  *   of the workspace, to the fake Linear of `linear-fake.fixture.ts`. `GET /__dev/tracker` answers
  *   what that fake received. It needs `FRUITBACK_SECRETS_KEY`, which seals the key of the connector.
@@ -179,7 +185,8 @@ async function moveStage(database: PgDatabase, incoming: IncomingMessage, respon
         "UPDATE notes SET stage = $1, updated_at = $3 WHERE (payload::jsonb ->> 'id') = $2",
         [asked.stage, asked.note, Date.now()],
       );
-      const count = (moved as { rowCount?: number | null }).rowCount ?? 0;
+      // FRU-604: a note of the Linear in memory, the store of the public site of development.
+      const count = (moved as { rowCount?: number | null }).rowCount || setMemoryNoteStage(asked.note, asked.stage);
       response.writeHead(count > 0 ? 200 : 404, { 'Content-Type': 'application/json' }).end(JSON.stringify({ count }));
     } finally {
       client.release();
@@ -262,6 +269,14 @@ export async function startDevWorker(given: WorkerEnv = process.env): Promise<vo
       ? ((await connectFakeLinear(database, seeded.workspace, config.config.secretsKey)) ?? undefined)
       : undefined;
 
+  // FRU-604: what a note done would send, kept here for `GET /__dev/mail`.
+  const mailed: MailMessage[] = [];
+  provideDevDoneMailer({
+    send: async (message) => {
+      mailed.push(message);
+    },
+  });
+
   const server = startServer(env);
   const serve = server.listeners('request') as ((incoming: IncomingMessage, response: ServerResponse) => void)[];
   server.removeAllListeners('request');
@@ -273,6 +288,11 @@ export async function startDevWorker(given: WorkerEnv = process.env): Promise<vo
     }
     if (tracker !== undefined && incoming.method === 'GET' && incoming.url === '/__dev/tracker') {
       response.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(tracker.received()));
+
+      return;
+    }
+    if (incoming.method === 'GET' && incoming.url === '/__dev/mail') {
+      response.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(mailed));
 
       return;
     }

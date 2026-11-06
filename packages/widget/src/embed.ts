@@ -34,6 +34,7 @@ import {
 import type { FruitbackTheme } from './theme.ts';
 import type { FruitbackTransport } from './transport.ts';
 import { callWorker, errorOf, noteWriteFailure } from './worker-client.ts';
+import { type NotifyAsk, createNotifyAsk } from './notify-ask.ts';
 import {
   type AttachOffer,
   type AttachRefusal,
@@ -43,7 +44,13 @@ import {
   refusalOf,
 } from './attachments.ts';
 import { pickArea } from './area.ts';
-import { type Composer, type SendFailure, type SentWithoutPicture, createComposer } from './composer.ts';
+import {
+  type Composer,
+  type NotifyOffer,
+  type SendFailure,
+  type SentWithoutPicture,
+  createComposer,
+} from './composer.ts';
 import {
   type BatchOffer,
   type Draft,
@@ -435,6 +442,9 @@ export function init(options: FruitbackOptions): Fruitback {
     language: languageOf(document),
   });
 
+  // FRU-604: whether this browser answered « Want to know when it's fixed? » already. See `notify-ask.ts`.
+  const notifyAsk = createNotifyAsk(storageOf(view));
+
   const config = createConfigStore({
     // `screenshot` off at the start: it is the reporter's to turn on, and an image of the page they
     // are looking at is not something to start sending because a default said so.
@@ -571,6 +581,8 @@ export function init(options: FruitbackOptions): Fruitback {
   // The worker's word at the last read that answered (FRU-112): it would sign a note of this reader.
   // And whether it takes several notes in one request (FRU-124).
   const readerIdentity: ReaderIdentity = { identified: false, canReply: false, canWrite: true };
+  /** Whether the worker names the reporter: a token of the host, a session of the extension, or one that ended. */
+  const identifiedNow = (): boolean => options.identityToken !== undefined || readerIdentity.identified || ended;
   /** The launch button offers no note (FRU-330): see `closeNotesIfRefused`. */
   let notesClosed = false;
   /** A read answered or failed, so `notesClosed` says what the worker said (FRU-330). */
@@ -808,7 +820,7 @@ export function init(options: FruitbackOptions): Fruitback {
     // extension does, and only the worker can say so: the widget holds a transport and no token.
     // Signed out (FRU-315), the note is a member's all the same: the name of a visitor would say it
     // can go without a session.
-    identified: () => options.identityToken !== undefined || readerIdentity.identified || ended,
+    identified: identifiedNow,
     // The places are the worker's word at the last read, and the choice is a preference of this
     // browser on this site, kept with the others (FRU-123).
     destinations: {
@@ -866,7 +878,9 @@ export function init(options: FruitbackOptions): Fruitback {
       // The element this note is about, as it was sent: the composer may stand on another by the answer.
       const about = typingPlace;
       let noteId: string | undefined;
+      let notifyToken: string | undefined;
       const planted = await plant({
+        onNotify: (token) => (notifyToken = token),
         note,
         target,
         place,
@@ -894,11 +908,19 @@ export function init(options: FruitbackOptions): Fruitback {
       // The card of a sent note says what the read gave back for it (FRU-305): its identifier, the
       // way to it when the reader may open it, and the number of its pin.
       const shown = overlay.resolutions().find((entry) => entry.issue.note.id === noteId);
-      if (shown === undefined) return planted;
+      // FRU-604: « Want to know when it's fixed? », for a visitor the worker gave a token to, once
+      // per browser. A member, and a reporter the site names, are never asked.
+      const notify =
+        notifyToken !== undefined && noteId !== undefined && !identifiedNow() && notifyAsk.asks()
+          ? notifyOffer(options, translator.locale, noteId, notifyToken, notifyAsk)
+          : undefined;
+      if (shown === undefined && notify === undefined) return planted;
 
       return {
-        sentAs: { identifier: shown.issue.identifier, url: shown.issue.url, number: shown.number },
+        sentAs:
+          shown === undefined ? {} : { identifier: shown.issue.identifier, url: shown.issue.url, number: shown.number },
         ...(planted === true ? {} : { picture: 'missed' as const }),
+        ...(notify === undefined ? {} : { notify }),
       };
     },
     // « Choose another element » starts a capture over the open composer: it keeps the text, and moves to the
@@ -1380,6 +1402,7 @@ export async function plant({
   config,
   options,
   onNote,
+  onNotify,
   attachments = [],
 }: {
   note: string;
@@ -1395,6 +1418,8 @@ export async function plant({
   onNote?: (id: string) => void;
   /** The ids in transit of the files of the note (FRU-332). */
   attachments?: readonly string[];
+  /** The token the worker gave to ask for an address for this note (FRU-604), when it gave one. */
+  onNotify?: (token: string) => void;
 }): Promise<true | SentWithoutPicture | SendFailure> {
   const made = await noteFor({ text: note, target, place, reporter, config, options });
   if (made === undefined) return 'retry';
@@ -1411,8 +1436,70 @@ export async function plant({
   });
 
   if (!response.ok) return failureOf(response);
+  const token = notifyTokenOf(response.body);
+  if (token !== undefined) onNotify?.(token);
 
   return missedPicture ? { picture: 'missed' } : true;
+}
+
+/** The `localStorage` of the page, or `null` when the browser refuses it (a sandbox, a setting). */
+function storageOf(view: Window): Storage | null {
+  try {
+    return view.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * « Notify me » and « No thanks » of a note just sent (FRU-604): `POST /feedback/<note>/notify` with
+ * the address and the token of the note. The answer of the browser is kept only once the worker took
+ * the address, or when the note can take none any more.
+ */
+function notifyOffer(
+  options: FruitbackOptions,
+  locale: string,
+  noteId: string,
+  token: string,
+  ask: NotifyAsk,
+): NotifyOffer {
+  return {
+    async send(email) {
+      const response = await callWorker(options, {
+        url: `${options.endpoint}/feedback/${encodeURIComponent(noteId)}/notify?client=${encodeURIComponent(options.clientId)}`,
+        method: 'POST',
+        contentType: 'application/json',
+        body: JSON.stringify({ email, token, locale }),
+      }).catch(() => undefined);
+      if (response === undefined) return 'retry';
+      if (response.ok) {
+        ask.accepted();
+
+        return 'sent';
+      }
+      if (response.status === 400 && errorOf(response.body) === 'invalid-email') return 'invalid';
+      if (response.status === 429) return 'wait';
+      // The time of the token ran out, the note has an address, or the worker takes none now.
+      if (response.status === 403 || response.status === 404 || response.status === 409) return 'gone';
+
+      return 'retry';
+    },
+    decline() {
+      ask.declined();
+    },
+  };
+}
+
+/** `notify.token` of the answer to a note (FRU-604): a short string, or nothing. */
+function notifyTokenOf(body: string): string | undefined {
+  try {
+    const notify = (JSON.parse(body) as { notify?: { token?: unknown } } | null)?.notify;
+    const token = notify?.token;
+
+    return typeof token === 'string' && token.length > 0 && token.length <= 200 ? token : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /**

@@ -1,7 +1,15 @@
 import { type IncomingMessage, type Server, type ServerResponse, createServer } from 'node:http';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { announceFirstAdmin, handleRequest, kvFor, storeFor, deliverPending, recheckPending } from './app.ts';
+import {
+  announceFirstAdmin,
+  handleRequest,
+  kvFor,
+  storeFor,
+  deliverPending,
+  recheckPending,
+  sweepDoneNotices,
+} from './app.ts';
 import { systemResolver } from './domain-proof.ts';
 import { announceAuth } from './auth.ts';
 import type { NoteStore } from './store.ts';
@@ -16,6 +24,9 @@ import { createSender } from './rest-send.ts';
 
 /** How often the worker looks for a delivery that is due. A first attempt waits this long at most. */
 export const DELIVERY_PASS_MS = 15_000;
+
+/** How often the addresses of the notes that were never done are looked for (FRU-604): each hour. */
+export const DONE_SWEEP_MS = 3_600_000;
 
 /** How often the worker looks for a domain to ask the DNS about again (FRU-103). */
 export const DOMAIN_PASS_MS = 10 * 60_000;
@@ -187,6 +198,15 @@ export function startServer(env: WorkerEnv = process.env): Server {
     }, DOMAIN_PASS_MS);
     check.unref();
     server.on('close', () => clearInterval(check));
+
+    // FRU-604: the address of a visitor goes when its time runs out, even if no read comes.
+    const sweep = setInterval(() => {
+      void sweepDoneNotices(env).catch((error: unknown) =>
+        console.error('[fruitback] a pass over the addresses of the notes done did not finish', error),
+      );
+    }, DONE_SWEEP_MS);
+    sweep.unref();
+    server.on('close', () => clearInterval(sweep));
   }
 
   // FRU-144: better-auth is built here when it is on, before its first request. See `announceAuth`.

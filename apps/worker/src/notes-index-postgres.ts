@@ -1,6 +1,6 @@
 import type { NoteIssue, NoteStage } from '@fruitback/shared';
 import { NOTE_STAGES } from '@fruitback/shared';
-import { type SQL, and, count, eq, gte, ilike, inArray, isNull, max, min, or, sql } from 'drizzle-orm';
+import { type SQL, and, count, eq, gte, ilike, inArray, isNull, lt, max, min, or, sql } from 'drizzle-orm';
 import { member, user } from './auth-schema.ts';
 import {
   type AuthorKind,
@@ -19,7 +19,8 @@ import {
 } from './notes-index.ts';
 import type { Database } from './postgres.ts';
 import { migrated } from './postgres-migrate.ts';
-import { connectors, deliveries, note_index, notes, sites } from './postgres-schema.ts';
+import { connectors, deliveries, done_notices, note_index, notes, sites } from './postgres-schema.ts';
+import { DONE_NOTICE_KEEP_MS, type DoneNotice, type DoneNotices } from './done-notices.ts';
 import { isSameNote, keptRowOf } from './note-rows.ts';
 import { checkedOf } from './reply-text.ts';
 
@@ -694,4 +695,98 @@ function rankOfStage() {
   const cases = STAGE_ORDER.map((stage, at) => sql`WHEN ${stage} THEN ${sql.raw(String(at))}`);
 
   return sql`(CASE ${note_index.stage} ${sql.join(cases, sql` `)} ELSE ${sql.raw(String(STAGE_ORDER.length - 1))} END)`;
+}
+
+/**
+ * Who to tell when a note is done (FRU-604), in the database of the worker. See `done-notices.ts`.
+ * Here because a row is of a note of the index (`done_notices_site_id_note_id_fkey`).
+ */
+export function createPostgresDoneNotices(database: Database): DoneNotices {
+  const run = async <T>(work: (db: Parameters<Parameters<Database['run']>[0]>[0]) => Promise<T>): Promise<T> => {
+    await migrated(database);
+
+    return database.run(work);
+  };
+  const rowOf = (notice: DoneNotice, now: number) => {
+    // Exactly one of the two: a row with both, or with neither, tells nobody or tells twice.
+    if ((notice.account === undefined) === (notice.email === undefined)) {
+      throw new TypeError('a notice names an account or an address, and not both');
+    }
+
+    return {
+      site_id: notice.site,
+      note_id: notice.note,
+      account_id: notice.account ?? null,
+      email: notice.email ?? null,
+      locale: notice.locale ?? null,
+      created_at: now,
+      expires_at: notice.expiresAt ?? now + DONE_NOTICE_KEEP_MS,
+    };
+  };
+
+  return {
+    async watch(notice, now) {
+      const row = rowOf(notice, now);
+
+      return run(async (db) => {
+        // A note the index does not hold takes no row: nobody can be told about a note of nowhere.
+        const [held] = await db
+          .select({ note: note_index.note_id })
+          .from(note_index)
+          .where(and(eq(note_index.site_id, notice.site), eq(note_index.note_id, notice.note)))
+          .limit(1);
+        if (held === undefined) return false;
+        const written = await db
+          .insert(done_notices)
+          .values(row)
+          .onConflictDoNothing({ target: [done_notices.site_id, done_notices.note_id] })
+          .returning({ note: done_notices.note_id });
+
+        return written.length > 0;
+      });
+    },
+
+    async take(site, notes, now) {
+      if (notes.length === 0) return [];
+      // One statement: two reads of one page at once remove each row once, so one message leaves.
+      const rows = await run((db) =>
+        db
+          .delete(done_notices)
+          .where(
+            and(
+              eq(done_notices.site_id, site),
+              inArray(done_notices.note_id, [...new Set(notes)]),
+              gte(done_notices.expires_at, now),
+            ),
+          )
+          .returning(),
+      );
+
+      return rows.map((row) => ({
+        site: row.site_id,
+        note: row.note_id,
+        ...(row.account_id === null ? {} : { account: row.account_id }),
+        ...(row.email === null ? {} : { email: row.email }),
+        ...(row.locale === null ? {} : { locale: row.locale }),
+        expiresAt: row.expires_at,
+      }));
+    },
+
+    async putBack(notice, now) {
+      await run((db) =>
+        db
+          .insert(done_notices)
+          .values(rowOf(notice, now))
+          .onConflictDoNothing({ target: [done_notices.site_id, done_notices.note_id] }),
+      );
+    },
+
+    async sweep(now) {
+      const gone = await run((db) =>
+        db.delete(done_notices).where(lt(done_notices.expires_at, now)).returning({ note: done_notices.note_id }),
+      );
+
+      return gone.length;
+    },
+  };
 }

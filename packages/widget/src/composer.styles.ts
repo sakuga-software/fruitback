@@ -358,6 +358,47 @@ export const STYLES = `
 */
 .fruitback-composer-lands { flex: 1 1 0; min-width: min(4.5em, 100%); font-size: 12px; color: var(--fruitback-color-text-muted); }
 .fruitback-composer-lands[hidden] { display: none; }
+/*
+  « Want to know when it's fixed? » under the card of a note sent by a visitor (FRU-604): an address,
+  « No thanks », « Notify me ». Its own row of buttons: the foot is hidden while the card shows.
+*/
+.fruitback-composer-notify {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 14px 16px 16px;
+  border-top: 1px solid var(--fruitback-color-border);
+}
+.fruitback-composer-notify[hidden] { display: none; }
+.fruitback-composer-notify-title { margin: 0; font-size: 13px; font-weight: 600; }
+.fruitback-composer-notify-field { display: flex; flex-direction: column; gap: 4px; }
+.fruitback-composer-notify-label { font-size: 12px; color: var(--fruitback-color-text-muted); }
+.fruitback-composer-notify input[type="email"] {
+  min-width: 0;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--fruitback-color-border-strong);
+  border-radius: var(--fruitback-radius-sm);
+  font: 13px/1.4 var(--fruitback-font-sans);
+  color: inherit;
+  background: var(--fruitback-color-surface);
+}
+.fruitback-composer-notify input[type="email"]:focus-visible { outline: 2px solid var(--fruitback-color-accent); outline-offset: 2px; }
+.fruitback-composer-notify input[aria-invalid="true"] { border-color: var(--fruitback-color-accent); }
+.fruitback-composer-notify-why { margin: 0; font-size: 12px; color: var(--fruitback-color-text-muted); }
+/* Always in the tree, because a live region that was hidden announces nothing. Empty, it takes no room. */
+.fruitback-composer-notify-error { margin: 0; font-size: 12px; color: var(--fruitback-color-accent); }
+.fruitback-composer-notify-error:empty { display: none; }
+.fruitback-composer-notify-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.fruitback-composer-notify-done {
+  margin: 0;
+  padding: 0 16px 16px;
+  font-size: 12px;
+  color: var(--fruitback-color-success);
+  outline: 0;
+}
+.fruitback-composer-notify-done[hidden] { display: none; }
 .fruitback-composer-send { order: 1; }
 .fruitback-composer-foot > .fruitback-composer-ghost:not(.fruitback-composer-keep) { order: 2; }
 .fruitback-composer-keep { order: 3; }
@@ -433,7 +474,8 @@ export const STYLES = `
   stays after the field loses focus. A box is toggled by its whole row, and the row is tall enough.
 */
 @media (pointer: coarse) {
-  .fruitback-composer textarea, .fruitback-composer-who input[type="text"] { font-size: 16px; }
+  .fruitback-composer textarea, .fruitback-composer-who input[type="text"],
+  .fruitback-composer-notify input[type="email"] { font-size: 16px; }
   .fruitback-composer-identify { min-height: 36px; }
   .fruitback-composer-check, .fruitback-composer-place { min-height: 36px; }
 }
