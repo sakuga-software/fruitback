@@ -28,11 +28,13 @@ import {
   type Ref,
   useEffect,
   useLayoutEffect,
+  useId,
   useRef,
   useState,
 } from 'react';
 import { Link } from 'react-router';
 import { Logo } from './logo';
+import { STAGES, type Stage } from './stages';
 
 export { Logo };
 
@@ -47,7 +49,7 @@ export function Mark({ size = 14 }: { size?: number }) {
 
 type Tone = 'primary' | 'outline' | 'danger' | 'quiet';
 /** The height of a control: of a page (44 px), of a panel or a row (40 px), small (32 px). */
-export type ControlSize = 'page' | 'panel' | 'small';
+type ControlSize = 'page' | 'panel' | 'small';
 
 /** The tone of a button, as the variant HeroUI draws it with. */
 const VARIANTS = {
@@ -414,7 +416,7 @@ export function Tip({ tip, className = '', children }: TipProps) {
 }
 
 /** How long a finger holds a cut link before its tooltip opens: the long press of Android. */
-export const LONG_PRESS_MS = 500;
+const LONG_PRESS_MS = 500;
 /** How far a finger moves before a long press is a scroll instead. */
 const LONG_PRESS_SLOP = 10;
 /**
@@ -658,7 +660,7 @@ export function Field({
 }
 
 /** `drop`: the drop of a status before the label, in a list that chooses one (FRU-385). */
-export type Option = { value: string; label: string; drop?: { status: Status; color?: string } };
+export type Option = { value: string; label: string; drop?: { status: Stage; color?: string } };
 /** Options under a heading, like the teams of a tracker and their projects. */
 export type OptionGroup = { heading: string; options: Option[] };
 
@@ -677,7 +679,7 @@ type ChoiceProps = {
    * The list chooses a status: its drop is drawn before the chosen word, and the list is the 38 px
    * of a row of « Status of the pins ». The drop is a picture: the word beside it says the status.
    */
-  status?: Status;
+  status?: Stage;
   /**
    * The button is the drop of the chosen status alone, 28 px, with no border (FRU-551): the status of
    * a row of the notes, whose group already says it in words. Its name still says the status.
@@ -1025,10 +1027,6 @@ export function Initial({
   );
 }
 
-/** The five statuses of a note, in the order the mockup lists them. */
-export const STATUSES = ['new', 'todo', 'progress', 'done', 'closed'] as const;
-export type Status = (typeof STATUSES)[number];
-
 /** The colour of a status. The class names are whole, so Tailwind finds them. */
 const STATUS_COLOURS = {
   new: 'bg-status-new',
@@ -1036,7 +1034,7 @@ const STATUS_COLOURS = {
   progress: 'bg-status-progress',
   done: 'bg-status-done',
   closed: 'bg-status-closed',
-} as const satisfies Record<Status, string>;
+} as const satisfies Record<Stage, string>;
 
 /**
  * The drop of a status. It is a picture for the eye only: the word of the status is always written
@@ -1047,7 +1045,7 @@ export function StatusDot({
   size = 9,
   color,
 }: {
-  status: Status;
+  status: Stage;
   size?: 9 | 10 | 11;
   /**
    * The colour of a status the team gave one (FRU-385), as `#rrggbb`: the drop takes it, over the
@@ -1068,7 +1066,7 @@ export function StatusDot({
 
 type StatusBarProps = {
   /** How many notes have each status. A status with none takes no room. */
-  counts: Readonly<Record<Status, number>>;
+  counts: Readonly<Record<Stage, number>>;
   /** The counts in words, e.g. « 3 new, 2 to do, 4 in progress, 2 done, 1 closed »: the bar is a picture. */
   label: string;
   /** 128 px in a table, 96 px on a tinted track (« short »), or the width of its column (« full »). */
@@ -1079,7 +1077,7 @@ type StatusBarProps = {
 export function StatusBar({ counts, label, width = 'table' }: StatusBarProps) {
   return (
     <span role="img" aria-label={label} className="kit-status-bar" data-width={width}>
-      {STATUSES.filter((status) => counts[status] > 0).map((status) => (
+      {STAGES.filter((status) => counts[status] > 0).map((status) => (
         <span key={status} className={STATUS_COLOURS[status]} style={{ flexGrow: counts[status], flexBasis: 0 }} />
       ))}
     </span>
@@ -1337,8 +1335,15 @@ export function KeyValue({ rows }: { rows: readonly { term: string; value: React
   );
 }
 
-/** The green drop with a check: something is done. A picture: the title under it says what. */
-export function SuccessMark() {
+/**
+ * The green drop with a check: something is done. A picture: the title under it says what.
+ *
+ * `inline` is the drop alone, at the size of a line of text, before the words that say what is done
+ * (« Extension connected »). It is the drop of the stage « done », so the two read as one colour.
+ */
+export function SuccessMark({ size = 'page' }: { size?: 'page' | 'inline' }) {
+  if (size === 'inline') return <StatusDot status="done" size={10} />;
+
   return (
     <span aria-hidden="true" className="kit-drop kit-success">
       <svg viewBox="0 0 24 24">
@@ -1349,7 +1354,7 @@ export function SuccessMark() {
           strokeWidth="3"
           strokeLinecap="round"
           strokeLinejoin="round"
-          className="text-white"
+          className="text-on-ink"
         />
       </svg>
     </span>
@@ -1678,12 +1683,53 @@ export function Disclosure({
   );
 }
 
-/** One way among a few to do a thing, in its card: its name, then what the screen puts in it. */
-export function OptionCard({ title, children }: { title: string; children: ReactNode }) {
+/**
+ * One way among a few to do a thing, in its card: its name, then what the screen puts in it.
+ *
+ * `badge`: a word beside the name, such as the way the screen recommends (FRU-610). `fold`: the card
+ * opens folded to its name, with « Show » beside it. The button says whether it is expanded, and
+ * names the part it opens. The part stays mounted while folded, hidden.
+ */
+export function OptionCard({
+  title,
+  badge,
+  fold,
+  children,
+}: {
+  title: string;
+  badge?: string;
+  fold?: { open: boolean; onToggle: (open: boolean) => void; show: string; hide: string };
+  children: ReactNode;
+}) {
+  const body = useId();
+
   return (
-    <div className="kit-option">
-      <h3 className="kit-option__title">{title}</h3>
-      {children}
+    <div className="kit-option" data-folded={fold !== undefined && !fold.open ? '' : undefined}>
+      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+        <h3 className="kit-option__title">{title}</h3>
+        {badge === undefined ? null : <Chip tone="accent">{badge}</Chip>}
+        {fold === undefined ? null : (
+          <HeroButton
+            type="button"
+            variant="ghost"
+            className="kit-link ml-auto"
+            data-space="flush"
+            aria-expanded={fold.open}
+            aria-controls={body}
+            onPress={() => fold.onToggle(!fold.open)}
+          >
+            {fold.open ? fold.hide : fold.show}
+          </HeroButton>
+        )}
+      </div>
+      {/* Folded, the content stays mounted and is hidden: what it holds (a « Copied ») is kept. */}
+      <div
+        id={body}
+        hidden={fold !== undefined && !fold.open}
+        className={fold === undefined || fold.open ? 'contents' : ''}
+      >
+        {children}
+      </div>
     </div>
   );
 }
@@ -1778,7 +1824,7 @@ export function searched(groups: readonly OptionGroup[], search: string): Option
 }
 
 /** The first `limit` options of the groups, in their order, and how many are left after them. */
-export function firstOf(groups: readonly OptionGroup[], limit: number): { groups: OptionGroup[]; left: number } {
+function firstOf(groups: readonly OptionGroup[], limit: number): { groups: OptionGroup[]; left: number } {
   let room = limit;
   let left = 0;
   const shown: OptionGroup[] = [];

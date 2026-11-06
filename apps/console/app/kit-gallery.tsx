@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { STAGES } from './stages';
 import {
   AutoGrid,
   BrowserFrame,
@@ -25,7 +26,6 @@ import {
   Pick,
   Problem,
   Radios,
-  STATUSES,
   SidePanel,
   Snippet,
   StatusBar,
@@ -202,7 +202,7 @@ export default function KitGallery() {
 
       <section aria-label="Statuses" className="flex flex-col gap-3" data-kit="statuses">
         <ul className="flex flex-wrap gap-x-[18px] gap-y-1.5 text-hint text-muted">
-          {STATUSES.map((status) => (
+          {STAGES.map((status) => (
             <li key={status} className="flex items-center gap-[7px]">
               <StatusDot status={status} />
               {status}
@@ -364,7 +364,7 @@ export default function KitGallery() {
           <Menu
             chosen={workspace}
             onAction={setWorkspace}
-            triggerClassName="flex items-center gap-2 rounded-box p-2 text-white"
+            triggerClassName="flex items-center gap-2 rounded-box p-2 text-on-ink"
             items={[
               { id: 'acme', label: 'Acme', detail: 'Owner' },
               { id: 'lumen', label: 'Lumen Studio', detail: 'Member' },

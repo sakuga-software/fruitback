@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { hostOf } from './site-address';
 
 /**
  * The icon of a site: its `/favicon.ico`, asked by the browser of the person, and the first letter of
@@ -39,12 +40,4 @@ export function SiteIcon({
         .toUpperCase()}
     </span>
   );
-}
-
-function hostOf(origin: string): string {
-  try {
-    return new URL(origin).host;
-  } catch {
-    return origin;
-  }
 }

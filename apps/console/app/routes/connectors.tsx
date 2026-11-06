@@ -606,6 +606,9 @@ function Under({ children }: { children: ReactNode }) {
   return <div className="w-full basis-full">{children}</div>;
 }
 
+/** What did not reach an address yet: notes, and calls of a trigger of a site (FRU-468). */
+type Late = { notes: number; calls: number };
+
 /**
  * The state of a source, at the end of its row. A source is « Connected »: the list cannot know that
  * its notes arrive. An address says how many of its notes did not arrive, when the worker said so,
@@ -614,9 +617,6 @@ function Under({ children }: { children: ReactNode }) {
  *
  * On the row that is chosen the red is the strong accent: the accent is 4.28:1 on its tint.
  */
-/** What did not reach an address yet: notes, and calls of a trigger of a site (FRU-468). */
-type Late = { notes: number; calls: number };
-
 function State({ connector, late, chosen }: { connector: Connector; late: Late | undefined; chosen: boolean }) {
   useLocale();
   const alert = `flex-none text-hint leading-auto font-semibold ${chosen ? 'text-accent-strong' : 'text-accent'}`;

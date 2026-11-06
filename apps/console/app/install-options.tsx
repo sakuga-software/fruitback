@@ -4,7 +4,7 @@ import { msg, t } from './i18n';
 import { useConnectedExtension } from './extension-connected';
 import { connectsBySignIn } from './instance';
 import { copyText, problemOf } from './problems';
-import { Button, Problem, Snippet, StatusDot } from './ui';
+import { Button, Problem, Snippet, SuccessMark } from './ui';
 import { useLocale } from './use-locale';
 import { WIDGET_SCRIPT_PATH } from './widget-script';
 
@@ -25,8 +25,6 @@ export function snippetFor(site: Site): string {
   ].join('\n');
 }
 
-// Every role connects a browser, so no code of the worker has a sentence of its own here.
-const CONNECT_PROBLEMS: Readonly<Record<string, string>> = {};
 const BROWSER_NOT_CONNECTED = msg('This browser was not connected. Try again.');
 
 /** A text put in the clipboard: whether the browser took it. « refused »: it stays on screen to select. */
@@ -67,7 +65,7 @@ export function useConnect(workspace: Workspace): {
       // The tab that just opened closes: the reason is said under the button (FRU-164).
       tab?.close();
 
-      return setProblem(problemOf(minted, CONNECT_PROBLEMS, BROWSER_NOT_CONNECTED));
+      return setProblem(problemOf(minted, {}, BROWSER_NOT_CONNECTED));
     }
     const target = pairingLink(minted.data.code);
     setLink(target);
@@ -119,7 +117,7 @@ export function InstallOptions({ workspace, site }: { workspace: Workspace; site
           </p>
         ) : (
           <p className="mb-2 flex items-center gap-2 text-xs font-semibold">
-            <StatusDot status="done" size={10} />
+            <SuccessMark size="inline" />
             {t('Extension connected · {browser}', { browser: connected.browser })}
           </p>
         )}

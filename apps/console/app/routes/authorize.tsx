@@ -6,7 +6,7 @@ import { daysOf, endOf } from '../agent-keys';
 import { refusalOf } from '../authorize-answer';
 import { keepAuthorize } from '../connect-return';
 import { msg, t } from '../i18n';
-import { SERVER_CAUSE, UNREACHABLE_CAUSE } from '../problems';
+import { SERVER_CAUSE, UNREACHABLE_CAUSE, retryable } from '../problems';
 import {
   AnotherAddress,
   EmailForm,
@@ -48,7 +48,7 @@ async function resolve(request: string): Promise<Stage> {
   const read = await authorizeRequest(request);
   if (read.ok) return { kind: 'ask', asked: read.data };
   if (read.status === 401) return { kind: 'signed-out' };
-  if (read.status === 0 || read.status === 429 || read.status >= 500) return { kind: 'silent', status: read.status };
+  if (retryable(read)) return { kind: 'silent', status: read.status };
 
   return { kind: 'gone' };
 }

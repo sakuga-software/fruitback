@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
-import { type InstanceNote, type InstanceNotes, STAGES, type Stage, instanceNotes } from '../api';
+import { STAGES, STAGE_NAMES, isStage } from '../stages';
+import { type InstanceNote, type InstanceNotes, instanceNotes } from '../api';
 import { ago } from '../ago';
 import { msg, t } from '../i18n';
 import { Choice, DataTable, Field, Lead, LinkButton, StatusDot, Title } from '../ui';
 import { useTypedSearch } from '../typed-search';
 import { useLocale } from '../use-locale';
-import { KINDS, STAGE_NAMES } from './connector-parts';
+import { kindName } from './connector-parts';
 import { NotePages, NotesFailed, Reference, excerptOf } from './notes';
 import { siteLabel } from '../site-address';
+import { type Fetched } from '../listed';
 
 /**
  * Every note of the instance, and where it is stored now: screen 20 of the mockup of 2026-10-13
@@ -29,13 +31,11 @@ const AUTHOR_WORDS: Readonly<Record<InstanceNote['author']['kind'], string>> = {
   verified: msg('Verified'),
 };
 
-const isStage = (stage: string): stage is Stage => (STAGES as readonly string[]).includes(stage);
-
 /** The name of the tool a note went to: the kind the console knows, else the name of the connector. */
 function toolOf(place: { kind: string; label?: string }): string {
-  const known = (KINDS as Readonly<Record<string, { name: string }>>)[place.kind];
+  const known = kindName(place.kind);
 
-  return known === undefined ? (place.label ?? place.kind) : t(known.name);
+  return known === undefined ? (place.label ?? place.kind) : t(known);
 }
 
 export default function AdminNotes() {
@@ -55,7 +55,7 @@ export default function AdminNotes() {
   const from = Math.max(1, Number(params.get('from')) || 1);
 
   // A read again keeps the rows on the screen until its answer comes: only the first read says « Loading… ».
-  const [shown, setShown] = useState<InstanceNotes | 'loading' | 'failed'>('loading');
+  const [shown, setShown] = useState<Fetched<InstanceNotes>>('loading');
   const [reading, setReading] = useState(false);
   const [before, setBefore] = useState<string[]>([]);
   // The workspaces that the answers named. A read of `/console/admin/workspaces` would leave a trace

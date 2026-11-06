@@ -1,7 +1,8 @@
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router';
 import { readableTextColor } from '@fruitback/shared';
-import { type Connector, STAGES, type Site, type Stage, call, placesOf, readSite } from '../api';
+import { STAGES, STAGE_NAMES, type Stage } from '../stages';
+import { type Connector, type Site, call, placesOf, readSite } from '../api';
 import { Confirmation } from '../confirm';
 import { locale, msg, t } from '../i18n';
 import { problemOf } from '../problems';
@@ -28,9 +29,10 @@ import {
 } from '../site-statuses';
 import { Button, Choice, Field, IconButton, LinkButton, LoadFailed, Problem, Radios, StatusDot, Toggle } from '../ui';
 import { useLocale } from '../use-locale';
-import { STAGE_NAMES, placeLabel } from './connector-parts';
+import { placeLabel } from './connector-parts';
 import { PageHead, useWorkspace } from './workspace';
 import { ReadProblem } from '../read-problem';
+import { type Fetched } from '../listed';
 
 /**
  * The statuses of a site (FRU-371), as the board `design/site-statuses/` draws them: the list of the
@@ -61,7 +63,8 @@ const NOT_CHANGED = msg('This status did not change. Try again.');
  * an editor stays open with what was typed, and nothing is said as done.
  */
 const BUSY = Symbol('busy');
-const STATUS_PROBLEMS: Readonly<Record<string, string>> = {
+/** What the worker refuses when the statuses of a site change. A note's own status: `note-status.ts`. */
+const STATUS_LIST_PROBLEMS: Readonly<Record<string, string>> = {
   forbidden: msg('Only an owner or an admin of the workspace sets the statuses of a site.'),
   'too-many-statuses': msg('A site holds {count} statuses at most.'),
 };
@@ -189,7 +192,7 @@ export default function SiteStatuses() {
   const { site: siteId = '' } = useParams();
   const base = `/console/workspaces/${workspace.id}`;
   const manages = workspace.role === 'owner' || workspace.role === 'admin';
-  const [read, setRead] = useState<Loaded | 'loading' | 'failed' | 'gone'>('loading');
+  const [read, setRead] = useState<Fetched<Loaded> | 'gone'>('loading');
   const [writing, setWriting] = useState(false);
   // The lock itself, set before the first await: `writing` is state, so two presses in one render both
   // read it as false, and two writes would leave at once (FRU-123, the lite review of pull request 493).
@@ -303,7 +306,7 @@ export default function SiteStatuses() {
         trackerColours: on,
       }),
     );
-    if (set === BUSY || !set.ok) return set === BUSY ? NOT_CHANGED : problemOf(set, STATUS_PROBLEMS, NOT_CHANGED);
+    if (set === BUSY || !set.ok) return set === BUSY ? NOT_CHANGED : problemOf(set, STATUS_LIST_PROBLEMS, NOT_CHANGED);
     setRead((current) =>
       typeof current === 'string' || current.tracker === 'failed'
         ? current
@@ -506,7 +509,7 @@ function StatusList({
   /** Adds or changes a status at the worker. The sentence of the refusal, or `undefined` once it is kept. */
   async function save(status: ScreenStatus): Promise<string | undefined> {
     const answer = await call<{ status: StatusRow }>('POST', path, rowOf(status));
-    if (!answer.ok) return problemOf(answer, STATUS_PROBLEMS, NOT_CHANGED);
+    if (!answer.ok) return problemOf(answer, STATUS_LIST_PROBLEMS, NOT_CHANGED);
     const kept = answer.data.status;
     onRows((current) => [...current.filter((row) => row.source !== kept.source || row.key !== kept.key), kept]);
 
@@ -528,7 +531,7 @@ function StatusList({
       const order = next.map((each) => ({ source: each.source, key: each.key }));
       const ordered = await call('POST', `${path}/order`, { order });
       if (!ordered.ok)
-        return setProblem(problemOf(ordered, STATUS_PROBLEMS, msg('The order did not change. Try again.')));
+        return setProblem(problemOf(ordered, STATUS_LIST_PROBLEMS, msg('The order did not change. Try again.')));
       onRows((current) =>
         current.map((row) => {
           const position = next.findIndex((each) => each.source === row.source && each.key === row.key);
@@ -569,7 +572,7 @@ function StatusList({
     if (!removed.ok && removed.error === 'status-in-use' && removed.notes !== undefined && moveTo === undefined)
       return setOpen({ key: status.key, what: 'move', notes: removed.notes });
     if (!removed.ok)
-      return setProblem(problemOf(removed, STATUS_PROBLEMS, msg('This status is still here. Try again.')));
+      return setProblem(problemOf(removed, STATUS_LIST_PROBLEMS, msg('This status is still here. Try again.')));
     setOpen(undefined);
     onRows((current) => current.filter((row) => row.source !== status.source || row.key !== status.key));
     // A worker that answers with no body (204) says no number: the target takes the notes the list

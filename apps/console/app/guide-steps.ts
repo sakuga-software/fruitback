@@ -25,7 +25,7 @@ export type GuideControl = {
   values?: Readonly<Record<string, string>>;
 };
 
-export type GuideStep = {
+type GuideStep = {
   /** The name of its capture: `docs/assets/guide/<id>.png`. Stable: the docs and the setup link it. */
   id: string;
   text: string;
@@ -103,7 +103,7 @@ export function controlText(control: GuideControl, translate: (sentence: string)
 }
 
 /** Where a guide points the person at the step's capture, from `docs/`. */
-export const GUIDE_FOLDER = 'assets/guide';
+const GUIDE_FOLDER = 'assets/guide';
 
 const START =
   '<!-- guide:start: written from apps/console/app/guide-steps.ts by `node apps/console/guide-docs.ts`. -->';

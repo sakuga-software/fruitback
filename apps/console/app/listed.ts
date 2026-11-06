@@ -7,7 +7,10 @@ import type { Answer } from './api.ts';
  * not answer. Only an answer that holds a list is a list, so only that one may show the empty state.
  * A screen that drew `[]` for a failed read said « No site yet » during an outage.
  */
-export type Listed<T> = readonly T[] | 'loading' | 'failed';
+export type Listed<T> = Fetched<readonly T[]>;
+
+/** Anything else a screen read from the worker, with the same two states before an answer is one. */
+export type Fetched<T> = T | 'loading' | 'failed';
 
 /**
  * The list an answer holds, or `failed`. An answer that says yes and holds no list (no body, or

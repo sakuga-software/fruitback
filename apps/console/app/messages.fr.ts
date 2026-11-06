@@ -862,6 +862,17 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Your first note is in': 'Votre première note est arrivée',
   'It waits in the {workspace} workspace. Send your notes to a tracker or your own API whenever you like.':
     'Elle vous attend dans l’espace de travail {workspace}. Envoyez vos notes vers un outil de suivi ou votre propre API quand vous voulez.',
+  // The setup with no question of access (FRU-610, board P6 of FRU-598).
+  'Members of {workspace} see and leave notes. You can open it to every visitor later, in Sites.':
+    'Les membres de {workspace} voient les notes et en laissent. Vous pourrez l’ouvrir à tous les visiteurs plus tard, dans Sites.',
+  'Recommended for a members site': 'Recommandé pour un site réservé aux membres',
+  'Recommended for a public site': 'Recommandé pour un site public',
+  Hide: 'Masquer',
+  'Install the extension': 'Installer l’extension',
+  'Add it to your browser. The page that opens signs you in and turns on {site}.':
+    'Ajoutez-la à votre navigateur. La page qui s’ouvre vous connecte et active {site}.',
+  'On {page}': 'Sur {page}',
+  'Connect Linear or GitHub': 'Connecter Linear ou GitHub',
   // How long ago (ago.ts).
   'Just now': 'À l’instant',
   '{count} min ago': 'il y a {count} min',
