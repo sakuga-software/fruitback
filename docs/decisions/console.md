@@ -20,6 +20,9 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   is there, and the root's `clientLoader` waits for it, so a French browser shows no English first.
   **`HydrateFallback` holds no word**: it is rendered when the console
   is built, and a word in another language is a hydration error in the browser.
+- **`routes/` holds the routes, and only them** (FRU-614): a file there is named in `routes.ts`, and
+  `routes-folder.test.ts` fails on any other. A part of a screen (a panel, a form, a section) is in
+  `parts/`. Only `ui.tsx` imports HeroUI, wherever a file is (`.oxlintrc.json`).
 - `apps/console` (`@fruitback/console`) — the console of the Cloud (FRU-99): React Router in SPA mode,
   Tailwind on the tokens of `design/README.md`, served as static files by nginx. **It holds no secret, and no
   token at all** (FRU-148): the session is a cookie of the worker that no script reads, and
@@ -561,7 +564,7 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   (the sites of a key), and `expanded` and `controls` of `Button`. `e2e/console-agents.spec.ts` holds
   the way from the settings, the list and its warning, a key made, shown once, copied and gone, the
   refusals, the writes, the revocation, a member, and 390 px in French, with axe.
-- **« Start an agent » is a section of the page of a site** (FRU-468, `routes/site-agent.tsx`, the
+- **« Start an agent » is a section of the page of a site** (FRU-468, `parts/site-agent.tsx`, the
   board `design/agent-triggers/`), after « Statuses », for an owner or an admin; a member and a guest
   do not see it, and the page asks them nothing of the trigger. Off by default: the switch alone.
   On: « Call », an address that receives of the workspace (a `rest` connector; a tracker is not
@@ -914,7 +917,7 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   absence of any write, the states, French, 390 px and axe.
 - **« Workspaces » and « Users » of the administration read only what is asked**
   (FRU-263, screens 18 and 19, routes of FRU-261). `routes/admin-workspaces.tsx` and
-  `routes/admin-users.tsx` share `routes/admin-list.tsx`. Opening a screen is an explicit read, so it
+  `routes/admin-users.tsx` share `parts/admin-list.tsx`. Opening a screen is an explicit read, so it
   reads its list when it opens; each read leaves a trace with the owners of the workspaces it names,
   so **the search reads 300 ms after the last key**, and once only when the screen mounts, also
   under the `StrictMode` of development. The search, the filter and the chosen row live in the

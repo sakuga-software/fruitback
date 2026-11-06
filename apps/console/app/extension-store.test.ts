@@ -46,7 +46,7 @@ describe('where a browser installs the extension', () => {
 });
 
 /** The console has no DOM under `node --test`: the guard reads the source of the screens (FRU-409). */
-const SCREENS = ['routes/connect-start.tsx', 'routes/setup-install.tsx', 'routes/invitations.tsx'].map((path) => ({
+const SCREENS = ['routes/connect-start.tsx', 'parts/setup-install.tsx', 'routes/invitations.tsx'].map((path) => ({
   path,
   source: readFileSync(new URL(path, import.meta.url), 'utf8'),
 }));

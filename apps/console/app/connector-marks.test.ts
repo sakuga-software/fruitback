@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 const source = readFileSync(new URL('connector-marks.tsx', import.meta.url), 'utf8');
 const notes = readFileSync(new URL('routes/notes.tsx', import.meta.url), 'utf8');
 const connectors = readFileSync(new URL('routes/connectors.tsx', import.meta.url), 'utf8');
-const parts = readFileSync(new URL('routes/connector-parts.tsx', import.meta.url), 'utf8');
+const parts = readFileSync(new URL('parts/connector-parts.tsx', import.meta.url), 'utf8');
 
 /** The kinds that have a mark: the keys of `MARKS`. */
 const marked = new Set([...source.matchAll(/^ {2}(\w+): \{/gm)].map((match) => match[1]));

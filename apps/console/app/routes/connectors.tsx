@@ -7,10 +7,10 @@ import { PageHead, useWorkspace } from './workspace';
 import { msg, t } from '../i18n';
 import { WORKSPACE_SUSPENDED, problemOf, writeProblemOf } from '../problems';
 import { useLocale } from '../use-locale';
-import { AddLinear, AddRest } from './connector-add';
-import { GithubPanel } from './connector-github';
-import { LinearPanel } from './connector-linear';
-import { ConnectorName } from './connector-name';
+import { AddLinear, AddRest } from '../parts/connector-add';
+import { GithubPanel } from '../parts/connector-github';
+import { LinearPanel } from '../parts/connector-linear';
+import { ConnectorName } from '../parts/connector-name';
 import {
   KEY_PROBLEMS,
   KINDS,
@@ -19,8 +19,8 @@ import {
   connectorName,
   siteCount,
   sourceLine,
-} from './connector-parts';
-import { RestPanel } from './connector-rest';
+} from '../parts/connector-parts';
+import { RestPanel } from '../parts/connector-rest';
 import type { LaterKind, MarkedKind } from '../connector-marks';
 import { ReadProblem } from '../read-problem';
 

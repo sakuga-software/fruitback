@@ -33,6 +33,7 @@ describe('the five stages of a note (FRU-508)', () => {
     const sources = [
       ...readdirSync(APP).filter((name) => /\.tsx?$/.test(name) && !name.includes('.test.')),
       ...readdirSync(new URL('routes/', APP)).map((name) => `routes/${name}`),
+      ...readdirSync(new URL('parts/', APP)).map((name) => `parts/${name}`),
     ];
     const found = sources.filter((name) => list.test(readFileSync(new URL(name, APP), 'utf8')));
 

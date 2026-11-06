@@ -7,7 +7,7 @@ import { Button, LinkButton, Problem, SidePanel } from '../ui';
 import { useLocale } from '../use-locale';
 import { moment } from '../ago';
 import { Disconnect, KINDS, type PanelProps, SendersList, accountOf, sourceLine } from './connector-parts';
-import { useWorkspace } from './workspace';
+import { useWorkspace } from '../routes/workspace';
 
 /**
  * The page of the App on GitHub, where « Configure » opens the installation of each account. The

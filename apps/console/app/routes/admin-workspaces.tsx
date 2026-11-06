@@ -35,9 +35,9 @@ import {
   rowId,
   useListAddress,
   useRead,
-} from './admin-list';
-import { AdminWrite, GIVEN_ROLES, INVITED_ROLES } from './admin-writes';
-import { kindName } from './connector-parts';
+} from '../parts/admin-list';
+import { AdminWrite, GIVEN_ROLES, INVITED_ROLES } from '../parts/admin-writes';
+import { kindName } from '../parts/connector-parts';
 import { siteLabel } from '../site-address';
 import { ReadProblem } from '../read-problem';
 import { type Fetched } from '../listed';

@@ -7,7 +7,7 @@ import { msg, t } from '../i18n';
 import { Choice, DataTable, Field, Lead, LinkButton, StatusDot, Title } from '../ui';
 import { useTypedSearch } from '../typed-search';
 import { useLocale } from '../use-locale';
-import { kindName } from './connector-parts';
+import { kindName } from '../parts/connector-parts';
 import { NotePages, NotesFailed, Reference, excerptOf } from './notes';
 import { siteLabel } from '../site-address';
 import { type Fetched } from '../listed';

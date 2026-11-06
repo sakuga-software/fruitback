@@ -1,4 +1,4 @@
-import { SiteAgent } from './site-agent';
+import { SiteAgent } from '../parts/site-agent';
 import { type FormEvent, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router';
 import { STAGES } from '../stages';
@@ -24,7 +24,7 @@ import { siteLabel, siteName } from '../site-address';
 import { Button, Disclosure, KeyValue, LinkButton, LoadFailed, Pick, Problem } from '../ui';
 import { useLocale } from '../use-locale';
 import { WritersPick } from '../writers-pick';
-import { SitePlaces } from './site-places';
+import { SitePlaces } from '../parts/site-places';
 import { notesOf } from './sites';
 import { PageHead, useWorkspace } from './workspace';
 import { ReadProblem } from '../read-problem';

@@ -22,7 +22,7 @@ import {
   StatusDot,
   Tip,
 } from '../ui';
-import { KINDS, connectorName } from './connector-parts';
+import { KINDS, connectorName } from '../parts/connector-parts';
 import { ConnectorMark } from '../connector-marks';
 import { useWorkspace } from './workspace';
 import { msg, t } from '../i18n';
@@ -33,7 +33,7 @@ import { domainOf, siteLabel } from '../site-address';
 import { NoteIcon } from '../note-icons';
 import { STATUS_NOT_SAVED, STATUS_PROBLEMS, type StatusChoice, offeredFor, statusName } from '../note-status';
 import { boardColumns } from '../board-columns';
-import { NotesBoard } from './notes-board';
+import { NotesBoard } from '../parts/notes-board';
 import { ReadProblem } from '../read-problem';
 import { pageWindow } from '../page-window';
 
