@@ -173,7 +173,8 @@ const panel = (page: Page) => page.locator('#source-panel');
 /** The sources to add: on the page with no source, in a dialog with one (FRU-562). */
 const catalogue = (page: Page) =>
   page.getByRole('dialog', { name: 'Add a connector' }).or(page.getByRole('region', { name: 'Add a connector' }));
-const sources = (page: Page) => catalogue(page).getByRole('listitem');
+// The sources to add: the recipes with no code under them (FRU-595) are not sources.
+const sources = (page: Page) => catalogue(page).locator('li[data-source]');
 
 /** FRU-542, FRU-562: with a source connected, « New connector » opens the dialog of the sources to add. */
 async function openCatalogue(page: Page, name = 'New connector'): Promise<void> {
@@ -577,7 +578,7 @@ test('« New connector » opens a dialog with the sources as a grid of cards (FR
   await opener.click();
   const dialog = page.getByRole('dialog', { name: 'Add a connector' });
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByRole('listitem')).toHaveCount(9);
+  await expect(dialog.locator('li[data-source]')).toHaveCount(9);
   // Not in the page: the list of the connected sources stays where it is, under the dialog.
   await expect(page.locator('main').getByRole('region', { name: 'Add a connector' })).toHaveCount(0);
   // Focus is in the dialog, and Tab keeps it there.
@@ -588,7 +589,7 @@ test('« New connector » opens a dialog with the sources as a grid of cards (FR
   }
 
   // A grid of cards: three in a row at 1440 px, each a frame of its own, their buttons at the foot.
-  const grid = dialog.getByRole('list');
+  const grid = dialog.getByRole('list').first();
   expect.soft(await styles(grid, ['display', 'row-gap', 'column-gap'])).toEqual({
     display: 'grid',
     'row-gap': '12px',
@@ -764,7 +765,7 @@ test('with no source, the sources to add are a grid of cards on the page (FRU-56
   await open(page);
   await expect(sources(page)).toHaveCount(9);
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  expect.soft(await styles(catalogue(page).getByRole('list'), ['display'])).toEqual({ display: 'grid' });
+  expect.soft(await styles(catalogue(page).getByRole('list').first(), ['display'])).toEqual({ display: 'grid' });
   const first = await box(sources(page).nth(0));
   expect((await box(sources(page).nth(1))).y).toBe(first.y);
 });

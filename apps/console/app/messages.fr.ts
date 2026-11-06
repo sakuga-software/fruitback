@@ -1670,4 +1670,17 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Every call arrived.': 'Tous les appels sont arrivés.',
   'Starts a routine of your team when the trigger of a site calls it. The routine reads the notes through the MCP server.':
     'Lance une routine de votre équipe quand le déclencheur d’un site l’appelle. La routine lit les notes par le serveur MCP.',
+  // FRU-595: the recipes that start an agent with no code.
+  'An agent of Linear': 'Un agent de Linear',
+  'Each note becomes a Linear issue. Delegate it to an agent your Linear workspace installed.':
+    'Chaque note devient un ticket Linear. Déléguez-le à un agent installé dans votre espace Linear.',
+  'Claude Code in GitHub Actions': 'Claude Code dans GitHub Actions',
+  'Each note becomes a GitHub issue, and a workflow of your repository opens a pull request for it.':
+    'Chaque note devient un ticket GitHub, et un workflow de votre dépôt ouvre une pull request pour elle.',
+  'Start an agent, with no code': 'Lancer un agent, sans code',
+  'They use the issue a connector makes of each note. No secret goes to Fruitback.':
+    'Elles partent du ticket qu’un connecteur crée pour chaque note. Aucun secret ne va à Fruitback.',
+  'No code': 'Sans code',
+  'Open the recipe': 'Ouvrir la recette',
+  'Open the recipe: {name}': 'Ouvrir la recette : {name}',
 };

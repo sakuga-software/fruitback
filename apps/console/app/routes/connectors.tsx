@@ -22,6 +22,7 @@ import {
 } from '../parts/connector-parts';
 import { RestPanel } from '../parts/connector-rest';
 import { RoutinePanel } from '../parts/connector-routine';
+import { NoCodeRecipes } from '../parts/agent-recipes';
 import type { LaterKind, MarkedKind } from '../connector-marks';
 import { ReadProblem } from '../read-problem';
 
@@ -455,6 +456,8 @@ export default function Connectors() {
           )}
         </Source>
       </ul>
+      {/* FRU-595: the recipes that start an agent with no code, under the sources. */}
+      <NoCodeRecipes />
     </>
   );
 

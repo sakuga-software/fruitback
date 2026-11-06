@@ -177,3 +177,52 @@ test('at 390 px in French, the panel says « Session lancée », and nothing scr
   expect(await sideScroll(page)).toBe(0);
   await expectNoViolation(page);
 });
+
+/**
+ * FRU-595: the recipes that start an agent with no code, under the sources to add of « Connectors »:
+ * an agent of Linear, and Claude Code in GitHub Actions. Each is a card with « No code » and a link
+ * to its steps in `docs/agents.md`; neither has a field.
+ */
+const GUIDE = 'https://fruitback.com/agents.html';
+
+async function openRecipes(page: Page, locale: 'en' | 'fr' = 'en'): Promise<void> {
+  await stubWorker(page, { locale, workspaces: [{ ...ACME, role: 'owner' }] });
+  await page.goto(`${CONSOLE}/w/w1/connectors`);
+}
+
+test('the two recipes with no code sit under the sources to add, each with its steps in the guide', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openRecipes(page);
+  const recipes = page.getByRole('region', { name: 'Start an agent, with no code' });
+  await expect(recipes).toBeVisible();
+  await expect(recipes.getByRole('listitem')).toHaveCount(2);
+  for (const [name, anchor] of [
+    ['An agent of Linear', 'delegate-to-an-agent-of-linear'],
+    ['Claude Code in GitHub Actions', 'claude-code-in-github-actions-on-the-issue-of-a-note'],
+  ] as const) {
+    const card = recipes.locator(`[data-recipe="${anchor}"]`);
+    await expect(card).toContainText(name);
+    await expect(card).toContainText('No code');
+    const link = card.getByRole('link', { name: `Open the recipe: ${name}` });
+    await expect(link).toHaveAttribute('href', `${GUIDE}#${anchor}`);
+    await expect(link).toHaveAttribute('target', '_blank');
+  }
+  // No field: a recipe with no code takes nothing, and keeps no secret.
+  await expect(recipes.getByRole('textbox')).toHaveCount(0);
+  // The control: the sources above it still have their own buttons.
+  await expect(page.locator('li[data-source]')).toHaveCount(9);
+  await expectNoViolation(page);
+});
+
+test('at 390 px in French, the recipes say « Sans code », and nothing scrolls sideways', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openRecipes(page, 'fr');
+  const recipes = page.getByRole('region', { name: 'Lancer un agent, sans code' });
+  await recipes.scrollIntoViewIfNeeded();
+  await expect(recipes.getByText('Sans code', { exact: true })).toHaveCount(2);
+  await expect(recipes.getByRole('link', { name: 'Ouvrir la recette : Un agent de Linear' })).toBeVisible();
+  expect(await sideScroll(page)).toBe(0);
+  await expectNoViolation(page);
+});
