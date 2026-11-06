@@ -17,6 +17,7 @@ const css = readFileSync(new URL('app.css', APP), 'utf8');
 function drawn(): Map<string, string> {
   const names = [
     ...readdirSync(new URL('routes/', APP)).map((name) => `routes/${name}`),
+    ...readdirSync(new URL('parts/', APP)).map((name) => `parts/${name}`),
     ...readdirSync(APP).filter((name) => name.endsWith('.tsx')),
   ];
 

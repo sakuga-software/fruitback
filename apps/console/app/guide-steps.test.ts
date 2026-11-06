@@ -30,7 +30,7 @@ function sourcesOf(folder: string): string {
 }
 
 const extension = `${sourcesOf('../../extension/src/')}\n${sourcesOf('../../extension/entrypoints/')}`;
-const consoleScreens = sourcesOf('./routes/');
+const consoleScreens = `${sourcesOf('./routes/')}\n${sourcesOf('./parts/')}`;
 
 /** Whether the screens of the part of `control` hand its English name to `t`. */
 function drawn(control: GuideControl, screens: { extension: string; console: string }): boolean {

@@ -7,7 +7,7 @@ import { manages } from '../setup-stage';
 import { Button, Field, FilePick, Problem, SubNav } from '../ui';
 import { useLocale } from '../use-locale';
 import { LOGO_NOT_REMOVED, LOGO_NOT_SAVED, LOGO_PROBLEMS, logoRefusal } from '../workspace-logo';
-import { RENAME_PROBLEMS, WORKSPACE_NOT_RENAMED } from './setup-account';
+import { RENAME_PROBLEMS, WORKSPACE_NOT_RENAMED } from '../parts/setup-account';
 import { PageHead, WorkspaceMark, useWorkspace } from './workspace';
 
 /** The pages of the settings (FRU-544): « General », here, and « AI », what an agent needs. */

@@ -29,7 +29,7 @@ import {
 } from '../site-statuses';
 import { Button, Choice, Field, IconButton, LinkButton, LoadFailed, Problem, Radios, StatusDot, Toggle } from '../ui';
 import { useLocale } from '../use-locale';
-import { placeLabel } from './connector-parts';
+import { placeLabel } from '../parts/connector-parts';
 import { PageHead, useWorkspace } from './workspace';
 import { ReadProblem } from '../read-problem';
 import { type Fetched } from '../listed';

@@ -33,7 +33,7 @@ import { agoInSentence, dayOf, moment } from '../ago';
 import { type Fetched, type Listed, edited } from '../listed';
 import { problemOf } from '../problems';
 import { Button, Choice, Field, LinkButton, Problem } from '../ui';
-import { Disconnect as AsksTwice } from './connector-parts';
+import { Disconnect as AsksTwice } from '../parts/connector-parts';
 import { PageHead, useWorkspace } from './workspace';
 import { LOCALES, chooseLanguage, locale, msg, t } from '../i18n';
 import { useLocale } from '../use-locale';

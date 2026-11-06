@@ -6,7 +6,7 @@ import { Button, LinkButton, Problem, SidePanel } from '../ui';
 import { useLocale } from '../use-locale';
 import { moment } from '../ago';
 import { BlockTitle, Disconnect, KINDS, type PanelProps, SendersList, addressOf, shortHost } from './connector-parts';
-import { useWorkspace } from './workspace';
+import { useWorkspace } from '../routes/workspace';
 import { ReadProblem } from '../read-problem';
 
 /** Where the contract of the request is written, for whoever writes the receiver. */

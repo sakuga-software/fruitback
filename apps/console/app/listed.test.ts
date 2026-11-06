@@ -44,11 +44,12 @@ describe('a list read from the worker (FRU-162)', () => {
 describe('a screen that reads a list (FRU-162)', () => {
   /** A refused answer that becomes an empty list in the state of a screen: `if (!answer.ok) return setX([])`. */
   const EMPTY_FOR_A_FAILURE = /!\w+\.ok\)[^;\n]*set\w+\(\[\]\)/;
-  const routes = new URL('./routes/', import.meta.url);
+  // The screens, and their parts (FRU-614).
+  const folders = ['./routes/', './parts/'].map((folder) => new URL(folder, import.meta.url));
 
   it('never keeps an empty list for an answer that failed', () => {
-    const found = readdirSync(routes).filter((name) =>
-      EMPTY_FOR_A_FAILURE.test(readFileSync(new URL(name, routes), 'utf8')),
+    const found = folders.flatMap((folder) =>
+      readdirSync(folder).filter((name) => EMPTY_FOR_A_FAILURE.test(readFileSync(new URL(name, folder), 'utf8'))),
     );
 
     assert.deepEqual(found, []);

@@ -27,9 +27,12 @@ const APP = new URL('./', import.meta.url);
 // `release-banner.tsx` says a newer release to the administrator of the instance (FRU-520).
 // `stages.ts` names the five stages, for every screen that shows one (FRU-508).
 const screens = [
-  ...readdirSync(new URL('routes/', APP))
-    .map((name) => `routes/${name}`)
-    .filter((name) => name.endsWith('.tsx')),
+  // The screens, and their parts (FRU-614): a part left `routes/` and keeps its sentences.
+  ...['routes', 'parts'].flatMap((folder) =>
+    readdirSync(new URL(`${folder}/`, APP))
+      .map((name) => `${folder}/${name}`)
+      .filter((name) => name.endsWith('.tsx')),
+  ),
   'root.tsx',
   'ui.tsx',
   'confirm.tsx',
