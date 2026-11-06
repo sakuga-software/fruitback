@@ -15,7 +15,11 @@ Mathieu answered three questions on 2026-10-26, and took the four recommendation
   that a person of the team moved on.
 - **The agent pulls what it reads.** The worker only says « a note is there » to an address that the
   team chose, from the queue of deliveries of the REST connector. No model is called by Fruitback,
-  and Fruitback holds no key of a model provider.
+  and Fruitback holds no key of a model provider: no key that buys tokens of a model, and no key
+  that can read or write a conversation. Since FRU-592 it may hold the token of an agent platform
+  that only starts a run the team set up there (the token of a Claude Code routine), and only when
+  that platform offers no OAuth. Such a token is encrypted with `FRUITBACK_SECRETS_KEY`, like the
+  key of a connector, and never shown again (_Agents as destinations_).
 - **The agent talks to a remote MCP server in the worker**, `/mcp`, over Streamable HTTP. A session
   of an agent that runs elsewhere (a cloud agent, CI, a scheduled task) reaches it with no browser and
   nobody to approve it (decision 1).
@@ -205,6 +209,81 @@ to write each reason. Mathieu can change each.
 The real connector of claude.ai needs a worker that claude.ai reaches, in `https`, with its database
 and its console: an environment of Mathieu. The tests play every step of the protocol through the
 worker, and the board and the specs of the console play the page.
+
+## Agents as destinations (FRU-592)
+
+### The rules, in short
+
+- **A recipe sends notes to an agent as a connector sends them to a tracker.** In « Add a
+  destination » of the console, a recipe is a guided way to an agent of the market. With code, it
+  is a connector whose delivery calls the API of the platform. Without code, it is a page that
+  says how to chain a connector that exists to an agent of the team.
+- **The flow.** A note arrives on a site whose trigger (FRU-468) names a recipe connector, at the
+  moment the team chose (`verified-note` or `moved-to-todo`). The worker queues `agent.requested`
+  on that connector's queue. The delivery is a call to the API of the platform: for a routine,
+  `POST /fire`. The platform starts a run of the agent the team set up there. The agent reads the
+  note by `/mcp`, with its own access: the MCP connector of claude.ai (OAuth, FRU-467) or an agent
+  key the team put in the platform's settings. Then it replies, sets a status and opens a pull
+  request for review (guard 2). Fruitback still calls no model.
+- **The call carries identifiers only**: the ids of the notes, the site, and the address of `/mcp`.
+  Never the text of a note. The text goes through `/mcp`, so the key decides what the agent reads,
+  `verifiedOnly` applies, and each read is in the log.
+- **One call for each send, not for each note.** A send of several notes together (FRU-124) starts
+  one run, and its call lists their ids. `requestAgent` (FRU-468), which queues one delivery for
+  each note today, changes with the first recipe.
+- **A secret of a platform: OAuth when the platform offers it, an encrypted token otherwise.** The
+  token is the fallback. It is kept as the keys of the connectors are, encrypted with
+  `FRUITBACK_SECRETS_KEY`, sent only to the one host of its platform, and never returned to the
+  console. A `401` from the platform puts the connector in « attention », as a refused key does.
+- **No `/mcp` key is sent to a platform in v1.** The team sets the Fruitback MCP up on the side of
+  the agent, as it does for a routine. For Cursor (v2), Mathieu chose a key for one run: the worker
+  makes it at the call, keeps only its digest, limits it to the notes of the call and to one hour at
+  most, and sends it in `mcpServers`. FRU-596 holds it, and `SECURITY.md` gains it with its code.
+- **What the console shows after the call: the URL of the session** that the platform returns, on
+  the row of the delivery (v1). The thread of the widget says « An agent is working on this note »
+  to everybody, with the link for a member of the team only. The link opens a session of the team
+  that a reviewer cannot open. FRU-594 holds it, and the member-only link is still to be confirmed.
+- **The order of the recipes**: v1, the Claude Code routine with code, and Linear and GitHub Actions
+  with no code; v2, Cursor; later, GitHub Copilot and Devin.
+
+### The platforms (measured on 2026-11-06 against their documentation)
+
+| Platform                               | Start                                                                                                                                                                                                       | What it gives                                                                                                                                                                                                                                                                                 | Limits                                                                                                                                                                                                                                                                                                              |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Claude Code scheduled tasks (routines) | `POST https://api.anthropic.com/v1/claude_code/routines/<trig_id>/fire`, `Authorization: Bearer`, `anthropic-beta: experimental-cc-routine-2026-04-01`, `anthropic-version: 2023-06-01`, an optional `text` | The answer gives `claude_code_session_id` and `claude_code_session_url`. `text` arrives wrapped in `<routine-fire-payload>`, labelled as untrusted data, and is followed only if the saved prompt says so. The token starts that task only, is shown once, and can be regenerated or deleted. | Research preview. The beta header is dated; the two previous versions keep working. The API trigger is set at claude.ai/code/routines, and `/fire` is for claude.ai users only. Plans Pro, Max, Ultra, Team and Enterprise. 30 fires an hour per task (shared with « Run now »), 100 API fires an hour per account. |
+| Cursor Cloud Agents                    | `POST https://api.cursor.com/v1/agents`, Basic or Bearer, with `prompt.text`, `repos[]` (`url`, `startingRef`), `autoCreatePR`, `mcpServers`                                                                | `mcpServers` takes up to 50 servers, a remote one with `url` and `headers` or OAuth `auth`.                                                                                                                                                                                                   | Public beta: the API may change before GA. No webhook at the end in v1 (« coming soon »): a run is read with `GET /v1/agents/{id}/runs/{runId}`, or its SSE stream.                                                                                                                                                 |
+| GitHub Copilot cloud agent             | `POST /agents/repos/{owner}/{repo}/tasks`, with `prompt`, `base_ref`, `model`, `create_pull_request`                                                                                                        | The GitHub connector already makes the issue.                                                                                                                                                                                                                                                 | Public preview. User-to-server tokens only: a token of an installation of a GitHub App is refused, so a token of a person would be needed.                                                                                                                                                                          |
+| Devin                                  | `POST https://api.devin.ai/v1/sessions`, Bearer (`apk_user_*` or `apk_*`), with `prompt`, `max_acu_limit`, `secret_ids`, and others                                                                         | A ceiling of cost per session.                                                                                                                                                                                                                                                                | Paid by use. The request takes no MCP server.                                                                                                                                                                                                                                                                       |
+| Agents of Linear                       | Delegate the issue to an agent app: it becomes the `delegate`, not the `assignee`, and an Agent Session starts (`AgentSessionEvent` webhook)                                                                | Nothing to build: the Linear connector already made the ticket.                                                                                                                                                                                                                               | On the agent's side. The page read on 2026-11-06 does not state a stage; the ticket of 2026-11-05 said Developer Preview.                                                                                                                                                                                           |
+| Codex cloud, Jules                     | No public API documented on 2026-11-05                                                                                                                                                                      | —                                                                                                                                                                                                                                                                                             | Set aside, not measured again here.                                                                                                                                                                                                                                                                                 |
+
+### Set aside
+
+- **Fruitback calling a model, or holding a key that buys tokens of one.** Unchanged.
+- **The text of a note in the call.** It would leave twice, past the key and past the log.
+- **A `/mcp` key sent to a platform in v1** (above), and a key kept readable by the worker.
+- **Polling the run of a platform with no webhook** (Cursor): the link of the run is enough.
+- **Codex cloud and Jules** until they publish an API. **Copilot** until a token of a person is
+  acceptable, **Devin** after Cursor.
+
+### The decisions (2026-11-05 and 2026-11-06)
+
+Mathieu answered on 2026-11-05, and the orchestrator took the five recommendations of the ticket on
+2026-11-06 in his place:
+
+1. **A secret of an agent platform in Fruitback: yes.** OAuth when the platform offers it. A token
+   encrypted with `FRUITBACK_SECRETS_KEY` is the fallback, for a platform that offers nothing else,
+   as the routine. The sentence of _Agents_ above says so.
+2. **No `/mcp` key sent to a platform in v1.** For Cursor in v2: a key for one run (Mathieu's option
+   C), as above.
+3. **Identifiers only in the call.** The text goes through `/mcp`.
+4. **The order:** v1 the routine (FRU-594), and Linear and GitHub Actions with no code (FRU-595);
+   v2 Cursor (FRU-596); later Copilot (FRU-597) and Devin. The cards of the console: FRU-593.
+5. **The URL of the session on the row of the delivery in v1**, and the line of the thread of the
+   widget with FRU-594.
+
+This section changes a rule of security of this page (decision 1): the PR that brings it is
+critical, and Mathieu merges it.
 
 ## The decisions
 
