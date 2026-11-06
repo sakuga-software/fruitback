@@ -137,6 +137,21 @@ button.panel-close:hover {
   margin: 12px var(--panel-gutter) 6px;
 }
 
+/*
+  Three tabs since FRU-606: « Terminées · 12 » does not fit a third of 320 px on one line. A tab may
+  shrink below its words and break them on two lines, and grows in height to hold them; it never runs
+  past the panel (wrap-extension.spec.ts).
+*/
+.panel-tabs button.kit-tab {
+  min-width: 0;
+  height: auto;
+  min-height: 40px;
+  padding: 4px 6px;
+  line-height: 1.2;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .panel-list {
   display: flex;
   flex-direction: column;
