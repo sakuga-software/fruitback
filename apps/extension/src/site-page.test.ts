@@ -45,7 +45,7 @@ describe('the page of the extension (FRU-301)', () => {
     assert.deepEqual(
       entries.map((entry) => [entry.getAttribute('href'), entry.textContent, entry.getAttribute('aria-current')]),
       [
-        ['#sites', 'Sites2', 'true'],
+        ['#sites', 'Sites2', 'page'],
         ['#share', 'Share rules', null],
       ],
     );

@@ -32,9 +32,10 @@ async function rejectInPages(context: BrowserContext, name: 'getAll' | 'request'
   }, name);
 }
 
-async function openOptions(page: Page, id: string): Promise<void> {
-  await page.goto(`chrome-extension://${id}/options.html`);
-  await expect(page.getByRole('heading', { level: 1, name: /^Sites$/ })).toBeVisible();
+/** « Servers and sessions », a page of its own (FRU-591). */
+async function openServers(page: Page, id: string): Promise<void> {
+  await page.goto(`chrome-extension://${id}/options.html#workers`);
+  await expect(page.getByRole('heading', { level: 1, name: /^Servers and sessions$/ })).toBeVisible();
 }
 
 /** A team rule on the worker that keeps sessions: its card in the options page offers to pair. */
@@ -83,7 +84,7 @@ test('a pairing whose permission request throws gives « Pair » back, with the 
   await teamRuleOnTheSessionWorker(extension.worker);
   await rejectInPages(extension.context, 'request');
   const page = await extension.context.newPage();
-  await openOptions(page, extension.id);
+  await openServers(page, extension.id);
   const card = page.locator(`.worker-card[data-endpoint="${AUTHENTICATED_WORKER_ORIGIN}"]`);
 
   await card.getByLabel('Connection code').fill('AAAA-BBBB-CCCC');
@@ -112,7 +113,7 @@ test('a pairing from the popup whose permission request throws gives the button 
 test('a log out from the options page asks again which language to keep (FRU-510)', async ({ extension }) => {
   await teamRuleOnTheSessionWorker(extension.worker);
   const page = await extension.context.newPage();
-  await openOptions(page, extension.id);
+  await openServers(page, extension.id);
   const card = page.locator(`.worker-card[data-endpoint="${AUTHENTICATED_WORKER_ORIGIN}"]`);
   const { code } = await mintPairing('Camille Durand');
   await card.getByLabel('Connection code').fill(code);

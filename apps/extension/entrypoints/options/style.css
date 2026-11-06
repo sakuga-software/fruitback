@@ -13,6 +13,8 @@ body {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
+  /* Wrapped, the content starts under the menu, not halfway down the window (FRU-591). */
+  align-content: flex-start;
   min-height: 100vh;
 }
 
@@ -70,7 +72,7 @@ body {
   text-decoration: none;
 }
 
-.page-entry[aria-current='true'] {
+.page-entry[aria-current='page'] {
   background: var(--surface);
   box-shadow: 0 0 0 1px var(--line);
   color: var(--text);
@@ -101,6 +103,42 @@ body {
   color: var(--accent);
 }
 
+/*
+  FRU-591: under 780 px the content goes under the menu, and the menu becomes a bar: the brand on
+  its line, then the pages and the guides side by side, wrapped when they do not fit. 780 px is the
+  width where the two columns (220 px and 560 px at the least) stop fitting side by side.
+*/
+@media (max-width: 779px) {
+  .page-menu {
+    flex: 1 1 100%;
+    flex-flow: row wrap;
+    align-items: center;
+    max-width: none;
+    padding: 16px 16px 12px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .page-brand {
+    box-sizing: border-box;
+    flex: 1 0 100%;
+    padding: 0 10px 8px;
+  }
+
+  .page-menu > .kit-update {
+    box-sizing: border-box;
+    flex: 1 0 100%;
+    margin-top: -4px;
+  }
+
+  .page-entry {
+    gap: 8px;
+  }
+
+  .page-rule {
+    display: none;
+  }
+}
+
 /* The column of the sections. */
 .page-content {
   box-sizing: border-box;
@@ -111,6 +149,14 @@ body {
   min-width: 0;
   max-width: 1180px;
   padding: 28px 32px 64px;
+}
+
+/*
+  FRU-591: one page for each entry of the menu. The sections of the other pages stay in the DOM, so
+  what somebody typed in them stays, and only the section of the page is shown.
+*/
+.page-content > [hidden] {
+  display: none;
 }
 
 .page-section {
@@ -150,7 +196,8 @@ body {
   gap: 4px;
 }
 
-.sites-words h1 {
+.sites-words h1,
+.page-section > h1 {
   margin: 0;
   font-size: 24px;
   line-height: 1.2;
@@ -159,7 +206,8 @@ body {
 }
 
 /* The title of the page has no drop before it: the menu carries the mark. */
-.sites-words h1::before {
+.sites-words h1::before,
+.page-section > h1::before {
   content: none;
 }
 

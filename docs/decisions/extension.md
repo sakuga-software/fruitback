@@ -443,7 +443,7 @@ did not change: the fields of 760 px and the file input of the browser are as th
 
 - **The options page is the page of the extension of the mock-up of 2026-10-20**: a menu (the drop,
   « Fruitback » and the version of the manifest, the sections, the two guides), and a column of
-  sections. **Sites** is a table of the rules and the panel of the one that is chosen; **Share
+  sections. Since FRU-591 each section is a page of its own (see below). **Sites** is a table of the rules and the panel of the one that is chosen; **Share
   rules** is the two cards of FRU-290; **Preferences** (the copy to the account of the browser) is
   the section of before, until FRU-302 draws it. « Servers and sessions » comes with FRU-302.
 - **`src/site-page.ts` builds the parts**, with no `browser`: `site-page.test.ts` reads them on
@@ -472,6 +472,40 @@ did not change: the fields of 760 px and the file input of the browser are as th
   worker see nothing new. The row and the panel say « imported », and the panel says that access
   did not travel with the file, while the page is open; a removed rule, or one typed in again, loses
   the word.
+
+## One page for each entry of the menu (FRU-591)
+
+### The rules, in short
+
+- **Each entry of the menu is a page**: **Sites**, **Servers and sessions**, **Share rules** and
+  **Preferences**. They are in the one entry point `options.html`, chosen by the fragment of the
+  address: `#sites` (also the page of no fragment, and of a fragment that names no page),
+  `#workers`, `#share` and `#prefs`. One entry point and not four: WXT builds one page, the popup and
+  the side panel open it with `runtime.openOptionsPage()`, and the links of before keep their
+  meaning. `#workers?worker=…&code=…`, which the popup opens for a pairing, is « Servers and
+  sessions » with the card of that worker and its code. `#prefs` is « Preferences ».
+- **The four sections stay in the DOM, and only the section of the page is shown** (`hidden`). This
+  is how nothing typed is lost: a form of a rule that is open, a code typed on a card, a name not yet
+  saved are where the person left them when they come back. A change of storage on another page
+  draws the table and the cards again, under the rules of before: the panel is never drawn again,
+  and `redrawWorkers` keeps a code that is typed.
+- **The menu marks the page that is shown** with `aria-current="page"`. An entry is a link to the
+  fragment: a click changes the fragment, the page is not loaded again, and **Back** and **Forward**
+  go from page to page (`hashchange`). A page that changes starts at its top. The focus stays on
+  the entry that was clicked; a pairing link gives it to the code of its card, as before.
+- **The title of the tab names the page**, « Preferences · Fruitback », in the language of the
+  page, and the `<h1>` of each page is the name of its entry. The line of a new release (FRU-519)
+  stays under the version, in the menu, so it is on every page.
+- **No section has the id of a fragment**: they are `page-sites`, `page-workers`, `page-share` and
+  `page-prefs` (`sectionId`). An element whose id is the fragment makes the browser scroll to it at
+  load. At 390 px that hid the menu above the page: measured in Chromium with `#prefs`.
+- **Under 780 px the menu is a bar** above the page: the brand on its line, then the pages and the
+  guides side by side, wrapped when they do not fit. 780 px is where the two columns (220 px and
+  560 px at the least) stop fitting side by side.
+- **`src/options-pages.ts` holds the rules** (`pageOf`, `showPage`, `sectionId`), with no `browser`:
+  `options-pages.test.ts` reads them on happy-dom. `e2e/extension-page.spec.ts` plays the switch,
+  Back and Forward and what stays typed, and runs axe on each page at 1440 and 390 px, in both
+  schemes.
 
 ## The key that starts a note (FRU-291)
 

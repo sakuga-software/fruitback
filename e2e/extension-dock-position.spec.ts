@@ -39,10 +39,10 @@ test('the corner chosen in the preferences moves the widget of an open tab, keep
 
   const options = await extension.context.newPage();
   await options.goto(`chrome-extension://${extension.id}/options.html#prefs`);
-  const corner = options.locator('section#prefs').getByRole('combobox', { name: 'Corner of the widget' });
+  const corner = options.locator('section#page-prefs').getByRole('combobox', { name: 'Corner of the widget' });
   await expect(corner).toHaveValue('bottom-right');
   // Reached by the keyboard: the control after « Show CSS selectors ».
-  await options.locator('section#prefs').getByRole('switch', { name: 'Show CSS selectors' }).focus();
+  await options.locator('section#page-prefs').getByRole('switch', { name: 'Show CSS selectors' }).focus();
   await options.keyboard.press('Tab');
   await expect(corner).toBeFocused();
   await corner.selectOption('top-left');

@@ -25,10 +25,10 @@ describe('« Share rules » (FRU-290)', () => {
     const { document } = page();
     const { section } = shareRules(document, { onDownload: nothing, onFile: nothing });
 
-    // The menu links to `#share`.
-    assert.equal(section.id, 'share');
-    assert.equal(section.querySelector('h2')?.textContent, 'Share rules');
-    assert.equal(section.getAttribute('aria-labelledby'), section.querySelector('h2')?.id);
+    // Not `share`: the browser would scroll to it at load (FRU-591).
+    assert.equal(section.id, 'page-share');
+    assert.equal(section.querySelector('h1')?.textContent, 'Share rules');
+    assert.equal(section.getAttribute('aria-labelledby'), section.querySelector('h1')?.id);
     assert.equal(
       section.querySelector('.share-intro')?.textContent,
       'Hand a reviewer a rules file instead of five fields to copy. Browser access never travels with it: they grant it on first use.',
@@ -130,7 +130,7 @@ describe('« Share rules » (FRU-290)', () => {
     const share = shareRules(document, { onDownload: nothing, onFile: nothing });
     share.setCount(3);
 
-    assert.equal(share.section.querySelector('h2')?.textContent, 'Partager les règles');
+    assert.equal(share.section.querySelector('h1')?.textContent, 'Partager les règles');
     assert.equal(share.download.textContent, 'Télécharger');
     assert.equal(
       share.section.querySelector('.share-export .share-hint')?.textContent,
