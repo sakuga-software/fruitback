@@ -470,3 +470,58 @@ describe('« Corner of the widget » (FRU-443)', () => {
     );
   });
 });
+
+describe('the colour of « Appearance » (FRU-601)', () => {
+  const MOUNT_SITE: SiteConfig = { mode: 'private', endpoint: 'https://worker.test', clientId: 'acme', enabled: true };
+  const COLOR = (color?: string) => ({
+    channel: CHANNEL,
+    kind: 'action-color',
+    ...(color === undefined ? {} : { color }),
+  });
+
+  it('says the colour after each mount, and again when it changes, with no new mount', async () => {
+    const posts: BridgeMessage[] = [];
+    let color: string | undefined = '#c2410c';
+    const apply = createApply({
+      readSite: async () => MOUNT_SITE,
+      readActionColor: async () => color,
+      post: (m) => void posts.push(m),
+    });
+    await apply();
+    await apply();
+    color = '#1c1917';
+    await apply();
+    color = undefined;
+    await apply();
+    await apply(true);
+
+    assert.deepEqual(
+      posts.map((m) => m.kind),
+      ['mount', 'action-color', 'action-color', 'action-color', 'mount', 'action-color'],
+    );
+    assert.deepEqual(posts[1], COLOR('#c2410c'));
+    assert.deepEqual(posts[2], COLOR('#1c1917'));
+    assert.deepEqual(posts[3], COLOR());
+  });
+
+  it('keeps the colour said last when the read fails, and says nothing to no widget', async () => {
+    const posts: BridgeMessage[] = [];
+    let fails = false;
+    let site: SiteConfig | undefined = MOUNT_SITE;
+    const apply = createApply({
+      readSite: async () => site,
+      readActionColor: async () => (fails ? Promise.reject(new Error('closed')) : '#b91c1c'),
+      post: (m) => void posts.push(m),
+    });
+    await apply();
+    fails = true;
+    await apply();
+    site = undefined;
+    await apply();
+
+    assert.deepEqual(
+      posts.map((m) => m.kind),
+      ['mount', 'action-color', 'unmount'],
+    );
+  });
+});

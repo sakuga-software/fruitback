@@ -235,6 +235,13 @@ export type FruitbackOptions = {
    */
   position?: DockPosition;
   /**
+   * The colour of « Send » in the composer (FRU-601), as `#rrggbb` or `#rgb`. The label stays white,
+   * so a colour under 4.5:1 with white is ignored, as is anything that is not a colour: « Send » keeps
+   * the accent. Only « Send » takes it: the pins, the stages and the launch button do not change.
+   * Change it later with `setActionColor`.
+   */
+  actionColor?: string;
+  /**
    * The notes of every page of the site (FRU-470), for a host that can read them: the extension, with
    * the session of its reviewer. Given, the list offers « All pages » beside « This page »; left out,
    * it has « This page » alone, as before. The widget asks it for one page of notes at a time, and
@@ -347,6 +354,11 @@ export type Fruitback = {
    * new widget: a note being written stays. `undefined` puts it back where it stands by default.
    */
   moveDock(position: DockPosition | undefined): void;
+  /**
+   * Paints « Send » in another colour (FRU-601), as the `actionColor` option does at `init`, with no
+   * new widget: a note being written stays. `undefined` gives « Send » the accent again.
+   */
+  setActionColor(color: string | undefined): void;
   /**
    * A reply under a note, by the path of its thread (FRU-257), then a read: the pins, the thread
    * and the list say it. `refused`: the worker does not let this reader reply, or the note is not here.
@@ -481,6 +493,7 @@ export function init(options: FruitbackOptions): Fruitback {
     ignore: options.ignore,
     ...(options.theme !== undefined ? { theme: options.theme } : {}),
     ...(dockPosition() !== undefined ? { position: dockPosition() } : {}),
+    ...(options.actionColor !== undefined ? { actionColor: options.actionColor } : {}),
     onConfigure: () => panel.toggle(),
     onList: () => openList(),
     onSelect: (selected) => {
@@ -1169,6 +1182,7 @@ export function init(options: FruitbackOptions): Fruitback {
       if (config.get().position !== undefined) config.set({ position: undefined });
       else host.moveDock(hostPosition);
     },
+    setActionColor: (color) => host.paintAction(color),
     async replyTo(id, body) {
       const issue = readIssues.find((each) => each.note.id === id);
       if (issue === undefined || options.replies === false || !readerIdentity.canReply || body.trim() === '') {

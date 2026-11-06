@@ -1756,6 +1756,22 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
 - **Two « Send » can be on screen**, the one of the composer and this one: this one is named « Send
   reply », and its visible word is in its name.
 
+## The colour of « Send » (FRU-601)
+
+### The rules, in short
+
+- **`actionColor` of `init` paints « Send » of the composer**, and `setActionColor(color)` of the
+  handle changes it with no new widget: a note being written stays. `undefined` gives « Send » the
+  accent again. The extension calls it with the colour its person chose in « Appearance ».
+- **Only « Send » takes it.** The launch button, the pins, the stages and the other uses of the
+  accent do not change: a colour chosen by one person must not change what the pins of a team say.
+- **The label stays white, so a colour under 4.5:1 with white is ignored**, as is anything that is not
+  `#rrggbb` or `#rgb`: « Send » keeps the accent. Under the pointer the colour is 15 % darker. The
+  drop is red where the red of Fruitback stands out on the colour at 3:1, white otherwise.
+- **Custom properties on the host element**, as `applyTheme` writes: `--fruitback-color-action`,
+  `-action-strong`, `-on-action` and `-action-mark`, read only by `.fruitback-composer-send`, each with
+  the accent as its fallback (`src/action-color.ts`, `action-color.test.ts`).
+
 ## The corner of the dock (FRU-443)
 
 ### The rules, in short

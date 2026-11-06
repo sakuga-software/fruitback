@@ -513,4 +513,22 @@ export const FRENCH: Readonly<Record<string, string>> = {
   // FRU-519: the line of a new release, in the popup and the page.
   'Fruitback {version} is out.': 'Fruitback {version} est disponible.',
   Update: 'Mettre à jour',
+  // FRU-601: « Appearance », the colour of the note button.
+  Appearance: 'Apparence',
+  'The colour of « Leave a note » and « Send » when you write with the extension. It is yours, in this browser: your team and the site see no change, and the pins keep their colours.':
+    'La couleur de « Laisser une note » et d’« Envoyer » quand vous écrivez avec l’extension. Elle est à vous, dans ce navigateur : votre équipe et le site ne voient aucun changement, et les repères gardent leurs couleurs.',
+  'Colour of the note button': 'Couleur du bouton de note',
+  Fruitback: 'Fruitback',
+  'Deep red': 'Rouge profond',
+  Orange: 'Orange',
+  Ink: 'Encre',
+  'Your own colour': 'Votre couleur',
+  'A hex colour that holds white text at 4.5:1 or more.':
+    'Une couleur hexadécimale qui tient un texte blanc à 4,5:1 ou plus.',
+  'Write a colour as #rrggbb, for example #1d4ed8.': 'Écrivez une couleur sous la forme #rrggbb, par exemple #1d4ed8.',
+  '{ratio} with white text.': '{ratio} avec un texte blanc.',
+  '{ratio} with white text. Pick a darker colour.': '{ratio} avec un texte blanc. Choisissez une couleur plus foncée.',
+  Preview: 'Aperçu',
+  'Reset to Fruitback red': 'Revenir au rouge Fruitback',
+  'This colour could not be saved. Try again.': 'Cette couleur n’a pas pu être enregistrée. Réessayez.',
 };

@@ -1,6 +1,7 @@
 import { browser } from 'wxt/browser';
 import { language, setLanguage } from '../../src/i18n.ts';
 import { storedLanguage } from '../../src/language.ts';
+import { followActionColor } from '../../src/action-color-browser.ts';
 import type { CheckVerdict } from '../../src/protocol.ts';
 import {
   type NotesTab,
@@ -48,6 +49,8 @@ import type { TabCommand } from '../../src/protocol.ts';
 
 setLanguage((await storedLanguage(browser.storage.local)) ?? navigator.language);
 document.documentElement.lang = language();
+// FRU-601: « Leave a note » in the colour of « Appearance ».
+followActionColor(document);
 
 const app = document.querySelector('#app');
 

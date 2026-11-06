@@ -291,6 +291,14 @@ export default defineContentScript({
         return;
       }
 
+      // FRU-601: the colour of « Appearance », for « Send ». Only our widget hears it, and it paints
+      // with no new widget: a note being written stays.
+      if (message.kind === 'action-color') {
+        widget?.setActionColor(message.color);
+
+        return;
+      }
+
       // FRU-254: the popup, through the isolated world. Only the widget this script mounted obeys:
       // a site's own widget (team mode) is the site's.
       if (message.kind === 'command') {

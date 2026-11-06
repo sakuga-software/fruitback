@@ -460,6 +460,9 @@ Since 0.2.0 an account also holds the language its person reads, taken from the 
   kept in the extension's own storage and given to the widget the extension mounts on a site in
   private mode, to fill the name of a note. That page can read it while the widget is mounted. It is
   sent only with a note the reviewer sends, as a name typed in the note is.
+- The colour of the note button (« Appearance »), when the reviewer chooses one, is kept in
+  the extension's own storage and given to the widget the extension mounts, which paints « Send » in
+  it. The page of the site can read it while the widget is mounted. It is sent to no worker.
 - An extension installed by hand asks GitHub for the number of the last release, once a
   day at most, when its popup or its page opens: a folder loaded from an archive, Firefox's temporary
   add-on, a build of the sources. The request is `GET` on the API of GitHub, with no cookie, no

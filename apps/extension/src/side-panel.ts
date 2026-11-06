@@ -448,6 +448,8 @@ export function panelPage(document: Document, options: PanelOptions): HTMLElemen
   // « Leave a note », and what to do next.
   const action = make(document, 'div', 'panel-action');
   const leave = primaryButton(document, t('Leave a note'), options.onLeave, { size: 'panel' });
+  // FRU-601: in the colour of « Appearance ».
+  leave.classList.add('kit-note');
   leave.prepend(dropMark(document));
   action.append(leave, make(document, 'p', 'panel-hint', t('Then click the part of the page you want to comment on')));
   root.append(action);
