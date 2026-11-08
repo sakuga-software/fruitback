@@ -1703,7 +1703,8 @@ token, Reporter, scope `api`. The address of a self-managed GitLab is the worksp
 https, with no name and password in it, and an IP address written in it must be public
 (`parseGitlabUrl`). Every call then goes through `createGuardedFetch` (`guarded-fetch.ts`), which
 checks the address the socket connects to against the list of the REST connector, follows no
-redirect, and reads 8 MB of an answer at most. So a name that resolves to an internal network is
+redirect, asks for no compression, and reads 8 MB of an answer at most, unpacked included: a body that a
+proxy compressed anyway stops unpacking past that limit. So a name that resolves to an internal network is
 refused at each call, on the Cloud and on an instance that a team runs: a GitLab that only an
 internal network reaches cannot be connected. The files of a note are uploaded to the project, and
 GitLab serves them with the rights of the project.
