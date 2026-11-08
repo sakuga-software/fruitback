@@ -110,8 +110,7 @@ async function connect(
   });
   assert.equal(approved.status, 200, await approved.clone().text());
   // The pace of the claims: the interval went by.
-  await env.kv.set(`fruitback:connect-poll:${await digest(claim)}`, '0', 1);
-  await new Promise((resolve) => setTimeout(resolve, 3));
+  await env.kv.set(`fruitback:connect-poll:${await digest(claim)}`, '0', 0);
   const claimed = await callOn(env, 'POST', '/session/connect/claim', { origin: EXTENSION, body: { claim } });
   assert.equal(claimed.status, 200, await claimed.clone().text());
 

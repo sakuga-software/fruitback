@@ -191,8 +191,7 @@ async function approvedClaim(worker: Worker, who: Person): Promise<string> {
 }
 
 async function claimed(worker: Worker, claim: string): Promise<Response> {
-  await worker.kv.set(`fruitback:connect-poll:${await digest(claim)}`, '0', 1);
-  await new Promise((resolve) => setTimeout(resolve, 3));
+  await worker.kv.set(`fruitback:connect-poll:${await digest(claim)}`, '0', 0);
 
   return worker.call('/session/connect/claim', { origin: EXTENSION, body: { claim } });
 }

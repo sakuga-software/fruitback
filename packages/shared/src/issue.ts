@@ -1,6 +1,6 @@
 import { type Note, noteSchema } from './note.ts';
 import { noteAttachmentSchema } from './attachments.ts';
-import { z } from 'zod';
+import * as z from 'zod';
 
 /**
  * An issue as the two ends exchange it: its labels, its stage, and the envelope of a read.
