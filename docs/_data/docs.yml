@@ -48,6 +48,10 @@
       url: /self-hosting/environment-variables.html
     - title: REST connector
       url: /rest-connector.html
+    - title: GitLab connector
+      url: /connectors/gitlab.html
+    - title: Connecteur GitLab
+      url: /connectors/gitlab.fr.html
     - title: Connect an AI agent
       url: /agents.html
     - title: Worker responses

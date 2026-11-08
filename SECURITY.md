@@ -1667,6 +1667,16 @@ what it reaches in its own guide; what they share is here.
 - A destination of a plugin keeps the id of its place and the name the service gives it now, never a
   page address: only the page of a team of Linear is kept.
 
+GitLab: the token reaches what its role reaches; the guide asks for a project access
+token, Reporter, scope `api`. The address of a self-managed GitLab is the workspace's word: it is
+https, with no name and password in it, and an IP address written in it must be public
+(`parseGitlabUrl`). Every call then goes through `createGuardedFetch` (`guarded-fetch.ts`), which
+checks the address the socket connects to against the list of the REST connector, follows no
+redirect, and reads 8 MB of an answer at most. So a name that resolves to an internal network is
+refused at each call, on the Cloud and on an instance that a team runs: a GitLab that only an
+internal network reaches cannot be connected. The files of a note are uploaded to the project, and
+GitLab serves them with the rights of the project.
+
 ### The GitHub App, installed on a workspace (FRU-360)
 
 Where the worker has the App of the connectors (`FRUITBACK_GITHUB_CONNECTOR`), an owner or an admin

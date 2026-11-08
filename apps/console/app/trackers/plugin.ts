@@ -44,6 +44,11 @@ export type ConsoleTracker = {
   /** What a refusal of the form means, by the word of the worker, beside the ones every plugin has. */
   problems?: Readonly<Record<string, string>>;
   /**
+   * What the panel says of a refusal, by its reason, in the words of the service, over the sentence
+   * every plugin says. Marked with `msg`; `{when}` is the first refusal.
+   */
+  attention?: Readonly<Partial<Record<'key-refused' | 'key-lacks-access' | 'connection-ended', string>>>;
+  /**
    * A connector that receives each note and keeps none (FRU-624, Slack): its panel lists the notes
    * that did not arrive, as the one of a REST address.
    */

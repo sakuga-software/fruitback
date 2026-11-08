@@ -199,7 +199,13 @@ export function PluginPanel({ id, base, connector, sites, manages, onChanged, on
       {known ? null : <p className="text-hint text-muted">{t('This console does not know this connector yet.')}</p>}
       {connector.attention === undefined ? null : (
         <Problem>
-          {t(ATTENTION[connector.attention.reason], { when: moment(connector.attention.since), source })}
+          {t(
+            trackerOf(connector.kind)?.attention?.[connector.attention.reason] ?? ATTENTION[connector.attention.reason],
+            {
+              when: moment(connector.attention.since),
+              source,
+            },
+          )}
         </Problem>
       )}
       <SendersList connector={connector} sites={sites} workspaceId={workspace.id} />
