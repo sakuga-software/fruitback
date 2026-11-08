@@ -43,6 +43,8 @@ const WANTED: Record<string, string> = {
   image: 'image-bold',
   // « Add to batch », beside « Send » (FRU-608).
   stackPlus: 'stack-plus-bold',
+  // « ⋯ », the menu of the author in the head of a thread (FRU-605).
+  more: 'dots-three-bold',
 };
 
 type IconifyInfo = {

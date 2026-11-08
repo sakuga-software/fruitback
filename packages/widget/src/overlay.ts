@@ -20,6 +20,7 @@ import { besideElement } from './thread-place.ts';
 import { adoptStyles } from './stylesheet.ts';
 import { firstLine, readDate } from './note-words.ts';
 import { BADGE_HALF, BADGE_RISE, STYLES } from './overlay.styles.ts';
+import { type MoreFooter, type MoreSaid, authorMenuOffered, moreMenu, moreSaid } from './thread-more.ts';
 
 /**
  * The pins on the page: one box over each element someone left a note on, coloured by where the
@@ -972,6 +973,33 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
           said: checkSaid,
           settled: checkSettled,
         };
+  // FRU-605: the menu « ⋯ » of the author. What its last action said outlives its thread, as a reply.
+  const moreSaidOf = new Map<string, MoreSaid>();
+  const moreFor = (issue: NoteIssue): MoreFooter | undefined => {
+    if (DRAFTS.has(issue) || !authorMenuOffered(issue)) return undefined;
+    const edit = editFor(issue);
+    const settled = (focus: string): void => {
+      const entry = placed.find((candidate) => candidate.issue.id === issue.id);
+      if (entry === undefined || thread?.dataset.fruitbackThread !== issue.note.id) return;
+      reopenThread(entry);
+      thread?.querySelector<HTMLElement>(focus)?.focus();
+    };
+
+    return {
+      said: moreSaidOf,
+      ...(edit === undefined
+        ? {}
+        : {
+            edit: () => {
+              edit.editing.add(issue.note.id);
+              edit.said.delete(issue.note.id);
+              edit.settled(issue, 'field');
+            },
+          }),
+      settled: () =>
+        settled(moreSaidOf.get(issue.note.id) === 'manual' ? '.fruitback-thread-more-link' : '.fruitback-thread-more'),
+    };
+  };
   const replyFor = (issue: NoteIssue): ReplyFooter | undefined =>
     options.reply === undefined || DRAFTS.has(issue) || !options.reply.allowed(issue)
       ? undefined
@@ -1005,6 +1033,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
       threadHome === null,
       editFor(entry.issue),
       checkFor(entry.issue),
+      moreFor(entry.issue),
     );
     wireThread(thread);
     mountThread(thread, entry);
@@ -1050,6 +1079,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
       home === null,
       editFor(entry.issue),
       checkFor(entry.issue),
+      moreFor(entry.issue),
     );
     wireThread(thread);
     mountThread(thread, entry);
@@ -1065,6 +1095,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     replySaid.clear();
     editSaid.clear();
     checkSaid.clear();
+    moreSaidOf.clear();
     const opener = placed.find((entry) => entry.pin.dataset.fruitbackOpen !== undefined);
     const wasOpen = thread !== null;
     // A thread in the list gives focus back through the list, to the row of its note (FRU-312): the
@@ -1457,6 +1488,7 @@ function buildThread(
   movable: boolean,
   edit?: EditFooter,
   check?: CheckFooter,
+  more?: MoreFooter,
 ): HTMLElement {
   const thread = document.createElement('div');
   thread.className = 'fruitback-thread';
@@ -1496,7 +1528,13 @@ function buildThread(
       // In the head (FRU-256), where the mock-up draws it: the way out is known before the note is read.
       ...link(document, issue, t),
     ]),
-    closeButton(document, t),
+    // The menu of the author (FRU-605) beside the cross, in its column: the cross keeps the top.
+    more === undefined
+      ? closeButton(document, t)
+      : element(document, 'div', 'fruitback-thread-tools', [
+          moreMenu(document, issue, t, more),
+          closeButton(document, t),
+        ]),
   ]);
   // An attribute and not `:has()`: a browser with no `:has()` drops the rule, and the cross would
   // fall to a second line again.
@@ -1506,6 +1544,7 @@ function buildThread(
     head,
     element(document, 'div', 'fruitback-thread-body', [
       ...noteText(document, issue, t, edit),
+      ...moreSaid(document, issue, t, more),
       byline(document, 'p', 'fruitback-thread-meta', reporter, issue.note.createdAt, t),
       ...sourceBlock(document, issue, showSelector),
       ...attachmentsLine(document, issue, t),

@@ -590,6 +590,16 @@ describe('every word the widget shows', () => {
     });
     await settleReply();
     snapshots.push(...shown(host.root));
+    // The menu « ⋯ » of the author (FRU-605): the link copied, then the link to copy by hand.
+    const navigatorOf = host.root.ownerDocument.defaultView?.navigator;
+    for (const writeText of [async () => {}, () => Promise.reject(new Error('denied'))]) {
+      Object.defineProperty(navigatorOf, 'clipboard', { value: { writeText }, configurable: true });
+      (host.root.querySelector('.fruitback-thread-more') as HTMLButtonElement).click();
+      const copy = [...host.root.querySelectorAll<HTMLButtonElement>('.fruitback-thread-more-item')].at(-1);
+      copy?.click();
+      await settleReply();
+      snapshots.push(...shown(host.root));
+    }
     // The verdict of the author on a note marked done (FRU-603): « Looks fixed » in flight, each
     // failure, then kept; then « Still wrong », its field, and kept.
     const verdictOf = (verdict: string) => ({
