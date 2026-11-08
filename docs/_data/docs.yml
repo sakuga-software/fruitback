@@ -40,6 +40,14 @@
       url: /translating.html
     - title: What the team sees
       url: /install/team-view.html
+    - title: Jira Cloud
+      url: /connectors/jira.html
+    - title: Jira Cloud (français)
+      url: /connectors/jira.fr.html
+    - title: ClickUp
+      url: /connectors/clickup.html
+    - title: ClickUp (français)
+      url: /connectors/clickup.fr.html
 - title: Reference
   pages:
     - title: Widget options
