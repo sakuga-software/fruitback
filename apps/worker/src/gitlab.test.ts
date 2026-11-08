@@ -164,7 +164,9 @@ async function fakeGitlab(tokens: Record<string, Token>) {
           .reverse()
           .filter((issue) => wanted.every((label) => issue.labels.includes(label)))
           .filter((issue) => search === null || (searching && `${issue.title} ${issue.description}`.includes(search)));
-        return send(200, found.slice((page - 1) * size, page * size));
+        return send(200, found.slice((page - 1) * size, page * size), {
+          'x-next-page': page * size < found.length ? String(page + 1) : '',
+        });
       }
       const notes = /^\/issues\/(\d+)\/notes$/.exec(rest);
       if (notes !== null && request.method === 'GET') {
@@ -381,6 +383,28 @@ describe('the GitLab connector against a fake GitLab (FRU-623)', async () => {
       })(),
       GitlabResponseError,
     );
+  });
+
+  it('searches nothing when GitLab says the ten pages hold every issue of the site (review of #865)', async () => {
+    const big = await fakeGitlab({ [TOKEN]: { user: 'bot', projects: { 42: 30 } } });
+    const one = createGitlabStore({ http, target: async () => ({ url: big.origin, token: TOKEN }) });
+    const rows = Array.from({ length: 1_000 }, (_, index) => ({
+      id: 10_000 + index,
+      iid: index + 1,
+      project_id: 42,
+      title: 'A note',
+      description: null,
+      state: 'opened',
+      labels: ['fruitback', 'fruitback:acme'],
+      web_url: `${big.origin}/acme/web/-/issues/${index + 1}`,
+      updated_at: '2026-11-08T10:00:00.000Z',
+      user_notes_count: 0,
+    }));
+    big.issues.set(42, rows);
+    await one.findForPage(query, client('42'), POLICY);
+    const listed = big.calls.filter((call) => call.path === '/api/v4/projects/42/issues');
+    assert.equal(listed.length, 10);
+    assert.equal(listed.filter((call) => call.query.get('search') !== null).length, 0);
   });
 
   it('another client of the same project does not read these notes', async () => {
