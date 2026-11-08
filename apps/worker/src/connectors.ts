@@ -315,6 +315,11 @@ export function createConnectorStores(
           `[fruitback] the setting of a connector that receives could not be read: ${error instanceof Error ? error.message : String(error)}`,
         );
         takes = (note) => receiver.takes(note, { via: 'token', token: '', extra: {} });
+        // The console says it at once (review of #871): a note that its setting would have sent may
+        // stay in Fruitback, and the connector must be connected again.
+        await accounts.noteConnector(connector, 'key-refused', now()).catch((failure: unknown) => {
+          console.error('[fruitback] the state of a connector was not kept', connector, failure);
+        });
       }
     }
     // Nothing is opened to keep a note and queue it: the key is for the loop that sends.

@@ -20,6 +20,7 @@ import {
   type TrackerPlugin,
   TrackerKeyForbidden,
   TrackerKeyRefused,
+  readTrackerCredential,
   trackerAccess,
 } from './trackers/plugin.ts';
 
@@ -371,6 +372,12 @@ export async function deliverDue({
     try {
       const signed = await withSignedFiles(delivery.body, { attachments, publicUrl, secretsKey, now: now() });
       files = signed.files;
+      // A credential this key does not open is opened by no attempt: the connector needs a new one,
+      // and the delivery is given up (review of #871).
+      const plain = open(sealed, secretsKey);
+      if (plain === undefined || readTrackerCredential(plain) === undefined) {
+        throw new TrackerKeyRefused('The credential of this connector could not be opened: connect it again');
+      }
       const access = trackerAccess(plugin, delivery.connectorId, sealed, {
         accounts,
         secretsKey,

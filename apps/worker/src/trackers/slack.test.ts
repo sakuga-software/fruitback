@@ -215,6 +215,38 @@ describe('a Slack connector through the routes and the deliveries (FRU-624)', ()
     assert.equal(second?.body.text, first?.body.text);
   });
 
+  it('gives up a delivery whose credential no longer opens, and a webhook that answers 404 with any word (review of #871)', async () => {
+    const world = await setup();
+    const { id } = (await (await connect(world, { url: HOOK })).json()) as { id: string };
+    const pass = () =>
+      deliverDue({
+        accounts: world.env.accounts,
+        secretsKey: SECRETS_KEY,
+        send: async () => ({ status: 500 }),
+        http: world.slack.http,
+        now: () => Date.now() + 1,
+      });
+    const attention = async () =>
+      (await world.env.accounts.connectors(world.workspace.id)).find((each) => each.id === id)?.attention?.reason;
+
+    await keep(world, id, true);
+    const kept = await world.env.accounts.sealedKey(id);
+    await world.env.accounts.resealConnector(id, 'sealed-by-another-key');
+    await pass();
+    const [unread] = await world.env.accounts.deliveries(world.workspace.id, id);
+    assert.equal(unread?.nextAt, undefined, 'a credential no attempt opens is not tried again');
+    assert.match(unread?.lastError ?? '', /could not be opened/);
+    assert.equal(await attention(), 'key-refused');
+
+    await world.env.accounts.resealConnector(id, kept?.sealed as string);
+    await world.env.accounts.retryDelivery(world.workspace.id, id, unread?.id as string, Date.now());
+    world.slack.state.answer = { status: 404, word: '<html>Not Found</html>' };
+    await pass();
+    const [gone] = await world.env.accounts.deliveries(world.workspace.id, id);
+    assert.equal(gone?.nextAt, undefined, 'a 404 is not tried again');
+    assert.equal(await attention(), 'key-refused');
+  });
+
   it('keeps a note when the credential of the connector does not open, and queues a verified one only (review of #871)', async () => {
     const world = await setup();
     const { id } = (await (await connect(world, { url: HOOK })).json()) as { id: string };
@@ -225,6 +257,9 @@ describe('a Slack connector through the routes and the deliveries (FRU-624)', ()
     assert.equal((await world.env.accounts.dueDeliveries(Date.now(), 10)).length, 0);
     await keep(world, id, true);
     assert.equal((await world.env.accounts.dueDeliveries(Date.now(), 10)).length, 1);
+    // The console says it at once: the connector must be connected again (review of #871).
+    const [connector] = await world.env.accounts.connectors(world.workspace.id);
+    assert.equal(connector?.attention?.reason, 'key-refused');
   });
 
   it('refuses what is no webhook, and keeps none that Slack refuses', async () => {

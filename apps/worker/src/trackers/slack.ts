@@ -157,6 +157,12 @@ async function post(http: Http, url: string, message: unknown): Promise<Receiver
   if (response.ok) return { ok: true };
   if (GONE.has(word)) throw new TrackerKeyRefused(`Slack refused the webhook: ${word}`);
   if (CHANNEL_REFUSED.has(word)) throw new TrackerKeyForbidden(`Slack refused the channel: ${word}`);
+  // A 404 or a 410 with another word (a page of a proxy, a word Slack adds) is a webhook that is not
+  // there; a 403, a post that is not allowed. Neither ends by trying again (review of #871).
+  if (response.status === 404 || response.status === 410) {
+    throw new TrackerKeyRefused(`Slack answered ${response.status}: the webhook is not there`);
+  }
+  if (response.status === 403) throw new TrackerKeyForbidden('Slack answered 403: the post is not allowed');
   // A message Slack cannot read is refused the same way at every attempt.
   const final = response.status === 400;
   // « Rate limits »: a 429 says in `Retry-After` how many seconds to wait. The next attempt waits that
