@@ -2256,8 +2256,12 @@ export function createPostgresAccountStore(database: Database): AccountStore {
       return sessionsWhere(and(eq(connectors.workspace_id, workspace), eq(connectors.id, connector)), 50);
     },
 
-    async agentSessionsOfSite(workspace, site) {
-      return sessionsWhere(and(eq(connectors.workspace_id, workspace), eq(agent_sessions.site_id, site)), 200);
+    async agentSessionsOfSite(workspace, site, identifiers) {
+      if (identifiers.length === 0) return [];
+      // `identifiers` is a JSON array in a text column: the sessions that name one of these notes.
+      const names = sql`${agent_sessions.identifiers}::jsonb ?| ${sql.param([...new Set(identifiers)])}::text[]`;
+
+      return sessionsWhere(and(eq(connectors.workspace_id, workspace), eq(agent_sessions.site_id, site), names), 500);
     },
 
     async dropAgentSessions(before) {

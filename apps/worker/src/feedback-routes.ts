@@ -133,6 +133,7 @@ export async function getFeedback(
       clientId,
       checks,
       route.policy,
+      all.map((issue) => issue.identifier),
     );
     const issues: NoteIssue[] = all.map((issue) => {
       const checked = issue.stage === 'done' ? checkedOf(issue.comments) : undefined;
@@ -720,7 +721,6 @@ async function postBatch(
   return json(kept.length === results.length ? 201 : 207, { results: answered }, corsHeaders);
 }
 
-/** The stages a connector gives some states (FRU-102), read at this request. None when it cannot say. */
 /** The address of a session that the read gives, as `noteIssueSchema` takes it (FRU-618). */
 const HTTPS = /^https:\/\/\S+$/u;
 
@@ -742,12 +742,15 @@ async function agentsOf(
   site: string | undefined,
   checks: CallerChecks,
   policy: ClientPolicy,
+  identifiers: readonly string[],
 ): Promise<{ sessions: Map<string, string>; team: boolean }> {
   const sessions = new Map<string, string>();
-  if (accounts === undefined || workspace === undefined || site === undefined) return { sessions, team: false };
+  if (accounts === undefined || workspace === undefined || site === undefined || identifiers.length === 0) {
+    return { sessions, team: false };
+  }
   try {
     // Newest first: the first session that names a note is its newest.
-    for (const session of await accounts.agentSessionsOfSite(workspace, site)) {
+    for (const session of await accounts.agentSessionsOfSite(workspace, site, identifiers)) {
       for (const identifier of session.identifiers)
         if (!sessions.has(identifier)) sessions.set(identifier, session.url);
     }
@@ -764,6 +767,7 @@ async function agentsOf(
   return { sessions, team };
 }
 
+/** The stages a connector gives some states (FRU-102), read at this request. None when it cannot say. */
 async function exceptionsOf(accounts: AccountStore | undefined, connector: string): Promise<StageExceptions> {
   if (accounts === undefined) return {};
   try {

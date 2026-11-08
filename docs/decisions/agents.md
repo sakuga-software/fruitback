@@ -306,8 +306,9 @@ critical, and Mathieu merges it.
 
 ### The rules, in short
 
-- **The read says `agent` on a note that a session of a routine names** (`agentSessionsOfSite`, the
-  newest 200 of the site, kept 30 days): `{}` for every reader, `{ url }` for a session of a member
+- **The read says `agent` on a note that a session of a routine names** (`agentSessionsOfSite`: the
+  sessions of the site, kept 30 days, that name one of the notes of the page, so a busy site does not
+  push an old note out, review of #880): `{}` for every reader, `{ url }` for a session of a member
   of the workspace who sees the tracker (`memberOf` and `seesTracker`). Added after the cache, as
   `mine`: the cached answer is shared by every reader of the page.
 - **Decision of the orchestrator, 2026-11-08** (Mathieu's recommendation of 2026-11-05, taken): the
