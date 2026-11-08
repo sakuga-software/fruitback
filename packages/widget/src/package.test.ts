@@ -142,6 +142,17 @@ describe('the script-tag build', () => {
     // bundled out, not a budget to optimise against.
     assert.ok(gzipped < 200_000, `${Math.round(gzipped / 1024)}kB gzipped, from ${Math.round(size / 1024)}kB raw`);
   });
+
+  it('carries the English messages of zod and no other locale', async () => {
+    // `import { z } from 'zod'` binds the whole namespace as one value, so esbuild keeps every export
+    // of it: about 50 locales and the JSON Schema converters, 66 kB gzipped of the widget. The
+    // contract in `@fruitback/shared` imports `* as z`, which esbuild shakes export by export.
+    // The Dutch message stands for every locale: it is ASCII, so the minifier does not escape it.
+    const source = await readFile(join(dist, 'fruitback.iife.js'), 'utf8');
+
+    assert.match(source, /Invalid input/);
+    assert.doesNotMatch(source, /Ongeldige invoer/);
+  });
 });
 
 describe('the published declarations', () => {
