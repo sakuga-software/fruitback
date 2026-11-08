@@ -1,5 +1,5 @@
 import type { NoteComment } from '@fruitback/shared';
-import type { CheckVerdict, NewCheck, NewEdit, NewReply } from './store.ts';
+import type { CheckVerdict, NewCheck, NewEdit, NewReply, NewWithdrawal } from './store.ts';
 
 /**
  * The text of a reply in a tracker (FRU-257): one line that says who wrote it, then what they wrote,
@@ -153,6 +153,19 @@ export function withEditedText<T extends { note: { text: string }; comments?: re
   return newest === undefined || newest.text === issue.note.text
     ? issue
     : { ...issue, note: { ...issue.note, text: newest.text } };
+}
+
+/** The line under the line of who wrote it that marks a withdrawal of the note (FRU-605). */
+const WITHDREW = { en: 'Withdrew the note', fr: 'A retiré la note' } as const;
+
+/**
+ * The reply that a withdrawal writes under a note (FRU-605): the line of who wrote it, then the line
+ * of the withdrawal. Nothing is deleted: the note is closed, and its text and replies stay.
+ */
+export function withdrawText(withdrawal: Pick<NewWithdrawal, 'author'>, locale?: string): string {
+  const language = locale?.toLowerCase().startsWith('fr') ? 'fr' : 'en';
+
+  return [whoLine(withdrawal.author, locale), WITHDREW[language]].join('\n');
 }
 
 /** The first line that the worker writes, and the name in it. */

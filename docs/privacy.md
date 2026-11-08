@@ -165,6 +165,14 @@ A note done or closed cannot be edited. Where the note goes decides what is kept
 
 The excerpt of the index of the notes is written again from the new text.
 
+### A note withdrawn by its author
+
+The person who left a note can withdraw it while it is open. **Nothing is deleted**: the note is
+closed, and a reply under it says who withdrew it and when. On a note sent to an address, the address
+receives a `note.withdrawn` event that holds identifiers only. On a note sent to Linear, the issue
+gets the same reply as a comment, and moves to the first canceled state of its team. A note sent to
+GitHub cannot be withdrawn. To have a note deleted, ask the team of the site.
+
 ### An e-mail when a note is done
 
 When the team marks a note done, the worker can write once to the person who left it. **It is a

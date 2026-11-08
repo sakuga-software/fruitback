@@ -3507,6 +3507,25 @@ replies, and on a public site mounted by the extension with no session, only the
 - **The event names the site the route found the note in** (`target.clientId`), and none is queued
   when there is no site: an id of a note that `/mcp` cannot read back helps nobody (review of #866).
 
+## The author withdraws an open note (FRU-605)
+
+**The rules, in short** (arbitrated by the orchestrator on 2026-11-08, Q3 of FRU-605):
+
+- **`POST /feedback/<id>/withdraw?client=<site>`, body `{ url }`** (`postWithdraw`, `edit-routes.ts`).
+  The guards of an edit: the author the index keeps, by a session (`403 not-allowed` for anybody else,
+  a role that manages the sites included: the team closes a note in the console), an open stage
+  (`409 not-open` with its stage), one place (`403 withdrawals-not-taken`).
+- **Nothing is deleted.** The worker's own store sets `closed` and the built-in status, and writes a
+  reply « Withdrew the note » (`withdrawText`), in one transaction under the lock of the row. Linear
+  writes the reply, then moves the issue to the first state of type `canceled` of the board
+  (`withdrawStateOf`); a team with none fails after the reply, as « Still wrong » does. GitHub takes
+  none (FRU-628). An address keeps it in the worker's own store and gets `note.withdrawn`, ids only.
+- **One at a time**: a key of the KV, as for a verdict (`409 withdraw-in-progress`). A tracker has
+  no lock, and a double click would write two replies.
+- **`withdrawable: true` is added after the cache**, as `editable`; the route decides again. A
+  withdrawal does not depend on the replies being shown: the stage says it on its own.
+- The extension relays `/withdraw` as it relays `/text` (`WITHDRAW_PATH`, `relay.ts`).
+
 ## The author edits a note (FRU-475)
 
 **The rules, in short** (the ticket left every choice open; the agent decided the simplest and the

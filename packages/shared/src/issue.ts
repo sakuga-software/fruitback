@@ -222,6 +222,12 @@ export const noteIssueSchema = z.object({
    */
   editable: z.literal(true).optional(),
   /**
+   * `true` on a note that the reader may withdraw now (FRU-605): their own (`mine`), open (`new`,
+   * `todo`, `progress`), on a site with one place whose store takes a withdrawal. Absent for every
+   * other note and reader. Read-envelope field.
+   */
+  withdrawable: z.literal(true).optional(),
+  /**
    * The files of the note, as its tracker keeps them (FRU-331): a name, and the address of the
    * tracker. Absent when the store says nothing of them. Read-envelope field.
    */

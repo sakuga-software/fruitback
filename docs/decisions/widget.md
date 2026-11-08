@@ -1905,7 +1905,8 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
 - **The items are the ones that work today.** « Edit the note » opens the field of the edit
   (FRU-475), and only where the read says `editable`. « Copy link to the note » copies
   `<page>#fruitback-note=<id>` (FRU-253, `noteLink`). « Move the note » and « Withdraw the note » come
-  with their routes, in the next pull requests of FRU-605.
+  with their routes, in the next pull requests of FRU-605. « Withdraw the note » came with C: offered
+  where the read says `withdrawable`.
 - **A copy that fails shows the link**, selected on focus, with « The link could not be copied.
   Select it, then copy it. »: a copy that fails with nothing to see reads as a copy that worked, as in
   the panel (`copySection`). What the copy said lives in a map by note, as the other footers, and
@@ -1914,6 +1915,21 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
   the ends, Escape closes the menu and gives the focus back to « ⋯ » without closing the thread, the
   focus on « ⋯ » included (review of #863), and Tab or a focus out of it closes it. An item gives the
   focus back to « ⋯ » at once, before its action ends: the item is hidden, and a clipboard answers late.
+
+## « Withdraw this note? », in the thread (FRU-605)
+
+### The rules, in short
+
+- **Asked before it goes**: « Withdraw the note » of « ⋯ » opens « Withdraw this note? The team will
+  see it closed. Nothing is deleted. » under the text, with « Withdraw » and « Keep it ». « Keep it »
+  gives the focus back to « ⋯ ». Offered where the read says `withdrawable`.
+- **No read after it, as after a verdict (FRU-603)**: the stage and the reply the worker answers go
+  on the issue (`applyWithdraw`), `editable` and `withdrawable` go, and the pins are drawn again with
+  this thread kept open, which says « Withdrawn. The note is closed. ».
+- **Each failure says why**, and the question stays to try again. `409 withdraw-in-progress` is
+  `retry`; `403`, `404` and another `409` are `refused`.
+- **The reply of a withdrawal reads in the words of the reader** (`editFromPage`): the name, then
+  « Withdrew the note », from the text the worker writes in either language of the team.
 
 ## The colour of « Send » (FRU-601)
 

@@ -23,12 +23,13 @@ import {
   type NewCheck,
   type NewEdit,
   type NewReply,
+  type NewWithdrawal,
   type NoteIssueQuery,
   type NoteStore,
   StoreError,
 } from './store.ts';
 import { type StoreSpec, defineStore } from './store-config.ts';
-import { checkText, editText, replyText, withEditedText } from './reply-text.ts';
+import { checkText, editText, replyText, withEditedText, withdrawText } from './reply-text.ts';
 import type { OutgoingFile } from './attachments.ts';
 
 const LINEAR_GRAPHQL_ENDPOINT = 'https://api.linear.app/graphql';
@@ -286,6 +287,41 @@ export async function createCheck(
     input: { stateId: state.id },
   });
   if (!moved.issueUpdate.success) throw new StoreError('Linear refused to reopen the issue');
+
+  return { comment: noteCommentOf(comment), stage: stageOf(moved.issueUpdate.issue?.state ?? state, stages) };
+}
+
+/** The state a withdrawn note goes to (FRU-605): the first of type `canceled` of the board. */
+export function withdrawStateOf(states: readonly WorkflowStateNode[]): WorkflowStateNode | undefined {
+  return states.filter((state) => state.type === 'canceled').sort((a, b) => a.position - b.position)[0];
+}
+
+/**
+ * A withdrawal of its author (FRU-605): the reply first, then the move of the issue to
+ * `withdrawStateOf`, as a verdict « Still wrong » does. A move that fails leaves the reply on an issue
+ * still open: a second try writes the reply again, and moves it. Nothing is deleted.
+ */
+export async function createWithdrawal(
+  config: LinearConfig,
+  issueId: string,
+  withdrawal: NewWithdrawal,
+  locale: string | undefined,
+  stages: StageExceptions = {},
+): Promise<{ comment: NoteComment; stage: NoteStage }> {
+  const created = await graphql<CreateCommentResult>(config, CREATE_COMMENT_MUTATION, {
+    input: { issueId, body: withdrawText(withdrawal, locale) },
+  });
+  const comment = created.commentCreate.comment;
+  if (!created.commentCreate.success || comment === null) throw new StoreError('Linear refused the reply');
+  const found = await graphql<IssueStatesResult>(config, ISSUE_STATES_QUERY, { id: issueId });
+  if (found.issue === null) throw new StoreError('Linear lost the issue between the reply and its move');
+  const state = withdrawStateOf(found.issue.team.states.nodes);
+  if (state === undefined) throw new StoreError('The team of this issue has no canceled state');
+  const moved = await graphql<ReopenIssueResult>(config, REOPEN_ISSUE_MUTATION, {
+    id: issueId,
+    input: { stateId: state.id },
+  });
+  if (!moved.issueUpdate.success) throw new StoreError('Linear refused to cancel the issue');
 
   return { comment: noteCommentOf(comment), stage: stageOf(moved.issueUpdate.issue?.state ?? state, stages) };
 }
@@ -1301,6 +1337,9 @@ export function createLinearStore(
     // FRU-605: a comment with the new text; the description stays the team's.
     editsInReplies: true,
     edit: (target, edit, _client, policy) => createEdit(config, target.issue, edit, policy.locale),
+    // FRU-605: a reply, then the first canceled state of the team.
+    withdraw: (target, withdrawal, _client, policy) =>
+      createWithdrawal(config, target.issue, withdrawal, policy.locale, stages),
   };
 }
 

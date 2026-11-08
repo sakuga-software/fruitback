@@ -108,6 +108,15 @@ is when the edit was kept. Read the text of now with the `get_note` tool of `/mc
 two edits of one note are two deliveries. A receiver written before this event answers `2xx` and
 reads nothing from it, or answers something else, and the edit is tried again as any delivery.
 
+### A note its author withdrew
+
+The person who left a note can withdraw it while it is open, since 0.8.0. Fruitback closes the note
+and deletes nothing. The address of the note then gets a request of this page, with the same headers,
+signature and attempts, and `event: "note.withdrawn"`. Its body has the fields of `note.edited` above:
+`version`, `event`, `workspace`, `site`, `identifier`, `note.id` and `at`, and no text. Close the
+item you made of the note, or mark it withdrawn: the person who left it does not expect an answer
+any more. `X-Fruitback-Delivery` is new for this event.
+
 ## Check the signature
 
 The signature is the HMAC-SHA256, with your secret, of the timestamp, a dot and the body **as it

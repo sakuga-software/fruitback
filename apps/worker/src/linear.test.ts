@@ -373,3 +373,54 @@ describe('the text of a note of Linear, after an edit of its author (FRU-605)', 
     assert.equal(toNoteIssue(node, note.page.url, { showComments: false })?.note.text, 'Sent');
   });
 });
+
+describe('a withdrawal of its author in Linear (FRU-605)', () => {
+  afterEach(() => vi.restoreAllMocks());
+  const state = (id: string, type: string, position: number) => ({ id, name: id, type, position });
+
+  it('writes the reply, then moves the issue to the first canceled state of the board', async () => {
+    const stub = installLinearStub({
+      teamStates: [
+        state('st_dup', 'canceled', 2),
+        state('st_done', 'completed', 1),
+        state('st_canceled', 'canceled', 0),
+      ],
+    });
+    const store = createLinearStore({ apiKey: 'lin_api_test', teamId: 'team_1', projectId: undefined });
+
+    const answer = await store.withdraw?.(
+      { issue: 'issue_1', clientId: 'acme' },
+      { author: { kind: 'member', name: 'Bob', workspace: 'Acme' }, note: noteFixture(), identifier: 'ENG-1' },
+      undefined,
+      { showComments: true, identitySecret: undefined, read: 'public', write: 'public', locale: 'en' },
+    );
+
+    assert.deepEqual(
+      stub.calls.map((call) => call.operation),
+      ['FruitbackCreateComment', 'FruitbackIssueStates', 'FruitbackReopenIssue'],
+    );
+    assert.deepEqual(stub.calls[2]?.variables, { id: 'issue_1', input: { stateId: 'st_canceled' } });
+    assert.ok(typeof answer === 'object');
+    assert.equal(answer.stage, 'closed');
+    assert.equal(answer.comment.body, '**Bob** via Fruitback · member of Acme\nWithdrew the note');
+  });
+
+  it('fails after the reply when the team has no canceled state, and moves nothing', async () => {
+    const stub = installLinearStub({ teamStates: [state('st_done', 'completed', 0)] });
+    const store = createLinearStore({ apiKey: 'lin_api_test', teamId: 'team_1', projectId: undefined });
+
+    await assert.rejects(
+      store.withdraw?.(
+        { issue: 'issue_1', clientId: 'acme' },
+        { author: { kind: 'member', name: 'Bob', workspace: 'Acme' }, note: noteFixture(), identifier: 'ENG-1' },
+        undefined,
+        { showComments: true, identitySecret: undefined, read: 'public', write: 'public', locale: 'en' },
+      ) ?? Promise.resolve(),
+      StoreError,
+    );
+    assert.deepEqual(
+      stub.calls.map((call) => call.operation),
+      ['FruitbackCreateComment', 'FruitbackIssueStates'],
+    );
+  });
+});
