@@ -214,7 +214,7 @@ describe('the text of a note, edited by the person who left it (FRU-475)', () =>
     }
   });
 
-  it('refuses a note done or closed: no longer offered, and `409 not-open`', async () => {
+  it('refuses a note done or closed: no longer offered, and 409 not-open', async () => {
     const { world, store, site, tokens, note } = await aNote();
     for (const stage of [DONE, CLOSED]) {
       assert.equal((await moveTo(world, site, note, stage, tokens.alice, store)).status, 200);

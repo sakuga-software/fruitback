@@ -3503,7 +3503,14 @@ replies, and on a public site mounted by the extension with no session, only the
 - **GitHub takes no edit**, as it takes no reply (FRU-628 follows it).
 - A tracker has no lock: the stage is the one the route read. A note marked done in Linear between
   the read and the comment gets the comment, a reply like any other, but not its text: the read
-  stops at `completedAt` (review of #866).
+  stops at `completedAt` or `canceledAt` (review of #866). Reopened, the issue has neither again, and
+  that comment is the text: it is the author's newest word on a note that is open again, as an edit
+  at `todo` would be. Only a race of one request writes it: the route answers `409 not-open` at
+  `done` and `closed` (test:`refuses a note done or closed: no longer offered, and 409 not-open`).
+- **The comment is recognized by its text, not by its Linear author** (round 3 of #866): with an
+  OAuth connection as the app, Linear may write it with no `user`, and nobody measured it; a filter on
+  the author could drop every real edit. Whoever can type it in Linear is of the team that owns the
+  issue, and can rewrite its description too, as for a verdict (`verdictOf`).
 - **The event names the site the route found the note in** (`target.clientId`), and none is queued
   when there is no site: an id of a note that `/mcp` cannot read back helps nobody (review of #866).
 

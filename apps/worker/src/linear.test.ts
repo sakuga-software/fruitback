@@ -369,6 +369,28 @@ describe('the text of a note of Linear, after an edit of its author (FRU-605)', 
       })?.note.text,
       'After done',
     );
+    // Reopened: Linear empties `completedAt`, and the edit that crossed the move is the newest word of
+    // the author on a note open again (review of #866, documented in worker.md).
+    assert.equal(
+      toNoteIssue({ ...node, completedAt: null, state: { name: 'Backlog', type: 'backlog' } }, note.page.url, {
+        showComments: true,
+      })?.note.text,
+      'After done',
+    );
+    // Canceled, as a withdrawal leaves it: the same cut-off.
+    assert.equal(
+      toNoteIssue(
+        {
+          ...node,
+          completedAt: null,
+          canceledAt: '2026-11-08T10:02:00.000Z',
+          state: { name: 'Canceled', type: 'canceled' },
+        },
+        note.page.url,
+        { showComments: true },
+      )?.note.text,
+      'Before done',
+    );
     // The replies hidden: the text of the description, as the store sent it.
     assert.equal(toNoteIssue(node, note.page.url, { showComments: false })?.note.text, 'Sent');
   });
