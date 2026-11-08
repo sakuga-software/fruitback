@@ -370,7 +370,14 @@ export async function deliverDue({
     let files: string[] = [];
     let answer: Awaited<ReturnType<typeof receiver.deliver>>;
     try {
-      const signed = await withSignedFiles(delivery.body, { attachments, publicUrl, secretsKey, now: now() });
+      // The files are signed apart: a store of files that fails says so in the panel (review of #871).
+      const signed = await withSignedFiles(delivery.body, { attachments, publicUrl, secretsKey, now: now() }).catch(
+        (error: unknown) => {
+          throw new Error(
+            `The files of the note could not be signed: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        },
+      );
       files = signed.files;
       // A credential this key does not open is opened by no attempt: the connector needs a new one,
       // and the delivery is given up (review of #871).

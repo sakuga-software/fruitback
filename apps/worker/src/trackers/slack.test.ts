@@ -293,6 +293,31 @@ describe('a Slack connector through the routes and the deliveries (FRU-624)', ()
     assert.equal((await world.env.accounts.dueDeliveries(Date.now(), 10)).length, 0);
   });
 
+  it('says in the panel when the files of a note could not be signed, and tries again (review of #871)', async () => {
+    const world = await setup();
+    const { id } = (await (await connect(world, { url: HOOK })).json()) as { id: string };
+    await keep(world, id, true, 1);
+    const broken = {
+      get: async () => {
+        throw new Error('the store of files is down');
+      },
+      endAt: async () => undefined,
+      sweep: async () => undefined,
+    } as unknown as NonNullable<Parameters<typeof deliverDue>[0]['attachments']>;
+    await deliverDue({
+      accounts: world.env.accounts,
+      secretsKey: SECRETS_KEY,
+      send: async () => ({ status: 500 }),
+      http: world.slack.http,
+      attachments: broken,
+      publicUrl: 'https://api.fruitback.test',
+      now: () => Date.now() + 1,
+    });
+    const [late] = await world.env.accounts.deliveries(world.workspace.id, id);
+    assert.match(late?.lastError ?? '', /^The files of the note could not be signed: the store of files is down/);
+    assert.notEqual(late?.nextAt, undefined);
+  });
+
   it('keeps a note when the credential of the connector does not open, and queues a verified one only (review of #871)', async () => {
     const world = await setup();
     const { id } = (await (await connect(world, { url: HOOK })).json()) as { id: string };
