@@ -21,13 +21,14 @@ import {
   type CreatedIssue,
   type CreatedWithFiles,
   type NewCheck,
+  type NewEdit,
   type NewReply,
   type NoteIssueQuery,
   type NoteStore,
   StoreError,
 } from './store.ts';
 import { type StoreSpec, defineStore } from './store-config.ts';
-import { checkText, replyText } from './reply-text.ts';
+import { checkText, editText, replyText } from './reply-text.ts';
 import type { OutgoingFile } from './attachments.ts';
 
 const LINEAR_GRAPHQL_ENDPOINT = 'https://api.linear.app/graphql';
@@ -186,6 +187,26 @@ export async function createReply(
   if (!created.commentCreate.success || comment === null) throw new StoreError('Linear refused the reply');
 
   return noteCommentOf(comment);
+}
+
+/**
+ * The new text of a note by its author (FRU-605): a comment « Edited the note » with the new text in
+ * it. The description of the issue is the team's, which they may have changed, and is never written
+ * again. A read takes the text from the comment (`withEditedText`).
+ */
+export async function createEdit(
+  config: LinearConfig,
+  issueId: string,
+  edit: NewEdit,
+  locale?: string,
+): Promise<{ note: Note; comment: NoteComment }> {
+  const created = await graphql<CreateCommentResult>(config, CREATE_COMMENT_MUTATION, {
+    input: { issueId, body: editText(edit, locale, true) },
+  });
+  const comment = created.commentCreate.comment;
+  if (!created.commentCreate.success || comment === null) throw new StoreError('Linear refused the edit');
+
+  return { note: { ...edit.note, text: edit.text }, comment: noteCommentOf(comment) };
 }
 
 /**
@@ -1267,6 +1288,9 @@ export function createLinearStore(
       })),
     reply: (target, reply, _client, policy) => createReply(config, target.issue, reply, policy.locale),
     check: (target, check, _client, policy) => createCheck(config, target.issue, check, policy.locale, stages),
+    // FRU-605: a comment with the new text; the description stays the team's.
+    editsInReplies: true,
+    edit: (target, edit, _client, policy) => createEdit(config, target.issue, edit, policy.locale),
   };
 }
 

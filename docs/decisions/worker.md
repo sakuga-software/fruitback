@@ -3479,6 +3479,31 @@ replies, and on a public site mounted by the extension with no session, only the
 - **`checked` and `mine` are added after the cache.** `checked` comes from the replies, so a read with
   the replies hidden says none; `mine` is the reader's.
 
+## The author edits an open note, and a tracker gets a reply (FRU-605)
+
+**The rules, in short** (arbitrated by the orchestrator on 2026-11-08, in FRU-605):
+
+- **Open is `new`, `todo` or `progress`** (`EDITABLE_STAGES`). A note `done` waits for the verdict
+  of its author, and a `closed` note says nothing more: `409 not-open`, with its stage. The worker's
+  own store reads the stage again under the lock of the row, as before.
+- **The description of a tracker is never written again.** The team may have changed it there.
+  Linear gets a comment: the line of who wrote it, « Edited the note », then the new text, quoted
+  (`editText(…, true)`). A read takes the text of a note from its newest such comment
+  (`withEditedText`, after the cache, beside `markedAgent`). The comment is read as text, as a
+  verdict is: a person of the team can type it in Linear, and can change the description too. A reply
+  of the page cannot: its second line is empty.
+- **Where the replies are hidden, a tracker takes no edit** (`editsInReplies`, `takesEdits(…,
+  policy)`): a read would show the text of before. This covers a worker that hides them, and a
+  connector whose workspace hides them (`withSettings`).
+- **An address keeps the edit in the worker's own store, and gets `note.edited`**, ids only
+  (`noteEventBody`): the workspace, the site, `identifier`, `note.id` as `get_note` of `/mcp` takes
+  it, and `at`. Never the text, for the reason of FRU-475. A queue that refuses the row is logged and
+  the author is answered, as for `note.created`. The console lists it as « Note edited by its
+  author ». `DELIVERY_EVENTS` gains it; the column is a text, so no migration.
+- **GitHub takes no edit**, as it takes no reply (FRU-628 follows it).
+- A tracker has no lock: the stage is the one the route read. A note marked done in Linear between
+  the read and the comment gets the comment, which is a reply like any other.
+
 ## The author edits a note (FRU-475)
 
 **The rules, in short** (the ticket left every choice open; the agent decided the simplest and the

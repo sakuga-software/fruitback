@@ -10,14 +10,14 @@ import { createPairing, redeemPairing } from './session.ts';
 import type { NoteStore } from './store.ts';
 
 /**
- * `POST /feedback/<id>/text` (FRU-475): the person who left a note edits its text, while it is `new`
- * and the worker keeps it. Nobody else, and no note of a tracker. A reply says it was edited.
+ * `POST /feedback/<id>/text` (FRU-475, FRU-605): the person who left a note edits its text, while it
+ * is open (new, todo, progress). Nobody else. A reply says it was edited; in a tracker it holds the text.
  */
 
 const open = worlds();
 const ORIGIN = 'https://acme.dev';
 const PAGE = 'https://acme.dev/pricing';
-const [NEW, TODO] = NOTE_STAGES;
+const [NEW, TODO, PROGRESS, DONE, CLOSED] = NOTE_STAGES;
 
 type Answer = { status: number; body: Record<string, any> };
 
@@ -107,6 +107,17 @@ async function pin(world: World, site: string, token: string, store: NoteStore):
   return (answer.body.issues as Record<string, any>[])[0] ?? {};
 }
 
+/** The team puts the note in a built-in status of the site, as the console does. */
+function moveTo(world: World, site: string, note: string, stage: string, token: string, store: NoteStore) {
+  return callOn(
+    world,
+    'POST',
+    `/feedback/${note}/status?client=${site}`,
+    { origin: ORIGIN, body: { url: PAGE, status: `own:${stage}` }, headers: { Authorization: `Bearer ${token}` } },
+    { store },
+  );
+}
+
 const textOfRow = async (world: World) =>
   (await rowsOf(world.database, 'SELECT payload FROM notes')).map((row) => JSON.parse(String(row.payload)).text);
 
@@ -189,33 +200,44 @@ describe('the text of a note, edited by the person who left it (FRU-475)', () =>
     assert.deepEqual(await textOfRow(world), ['The price is wrong']);
   });
 
-  it('refuses a note the team moved: no longer offered, and `409 not-new`', async () => {
+  it('takes an edit of a note the team took, at todo and at progress (FRU-605)', async () => {
     const { world, store, site, tokens, note } = await aNote();
-    const moved = await callOn(
-      world,
-      'POST',
-      `/feedback/${note}/status?client=${site}`,
-      {
-        origin: ORIGIN,
-        body: { url: PAGE, status: `own:${TODO}` },
-        headers: { Authorization: `Bearer ${tokens.alice}` },
-      },
-      { store },
-    );
-    assert.equal(moved.status, 200);
-
-    assert.equal((await pin(world, site, tokens.bob, store)).editable, undefined);
-    assert.deepEqual(await edit(world, site, note, 'Too late', tokens.bob, store), {
-      status: 409,
-      body: { error: 'not-new', stage: TODO },
-    });
-    assert.deepEqual(await textOfRow(world), ['The price is wrong']);
+    for (const [stage, words] of [
+      [TODO, 'The price of the Pro plan is wrong'],
+      [PROGRESS, 'The price of the Team plan is wrong'],
+    ] as const) {
+      assert.equal((await moveTo(world, site, note, stage, tokens.alice, store)).status, 200);
+      assert.equal((await pin(world, site, tokens.bob, store)).editable, true, stage);
+      const edited = await edit(world, site, note, words, tokens.bob, store);
+      assert.equal(edited.status, 200, JSON.stringify(edited.body));
+      assert.deepEqual(await textOfRow(world), [words]);
+    }
   });
 
-  it('refuses the note of a tracker: the issue is the team’s there, and is not offered', async () => {
+  it('refuses a note done or closed: no longer offered, and `409 not-open`', async () => {
+    const { world, store, site, tokens, note } = await aNote();
+    for (const stage of [DONE, CLOSED]) {
+      assert.equal((await moveTo(world, site, note, stage, tokens.alice, store)).status, 200);
+
+      assert.equal((await pin(world, site, tokens.bob, store)).editable, undefined, stage);
+      assert.deepEqual(await edit(world, site, note, 'Too late', tokens.bob, store), {
+        status: 409,
+        body: { error: 'not-open', stage },
+      });
+    }
+    assert.deepEqual(await textOfRow(world), ['The price is wrong']);
+    assert.deepEqual(await rowsOf(world.database, 'SELECT id FROM note_comments'), []);
+  });
+
+  it('writes a reply with the new text in a tracker, keeps its description, and a read shows the new text (FRU-605)', async () => {
     const { world, site, tokens } = await aNote();
     const tracker = createMemoryStore();
-    const note = noteFixture({ id: 'ed_2', page: { url: PAGE, path: '/pricing' }, client: { id: site, name: 'Acme' } });
+    const note = noteFixture({
+      id: 'ed_2',
+      text: 'The words it was sent with',
+      page: { url: PAGE, path: '/pricing' },
+      client: { id: site, name: 'Acme' },
+    });
     const planted = await answerOf(
       await callOn(
         world,
@@ -226,12 +248,24 @@ describe('the text of a note, edited by the person who left it (FRU-475)', () =>
       ),
     );
     assert.equal(planted.status, 201);
+    const issue = planted.body.issue.id as string;
+    assert.equal((await pin(world, site, tokens.bob, tracker)).editable, true);
 
-    assert.equal((await pin(world, site, tokens.bob, tracker)).editable, undefined);
-    assert.deepEqual(await edit(world, site, planted.body.issue.id as string, 'Changed', tokens.bob, tracker), {
-      status: 403,
-      body: { error: 'edits-not-taken' },
-    });
+    const edited = await edit(world, site, issue, 'The new words\nOn two lines', tokens.bob, tracker);
+
+    assert.equal(edited.status, 200, JSON.stringify(edited.body));
+    assert.equal(edited.body.note.text, 'The new words\nOn two lines');
+    assert.equal(
+      edited.body.comment.body,
+      '**bob@acme.dev** via Fruitback · member of Acme\nEdited the note\n\n> The new words\n> On two lines',
+    );
+    // The description of the issue is the team's: it keeps the words the note was sent with.
+    const kept = await tracker.findForPage({ url: PAGE, clientId: site }, undefined, { showComments: false } as never);
+    assert.equal(kept[0]?.note.text, 'The words it was sent with');
+    // A read shows the text of the newest edit, and the reply.
+    const read = await pin(world, site, tokens.carol, tracker);
+    assert.equal(read.note.text, 'The new words\nOn two lines');
+    assert.equal(read.comments.length, 1);
   });
 
   it('refuses a site with two places before it reads the note, and offers no edit there', async () => {
@@ -280,20 +314,26 @@ describe('the text of a note, edited by the person who left it (FRU-475)', () =>
   });
 });
 
-describe('the edit of a note, written under the lock of its row (FRU-475)', () => {
+describe('the edit of a note, written under the lock of its row (FRU-475, FRU-605)', () => {
   it('writes nothing on a note that moved since the route read it, nor on a note of another site', async () => {
     const { world, store, site, note } = await aNote();
     const author = { kind: 'member' as const, name: 'Bob', workspace: 'Acme' };
     const policy = { showComments: true, read: 'authenticated', write: 'public' } as never;
-    await rowsOf(world.database, `UPDATE notes SET stage = '${TODO}' RETURNING id`);
+    const of = { note: noteFixture(), identifier: 'FB-1' };
+    await rowsOf(world.database, `UPDATE notes SET stage = '${DONE}' RETURNING id`);
 
     assert.equal(
-      await store.edit?.({ issue: note, clientId: site }, { text: 'Late', author }, undefined, policy),
-      'not-new',
+      await store.edit?.({ issue: note, clientId: site }, { text: 'Late', author, ...of }, undefined, policy),
+      'not-open',
     );
     await rowsOf(world.database, `UPDATE notes SET stage = '${NEW}' RETURNING id`);
     assert.equal(
-      await store.edit?.({ issue: note, clientId: 'another-site' }, { text: 'Elsewhere', author }, undefined, policy),
+      await store.edit?.(
+        { issue: note, clientId: 'another-site' },
+        { text: 'Elsewhere', author, ...of },
+        undefined,
+        policy,
+      ),
       undefined,
     );
     assert.deepEqual(await textOfRow(world), ['The price is wrong']);

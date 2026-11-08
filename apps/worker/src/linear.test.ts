@@ -305,3 +305,35 @@ describe('the files of a note, read back from Linear (FRU-348)', () => {
     assert.deepEqual(stub.calls.at(-1)?.variables.attachmentFilter, { subtitle: { eq: ATTACHMENT_SUBTITLE } });
   });
 });
+
+describe('an edit of the author in Linear (FRU-605)', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('writes one comment with the new text, never touches the issue, and answers the note with it', async () => {
+    const stub = installLinearStub({});
+    const store = createLinearStore({ apiKey: 'lin_api_test', teamId: 'team_1', projectId: undefined });
+    const note = noteFixture({ text: 'The words it was sent with' });
+
+    const answer = await store.edit?.(
+      { issue: 'issue_1', clientId: 'acme' },
+      { text: 'The new words', author: { kind: 'member', name: 'Bob', workspace: 'Acme' }, note, identifier: 'ENG-1' },
+      undefined,
+      { showComments: true, identitySecret: undefined, read: 'public', write: 'public', locale: 'en' },
+    );
+
+    assert.deepEqual(
+      stub.calls.map((call) => call.operation),
+      ['FruitbackCreateComment'],
+    );
+    assert.deepEqual(stub.calls[0]?.variables, {
+      input: {
+        issueId: 'issue_1',
+        body: '**Bob** via Fruitback · member of Acme\nEdited the note\n\n> The new words',
+      },
+    });
+    assert.ok(typeof answer === 'object');
+    assert.equal(answer.note.text, 'The new words');
+    assert.equal(answer.note.id, note.id);
+    assert.equal(store.editsInReplies, true);
+  });
+});

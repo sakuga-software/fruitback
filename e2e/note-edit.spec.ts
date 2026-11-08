@@ -35,7 +35,7 @@ async function plantOn(page: Page, selector: string, note: string): Promise<void
 const EDIT = /^(Edit your note|Modifier votre note)$/;
 const SAVE = /^(Save|Enregistrer)$/;
 
-test('the author edits a note that is still new, the thread and the reload show the new text, and a note the team moved is not offered (FRU-475)', async ({
+test('the author edits a note that is still open, the thread and the reload show the new text, and a note the team marked done is not offered (FRU-475, FRU-605)', async ({
   extension,
 }) => {
   test.slow();
@@ -72,12 +72,13 @@ test('the author edits a note that is still new, the thread and the reload show 
     timeout: 10_000,
   });
 
-  // The other note: the team moves it, as it would in the console. It is no longer offered.
+  // The other note: the team marks it done, as it would in the console. It is no longer offered (FRU-605:
+  // a note at todo or in progress still is).
   const id = await pinFor(page, 'A note the team takes').getAttribute('data-fruitback-pin');
   const moved = await fetch(`${AUTHENTICATED_WORKER_ORIGIN}/__dev/stage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ note: id, stage: 'todo' }),
+    body: JSON.stringify({ note: id, stage: 'done' }),
   });
   expect(moved.status).toBe(200);
   // The stage of now, once the shared cache of the read (15 s, `CACHE_TTL_MS`) let go of the answer of before.
@@ -87,7 +88,7 @@ test('the author edits a note that is still new, the thread and the reload show 
         await page.reload();
         await expect(page.locator('[data-fruitback-pin]')).toHaveCount(2);
 
-        return page.locator('[data-fruitback-pin][data-fruitback-stage="todo"]').count();
+        return page.locator('[data-fruitback-pin][data-fruitback-stage="done"]').count();
       },
       { timeout: 40_000, intervals: [3_000] },
     )
@@ -99,7 +100,7 @@ test('the author edits a note that is still new, the thread and the reload show 
   await expect(thread.getByRole('button', { name: EDIT })).toBeVisible();
   await thread.locator('.fruitback-thread-close').click();
 
-  // The note the team moved: its thread has no « Edit ».
+  // The note the team marked done: its thread has no « Edit ».
   await pinFor(page, 'A note the team takes').locator('.fruitback-pin-badge').click();
   await expect(thread.locator('.fruitback-thread-note')).toHaveText('A note the team takes');
   await expect(thread.getByRole('button', { name: EDIT })).toHaveCount(0);
