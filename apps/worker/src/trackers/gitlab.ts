@@ -13,7 +13,7 @@ import {
 import { createGitlabStore } from '../gitlab-store.ts';
 import { createGuardedFetch } from '../guarded-fetch.ts';
 import { StoreError } from '../store.ts';
-import { type Http, type TrackerAccess, TrackerInputRefused, type TrackerPlugin } from './plugin.ts';
+import { type TrackerAccess, TrackerInputRefused, type TrackerPlugin } from './plugin.ts';
 
 /**
  * The connector GitLab (FRU-623): an issue in a project of gitlab.com or of a self-managed GitLab.
@@ -25,13 +25,20 @@ import { type Http, type TrackerAccess, TrackerInputRefused, type TrackerPlugin 
  */
 
 /**
- * WARNING: the address of a self-managed GitLab is the word of the workspace. The worker's own
- * `fetch` (the default of `trackerAccess`) resolves a name itself, so a name that answers an internal
- * address would pass. In its place every call goes through `createGuardedFetch`, which checks the
- * address the socket connects to. A test hands over its own `http`, which is used as it is.
+ * WARNING: the address of a self-managed GitLab is the word of the workspace. Every call goes through
+ * `createGuardedFetch`, which checks the address the socket connects to, whatever `http` the worker
+ * hands the plugin: a `fetch` of the worker (`trackerHttp`) resolves a name itself, and a name that
+ * answers an internal address would pass (review of #865). Only a test replaces it, by name, with
+ * `useGitlabHttpForTests`.
  */
-const guarded = createGuardedFetch();
-const reach = (http: Http): GitlabHttp => (http === globalThis.fetch ? guarded : http);
+const guarded: GitlabHttp = createGuardedFetch();
+let forTests: GitlabHttp | undefined;
+const reach = (): GitlabHttp => forTests ?? guarded;
+
+/** For the tests: the GitLab of a port of the machine, reached without the guard. `undefined` puts it back. */
+export function useGitlabHttpForTests(http: GitlabHttp | undefined): void {
+  forTests = http;
+}
 
 async function targetOf(access: TrackerAccess): Promise<GitlabTarget> {
   const credential = await access.credential();
@@ -43,18 +50,18 @@ async function targetOf(access: TrackerAccess): Promise<GitlabTarget> {
 export const plugin: TrackerPlugin | undefined = {
   kind: 'gitlab',
   name: 'GitLab',
-  async connect(body, { http }) {
+  async connect(body) {
     const url = parseGitlabUrl(body.url);
     if (url === undefined) throw new TrackerInputRefused('invalid-address');
     const token = typeof body.token === 'string' ? body.token.trim() : '';
     if (!isAcceptableGitlabToken(token)) throw new TrackerInputRefused('invalid-token');
     // Asked before anything is kept: a token that GitLab refuses throws `TrackerKeyRefused`.
-    await readGitlabUser(reach(http), { url, token });
+    await readGitlabUser(reach(), { url, token });
 
     return { label: gitlabLabel(url), token, extra: { url } };
   },
   async places(access, { search, after }) {
-    const { projects, next } = await listGitlabProjects(reach(access.http), await targetOf(access), {
+    const { projects, next } = await listGitlabProjects(reach(), await targetOf(access), {
       ...(search === undefined || search === '' ? {} : { search }),
       ...(after === undefined ? {} : { after }),
     });
@@ -66,13 +73,13 @@ export const plugin: TrackerPlugin | undefined = {
   },
   readPlace: (value) => (typeof value === 'string' && GITLAB_PROJECT_ID.test(value) ? value : undefined),
   async placeName(access, place) {
-    const project = await readGitlabProject(reach(access.http), await targetOf(access), place);
+    const project = await readGitlabProject(reach(), await targetOf(access), place);
 
     return project === undefined ? undefined : { name: project.path };
   },
   store(access, { connector, stages }) {
     return createGitlabStore({
-      http: reach(access.http),
+      http: reach(),
       target: () => targetOf(access),
       statusSource: connector,
       ...(stages === undefined ? {} : { stages }),

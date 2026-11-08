@@ -64,6 +64,7 @@ const uploadSchema = z.object({ markdown: z.string().min(1) });
 const issueSchema = z.object({
   id: z.number(),
   iid: z.number(),
+  project_id: z.number().int().positive(),
   web_url: z.string().min(1),
   title: z.string(),
   description: z.string().nullable(),
@@ -236,6 +237,7 @@ export function createGitlabStore({ http, target, statusSource, stages = {} }: G
 
     async findForPage(query: NoteIssueQuery, client: ClientConfig | undefined, policy: ClientPolicy) {
       const project = projectOf(client);
+      const instance = (await target()).url;
       const labels = (query.clientId ? [FRUITBACK_LABEL, clientLabelName(query.clientId)] : [FRUITBACK_LABEL]).map(
         githubLabelName,
       );
@@ -248,7 +250,7 @@ export function createGitlabStore({ http, target, statusSource, stages = {} }: G
       const issues = await mapInBatches(matched, NOTES_AT_ONCE, async ({ issue, note }) => {
         const known = GITLAB_STATES.find((state) => state.id === issue.state);
         const thread = policy.showComments ? await comments(project, issue) : undefined;
-        const files = filesOf(issue);
+        const files = filesOf(issue, instance);
 
         return noteIssueSchema.safeParse({
           id: String(issue.id),
@@ -295,16 +297,17 @@ function matchPage(
 const LINK = /!?\[([^\]\n]+)\]\((\/uploads\/[0-9a-f]{32}\/[^)\s]+)\)/g;
 
 /**
- * The files under `FILES_HEADING`, with the address of the project: GitLab writes them as
- * `/uploads/<secret>/<name>`, under the page of the project.
+ * The files under `FILES_HEADING`. GitLab writes them as `/uploads/<secret>/<name>`, relative to the
+ * project; they are read back at `full_path`, `/-/project/<id>/uploads/<secret>/<name>` of the
+ * instance, as « Project markdown uploads » answers it: an address that a rename of the project does
+ * not move (review of #865).
  */
-function filesOf(issue: IssueRow): NoteAttachment[] {
+function filesOf(issue: IssueRow, instance: string): NoteAttachment[] {
   const at = issue.description?.lastIndexOf(`\n${FILES_HEADING}\n`) ?? -1;
   if (at === -1) return [];
-  const project = issue.web_url.replace(/\/-\/issues\/\d+$/, '').replace(/\/issues\/\d+$/, '');
 
   return [...(issue.description as string).slice(at).matchAll(LINK)].map(([, name, path]) => ({
     name: name as string,
-    url: `${project}${path as string}`,
+    url: `${instance}/-/project/${issue.project_id}${path as string}`,
   }));
 }

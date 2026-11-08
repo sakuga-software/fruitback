@@ -22,6 +22,7 @@ import { type World, callOn, signInTo, worlds } from './console-world.fixture.ts
 import { createPostgresNoteStore } from './notes-postgres.ts';
 import { open } from './secrets.ts';
 import { pluginOf, withoutTestPlugins } from './trackers/index.ts';
+import { useGitlabHttpForTests } from './trackers/gitlab.ts';
 import { readTrackerCredential } from './trackers/plugin.ts';
 
 /**
@@ -290,7 +291,7 @@ describe('the GitLab connector against a fake GitLab (FRU-623)', async () => {
     assert.ok(issue?.description?.includes(`${FILES_HEADING}\n\n![capture](/uploads/`));
     const read = (await store.findForPage(query, client('42'), POLICY)).find((each) => each.note.id === 'sd_files');
     assert.deepEqual(read?.attachments, [
-      { name: 'capture', url: `${gitlab.origin}/acme/web/uploads/${'a'.repeat(32)}/capture.png` },
+      { name: 'capture', url: `${gitlab.origin}/-/project/42/uploads/${'a'.repeat(32)}/capture.png` },
     ]);
   });
 
@@ -416,7 +417,10 @@ const SECRETS_KEY = 'a-secret-that-opens-the-connectors-of-gitlab';
 const SITE = 'https://staging.acme.dev';
 const INSTANCE = 'https://gitlab.acme.test';
 const opened = worlds();
-afterEach(() => withoutTestPlugins());
+afterEach(() => {
+  withoutTestPlugins();
+  useGitlabHttpForTests(undefined);
+});
 
 describe('a GitLab connector through the routes of the console (FRU-623)', async () => {
   const gitlab = await fakeGitlab({ [TOKEN]: { user: 'project_42_bot', projects: { 42: 30 } } });
@@ -424,13 +428,17 @@ describe('a GitLab connector through the routes of the console (FRU-623)', async
     http(String(url).replace(INSTANCE, gitlab.origin), init ?? {});
 
   async function setup() {
+    useGitlabHttpForTests(toFake);
     const world = await opened({ env: { FRUITBACK_STORE: 'postgres', FRUITBACK_SECRETS_KEY: SECRETS_KEY } });
     const env: World = {
       ...world,
       context: {
         ...world.context,
         store: createPostgresNoteStore(world.database),
-        trackerHttp: toFake as typeof fetch,
+        // The worker's own `http` reaches nothing here: the plugin calls GitLab through its guard.
+        trackerHttp: async () => {
+          throw new TypeError('the plugin of GitLab called the http of the worker');
+        },
       },
     };
     const { id, token } = await signInTo(env, 'owner@acme.dev');
@@ -441,6 +449,19 @@ describe('a GitLab connector through the routes of the console (FRU-623)', async
   }
   const connect = (world: Awaited<ReturnType<typeof setup>>, body: Record<string, unknown>) =>
     callOn(world.env, 'POST', `${world.base}/connectors`, { token: world.token, body: { kind: 'gitlab', ...body } });
+
+  it('calls GitLab through its guard, whatever http the worker hands it (review of #865)', async () => {
+    useGitlabHttpForTests(undefined);
+    const plugin = pluginOf('gitlab');
+    // The worker's http would send the name of the instance to the fake. The guard resolves the name
+    // itself, finds no address for a `.test` name, and nothing reaches the fake.
+    const before = gitlab.calls.length;
+    const refused = await plugin
+      ?.connect?.({ url: INSTANCE, token: TOKEN }, { http: toFake as typeof fetch, now: Date.now })
+      .catch((error: unknown) => error);
+    assert.ok(refused instanceof StoreError, String(refused));
+    assert.equal(gitlab.calls.length, before);
+  });
 
   it('ships in this build, by a token', () => {
     assert.equal(pluginOf('gitlab')?.name, 'GitLab');
