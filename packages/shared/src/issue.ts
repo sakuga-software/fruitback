@@ -221,6 +221,19 @@ export const noteIssueSchema = z.object({
    */
   editable: z.literal(true).optional(),
   /**
+   * An agent works on this note (FRU-618): a call of the trigger of its site started a session of a
+   * routine for it. `url`, the address of that session (https only), only for a member of the team who
+   * sees the tracker: a reviewer cannot open a session of the team. Read-envelope field, after the cache.
+   */
+  agent: z
+    .object({
+      url: z
+        .string()
+        .regex(/^https:\/\/\S+$/u)
+        .optional(),
+    })
+    .optional(),
+  /**
    * The files of the note, as its tracker keeps them (FRU-331): a name, and the address of the
    * tracker. Absent when the store says nothing of them. Read-envelope field.
    */

@@ -916,6 +916,11 @@ export type AccountStore = {
   ): Promise<void>;
   /** The sessions a routine connector of this workspace started, newest first, 50 at most. */
   agentSessions(workspace: string, connector: string): Promise<AgentSession[]>;
+  /**
+   * The sessions started for the notes of one site of this workspace (FRU-618), newest first, 200 at
+   * most: the thread of a note says an agent works on it. Kept `AGENT_SESSION_KEPT_DAYS`.
+   */
+  agentSessionsOfSite(workspace: string, site: string): Promise<AgentSession[]>;
   /** Removes the sessions started before `before`. Answers how many. */
   dropAgentSessions(before: number): Promise<number>;
   /**
