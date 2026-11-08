@@ -193,15 +193,15 @@ The worker writes to nobody a second time for the same note, even when it is reo
 
 The table `done_notices` keeps one row for each note that waits:
 
-| Column               | What it holds                                                                                   |
-| -------------------- | ----------------------------------------------------------------------------------------------- |
-| `site_id`, `note_id` | The note, as the index of the notes names it.                                                   |
-| `account_id`         | The account of the member who left the note. Empty for a visitor.                               |
-| `email`              | The address a visitor gave for this note, in lower case. Empty for a member.                    |
-| `locale`             | The language of the widget when the visitor gave the address, `en` or `fr`. Empty for a member. |
-| `created_at`         | When the row was written.                                                                       |
-| `expires_at`         | When the row goes if the note is not done by then: 90 days after `created_at`.                  |
-| `claimed_until`      | While a message is being sent, until when. Empty otherwise.                                     |
+| Column               | What it holds                                                                                       |
+| -------------------- | --------------------------------------------------------------------------------------------------- |
+| `site_id`, `note_id` | The note, as the index of the notes names it.                                                       |
+| `account_id`         | The account of the member who left the note. Empty for a visitor.                                   |
+| `email`              | The address a visitor gave for this note, in lower case. Empty for a member.                        |
+| `locale`             | The language of the widget when the visitor gave the address, `en` or `fr`. Empty for a member.     |
+| `created_at`         | When the row was written.                                                                           |
+| `expires_at`         | When the row goes if the note is not done by then: 90 days after `created_at`.                      |
+| `claimed_until`      | While a message is being sent, or for 5 minutes after one that failed, until when. Empty otherwise. |
 
 ### What the worker keeps besides the note
 

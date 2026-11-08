@@ -2387,8 +2387,8 @@ visitor. It is public: no session, no cookie.
 - What is sent. One message for each note, when a read of its page or a change of its status says
   that it is done. One statement claims the row for 10 minutes and answers it, so two reads at once
   send one message (test:`answers a row to one of two takes at once`). The row goes once the
-  provider took the message. A message that did not leave, or a process that stopped while it sent,
-  leaves the row for the next read
+  provider took the message. A message that did not leave stays claimed for 5 minutes, then the next
+  read sends it. A process that stopped while it sent leaves the row for the first read after its claim
   (test:`keeps a row that a read took and did not send, and gives it again once its claim ran out`).
   The one case that sends twice is a provider that took the message while the database refused the
   removal of the row. The message holds the host of the

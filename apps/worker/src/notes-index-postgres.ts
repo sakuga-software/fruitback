@@ -803,11 +803,11 @@ export function createPostgresDoneNotices(database: Database): DoneNotices {
       );
     },
 
-    async release({ site, note }) {
+    async release({ site, note }, retryAt) {
       await run((db) =>
         db
           .update(done_notices)
-          .set({ claimed_until: null })
+          .set({ claimed_until: retryAt ?? null })
           .where(and(eq(done_notices.site_id, site), eq(done_notices.note_id, note))),
       );
     },
