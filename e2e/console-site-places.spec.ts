@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { type Page, type Route, expect, test } from '@playwright/test';
 import { ACME, type Role, box, sideScroll, stubWorker, fulfillSites, styles } from './console-workspace.ts';
+import { unfolded } from './settled.ts';
 
 /**
  * Where the notes of a site go, set from the Sites screen (FRU-399), and no longer from the panel of
@@ -608,6 +609,7 @@ test('the panel of a source lists the sites that send there, and leads to the Si
   worker.places = [{ connector: 'c1', teamId: 't1' }];
   await page.goto(`${CONSOLE}/w/w1/connectors`);
   await page.locator('button[id^="source-row-"]').first().click();
+  await unfolded(page);
   const linear = page.getByRole('region', { name: /^Linear · / });
   await expect(linear.locator(`[data-site="${SITE}"]`)).toContainText('Linear · Web');
   // The places are read here, and chosen on the Sites screen only.
