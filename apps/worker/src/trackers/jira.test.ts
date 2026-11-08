@@ -8,7 +8,7 @@ import type { ClientPolicy } from '../clients.ts';
 import { StoreError } from '../store.ts';
 import { pluginOf } from './index.ts';
 import { JIRA_CLIENT, OTHER_SITE_ID, SITE_ID, fakeJira } from './jira-fake.fixture.ts';
-import { JIRA_SCOPES, jiraStage, pageLabel, plugin } from './jira.ts';
+import { JIRA_SCOPES, jiraStage, jqlString, pageLabel, plugin } from './jira.ts';
 import { noteOfDescription } from './jira-adf.ts';
 import { type TrackerAccess, type TrackerCredential, TrackerKeyForbidden, TrackerKeyRefused } from './plugin.ts';
 
@@ -254,6 +254,11 @@ describe('a note in Jira (FRU-622)', () => {
     for (const [, label] of jql.matchAll(/labels = "([^"]*)"/g)) assert.match(label ?? '', /^[A-Za-z0-9._:-]+$/);
     assert.equal(jql.includes(' OR '), false);
     assert.match(jira.state.issues[0]?.labels[1] ?? '', /^fruitback:[0-9a-f]{16}$/);
+  });
+
+  it('escapes a quote and a backslash in a string of JQL', () => {
+    assert.equal(jqlString('plain:label-1'), 'plain:label-1');
+    assert.equal(jqlString('a"b\\c'), 'a\\"b\\\\c');
   });
 
   it('keeps an issue of the page that names another client off the read', async () => {
