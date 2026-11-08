@@ -61,6 +61,8 @@ export function fakeClickup() {
     /** Each filter of a read of tasks: its tags. */
     reads: [] as string[][],
     attachmentsOff: false,
+    /** The tags that ClickUp refuses to make, with a 400 that is not « it exists ». */
+    refusedTags: new Set<string>(),
     next: undefined as { status: number; body?: unknown } | undefined,
   };
 
@@ -149,12 +151,22 @@ export function fakeClickup() {
     const tag = /^\/v2\/space\/([0-9]+)\/tag$/.exec(path);
     if (method === 'POST' && tag !== null) {
       const name = (JSON.parse(String(init?.body)) as { tag: { name: string } }).tag.name.toLowerCase();
+      if (state.refusedTags.has(name)) return json({ err: 'Tag name invalid', ECODE: 'TAGS_002' }, 400);
       const kept = state.tags.get(tag[1] as string) ?? new Set<string>();
       if (kept.has(name)) return json({ err: 'Tag already exists', ECODE: 'TAGS_001' }, 400);
       kept.add(name);
       state.tags.set(tag[1] as string, kept);
 
       return json({});
+    }
+    if (method === 'GET' && tag !== null) {
+      return json({
+        tags: [...(state.tags.get(tag[1] as string) ?? [])].map((name) => ({
+          name,
+          tag_fg: '#000000',
+          tag_bg: '#000000',
+        })),
+      });
     }
     const list = /^\/v2\/list\/([0-9]+)$/.exec(path);
     if (method === 'GET' && list !== null) {

@@ -177,6 +177,30 @@ describe('a note in ClickUp (FRU-625)', () => {
     assert.equal(clickup.state.tasks.length, 2);
   });
 
+  it('writes no task whose tags ClickUp would not keep: no read could find it', async () => {
+    const clickup = fakeClickup();
+    const store = plugin.store(accessTo(clickup), { connector: 'con_1' });
+    clickup.state.refusedTags.add(pageTag(PAGE, 'site_1'));
+
+    await assert.rejects(store.create(note(), { teamId: '124' }, POLICY), StoreError);
+    assert.equal(clickup.state.tasks.length, 0);
+  });
+
+  it('reads a task whose dates are not dates, with no date', async () => {
+    const clickup = fakeClickup();
+    const store = plugin.store(accessTo(clickup), { connector: 'con_1' });
+    await store.create(note(), { teamId: '124' }, POLICY);
+    const [task] = clickup.state.tasks;
+    assert.ok(task !== undefined);
+    task.updated = 'not a date';
+    task.comments.push({ id: '1', comment_text: 'Seen.', date: 'soon', user: { username: 'Mia' } });
+
+    const read = await store.findForPage({ url: PAGE, clientId: 'site_1' }, { teamId: '124' }, POLICY);
+    assert.equal(read.length, 1);
+    assert.equal(read[0]?.updatedAt, '');
+    assert.equal(read[0]?.comments?.[0]?.createdAt, '');
+  });
+
   it('sends its files, and keeps the note when ClickUp refuses them', async () => {
     const clickup = fakeClickup();
     const store = plugin.store(accessTo(clickup), { connector: 'con_1' });

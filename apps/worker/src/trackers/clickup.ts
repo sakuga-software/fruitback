@@ -170,6 +170,7 @@ function labelOf(teams: readonly { name: string }[]): string {
  * them would be lost to its page. A tag that exists already is no failure.
  */
 async function ensureTags(access: TrackerAccess, space: string, tags: readonly string[]): Promise<void> {
+  let refused = false;
   for (const name of tags) {
     try {
       await clickup(access, `/v2/space/${space}/tag`, {
@@ -181,8 +182,26 @@ async function ensureTags(access: TrackerAccess, space: string, tags: readonly s
       // ClickUp answers `400` for a tag of the space that exists. Any refusal of rights stops the note.
       if (error instanceof TrackerKeyRefused || error instanceof TrackerKeyForbidden) throw error;
       if (!(error instanceof StoreError) || !/responded 400/.test(error.message)) throw error;
+      refused = true;
     }
   }
+  if (!refused) return;
+  // A `400` can say something else than « it exists »: the tags of the space are read, and a note
+  // whose tag is not there is not written, since no read would find it (balanced review of #868).
+  const kept = z
+    .object({ tags: z.array(z.object({ name: z.string() })) })
+    .safeParse(await clickup(access, `/v2/space/${space}/tag`));
+  const names = new Set(kept.success ? kept.data.tags.map((each) => each.name.toLowerCase()) : []);
+  if (tags.some((name) => !names.has(name.toLowerCase()))) {
+    throw new StoreError('ClickUp did not keep the tags of the note in the space of its list');
+  }
+}
+
+/** A date of ClickUp, milliseconds as a string, as ISO; an empty string for one that is not a date. */
+function dateOf(value: string | null | undefined): string {
+  const moment = value === undefined || value === null || value.trim() === '' ? Number.NaN : Number(value);
+
+  return Number.isFinite(moment) && Math.abs(moment) <= 8.64e15 ? new Date(moment).toISOString() : '';
 }
 
 async function listOf(access: TrackerAccess, list: string | undefined): Promise<z.infer<typeof listSchema>> {
@@ -239,7 +258,7 @@ async function commentsOf(access: TrackerAccess, task: string): Promise<NoteComm
     .map((comment) => ({
       id: comment.id,
       body: comment.comment_text ?? '',
-      createdAt: comment.date === undefined ? '' : new Date(Number(comment.date)).toISOString(),
+      createdAt: dateOf(comment.date),
       ...(comment.user?.username ? { author: comment.user.username } : {}),
     }));
 }
@@ -339,10 +358,7 @@ function createClickupStore(
               stage,
               stateName: status?.status ?? '',
               ...(key === undefined ? {} : { status: `${connector}:${key}` }),
-              updatedAt:
-                task.date_updated === undefined || task.date_updated === null
-                  ? ''
-                  : new Date(Number(task.date_updated)).toISOString(),
+              updatedAt: dateOf(task.date_updated),
               ...(comments === undefined ? {} : { comments }),
               note,
             });
