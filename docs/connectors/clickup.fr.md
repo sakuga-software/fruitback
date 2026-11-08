@@ -54,7 +54,7 @@ Le serveur refuse de démarrer avec une valeur qui n’a pas deux parties, ou sa
 | son texte, la page, l’élément, l’auteur | la description                                                                               |
 | la note elle-même                       | un bloc de code JSON à la fin de la description, que Fruitback relit                         |
 | ses fichiers                            | les pièces jointes de la tâche                                                               |
-| sa page                                 | les étiquettes `fruitback` et `fruitback-page-<empreinte>`, créées dans l’espace de la liste |
+| son site et sa page                     | les étiquettes `fruitback` et `fruitback-page-<empreinte>`, créées dans l’espace de la liste |
 
 Gardez le bloc de code et les étiquettes. Un repère est trouvé par l’étiquette de sa page, et dessiné
 d’après le bloc de code. Une tâche qui les perd n’est plus montrée sur la page. Une page montre les

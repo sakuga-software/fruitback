@@ -41,8 +41,12 @@ const API = 'https://api.clickup.com/api';
 const CONSENT = 'https://app.clickup.com/api';
 const CALL_TIMEOUT_MS = 10_000;
 
-/** A token of OAuth of ClickUp does not expire: the worker never refreshes it. */
-const NEVER = Number.MAX_SAFE_INTEGER;
+/**
+ * A token of OAuth of ClickUp does not expire, so the worker keeps it with an end a century away,
+ * and never refreshes it. A safe date, not `MAX_SAFE_INTEGER`: no sum with it leaves the integers
+ * (balanced review of #868).
+ */
+const CENTURY_MS = 100 * 365 * 24 * 60 * 60 * 1_000;
 
 /** A list id of ClickUp: a number, written as a string. */
 const LIST = /^[0-9]{1,20}$/;
@@ -57,9 +61,15 @@ const COMMENT_READS_AT_ONCE = 4;
 /** The spaces a page of places walks, each with its folders and its lists. */
 const SPACES_PER_PAGE = 5;
 
-/** The tag of a page: ClickUp keeps a tag in lower case, and a read filters on it. */
-export function pageTag(url: string): string {
-  return `${FRUITBACK_LABEL}-page-${createHash('sha256').update(url).digest('hex').slice(0, 20)}`;
+/**
+ * The tag of the notes of one client on one page: ClickUp keeps a tag in lower case, and a read
+ * filters on it. The client is in it, so that two sites that send to one list never share the tasks
+ * of a read, nor its pages (balanced review of #868).
+ */
+export function pageTag(url: string, client: string | undefined): string {
+  const named = JSON.stringify([client ?? '', url]);
+
+  return `${FRUITBACK_LABEL}-page-${createHash('sha256').update(named).digest('hex').slice(0, 20)}`;
 }
 
 /** What the type of a status of ClickUp says, as the stage of a pin. */
@@ -246,7 +256,7 @@ function createClickupStore(
 
     async create(note: Note, client: ClientConfig | undefined, policy, files = []) {
       const list = await listOf(access, client?.teamId);
-      const tags = [FRUITBACK_LABEL, pageTag(note.page.url)];
+      const tags = [FRUITBACK_LABEL, pageTag(note.page.url, note.client?.id)];
       if (list.space !== undefined) await ensureTags(access, list.space.id, tags);
       const created = z.object({ id: z.string(), url: z.string().optional() }).safeParse(
         await clickup(
@@ -280,7 +290,7 @@ function createClickupStore(
     async findForPage(query, client, policy) {
       const list = client?.teamId;
       if (list === undefined || !LIST.test(list)) throw new StoreError('This destination names no ClickUp list');
-      const tag = pageTag(query.url);
+      const tag = pageTag(query.url, query.clientId);
       const rows: unknown[] = [];
       for (let page = 0; page < TASK_PAGES; page += 1) {
         const params = new URLSearchParams({
@@ -401,7 +411,7 @@ export const plugin: TrackerPlugin = {
   oauth: {
     authorize: ({ clientId, redirectUri, state }) =>
       `${CONSENT}?${new URLSearchParams({ client_id: clientId, redirect_uri: redirectUri, state })}`,
-    async exchange({ code, client }, http) {
+    async exchange({ code, client }, http, now) {
       let response: Response;
       try {
         response = await http(`${API}/v2/oauth/token`, {
@@ -419,7 +429,9 @@ export const plugin: TrackerPlugin = {
         .safeParse(await response.json().catch(() => undefined));
 
       // No refresh token, and no end: ClickUp says its token does not expire.
-      return parsed.success ? { accessToken: parsed.data.access_token, refreshToken: '', expiresAt: NEVER } : undefined;
+      return parsed.success
+        ? { accessToken: parsed.data.access_token, refreshToken: '', expiresAt: now + CENTURY_MS }
+        : undefined;
     },
     // A token that never ends is never refreshed. A worker that asks anyway has a token ClickUp ended.
     refresh: async () => 'ended',

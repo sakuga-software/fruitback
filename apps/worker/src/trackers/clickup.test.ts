@@ -76,8 +76,9 @@ describe('the plugin ClickUp (FRU-625)', () => {
     assert.deepEqual(tokens, {
       accessToken: '1_clickup_oauth_token',
       refreshToken: '',
-      expiresAt: Number.MAX_SAFE_INTEGER,
+      expiresAt: 100 * 365 * 24 * 60 * 60 * 1_000,
     });
+    assert.ok(Number.isSafeInteger((tokens?.expiresAt ?? 0) + Date.now()), 'a sum with the end stays an integer');
     assert.equal(
       await plugin.oauth?.exchange(
         { code: 'code-1', verifier: 'v', redirectUri: 'r', client: CLICKUP_CLIENT },
@@ -166,7 +167,7 @@ describe('a note in ClickUp (FRU-625)', () => {
 
     assert.deepEqual(created, { id: '86abc1', identifier: '#86abc1', url: 'https://app.clickup.com/t/86abc1' });
     const [task] = clickup.state.tasks;
-    assert.deepEqual(task?.tags, ['fruitback', pageTag(PAGE)], 'ClickUp keeps a tag its space has');
+    assert.deepEqual(task?.tags, ['fruitback', pageTag(PAGE, 'site_1')], 'ClickUp keeps a tag its space has');
     const parsed = parseNoteFromDescription(task?.markdown);
     assert.ok(parsed.ok);
     assert.deepEqual(parsed.note, note());
@@ -226,7 +227,7 @@ describe('a note in ClickUp (FRU-625)', () => {
       ],
       'oldest first',
     );
-    assert.deepEqual(clickup.state.reads.at(-1), [pageTag(PAGE)]);
+    assert.deepEqual(clickup.state.reads.at(-1), [pageTag(PAGE, 'site_1')]);
 
     // The stage a site gives a status wins (FRU-368).
     const staged = plugin.store(accessTo(clickup), { connector: 'con_1', stages: { 'in progress': 'todo' } });
@@ -237,8 +238,11 @@ describe('a note in ClickUp (FRU-625)', () => {
   it('keeps a task of the page that names another client off the read, and reads every page of tasks', async () => {
     const clickup = fakeClickup();
     const store = plugin.store(accessTo(clickup), { connector: 'con_1' });
-    await store.create(note('site_2'), { teamId: '124' }, POLICY);
+    // Two sites send to one list: the tag of a page names its client, so a read asks for its own only.
+    for (let index = 0; index < 150; index += 1) await store.create(note('site_2'), { teamId: '124' }, POLICY);
     assert.deepEqual(await store.findForPage({ url: PAGE, clientId: 'site_1' }, { teamId: '124' }, POLICY), []);
+    assert.equal(clickup.state.reads.length, 1, 'no page of the other site is read');
+    assert.notEqual(pageTag(PAGE, 'site_1'), pageTag(PAGE, 'site_2'));
 
     for (let index = 0; index < 120; index += 1) await store.create(note(), { teamId: '124' }, POLICY);
     const quiet = { ...POLICY, showComments: false };
