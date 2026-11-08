@@ -449,8 +449,9 @@ export const plugin: TrackerPlugin = {
   envNames: { oauth: 'FRUITBACK_ASANA_OAUTH' },
   async connect(body, { http }) {
     const token = typeof body.token === 'string' ? body.token.trim() : '';
-    // A personal access token of Asana: a version digit, a slash, then the token.
-    if (!/^[0-9]\/[A-Za-z0-9:/_-]{16,300}$/.test(token)) throw new TrackerInputRefused('invalid-token');
+    // Asana says its tokens are opaque, and that a client must not check their format: only a value
+    // that cannot be one is refused here, and Asana says the rest.
+    if (!/^\S{16,300}$/.test(token)) throw new TrackerInputRefused('invalid-token');
 
     return { label: labelOf(await workspacesOf(http, `Bearer ${token}`)), token };
   },
