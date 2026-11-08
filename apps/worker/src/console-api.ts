@@ -7,7 +7,7 @@ import { pluginOf } from './trackers/index.ts';
 import { type PluginKind, isPluginKind } from './trackers/kinds.ts';
 import type { TrackerApps } from './trackers/oauth.ts';
 import type { Http } from './trackers/plugin.ts';
-import { accessOf, askPlugin } from './trackers/routes.ts';
+import { accessOf, askPlugin, readOf } from './trackers/routes.ts';
 import { readJsonObject } from './bounded-body.ts';
 import {
   type InstanceAdminContext,
@@ -357,7 +357,7 @@ async function labelled(
       if (kept === undefined || destination.teamId === undefined) throw new UnknownPlace();
       const place = destination.teamId;
       const named = await askPlugin(context, connector.id, () =>
-        plugin.placeName(accessOf(context, plugin, connector.id, kept.sealed), place),
+        readOf(plugin, () => plugin.placeName(accessOf(context, plugin, connector.id, kept.sealed), place)),
       );
       if (named === undefined) throw new UnknownPlace();
       // Whatever a destination came with is dropped: the label is the service's word alone.

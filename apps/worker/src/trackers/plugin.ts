@@ -217,6 +217,11 @@ export function trackerAccess(
       }
       const answer = await plugin.oauth.refresh(latest.refreshToken, client, http, now());
       if (answer === 'ended') {
+        // Another process of the worker can have spent this refresh token just before: the service
+        // then refuses it here, and the row already holds the new pair (balanced review of #864).
+        const again = await accounts.sealedKey(connector);
+        const rotated = again === undefined ? undefined : openOf(again.sealed);
+        if (rotated?.via === 'oauth' && rotated.refreshToken !== latest.refreshToken) return rotated;
         throw new TrackerConnectionEnded(`The connection to ${plugin.name} ended. Connect ${plugin.name} again.`);
       }
       const next: TrackerCredential = { via: 'oauth', ...answer, extra: latest.extra };

@@ -8,7 +8,7 @@ import { open } from '../secrets.ts';
 import { FAKE, FAKE_CLIENT, fakePlugin, fakeService } from './fake-plugin.fixture.ts';
 import { pluginOf, shippedPlugins, useTestPlugin, withoutTestPlugins } from './index.ts';
 import { PLUGIN_KINDS } from './kinds.ts';
-import { readTrackerCredential } from './plugin.ts';
+import { readTrackerCredential, sealTrackerCredential } from './plugin.ts';
 
 /**
  * The socle of the connectors of a plugin (FRU-621), through the routes a browser calls: connect by
@@ -216,6 +216,23 @@ describe('a connector of a plugin, by a token (FRU-621)', () => {
     assert.equal(await attention(), 'key-refused');
   });
 
+  it('answers 502 for places the service answers in a shape the plugin cannot read', async () => {
+    useTestPlugin(fakePlugin);
+    const { env, service } = await envWith();
+    const world = await acme(env);
+    const made = await callOn(env, 'POST', `${world.base}/connectors`, {
+      token: world.token,
+      body: { kind: 'asana', token: 'typed-token' },
+    });
+    const { id } = (await made.json()) as { id: string };
+    service.state.garbled = true;
+
+    const read = await callOn(env, 'GET', `${world.base}/connectors/${id}/places`, { token: world.token });
+    assert.equal(read.status, 502, await read.clone().text());
+    const [connector] = await env.accounts.connectors(world.workspace.id);
+    assert.equal(connector?.attention, undefined, 'a service that is down is no refusal');
+  });
+
   it('tells the service before the connector goes', async () => {
     useTestPlugin(fakePlugin);
     const { env, service } = await envWith();
@@ -329,6 +346,43 @@ describe('a connector of a plugin, by OAuth (FRU-621)', () => {
     const [after] = await env.accounts.connectors(world.workspace.id);
     assert.equal(after?.id, connector.id);
     assert.equal(after?.attention?.reason, 'connection-ended');
+  });
+
+  it('uses the pair another process wrote when the service refuses a refresh token spent there', async () => {
+    useTestPlugin(fakePlugin);
+    const { env, service } = await envWith(OAUTH);
+    service.state.lasts = 60;
+    const world = await acme(env);
+    const connector = await connected(env, service, world);
+    const kept = await env.accounts.sealedKey(connector.id);
+    const before = readTrackerCredential(open(kept?.sealed as string, SECRETS_KEY) as string);
+    assert.equal(before?.via, 'oauth');
+    // Another process refreshes first: the refresh token of this one is spent when it asks.
+    service.state.beforeRefresh = async () => {
+      service.state.beforeRefresh = undefined;
+      if (before?.via !== 'oauth') return;
+      service.state.refreshable.delete(before.refreshToken);
+      service.state.valid.add('access-other');
+      await env.accounts.resealConnector(
+        connector.id,
+        sealTrackerCredential(
+          {
+            via: 'oauth',
+            accessToken: 'access-other',
+            refreshToken: 'refresh-other',
+            expiresAt: Date.now() + 3_600_000,
+            extra: before.extra,
+          },
+          SECRETS_KEY,
+        ),
+      );
+    };
+
+    const written = await callOn(env, 'POST', '/feedback', { origin: SITE, body: note(world.site.id) });
+    assert.equal(written.status, 201, await written.clone().text());
+    assert.equal(service.state.issues.at(-1)?.token, 'access-other');
+    const [after] = await env.accounts.connectors(world.workspace.id);
+    assert.equal(after?.attention, undefined);
   });
 
   it('keeps no connector for a person who said no, nor for a state of another browser', async () => {
