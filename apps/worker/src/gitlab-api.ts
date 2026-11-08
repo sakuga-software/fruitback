@@ -95,6 +95,8 @@ export async function gitlabCall(
   target: GitlabTarget,
   path: string,
   { method = 'GET', json, form }: Call = {},
+  /** Told the headers of an answer that GitLab gave, for one that reads them (`x-next-page`). */
+  answered?: (headers: Headers) => void,
 ): Promise<unknown> {
   let response: Response;
   try {
@@ -118,7 +120,11 @@ export async function gitlabCall(
     throw new StoreError('GitLab could not be reached');
   }
   const payload: unknown = await response.json().catch(() => null);
-  if (response.ok) return payload;
+  if (response.ok) {
+    answered?.(response.headers);
+
+    return payload;
+  }
   if (response.status === 401) throw new GitlabTokenRefused('GitLab refused the token');
   const rateLimited = response.status === 429 || response.headers.get('retry-after') !== null;
   throw new GitlabResponseError(response.status, rateLimited);
@@ -180,7 +186,12 @@ export async function listGitlabProjects(
     page: String(page),
     ...(search === undefined ? {} : { search }),
   });
-  const answer = await gitlabCall(http, target, `/projects?${params}`);
+  // GitLab says the next page in `x-next-page`, empty on the last one: a full page can be the last
+  // (review of #865). Absent, as a GitLab behind a proxy can send it, the size of the page decides.
+  let following: string | null = null;
+  const answer = await gitlabCall(http, target, `/projects?${params}`, {}, (headers) => {
+    following = headers.get('x-next-page');
+  });
   if (!Array.isArray(answer)) throw new StoreError('GitLab returned no list of projects');
   const projects = answer.flatMap((row) => {
     const project = projectSchema.safeParse(row);
@@ -188,7 +199,9 @@ export async function listGitlabProjects(
     return project.success ? [projectOf(project.data)] : [];
   });
 
-  return { projects, ...(answer.length < PROJECTS_PAGE ? {} : { next: String(page + 1) }) };
+  const more = following === null ? answer.length >= PROJECTS_PAGE : (following as string).trim() !== '';
+
+  return { projects, ...(more ? { next: String(page + 1) } : {}) };
 }
 
 function projectOf(row: z.infer<typeof projectSchema>): GitlabProject {
