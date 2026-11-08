@@ -76,8 +76,8 @@ export type PostgresKvOptions = {
 
 export function createPostgresKv(database: Database, options: PostgresKvOptions = {}): Kv {
   const { now = Date.now, instant, sweepEveryMs = SWEEP_INTERVAL_MS, sweepBatch = SWEEP_BATCH } = options;
-  /** The instant of one statement: the clock of the database, or the one the caller gave. */
-  const when = (): SQL => (instant === undefined ? NOW : sql`${instant()}::bigint`);
+  /** The instant of one statement: the clock of the database, or the given one, rounded to the ms as `NOW` is. */
+  const when = (): SQL => (instant === undefined ? NOW : sql`${Math.round(instant())}::bigint`);
   const key = sql.identifier(table.key.name);
   const value = sql.identifier(table.value.name);
   const expiresAt = sql.identifier(table.expires_at.name);
