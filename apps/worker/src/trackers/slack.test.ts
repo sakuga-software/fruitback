@@ -37,6 +37,9 @@ function fakeSlack() {
     answer: { status: 200, word: 'ok' } as { status: number; word: string; retryAfter?: string },
     /** After one refusal, the next posts answer `ok`. */
     thenOk: false,
+    /** After one refusal, the next post does not reach Slack. */
+    thenUnreachable: false,
+    unreachable: false,
   };
   const http = (async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input);
@@ -44,6 +47,12 @@ function fakeSlack() {
     state.posts.push({ url, body: JSON.parse(String(init?.body)) as Record<string, unknown> });
 
     const { status, word, retryAfter } = state.answer;
+    if (state.unreachable) {
+      state.unreachable = false;
+      throw new TypeError('fetch failed');
+    }
+    if (state.thenUnreachable) state.unreachable = true;
+    state.thenUnreachable = false;
     if (state.thenOk) state.answer = { status: 200, word: 'ok' };
     state.thenOk = false;
 
@@ -222,6 +231,23 @@ describe('a Slack connector through the routes and the deliveries (FRU-624)', ()
     assert.ok(((first?.body.blocks as unknown[] | undefined)?.length ?? 0) > 1);
     assert.equal((second?.body.blocks as unknown[] | undefined)?.length, 1);
     assert.equal(second?.body.text, first?.body.text);
+
+    // Refused for its blocks, then the text alone does not reach Slack: tried again, and the panel
+    // still says the first refusal (review of #871).
+    await keep(world, id, true);
+    world.slack.state.answer = { status: 400, word: 'invalid_blocks' };
+    world.slack.state.thenUnreachable = true;
+    await deliverDue({
+      accounts: world.env.accounts,
+      secretsKey: SECRETS_KEY,
+      send: async () => ({ status: 500 }),
+      http: world.slack.http,
+      now: () => Date.now() + 1,
+    });
+    world.slack.state.answer = { status: 200, word: 'ok' };
+    const [late] = await world.env.accounts.deliveries(world.workspace.id, id);
+    assert.notEqual(late?.nextAt, undefined);
+    assert.match(late?.lastError ?? '', /invalid_blocks \(its blocks\), then Slack could not be reached/);
   });
 
   it('gives up a delivery whose credential no longer opens, and a webhook that answers 404 with any word (review of #871)', async () => {

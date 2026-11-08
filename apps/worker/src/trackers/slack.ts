@@ -220,10 +220,9 @@ export const plugin: TrackerPlugin | undefined = {
       if (said.ok || said.status !== 400) return said;
       // A message of blocks that Slack refuses (an image it cannot fetch, a block too long) goes again
       // as its text and its link alone, before the delivery is given up (review of #871).
-      return post(access.http, credential.token, {
-        text: message.text,
-        blocks: [message.blocks[0]],
-      });
+      const again = await post(access.http, credential.token, { text: message.text, blocks: [message.blocks[0]] });
+      // The first refusal stays in what the panel says, whatever the second post met (review of #871).
+      return again.ok ? again : { ...again, error: `${said.error} (its blocks), then ${again.error}`.slice(0, 200) };
     },
   },
 };
