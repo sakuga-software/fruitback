@@ -594,6 +594,32 @@ describe('which store edits a note (FRU-475, FRU-605)', () => {
     assert.ok(!queued[0]?.body.includes('New words'), 'the text never travels in the event');
   });
 
+  it('names the site the route found the note in, and queues nothing with no site (review of #866)', async () => {
+    const author = { kind: 'member' as const, name: 'Bob', workspace: 'Acme' };
+    const policy = shown as never;
+    queued.length = 0;
+    // A note whose own `client` says another site: the site of the route wins.
+    const elsewhere = { ...note, client: { id: 'site_other', name: 'Other' } };
+    await routed.edit?.(
+      { issue: '7', clientId: 'site_a' },
+      { text: 'x', author, note: elsewhere, identifier: 'FB-7' },
+      site('con_rest'),
+      policy,
+    );
+    assert.equal(JSON.parse(queued[0]?.body ?? '{}').site.id, 'site_a');
+    // No site anywhere: the edit is kept and answered, and no event with an id nobody can read.
+    queued.length = 0;
+    const { client: _client, ...siteless } = note;
+    const kept = await routed.edit?.(
+      { issue: '7', clientId: undefined },
+      { text: 'x', author, note: siteless, identifier: 'FB-7' },
+      site('con_rest'),
+      policy,
+    );
+    assert.deepEqual(kept, answer);
+    assert.deepEqual(queued, []);
+  });
+
   it('is read by the console as an edit, and a note as before (FRU-605)', () => {
     assert.equal(pendingDeliveryOf({ id: 'd', event: 'note.edited', created_at: 0 })?.event, 'note.edited');
     assert.equal(pendingDeliveryOf({ id: 'd', event: 'note.created', created_at: 0 })?.event, undefined);

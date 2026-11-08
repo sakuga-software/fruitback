@@ -157,3 +157,22 @@ describe('the reply of an edit in a tracker, with the new text (FRU-605)', () =>
     assert.equal(editedTextOf('**Ana** via Fruitback · member of Acme\nEdited the note\n> no empty line'), undefined);
   });
 });
+
+describe('an edit that crossed a move to done (review of #866)', () => {
+  const author = { kind: 'member' as const, name: 'Ana Martin', workspace: 'Acme' };
+
+  it('takes no edit written after the issue was done or canceled', () => {
+    const before = editText({ text: 'Before done', author }, undefined, true);
+    const after = editText({ text: 'After done', author }, undefined, true);
+    const issue = {
+      note: { text: 'Sent' },
+      comments: [
+        { id: '1', body: before, createdAt: '2026-11-08T10:00:00.000Z' },
+        { id: '2', body: after, createdAt: '2026-11-08T10:05:00.000Z' },
+      ],
+    };
+
+    assert.equal(withEditedText(issue, '2026-11-08T10:02:00.000Z').note.text, 'Before done');
+    assert.equal(withEditedText(issue).note.text, 'After done');
+  });
+});

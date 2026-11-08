@@ -24,7 +24,7 @@ import {
 import { type Channel, type NoteEntry, type NoteIndex, authorOf } from './notes-index.ts';
 import { type DoneNoticeSeams, notifyToken, sendDoneNotices } from './done-notices.ts';
 import { chargeRateLimit, maxBatch } from './rate-limit.ts';
-import { checkedOf, markedAgent, withEditedText } from './reply-text.ts';
+import { checkedOf, markedAgent } from './reply-text.ts';
 import type { CallerChecks, RequestContext, Served } from './request-context.ts';
 import {
   type BatchAnswer,
@@ -293,9 +293,8 @@ export async function readPage({
       : found.flat().filter((issue) => !seen.has(issue.note.id) && seen.add(issue.note.id));
 
   // FRU-464: a reply of an agent says so, after the cache, from the line that the worker wrote.
-  // FRU-605: the note of a tracker has the text of its newest edit, which its replies hold.
   return issues.map((issue) =>
-    issue.comments === undefined ? issue : withEditedText({ ...issue, comments: issue.comments.map(markedAgent) }),
+    issue.comments === undefined ? issue : { ...issue, comments: issue.comments.map(markedAgent) },
   );
 }
 

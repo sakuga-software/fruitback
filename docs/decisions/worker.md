@@ -3488,10 +3488,10 @@ replies, and on a public site mounted by the extension with no session, only the
   own store reads the stage again under the lock of the row, as before.
 - **The description of a tracker is never written again.** The team may have changed it there.
   Linear gets a comment: the line of who wrote it, « Edited the note », then the new text, quoted
-  (`editText(…, true)`). A read takes the text of a note from its newest such comment
-  (`withEditedText`, after the cache, beside `markedAgent`). The comment is read as text, as a
-  verdict is: a person of the team can type it in Linear, and can change the description too. A reply
-  of the page cannot: its second line is empty.
+  (`editText(…, true)`). The read of Linear takes the text of a note from its newest such comment
+  written before the issue was done or canceled (`withEditedText` in `toNoteIssue`, `completedAt` and
+  `canceledAt`). The comment is read as text, as a verdict is: a person of the team can type it in
+  Linear, and can change the description too. A reply of the page cannot: its second line is empty.
 - **Where the replies are hidden, a tracker takes no edit** (`editsInReplies`, `takesEdits(…,
   policy)`): a read would show the text of before. This covers a worker that hides them, and a
   connector whose workspace hides them (`withSettings`).
@@ -3502,7 +3502,10 @@ replies, and on a public site mounted by the extension with no session, only the
   author ». `DELIVERY_EVENTS` gains it; the column is a text, so no migration.
 - **GitHub takes no edit**, as it takes no reply (FRU-628 follows it).
 - A tracker has no lock: the stage is the one the route read. A note marked done in Linear between
-  the read and the comment gets the comment, which is a reply like any other.
+  the read and the comment gets the comment, a reply like any other, but not its text: the read
+  stops at `completedAt` (review of #866).
+- **The event names the site the route found the note in** (`target.clientId`), and none is queued
+  when there is no site: an id of a note that `/mcp` cannot read back helps nobody (review of #866).
 
 ## The author edits a note (FRU-475)
 

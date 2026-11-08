@@ -28,7 +28,7 @@ import {
   StoreError,
 } from './store.ts';
 import { type StoreSpec, defineStore } from './store-config.ts';
-import { checkText, editText, replyText } from './reply-text.ts';
+import { checkText, editText, replyText, withEditedText } from './reply-text.ts';
 import type { OutgoingFile } from './attachments.ts';
 
 const LINEAR_GRAPHQL_ENDPOINT = 'https://api.linear.app/graphql';
@@ -612,6 +612,8 @@ const ISSUES_QUERY = `
         url
         title
         updatedAt
+        completedAt
+        canceledAt
         description
         state { id name type }
         comments(first: $comments) {
@@ -632,6 +634,12 @@ export type IssueNode = {
   url: string;
   title: string;
   updatedAt: string;
+  /**
+   * When the issue was marked done, or canceled (FRU-605): an edit of its author written after it is
+   * not the text of the note. Absent from the in-memory Linear, and from a read of before.
+   */
+  completedAt?: string | null;
+  canceledAt?: string | null;
   description: string | null;
   /** `id` is what a connector's exceptions name (FRU-102). The in-memory Linear has none. */
   state: { id?: string; name: string; type: string } | null;
@@ -876,7 +884,9 @@ export function toNoteIssue(
 
   // Validated against the shared contract rather than trusted: this is the exact shape the widget
   // parses on the other side, and a field Linear stopped returning must not reach it as `undefined`.
-  const result = noteIssueSchema.safeParse(candidate);
+  // FRU-605: the text of the newest edit of its author, written before the issue was done or canceled.
+  // An edit that crossed a move to done (a tracker has no lock) is a reply, not the text of the note.
+  const result = noteIssueSchema.safeParse(withEditedText(candidate, node.completedAt ?? node.canceledAt ?? undefined));
 
   return result.success ? result.data : null;
 }

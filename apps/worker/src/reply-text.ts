@@ -133,13 +133,19 @@ export function editedTextOf(body: string): string | undefined {
 /**
  * The note with the text of its newest edit (FRU-605), where its replies hold one: the note of a
  * tracker, whose description keeps the words it was sent with. A note whose replies were not read
- * keeps the text of its description.
+ * keeps the text of its description. `until`: when the issue was done or canceled; an edit written
+ * after it crossed that move, and is not taken.
  */
-export function withEditedText<T extends { note: { text: string }; comments?: readonly NoteComment[] }>(issue: T): T {
+export function withEditedText<T extends { note: { text: string }; comments?: readonly NoteComment[] }>(
+  issue: T,
+  until?: string,
+): T {
+  const limit = until === undefined ? undefined : Date.parse(until);
   let newest: { text: string; at: string } | undefined;
   for (const comment of issue.comments ?? []) {
     const text = editedTextOf(comment.body);
-    if (text !== undefined && (newest === undefined || comment.createdAt >= newest.at)) {
+    if (text === undefined || (limit !== undefined && Date.parse(comment.createdAt) > limit)) continue;
+    if (newest === undefined || comment.createdAt >= newest.at) {
       newest = { text, at: comment.createdAt };
     }
   }

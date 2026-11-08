@@ -207,6 +207,14 @@ function receivingStore(own: NoteStore, accounts: AccountStore, connector: strin
           async edit(target, edit, client, policy) {
             const answer = await (own.edit as NonNullable<NoteStore['edit']>)(target, edit, client, policy);
             if (typeof answer !== 'object') return answer;
+            // The site the route found the note in, which is the one the note was written for. With
+            // none, the id of the note could not be read back by `/mcp`: nothing is queued.
+            const site = target.clientId ?? edit.note.client?.id;
+            if (site === undefined || site === '') {
+              console.error('[fruitback] an edit was kept with no site, and no event was queued', edit.identifier);
+
+              return answer;
+            }
             // As for a note: the edit is kept first, and a queue that refuses the row is logged. The
             // author is answered: a failure would make them send it again, and the text is kept.
             try {
@@ -214,7 +222,7 @@ function receivingStore(own: NoteStore, accounts: AccountStore, connector: strin
                 connector,
                 noteEventBody('note.edited', {
                   workspace: client?.workspace ?? '',
-                  site: edit.note.client?.id ?? target.clientId ?? '',
+                  site,
                   ...(client?.origins?.[0] === undefined ? {} : { origin: client.origins[0] }),
                   identifier: edit.identifier,
                   note: edit.note.id,

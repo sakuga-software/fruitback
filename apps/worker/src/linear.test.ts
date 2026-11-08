@@ -12,6 +12,7 @@ import {
 } from './linear.ts';
 import { installLinearStub, storedIssueFromNote } from './linear-stub.fixture.ts';
 import { StoreError } from './store.ts';
+import { editText } from './reply-text.ts';
 
 /**
  * These tests moved here from `packages/shared` with the code they cover (FRU-23). The contract
@@ -335,5 +336,40 @@ describe('an edit of the author in Linear (FRU-605)', () => {
     assert.equal(answer.note.text, 'The new words');
     assert.equal(answer.note.id, note.id);
     assert.equal(store.editsInReplies, true);
+  });
+});
+
+describe('the text of a note of Linear, after an edit of its author (FRU-605)', () => {
+  const author = { kind: 'member' as const, name: 'Bob', workspace: 'Acme' };
+  const comment = (id: string, text: string, createdAt: string) => ({
+    id,
+    body: editText({ text, author }, undefined, true),
+    createdAt,
+    user: { name: 'Fruitback' },
+  });
+
+  it('reads the text of the newest edit, and not one written after the issue was done', () => {
+    const note = noteFixture({ text: 'Sent' });
+    const node = {
+      ...storedIssueFromNote(note),
+      state: { name: 'Done', type: 'completed' },
+      completedAt: '2026-11-08T10:02:00.000Z',
+      comments: {
+        nodes: [
+          comment('c2', 'After done', '2026-11-08T10:05:00.000Z'),
+          comment('c1', 'Before done', '2026-11-08T10:00:00.000Z'),
+        ],
+      },
+    };
+
+    assert.equal(toNoteIssue(node, note.page.url, { showComments: true })?.note.text, 'Before done');
+    assert.equal(
+      toNoteIssue({ ...node, completedAt: null, state: { name: 'Todo', type: 'unstarted' } }, note.page.url, {
+        showComments: true,
+      })?.note.text,
+      'After done',
+    );
+    // The replies hidden: the text of the description, as the store sent it.
+    assert.equal(toNoteIssue(node, note.page.url, { showComments: false })?.note.text, 'Sent');
   });
 });
