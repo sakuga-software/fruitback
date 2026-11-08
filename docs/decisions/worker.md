@@ -3507,6 +3507,8 @@ replies, and on a public site mounted by the extension with no session, only the
   the note keeps it as an edit of before, stopped at `completedAt` or `canceledAt`. So no edit that
   crossed a move stays, and a reopened issue never takes the text of one
   (test:`deletes its comment when the issue is completed once the comment is written, and says not-open`).
+  A comment Linear refuses to delete is written again with no text (`retractEdit`), so that a reopen
+  never makes it the text (round 6 of #866); refused both ways, the route answers `502`.
   A read of the stage that fails deletes the comment as far as Linear lets it, and the route answers
   `502`: the author tries again, and nothing stays that nobody answered for (round 5 of #866).
   A move to done **after** that read is a move after the comment: its `completedAt` is later than the

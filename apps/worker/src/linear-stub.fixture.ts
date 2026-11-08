@@ -71,6 +71,9 @@ export type LinearStubOptions = {
   issueState?: { id?: string; name: string; type: string };
   /** The read of that state fails as an outage would. */
   failIssueState?: boolean;
+  /** `commentDelete` answers no success, and `commentUpdate` too when `failUpdateComment`. */
+  failDeleteComment?: boolean;
+  failUpdateComment?: boolean;
   /** The workflow states of the team of every issue, for « Still wrong » (FRU-294). */
   teamStates?: { id: string; name: string; type: string; position: number }[];
   /** FRU-331: `fileUpload` refuses, the storage answers this status to the PUT, `attachmentCreate` refuses. */
@@ -215,7 +218,11 @@ export function installLinearStub(options: LinearStubOptions = {}): LinearStub {
       }
 
       if (operation === 'FruitbackDeleteComment') {
-        return jsonResponse({ data: { commentDelete: { success: true } } });
+        return jsonResponse({ data: { commentDelete: { success: options.failDeleteComment !== true } } });
+      }
+
+      if (operation === 'FruitbackUpdateComment') {
+        return jsonResponse({ data: { commentUpdate: { success: options.failUpdateComment !== true } } });
       }
 
       if (operation === 'FruitbackIssueStates') {
