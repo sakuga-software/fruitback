@@ -8,6 +8,8 @@ import { Chip, LinkButton, Problem } from '../ui';
 import { hostOf, siteLabel } from '../site-address';
 import { useLocale } from '../use-locale';
 import { ReadProblem } from '../read-problem';
+import { trackerOf } from '../trackers/index.ts';
+import { isPluginKind } from '../trackers/plugin.ts';
 
 /**
  * What the Connectors screen and the panels of a source share (FRU-246): how a kind of source is
@@ -22,7 +24,14 @@ export const KINDS = {
   github: { name: msg('GitHub Issues') },
   // FRU-594: what the trigger of a site calls, never where a note goes.
   'claude-routine': { name: msg('Claude Code routine') },
-} as const;
+  // FRU-621: the connectors of a plugin, product names, the same in French. Each draws its card from
+  // its file of `trackers/`.
+  jira: { name: 'Jira' },
+  gitlab: { name: 'GitLab' },
+  slack: { name: 'Slack' },
+  clickup: { name: 'ClickUp' },
+  asana: { name: 'Asana' },
+} as const satisfies Readonly<Record<Connector['kind'], { name: string }>>;
 
 /**
  * The name of a kind the worker sent, to translate with `t`, or `undefined` for a kind this console
@@ -116,6 +125,8 @@ export function routineOf(connector: Pick<Connector, 'label'>): string {
 /** How a source is connected, in one line under its name. */
 export function sourceLine(connector: Connector): string {
   if (connector.kind === 'rest') return addressOf(connector);
+  // FRU-621: a plugin reads its own label, or the label is the line.
+  if (isPluginKind(connector.kind)) return trackerOf(connector.kind)?.sourceLine?.(connector.label) ?? connector.label;
   if (connector.kind === 'claude-routine') return t('Trigger {id}', { id: routineOf(connector) });
   if (connector.kind === 'github') return t('Installed on {account}', { account: accountOf(connector) });
   if (OAUTH_LABEL.test(connector.label)) {

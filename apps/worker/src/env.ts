@@ -5,6 +5,8 @@ import { type OAuthClient, parseOAuthClient } from './oauth-client.ts';
 import { type LinearOAuth, parseLinearOAuth } from './linear-oauth.ts';
 import { type GithubConnectorConfig, parseGithubConnector } from './github-connector.ts';
 import { readRsaPrivateKey } from './github.ts';
+import { shippedPlugins } from './trackers/index.ts';
+import type { TrackerApps } from './trackers/oauth.ts';
 import { type ClientMap, originsFromClients, readClientMap, unreadableClients } from './clients.ts';
 import {
   DEFAULT_DATABASE_SCHEMA,
@@ -293,6 +295,8 @@ const configSchema = z.object({
   linearOAuth: z.custom<LinearOAuth | undefined>().optional(),
   /** The GitHub App a workspace connects its GitHub with, or absent (FRU-359). */
   githubConnector: z.custom<GithubConnectorConfig | undefined>().optional(),
+  /** The applications of OAuth of the plugins, by kind (FRU-621). A plugin with none is absent. */
+  trackerApps: z.custom<TrackerApps>().optional(),
   /** What encrypts the connector keys at rest, or absent (FRU-121). */
   secretsKey: z.string().min(32).optional(),
   /** What better-auth signs its cookies with, or absent: better-auth is then off (FRU-144). */
@@ -518,6 +522,7 @@ export function readConfig(env: WorkerEnv): ConfigResult {
     google: env.FRUITBACK_GOOGLE_OAUTH ? parseOAuthClient(env.FRUITBACK_GOOGLE_OAUTH) : undefined,
     linearOAuth: env.FRUITBACK_LINEAR_OAUTH ? parseLinearOAuth(env.FRUITBACK_LINEAR_OAUTH) : undefined,
     githubConnector: readGithubConnector(env),
+    trackerApps: readTrackerApps(env),
     teamLocale: readTeamLocale(env.FRUITBACK_TEAM_LOCALE),
   };
 
@@ -763,6 +768,9 @@ export function readConfig(env: WorkerEnv): ConfigResult {
     }
   }
 
+  const pluginRefusal = trackerAppsRefusal(env, result.data, accounts);
+  if (pluginRefusal !== undefined) return { ok: false, missing: [pluginRefusal] };
+
   const githubRefusal = githubConnectorRefusal(env, result.data, accounts);
   if (githubRefusal !== undefined) return { ok: false, missing: [githubRefusal] };
 
@@ -976,4 +984,51 @@ export function readPort(env: WorkerEnv): number {
   const parsed = Number(env.PORT ?? '');
 
   return Number.isInteger(parsed) && parsed > 0 ? parsed : DEFAULT_PORT;
+}
+
+/**
+ * A variable that a plugin names in its `envNames` (FRU-621). `WorkerEnv` does not list them: each
+ * plugin documents its own, and `compose.test.ts` reads them from `trackers/`.
+ */
+function pluginVariable(env: WorkerEnv, name: string): string | undefined {
+  const value = (env as Readonly<Record<string, unknown>>)[name];
+
+  return typeof value === 'string' ? value : undefined;
+}
+
+/** The application of each plugin whose variable is set and reads as `<client id>:<client secret>` (FRU-621). */
+function readTrackerApps(env: WorkerEnv): TrackerApps {
+  return Object.fromEntries(
+    shippedPlugins().flatMap((plugin) => {
+      const name = plugin.envNames?.oauth;
+      const value = name === undefined ? undefined : pluginVariable(env, name);
+      const client = value ? parseOAuthClient(value) : undefined;
+
+      return client === undefined ? [] : [[plugin.kind, client]];
+    }),
+  );
+}
+
+/**
+ * Why the application of a plugin cannot serve (FRU-621), as for `FRUITBACK_LINEAR_OAUTH`: a value
+ * that is not two parts, or a worker with no address to come back to, no database or no key to seal
+ * the tokens with. No reason quotes a value.
+ */
+function trackerAppsRefusal(
+  env: WorkerEnv,
+  config: Pick<WorkerConfig, 'publicUrl' | 'secretsKey' | 'trackerApps'>,
+  accounts: boolean,
+): string | undefined {
+  for (const plugin of shippedPlugins()) {
+    const name = plugin.envNames?.oauth;
+    if (name === undefined || !pluginVariable(env, name)) continue;
+    if (config.trackerApps?.[plugin.kind] === undefined) {
+      return `${name} (<client id>:<client secret> of a ${plugin.name} OAuth application)`;
+    }
+    if (config.publicUrl === undefined || !accounts || config.secretsKey === undefined) {
+      return `FRUITBACK_PUBLIC_URL, FRUITBACK_DATABASE_URL and FRUITBACK_SECRETS_KEY (${name} connects the ${plugin.name} of a workspace, and keeps its token sealed)`;
+    }
+  }
+
+  return undefined;
 }

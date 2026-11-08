@@ -1648,6 +1648,25 @@ by consent at Linear, and no personal key is typed.
   in the widget, and the workspace connects Linear again.
 - Disconnecting revokes the token at Linear, and removes the connector whatever Linear answers.
 
+### The connectors of a plugin (FRU-621)
+
+Jira, GitLab, Slack, ClickUp and Asana come as plugins of `apps/worker/src/trackers/`. Each one says
+what it reaches in its own guide; what they share is here.
+
+- A credential of a plugin, a token typed in the console or the tokens of an OAuth consent, is
+  sealed with `FRUITBACK_SECRETS_KEY` like a key, opened at each call, and answered by no route. A
+  token typed in the console is asked of the service first: a token it refuses is never stored.
+- The way to the service by OAuth (`/auth/<kind>/start`, `/auth/<kind>/callback`) is the one of
+  Linear: a ticket that only an owner or an admin gets, spent once and good for a minute; a `state`
+  bound to the browser by a cookie and spent once; a PKCE challenge for a service that takes one; the
+  role and the suspension of the workspace asked again on the way back. Only one word of ours goes
+  back to the console.
+- A refresh token is spent one at a time for a connector, and the new pair is written before it is
+  used. A refresh that the service refuses makes the connector « Needs attention »
+  (`connection-ended`), and the note stays in the widget (`502`).
+- A destination of a plugin keeps the id of its place and the name the service gives it now, never a
+  page address: only the page of a team of Linear is kept.
+
 ### The GitHub App, installed on a workspace (FRU-360)
 
 Where the worker has the App of the connectors (`FRUITBACK_GITHUB_CONNECTOR`), an owner or an admin

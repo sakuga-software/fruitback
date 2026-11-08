@@ -9,6 +9,7 @@
  */
 
 import { locale } from './i18n.ts';
+import type { PluginKind } from './trackers/plugin.ts';
 import { WORKSPACE_SUSPENDED_ERROR } from './problems.ts';
 import type { Stage } from './stages.ts';
 import { API, UNREACHABLE, reach } from './transport.ts';
@@ -156,7 +157,7 @@ type ConnectorAttention = { reason: 'key-refused' | 'key-lacks-access' | 'connec
 export type Connector = {
   id: string;
   /** `claude-routine` (FRU-594): what the trigger of a site calls to start a Claude Code routine. */
-  kind: 'linear' | 'rest' | 'github' | 'claude-routine';
+  kind: 'linear' | 'rest' | 'github' | 'claude-routine' | PluginKind;
   label: string;
   /** The name the workspace gave it (FRU-404). Absent: none, or a worker of before. */
   name?: string;
