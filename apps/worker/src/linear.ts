@@ -206,6 +206,30 @@ const DELETE_COMMENT_MUTATION = `
 
 type DeleteCommentResult = { commentDelete: { success: boolean } };
 
+const UPDATE_COMMENT_MUTATION = `
+  mutation FruitbackUpdateComment($id: String!, $input: CommentUpdateInput!) {
+    commentUpdate(id: $id, input: $input) { success }
+  }
+`;
+
+type UpdateCommentResult = { commentUpdate: { success: boolean } };
+
+/**
+ * Takes the text out of a comment of an edit that must not count (FRU-605): deleted, or else written
+ * again with no text, so that no read takes it after a reopen (round 6 of #866). `false`: Linear
+ * refused both, and the comment holds the text still.
+ */
+async function retractEdit(config: LinearConfig, id: string, bare: string): Promise<boolean> {
+  const deleted = await graphql<DeleteCommentResult>(config, DELETE_COMMENT_MUTATION, { id }).catch(() => undefined);
+  if (deleted?.commentDelete.success === true) return true;
+  const updated = await graphql<UpdateCommentResult>(config, UPDATE_COMMENT_MUTATION, {
+    id,
+    input: { body: bare },
+  }).catch(() => undefined);
+
+  return updated?.commentUpdate.success === true;
+}
+
 /**
  * The new text of a note by its author (FRU-605): a comment « Edited the note » with the new text in
  * it. The description of the issue is the team's, which they may have changed, and is never written
@@ -236,13 +260,14 @@ export async function createEdit(
   } catch (error) {
     // The stage is not known: the comment goes, as far as Linear lets it, and the author is told the
     // edit did not go (`502`). Kept, it would be an edit nobody answered for (round 5 of #866).
-    await graphql<DeleteCommentResult>(config, DELETE_COMMENT_MUTATION, { id: comment.id }).catch(() => undefined);
+    await retractEdit(config, comment.id, editText(edit, locale));
     throw error instanceof StoreError ? error : new StoreError('Linear did not say the stage after the edit');
   }
   if (!open) {
-    const deleted = await graphql<DeleteCommentResult>(config, DELETE_COMMENT_MUTATION, { id: comment.id });
-    // A comment that stays is a reply written after the move: the read does not take its text.
-    if (!deleted.commentDelete.success) throw new StoreError('Linear kept an edit of a note done');
+    // Deleted, or written again with no text: a reopen never makes it the text (round 6 of #866).
+    if (!(await retractEdit(config, comment.id, editText(edit, locale)))) {
+      throw new StoreError('Linear kept an edit of a note done');
+    }
 
     return 'not-open';
   }

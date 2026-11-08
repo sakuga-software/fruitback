@@ -395,6 +395,64 @@ describe('an edit that crosses a move to done in Linear (review of #866)', () =>
     assert.equal(toNoteIssue(node, note.page.url, { showComments: true })?.note.text, 'Edited while open');
   });
 
+  it('writes its comment again with no text when Linear refuses to delete it (#c47f98)', async () => {
+    const stub = installLinearStub({ issueState: { name: 'Done', type: 'completed' }, failDeleteComment: true });
+    const store = createLinearStore({ apiKey: 'lin_api_test', teamId: 'team_1', projectId: undefined });
+    const answer = await store.edit?.(
+      { issue: 'issue_1', clientId: 'acme' },
+      {
+        text: 'Too late',
+        author: { kind: 'member', name: 'Bob', workspace: 'Acme' },
+        note: noteFixture(),
+        identifier: 'ENG-1',
+      },
+      undefined,
+      { showComments: true, identitySecret: undefined, read: 'public', write: 'public', locale: 'en' },
+    );
+
+    assert.equal(answer, 'not-open');
+    assert.deepEqual(
+      stub.calls.map((call) => call.operation),
+      ['FruitbackCreateComment', 'FruitbackIssueState', 'FruitbackDeleteComment', 'FruitbackUpdateComment'],
+    );
+    const bare = String((stub.calls[3]?.variables.input as { body?: string } | undefined)?.body);
+    assert.equal(bare, '**Bob** via Fruitback · member of Acme\nEdited the note');
+    // Reopened, the issue has no `completedAt`: that comment gives no text.
+    const note = noteFixture({ text: 'Sent' });
+    const node = {
+      ...storedIssueFromNote(note),
+      completedAt: null,
+      comments: {
+        nodes: [{ id: 'comment_1', body: bare, createdAt: '2026-10-20T10:00:00.000Z', user: { name: 'Fruitback' } }],
+      },
+    };
+    assert.equal(toNoteIssue(node, note.page.url, { showComments: true })?.note.text, 'Sent');
+  });
+
+  it('fails when Linear refuses to delete the comment and to write it again', async () => {
+    installLinearStub({
+      issueState: { name: 'Done', type: 'completed' },
+      failDeleteComment: true,
+      failUpdateComment: true,
+    });
+    const store = createLinearStore({ apiKey: 'lin_api_test', teamId: 'team_1', projectId: undefined });
+
+    await assert.rejects(
+      store.edit?.(
+        { issue: 'issue_1', clientId: 'acme' },
+        {
+          text: 'Too late',
+          author: { kind: 'member', name: 'Bob', workspace: 'Acme' },
+          note: noteFixture(),
+          identifier: 'ENG-1',
+        },
+        undefined,
+        { showComments: true, identitySecret: undefined, read: 'public', write: 'public', locale: 'en' },
+      ) ?? Promise.resolve(),
+      StoreError,
+    );
+  });
+
   it('deletes its comment when the stage cannot be read after it, and fails (round 5 of #866)', async () => {
     const stub = installLinearStub({ failIssueState: true });
     const store = createLinearStore({ apiKey: 'lin_api_test', teamId: 'team_1', projectId: undefined });
