@@ -18,6 +18,7 @@ import {
   type Http,
   type ReceiverDelivery,
   type TrackerPlugin,
+  TrackerKeyForbidden,
   TrackerKeyRefused,
   trackerAccess,
 } from './trackers/plugin.ts';
@@ -350,7 +351,10 @@ export async function deliverDue({
   };
 
   /** What `/fire` said of the token, on the connector (FRU-102). It never rejects. */
-  const noteRoutine = async (connector: string, trouble: 'key-refused' | undefined): Promise<void> => {
+  const noteRoutine = async (
+    connector: string,
+    trouble: 'key-refused' | 'key-lacks-access' | undefined,
+  ): Promise<void> => {
     await accounts.noteConnector(connector, trouble, now()).catch((failure: unknown) => {
       console.error('[fruitback] the state of a connector was not kept', connector, failure);
     });
@@ -376,9 +380,12 @@ export async function deliverDue({
       });
       answer = await receiver.deliver(access, JSON.parse(signed.body) as ReceiverDelivery);
     } catch (thrown) {
-      // A credential the service refuses: every attempt left would be refused too.
-      const refused = thrown instanceof TrackerKeyRefused;
-      if (refused) await noteRoutine(delivery.connectorId, 'key-refused');
+      // A credential or a place the service refuses: every attempt left would be refused too.
+      let trouble: 'key-refused' | 'key-lacks-access' | undefined;
+      if (thrown instanceof TrackerKeyRefused) trouble = 'key-refused';
+      else if (thrown instanceof TrackerKeyForbidden) trouble = 'key-lacks-access';
+      const refused = trouble !== undefined;
+      if (trouble !== undefined) await noteRoutine(delivery.connectorId, trouble);
       answer = {
         ok: false,
         error: thrown instanceof Error ? thrown.message.slice(0, 200) : 'The request did not finish',
