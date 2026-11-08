@@ -3538,6 +3538,8 @@ replies, and on a public site mounted by the extension with no session, only the
   open stages (`withMovedPlace` in `toNoteIssue`, `closedAtOf`). The comment is kept only while the
   issue is open (`commentWhileOpen`, shared with the edit).
 - **An address** keeps the move and gets `note.moved`, ids only. GitHub takes none (FRU-628).
+- **One move at a time on a note**, a key of the KV as for a withdrawal (`409 move-in-progress`,
+  review of #877): a tracker has no lock, and a double click would write two comments.
 - The extension relays `/place` (`PLACE_PATH`).
 
 ## The author withdraws an open note (FRU-605)

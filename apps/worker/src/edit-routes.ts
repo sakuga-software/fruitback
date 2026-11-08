@@ -362,27 +362,35 @@ export async function postMove(
     const membership = memberships.find((each) => each.workspace.id === workspace);
     if (person === undefined || membership === undefined) return json(401, { error: 'identity-required' }, corsHeaders);
 
-    const answer = await store.move(
-      { issue: found.id, clientId },
-      {
-        author: { kind: 'member', name: person.name ?? person.email, workspace: membership.workspace.name },
-        anchor: anchor.data,
-        viewport: viewport.data,
-        note: found.note,
-        identifier: found.identifier,
-      },
-      target,
-      route.policy,
-    );
-    if (answer === undefined) return json(404, { error: 'not-found' }, corsHeaders);
-    if (answer === 'not-open') return json(409, { error: 'not-open' }, corsHeaders);
-    await invalidatePages(kv, [url]);
+    // One move at a time on a note, as a withdrawal (review of #877): a tracker has no lock, and a
+    // double click would write two comments.
+    const lock = `fruitback:move:${clientId}:${found.note.id}`;
+    if ((await kv.incr(lock, WITHDRAW_LOCK_MS)) > 1) return json(409, { error: 'move-in-progress' }, corsHeaders);
+    try {
+      const answer = await store.move(
+        { issue: found.id, clientId },
+        {
+          author: { kind: 'member', name: person.name ?? person.email, workspace: membership.workspace.name },
+          anchor: anchor.data,
+          viewport: viewport.data,
+          note: found.note,
+          identifier: found.identifier,
+        },
+        target,
+        route.policy,
+      );
+      if (answer === undefined) return json(404, { error: 'not-found' }, corsHeaders);
+      if (answer === 'not-open') return json(409, { error: 'not-open' }, corsHeaders);
+      await invalidatePages(kv, [url]);
 
-    return json(
-      200,
-      { note: answer.note, ...(route.policy.showComments ? { comment: answer.comment } : {}) },
-      corsHeaders,
-    );
+      return json(
+        200,
+        { note: answer.note, ...(route.policy.showComments ? { comment: answer.comment } : {}) },
+        corsHeaders,
+      );
+    } finally {
+      await kv.set(lock, '0', 1).catch(() => undefined);
+    }
   } catch (error) {
     if (error instanceof StoreError) return json(502, { error: 'store-unavailable' }, corsHeaders);
     if (error instanceof KvError) return json(503, { error: 'limiter-unavailable' }, corsHeaders);

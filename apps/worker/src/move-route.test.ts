@@ -184,6 +184,31 @@ describe('a note moved by the person who left it (FRU-605)', () => {
     assert.deepEqual(await rowsOf(world.database, 'SELECT id FROM note_comments'), []);
   });
 
+  it('writes one move for a double click: the second waits for the first, and a new try is taken after (review of #877)', async () => {
+    const { world, store, site, tokens, note } = await aNote();
+    let release: () => void = () => {};
+    const slow: NoteStore = {
+      ...store,
+      move: async (...args) => {
+        await new Promise<void>((resolve) => (release = resolve));
+
+        return (store.move as NonNullable<NoteStore['move']>)(...args);
+      },
+    };
+
+    const first = move(world, site, note, tokens.bob, slow);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.deepEqual(await move(world, site, note, tokens.bob, slow), {
+      status: 409,
+      body: { error: 'move-in-progress' },
+    });
+    release();
+    assert.equal((await first).status, 200);
+    assert.equal((await rowsOf(world.database, 'SELECT id FROM note_comments')).length, 1);
+    // The key is let go: the next move is taken at once.
+    assert.equal((await move(world, site, note, tokens.bob, store)).status, 200);
+  });
+
   it('refuses a move of a note of a tracker where the replies are hidden: a read would show the place of before (review of #877)', async () => {
     const tracker = createMemoryStore();
     const { world, site, tokens, note } = await aNote(tracker, { FRUITBACK_HIDE_COMMENTS: '1' });
