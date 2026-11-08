@@ -8,6 +8,7 @@ import {
   linearRoutingFor,
   reopenStateOf,
   stageForLinearState,
+  closedAtOf,
   toNoteIssue,
 } from './linear.ts';
 import { installLinearStub, storedIssueFromNote } from './linear-stub.fixture.ts';
@@ -424,6 +425,22 @@ describe('an edit that crosses a move to done in Linear (review of #866)', () =>
 
   it('deletes its comment when the issue is canceled once the comment is written, and says not-open', async () => {
     await crossing({ name: 'Canceled', type: 'canceled' });
+  });
+});
+
+describe('when a Linear issue left the open stages (round 6 of #866, #c45cee)', () => {
+  it('takes the later of completedAt and canceledAt when Linear keeps both, and nothing for an open issue', () => {
+    assert.equal(
+      closedAtOf({ completedAt: '2026-11-08T10:00:00.000Z', canceledAt: '2026-11-08T11:00:00.000Z' }),
+      '2026-11-08T11:00:00.000Z',
+    );
+    assert.equal(
+      closedAtOf({ completedAt: '2026-11-08T12:00:00.000Z', canceledAt: '2026-11-08T11:00:00.000Z' }),
+      '2026-11-08T12:00:00.000Z',
+    );
+    assert.equal(closedAtOf({ completedAt: null, canceledAt: '2026-11-08T11:00:00.000Z' }), '2026-11-08T11:00:00.000Z');
+    assert.equal(closedAtOf({ completedAt: null, canceledAt: null }), undefined);
+    assert.equal(closedAtOf({}), undefined);
   });
 });
 
