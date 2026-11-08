@@ -76,6 +76,8 @@ export function fakeJira() {
     issues: [] as Issue[],
     /** Every JQL that a search was asked with. */
     searches: [] as string[],
+    /** The answer of an upload of a file: Jira answers 403 where the attachments of the site are off. */
+    attachmentsOff: false,
     /** What the next call to the REST API answers in place of its own answer, once. */
     next: undefined as { status: number; body?: unknown } | undefined,
   };
@@ -193,6 +195,7 @@ export function fakeJira() {
       const issue = state.issues.find((each) => each.key === attach[1]);
       if (issue === undefined) return errorOf(404, 'Issue does not exist');
       if (new Headers(init?.headers).get('X-Atlassian-Token') !== 'no-check') return errorOf(403, 'XSRF check failed');
+      if (state.attachmentsOff) return errorOf(403, 'Attachments are disabled.');
       if (!(init?.body instanceof FormData)) return errorOf(415, 'Unsupported media type');
       const files = init.body.getAll('file').filter((each): each is File => each instanceof File);
       if (files.length === 0) return errorOf(400, 'No file');
@@ -239,7 +242,17 @@ export function fakeJira() {
           },
         }));
 
-      return json({ isLast: true, issues });
+      // Pages of `maxResults`, the next one named by an opaque `nextPageToken`, as search/jql gives them.
+      const size = Number(url.searchParams.get('maxResults') ?? '50');
+      const from = Number(Buffer.from(url.searchParams.get('nextPageToken') ?? 'MA', 'base64url').toString() || '0');
+      const page = issues.slice(from, from + size);
+      const isLast = from + size >= issues.length;
+
+      return json({
+        isLast,
+        issues: page,
+        ...(isLast ? {} : { nextPageToken: Buffer.from(String(from + size)).toString('base64url') }),
+      });
     }
 
     return errorOf(404, `No route for ${method} ${path}`);

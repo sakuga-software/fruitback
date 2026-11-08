@@ -65,8 +65,13 @@ const tokensSchema = z.object({
 /** `<cloud id>/<project id>`: a project of one site. */
 const PLACE = /^([0-9a-f-]{36})\/([0-9]{1,18})$/;
 
-/** The issues of one page are read in one search: a page has never had more notes than this. */
+/** The issues of one search answer: the most that `search/jql` gives with these fields. */
 const ISSUES_PAGE_SIZE = 100;
+/**
+ * The pages of a search, `nextPageToken` after `nextPageToken`: 1,000 notes of one page of a site at
+ * most. Past that the oldest are not drawn, and the log says so (balanced review of #867).
+ */
+const SEARCH_MAX_PAGES = 10;
 /** The projects of a page of places, for each site. */
 const PROJECTS_PAGE_SIZE = 50;
 /** The replies of a note that a read shows, the newest. */
@@ -326,12 +331,30 @@ function createJiraStore(
           ...(policy.showComments ? ['comment'] : []),
         ].join(','),
       });
-      const answer = z
-        .object({ issues: z.array(z.unknown()) })
-        .safeParse(await jira(access, `/ex/jira/${site.id}/rest/api/3/search/jql?${params}`));
-      if (!answer.success) throw new StoreError('Jira returned no search');
+      const rows: unknown[] = [];
+      let token: string | undefined;
+      for (let page = 1; ; page += 1) {
+        if (token !== undefined) params.set('nextPageToken', token);
+        const answer = z
+          .object({
+            issues: z.array(z.unknown()),
+            isLast: z.boolean().optional(),
+            nextPageToken: z.string().optional(),
+          })
+          .safeParse(await jira(access, `/ex/jira/${site.id}/rest/api/3/search/jql?${params}`));
+        if (!answer.success) throw new StoreError('Jira returned no search');
+        rows.push(...answer.data.issues);
+        token = answer.data.nextPageToken;
+        if (answer.data.isLast !== false || token === undefined) break;
+        if (page === SEARCH_MAX_PAGES) {
+          console.error(
+            `[fruitback] the search of a page of Jira reached ${SEARCH_MAX_PAGES * ISSUES_PAGE_SIZE} notes: older ones are not drawn`,
+          );
+          break;
+        }
+      }
 
-      return answer.data.issues.flatMap((each): NoteIssue[] => {
+      return rows.flatMap((each): NoteIssue[] => {
         const row = issueRowSchema.safeParse(each);
         if (!row.success) return [];
         // The labels select the issues, and the note confirms the page and the client.

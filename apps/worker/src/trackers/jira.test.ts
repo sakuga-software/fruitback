@@ -214,6 +214,29 @@ describe('a note in Jira (FRU-622)', () => {
     );
   });
 
+  it('reads every page of the search, past the first 100 notes of a page', async () => {
+    const jira = fakeJira();
+    const store = plugin.store(accessTo(jira), { connector: 'con_1' });
+    for (let index = 0; index < 130; index += 1) await store.create(note(), { teamId: PLACE }, POLICY);
+
+    const read = await store.findForPage({ url: PAGE, clientId: 'site_1' }, { teamId: PLACE }, POLICY);
+    assert.equal(read.length, 130);
+    assert.equal(read.at(-1)?.identifier, 'DES-1', 'the oldest note too');
+    assert.equal(jira.state.searches.length, 2);
+  });
+
+  it('keeps the note when Jira refuses its files, says them lost, and says no refusal of the connection', async () => {
+    const jira = fakeJira();
+    jira.state.attachmentsOff = true;
+    const store = plugin.store(accessTo(jira), { connector: 'con_1' });
+    const png = { id: 'f1', name: 'capture.png', type: 'image/png', content: new Uint8Array([1, 2]) };
+
+    // The create resolves: the watcher of the connector (`watchedStore`) notes no refusal for it.
+    const created = await store.create(note(), { teamId: PLACE }, POLICY, [png]);
+    assert.equal(created.identifier, 'DES-1');
+    assert.deepEqual(created.files, { sent: [], lost: ['f1'], waiting: [] });
+  });
+
   it('keeps an issue of the page that names another client off the read', async () => {
     const jira = fakeJira();
     const store = plugin.store(accessTo(jira), { connector: 'con_1' });
