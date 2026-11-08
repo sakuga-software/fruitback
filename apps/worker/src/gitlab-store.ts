@@ -57,6 +57,8 @@ export const FILES_HEADING = '#### Files';
 const PAGE_SIZE = 100;
 /** Ten pages of a search, as for GitHub: a page with more notes keeps its newest ones. */
 const SEARCH_MAX_PAGES = 10;
+/** The pages of the list of the issues of a site that are read before a search: 1,000 issues. */
+const LIST_MAX_PAGES = 10;
 const NOTES_AT_ONCE = 4;
 
 const createdSchema = z.object({ id: z.number(), iid: z.number(), web_url: z.string().min(1) });
@@ -170,12 +172,21 @@ export function createGitlabStore({ http, target, statusSource, stages = {} }: G
     return answer;
   }
 
-  /** The newest issues with the labels, then a search for the page when there are more (as GitHub). */
+  /**
+   * The issues with the labels of the page: every page of them, newest first, up to `LIST_MAX_PAGES`
+   * (1,000 issues), so a note is found whatever its description holds. Past that, a search for the
+   * address of the page reaches the older ones. GitLab's `search` reads the title and the
+   * description, but a note whose address it does not match as written would be lost, so it is the
+   * last resort and not the first (review of #865).
+   */
   async function issuesOfPage(project: string, labels: string[], url: string): Promise<unknown[]> {
     const base = { labels: labels.join(','), scope: 'all', order_by: 'created_at', sort: 'desc' };
-    const newest = await list(project, base);
-    if (newest.length < PAGE_SIZE) return newest;
-    const rows = [...newest];
+    const rows: unknown[] = [];
+    for (let page = 1; page <= LIST_MAX_PAGES; page += 1) {
+      const listed = await list(project, { ...base, page: String(page) });
+      rows.push(...listed);
+      if (listed.length < PAGE_SIZE) return rows;
+    }
     for (let page = 1; page <= SEARCH_MAX_PAGES; page += 1) {
       let found: unknown[];
       try {
