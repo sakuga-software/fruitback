@@ -94,7 +94,7 @@ export function slackMessage(delivery: ReceiverDelivery): { text: string; blocks
   const page = note.page.title?.trim() || note.page.path || note.page.url;
   const words = note.text.length > SECTION_MAX ? `${note.text.slice(0, SECTION_MAX)}…` : note.text;
   const element = [
-    note.anchor?.selector === undefined ? undefined : `\`${note.anchor.selector.replace(/`/g, "'")}\``,
+    note.anchor?.selector === undefined ? undefined : `\`${escapeSlack(note.anchor.selector.replace(/`/g, "'"))}\``,
     note.source?.component === undefined ? undefined : escapeSlack(note.source.component),
     note.source?.file === undefined
       ? undefined
@@ -105,7 +105,9 @@ export function slackMessage(delivery: ReceiverDelivery): { text: string; blocks
   const by = note.reporter?.name?.trim();
 
   return {
-    text: `${identifier}: ${note.text.slice(0, 200)}`,
+    // The text of the notification is read as mrkdwn too: a `<!channel>` a visitor writes stays words
+    // (review of #871).
+    text: escapeSlack(`${identifier}: ${note.text.slice(0, 200)}`),
     blocks: [
       {
         type: 'section',

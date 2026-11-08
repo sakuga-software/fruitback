@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { noteFixture } from '@fruitback/shared/note.fixture';
-import { describe, it } from 'vitest';
+import { afterEach, describe, it, vi } from 'vitest';
+import { mockMethod } from '../mock.fixture.ts';
 import type { ClientConfig, ClientPolicy } from '../clients.ts';
 import { createConnectorStores } from '../connectors.ts';
 import { type World, callOn, signInTo, worlds } from '../console-world.fixture.ts';
@@ -115,7 +116,11 @@ describe('the message of a note in Slack (FRU-624)', () => {
 
   it('posts the note with its link, its element and its capture, escaped', () => {
     const base = noteFixture();
-    const note = { ...base, text: 'Price <b> & "plan" > here', reporter: { name: 'Mia', verified: true as const } };
+    const note = {
+      ...base,
+      text: 'Price <b> & "plan" > here <!channel>',
+      reporter: { name: 'Mia', verified: true as const },
+    };
     const message = slackMessage({
       version: 2,
       event: 'note.created',
@@ -139,7 +144,10 @@ describe('the message of a note in Slack (FRU-624)', () => {
       [{ type: 'image', image_url: 'https://api.acme.dev/a/1?s=x', alt_text: 'capture.png' }],
     );
     assert.ok(text.includes('<https://api.acme.dev/a/2?s=y|log.txt>'), text);
-    assert.equal(message.text.startsWith('FB-12: Price <b>'), true);
+    // Nothing a visitor writes is markup of Slack: no mention of the channel (review of #871).
+    assert.equal(message.text.startsWith('FB-12: Price &lt;b&gt; &amp;'), true, message.text);
+    assert.equal(JSON.stringify(message).includes('<!channel>'), false);
+    assert.ok(JSON.stringify(message).includes('&lt;!channel&gt;'));
     assert.equal(escapeSlack('a&<>'), 'a&amp;&lt;&gt;');
   });
 
@@ -152,6 +160,37 @@ describe('the message of a note in Slack (FRU-624)', () => {
 });
 
 describe('a Slack connector through the routes and the deliveries (FRU-624)', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('posts with the fetch of the worker when the loop of the server hands no http (review of #871)', async () => {
+    const world = await setup();
+    const { id } = (await (await connect(world, { url: HOOK })).json()) as { id: string };
+    await keep(world, id, true);
+    // `server.ts` calls `deliverDue` with no `http`: `trackerAccess` then takes the global `fetch`.
+    const posted: string[] = [];
+    mockMethod(globalThis, 'fetch', async (url: unknown) => {
+      posted.push(String(url));
+
+      return new Response('ok', { status: 200 });
+    });
+    const pass = await deliverDue({
+      accounts: world.env.accounts,
+      secretsKey: SECRETS_KEY,
+      send: async () => ({ status: 500 }),
+    });
+    assert.deepEqual(pass, { delivered: 1, failed: 0 });
+    assert.deepEqual(posted, [HOOK]);
+  });
+
+  it('keeps a note when the credential of the connector does not open, and queues it (review of #871)', async () => {
+    const world = await setup();
+    const { id } = (await (await connect(world, { url: HOOK })).json()) as { id: string };
+    await world.env.accounts.resealConnector(id, 'sealed-by-another-key');
+    const kept = await keep(world, id, false);
+    assert.match(kept.identifier, /.+/);
+    assert.equal((await world.env.accounts.dueDeliveries(Date.now(), 10)).length, 1);
+  });
+
   it('refuses what is no webhook, and keeps none that Slack refuses', async () => {
     const world = await setup();
     for (const [body, error] of [

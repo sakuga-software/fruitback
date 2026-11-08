@@ -299,13 +299,23 @@ export function createConnectorStores(
     let takes: ((note: Note) => boolean) | undefined;
     if (receiver !== undefined) {
       const plugin = pluginOf(kept.kind) as NonNullable<ReturnType<typeof pluginOf>>;
-      const credential = await trackerAccess(plugin, connector, kept.sealed, {
-        accounts,
-        secretsKey,
-        client: undefined,
-        now,
-      }).credential();
-      takes = (note) => receiver.takes(note, credential);
+      try {
+        const credential = await trackerAccess(plugin, connector, kept.sealed, {
+          accounts,
+          secretsKey,
+          client: undefined,
+          now,
+        }).credential();
+        takes = (note) => receiver.takes(note, credential);
+      } catch (error) {
+        // WARNING: the note is kept whatever its credential says (review of #871). A credential that
+        // does not open (a key that changed, a row of another server) queues every note: the loop that
+        // sends cannot open it either, and the panel of the connector shows each one that did not arrive.
+        console.error(
+          `[fruitback] the setting of a connector that receives could not be read: ${error instanceof Error ? error.message : String(error)}`,
+        );
+        takes = () => true;
+      }
     }
     // Nothing is opened to keep a note and queue it: the key is for the loop that sends.
     if (kept.kind === 'rest' || takes !== undefined) {
