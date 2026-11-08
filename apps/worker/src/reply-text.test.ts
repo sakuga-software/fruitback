@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { describe, it } from 'vitest';
+import { describe, it, vi } from 'vitest';
 import {
   REPLY_NAME_LENGTH,
   checkedOf,
@@ -226,6 +226,18 @@ describe('the reply of a move, and the place it holds (FRU-605)', () => {
     const tracker = moveText({ author, anchor, viewport }, undefined, true);
     assert.deepEqual(movedPlaceOf(tracker), { anchor, viewport });
     assert.equal(editedTextOf(tracker), undefined);
+  });
+
+  it("encodes no place for the worker's own store, which keeps it in its row (review of #877)", () => {
+    const from = vi.spyOn(Buffer, 'from');
+    try {
+      moveText({ author, anchor, viewport }, 'en');
+      assert.equal(from.mock.calls.length, 0);
+      moveText({ author, anchor, viewport }, 'en', true);
+      assert.equal(from.mock.calls.length, 1);
+    } finally {
+      from.mockRestore();
+    }
   });
 
   it('takes the newest place written before the issue was done, and no place that does not parse', () => {

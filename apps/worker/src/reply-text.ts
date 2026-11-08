@@ -194,15 +194,12 @@ export function moveText(
   withPlace = false,
 ): string {
   const language = locale?.toLowerCase().startsWith('fr') ? 'fr' : 'en';
+  const lines = [whoLine(move.author, locale), MOVED[language], '', ...quoted(anchorSelectorPath(move.anchor))];
+  if (!withPlace) return lines.join('\n');
+  // Encoded only for a tracker (review of #877): the worker's own store keeps the place in its row.
   const place = Buffer.from(JSON.stringify({ anchor: move.anchor, viewport: move.viewport })).toString('base64url');
 
-  return [
-    whoLine(move.author, locale),
-    MOVED[language],
-    '',
-    ...quoted(anchorSelectorPath(move.anchor)),
-    ...(withPlace ? ['', PLACE_FENCE, place, '```'] : []),
-  ].join('\n');
+  return [...lines, '', PLACE_FENCE, place, '```'].join('\n');
 }
 
 /** The new place that a reply of a move holds (FRU-605), or `undefined` for any other comment. */
