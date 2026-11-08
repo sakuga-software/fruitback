@@ -54,10 +54,22 @@ function note(site: string) {
   return { ...base, page: { ...base.page, url: `${SITE}/pricing` }, client: { id: site } };
 }
 
+/**
+ * The plugins a worker offers, without the ones that shipped in this build: the tests of the socle
+ * read the fake, on the kind `asana`, whatever connector ships next to it.
+ */
+function offered(answer: unknown): unknown {
+  return (answer as { trackers: { kind: string }[] }).trackers.filter((each) => each.kind === fakePlugin.kind);
+}
+
 describe('the plugins of this build (FRU-621)', () => {
-  it('has a file for each kind, and no plugin has shipped in the socle', () => {
+  it('has a file for each kind, and the kind of the fake has not shipped', () => {
     assert.deepEqual([...PLUGIN_KINDS], ['jira', 'gitlab', 'slack', 'clickup', 'asana']);
-    assert.deepEqual(shippedPlugins(), []);
+    assert.equal(pluginOf(fakePlugin.kind), undefined);
+    assert.deepEqual(
+      shippedPlugins().map((each) => each.kind),
+      PLUGIN_KINDS.filter((kind) => pluginOf(kind) !== undefined),
+    );
     assert.equal(pluginOf('linear'), undefined);
     assert.equal(pluginOf('constructor'), undefined);
   });
@@ -67,7 +79,7 @@ describe('the plugins of this build (FRU-621)', () => {
     const world = await acme(env);
 
     const listed = await callOn(env, 'GET', `${world.base}/connectors`, { token: world.token });
-    assert.deepEqual(((await listed.json()) as { trackers: unknown }).trackers, []);
+    assert.deepEqual(offered(await listed.json()), []);
     const refused = await callOn(env, 'POST', `${world.base}/connectors`, {
       token: world.token,
       body: { kind: 'asana', token: 'typed-token' },
@@ -102,9 +114,7 @@ describe('a connector of a plugin, by a token (FRU-621)', () => {
     const listed = await callOn(env, 'GET', `${world.base}/connectors`, { token: world.token });
     const text = await listed.text();
     assert.equal(text.includes('typed-token'), false);
-    assert.deepEqual((JSON.parse(text) as { trackers: unknown }).trackers, [
-      { kind: 'asana', oauth: false, token: true },
-    ]);
+    assert.deepEqual(offered(JSON.parse(text)), [{ kind: 'asana', oauth: false, token: true }]);
   });
 
   it('keeps nothing for a token the service refuses, and says why', async () => {
@@ -273,9 +283,7 @@ describe('a connector of a plugin, by OAuth (FRU-621)', () => {
     const world = await acme(env);
 
     const listed = await callOn(env, 'GET', `${world.base}/connectors`, { token: world.token });
-    assert.deepEqual(((await listed.json()) as { trackers: unknown }).trackers, [
-      { kind: 'asana', oauth: true, token: true },
-    ]);
+    assert.deepEqual(offered(await listed.json()), [{ kind: 'asana', oauth: true, token: true }]);
     const none = await envWith();
     const elsewhere = await acme(none.env);
     const refused = await callOn(none.env, 'POST', `${elsewhere.base}/connectors/asana/oauth`, {

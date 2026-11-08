@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { parseTargetUrl } from './rest-connector.ts';
-import { open, seal } from './secrets.ts';
 import { StoreError } from './store.ts';
+import { TrackerKeyForbidden, TrackerKeyRefused } from './trackers/plugin.ts';
 
 /**
  * The REST API v4 of GitLab (FRU-623), on gitlab.com or on an instance that a team hosts.
@@ -24,7 +24,7 @@ export const GITLAB_COM = 'https://gitlab.com';
 /** A `fetch` of the worker. In production it refuses the internal networks (`guarded-fetch.ts`). */
 export type Http = (url: string, init: RequestInit) => Promise<Response>;
 
-/** What a `gitlab` connector keeps, sealed: the instance and the token. */
+/** How a call reaches GitLab: the instance and the token, opened from the connector for one request. */
 export type GitlabTarget = { url: string; token: string };
 
 /** How long a read waits for GitLab. A write waits longer: a note GitLab made late would be sent again. */
@@ -62,23 +62,6 @@ export function isAcceptableGitlabToken(token: unknown): token is string {
   return typeof token === 'string' && TOKEN.test(token);
 }
 
-export function sealGitlab(target: GitlabTarget, secretsKey: string): string {
-  return seal(JSON.stringify(target), secretsKey);
-}
-
-/** The target, or a `StoreError` for a value this key does not open. */
-export function openGitlab(sealed: string, secretsKey: string | undefined): GitlabTarget {
-  if (secretsKey === undefined) throw new StoreError('This worker has no key to open a connector with');
-  const plain = open(sealed, secretsKey);
-  try {
-    const { url, token } = JSON.parse(plain ?? 'null') as Partial<GitlabTarget>;
-    if (typeof url === 'string' && isAcceptableGitlabToken(token)) return { url, token };
-  } catch {
-    // Said below.
-  }
-  throw new StoreError('The token of this GitLab connector could not be opened');
-}
-
 /** A call that GitLab answered with an error. The message holds the status only: the widget reads it. */
 export class GitlabResponseError extends StoreError {
   readonly status: number;
@@ -93,10 +76,10 @@ export class GitlabResponseError extends StoreError {
 }
 
 /** `401`: GitLab knows no such token, or it expired, or it was revoked. The connector needs a new one. */
-export class GitlabTokenRefused extends StoreError {}
+export class GitlabTokenRefused extends TrackerKeyRefused {}
 
 /** `403` or `404` on a project: the token does not reach it, or its role is too low. */
-export class GitlabProjectRefused extends StoreError {}
+export class GitlabProjectRefused extends TrackerKeyForbidden {}
 
 type Call = {
   method?: 'GET' | 'POST';

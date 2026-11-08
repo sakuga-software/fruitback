@@ -83,7 +83,8 @@ const commentSchema = z.object({
 
 export type GitlabStoreOptions = {
   http: Http;
-  target: GitlabTarget;
+  /** The instance and the token, opened at each call: the store keeps no token between two. */
+  target: () => Promise<GitlabTarget>;
   /** The connector the statuses are named by: `<connector>:opened`. */
   statusSource?: string;
   /** The stage a site gives a state, by its id, over the one of `GITLAB_STATES`. */
@@ -104,7 +105,7 @@ export function createGitlabStore({ http, target, statusSource, stages = {} }: G
   /** A call on the project. A `403` or a `404` is a project the token does not reach. */
   async function call(project: string, path: string, init?: Parameters<typeof gitlabCall>[3]): Promise<unknown> {
     try {
-      return await gitlabCall(http, target, `/projects/${project}${path}`, init);
+      return await gitlabCall(http, await target(), `/projects/${project}${path}`, init);
     } catch (error) {
       if (
         error instanceof GitlabResponseError &&
@@ -200,7 +201,7 @@ export function createGitlabStore({ http, target, statusSource, stages = {} }: G
   return {
     name: 'gitlab',
     stages: GITLAB_STAGES,
-    scope: (client) => `${target.url}#${projectOf(client)}`,
+    scope: (client) => `${statusSource ?? 'gitlab'}:${projectOf(client)}`,
     attachments: true,
 
     async create(note: Note, client, policy: ClientPolicy, files: readonly OutgoingFile[] = []) {

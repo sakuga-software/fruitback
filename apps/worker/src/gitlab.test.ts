@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { type IncomingMessage, type ServerResponse, createServer, request as httpRequest } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { afterAll, describe, it } from 'vitest';
+import { afterAll, afterEach, describe, it } from 'vitest';
 import { noteFixture } from '@fruitback/shared/note.fixture';
 import type { ClientConfig, ClientPolicy } from './clients.ts';
 import {
@@ -11,15 +11,18 @@ import {
   gitlabLabel,
   isAcceptableGitlabToken,
   listGitlabProjects,
-  openGitlab,
   parseGitlabUrl,
   readGitlabProject,
   readGitlabUser,
-  sealGitlab,
 } from './gitlab-api.ts';
 import { FILES_HEADING, GITLAB_STATES, createGitlabStore } from './gitlab-store.ts';
 import { createGuardedFetch } from './guarded-fetch.ts';
 import { StoreError } from './store.ts';
+import { type World, callOn, signInTo, worlds } from './console-world.fixture.ts';
+import { createPostgresNoteStore } from './notes-postgres.ts';
+import { open } from './secrets.ts';
+import { pluginOf, withoutTestPlugins } from './trackers/index.ts';
+import { readTrackerCredential } from './trackers/plugin.ts';
 
 /**
  * The GitLab connector (FRU-623) against a GitLab on a port of this machine.
@@ -198,7 +201,7 @@ describe('the GitLab connector against a fake GitLab (FRU-623)', async () => {
     [GUEST]: { user: 'guest', projects: { 42: 10 } },
   });
   const target = { url: gitlab.origin, token: TOKEN };
-  const store = createGitlabStore({ http, target, statusSource: 'con_gl' });
+  const store = createGitlabStore({ http, target: async () => target, statusSource: 'con_gl' });
 
   it('a note becomes an issue of the project, with its labels, and comes back on its page', async () => {
     const created = await store.create(note, client('42'), POLICY);
@@ -226,7 +229,12 @@ describe('the GitLab connector against a fake GitLab (FRU-623)', async () => {
     assert.ok(issue);
     issue.state = 'closed';
     assert.equal((await store.findForPage(query, client('42'), POLICY))[0]?.stage, 'done');
-    const staged = createGitlabStore({ http, target, statusSource: 'con_gl', stages: { closed: 'closed' } });
+    const staged = createGitlabStore({
+      http,
+      target: async () => target,
+      statusSource: 'con_gl',
+      stages: { closed: 'closed' },
+    });
     const read = await staged.findForPage(query, client('42'), POLICY);
     assert.equal(read[0]?.stage, 'closed');
     assert.equal(read[0]?.status, 'con_gl:closed');
@@ -309,7 +317,10 @@ describe('the GitLab connector against a fake GitLab (FRU-623)', async () => {
   });
 
   it('a token GitLab refuses (unknown, expired or revoked: 401) is a refusal of the token', async () => {
-    const revoked = createGitlabStore({ http, target: { ...target, token: 'glpat-revoked-0123456789abc' } });
+    const revoked = createGitlabStore({
+      http,
+      target: async () => ({ ...target, token: 'glpat-revoked-0123456789abc' }),
+    });
     await assert.rejects(revoked.create(note, client('42'), POLICY), GitlabTokenRefused);
     await assert.rejects(readGitlabUser(http, { ...target, token: 'glpat-revoked-0123456789abc' }), GitlabTokenRefused);
   });
@@ -378,14 +389,10 @@ describe('the address and the token of a GitLab connector (FRU-623)', () => {
     assert.equal(gitlabLabel('https://acme.dev/gitlab'), 'GitLab · acme.dev/gitlab');
   });
 
-  it('the token is sealed with the address, and opens with the same key only', () => {
+  it('takes a token as GitLab gives one: printable, with no space', () => {
     assert.equal(isAcceptableGitlabToken('glpat-short'), false);
     assert.equal(isAcceptableGitlabToken('glpat-with a space-0123456789'), false);
     assert.equal(isAcceptableGitlabToken(TOKEN), true);
-    const sealed = sealGitlab({ url: GITLAB_COM, token: TOKEN }, 'a-key-of-thirty-two-characters-xx');
-    assert.ok(!sealed.includes(TOKEN));
-    assert.deepEqual(openGitlab(sealed, 'a-key-of-thirty-two-characters-xx'), { url: GITLAB_COM, token: TOKEN });
-    assert.throws(() => openGitlab(sealed, 'another-key-of-thirty-two-chars-x'), StoreError);
   });
 
   it('the guarded fetch of the worker refuses the loopback by default', async () => {
@@ -397,5 +404,127 @@ describe('the address and the token of a GitLab connector (FRU-623)', () => {
       StoreError,
     );
     assert.equal(gitlab.calls.length, 0);
+  });
+});
+
+/**
+ * The routes a browser calls, with the plugin of this build (`trackers/gitlab.ts`). The instance is
+ * `https://gitlab.acme.test`: an https address with a name, as a person types it. The `http` of the
+ * worker sends that name to the fake, on the loopback.
+ */
+const SECRETS_KEY = 'a-secret-that-opens-the-connectors-of-gitlab';
+const SITE = 'https://staging.acme.dev';
+const INSTANCE = 'https://gitlab.acme.test';
+const opened = worlds();
+afterEach(() => withoutTestPlugins());
+
+describe('a GitLab connector through the routes of the console (FRU-623)', async () => {
+  const gitlab = await fakeGitlab({ [TOKEN]: { user: 'project_42_bot', projects: { 42: 30 } } });
+  const toFake = (url: string | URL | Request, init?: RequestInit) =>
+    http(String(url).replace(INSTANCE, gitlab.origin), init ?? {});
+
+  async function setup() {
+    const world = await opened({ env: { FRUITBACK_STORE: 'postgres', FRUITBACK_SECRETS_KEY: SECRETS_KEY } });
+    const env: World = {
+      ...world,
+      context: {
+        ...world.context,
+        store: createPostgresNoteStore(world.database),
+        trackerHttp: toFake as typeof fetch,
+      },
+    };
+    const { id, token } = await signInTo(env, 'owner@acme.dev');
+    const workspace = await env.accounts.createWorkspace('Acme', id);
+    const site = await env.accounts.addSite(workspace.id, { origin: SITE, visibility: 'everyone' });
+
+    return { env, token, workspace, site, base: `/console/workspaces/${workspace.id}` };
+  }
+  const connect = (world: Awaited<ReturnType<typeof setup>>, body: Record<string, unknown>) =>
+    callOn(world.env, 'POST', `${world.base}/connectors`, { token: world.token, body: { kind: 'gitlab', ...body } });
+
+  it('ships in this build, by a token', () => {
+    assert.equal(pluginOf('gitlab')?.name, 'GitLab');
+    assert.equal(pluginOf('gitlab')?.oauth, undefined);
+  });
+
+  it('refuses an address or a token before anything is kept, and keeps none that GitLab refuses', async () => {
+    const world = await setup();
+    for (const [body, error] of [
+      [{ url: 'http://gitlab.acme.test', token: TOKEN }, 'invalid-address'],
+      [{ url: 'https://10.1.2.3', token: TOKEN }, 'invalid-address'],
+      [{ url: INSTANCE, token: 'short' }, 'invalid-token'],
+      [{ url: INSTANCE, token: 'glpat-revoked-0123456789abc' }, 'key-refused'],
+    ] as const) {
+      const refused = await connect(world, body);
+      assert.equal(refused.status, 400, JSON.stringify(body));
+      assert.deepEqual(await refused.json(), { error });
+    }
+    assert.deepEqual(await world.env.accounts.connectors(world.workspace.id), []);
+  });
+
+  it('keeps the token sealed with its instance, lists the projects, and writes a note in the one a site chose', async () => {
+    const world = await setup();
+    const made = await connect(world, { url: `${INSTANCE}/`, token: TOKEN });
+    assert.equal(made.status, 201, await made.clone().text());
+    const connector = (await made.json()) as { id: string; label: string };
+    assert.equal(connector.label, 'GitLab · gitlab.acme.test');
+    const kept = await world.env.accounts.sealedKey(connector.id);
+    assert.ok(!(kept?.sealed ?? '').includes(TOKEN));
+    assert.deepEqual(readTrackerCredential(open(kept?.sealed as string, SECRETS_KEY) as string), {
+      via: 'token',
+      token: TOKEN,
+      extra: { url: INSTANCE },
+    });
+
+    const places = await callOn(world.env, 'GET', `${world.base}/connectors/${connector.id}/places`, {
+      token: world.token,
+    });
+    assert.equal(places.status, 200, await places.clone().text());
+    assert.deepEqual(await places.json(), { places: [{ id: '42', name: 'acme/web' }] });
+
+    const wrong = await callOn(world.env, 'POST', `${world.base}/sites/${world.site.id}/destination`, {
+      token: world.token,
+      body: { connector: connector.id, teamId: '../users' },
+    });
+    assert.equal(wrong.status, 400);
+    const set = await callOn(world.env, 'POST', `${world.base}/sites/${world.site.id}/destination`, {
+      token: world.token,
+      body: { connector: connector.id, teamId: '42' },
+    });
+    assert.equal(set.status, 200, await set.clone().text());
+    const [site] = await world.env.accounts.sites(world.workspace.id);
+    assert.equal(site?.destinations[0]?.label, 'GitLab · acme/web');
+
+    const base = noteFixture();
+    const written = await callOn(world.env, 'POST', '/feedback', {
+      origin: SITE,
+      body: { ...base, page: { ...base.page, url: `${SITE}/pricing` }, client: { id: world.site.id } },
+    });
+    assert.equal(written.status, 201, await written.clone().text());
+    const issue = gitlab.issues.get(42)?.at(-1);
+    assert.deepEqual(issue?.labels, ['fruitback', `fruitback:${world.site.id}`]);
+  });
+
+  it('says on the connector a token that GitLab revoked, and a project it refuses', async () => {
+    const world = await setup();
+    const made = await connect(world, { url: INSTANCE, token: TOKEN });
+    const { id } = (await made.json()) as { id: string };
+    const attention = async () =>
+      (await world.env.accounts.connectors(world.workspace.id)).find((each) => each.id === id)?.attention?.reason;
+    // A project the token lost since the destination was written: the note is refused, and said.
+    await world.env.accounts.setDestinations(world.workspace.id, world.site.id, [{ connector: id, teamId: '77' }]);
+    const base = noteFixture();
+    const refused = await callOn(world.env, 'POST', '/feedback', {
+      origin: SITE,
+      body: { ...base, page: { ...base.page, url: `${SITE}/pricing` }, client: { id: world.site.id } },
+    });
+    assert.equal(refused.status, 502);
+    assert.equal(await attention(), 'key-lacks-access');
+
+    gitlab.refuse(401);
+    const revoked = await callOn(world.env, 'GET', `${world.base}/connectors/${id}/places`, { token: world.token });
+    gitlab.refuse(undefined);
+    assert.equal(revoked.status, 502);
+    assert.equal(await attention(), 'key-refused');
   });
 });
