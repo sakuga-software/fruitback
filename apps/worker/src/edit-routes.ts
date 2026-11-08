@@ -288,6 +288,24 @@ export async function postWithdraw(
  */
 export const MOVE_LOCK_MS = 15 * 60_000;
 
+/**
+ * Lets go of the key of a move (review of #877): three tries, then a line in the log. The key is held
+ * `MOVE_LOCK_MS`, so a key that stays would refuse every move of the note until it expires; a store of
+ * keys that fails three times in a row is said, and fails the next moves too (`503`), whatever the key.
+ */
+async function letGo(kv: Kv, lock: string): Promise<void> {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      await kv.set(lock, '0', 1);
+
+      return;
+    } catch {
+      // Tried again: a store of keys that blinks for one call must not hold a move for 15 minutes.
+    }
+  }
+  console.error('[fruitback] the key of a move was not let go, and expires by itself', lock);
+}
+
 /** `POST /feedback/<id>/place`: the author moves an open note to another element of its page (FRU-605). */
 export const PLACE_PATH = /^\/feedback\/([A-Za-z0-9_-]{1,100})\/place$/;
 
@@ -398,7 +416,7 @@ export async function postMove(
         corsHeaders,
       );
     } finally {
-      await kv.set(lock, '0', 1).catch(() => undefined);
+      await letGo(kv, lock);
     }
   } catch (error) {
     if (error instanceof StoreError) return json(502, { error: 'store-unavailable' }, corsHeaders);

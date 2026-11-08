@@ -3542,7 +3542,8 @@ replies, and on a public site mounted by the extension with no session, only the
   review of #877): a tracker has no lock, and a double click would write two comments. The key holds
   15 minutes (`MOVE_LOCK_MS`), longer than a call to a tracker can last (`fetch` of Node gives up
   after 300 s with no headers and 300 s with no body), so it never expires under a move still running;
-  it is let go as soon as the store answers.
+  it is let go as soon as the store answers, in three tries, and a key that stays is said in the log
+  (`letGo`, round 6 of #877).
 - **The limit of the read of Linear** (review of #877): a read takes the newest
   `COMMENTS_PER_ISSUE` (20) comments of an issue, newest first as Linear gives them. An edit or a
   move older than the 20 newest comments is not read, and the note shows the text or the place it

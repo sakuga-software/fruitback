@@ -9,6 +9,7 @@ import { createPostgresNoteStore } from './notes-postgres.ts';
 import { createPairing, redeemPairing } from './session.ts';
 import type { NoteStore } from './store.ts';
 import { MOVE_LOCK_MS } from './edit-routes.ts';
+import { KvError } from './kv.ts';
 
 /**
  * `POST /feedback/<id>/place` (FRU-605): the person who left an open note moves it to another element
@@ -208,6 +209,27 @@ describe('a note moved by the person who left it (FRU-605)', () => {
     assert.equal((await rowsOf(world.database, 'SELECT id FROM note_comments')).length, 1);
     // The key is let go: the next move is taken at once.
     assert.equal((await move(world, site, note, tokens.bob, store)).status, 200);
+  });
+
+  it('lets go of its key when the store of keys fails once, and takes the next move (review of #877)', async () => {
+    const { world, store, site, tokens, note } = await aNote();
+    const kv = world.kv;
+    const set = kv.set.bind(kv);
+    let failures = 1;
+    kv.set = async (...args) => {
+      if (args[1] === '0' && failures > 0) {
+        failures -= 1;
+        throw new KvError('the store of keys blinked');
+      }
+
+      return set(...args);
+    };
+    try {
+      assert.equal((await move(world, site, note, tokens.bob, store)).status, 200);
+      assert.equal((await move(world, site, note, tokens.bob, store)).status, 200);
+    } finally {
+      kv.set = set;
+    }
   });
 
   it('holds a move longer than a call to a tracker can last (review of #877)', () => {
