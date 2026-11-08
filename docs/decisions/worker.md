@@ -3539,7 +3539,10 @@ replies, and on a public site mounted by the extension with no session, only the
   issue is open (`commentWhileOpen`, shared with the edit).
 - **An address** keeps the move and gets `note.moved`, ids only. GitHub takes none (FRU-628).
 - **One move at a time on a note**, a key of the KV as for a withdrawal (`409 move-in-progress`,
-  review of #877): a tracker has no lock, and a double click would write two comments.
+  review of #877): a tracker has no lock, and a double click would write two comments. The key holds
+  15 minutes (`MOVE_LOCK_MS`), longer than a call to a tracker can last (`fetch` of Node gives up
+  after 300 s with no headers and 300 s with no body), so it never expires under a move still running;
+  it is let go as soon as the store answers.
 - **The limit of the read of Linear** (review of #877): a read takes the newest
   `COMMENTS_PER_ISSUE` (20) comments of an issue, newest first as Linear gives them. An edit or a
   move older than the 20 newest comments is not read, and the note shows the text or the place it

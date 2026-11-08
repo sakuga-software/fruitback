@@ -279,6 +279,15 @@ export async function postWithdraw(
   }
 }
 
+/**
+ * How long one move of a note holds the others back (review of #877). Longer than any call to a
+ * tracker can last, so that the key never expires under a move still running and lets a second one
+ * in: a write to Linear has no timeout of its own, and `fetch` of Node gives up on a server that does
+ * not answer after 300 s (the `headersTimeout` and `bodyTimeout` of undici). The key is let go as soon
+ * as the store answers: this only counts for a worker that stopped in the middle.
+ */
+export const MOVE_LOCK_MS = 15 * 60_000;
+
 /** `POST /feedback/<id>/place`: the author moves an open note to another element of its page (FRU-605). */
 export const PLACE_PATH = /^\/feedback\/([A-Za-z0-9_-]{1,100})\/place$/;
 
@@ -365,7 +374,7 @@ export async function postMove(
     // One move at a time on a note, as a withdrawal (review of #877): a tracker has no lock, and a
     // double click would write two comments.
     const lock = `fruitback:move:${clientId}:${found.note.id}`;
-    if ((await kv.incr(lock, WITHDRAW_LOCK_MS)) > 1) return json(409, { error: 'move-in-progress' }, corsHeaders);
+    if ((await kv.incr(lock, MOVE_LOCK_MS)) > 1) return json(409, { error: 'move-in-progress' }, corsHeaders);
     try {
       const answer = await store.move(
         { issue: found.id, clientId },
