@@ -524,6 +524,31 @@ describe('the capture of the element, and the state of each file (FRU-609)', () 
     assert.deepEqual(files(none.root), []);
   });
 
+  it('joins the capture of the element when the read that offers files answers after the open', async () => {
+    let offer: 'none' | 'offered' = 'none';
+    let told: () => void = () => {};
+    let taken = 0;
+    const late = mount({
+      offer: () => offer,
+      subscribe: (listener) => ((told = listener), () => {}),
+      captureElement: async () => ((taken += 1), SHOT),
+    });
+    // The composer opens before the first read of the page answered: no file is offered yet.
+    composer?.open(ANCHOR);
+    await late.settle();
+    assert.deepEqual(files(late.root), []);
+    offer = 'offered';
+    told();
+    await late.settle();
+    assert.deepEqual(files(late.root), [['element.png', '0.1 kB · Goes with the note', 'local']]);
+    // A later read takes no second capture, and one the person removed does not come back.
+    late.q<HTMLButtonElement>('[data-fruitback-file-remove]').click();
+    told();
+    await late.settle();
+    assert.equal(taken, 1);
+    assert.deepEqual(files(late.root), []);
+  });
+
   it('says the part sent of a file on its way, when the host measures it', async () => {
     let told: ((fraction: number) => void) | undefined;
     const again = mount({

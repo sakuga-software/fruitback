@@ -85,6 +85,9 @@ test('the item is in the context menu, and its command captures an area in the o
   await page.locator('[data-testid="card-latte"] .add').click();
   const field = page.getByPlaceholder('What should change?');
   await field.fill('Capturé par le menu');
+  // The composer offers a capture once the read of the page says that the note takes files. Before
+  // that, the command is refused (`done: false`), as the camera icon is not there to press either.
+  await expect(page.getByRole('button', { name: 'Take a screenshot', exact: true })).toBeVisible();
 
   // What the background does on a click of the item: the command to the tab.
   const sent = await extension.worker.evaluate(async (origin) => {
