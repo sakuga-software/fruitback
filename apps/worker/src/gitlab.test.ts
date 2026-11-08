@@ -6,6 +6,7 @@ import { noteFixture } from '@fruitback/shared/note.fixture';
 import type { ClientConfig, ClientPolicy } from './clients.ts';
 import {
   GITLAB_COM,
+  GitlabResponseError,
   GitlabProjectRefused,
   GitlabTokenRefused,
   gitlabLabel,
@@ -66,6 +67,8 @@ async function fakeGitlab(tokens: Record<string, Token>) {
   const comments = new Map<string, Comment[]>();
   let next = 1000;
   let refuse: number | undefined;
+  /** A status for the requests it names, as GitLab limits a burst of reads. */
+  let refuseWhen: ((url: URL) => number | undefined) | undefined;
   // A search of GitLab that matches nothing, as for an address it does not read as written.
   let searching = true;
   const server = createServer((request: IncomingMessage, response: ServerResponse) => {
@@ -80,6 +83,8 @@ async function fakeGitlab(tokens: Record<string, Token>) {
         response.writeHead(status, { 'Content-Type': 'application/json', ...headers });
         response.end(JSON.stringify(value));
       };
+      const refusedHere = refuseWhen?.(url);
+      if (refusedHere !== undefined) return send(refusedHere, { message: `${refusedHere}` }, { 'Retry-After': '60' });
       if (refuse !== undefined)
         return send(refuse, { message: `${refuse}` }, refuse === 429 ? { 'Retry-After': '60' } : {});
       const held = token === undefined ? undefined : tokens[token];
@@ -176,6 +181,9 @@ async function fakeGitlab(tokens: Record<string, Token>) {
       comments.set(key, [...(comments.get(key) ?? []), comment]);
       const issue = issues.get(project)?.find((each) => each.iid === iid);
       if (issue !== undefined && !comment.system) issue.user_notes_count += 1;
+    },
+    refuseOnly(when: ((url: URL) => number | undefined) | undefined) {
+      refuseWhen = when;
     },
     searchFinds(finds: boolean) {
       searching = finds;
@@ -335,6 +343,30 @@ describe('the GitLab connector against a fake GitLab (FRU-623)', async () => {
         ['1', null],
         ['2', null],
       ],
+    );
+  });
+
+  it('keeps the pages it read when GitLab limits the rate of the next one (review of #865)', async () => {
+    gitlab.refuseOnly((url) => (url.searchParams.get('page') === '2' ? 429 : undefined));
+    const read = await store.findForPage({ ...query, url: 'https://preview.acme.test/other' }, client('42'), {
+      ...POLICY,
+      showComments: false,
+    });
+    gitlab.refuseOnly(undefined);
+    // The newest 100 of the 150 notes of that page, from page 1.
+    assert.equal(read.length, 100);
+    await assert.rejects(
+      (async () => {
+        gitlab.refuseOnly((url) =>
+          url.pathname.endsWith('/issues') && url.searchParams.get('page') === '1' ? 429 : undefined,
+        );
+        try {
+          await store.findForPage(query, client('42'), POLICY);
+        } finally {
+          gitlab.refuseOnly(undefined);
+        }
+      })(),
+      GitlabResponseError,
     );
   });
 

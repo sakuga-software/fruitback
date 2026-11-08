@@ -10,6 +10,7 @@ import {
   SITE_ON,
   sessionSitesOf,
 } from './extension.ts';
+import { settled } from './settled.ts';
 import { AUTHENTICATED_WORKER_ORIGIN } from './worker-sessions.ts';
 
 /**
@@ -46,6 +47,7 @@ function expectNear(built: Box, mockup: Partial<Box>, name: string): void {
 async function clean(surface: Page, name: string): Promise<void> {
   for (const colorScheme of ['light', 'dark'] as const) {
     await surface.emulateMedia({ colorScheme });
+    await settled(surface);
     const { violations, passes } = await new AxeBuilder({ page: surface }).analyze();
     expect(
       passes.map((rule) => rule.id),

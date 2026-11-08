@@ -52,6 +52,10 @@
       url: /connectors/slack.html
     - title: Slack (français)
       url: /connectors/slack.fr.html
+    - title: ClickUp
+      url: /connectors/clickup.html
+    - title: ClickUp (français)
+      url: /connectors/clickup.fr.html
 - title: Reference
   pages:
     - title: Widget options

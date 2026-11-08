@@ -183,7 +183,17 @@ export function createGitlabStore({ http, target, statusSource, stages = {} }: G
     const base = { labels: labels.join(','), scope: 'all', order_by: 'created_at', sort: 'desc' };
     const rows: unknown[] = [];
     for (let page = 1; page <= LIST_MAX_PAGES; page += 1) {
-      const listed = await list(project, { ...base, page: String(page) });
+      let listed: unknown[];
+      try {
+        listed = await list(project, { ...base, page: String(page) });
+      } catch (error) {
+        // A page refused for the rate after the first keeps the pages read, as for GitHub: the pins of
+        // the newest notes are drawn, and the read cache spares the next readers (review of #865).
+        if (page === 1 || !(error instanceof GitlabResponseError) || !error.rateLimited) throw error;
+        console.error(`[fruitback] GitLab refused page ${page} of the issues of a page: older notes may be missing`);
+
+        return rows;
+      }
       rows.push(...listed);
       if (listed.length < PAGE_SIZE) return rows;
     }

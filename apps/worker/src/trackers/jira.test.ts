@@ -8,7 +8,7 @@ import type { ClientPolicy } from '../clients.ts';
 import { StoreError } from '../store.ts';
 import { pluginOf } from './index.ts';
 import { JIRA_CLIENT, OTHER_SITE_ID, SITE_ID, fakeJira } from './jira-fake.fixture.ts';
-import { JIRA_SCOPES, jiraStage, pageLabel, plugin } from './jira.ts';
+import { JIRA_SCOPES, jiraStage, jqlString, pageLabel, plugin } from './jira.ts';
 import { noteOfDescription } from './jira-adf.ts';
 import { type TrackerAccess, type TrackerCredential, TrackerKeyForbidden, TrackerKeyRefused } from './plugin.ts';
 
@@ -256,6 +256,11 @@ describe('a note in Jira (FRU-622)', () => {
     assert.match(jira.state.issues[0]?.labels[1] ?? '', /^fruitback:[0-9a-f]{16}$/);
   });
 
+  it('escapes a quote and a backslash in a string of JQL', () => {
+    assert.equal(jqlString('plain:label-1'), 'plain:label-1');
+    assert.equal(jqlString('a"b\\c'), 'a\\"b\\\\c');
+  });
+
   it('keeps an issue of the page that names another client off the read', async () => {
     const jira = fakeJira();
     const store = plugin.store(accessTo(jira), { connector: 'con_1' });
@@ -348,8 +353,9 @@ describe('a workspace connects Jira (FRU-622)', () => {
     const base = `/console/workspaces/${workspace.id}`;
 
     const listed = await callOn(env, 'GET', `${base}/connectors`, { token });
+    const offers = ((await listed.json()) as { trackers: { kind: string }[] }).trackers;
     assert.deepEqual(
-      ((await listed.json()) as { trackers: { kind: string }[] }).trackers.find((each) => each.kind === 'jira'),
+      offers.find((each) => each.kind === 'jira'),
       { kind: 'jira', oauth: true, token: false },
     );
     const asked = await callOn(env, 'POST', `${base}/connectors/jira/oauth`, { token });
@@ -401,8 +407,9 @@ describe('a workspace connects Jira (FRU-622)', () => {
     const workspace = await env.accounts.createWorkspace('Acme', id);
 
     const listed = await callOn(env, 'GET', `/console/workspaces/${workspace.id}/connectors`, { token });
+    const offers = ((await listed.json()) as { trackers: { kind: string }[] }).trackers;
     assert.deepEqual(
-      ((await listed.json()) as { trackers: { kind: string }[] }).trackers.find((each) => each.kind === 'jira'),
+      offers.find((each) => each.kind === 'jira'),
       { kind: 'jira', oauth: false, token: false },
     );
     const asked = await callOn(env, 'POST', `/console/workspaces/${workspace.id}/connectors/jira/oauth`, { token });
