@@ -3529,6 +3529,9 @@ replies, and on a public site mounted by the extension with no session, only the
   none (FRU-628). An address keeps it in the worker's own store and gets `note.withdrawn`, ids only.
 - **One at a time**: a key of the KV, as for a verdict (`409 withdraw-in-progress`). A tracker has
   no lock, and a double click would write two replies.
+- **Linear reads the stage again after the reply**, as for an edit: an issue the team marked done or
+  closed meanwhile keeps its state, the reply is deleted, and the route answers `409 not-open`
+  (test:`deletes its reply and moves nothing when the team marked the issue done meanwhile`).
 - **`withdrawable: true` is added after the cache**, as `editable`; the route decides again. A
   withdrawal does not depend on the replies being shown: the stage says it on its own.
 - The extension relays `/withdraw` as it relays `/text` (`WITHDRAW_PATH`, `relay.ts`).
