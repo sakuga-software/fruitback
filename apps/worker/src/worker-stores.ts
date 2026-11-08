@@ -205,5 +205,8 @@ export async function deliverPending(
     ...(attachments === undefined ? {} : { attachments }),
     ...(config.config.publicUrl === undefined ? {} : { publicUrl: config.config.publicUrl }),
     ...(now === undefined ? {} : { now }),
+    // What a plugin that receives (FRU-624, Slack) posts with. `trackerAccess` takes the same `fetch`
+    // by default; it is written here so that the loop says it (review of #871).
+    http: fetch,
   });
 }
