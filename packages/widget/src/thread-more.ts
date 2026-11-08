@@ -30,8 +30,16 @@ export function noteLink(url: string, id: string): string {
   return at === url.length - 1 ? `${url}${part}` : `${url}&${part}`;
 }
 
+/** The words of each `MoreSaid`. */
+const SAID = {
+  copied: 'more.copied',
+  manual: 'more.copyManually',
+  moved: 'move.done',
+  moveFailed: 'move.failed',
+} as const;
+
 /** What the last action of the menu said, by note: the link copied, or the link to copy by hand. */
-export type MoreSaid = 'copied' | 'manual';
+export type MoreSaid = 'copied' | 'manual' | 'moved' | 'moveFailed';
 
 /** What the menus of the threads share, by note: a menu is built again with its thread. */
 export type MoreFooter = {
@@ -40,6 +48,8 @@ export type MoreFooter = {
   edit?: () => void;
   /** Asks « Withdraw this note? » in the thread. Left out: the worker does not offer it now. */
   withdraw?: () => void;
+  /** Starts the choice of a new element for the note (FRU-605). Left out: not offered now. */
+  move?: () => void;
   /** Draws the thread again, with the focus on « ⋯ », or on the link to copy by hand. */
   settled: () => void;
 };
@@ -70,7 +80,7 @@ export function moreMenu(document: Document, issue: NoteIssue, t: Translator, mo
   menu.setAttribute('aria-label', t.text('more.open'));
   menu.hidden = true;
 
-  const item = (key: 'more.edit' | 'more.copyLink' | 'more.withdraw', run: () => void): HTMLButtonElement => {
+  const item = (key: `more.${'edit' | 'copyLink' | 'move' | 'withdraw'}`, run: () => void): HTMLButtonElement => {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'fruitback-thread-more-item';
@@ -105,6 +115,7 @@ export function moreMenu(document: Document, issue: NoteIssue, t: Translator, mo
           more.settled();
         });
     }),
+    ...(more.move === undefined ? [] : [item('more.move', more.move)]),
     ...(more.withdraw === undefined ? [] : [item('more.withdraw', more.withdraw)]),
   ];
 
@@ -191,8 +202,8 @@ export function moreSaid(
   const line = document.createElement('p');
   line.className = 'fruitback-thread-more-said';
   line.setAttribute('role', 'status');
-  line.textContent = t.text(said === 'copied' ? 'more.copied' : 'more.copyManually');
-  if (said === 'copied') return [line];
+  line.textContent = t.text(SAID[said]);
+  if (said !== 'manual') return [line];
 
   const field = document.createElement('input');
   field.className = 'fruitback-thread-more-link';

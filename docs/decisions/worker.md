@@ -3520,6 +3520,26 @@ replies, and on a public site mounted by the extension with no session, only the
 - **The event names the site the route found the note in** (`target.clientId`), and none is queued
   when there is no site: an id of a note that `/mcp` cannot read back helps nobody (review of #866).
 
+## The author moves an open note (FRU-605)
+
+**The rules, in short** (arbitrated by the orchestrator on 2026-11-08, Q4 of FRU-605):
+
+- **`POST /feedback/<id>/place?client=<site>`, body `{ url, anchor, viewport }`** (`postMove`,
+  `edit-routes.ts`). The anchor and the viewport are checked by `noteAnchorSchema` and
+  `noteViewportSchema` (`400 invalid-place`). **The same page only**: the note is read in the store by
+  `url`, its page.
+- **Taken where an edit is** (`takesEdits` and `NoteStore.move`), with its guards: the author, an
+  open stage (`409 not-open`), one place. The read offers it where it says `editable`: one flag for
+  two actions that have the same rule.
+- **The worker's own store** replaces the anchor and the viewport, and writes « Moved the note »
+  with the element quoted (`moveText`), under the lock of the row. **Linear** keeps its description:
+  the comment holds the new place too, in base64url between a fence (`moveText(…, true)`), so that no
+  text of the page closes the fence. A read takes the newest place written before the issue left the
+  open stages (`withMovedPlace` in `toNoteIssue`, `closedAtOf`). The comment is kept only while the
+  issue is open (`commentWhileOpen`, shared with the edit).
+- **An address** keeps the move and gets `note.moved`, ids only. GitHub takes none (FRU-628).
+- The extension relays `/place` (`PLACE_PATH`).
+
 ## The author withdraws an open note (FRU-605)
 
 **The rules, in short** (arbitrated by the orchestrator on 2026-11-08, Q3 of FRU-605):

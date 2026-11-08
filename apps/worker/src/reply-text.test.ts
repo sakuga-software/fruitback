@@ -10,6 +10,9 @@ import {
   replyText,
   withEditedText,
   withdrawText,
+  moveText,
+  movedPlaceOf,
+  withMovedPlace,
 } from './reply-text.ts';
 
 describe('the text of a reply in a tracker (FRU-257)', () => {
@@ -207,5 +210,41 @@ describe('the reply that a withdrawal writes (FRU-605)', () => {
       checkedOf([{ id: '1', body: withdrawText({ author }), createdAt: '2026-11-08T10:00:00.000Z' }]),
       undefined,
     );
+  });
+});
+
+describe('the reply of a move, and the place it holds (FRU-605)', () => {
+  const author = { kind: 'member' as const, name: 'Ana Martin', workspace: 'Acme' };
+  const anchor = { selector: '#buy', hosts: ['#promo'], tag: 'button', bounds: { xPct: 1, yPct: 2, wPct: 3, hPct: 4 } };
+  const viewport = { width: 390, height: 844 };
+
+  it('names the element for a person, and holds the place for a read only in a tracker', () => {
+    const own = moveText({ author, anchor, viewport }, 'fr');
+    assert.equal(own, '**Ana Martin** via Fruitback · membre de Acme\nA déplacé la note\n\n> #promo >>> #buy');
+    assert.equal(movedPlaceOf(own), undefined);
+
+    const tracker = moveText({ author, anchor, viewport }, undefined, true);
+    assert.deepEqual(movedPlaceOf(tracker), { anchor, viewport });
+    assert.equal(editedTextOf(tracker), undefined);
+  });
+
+  it('takes the newest place written before the issue was done, and no place that does not parse', () => {
+    const older = moveText({ author, anchor: { ...anchor, selector: '#old' }, viewport }, undefined, true);
+    const newer = moveText({ author, anchor, viewport }, undefined, true);
+    const sent = { selector: '#sent', tag: 'p', bounds: anchor.bounds };
+    const issue = {
+      note: { anchor: sent, viewport: { width: 1440, height: 900 } },
+      comments: [
+        { id: '1', body: older, createdAt: '2026-11-08T10:00:00.000Z' },
+        { id: '2', body: newer, createdAt: '2026-11-08T10:05:00.000Z' },
+      ],
+    };
+
+    assert.equal(withMovedPlace(issue).note.anchor.selector, '#buy');
+    assert.equal(withMovedPlace(issue, '2026-11-08T10:02:00.000Z').note.anchor.selector, '#old');
+    const broken = newer.replace(/\n[A-Za-z0-9_-]+\n```$/u, '\nbm90IGpzb24\n```');
+    assert.equal(movedPlaceOf(broken), undefined);
+    // A reply of the page that quotes the same lines is no move: its second line is empty.
+    assert.equal(movedPlaceOf(replyText({ body: newer, author }, undefined)), undefined);
   });
 });

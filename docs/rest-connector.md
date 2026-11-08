@@ -108,6 +108,14 @@ is when the edit was kept. Read the text of now with the `get_note` tool of `/mc
 two edits of one note are two deliveries. A receiver written before this event answers `2xx` and
 reads nothing from it, or answers something else, and the edit is tried again as any delivery.
 
+### A note its author moved
+
+The person who left a note can move it to another element of its page while it is open, since
+0.8.0. The address of the note then gets a request of this page with `event: "note.moved"`, and the
+fields of `note.edited` above: `version`, `event`, `workspace`, `site`, `identifier`, `note.id` and
+`at`. It holds no place: read the note of now with the `get_note` tool of `/mcp`.
+`X-Fruitback-Delivery` is new for this event.
+
 ### A note its author withdrew
 
 The person who left a note can withdraw it while it is open, since 0.8.0. Fruitback closes the note

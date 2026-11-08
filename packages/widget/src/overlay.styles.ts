@@ -598,9 +598,10 @@ export const STYLES = `
 /* FRU-603: a note the team marked done, and the verdict of its author. Its field and « Send » are the edit's. */
 .fruitback-thread-done { margin: 0; padding: 10px 16px 0; font: 600 12px/1.5 var(--fruitback-font-sans); color: var(--fruitback-color-text-muted); }
 .fruitback-thread-check { display: flex; flex-direction: column; gap: 10px; padding: 12px 16px 14px; border-top: 1px solid var(--fruitback-color-border); }
-.fruitback-thread-check-ask { margin: 0; font: 600 13px/1.4 var(--fruitback-font-sans); }
-.fruitback-thread-check-actions, .fruitback-thread-check-form-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.fruitback-thread-check-fixed, .fruitback-thread-check-wrong, .fruitback-thread-check-cancel {
+.fruitback-thread-check-ask, .fruitback-thread-withdraw-ask { margin: 0; font: 600 13px/1.4 var(--fruitback-font-sans); }
+.fruitback-thread-check-actions, .fruitback-thread-check-form-actions, .fruitback-thread-withdraw-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.fruitback-thread-check-fixed, .fruitback-thread-check-wrong, .fruitback-thread-check-cancel,
+.fruitback-thread-withdraw-confirm, .fruitback-thread-withdraw-keep {
   height: 32px;
   padding: 0 14px;
   border: 1px solid var(--fruitback-color-border-strong);
@@ -629,18 +630,6 @@ export const STYLES = `
   border: 1px solid var(--fruitback-color-border);
   border-radius: var(--fruitback-radius-sm);
   background: var(--fruitback-color-surface-sunken);
-}
-.fruitback-thread-withdraw-ask { margin: 0; font: 600 13px/1.4 var(--fruitback-font-sans); }
-.fruitback-thread-withdraw-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.fruitback-thread-withdraw-confirm, .fruitback-thread-withdraw-keep {
-  height: 32px;
-  padding: 0 14px;
-  border: 1px solid var(--fruitback-color-border-strong);
-  border-radius: var(--fruitback-radius-pill);
-  background: var(--fruitback-color-surface);
-  color: var(--fruitback-color-text);
-  font: 600 13px/1 var(--fruitback-font-sans);
-  cursor: pointer;
 }
 .fruitback-thread-withdraw-confirm { border-color: transparent; background: var(--fruitback-color-accent); color: var(--fruitback-color-on-accent); }
 .fruitback-thread-withdraw-confirm:hover:not([disabled]) { background: var(--fruitback-color-accent-strong); }

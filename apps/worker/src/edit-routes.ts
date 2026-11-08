@@ -1,5 +1,5 @@
 import { json } from './http.ts';
-import { NOTE_MAX_LENGTH } from '@fruitback/shared';
+import { NOTE_MAX_LENGTH, noteAnchorSchema, noteViewportSchema } from '@fruitback/shared';
 import type { AccountStore } from './accounts.ts';
 import { MAX_BODY_BYTES, readBoundedText } from './bounded-body.ts';
 import { normalizeClientId } from './clients.ts';
@@ -272,6 +272,117 @@ export async function postWithdraw(
     } finally {
       await kv.set(lock, '0', 1).catch(() => undefined);
     }
+  } catch (error) {
+    if (error instanceof StoreError) return json(502, { error: 'store-unavailable' }, corsHeaders);
+    if (error instanceof KvError) return json(503, { error: 'limiter-unavailable' }, corsHeaders);
+    throw error;
+  }
+}
+
+/** `POST /feedback/<id>/place`: the author moves an open note to another element of its page (FRU-605). */
+export const PLACE_PATH = /^\/feedback\/([A-Za-z0-9_-]{1,100})\/place$/;
+
+/**
+ * `POST /feedback/<id>/place?client=<site>` with `{ url, anchor, viewport }` (FRU-605).
+ *
+ * The guards of an edit, and where an edit is taken (`takesEdits`): a tracker keeps the new place in
+ * a reply too. **The same page only**: `url` is the page of the note, read in the store by it, and an
+ * anchor is checked by `noteAnchorSchema` as the anchor of a new note is.
+ */
+export async function postMove(
+  request: Request,
+  issue: string,
+  config: Served,
+  store: NoteStore,
+  kv: Kv,
+  corsHeaders: Record<string, string>,
+  context: {
+    accounts: AccountStore | undefined;
+    noteIndex: NoteIndex | undefined;
+    context: RequestContext;
+  },
+  checks: CallerChecks,
+): Promise<Response> {
+  const { routeFor, sessionWrites, writerIn, hidesTracker } = checks;
+  const body = await readBoundedText(request);
+  if (body === null) return json(413, { error: 'payload-too-large', maxBytes: MAX_BODY_BYTES }, corsHeaders);
+  let payload: unknown;
+  try {
+    payload = JSON.parse(body);
+  } catch {
+    return json(400, { error: 'invalid-json' }, corsHeaders);
+  }
+  const fields = (typeof payload === 'object' && payload !== null ? payload : {}) as Record<string, unknown>;
+  const url = typeof fields.url === 'string' ? canonicalizeRequestedPage(fields.url) : null;
+  if (url === null) return json(400, { error: 'invalid-url' }, corsHeaders);
+  const anchor = noteAnchorSchema.safeParse(fields.anchor);
+  const viewport = noteViewportSchema.safeParse(fields.viewport);
+  if (!anchor.success || !viewport.success) return json(400, { error: 'invalid-place' }, corsHeaders);
+
+  const clientId = normalizeClientId(new URL(request.url).searchParams.get('client'));
+  const route = await routeFor(request, config, clientId);
+  if (!route.ok) return routingFailure(route, corsHeaders);
+
+  try {
+    const workspace = route.client?.workspace;
+    const { accounts } = context;
+    const session = await sessionWrites(request, config, context.context);
+    if (workspace === undefined || clientId === undefined || accounts === undefined || session === undefined) {
+      return json(401, { error: 'identity-required' }, corsHeaders);
+    }
+    const account = await writerIn(request, config, context.context, workspace, clientId);
+    if (account === undefined) {
+      const reach = await accounts.reach(workspace, session.subject);
+      const suspended = config.suspendedIn !== undefined && (await config.suspendedIn(workspace));
+
+      return reach === undefined || suspended
+        ? json(401, { error: 'identity-required' }, corsHeaders)
+        : json(403, { error: 'not-allowed' }, corsHeaders);
+    }
+    const target = route.client;
+    if ((target?.destinations?.length ?? 0) > 1) return json(403, { error: 'edits-not-taken' }, corsHeaders);
+
+    const hidden = await hidesTracker(request, config, route.policy);
+    const found = await findNote(
+      store,
+      { url, clientId, id: issue, by: hidden ? 'note' : 'issue' },
+      target,
+      route.policy,
+    );
+    if (found === undefined) return json(404, { error: 'not-found' }, corsHeaders);
+
+    const author = await indexedAuthorOf(context.noteIndex, workspace, clientId, found.note.id);
+    if (author === undefined || author !== account) return json(403, { error: 'not-allowed' }, corsHeaders);
+    if (store.move === undefined || !(await takesEdits(store, target, route.policy))) {
+      return json(403, { error: 'edits-not-taken' }, corsHeaders);
+    }
+    if (!EDITABLE_STAGES.has(found.stage)) return json(409, { error: 'not-open', stage: found.stage }, corsHeaders);
+
+    const [person, memberships] = await Promise.all([accounts.account(account), accounts.memberships(account)]);
+    const membership = memberships.find((each) => each.workspace.id === workspace);
+    if (person === undefined || membership === undefined) return json(401, { error: 'identity-required' }, corsHeaders);
+
+    const answer = await store.move(
+      { issue: found.id, clientId },
+      {
+        author: { kind: 'member', name: person.name ?? person.email, workspace: membership.workspace.name },
+        anchor: anchor.data,
+        viewport: viewport.data,
+        note: found.note,
+        identifier: found.identifier,
+      },
+      target,
+      route.policy,
+    );
+    if (answer === undefined) return json(404, { error: 'not-found' }, corsHeaders);
+    if (answer === 'not-open') return json(409, { error: 'not-open' }, corsHeaders);
+    await invalidatePages(kv, [url]);
+
+    return json(
+      200,
+      { note: answer.note, ...(route.policy.showComments ? { comment: answer.comment } : {}) },
+      corsHeaders,
+    );
   } catch (error) {
     if (error instanceof StoreError) return json(502, { error: 'store-unavailable' }, corsHeaders);
     if (error instanceof KvError) return json(503, { error: 'limiter-unavailable' }, corsHeaders);

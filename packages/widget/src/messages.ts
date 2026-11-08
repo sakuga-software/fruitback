@@ -230,6 +230,7 @@ export const ENGLISH = {
   'thread.edited': 'Edited the note',
   /** The reply the worker writes when the author withdraws their note (FRU-605). */
   'thread.withdrawn': 'Withdrew the note',
+  'thread.moved': 'Moved the note',
   // FRU-603: the verdict of the author on a note the team marked done, in its thread.
   /** Who marked the note done: the author of the newest reply of the team. */
   'check.doneBy': '{name} marked it done',
@@ -277,6 +278,11 @@ export const ENGLISH = {
   'more.copyManually': 'The link could not be copied. Select it, then copy it.',
   'more.linkLabel': 'Link to the note',
   'more.withdraw': 'Withdraw the note',
+  // FRU-605: the author moves their note to another element of its page.
+  'more.move': 'Move the note',
+  'move.banner': 'Point at the new element of your note',
+  'move.done': 'Moved.',
+  'move.failed': 'Not moved. Try again.',
   // FRU-605: the author withdraws their note. It is closed for the team, and nothing is deleted.
   'withdraw.ask': 'Withdraw this note? The team will see it closed. Nothing is deleted.',
   'withdraw.confirm': 'Withdraw',

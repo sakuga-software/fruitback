@@ -48,6 +48,9 @@ export const EDIT_PATH = /^\/feedback\/[A-Za-z0-9_-]{1,100}\/text$/;
  */
 export const WITHDRAW_PATH = /^\/feedback\/[A-Za-z0-9_-]{1,100}\/withdraw$/;
 
+/** The path of a move of one note by its author (FRU-605): `FEEDBACK_PATH`, the id, then `/place`. */
+export const PLACE_PATH = /^\/feedback\/[A-Za-z0-9_-]{1,100}\/place$/;
+
 /**
  * The path of a file of a note on its way (FRU-332): `POST /attachments`, its bytes in base64 between
  * the page and the background. The only path that takes a body in base64.
@@ -196,6 +199,7 @@ function targets(url: string, endpoint: string): boolean {
       CHECK_PATH.test(rest) ||
       EDIT_PATH.test(rest) ||
       WITHDRAW_PATH.test(rest) ||
+      PLACE_PATH.test(rest) ||
       rest === ATTACHMENTS_PATH
     );
   } catch {

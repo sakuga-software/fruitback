@@ -179,9 +179,9 @@ export type Delivery = {
   /**
    * `agent.requested`: the call of the trigger of a site that starts an agent (FRU-468), with ids
    * only. `note.edited`: its author changed the text of a note already sent (FRU-605), ids only.
-   * `note.withdrawn`: its author withdrew it, ids only. Absent: a note, as a worker of before sends it.
+   * `note.moved`: its author moved it, ids only. `note.withdrawn`: its author withdrew it, ids only. Absent: a note, as a worker of before sends it.
    */
-  event?: 'note.created' | 'agent.requested' | 'note.edited' | 'note.withdrawn';
+  event?: 'note.created' | 'agent.requested' | 'note.edited' | 'note.moved' | 'note.withdrawn';
   createdAt: string;
   attempts: number;
   nextAt?: string;

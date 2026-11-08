@@ -165,6 +165,14 @@ A note done or closed cannot be edited. Where the note goes decides what is kept
 
 The excerpt of the index of the notes is written again from the new text.
 
+### A note moved by its author
+
+The person who left a note can move it to another element of its page while it is open. The worker
+keeps the new place (the element, as the widget reads it, and the size of the window) in place of
+the old one. On a note sent to Linear, the issue keeps the place in its description, and a comment
+says who moved the note and to which element, with the new place in it. An address receives a
+`note.moved` event that holds identifiers only. A note sent to GitHub cannot be moved.
+
 ### A note withdrawn by its author
 
 The person who left a note can withdraw it while it is open. **Nothing is deleted**: the note is

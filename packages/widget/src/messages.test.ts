@@ -320,6 +320,8 @@ describe('every word the widget shows', () => {
     const checkAnswers: ((answer: CheckAnswer | CheckFailure) => void)[] = [];
     // And each withdrawal of a note by its author (FRU-605).
     const withdrawAnswers: ((answer: WithdrawAnswer | WithdrawFailure) => void)[] = [];
+    // And each move of a note (FRU-605).
+    const moveAnswers: ((moved: boolean | undefined) => void)[] = [];
     const overlay = createOverlay({
       document: page.document,
       host: host.root,
@@ -330,6 +332,7 @@ describe('every word the widget shows', () => {
       edit: { send: () => new Promise((resolve) => editAnswers.push(resolve)) },
       check: { send: () => new Promise((resolve) => checkAnswers.push(resolve)) },
       withdraw: { send: () => new Promise((resolve) => withdrawAnswers.push(resolve)) },
+      move: () => new Promise((resolve) => moveAnswers.push(resolve)),
     });
     cleanup.push(() => overlay.destroy());
 
@@ -640,6 +643,30 @@ describe('every word the widget shows', () => {
     checkAnswers.shift()?.(verdictOf('Reopened: still wrong'));
     await settleReply();
     snapshots.push(...shown(host.root));
+    // The move of a note by its author (FRU-605): the banner of its capture, not moved, then moved.
+    host.start('move.banner');
+    snapshots.push(...shown(host.root));
+    host.stop();
+    for (const moved of [false, true]) {
+      overlay.select(found.note.id);
+      (host.root.querySelector('.fruitback-thread-more') as HTMLButtonElement).click();
+      [...host.root.querySelectorAll<HTMLButtonElement>('.fruitback-thread-more-item')]
+        .find((each) => each.textContent === translator.text('more.move'))
+        ?.click();
+      if (moved) {
+        found.comments = [
+          ...(found.comments ?? []),
+          {
+            id: 'c-moved',
+            body: '**REPORTER** via Fruitback · member of WORKSPACE\nMoved the note\n\n> #buy',
+            createdAt: '2026-08-01T12:00:00.000Z',
+          },
+        ];
+      }
+      moveAnswers.shift()?.(moved);
+      await settleReply();
+      snapshots.push(...shown(host.root));
+    }
     // The withdrawal of a note by its author (FRU-605): asked, in flight, each failure, then kept.
     overlay.select(found.note.id);
     (host.root.querySelector('.fruitback-thread-more') as HTMLButtonElement).click();

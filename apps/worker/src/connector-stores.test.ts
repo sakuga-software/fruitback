@@ -674,6 +674,32 @@ describe('which store edits a note (FRU-475, FRU-605)', () => {
     }
   });
 
+  it('an address keeps a move, and is told by `note.moved`, with ids only (FRU-605)', async () => {
+    const author = { kind: 'member' as const, name: 'Bob', workspace: 'Acme' };
+    const moving = createRoutedStore(
+      { ...own, move: async () => answer },
+      createConnectorStores(accounts, SECRETS_KEY, () => 3_000),
+    );
+    queued.length = 0;
+
+    const moved = await moving.move?.(
+      { issue: '7', clientId: 'site_a' },
+      { author, anchor: note.anchor, viewport: note.viewport, note, identifier: 'FB-7' },
+      site('con_rest'),
+      shown as never,
+    );
+
+    assert.deepEqual(moved, answer);
+    assert.equal(queued.length, 1);
+    assert.equal(queued[0]?.event, 'note.moved');
+    const body = JSON.parse(queued[0]?.body ?? '{}');
+    assert.equal(body.event, 'note.moved');
+    assert.equal(body.identifier, 'FB-7');
+    assert.equal(body.at, new Date(3_000).toISOString());
+    assert.ok(!queued[0]?.body.includes(note.anchor.selector), 'the place never travels in the event');
+    assert.equal(pendingDeliveryOf({ id: 'd', event: 'note.moved', created_at: 0 })?.event, 'note.moved');
+  });
+
   it('is read by the console as an edit, and a note as before (FRU-605)', () => {
     assert.equal(pendingDeliveryOf({ id: 'd', event: 'note.edited', created_at: 0 })?.event, 'note.edited');
     assert.equal(pendingDeliveryOf({ id: 'd', event: 'note.created', created_at: 0 })?.event, undefined);

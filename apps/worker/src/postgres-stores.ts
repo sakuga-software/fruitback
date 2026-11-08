@@ -326,6 +326,7 @@ export function postgresNoteStore(url: string, schema: string): NoteStore {
       | 'check'
       | 'setStatus'
       | 'edit'
+      | 'move'
       | 'withdraw'
     >
   >;
@@ -341,7 +342,8 @@ export function postgresNoteStore(url: string, schema: string): NoteStore {
       check: true,
       setStatus: true,
       edit: true,
-      // FRU-605: the author withdraws an open note.
+      // FRU-605: the author moves, and withdraws, an open note.
+      move: true,
       withdraw: true,
     },
   );

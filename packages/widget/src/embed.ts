@@ -89,7 +89,7 @@ import {
   replyFromPage,
 } from './overlay.ts';
 import { type ConfigPanel, type OfferedStages, createConfigPanel, createOfferedStages } from './panel.ts';
-import { linkedNote, withoutLinkedNote } from './page.ts';
+import { captureViewport, linkedNote, withoutLinkedNote } from './page.ts';
 
 /**
  * One call that mounts the whole widget on a page (FRU-16).
@@ -532,6 +532,12 @@ export function init(options: FruitbackOptions): Fruitback {
     onConfigure: () => panel.toggle(),
     onList: () => openList(),
     onSelect: (selected) => {
+      // FRU-605: the new element of a note its author moves, and no new note.
+      if (selected.purpose === 'move') {
+        void moveTo(selected.element);
+
+        return;
+      }
       // A note is on its way, about the element chosen before: a choice now would point the
       // composer at another element under a send it cannot change. The choice is let go, and the
       // frame goes back to the element of the note in flight.
@@ -620,6 +626,12 @@ export function init(options: FruitbackOptions): Fruitback {
         return answer;
       },
     },
+    // FRU-605: the author moves their open note: a capture for its new element, then `moveTo`.
+    move: (issue: NoteIssue) =>
+      new Promise<boolean | undefined>((resolve) => {
+        moving = { issue, resolve };
+        host.start('move.banner');
+      }),
     // FRU-605: the author withdraws their open note. No read after it, as for an edit: the stage and
     // the reply go on the issue (the overlay draws the pins again), and the lists follow.
     withdraw: {
@@ -654,6 +666,39 @@ export function init(options: FruitbackOptions): Fruitback {
         }),
   });
 
+  /** The note its author moves (FRU-605), until the element of its new place is chosen. */
+  let moving: { issue: NoteIssue; resolve: (moved: boolean) => void } | undefined;
+  /** Sends the new place of the note that moves, and gives it to the note when the store kept it. */
+  async function moveTo(element: Element): Promise<void> {
+    const pending = moving;
+    moving = undefined;
+    if (pending === undefined) return;
+    const { issue } = pending;
+    const response = await callWorker(options, {
+      url: `${options.endpoint}/feedback/${encodeURIComponent(issue.id)}/place?client=${encodeURIComponent(options.clientId)}`,
+      method: 'POST',
+      contentType: 'application/json',
+      body: JSON.stringify({
+        url: canonicalizePageUrl(view.location.href),
+        anchor: captureAnchor(element),
+        viewport: captureViewport(view),
+      }),
+    }).catch(() => undefined);
+    let body: { note?: unknown; comment?: unknown } = {};
+    try {
+      if (response?.ok === true) body = JSON.parse(response.body) as typeof body;
+    } catch {
+      // Not the answer of a worker: not moved, and it says so.
+    }
+    const note = noteSchema.safeParse(body.note);
+    if (note.success) {
+      const comment = noteCommentSchema.safeParse(body.comment);
+      applyEdit(issue, { note: note.data, ...(comment.success ? { comment: comment.data } : {}) });
+      sidebar.refresh();
+      tellNotes({ kind: 'list' });
+    }
+    pending.resolve(note.success);
+  }
   const stages = createOfferedStages();
   const destinations = createOfferedDestinations();
   // The worker's word at the last read that answered (FRU-112): it would sign a note of this reader.

@@ -13,7 +13,7 @@ import {
 } from './linear.ts';
 import { installLinearStub, storedIssueFromNote } from './linear-stub.fixture.ts';
 import { StoreError } from './store.ts';
-import { editText } from './reply-text.ts';
+import { editText, movedPlaceOf } from './reply-text.ts';
 
 /**
  * These tests moved here from `packages/shared` with the code they cover (FRU-23). The contract
@@ -652,6 +652,71 @@ describe('a withdrawal of its author in Linear (FRU-605)', () => {
         'FruitbackReopenIssue',
         'FruitbackDeleteComment',
       ],
+    );
+  });
+});
+
+describe('a move of its author in Linear (FRU-605)', () => {
+  afterEach(() => vi.restoreAllMocks());
+  const anchor = { selector: '#buy', tag: 'button', bounds: { xPct: 1, yPct: 2, wPct: 3, hPct: 4 } };
+  const viewport = { width: 390, height: 844 };
+  const policy = {
+    showComments: true,
+    identitySecret: undefined,
+    read: 'public',
+    write: 'public',
+    locale: 'en',
+  } as const;
+
+  it('writes one comment that names the element and holds the place, never touches the issue', async () => {
+    const stub = installLinearStub({});
+    const store = createLinearStore({ apiKey: 'lin_api_test', teamId: 'team_1', projectId: undefined });
+    const note = noteFixture({ text: 'Sent' });
+
+    const answer = await store.move?.(
+      { issue: 'issue_1', clientId: 'acme' },
+      { author: { kind: 'member', name: 'Bob', workspace: 'Acme' }, anchor, viewport, note, identifier: 'ENG-1' },
+      undefined,
+      policy,
+    );
+
+    assert.deepEqual(
+      stub.calls.map((call) => call.operation),
+      ['FruitbackCreateComment', 'FruitbackIssueState'],
+    );
+    assert.ok(typeof answer === 'object');
+    assert.deepEqual(answer.note.anchor, anchor);
+    assert.deepEqual(movedPlaceOf(answer.comment.body), { anchor, viewport });
+    // A read of the issue takes the place from the comment; its description keeps the one it was sent with.
+    const node = {
+      ...storedIssueFromNote(note),
+      comments: { nodes: [{ ...answer.comment, user: { name: 'Fruitback' } }] },
+    };
+    assert.deepEqual(toNoteIssue(node, note.page.url, policy)?.note.anchor, anchor);
+    assert.notDeepEqual(toNoteIssue(node, note.page.url, { showComments: false })?.note.anchor, anchor);
+  });
+
+  it('takes its comment back when the issue is done once it is written, and says not-open', async () => {
+    const stub = installLinearStub({ issueState: { name: 'Done', type: 'completed' } });
+    const store = createLinearStore({ apiKey: 'lin_api_test', teamId: 'team_1', projectId: undefined });
+
+    const answer = await store.move?.(
+      { issue: 'issue_1', clientId: 'acme' },
+      {
+        author: { kind: 'member', name: 'Bob', workspace: 'Acme' },
+        anchor,
+        viewport,
+        note: noteFixture(),
+        identifier: 'ENG-1',
+      },
+      undefined,
+      policy,
+    );
+
+    assert.equal(answer, 'not-open');
+    assert.deepEqual(
+      stub.calls.map((call) => call.operation),
+      ['FruitbackCreateComment', 'FruitbackIssueState', 'FruitbackDeleteComment'],
     );
   });
 });

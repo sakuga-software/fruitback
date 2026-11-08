@@ -1,4 +1,4 @@
-import type { Note, NoteComment, NoteIssue, NoteStage } from '@fruitback/shared';
+import type { Note, NoteAnchor, NoteComment, NoteIssue, NoteStage, NoteViewport } from '@fruitback/shared';
 import type { ClientConfig, ClientPolicy } from './clients.ts';
 import type { OutgoingFile } from './attachments.ts';
 
@@ -227,6 +227,19 @@ export type NoteStore = {
     client: ClientConfig | undefined,
     policy: ClientPolicy,
   ): Promise<{ comment: NoteComment; stage: NoteStage } | 'not-open' | undefined>;
+  /**
+   * The author moves an open note to another element of its page (FRU-605): a new anchor and the
+   * viewport it was chosen in. Taken where an edit is (`takesEdits`): the worker's own store replaces
+   * them, under the lock of the row (`not-open` after a move to done); Linear writes a reply « Moved
+   * the note » that holds them (`moveText(…, true)`), reads the stage again after it as for an edit,
+   * and a read takes them from there (`withMovedAnchor`). The answer is the note as a read shows it.
+   */
+  move?(
+    target: ReplyTarget,
+    move: NewMove,
+    client: ClientConfig | undefined,
+    policy: ClientPolicy,
+  ): Promise<{ note: Note; comment: NoteComment } | 'not-open' | undefined>;
   /** Whether the store of this client takes a withdrawal, for a store that routes by client. */
   withdrawalsFor?(client: ClientConfig | undefined): Promise<boolean>;
   /** Whether the store of this client takes an edit, for a store that routes by client. */
@@ -288,6 +301,15 @@ export type ReplyTarget = { issue: string; clientId: string | undefined };
 export type NewEdit = {
   text: string;
   author: Extract<ReplyAuthor, { kind: 'member' }>;
+  note: Note;
+  identifier: string;
+};
+
+/** A new place for a note, by its author (FRU-605): an element of the same page. */
+export type NewMove = {
+  author: Extract<ReplyAuthor, { kind: 'member' }>;
+  anchor: NoteAnchor;
+  viewport: NoteViewport;
   note: Note;
   identifier: string;
 };

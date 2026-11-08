@@ -1,5 +1,12 @@
-import type { NoteComment } from '@fruitback/shared';
-import type { CheckVerdict, NewCheck, NewEdit, NewReply, NewWithdrawal } from './store.ts';
+import {
+  type NoteAnchor,
+  type NoteComment,
+  type NoteViewport,
+  anchorSelectorPath,
+  noteAnchorSchema,
+  noteViewportSchema,
+} from '@fruitback/shared';
+import type { CheckVerdict, NewCheck, NewEdit, NewMove, NewReply, NewWithdrawal } from './store.ts';
 
 /**
  * The text of a reply in a tracker (FRU-257): one line that says who wrote it, then what they wrote,
@@ -166,6 +173,73 @@ export function withdrawText(withdrawal: Pick<NewWithdrawal, 'author'>, locale?:
   const language = locale?.toLowerCase().startsWith('fr') ? 'fr' : 'en';
 
   return [whoLine(withdrawal.author, locale), WITHDREW[language]].join('\n');
+}
+
+/** The line under the line of who wrote it that marks a move of the note (FRU-605). */
+const MOVED = { en: 'Moved the note', fr: 'A déplacé la note' } as const;
+
+/** The fence around the new place of a note, in the reply of a move in a tracker (FRU-605). */
+const PLACE_FENCE = '```fruitback-place';
+
+/**
+ * The reply that a move writes under a note (FRU-605): the line of who wrote it, the line of the move,
+ * then the element it points at now, quoted, for a person to read. `withPlace`: then the new anchor
+ * and viewport, in base64url between a fence, for a tracker, whose description keeps the place the
+ * note was sent with; a read takes them from there (`withMovedPlace`). Base64: no text of the page
+ * can close the fence.
+ */
+export function moveText(
+  move: Pick<NewMove, 'author' | 'anchor' | 'viewport'>,
+  locale?: string,
+  withPlace = false,
+): string {
+  const language = locale?.toLowerCase().startsWith('fr') ? 'fr' : 'en';
+  const place = Buffer.from(JSON.stringify({ anchor: move.anchor, viewport: move.viewport })).toString('base64url');
+
+  return [
+    whoLine(move.author, locale),
+    MOVED[language],
+    '',
+    ...quoted(anchorSelectorPath(move.anchor)),
+    ...(withPlace ? ['', PLACE_FENCE, place, '```'] : []),
+  ].join('\n');
+}
+
+/** The new place that a reply of a move holds (FRU-605), or `undefined` for any other comment. */
+export function movedPlaceOf(body: string): { anchor: NoteAnchor; viewport: NoteViewport } | undefined {
+  const lines = body.replace(/\r\n?/gu, '\n').split('\n');
+  const [first = '', second = ''] = lines;
+  if (!WHO_LINE.test(first) || !Object.values(MOVED).includes(second as never)) return undefined;
+  const at = lines.indexOf(PLACE_FENCE);
+  if (at === -1 || lines[at + 2] !== '```' || at + 3 !== lines.length) return undefined;
+  try {
+    const read = JSON.parse(Buffer.from(lines[at + 1] ?? '', 'base64url').toString('utf8')) as Record<string, unknown>;
+    const anchor = noteAnchorSchema.safeParse(read.anchor);
+    const viewport = noteViewportSchema.safeParse(read.viewport);
+
+    return anchor.success && viewport.success ? { anchor: anchor.data, viewport: viewport.data } : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The note in the place of its newest move (FRU-605), written before `until` (done or canceled), as
+ * `withEditedText` does for the text. A note whose replies were not read keeps the place it was sent with.
+ */
+export function withMovedPlace<
+  T extends { note: { anchor: NoteAnchor; viewport: NoteViewport }; comments?: readonly NoteComment[] },
+>(issue: T, until?: string): T {
+  const limit = until === undefined ? undefined : Date.parse(until);
+  let newest: { place: { anchor: NoteAnchor; viewport: NoteViewport }; at: number } | undefined;
+  for (const comment of issue.comments ?? []) {
+    const place = movedPlaceOf(comment.body);
+    const at = Date.parse(comment.createdAt);
+    if (place === undefined || Number.isNaN(at) || (limit !== undefined && at > limit)) continue;
+    if (newest === undefined || at >= newest.at) newest = { place, at };
+  }
+
+  return newest === undefined ? issue : { ...issue, note: { ...issue.note, ...newest.place } };
 }
 
 /** The first line that the worker writes, and the name in it. */

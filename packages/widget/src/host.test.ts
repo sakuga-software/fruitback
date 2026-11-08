@@ -727,6 +727,29 @@ describe('selecting an element without a pointer (FRU-51)', () => {
     }
   });
 
+  it('asks for the new element of a note, and says the choice is for a move, once (FRU-605)', async () => {
+    const targets: CaptureTarget[] = [];
+    const page = mountKeyboard({ onSelect: (target) => targets.push(target) });
+    host?.start('move.banner');
+    assert.equal(
+      host?.root.querySelector('.fruitback-banner-ask')?.textContent,
+      'Point at the new element of your note',
+    );
+    press(page, 'ArrowDown');
+    press(page, 'Enter');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    // The next capture, started by the launch button, is for a note again.
+    host?.start();
+    press(page, 'ArrowDown');
+    press(page, 'Enter');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.deepEqual(
+      targets.map((target) => target.purpose),
+      ['move', undefined],
+    );
+  });
+
   it('gives focus to the way out when the launch button had it, and Enter there stops or selects (FRU-303)', async () => {
     // The capsule hides the launch button while a capture runs: focus must not fall to the page.
     const targets: CaptureTarget[] = [];
