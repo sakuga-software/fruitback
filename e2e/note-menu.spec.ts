@@ -14,6 +14,7 @@ const MORE = /^(More actions on your note|Autres actions sur votre note)$/;
 const EDIT = /^(Edit the note|Modifier la note)$/;
 const COPY = /^(Copy link to the note|Copier le lien de la note)$/;
 const WITHDRAW = /^(Withdraw the note|Retirer la note)$/;
+const MOVE = /^(Move the note|Déplacer la note)$/;
 
 async function paired(extension: LoadedExtension): Promise<void> {
   const { link } = await mintPairing(NAME);
@@ -53,7 +54,7 @@ test('the author of an open note copies its link and opens the edit from « ⋯ 
   const id = await pinFor(page, 'The price is wrong').getAttribute('data-fruitback-pin');
 
   await more.click();
-  await expect(thread.getByRole('menuitem')).toHaveText([EDIT, COPY, WITHDRAW]);
+  await expect(thread.getByRole('menuitem')).toHaveText([EDIT, COPY, MOVE, WITHDRAW]);
   await page.emulateMedia({ reducedMotion: 'reduce' });
   const scanned = await new AxeBuilder({ page }).include('[data-fruitback-host]').analyze();
   expect(scanned.violations.map((violation) => violation.id)).toEqual([]);
@@ -138,4 +139,45 @@ test('the author withdraws an open note from « ⋯ »: asked first, then closed
   await expect(pinFor(page, 'Please take this back')).toHaveAttribute('data-fruitback-stage', 'closed', {
     timeout: 20_000,
   });
+});
+
+test('the author moves an open note to another element from « ⋯ », and it stays there (FRU-605)', async ({
+  extension,
+}) => {
+  test.slow();
+  await paired(extension);
+  const page = await extension.context.newPage();
+  await openBareSite(page, 'note-move');
+  const popup = await openPopup(extension, page);
+  await popup.getByRole('button', { name: /^(Turn on|Activer)$/ }).click();
+  await expect(page.locator('[data-fruitback-host-launch]')).toBeVisible();
+  await plantOn(page, '[data-testid="card-espresso"] .add', 'Wrong button');
+
+  const latte = page.locator('[data-testid="card-latte"] .add');
+  const near = async () => {
+    const pin = await pinFor(page, 'Wrong button').boundingBox();
+    const box = await latte.boundingBox();
+    if (pin === null || box === null) return false;
+
+    return Math.abs(pin.x - box.x) < 40 && Math.abs(pin.y - box.y) < 40;
+  };
+  expect(await near()).toBe(false);
+
+  await pinFor(page, 'Wrong button').locator('.fruitback-pin-badge').click();
+  const thread = page.locator('.fruitback-thread');
+  await thread.getByRole('button', { name: MORE }).click();
+  await thread.getByRole('menuitem', { name: MOVE }).click();
+  await expect(
+    page.getByText(/^(Point at the new element of your note|Pointez le nouvel élément de votre note)$/),
+  ).toBeVisible();
+  await latte.click();
+
+  await expect(thread.locator('.fruitback-thread-more-said')).toHaveText(/^(Moved\.|Déplacée\.)$/);
+  await expect.poll(near).toBe(true);
+  // No composer opened for the choice: it was a move, not a new note.
+  await expect(page.locator('[data-fruitback-composer]')).toBeHidden();
+
+  await page.reload();
+  await expect(pinFor(page, 'Wrong button')).toBeVisible({ timeout: 20_000 });
+  await expect.poll(near).toBe(true);
 });
