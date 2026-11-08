@@ -40,6 +40,14 @@
       url: /translating.html
     - title: What the team sees
       url: /install/team-view.html
+    - title: Jira Cloud
+      url: /connectors/jira.html
+    - title: Jira Cloud (français)
+      url: /connectors/jira.fr.html
+    - title: GitLab
+      url: /connectors/gitlab.html
+    - title: GitLab (français)
+      url: /connectors/gitlab.fr.html
 - title: Reference
   pages:
     - title: Widget options
@@ -48,10 +56,6 @@
       url: /self-hosting/environment-variables.html
     - title: REST connector
       url: /rest-connector.html
-    - title: GitLab connector
-      url: /connectors/gitlab.html
-    - title: Connecteur GitLab
-      url: /connectors/gitlab.fr.html
     - title: Connect an AI agent
       url: /agents.html
     - title: Worker responses
