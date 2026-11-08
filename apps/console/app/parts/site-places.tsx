@@ -22,6 +22,7 @@ import { KINDS, accountOf, addressOf, sourceLine } from './connector-parts';
 import { GITHUB_APP_PAGE } from './connector-github';
 import { ReadProblem } from '../read-problem';
 import { hostOf } from '../site-address';
+import { isPluginKind } from '../trackers/plugin.ts';
 
 /** A source in a sentence: its kind, then how it is connected. « Linear · Workspace Acme ». */
 function sourceName(source: Connector): string {
@@ -40,6 +41,8 @@ type Offer = Fetched<
    */
   | { kind: 'github'; repositories: Repository[]; listed: number; total: number }
   | { kind: 'rest' }
+  /** FRU-621: the places of a connector of a plugin, its projects or its lists, the first page. */
+  | { kind: 'places'; places: { id: string; name: string }[] }
 >;
 
 /**
@@ -120,6 +123,19 @@ export function SitePlaces({
         continue;
       }
       setOffers((current) => ({ ...current, [source.id]: 'loading' }));
+      if (isPluginKind(source.kind)) {
+        void call<{ places?: { id: string; name: string }[] }>('GET', `${base}/connectors/${source.id}/places`).then(
+          (answer) => {
+            if (stale) return;
+            const offer: Offer =
+              answer.ok && Array.isArray(answer.data.places)
+                ? { kind: 'places', places: answer.data.places }
+                : 'failed';
+            setOffers((current) => ({ ...current, [source.id]: offer }));
+          },
+        );
+        continue;
+      }
       const path = source.kind === 'linear' ? 'teams' : 'repositories';
       requests.current += 1;
       const asked = requests.current;
@@ -217,6 +233,14 @@ export function SitePlaces({
     if (source.kind === 'rest') return `${t(KINDS.rest.name)} · ${addressOf(source)}`;
     if (source.kind === 'github') return `GitHub · ${each.teamId ?? ''}`;
     const offer = offers[source.id];
+    if (isPluginKind(source.kind)) {
+      const named =
+        typeof offer === 'object' && offer.kind === 'places'
+          ? offer.places.find((one) => one.id === each.teamId)
+          : undefined;
+
+      return `${t(KINDS[source.kind].name)} · ${named?.name ?? each.teamId ?? ''}`;
+    }
     const team =
       typeof offer === 'object' && offer.kind === 'linear'
         ? offer.list.items.find((one) => one.id === each.teamId)
@@ -282,6 +306,13 @@ export function SitePlaces({
         {
           heading: t(KINDS.rest.name),
           options: [{ value: `${source.id}||`, label: addressOf(source).replace(/^https?:\/\//, '') }],
+        },
+      ];
+    if (offer.kind === 'places')
+      return [
+        {
+          heading: named,
+          options: offer.places.map((each) => ({ value: `${source.id}|${each.id}|`, label: each.name })),
         },
       ];
     if (offer.kind === 'linear')

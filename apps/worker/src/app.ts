@@ -440,6 +440,8 @@ async function routed(
             // FRU-331: a delivery carries the address of a file on this worker, which needs both.
             filesReachable: served.publicUrl !== undefined && served.secretsKey !== undefined,
             ...githubAppOf(context, served),
+            ...(served.trackerApps === undefined ? {} : { trackerApps: served.trackerApps }),
+            ...(context.trackerHttp === undefined ? {} : { trackerHttp: context.trackerHttp }),
           }),
         );
   };

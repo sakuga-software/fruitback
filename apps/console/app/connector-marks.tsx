@@ -1,4 +1,6 @@
 import { GITHUB_MARK } from './provider-icons';
+import { trackerOf } from './trackers/index.ts';
+import type { PluginKind } from './trackers/plugin.ts';
 
 /**
  * The mark of a kind of source beside its name (FRU-435, FRU-543), drawn inline: no CDN, no request.
@@ -11,11 +13,12 @@ import { GITHUB_MARK } from './provider-icons';
  * - Webhook: the `webhook` icon of Lucide 0.5 (`@iconify-json/lucide`, ISC), drawn as lines too.
  * - Claude Code routine (FRU-594): the `terminal` icon of Lucide (ISC), drawn as lines. No logo of a
  *   third party is copied: the name beside it says whose routine it is.
+ * - A connector of a plugin (FRU-621): the mark of its file in `trackers/`, else `PLUGGED`.
  *
  * The name beside it says the kind, so a mark is `aria-hidden` and takes no focus. It takes the colour
  * of the name: one colour for every mark, so that no logo is louder than the state of its row.
  */
-export type MarkedKind = 'linear' | 'github' | 'rest' | 'claude-routine';
+export type MarkedKind = 'linear' | 'github' | 'rest' | 'claude-routine' | PluginKind;
 
 /** The sources that the Connectors screen lists and that do not exist yet: they have a mark too. */
 export type LaterKind = 'jira' | 'gitlab' | 'trello' | 'notion' | 'webhook';
@@ -23,7 +26,7 @@ export type LaterKind = 'jira' | 'gitlab' | 'trello' | 'notion' | 'webhook';
 /** A mark: a path in its box, filled, or drawn as lines of 1.5 px at 16 px. */
 type Drawn = { box: 16 | 24; path: string; lines?: true };
 
-const MARKS: Readonly<Record<MarkedKind | LaterKind, Drawn>> = {
+const MARKS: Readonly<Record<Exclude<MarkedKind, PluginKind> | LaterKind, Drawn>> = {
   linear: {
     box: 24,
     path: 'M2.886 4.18A11.982 11.982 0 0 1 11.99 0C18.624 0 24 5.376 24 12.009c0 3.64-1.62 6.903-4.18 9.105L2.887 4.18ZM1.817 5.626l16.556 16.556c-.524.33-1.075.62-1.65.866L.951 7.277c.247-.575.537-1.126.866-1.65ZM.322 9.163l14.515 14.515c-.71.172-1.443.282-2.195.322L0 11.358a12 12 0 0 1 .322-2.195Zm-.17 4.862 9.823 9.824a12.02 12.02 0 0 1-9.824-9.824Z',
@@ -58,9 +61,24 @@ const MARKS: Readonly<Record<MarkedKind | LaterKind, Drawn>> = {
   },
 };
 
+/**
+ * A connector of a plugin with no mark here (FRU-621): the `plug` icon of Lucide (ISC), drawn as lines.
+ * Its own mark is in its file of `trackers/`; Jira and GitLab keep theirs above until they ship.
+ */
+const PLUGGED: Drawn = {
+  box: 24,
+  lines: true,
+  path: 'M12 22v-5M9 8V2M15 8V2M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z',
+};
+
+/** The mark of a kind: the one of its plugin, else the one drawn here. */
+function drawnOf(kind: MarkedKind | LaterKind): Drawn {
+  return trackerOf(kind)?.mark ?? (Object.hasOwn(MARKS, kind) ? MARKS[kind as keyof typeof MARKS] : PLUGGED);
+}
+
 /** The mark of a kind of source, 14 px in a cell of a table, or `size` beside the name of a source. */
 export function ConnectorMark({ kind, size = 14 }: { kind: MarkedKind | LaterKind; size?: 14 | 18 }) {
-  const { box, path, lines } = MARKS[kind];
+  const { box, path, lines } = drawnOf(kind);
 
   return (
     <svg

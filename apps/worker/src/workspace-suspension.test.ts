@@ -774,6 +774,8 @@ const READ_ONLY_RESTS = [
   '/connectors/con_1/states',
   '/connectors/con_1/teams',
   '/connectors/con_1/repositories',
+  // FRU-621: the places of a connector of a plugin.
+  '/connectors/con_1/places',
 ];
 
 /** The paths that a route of the console API matches `rest` with, as the source writes them. */

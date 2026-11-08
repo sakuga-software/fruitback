@@ -4,7 +4,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        A connector implements `NoteStore` from `apps/worker/src/store.ts`. CONTRIBUTING.md lists what a connector pull request must contain. The questions below are the ones that decided the shape of the existing connectors.
+        A connector implements `NoteStore` from `apps/worker/src/store.ts`. A connector of a workspace is a plugin of `apps/worker/src/trackers/` (docs/decisions/worker.md, « The connectors of a plugin »). CONTRIBUTING.md lists what a connector pull request must contain. The questions below are the ones that decided the shape of the existing connectors.
   - type: input
     id: store
     attributes:

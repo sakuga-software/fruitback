@@ -36,8 +36,11 @@ function workerVariables(): string[] {
   const block = /export type WorkerEnv = \{([\s\S]*?)\n\};/.exec(env)?.[1] ?? '';
   const own = [...block.matchAll(/^ {2}([A-Z][A-Z0-9_]*)\??:/gm)].map((match) => match[1] ?? '');
 
-  const sources = readdirSync(fileURLToPath(new URL('.', import.meta.url))).filter(
-    (file) => file.endsWith('.ts') && !file.endsWith('.test.ts') && !file.endsWith('.fixture.ts'),
+  // FRU-621: a plugin of `trackers/` names its variables in its `envNames` too.
+  const sources = ['.', 'trackers'].flatMap((folder) =>
+    readdirSync(fileURLToPath(new URL(`${folder}/`, import.meta.url)))
+      .filter((file) => file.endsWith('.ts') && !file.endsWith('.test.ts') && !file.endsWith('.fixture.ts'))
+      .map((file) => (folder === '.' ? file : `${folder}/${file}`)),
   );
   const stores = sources.flatMap((file) =>
     [...read(`./${file}`).matchAll(/envNames: \{([^}]*)\}/g)].flatMap((match) =>

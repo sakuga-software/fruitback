@@ -32,6 +32,14 @@ import { linearAuthorization, linearTicket, revokeLinear } from './linear-oauth.
 import { isAcceptableToken, parseFireUrl, routineLabel, sealRoutine } from './claude-routine.ts';
 import { seal } from './secrets.ts';
 import { StoreError } from './store.ts';
+import { isPluginKind } from './trackers/kinds.ts';
+import {
+  connectPlugin,
+  disconnectPlugin,
+  listPluginPlaces,
+  pluginOffers,
+  startPluginOAuth,
+} from './trackers/routes.ts';
 
 /**
  * The connectors of a workspace in the console (FRU-507): list, add, name, remove, their deliveries,
@@ -177,6 +185,8 @@ export async function handleConnectors(
           linearOAuth: linearOAuthReady(context),
           // The console offers « Install the GitHub App » only where the worker can do it (FRU-360).
           githubApp: githubAppReady(context),
+          // FRU-621: the connectors of a plugin this build has, and how each one connects here.
+          trackers: pluginOffers(context),
         },
         headers,
       );
@@ -186,6 +196,10 @@ export async function handleConnectors(
     if (context.secretsKey === undefined) return json(404, CONNECTORS_UNAVAILABLE, headers);
 
     const body = await readJsonObject(request);
+    // FRU-621: a connector of a plugin, by the token a person typed.
+    if (body !== undefined && isPluginKind(body.kind)) {
+      return connectPlugin(body, workspaceId as string, context, headers, connectorView);
+    }
     if (body?.kind === 'rest') {
       // FRU-122: an address that receives each note. Nothing is asked of it now: it is called when a
       // note is written, and the console shows a delivery that did not arrive.
@@ -256,6 +270,24 @@ export async function handleConnectors(
     );
 
     return json(201, { url }, headers);
+  }
+
+  // FRU-621: where the browser goes to connect the service of a plugin by OAuth.
+  const viaPlugin = /^\/connectors\/([a-z]+)\/oauth$/.exec(rest);
+  if (viaPlugin !== null && isPluginKind(viaPlugin[1])) {
+    if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
+    if (!allowed('manage-workspace')) return forbidden();
+
+    return startPluginOAuth(viaPlugin[1], { workspace: workspaceId as string, account: account.id }, context, headers);
+  }
+
+  // FRU-621: the places of a connector of a plugin, for the person who chooses a destination.
+  const placed = /^\/connectors\/([A-Za-z0-9_-]+)\/places$/.exec(rest);
+  if (placed !== null) {
+    if (request.method !== 'GET') return json(405, { error: 'method-not-allowed' }, headers);
+    if (!allowed('manage-sites')) return forbidden();
+
+    return listPluginPlaces(request, placed[1] as string, workspaceId as string, context, headers);
   }
 
   // FRU-360: where the browser goes to install the GitHub App. The console sends it there.
@@ -412,6 +444,10 @@ export async function handleConnectors(
       const removed = await context.accounts.removeConnector(workspaceId as string, id);
       if (removed && leaving?.kind === 'linear' && leaving.workspaceId === workspaceId) {
         await revokeLinear(leaving.sealed, context.secretsKey);
+      }
+      // FRU-621: the service of a plugin forgets its token, best effort, as Linear's.
+      if (removed && leaving !== undefined && leaving.workspaceId === workspaceId && isPluginKind(leaving.kind)) {
+        await disconnectPlugin(context, id, leaving.sealed, leaving.kind);
       }
 
       return removed ? new Response(null, { status: 204, headers }) : json(404, { error: 'not-found' }, headers);

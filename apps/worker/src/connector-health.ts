@@ -4,6 +4,7 @@ import { GithubInstallationGone, GithubRepositoryRefused } from './github-connec
 import { LinearKeyForbidden, LinearKeyRefused } from './linear.ts';
 import { LinearConnectionEnded } from './linear-oauth.ts';
 import { type NoteStore, findNote } from './store.ts';
+import { TrackerConnectionEnded, TrackerKeyForbidden, TrackerKeyRefused } from './trackers/plugin.ts';
 
 /**
  * Whether a connector works, as its tracker last said (FRU-102).
@@ -22,6 +23,10 @@ export function troubleOf(error: unknown): ConnectorTrouble | undefined {
   // FRU-359: the installation of the App does not cover the repository, or the App was removed.
   if (error instanceof GithubRepositoryRefused) return 'key-lacks-access';
   if (error instanceof GithubInstallationGone) return 'connection-ended';
+  // FRU-621: the connectors of a plugin say their refusals with the three errors of `trackers/plugin.ts`.
+  if (error instanceof TrackerKeyRefused) return 'key-refused';
+  if (error instanceof TrackerKeyForbidden) return 'key-lacks-access';
+  if (error instanceof TrackerConnectionEnded) return 'connection-ended';
 
   return undefined;
 }
