@@ -111,7 +111,9 @@ uses: a processor of the notes that Fruitback does not choose and does not see. 
 model itself. When a site starts a Claude Code routine of your team, the call to Anthropic carries
 the identifiers of the notes and of the site, never their text: the routine reads the notes with
 its own access, as any agent does. Fruitback keeps the address of the session it started for 30
-days, to show it to your team. With no key, no note leaves this way. On a site that everyone reads, a key reads only
+days, to show it to your team. Whoever reads a note on its page is told that an agent works on it;
+the address of the session is given only to a member of the workspace whose role sees the tracker,
+never to a guest, a reviewer of the site, or a visitor. With no key, no note leaves this way. On a site that everyone reads, a key reads only
 the notes of a known person unless the team made it otherwise. A reply that an agent writes is
 stored where the note is, under the name of the key and the word « agent ».
 

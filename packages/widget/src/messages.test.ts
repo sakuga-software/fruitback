@@ -338,6 +338,8 @@ describe('every word the widget shows', () => {
       // FRU-475: its reader left it, and may edit it.
       mine: true,
       editable: true,
+      // FRU-618: an agent works on it, and its reader is of the team.
+      agent: { url: 'https://claude.ai/code/session_1' },
       note: noteFixture({
         id: 'sd_found',
         text: 'NOTE ONE',

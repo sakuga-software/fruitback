@@ -1553,6 +1553,7 @@ function buildThread(
       ...uncertaintyNote(document, resolution, t),
     ]),
     ...doneLine(document, issue, t),
+    ...agentLine(document, issue, t),
     ...replies(document, issue, t),
     ...(check === undefined ? [] : checkBlock(document, issue, t, check)),
     // The author answers a note marked done by its verdict (FRU-603): « Still wrong » opens the field
@@ -1814,6 +1815,27 @@ export function doneByOf(issue: NoteIssue, t: Translator): string | undefined {
   }
 
   return undefined;
+}
+
+/**
+ * « An agent is working on this note », above the replies, when a session of a routine was started
+ * for it (FRU-618). The read gives the address of that session to a member of the team only: then
+ * « Open the session », in a new tab. Every other reader reads the line alone.
+ */
+function agentLine(document: Document, issue: NoteIssue, t: Translator): HTMLElement[] {
+  if (DRAFTS.has(issue) || issue.agent === undefined) return [];
+  const line = element(document, 'p', 'fruitback-thread-agent', t.text('thread.agentWorks'));
+  const { url } = issue.agent;
+  if (url !== undefined) {
+    const open = document.createElement('a');
+    open.href = url;
+    open.target = '_blank';
+    open.rel = 'noreferrer noopener';
+    open.textContent = t.text('thread.agentSession');
+    line.append(' · ', open);
+  }
+
+  return [line];
 }
 
 /** « Marc Petit marked it done », above the replies of a note done and not confirmed yet (FRU-603). */

@@ -167,6 +167,8 @@ export const FRENCH: Catalog = {
   'thread.team': 'Équipe',
   'thread.agent': 'Agent',
   'thread.edited': 'A modifié la note',
+  'thread.agentWorks': 'Un agent travaille sur cette note',
+  'thread.agentSession': 'Ouvrir la session',
   'check.doneBy': '{name} l’a marquée comme faite',
   'check.done': 'Marquée comme faite',
   'check.ask': 'Est-ce bon pour vous ?',

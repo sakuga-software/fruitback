@@ -53,6 +53,9 @@ first publish made it expensive.
   new version would make every reader of before refuse every new note. `anchorSelectorPath` writes the
   hosts and the selector as one line (`#promo >>> button.buy`) for the description, the text of a page
   and the thread; no CSS engine reads it.
+- **An issue says `agent`** (FRU-618) when an agent works on the note: `{}`, or `{ url }` with the
+  address of its session (`https` only) for a member of the team who sees the tracker. Optional, a
+  read-envelope field: `NOTE_VERSION` does not move.
 - **An issue says `editable: true`** (FRU-475) to the reader who may edit its text now: their own
   note, still `new`, kept by the worker. Optional, a read-envelope field: `NOTE_VERSION` does not move.
 
