@@ -67,8 +67,7 @@ async function accountSession(world: World, who: Who): Promise<string> {
     body: { word, account: who.id },
   });
   assert.equal(approved.status, 200, await approved.clone().text());
-  await world.kv.set(`fruitback:connect-poll:${await digest(claim)}`, '0', 1);
-  await new Promise((resolve) => setTimeout(resolve, 3));
+  await world.kv.set(`fruitback:connect-poll:${await digest(claim)}`, '0', 0);
   const claimed = await callOn(world, 'POST', '/session/connect/claim', { origin: EXTENSION, body: { claim } });
   assert.equal(claimed.status, 200, await claimed.clone().text());
 

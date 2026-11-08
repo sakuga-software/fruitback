@@ -108,8 +108,7 @@ async function worldOf(routes: Routes): Promise<World> {
       return answer;
     },
     async waited(claim) {
-      await kv.set(`fruitback:connect-poll:${await digest(claim)}`, '0', 1);
-      await new Promise((resolve) => setTimeout(resolve, 3));
+      await kv.set(`fruitback:connect-poll:${await digest(claim)}`, '0', 0);
     },
   };
 }
