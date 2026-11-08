@@ -36,7 +36,17 @@ import { readTrackerCredential } from './trackers/plugin.ts';
  * go through the guarded `fetch` of the worker, opened to the loopback for this test only.
  */
 
-type Seen = { method: string; path: string; query: URLSearchParams; token: string | undefined; body: string };
+type Seen = {
+  method: string;
+  path: string;
+  query: URLSearchParams;
+  token: string | undefined;
+  body: string;
+  /** The headers as the server read them: `host`, `content-type`, `content-length`. */
+  headers: Record<string, string | string[] | undefined>;
+  /** The bytes of the body the server read. */
+  size: number;
+};
 type Issue = {
   id: number;
   iid: number;
@@ -84,7 +94,16 @@ async function fakeGitlab(tokens: Record<string, Token>) {
       const url = new URL(request.url ?? '/', 'http://fake');
       const token = request.headers['private-token'] as string | undefined;
       const body = Buffer.concat(chunks).toString('latin1');
-      calls.push({ method: request.method ?? 'GET', path: url.pathname, query: url.searchParams, token, body });
+      const bytes = Buffer.concat(chunks).byteLength;
+      calls.push({
+        method: request.method ?? 'GET',
+        path: url.pathname,
+        query: url.searchParams,
+        token,
+        body,
+        headers: request.headers,
+        size: bytes,
+      });
       const send = (status: number, value: unknown, headers: Record<string, string> = {}) => {
         response.writeHead(status, { 'Content-Type': 'application/json', ...headers });
         response.end(JSON.stringify(value));
@@ -316,6 +335,16 @@ describe('the GitLab connector against a fake GitLab (FRU-623)', async () => {
     assert.deepEqual(created.files, { sent: ['att_1'], lost: [], waiting: [] });
     const upload = gitlab.calls.findLast((call) => call.path === '/api/v4/projects/42/uploads');
     assert.match(upload?.body ?? '', /name="file"; filename="capture.png"/);
+    // What the server read of the guarded fetch (review of #865): its host, the boundary of the form
+    // in its type, and a length that is the length of the body it received.
+    assert.equal(upload?.headers.host, new URL(gitlab.origin).host);
+    const boundary = /^multipart\/form-data; boundary=(.+)$/.exec(String(upload?.headers['content-type']))?.[1];
+    assert.ok(
+      boundary !== undefined && upload?.body.includes(`--${boundary}--`),
+      String(upload?.headers['content-type']),
+    );
+    assert.equal(Number(upload?.headers['content-length']), upload?.size);
+    assert.ok((upload?.size ?? 0) > 4);
     const issue = gitlab.issues.get(42)?.at(-1);
     assert.ok(issue?.description?.includes(`${FILES_HEADING}\n\n![capture](/uploads/`));
     const read = (await store.findForPage(query, client('42'), POLICY)).find((each) => each.note.id === 'sd_files');
@@ -517,6 +546,24 @@ describe('the address and the token of a GitLab connector (FRU-623)', () => {
     await assert.rejects(http(`${origin}/api/v4/user`, {}), TypeError);
     assert.equal((await http(`${origin}/api/v4/user`, { redirect: 'manual' })).status, 302);
     assert.deepEqual(hops, ['/api/v4/user', '/api/v4/user', '/api/v4/user']);
+  });
+
+  it('the guarded fetch fails an answer past its limit, and keeps none of it (review of #865)', async () => {
+    const server = createServer((_request, response) => {
+      response.writeHead(200, { 'Content-Type': 'application/json' });
+      // Three chunks of 1 KB, past a limit of 1.5 KB: the third arrives after the cut, if at all.
+      for (let index = 0; index < 3; index += 1) response.write('x'.repeat(1_024));
+      response.end();
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    servers.push(server);
+    const small = createGuardedFetch({ request: httpRequest as never, allows: () => true, maxBytes: 1_536 });
+    const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    await assert.rejects(small(`${origin}/`, {}), /too long/);
+    assert.equal(
+      (await createGuardedFetch({ request: httpRequest as never, allows: () => true })(`${origin}/`, {})).status,
+      200,
+    );
   });
 
   it('the guarded fetch of the worker refuses the loopback by default', async () => {
