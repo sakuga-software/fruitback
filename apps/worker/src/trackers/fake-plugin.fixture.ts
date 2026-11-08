@@ -38,6 +38,10 @@ export function fakeService() {
     issues: [] as { place: string; title: string; token: string }[],
     revoked: [] as string[],
     calls: [] as string[],
+    /** Runs when a refresh is asked, before the answer: another process of the worker, for a test. */
+    beforeRefresh: undefined as (() => Promise<void>) | undefined,
+    /** The list of the places answers a body that is not JSON. */
+    garbled: false,
   };
   const mint = () => {
     state.generation += 1;
@@ -61,6 +65,7 @@ export function fakeService() {
         return Response.json({ error: 'invalid_client' }, { status: 401 });
       }
       if (form.grant_type === 'authorization_code' && state.codes.delete(form.code ?? '')) return Response.json(mint());
+      if (form.grant_type === 'refresh_token') await state.beforeRefresh?.();
       if (form.grant_type === 'refresh_token' && state.refreshable.delete(form.refresh_token ?? '')) {
         return Response.json(mint());
       }
@@ -77,6 +82,7 @@ export function fakeService() {
     if (url.pathname === '/me') return Response.json({ name: 'Acme' });
     if (url.pathname === '/places') {
       if (state.limited.has(token)) return Response.json({ error: 'forbidden' }, { status: 403 });
+      if (state.garbled) return new Response('<html>maintenance</html>', { status: 200 });
       const search = (url.searchParams.get('q') ?? '').toLowerCase();
 
       return Response.json(state.places.filter((each) => each.name.toLowerCase().includes(search)));

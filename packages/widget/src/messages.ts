@@ -267,6 +267,13 @@ export const ENGLISH = {
   'edit.failedSignedOut': 'Your session has ended. Your text is still here. Sign in again, then save it.',
   'edit.refused':
     'This note can no longer be edited: the team has started on it. Your text is still here. Send it as a reply.',
+  // FRU-605: the menu « ⋯ » of the author, in the head of the thread of an open note.
+  'more.open': 'More actions on your note',
+  'more.edit': 'Edit the note',
+  'more.copyLink': 'Copy link to the note',
+  'more.copied': 'Link copied.',
+  'more.copyManually': 'The link could not be copied. Select it, then copy it.',
+  'more.linkLabel': 'Link to the note',
   'thread.anonymous': 'Anonymous',
   'thread.orphan': 'Element not found. The position is approximate.',
   'thread.uncertain': 'Element found by its position, not by its identity. The page may have changed under the pin.',

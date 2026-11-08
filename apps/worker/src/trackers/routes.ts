@@ -67,6 +67,23 @@ export function accessOf(context: PluginRouteContext, plugin: TrackerPlugin, con
 }
 
 /**
+ * A read of a plugin whose failure is a service that is down: an answer the plugin cannot read (a
+ * body that is not JSON, a shape it does not know) is a `StoreError`, so the console reads `502` and
+ * never `500` (balanced review of #864).
+ */
+export async function readOf<T>(plugin: TrackerPlugin, read: () => Promise<T>): Promise<T> {
+  try {
+    return await read();
+  } catch (error) {
+    if (error instanceof StoreError) throw error;
+    console.error(
+      `[fruitback] ${plugin.name} answered what its connector cannot read: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    throw new StoreError(`${plugin.name} answered what its connector cannot read`);
+  }
+}
+
+/**
  * A call to the service of a connector. What it answers is noted on the connector, as for a note
  * (FRU-102): a refusal makes it « Needs attention », and an answer ends it.
  */
@@ -167,7 +184,9 @@ export async function listPluginPlaces(
   }
   const access = accessOf(context, plugin, connector, kept.sealed);
   const page = await askPlugin(context, connector, () =>
-    plugin.places(access, { ...(search === '' ? {} : { search }), ...(after === undefined ? {} : { after }) }),
+    readOf(plugin, () =>
+      plugin.places(access, { ...(search === '' ? {} : { search }), ...(after === undefined ? {} : { after }) }),
+    ),
   );
 
   return json(200, page, headers);
