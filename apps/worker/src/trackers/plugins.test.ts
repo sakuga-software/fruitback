@@ -114,9 +114,7 @@ describe('a connector of a plugin, by a token (FRU-621)', () => {
     const listed = await callOn(env, 'GET', `${world.base}/connectors`, { token: world.token });
     const text = await listed.text();
     assert.equal(text.includes('typed-token'), false);
-    assert.deepEqual(offered(JSON.parse(text)), [
-      { kind: 'asana', oauth: false, token: true },
-    ]);
+    assert.deepEqual(offered(JSON.parse(text)), [{ kind: 'asana', oauth: false, token: true }]);
   });
 
   it('keeps nothing for a token the service refuses, and says why', async () => {
@@ -302,9 +300,7 @@ describe('a connector of a plugin, by OAuth (FRU-621)', () => {
     const world = await acme(env);
 
     const listed = await callOn(env, 'GET', `${world.base}/connectors`, { token: world.token });
-    assert.deepEqual(offered(await listed.json()), [
-      { kind: 'asana', oauth: true, token: true },
-    ]);
+    assert.deepEqual(offered(await listed.json()), [{ kind: 'asana', oauth: true, token: true }]);
     const none = await envWith();
     const elsewhere = await acme(none.env);
     const refused = await callOn(none.env, 'POST', `${elsewhere.base}/connectors/asana/oauth`, {
