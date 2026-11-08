@@ -111,6 +111,7 @@
   "screenshot.spec.ts": 20.1,
   "scroll-fixed.spec.ts": 3.4,
   "send-failure.spec.ts": 12.9,
+  "settled.spec.ts": 0.7,
   "shadow-anchor.spec.ts": 7,
   "shadow-late.spec.ts": 12.5,
   "side-panel-search.spec.ts": 66,
