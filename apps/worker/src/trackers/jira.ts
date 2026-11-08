@@ -84,6 +84,14 @@ function jiraLabel(name: string): string {
     : `${FRUITBACK_LABEL}:${createHash('sha256').update(name).digest('hex').slice(0, 16)}`;
 }
 
+/**
+ * A value as a string of JQL. The labels are plain already (`jiraLabel`); this escapes a quote and a
+ * backslash all the same, so the search never rests on that rule alone (balanced review of #867).
+ */
+export function jqlString(value: string): string {
+  return value.replace(/["\\]/g, (character) => `\\${character}`);
+}
+
 /** The label of a page: a search by it finds the issues of that page and of no other. */
 export function pageLabel(url: string): string {
   return `${FRUITBACK_LABEL}-page-${createHash('sha256').update(url).digest('hex').slice(0, 20)}`;
@@ -337,7 +345,7 @@ function createJiraStore(
         pageLabel(query.url),
         ...(query.clientId ? [jiraLabel(clientLabelName(query.clientId))] : []),
       ];
-      const jql = [`project = ${project}`, ...labels.map((label) => `labels = "${label}"`)].join(' AND ');
+      const jql = [`project = ${project}`, ...labels.map((label) => `labels = "${jqlString(label)}"`)].join(' AND ');
       const params = new URLSearchParams({
         jql: `${jql} ORDER BY created DESC`,
         maxResults: String(ISSUES_PAGE_SIZE),

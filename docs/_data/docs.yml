@@ -48,6 +48,10 @@
       url: /connectors/gitlab.html
     - title: GitLab (français)
       url: /connectors/gitlab.fr.html
+    - title: ClickUp
+      url: /connectors/clickup.html
+    - title: ClickUp (français)
+      url: /connectors/clickup.fr.html
 - title: Reference
   pages:
     - title: Widget options
