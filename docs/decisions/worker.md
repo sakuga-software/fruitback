@@ -4706,8 +4706,12 @@ framing; `SECURITY.md` says what is protected.
   they gave. `take` claims the rows of the notes done for `DONE_CLAIM_MS` (10 minutes) and answers
   them in one statement, so two reads of one page send one message
   (test:`answers a row to one of two takes at once`). The row goes only after the provider took the
-  message (`sent`); a refusal releases the claim (`release`), and a process that stops while it
-  sends leaves a claim that runs out
+  message (`sent`). A failure (the provider refuses, or the account cannot be read) keeps the claim
+  for `DONE_RETRY_MS` (5 minutes, FRU-619), so the reads of the page in between do not fail and log
+  again every 15 seconds
+  (test:`waits 5 minutes after an account that could not be read, then sends (FRU-619)`). A row
+  whose page the read does not hold is released at once. A process that stops while it sends leaves
+  a claim that runs out
   (test:`keeps a row that a read took and did not send, and gives it again once its claim ran out`).
   Kentō's review of #839 found the first version, which deleted the row before the send: a stop
   between the two lost the only message. The order chosen sends twice in one case (the database

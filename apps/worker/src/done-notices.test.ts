@@ -5,6 +5,7 @@ import { type World, callOn, memberOf, signInTo, workspaceIn, worlds } from './c
 import {
   DONE_CLAIM_MS,
   DONE_NOTICE_KEEP_MS,
+  DONE_RETRY_MS,
   type DoneNotice,
   type DoneNotices,
   NOTIFY_TOKEN_TTL_MS,
@@ -139,7 +140,8 @@ describe('the message of a note done', () => {
 
 /** A store of rows in memory, as `DoneNotices` says it behaves. */
 function memoryNotices(rows: DoneNotice[] = []): DoneNotices & { rows: DoneNotice[] } {
-  const claimed = new Set<string>();
+  // The instant each claim runs out at, as `claimed_until` holds it.
+  const claimed = new Map<string, number>();
   const key = (notice: Pick<DoneNotice, 'site' | 'note'>) => `${notice.site} ${notice.note}`;
 
   return {
@@ -153,9 +155,11 @@ function memoryNotices(rows: DoneNotice[] = []): DoneNotices & { rows: DoneNotic
     async open(site, note) {
       return !rows.some((row) => row.site === site && row.note === note);
     },
-    async take(site, notes) {
-      const taken = rows.filter((row) => row.site === site && notes.includes(row.note) && !claimed.has(key(row)));
-      for (const row of taken) claimed.add(key(row));
+    async take(site, notes, now) {
+      const taken = rows.filter(
+        (row) => row.site === site && notes.includes(row.note) && (claimed.get(key(row)) ?? -1) < now,
+      );
+      for (const row of taken) claimed.set(key(row), now + DONE_CLAIM_MS);
 
       return taken;
     },
@@ -164,14 +168,18 @@ function memoryNotices(rows: DoneNotice[] = []): DoneNotices & { rows: DoneNotic
       if (at >= 0) rows.splice(at, 1);
       claimed.delete(key(notice));
     },
-    async release(notice) {
-      claimed.delete(key(notice));
+    async release(notice, retryAt) {
+      if (retryAt === undefined) claimed.delete(key(notice));
+      else claimed.set(key(notice), retryAt);
     },
     async sweep() {
       return 0;
     },
   };
 }
+
+/** The instant of the first read of a case. */
+const AT = 1_800_000_000_000;
 
 const issue = (id: string, stage: string) => ({ stage, note: { id, page: { url: PAGE } } });
 
@@ -216,11 +224,53 @@ describe('sendDoneNotices', () => {
       accountOf: async () => undefined,
     };
 
-    assert.equal(await sendDoneNotices(seams, 's', [issue('n_1', 'done')]), 0);
+    assert.equal(await sendDoneNotices({ ...seams, now: () => AT }, 's', [issue('n_1', 'done')]), 0);
     assert.equal(notices.rows.length, 1);
     refuse = false;
-    assert.equal(await sendDoneNotices(seams, 's', [issue('n_1', 'done')]), 1);
+    const at = (now: number) => sendDoneNotices({ ...seams, now: () => now }, 's', [issue('n_1', 'done')]);
+    // FRU-619: the reads of the next 5 minutes do not try again, and the first one after does.
+    assert.equal(await at(AT + DONE_RETRY_MS - 1), 0);
+    assert.equal(await at(AT + DONE_RETRY_MS + 1), 1);
     assert.equal(sent.length, 1);
+  });
+
+  it('waits 5 minutes after an account that could not be read, then sends (FRU-619)', async () => {
+    const notices = memoryNotices([{ site: 's', note: 'n_1', account: 'acc_1' }]);
+    let down = true;
+    const sent: MailMessage[] = [];
+    const errors: unknown[] = [];
+    const logged = console.error;
+    console.error = (...line: unknown[]) => void errors.push(line);
+    try {
+      const at = (now: number) =>
+        sendDoneNotices(
+          {
+            notices,
+            mailer: { send: async (message: MailMessage) => void sent.push(message) },
+            accountOf: async () => {
+              if (down) throw new Error('the database is busy');
+
+              return { email: 'carla@acme.dev' };
+            },
+            now: () => now,
+          },
+          's',
+          [issue('n_1', 'done')],
+        );
+      assert.equal(await at(AT), 0);
+      // Twenty reads in the next 5 minutes: none tries again, so the error is logged once.
+      for (let read = 1; read <= 20; read += 1) assert.equal(await at(AT + read * 15_000 - 1), 0);
+      assert.equal(errors.length, 1);
+      down = false;
+      assert.equal(await at(AT + DONE_RETRY_MS + 1), 1);
+      assert.deepEqual(
+        sent.map((message) => message.to),
+        ['carla@acme.dev'],
+      );
+      assert.deepEqual(notices.rows, []);
+    } finally {
+      console.error = logged;
+    }
   });
 
   it('releases a row whose page the read does not hold, and never deletes it unsent', async () => {
@@ -232,9 +282,16 @@ describe('sendDoneNotices', () => {
       mailer: { send: async (message: MailMessage) => void sent.push(message) },
       accountOf: async () => undefined,
     };
-    assert.equal(await sendDoneNotices(seams, 's', [issue('n_1', 'done')]), 0);
+    assert.equal(await sendDoneNotices({ ...seams, now: () => AT }, 's', [issue('n_1', 'done')]), 0);
     assert.deepEqual(sent, []);
     assert.deepEqual(notices.rows, [{ site: 's', note: 'n_other', email: 'ana@example.com' }]);
+    // No failure: the claim goes at once, and a read of its own page sends it with no wait.
+    assert.equal(
+      await sendDoneNotices({ notices, mailer: seams.mailer, accountOf: seams.accountOf, now: () => AT }, 's', [
+        issue('n_other', 'done'),
+      ]),
+      1,
+    );
   });
 
   it('tells nobody for an account that is gone, and sends nothing without a mailer', async () => {
@@ -693,9 +750,14 @@ describe('the rows of done_notices (FRU-604)', () => {
     // Another read meanwhile does not send it a second time; one after the claim ran out does.
     assert.deepEqual(await notices.take(site, ['nr_5'], at + DONE_CLAIM_MS - 1), []);
     assert.equal((await notices.take(site, ['nr_5'], at + DONE_CLAIM_MS + 1)).length, 1);
-    // Released, it is taken at once; sent, it is gone.
+    // Released after a failure, it waits until the time given (FRU-619).
+    const failedAt = at + DONE_CLAIM_MS + 2;
+    await notices.release({ site, note: 'nr_5' }, failedAt + DONE_RETRY_MS);
+    assert.deepEqual(await notices.take(site, ['nr_5'], failedAt + DONE_RETRY_MS - 1), []);
+    assert.equal((await notices.take(site, ['nr_5'], failedAt + DONE_RETRY_MS + 1)).length, 1);
+    // Released with no failure, it is taken at once; sent, it is gone.
     await notices.release({ site, note: 'nr_5' });
-    assert.equal((await notices.take(site, ['nr_5'], at + DONE_CLAIM_MS + 2)).length, 1);
+    assert.equal((await notices.take(site, ['nr_5'], failedAt + DONE_RETRY_MS + 2)).length, 1);
     await notices.sent({ site, note: 'nr_5' });
     assert.deepEqual(await rowsOf(world.database, 'SELECT * FROM done_notices'), []);
   });
