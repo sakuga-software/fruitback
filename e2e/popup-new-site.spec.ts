@@ -43,9 +43,19 @@ function expectNear(built: Box, mockup: Partial<Box>, name: string): void {
   }
 }
 
+/**
+ * Waits until no animation or transition of the page runs. A line of the lists fades in from
+ * `opacity: 0` (`.popup-screen-2 .kit-dl-entry`), and axe measures the contrast of what is drawn
+ * now: a fade that is not at its end fails `color-contrast`.
+ */
+async function settled(surface: Page): Promise<void> {
+  await surface.evaluate(() => Promise.all(document.getAnimations().map((animation) => animation.finished)));
+}
+
 async function clean(surface: Page, name: string): Promise<void> {
   for (const colorScheme of ['light', 'dark'] as const) {
     await surface.emulateMedia({ colorScheme });
+    await settled(surface);
     const { violations, passes } = await new AxeBuilder({ page: surface }).analyze();
     expect(
       passes.map((rule) => rule.id),
