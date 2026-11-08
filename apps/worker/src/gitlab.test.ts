@@ -66,6 +66,8 @@ async function fakeGitlab(tokens: Record<string, Token>) {
   const comments = new Map<string, Comment[]>();
   let next = 1000;
   let refuse: number | undefined;
+  // A search of GitLab that matches nothing, as for an address it does not read as written.
+  let searching = true;
   const server = createServer((request: IncomingMessage, response: ServerResponse) => {
     const chunks: Buffer[] = [];
     request.on('data', (chunk: Buffer) => chunks.push(chunk));
@@ -148,7 +150,7 @@ async function fakeGitlab(tokens: Record<string, Token>) {
         const found = [...list]
           .reverse()
           .filter((issue) => wanted.every((label) => issue.labels.includes(label)))
-          .filter((issue) => search === null || `${issue.title} ${issue.description}`.includes(search));
+          .filter((issue) => search === null || (searching && `${issue.title} ${issue.description}`.includes(search)));
         return send(200, found.slice((page - 1) * size, page * size));
       }
       const notes = /^\/issues\/(\d+)\/notes$/.exec(rest);
@@ -174,6 +176,9 @@ async function fakeGitlab(tokens: Record<string, Token>) {
       comments.set(key, [...(comments.get(key) ?? []), comment]);
       const issue = issues.get(project)?.find((each) => each.iid === iid);
       if (issue !== undefined && !comment.system) issue.user_notes_count += 1;
+    },
+    searchFinds(finds: boolean) {
+      searching = finds;
     },
     refuse(status: number | undefined) {
       refuse = status;
@@ -307,6 +312,30 @@ describe('the GitLab connector against a fake GitLab (FRU-623)', async () => {
     );
     gitlab.refuse(undefined);
     assert.equal(gitlab.issues.get(42)?.length, count);
+  });
+
+  it('finds a note past the newest 100 issues of a site, whatever the search of GitLab matches (review of #865)', async () => {
+    const issues = gitlab.issues.get(42) ?? [];
+    const old = issues[0];
+    assert.ok(old);
+    // 150 newer issues of the same client, on another page: the note of this page is the oldest.
+    const other = noteFixture({ id: 'sd_other', page: { ...note.page, url: 'https://preview.acme.test/other' } });
+    for (let index = 0; index < 150; index += 1) await store.create(other, client('42'), POLICY);
+    gitlab.searchFinds(false);
+    const read = await store.findForPage(query, client('42'), POLICY);
+    gitlab.searchFinds(true);
+    assert.ok(
+      read.some((each) => each.id === String(old.id)),
+      'the oldest note is read from the second page',
+    );
+    const asked = gitlab.calls.filter((call) => call.path === '/api/v4/projects/42/issues' && call.method === 'GET');
+    assert.deepEqual(
+      asked.slice(-2).map((call) => [call.query.get('page'), call.query.get('search')]),
+      [
+        ['1', null],
+        ['2', null],
+      ],
+    );
   });
 
   it('another client of the same project does not read these notes', async () => {
