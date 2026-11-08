@@ -22,6 +22,7 @@ import { type Kv, KvError } from './kv.ts';
 import { handleGithubAppFlow } from './github-app-flow.ts';
 import type { GithubApp } from './github-connector.ts';
 import { handleLinearOAuth } from './linear-oauth.ts';
+import { handleTrackerOAuth } from './trackers/oauth.ts';
 import type { NoteIndex } from './notes-index.ts';
 import { withoutAddress } from './postgres.ts';
 import type { RequestContext, Served } from './request-context.ts';
@@ -136,6 +137,25 @@ export async function handleConsole(request: Request, pathname: string, seams: C
       if (viaLinear !== undefined) return viaLinear;
     }
 
+    // The way to the service of a plugin and back (FRU-621). Navigations too.
+    if (
+      served.trackerApps !== undefined &&
+      served.publicUrl !== undefined &&
+      served.consoleUrl !== undefined &&
+      served.secretsKey !== undefined
+    ) {
+      const viaPlugin = await handleTrackerOAuth(request, pathname, {
+        apps: served.trackerApps,
+        publicUrl: served.publicUrl,
+        consoleUrl: served.consoleUrl,
+        accounts,
+        kv,
+        secretsKey: served.secretsKey,
+        ...(context.trackerHttp === undefined ? {} : { http: context.trackerHttp }),
+      });
+      if (viaPlugin !== undefined) return viaPlugin;
+    }
+
     // The installation of the GitHub App on a workspace (FRU-360). Navigations too.
     if (
       githubApp !== undefined &&
@@ -201,6 +221,8 @@ export async function handleConsole(request: Request, pathname: string, seams: C
         ...(done === undefined ? {} : { done }),
         ...(served.linearOAuth === undefined ? {} : { linearOAuth: served.linearOAuth }),
         ...(githubApp === undefined ? {} : { githubApp }),
+        ...(served.trackerApps === undefined ? {} : { trackerApps: served.trackerApps }),
+        ...(context.trackerHttp === undefined ? {} : { trackerHttp: context.trackerHttp }),
         ...(served.publicUrl === undefined ? {} : { publicUrl: served.publicUrl }),
         ...(context.resolveTxt === undefined ? {} : { resolveTxt: context.resolveTxt }),
         // The administrator of the instance (FRU-261): the database of the accounts, and this configuration.

@@ -290,5 +290,6 @@ function trackerOf(served: Served, githubApp: GithubApp | undefined): Omit<Track
     ...(served.secretsKey === undefined ? {} : { secretsKey: served.secretsKey }),
     ...(served.linearOAuth === undefined ? {} : { linearOAuth: served.linearOAuth }),
     ...(githubApp === undefined ? {} : { githubApp }),
+    ...(served.trackerApps === undefined ? {} : { trackerApps: served.trackerApps }),
   };
 }

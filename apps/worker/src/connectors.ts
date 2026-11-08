@@ -6,6 +6,10 @@ import { type GithubApp, createGithubConnectorStore, openInstallation } from './
 import { type StageExceptions, createLinearStore } from './linear.ts';
 import { deliveryBody } from './rest-connector.ts';
 import { type LinearOAuth, linearAuthorization } from './linear-oauth.ts';
+import { pluginOf } from './trackers/index.ts';
+import { type PluginKind, isPluginKind } from './trackers/kinds.ts';
+import type { TrackerApps } from './trackers/oauth.ts';
+import { type Http, trackerAccess } from './trackers/plugin.ts';
 import {
   type NoteStore,
   StoreError,
@@ -35,10 +39,44 @@ type TrackerAccess = {
   now: () => number;
   oauth: LinearOAuth | undefined;
   githubApp: GithubApp | undefined;
+  trackerApps: TrackerApps | undefined;
+  trackerHttp: Http | undefined;
 };
 
+/**
+ * The store of a connector of a plugin (FRU-621). The stage a site gives a state wins over the one
+ * the plugin reads, for that site, as for GitHub (FRU-368). A plugin that has not shipped in this
+ * build is a store that is down.
+ */
+async function pluginStore(
+  kind: PluginKind,
+  { connector, workspace, sealed }: Kept,
+  { accounts, secretsKey, now, trackerApps, trackerHttp }: TrackerAccess,
+): Promise<NoteStore> {
+  const plugin = pluginOf(kind);
+  if (plugin === undefined) throw new StoreError('This server cannot use a connector of this kind');
+  const access = trackerAccess(plugin, connector, sealed, {
+    accounts,
+    secretsKey,
+    client: trackerApps?.[kind],
+    now,
+    ...(trackerHttp === undefined ? {} : { http: trackerHttp }),
+  });
+  const base = plugin.store(access, { connector });
+  const forSite = async (site: string | undefined): Promise<NoteStore> => {
+    const own = await siteStages(accounts, workspace, site, connector);
+
+    return own === undefined ? base : plugin.store(access, { connector, stages: own });
+  };
+
+  return {
+    ...base,
+    findForPage: async (query, client, policy) => (await forSite(query.clientId)).findForPage(query, client, policy),
+  };
+}
+
 const TRACKERS: Record<
-  Exclude<ConnectorKind, 'rest' | 'claude-routine'>,
+  Exclude<ConnectorKind, 'rest' | 'claude-routine' | PluginKind>,
   (kept: Kept, access: TrackerAccess) => Promise<NoteStore>
 > = {
   async linear({ connector, workspace, sealed, settings }, { accounts, secretsKey, oauth, now }) {
@@ -229,10 +267,16 @@ export function createConnectorStores(
   {
     filesReachable = false,
     githubApp,
+    trackerApps,
+    trackerHttp,
   }: {
     filesReachable?: boolean;
     /** The GitHub App of the worker (FRU-359), for a `github` connector. It holds the tokens of the process. */
     githubApp?: GithubApp;
+    /** The applications of OAuth of the plugins (FRU-621), to refresh a token with. */
+    trackerApps?: TrackerApps;
+    /** What a plugin calls its service with. A test hands over its own. */
+    trackerHttp?: Http;
   } = {},
 ): ConnectorStores {
   return async (connector, workspace, own) => {
@@ -254,10 +298,11 @@ export function createConnectorStores(
     // no destination, and a row that names it anyway keeps no note.
     if (kept.kind === 'claude-routine') throw new StoreError('A Claude Code routine is not a place for notes');
 
-    const store = await TRACKERS[kept.kind](
-      { connector, workspace, sealed: kept.sealed, settings: kept.settings },
-      { accounts, secretsKey, now, oauth, githubApp },
-    );
+    const held = { connector, workspace, sealed: kept.sealed, settings: kept.settings };
+    const reach = { accounts, secretsKey, now, oauth, githubApp, trackerApps, trackerHttp };
+    const store = isPluginKind(kept.kind)
+      ? await pluginStore(kept.kind, held, reach)
+      : await TRACKERS[kept.kind](held, reach);
 
     return withSettings(store, kept.settings);
   };

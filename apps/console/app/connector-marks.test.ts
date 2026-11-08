@@ -54,8 +54,9 @@ describe('the marks of the sources (FRU-435)', () => {
   it('is drawn before the name of every source of the Connectors screen (FRU-543)', () => {
     // Every source to add and every connected one names its kind to the box of the mark.
     const sources = connectors.match(/<Source\b[^>]*>/gs) ?? [];
-    // Linear, GitHub, an address, a Claude Code routine (FRU-594), and the sources of later.
-    assert.equal(sources.length, 5);
+    // Linear, GitHub, an address, a Claude Code routine (FRU-594), the sources of later, and the
+    // card of each connector of a plugin (FRU-621).
+    assert.equal(sources.length, 6);
     for (const each of sources) assert.match(each, /\bkind=\{?["'\w.]/);
     assert.match(connectors, /<SourceMark kind=\{connector\.kind\} \/>/);
     // The box draws the mark, and no letter any more (the « L », « G », « { } » of the mockup).

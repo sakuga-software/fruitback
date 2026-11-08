@@ -3,6 +3,11 @@ import { isOneOf } from './one-of.ts';
 import { json } from './http.ts';
 import { handleNotes } from './console-notes.ts';
 import { askLinear, handleConnectors, listRepositories } from './console-connectors.ts';
+import { pluginOf } from './trackers/index.ts';
+import { type PluginKind, isPluginKind } from './trackers/kinds.ts';
+import type { TrackerApps } from './trackers/oauth.ts';
+import type { Http } from './trackers/plugin.ts';
+import { accessOf, askPlugin, readOf } from './trackers/routes.ts';
 import { readJsonObject } from './bounded-body.ts';
 import {
   type InstanceAdminContext,
@@ -91,6 +96,10 @@ export type ConsoleApiContext = {
   linearOAuth?: LinearOAuth;
   /** The GitHub App of the connectors (FRU-360). Absent: a workspace does not install it here. */
   githubApp?: GithubApp;
+  /** The applications of OAuth of the plugins (FRU-621), by kind. */
+  trackerApps?: TrackerApps;
+  /** What a plugin calls its service with (FRU-621). A test hands over its own. Absent: `fetch`. */
+  trackerHttp?: Http;
   publicUrl?: string;
   /**
    * The person of the cookie of better-auth, or `undefined` (FRU-147). Absent: better-auth is off,
@@ -229,12 +238,17 @@ async function counted<T>(read: () => Promise<T> | undefined): Promise<T | undef
 }
 
 /** What the worker calls each kind of source in the label of a destination. */
-const KIND_NAMES: Record<ConnectorKind, string> = {
+const KIND_NAMES: Record<Exclude<ConnectorKind, PluginKind>, string> = {
   linear: 'Linear',
   rest: 'REST API',
   github: 'GitHub',
   'claude-routine': 'Claude Code routine',
 };
+
+/** The name of a kind in a label: its own, or the one its plugin gives (FRU-621). */
+function kindName(kind: ConnectorKind): string {
+  return isPluginKind(kind) ? (pluginOf(kind)?.name ?? kind) : KIND_NAMES[kind];
+}
 
 /** The place does not exist in the tracker of the connector: nothing must be kept for it. */
 export class UnknownPlace extends Error {}
@@ -243,7 +257,10 @@ export class UnknownPlace extends Error {}
  * What a read of a tracker needs (FRU-453): the console's context, and the session routes of the
  * extension, which choose a place too. The keys of the connectors are opened here and never leave.
  */
-export type TrackerContext = Pick<ConsoleApiContext, 'accounts' | 'secretsKey' | 'linearOAuth' | 'githubApp' | 'now'>;
+export type TrackerContext = Pick<
+  ConsoleApiContext,
+  'accounts' | 'secretsKey' | 'linearOAuth' | 'githubApp' | 'now' | 'trackerApps' | 'trackerHttp'
+>;
 
 /** What a source offers to choose (FRU-453), as the console's routes answer it. */
 export type SourceOffer =
@@ -264,6 +281,8 @@ export async function offerOf(
   const kept = await context.accounts.sealedKey(connector);
   // FRU-594: a routine is no place of a note, and offers nothing to choose.
   if (kept === undefined || kept.workspaceId !== workspace || kept.kind === 'claude-routine') return undefined;
+  // FRU-621: the popup of the extension chooses no place of a plugin yet; the Sites screen does.
+  if (isPluginKind(kept.kind)) return undefined;
   if (kept.kind === 'rest') return { kind: 'rest' };
   if (kept.kind === 'github') {
     if (context.githubApp === undefined || context.secretsKey === undefined) return undefined;
@@ -331,6 +350,22 @@ async function labelled(
       out.push({ ...destination, label: `${KIND_NAMES.rest} · ${connector.label}` });
       continue;
     }
+    // FRU-621: the plugin names the place as its service says it now, and gives its page.
+    const plugin = pluginOf(connector.kind);
+    if (plugin !== undefined) {
+      const kept = await context.accounts.sealedKey(connector.id);
+      if (kept === undefined || destination.teamId === undefined) throw new UnknownPlace();
+      const place = destination.teamId;
+      const named = await askPlugin(context, connector.id, () =>
+        readOf(plugin, () => plugin.placeName(accessOf(context, plugin, connector.id, kept.sealed), place)),
+      );
+      if (named === undefined) throw new UnknownPlace();
+      // Whatever a destination came with is dropped: the label is the service's word alone.
+      const { url: _asked, private: _private, ...rest } = destination;
+      out.push({ ...rest, label: `${plugin.name} · ${named.name}` });
+      continue;
+    }
+    if (isPluginKind(connector.kind)) throw new UnknownPlace();
     // FRU-359: the repository is its own name. FRU-382: GitHub says whether it is private, so that the
     // console warns about a public one without the list of the repositories.
     if (connector.kind === 'github') {
@@ -353,7 +388,7 @@ async function labelled(
     const { url: _asked, ...place } = destination;
     out.push({
       ...place,
-      label: [KIND_NAMES[connector.kind], named.team, ...(named.project === undefined ? [] : [named.project])].join(
+      label: [kindName(connector.kind), named.team, ...(named.project === undefined ? [] : [named.project])].join(
         ' · ',
       ),
       ...(named.url === undefined ? {} : { url: named.url }),
@@ -438,6 +473,13 @@ function destinationOf(body: Record<string, unknown> | undefined, kind: Connecto
   if (typeof connector !== 'string' || !ID.test(connector)) return undefined;
   // FRU-594: a routine is what a trigger calls, never where a note goes.
   if (kind === 'claude-routine') return undefined;
+  // FRU-621: the place of a plugin is its `teamId`, as the plugin reads it. No project.
+  if (isPluginKind(kind)) {
+    const place = pluginOf(kind)?.readPlace(teamId);
+    if (place === undefined || (projectId ?? undefined) !== undefined) return undefined;
+
+    return { connector, teamId: place };
+  }
   // `null` is « none », as the route takes it for the project of a tracker.
   if (kind === 'rest')
     return (teamId ?? undefined) === undefined && (projectId ?? undefined) === undefined ? { connector } : undefined;
@@ -997,6 +1039,37 @@ export async function handleConsoleApi(
             // of GitHub in its own rows (`siteStages`), as the ticket asks.
             states: [...GITHUB_STATES],
           });
+          continue;
+        }
+        // FRU-621: the states of the place of a plugin, as its store reads them, one list per place.
+        const plugin = pluginOf(kept.kind);
+        if (plugin !== undefined) {
+          const named = {
+            connector: place.connector,
+            ...(place.teamId === undefined ? {} : { teamId: place.teamId }),
+            ...(place.label === undefined ? {} : { label: place.label }),
+          };
+          const store = plugin.store(accessOf(context, plugin, place.connector, kept.sealed), {
+            connector: place.connector,
+          });
+          if (context.secretsKey === undefined || place.teamId === undefined || store.trackerStates === undefined) {
+            trackers.push({ ...named, error: 'tracker-unreachable' });
+            continue;
+          }
+          const team = place.teamId;
+          try {
+            const read = await askPlugin(context, place.connector, () =>
+              (store.trackerStates as NonNullable<typeof store.trackerStates>)({
+                teamId: team,
+                connector: place.connector,
+              }),
+            );
+            await rememberTrackerStates(context.kv, place.connector, team, read);
+            trackers.push({ ...named, states: read });
+          } catch (error) {
+            if (!(error instanceof StoreError)) throw error;
+            trackers.push({ ...named, error: 'tracker-unreachable' });
+          }
           continue;
         }
         if (kept.kind !== 'linear') continue;

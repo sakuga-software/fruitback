@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import type { SiteStatus } from './site-statuses.ts';
 import { NOTE_STAGES, type NoteStage } from '@fruitback/shared';
 import type { ClientMap } from './clients.ts';
+import { PLUGIN_KINDS } from './trackers/kinds.ts';
 
 /**
  * People, teams and the sites a team reviews (FRU-96).
@@ -392,8 +393,11 @@ export function destinationId(site: string, destination: Destination): string {
  * A `claude-routine` connector (FRU-594) is no place of a note: it is what the trigger of a site
  * calls to start a Claude Code routine (`claude-routine.ts`). It keeps the Fire URL and the token,
  * sealed.
+ *
+ * The kinds of `PLUGIN_KINDS` (FRU-621) are the trackers that come as a plugin of `trackers/`: Jira,
+ * GitLab, Slack, ClickUp, Asana. Each keeps its credential sealed, as `trackers/plugin.ts` says.
  */
-export const CONNECTOR_KINDS = ['linear', 'rest', 'github', 'claude-routine'] as const;
+export const CONNECTOR_KINDS = ['linear', 'rest', 'github', 'claude-routine', ...PLUGIN_KINDS] as const;
 export type ConnectorKind = (typeof CONNECTOR_KINDS)[number];
 
 export type DueDelivery = { id: string; connectorId: string; body: string; attempts: number };

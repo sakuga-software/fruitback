@@ -21,6 +21,9 @@ import {
   sourceLine,
 } from '../parts/connector-parts';
 import { RestPanel } from '../parts/connector-rest';
+import { AddPlugin, PLUGIN_RETURNS, PluginPanel, leaveForPlugin, pluginSentence } from '../parts/connector-plugin';
+import { trackerOf } from '../trackers/index.ts';
+import { PLUGIN_KINDS, type PluginKind } from '../trackers/plugin.ts';
 import { RoutinePanel } from '../parts/connector-routine';
 import { NoCodeRecipes } from '../parts/agent-recipes';
 import type { LaterKind, MarkedKind } from '../connector-marks';
@@ -82,13 +85,30 @@ const GITHUB_START_PROBLEMS: Readonly<Record<string, string>> = {
   'connectors-unavailable': msg('This Fruitback has no GitHub App. Its operator must set one up.'),
 };
 
-/** The panel of each kind of source. */
+/** The panel of each kind of source. A connector of a plugin has the panel of every plugin (FRU-621). */
 const PANELS: Record<Connector['kind'], (props: PanelProps) => ReactNode> = {
   linear: LinearPanel,
   rest: RestPanel,
   github: GithubPanel,
   'claude-routine': RoutinePanel,
+  ...(Object.fromEntries(PLUGIN_KINDS.map((kind) => [kind, PluginPanel])) as Record<
+    PluginKind,
+    (props: PanelProps) => ReactNode
+  >),
 };
+
+/** A plugin the worker has (FRU-621), and how it connects there: by OAuth, by a token, or both. */
+type PluginOffer = { kind: string; oauth: boolean; token: boolean };
+
+/** The way back from the service of a plugin, as the address says it: `?jira=declined`. */
+function pluginReturn(search: URLSearchParams): { kind: PluginKind; word: string } | undefined {
+  for (const kind of PLUGIN_KINDS) {
+    const word = search.get(kind);
+    if (word !== null) return { kind, word };
+  }
+
+  return undefined;
+}
 
 /** The id of the title of the open panel. */
 const PANEL_TITLE = 'source-panel-title';
@@ -111,6 +131,15 @@ export default function Connectors() {
   const [leaving, setLeaving] = useState(false);
   const [problem, setProblem] = useState<string | undefined>(LINEAR_RETURNS[search.get('linear') ?? '']);
   const [githubProblem, setGithubProblem] = useState<string | undefined>(GITHUB_RETURNS[search.get('github') ?? '']);
+  // FRU-621: the plugins of the worker, and a word of the way back from one of them, or of its start.
+  const [plugins, setPlugins] = useState<readonly PluginOffer[]>([]);
+  const [pluginProblem, setPluginProblem] = useState<{ kind: PluginKind; problem: string } | undefined>(() => {
+    const back = pluginReturn(search);
+    const problem = back === undefined ? undefined : PLUGIN_RETURNS[back.word];
+
+    return back === undefined || problem === undefined ? undefined : { kind: back.kind, problem };
+  });
+  const [leavingFor, setLeavingFor] = useState<PluginKind | undefined>();
   const [toGithub, setToGithub] = useState(false);
   const [sites, setSites] = useState<Listed<Site>>('loading');
   // How many notes did not reach each address. An address that is not in it was not read: no list
@@ -130,17 +159,22 @@ export default function Connectors() {
   // Linear or GitHub that went wrong opens it: its sentence is under the source, in that dialog. So does
   // `?new` in the address (« Connect a tracker » of the Sites screen), once the read says that this
   // person can add a source.
-  const [catalogue, setCatalogue] = useState(problem !== undefined || githubProblem !== undefined);
+  const [catalogue, setCatalogue] = useState(
+    problem !== undefined || githubProblem !== undefined || pluginProblem !== undefined,
+  );
   // An address connected from the list, whose secret is still on the screen (see `AddRest`).
   const restAdded = useRef(false);
   const toPanel = useRef(false);
 
   const load = useCallback(async () => {
     const [listed, placed] = await Promise.all([
-      call<{ connectors: Connector[]; available: boolean; linearOAuth?: boolean; githubApp?: boolean }>(
-        'GET',
-        `${base}/connectors`,
-      ),
+      call<{
+        connectors: Connector[];
+        available: boolean;
+        linearOAuth?: boolean;
+        githubApp?: boolean;
+        trackers?: PluginOffer[];
+      }>('GET', `${base}/connectors`),
       // The sites and where they send, with no count of their notes (FRU-497).
       call<{ sites: Site[] }>('GET', `${base}/sites?counts=none`),
     ]);
@@ -150,6 +184,7 @@ export default function Connectors() {
       setAvailable(listed.data.available);
       setOauth(listed.data.linearOAuth === true);
       setGithubApp(listed.data.githubApp === true);
+      setPlugins(Array.isArray(listed.data.trackers) ? listed.data.trackers : []);
     }
     setUnread(!listed.ok || !placed.ok);
 
@@ -187,8 +222,10 @@ export default function Connectors() {
       // Back from Linear or GitHub with a new connector: its panel opens, and the word leaves the address.
       const linear = search.get('linear');
       const github = search.get('github');
+      const plugin = pluginReturn(search);
       const asked = search.get('new') !== null;
-      if (linear === null && github === null && !asked) return;
+      if (linear === null && github === null && plugin === undefined && !asked) return;
+      if (plugin?.word === 'connected') setSelected(found.filter((each) => each.kind === plugin.kind).at(-1)?.id);
       // `?new` opens nothing for a person who cannot add a source: no dialog of disabled buttons, now
       // or after a later read.
       if (asked && manages && adds) setCatalogue(true);
@@ -417,14 +454,90 @@ export default function Connectors() {
             </Button>
           )}
         </Source>
-        {LATER.map((source) => (
-          <Source key={source.name} kind={source.kind} name={source.name} detail={t(source.detail)}>
-            {/* No connector of this kind exists: the button says when, and connects nothing. */}
-            <Button tone="outline" inset={16} disabled>
-              {t('After the beta')}
-            </Button>
-          </Source>
-        ))}
+        {/* FRU-621: the connectors of a plugin that the worker has and this console draws. */}
+        {plugins.flatMap((offer) => {
+          const tracker = trackerOf(offer.kind);
+          if (tracker === undefined) return [];
+          const kind = tracker.kind;
+          const name = t(KINDS[kind].name);
+          const typing = adding === kind;
+          const leavesNow = leavingFor === kind;
+          const said = pluginProblem?.kind === kind ? pluginProblem.problem : undefined;
+
+          return [
+            <Source key={kind} kind={kind} wide={typing} name={name} detail={t(tracker.detail)}>
+              {typing ? null : (
+                <span className="flex flex-wrap items-center gap-x-[16px]">
+                  {offer.oauth && offer.token && tracker.tokenFields !== undefined ? (
+                    <LinkButton disabled={cannot} onClick={() => startAdding(kind)}>
+                      {t('Use a token')}
+                    </LinkButton>
+                  ) : null}
+                  {offer.oauth || (offer.token && tracker.tokenFields !== undefined) ? (
+                    <Button
+                      tone="outline"
+                      inset={16}
+                      disabled={cannot || leavesNow}
+                      onClick={() => {
+                        if (!offer.oauth) return startAdding(kind);
+                        setLeavingFor(kind);
+                        setPluginProblem(undefined);
+                        void leaveForPlugin(base, tracker).then((failed) => {
+                          setLeavingFor(undefined);
+                          if (failed !== undefined) setPluginProblem({ kind, problem: failed });
+                        });
+                      }}
+                    >
+                      {leavesNow ? t('Going to {source}…', { source: name }) : <Connect name={name} />}
+                    </Button>
+                  ) : (
+                    <Button tone="outline" inset={16} disabled>
+                      {t('Not on this Fruitback')}
+                    </Button>
+                  )}
+                </span>
+              )}
+              {typing ? (
+                <Under>
+                  <AddPlugin
+                    base={base}
+                    tracker={tracker}
+                    onDone={(connector) => {
+                      setForm(undefined);
+                      if (connector === undefined) return;
+                      setCatalogue(false);
+                      opening.current = true;
+                      setSelected(connector.id);
+                      void load();
+                    }}
+                  />
+                </Under>
+              ) : null}
+              {offer.oauth || offer.token ? null : (
+                <Under>
+                  <p className="text-hint text-muted">
+                    {t('The operator of this Fruitback has not set up {source}.', { source: name })}
+                  </p>
+                </Under>
+              )}
+              {said === undefined ? null : (
+                <Under>
+                  <Problem>{pluginSentence(said, tracker)}</Problem>
+                </Under>
+              )}
+            </Source>,
+          ];
+        })}
+        {LATER.filter((source) => !plugins.some((offer) => offer.kind === source.kind && trackerOf(offer.kind))).map(
+          (source) => (
+            <Source key={source.name} kind={source.kind} name={source.name} detail={t(source.detail)}>
+              {/* No connector of this kind exists: the button says when, and connects nothing. */}
+              <Button tone="outline" inset={16} disabled>
+                {t('After the beta')}
+              </Button>
+            </Source>
+          ),
+        )}
         {/* FRU-594: what the trigger of a site calls to start a Claude Code routine. No note goes there.
             Last: the trackers come first, as the mockup orders them, and their rows do not move. */}
         <Source

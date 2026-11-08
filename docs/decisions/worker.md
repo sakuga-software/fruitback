@@ -4755,3 +4755,33 @@ framing; `SECURITY.md` says what is protected.
   on the note of somebody else and have Fruitback write to it. The two limits (3 a minute from a
   caller, 10 a minute for a site) bound what an owner of a site can still do with their own notes,
   which SECURITY.md says.
+
+## The connectors of a plugin (FRU-621)
+
+Mathieu asked for more connectors on 2026-11-08: Jira Cloud, GitLab, Slack, ClickUp, Asana. Two
+agents write them at once, so each one lives in files of its own, and no list is edited by two.
+
+### The rules, in short
+
+- **A connector of a plugin is one file of `apps/worker/src/trackers/`**, `<kind>.ts`, which exports
+  a `TrackerPlugin` (`trackers/plugin.ts`) or `undefined`. The five kinds are listed once, in
+  `trackers/kinds.ts`, before their plugins exist: a row of a server of after is read, and its
+  connector is a store that is down.
+- **The console draws it from `apps/console/app/trackers/<kind>.ts`** (its card, its mark, the fields
+  of its form) and its French from `<kind>.fr.ts`, which `messages.fr.ts` merges at its end. Every
+  sentence that all plugins say is in `parts/connector-plugin.tsx`, with the service as `{source}`.
+- **The routes, the store of a site, the health and the OAuth flow read the plugin through
+  `pluginOf`**: `POST /connectors` with its kind, `POST /connectors/<kind>/oauth`,
+  `GET /connectors/<id>/places`, `/auth/<kind>/start` and `/callback`. A destination keeps the place
+  as its `teamId`, as `readPlace` reads it, and its label is `<name> · <place>` as `placeName` says.
+- **A plugin says a refusal with the errors of `plugin.ts`**: `TrackerKeyRefused`,
+  `TrackerKeyForbidden`, `TrackerConnectionEnded`. `troubleOf` reads them, so the console says
+  « Needs attention » with what to do. Any other `StoreError` is a service that is down.
+- **A plugin reaches its service through `access.http`**, never `fetch` itself: a test hands over a
+  `fetch` to its own fake service (`trackerHttp`), and the contract tests replay the answers of the
+  official documentation there. `trackers/fake-plugin.fixture.ts` is the example.
+- **Its application of OAuth is `FRUITBACK_<KIND>_OAUTH`**, named in its `envNames`: `env.ts` reads it,
+  refuses a value that is not two parts, and `compose.test.ts` holds the compose file and the
+  reference of the variables to it.
+- The popup of the extension does not choose a place of a plugin yet (`offerOf` answers none): the
+  Sites screen does.

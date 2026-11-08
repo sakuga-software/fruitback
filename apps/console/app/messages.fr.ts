@@ -1,7 +1,16 @@
+import { FRENCH as ASANA } from './trackers/asana.fr.ts';
+import { FRENCH as CLICKUP } from './trackers/clickup.fr.ts';
+import { FRENCH as GITLAB } from './trackers/gitlab.fr.ts';
+import { FRENCH as JIRA } from './trackers/jira.fr.ts';
+import { FRENCH as SLACK } from './trackers/slack.fr.ts';
+
 /**
  * The console in French (FRU-120). The key is the English sentence a screen shows: see `i18n.ts`.
  *
  * A name of a product is a key too when a screen shows it through `t`, and it reads the same.
+ *
+ * FRU-621: the French of each connector of a plugin is in its own file, `trackers/<kind>.fr.ts`, and
+ * joins this map at its end. It loads with this map, when French is asked for.
  */
 export const FRENCH: Readonly<Record<string, string>> = {
   Linear: 'Linear',
@@ -1683,4 +1692,41 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'No code': 'Sans code',
   'Open the recipe': 'Ouvrir la recette',
   'Open the recipe: {name}': 'Ouvrir la recette : {name}',
+
+  // FRU-621: what every connector of a plugin says, with the name of its service.
+  'Use a token': 'Utiliser un jeton',
+  'Going to {source}…': 'Vers {source}…',
+  'The operator of this Fruitback has not set up {source}.': 'L’opérateur de ce Fruitback n’a pas configuré {source}.',
+  'You declined access in {source}, so it is not connected. Press Connect to try again.':
+    'Vous avez refusé l’accès dans {source} : il n’est pas connecté. Appuyez sur Connecter pour réessayer.',
+  '{source} was not connected: this workspace is suspended.':
+    '{source} n’a pas été connecté : cet espace de travail est suspendu.',
+  '{source} was not connected. Start again from « Connect ».':
+    '{source} n’a pas été connecté. Recommencez depuis « Connecter ».',
+  '{source} refused this token. Copy it again from {source}, then try again.':
+    '{source} a refusé ce jeton. Copiez-le de nouveau depuis {source}, puis réessayez.',
+  '{source} knows this token, and it may not reach what Fruitback needs. Check its access, then try again.':
+    '{source} connaît ce jeton, mais il n’atteint pas ce dont Fruitback a besoin. Vérifiez ses accès, puis réessayez.',
+  '{source} did not answer just now. Your token is not kept: try again in a minute.':
+    '{source} n’a pas répondu. Votre jeton n’est pas gardé : réessayez dans une minute.',
+  'This Fruitback cannot connect {source} yet. Its operator must set it up.':
+    'Ce Fruitback ne peut pas encore connecter {source}. Son opérateur doit le configurer.',
+  '{source} refuses this connection since {when}, and the notes of its sites do not reach {source}. Disconnect it, then connect {source} again.':
+    '{source} refuse cette connexion depuis {when}, et les notes de ses sites n’arrivent pas dans {source}. Déconnectez-la, puis connectez {source} de nouveau.',
+  'Since {when}, {source} refuses a place that a site sends to, and its notes do not reach {source}. Give the connection access to that place in {source}, or choose another one here.':
+    'Depuis {when}, {source} refuse un emplacement vers lequel un site envoie, et ses notes n’arrivent pas dans {source}. Donnez à la connexion l’accès à cet emplacement dans {source}, ou choisissez-en un autre ici.',
+  '{source} ended this connection, and since {when} the notes of its sites do not reach {source}. Disconnect it, then connect {source} again.':
+    '{source} a mis fin à cette connexion, et depuis {when} les notes de ses sites n’arrivent pas dans {source}. Déconnectez-la, puis connectez {source} de nouveau.',
+  'Fruitback could not start the connection to {source}. Try again.':
+    'Fruitback n’a pas pu lancer la connexion à {source}. Réessayez.',
+  'The token could not be kept just now. Try again.': 'Le jeton n’a pas pu être gardé. Réessayez.',
+  'Its sites keep their notes in the workspace again. The issues already in {source} stay there.':
+    'Ses sites gardent de nouveau leurs notes dans l’espace de travail. Les tickets déjà dans {source} y restent.',
+  'This console does not know this connector yet.': 'Cette console ne connaît pas encore ce connecteur.',
+
+  ...JIRA,
+  ...GITLAB,
+  ...SLACK,
+  ...CLICKUP,
+  ...ASANA,
 };

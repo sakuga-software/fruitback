@@ -28,10 +28,11 @@ const APP = new URL('./', import.meta.url);
 // `stages.ts` names the five stages, for every screen that shows one (FRU-508).
 const screens = [
   // The screens, and their parts (FRU-614): a part left `routes/` and keeps its sentences.
-  ...['routes', 'parts'].flatMap((folder) =>
+  // FRU-621: the connectors of a plugin, each in its file of `trackers/`. Their French is no screen.
+  ...['routes', 'parts', 'trackers'].flatMap((folder) =>
     readdirSync(new URL(`${folder}/`, APP))
       .map((name) => `${folder}/${name}`)
-      .filter((name) => /\.tsx?$/.test(name) && !name.includes('.test.')),
+      .filter((name) => /\.tsx?$/.test(name) && !name.includes('.test.') && !name.endsWith('.fr.ts')),
   ),
   'root.tsx',
   'ui.tsx',

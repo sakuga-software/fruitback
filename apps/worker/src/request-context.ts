@@ -80,6 +80,8 @@ export type RequestContext = {
    * `FRUITBACK_GITHUB_CONNECTOR`. A suite hands over one that calls a GitHub on a port of the machine.
    */
   githubApp?: GithubApp;
+  /** What a plugin calls its service with (FRU-621). A test hands over a `fetch` to its own server. */
+  trackerHttp?: typeof fetch;
 };
 
 /**
