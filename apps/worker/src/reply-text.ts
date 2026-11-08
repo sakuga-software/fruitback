@@ -140,14 +140,14 @@ export function withEditedText<T extends { note: { text: string }; comments?: re
   issue: T,
   until?: string,
 ): T {
+  // Instants, never strings: a tracker may write an offset, or no milliseconds (review of #866).
   const limit = until === undefined ? undefined : Date.parse(until);
-  let newest: { text: string; at: string } | undefined;
+  let newest: { text: string; at: number } | undefined;
   for (const comment of issue.comments ?? []) {
     const text = editedTextOf(comment.body);
-    if (text === undefined || (limit !== undefined && Date.parse(comment.createdAt) > limit)) continue;
-    if (newest === undefined || comment.createdAt >= newest.at) {
-      newest = { text, at: comment.createdAt };
-    }
+    const at = Date.parse(comment.createdAt);
+    if (text === undefined || Number.isNaN(at) || (limit !== undefined && at > limit)) continue;
+    if (newest === undefined || at >= newest.at) newest = { text, at };
   }
 
   return newest === undefined || newest.text === issue.note.text

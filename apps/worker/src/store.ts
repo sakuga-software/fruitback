@@ -214,7 +214,7 @@ export type NoteStore = {
     policy: ClientPolicy,
   ): Promise<{ note: Note; comment: NoteComment } | 'not-open' | undefined>;
   /** Whether the store of this client takes an edit, for a store that routes by client. */
-  editsFor?(client: ClientConfig | undefined, policy: ClientPolicy): Promise<boolean>;
+  editsFor?(client: ClientConfig | undefined, policy: Pick<ClientPolicy, 'showComments'>): Promise<boolean>;
   /**
    * The new text of an edit lives in its reply (FRU-605): a tracker. A read that does not show the
    * replies would show the text of before, so such a store takes no edit where the replies are hidden.
@@ -327,7 +327,7 @@ export async function takesEdits(
   client: ClientConfig | undefined,
   policy: Pick<ClientPolicy, 'showComments'>,
 ): Promise<boolean> {
-  if (store.editsFor !== undefined) return store.editsFor(client, policy as ClientPolicy);
+  if (store.editsFor !== undefined) return store.editsFor(client, policy);
 
   return store.edit !== undefined && (store.editsInReplies !== true || policy.showComments);
 }

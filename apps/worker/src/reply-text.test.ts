@@ -176,3 +176,21 @@ describe('an edit that crossed a move to done (review of #866)', () => {
     assert.equal(withEditedText(issue).note.text, 'After done');
   });
 });
+
+describe('the newest edit, by its instant (review of #866)', () => {
+  const author = { kind: 'member' as const, name: 'Ana Martin', workspace: 'Acme' };
+
+  it('orders the edits by their instant, whatever the shape of their date', () => {
+    const issue = {
+      note: { text: 'Sent' },
+      comments: [
+        // 10:30 in Paris is 09:30 UTC: older than the next one, though its string sorts after it.
+        { id: '1', body: editText({ text: 'Older', author }, undefined, true), createdAt: '2026-11-08T10:30:00+01:00' },
+        { id: '2', body: editText({ text: 'Newer', author }, undefined, true), createdAt: '2026-11-08T10:00:00Z' },
+      ],
+    };
+
+    assert.equal(withEditedText(issue).note.text, 'Newer');
+    assert.equal(withEditedText(issue, '2026-11-08T09:45:00Z').note.text, 'Older');
+  });
+});
