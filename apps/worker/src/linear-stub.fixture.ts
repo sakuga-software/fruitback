@@ -69,6 +69,8 @@ export type LinearStubOptions = {
   failIssueQuery?: boolean;
   /** The state of an issue now, read after an edit (FRU-605). Absent: started. */
   issueState?: { id?: string; name: string; type: string };
+  /** The read of that state fails as an outage would. */
+  failIssueState?: boolean;
   /** The workflow states of the team of every issue, for « Still wrong » (FRU-294). */
   teamStates?: { id: string; name: string; type: string; position: number }[];
   /** FRU-331: `fileUpload` refuses, the storage answers this status to the PUT, `attachmentCreate` refuses. */
@@ -200,6 +202,8 @@ export function installLinearStub(options: LinearStubOptions = {}): LinearStub {
       }
 
       if (operation === 'FruitbackIssueState') {
+        if (options.failIssueState === true) return new Response('upstream down', { status: 503 });
+
         return jsonResponse({
           data: {
             issue: {
