@@ -207,6 +207,21 @@ export function siteTile(document: Document, name: string, on: boolean): HTMLEle
   return tile;
 }
 
+/**
+ * A host on one line, cut at its start when it is longer than its room (FRU-611, P7): « …preview.acme.dev »
+ * keeps the end, which says which site. The whole host is in `title`. The words are an isolated run
+ * from left to right inside a box written from right to left, so the sheet puts « … » at the start.
+ */
+export function hostTail(document: Document, host: string, className: string): HTMLElement {
+  const box = make(document, 'span', `${className} kit-host-tail`);
+  box.title = host;
+  const words = make(document, 'span', '', host);
+  words.dir = 'ltr';
+  box.append(words);
+
+  return box;
+}
+
 export type SiteLineOptions = { host: string; state: string; on: boolean; paused?: boolean };
 
 /** A site as a screen names it: the tile, the host, and the line of its state. */
@@ -215,7 +230,7 @@ export function siteLine(document: Document, options: SiteLineOptions): HTMLElem
   const words = make(document, 'span', 'kit-site-words');
   const state = make(document, 'span', 'kit-site-state', options.state);
   if (options.paused === true) state.dataset.paused = 'true';
-  words.append(make(document, 'span', 'kit-site-host', options.host), state);
+  words.append(hostTail(document, options.host, 'kit-site-host'), state);
   root.append(siteTile(document, options.host, options.on), words);
 
   return root;

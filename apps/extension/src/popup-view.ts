@@ -729,7 +729,9 @@ function hostAsTitle(site: HTMLElement): HTMLElement {
   if (host === null) return site;
   const title = site.ownerDocument.createElement('h1');
   title.className = host.className;
-  title.textContent = host.textContent;
+  // The host keeps its words and its tooltip: it is cut at its start (FRU-611).
+  title.title = (host as HTMLElement).title;
+  title.append(...host.childNodes);
   host.replaceWith(title);
 
   return site;

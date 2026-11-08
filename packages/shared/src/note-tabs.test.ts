@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { NOTE_STAGES } from './issue.ts';
-import { NOTE_TABS, firstTab, noteTab } from './note-tabs.ts';
+import { NOTE_TABS, firstTab, noteTab, shortCount } from './note-tabs.ts';
 
 describe('the tabs of the list of the notes (FRU-606)', () => {
   it('are To check, Open and Done, in the order of the loop', () => {
@@ -30,5 +30,11 @@ describe('the tabs of the list of the notes (FRU-606)', () => {
     assert.equal(firstTab([{ stage: 'new' }, { stage: 'done', mine: true }]), 'check');
     assert.equal(firstTab([{ stage: 'new' }, { stage: 'done' }]), 'open');
     assert.equal(firstTab([]), 'open');
+  });
+});
+
+describe('a count in a list (FRU-611)', () => {
+  it('says « 99+ » above 99, and the number up to it', () => {
+    assert.deepEqual([0, 1, 99, 100, 1234].map(shortCount), ['0', '1', '99', '99+', '99+']);
   });
 });

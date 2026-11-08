@@ -661,6 +661,43 @@ describe('the page of the panel (FRU-296, FRU-299)', () => {
       ['Voir sur la page', 'Répondre'],
     );
   });
+  describe('a panel of many notes, on a long host (FRU-611)', () => {
+    const many = (count: number, stage: PanelNote['stage'], mine: boolean): PanelNote[] =>
+      Array.from({ length: count }, (_, index) => ({
+        id: `${stage}-${mine}-${index}`,
+        stage,
+        note: `Note ${index}`,
+        createdAt: '2026-10-19T12:00:00Z',
+        updatedAt: '2026-10-19T12:00:00Z',
+        replies: [],
+        canReply: false,
+        placement: 'found' as const,
+        ...(mine ? { mine: true as const } : {}),
+      }));
+
+    it('says « 99+ » above 99 in Open and Done, and the notes to check exactly', () => {
+      const root = panelPage(page(), {
+        ...handlers(),
+        state: on([...many(101, 'done', true), ...many(150, 'new', false), ...many(100, 'closed', false)]),
+        tab: 'open',
+      });
+
+      assert.deepEqual(
+        [...root.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent),
+        ['To check · 101', 'Open · 99+', 'Done · 99+'],
+      );
+    });
+
+    it('names the host in a box cut at its start, the workspace after it, and the whole host in its tooltip', () => {
+      const host = 'review-4521-a-very-long-branch-name.preview.staging.acme-corporation.example.com';
+      const root = panelPage(page(), { ...handlers(), state: { kind: 'on', host, where: 'Acme', notes: [] } });
+      const box = root.querySelector<HTMLElement>('.panel-where .kit-host-tail');
+
+      assert.equal(root.querySelector('.panel-where')?.textContent, `${host} · Acme`);
+      assert.equal(box?.title, host);
+      assert.equal(box?.querySelector('span')?.getAttribute('dir'), 'ltr');
+    });
+  });
 });
 
 describe('« To check », the first tab (FRU-300, FRU-606)', () => {
