@@ -221,6 +221,8 @@ describe('the notes of a workspace (FRU-244)', () => {
       id: noteIdOf(newest.site, newest.id),
       excerpt: newest.note,
       page: { url: newest.url, host: new URL(newest.url).host, path: new URL(newest.url).pathname },
+      selector: '[data-testid="checkout-cta"]',
+      component: 'CheckoutCta',
       site: { id: newest.site },
       stage: newest.stage,
       channel: 'script',

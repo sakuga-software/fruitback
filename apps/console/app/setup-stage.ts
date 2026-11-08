@@ -175,6 +175,9 @@ export type FirstNote = {
   page: { url: string; host: string; path: string };
   /** The id the widget gave it, which `#fruitback-note=` opens on its page (FRU-253). */
   note?: string;
+  /** The element of the note (FRU-613). Absent from a worker or a row from before it. */
+  selector?: string;
+  component?: string;
 };
 
 /** The address of the list that holds the first note of a site: one page, with no count. */
@@ -210,11 +213,13 @@ export function firstNoteOf(answer: Answer<unknown>): FirstNote | undefined {
 /** A note of the list as the end shows it, with the moment it was created, or `undefined`. */
 function indexedNote(entry: unknown): { note: FirstNote; at: number } | undefined {
   if (typeof entry !== 'object' || entry === null) return undefined;
-  const { excerpt, page, note, createdAt } = entry as {
+  const { excerpt, page, note, createdAt, selector, component } = entry as {
     excerpt?: unknown;
     page?: unknown;
     note?: unknown;
     createdAt?: unknown;
+    selector?: unknown;
+    component?: unknown;
   };
   if (typeof excerpt !== 'string' || typeof page !== 'object' || page === null) return undefined;
   const { url, host, path } = page as { url?: unknown; host?: unknown; path?: unknown };
@@ -223,7 +228,14 @@ function indexedNote(entry: unknown): { note: FirstNote; at: number } | undefine
   if (Number.isNaN(at)) return undefined;
 
   return {
-    note: { excerpt, page: { url, host, path }, ...(typeof note === 'string' && note !== '' ? { note } : {}) },
+    note: {
+      excerpt,
+      page: { url, host, path },
+      ...(typeof note === 'string' && note !== '' ? { note } : {}),
+      // The element is shown when it is there, and its absence is no reason to show no note.
+      ...(typeof selector === 'string' && selector !== '' ? { selector } : {}),
+      ...(typeof component === 'string' && component !== '' ? { component } : {}),
+    },
     at,
   };
 }

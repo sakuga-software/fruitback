@@ -332,12 +332,14 @@ the first read of its page, with what that read says.
 | `reference`, `reference_url` | What the store calls the note (`ACM-151`, `FB-12`) and its address there.                                                                                       |
 | `created_at`                 | When the worker took the note.                                                                                                                                  |
 | `confirmed`                  | Whether the newest verdict in the replies of the note is « looks fixed », as the last read that saw them said it. Empty until one did. No name, no text.        |
+| `selector`, `component`      | The element of the note: its selector, shadow hosts included, and the name of its component when the build gave one. Code of the site, no text of the note.     |
 
 A note of 64 characters or fewer is in the index whole, as its excerpt: that is what « the first
 64 characters » means for a short note.
 
 What the index does not keep: the rest of the text, the name or the address a reporter typed,
-the anchor, the environment, the picture, the replies. Those stay where the note went. So a
+the rest of the anchor (the text of the element, its attributes, its place on the page), the
+environment, the picture, the replies. Those stay where the note went. So a
 visitor's typed name is in the tracker and never in the index: the console shows « Visitor ».
 
 It goes with its site and its workspace: removing a site removes its rows at once, with the
@@ -350,7 +352,7 @@ site goes: the worker is not told of a deletion there, and a read of the page ca
 that was deleted from one that a tracker did not list. That is the one place where up to 64
 characters of a note outlive it; `docs/decisions/worker.md` says how it would be closed.
 
-The console lists these rows: the excerpt, the page, the site, the stage, the dates,
+The console lists these rows: the excerpt, the page, the element, the site, the stage, the dates,
 the way the note came, and, for a role that sees the tracker, where it went and its reference. Its
 search reads these columns only. The name of an author is the name of a member's account as it is
 now, read from the account at each request and not kept in the index; a member who left the

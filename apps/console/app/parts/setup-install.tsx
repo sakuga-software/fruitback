@@ -267,10 +267,10 @@ function received(at: string | undefined): string {
  * The end of the setup (FRU-610, board P6 of FRU-598): the note that came, then the two ways on,
  * « Connect Linear or GitHub » and « Open the console ».
  *
- * The note is what the index of the notes keeps of it (FRU-237): the first 64 characters of its text
- * and its page. Never its whole text, its selector or its component: the index keeps none of them,
- * and the console reads no store of the notes. The page opens on the note, where the widget shows
- * all of it. A worker with no index answers no note: the end is said without it.
+ * The note is what the index of the notes keeps of it (FRU-237): the first 64 characters of its text,
+ * its page, and its selector and its component (FRU-613). Never its whole text: the console reads no
+ * store of the notes. The page opens on the note, where the widget shows all of it. A worker with no
+ * index answers no note: the end is said without it.
  *
  * Said once it appears, with no move of the focus: the person may be on the site, in another tab.
  */
@@ -297,6 +297,12 @@ export function FirstNoteIn({ workspace, site }: { workspace: Workspace; site: S
           <blockquote className="text-body font-semibold wrap-anywhere">{excerptShown(first.excerpt)}</blockquote>
           <figcaption className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-small text-muted">
             <span className="wrap-anywhere">{t('On {page}', { page: `${first.page.host}${first.page.path}` })}</span>
+            {first.selector === undefined ? null : (
+              <code className="font-mono text-tiny wrap-anywhere">{first.selector}</code>
+            )}
+            {first.component === undefined ? null : (
+              <code className="font-mono text-tiny wrap-anywhere">{`<${first.component}>`}</code>
+            )}
             {link === undefined ? null : (
               <LinkButton space="inline" href={link} newTab>
                 {t('Show on the page')}

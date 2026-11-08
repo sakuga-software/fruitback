@@ -75,10 +75,11 @@ async function leave(
   world: World,
   site: string,
   note: string,
-  more: { token?: string; id?: string; origin?: string } = {},
+  more: { token?: string; id?: string; origin?: string; element?: Pick<Note, 'anchor' | 'source'> } = {},
 ) {
   const origin = more.origin ?? 'https://acme.dev';
   const planted = noteFixture({
+    ...more.element,
     id: more.id ?? `sd_${Math.random().toString(36).slice(2, 10)}`,
     text: note,
     page: { url: `${origin}/pricing`, path: '/pricing', title: 'Pricing' },
@@ -336,6 +337,85 @@ describe('the summary of the sites of a workspace (FRU-237)', () => {
       logged.mockRestore();
     }
     void workspace;
+  });
+});
+
+describe('the element of a note in the index (FRU-613)', () => {
+  const inShadow: Pick<Note, 'anchor' | 'source'> = {
+    anchor: {
+      selector: 'button.buy',
+      hosts: ['price-card#pro'],
+      tag: 'button',
+      bounds: { xPct: 1, yPct: 2, wPct: 3, hPct: 4 },
+    },
+    source: { file: 'src/price-card.ts' },
+  };
+
+  async function listed(world: World, workspace: string, token: string) {
+    const answer = await callOn(world, 'GET', `/console/workspaces/${workspace}/notes?counts=none`, { token });
+    assert.equal(answer.status, 200, await answer.clone().text());
+
+    return ((await answer.json()) as { notes: Record<string, unknown>[] }).notes;
+  }
+
+  it('keeps the selector and the component of a note, and the list of the console answers them', async () => {
+    const { world, alice, workspace, acme } = await aWorkspace();
+    await leave(world, acme, 'In the light DOM.');
+    await leave(world, acme, 'In a shadow root, with no component.', { element: inShadow });
+
+    const rows = await rowsOf(world.database, 'SELECT excerpt, selector, component FROM note_index ORDER BY excerpt');
+    assert.deepEqual(rows, [
+      { excerpt: 'In a shadow root, with no component.', selector: 'price-card#pro >>> button.buy', component: null },
+      { excerpt: 'In the light DOM.', selector: '[data-testid="checkout-cta"]', component: 'CheckoutCta' },
+    ]);
+    const notes = await listed(world, workspace, alice.token);
+    const light = notes.find((note) => note.excerpt === 'In the light DOM.');
+    const shadow = notes.find((note) => note.excerpt === 'In a shadow root, with no component.');
+    assert.equal(light?.selector, '[data-testid="checkout-cta"]');
+    assert.equal(light?.component, 'CheckoutCta');
+    assert.equal(shadow?.selector, 'price-card#pro >>> button.buy');
+    assert.equal('component' in (shadow ?? {}), false, 'no component is absent, not empty');
+  });
+
+  it('writes the element of a note from before the index, and of a row from before the column, once', async () => {
+    const { world, workspace, acme, kept, index } = await aWorkspace();
+    kept.push(
+      noteFixture({
+        id: 'sd_before',
+        text: 'Planted before the index.',
+        page: { url: 'https://acme.dev/pricing', path: '/pricing', title: 'Pricing' },
+        client: { id: acme, name: 'Acme' },
+      }),
+    );
+    const planted = await leave(world, acme, 'Planted before the column.');
+    // A row that the index wrote before the migration of FRU-613: no element.
+    await rowsOf(
+      world.database,
+      `UPDATE note_index SET selector = NULL, component = NULL WHERE note_id = '${planted.id}'`,
+    );
+    const read = () =>
+      callOn(world, 'GET', `/feedback?url=${encodeURIComponent('https://acme.dev/pricing')}&client=${acme}`, {
+        origin: 'https://acme.dev',
+      });
+
+    await read();
+    const element = `SELECT selector, component FROM note_index WHERE workspace_id = '${workspace}'`;
+    const written = { selector: '[data-testid="checkout-cta"]', component: 'CheckoutCta' };
+    assert.deepEqual(await rowsOf(world.database, element), [written, written]);
+
+    // A later read never writes over an element the index holds. The cache of the page answers a
+    // second read, so the index is given the read itself.
+    const moved = kept.map((note, at): NoteIssue => ({
+      id: `issue_${at + 1}`,
+      identifier: `FB-${at + 1}`,
+      title: 'Moved',
+      stage: 'new',
+      stateName: 'New',
+      updatedAt: '2026-10-13T00:00:00.000Z',
+      note: { ...note, anchor: { ...note.anchor, selector: '#moved' }, source: { component: 'Moved' } },
+    }));
+    await index.refresh(workspace, acme, { kind: 'fruitback' }, moved, Date.now());
+    assert.deepEqual(await rowsOf(world.database, element), [written, written]);
   });
 });
 

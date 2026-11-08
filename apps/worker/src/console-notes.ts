@@ -34,7 +34,7 @@ import {
  * the text of a note, and a search on the fields the index holds (`searched` says which).
  *
  * Who reads what:
- * - `read-feedback` (every role) reads the list: its excerpts, pages, stages, dates, authors;
+ * - `read-feedback` (every role) reads the list: its excerpts, pages, elements, stages, dates, authors;
  * - `see-tracker` (not a guest) reads where each note went: the place, the reference and its link in
  *   the tracker, the delivery that did not arrive, and the counts by place. A guest gets none of it,
  *   and a `place` filter is refused to it, as the list of the sites hides it the destinations;
@@ -235,6 +235,9 @@ function noteView(note: ListedNote, account: string, seesTracker: boolean, manag
     id: noteIdOf(note.site, note.note),
     excerpt: note.excerpt,
     page,
+    // FRU-613: the element of the note, which the end of the setup shows under its text.
+    ...(note.selector === undefined ? {} : { selector: note.selector }),
+    ...(note.component === undefined ? {} : { component: note.component }),
     site: { id: note.site },
     stage: note.stage,
     channel: note.channel,

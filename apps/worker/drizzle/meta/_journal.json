@@ -309,6 +309,13 @@
       "when": 1793976919239,
       "tag": "0043_agent_sessions",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1794154151044,
+      "tag": "0044_note_index_element",
+      "breakpoints": true
     }
   ]
 }

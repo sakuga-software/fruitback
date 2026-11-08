@@ -840,7 +840,8 @@ export const note_comments = pgTable(
 /**
  * The index of the notes of a workspace (FRU-237): `notes-index.ts` says what it keeps and why, and
  * `docs/privacy.md` names each column. **No column holds more than `EXCERPT_LENGTH` characters of
- * the text of a note**: `excerpt`, and nothing else of the text.
+ * the text of a note**: `excerpt`, and nothing else of the text. `selector` and `component` name the
+ * code of the site (FRU-613).
  *
  * A row goes with its site and with its workspace (`cascade`): the index of a site that is removed
  * is removed, with the notes themselves (FRU-194). `connector_id` is `set null` when
@@ -867,6 +868,10 @@ export const note_index = pgTable(
     // FRU-295: whether the newest verdict in the replies of the note is « looks fixed » (FRU-294), as
     // the last read that saw its replies said it. Empty: no read saw them yet.
     confirmed: boolean('confirmed'),
+    // FRU-613: the element of the note, as the end of the setup shows it. Names of the code of the
+    // site, not text of the note. Empty for a row from before the migration, until a read of its page.
+    selector: text('selector'),
+    component: text('component'),
   },
   (table) => [
     primaryKey({ name: 'note_index_pkey', columns: [table.site_id, table.note_id] }),
