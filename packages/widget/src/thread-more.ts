@@ -76,7 +76,9 @@ export function moreMenu(document: Document, issue: NoteIssue, t: Translator, mo
     button.tabIndex = -1;
     button.textContent = t.text(key);
     button.addEventListener('click', () => {
-      close(false);
+      // The focus goes back to « ⋯ » at once: the item it was on is hidden now, and the action may
+      // take a while (a clipboard answers later).
+      close(true);
       run();
     });
     const li = document.createElement('li');
@@ -125,16 +127,16 @@ export function moreMenu(document: Document, issue: NoteIssue, t: Translator, mo
     event.preventDefault();
     open(event.key === 'ArrowDown' ? 'first' : 'last');
   });
+  // On the whole of « ⋯ » and its menu, the trigger included: while the menu is open, Escape closes
+  // the menu only. The thread closes on an Escape that reaches the document.
+  wrap.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape' || menu.hidden) return;
+    event.preventDefault();
+    event.stopPropagation();
+    close(true);
+  });
   menu.addEventListener('keydown', (event) => {
     const { key } = event;
-    if (key === 'Escape') {
-      event.preventDefault();
-      // The thread closes on Escape too: this one closes the menu only.
-      event.stopPropagation();
-      close(true);
-
-      return;
-    }
     if (key === 'Tab') {
       close(false);
 

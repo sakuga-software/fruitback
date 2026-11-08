@@ -1911,8 +1911,9 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
   the panel (`copySection`). What the copy said lives in a map by note, as the other footers, and
   clears when the thread closes.
 - **The menu is the one of « Attach » (FRU-351)**: the arrows go from item to item, Home and End to
-  the ends, Escape closes the menu and gives the focus back to « ⋯ » without closing the thread, and
-  Tab or a focus out of it closes it.
+  the ends, Escape closes the menu and gives the focus back to « ⋯ » without closing the thread, the
+  focus on « ⋯ » included (review of #863), and Tab or a focus out of it closes it. An item gives the
+  focus back to « ⋯ » at once, before its action ends: the item is hidden, and a clipboard answers late.
 
 ## The colour of « Send » (FRU-601)
 

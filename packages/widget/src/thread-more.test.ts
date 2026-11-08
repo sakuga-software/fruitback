@@ -177,6 +177,41 @@ describe('the menu of the author in a thread (FRU-605)', () => {
     assert.notEqual(thread.thread(), null);
     assert.equal(page.document.activeElement, thread.more());
   });
+
+  it('closes the menu, not the thread, on Escape with the focus on « ⋯ » (review of #863)', () => {
+    const page = mounted();
+    const thread = open(page, anIssue());
+    const keyOf = (key: string) =>
+      new (page.view as unknown as typeof globalThis).KeyboardEvent('keydown', { key, bubbles: true, composed: true });
+    thread.more()?.click();
+    thread.more()?.focus();
+    assert.equal(thread.menu()?.hidden, false);
+    thread.more()?.dispatchEvent(keyOf('Escape'));
+    assert.equal(thread.menu()?.hidden, true);
+    assert.notEqual(thread.thread(), null);
+    // The menu closed, the next Escape is the thread's.
+    thread.more()?.dispatchEvent(keyOf('Escape'));
+    assert.equal(thread.thread(), null);
+  });
+
+  it('gives the focus back to « ⋯ » at once, while the clipboard has not answered (review of #863)', async () => {
+    const page = mounted();
+    let answer: () => void = () => {};
+    withClipboard(page, () => new Promise<void>((resolve) => (answer = resolve)));
+    const thread = open(page, anIssue());
+    thread.more()?.click();
+    thread.item('Copy link to the note')?.click();
+    assert.equal(thread.menu()?.hidden, true);
+    assert.equal(page.document.activeElement, thread.more());
+    await settle();
+    // Still asked: the thread says nothing yet, and the focus stays on « ⋯ ».
+    assert.equal(thread.said(), null);
+    assert.equal(page.document.activeElement, thread.more());
+    answer();
+    await settle();
+    assert.equal(thread.said(), 'Link copied.');
+    assert.equal(page.document.activeElement, thread.more());
+  });
 });
 
 describe('noteLink (FRU-605)', () => {
