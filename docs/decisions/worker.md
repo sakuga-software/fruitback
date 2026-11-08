@@ -3540,6 +3540,14 @@ replies, and on a public site mounted by the extension with no session, only the
 - **An address** keeps the move and gets `note.moved`, ids only. GitHub takes none (FRU-628).
 - **One move at a time on a note**, a key of the KV as for a withdrawal (`409 move-in-progress`,
   review of #877): a tracker has no lock, and a double click would write two comments.
+- **The limit of the read of Linear** (review of #877): a read takes the newest
+  `COMMENTS_PER_ISSUE` (20) comments of an issue, newest first as Linear gives them. An edit or a
+  move older than the 20 newest comments is not read, and the note shows the text or the place it
+  was sent with. It is accepted: a note with twenty comments after its last edit is a conversation
+  of the team in Linear, and rewriting the description, which would hold it for ever, is excluded
+  (Q2 and Q4 of FRU-605). The author can edit or move it again.
+- **The key is let go by `set(key, '0', 1)`**, as for a verdict: the next count is 1 at once, on
+  every `Kv` (test:`counts from 1 again at once when a count is set back to "0" for 1 ms, and after that ms`).
 - The extension relays `/place` (`PLACE_PATH`).
 
 ## The author withdraws an open note (FRU-605)

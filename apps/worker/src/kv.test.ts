@@ -54,6 +54,20 @@ function contract(
       assert.equal(await open().get(key()), undefined);
     });
 
+    // FRU-605: how the routes of a verdict, a withdrawal and a move let go of their key.
+    it('counts from 1 again at once when a count is set back to "0" for 1 ms, and after that ms', async () => {
+      const clock = aClock();
+      const kv = open(clock.now);
+      const k = key();
+      assert.equal(await kv.incr(k, 15_000), 1);
+      assert.equal(await kv.incr(k, 15_000), 2);
+      await kv.set(k, '0', 1);
+      assert.equal(await kv.incr(k, 15_000), 1);
+      await kv.set(k, '0', 1);
+      clock.pass(5);
+      assert.equal(await kv.incr(k, 15_000), 1);
+    });
+
     it('gives back the exact string, with multibyte characters and protocol bytes in it', async () => {
       const kv = open();
       const k = key();
