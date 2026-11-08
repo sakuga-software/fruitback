@@ -1694,6 +1694,20 @@ refused at each call, on the Cloud and on an instance that a team runs: a GitLab
 internal network reaches cannot be connected. The files of a note are uploaded to the project, and
 GitLab serves them with the rights of the project.
 
+### Slack
+
+- Slack connects by an Incoming Webhook that the team makes in its own Slack app: one URL that posts
+  in one channel. The URL is the secret; it is sealed like a token and answered by no route. Only an
+  address of `https://hooks.slack.com/services/` is taken (`readWebhook`), so the worker posts to
+  Slack and nowhere else.
+- Slack keeps no note. The note stays in the worker, and a delivery posts a copy: its text, its page,
+  its element, the name its reporter gave, and an address of one hour for each of its files, which
+  anybody who reads the channel can open in that hour.
+- By default only a verified note is posted: `reporter.verified`, which the worker sets and a browser
+  cannot (`stripClaimedVerification`). « Every note » posts what any visitor writes on a public site.
+- A webhook that Slack says is gone (`no_service`, `invalid_token`…) or a channel it refuses is given
+  up at once, and the connector says « Needs attention ».
+
 ### The GitHub App, installed on a workspace (FRU-360)
 
 Where the worker has the App of the connectors (`FRUITBACK_GITHUB_CONNECTOR`), an owner or an admin
