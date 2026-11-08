@@ -927,6 +927,7 @@ export function toNoteIssue(
   // parses on the other side, and a field Linear stopped returning must not reach it as `undefined`.
   // FRU-605: the text of the newest edit of its author, written before the issue was done or canceled.
   // An edit that crossed a move to done (a tracker has no lock) is a reply, not the text of the note.
+  // A move to done after the re-read of `createEdit` comes after the comment: the edit holds (#b7d262).
   const result = noteIssueSchema.safeParse(withEditedText(candidate, node.completedAt ?? node.canceledAt ?? undefined));
 
   return result.success ? result.data : null;

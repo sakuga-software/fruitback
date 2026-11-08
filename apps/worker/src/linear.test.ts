@@ -365,6 +365,35 @@ describe('an edit that crosses a move to done in Linear (review of #866)', () =>
     assert.deepEqual(stub.calls[2]?.variables, { id: 'comment_1' });
   }
 
+  it('keeps the edit when the issue is marked done only after the re-read of its stage (#b7d262)', async () => {
+    // The re-read sees the issue open: the comment stays, written at 10:00 by the stub.
+    installLinearStub({ issueState: { name: 'In Progress', type: 'started' } });
+    const store = createLinearStore({ apiKey: 'lin_api_test', teamId: 'team_1', projectId: undefined });
+    const note = noteFixture({ text: 'Sent' });
+    const answer = await store.edit?.(
+      { issue: 'issue_1', clientId: 'acme' },
+      {
+        text: 'Edited while open',
+        author: { kind: 'member', name: 'Bob', workspace: 'Acme' },
+        note,
+        identifier: 'ENG-1',
+      },
+      undefined,
+      { showComments: true, identitySecret: undefined, read: 'public', write: 'public', locale: 'en' },
+    );
+    assert.ok(typeof answer === 'object');
+
+    // Then the team marks the issue done, after the comment: `completedAt` is later than it.
+    const node = {
+      ...storedIssueFromNote(note),
+      state: { name: 'Done', type: 'completed' },
+      completedAt: '2026-10-20T10:05:00.000Z',
+      comments: { nodes: [{ ...answer.comment, user: { name: 'Fruitback' } }] },
+    };
+    assert.equal(answer.comment.createdAt < node.completedAt, true);
+    assert.equal(toNoteIssue(node, note.page.url, { showComments: true })?.note.text, 'Edited while open');
+  });
+
   it('deletes its comment when the stage cannot be read after it, and fails (round 5 of #866)', async () => {
     const stub = installLinearStub({ failIssueState: true });
     const store = createLinearStore({ apiKey: 'lin_api_test', teamId: 'team_1', projectId: undefined });
