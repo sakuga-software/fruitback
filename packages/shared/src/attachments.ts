@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import * as z from 'zod';
 
 /**
  * The files that go with a note (FRU-331): the capture of the page, of an area, an image, any file.

@@ -229,6 +229,24 @@ describe('the Kv of the database (FRU-67)', () => {
     }
   });
 
+  it('rounds an instant of a test clock to the millisecond, as the clock of the database is', async () => {
+    // A bigint parameter refuses « 1000.6 »: a clock with a fraction failed every statement. Raised in review.
+    const database = await createPgliteDatabase();
+
+    try {
+      let at = 1_000.6;
+      const kv = createPostgresKv(database, { now: () => 0, instant: () => at });
+
+      await kv.set('k', 'x', 10);
+      at = 1_010.4;
+      assert.equal(await kv.get('k'), 'x', 'written at 1001, so live until 1011');
+      at = 1_010.6;
+      assert.equal(await kv.get('k'), undefined);
+    } finally {
+      await database.close();
+    }
+  });
+
   it('reads an expired row as absent before any sweep removed it', async () => {
     const database = await createPgliteDatabase();
 

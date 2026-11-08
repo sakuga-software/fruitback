@@ -65,12 +65,19 @@ type Rows = { rows?: Record<string, unknown>[] };
 export type PostgresKvOptions = {
   /** The clock of this process, for the pace of the sweep only. */
   now?: () => number;
+  /**
+   * The instant of the statements, in milliseconds. When it is not set, the instant is the clock of
+   * the database, one for every replica. Only a test sets it, to move the time without waiting.
+   */
+  instant?: () => number;
   sweepEveryMs?: number;
   sweepBatch?: number;
 };
 
 export function createPostgresKv(database: Database, options: PostgresKvOptions = {}): Kv {
-  const { now = Date.now, sweepEveryMs = SWEEP_INTERVAL_MS, sweepBatch = SWEEP_BATCH } = options;
+  const { now = Date.now, instant, sweepEveryMs = SWEEP_INTERVAL_MS, sweepBatch = SWEEP_BATCH } = options;
+  /** The instant of one statement: the clock of the database, or the given one, rounded to the ms as `NOW` is. */
+  const when = (): SQL => (instant === undefined ? NOW : sql`${Math.round(instant())}::bigint`);
   const key = sql.identifier(table.key.name);
   const value = sql.identifier(table.value.name);
   const expiresAt = sql.identifier(table.expires_at.name);
@@ -101,7 +108,7 @@ export function createPostgresKv(database: Database, options: PostgresKvOptions 
       const removed = await ask(sql`
         WITH ${quietly}, gone AS (
           SELECT ${key} FROM ${table}
-          WHERE ${expiresAt} <= ${NOW} AND (SELECT commits FROM quiet) IS NOT NULL
+          WHERE ${expiresAt} <= ${when()} AND (SELECT commits FROM quiet) IS NOT NULL
           ORDER BY ${expiresAt} LIMIT ${sweepBatch} FOR UPDATE SKIP LOCKED
         )
         DELETE FROM ${table} WHERE ${key} IN (SELECT ${key} FROM gone) RETURNING 1 AS removed`);
@@ -113,7 +120,7 @@ export function createPostgresKv(database: Database, options: PostgresKvOptions 
 
   return {
     async get(k) {
-      const [row] = await ask(sql`SELECT ${value} FROM ${table} WHERE ${key} = ${k} AND ${expiresAt} > ${NOW}`);
+      const [row] = await ask(sql`SELECT ${value} FROM ${table} WHERE ${key} = ${k} AND ${expiresAt} > ${when()}`);
       await sweep();
 
       return row === undefined ? undefined : String(row[table.value.name]);
@@ -122,7 +129,7 @@ export function createPostgresKv(database: Database, options: PostgresKvOptions 
       await ask(sql`
         WITH ${quietly}
         INSERT INTO ${table} (${key}, ${value}, ${expiresAt})
-        SELECT ${k}, ${v}, ${NOW} + ${Math.ceil(ttlMs)}::bigint FROM quiet
+        SELECT ${k}, ${v}, ${when()} + ${Math.ceil(ttlMs)}::bigint FROM quiet
         ON CONFLICT (${key}) DO UPDATE SET ${value} = EXCLUDED.${value}, ${expiresAt} = EXCLUDED.${expiresAt}
         RETURNING current_setting('synchronous_commit') AS commits`);
       await sweep();
@@ -140,7 +147,7 @@ export function createPostgresKv(database: Database, options: PostgresKvOptions 
       const rows = await ask(sql`
         WITH ${quietly}
         INSERT INTO ${table} AS held (${key}, ${value}, ${expiresAt})
-        SELECT ${k}, ${String(by)}, ${NOW} + ${ttl}::bigint FROM quiet
+        SELECT ${k}, ${String(by)}, ${when()} + ${ttl}::bigint FROM quiet
         ON CONFLICT (${key}) DO UPDATE SET
           ${value} = CASE WHEN ${past} THEN EXCLUDED.${value} ELSE (held.${value}::numeric + ${by}::numeric)::text END,
           ${expiresAt} = CASE WHEN ${past} THEN EXCLUDED.${expiresAt} ELSE held.${expiresAt} END
