@@ -78,6 +78,8 @@ export function fakeJira() {
     searches: [] as string[],
     /** The answer of an upload of a file: Jira answers 403 where the attachments of the site are off. */
     attachmentsOff: false,
+    /** Each search answers an empty page that says it is not the last, with a token: a Jira that misbehaves. */
+    endless: false,
     /** What the next call to the REST API answers in place of its own answer, once. */
     next: undefined as { status: number; body?: unknown } | undefined,
   };
@@ -242,6 +244,7 @@ export function fakeJira() {
           },
         }));
 
+      if (state.endless) return json({ isLast: false, issues: [], nextPageToken: 'more' });
       // Pages of `maxResults`, the next one named by an opaque `nextPageToken`, as search/jql gives them.
       const size = Number(url.searchParams.get('maxResults') ?? '50');
       const from = Number(Buffer.from(url.searchParams.get('nextPageToken') ?? 'MA', 'base64url').toString() || '0');

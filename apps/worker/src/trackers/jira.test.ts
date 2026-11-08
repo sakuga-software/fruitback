@@ -282,6 +282,21 @@ describe('a note in Jira (FRU-622)', () => {
       );
     });
     await assert.rejects(store.create(note(), { teamId: 'not-a-place' }, POLICY), StoreError);
+    // A 404 of a route that is not the project says nothing of the rights.
+    jira.state.next = { status: 404 };
+    await assert.rejects(
+      store.findForPage({ url: PAGE, clientId: 'site_1' }, { teamId: PLACE }, POLICY),
+      (error: unknown) => error instanceof StoreError && !(error instanceof TrackerKeyForbidden),
+    );
+  });
+
+  it('stops a search at its first empty page, whatever Jira says of the next one', async () => {
+    const jira = fakeJira();
+    jira.state.endless = true;
+    const store = plugin.store(accessTo(jira), { connector: 'con_1' });
+
+    assert.deepEqual(await store.findForPage({ url: PAGE, clientId: 'site_1' }, { teamId: PLACE }, POLICY), []);
+    assert.equal(jira.state.searches.length, 1);
   });
 });
 

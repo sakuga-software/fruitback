@@ -112,8 +112,21 @@ function sitesOf(extra: Readonly<Record<string, string>>): Site[] {
   }
 }
 
-/** A call to Jira with the token of the connector. A refusal is said as one, anything else is a Jira that is down. */
-async function jira(access: TrackerAccess, path: string, init: RequestInit = {}): Promise<unknown> {
+/**
+ * A call to Jira with the token of the connector. A refusal is said as one, anything else is a Jira
+ * that is down.
+ *
+ * `403` is a refusal of rights. `404` is one only on a route of the project itself (`project: true`):
+ * Jira answers `404` for a project that the person may not browse, and hides that it exists. A `404`
+ * of any other route says nothing of the rights, and is not kept on the connector (balanced review
+ * of #867).
+ */
+async function jira(
+  access: TrackerAccess,
+  path: string,
+  init: RequestInit = {},
+  { project = false }: { project?: boolean } = {},
+): Promise<unknown> {
   const credential = await access.credential();
   if (credential.via !== 'oauth') throw new StoreError('This Jira connector holds no token of OAuth');
   let response: Response;
@@ -127,7 +140,7 @@ async function jira(access: TrackerAccess, path: string, init: RequestInit = {})
     throw new StoreError('Jira could not be reached');
   }
   if (response.status === 401) throw new TrackerKeyRefused('Jira refuses the token of this connector');
-  if (response.status === 403 || response.status === 404) {
+  if (response.status === 403 || (project && response.status === 404)) {
     throw new TrackerKeyForbidden(`Jira responded ${response.status} for this place`);
   }
   if (!response.ok) throw new StoreError(`Jira responded ${response.status}`);
@@ -217,7 +230,14 @@ const statusesSchema = z.array(
 async function issueTypeOf(access: TrackerAccess, site: Site, project: string): Promise<string> {
   const answer = z
     .object({ issueTypes: z.array(z.object({ id: z.string(), name: z.string(), subtask: z.boolean().optional() })) })
-    .safeParse(await jira(access, `/ex/jira/${site.id}/rest/api/3/issue/createmeta/${project}/issuetypes`));
+    .safeParse(
+      await jira(
+        access,
+        `/ex/jira/${site.id}/rest/api/3/issue/createmeta/${project}/issuetypes`,
+        {},
+        { project: true },
+      ),
+    );
   const types = answer.success ? answer.data.issueTypes.filter((each) => each.subtask !== true) : [];
   const chosen =
     types.find((each) => /^bug$/i.test(each.name)) ?? types.find((each) => /^task$/i.test(each.name)) ?? types[0];
@@ -345,7 +365,8 @@ function createJiraStore(
         if (!answer.success) throw new StoreError('Jira returned no search');
         rows.push(...answer.data.issues);
         token = answer.data.nextPageToken;
-        if (answer.data.isLast !== false || token === undefined) break;
+        // An empty page ends the search too, whatever `isLast` says (balanced review of #867).
+        if (answer.data.isLast !== false || token === undefined || answer.data.issues.length === 0) break;
         if (page === SEARCH_MAX_PAGES) {
           console.error(
             `[fruitback] the search of a page of Jira reached ${SEARCH_MAX_PAGES * ISSUES_PAGE_SIZE} notes: older ones are not drawn`,
@@ -388,7 +409,7 @@ function createJiraStore(
     async trackerStates(client): Promise<TrackerState[]> {
       const { site, project } = await placeOf(access, client?.teamId);
       const answer = statusesSchema.safeParse(
-        await jira(access, `/ex/jira/${site.id}/rest/api/3/project/${project}/statuses`),
+        await jira(access, `/ex/jira/${site.id}/rest/api/3/project/${project}/statuses`, {}, { project: true }),
       );
       if (!answer.success) throw new StoreError('Jira returned no statuses');
       const seen = new Map<string, TrackerState>();
@@ -519,7 +540,7 @@ export const plugin: TrackerPlugin = {
     let answer: unknown;
     try {
       const { site, project } = await placeOf(access, place);
-      answer = await jira(access, `/ex/jira/${site.id}/rest/api/3/project/${project}`);
+      answer = await jira(access, `/ex/jira/${site.id}/rest/api/3/project/${project}`, {}, { project: true });
     } catch (error) {
       // A project that the person cannot see is no place of this connector.
       if (error instanceof TrackerKeyForbidden) return undefined;
