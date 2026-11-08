@@ -928,9 +928,19 @@ export function toNoteIssue(
   // FRU-605: the text of the newest edit of its author, written before the issue was done or canceled.
   // An edit that crossed a move to done (a tracker has no lock) is a reply, not the text of the note.
   // A move to done after the re-read of `createEdit` comes after the comment: the edit holds (#b7d262).
-  const result = noteIssueSchema.safeParse(withEditedText(candidate, node.completedAt ?? node.canceledAt ?? undefined));
+  const result = noteIssueSchema.safeParse(withEditedText(candidate, closedAtOf(node)));
 
   return result.success ? result.data : null;
+}
+
+/**
+ * When the issue left the open stages (FRU-605): `completedAt` or `canceledAt`, the later of the two
+ * when Linear keeps both (round 6 of #866). `undefined` for an issue that is open.
+ */
+export function closedAtOf(node: Pick<IssueNode, 'completedAt' | 'canceledAt'>): string | undefined {
+  const dates = [node.completedAt, node.canceledAt].filter((each): each is string => typeof each === 'string');
+
+  return dates.sort((a, b) => Date.parse(a) - Date.parse(b)).at(-1);
 }
 
 /** The files that Fruitback sent to this issue, by their name and the address Linear gave. */
