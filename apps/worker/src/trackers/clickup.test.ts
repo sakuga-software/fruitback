@@ -9,7 +9,7 @@ import { createPostgresNoteStore } from '../notes-postgres.ts';
 import { open } from '../secrets.ts';
 import { StoreError } from '../store.ts';
 import { CLICKUP_CLIENT, PERSONAL, fakeClickup } from './clickup-fake.fixture.ts';
-import { clickupStage, pageTag, plugin } from './clickup.ts';
+import { ClickupAnswered, clickupStage, pageTag, plugin } from './clickup.ts';
 import { pluginOf } from './index.ts';
 import {
   type TrackerAccess,
@@ -177,6 +177,47 @@ describe('a note in ClickUp (FRU-625)', () => {
     assert.equal(clickup.state.tasks.length, 2);
   });
 
+  it('writes no task whose tags ClickUp would not keep: no read could find it', async () => {
+    const clickup = fakeClickup();
+    const store = plugin.store(accessTo(clickup), { connector: 'con_1' });
+    clickup.state.refusedTags.add(pageTag(PAGE, 'site_1'));
+
+    await assert.rejects(store.create(note(), { teamId: '124' }, POLICY), StoreError);
+    assert.equal(clickup.state.tasks.length, 0);
+
+    // A list whose answer says no space: its tags could not be made, so no task either.
+    clickup.state.refusedTags.clear();
+    clickup.state.spaceless.add('124');
+    await assert.rejects(store.create(note(), { teamId: '124' }, POLICY), StoreError);
+    assert.equal(clickup.state.tasks.length, 0);
+  });
+
+  it('tells a tag that exists by the status of the answer, not by its words', async () => {
+    const clickup = fakeClickup();
+    clickup.state.next = { status: 400 };
+    const answered = await plugin
+      .store(accessTo(clickup), { connector: 'con_1' })
+      .findForPage({ url: PAGE, clientId: 'site_1' }, { teamId: '124' }, POLICY)
+      .catch((error: unknown) => error);
+    assert.ok(answered instanceof ClickupAnswered);
+    assert.equal(answered.status, 400);
+  });
+
+  it('reads a task whose dates are not dates, with no date', async () => {
+    const clickup = fakeClickup();
+    const store = plugin.store(accessTo(clickup), { connector: 'con_1' });
+    await store.create(note(), { teamId: '124' }, POLICY);
+    const [task] = clickup.state.tasks;
+    assert.ok(task !== undefined);
+    task.updated = 'not a date';
+    task.comments.push({ id: '1', comment_text: 'Seen.', date: 'soon', user: { username: 'Mia' } });
+
+    const read = await store.findForPage({ url: PAGE, clientId: 'site_1' }, { teamId: '124' }, POLICY);
+    assert.equal(read.length, 1);
+    assert.equal(read[0]?.updatedAt, '');
+    assert.equal(read[0]?.comments?.[0]?.createdAt, '');
+  });
+
   it('sends its files, and keeps the note when ClickUp refuses them', async () => {
     const clickup = fakeClickup();
     const store = plugin.store(accessTo(clickup), { connector: 'con_1' });
@@ -248,6 +289,9 @@ describe('a note in ClickUp (FRU-625)', () => {
     const quiet = { ...POLICY, showComments: false };
     const read = await store.findForPage({ url: PAGE, clientId: 'site_1' }, { teamId: '124' }, quiet);
     assert.equal(read.length, 120);
+    // A ClickUp that leaves `last_page` out: a full page leads to the next one.
+    clickup.state.noLastPage = true;
+    assert.equal((await store.findForPage({ url: PAGE, clientId: 'site_1' }, { teamId: '124' }, quiet)).length, 120);
     assert.equal(read[0]?.comments, undefined, 'no reply is asked for a site that shows none');
   });
 

@@ -90,6 +90,16 @@ function authorizationOf(credential: Awaited<ReturnType<TrackerAccess['credentia
   return credential.via === 'token' ? credential.token : `Bearer ${credential.accessToken}`;
 }
 
+/** ClickUp answered a status that is no refusal and no success: a ClickUp that is down, or a `400`. */
+export class ClickupAnswered extends StoreError {
+  readonly status: number;
+
+  constructor(status: number) {
+    super(`ClickUp responded ${status}`);
+    this.status = status;
+  }
+}
+
 /**
  * A call to ClickUp. `401` is a token that ClickUp refuses. `403` is a refusal of rights, and so is a
  * `404` on a list (`list: true`), which ClickUp answers for a list the token cannot reach. Anything
@@ -116,7 +126,7 @@ async function call(
   if (response.status === 403 || (list && response.status === 404)) {
     throw new TrackerKeyForbidden(`ClickUp responded ${response.status} for this list`);
   }
-  if (!response.ok) throw new StoreError(`ClickUp responded ${response.status}`);
+  if (!response.ok) throw new ClickupAnswered(response.status);
 
   return response.json().catch(() => {
     throw new StoreError('ClickUp answered no JSON');
@@ -170,6 +180,7 @@ function labelOf(teams: readonly { name: string }[]): string {
  * them would be lost to its page. A tag that exists already is no failure.
  */
 async function ensureTags(access: TrackerAccess, space: string, tags: readonly string[]): Promise<void> {
+  let refused = false;
   for (const name of tags) {
     try {
       await clickup(access, `/v2/space/${space}/tag`, {
@@ -180,9 +191,27 @@ async function ensureTags(access: TrackerAccess, space: string, tags: readonly s
     } catch (error) {
       // ClickUp answers `400` for a tag of the space that exists. Any refusal of rights stops the note.
       if (error instanceof TrackerKeyRefused || error instanceof TrackerKeyForbidden) throw error;
-      if (!(error instanceof StoreError) || !/responded 400/.test(error.message)) throw error;
+      if (!(error instanceof ClickupAnswered) || error.status !== 400) throw error;
+      refused = true;
     }
   }
+  if (!refused) return;
+  // A `400` can say something else than « it exists »: the tags of the space are read, and a note
+  // whose tag is not there is not written, since no read would find it (balanced review of #868).
+  const kept = z
+    .object({ tags: z.array(z.object({ name: z.string() })) })
+    .safeParse(await clickup(access, `/v2/space/${space}/tag`));
+  const names = new Set(kept.success ? kept.data.tags.map((each) => each.name.toLowerCase()) : []);
+  if (tags.some((name) => !names.has(name.toLowerCase()))) {
+    throw new StoreError('ClickUp did not keep the tags of the note in the space of its list');
+  }
+}
+
+/** A date of ClickUp, milliseconds as a string, as ISO; an empty string for one that is not a date. */
+function dateOf(value: string | null | undefined): string {
+  const moment = value === undefined || value === null || value.trim() === '' ? Number.NaN : Number(value);
+
+  return Number.isFinite(moment) && Math.abs(moment) <= 8.64e15 ? new Date(moment).toISOString() : '';
 }
 
 async function listOf(access: TrackerAccess, list: string | undefined): Promise<z.infer<typeof listSchema>> {
@@ -239,7 +268,7 @@ async function commentsOf(access: TrackerAccess, task: string): Promise<NoteComm
     .map((comment) => ({
       id: comment.id,
       body: comment.comment_text ?? '',
-      createdAt: comment.date === undefined ? '' : new Date(Number(comment.date)).toISOString(),
+      createdAt: dateOf(comment.date),
       ...(comment.user?.username ? { author: comment.user.username } : {}),
     }));
 }
@@ -257,7 +286,9 @@ function createClickupStore(
     async create(note: Note, client: ClientConfig | undefined, policy, files = []) {
       const list = await listOf(access, client?.teamId);
       const tags = [FRUITBACK_LABEL, pageTag(note.page.url, note.client?.id)];
-      if (list.space !== undefined) await ensureTags(access, list.space.id, tags);
+      // A list of no space would take tags that ClickUp drops: no read would find its task (review of #868).
+      if (list.space === undefined) throw new StoreError('ClickUp said no space of this list');
+      await ensureTags(access, list.space.id, tags);
       const created = z.object({ id: z.string(), url: z.string().optional() }).safeParse(
         await clickup(
           access,
@@ -306,7 +337,8 @@ function createClickupStore(
           .safeParse(await clickup(access, `/v2/list/${list}/task?${params}`, {}, { list: true }));
         if (!answer.success) throw new StoreError('ClickUp returned no tasks');
         rows.push(...answer.data.tasks);
-        if (answer.data.last_page !== false || answer.data.tasks.length < TASKS_PER_PAGE) break;
+        // A full page leads to the next one, whatever `last_page` says or leaves out (review of #868).
+        if (answer.data.last_page === true || answer.data.tasks.length < TASKS_PER_PAGE) break;
       }
 
       const matched = rows.flatMap((each) => {
@@ -339,10 +371,7 @@ function createClickupStore(
               stage,
               stateName: status?.status ?? '',
               ...(key === undefined ? {} : { status: `${connector}:${key}` }),
-              updatedAt:
-                task.date_updated === undefined || task.date_updated === null
-                  ? ''
-                  : new Date(Number(task.date_updated)).toISOString(),
+              updatedAt: dateOf(task.date_updated),
               ...(comments === undefined ? {} : { comments }),
               note,
             });

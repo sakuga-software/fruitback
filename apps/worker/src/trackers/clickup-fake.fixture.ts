@@ -61,6 +61,12 @@ export function fakeClickup() {
     /** Each filter of a read of tasks: its tags. */
     reads: [] as string[][],
     attachmentsOff: false,
+    /** The tags that ClickUp refuses to make, with a 400 that is not « it exists ». */
+    refusedTags: new Set<string>(),
+    /** The lists whose answer says no space. */
+    spaceless: new Set<string>(),
+    /** Each read of tasks leaves `last_page` out. */
+    noLastPage: false,
     next: undefined as { status: number; body?: unknown } | undefined,
   };
 
@@ -149,12 +155,22 @@ export function fakeClickup() {
     const tag = /^\/v2\/space\/([0-9]+)\/tag$/.exec(path);
     if (method === 'POST' && tag !== null) {
       const name = (JSON.parse(String(init?.body)) as { tag: { name: string } }).tag.name.toLowerCase();
+      if (state.refusedTags.has(name)) return json({ err: 'Tag name invalid', ECODE: 'TAGS_002' }, 400);
       const kept = state.tags.get(tag[1] as string) ?? new Set<string>();
       if (kept.has(name)) return json({ err: 'Tag already exists', ECODE: 'TAGS_001' }, 400);
       kept.add(name);
       state.tags.set(tag[1] as string, kept);
 
       return json({});
+    }
+    if (method === 'GET' && tag !== null) {
+      return json({
+        tags: [...(state.tags.get(tag[1] as string) ?? [])].map((name) => ({
+          name,
+          tag_fg: '#000000',
+          tag_bg: '#000000',
+        })),
+      });
     }
     const list = /^\/v2\/list\/([0-9]+)$/.exec(path);
     if (method === 'GET' && list !== null) {
@@ -169,7 +185,9 @@ export function fakeClickup() {
           folder === undefined
             ? { id: '0', name: 'hidden', hidden: true, access: true }
             : { id: folder.id, name: folder.name, hidden: false, access: true },
-        space: { id: found.space, name: spaceName(found.space), access: true },
+        ...(state.spaceless.has(found.id)
+          ? {}
+          : { space: { id: found.space, name: spaceName(found.space), access: true } }),
         statuses: state.statuses,
         permission_level: 'create',
       });
@@ -207,7 +225,10 @@ export function fakeClickup() {
         .reverse();
       const slice = all.slice(page * 100, page * 100 + 100);
 
-      return json({ tasks: slice.map(view), last_page: page * 100 + 100 >= all.length });
+      return json({
+        tasks: slice.map(view),
+        ...(state.noLastPage ? {} : { last_page: page * 100 + 100 >= all.length }),
+      });
     }
     const attach = /^\/v2\/task\/([0-9a-z]+)\/attachment$/.exec(path);
     if (method === 'POST' && attach !== null) {
