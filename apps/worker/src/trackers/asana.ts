@@ -336,7 +336,7 @@ function createAsanaStore(
         if (offset === undefined || answer.data.data.length === 0) break;
         if (page === TASK_PAGES - 1) {
           console.error(
-            `[fruitback] the tag of a page of Asana holds more than ${TASK_PAGES * TASKS_PER_PAGE} tasks: older notes are not drawn`,
+            `[fruitback] the tag of a page of Asana holds more than ${TASK_PAGES * TASKS_PER_PAGE} tasks: some notes of the page are not drawn`,
           );
         }
       }

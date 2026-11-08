@@ -56,7 +56,9 @@ Le serveur refuse de démarrer avec une valeur qui n’a pas deux parties, ou sa
 
 Gardez le bloc de code et l’étiquette. Un repère est trouvé par l’étiquette de son projet, de son site et de sa page,
 et dessiné d’après le bloc de code. Une tâche qui les perd n’est plus montrée sur la page. Une page
-montre les repères de ses 1 000 notes les plus récentes dans Asana.
+montre au plus les repères de 1 000 de ses notes dans Asana : Asana ne dit pas dans quel ordre il liste
+les tâches d’une étiquette, donc au-delà de 1 000 notes sur une page, celles qui s’affichent ne sont
+pas choisies.
 
 ## L’étape d’un repère
 

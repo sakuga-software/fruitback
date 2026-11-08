@@ -53,8 +53,9 @@ The worker refuses to start with a value that is not two parts, or without `FRUI
 | its project, its site and its page          | the tag `fruitback-page-<hash>`, made in the workspace of the project   |
 
 Keep the code block and the tag. A pin is found by the tag of its project, its site and its page, and drawn from
-the code block. A task without them is no longer shown on the page. A page shows the pins of its
-1,000 newest notes in Asana.
+the code block. A task without them is no longer shown on the page. A page shows the pins of 1,000
+of its notes in Asana at most: Asana does not say in which order it lists the tasks of a tag, so past
+1,000 notes on one page, which ones show is not chosen.
 
 ## The stage of a pin
 
