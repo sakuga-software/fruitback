@@ -50,9 +50,9 @@ The worker refuses to start with a value that is not two parts, or without `FRUI
 | its text, the page, the element, the author | the notes (the description)                                             |
 | the note itself                             | a code block of JSON at the end of the notes, that Fruitback reads back |
 | its files                                   | attachments of the task                                                 |
-| its site and its page                       | the tag `fruitback-page-<hash>`, made in the workspace of the project   |
+| its project, its site and its page          | the tag `fruitback-page-<hash>`, made in the workspace of the project   |
 
-Keep the code block and the tag. A pin is found by the tag of its site and its page, and drawn from
+Keep the code block and the tag. A pin is found by the tag of its project, its site and its page, and drawn from
 the code block. A task without them is no longer shown on the page. A page shows the pins of its
 1,000 newest notes in Asana.
 

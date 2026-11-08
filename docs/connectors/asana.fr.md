@@ -54,7 +54,7 @@ Le serveur refuse de démarrer avec une valeur qui n’a pas deux parties, ou sa
 | ses fichiers                            | les pièces jointes de la tâche                                                |
 | son projet, son site et sa page         | l’étiquette `fruitback-page-<empreinte>`, créée dans l’espace Asana du projet |
 
-Gardez le bloc de code et l’étiquette. Un repère est trouvé par l’étiquette de son site et de sa page,
+Gardez le bloc de code et l’étiquette. Un repère est trouvé par l’étiquette de son projet, de son site et de sa page,
 et dessiné d’après le bloc de code. Une tâche qui les perd n’est plus montrée sur la page. Une page
 montre les repères de ses 1 000 notes les plus récentes dans Asana.
 
