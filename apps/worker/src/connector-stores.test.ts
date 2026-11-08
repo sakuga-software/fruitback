@@ -620,6 +620,27 @@ describe('which store edits a note (FRU-475, FRU-605)', () => {
     assert.deepEqual(queued, []);
   });
 
+  it('queues nothing for an edit the store refused (review of #866)', async () => {
+    const author = { kind: 'member' as const, name: 'Bob', workspace: 'Acme' };
+    for (const refusal of ['not-open', undefined] as const) {
+      const refusing = createRoutedStore(
+        { ...own, edit: async () => refusal },
+        createConnectorStores(accounts, SECRETS_KEY, () => 1_000),
+      );
+      queued.length = 0;
+
+      const answer = await refusing.edit?.(
+        { issue: '7', clientId: 'site_a' },
+        { text: 'x', author, note, identifier: 'FB-7' },
+        site('con_rest'),
+        shown as never,
+      );
+
+      assert.equal(answer, refusal);
+      assert.deepEqual(queued, [], String(refusal));
+    }
+  });
+
   it('is read by the console as an edit, and a note as before (FRU-605)', () => {
     assert.equal(pendingDeliveryOf({ id: 'd', event: 'note.edited', created_at: 0 })?.event, 'note.edited');
     assert.equal(pendingDeliveryOf({ id: 'd', event: 'note.created', created_at: 0 })?.event, undefined);
