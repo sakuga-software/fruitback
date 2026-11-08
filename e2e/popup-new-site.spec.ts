@@ -10,6 +10,7 @@ import {
   SITE_ON,
   sessionSitesOf,
 } from './extension.ts';
+import { settled } from './settled.ts';
 import { AUTHENTICATED_WORKER_ORIGIN } from './worker-sessions.ts';
 
 /**
