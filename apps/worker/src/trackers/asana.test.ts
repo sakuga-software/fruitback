@@ -101,6 +101,16 @@ describe('the plugin Asana (FRU-626)', () => {
     );
     assert.deepEqual(asana.state.revoked, ['asana-refresh-1']);
     assert.equal(await plugin.oauth?.refresh('asana-refresh-1', ASANA_CLIENT, asana.http, 10), 'ended');
+    // A refusal that is not `invalid_grant` says nothing of the refresh token: the connection stays.
+    await assert.rejects(
+      plugin.oauth?.refresh(
+        'asana-refresh-1',
+        { ...ASANA_CLIENT, clientSecret: 'copied-wrong' },
+        asana.http,
+        10,
+      ) as Promise<unknown>,
+      StoreError,
+    );
     assert.deepEqual(await plugin.oauth?.identify(tokens as NonNullable<typeof tokens>, asana.http), {
       label: 'Asana · Acme',
     });
@@ -171,7 +181,7 @@ describe('a note in Asana (FRU-626)', () => {
     });
     assert.deepEqual(
       asana.state.tags.map((each) => each.name),
-      [pageTag(PAGE, 'site_1')],
+      [pageTag(PROJECT, PAGE, 'site_1')],
     );
     const parsed = parseNoteFromDescription(asana.state.tasks[0]?.notes);
     assert.ok(parsed.ok);
@@ -187,7 +197,7 @@ describe('a note in Asana (FRU-626)', () => {
     const asana = fakeAsana();
     const store = plugin.store(accessTo(asana), { connector: 'con_1' });
     // A tag whose name begins like the tag of this page, as a fuzzy typeahead answers it.
-    const near = `${pageTag(PAGE, 'site_1').slice(0, 20)}zzzz`;
+    const near = `${pageTag(PROJECT, PAGE, 'site_1').slice(0, 20)}zzzz`;
     asana.state.tags.push({ gid: '1400000000000099', name: near, workspace: WORKSPACE });
 
     await store.create(note(), { teamId: PROJECT }, POLICY);
@@ -275,6 +285,17 @@ describe('a note in Asana (FRU-626)', () => {
     const quiet = { ...POLICY, showComments: false };
     const read = await store.findForPage({ url: PAGE, clientId: 'site_1' }, { teamId: PROJECT }, quiet);
     assert.equal(read.length, 120);
+  });
+
+  it('gives each project its own tag, so another project never fills the pages of a read', async () => {
+    const asana = fakeAsana();
+    const store = plugin.store(accessTo(asana), { connector: 'con_1' });
+    for (let index = 0; index < 150; index += 1) await store.create(note(), { teamId: '1200000000000011' }, POLICY);
+    await store.create(note(), { teamId: PROJECT }, POLICY);
+
+    assert.notEqual(pageTag(PROJECT, PAGE, 'site_1'), pageTag('1200000000000011', PAGE, 'site_1'));
+    const read = await store.findForPage({ url: PAGE, clientId: 'site_1' }, { teamId: PROJECT }, POLICY);
+    assert.equal(read.length, 1);
   });
 
   it('lists the sections of the project, then « Completed »', async () => {

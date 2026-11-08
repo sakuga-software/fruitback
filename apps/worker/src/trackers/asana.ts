@@ -56,11 +56,13 @@ const PROJECTS_PER_PAGE = 100;
 export const COMPLETED = 'completed';
 
 /**
- * The tag of the notes of one client on one page. Asana lists the tasks of a tag (`/tags/{gid}/tasks`)
- * on every plan, where its search is a paid one, so a read goes through this tag.
+ * The tag of the notes of one client on one page, in one project. Asana lists the tasks of a tag
+ * (`/tags/{gid}/tasks`) on every plan, where its search is a paid one, so a read goes through this
+ * tag. A tag belongs to a workspace: the project is in its name, so the tasks of another project
+ * never fill the pages of a read (balanced review of #872).
  */
-export function pageTag(url: string, client: string | undefined): string {
-  const named = JSON.stringify([client ?? '', url]);
+export function pageTag(project: string, url: string, client: string | undefined): string {
+  const named = JSON.stringify([project, client ?? '', url]);
 
   return `${FRUITBACK_LABEL}-page-${createHash('sha256').update(named).digest('hex').slice(0, 20)}`;
 }
@@ -278,7 +280,7 @@ function createAsanaStore(
 
     async create(note: Note, client: ClientConfig | undefined, policy, files = []) {
       const project = await projectOf(access, client?.teamId);
-      const tag = await tagOf(access, project.workspace.gid, pageTag(note.page.url, note.client?.id));
+      const tag = await tagOf(access, project.workspace.gid, pageTag(project.gid, note.page.url, note.client?.id));
       const created = z.object({ data: z.object({ gid: z.string(), permalink_url: z.string().optional() }) }).safeParse(
         await asana(
           access,
@@ -314,7 +316,7 @@ function createAsanaStore(
 
     async findForPage(query, client, policy) {
       const project = await projectOf(access, client?.teamId);
-      const tag = await findTag(access, project.workspace.gid, pageTag(query.url, query.clientId));
+      const tag = await findTag(access, project.workspace.gid, pageTag(project.gid, query.url, query.clientId));
       // No tag yet: no note was ever written for this page.
       if (tag === undefined) return [];
       const rows: unknown[] = [];
@@ -332,6 +334,11 @@ function createAsanaStore(
         rows.push(...answer.data.data);
         offset = answer.data.next_page?.offset;
         if (offset === undefined || answer.data.data.length === 0) break;
+        if (page === TASK_PAGES - 1) {
+          console.error(
+            `[fruitback] the tag of a page of Asana holds more than ${TASK_PAGES * TASKS_PER_PAGE} tasks: older notes are not drawn`,
+          );
+        }
       }
 
       const matched = rows.flatMap((each) => {
@@ -405,8 +412,13 @@ async function askTokens(http: Http, form: Record<string, string>, now: number):
   } catch {
     throw new StoreError('Asana could not be reached');
   }
-  if (response.status === 400 || response.status === 401) return 'refused';
-  if (!response.ok) throw new StoreError(`Asana responded ${response.status} to a token`);
+  if (!response.ok) {
+    // Only `invalid_grant` says that the code or the refresh token is over. Any other refusal (a client
+    // secret copied wrong, a request Asana did not read) keeps the connection (balanced review of #872).
+    const said = (await response.json().catch(() => undefined)) as { error?: unknown } | undefined;
+    if (said?.error === 'invalid_grant') return 'refused';
+    throw new StoreError(`Asana responded ${response.status} to a token`);
+  }
   const parsed = z
     .object({
       access_token: z.string().min(1),
