@@ -7,7 +7,7 @@ import { createMemoryStore } from './linear-memory.ts';
 import { rowsOf } from './postgres.fixture.ts';
 import { createPostgresNoteStore } from './notes-postgres.ts';
 import { createPairing, redeemPairing } from './session.ts';
-import type { NoteStore } from './store.ts';
+import { type NoteStore, StoreError } from './store.ts';
 
 /**
  * `POST /feedback/<id>/withdraw` (FRU-605): the person who left an open note withdraws it. It goes to
@@ -198,6 +198,28 @@ describe('a note withdrawn by the person who left it (FRU-605)', () => {
     assert.deepEqual(second, { status: 409, body: { error: 'withdraw-in-progress' } });
     assert.equal((await first).status, 200);
     assert.equal((await rowsOf(world.database, 'SELECT id FROM note_comments')).length, 1);
+  });
+
+  it('takes a new try at once after a withdrawal that failed: the key is let go (review of #870)', async () => {
+    const { world, store, site, tokens, note } = await aNote();
+    let calls = 0;
+    const once: NoteStore = {
+      ...store,
+      withdraw: async (...args) => {
+        calls += 1;
+        if (calls === 1) throw new StoreError('the tracker did not answer');
+
+        return (store.withdraw as NonNullable<NoteStore['withdraw']>)(...args);
+      },
+    };
+
+    assert.deepEqual(await withdraw(world, site, note, tokens.bob, once), {
+      status: 502,
+      body: { error: 'store-unavailable' },
+    });
+    // No wait: `kv.set(lock, '0', 1)` puts the count back at 0, for 1 ms (`ttlMs`, kv.ts).
+    assert.equal((await withdraw(world, site, note, tokens.bob, once)).status, 200);
+    assert.equal(calls, 2);
   });
 
   it('cancels the issue of a tracker after the reply, and its description stays', async () => {
