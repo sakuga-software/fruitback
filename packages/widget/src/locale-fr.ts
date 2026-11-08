@@ -203,6 +203,12 @@ export const FRENCH: Catalog = {
     'Votre session a pris fin. Votre texte est toujours là. Reconnectez-vous, puis enregistrez-la.',
   'edit.refused':
     'Cette note ne peut plus être modifiée : l’équipe l’a prise en charge. Votre texte est toujours là. Envoyez-le en réponse.',
+  'more.open': 'Autres actions sur votre note',
+  'more.edit': 'Modifier la note',
+  'more.copyLink': 'Copier le lien de la note',
+  'more.copied': 'Lien copié.',
+  'more.copyManually': 'Le lien n’a pas pu être copié. Sélectionnez-le, puis copiez-le.',
+  'more.linkLabel': 'Lien de la note',
   'thread.anonymous': 'Anonyme',
   'thread.orphan': 'Élément introuvable. La position est approximative.',
   'thread.uncertain':

@@ -349,8 +349,79 @@ export const STYLES = `
   color: var(--fruitback-color-text-muted);
 }
 .fruitback-thread-close:hover { background: var(--fruitback-color-surface-sunken) padding-box; }
+/*
+  The menu « ⋯ » of the author (FRU-605), before the cross in the same column. Both are 28 px drawn and
+  44 px to press: the gap keeps 12 px between the two drawn squares.
+*/
+.fruitback-thread-tools { display: flex; align-items: center; gap: 12px; }
+.fruitback-thread-more-wrap { position: relative; }
+.fruitback-thread-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin: -8px;
+  border: 8px solid transparent;
+  border-radius: calc(var(--fruitback-radius-sm) + 8px);
+  background: transparent;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--fruitback-color-text-muted);
+}
+.fruitback-thread-more:hover, .fruitback-thread-more[aria-expanded="true"] {
+  background: var(--fruitback-color-surface-sunken) padding-box;
+  color: var(--fruitback-color-text);
+}
+.fruitback-thread-more:focus-visible { outline: 2px solid var(--fruitback-color-accent); outline-offset: -6px; }
+/* Under « ⋯ », on the end side: the thread is 344 px wide at most, and the menu stays inside it. */
+.fruitback-thread-more-menu {
+  position: absolute;
+  top: calc(100% + 12px);
+  inset-inline-end: -8px;
+  z-index: 1;
+  box-sizing: border-box;
+  min-width: 220px;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  border: 1px solid var(--fruitback-color-border);
+  border-radius: var(--fruitback-radius-sm);
+  background: var(--fruitback-color-surface);
+  box-shadow: var(--fruitback-shadow-xl);
+}
+.fruitback-thread-more-menu[hidden] { display: none; }
+.fruitback-thread-more-menu li { display: block; margin: 0; padding: 0; }
+.fruitback-thread-more-item {
+  display: block;
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: var(--fruitback-radius-sm);
+  background: transparent;
+  color: var(--fruitback-color-text);
+  font: 500 13px/1.3 var(--fruitback-font-sans);
+  text-align: start;
+  cursor: pointer;
+}
+.fruitback-thread-more-item:hover, .fruitback-thread-more-item:focus-visible { background: var(--fruitback-color-surface-sunken); }
+.fruitback-thread-more-item:focus-visible { outline: 2px solid var(--fruitback-color-accent); outline-offset: -2px; }
+.fruitback-thread-more-said { margin: -6px 0 0; font-size: 12px; color: var(--fruitback-color-text-muted); }
+.fruitback-thread-more-link {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--fruitback-color-border);
+  border-radius: var(--fruitback-radius-sm);
+  background: var(--fruitback-color-surface-sunken);
+  color: var(--fruitback-color-text);
+  font: 12px/1.4 var(--fruitback-font-mono);
+}
 @media (forced-colors: active) {
-  .fruitback-thread-close, .fruitback-thread-link { border-color: Canvas; }
+  .fruitback-thread-close, .fruitback-thread-link, .fruitback-thread-more { border-color: Canvas; }
+  .fruitback-thread-more-menu { outline: 1px solid CanvasText; }
 }
 .fruitback-thread-body { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px 4px; }
 /* anywhere: an address has no space, and it must wrap inside the thread instead of leaving it (FRU-154). */

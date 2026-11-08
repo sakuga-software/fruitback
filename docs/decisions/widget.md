@@ -1891,6 +1891,29 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
   « Checked: looks fixed » or « Reopened: still wrong », and what was typed, from the text the worker
   writes in either language of the team (`checkText`).
 
+## The menu « ⋯ » of the author, in the head of a thread (FRU-605)
+
+### The rules, in short
+
+- **Only the author of an open note sees « ⋯ »**: the read says `mine`, and the stage is `new`,
+  `todo` or `progress` (`authorMenuOffered`, `thread-more.ts`). A note at `done` waits for the verdict
+  of its author (FRU-603), and a `closed` note says nothing more. `mine` only says where to offer it:
+  the worker decides again for each action.
+- **« ⋯ » sits before the cross, in the same column of the head** (`.fruitback-thread-tools`). Both
+  are 28 px drawn and 44 px to press, with 12 px between the two drawn squares. The glyph is
+  Phosphor's `dots-three-bold`, from the set like every action (icons.md).
+- **The items are the ones that work today.** « Edit the note » opens the field of the edit
+  (FRU-475), and only where the read says `editable`. « Copy link to the note » copies
+  `<page>#fruitback-note=<id>` (FRU-253, `noteLink`). « Move the note » and « Withdraw the note » come
+  with their routes, in the next pull requests of FRU-605.
+- **A copy that fails shows the link**, selected on focus, with « The link could not be copied.
+  Select it, then copy it. »: a copy that fails with nothing to see reads as a copy that worked, as in
+  the panel (`copySection`). What the copy said lives in a map by note, as the other footers, and
+  clears when the thread closes.
+- **The menu is the one of « Attach » (FRU-351)**: the arrows go from item to item, Home and End to
+  the ends, Escape closes the menu and gives the focus back to « ⋯ » without closing the thread, and
+  Tab or a focus out of it closes it.
+
 ## The colour of « Send » (FRU-601)
 
 ### The rules, in short
