@@ -4,7 +4,7 @@ import { t } from '../i18n';
 import { extensionInstallFor } from '../extension-store';
 import { useConnectedExtension } from '../extension-connected';
 import { EXTENSION_IDS, hereProblemOf, useExtensionHere } from '../extension-here';
-import { type ReactNode, useEffect, useState } from 'react';
+import { Fragment, type ReactNode, useEffect, useState } from 'react';
 import { BY_SIGN_IN, CONNECT_PAGE, snippetFor, useConnect, useCopy } from '../install-options';
 import { Button, LinkButton, OptionCard, Problem, Snippet, SuccessMark } from '../ui';
 import { useLocale } from '../use-locale';
@@ -296,13 +296,17 @@ export function FirstNoteIn({ workspace, site }: { workspace: Workspace; site: S
         <figure className="flex flex-col gap-1.5 rounded-[12px] border border-line px-4 py-3.5">
           <blockquote className="text-body font-semibold wrap-anywhere">{excerptShown(first.excerpt)}</blockquote>
           <figcaption className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-small text-muted">
-            <span className="wrap-anywhere">{t('On {page}', { page: `${first.page.host}${first.page.path}` })}</span>
-            {first.selector === undefined ? null : (
-              <code className="font-mono text-tiny wrap-anywhere">{first.selector}</code>
-            )}
-            {first.component === undefined ? null : (
-              <code className="font-mono text-tiny wrap-anywhere">{`<${first.component}>`}</code>
-            )}
+            <span className="wrap-anywhere">
+              {t('On {page}', { page: `${first.page.host}${first.page.path}` })}
+              {[first.selector, first.component === undefined ? undefined : `<${first.component}>`].map((part) =>
+                part === undefined ? null : (
+                  <Fragment key={part}>
+                    <span aria-hidden="true">{' · '}</span>
+                    <code className="font-mono">{part}</code>
+                  </Fragment>
+                ),
+              )}
+            </span>
             {link === undefined ? null : (
               <LinkButton space="inline" href={link} newTab>
                 {t('Show on the page')}
