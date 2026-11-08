@@ -10,6 +10,7 @@ import {
   SITE_ON,
   sessionSitesOf,
 } from './extension.ts';
+// `settled` comes from `e2e/settled.ts` (#873). The local copy that the squash left is removed.
 import { settled } from './settled.ts';
 import { AUTHENTICATED_WORKER_ORIGIN } from './worker-sessions.ts';
 
