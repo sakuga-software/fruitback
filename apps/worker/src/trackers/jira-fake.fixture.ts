@@ -69,9 +69,9 @@ export function fakeJira() {
       { id: '10004', name: 'Bug', subtask: false },
     ],
     statuses: [
-      { id: '10000', name: 'To Do', statusCategory: { key: 'new', colorName: 'blue-gray' } },
-      { id: '3', name: 'In Progress', statusCategory: { key: 'indeterminate', colorName: 'yellow' } },
-      { id: '10001', name: 'Done', statusCategory: { key: 'done', colorName: 'green' } },
+      { id: '10000', name: 'To Do', statusCategory: { key: 'new' } },
+      { id: '3', name: 'In Progress', statusCategory: { key: 'indeterminate' } },
+      { id: '10001', name: 'Done', statusCategory: { key: 'done' } },
     ],
     issues: [] as Issue[],
     /** Every JQL that a search was asked with. */
