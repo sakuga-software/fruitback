@@ -65,6 +65,8 @@ The person who connects needs these rights in each project a site sends to: « B
 The issue type is « Bug » when the project has one, else « Task », else the first type of the project
 that is not a sub-task.
 
+A page shows the pins of its 1,000 newest notes in Jira; older ones stay in Jira and are not drawn.
+
 Keep the code block and the labels. A pin is found by the label of its page, and drawn from the code
 block. An issue without them is no longer shown on the page.
 

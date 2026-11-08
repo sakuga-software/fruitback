@@ -67,6 +67,9 @@ La personne qui connecte a besoin de ces droits dans chaque projet vers lequel u
 Le type de ticket est « Bug » quand le projet en a un, sinon « Task », sinon le premier type du
 projet qui n’est pas une sous-tâche.
 
+Une page montre les repères de ses 1 000 notes les plus récentes dans Jira ; les plus anciennes restent
+dans Jira et ne sont pas dessinées.
+
 Gardez le bloc de code et les étiquettes. Un repère est trouvé par l’étiquette de sa page, et dessiné
 d’après le bloc de code. Un ticket qui les perd n’est plus montré sur la page.
 

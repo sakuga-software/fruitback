@@ -237,6 +237,21 @@ describe('a note in Jira (FRU-622)', () => {
     assert.deepEqual(created.files, { sent: [], lost: ['f1'], waiting: [] });
   });
 
+  it('puts only plain labels in a JQL search: a client id with a quote goes by its hash', async () => {
+    const jira = fakeJira();
+    const store = plugin.store(accessTo(jira), { connector: 'con_1' });
+    const sly = 'a" OR project = 1 OR labels = "b';
+    await store.create(note(sly), { teamId: PLACE }, POLICY);
+
+    const read = await store.findForPage({ url: PAGE, clientId: sly }, { teamId: PLACE }, POLICY);
+    assert.equal(read.length, 1, 'the note of that client is read back');
+    const jql = jira.state.searches.at(-1) ?? '';
+    // Each value between quotes is a plain label: no quote of the id reaches the search.
+    for (const [, label] of jql.matchAll(/labels = "([^"]*)"/g)) assert.match(label ?? '', /^[A-Za-z0-9._:-]+$/);
+    assert.equal(jql.includes(' OR '), false);
+    assert.match(jira.state.issues[0]?.labels[1] ?? '', /^fruitback:[0-9a-f]{16}$/);
+  });
+
   it('keeps an issue of the page that names another client off the read', async () => {
     const jira = fakeJira();
     const store = plugin.store(accessTo(jira), { connector: 'con_1' });
