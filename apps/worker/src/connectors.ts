@@ -9,7 +9,8 @@ import { type LinearOAuth, linearAuthorization } from './linear-oauth.ts';
 import { pluginOf } from './trackers/index.ts';
 import { type PluginKind, isPluginKind } from './trackers/kinds.ts';
 import type { TrackerApps } from './trackers/oauth.ts';
-import { type Http, trackerAccess } from './trackers/plugin.ts';
+import { type Http, readTrackerCredential, trackerAccess } from './trackers/plugin.ts';
+import { open } from './secrets.ts';
 import {
   type NoteStore,
   StoreError,
@@ -298,25 +299,18 @@ export function createConnectorStores(
     const receiver = isPluginKind(kept.kind) ? pluginOf(kept.kind)?.receiver : undefined;
     let takes: ((note: Note) => boolean) | undefined;
     if (receiver !== undefined) {
-      const plugin = pluginOf(kept.kind) as NonNullable<ReturnType<typeof pluginOf>>;
-      try {
-        const credential = await trackerAccess(plugin, connector, kept.sealed, {
-          accounts,
-          secretsKey,
-          client: undefined,
-          now,
-        }).credential();
-        takes = (note) => receiver.takes(note, credential);
-      } catch (error) {
-        // WARNING: the note is kept whatever its credential says (review of #871), and the setting that
-        // cannot be read is the default of the plugin: for Slack, verified notes only. A note of a
-        // visitor is then never queued for a channel that may have said « verified only ».
-        console.error(
-          `[fruitback] the setting of a connector that receives could not be read: ${error instanceof Error ? error.message : String(error)}`,
-        );
-        takes = (note) => receiver.takes(note, { via: 'token', token: '', extra: {} });
-        // The console says it at once (review of #871): a note that its setting would have sent may
-        // stay in Fruitback, and the connector must be connected again.
+      // The setting is read from the credential, opened here with the key of the server. It is never
+      // refreshed here: a receiver connects by a token.
+      const plain = secretsKey === undefined ? undefined : open(kept.sealed, secretsKey);
+      const credential = plain === undefined ? undefined : readTrackerCredential(plain);
+      // WARNING: the note is kept whatever its credential says (review of #871). A setting that cannot
+      // be read is the default of the plugin: for Slack, verified notes only, so a note of a visitor
+      // is never queued for a channel that may have said « verified only ».
+      takes = (note) => receiver.takes(note, credential ?? { via: 'token', token: '', extra: {} });
+      // Only a credential that this key really does not open makes the connector need attention: it
+      // must be connected again. A server with no key says nothing here, as a REST address does not.
+      if (secretsKey !== undefined && credential === undefined) {
+        console.error('[fruitback] the credential of a connector that receives does not open', connector);
         await accounts.noteConnector(connector, 'key-refused', now()).catch((failure: unknown) => {
           console.error('[fruitback] the state of a connector was not kept', connector, failure);
         });

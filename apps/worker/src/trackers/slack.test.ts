@@ -76,8 +76,17 @@ async function connect(world: Setup, body: Record<string, unknown>) {
 }
 
 /** A note kept through the connector of the site, as `POST /feedback` keeps it. */
-async function keep(world: Setup, connector: string, verified: boolean, files = 0) {
-  const stores = createConnectorStores(world.env.accounts, SECRETS_KEY, Date.now, undefined, { filesReachable: true });
+async function keep(
+  world: Setup,
+  connector: string,
+  verified: boolean,
+  files = 0,
+  /** `null`: a server with no key to open the connectors. */
+  key: string | null = SECRETS_KEY,
+) {
+  const stores = createConnectorStores(world.env.accounts, key ?? undefined, Date.now, undefined, {
+    filesReachable: true,
+  });
   const store = await stores(connector, world.workspace.id, createMemoryStore());
   const base = noteFixture();
   const note = {
@@ -245,6 +254,17 @@ describe('a Slack connector through the routes and the deliveries (FRU-624)', ()
     const [gone] = await world.env.accounts.deliveries(world.workspace.id, id);
     assert.equal(gone?.nextAt, undefined, 'a 404 is not tried again');
     assert.equal(await attention(), 'key-refused');
+  });
+
+  it('says nothing on the connector on a server with no key to open it (review of #871)', async () => {
+    const world = await setup();
+    const { id } = (await (await connect(world, { url: HOOK, notes: 'all' })).json()) as { id: string };
+    const kept = await keep(world, id, false, 0, null);
+    assert.match(kept.identifier, /.+/);
+    const [connector] = await world.env.accounts.connectors(world.workspace.id);
+    assert.equal(connector?.attention, undefined);
+    // The setting is not read: the default holds, and the note of a visitor stays in Fruitback.
+    assert.equal((await world.env.accounts.dueDeliveries(Date.now(), 10)).length, 0);
   });
 
   it('keeps a note when the credential of the connector does not open, and queues a verified one only (review of #871)', async () => {
