@@ -1667,6 +1667,21 @@ what it reaches in its own guide; what they share is here.
 - A destination of a plugin keeps the id of its place and the name the service gives it now, never a
   page address: only the page of a team of Linear is kept.
 
+### Jira Cloud
+
+- Jira connects by OAuth 2.0 (3LO) only, with an app that the operator makes once
+  (`FRUITBACK_JIRA_OAUTH`). The worker takes no API token: Atlassian says that an app that collects
+  them does not comply with its security requirements.
+- The scopes are `read:jira-work`, `write:jira-work`, `read:jira-user` and `offline_access`. The
+  token acts with the rights of the person who consented, on the sites they chose at Atlassian, and
+  lasts an hour. Its refresh token changes at each refresh, and ends after 90 days with no use.
+- The worker calls `api.atlassian.com` and `auth.atlassian.com` only. The address of a site comes
+  from the answer of Atlassian at the consent, and serves only to build the link of an issue.
+- A note lands in the project of its destination, and anybody who can browse that project in Jira
+  reads it: its text, its page, and the name and the address of its author when they gave them.
+- Atlassian has no route to revoke a token of 3LO for an app: « Disconnect » removes the connector,
+  and the person removes the app from their Atlassian account to end the token at once.
+
 ### The GitHub App, installed on a workspace (FRU-360)
 
 Where the worker has the App of the connectors (`FRUITBACK_GITHUB_CONNECTOR`), an owner or an admin
