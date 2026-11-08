@@ -280,6 +280,11 @@ describe('a Slack connector through the routes and the deliveries (FRU-624)', ()
     // The console says it at once: the connector must be connected again (review of #871).
     const [connector] = await world.env.accounts.connectors(world.workspace.id);
     assert.equal(connector?.attention?.reason, 'key-refused');
+    // Written once: the next notes do not write it again (review of #871).
+    const noted = vi.spyOn(world.env.accounts, 'noteConnector');
+    await keep(world, id, true);
+    await keep(world, id, false);
+    assert.equal(noted.mock.calls.length, 0);
   });
 
   it('refuses what is no webhook, and keeps none that Slack refuses', async () => {

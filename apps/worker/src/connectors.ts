@@ -309,11 +309,15 @@ export function createConnectorStores(
       takes = (note) => receiver.takes(note, credential ?? { via: 'token', token: '', extra: {} });
       // Only a credential that this key really does not open makes the connector need attention: it
       // must be connected again. A server with no key says nothing here, as a REST address does not.
+      // Written once: a connector that already says it is not written again at each note (review of #871).
       if (secretsKey !== undefined && credential === undefined) {
-        console.error('[fruitback] the credential of a connector that receives does not open', connector);
-        await accounts.noteConnector(connector, 'key-refused', now()).catch((failure: unknown) => {
-          console.error('[fruitback] the state of a connector was not kept', connector, failure);
-        });
+        const said = (await accounts.connectors(workspace).catch(() => [])).find((each) => each.id === connector);
+        if (said?.attention?.reason !== 'key-refused') {
+          console.error('[fruitback] the credential of a connector that receives does not open', connector);
+          await accounts.noteConnector(connector, 'key-refused', now()).catch((failure: unknown) => {
+            console.error('[fruitback] the state of a connector was not kept', connector, failure);
+          });
+        }
       }
     }
     // Nothing is opened to keep a note and queue it: the key is for the loop that sends.
