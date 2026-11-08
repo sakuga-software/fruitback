@@ -12,6 +12,15 @@ import {
 } from './claude-routine.ts';
 import { open, seal } from './secrets.ts';
 import { type AttachmentStore, SIGNED_URL_MS, legacyFileOf, signedAttachmentPath } from './attachments.ts';
+import { pluginOf } from './trackers/index.ts';
+import { isPluginKind } from './trackers/kinds.ts';
+import {
+  type Http,
+  type ReceiverDelivery,
+  type TrackerPlugin,
+  TrackerKeyRefused,
+  trackerAccess,
+} from './trackers/plugin.ts';
 
 /**
  * An address that receives each note of a site (FRU-122).
@@ -236,6 +245,8 @@ export type DeliverySeams = {
   now?: () => number;
   /** How many deliveries one pass attempts. The others wait for the next pass. */
   limit?: number;
+  /** What a plugin that receives (FRU-624, Slack) calls its service with. A test hands over its own. */
+  http?: Http;
 };
 
 /**
@@ -253,6 +264,7 @@ export async function deliverDue({
   publicUrl,
   now = Date.now,
   limit = 20,
+  http,
 }: DeliverySeams): Promise<{ delivered: number; failed: number }> {
   let delivered = 0;
   let failed = 0;
@@ -344,10 +356,63 @@ export async function deliverDue({
     });
   };
 
+  /**
+   * One attempt of a plugin that receives (FRU-624, Slack): the body of the queue with its files signed
+   * for this attempt, handed to the plugin, which says what its service answered.
+   */
+  const attemptPlugin = async (delivery: DueDelivery, plugin: TrackerPlugin, sealed: string): Promise<boolean> => {
+    const receiver = plugin.receiver as NonNullable<TrackerPlugin['receiver']>;
+    let files: string[] = [];
+    let answer: Awaited<ReturnType<typeof receiver.deliver>>;
+    try {
+      const signed = await withSignedFiles(delivery.body, { attachments, publicUrl, secretsKey, now: now() });
+      files = signed.files;
+      const access = trackerAccess(plugin, delivery.connectorId, sealed, {
+        accounts,
+        secretsKey,
+        client: undefined,
+        now,
+        ...(http === undefined ? {} : { http }),
+      });
+      answer = await receiver.deliver(access, JSON.parse(signed.body) as ReceiverDelivery);
+    } catch (thrown) {
+      // A credential the service refuses: every attempt left would be refused too.
+      const refused = thrown instanceof TrackerKeyRefused;
+      if (refused) await noteRoutine(delivery.connectorId, 'key-refused');
+      answer = {
+        ok: false,
+        error: thrown instanceof Error ? thrown.message.slice(0, 200) : 'The request did not finish',
+        retry: !refused,
+      };
+    }
+    if (answer.ok) {
+      await noteRoutine(delivery.connectorId, undefined);
+      await accounts.settleDelivery(delivery.id, { delivered: true });
+      await attachments?.endAt(files, now() + SIGNED_URL_MS).catch((error: unknown) => {
+        console.error('[fruitback] the files of a delivery that arrived keep their transit', delivery.id, error);
+      });
+
+      return true;
+    }
+    const wait = answer.retry ? RETRY_AFTER_SECONDS[delivery.attempts] : undefined;
+    await accounts.settleDelivery(delivery.id, {
+      delivered: false,
+      attempts: delivery.attempts,
+      at: now(),
+      ...(answer.status === undefined ? {} : { status: answer.status }),
+      error: answer.error,
+      ...(wait === undefined ? {} : { nextAt: now() + wait * 1_000 }),
+    });
+
+    return false;
+  };
+
   /** One attempt. `true` when the note arrived. */
   const attempt = async (delivery: DueDelivery): Promise<boolean> => {
     const kept = await accounts.sealedKey(delivery.connectorId);
     if (kept?.kind === 'claude-routine') return attemptRoutine(delivery, kept.sealed);
+    const plugin = kept !== undefined && isPluginKind(kept.kind) ? pluginOf(kept.kind) : undefined;
+    if (kept !== undefined && plugin?.receiver !== undefined) return attemptPlugin(delivery, plugin, kept.sealed);
     const target = kept?.kind === 'rest' ? openTarget(kept.sealed, secretsKey) : undefined;
 
     let status: number | undefined;

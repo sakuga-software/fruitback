@@ -25,7 +25,9 @@ export type TokenField = {
   /** The name of the field in the body of `POST /connectors`. */
   name: string;
   label: string;
-  type: 'text' | 'password' | 'url';
+  type: 'text' | 'password' | 'url' | 'select';
+  /** The choices of a `select`, its first one chosen at first (FRU-624). Each `label` is marked with `msg`. */
+  options?: readonly { value: string; label: string }[];
   hint?: string;
   placeholder?: string;
   /** A field that may stay empty: it is then not sent. */
@@ -41,6 +43,11 @@ export type ConsoleTracker = {
   tokenFields?: readonly TokenField[];
   /** What a refusal of the form means, by the word of the worker, beside the ones every plugin has. */
   problems?: Readonly<Record<string, string>>;
+  /**
+   * A connector that receives each note and keeps none (FRU-624, Slack): its panel lists the notes
+   * that did not arrive, as the one of a REST address.
+   */
+  receives?: true;
   /** The line under the name of a connector, from the label the worker wrote. Absent: the label. */
   sourceLine?(label: string): string;
 };
