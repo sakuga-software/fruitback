@@ -10,18 +10,19 @@ layout: landing
 
 ## The guides
 
-|                                           |                                                                                                    |
-| ----------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| [Choose a mode](modes.md)                 | Public, private and team: what the site ships in each, and who may read the pins. Start here.      |
-| [Install the widget](install.md)          | Two lines on a site with no build step, and what each option does.                                 |
-| [Run Fruitback yourself](self-hosting.md) | From an empty folder to a first pin, then backups, upgrades and every environment variable.        |
-| [Review with the extension](reviewing.md) | The reviewer's side: the browser extension, a rule per site, and pairing.                          |
-| [Translate the widget](translating.md)    | The words a host can replace, and the catalogs the bundle carries.                                 |
-| [REST connector](rest-connector.md)       | The request the Cloud posts for each note, its signature, and what happens when you do not answer. |
-| [GitLab connector](connectors/gitlab.md)  | Each note as an issue of a GitLab project, on gitlab.com or a GitLab your team hosts.              |
-| [Connect an AI agent](agents.md)          | Claude Code or a cloud agent reads, replies and sets a status with a key, and what it cannot stop. |
-| [What the widget collects](privacy.md)    | Every field a note carries, where it goes, how long it stays, and how to delete it.                |
-| [Architecture](architecture.md)           | What the parts are, and the designs that were dropped.                                             |
+|                                           |                                                                                                               |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| [Choose a mode](modes.md)                 | Public, private and team: what the site ships in each, and who may read the pins. Start here.                 |
+| [Install the widget](install.md)          | Two lines on a site with no build step, and what each option does.                                            |
+| [Run Fruitback yourself](self-hosting.md) | From an empty folder to a first pin, then backups, upgrades and every environment variable.                   |
+| [Review with the extension](reviewing.md) | The reviewer's side: the browser extension, a rule per site, and pairing.                                     |
+| [Translate the widget](translating.md)    | The words a host can replace, and the catalogs the bundle carries.                                            |
+| [Jira Cloud](connectors/jira.md)          | An issue per note in a Jira project, by consent at Atlassian. [En français](connectors/jira.fr.md).           |
+| [GitLab](connectors/gitlab.md)            | An issue per note in a GitLab project, on gitlab.com or self-managed. [En français](connectors/gitlab.fr.md). |
+| [REST connector](rest-connector.md)       | The request the Cloud posts for each note, its signature, and what happens when you do not answer.            |
+| [Connect an AI agent](agents.md)          | Claude Code or a cloud agent reads, replies and sets a status with a key, and what it cannot stop.            |
+| [What the widget collects](privacy.md)    | Every field a note carries, where it goes, how long it stays, and how to delete it.                           |
+| [Architecture](architecture.md)           | What the parts are, and the designs that were dropped.                                                        |
 
 ## The code
 

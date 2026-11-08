@@ -10,7 +10,9 @@ import { guardedLookup } from './rest-send.ts';
  *
  * WARNING: the global `fetch` resolves the name itself, so a check before it can be passed by a name
  * that answers a public address first and an internal one after. Here the socket connects to the
- * address `guardedLookup` checked. A redirect is not followed: it could lead anywhere.
+ * address `guardedLookup` checked. A redirect is never followed: it could lead anywhere. With
+ * `redirect: 'manual'` it is answered as it is; otherwise it fails, as `fetch` fails a redirect with
+ * `redirect: 'error'` (review of #865).
  */
 export type GuardedFetchSeams = {
   /** `node:https` in production. */
@@ -44,6 +46,14 @@ export function createGuardedFetch({
     return new Promise<Response>((resolve, reject) => {
       const signal = init.signal ?? undefined;
       const sent = request(url, { method: asked.method, headers, lookup: guardedLookup(lookup, allows) }, (answer) => {
+        const redirected =
+          (answer.statusCode ?? 0) >= 300 && (answer.statusCode ?? 0) < 400 && answer.statusCode !== 304;
+        if (redirected && init.redirect !== 'manual') {
+          answer.destroy();
+          reject(new TypeError('The answer is a redirect, which the worker does not follow'));
+
+          return;
+        }
         const chunks: Buffer[] = [];
         let size = 0;
         answer.on('data', (chunk: Buffer) => {

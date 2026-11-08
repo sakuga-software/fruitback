@@ -294,7 +294,12 @@ function matchPage(
   return { issue: issue.data, note: parsed.note };
 }
 
-const LINK = /!?\[([^\]\n]+)\]\((\/uploads\/[0-9a-f]{32}\/[^)\s]+)\)/g;
+/**
+ * A file under `FILES_HEADING`: `/uploads/<secret>/<name>`. The secret is 32 hexadecimal characters
+ * in the example of the documentation; any letters, digits, `-` and `_` are read, so a GitLab that
+ * makes it longer or of another alphabet keeps its files (review of #865).
+ */
+const LINK = /!?\[([^\]\n]+)\]\((\/uploads\/[A-Za-z0-9_-]{1,128}\/[^)\s]+)\)/g;
 
 /**
  * The files under `FILES_HEADING`. GitLab writes them as `/uploads/<secret>/<name>`, relative to the

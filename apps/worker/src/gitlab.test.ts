@@ -109,7 +109,8 @@ async function fakeGitlab(tokens: Record<string, Token>) {
         return send(200, { id, path_with_namespace: PROJECTS[id], web_url: `${origin}/${PROJECTS[id]}` });
       if (rest === '/uploads' && request.method === 'POST') {
         const name = /filename="([^"]+)"/.exec(body)?.[1] ?? 'file';
-        const secret = 'a'.repeat(32);
+        // A secret of another shape than the 32 hexadecimal characters of the documentation (review of #865).
+        const secret = 'Zq_9-'.repeat(13);
         const alt = name.replace(/\.[^.]+$/, '');
         return send(201, {
           id: 5,
@@ -291,7 +292,7 @@ describe('the GitLab connector against a fake GitLab (FRU-623)', async () => {
     assert.ok(issue?.description?.includes(`${FILES_HEADING}\n\n![capture](/uploads/`));
     const read = (await store.findForPage(query, client('42'), POLICY)).find((each) => each.note.id === 'sd_files');
     assert.deepEqual(read?.attachments, [
-      { name: 'capture', url: `${gitlab.origin}/-/project/42/uploads/${'a'.repeat(32)}/capture.png` },
+      { name: 'capture', url: `${gitlab.origin}/-/project/42/uploads/${'Zq_9-'.repeat(13)}/capture.png` },
     ]);
   });
 
@@ -394,6 +395,23 @@ describe('the address and the token of a GitLab connector (FRU-623)', () => {
     assert.equal(isAcceptableGitlabToken('glpat-short'), false);
     assert.equal(isAcceptableGitlabToken('glpat-with a space-0123456789'), false);
     assert.equal(isAcceptableGitlabToken(TOKEN), true);
+  });
+
+  it('the guarded fetch follows no redirect, and fails one unless it is asked for as it is (review of #865)', async () => {
+    const hops: string[] = [];
+    const server = createServer((request, response) => {
+      hops.push(request.url ?? '');
+      if (request.url === '/elsewhere') return response.end('{}');
+      response.writeHead(302, { Location: '/elsewhere' });
+      response.end();
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    servers.push(server);
+    const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    await assert.rejects(readGitlabUser(http, { url: origin, token: TOKEN }), StoreError);
+    await assert.rejects(http(`${origin}/api/v4/user`, {}), TypeError);
+    assert.equal((await http(`${origin}/api/v4/user`, { redirect: 'manual' })).status, 302);
+    assert.deepEqual(hops, ['/api/v4/user', '/api/v4/user', '/api/v4/user']);
   });
 
   it('the guarded fetch of the worker refuses the loopback by default', async () => {
