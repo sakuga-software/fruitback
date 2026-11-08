@@ -116,8 +116,7 @@ async function asks(worker: Worker, init: Call = {}): Promise<Asked> {
 
 /** The interval of the extension, gone by: the next claim is not too soon. */
 async function waited(worker: Worker, claim: string): Promise<void> {
-  await worker.kv.set(`fruitback:connect-poll:${await digest(claim)}`, '0', 1);
-  await new Promise((resolve) => setTimeout(resolve, 3));
+  await worker.kv.set(`fruitback:connect-poll:${await digest(claim)}`, '0', 0);
 }
 
 /** The extension asks whether it was answered, once the interval went by. */

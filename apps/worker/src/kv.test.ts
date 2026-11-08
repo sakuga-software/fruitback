@@ -6,7 +6,21 @@ import { createPostgresKv } from './kv-postgres.ts';
 import type { Database } from './postgres.ts';
 import { NO_REAL_POSTGRES, createPgliteDatabase, createRealDatabase } from './postgres.fixture.ts';
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+/**
+ * A clock that moves only when the test moves it. On the clock of the machine, a test of a 60 ms
+ * expiry failed under load: the second count came more than 60 ms after the first, and started
+ * again from 1.
+ */
+function aClock() {
+  let at = Date.now();
+
+  return {
+    now: () => at,
+    pass(ms: number) {
+      at += ms;
+    },
+  };
+}
 
 /**
  * What every `Kv` must answer: one suite, played on each implementation (FRU-67).
@@ -15,11 +29,16 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
  * fake that answers differently passes whatever is written next. The rules of a count are the
  * strictest ones measured: a canonical integer only, and nothing past 2^53.
  */
-function contract(name: string, connect: () => Kv, more: { skip?: string | false; closed?: () => Promise<void> } = {}) {
+function contract(
+  name: string,
+  connect: (now: () => number) => Kv,
+  more: { skip?: string | false; closed?: () => Promise<void> } = {},
+) {
   describe(`the ${name} Kv`, { skip: Boolean(more.skip) }, () => {
     const opened: Kv[] = [];
-    const open = () => {
-      const kv = connect();
+    // The tests that do not move the time read the clock of the machine.
+    const open = (now: () => number = Date.now) => {
+      const kv = connect(now);
       opened.push(kv);
 
       return kv;
@@ -44,33 +63,50 @@ function contract(name: string, connect: () => Kv, more: { skip?: string | false
       assert.equal(await kv.get(k), value);
     });
 
-    it('forgets a value after its expiry', async () => {
-      const kv = open();
+    it('forgets a value at its expiry', async () => {
+      const clock = aClock();
+      const kv = open(clock.now);
       const k = key();
 
       await kv.set(k, 'x', 30);
-      await sleep(80);
+      clock.pass(29);
+      assert.equal(await kv.get(k), 'x');
+      clock.pass(1);
       assert.equal(await kv.get(k), undefined);
     });
 
+    it('holds a value written with an expiry of 0 as already gone, without waiting', async () => {
+      // The tests of the connect flow write the pace of a claim this way, to say that it went by.
+      const kv = open(aClock().now);
+      const k = key();
+
+      await kv.set(k, '0', 0);
+      assert.equal(await kv.get(k), undefined);
+      assert.equal(await kv.incr(k, 10_000), 1);
+    });
+
     it('counts from 1, and starts again after the expiry', async () => {
-      const kv = open();
+      const clock = aClock();
+      const kv = open(clock.now);
       const k = key();
 
       assert.equal(await kv.incr(k, 60), 1);
       assert.equal(await kv.incr(k, 60), 2);
-      await sleep(120);
+      clock.pass(59);
+      assert.equal(await kv.incr(k, 60), 3);
+      clock.pass(1);
       assert.equal(await kv.incr(k, 60), 1);
     });
 
     it('counts a batch by its size, from nothing and from a count', async () => {
-      const kv = open();
+      const clock = aClock();
+      const kv = open(clock.now);
       const k = key();
 
       assert.equal(await kv.incr(k, 60, 4), 4);
       assert.equal(await kv.incr(k, 60), 5);
       assert.equal(await kv.incr(k, 60, 3), 8);
-      await sleep(120);
+      clock.pass(60);
       assert.equal(await kv.incr(k, 60, 2), 2, 'a count that starts above one has its expiry too');
     });
 
@@ -85,25 +121,27 @@ function contract(name: string, connect: () => Kv, more: { skip?: string | false
     it('gives an expiry to a count that starts from a stored zero, and keeps the one of a stored value', async () => {
       // « The count equals the increment » is not « the key is new »: a key that held `0` would get
       // a second expiry, and one that held `-1` and counts 2 would get none.
-      const kv = open();
+      const clock = aClock();
+      const kv = open(clock.now);
       const k = key();
 
       await kv.set(k, '0', 150);
       assert.equal(await kv.incr(k, 10_000), 1);
-      await sleep(250);
+      clock.pass(150);
       assert.equal(await kv.get(k), undefined, 'the count outlived the expiry of the value it started from');
     });
 
     it('keeps the first expiry when it counts again', async () => {
       // A counter whose expiry moved on every request would never expire for a steady caller, and
       // the address it counts would be refused for ever.
-      const kv = open();
+      const clock = aClock();
+      const kv = open(clock.now);
       const k = key();
 
       await kv.incr(k, 300);
-      await sleep(150);
+      clock.pass(150);
       assert.equal(await kv.incr(k, 300), 2);
-      await sleep(225);
+      clock.pass(150);
       assert.equal(await kv.incr(k, 300), 1);
     });
 
@@ -171,8 +209,14 @@ function contract(name: string, connect: () => Kv, more: { skip?: string | false
   });
 }
 
-const memory = createMemoryKv();
-contract('memory', () => ({ ...memory, close: async () => {} }));
+/** One memory store for each clock: the clients of one test share it, as they share a server. */
+const memories = new Map<() => number, Kv>();
+contract('memory', (now) => {
+  const memory = memories.get(now) ?? createMemoryKv({ now });
+  memories.set(now, memory);
+
+  return { ...memory, close: async () => {} };
+});
 
 /**
  * The store of `kv-postgres.ts` on one database, opened at the first call: each `connect` is one
@@ -182,8 +226,9 @@ function onPostgres(open: () => Promise<Database>) {
   let database: Promise<Database> | undefined;
 
   return {
-    connect(): Kv {
-      const store = (database ??= open()).then((opened) => createPostgresKv(opened));
+    connect(now: () => number): Kv {
+      // The test clock gives the instant of the statements and the pace of the sweep.
+      const store = (database ??= open()).then((opened) => createPostgresKv(opened, { now, instant: now }));
 
       return {
         get: async (key) => (await store).get(key),

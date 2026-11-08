@@ -355,7 +355,8 @@ describe('the limiter counts a batch by its notes', () => {
   });
 
   it('refuses an increment that is not a positive integer', async () => {
-    const kv = createMemoryKv();
+    // A clock that does not move: the count of one second must not expire between two calls.
+    const kv = createMemoryKv({ now: () => 0 });
     await assert.rejects(kv.incr('key', 1000, 0));
     await assert.rejects(kv.incr('key', 1000, 1.5));
     assert.equal(await kv.incr('key', 1000, 3), 3);
