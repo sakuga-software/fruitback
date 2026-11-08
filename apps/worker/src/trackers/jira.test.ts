@@ -223,6 +223,10 @@ describe('a note in Jira (FRU-622)', () => {
     assert.equal(read.length, 130);
     assert.equal(read.at(-1)?.identifier, 'DES-1', 'the oldest note too');
     assert.equal(jira.state.searches.length, 2);
+
+    // A Jira that leaves `isLast` out: the token of the next page leads.
+    jira.state.noIsLast = true;
+    assert.equal((await store.findForPage({ url: PAGE, clientId: 'site_1' }, { teamId: PLACE }, POLICY)).length, 130);
   });
 
   it('keeps the note when Jira refuses its files, says them lost, and says no refusal of the connection', async () => {

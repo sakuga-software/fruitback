@@ -365,8 +365,9 @@ function createJiraStore(
         if (!answer.success) throw new StoreError('Jira returned no search');
         rows.push(...answer.data.issues);
         token = answer.data.nextPageToken;
-        // An empty page ends the search too, whatever `isLast` says (balanced review of #867).
-        if (answer.data.isLast !== false || token === undefined || answer.data.issues.length === 0) break;
+        // The token of a next page leads, and an empty page ends the search, whatever `isLast` says
+        // or leaves out (balanced reviews of #867).
+        if (answer.data.isLast === true || token === undefined || answer.data.issues.length === 0) break;
         if (page === SEARCH_MAX_PAGES) {
           console.error(
             `[fruitback] the search of a page of Jira reached ${SEARCH_MAX_PAGES * ISSUES_PAGE_SIZE} notes: older ones are not drawn`,

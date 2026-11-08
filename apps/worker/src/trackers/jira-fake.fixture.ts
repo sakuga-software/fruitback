@@ -80,6 +80,8 @@ export function fakeJira() {
     attachmentsOff: false,
     /** Each search answers an empty page that says it is not the last, with a token: a Jira that misbehaves. */
     endless: false,
+    /** Each answer of a search leaves `isLast` out, and gives a token while there is more. */
+    noIsLast: false,
     /** What the next call to the REST API answers in place of its own answer, once. */
     next: undefined as { status: number; body?: unknown } | undefined,
   };
@@ -252,7 +254,7 @@ export function fakeJira() {
       const isLast = from + size >= issues.length;
 
       return json({
-        isLast,
+        ...(state.noIsLast ? {} : { isLast }),
         issues: page,
         ...(isLast ? {} : { nextPageToken: Buffer.from(String(from + size)).toString('base64url') }),
       });
