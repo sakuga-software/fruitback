@@ -36,7 +36,17 @@ import { readTrackerCredential } from './trackers/plugin.ts';
  * go through the guarded `fetch` of the worker, opened to the loopback for this test only.
  */
 
-type Seen = { method: string; path: string; query: URLSearchParams; token: string | undefined; body: string };
+type Seen = {
+  method: string;
+  path: string;
+  query: URLSearchParams;
+  token: string | undefined;
+  body: string;
+  /** The headers as the server read them: `host`, `content-type`, `content-length`. */
+  headers: Record<string, string | string[] | undefined>;
+  /** The bytes of the body the server read. */
+  size: number;
+};
 type Issue = {
   id: number;
   iid: number;
@@ -84,7 +94,16 @@ async function fakeGitlab(tokens: Record<string, Token>) {
       const url = new URL(request.url ?? '/', 'http://fake');
       const token = request.headers['private-token'] as string | undefined;
       const body = Buffer.concat(chunks).toString('latin1');
-      calls.push({ method: request.method ?? 'GET', path: url.pathname, query: url.searchParams, token, body });
+      const bytes = Buffer.concat(chunks).byteLength;
+      calls.push({
+        method: request.method ?? 'GET',
+        path: url.pathname,
+        query: url.searchParams,
+        token,
+        body,
+        headers: request.headers,
+        size: bytes,
+      });
       const send = (status: number, value: unknown, headers: Record<string, string> = {}) => {
         response.writeHead(status, { 'Content-Type': 'application/json', ...headers });
         response.end(JSON.stringify(value));
@@ -316,6 +335,16 @@ describe('the GitLab connector against a fake GitLab (FRU-623)', async () => {
     assert.deepEqual(created.files, { sent: ['att_1'], lost: [], waiting: [] });
     const upload = gitlab.calls.findLast((call) => call.path === '/api/v4/projects/42/uploads');
     assert.match(upload?.body ?? '', /name="file"; filename="capture.png"/);
+    // What the server read of the guarded fetch (review of #865): its host, the boundary of the form
+    // in its type, and a length that is the length of the body it received.
+    assert.equal(upload?.headers.host, new URL(gitlab.origin).host);
+    const boundary = /^multipart\/form-data; boundary=(.+)$/.exec(String(upload?.headers['content-type']))?.[1];
+    assert.ok(
+      boundary !== undefined && upload?.body.includes(`--${boundary}--`),
+      String(upload?.headers['content-type']),
+    );
+    assert.equal(Number(upload?.headers['content-length']), upload?.size);
+    assert.ok((upload?.size ?? 0) > 4);
     const issue = gitlab.issues.get(42)?.at(-1);
     assert.ok(issue?.description?.includes(`${FILES_HEADING}\n\n![capture](/uploads/`));
     const read = (await store.findForPage(query, client('42'), POLICY)).find((each) => each.note.id === 'sd_files');
