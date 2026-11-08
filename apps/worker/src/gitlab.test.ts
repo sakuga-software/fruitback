@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { type IncomingMessage, type ServerResponse, createServer, request as httpRequest } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { gzipSync } from 'node:zlib';
 import { afterAll, afterEach, describe, it } from 'vitest';
 import { noteFixture } from '@fruitback/shared/note.fixture';
 import type { ClientConfig, ClientPolicy } from './clients.ts';
@@ -564,6 +565,31 @@ describe('the address and the token of a GitLab connector (FRU-623)', () => {
       (await createGuardedFetch({ request: httpRequest as never, allows: () => true })(`${origin}/`, {})).status,
       200,
     );
+  });
+
+  it('the guarded fetch asks for no compression, and reads a body a proxy compressed anyway (review of #865)', async () => {
+    const asked: (string | undefined)[] = [];
+    const server = createServer((request, response) => {
+      asked.push(request.headers['accept-encoding'] as string | undefined);
+      response.writeHead(200, { 'Content-Type': 'application/json', 'Content-Encoding': 'gzip' });
+      response.end(gzipSync(JSON.stringify({ username: 'behind_a_proxy' })));
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    servers.push(server);
+    const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    assert.equal(await readGitlabUser(http, { url: origin, token: TOKEN }), 'behind_a_proxy');
+    assert.deepEqual(asked, ['identity']);
+    const answer = await http(`${origin}/api/v4/user`, {});
+    assert.equal(answer.headers.get('content-encoding'), null);
+    assert.equal(answer.headers.get('content-length'), null);
+    // 8 MB of zeros, a few kilobytes on the wire, past the limit once unpacked: refused.
+    const bomb = createServer((_request, response) => {
+      response.writeHead(200, { 'Content-Encoding': 'gzip' });
+      response.end(gzipSync(Buffer.alloc(8 * 1024 * 1024 + 1)));
+    });
+    await new Promise<void>((resolve) => bomb.listen(0, '127.0.0.1', resolve));
+    servers.push(bomb);
+    await assert.rejects(http(`http://127.0.0.1:${(bomb.address() as AddressInfo).port}/`, {}), TypeError);
   });
 
   it('the guarded fetch of the worker refuses the loopback by default', async () => {
