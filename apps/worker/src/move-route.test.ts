@@ -36,8 +36,8 @@ async function sessionOf(world: World, account: string, workspace: string): Prom
 }
 
 /** Alice owns Acme and its site. Bob and Carol are members. Bob left a note on `PAGE`. */
-async function aNote(store?: NoteStore) {
-  const world = await open();
+async function aNote(store?: NoteStore, env: Record<string, string> = {}) {
+  const world = await open({ env });
   const kept = store ?? createPostgresNoteStore(world.database);
   const alice = await signInTo(world, 'alice@acme.dev');
   const workspace = await workspaceIn(world, alice.token, 'Acme');
@@ -182,6 +182,17 @@ describe('a note moved by the person who left it (FRU-605)', () => {
       });
     }
     assert.deepEqual(await rowsOf(world.database, 'SELECT id FROM note_comments'), []);
+  });
+
+  it('refuses a move of a note of a tracker where the replies are hidden: a read would show the place of before (review of #877)', async () => {
+    const tracker = createMemoryStore();
+    const { world, site, tokens, note } = await aNote(tracker, { FRUITBACK_HIDE_COMMENTS: '1' });
+
+    assert.equal((await pin(world, site, tokens.bob, tracker)).editable, undefined);
+    assert.deepEqual(await move(world, site, note, tokens.bob, tracker), {
+      status: 403,
+      body: { error: 'edits-not-taken' },
+    });
   });
 
   it('writes the place in a reply of a tracker, keeps its description, and a read takes the place', async () => {
