@@ -106,9 +106,14 @@ export function createGitlabStore({ http, target, statusSource, stages = {} }: G
   }
 
   /** A call on the project. A `403` or a `404` is a project the token does not reach. */
-  async function call(project: string, path: string, init?: Parameters<typeof gitlabCall>[3]): Promise<unknown> {
+  async function call(
+    project: string,
+    path: string,
+    init?: Parameters<typeof gitlabCall>[3],
+    answered?: Parameters<typeof gitlabCall>[4],
+  ): Promise<unknown> {
     try {
-      return await gitlabCall(http, await target(), `/projects/${project}${path}`, init);
+      return await gitlabCall(http, await target(), `/projects/${project}${path}`, init, answered);
     } catch (error) {
       if (
         error instanceof GitlabResponseError &&
@@ -165,11 +170,24 @@ export function createGitlabStore({ http, target, statusSource, stages = {} }: G
       }));
   }
 
-  async function list(project: string, params: Record<string, string>): Promise<unknown[]> {
-    const answer = await call(project, `/issues?${new URLSearchParams({ ...params, per_page: String(PAGE_SIZE) })}`);
+  /**
+   * One page of issues, and whether GitLab says there is another: its `x-next-page` header, empty on
+   * the last page. Absent (a proxy can drop it), a full page is taken to have a next one.
+   */
+  async function list(project: string, params: Record<string, string>): Promise<{ rows: unknown[]; more: boolean }> {
+    let following: string | null = null;
+    const answer = await call(
+      project,
+      `/issues?${new URLSearchParams({ ...params, per_page: String(PAGE_SIZE) })}`,
+      {},
+      (headers) => {
+        following = headers.get('x-next-page');
+      },
+    );
     if (!Array.isArray(answer)) throw new StoreError('GitLab returned no list of issues');
+    const more = following === null ? answer.length >= PAGE_SIZE : (following as string).trim() !== '';
 
-    return answer;
+    return { rows: answer, more };
   }
 
   /**
@@ -183,7 +201,7 @@ export function createGitlabStore({ http, target, statusSource, stages = {} }: G
     const base = { labels: labels.join(','), scope: 'all', order_by: 'created_at', sort: 'desc' };
     const rows: unknown[] = [];
     for (let page = 1; page <= LIST_MAX_PAGES; page += 1) {
-      let listed: unknown[];
+      let listed: { rows: unknown[]; more: boolean };
       try {
         listed = await list(project, { ...base, page: String(page) });
       } catch (error) {
@@ -194,11 +212,13 @@ export function createGitlabStore({ http, target, statusSource, stages = {} }: G
 
         return rows;
       }
-      rows.push(...listed);
-      if (listed.length < PAGE_SIZE) return rows;
+      rows.push(...listed.rows);
+      // Exactly 1,000 issues fill the ten pages: GitLab says there is no more, and nothing is searched
+      // (review of #865).
+      if (!listed.more) return rows;
     }
     for (let page = 1; page <= SEARCH_MAX_PAGES; page += 1) {
-      let found: unknown[];
+      let found: { rows: unknown[]; more: boolean };
       try {
         found = await list(project, { ...base, search: searchPhrase(url), page: String(page) });
       } catch (error) {
@@ -206,8 +226,8 @@ export function createGitlabStore({ http, target, statusSource, stages = {} }: G
         console.error('[fruitback] GitLab refused the search of a page: its older notes are not read');
         break;
       }
-      rows.push(...found);
-      if (found.length < PAGE_SIZE) break;
+      rows.push(...found.rows);
+      if (!found.more) break;
     }
     const seen = new Set<unknown>();
 
