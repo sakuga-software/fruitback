@@ -337,7 +337,8 @@ function createClickupStore(
           .safeParse(await clickup(access, `/v2/list/${list}/task?${params}`, {}, { list: true }));
         if (!answer.success) throw new StoreError('ClickUp returned no tasks');
         rows.push(...answer.data.tasks);
-        if (answer.data.last_page !== false || answer.data.tasks.length < TASKS_PER_PAGE) break;
+        // A full page leads to the next one, whatever `last_page` says or leaves out (review of #868).
+        if (answer.data.last_page === true || answer.data.tasks.length < TASKS_PER_PAGE) break;
       }
 
       const matched = rows.flatMap((each) => {

@@ -65,6 +65,8 @@ export function fakeClickup() {
     refusedTags: new Set<string>(),
     /** The lists whose answer says no space. */
     spaceless: new Set<string>(),
+    /** Each read of tasks leaves `last_page` out. */
+    noLastPage: false,
     next: undefined as { status: number; body?: unknown } | undefined,
   };
 
@@ -223,7 +225,10 @@ export function fakeClickup() {
         .reverse();
       const slice = all.slice(page * 100, page * 100 + 100);
 
-      return json({ tasks: slice.map(view), last_page: page * 100 + 100 >= all.length });
+      return json({
+        tasks: slice.map(view),
+        ...(state.noLastPage ? {} : { last_page: page * 100 + 100 >= all.length }),
+      });
     }
     const attach = /^\/v2\/task\/([0-9a-z]+)\/attachment$/.exec(path);
     if (method === 'POST' && attach !== null) {

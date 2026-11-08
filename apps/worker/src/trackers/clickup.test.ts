@@ -289,6 +289,9 @@ describe('a note in ClickUp (FRU-625)', () => {
     const quiet = { ...POLICY, showComments: false };
     const read = await store.findForPage({ url: PAGE, clientId: 'site_1' }, { teamId: '124' }, quiet);
     assert.equal(read.length, 120);
+    // A ClickUp that leaves `last_page` out: a full page leads to the next one.
+    clickup.state.noLastPage = true;
+    assert.equal((await store.findForPage({ url: PAGE, clientId: 'site_1' }, { teamId: '124' }, quiet)).length, 120);
     assert.equal(read[0]?.comments, undefined, 'no reply is asked for a site that shows none');
   });
 
