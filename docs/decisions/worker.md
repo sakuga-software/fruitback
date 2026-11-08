@@ -3531,7 +3531,9 @@ replies, and on a public site mounted by the extension with no session, only the
 - **Nothing is deleted.** The worker's own store sets `closed` and the built-in status, and writes a
   reply « Withdrew the note » (`withdrawText`), in one transaction under the lock of the row. Linear
   writes the reply, then moves the issue to the first state of type `canceled` of the board
-  (`withdrawStateOf`); a team with none fails after the reply, as « Still wrong » does. GitHub takes
+  (`withdrawStateOf`), read **before** the reply: a team with none fails with nothing written, and a
+  move that Linear refuses takes the reply back, so a new try does not pile replies up (review of
+  #870, test:`fails with nothing written when the team has no canceled state (review of #870)`). GitHub takes
   none (FRU-628). An address keeps it in the worker's own store and gets `note.withdrawn`, ids only.
 - **One at a time**: a key of the KV, as for a verdict (`409 withdraw-in-progress`). A tracker has
   no lock, and a double click would write two replies.

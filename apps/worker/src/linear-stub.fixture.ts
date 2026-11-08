@@ -71,6 +71,8 @@ export type LinearStubOptions = {
   issueState?: { id?: string; name: string; type: string };
   /** The read of that state fails as an outage would. */
   failIssueState?: boolean;
+  /** `issueUpdate` answers no success (FRU-605). */
+  failReopen?: boolean;
   /** `commentDelete` answers no success, and `commentUpdate` too when `failUpdateComment`. */
   failDeleteComment?: boolean;
   failUpdateComment?: boolean;
@@ -232,6 +234,8 @@ export function installLinearStub(options: LinearStubOptions = {}): LinearStub {
       }
 
       if (operation === 'FruitbackReopenIssue') {
+        if (options.failReopen === true)
+          return jsonResponse({ data: { issueUpdate: { success: false, issue: null } } });
         const { stateId } = variables.input as { stateId: string };
         const state = (options.teamStates ?? []).find((each) => each.id === stateId);
         if (state === undefined) return jsonResponse({ errors: [{ message: 'Entity not found: WorkflowState' }] });

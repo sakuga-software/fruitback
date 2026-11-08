@@ -363,9 +363,10 @@ export function withdrawStateOf(states: readonly WorkflowStateNode[]): WorkflowS
 }
 
 /**
- * A withdrawal of its author (FRU-605): the reply first, then the move of the issue to
- * `withdrawStateOf`, as a verdict « Still wrong » does. A move that fails leaves the reply on an issue
- * still open: a second try writes the reply again, and moves it. Nothing of the note is deleted.
+ * A withdrawal of its author (FRU-605): the state it goes to is read first (`withdrawStateOf`), and a
+ * team with none fails with nothing written. Then the reply, then the move. A move that fails takes
+ * the reply back, as far as Linear lets it: a new try does not pile replies up (review of #870).
+ * Nothing of the note is deleted.
  *
  * As for an edit, the stage is read again after the reply: an issue the team marked done or closed
  * meanwhile keeps its state, the reply is deleted, and the answer is `not-open`.
@@ -377,28 +378,48 @@ export async function createWithdrawal(
   locale: string | undefined,
   stages: StageExceptions = {},
 ): Promise<{ comment: NoteComment; stage: NoteStage } | 'not-open'> {
+  // The state it goes to, before anything is written: a team with none fails with nothing written,
+  // and a new try does not add a reply each time (review of #870).
+  const found = await graphql<IssueStatesResult>(config, ISSUE_STATES_QUERY, { id: issueId });
+  if (found.issue === null) throw new StoreError('Linear did not find the issue to cancel');
+  const state = withdrawStateOf(found.issue.team.states.nodes);
+  if (state === undefined) throw new StoreError('The team of this issue has no canceled state');
   const created = await graphql<CreateCommentResult>(config, CREATE_COMMENT_MUTATION, {
     input: { issueId, body: withdrawText(withdrawal, locale) },
   });
   const comment = created.commentCreate.comment;
   if (!created.commentCreate.success || comment === null) throw new StoreError('Linear refused the reply');
-  const now = await graphql<IssueStateResult>(config, ISSUE_STATE_QUERY, { id: issueId });
-  if (now.issue === null) throw new StoreError('Linear lost the issue after the reply');
-  if (!EDITABLE_STAGES.has(stageOf(now.issue.state, stages))) {
-    const deleted = await graphql<DeleteCommentResult>(config, DELETE_COMMENT_MUTATION, { id: comment.id });
-    if (!deleted.commentDelete.success) throw new StoreError('Linear kept the reply of a withdrawal of a note done');
+  /** The reply goes when the issue does not move: as far as Linear lets it, and the error is the move's. */
+  const takeBack = () =>
+    graphql<DeleteCommentResult>(config, DELETE_COMMENT_MUTATION, { id: comment.id }).catch(() => undefined);
+  let open: boolean;
+  try {
+    const now = await graphql<IssueStateResult>(config, ISSUE_STATE_QUERY, { id: issueId });
+    if (now.issue === null) throw new StoreError('Linear lost the issue after the reply');
+    open = EDITABLE_STAGES.has(stageOf(now.issue.state, stages));
+  } catch (error) {
+    await takeBack();
+    throw error instanceof StoreError ? error : new StoreError('Linear did not say the stage after the reply');
+  }
+  if (!open) {
+    const deleted = await takeBack();
+    if (deleted?.commentDelete.success !== true) {
+      throw new StoreError('Linear kept the reply of a withdrawal of a note done');
+    }
 
     return 'not-open';
   }
-  const found = await graphql<IssueStatesResult>(config, ISSUE_STATES_QUERY, { id: issueId });
-  if (found.issue === null) throw new StoreError('Linear lost the issue between the reply and its move');
-  const state = withdrawStateOf(found.issue.team.states.nodes);
-  if (state === undefined) throw new StoreError('The team of this issue has no canceled state');
-  const moved = await graphql<ReopenIssueResult>(config, REOPEN_ISSUE_MUTATION, {
-    id: issueId,
-    input: { stateId: state.id },
-  });
-  if (!moved.issueUpdate.success) throw new StoreError('Linear refused to cancel the issue');
+  let moved: ReopenIssueResult;
+  try {
+    moved = await graphql<ReopenIssueResult>(config, REOPEN_ISSUE_MUTATION, {
+      id: issueId,
+      input: { stateId: state.id },
+    });
+    if (!moved.issueUpdate.success) throw new StoreError('Linear refused to cancel the issue');
+  } catch (error) {
+    await takeBack();
+    throw error instanceof StoreError ? error : new StoreError('Linear did not cancel the issue');
+  }
 
   return { comment: noteCommentOf(comment), stage: stageOf(moved.issueUpdate.issue?.state ?? state, stages) };
 }
