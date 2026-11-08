@@ -34,17 +34,20 @@ function fakeSlack() {
   const state = {
     posts: [] as { url: string; body: Record<string, unknown> }[],
     /** The answer of the next posts: a status and the word of Slack. */
-    answer: { status: 200, word: 'ok' } as { status: number; word: string },
+    answer: { status: 200, word: 'ok' } as { status: number; word: string; retryAfter?: string },
+    /** After one refusal, the next posts answer `ok`. */
+    thenOk: false,
   };
   const http = (async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input);
     if (!url.startsWith('https://hooks.slack.com/services/')) throw new TypeError(`fetch failed: ${url}`);
     state.posts.push({ url, body: JSON.parse(String(init?.body)) as Record<string, unknown> });
 
-    return new Response(state.answer.word, {
-      status: state.answer.status,
-      headers: state.answer.status === 429 ? { 'Retry-After': '1' } : {},
-    });
+    const { status, word, retryAfter } = state.answer;
+    if (state.thenOk) state.answer = { status: 200, word: 'ok' };
+    state.thenOk = false;
+
+    return new Response(word, { status, headers: status === 429 ? { 'Retry-After': retryAfter ?? '1' } : {} });
   }) as typeof fetch;
 
   return { state, http };
@@ -182,12 +185,45 @@ describe('a Slack connector through the routes and the deliveries (FRU-624)', ()
     assert.deepEqual(posted, [HOOK]);
   });
 
-  it('keeps a note when the credential of the connector does not open, and queues it (review of #871)', async () => {
+  it('waits what Slack asks after a 429, and posts the text alone when Slack refuses the blocks (review of #871)', async () => {
+    const world = await setup();
+    const { id } = (await (await connect(world, { url: HOOK })).json()) as { id: string };
+    await keep(world, id, true, 1);
+    // After the note: its delivery is due at the moment it was queued.
+    const now = Date.now() + 1;
+    const pass = () =>
+      deliverDue({
+        accounts: world.env.accounts,
+        secretsKey: SECRETS_KEY,
+        send: async () => ({ status: 500 }),
+        http: world.slack.http,
+        now: () => now,
+      });
+    world.slack.state.answer = { status: 429, word: 'rate_limited', retryAfter: '3600' };
+    await pass();
+    const [waiting] = await world.env.accounts.deliveries(world.workspace.id, id);
+    assert.ok(Date.parse(waiting?.nextAt ?? '') >= now + 3_600_000, String(waiting?.nextAt));
+
+    await world.env.accounts.retryDelivery(world.workspace.id, id, waiting?.id as string, now);
+    world.slack.state.posts = [];
+    world.slack.state.answer = { status: 400, word: 'invalid_blocks' };
+    world.slack.state.thenOk = true;
+    assert.deepEqual(await pass(), { delivered: 1, failed: 0 });
+    const [first, second] = world.slack.state.posts;
+    assert.ok(((first?.body.blocks as unknown[] | undefined)?.length ?? 0) > 1);
+    assert.equal((second?.body.blocks as unknown[] | undefined)?.length, 1);
+    assert.equal(second?.body.text, first?.body.text);
+  });
+
+  it('keeps a note when the credential of the connector does not open, and queues a verified one only (review of #871)', async () => {
     const world = await setup();
     const { id } = (await (await connect(world, { url: HOOK })).json()) as { id: string };
     await world.env.accounts.resealConnector(id, 'sealed-by-another-key');
-    const kept = await keep(world, id, false);
-    assert.match(kept.identifier, /.+/);
+    // The setting cannot be read: the default holds, verified notes only (review of #871).
+    const visitor = await keep(world, id, false);
+    assert.match(visitor.identifier, /.+/);
+    assert.equal((await world.env.accounts.dueDeliveries(Date.now(), 10)).length, 0);
+    await keep(world, id, true);
     assert.equal((await world.env.accounts.dueDeliveries(Date.now(), 10)).length, 1);
   });
 

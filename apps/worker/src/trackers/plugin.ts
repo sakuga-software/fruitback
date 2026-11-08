@@ -140,7 +140,16 @@ export type ReceiverDelivery = Omit<DeliveryBody, 'attachments'> & { attachments
  * and the delivery is given up (a body the service refuses). A credential that the service refuses is
  * a `TrackerKeyRefused` thrown: the delivery is given up, and the connector needs attention.
  */
-export type ReceiverAnswer = { ok: true } | { ok: false; status?: number; error: string; retry: boolean };
+export type ReceiverAnswer =
+  | { ok: true }
+  | {
+      ok: false;
+      status?: number;
+      error: string;
+      retry: boolean;
+      /** What the service asked to wait before the next attempt, in seconds (`Retry-After`). */
+      retryAfterSeconds?: number;
+    };
 
 export type TrackerReceiver = {
   /** Whether this note is sent, by what the connector keeps (a setting in `extra`). */

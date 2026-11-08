@@ -401,7 +401,12 @@ export async function deliverDue({
 
       return true;
     }
-    const wait = answer.retry ? RETRY_AFTER_SECONDS[delivery.attempts] : undefined;
+    const scheduled = answer.retry ? RETRY_AFTER_SECONDS[delivery.attempts] : undefined;
+    // A service that asks to wait longer than the schedule is waited for (`Retry-After`).
+    const wait =
+      scheduled === undefined || answer.retryAfterSeconds === undefined
+        ? scheduled
+        : Math.max(scheduled, answer.retryAfterSeconds);
     await accounts.settleDelivery(delivery.id, {
       delivered: false,
       attempts: delivery.attempts,

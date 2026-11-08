@@ -159,8 +159,18 @@ async function post(http: Http, url: string, message: unknown): Promise<Receiver
   if (CHANNEL_REFUSED.has(word)) throw new TrackerKeyForbidden(`Slack refused the channel: ${word}`);
   // A message Slack cannot read is refused the same way at every attempt.
   const final = response.status === 400;
+  // « Rate limits »: a 429 says in `Retry-After` how many seconds to wait. The next attempt waits that
+  // long at least (review of #871).
+  const after = Number(response.headers.get('retry-after'));
+  const retryAfterSeconds = response.status === 429 && Number.isFinite(after) && after > 0 ? after : undefined;
 
-  return { ok: false, status: response.status, error: `Slack answered ${word || response.status}`, retry: !final };
+  return {
+    ok: false,
+    status: response.status,
+    error: `Slack answered ${word || response.status}`,
+    retry: !final,
+    ...(retryAfterSeconds === undefined ? {} : { retryAfterSeconds }),
+  };
 }
 
 export const plugin: TrackerPlugin | undefined = {
@@ -199,7 +209,15 @@ export const plugin: TrackerPlugin | undefined = {
         throw new StoreError('The webhook of this Slack connector could not be opened');
       }
 
-      return post(access.http, credential.token, slackMessage(delivery));
+      const message = slackMessage(delivery);
+      const said = await post(access.http, credential.token, message);
+      if (said.ok || said.status !== 400) return said;
+      // A message of blocks that Slack refuses (an image it cannot fetch, a block too long) goes again
+      // as its text and its link alone, before the delivery is given up (review of #871).
+      return post(access.http, credential.token, {
+        text: message.text,
+        blocks: [message.blocks[0]],
+      });
     },
   },
 };

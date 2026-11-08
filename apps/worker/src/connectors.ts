@@ -308,13 +308,13 @@ export function createConnectorStores(
         }).credential();
         takes = (note) => receiver.takes(note, credential);
       } catch (error) {
-        // WARNING: the note is kept whatever its credential says (review of #871). A credential that
-        // does not open (a key that changed, a row of another server) queues every note: the loop that
-        // sends cannot open it either, and the panel of the connector shows each one that did not arrive.
+        // WARNING: the note is kept whatever its credential says (review of #871), and the setting that
+        // cannot be read is the default of the plugin: for Slack, verified notes only. A note of a
+        // visitor is then never queued for a channel that may have said « verified only ».
         console.error(
           `[fruitback] the setting of a connector that receives could not be read: ${error instanceof Error ? error.message : String(error)}`,
         );
-        takes = () => true;
+        takes = (note) => receiver.takes(note, { via: 'token', token: '', extra: {} });
       }
     }
     // Nothing is opened to keep a note and queue it: the key is for the loop that sends.
