@@ -298,9 +298,12 @@ export function FirstNoteIn({ workspace, site }: { workspace: Workspace; site: S
           <figcaption className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-small text-muted">
             <span className="wrap-anywhere">
               {t('On {page}', { page: `${first.page.host}${first.page.path}` })}
-              {[first.selector, first.component === undefined ? undefined : `<${first.component}>`].map((part) =>
+              {[
+                { key: 'selector', part: first.selector },
+                { key: 'component', part: first.component === undefined ? undefined : `<${first.component}>` },
+              ].map(({ key, part }) =>
                 part === undefined ? null : (
-                  <Fragment key={part}>
+                  <Fragment key={key}>
                     <span aria-hidden="true">{' · '}</span>
                     <code className="font-mono">{part}</code>
                   </Fragment>
