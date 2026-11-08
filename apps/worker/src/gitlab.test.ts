@@ -59,7 +59,13 @@ afterAll(() => {
   for (const server of servers) server.close();
 });
 
-const PROJECTS: Record<number, string> = { 42: 'acme/web', 43: 'acme/api', 77: 'other/secret' };
+const PROJECTS: Record<number, string> = {
+  42: 'acme/web',
+  43: 'acme/api',
+  77: 'other/secret',
+  // Fifty projects of a group, exactly one page of the console's list.
+  ...Object.fromEntries(Array.from({ length: 50 }, (_, index) => [500 + index, `big/project-${index}`])),
+};
 
 async function fakeGitlab(tokens: Record<string, Token>) {
   const calls: Seen[] = [];
@@ -94,17 +100,19 @@ async function fakeGitlab(tokens: Record<string, Token>) {
       if (path === '/projects' && request.method === 'GET') {
         const min = Number(url.searchParams.get('min_access_level') ?? '0');
         const search = url.searchParams.get('search');
-        return send(
-          200,
-          Object.entries(held.projects)
-            .filter(([, role]) => role >= min)
-            .map(([id]) => ({
-              id: Number(id),
-              path_with_namespace: PROJECTS[Number(id)],
-              web_url: `${origin}/${PROJECTS[Number(id)]}`,
-            }))
-            .filter((project) => search === null || project.path_with_namespace?.includes(search)),
-        );
+        const page = Number(url.searchParams.get('page') ?? '1');
+        const size = Number(url.searchParams.get('per_page') ?? '20');
+        const all = Object.entries(held.projects)
+          .filter(([, role]) => role >= min)
+          .map(([id]) => ({
+            id: Number(id),
+            path_with_namespace: PROJECTS[Number(id)],
+            web_url: `${origin}/${PROJECTS[Number(id)]}`,
+          }))
+          .filter((project) => search === null || project.path_with_namespace?.includes(search));
+        // `x-next-page` is the next page, or empty on the last one (« REST API », pagination).
+        const next = page * size < all.length ? String(page + 1) : '';
+        return send(200, all.slice((page - 1) * size, page * size), { 'x-next-page': next });
       }
       const project = /^\/projects\/(\d+)(\/.*)?$/.exec(path);
       if (project === null) return send(404, { message: '404 Not Found' });
@@ -199,6 +207,7 @@ const http = createGuardedFetch({ request: httpRequest as never, allows: () => t
 
 const TOKEN = 'glpat-reporter-0123456789abcdef';
 const GUEST = 'glpat-guest-0123456789abcdefgh';
+const GROUP = 'glgat-group-0123456789abcdefgh';
 const POLICY: ClientPolicy = {
   showComments: true,
   identitySecret: undefined,
@@ -214,6 +223,10 @@ describe('the GitLab connector against a fake GitLab (FRU-623)', async () => {
   const gitlab = await fakeGitlab({
     [TOKEN]: { user: 'project_42_bot', projects: { 42: 30, 43: 20 } },
     [GUEST]: { user: 'guest', projects: { 42: 10 } },
+    [GROUP]: {
+      user: 'group_bot',
+      projects: Object.fromEntries(Array.from({ length: 50 }, (_, index) => [500 + index, 20])),
+    },
   });
   const target = { url: gitlab.origin, token: TOKEN };
   const store = createGitlabStore({ http, target: async () => target, statusSource: 'con_gl' });
@@ -420,6 +433,13 @@ describe('the GitLab connector against a fake GitLab (FRU-623)', async () => {
     assert.equal((await readGitlabProject(http, target, '42'))?.path, 'acme/web');
     assert.equal(await readGitlabProject(http, target, '77'), undefined);
     assert.equal(await readGitlabProject(http, target, '../users'), undefined);
+  });
+
+  it('offers no next page after a full page that GitLab says is the last (review of #865)', async () => {
+    const group = { ...target, token: GROUP };
+    const first = await listGitlabProjects(http, group);
+    assert.equal(first.projects.length, 50);
+    assert.equal(first.next, undefined);
   });
 
   it('a self-managed instance under a path is called under that path', async () => {
