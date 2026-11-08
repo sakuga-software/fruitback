@@ -9,7 +9,7 @@ import { createPostgresNoteStore } from '../notes-postgres.ts';
 import { open } from '../secrets.ts';
 import { StoreError } from '../store.ts';
 import { CLICKUP_CLIENT, PERSONAL, fakeClickup } from './clickup-fake.fixture.ts';
-import { clickupStage, pageTag, plugin } from './clickup.ts';
+import { ClickupAnswered, clickupStage, pageTag, plugin } from './clickup.ts';
 import { pluginOf } from './index.ts';
 import {
   type TrackerAccess,
@@ -184,6 +184,23 @@ describe('a note in ClickUp (FRU-625)', () => {
 
     await assert.rejects(store.create(note(), { teamId: '124' }, POLICY), StoreError);
     assert.equal(clickup.state.tasks.length, 0);
+
+    // A list whose answer says no space: its tags could not be made, so no task either.
+    clickup.state.refusedTags.clear();
+    clickup.state.spaceless.add('124');
+    await assert.rejects(store.create(note(), { teamId: '124' }, POLICY), StoreError);
+    assert.equal(clickup.state.tasks.length, 0);
+  });
+
+  it('tells a tag that exists by the status of the answer, not by its words', async () => {
+    const clickup = fakeClickup();
+    clickup.state.next = { status: 400 };
+    const answered = await plugin
+      .store(accessTo(clickup), { connector: 'con_1' })
+      .findForPage({ url: PAGE, clientId: 'site_1' }, { teamId: '124' }, POLICY)
+      .catch((error: unknown) => error);
+    assert.ok(answered instanceof ClickupAnswered);
+    assert.equal(answered.status, 400);
   });
 
   it('reads a task whose dates are not dates, with no date', async () => {

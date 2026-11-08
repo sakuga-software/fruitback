@@ -90,6 +90,16 @@ function authorizationOf(credential: Awaited<ReturnType<TrackerAccess['credentia
   return credential.via === 'token' ? credential.token : `Bearer ${credential.accessToken}`;
 }
 
+/** ClickUp answered a status that is no refusal and no success: a ClickUp that is down, or a `400`. */
+export class ClickupAnswered extends StoreError {
+  readonly status: number;
+
+  constructor(status: number) {
+    super(`ClickUp responded ${status}`);
+    this.status = status;
+  }
+}
+
 /**
  * A call to ClickUp. `401` is a token that ClickUp refuses. `403` is a refusal of rights, and so is a
  * `404` on a list (`list: true`), which ClickUp answers for a list the token cannot reach. Anything
@@ -116,7 +126,7 @@ async function call(
   if (response.status === 403 || (list && response.status === 404)) {
     throw new TrackerKeyForbidden(`ClickUp responded ${response.status} for this list`);
   }
-  if (!response.ok) throw new StoreError(`ClickUp responded ${response.status}`);
+  if (!response.ok) throw new ClickupAnswered(response.status);
 
   return response.json().catch(() => {
     throw new StoreError('ClickUp answered no JSON');
@@ -181,7 +191,7 @@ async function ensureTags(access: TrackerAccess, space: string, tags: readonly s
     } catch (error) {
       // ClickUp answers `400` for a tag of the space that exists. Any refusal of rights stops the note.
       if (error instanceof TrackerKeyRefused || error instanceof TrackerKeyForbidden) throw error;
-      if (!(error instanceof StoreError) || !/responded 400/.test(error.message)) throw error;
+      if (!(error instanceof ClickupAnswered) || error.status !== 400) throw error;
       refused = true;
     }
   }
@@ -276,7 +286,9 @@ function createClickupStore(
     async create(note: Note, client: ClientConfig | undefined, policy, files = []) {
       const list = await listOf(access, client?.teamId);
       const tags = [FRUITBACK_LABEL, pageTag(note.page.url, note.client?.id)];
-      if (list.space !== undefined) await ensureTags(access, list.space.id, tags);
+      // A list of no space would take tags that ClickUp drops: no read would find its task (review of #868).
+      if (list.space === undefined) throw new StoreError('ClickUp said no space of this list');
+      await ensureTags(access, list.space.id, tags);
       const created = z.object({ id: z.string(), url: z.string().optional() }).safeParse(
         await clickup(
           access,

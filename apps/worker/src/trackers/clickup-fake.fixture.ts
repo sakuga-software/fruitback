@@ -63,6 +63,8 @@ export function fakeClickup() {
     attachmentsOff: false,
     /** The tags that ClickUp refuses to make, with a 400 that is not « it exists ». */
     refusedTags: new Set<string>(),
+    /** The lists whose answer says no space. */
+    spaceless: new Set<string>(),
     next: undefined as { status: number; body?: unknown } | undefined,
   };
 
@@ -181,7 +183,9 @@ export function fakeClickup() {
           folder === undefined
             ? { id: '0', name: 'hidden', hidden: true, access: true }
             : { id: folder.id, name: folder.name, hidden: false, access: true },
-        space: { id: found.space, name: spaceName(found.space), access: true },
+        ...(state.spaceless.has(found.id)
+          ? {}
+          : { space: { id: found.space, name: spaceName(found.space), access: true } }),
         statuses: state.statuses,
         permission_level: 'create',
       });
