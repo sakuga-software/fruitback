@@ -1682,6 +1682,20 @@ what it reaches in its own guide; what they share is here.
 - Atlassian has no route to revoke a token of 3LO for an app: « Disconnect » removes the connector,
   and the person removes the app from their Atlassian account to end the token at once.
 
+### ClickUp
+
+- ClickUp connects by consent (OAuth) with an app that the operator makes once
+  (`FRUITBACK_CLICKUP_OAUTH`), or by a personal token where the server has no app. Neither expires,
+  as ClickUp says. Each is sealed with `FRUITBACK_SECRETS_KEY`, and no route answers it.
+- A token of OAuth reaches the Workspaces that its person chose at the consent; a personal token
+  reaches every Workspace of its person. Each acts with the rights of that person in ClickUp.
+- A personal token is asked of ClickUp before it is kept: a token ClickUp refuses is never stored.
+- The worker calls `api.clickup.com` only.
+- A note lands in the list of its destination, and anybody who can see that list in ClickUp reads it:
+  its text, its page, and the name and the address of its author when they gave them.
+- ClickUp has no route to revoke a token for an app: « Disconnect » removes the connector, and the app
+  is removed in ClickUp, or the personal token regenerated, to end the token at once.
+
 ### The GitHub App, installed on a workspace (FRU-360)
 
 Where the worker has the App of the connectors (`FRUITBACK_GITHUB_CONNECTOR`), an owner or an admin

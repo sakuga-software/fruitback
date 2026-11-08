@@ -353,9 +353,11 @@ describe('a workspace connects Jira (FRU-622)', () => {
     const base = `/console/workspaces/${workspace.id}`;
 
     const listed = await callOn(env, 'GET', `${base}/connectors`, { token });
-    assert.deepEqual(((await listed.json()) as { trackers: unknown }).trackers, [
+    const offers = ((await listed.json()) as { trackers: { kind: string }[] }).trackers;
+    assert.deepEqual(
+      offers.find((each) => each.kind === 'jira'),
       { kind: 'jira', oauth: true, token: false },
-    ]);
+    );
     const asked = await callOn(env, 'POST', `${base}/connectors/jira/oauth`, { token });
     const { url } = (await asked.json()) as { url: string };
     const started = await callOn(env, 'GET', new URL(url).pathname + new URL(url).search);
@@ -405,9 +407,11 @@ describe('a workspace connects Jira (FRU-622)', () => {
     const workspace = await env.accounts.createWorkspace('Acme', id);
 
     const listed = await callOn(env, 'GET', `/console/workspaces/${workspace.id}/connectors`, { token });
-    assert.deepEqual(((await listed.json()) as { trackers: unknown }).trackers, [
+    const offers = ((await listed.json()) as { trackers: { kind: string }[] }).trackers;
+    assert.deepEqual(
+      offers.find((each) => each.kind === 'jira'),
       { kind: 'jira', oauth: false, token: false },
-    ]);
+    );
     const asked = await callOn(env, 'POST', `/console/workspaces/${workspace.id}/connectors/jira/oauth`, { token });
     assert.equal(asked.status, 404);
   });

@@ -754,6 +754,7 @@ the Keychain entries, and add these.
 | ----------------------------- | ----------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
 | `FRUITBACK_LINEAR_OAUTH`      | Linear, Settings, API, « OAuth applications »                                                   | `https://api.fruitback.com/auth/linear/callback`         |
 | `FRUITBACK_JIRA_OAUTH`        | developer.atlassian.com, « Developer console », an « OAuth 2.0 integration » (FRU-622)          | `https://api.fruitback.com/auth/jira/callback`           |
+| `FRUITBACK_CLICKUP_OAUTH`     | ClickUp, your avatar, « Settings », « Apps », « Create new app » (FRU-625)                      | `https://api.fruitback.com/auth/clickup/callback`        |
 | `FRUITBACK_AUTH_GITHUB_OAUTH` | GitHub, the organisation's settings, « OAuth Apps » (FRU-147)                                   | `https://api.fruitback.com/console/auth/callback/github` |
 | `FRUITBACK_GOOGLE_OAUTH`      | Google Cloud, « APIs & Services », « Credentials », an OAuth client of type « Web application » | `https://api.fruitback.com/console/auth/callback/google` |
 
