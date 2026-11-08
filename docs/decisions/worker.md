@@ -3507,6 +3507,10 @@ replies, and on a public site mounted by the extension with no session, only the
   the note keeps it as an edit of before, stopped at `completedAt` or `canceledAt`. So no edit that
   crossed a move stays, and a reopened issue never takes the text of one
   (test:`deletes its comment when the issue is completed once the comment is written, and says not-open`).
+  A read of the stage that fails deletes the comment as far as Linear lets it, and the route answers
+  `502`: the author tries again, and nothing stays that nobody answered for (round 5 of #866).
+  A move to done **after** that read is a move after the comment: its `completedAt` is later than the
+  comment, which is an edit of the note while it was open, and the text it gives is the right one.
 - **The comment is recognized by its text, not by its Linear author** (round 3 of #866): with an
   OAuth connection as the app, Linear may write it with no `user`, and nobody measured it; a filter on
   the author could drop every real edit. Whoever can type it in Linear is of the team that owns the

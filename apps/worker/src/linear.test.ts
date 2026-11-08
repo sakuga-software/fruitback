@@ -365,6 +365,30 @@ describe('an edit that crosses a move to done in Linear (review of #866)', () =>
     assert.deepEqual(stub.calls[2]?.variables, { id: 'comment_1' });
   }
 
+  it('deletes its comment when the stage cannot be read after it, and fails (round 5 of #866)', async () => {
+    const stub = installLinearStub({ failIssueState: true });
+    const store = createLinearStore({ apiKey: 'lin_api_test', teamId: 'team_1', projectId: undefined });
+
+    await assert.rejects(
+      store.edit?.(
+        { issue: 'issue_1', clientId: 'acme' },
+        {
+          text: 'Unknown',
+          author: { kind: 'member', name: 'Bob', workspace: 'Acme' },
+          note: noteFixture(),
+          identifier: 'ENG-1',
+        },
+        undefined,
+        { showComments: true, identitySecret: undefined, read: 'public', write: 'public', locale: 'en' },
+      ) ?? Promise.resolve(),
+      StoreError,
+    );
+    assert.deepEqual(
+      stub.calls.map((call) => call.operation),
+      ['FruitbackCreateComment', 'FruitbackIssueState', 'FruitbackDeleteComment'],
+    );
+  });
+
   it('deletes its comment when the issue is completed once the comment is written, and says not-open', async () => {
     await crossing({ name: 'Done', type: 'completed' });
   });

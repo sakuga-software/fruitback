@@ -228,9 +228,18 @@ export async function createEdit(
   });
   const comment = created.commentCreate.comment;
   if (!created.commentCreate.success || comment === null) throw new StoreError('Linear refused the edit');
-  const now = await graphql<IssueStateResult>(config, ISSUE_STATE_QUERY, { id: issueId });
-  if (now.issue === null) throw new StoreError('Linear lost the issue after the edit');
-  if (!EDITABLE_STAGES.has(stageOf(now.issue.state, stages))) {
+  let open: boolean;
+  try {
+    const now = await graphql<IssueStateResult>(config, ISSUE_STATE_QUERY, { id: issueId });
+    if (now.issue === null) throw new StoreError('Linear lost the issue after the edit');
+    open = EDITABLE_STAGES.has(stageOf(now.issue.state, stages));
+  } catch (error) {
+    // The stage is not known: the comment goes, as far as Linear lets it, and the author is told the
+    // edit did not go (`502`). Kept, it would be an edit nobody answered for (round 5 of #866).
+    await graphql<DeleteCommentResult>(config, DELETE_COMMENT_MUTATION, { id: comment.id }).catch(() => undefined);
+    throw error instanceof StoreError ? error : new StoreError('Linear did not say the stage after the edit');
+  }
+  if (!open) {
     const deleted = await graphql<DeleteCommentResult>(config, DELETE_COMMENT_MUTATION, { id: comment.id });
     // A comment that stays is a reply written after the move: the read does not take its text.
     if (!deleted.commentDelete.success) throw new StoreError('Linear kept an edit of a note done');
