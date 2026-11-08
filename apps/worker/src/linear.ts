@@ -20,6 +20,7 @@ import {
   type CheckAnswer,
   type CreatedIssue,
   type CreatedWithFiles,
+  EDITABLE_STAGES,
   type NewCheck,
   type NewEdit,
   type NewReply,
@@ -190,22 +191,53 @@ export async function createReply(
   return noteCommentOf(comment);
 }
 
+const ISSUE_STATE_QUERY = `
+  query FruitbackIssueState($id: String!) {
+    issue(id: $id) { id state { id name type } }
+  }
+`;
+
+type IssueStateResult = { issue: { id: string; state: { id: string; name: string; type: string } | null } | null };
+
+const DELETE_COMMENT_MUTATION = `
+  mutation FruitbackDeleteComment($id: String!) {
+    commentDelete(id: $id) { success }
+  }
+`;
+
+type DeleteCommentResult = { commentDelete: { success: boolean } };
+
 /**
  * The new text of a note by its author (FRU-605): a comment « Edited the note » with the new text in
  * it. The description of the issue is the team's, which they may have changed, and is never written
  * again. A read takes the text from the comment (`withEditedText`).
+ *
+ * Linear has no lock, so the stage is read again **after** the comment (review of #866). An issue
+ * done or canceled by then had its move before that read: the comment is deleted, and the answer is
+ * `not-open`. A move after that read comes after the comment too, and the read of the note keeps it,
+ * as an edit of before (`completedAt`). So no edit that crossed a move stays, reopened or not.
  */
 export async function createEdit(
   config: LinearConfig,
   issueId: string,
   edit: NewEdit,
   locale?: string,
-): Promise<{ note: Note; comment: NoteComment }> {
+  stages: StageExceptions = {},
+): Promise<{ note: Note; comment: NoteComment } | 'not-open'> {
   const created = await graphql<CreateCommentResult>(config, CREATE_COMMENT_MUTATION, {
     input: { issueId, body: editText(edit, locale, true) },
   });
   const comment = created.commentCreate.comment;
   if (!created.commentCreate.success || comment === null) throw new StoreError('Linear refused the edit');
+  const now = await graphql<IssueStateResult>(config, ISSUE_STATE_QUERY, { id: issueId });
+  if (now.issue === null) throw new StoreError('Linear lost the issue after the edit');
+  if (!EDITABLE_STAGES.has(stageOf(now.issue.state, stages))) {
+    const deleted = await graphql<DeleteCommentResult>(config, DELETE_COMMENT_MUTATION, { id: comment.id });
+    // A comment that stays is a reply written after the move: the read does not take its text.
+    if (!deleted.commentDelete.success) throw new StoreError('Linear kept an edit of a note done');
+
+    return 'not-open';
+  }
 
   return { note: { ...edit.note, text: edit.text }, comment: noteCommentOf(comment) };
 }
@@ -299,7 +331,10 @@ export function withdrawStateOf(states: readonly WorkflowStateNode[]): WorkflowS
 /**
  * A withdrawal of its author (FRU-605): the reply first, then the move of the issue to
  * `withdrawStateOf`, as a verdict « Still wrong » does. A move that fails leaves the reply on an issue
- * still open: a second try writes the reply again, and moves it. Nothing is deleted.
+ * still open: a second try writes the reply again, and moves it. Nothing of the note is deleted.
+ *
+ * As for an edit, the stage is read again after the reply: an issue the team marked done or closed
+ * meanwhile keeps its state, the reply is deleted, and the answer is `not-open`.
  */
 export async function createWithdrawal(
   config: LinearConfig,
@@ -307,12 +342,20 @@ export async function createWithdrawal(
   withdrawal: NewWithdrawal,
   locale: string | undefined,
   stages: StageExceptions = {},
-): Promise<{ comment: NoteComment; stage: NoteStage }> {
+): Promise<{ comment: NoteComment; stage: NoteStage } | 'not-open'> {
   const created = await graphql<CreateCommentResult>(config, CREATE_COMMENT_MUTATION, {
     input: { issueId, body: withdrawText(withdrawal, locale) },
   });
   const comment = created.commentCreate.comment;
   if (!created.commentCreate.success || comment === null) throw new StoreError('Linear refused the reply');
+  const now = await graphql<IssueStateResult>(config, ISSUE_STATE_QUERY, { id: issueId });
+  if (now.issue === null) throw new StoreError('Linear lost the issue after the reply');
+  if (!EDITABLE_STAGES.has(stageOf(now.issue.state, stages))) {
+    const deleted = await graphql<DeleteCommentResult>(config, DELETE_COMMENT_MUTATION, { id: comment.id });
+    if (!deleted.commentDelete.success) throw new StoreError('Linear kept the reply of a withdrawal of a note done');
+
+    return 'not-open';
+  }
   const found = await graphql<IssueStatesResult>(config, ISSUE_STATES_QUERY, { id: issueId });
   if (found.issue === null) throw new StoreError('Linear lost the issue between the reply and its move');
   const state = withdrawStateOf(found.issue.team.states.nodes);
@@ -1336,7 +1379,7 @@ export function createLinearStore(
     check: (target, check, _client, policy) => createCheck(config, target.issue, check, policy.locale, stages),
     // FRU-605: a comment with the new text; the description stays the team's.
     editsInReplies: true,
-    edit: (target, edit, _client, policy) => createEdit(config, target.issue, edit, policy.locale),
+    edit: (target, edit, _client, policy) => createEdit(config, target.issue, edit, policy.locale, stages),
     // FRU-605: a reply, then the first canceled state of the team.
     withdraw: (target, withdrawal, _client, policy) =>
       createWithdrawal(config, target.issue, withdrawal, policy.locale, stages),

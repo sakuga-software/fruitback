@@ -3501,12 +3501,12 @@ replies, and on a public site mounted by the extension with no session, only the
   the author is answered, as for `note.created`. The console lists it as « Note edited by its
   author ». `DELIVERY_EVENTS` gains it; the column is a text, so no migration.
 - **GitHub takes no edit**, as it takes no reply (FRU-628 follows it).
-- A tracker has no lock: the stage is the one the route read. A note marked done in Linear between
-  the read and the comment gets the comment, a reply like any other, but not its text: the read
-  stops at `completedAt` or `canceledAt` (review of #866). Reopened, the issue has neither again, and
-  that comment is the text: it is the author's newest word on a note that is open again, as an edit
-  at `todo` would be. Only a race of one request writes it: the route answers `409 not-open` at
-  `done` and `closed` (test:`refuses a note done or closed: no longer offered, and 409 not-open`).
+- **A tracker has no lock, so Linear reads the stage again after the comment** (round 4 of #866).
+  An issue done or canceled by then had its move before that read: the comment is deleted, and the
+  route answers `409 not-open`. A move after that read comes after the comment too, and the read of
+  the note keeps it as an edit of before, stopped at `completedAt` or `canceledAt`. So no edit that
+  crossed a move stays, and a reopened issue never takes the text of one
+  (test:`deletes its comment when the issue is completed once the comment is written, and says not-open`).
 - **The comment is recognized by its text, not by its Linear author** (round 3 of #866): with an
   OAuth connection as the app, Linear may write it with no `user`, and nobody measured it; a filter on
   the author could drop every real edit. Whoever can type it in Linear is of the team that owns the

@@ -324,7 +324,7 @@ describe('an edit of the author in Linear (FRU-605)', () => {
 
     assert.deepEqual(
       stub.calls.map((call) => call.operation),
-      ['FruitbackCreateComment'],
+      ['FruitbackCreateComment', 'FruitbackIssueState'],
     );
     assert.deepEqual(stub.calls[0]?.variables, {
       input: {
@@ -336,6 +336,41 @@ describe('an edit of the author in Linear (FRU-605)', () => {
     assert.equal(answer.note.text, 'The new words');
     assert.equal(answer.note.id, note.id);
     assert.equal(store.editsInReplies, true);
+  });
+});
+
+describe('an edit that crosses a move to done in Linear (review of #866)', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  async function crossing(state: { name: string; type: string }) {
+    const stub = installLinearStub({ issueState: state });
+    const store = createLinearStore({ apiKey: 'lin_api_test', teamId: 'team_1', projectId: undefined });
+    const answer = await store.edit?.(
+      { issue: 'issue_1', clientId: 'acme' },
+      {
+        text: 'Too late',
+        author: { kind: 'member', name: 'Bob', workspace: 'Acme' },
+        note: noteFixture(),
+        identifier: 'ENG-1',
+      },
+      undefined,
+      { showComments: true, identitySecret: undefined, read: 'public', write: 'public', locale: 'en' },
+    );
+
+    assert.equal(answer, 'not-open');
+    assert.deepEqual(
+      stub.calls.map((call) => call.operation),
+      ['FruitbackCreateComment', 'FruitbackIssueState', 'FruitbackDeleteComment'],
+    );
+    assert.deepEqual(stub.calls[2]?.variables, { id: 'comment_1' });
+  }
+
+  it('deletes its comment when the issue is completed once the comment is written, and says not-open', async () => {
+    await crossing({ name: 'Done', type: 'completed' });
+  });
+
+  it('deletes its comment when the issue is canceled once the comment is written, and says not-open', async () => {
+    await crossing({ name: 'Canceled', type: 'canceled' });
   });
 });
 
@@ -419,9 +454,9 @@ describe('a withdrawal of its author in Linear (FRU-605)', () => {
 
     assert.deepEqual(
       stub.calls.map((call) => call.operation),
-      ['FruitbackCreateComment', 'FruitbackIssueStates', 'FruitbackReopenIssue'],
+      ['FruitbackCreateComment', 'FruitbackIssueState', 'FruitbackIssueStates', 'FruitbackReopenIssue'],
     );
-    assert.deepEqual(stub.calls[2]?.variables, { id: 'issue_1', input: { stateId: 'st_canceled' } });
+    assert.deepEqual(stub.calls[3]?.variables, { id: 'issue_1', input: { stateId: 'st_canceled' } });
     assert.ok(typeof answer === 'object');
     assert.equal(answer.stage, 'closed');
     assert.equal(answer.comment.body, '**Bob** via Fruitback · member of Acme\nWithdrew the note');
@@ -442,7 +477,28 @@ describe('a withdrawal of its author in Linear (FRU-605)', () => {
     );
     assert.deepEqual(
       stub.calls.map((call) => call.operation),
-      ['FruitbackCreateComment', 'FruitbackIssueStates'],
+      ['FruitbackCreateComment', 'FruitbackIssueState', 'FruitbackIssueStates'],
+    );
+  });
+
+  it('deletes its reply and moves nothing when the team marked the issue done meanwhile', async () => {
+    const stub = installLinearStub({
+      issueState: { name: 'Done', type: 'completed' },
+      teamStates: [state('st_canceled', 'canceled', 0)],
+    });
+    const store = createLinearStore({ apiKey: 'lin_api_test', teamId: 'team_1', projectId: undefined });
+
+    const answer = await store.withdraw?.(
+      { issue: 'issue_1', clientId: 'acme' },
+      { author: { kind: 'member', name: 'Bob', workspace: 'Acme' }, note: noteFixture(), identifier: 'ENG-1' },
+      undefined,
+      { showComments: true, identitySecret: undefined, read: 'public', write: 'public', locale: 'en' },
+    );
+
+    assert.equal(answer, 'not-open');
+    assert.deepEqual(
+      stub.calls.map((call) => call.operation),
+      ['FruitbackCreateComment', 'FruitbackIssueState', 'FruitbackDeleteComment'],
     );
   });
 });
