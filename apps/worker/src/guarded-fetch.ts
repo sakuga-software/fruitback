@@ -56,9 +56,15 @@ export function createGuardedFetch({
         }
         const chunks: Buffer[] = [];
         let size = 0;
+        // Set once the answer passed `maxBytes`: what still arrives is not kept, and the answer settles
+        // once (review of #865).
+        let cut = false;
         answer.on('data', (chunk: Buffer) => {
+          if (cut) return;
           size += chunk.length;
           if (size > maxBytes) {
+            cut = true;
+            chunks.length = 0;
             answer.destroy();
             reject(new TypeError('The answer is too long'));
 
@@ -66,8 +72,11 @@ export function createGuardedFetch({
           }
           chunks.push(chunk);
         });
-        answer.on('error', reject);
+        answer.on('error', (error) => {
+          if (!cut) reject(error);
+        });
         answer.on('end', () => {
+          if (cut) return;
           const kept = new Headers();
           for (const [name, value] of Object.entries(answer.headers)) {
             if (value !== undefined) kept.set(name, Array.isArray(value) ? value.join(', ') : value);

@@ -548,6 +548,24 @@ describe('the address and the token of a GitLab connector (FRU-623)', () => {
     assert.deepEqual(hops, ['/api/v4/user', '/api/v4/user', '/api/v4/user']);
   });
 
+  it('the guarded fetch fails an answer past its limit, and keeps none of it (review of #865)', async () => {
+    const server = createServer((_request, response) => {
+      response.writeHead(200, { 'Content-Type': 'application/json' });
+      // Three chunks of 1 KB, past a limit of 1.5 KB: the third arrives after the cut, if at all.
+      for (let index = 0; index < 3; index += 1) response.write('x'.repeat(1_024));
+      response.end();
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    servers.push(server);
+    const small = createGuardedFetch({ request: httpRequest as never, allows: () => true, maxBytes: 1_536 });
+    const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    await assert.rejects(small(`${origin}/`, {}), /too long/);
+    assert.equal(
+      (await createGuardedFetch({ request: httpRequest as never, allows: () => true })(`${origin}/`, {})).status,
+      200,
+    );
+  });
+
   it('the guarded fetch of the worker refuses the loopback by default', async () => {
     const gitlab = await fakeGitlab({ [TOKEN]: { user: 'bot', projects: {} } });
     const guarded = createGuardedFetch({ request: httpRequest as never });
