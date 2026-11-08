@@ -1,4 +1,4 @@
-import { NOTE_STAGES, type Note, type NoteIssue, type NoteStage } from '@fruitback/shared';
+import { NOTE_STAGES, type Note, type NoteIssue, type NoteStage, anchorSelectorPath } from '@fruitback/shared';
 
 /**
  * The index of the notes of a workspace (FRU-237): one row for each note this worker planted for a
@@ -12,9 +12,11 @@ import { NOTE_STAGES, type Note, type NoteIssue, type NoteStage } from '@fruitba
  * - by which way it came (`script` or `extension`), when the worker knew it;
  * - who left it, as a kind (`visitor`, `site`, `member`) and, for a member, the account. **A name
  *   that a visitor typed is not kept**: it is a claim, and the screen shows « Visitor »;
- * - where it went: the connector, or the worker's own store, and the reference the tracker gave.
+ * - where it went: the connector, or the worker's own store, and the reference the tracker gave;
+ * - the element of the note: its selector and its component (FRU-613). They name the code of the
+ *   site, and no text of the note.
  *
- * The rest of a note (its whole text, the reporter's address, the anchor, the environment, the
+ * The rest of a note (its whole text, the reporter's address, the rest of the anchor, the environment, the
  * replies) stays where it went: in the tracker, or in the worker's own store, which the index does
  * not copy. `docs/privacy.md` names each column.
  */
@@ -232,6 +234,9 @@ export type ListedNote = {
   note: string;
   pageUrl: string;
   excerpt: string;
+  /** The element of the note (FRU-613). Absent for a row from before it, until a read of its page. */
+  selector?: string;
+  component?: string;
   stage: string;
   channel: Channel | null;
   author: {
@@ -284,6 +289,19 @@ export type IndexedNote = {
   reference?: string;
   createdAt: number;
 };
+
+/**
+ * The element of a note as the index keeps it (FRU-613): the selector as a person reads it, shadow
+ * hosts included, and the component, `null` when the build gave none.
+ */
+export function elementOf(note: Pick<Note, 'anchor' | 'source'>): { selector: string; component: string | null } {
+  const component = note.source?.component?.trim();
+
+  return {
+    selector: anchorSelectorPath(note.anchor),
+    component: component === undefined || component === '' ? null : component,
+  };
+}
 
 /** The author of a note, from what the worker verified when it took it. */
 export function authorOf(note: Note, session: boolean): { kind: AuthorKind; account?: string } {

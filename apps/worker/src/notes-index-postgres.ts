@@ -14,6 +14,7 @@ import {
   type Place,
   type SiteNotes,
   STAGE_ORDER,
+  elementOf,
   excerptOf,
   noNotes,
 } from './notes-index.ts';
@@ -181,6 +182,7 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
               workspace_id: entry.workspace,
               page_url: entry.note.page.url,
               excerpt: excerptOf(entry.note.text),
+              ...elementOf(entry.note),
               stage: entry.stage,
               channel: entry.channel,
               author_kind: entry.author.kind,
@@ -218,6 +220,7 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
               workspace_id: workspace,
               page_url: issue.note.page.url,
               excerpt: excerptOf(issue.note.text),
+              ...elementOf(issue.note),
               stage: issue.stage,
               // A note from before the index: what the read says, and nothing invented.
               channel: null,
@@ -233,7 +236,8 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
             })),
           )
           // A note it holds: the stage, and when the tracker said it. Nothing else of the row moves,
-          // and a read with no replies leaves the verdict as the last read with replies said it.
+          // and a read with no replies leaves the verdict as the last read with replies said it. A
+          // row from before FRU-613 gets its element once, and keeps it.
           // Never the excerpt (FRU-475): a read that started before an edit would write the text of
           // before over it. `reword` writes it, for the edit only.
           .onConflictDoUpdate({
@@ -243,6 +247,8 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
               checked_at: sql`excluded.checked_at`,
               // Where no verdict can be given, none is kept: the note is no fix to check.
               confirmed: verdicts ? sql`coalesce(excluded.confirmed, ${note_index.confirmed})` : sql`NULL`,
+              selector: sql`coalesce(${note_index.selector}, excluded.selector)`,
+              component: sql`coalesce(${note_index.component}, excluded.component)`,
             },
             // A note of another workspace under the same ids is not this one.
             setWhere: eq(note_index.workspace_id, workspace),
@@ -611,6 +617,8 @@ function listedOf({ row, connector, memberName, memberRole, delivery, kept }: Pa
     note: row.note_id,
     pageUrl: row.page_url,
     excerpt: row.excerpt,
+    ...(row.selector === null ? {} : { selector: row.selector }),
+    ...(row.component === null ? {} : { component: row.component }),
     stage: row.stage,
     channel: row.channel === 'script' || row.channel === 'extension' ? row.channel : null,
     author: {

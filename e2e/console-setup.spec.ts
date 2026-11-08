@@ -378,11 +378,13 @@ type Stub = {
 
 const CLOUD_WORKER = 'https://api.fruitback.com';
 
-/** The first note of « sited », as the index of the notes lists it (FRU-610). */
+/** The first note of « sited », as the index of the notes lists it (FRU-610, FRU-613). */
 const FIRST_NOTE = {
   id: 'n1',
   excerpt: 'The price is hard to read.',
   page: { url: 'https://staging.acme.dev/pricing', host: 'staging.acme.dev', path: '/pricing' },
+  selector: 'p.demo-price',
+  component: 'PriceTag',
   site: { id: 's1' },
   stage: 'new',
   author: { kind: 'you' },
@@ -869,11 +871,12 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
     await expect(conclusion).toContainText(
       'It waits in the Havane workspace. Send your notes to a tracker or your own API whenever you like.',
     );
-    // The note that came (FRU-610): what the index keeps of it, its text and its page, and a link that
-    // opens the page on it. Then the two ways on, in the order of the board P6.
+    // The note that came (FRU-610): what the index keeps of it, its text, its page and its element
+    // (FRU-613), and a link that opens the page on it. Then the two ways on, in the order of the board P6.
     const note = conclusion.locator('figure');
     await expect(note.locator('blockquote')).toHaveText('The price is hard to read.');
     await expect(note).toContainText('On staging.acme.dev/pricing');
+    await expect(note.locator('code')).toHaveText(['p.demo-price', '<PriceTag>']);
     await expect(note.getByRole('link', { name: 'Show on the page' })).toHaveAttribute(
       'href',
       'https://staging.acme.dev/pricing#fruitback-note=fb_1',

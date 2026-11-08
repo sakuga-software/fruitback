@@ -1079,7 +1079,8 @@ whole.
 ### The list of the notes of a workspace (FRU-244)
 
 `GET /console/workspaces/<id>/notes` answers the rows of the index above, a page at a time: **an
-excerpt of 64 characters at most, never the text of a note**, and a search on what the index keeps
+excerpt of 64 characters at most, never the text of a note**, the selector and the component of the
+element (code of the site, no text of the note), and a search on what the index keeps
 only (the excerpt, the page, the origin of the site, the stage, and the reference for a role with
 `see-tracker`). A guest's search does not read the references: trying words would otherwise
 tell it which note carries which reference (raised by the heavy review of #306; test in

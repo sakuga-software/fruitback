@@ -295,14 +295,14 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
     people to `/connect`, a page that waits for the popup, while the welcome page was already open. A
     self-hosted console keeps it, as it opens the pairing link of its worker (FRU-238). The states of
     the card when the extension is already here (FRU-441, FRU-487) are as they were.
-  - **The end shows the note that came**: its text and its page as the index keeps them (the first 64
-    characters, FRU-237), « Show on the page » that opens the page on it (`#fruitback-note=`, only
-    for a page of the site), then « Connect Linear or GitHub » (the Connectors screen) and « Open the
-    console ». **Not its selector nor its component**, which the board draws: the index keeps
-    neither, and the console reads no store of the notes. Showing them is a column of `note_index` and
-    a migration, left for a ticket of its own. The first note is the last of a page of 8, the newest
-    first, and only when that page is the whole list (no `next`): otherwise it is not the first, and
-    none is shown. A worker with no index answers `404` to the list, and the end is said without the
+  - **The end shows the note that came**: its text, its page, its selector and its component as the
+    index keeps them (the first 64 characters, FRU-237; the element, FRU-613), « Show on the page »
+    that opens the page on it (`#fruitback-note=`, only for a page of the site), then « Connect Linear
+    or GitHub » (the Connectors screen) and « Open the console ». The console reads no store of the
+    notes. A row from before FRU-613 has no element until a read of its page writes it: the note is
+    shown without it. The first note is the one created first in a page of 8, read by its
+    `createdAt`, and only when that page is the whole list (no `next`): otherwise it is not the first,
+    and none is shown. A worker with no index answers `404` to the list, and the end is said without the
     note. The sentence says « a tracker or your own API »: GitHub is a
     source only where the worker has its App (FRU-361).
   - **Still waiting**: « Signs in with this account. No code to type. » (a browser is still connected

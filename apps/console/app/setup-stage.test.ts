@@ -239,6 +239,31 @@ describe('the setup with no question of access (FRU-610)', () => {
     });
   });
 
+  it('reads the element of the note, and a note with none of it is shown all the same (FRU-613)', () => {
+    const element = { selector: 'price-card#pro >>> button.buy', component: 'PriceTag' };
+    assert.deepEqual(firstNoteOf(yes({ notes: [{ ...indexed, ...element }] })), {
+      excerpt: indexed.excerpt,
+      page: indexed.page,
+      note: 'fb_1',
+      ...element,
+    });
+    // A selector and no component: a build with no name of the component.
+    assert.deepEqual(firstNoteOf(yes({ notes: [{ ...indexed, selector: 'main > h1' }] })), {
+      excerpt: indexed.excerpt,
+      page: indexed.page,
+      note: 'fb_1',
+      selector: 'main > h1',
+    });
+    // A row from before FRU-613, or a field that is not a word: the note, with no element.
+    for (const odd of [{}, { selector: '', component: '' }, { selector: 3, component: null }]) {
+      assert.deepEqual(firstNoteOf(yes({ notes: [{ ...indexed, ...odd }] })), {
+        excerpt: indexed.excerpt,
+        page: indexed.page,
+        note: 'fb_1',
+      });
+    }
+  });
+
   it('has no first note when the page is not the whole list: its last note is only the 8th newest', () => {
     assert.equal(firstNoteOf(yes({ notes: [indexed], next: 'c1' })), undefined);
     // The control: the same page with no `next` is the whole list.
