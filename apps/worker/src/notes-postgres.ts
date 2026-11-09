@@ -16,7 +16,7 @@ import {
   toNoteIssue,
   widgetIdOf,
 } from './note-rows.ts';
-import { checkText, editText, replyText } from './reply-text.ts';
+import { checkText, editText, replyText, withdrawText } from './reply-text.ts';
 import {
   type BatchAnswer,
   type CreatedIssue,
@@ -302,6 +302,39 @@ export function createPostgresNoteStore(database: Database): NoteStore {
           return {
             note,
             comment: { id: String(comment.id), body: comment.body, createdAt: new Date(now).toISOString() },
+          };
+        }),
+      ),
+    // FRU-605: the author withdraws an open note. It goes to the built-in status of `closed`, with the
+    // reply that says so, in one transaction, under the lock of the row. Nothing is deleted.
+    withdraw: (target, withdrawal, _client, policy) =>
+      through('keep the withdrawal', ({ transaction }) =>
+        transaction(async (tx) => {
+          const id = Number(target.issue);
+          if (!Number.isSafeInteger(id)) return undefined;
+          const [row] = await tx
+            .select({ stage: notes.stage })
+            .from(notes)
+            .where(
+              and(
+                eq(notes.id, id),
+                target.clientId === undefined ? isNull(notes.client_id) : eq(notes.client_id, target.clientId),
+              ),
+            )
+            .for('update');
+          if (row === undefined) return undefined;
+          if (!EDITABLE_STAGES.has(stageOf(row.stage))) return 'not-open' as const;
+          const now = Date.now();
+          await tx.update(notes).set({ stage: 'closed', status_key: null, updated_at: now }).where(eq(notes.id, id));
+          const [comment] = await tx
+            .insert(note_comments)
+            .values({ note_id: id, author: null, body: withdrawText(withdrawal, policy.locale), created_at: now })
+            .returning({ id: note_comments.id, body: note_comments.body });
+          if (comment === undefined) throw new StoreError('PostgreSQL kept a withdrawal and answered no number for it');
+
+          return {
+            comment: { id: String(comment.id), body: comment.body, createdAt: new Date(now).toISOString() },
+            stage: 'closed' as const,
           };
         }),
       ),

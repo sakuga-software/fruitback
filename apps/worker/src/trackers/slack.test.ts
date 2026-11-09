@@ -319,16 +319,17 @@ describe('a Slack connector through the routes and the deliveries (FRU-624)', ()
     assert.notEqual(late?.nextAt, undefined);
   });
 
-  it('takes no edit of a note it posted, and posts no event but a new note (FRU-605)', async () => {
+  it('takes no edit and no withdrawal of a note it posted, and posts no event but a new note (FRU-605)', async () => {
     const world = await setup();
     const { id } = (await (await connect(world, { url: HOOK })).json()) as { id: string };
     const stores = createConnectorStores(world.env.accounts, SECRETS_KEY, Date.now, undefined, {
       filesReachable: true,
     });
-    const own = { ...createMemoryStore(), edit: async () => undefined };
+    const own = { ...createMemoryStore(), edit: async () => undefined, withdraw: async () => undefined };
     const store = await stores(id, world.workspace.id, own);
     assert.equal(store.edit, undefined);
     assert.equal(store.editsFor, undefined);
+    assert.equal(store.withdraw, undefined);
     const answer = await pluginOf('slack')?.receiver?.deliver(
       { credential: async () => ({ via: 'token', token: HOOK, extra: {} }), http: world.slack.http, now: Date.now },
       { version: 2, event: 'note.edited' } as never,

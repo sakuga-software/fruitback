@@ -317,7 +317,16 @@ export function postgresNoteStore(url: string, schema: string): NoteStore {
   type Calls = Required<
     Pick<
       NoteStore,
-      'create' | 'createBatch' | 'findForPage' | 'findNote' | 'forget' | 'reply' | 'check' | 'setStatus' | 'edit'
+      | 'create'
+      | 'createBatch'
+      | 'findForPage'
+      | 'findNote'
+      | 'forget'
+      | 'reply'
+      | 'check'
+      | 'setStatus'
+      | 'edit'
+      | 'withdraw'
     >
   >;
   const store = later<Calls>(
@@ -332,6 +341,8 @@ export function postgresNoteStore(url: string, schema: string): NoteStore {
       check: true,
       setStatus: true,
       edit: true,
+      // FRU-605: the author withdraws an open note.
+      withdraw: true,
     },
   );
 

@@ -53,6 +53,9 @@ first publish made it expensive.
   new version would make every reader of before refuse every new note. `anchorSelectorPath` writes the
   hosts and the selector as one line (`#promo >>> button.buy`) for the description, the text of a page
   and the thread; no CSS engine reads it.
+- **An issue says `withdrawable: true`** (FRU-605) to the reader who may withdraw it now: their own
+  note, open, on a site with one place whose store takes a withdrawal. Optional, a read-envelope
+  field: `NOTE_VERSION` does not move.
 - **An issue says `editable: true`** (FRU-475) to the reader who may edit its text now: their own
   note, open (`new`, `todo`, `progress` since FRU-605), on a site whose store takes an edit. Optional, a read-envelope field: `NOTE_VERSION` does not move.
 

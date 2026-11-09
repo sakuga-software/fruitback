@@ -9,6 +9,7 @@ import {
   replyName,
   replyText,
   withEditedText,
+  withdrawText,
 } from './reply-text.ts';
 
 describe('the text of a reply in a tracker (FRU-257)', () => {
@@ -192,5 +193,19 @@ describe('the newest edit, by its instant (review of #866)', () => {
 
     assert.equal(withEditedText(issue).note.text, 'Newer');
     assert.equal(withEditedText(issue, '2026-11-08T09:45:00Z').note.text, 'Older');
+  });
+});
+
+describe('the reply that a withdrawal writes (FRU-605)', () => {
+  const author = { kind: 'member' as const, name: 'Ana Martin', workspace: 'Acme' };
+
+  it('says who withdrew the note, in the language of the team, and is no edit nor verdict', () => {
+    assert.equal(withdrawText({ author }), '**Ana Martin** via Fruitback · member of Acme\nWithdrew the note');
+    assert.equal(withdrawText({ author }, 'fr'), '**Ana Martin** via Fruitback · membre de Acme\nA retiré la note');
+    assert.equal(editedTextOf(withdrawText({ author })), undefined);
+    assert.equal(
+      checkedOf([{ id: '1', body: withdrawText({ author }), createdAt: '2026-11-08T10:00:00.000Z' }]),
+      undefined,
+    );
   });
 });

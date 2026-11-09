@@ -39,6 +39,7 @@ import {
   type ReplyFailure,
   createOverlay,
 } from './overlay.ts';
+import type { WithdrawAnswer, WithdrawFailure } from './thread-more.ts';
 import {
   globalNavigatorSpeaks,
   keyboardEventCtor,
@@ -317,6 +318,8 @@ describe('every word the widget shows', () => {
     const editAnswers: ((answer: EditAnswer | EditFailure) => void)[] = [];
     // And each verdict on a note marked done (FRU-603).
     const checkAnswers: ((answer: CheckAnswer | CheckFailure) => void)[] = [];
+    // And each withdrawal of a note by its author (FRU-605).
+    const withdrawAnswers: ((answer: WithdrawAnswer | WithdrawFailure) => void)[] = [];
     const overlay = createOverlay({
       document: page.document,
       host: host.root,
@@ -326,6 +329,7 @@ describe('every word the widget shows', () => {
       reply: { allowed: () => true, send: () => new Promise((resolve) => replyAnswers.push(resolve)) },
       edit: { send: () => new Promise((resolve) => editAnswers.push(resolve)) },
       check: { send: () => new Promise((resolve) => checkAnswers.push(resolve)) },
+      withdraw: { send: () => new Promise((resolve) => withdrawAnswers.push(resolve)) },
     });
     cleanup.push(() => overlay.destroy());
 
@@ -338,6 +342,8 @@ describe('every word the widget shows', () => {
       // FRU-475: its reader left it, and may edit it.
       mine: true,
       editable: true,
+      // FRU-605: and may withdraw it.
+      withdrawable: true,
       note: noteFixture({
         id: 'sd_found',
         text: 'NOTE ONE',
@@ -595,7 +601,9 @@ describe('every word the widget shows', () => {
     for (const writeText of [async () => {}, () => Promise.reject(new Error('denied'))]) {
       Object.defineProperty(navigatorOf, 'clipboard', { value: { writeText }, configurable: true });
       (host.root.querySelector('.fruitback-thread-more') as HTMLButtonElement).click();
-      const copy = [...host.root.querySelectorAll<HTMLButtonElement>('.fruitback-thread-more-item')].at(-1);
+      const copy = [...host.root.querySelectorAll<HTMLButtonElement>('.fruitback-thread-more-item')].find(
+        (each) => each.textContent === translator.text('more.copyLink'),
+      );
       copy?.click();
       await settleReply();
       snapshots.push(...shown(host.root));
@@ -630,6 +638,29 @@ describe('every word the widget shows', () => {
     (host.root.querySelector('.fruitback-thread-check-field') as HTMLTextAreaElement).value = 'WRONG';
     (host.root.querySelector('.fruitback-thread-check-form') as HTMLFormElement).requestSubmit();
     checkAnswers.shift()?.(verdictOf('Reopened: still wrong'));
+    await settleReply();
+    snapshots.push(...shown(host.root));
+    // The withdrawal of a note by its author (FRU-605): asked, in flight, each failure, then kept.
+    overlay.select(found.note.id);
+    (host.root.querySelector('.fruitback-thread-more') as HTMLButtonElement).click();
+    [...host.root.querySelectorAll<HTMLButtonElement>('.fruitback-thread-more-item')].at(-1)?.click();
+    snapshots.push(...shown(host.root));
+    for (const answer of ['wait', 'signed-out', 'retry', 'refused'] as const) {
+      (host.root.querySelector('.fruitback-thread-withdraw-confirm') as HTMLButtonElement).click();
+      snapshots.push(...shown(host.root));
+      withdrawAnswers.shift()?.(answer);
+      await settleReply();
+      snapshots.push(...shown(host.root));
+    }
+    (host.root.querySelector('.fruitback-thread-withdraw-confirm') as HTMLButtonElement).click();
+    withdrawAnswers.shift()?.({
+      stage: 'closed',
+      comment: {
+        id: 'c-withdrawn',
+        body: '**REPORTER** via Fruitback · member of WORKSPACE\nWithdrew the note',
+        createdAt: '2026-08-01T12:00:00.000Z',
+      },
+    });
     await settleReply();
     snapshots.push(...shown(host.root));
     composer.open({ left: 0, top: 0, bottom: 10, right: 10 }, 'ELEMENT');

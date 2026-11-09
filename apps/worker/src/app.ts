@@ -30,7 +30,7 @@ import { handleAttachment } from './attachment-routes.ts';
 import { handleConsole } from './console-routes.ts';
 import { handlePairing, handleSessionRoutes } from './session-routes.ts';
 import { CHECK_PATH, REPLY_PATH, STATUS_PATH, postCheck, postReply, postStatus } from './reply-routes.ts';
-import { EDIT_PATH, postEdit } from './edit-routes.ts';
+import { EDIT_PATH, WITHDRAW_PATH, postEdit, postWithdraw } from './edit-routes.ts';
 import { getFeedback, postFeedback } from './feedback-routes.ts';
 import { MCP_PATH, handleMcp } from './mcp.ts';
 import { KEY_PREFIX, resolveAgentKey } from './agent-keys.ts';
@@ -516,6 +516,7 @@ async function routed(
   const checkOf = CHECK_PATH.exec(pathname)?.[1];
   const statusOfNote = STATUS_PATH.exec(pathname)?.[1];
   const editOf = EDIT_PATH.exec(pathname)?.[1];
+  const withdrawOf = WITHDRAW_PATH.exec(pathname)?.[1];
   const notifyOf = NOTIFY_PATH.exec(pathname)?.[1];
   if (
     pathname !== '/feedback' &&
@@ -523,7 +524,8 @@ async function routed(
     replyTo === undefined &&
     checkOf === undefined &&
     statusOfNote === undefined &&
-    editOf === undefined
+    editOf === undefined &&
+    withdrawOf === undefined
   ) {
     return json(404, { error: 'not-found' }, cors.headers);
   }
@@ -606,6 +608,22 @@ async function routed(
     return postEdit(
       request,
       editOf,
+      served,
+      watchedStore(store, accounts),
+      kv,
+      cors.headers,
+      { accounts, noteIndex, context },
+      checks,
+    );
+  }
+
+  // FRU-605: an open note, withdrawn by the person who left it.
+  if (withdrawOf !== undefined) {
+    if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, cors.headers);
+
+    return postWithdraw(
+      request,
+      withdrawOf,
       served,
       watchedStore(store, accounts),
       kv,

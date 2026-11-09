@@ -83,6 +83,9 @@ export function LateDeliveries({
             {delivery.event === 'note.edited' ? (
               <span className="block text-hint text-muted">{t('Note edited by its author')}</span>
             ) : null}
+            {delivery.event === 'note.withdrawn' ? (
+              <span className="block text-hint text-muted">{t('Note withdrawn by its author')}</span>
+            ) : null}
             <span className="block text-hint text-muted">
               {t('Written {when}', { when: moment(delivery.createdAt) })} ·{' '}
               {delivery.attempts === 1 ? t('1 attempt') : t('{count} attempts', { count: delivery.attempts })}
