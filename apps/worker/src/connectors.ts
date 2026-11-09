@@ -1,11 +1,11 @@
-import { NOTE_STAGES } from '@fruitback/shared';
+import { NOTE_STAGES, type Note } from '@fruitback/shared';
 import type { AccountStore, ConnectorKind, ConnectorSettings } from './accounts.ts';
 import { createAll } from './batch.ts';
 import type { ClientConfig } from './clients.ts';
 import { type GithubApp, createGithubConnectorStore, openInstallation } from './github-connector.ts';
 import { type StageExceptions, createLinearStore } from './linear.ts';
 import { deliveryBody } from './rest-connector.ts';
-import { noteEventBody } from './note-events.ts';
+import { type NoteEvent, noteEventBody } from './note-events.ts';
 import { type LinearOAuth, linearAuthorization } from './linear-oauth.ts';
 import { pluginOf } from './trackers/index.ts';
 import { type PluginKind, isPluginKind } from './trackers/kinds.ts';
@@ -13,11 +13,13 @@ import type { TrackerApps } from './trackers/oauth.ts';
 import { type Http, trackerAccess } from './trackers/plugin.ts';
 import {
   type NoteStore,
+  type ReplyTarget,
   StoreError,
   findNote,
   takesAttachments,
   takesChecks,
   takesEdits,
+  takesWithdrawals,
   takesStatuses,
   takesReplies,
 } from './store.ts';
@@ -196,8 +198,45 @@ export type ConnectorStores = (connector: string, workspace: string | undefined,
  */
 function receivingStore(own: NoteStore, accounts: AccountStore, connector: string, now: () => number): NoteStore {
   // An address only receives: it sends no reply back, so a site of it takes none (FRU-257), and no
-  // verdict (FRU-294). An edit is kept here, and the address is told by `note.edited` (FRU-605).
+  // verdict (FRU-294). An edit and a withdrawal are kept here, and the address is told by
+  // `note.edited` and `note.withdrawn` (FRU-605).
   const { reply: _reply, check: _check, ...noReply } = own;
+  /**
+   * Queues what the author did to a note already sent (FRU-605), ids only. The site is the one the
+   * route found the note in; with none, the id of the note could not be read back by `/mcp`, and
+   * nothing is queued. As for a note, the change is kept first, and a queue that refuses the row is
+   * logged: the author is answered, and a failure would make them do it twice.
+   */
+  const tell = async (
+    event: NoteEvent,
+    target: ReplyTarget,
+    of: { note: Note; identifier: string },
+    client: ClientConfig | undefined,
+  ): Promise<void> => {
+    const site = target.clientId ?? of.note.client?.id;
+    if (site === undefined || site === '') {
+      console.error(`[fruitback] ${event} was kept with no site, and not queued`, of.identifier);
+
+      return;
+    }
+    try {
+      await accounts.enqueueDelivery(
+        connector,
+        noteEventBody(event, {
+          workspace: client?.workspace ?? '',
+          site,
+          ...(client?.origins?.[0] === undefined ? {} : { origin: client.origins[0] }),
+          identifier: of.identifier,
+          note: of.note.id,
+          at: now(),
+        }),
+        now(),
+        event,
+      );
+    } catch (error) {
+      console.error(`[fruitback] ${event} was kept and not queued`, of.identifier, error);
+    }
+  };
 
   return {
     ...noReply,
@@ -206,34 +245,22 @@ function receivingStore(own: NoteStore, accounts: AccountStore, connector: strin
       : {
           async edit(target, edit, client, policy) {
             const answer = await (own.edit as NonNullable<NoteStore['edit']>)(target, edit, client, policy);
-            if (typeof answer !== 'object') return answer;
-            // The site the route found the note in, which is the one the note was written for. With
-            // none, the id of the note could not be read back by `/mcp`: nothing is queued.
-            const site = target.clientId ?? edit.note.client?.id;
-            if (site === undefined || site === '') {
-              console.error('[fruitback] an edit was kept with no site, and no event was queued', edit.identifier);
+            if (typeof answer === 'object') await tell('note.edited', target, edit, client);
 
-              return answer;
-            }
-            // As for a note: the edit is kept first, and a queue that refuses the row is logged. The
-            // author is answered: a failure would make them send it again, and the text is kept.
-            try {
-              await accounts.enqueueDelivery(
-                connector,
-                noteEventBody('note.edited', {
-                  workspace: client?.workspace ?? '',
-                  site,
-                  ...(client?.origins?.[0] === undefined ? {} : { origin: client.origins[0] }),
-                  identifier: edit.identifier,
-                  note: edit.note.id,
-                  at: now(),
-                }),
-                now(),
-                'note.edited',
-              );
-            } catch (error) {
-              console.error('[fruitback] an edit was kept and its event was not queued', edit.identifier, error);
-            }
+            return answer;
+          },
+        }),
+    ...(own.withdraw === undefined
+      ? {}
+      : {
+          async withdraw(target, withdrawal, client, policy) {
+            const answer = await (own.withdraw as NonNullable<NoteStore['withdraw']>)(
+              target,
+              withdrawal,
+              client,
+              policy,
+            );
+            if (typeof answer === 'object') await tell('note.withdrawn', target, withdrawal, client);
 
             return answer;
           },
@@ -377,6 +404,8 @@ export function createRoutedStore(base: NoteStore, connectors: ConnectorStores):
     statusesFor: async (client) => takesStatuses(await pick(client), client),
     // FRU-475, FRU-605: the worker's own store, an address (with `note.edited`) and Linear (a reply).
     editsFor: async (client, policy) => takesEdits(await pick(client), client, policy),
+    // FRU-605: the worker's own store, an address (with `note.withdrawn`) and Linear (canceled).
+    withdrawalsFor: async (client) => takesWithdrawals(await pick(client), client),
     // FRU-368: the states of the tracker of the client, for the statuses of its site.
     trackerStatesFor: async (client) => {
       const store = await pick(client);
@@ -406,6 +435,12 @@ export function createRoutedStore(base: NoteStore, connectors: ConnectorStores):
       if (store.edit === undefined) throw new StoreError('The store of this site takes no edit');
 
       return store.edit(target, edit, client, policy);
+    },
+    async withdraw(target, withdrawal, client, policy) {
+      const store = await pick(client);
+      if (store.withdraw === undefined) throw new StoreError('The store of this site takes no withdrawal');
+
+      return store.withdraw(target, withdrawal, client, policy);
     },
   };
 }

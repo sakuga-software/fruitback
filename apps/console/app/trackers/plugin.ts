@@ -41,6 +41,11 @@ export type ConsoleTracker = {
   tokenFields?: readonly TokenField[];
   /** What a refusal of the form means, by the word of the worker, beside the ones every plugin has. */
   problems?: Readonly<Record<string, string>>;
+  /**
+   * What the panel says of a refusal, by its reason, in the words of the service, over the sentence
+   * every plugin says. Marked with `msg`; `{when}` is the first refusal.
+   */
+  attention?: Readonly<Partial<Record<'key-refused' | 'key-lacks-access' | 'connection-ended', string>>>;
   /** The line under the name of a connector, from the label the worker wrote. Absent: the label. */
   sourceLine?(label: string): string;
 };

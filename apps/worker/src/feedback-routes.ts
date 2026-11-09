@@ -35,6 +35,7 @@ import {
   takesChecks,
   EDITABLE_STAGES,
   takesEdits,
+  takesWithdrawals,
   takesReplies,
 } from './store.ts';
 import { attachmentStoreFor } from './worker-stores.ts';
@@ -125,6 +126,8 @@ export async function getFeedback(
     // FRU-475: the reader may edit a note of theirs that is still open (FRU-605), on a site with one
     // place whose store takes an edit. The route decides again; this only says where to offer it.
     const editsHere = own.size > 0 && places.length < 2 && (await takesEdits(store, route.client, route.policy));
+    // FRU-605: and withdraw it, where the store takes a withdrawal. The route decides again.
+    const withdrawalsHere = own.size > 0 && places.length < 2 && (await takesWithdrawals(store, route.client));
     // FRU-618: the notes an agent works on, and for a member of the team the address of its session.
     const agents = await agentsOf(
       request,
@@ -146,6 +149,7 @@ export async function getFeedback(
         ...(checked === undefined ? {} : { checked }),
         ...(mine ? { mine: true as const } : {}),
         ...(mine && editsHere && EDITABLE_STAGES.has(issue.stage) ? { editable: true as const } : {}),
+        ...(mine && withdrawalsHere && EDITABLE_STAGES.has(issue.stage) ? { withdrawable: true as const } : {}),
       };
 
       return hidden ? withoutTrackerStatus(withoutTracker(marked, issue.note.id)) : marked;

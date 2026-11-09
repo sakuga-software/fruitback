@@ -37,6 +37,7 @@ import {
 import type { FruitbackTheme } from './theme.ts';
 import type { FruitbackTransport } from './transport.ts';
 import { callWorker, errorOf, noteWriteFailure } from './worker-client.ts';
+import type { WithdrawAnswer, WithdrawFailure } from './thread-more.ts';
 import { type NotifyAsk, createNotifyAsk } from './notify-ask.ts';
 import {
   type AttachOffer,
@@ -613,6 +614,18 @@ export function init(options: FruitbackOptions): Fruitback {
         const answer = await sendEdit(options, view, issue, text);
         if (typeof answer === 'string') return answer;
         applyEdit(issue, answer);
+        sidebar.refresh();
+        tellNotes({ kind: 'list' });
+
+        return answer;
+      },
+    },
+    // FRU-605: the author withdraws their open note. No read after it, as for an edit: the stage and
+    // the reply go on the issue (the overlay draws the pins again), and the lists follow.
+    withdraw: {
+      send: async (issue: NoteIssue) => {
+        const answer = await sendWithdraw(options, view, issue);
+        if (typeof answer === 'string') return answer;
         sidebar.refresh();
         tellNotes({ kind: 'list' });
 
@@ -1879,6 +1892,39 @@ async function sendEdit(
   const comment = noteCommentSchema.safeParse(body.comment);
 
   return { note: note.data, ...(comment.success ? { comment: comment.data } : {}) };
+}
+
+/**
+ * A withdrawal of a note by its author (FRU-605), through the transport of the host. `refused`: the
+ * worker takes none of this note (`403`, `404`, `409 not-open`); nothing moved, and trying again does
+ * not change it. `409 withdraw-in-progress` is `retry`: the first one is on its way.
+ */
+async function sendWithdraw(
+  options: FruitbackOptions,
+  view: Window & typeof globalThis,
+  issue: NoteIssue,
+): Promise<WithdrawAnswer | WithdrawFailure> {
+  const response = await callWorker(options, {
+    url: `${options.endpoint}/feedback/${encodeURIComponent(issue.id)}/withdraw?client=${encodeURIComponent(options.clientId)}`,
+    method: 'POST',
+    contentType: 'application/json',
+    body: JSON.stringify({ url: canonicalizePageUrl(view.location.href) }),
+  });
+  const failure = noteWriteFailure(
+    response,
+    (answer) => REFUSED.has(answer.status) && !answer.body.includes('withdraw-in-progress'),
+  );
+  if (failure !== undefined) return failure;
+  let body: { stage?: unknown; comment?: unknown };
+  try {
+    body = JSON.parse(response.body) as typeof body;
+  } catch {
+    return 'retry';
+  }
+  if (typeof body.stage !== 'string' || !(NOTE_STAGES as readonly string[]).includes(body.stage)) return 'retry';
+  const comment = noteCommentSchema.safeParse(body.comment);
+
+  return { stage: body.stage as NoteStage, ...(comment.success ? { comment: comment.data } : {}) };
 }
 
 /**

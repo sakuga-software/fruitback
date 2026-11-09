@@ -24,12 +24,13 @@ import {
   type NewCheck,
   type NewEdit,
   type NewReply,
+  type NewWithdrawal,
   type NoteIssueQuery,
   type NoteStore,
   StoreError,
 } from './store.ts';
 import { type StoreSpec, defineStore } from './store-config.ts';
-import { checkText, editText, replyText, withEditedText } from './reply-text.ts';
+import { checkText, editText, replyText, withEditedText, withdrawText } from './reply-text.ts';
 import type { OutgoingFile } from './attachments.ts';
 
 const LINEAR_GRAPHQL_ENDPOINT = 'https://api.linear.app/graphql';
@@ -352,6 +353,73 @@ export async function createCheck(
     input: { stateId: state.id },
   });
   if (!moved.issueUpdate.success) throw new StoreError('Linear refused to reopen the issue');
+
+  return { comment: noteCommentOf(comment), stage: stageOf(moved.issueUpdate.issue?.state ?? state, stages) };
+}
+
+/** The state a withdrawn note goes to (FRU-605): the first of type `canceled` of the board. */
+export function withdrawStateOf(states: readonly WorkflowStateNode[]): WorkflowStateNode | undefined {
+  return states.filter((state) => state.type === 'canceled').sort((a, b) => a.position - b.position)[0];
+}
+
+/**
+ * A withdrawal of its author (FRU-605): the state it goes to is read first (`withdrawStateOf`), and a
+ * team with none fails with nothing written. Then the reply, then the move. A move that fails takes
+ * the reply back, as far as Linear lets it: a new try does not pile replies up (review of #870).
+ * Nothing of the note is deleted.
+ *
+ * As for an edit, the stage is read again after the reply: an issue the team marked done or closed
+ * meanwhile keeps its state, the reply is deleted, and the answer is `not-open`.
+ */
+export async function createWithdrawal(
+  config: LinearConfig,
+  issueId: string,
+  withdrawal: NewWithdrawal,
+  locale: string | undefined,
+  stages: StageExceptions = {},
+): Promise<{ comment: NoteComment; stage: NoteStage } | 'not-open'> {
+  // The state it goes to, before anything is written: a team with none fails with nothing written,
+  // and a new try does not add a reply each time (review of #870).
+  const found = await graphql<IssueStatesResult>(config, ISSUE_STATES_QUERY, { id: issueId });
+  if (found.issue === null) throw new StoreError('Linear did not find the issue to cancel');
+  const state = withdrawStateOf(found.issue.team.states.nodes);
+  if (state === undefined) throw new StoreError('The team of this issue has no canceled state');
+  const created = await graphql<CreateCommentResult>(config, CREATE_COMMENT_MUTATION, {
+    input: { issueId, body: withdrawText(withdrawal, locale) },
+  });
+  const comment = created.commentCreate.comment;
+  if (!created.commentCreate.success || comment === null) throw new StoreError('Linear refused the reply');
+  /** The reply goes when the issue does not move: as far as Linear lets it, and the error is the move's. */
+  const takeBack = () =>
+    graphql<DeleteCommentResult>(config, DELETE_COMMENT_MUTATION, { id: comment.id }).catch(() => undefined);
+  let open: boolean;
+  try {
+    const now = await graphql<IssueStateResult>(config, ISSUE_STATE_QUERY, { id: issueId });
+    if (now.issue === null) throw new StoreError('Linear lost the issue after the reply');
+    open = EDITABLE_STAGES.has(stageOf(now.issue.state, stages));
+  } catch (error) {
+    await takeBack();
+    throw error instanceof StoreError ? error : new StoreError('Linear did not say the stage after the reply');
+  }
+  if (!open) {
+    const deleted = await takeBack();
+    if (deleted?.commentDelete.success !== true) {
+      throw new StoreError('Linear kept the reply of a withdrawal of a note done');
+    }
+
+    return 'not-open';
+  }
+  let moved: ReopenIssueResult;
+  try {
+    moved = await graphql<ReopenIssueResult>(config, REOPEN_ISSUE_MUTATION, {
+      id: issueId,
+      input: { stateId: state.id },
+    });
+    if (!moved.issueUpdate.success) throw new StoreError('Linear refused to cancel the issue');
+  } catch (error) {
+    await takeBack();
+    throw error instanceof StoreError ? error : new StoreError('Linear did not cancel the issue');
+  }
 
   return { comment: noteCommentOf(comment), stage: stageOf(moved.issueUpdate.issue?.state ?? state, stages) };
 }
@@ -1378,6 +1446,9 @@ export function createLinearStore(
     // FRU-605: a comment with the new text; the description stays the team's.
     editsInReplies: true,
     edit: (target, edit, _client, policy) => createEdit(config, target.issue, edit, policy.locale, stages),
+    // FRU-605: a reply, then the first canceled state of the team.
+    withdraw: (target, withdrawal, _client, policy) =>
+      createWithdrawal(config, target.issue, withdrawal, policy.locale, stages),
   };
 }
 

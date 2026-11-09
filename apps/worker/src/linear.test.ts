@@ -558,3 +558,100 @@ describe('the text of a note of Linear, after an edit of its author (FRU-605)', 
     assert.equal(toNoteIssue(node, note.page.url, { showComments: false })?.note.text, 'Sent');
   });
 });
+
+describe('a withdrawal of its author in Linear (FRU-605)', () => {
+  afterEach(() => vi.restoreAllMocks());
+  const state = (id: string, type: string, position: number) => ({ id, name: id, type, position });
+
+  it('writes the reply, then moves the issue to the first canceled state of the board', async () => {
+    const stub = installLinearStub({
+      teamStates: [
+        state('st_dup', 'canceled', 2),
+        state('st_done', 'completed', 1),
+        state('st_canceled', 'canceled', 0),
+      ],
+    });
+    const store = createLinearStore({ apiKey: 'lin_api_test', teamId: 'team_1', projectId: undefined });
+
+    const answer = await store.withdraw?.(
+      { issue: 'issue_1', clientId: 'acme' },
+      { author: { kind: 'member', name: 'Bob', workspace: 'Acme' }, note: noteFixture(), identifier: 'ENG-1' },
+      undefined,
+      { showComments: true, identitySecret: undefined, read: 'public', write: 'public', locale: 'en' },
+    );
+
+    assert.deepEqual(
+      stub.calls.map((call) => call.operation),
+      ['FruitbackIssueStates', 'FruitbackCreateComment', 'FruitbackIssueState', 'FruitbackReopenIssue'],
+    );
+    assert.deepEqual(stub.calls[3]?.variables, { id: 'issue_1', input: { stateId: 'st_canceled' } });
+    assert.ok(typeof answer === 'object');
+    assert.equal(answer.stage, 'closed');
+    assert.equal(answer.comment.body, '**Bob** via Fruitback · member of Acme\nWithdrew the note');
+  });
+
+  it('fails with nothing written when the team has no canceled state (review of #870)', async () => {
+    const stub = installLinearStub({ teamStates: [state('st_done', 'completed', 0)] });
+    const store = createLinearStore({ apiKey: 'lin_api_test', teamId: 'team_1', projectId: undefined });
+
+    await assert.rejects(
+      store.withdraw?.(
+        { issue: 'issue_1', clientId: 'acme' },
+        { author: { kind: 'member', name: 'Bob', workspace: 'Acme' }, note: noteFixture(), identifier: 'ENG-1' },
+        undefined,
+        { showComments: true, identitySecret: undefined, read: 'public', write: 'public', locale: 'en' },
+      ) ?? Promise.resolve(),
+      StoreError,
+    );
+    assert.deepEqual(
+      stub.calls.map((call) => call.operation),
+      ['FruitbackIssueStates'],
+    );
+  });
+
+  it('deletes its reply and moves nothing when the team marked the issue done meanwhile', async () => {
+    const stub = installLinearStub({
+      issueState: { name: 'Done', type: 'completed' },
+      teamStates: [state('st_canceled', 'canceled', 0)],
+    });
+    const store = createLinearStore({ apiKey: 'lin_api_test', teamId: 'team_1', projectId: undefined });
+
+    const answer = await store.withdraw?.(
+      { issue: 'issue_1', clientId: 'acme' },
+      { author: { kind: 'member', name: 'Bob', workspace: 'Acme' }, note: noteFixture(), identifier: 'ENG-1' },
+      undefined,
+      { showComments: true, identitySecret: undefined, read: 'public', write: 'public', locale: 'en' },
+    );
+
+    assert.equal(answer, 'not-open');
+    assert.deepEqual(
+      stub.calls.map((call) => call.operation),
+      ['FruitbackIssueStates', 'FruitbackCreateComment', 'FruitbackIssueState', 'FruitbackDeleteComment'],
+    );
+  });
+
+  it('takes its reply back when Linear refuses the move (review of #870)', async () => {
+    const stub = installLinearStub({ teamStates: [state('st_canceled', 'canceled', 0)], failReopen: true });
+    const store = createLinearStore({ apiKey: 'lin_api_test', teamId: 'team_1', projectId: undefined });
+
+    await assert.rejects(
+      store.withdraw?.(
+        { issue: 'issue_1', clientId: 'acme' },
+        { author: { kind: 'member', name: 'Bob', workspace: 'Acme' }, note: noteFixture(), identifier: 'ENG-1' },
+        undefined,
+        { showComments: true, identitySecret: undefined, read: 'public', write: 'public', locale: 'en' },
+      ) ?? Promise.resolve(),
+      StoreError,
+    );
+    assert.deepEqual(
+      stub.calls.map((call) => call.operation),
+      [
+        'FruitbackIssueStates',
+        'FruitbackCreateComment',
+        'FruitbackIssueState',
+        'FruitbackReopenIssue',
+        'FruitbackDeleteComment',
+      ],
+    );
+  });
+});

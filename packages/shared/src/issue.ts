@@ -222,6 +222,12 @@ export const noteIssueSchema = z.object({
    */
   editable: z.literal(true).optional(),
   /**
+   * `true` on a note that the reader may withdraw now (FRU-605): their own (`mine`), open (`new`,
+   * `todo`, `progress`), on a site with one place whose store takes a withdrawal. Absent for every
+   * other note and reader. Read-envelope field.
+   */
+  withdrawable: z.literal(true).optional(),
+  /**
    * An agent works on this note (FRU-618): a call of the trigger of its site started a session of a
    * routine for it. `url`, the address of that session (https only), only for a member of the team who
    * sees the tracker: a reviewer cannot open a session of the team. Read-envelope field, after the cache.

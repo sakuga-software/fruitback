@@ -12,7 +12,7 @@ import { type CallOptions, type World, callOn, memberOf, signInTo, worlds } from
 import { createMemoryKv } from './kv.ts';
 import { seal } from './secrets.ts';
 import { createMemoryStore } from './linear-memory.ts';
-import { type NoteStore, StoreError, takesEdits, takesReplies } from './store.ts';
+import { type NoteStore, StoreError, takesEdits, takesReplies, takesWithdrawals } from './store.ts';
 
 const SECRETS_KEY = 'another-secret-that-opens-the-connectors';
 const opened = worlds();
@@ -618,6 +618,39 @@ describe('which store edits a note (FRU-475, FRU-605)', () => {
     );
     assert.deepEqual(kept, answer);
     assert.deepEqual(queued, []);
+  });
+
+  it('an address keeps a withdrawal, and is told by `note.withdrawn`, with ids only (FRU-605)', async () => {
+    const author = { kind: 'member' as const, name: 'Bob', workspace: 'Acme' };
+    const closed = { stage: 'closed' as const, comment: { id: 'c2', body: 'x', createdAt: '' } };
+    const withdrawing = createRoutedStore(
+      { ...own, withdraw: async () => closed },
+      createConnectorStores(accounts, SECRETS_KEY, () => 2_000),
+    );
+    queued.length = 0;
+
+    assert.equal(await takesWithdrawals(withdrawing, site('con_rest')), true);
+    assert.equal(await takesWithdrawals(withdrawing, site('con_linear')), true);
+    const answer = await withdrawing.withdraw?.(
+      { issue: '7', clientId: 'site_a' },
+      { author, note, identifier: 'FB-7' },
+      site('con_rest'),
+      shown as never,
+    );
+
+    assert.deepEqual(answer, closed);
+    assert.equal(queued.length, 1);
+    assert.equal(queued[0]?.event, 'note.withdrawn');
+    assert.deepEqual(JSON.parse(queued[0]?.body ?? '{}'), {
+      version: 2,
+      event: 'note.withdrawn',
+      workspace: 'ws_a',
+      site: { id: 'site_a', origin: 'https://acme.dev' },
+      identifier: 'FB-7',
+      note: { id: Buffer.from(JSON.stringify(['site_a', 'n_1'])).toString('base64url') },
+      at: new Date(2_000).toISOString(),
+    });
+    assert.equal(pendingDeliveryOf({ id: 'd', event: 'note.withdrawn', created_at: 0 })?.event, 'note.withdrawn');
   });
 
   it('queues nothing for an edit the store refused (review of #866)', async () => {

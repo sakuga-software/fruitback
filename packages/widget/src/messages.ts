@@ -228,6 +228,8 @@ export const ENGLISH = {
   'thread.agent': 'Agent',
   /** The reply the worker writes when the author edits their note (FRU-475). */
   'thread.edited': 'Edited the note',
+  /** The reply the worker writes when the author withdraws their note (FRU-605). */
+  'thread.withdrawn': 'Withdrew the note',
   // FRU-618: a session of a routine was started for the note; its address for the team only.
   'thread.agentWorks': 'An agent is working on this note',
   'thread.agentSession': 'Open the session',
@@ -277,6 +279,17 @@ export const ENGLISH = {
   'more.copied': 'Link copied.',
   'more.copyManually': 'The link could not be copied. Select it, then copy it.',
   'more.linkLabel': 'Link to the note',
+  'more.withdraw': 'Withdraw the note',
+  // FRU-605: the author withdraws their note. It is closed for the team, and nothing is deleted.
+  'withdraw.ask': 'Withdraw this note? The team will see it closed. Nothing is deleted.',
+  'withdraw.confirm': 'Withdraw',
+  'withdraw.keep': 'Keep it',
+  'withdraw.sending': 'Withdrawing…',
+  'withdraw.done': 'Withdrawn. The note is closed.',
+  'withdraw.failed': 'Not withdrawn. Try again.',
+  'withdraw.failedWait': 'Too many requests just now. Try again in a minute.',
+  'withdraw.failedSignedOut': 'Your session has ended. Sign in again, then try again.',
+  'withdraw.refused': 'This note can no longer be withdrawn: the team marked it done or closed it.',
   'thread.anonymous': 'Anonymous',
   'thread.orphan': 'Element not found. The position is approximate.',
   'thread.uncertain': 'Element found by its position, not by its identity. The page may have changed under the pin.',
