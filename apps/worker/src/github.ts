@@ -380,7 +380,7 @@ function labelNames(issue: IssueRow): string[] {
   return issue.labels.map((label) => (typeof label === 'string' ? label : label.name));
 }
 
-async function mapInBatches<T, R>(items: T[], size: number, map: (item: T) => Promise<R>): Promise<R[]> {
+export async function mapInBatches<T, R>(items: T[], size: number, map: (item: T) => Promise<R>): Promise<R[]> {
   const results: R[] = [];
   for (let start = 0; start < items.length; start += size) {
     results.push(...(await Promise.all(items.slice(start, start + size).map(map))));
