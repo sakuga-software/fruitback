@@ -4,7 +4,7 @@ import type { NoteIssue } from '@fruitback/shared';
 import { noteFixture, noteIssueFixture } from '@fruitback/shared/note.fixture';
 import { type EditSeam, type Overlay, createOverlay } from './overlay.ts';
 import { linkedNote } from './page.ts';
-import { noteLink } from './thread-more.ts';
+import { type WithdrawAnswer, type WithdrawFailure, type WithdrawSeam, noteLink } from './thread-more.ts';
 import { type MountedPage, mountPage, setDocumentSize, setRect } from './dom.fixture.ts';
 
 /**
@@ -48,8 +48,12 @@ function anIssue(overrides: Parameters<typeof noteIssueFixture>[0] = {}): NoteIs
 const neverSent: EditSeam = { send: () => new Promise(() => {}) };
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-function open(page: MountedPage, issue: NoteIssue) {
-  overlay = createOverlay({ document: page.document, edit: neverSent });
+function open(page: MountedPage, issue: NoteIssue, withdraw?: WithdrawSeam) {
+  overlay = createOverlay({
+    document: page.document,
+    edit: neverSent,
+    ...(withdraw === undefined ? {} : { withdraw }),
+  });
   overlay.render([issue]);
   (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
   const q = <T extends Element>(selector: string) => page.document.querySelector(selector) as T | null;
@@ -211,6 +215,105 @@ describe('the menu of the author in a thread (FRU-605)', () => {
     await settle();
     assert.equal(thread.said(), 'Link copied.');
     assert.equal(page.document.activeElement, thread.more());
+  });
+});
+
+describe('the withdrawal of a note by its author, from « ⋯ » (FRU-605)', () => {
+  /** A seam whose answers a case gives one at a time. */
+  function answered() {
+    const pending: ((answer: WithdrawAnswer | WithdrawFailure) => void)[] = [];
+    const sent: string[] = [];
+    const seam: WithdrawSeam = {
+      send: (issue) => {
+        sent.push(issue.id);
+
+        return new Promise((resolve) => pending.push(resolve));
+      },
+    };
+
+    return { seam, sent, answer: (value: WithdrawAnswer | WithdrawFailure) => pending.shift()?.(value) };
+  }
+  const q = (page: MountedPage, selector: string) => page.document.querySelector<HTMLElement>(selector);
+
+  it('is offered where the read says `withdrawable`, and asks before it goes', () => {
+    const page = mounted();
+    const { seam, sent } = answered();
+    let thread = open(page, anIssue({ withdrawable: true }), seam);
+    thread.more()?.click();
+    assert.deepEqual(thread.items(), ['Copy link to the note', 'Withdraw the note']);
+    overlay?.destroy();
+
+    thread = open(page, anIssue(), seam);
+    thread.more()?.click();
+    assert.deepEqual(thread.items(), ['Copy link to the note']);
+    overlay?.destroy();
+
+    thread = open(page, anIssue({ withdrawable: true }), seam);
+    thread.more()?.click();
+    thread.item('Withdraw the note')?.click();
+    assert.equal(
+      q(page, '.fruitback-thread-withdraw-ask')?.textContent,
+      'Withdraw this note? The team will see it closed. Nothing is deleted.',
+    );
+    assert.equal(page.document.activeElement, q(page, '.fruitback-thread-withdraw-confirm'));
+    assert.deepEqual(sent, []);
+    // « Keep it »: nothing goes, and the focus goes back to « ⋯ ».
+    q(page, '.fruitback-thread-withdraw-keep')?.click();
+    assert.equal(q(page, '.fruitback-thread-withdraw'), null);
+    assert.equal(page.document.activeElement, thread.more());
+    assert.deepEqual(sent, []);
+  });
+
+  it('closes the note once the store kept it, keeps the thread open, and says so', async () => {
+    const page = mounted();
+    const { seam, sent, answer } = answered();
+    const issue = anIssue({ withdrawable: true, editable: true });
+    const thread = open(page, issue, seam);
+    thread.more()?.click();
+    thread.item('Withdraw the note')?.click();
+    q(page, '.fruitback-thread-withdraw-confirm')?.click();
+    assert.deepEqual(sent, [issue.id]);
+    assert.equal(q(page, '.fruitback-thread-withdraw-confirm')?.textContent, 'Withdrawing…');
+    assert.equal((q(page, '.fruitback-thread-withdraw-confirm') as HTMLButtonElement | null)?.disabled, true);
+
+    answer({
+      stage: 'closed',
+      comment: {
+        id: 'c9',
+        body: '**Bob** via Fruitback · member of Acme\nWithdrew the note',
+        createdAt: '2026-11-08T10:00:00.000Z',
+      },
+    });
+    await settle();
+
+    assert.notEqual(thread.thread(), null);
+    assert.equal(q(page, '.fruitback-thread-withdraw-said')?.textContent, 'Withdrawn. The note is closed.');
+    assert.equal(page.document.activeElement, q(page, '.fruitback-thread-withdraw-said'));
+    // Closed: the author has no menu any more, and the reply reads in the words of the reader.
+    assert.equal(thread.more(), null);
+    assert.ok((thread.thread()?.textContent ?? '').includes('Withdrew the note'));
+    assert.ok(!(thread.thread()?.textContent ?? '').includes('**Bob**'));
+    assert.equal(page.document.querySelector('[data-fruitback-pin]')?.getAttribute('data-fruitback-stage'), 'closed');
+  });
+
+  it('says why when it did not go, and asks again', async () => {
+    const page = mounted();
+    const { seam, answer } = answered();
+    const thread = open(page, anIssue({ withdrawable: true }), seam);
+    thread.more()?.click();
+    thread.item('Withdraw the note')?.click();
+    for (const [failure, words] of [
+      ['retry', 'Not withdrawn. Try again.'],
+      ['wait', 'Too many requests just now. Try again in a minute.'],
+      ['signed-out', 'Your session has ended. Sign in again, then try again.'],
+      ['refused', 'This note can no longer be withdrawn: the team marked it done or closed it.'],
+    ] as const) {
+      q(page, '.fruitback-thread-withdraw-confirm')?.click();
+      answer(failure);
+      await settle();
+      assert.equal(q(page, '.fruitback-thread-withdraw-status')?.textContent, words, failure);
+      assert.notEqual(q(page, '.fruitback-thread-withdraw-confirm'), null);
+    }
   });
 });
 

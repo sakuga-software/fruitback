@@ -3479,6 +3479,71 @@ replies, and on a public site mounted by the extension with no session, only the
 - **`checked` and `mine` are added after the cache.** `checked` comes from the replies, so a read with
   the replies hidden says none; `mine` is the reader's.
 
+## The author edits an open note, and a tracker gets a reply (FRU-605)
+
+**The rules, in short** (arbitrated by the orchestrator on 2026-11-08, in FRU-605):
+
+- **Open is `new`, `todo` or `progress`** (`EDITABLE_STAGES`). A note `done` waits for the verdict
+  of its author, and a `closed` note says nothing more: `409 not-open`, with its stage. The worker's
+  own store reads the stage again under the lock of the row, as before.
+- **The description of a tracker is never written again.** The team may have changed it there.
+  Linear gets a comment: the line of who wrote it, « Edited the note », then the new text, quoted
+  (`editText(…, true)`). The read of Linear takes the text of a note from its newest such comment
+  written before the issue was done or canceled (`withEditedText` in `toNoteIssue`, `completedAt` and
+  `canceledAt`). The comment is read as text, as a verdict is: a person of the team can type it in
+  Linear, and can change the description too. A reply of the page cannot: its second line is empty.
+- **Where the replies are hidden, a tracker takes no edit** (`editsInReplies`, `takesEdits(…,
+  policy)`): a read would show the text of before. This covers a worker that hides them, and a
+  connector whose workspace hides them (`withSettings`).
+- **An address keeps the edit in the worker's own store, and gets `note.edited`**, ids only
+  (`noteEventBody`): the workspace, the site, `identifier`, `note.id` as `get_note` of `/mcp` takes
+  it, and `at`. Never the text, for the reason of FRU-475. A queue that refuses the row is logged and
+  the author is answered, as for `note.created`. The console lists it as « Note edited by its
+  author ». `DELIVERY_EVENTS` gains it; the column is a text, so no migration.
+- **GitHub takes no edit**, as it takes no reply (FRU-628 follows it).
+- **A tracker has no lock, so Linear reads the stage again after the comment** (round 4 of #866).
+  An issue done or canceled by then had its move before that read: the comment is deleted, and the
+  route answers `409 not-open`. A move after that read comes after the comment too, and the read of
+  the note keeps it as an edit of before, stopped at `completedAt` or `canceledAt`. So no edit that
+  crossed a move stays, and a reopened issue never takes the text of one
+  (test:`deletes its comment when the issue is completed once the comment is written, and says not-open`).
+  A comment Linear refuses to delete is written again with no text (`retractEdit`), so that a reopen
+  never makes it the text (round 6 of #866); refused both ways, the route answers `502`.
+  A read of the stage that fails deletes the comment as far as Linear lets it, and the route answers
+  `502`: the author tries again, and nothing stays that nobody answered for (round 5 of #866).
+  A move to done **after** that read is a move after the comment: its `completedAt` is later than the
+  comment, which is an edit of the note while it was open, and the text it gives is the right one.
+- **The comment is recognized by its text, not by its Linear author** (round 3 of #866): with an
+  OAuth connection as the app, Linear may write it with no `user`, and nobody measured it; a filter on
+  the author could drop every real edit. Whoever can type it in Linear is of the team that owns the
+  issue, and can rewrite its description too, as for a verdict (`verdictOf`).
+- **The event names the site the route found the note in** (`target.clientId`), and none is queued
+  when there is no site: an id of a note that `/mcp` cannot read back helps nobody (review of #866).
+
+## The author withdraws an open note (FRU-605)
+
+**The rules, in short** (arbitrated by the orchestrator on 2026-11-08, Q3 of FRU-605):
+
+- **`POST /feedback/<id>/withdraw?client=<site>`, body `{ url }`** (`postWithdraw`, `edit-routes.ts`).
+  The guards of an edit: the author the index keeps, by a session (`403 not-allowed` for anybody else,
+  a role that manages the sites included: the team closes a note in the console), an open stage
+  (`409 not-open` with its stage), one place (`403 withdrawals-not-taken`).
+- **Nothing is deleted.** The worker's own store sets `closed` and the built-in status, and writes a
+  reply « Withdrew the note » (`withdrawText`), in one transaction under the lock of the row. Linear
+  writes the reply, then moves the issue to the first state of type `canceled` of the board
+  (`withdrawStateOf`), read **before** the reply: a team with none fails with nothing written, and a
+  move that Linear refuses takes the reply back, so a new try does not pile replies up (review of
+  #870, test:`fails with nothing written when the team has no canceled state (review of #870)`). GitHub takes
+  none (FRU-628). An address keeps it in the worker's own store and gets `note.withdrawn`, ids only.
+- **One at a time**: a key of the KV, as for a verdict (`409 withdraw-in-progress`). A tracker has
+  no lock, and a double click would write two replies.
+- **Linear reads the stage again after the reply**, as for an edit: an issue the team marked done or
+  closed meanwhile keeps its state, the reply is deleted, and the route answers `409 not-open`
+  (test:`deletes its reply and moves nothing when the team marked the issue done meanwhile`).
+- **`withdrawable: true` is added after the cache**, as `editable`; the route decides again. A
+  withdrawal does not depend on the replies being shown: the stage says it on its own.
+- The extension relays `/withdraw` as it relays `/text` (`WITHDRAW_PATH`, `relay.ts`).
+
 ## The author edits a note (FRU-475)
 
 **The rules, in short** (the ticket left every choice open; the agent decided the simplest and the

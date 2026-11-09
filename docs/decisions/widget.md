@@ -855,7 +855,10 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
     The widget is hidden for the two frames of that capture, as for any capture (FRU-351): at the
     choice, before the composer is drawn, the frame of the element blinks once. Every capture goes
     through one queue (`serialized`), so a capture of the page asked at once waits for it. A capture
-    of the element is forgotten when the composer closes: it is never given to a later open.
+    of the element is forgotten when the composer closes: it is never given to a later open. A
+    composer that opens before the first read of the page answered offers no file yet; it joins the
+    capture when that read says files go, once per open, so a capture the person removed does not
+    come back at a later read (`context-menu.spec.ts` lost it 4 times in 80, in a loop).
   - **A note that holds it is not added to the batch**, as any note with files (FRU-124): the cross
     takes it away first. An open question for the design: a batch of notes with their captures.
   - **Each file says its state**: « Goes with the note », the part sent (« Sending 42 % ») when the
@@ -1905,7 +1908,8 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
 - **The items are the ones that work today.** « Edit the note » opens the field of the edit
   (FRU-475), and only where the read says `editable`. « Copy link to the note » copies
   `<page>#fruitback-note=<id>` (FRU-253, `noteLink`). « Move the note » and « Withdraw the note » come
-  with their routes, in the next pull requests of FRU-605.
+  with their routes, in the next pull requests of FRU-605. « Withdraw the note » came with C: offered
+  where the read says `withdrawable`.
 - **A copy that fails shows the link**, selected on focus, with « The link could not be copied.
   Select it, then copy it. »: a copy that fails with nothing to see reads as a copy that worked, as in
   the panel (`copySection`). What the copy said lives in a map by note, as the other footers, and
@@ -1914,6 +1918,21 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
   the ends, Escape closes the menu and gives the focus back to « ⋯ » without closing the thread, the
   focus on « ⋯ » included (review of #863), and Tab or a focus out of it closes it. An item gives the
   focus back to « ⋯ » at once, before its action ends: the item is hidden, and a clipboard answers late.
+
+## « Withdraw this note? », in the thread (FRU-605)
+
+### The rules, in short
+
+- **Asked before it goes**: « Withdraw the note » of « ⋯ » opens « Withdraw this note? The team will
+  see it closed. Nothing is deleted. » under the text, with « Withdraw » and « Keep it ». « Keep it »
+  gives the focus back to « ⋯ ». Offered where the read says `withdrawable`.
+- **No read after it, as after a verdict (FRU-603)**: the stage and the reply the worker answers go
+  on the issue (`applyWithdraw`), `editable` and `withdrawable` go, and the pins are drawn again with
+  this thread kept open, which says « Withdrawn. The note is closed. ».
+- **Each failure says why**, and the question stays to try again. `409 withdraw-in-progress` is
+  `retry`; `403`, `404` and another `409` are `refused`.
+- **The reply of a withdrawal reads in the words of the reader** (`editFromPage`): the name, then
+  « Withdrew the note », from the text the worker writes in either language of the team.
 
 ## The colour of « Send » (FRU-601)
 

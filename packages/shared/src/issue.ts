@@ -216,10 +216,17 @@ export const noteIssueSchema = z.object({
    */
   mine: z.literal(true).optional(),
   /**
-   * `true` on a note that the reader may edit now (FRU-475): their own (`mine`), still `new`, kept by
-   * the worker on a site with one place. Absent for every other note and reader. Read-envelope field.
+   * `true` on a note that the reader may edit now (FRU-475): their own (`mine`), open (`new`, `todo`,
+   * `progress`, FRU-605), on a site with one place whose store takes an edit. Absent for every other
+   * note and reader. Read-envelope field.
    */
   editable: z.literal(true).optional(),
+  /**
+   * `true` on a note that the reader may withdraw now (FRU-605): their own (`mine`), open (`new`,
+   * `todo`, `progress`), on a site with one place whose store takes a withdrawal. Absent for every
+   * other note and reader. Read-envelope field.
+   */
+  withdrawable: z.literal(true).optional(),
   /**
    * An agent works on this note (FRU-618): a call of the trigger of its site started a session of a
    * routine for it. `url`, the address of that session (https only), only for a member of the team who

@@ -152,11 +152,28 @@ the account of the member who left a note, and that is what says who may give a 
 
 ### A note edited by its author (FRU-475)
 
-The person who left a note can change its text while nobody of the team has moved it, on a note the
-worker keeps. The new text replaces the old one in the database: **the worker keeps no copy of the
-text of before**. A reply under the note says who edited it and when, with no text. The excerpt of
-the index of the notes is written again from the new text. A note sent to a tracker or to an address
-cannot be edited, so nothing is sent to them again.
+The person who left a note can change its text while the note is open: new, to do or in progress.
+A note done or closed cannot be edited. Where the note goes decides what is kept:
+
+- On a note the worker keeps, the new text replaces the old one in the database: **the worker keeps no
+  copy of the text of before**. A reply under the note says who edited it and when, with no text.
+- On a note sent to an address, the same happens in the worker, and the address receives a
+  `note.edited` event that holds identifiers only, never a text. The address keeps the note it was
+  first sent.
+- On a note sent to Linear, the issue keeps its description, with the text of before: it is the
+  team's, and they may have changed it. A comment under the issue says who edited the note, with the
+  new text. Taking out a text from Linear is done in Linear, by the team. A site whose replies are
+  hidden takes no edit. A note sent to GitHub cannot be edited.
+
+The excerpt of the index of the notes is written again from the new text.
+
+### A note withdrawn by its author
+
+The person who left a note can withdraw it while it is open. **Nothing is deleted**: the note is
+closed, and a reply under it says who withdrew it and when. On a note sent to an address, the address
+receives a `note.withdrawn` event that holds identifiers only. On a note sent to Linear, the issue
+gets the same reply as a comment, and moves to the first canceled state of its team. A note sent to
+GitHub cannot be withdrawn. To have a note deleted, ask the team of the site.
 
 ### An e-mail when a note is done
 

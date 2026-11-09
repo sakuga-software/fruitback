@@ -20,7 +20,17 @@ import { besideElement } from './thread-place.ts';
 import { adoptStyles } from './stylesheet.ts';
 import { firstLine, readDate } from './note-words.ts';
 import { BADGE_HALF, BADGE_RISE, STYLES } from './overlay.styles.ts';
-import { type MoreFooter, type MoreSaid, authorMenuOffered, moreMenu, moreSaid } from './thread-more.ts';
+import {
+  type MoreFooter,
+  type MoreSaid,
+  type WithdrawFooter,
+  type WithdrawSeam,
+  applyWithdraw,
+  authorMenuOffered,
+  moreMenu,
+  moreSaid,
+  withdrawBlock,
+} from './thread-more.ts';
 
 /**
  * The pins on the page: one box over each element someone left a note on, coloured by where the
@@ -139,6 +149,11 @@ export type OverlayOptions = {
    * and not `checked`. Left out: no thread offers it.
    */
   check?: CheckSeam;
+  /**
+   * How the author withdraws an open note (FRU-605), from « ⋯ » of its thread. Offered on a note whose
+   * read says `withdrawable`. Left out: no thread offers it.
+   */
+  withdraw?: WithdrawSeam;
   /**
    * Show the CSS selector of the element in a thread (FRU-349). Off by default: a reviewer reads the
    * note, and the selector is for a developer. The note and the issue keep it either way.
@@ -973,6 +988,45 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
           said: checkSaid,
           settled: checkSettled,
         };
+  // FRU-605: the withdrawal of a note by its author outlives its thread too, as a verdict does.
+  const withdrawAsking = new Set<string>();
+  const withdrawsInFlight = new Set<string>();
+  const withdrawSaid = new Map<string, string>();
+  const withdrawSettled: WithdrawFooter['settled'] = (issue, focus, kept) => {
+    const entry = placed.find((candidate) => candidate.issue.id === issue.id);
+    if (kept !== undefined) {
+      applyWithdraw(issue, kept);
+      // A read may have drawn the note again since: the answer goes on the issue on screen too.
+      if (entry !== undefined && entry.issue !== issue) applyWithdraw(entry.issue, kept);
+    }
+    if (entry === undefined || thread?.dataset.fruitbackThread !== issue.note.id) return;
+    if (kept !== undefined) {
+      keeping = issue.note.id;
+      try {
+        draw();
+      } finally {
+        keeping = undefined;
+      }
+    } else reopenThread(entry);
+    const target = {
+      confirm: '.fruitback-thread-withdraw-confirm',
+      said: '.fruitback-thread-withdraw-said',
+      more: '.fruitback-thread-more',
+    }[focus];
+    (
+      thread?.querySelector<HTMLElement>(target) ?? thread?.querySelector<HTMLElement>('.fruitback-thread-close')
+    )?.focus();
+  };
+  const withdrawFor = (issue: NoteIssue): WithdrawFooter | undefined =>
+    options.withdraw === undefined || DRAFTS.has(issue)
+      ? undefined
+      : {
+          seam: options.withdraw,
+          asking: withdrawAsking,
+          inFlight: withdrawsInFlight,
+          said: withdrawSaid,
+          settled: withdrawSettled,
+        };
   // FRU-605: the menu « ⋯ » of the author. What its last action said outlives its thread, as a reply.
   const moreSaidOf = new Map<string, MoreSaid>();
   const moreFor = (issue: NoteIssue): MoreFooter | undefined => {
@@ -985,8 +1039,19 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
       thread?.querySelector<HTMLElement>(focus)?.focus();
     };
 
+    const withdraw = issue.withdrawable === true ? withdrawFor(issue) : undefined;
+
     return {
       said: moreSaidOf,
+      ...(withdraw === undefined
+        ? {}
+        : {
+            withdraw: () => {
+              withdraw.asking.add(issue.note.id);
+              withdraw.said.delete(issue.note.id);
+              withdraw.settled(issue, 'confirm');
+            },
+          }),
       ...(edit === undefined
         ? {}
         : {
@@ -1034,6 +1099,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
       editFor(entry.issue),
       checkFor(entry.issue),
       moreFor(entry.issue),
+      withdrawFor(entry.issue),
     );
     wireThread(thread);
     mountThread(thread, entry);
@@ -1080,6 +1146,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
       editFor(entry.issue),
       checkFor(entry.issue),
       moreFor(entry.issue),
+      withdrawFor(entry.issue),
     );
     wireThread(thread);
     mountThread(thread, entry);
@@ -1096,6 +1163,8 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     editSaid.clear();
     checkSaid.clear();
     moreSaidOf.clear();
+    withdrawSaid.clear();
+    withdrawAsking.clear();
     const opener = placed.find((entry) => entry.pin.dataset.fruitbackOpen !== undefined);
     const wasOpen = thread !== null;
     // A thread in the list gives focus back through the list, to the row of its note (FRU-312): the
@@ -1489,6 +1558,7 @@ function buildThread(
   edit?: EditFooter,
   check?: CheckFooter,
   more?: MoreFooter,
+  withdraw?: WithdrawFooter,
 ): HTMLElement {
   const thread = document.createElement('div');
   thread.className = 'fruitback-thread';
@@ -1545,6 +1615,7 @@ function buildThread(
     element(document, 'div', 'fruitback-thread-body', [
       ...noteText(document, issue, t, edit),
       ...moreSaid(document, issue, t, more),
+      ...withdrawBlock(document, issue, t, withdraw),
       byline(document, 'p', 'fruitback-thread-meta', reporter, issue.note.createdAt, t),
       ...sourceBlock(document, issue, showSelector),
       ...attachmentsLine(document, issue, t),
@@ -1735,13 +1806,24 @@ export function replyFromPage(body: string): { name: string; who: string; text: 
  * wrote it, then « Edited the note » in the language of the team. The page shows the name, and its own
  * words for the edit. Any other comment is `undefined`.
  */
-const EDITED = /^\*\*([^*\n]+)\*\* via Fruitback · ([^\n]+)\n(?:Edited the note|A modifié la note)$/u;
+// FRU-605: in a tracker, the new text follows, quoted. The thread shows it as the text of the note,
+// so the reply says « Edited the note » alone, as in the worker's own store.
+const EDITED =
+  /^\*\*([^*\n]+)\*\* via Fruitback · ([^\n]+)\n(?:Edited the note|A modifié la note)(?:\n\n(?:>(?: [^\n]*)?(?:\n|$))+)?$/u;
 
 export function editFromPage(body: string, t: Translator): { name: string; who: string; text: string } | undefined {
   const match = EDITED.exec(body);
+  if (match !== null) return { name: match[1] ?? '', who: match[2] ?? '', text: t.text('thread.edited') };
+  // FRU-605: the reply of a withdrawal, the same shape, read in the words of the reader.
+  const withdrawn = WITHDREW.exec(body);
 
-  return match === null ? undefined : { name: match[1] ?? '', who: match[2] ?? '', text: t.text('thread.edited') };
+  return withdrawn === null
+    ? undefined
+    : { name: withdrawn[1] ?? '', who: withdrawn[2] ?? '', text: t.text('thread.withdrawn') };
 }
+
+/** The reply the worker writes when the author withdraws a note (FRU-605, `withdrawText`). */
+const WITHDREW = /^\*\*([^*\n]+)\*\* via Fruitback · ([^\n]+)\n(?:Withdrew the note|A retiré la note)$/u;
 
 /**
  * The reply the worker writes for a verdict (FRU-294, `checkText`): the line of who wrote it, the

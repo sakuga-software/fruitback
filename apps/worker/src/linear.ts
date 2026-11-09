@@ -20,14 +20,17 @@ import {
   type CheckAnswer,
   type CreatedIssue,
   type CreatedWithFiles,
+  EDITABLE_STAGES,
   type NewCheck,
+  type NewEdit,
   type NewReply,
+  type NewWithdrawal,
   type NoteIssueQuery,
   type NoteStore,
   StoreError,
 } from './store.ts';
 import { type StoreSpec, defineStore } from './store-config.ts';
-import { checkText, replyText } from './reply-text.ts';
+import { checkText, editText, replyText, withEditedText, withdrawText } from './reply-text.ts';
 import type { OutgoingFile } from './attachments.ts';
 
 const LINEAR_GRAPHQL_ENDPOINT = 'https://api.linear.app/graphql';
@@ -188,6 +191,91 @@ export async function createReply(
   return noteCommentOf(comment);
 }
 
+const ISSUE_STATE_QUERY = `
+  query FruitbackIssueState($id: String!) {
+    issue(id: $id) { id state { id name type } }
+  }
+`;
+
+type IssueStateResult = { issue: { id: string; state: { id: string; name: string; type: string } | null } | null };
+
+const DELETE_COMMENT_MUTATION = `
+  mutation FruitbackDeleteComment($id: String!) {
+    commentDelete(id: $id) { success }
+  }
+`;
+
+type DeleteCommentResult = { commentDelete: { success: boolean } };
+
+const UPDATE_COMMENT_MUTATION = `
+  mutation FruitbackUpdateComment($id: String!, $input: CommentUpdateInput!) {
+    commentUpdate(id: $id, input: $input) { success }
+  }
+`;
+
+type UpdateCommentResult = { commentUpdate: { success: boolean } };
+
+/**
+ * Takes the text out of a comment of an edit that must not count (FRU-605): deleted, or else written
+ * again with no text, so that no read takes it after a reopen (round 6 of #866). `false`: Linear
+ * refused both, and the comment holds the text still.
+ */
+async function retractEdit(config: LinearConfig, id: string, bare: string): Promise<boolean> {
+  const deleted = await graphql<DeleteCommentResult>(config, DELETE_COMMENT_MUTATION, { id }).catch(() => undefined);
+  if (deleted?.commentDelete.success === true) return true;
+  const updated = await graphql<UpdateCommentResult>(config, UPDATE_COMMENT_MUTATION, {
+    id,
+    input: { body: bare },
+  }).catch(() => undefined);
+
+  return updated?.commentUpdate.success === true;
+}
+
+/**
+ * The new text of a note by its author (FRU-605): a comment « Edited the note » with the new text in
+ * it. The description of the issue is the team's, which they may have changed, and is never written
+ * again. A read takes the text from the comment (`withEditedText`).
+ *
+ * Linear has no lock, so the stage is read again **after** the comment (review of #866). An issue
+ * done or canceled by then had its move before that read: the comment is deleted, and the answer is
+ * `not-open`. A move after that read comes after the comment too, and the read of the note keeps it,
+ * as an edit of before (`completedAt`). So no edit that crossed a move stays, reopened or not.
+ */
+export async function createEdit(
+  config: LinearConfig,
+  issueId: string,
+  edit: NewEdit,
+  locale?: string,
+  stages: StageExceptions = {},
+): Promise<{ note: Note; comment: NoteComment } | 'not-open'> {
+  const created = await graphql<CreateCommentResult>(config, CREATE_COMMENT_MUTATION, {
+    input: { issueId, body: editText(edit, locale, true) },
+  });
+  const comment = created.commentCreate.comment;
+  if (!created.commentCreate.success || comment === null) throw new StoreError('Linear refused the edit');
+  let open: boolean;
+  try {
+    const now = await graphql<IssueStateResult>(config, ISSUE_STATE_QUERY, { id: issueId });
+    if (now.issue === null) throw new StoreError('Linear lost the issue after the edit');
+    open = EDITABLE_STAGES.has(stageOf(now.issue.state, stages));
+  } catch (error) {
+    // The stage is not known: the comment goes, as far as Linear lets it, and the author is told the
+    // edit did not go (`502`). Kept, it would be an edit nobody answered for (round 5 of #866).
+    await retractEdit(config, comment.id, editText(edit, locale));
+    throw error instanceof StoreError ? error : new StoreError('Linear did not say the stage after the edit');
+  }
+  if (!open) {
+    // Deleted, or written again with no text: a reopen never makes it the text (round 6 of #866).
+    if (!(await retractEdit(config, comment.id, editText(edit, locale)))) {
+      throw new StoreError('Linear kept an edit of a note done');
+    }
+
+    return 'not-open';
+  }
+
+  return { note: { ...edit.note, text: edit.text }, comment: noteCommentOf(comment) };
+}
+
 /**
  * The states of the team of an issue, to reopen it (FRU-294). The team is the issue's own: the read
  * that found the note asked for the team of the client, so this is that team.
@@ -265,6 +353,73 @@ export async function createCheck(
     input: { stateId: state.id },
   });
   if (!moved.issueUpdate.success) throw new StoreError('Linear refused to reopen the issue');
+
+  return { comment: noteCommentOf(comment), stage: stageOf(moved.issueUpdate.issue?.state ?? state, stages) };
+}
+
+/** The state a withdrawn note goes to (FRU-605): the first of type `canceled` of the board. */
+export function withdrawStateOf(states: readonly WorkflowStateNode[]): WorkflowStateNode | undefined {
+  return states.filter((state) => state.type === 'canceled').sort((a, b) => a.position - b.position)[0];
+}
+
+/**
+ * A withdrawal of its author (FRU-605): the state it goes to is read first (`withdrawStateOf`), and a
+ * team with none fails with nothing written. Then the reply, then the move. A move that fails takes
+ * the reply back, as far as Linear lets it: a new try does not pile replies up (review of #870).
+ * Nothing of the note is deleted.
+ *
+ * As for an edit, the stage is read again after the reply: an issue the team marked done or closed
+ * meanwhile keeps its state, the reply is deleted, and the answer is `not-open`.
+ */
+export async function createWithdrawal(
+  config: LinearConfig,
+  issueId: string,
+  withdrawal: NewWithdrawal,
+  locale: string | undefined,
+  stages: StageExceptions = {},
+): Promise<{ comment: NoteComment; stage: NoteStage } | 'not-open'> {
+  // The state it goes to, before anything is written: a team with none fails with nothing written,
+  // and a new try does not add a reply each time (review of #870).
+  const found = await graphql<IssueStatesResult>(config, ISSUE_STATES_QUERY, { id: issueId });
+  if (found.issue === null) throw new StoreError('Linear did not find the issue to cancel');
+  const state = withdrawStateOf(found.issue.team.states.nodes);
+  if (state === undefined) throw new StoreError('The team of this issue has no canceled state');
+  const created = await graphql<CreateCommentResult>(config, CREATE_COMMENT_MUTATION, {
+    input: { issueId, body: withdrawText(withdrawal, locale) },
+  });
+  const comment = created.commentCreate.comment;
+  if (!created.commentCreate.success || comment === null) throw new StoreError('Linear refused the reply');
+  /** The reply goes when the issue does not move: as far as Linear lets it, and the error is the move's. */
+  const takeBack = () =>
+    graphql<DeleteCommentResult>(config, DELETE_COMMENT_MUTATION, { id: comment.id }).catch(() => undefined);
+  let open: boolean;
+  try {
+    const now = await graphql<IssueStateResult>(config, ISSUE_STATE_QUERY, { id: issueId });
+    if (now.issue === null) throw new StoreError('Linear lost the issue after the reply');
+    open = EDITABLE_STAGES.has(stageOf(now.issue.state, stages));
+  } catch (error) {
+    await takeBack();
+    throw error instanceof StoreError ? error : new StoreError('Linear did not say the stage after the reply');
+  }
+  if (!open) {
+    const deleted = await takeBack();
+    if (deleted?.commentDelete.success !== true) {
+      throw new StoreError('Linear kept the reply of a withdrawal of a note done');
+    }
+
+    return 'not-open';
+  }
+  let moved: ReopenIssueResult;
+  try {
+    moved = await graphql<ReopenIssueResult>(config, REOPEN_ISSUE_MUTATION, {
+      id: issueId,
+      input: { stateId: state.id },
+    });
+    if (!moved.issueUpdate.success) throw new StoreError('Linear refused to cancel the issue');
+  } catch (error) {
+    await takeBack();
+    throw error instanceof StoreError ? error : new StoreError('Linear did not cancel the issue');
+  }
 
   return { comment: noteCommentOf(comment), stage: stageOf(moved.issueUpdate.issue?.state ?? state, stages) };
 }
@@ -591,6 +746,8 @@ const ISSUES_QUERY = `
         url
         title
         updatedAt
+        completedAt
+        canceledAt
         description
         state { id name type }
         comments(first: $comments) {
@@ -611,6 +768,12 @@ export type IssueNode = {
   url: string;
   title: string;
   updatedAt: string;
+  /**
+   * When the issue was marked done, or canceled (FRU-605): an edit of its author written after it is
+   * not the text of the note. Absent from the in-memory Linear, and from a read of before.
+   */
+  completedAt?: string | null;
+  canceledAt?: string | null;
   description: string | null;
   /** `id` is what a connector's exceptions name (FRU-102). The in-memory Linear has none. */
   state: { id?: string; name: string; type: string } | null;
@@ -855,9 +1018,22 @@ export function toNoteIssue(
 
   // Validated against the shared contract rather than trusted: this is the exact shape the widget
   // parses on the other side, and a field Linear stopped returning must not reach it as `undefined`.
-  const result = noteIssueSchema.safeParse(candidate);
+  // FRU-605: the text of the newest edit of its author, written before the issue was done or canceled.
+  // An edit that crossed a move to done (a tracker has no lock) is a reply, not the text of the note.
+  // A move to done after the re-read of `createEdit` comes after the comment: the edit holds (#b7d262).
+  const result = noteIssueSchema.safeParse(withEditedText(candidate, closedAtOf(node)));
 
   return result.success ? result.data : null;
+}
+
+/**
+ * When the issue left the open stages (FRU-605): `completedAt` or `canceledAt`, the later of the two
+ * when Linear keeps both (round 6 of #866). `undefined` for an issue that is open.
+ */
+export function closedAtOf(node: Pick<IssueNode, 'completedAt' | 'canceledAt'>): string | undefined {
+  const dates = [node.completedAt, node.canceledAt].filter((each): each is string => typeof each === 'string');
+
+  return dates.sort((a, b) => Date.parse(a) - Date.parse(b)).at(-1);
 }
 
 /** The files that Fruitback sent to this issue, by their name and the address Linear gave. */
@@ -1267,6 +1443,12 @@ export function createLinearStore(
       })),
     reply: (target, reply, _client, policy) => createReply(config, target.issue, reply, policy.locale),
     check: (target, check, _client, policy) => createCheck(config, target.issue, check, policy.locale, stages),
+    // FRU-605: a comment with the new text; the description stays the team's.
+    editsInReplies: true,
+    edit: (target, edit, _client, policy) => createEdit(config, target.issue, edit, policy.locale, stages),
+    // FRU-605: a reply, then the first canceled state of the team.
+    withdraw: (target, withdrawal, _client, policy) =>
+      createWithdrawal(config, target.issue, withdrawal, policy.locale, stages),
   };
 }
 

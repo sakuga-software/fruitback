@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test';
+import { type Page, expect } from '@playwright/test';
 
 /**
  * Waits until the animations and transitions of the page that will end have ended. axe measures the
@@ -21,4 +21,15 @@ export async function settled(surface: Page): Promise<void> {
         .map((animation) => animation.finished.catch(() => undefined)),
     ),
   );
+}
+
+/**
+ * Waits until the panel of a source has unfolded (FRU-563). The panel grows in 220 ms, and its body
+ * is clipped until `data-settled`. The boxes of its controls are in their last place from the first
+ * frame, so Playwright finds a control visible and stable while the panel still clips it, and its
+ * click can go to what is under it (#878). Boxes measured before the end are not the last ones either.
+ * Call it after the press that opens the panel, before a click in it or a measure of it.
+ */
+export async function unfolded(page: Page): Promise<void> {
+  await expect(page.locator('#source-panel')).toHaveAttribute('data-settled', '');
 }

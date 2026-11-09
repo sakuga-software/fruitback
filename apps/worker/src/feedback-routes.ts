@@ -33,7 +33,9 @@ import {
   StoreError,
   takesAttachments,
   takesChecks,
+  EDITABLE_STAGES,
   takesEdits,
+  takesWithdrawals,
   takesReplies,
 } from './store.ts';
 import { attachmentStoreFor } from './worker-stores.ts';
@@ -121,9 +123,11 @@ export async function getFeedback(
     // FRU-294: the notes of this reader, and the confirmation of each note done. Never in the cached
     // answer: `mine` is the reader's.
     const own = await notesOfReader(request, config, route.policy, route.client?.workspace, clientId, all, noteIndex);
-    // FRU-475: the reader may edit a note of theirs that is still `new`, where the worker keeps it,
-    // on a site with one place. The route decides again; this only says where to offer it.
-    const editsHere = own.size > 0 && places.length < 2 && (await takesEdits(store, route.client));
+    // FRU-475: the reader may edit a note of theirs that is still open (FRU-605), on a site with one
+    // place whose store takes an edit. The route decides again; this only says where to offer it.
+    const editsHere = own.size > 0 && places.length < 2 && (await takesEdits(store, route.client, route.policy));
+    // FRU-605: and withdraw it, where the store takes a withdrawal. The route decides again.
+    const withdrawalsHere = own.size > 0 && places.length < 2 && (await takesWithdrawals(store, route.client));
     // FRU-618: the notes an agent works on, and for a member of the team the address of its session.
     const agents = await agentsOf(
       request,
@@ -145,7 +149,8 @@ export async function getFeedback(
         ...(agent === undefined ? {} : { agent: agents.team && HTTPS.test(agent) ? { url: agent } : {} }),
         ...(checked === undefined ? {} : { checked }),
         ...(mine ? { mine: true as const } : {}),
-        ...(mine && editsHere && issue.stage === 'new' ? { editable: true as const } : {}),
+        ...(mine && editsHere && EDITABLE_STAGES.has(issue.stage) ? { editable: true as const } : {}),
+        ...(mine && withdrawalsHere && EDITABLE_STAGES.has(issue.stage) ? { withdrawable: true as const } : {}),
       };
 
       return hidden ? withoutTrackerStatus(withoutTracker(marked, issue.note.id)) : marked;

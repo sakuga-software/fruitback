@@ -1699,6 +1699,48 @@ what it reaches in its own guide; what they share is here.
 - ClickUp has no route to revoke a token for an app: « Disconnect » removes the connector, and the app
   is removed in ClickUp, or the personal token regenerated, to end the token at once.
 
+### Asana
+
+- Asana connects by consent (OAuth, with PKCE) with an app that the operator makes once
+  (`FRUITBACK_ASANA_OAUTH`, « Full permissions »), or by a personal access token where the server has
+  no app. Each is sealed with `FRUITBACK_SECRETS_KEY`, and no route answers it.
+- A token of OAuth lasts an hour and is refreshed with the refresh token of the consent, one refresh
+  at a time for a connector. « Disconnect » revokes the refresh token at Asana, and its access tokens
+  with it. A personal access token stays valid until its person revokes it.
+- Each token acts with the rights of its person in Asana. A personal access token is asked of Asana
+  before it is kept: a token Asana refuses is never stored.
+- The worker calls `app.asana.com` only.
+- A note lands in the project of its destination, and anybody who can see that project in Asana reads
+  it: its text, its page, and the name and the address of its author when they gave them. Its tag is
+  a hash of its site and its page, readable by the members of the Asana workspace.
+
+### GitLab
+
+The token reaches what its role reaches; the guide asks for a project access
+token, Reporter, scope `api`. The address of a self-managed GitLab is the workspace's word: it is
+https, with no name and password in it, and an IP address written in it must be public
+(`parseGitlabUrl`). Every call then goes through `createGuardedFetch` (`guarded-fetch.ts`), which
+checks the address the socket connects to against the list of the REST connector, follows no
+redirect, asks for no compression, and reads 8 MB of an answer at most, unpacked included: a body that a
+proxy compressed anyway stops unpacking past that limit. So a name that resolves to an internal network is
+refused at each call, on the Cloud and on an instance that a team runs: a GitLab that only an
+internal network reaches cannot be connected. The files of a note are uploaded to the project, and
+GitLab serves them with the rights of the project.
+
+### Slack
+
+- Slack connects by an Incoming Webhook that the team makes in its own Slack app: one URL that posts
+  in one channel. The URL is the secret; it is sealed like a token and answered by no route. Only an
+  address of `https://hooks.slack.com/services/` is taken (`readWebhook`), so the worker posts to
+  Slack and nowhere else.
+- Slack keeps no note. The note stays in the worker, and a delivery posts a copy: its text, its page,
+  its element, the name its reporter gave, and an address of one hour for each of its files, which
+  anybody who reads the channel can open in that hour.
+- By default only a verified note is posted: `reporter.verified`, which the worker sets and a browser
+  cannot (`stripClaimedVerification`). « Every note » posts what any visitor writes on a public site.
+- A webhook that Slack says is gone (`no_service`, `invalid_token`…) or a channel it refuses is given
+  up at once, and the connector says « Needs attention ».
+
 ### The GitHub App, installed on a workspace (FRU-360)
 
 Where the worker has the App of the connectors (`FRUITBACK_GITHUB_CONNECTOR`), an owner or an admin

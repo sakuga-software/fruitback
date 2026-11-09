@@ -11,8 +11,17 @@ import { z } from 'zod';
 import type { ClientPolicy } from './clients.ts';
 import { ATTACHMENT_SUBTITLE, type IssueNode, stageForLinearState, toNoteIssue } from './linear.ts';
 import type { OutgoingFile } from './attachments.ts';
-import { checkText, replyText } from './reply-text.ts';
-import type { CheckAnswer, CreatedWithFiles, NewCheck, NewReply, NoteIssueQuery, NoteStore } from './store.ts';
+import { checkText, editText, replyText, withdrawText } from './reply-text.ts';
+import type {
+  CheckAnswer,
+  CreatedWithFiles,
+  NewCheck,
+  NewEdit,
+  NewReply,
+  NewWithdrawal,
+  NoteIssueQuery,
+  NoteStore,
+} from './store.ts';
 import { type StoreSpec, defineStore } from './store-config.ts';
 
 /**
@@ -156,6 +165,56 @@ async function createReply(
 }
 
 /**
+ * The new text of a note by its author (FRU-605), as Linear keeps it: a reply with the text in it.
+ * The description stays as it was sent.
+ */
+async function createEdit(
+  id: string,
+  edit: NewEdit,
+  clientId: string | undefined,
+  locale?: string,
+): Promise<{ note: Note; comment: NoteComment } | undefined> {
+  const issue = issues.find((each) => each.id === id && (clientId === undefined || each.clientId === clientId));
+  if (issue === undefined) return undefined;
+  const comment = {
+    id: `dev_reply_${issue.id}_${issue.comments?.nodes.length ?? 0}`,
+    body: editText(edit, locale, true),
+    createdAt: new Date().toISOString(),
+    user: { name: 'Fruitback' },
+  };
+  issue.comments = { nodes: [comment, ...(issue.comments?.nodes ?? [])] };
+
+  return {
+    note: { ...edit.note, text: edit.text },
+    comment: { id: comment.id, body: comment.body, createdAt: comment.createdAt, author: comment.user.name },
+  };
+}
+
+/** A withdrawal of its author (FRU-605), as Linear keeps it: a reply, then the issue canceled. */
+async function createWithdrawal(
+  id: string,
+  withdrawal: NewWithdrawal,
+  clientId: string | undefined,
+  locale?: string,
+): Promise<{ comment: NoteComment; stage: 'closed' } | undefined> {
+  const issue = issues.find((each) => each.id === id && (clientId === undefined || each.clientId === clientId));
+  if (issue === undefined) return undefined;
+  const comment = {
+    id: `dev_reply_${issue.id}_${issue.comments?.nodes.length ?? 0}`,
+    body: withdrawText(withdrawal, locale),
+    createdAt: new Date().toISOString(),
+    user: { name: 'Fruitback' },
+  };
+  issue.comments = { nodes: [comment, ...(issue.comments?.nodes ?? [])] };
+  issue.state = { name: 'Canceled', type: 'canceled' };
+
+  return {
+    comment: { id: comment.id, body: comment.body, createdAt: comment.createdAt, author: comment.user.name },
+    stage: 'closed',
+  };
+}
+
+/**
  * A verdict on an issue of this client (FRU-294). « Still wrong » puts the issue back in Backlog
  * first, as the real store picks the first state of the team that is not started.
  */
@@ -257,6 +316,11 @@ export function createMemoryStore(): NoteStore {
     findForPage: (query, _client, policy) => fetchNoteIssues(query, policy),
     reply: (target, reply, _client, policy) => createReply(target.issue, reply, target.clientId, policy.locale),
     check: (target, check, _client, policy) => createCheck(target.issue, check, target.clientId, policy.locale),
+    // FRU-605: as Linear, a reply with the new text; the description stays as it was sent.
+    editsInReplies: true,
+    edit: (target, edit, _client, policy) => createEdit(target.issue, edit, target.clientId, policy.locale),
+    withdraw: (target, withdrawal, _client, policy) =>
+      createWithdrawal(target.issue, withdrawal, target.clientId, policy.locale),
   };
 }
 

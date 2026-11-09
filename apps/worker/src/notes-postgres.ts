@@ -16,10 +16,11 @@ import {
   toNoteIssue,
   widgetIdOf,
 } from './note-rows.ts';
-import { checkText, editText, replyText } from './reply-text.ts';
+import { checkText, editText, replyText, withdrawText } from './reply-text.ts';
 import {
   type BatchAnswer,
   type CreatedIssue,
+  EDITABLE_STAGES,
   type ForgetSelector,
   type NoteIssueQuery,
   type NoteStore,
@@ -262,9 +263,9 @@ export function createPostgresNoteStore(database: Database): NoteStore {
             : { stage: stageOf(note.stage), was: stageOf(before.stage), page: note.page };
         }),
       ),
-    // FRU-475: the text of a note that is still `new`, and the reply that says it was edited, in one
+    // FRU-475: the text of a note that is still open, and the reply that says it was edited, in one
     // transaction. The row is taken for update: a status or a verdict written meanwhile waits, and
-    // the stage read here is the one the edit is decided on.
+    // the stage read here is the one the edit is decided on. Open since FRU-605: new, todo, progress.
     edit: (target, edit, _client, policy) =>
       through('keep the edit', ({ transaction }) =>
         transaction(async (tx) => {
@@ -281,7 +282,7 @@ export function createPostgresNoteStore(database: Database): NoteStore {
             )
             .for('update');
           if (row === undefined) return undefined;
-          if (stageOf(row.stage) !== DEFAULT_NOTE_STAGE) return 'not-new' as const;
+          if (!EDITABLE_STAGES.has(stageOf(row.stage))) return 'not-open' as const;
           // The note as it is kept, with its text changed and nothing else: a row that does not parse
           // is no note this store can answer for.
           const parsed = noteSchema.safeParse(readJson(row.payload));
@@ -301,6 +302,39 @@ export function createPostgresNoteStore(database: Database): NoteStore {
           return {
             note,
             comment: { id: String(comment.id), body: comment.body, createdAt: new Date(now).toISOString() },
+          };
+        }),
+      ),
+    // FRU-605: the author withdraws an open note. It goes to the built-in status of `closed`, with the
+    // reply that says so, in one transaction, under the lock of the row. Nothing is deleted.
+    withdraw: (target, withdrawal, _client, policy) =>
+      through('keep the withdrawal', ({ transaction }) =>
+        transaction(async (tx) => {
+          const id = Number(target.issue);
+          if (!Number.isSafeInteger(id)) return undefined;
+          const [row] = await tx
+            .select({ stage: notes.stage })
+            .from(notes)
+            .where(
+              and(
+                eq(notes.id, id),
+                target.clientId === undefined ? isNull(notes.client_id) : eq(notes.client_id, target.clientId),
+              ),
+            )
+            .for('update');
+          if (row === undefined) return undefined;
+          if (!EDITABLE_STAGES.has(stageOf(row.stage))) return 'not-open' as const;
+          const now = Date.now();
+          await tx.update(notes).set({ stage: 'closed', status_key: null, updated_at: now }).where(eq(notes.id, id));
+          const [comment] = await tx
+            .insert(note_comments)
+            .values({ note_id: id, author: null, body: withdrawText(withdrawal, policy.locale), created_at: now })
+            .returning({ id: note_comments.id, body: note_comments.body });
+          if (comment === undefined) throw new StoreError('PostgreSQL kept a withdrawal and answered no number for it');
+
+          return {
+            comment: { id: String(comment.id), body: comment.body, createdAt: new Date(now).toISOString() },
+            stage: 'closed' as const,
           };
         }),
       ),

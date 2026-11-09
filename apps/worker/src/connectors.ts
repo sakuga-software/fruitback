@@ -1,22 +1,26 @@
-import { NOTE_STAGES } from '@fruitback/shared';
+import { NOTE_STAGES, type Note } from '@fruitback/shared';
 import type { AccountStore, ConnectorKind, ConnectorSettings } from './accounts.ts';
 import { createAll } from './batch.ts';
 import type { ClientConfig } from './clients.ts';
 import { type GithubApp, createGithubConnectorStore, openInstallation } from './github-connector.ts';
 import { type StageExceptions, createLinearStore } from './linear.ts';
 import { deliveryBody } from './rest-connector.ts';
+import { type NoteEvent, noteEventBody } from './note-events.ts';
 import { type LinearOAuth, linearAuthorization } from './linear-oauth.ts';
 import { pluginOf } from './trackers/index.ts';
 import { type PluginKind, isPluginKind } from './trackers/kinds.ts';
 import type { TrackerApps } from './trackers/oauth.ts';
-import { type Http, trackerAccess } from './trackers/plugin.ts';
+import { type Http, readTrackerCredential, trackerAccess } from './trackers/plugin.ts';
+import { open } from './secrets.ts';
 import {
   type NoteStore,
+  type ReplyTarget,
   StoreError,
   findNote,
   takesAttachments,
   takesChecks,
   takesEdits,
+  takesWithdrawals,
   takesStatuses,
   takesReplies,
 } from './store.ts';
@@ -176,6 +180,8 @@ function withSettings(store: NoteStore, settings: ConnectorSettings): NoteStore 
         }),
     findForPage: (query, client, policy) => store.findForPage(query, client, quiet(policy)),
     findNote: (lookup, client, policy) => findNote(store, lookup, client, quiet(policy)),
+    // FRU-605: a tracker keeps the new text of an edit in a reply, which nobody reads here.
+    editsFor: (client, policy) => takesEdits(store, client, quiet(policy)),
   };
 }
 
@@ -191,20 +197,91 @@ export type ConnectorStores = (connector: string, workspace: string | undefined,
  * note exists, and a failure here would make the widget send it again and keep it twice. The cost
  * is a note that is kept and never sent, which is logged.
  */
-function receivingStore(own: NoteStore, accounts: AccountStore, connector: string, now: () => number): NoteStore {
+function receivingStore(
+  own: NoteStore,
+  accounts: AccountStore,
+  connector: string,
+  now: () => number,
+  /** FRU-624: whether this note is sent. A note it does not take is kept, and goes nowhere else. */
+  takes: (note: Note) => boolean = () => true,
+): NoteStore {
   // An address only receives: it sends no reply back, so a site of it takes none (FRU-257), and no
-  // verdict (FRU-294). No edit either (FRU-475): the address has the note as it was sent, and an
-  // edit here would make the two say different things.
-  const { reply: _reply, check: _check, edit: _edit, editsFor: _editsFor, ...noReply } = own;
+  // verdict (FRU-294). An edit and a withdrawal are kept here, and the address is told by
+  // `note.edited` and `note.withdrawn` (FRU-605).
+  const { reply: _reply, check: _check, ...noReply } = own;
+  /**
+   * Queues what the author did to a note already sent (FRU-605), ids only. The site is the one the
+   * route found the note in; with none, the id of the note could not be read back by `/mcp`, and
+   * nothing is queued. As for a note, the change is kept first, and a queue that refuses the row is
+   * logged: the author is answered, and a failure would make them do it twice.
+   */
+  const tell = async (
+    event: NoteEvent,
+    target: ReplyTarget,
+    of: { note: Note; identifier: string },
+    client: ClientConfig | undefined,
+  ): Promise<void> => {
+    const site = target.clientId ?? of.note.client?.id;
+    if (site === undefined || site === '') {
+      console.error(`[fruitback] ${event} was kept with no site, and not queued`, of.identifier);
+
+      return;
+    }
+    try {
+      await accounts.enqueueDelivery(
+        connector,
+        noteEventBody(event, {
+          workspace: client?.workspace ?? '',
+          site,
+          ...(client?.origins?.[0] === undefined ? {} : { origin: client.origins[0] }),
+          identifier: of.identifier,
+          note: of.note.id,
+          at: now(),
+        }),
+        now(),
+        event,
+      );
+    } catch (error) {
+      console.error(`[fruitback] ${event} was kept and not queued`, of.identifier, error);
+    }
+  };
 
   return {
     ...noReply,
+    ...(own.edit === undefined
+      ? {}
+      : {
+          async edit(target, edit, client, policy) {
+            const answer = await (own.edit as NonNullable<NoteStore['edit']>)(target, edit, client, policy);
+            if (typeof answer === 'object') await tell('note.edited', target, edit, client);
+
+            return answer;
+          },
+        }),
+    ...(own.withdraw === undefined
+      ? {}
+      : {
+          async withdraw(target, withdrawal, client, policy) {
+            const answer = await (own.withdraw as NonNullable<NoteStore['withdraw']>)(
+              target,
+              withdrawal,
+              client,
+              policy,
+            );
+            if (typeof answer === 'object') await tell('note.withdrawn', target, withdrawal, client);
+
+            return answer;
+          },
+        }),
     // FRU-331: the files of a note travel with its delivery, by the addresses of short life that each
     // attempt signs (`deliverDue`). The worker's own store takes none: the files never stay with it.
     attachments: true,
     async create(note, client, policy, files = []) {
       const created = await own.create(note, client, policy);
       const ids = files.map((file) => file.id);
+      // The worker's own store keeps no file: a note that is not sent loses its files now.
+      if (!takes(note))
+        return files.length === 0 ? created : { ...created, files: { sent: [], lost: ids, waiting: [] } };
       try {
         await accounts.enqueueDelivery(
           connector,
@@ -283,9 +360,46 @@ export function createConnectorStores(
     const kept = await accounts.sealedKey(connector);
     if (kept === undefined || kept.workspaceId !== workspace)
       throw new StoreError('The connector of this site is gone');
+    // FRU-624: a plugin that receives (Slack) keeps the note in the worker's own store, as an address
+    // does. Its credential is opened for its setting only (which notes go); the key is for the loop.
+    const receiver = isPluginKind(kept.kind) ? pluginOf(kept.kind)?.receiver : undefined;
+    let takes: ((note: Note) => boolean) | undefined;
+    if (receiver !== undefined) {
+      // The setting is read from the credential, opened here with the key of the server. It is never
+      // refreshed here: a receiver connects by a token.
+      const plain = secretsKey === undefined ? undefined : open(kept.sealed, secretsKey);
+      const credential = plain === undefined ? undefined : readTrackerCredential(plain);
+      // WARNING: the note is kept whatever its credential says (review of #871). A setting that cannot
+      // be read is the default of the plugin: for Slack, verified notes only, so a note of a visitor
+      // is never queued for a channel that may have said « verified only ».
+      takes = (note) => receiver.takes(note, credential ?? { via: 'token', token: '', extra: {} });
+      // Only a credential that this key really does not open makes the connector need attention: it
+      // must be connected again. A server with no key says nothing here, as a REST address does not.
+      // Written once: a connector that already says it is not written again at each note (review of #871).
+      if (secretsKey !== undefined && credential === undefined) {
+        const said = (await accounts.connectors(workspace).catch(() => [])).find((each) => each.id === connector);
+        if (said?.attention?.reason !== 'key-refused') {
+          console.error('[fruitback] the credential of a connector that receives does not open', connector);
+          await accounts.noteConnector(connector, 'key-refused', now()).catch((failure: unknown) => {
+            console.error('[fruitback] the state of a connector was not kept', connector, failure);
+          });
+        }
+      }
+    }
     // Nothing is opened to keep a note and queue it: the key is for the loop that sends.
-    if (kept.kind === 'rest') {
-      const receiving = receivingStore(own, accounts, connector, now);
+    if (kept.kind === 'rest' || takes !== undefined) {
+      const told = receivingStore(own, accounts, connector, now, takes);
+      // FRU-624: a plugin that receives (Slack) posted a copy of the note, and takes no edit and no
+      // withdrawal of it: `note.edited` and `note.withdrawn` carry ids only, which a channel cannot
+      // read, and the copy stays in the channel. The note keeps its text.
+      const {
+        edit: _edit,
+        editsFor: _editsFor,
+        withdraw: _withdraw,
+        withdrawalsFor: _withdrawalsFor,
+        ...noEdit
+      } = told;
+      const receiving: NoteStore = takes === undefined ? told : noEdit;
       if (filesReachable) return receiving;
       // Takes no file, and never queues one: the route refuses files before it (`409`), and a call
       // that would still bring some sends the note alone, with no file said to wait (raised in review).
@@ -336,8 +450,10 @@ export function createRoutedStore(base: NoteStore, connectors: ConnectorStores):
     checksFor: async (client) => takesChecks(await pick(client), client),
     // FRU-367: only the worker's own store sets the status of a note; a tracker keeps its own.
     statusesFor: async (client) => takesStatuses(await pick(client), client),
-    // FRU-475: only the worker's own store edits a note; a tracker and an address keep what they got.
-    editsFor: async (client) => takesEdits(await pick(client), client),
+    // FRU-475, FRU-605: the worker's own store, an address (with `note.edited`) and Linear (a reply).
+    editsFor: async (client, policy) => takesEdits(await pick(client), client, policy),
+    // FRU-605: the worker's own store, an address (with `note.withdrawn`) and Linear (canceled).
+    withdrawalsFor: async (client) => takesWithdrawals(await pick(client), client),
     // FRU-368: the states of the tracker of the client, for the statuses of its site.
     trackerStatesFor: async (client) => {
       const store = await pick(client);
@@ -367,6 +483,12 @@ export function createRoutedStore(base: NoteStore, connectors: ConnectorStores):
       if (store.edit === undefined) throw new StoreError('The store of this site takes no edit');
 
       return store.edit(target, edit, client, policy);
+    },
+    async withdraw(target, withdrawal, client, policy) {
+      const store = await pick(client);
+      if (store.withdraw === undefined) throw new StoreError('The store of this site takes no withdrawal');
+
+      return store.withdraw(target, withdrawal, client, policy);
     },
   };
 }
