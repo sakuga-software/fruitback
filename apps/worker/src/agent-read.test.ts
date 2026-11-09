@@ -137,6 +137,21 @@ describe('the notes an agent works on, in the read of a page (FRU-618)', () => {
     assert.equal(identifiers.length, 2);
   });
 
+  it('keeps the line of every note when a session of the site holds identifiers that are not JSON (review of #887)', async () => {
+    const { world, store, site, tokens } = await aSite();
+    // A row written by hand, or by a worker of before: its text is no JSON array.
+    await rowsOf(
+      world.database,
+      `INSERT INTO agent_sessions (id, connector_id, site_id, identifiers, session_url, started_at)
+       SELECT 'dlv_broken', connector_id, site_id, 'not json', 'https://claude.ai/code/session_broken', started_at + 1
+       FROM agent_sessions LIMIT 1`,
+    );
+
+    const issues = await read(world, site, tokens.alice, store);
+    assert.deepEqual(agentOf(issues, 'ag_1'), { url: SESSION });
+    assert.equal(agentOf(issues, 'ag_2'), undefined);
+  });
+
   it('gives no address that is not https, and keeps the line', async () => {
     const { world, store, site, tokens } = await aSite('javascript:alert(1)');
 

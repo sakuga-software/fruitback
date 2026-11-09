@@ -2258,8 +2258,9 @@ export function createPostgresAccountStore(database: Database): AccountStore {
 
     async agentSessionsOfSite(workspace, site, identifiers) {
       if (identifiers.length === 0) return [];
-      // `identifiers` is a JSON array in a text column: the sessions that name one of these notes.
-      const names = sql`${agent_sessions.identifiers}::jsonb ?| ${sql.param([...new Set(identifiers)])}::text[]`;
+      // `identifiers` is a JSON array in a text column: the sessions that name one of these notes. A
+      // text that is no JSON names none, and the cast of the others still runs (review of #887).
+      const names = sql`(CASE WHEN pg_input_is_valid(${agent_sessions.identifiers}, 'jsonb') THEN ${agent_sessions.identifiers}::jsonb ?| ${sql.param([...new Set(identifiers)])}::text[] ELSE false END)`;
 
       return sessionsWhere(and(eq(connectors.workspace_id, workspace), eq(agent_sessions.site_id, site), names), 500);
     },
