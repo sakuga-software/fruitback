@@ -133,6 +133,9 @@ jobs:
           tags: fruitback-worker:candidate
           cache-from: type=gha,scope=release-image-${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=release-image-${{ matrix.arch }}
+          # The `apk upgrade` of the runtime stage runs at each build. From the cache, it keeps the
+          # packages of the day the layer was made, and the scan refuses a fix that Alpine shipped since.
+          no-cache-filters: runtime
 
       - name: It serves, and it still refuses the in-memory store
         run: |
@@ -370,6 +373,9 @@ jobs:
           tags: fruitback-console:candidate
           cache-from: type=gha,scope=release-console-${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=release-console-${{ matrix.arch }}
+          # The `apk upgrade` of the runtime stage runs at each build. From the cache, it keeps the
+          # packages of the day the layer was made, and the scan refuses a fix that Alpine shipped since.
+          no-cache-filters: runtime
 
       - name: It serves the worker it is given, as a user that is not root, and refuses to start with none
         run: |
