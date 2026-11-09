@@ -268,8 +268,8 @@ export const ENGLISH = {
   'edit.failed': 'Not saved. Your text is still here. Try again.',
   'edit.failedWait': 'Too many requests just now. Your text is still here. Save it again in a minute.',
   'edit.failedSignedOut': 'Your session has ended. Your text is still here. Sign in again, then save it.',
-  'edit.refused':
-    'This note can no longer be edited: the team has started on it. Your text is still here. Send it as a reply.',
+  // FRU-605: an open note takes an edit; the team marked this one done or closed it meanwhile.
+  'edit.refused': 'This note can no longer be edited: the team marked it done or closed it. Your text is still here.',
   // FRU-605: the menu « ⋯ » of the author, in the head of the thread of an open note.
   'more.open': 'More actions on your note',
   'more.edit': 'Edit the note',

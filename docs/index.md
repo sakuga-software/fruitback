@@ -19,6 +19,7 @@ layout: landing
 | [Translate the widget](translating.md)    | The words a host can replace, and the catalogs the bundle carries.                                          |
 | [Jira Cloud](connectors/jira.md)          | An issue per note in a Jira project, by consent at Atlassian. [En français](connectors/jira.fr.md).         |
 | [ClickUp](connectors/clickup.md)          | A task per note in a ClickUp list, by consent or a personal token. [En français](connectors/clickup.fr.md). |
+| [Asana](connectors/asana.md)              | A task per note in an Asana project, by consent or a personal token. [En français](connectors/asana.fr.md). |
 | [REST connector](rest-connector.md)       | The request the Cloud posts for each note, its signature, and what happens when you do not answer.          |
 | [Connect an AI agent](agents.md)          | Claude Code or a cloud agent reads, replies and sets a status with a key, and what it cannot stop.          |
 | [What the widget collects](privacy.md)    | Every field a note carries, where it goes, how long it stays, and how to delete it.                         |

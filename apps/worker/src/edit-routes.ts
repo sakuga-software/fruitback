@@ -8,9 +8,9 @@ import { canonicalizeRequestedPage, indexed, invalidatePages, routingFailure } f
 import type { NoteIndex } from './notes-index.ts';
 import { indexedAuthorOf } from './reply-routes.ts';
 import type { CallerChecks, RequestContext, Served } from './request-context.ts';
-import { type NoteStore, StoreError, findNote, takesEdits } from './store.ts';
+import { EDITABLE_STAGES, type NoteStore, StoreError, findNote, takesEdits } from './store.ts';
 
-/** `POST /feedback/<id>/text`: the text of a note, edited by the person who left it (FRU-475). */
+/** `POST /feedback/<id>/text`: the text of a note, edited by the person who left it (FRU-475, FRU-605). */
 export const EDIT_PATH = /^\/feedback\/([A-Za-z0-9_-]{1,100})\/text$/;
 
 /**
@@ -23,11 +23,13 @@ export const EDIT_PATH = /^\/feedback\/([A-Za-z0-9_-]{1,100})\/text$/;
  *   in the store as for every write, whose account the index keeps as the author. A role that
  *   manages the sites does not rewrite the words of somebody else. A visitor and a token of a site
  *   are nobody the worker can name: `401`.
- * - **Until when.** While the note is `new`: nobody of the team moved it yet. Read in the store, and
- *   again under the lock of the row when it is written (`409 not-new`).
- * - **Where.** A note that the worker keeps (« Kept in Fruitback »), on a site with one place. A note
- *   of a tracker is the team's issue there, and an address already has the note it was sent: an
- *   edit would make the two say different things (`403 edits-not-taken`). Nothing is sent again.
+ * - **Until when.** While the note is open: `new`, `todo` or `progress` (FRU-605). A note done waits
+ *   for the verdict of its author, and a closed note says nothing more. Read in the store, and again
+ *   under the lock of the row in the worker's own store (`409 not-open`).
+ * - **Where.** On a site with one place: the worker's own store replaces the text. An address keeps
+ *   it the same way, and is told by `note.edited`, ids only. Linear gets a comment with the new text,
+ *   and its description stays the team's; where the replies are hidden, no edit (`403
+ *   edits-not-taken`): a read would show the text of before. GitHub takes no reply, and no edit.
  * - **History.** The text of before is not kept: a person may edit a note to take out what they
  *   should not have written. The reply says who edited it, and when.
  */
@@ -104,8 +106,8 @@ export async function postEdit(
 
     const author = await indexedAuthorOf(context.noteIndex, workspace, clientId, found.note.id);
     if (author === undefined || author !== account) return json(403, { error: 'not-allowed' }, corsHeaders);
-    if (!(await takesEdits(store, target))) return json(403, { error: 'edits-not-taken' }, corsHeaders);
-    if (found.stage !== 'new') return json(409, { error: 'not-new', stage: found.stage }, corsHeaders);
+    if (!(await takesEdits(store, target, route.policy))) return json(403, { error: 'edits-not-taken' }, corsHeaders);
+    if (!EDITABLE_STAGES.has(found.stage)) return json(409, { error: 'not-open', stage: found.stage }, corsHeaders);
 
     const [person, memberships] = await Promise.all([accounts.account(account), accounts.memberships(account)]);
     const membership = memberships.find((each) => each.workspace.id === workspace);
@@ -113,13 +115,18 @@ export async function postEdit(
 
     const answer = await store.edit?.(
       { issue: found.id, clientId },
-      { text, author: { kind: 'member', name: person.name ?? person.email, workspace: membership.workspace.name } },
+      {
+        text,
+        author: { kind: 'member', name: person.name ?? person.email, workspace: membership.workspace.name },
+        note: found.note,
+        identifier: found.identifier,
+      },
       target,
       route.policy,
     );
     if (answer === undefined) return json(404, { error: 'not-found' }, corsHeaders);
-    // Moved by the team between the read above and the write.
-    if (answer === 'not-new') return json(409, { error: 'not-new' }, corsHeaders);
+    // Marked done or closed by the team between the read above and the write.
+    if (answer === 'not-open') return json(409, { error: 'not-open' }, corsHeaders);
     await invalidatePages(kv, [url]);
     // The excerpt of the console and of the extension follows the text (FRU-244).
     await indexed(context.noteIndex, (index) => index.reword(workspace, clientId, found.note.id, answer.note.text));

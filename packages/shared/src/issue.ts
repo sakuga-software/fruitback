@@ -216,8 +216,9 @@ export const noteIssueSchema = z.object({
    */
   mine: z.literal(true).optional(),
   /**
-   * `true` on a note that the reader may edit now (FRU-475): their own (`mine`), still `new`, kept by
-   * the worker on a site with one place. Absent for every other note and reader. Read-envelope field.
+   * `true` on a note that the reader may edit now (FRU-475): their own (`mine`), open (`new`, `todo`,
+   * `progress`, FRU-605), on a site with one place whose store takes an edit. Absent for every other
+   * note and reader. Read-envelope field.
    */
   editable: z.literal(true).optional(),
   /**

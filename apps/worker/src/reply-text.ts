@@ -100,11 +100,59 @@ const EDITED = { en: 'Edited the note', fr: 'A modifié la note' } as const;
  * The reply that an edit of a note writes under it (FRU-475): the line of who wrote it, then the line
  * of the edit. Never the text of before: a person may edit a note to take out what they should not
  * have written.
+ *
+ * `withText`: the new text under it, quoted (FRU-605). A tracker keeps the note as it was sent in its
+ * description, which the team may have changed there, so the new text lives in the reply, and a read
+ * takes it from there (`withEditedText`). The worker's own store replaces the text, and writes none.
  */
-export function editText(edit: NewEdit, locale?: string): string {
+export function editText(edit: Pick<NewEdit, 'text' | 'author'>, locale?: string, withText = false): string {
   const language = locale?.toLowerCase().startsWith('fr') ? 'fr' : 'en';
 
-  return [whoLine(edit.author, locale), EDITED[language]].join('\n');
+  return [whoLine(edit.author, locale), EDITED[language], ...(withText ? ['', ...quoted(edit.text)] : [])].join('\n');
+}
+
+/**
+ * The new text that a reply of an edit holds (FRU-605), or `undefined` for any other comment, and for
+ * an edit of the worker's own store, which holds none.
+ *
+ * WARNING: this reads a text, as `verdictOf` does. A person of the team who writes in the tracker can
+ * write these lines by hand: the tracker is theirs, and they can change the description there too. A
+ * reply of the page cannot: its second line is always empty, and every line it holds is quoted.
+ */
+export function editedTextOf(body: string): string | undefined {
+  const [first = '', second = '', third, ...rest] = body.replace(/\r\n?/gu, '\n').split('\n');
+  if (!WHO_LINE.test(first) || !Object.values(EDITED).includes(second as never)) return undefined;
+  if (third !== '' || rest.length === 0 || !rest.every((line) => line === '>' || line.startsWith('> '))) {
+    return undefined;
+  }
+  const text = rest.map((line) => line.replace(/^> ?/u, '')).join('\n');
+
+  return text.trim() === '' ? undefined : text;
+}
+
+/**
+ * The note with the text of its newest edit (FRU-605), where its replies hold one: the note of a
+ * tracker, whose description keeps the words it was sent with. A note whose replies were not read
+ * keeps the text of its description. `until`: when the issue was done or canceled; an edit written
+ * after it crossed that move, and is not taken.
+ */
+export function withEditedText<T extends { note: { text: string }; comments?: readonly NoteComment[] }>(
+  issue: T,
+  until?: string,
+): T {
+  // Instants, never strings: a tracker may write an offset, or no milliseconds (review of #866).
+  const limit = until === undefined ? undefined : Date.parse(until);
+  let newest: { text: string; at: number } | undefined;
+  for (const comment of issue.comments ?? []) {
+    const text = editedTextOf(comment.body);
+    const at = Date.parse(comment.createdAt);
+    if (text === undefined || Number.isNaN(at) || (limit !== undefined && at > limit)) continue;
+    if (newest === undefined || at >= newest.at) newest = { text, at };
+  }
+
+  return newest === undefined || newest.text === issue.note.text
+    ? issue
+    : { ...issue, note: { ...issue.note, text: newest.text } };
 }
 
 /** The first line that the worker writes, and the name in it. */

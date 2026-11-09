@@ -8,10 +8,12 @@ import {
   linearRoutingFor,
   reopenStateOf,
   stageForLinearState,
+  closedAtOf,
   toNoteIssue,
 } from './linear.ts';
 import { installLinearStub, storedIssueFromNote } from './linear-stub.fixture.ts';
 import { StoreError } from './store.ts';
+import { editText } from './reply-text.ts';
 
 /**
  * These tests moved here from `packages/shared` with the code they cover (FRU-23). The contract
@@ -303,5 +305,256 @@ describe('the files of a note, read back from Linear (FRU-348)', () => {
     ]);
     // Linear is asked for the files of Fruitback only, so the links of the team take no place.
     assert.deepEqual(stub.calls.at(-1)?.variables.attachmentFilter, { subtitle: { eq: ATTACHMENT_SUBTITLE } });
+  });
+});
+
+describe('an edit of the author in Linear (FRU-605)', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('writes one comment with the new text, never touches the issue, and answers the note with it', async () => {
+    const stub = installLinearStub({});
+    const store = createLinearStore({ apiKey: 'lin_api_test', teamId: 'team_1', projectId: undefined });
+    const note = noteFixture({ text: 'The words it was sent with' });
+
+    const answer = await store.edit?.(
+      { issue: 'issue_1', clientId: 'acme' },
+      { text: 'The new words', author: { kind: 'member', name: 'Bob', workspace: 'Acme' }, note, identifier: 'ENG-1' },
+      undefined,
+      { showComments: true, identitySecret: undefined, read: 'public', write: 'public', locale: 'en' },
+    );
+
+    assert.deepEqual(
+      stub.calls.map((call) => call.operation),
+      ['FruitbackCreateComment', 'FruitbackIssueState'],
+    );
+    assert.deepEqual(stub.calls[0]?.variables, {
+      input: {
+        issueId: 'issue_1',
+        body: '**Bob** via Fruitback · member of Acme\nEdited the note\n\n> The new words',
+      },
+    });
+    assert.ok(typeof answer === 'object');
+    assert.equal(answer.note.text, 'The new words');
+    assert.equal(answer.note.id, note.id);
+    assert.equal(store.editsInReplies, true);
+  });
+});
+
+describe('an edit that crosses a move to done in Linear (review of #866)', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  async function crossing(state: { name: string; type: string }) {
+    const stub = installLinearStub({ issueState: state });
+    const store = createLinearStore({ apiKey: 'lin_api_test', teamId: 'team_1', projectId: undefined });
+    const answer = await store.edit?.(
+      { issue: 'issue_1', clientId: 'acme' },
+      {
+        text: 'Too late',
+        author: { kind: 'member', name: 'Bob', workspace: 'Acme' },
+        note: noteFixture(),
+        identifier: 'ENG-1',
+      },
+      undefined,
+      { showComments: true, identitySecret: undefined, read: 'public', write: 'public', locale: 'en' },
+    );
+
+    assert.equal(answer, 'not-open');
+    assert.deepEqual(
+      stub.calls.map((call) => call.operation),
+      ['FruitbackCreateComment', 'FruitbackIssueState', 'FruitbackDeleteComment'],
+    );
+    assert.deepEqual(stub.calls[2]?.variables, { id: 'comment_1' });
+  }
+
+  it('keeps the edit when the issue is marked done only after the re-read of its stage (#b7d262)', async () => {
+    // The re-read sees the issue open: the comment stays, written at 10:00 by the stub.
+    installLinearStub({ issueState: { name: 'In Progress', type: 'started' } });
+    const store = createLinearStore({ apiKey: 'lin_api_test', teamId: 'team_1', projectId: undefined });
+    const note = noteFixture({ text: 'Sent' });
+    const answer = await store.edit?.(
+      { issue: 'issue_1', clientId: 'acme' },
+      {
+        text: 'Edited while open',
+        author: { kind: 'member', name: 'Bob', workspace: 'Acme' },
+        note,
+        identifier: 'ENG-1',
+      },
+      undefined,
+      { showComments: true, identitySecret: undefined, read: 'public', write: 'public', locale: 'en' },
+    );
+    assert.ok(typeof answer === 'object');
+
+    // Then the team marks the issue done, after the comment: `completedAt` is later than it.
+    const node = {
+      ...storedIssueFromNote(note),
+      state: { name: 'Done', type: 'completed' },
+      completedAt: '2026-10-20T10:05:00.000Z',
+      comments: { nodes: [{ ...answer.comment, user: { name: 'Fruitback' } }] },
+    };
+    assert.equal(answer.comment.createdAt < node.completedAt, true);
+    assert.equal(toNoteIssue(node, note.page.url, { showComments: true })?.note.text, 'Edited while open');
+  });
+
+  it('writes its comment again with no text when Linear refuses to delete it (#c47f98)', async () => {
+    const stub = installLinearStub({ issueState: { name: 'Done', type: 'completed' }, failDeleteComment: true });
+    const store = createLinearStore({ apiKey: 'lin_api_test', teamId: 'team_1', projectId: undefined });
+    const answer = await store.edit?.(
+      { issue: 'issue_1', clientId: 'acme' },
+      {
+        text: 'Too late',
+        author: { kind: 'member', name: 'Bob', workspace: 'Acme' },
+        note: noteFixture(),
+        identifier: 'ENG-1',
+      },
+      undefined,
+      { showComments: true, identitySecret: undefined, read: 'public', write: 'public', locale: 'en' },
+    );
+
+    assert.equal(answer, 'not-open');
+    assert.deepEqual(
+      stub.calls.map((call) => call.operation),
+      ['FruitbackCreateComment', 'FruitbackIssueState', 'FruitbackDeleteComment', 'FruitbackUpdateComment'],
+    );
+    const bare = String((stub.calls[3]?.variables.input as { body?: string } | undefined)?.body);
+    assert.equal(bare, '**Bob** via Fruitback · member of Acme\nEdited the note');
+    // Reopened, the issue has no `completedAt`: that comment gives no text.
+    const note = noteFixture({ text: 'Sent' });
+    const node = {
+      ...storedIssueFromNote(note),
+      completedAt: null,
+      comments: {
+        nodes: [{ id: 'comment_1', body: bare, createdAt: '2026-10-20T10:00:00.000Z', user: { name: 'Fruitback' } }],
+      },
+    };
+    assert.equal(toNoteIssue(node, note.page.url, { showComments: true })?.note.text, 'Sent');
+  });
+
+  it('fails when Linear refuses to delete the comment and to write it again', async () => {
+    installLinearStub({
+      issueState: { name: 'Done', type: 'completed' },
+      failDeleteComment: true,
+      failUpdateComment: true,
+    });
+    const store = createLinearStore({ apiKey: 'lin_api_test', teamId: 'team_1', projectId: undefined });
+
+    await assert.rejects(
+      store.edit?.(
+        { issue: 'issue_1', clientId: 'acme' },
+        {
+          text: 'Too late',
+          author: { kind: 'member', name: 'Bob', workspace: 'Acme' },
+          note: noteFixture(),
+          identifier: 'ENG-1',
+        },
+        undefined,
+        { showComments: true, identitySecret: undefined, read: 'public', write: 'public', locale: 'en' },
+      ) ?? Promise.resolve(),
+      StoreError,
+    );
+  });
+
+  it('deletes its comment when the stage cannot be read after it, and fails (round 5 of #866)', async () => {
+    const stub = installLinearStub({ failIssueState: true });
+    const store = createLinearStore({ apiKey: 'lin_api_test', teamId: 'team_1', projectId: undefined });
+
+    await assert.rejects(
+      store.edit?.(
+        { issue: 'issue_1', clientId: 'acme' },
+        {
+          text: 'Unknown',
+          author: { kind: 'member', name: 'Bob', workspace: 'Acme' },
+          note: noteFixture(),
+          identifier: 'ENG-1',
+        },
+        undefined,
+        { showComments: true, identitySecret: undefined, read: 'public', write: 'public', locale: 'en' },
+      ) ?? Promise.resolve(),
+      StoreError,
+    );
+    assert.deepEqual(
+      stub.calls.map((call) => call.operation),
+      ['FruitbackCreateComment', 'FruitbackIssueState', 'FruitbackDeleteComment'],
+    );
+  });
+
+  it('deletes its comment when the issue is completed once the comment is written, and says not-open', async () => {
+    await crossing({ name: 'Done', type: 'completed' });
+  });
+
+  it('deletes its comment when the issue is canceled once the comment is written, and says not-open', async () => {
+    await crossing({ name: 'Canceled', type: 'canceled' });
+  });
+});
+
+describe('when a Linear issue left the open stages (round 6 of #866, #c45cee)', () => {
+  it('takes the later of completedAt and canceledAt when Linear keeps both, and nothing for an open issue', () => {
+    assert.equal(
+      closedAtOf({ completedAt: '2026-11-08T10:00:00.000Z', canceledAt: '2026-11-08T11:00:00.000Z' }),
+      '2026-11-08T11:00:00.000Z',
+    );
+    assert.equal(
+      closedAtOf({ completedAt: '2026-11-08T12:00:00.000Z', canceledAt: '2026-11-08T11:00:00.000Z' }),
+      '2026-11-08T12:00:00.000Z',
+    );
+    assert.equal(closedAtOf({ completedAt: null, canceledAt: '2026-11-08T11:00:00.000Z' }), '2026-11-08T11:00:00.000Z');
+    assert.equal(closedAtOf({ completedAt: null, canceledAt: null }), undefined);
+    assert.equal(closedAtOf({}), undefined);
+  });
+});
+
+describe('the text of a note of Linear, after an edit of its author (FRU-605)', () => {
+  const author = { kind: 'member' as const, name: 'Bob', workspace: 'Acme' };
+  const comment = (id: string, text: string, createdAt: string) => ({
+    id,
+    body: editText({ text, author }, undefined, true),
+    createdAt,
+    user: { name: 'Fruitback' },
+  });
+
+  it('reads the text of the newest edit, and not one written after the issue was done', () => {
+    const note = noteFixture({ text: 'Sent' });
+    const node = {
+      ...storedIssueFromNote(note),
+      state: { name: 'Done', type: 'completed' },
+      completedAt: '2026-11-08T10:02:00.000Z',
+      comments: {
+        nodes: [
+          comment('c2', 'After done', '2026-11-08T10:05:00.000Z'),
+          comment('c1', 'Before done', '2026-11-08T10:00:00.000Z'),
+        ],
+      },
+    };
+
+    assert.equal(toNoteIssue(node, note.page.url, { showComments: true })?.note.text, 'Before done');
+    assert.equal(
+      toNoteIssue({ ...node, completedAt: null, state: { name: 'Todo', type: 'unstarted' } }, note.page.url, {
+        showComments: true,
+      })?.note.text,
+      'After done',
+    );
+    // Reopened: Linear empties `completedAt`, and the edit that crossed the move is the newest word of
+    // the author on a note open again (review of #866, documented in worker.md).
+    assert.equal(
+      toNoteIssue({ ...node, completedAt: null, state: { name: 'Backlog', type: 'backlog' } }, note.page.url, {
+        showComments: true,
+      })?.note.text,
+      'After done',
+    );
+    // Canceled, as a withdrawal leaves it: the same cut-off.
+    assert.equal(
+      toNoteIssue(
+        {
+          ...node,
+          completedAt: null,
+          canceledAt: '2026-11-08T10:02:00.000Z',
+          state: { name: 'Canceled', type: 'canceled' },
+        },
+        note.page.url,
+        { showComments: true },
+      )?.note.text,
+      'Before done',
+    );
+    // The replies hidden: the text of the description, as the store sent it.
+    assert.equal(toNoteIssue(node, note.page.url, { showComments: false })?.note.text, 'Sent');
   });
 });

@@ -1,6 +1,7 @@
 import { type Page, expect, test } from '@playwright/test';
 import { fulfillSites } from './console-workspace.ts';
 import { WORKER_ORIGIN } from './pin.ts';
+import { unfolded } from './settled.ts';
 
 /**
  * `Confirm` (FRU-165), the gesture that asks twice, measured where the console uses it (FRU-191):
@@ -81,7 +82,7 @@ const screens = [
     // stable, but the press lands on the card under the clipped edge and asks nothing.
     open: async (page: Page) => {
       await page.locator('button[id^="source-row-"]').first().click();
-      await expect(page.locator('#source-panel')).toHaveAttribute('data-settled', '');
+      await unfolded(page);
     },
     deletes: '/console/workspaces/w1/connectors/c1',
   },

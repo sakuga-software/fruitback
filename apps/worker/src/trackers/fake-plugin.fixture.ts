@@ -12,7 +12,7 @@ import {
 /**
  * A plugin and its service, for the tests of the socle (FRU-621). The service answers at
  * `https://fake.test`, through the `http` a test hands the worker (`trackerHttp`): no port, no
- * network. It takes the kind `asana`, whose plugin has not shipped in this build.
+ * network. It takes the kind `asana`: `useTestPlugin` puts it in the place of the plugin of that kind.
  */
 
 export const FAKE = 'https://fake.test';
