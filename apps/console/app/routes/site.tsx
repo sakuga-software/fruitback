@@ -1,5 +1,5 @@
 import { SiteAgent } from '../parts/site-agent';
-import { type FormEvent, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import { type FormEvent, type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router';
 import { STAGES } from '../stages';
 import {
@@ -470,8 +470,17 @@ function AccessForm({
   const [problem, setProblem] = useState<string | undefined>();
   const [saved, setSaved] = useState(false);
   const change = useRef<HTMLDivElement>(null);
-  // The way back gives focus to « Change », which the form replaced.
-  const back = () => requestAnimationFrame(() => change.current?.querySelector('button')?.focus());
+  // The way back gives focus to « Change », which the form replaced. The focus is given after the
+  // commit that draws « Change » again, not in a frame (FRU-631). After a save, the form closes after
+  // an `await`: React commits in a task of its scheduler, and a frame can run before it. « Change »
+  // was then not in the page yet, and the focus fell to the body when the form went.
+  const [focusChange, setFocusChange] = useState(false);
+  const back = () => setFocusChange(true);
+  useLayoutEffect(() => {
+    if (!focusChange) return;
+    setFocusChange(false);
+    change.current?.querySelector('button')?.focus();
+  }, [focusChange]);
 
   function start() {
     setVisibility(site.visibility);
