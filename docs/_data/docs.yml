@@ -48,6 +48,10 @@
       url: /connectors/gitlab.html
     - title: GitLab (français)
       url: /connectors/gitlab.fr.html
+    - title: Slack
+      url: /connectors/slack.html
+    - title: Slack (français)
+      url: /connectors/slack.fr.html
     - title: ClickUp
       url: /connectors/clickup.html
     - title: ClickUp (français)

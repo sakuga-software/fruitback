@@ -12,8 +12,14 @@ import { ReadProblem } from '../read-problem';
 /** Where the contract of the request is written, for whoever writes the receiver. */
 const REST_GUIDE = 'https://fruitback.com/rest-connector.html';
 
-/** Why a delivery did not arrive, in a few words: the status of the receiver, or what stopped the request. */
-function reasonOf(delivery: Delivery): string {
+/**
+ * Why a delivery did not arrive, in a few words: the status of the receiver, or what stopped the
+ * request. `source`: the service of a plugin that receives (FRU-624), which says its own words.
+ */
+function reasonOf(delivery: Delivery, source?: string): string {
+  if (source !== undefined && delivery.lastError !== undefined) {
+    return t('{source} did not take it: {error}', { source, error: delivery.lastError });
+  }
   if (delivery.lastStatus !== undefined) return t('Your receiver answered {status}', { status: delivery.lastStatus });
   if (delivery.lastError !== undefined) return t('No answer: {error}', { error: delivery.lastError });
 
@@ -24,9 +30,18 @@ function reasonOf(delivery: Delivery): string {
  * The panel of an address that receives (FRU-132): the sites that send their notes there (read only:
  * a site chooses its places on the Sites screen, FRU-399), and the notes that did not arrive.
  */
-export function RestPanel({ id, base, connector, sites, manages, onChanged, onRemoved }: PanelProps) {
+/**
+ * The notes that did not arrive at a connector that receives, and a new attempt (FRU-132): the REST
+ * address, and a plugin that receives (FRU-624, `source` its name).
+ */
+export function LateDeliveries({
+  base,
+  connector,
+  manages,
+  onChanged,
+  source,
+}: Pick<PanelProps, 'base' | 'connector' | 'manages' | 'onChanged'> & { source?: string }) {
   useLocale();
-  const { workspace } = useWorkspace();
   const [late, setLate] = useState<Delivery[] | undefined>();
   const [problem, setProblem] = useState<string | undefined>();
 
@@ -46,6 +61,57 @@ export function RestPanel({ id, base, connector, sites, manages, onChanged, onRe
     // The row of the address counts the notes that did not arrive: it is read again too.
     await onChanged();
   }
+
+  return (
+    <section className="flex flex-col gap-[8px]" data-deliveries>
+      <BlockTitle>{t('Notes that did not arrive')}</BlockTitle>
+      {late === undefined ? (
+        <p className="text-small text-muted">
+          {t('This list did not load.')} <ReadProblem alone />
+        </p>
+      ) : null}
+      {late?.length === 0 ? <p className="text-small text-muted">{t('Every note arrived.')}</p> : null}
+      <ul className="flex flex-col">
+        {(late ?? []).map((delivery) => (
+          <li key={delivery.id} className="border-b border-line py-[8px] text-small">
+            <span className="block font-semibold">{reasonOf(delivery, source)}</span>
+            {/* FRU-468: the call of a trigger of a site, in the same queue as the notes. */}
+            {delivery.event === 'agent.requested' ? (
+              <span className="block text-hint text-muted">{t('Call of an agent')}</span>
+            ) : null}
+            {/* FRU-605: the author changed the text of a note already sent. */}
+            {delivery.event === 'note.edited' ? (
+              <span className="block text-hint text-muted">{t('Note edited by its author')}</span>
+            ) : null}
+            {delivery.event === 'note.withdrawn' ? (
+              <span className="block text-hint text-muted">{t('Note withdrawn by its author')}</span>
+            ) : null}
+            <span className="block text-hint text-muted">
+              {t('Written {when}', { when: moment(delivery.createdAt) })} ·{' '}
+              {delivery.attempts === 1 ? t('1 attempt') : t('{count} attempts', { count: delivery.attempts })}
+            </span>
+            <span className="block text-hint text-muted">
+              {delivery.nextAt === undefined
+                ? t('Fruitback stopped trying.')
+                : t('Next attempt {when}', { when: moment(delivery.nextAt) })}
+            </span>
+            {manages ? (
+              <Button tone="outline" size="small" className="mt-[8px]" onClick={() => void retry(delivery)}>
+                {t('Try now')}
+              </Button>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+      {problem === undefined ? null : <Problem>{t(problem)}</Problem>}
+    </section>
+  );
+}
+
+export function RestPanel({ id, base, connector, sites, manages, onChanged, onRemoved }: PanelProps) {
+  useLocale();
+  const { workspace } = useWorkspace();
+  const [problem, setProblem] = useState<string | undefined>();
 
   async function disconnect() {
     const removed = await call('DELETE', `${base}/connectors/${connector.id}`);
@@ -79,48 +145,8 @@ export function RestPanel({ id, base, connector, sites, manages, onChanged, onRe
         </LinkButton>
       </p>
 
-      <section className="flex flex-col gap-[8px]" data-deliveries>
-        <BlockTitle>{t('Notes that did not arrive')}</BlockTitle>
-        {late === undefined ? (
-          <p className="text-small text-muted">
-            {t('This list did not load.')} <ReadProblem alone />
-          </p>
-        ) : null}
-        {late?.length === 0 ? <p className="text-small text-muted">{t('Every note arrived.')}</p> : null}
-        <ul className="flex flex-col">
-          {(late ?? []).map((delivery) => (
-            <li key={delivery.id} className="border-b border-line py-[8px] text-small">
-              <span className="block font-semibold">{reasonOf(delivery)}</span>
-              {/* FRU-468: the call of a trigger of a site, in the same queue as the notes. */}
-              {delivery.event === 'agent.requested' ? (
-                <span className="block text-hint text-muted">{t('Call of an agent')}</span>
-              ) : null}
-              {/* FRU-605: the author changed the text of a note already sent. */}
-              {delivery.event === 'note.edited' ? (
-                <span className="block text-hint text-muted">{t('Note edited by its author')}</span>
-              ) : null}
-              {delivery.event === 'note.withdrawn' ? (
-                <span className="block text-hint text-muted">{t('Note withdrawn by its author')}</span>
-              ) : null}
-              <span className="block text-hint text-muted">
-                {t('Written {when}', { when: moment(delivery.createdAt) })} ·{' '}
-                {delivery.attempts === 1 ? t('1 attempt') : t('{count} attempts', { count: delivery.attempts })}
-              </span>
-              <span className="block text-hint text-muted">
-                {delivery.nextAt === undefined
-                  ? t('Fruitback stopped trying.')
-                  : t('Next attempt {when}', { when: moment(delivery.nextAt) })}
-              </span>
-              {manages ? (
-                <Button tone="outline" size="small" className="mt-[8px]" onClick={() => void retry(delivery)}>
-                  {t('Try now')}
-                </Button>
-              ) : null}
-            </li>
-          ))}
-        </ul>
-        {problem === undefined ? null : <Problem>{t(problem)}</Problem>}
-      </section>
+      <LateDeliveries base={base} connector={connector} manages={manages} onChanged={onChanged} />
+      {problem === undefined ? null : <Problem>{t(problem)}</Problem>}
     </SidePanel>
   );
 }
