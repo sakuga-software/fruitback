@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { NOTE_STAGES } from '@fruitback/shared';
 import { noteFixture } from '@fruitback/shared/note.fixture';
 import { type AccountStore, DEFAULT_CONNECTOR_SETTINGS } from './accounts.ts';
+import { pendingDeliveryOf } from './account-rows.ts';
 import type { ClientConfig, ClientPolicy } from './clients.ts';
 import { createConnectorStores, createRoutedStore } from './connectors.ts';
 import { GITHUB_STAGES } from './github.ts';
@@ -520,32 +521,129 @@ describe('the sites that take a reply, by where their notes go (FRU-257)', () =>
   });
 });
 
-describe('which store edits a note (FRU-475)', () => {
+describe('which store edits a note (FRU-475, FRU-605)', () => {
+  const queued: { connector: string; body: string; event: string | undefined }[] = [];
   const accounts = {
     sealedKey: async (connector: string) =>
-      connector === 'con_rest' || connector === 'con_linear'
+      connector === 'con_rest' || connector === 'con_linear' || connector === 'con_quiet'
         ? {
             kind: connector === 'con_rest' ? 'rest' : 'linear',
             sealed: seal('lin_api_a_key_of_the_test', SECRETS_KEY),
             workspaceId: 'ws_a',
-            settings: DEFAULT_CONNECTOR_SETTINGS,
+            settings: { ...DEFAULT_CONNECTOR_SETTINGS, showComments: connector !== 'con_quiet' },
           }
         : undefined,
-    enqueueDelivery: async () => 'dlv_1',
+    enqueueDelivery: async (connector: string, body: string, _now: number, event?: string) => {
+      queued.push({ connector, body, event });
+
+      return 'dlv_1';
+    },
   } as unknown as AccountStore;
+  const note = noteFixture({ id: 'n_1', client: { id: 'site_a', name: 'Acme' } });
+  const answer = { note: { ...note, text: 'New words' }, comment: { id: 'c1', body: 'x', createdAt: '' } };
   // The worker's own store, which edits.
-  const own: NoteStore = { ...createMemoryStore(), edit: async () => undefined };
-  const routed = createRoutedStore(own, createConnectorStores(accounts, SECRETS_KEY));
+  const { editsInReplies: _inReplies, ...memory } = createMemoryStore();
+  const own: NoteStore = { ...memory, edit: async () => answer };
+  const routed = createRoutedStore(
+    own,
+    createConnectorStores(accounts, SECRETS_KEY, () => 1_000),
+  );
   const site = (connector?: string) =>
-    ({ workspace: 'ws_a', ...(connector === undefined ? {} : { connector }) }) as ClientConfig;
+    ({
+      workspace: 'ws_a',
+      origins: ['https://acme.dev'],
+      ...(connector === undefined ? {} : { connector }),
+    }) as ClientConfig;
+  const shown = { showComments: true };
 
   it('the worker’s own store, for a site with no destination', async () => {
-    assert.equal(await takesEdits(routed, site()), true);
+    assert.equal(await takesEdits(routed, site(), shown), true);
   });
 
-  it('never a tracker, nor an address that already has the note as it was sent, though it keeps the notes', async () => {
-    assert.equal(await takesEdits(routed, site('con_linear')), false);
-    assert.equal(await takesEdits(routed, site('con_rest')), false);
+  it('Linear, where its replies are read: the new text lives in a reply (FRU-605)', async () => {
+    assert.equal(await takesEdits(routed, site('con_linear'), shown), true);
+    assert.equal(await takesEdits(routed, site('con_linear'), { showComments: false }), false);
+    // The workspace hides the replies of this connector: a read would show the text of before.
+    assert.equal(await takesEdits(routed, site('con_quiet'), shown), false);
+  });
+
+  it('an address keeps the edit, and is told by `note.edited`, with ids only (FRU-605)', async () => {
+    assert.equal(await takesEdits(routed, site('con_rest'), shown), true);
+    queued.length = 0;
+    const author = { kind: 'member' as const, name: 'Bob', workspace: 'Acme' };
+    const edited = await routed.edit?.(
+      { issue: '7', clientId: 'site_a' },
+      { text: 'New words', author, note, identifier: 'FB-7' },
+      site('con_rest'),
+      shown as never,
+    );
+    assert.deepEqual(edited, answer);
+    assert.equal(queued.length, 1);
+    assert.equal(queued[0]?.connector, 'con_rest');
+    assert.equal(queued[0]?.event, 'note.edited');
+    const body = JSON.parse(queued[0]?.body ?? '{}');
+    assert.deepEqual(body, {
+      version: 2,
+      event: 'note.edited',
+      workspace: 'ws_a',
+      site: { id: 'site_a', origin: 'https://acme.dev' },
+      identifier: 'FB-7',
+      note: { id: Buffer.from(JSON.stringify(['site_a', 'n_1'])).toString('base64url') },
+      at: new Date(1_000).toISOString(),
+    });
+    assert.ok(!queued[0]?.body.includes('New words'), 'the text never travels in the event');
+  });
+
+  it('names the site the route found the note in, and queues nothing with no site (review of #866)', async () => {
+    const author = { kind: 'member' as const, name: 'Bob', workspace: 'Acme' };
+    const policy = shown as never;
+    queued.length = 0;
+    // A note whose own `client` says another site: the site of the route wins.
+    const elsewhere = { ...note, client: { id: 'site_other', name: 'Other' } };
+    await routed.edit?.(
+      { issue: '7', clientId: 'site_a' },
+      { text: 'x', author, note: elsewhere, identifier: 'FB-7' },
+      site('con_rest'),
+      policy,
+    );
+    assert.equal(JSON.parse(queued[0]?.body ?? '{}').site.id, 'site_a');
+    // No site anywhere: the edit is kept and answered, and no event with an id nobody can read.
+    queued.length = 0;
+    const { client: _client, ...siteless } = note;
+    const kept = await routed.edit?.(
+      { issue: '7', clientId: undefined },
+      { text: 'x', author, note: siteless, identifier: 'FB-7' },
+      site('con_rest'),
+      policy,
+    );
+    assert.deepEqual(kept, answer);
+    assert.deepEqual(queued, []);
+  });
+
+  it('queues nothing for an edit the store refused (review of #866)', async () => {
+    const author = { kind: 'member' as const, name: 'Bob', workspace: 'Acme' };
+    for (const refusal of ['not-open', undefined] as const) {
+      const refusing = createRoutedStore(
+        { ...own, edit: async () => refusal },
+        createConnectorStores(accounts, SECRETS_KEY, () => 1_000),
+      );
+      queued.length = 0;
+
+      const answer = await refusing.edit?.(
+        { issue: '7', clientId: 'site_a' },
+        { text: 'x', author, note, identifier: 'FB-7' },
+        site('con_rest'),
+        shown as never,
+      );
+
+      assert.equal(answer, refusal);
+      assert.deepEqual(queued, [], String(refusal));
+    }
+  });
+
+  it('is read by the console as an edit, and a note as before (FRU-605)', () => {
+    assert.equal(pendingDeliveryOf({ id: 'd', event: 'note.edited', created_at: 0 })?.event, 'note.edited');
+    assert.equal(pendingDeliveryOf({ id: 'd', event: 'note.created', created_at: 0 })?.event, undefined);
   });
 });
 

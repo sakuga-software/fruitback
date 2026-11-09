@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { type Page, type Route, expect, test } from '@playwright/test';
 import { ACME, sideScroll, stubWorker, fulfillSites } from './console-workspace.ts';
+import { unfolded } from './settled.ts';
 
 /**
  * A Claude Code routine as what the trigger of a site calls (FRU-594): connected from « Connectors »
@@ -124,7 +125,7 @@ test('the panel of a routine says « Session started » with the link of each se
   await expect(row).toContainText('Trigger trig_01ABCDEFGHJKLMNOPQRSTUVW');
   await expect(row).toContainText('1 call of an agent did not arrive');
   await row.click();
-  await expect(page.locator('#source-panel')).toHaveAttribute('data-settled', '');
+  await unfolded(page);
   const session = page.locator('[data-session]');
   await expect(session).toHaveCount(1);
   await expect(session).toContainText('Session started');
@@ -171,7 +172,7 @@ test('at 390 px in French, the panel says « Session lancée », and nothing scr
   await page.goto(`${CONSOLE}/w/w1/connectors`);
   await page.locator('button[aria-expanded]').filter({ hasText: 'Routine Claude Code' }).click();
   // The panel fades in: axe reads its contrast once it is there.
-  await expect(page.locator('#source-panel')).toHaveAttribute('data-settled', '');
+  await unfolded(page);
   await expect(page.locator('[data-session]')).toContainText('Session lancée');
   await expect(page.locator('[data-session]').getByRole('link', { name: 'Ouvrir la session' })).toBeVisible();
   expect(await sideScroll(page)).toBe(0);

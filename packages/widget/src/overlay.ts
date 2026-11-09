@@ -1734,7 +1734,10 @@ export function replyFromPage(body: string): { name: string; who: string; text: 
  * wrote it, then « Edited the note » in the language of the team. The page shows the name, and its own
  * words for the edit. Any other comment is `undefined`.
  */
-const EDITED = /^\*\*([^*\n]+)\*\* via Fruitback · ([^\n]+)\n(?:Edited the note|A modifié la note)$/u;
+// FRU-605: in a tracker, the new text follows, quoted. The thread shows it as the text of the note,
+// so the reply says « Edited the note » alone, as in the worker's own store.
+const EDITED =
+  /^\*\*([^*\n]+)\*\* via Fruitback · ([^\n]+)\n(?:Edited the note|A modifié la note)(?:\n\n(?:>(?: [^\n]*)?(?:\n|$))+)?$/u;
 
 export function editFromPage(body: string, t: Translator): { name: string; who: string; text: string } | undefined {
   const match = EDITED.exec(body);

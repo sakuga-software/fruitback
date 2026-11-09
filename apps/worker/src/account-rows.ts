@@ -184,7 +184,8 @@ export function pendingDeliveryOf(row: Record<string, unknown>): PendingDelivery
 
   return {
     id: row.id,
-    ...(row.event === 'agent.requested' ? { event: 'agent.requested' as const } : {}),
+    // FRU-605: an edit of a note already sent; `note.created` stays absent, as from a worker of before.
+    ...(row.event === 'agent.requested' || row.event === 'note.edited' ? { event: row.event } : {}),
     createdAt: new Date(typeof row.created_at === 'number' ? row.created_at : 0).toISOString(),
     attempts: typeof row.attempts === 'number' ? row.attempts : 0,
     ...(typeof row.next_at === 'number' ? { nextAt: new Date(row.next_at).toISOString() } : {}),

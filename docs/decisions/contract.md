@@ -54,7 +54,7 @@ first publish made it expensive.
   hosts and the selector as one line (`#promo >>> button.buy`) for the description, the text of a page
   and the thread; no CSS engine reads it.
 - **An issue says `editable: true`** (FRU-475) to the reader who may edit its text now: their own
-  note, still `new`, kept by the worker. Optional, a read-envelope field: `NOTE_VERSION` does not move.
+  note, open (`new`, `todo`, `progress` since FRU-605), on a site whose store takes an edit. Optional, a read-envelope field: `NOTE_VERSION` does not move.
 
 ### The reasons, and the history
 

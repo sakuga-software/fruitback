@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import * as z from 'zod';
 
 /**
  * A **note** is one piece of visual feedback planted on an element of a live page.

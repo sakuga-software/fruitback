@@ -202,7 +202,7 @@ export const FRENCH: Catalog = {
   'edit.failedSignedOut':
     'Votre session a pris fin. Votre texte est toujours là. Reconnectez-vous, puis enregistrez-la.',
   'edit.refused':
-    'Cette note ne peut plus être modifiée : l’équipe l’a prise en charge. Votre texte est toujours là. Envoyez-le en réponse.',
+    'Cette note ne peut plus être modifiée : l’équipe l’a marquée comme faite ou l’a fermée. Votre texte est toujours là.',
   'more.open': 'Autres actions sur votre note',
   'more.edit': 'Modifier la note',
   'more.copyLink': 'Copier le lien de la note',
