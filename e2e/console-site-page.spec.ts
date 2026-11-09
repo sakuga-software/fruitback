@@ -275,6 +275,30 @@ test('an owner changes who sees the notes and who writes on the page, and the si
   await expect(page.locator('pre')).toContainText('s1');
 });
 
+test('who sees the notes saved while React commits after the next frame: the focus is back on « Change » (FRU-631)', async ({
+  page,
+}) => {
+  // A loaded runner, made sure: React's scheduler posts its renders on a MessageChannel, and here
+  // each post runs 100 ms late, so a frame always comes before the commit that closes the form.
+  // A focus given in a frame then found no « Change » yet, and fell to the body when « Save » went.
+  await page.addInitScript(() => {
+    const post = MessagePort.prototype.postMessage;
+    MessagePort.prototype.postMessage = function (this: MessagePort, ...args: Parameters<typeof post>) {
+      setTimeout(() => post.apply(this, args), 100);
+    } as typeof post;
+  });
+  await workerWith(page);
+  await page.goto(`${CONSOLE}/w/w1/sites/s1`);
+  const about = page.getByRole('region', { name: 'Site', exact: true });
+  const change = about.getByRole('button', { name: 'Change who sees the notes of staging.acme.dev' });
+  await change.click();
+  const form = about.getByRole('form', { name: 'Who sees the notes of staging.acme.dev' });
+  await form.getByText('Members only', { exact: true }).click();
+  await form.getByRole('button', { name: 'Save' }).click();
+  await expect(about.getByRole('status')).toHaveText('Saved. The script on the site stays the same.');
+  await expect(change).toBeFocused();
+});
+
 test('« Offer visitors an e-mail when their note is done » is offered only where anybody leaves a note (FRU-604)', async ({
   page,
 }) => {
