@@ -497,6 +497,43 @@ export function createPostgresAccountStore(database: Database): AccountStore {
     return Number(row?.waiting ?? 0);
   };
 
+  /** The sessions of the routines that `where` names, newest first (FRU-594, FRU-618). */
+  const sessionsWhere = async (where: SQL | undefined, limit: number): Promise<AgentSession[]> => {
+    const rows = await run((db) =>
+      db
+        .select({
+          id: agent_sessions.id,
+          site_id: agent_sessions.site_id,
+          identifiers: agent_sessions.identifiers,
+          session_url: agent_sessions.session_url,
+          started_at: agent_sessions.started_at,
+        })
+        .from(agent_sessions)
+        .innerJoin(connectors, eq(connectors.id, agent_sessions.connector_id))
+        .where(where)
+        .orderBy(desc(agent_sessions.started_at), agent_sessions.id)
+        .limit(limit),
+    );
+
+    return rows.map((row): AgentSession => {
+      let identifiers: string[] = [];
+      try {
+        const parsed = JSON.parse(row.identifiers) as unknown;
+        if (Array.isArray(parsed)) identifiers = parsed.filter((each): each is string => typeof each === 'string');
+      } catch {
+        identifiers = [];
+      }
+
+      return {
+        id: row.id,
+        ...(row.site_id === null ? {} : { site: row.site_id }),
+        identifiers,
+        url: row.session_url,
+        startedAt: new Date(Number(row.started_at)).toISOString(),
+      };
+    });
+  };
+
   const store: AccountStore = {
     async signIn({ provider, subject, email, name, locale }) {
       const address = normalizeEmail(email);
@@ -2216,39 +2253,11 @@ export function createPostgresAccountStore(database: Database): AccountStore {
     },
 
     async agentSessions(workspace, connector) {
-      const rows = await run((db) =>
-        db
-          .select({
-            id: agent_sessions.id,
-            site_id: agent_sessions.site_id,
-            identifiers: agent_sessions.identifiers,
-            session_url: agent_sessions.session_url,
-            started_at: agent_sessions.started_at,
-          })
-          .from(agent_sessions)
-          .innerJoin(connectors, eq(connectors.id, agent_sessions.connector_id))
-          .where(and(eq(connectors.workspace_id, workspace), eq(connectors.id, connector)))
-          .orderBy(desc(agent_sessions.started_at), agent_sessions.id)
-          .limit(50),
-      );
+      return sessionsWhere(and(eq(connectors.workspace_id, workspace), eq(connectors.id, connector)), 50);
+    },
 
-      return rows.map((row): AgentSession => {
-        let identifiers: string[] = [];
-        try {
-          const parsed = JSON.parse(row.identifiers) as unknown;
-          if (Array.isArray(parsed)) identifiers = parsed.filter((each): each is string => typeof each === 'string');
-        } catch {
-          identifiers = [];
-        }
-
-        return {
-          id: row.id,
-          ...(row.site_id === null ? {} : { site: row.site_id }),
-          identifiers,
-          url: row.session_url,
-          startedAt: new Date(Number(row.started_at)).toISOString(),
-        };
-      });
+    async agentSessionsOfSite(workspace, site) {
+      return sessionsWhere(and(eq(connectors.workspace_id, workspace), eq(agent_sessions.site_id, site)), 200);
     },
 
     async dropAgentSessions(before) {

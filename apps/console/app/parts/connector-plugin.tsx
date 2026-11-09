@@ -6,9 +6,10 @@ import { problemOf, writeProblemOf } from '../problems';
 import { useWorkspace } from '../routes/workspace';
 import { trackerOf } from '../trackers/index.ts';
 import type { ConsoleTracker } from '../trackers/plugin.ts';
-import { Button, Field, LinkButton, Problem, SidePanel } from '../ui';
+import { Button, Choice, Field, LinkButton, Problem, SidePanel } from '../ui';
 import { useLocale } from '../use-locale';
 import { Disconnect, KINDS, type PanelProps, SendersList, sourceLine } from './connector-parts';
+import { LateDeliveries } from './connector-rest';
 
 /**
  * What every connector of a plugin says and does in the console (FRU-621): its form of a token, its
@@ -83,7 +84,12 @@ export function AddPlugin({
 }) {
   useLocale();
   const fields = tracker.tokenFields ?? [];
-  const [values, setValues] = useState<Readonly<Record<string, string>>>({});
+  // A choice starts on its first option: the form sends what the person sees.
+  const [values, setValues] = useState<Readonly<Record<string, string>>>(() =>
+    Object.fromEntries(
+      fields.flatMap((field) => (field.options?.[0] === undefined ? [] : [[field.name, field.options[0].value]])),
+    ),
+  );
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | undefined>();
   const missing = fields.some((field) => field.optional !== true && (values[field.name] ?? '').trim() === '');
@@ -111,21 +117,32 @@ export function AddPlugin({
 
   return (
     <form onSubmit={submit} className="flex max-w-[520px] flex-col gap-[12px]">
-      {fields.map((field) => (
-        <Field
-          key={field.name}
-          label={t(field.label)}
-          type={field.type}
-          autoComplete="off"
-          {...(field.placeholder === undefined ? {} : { placeholder: field.placeholder })}
-          value={values[field.name] ?? ''}
-          onChange={(event) => {
-            const typed = event.target.value;
-            setValues((current) => ({ ...current, [field.name]: typed }));
-          }}
-          {...(field.hint === undefined ? {} : { hint: t(field.hint) })}
-        />
-      ))}
+      {fields.map((field) =>
+        field.type === 'select' ? (
+          <Choice
+            key={field.name}
+            label={t(field.label)}
+            value={values[field.name] ?? ''}
+            onChange={(chosen) => setValues((current) => ({ ...current, [field.name]: chosen }))}
+            options={(field.options ?? []).map((option) => ({ value: option.value, label: t(option.label) }))}
+            {...(field.hint === undefined ? {} : { hint: t(field.hint) })}
+          />
+        ) : (
+          <Field
+            key={field.name}
+            label={t(field.label)}
+            type={field.type}
+            autoComplete="off"
+            {...(field.placeholder === undefined ? {} : { placeholder: field.placeholder })}
+            value={values[field.name] ?? ''}
+            onChange={(event) => {
+              const typed = event.target.value;
+              setValues((current) => ({ ...current, [field.name]: typed }));
+            }}
+            {...(field.hint === undefined ? {} : { hint: t(field.hint) })}
+          />
+        ),
+      )}
       {problem === undefined ? null : <Problem>{pluginSentence(problem, tracker)}</Problem>}
       <div className="flex flex-wrap items-center gap-x-[16px] gap-y-[8px]">
         <Button type="submit" size="panel" disabled={busy || missing}>
@@ -141,7 +158,7 @@ export function AddPlugin({
  * The panel of a connector of a plugin: the sites that send their notes there (read only: a site
  * chooses its places on the Sites screen, FRU-399), and what to do when the service refuses it.
  */
-export function PluginPanel({ id, base, connector, sites, manages, onRemoved }: PanelProps) {
+export function PluginPanel({ id, base, connector, sites, manages, onChanged, onRemoved }: PanelProps) {
   useLocale();
   const { workspace } = useWorkspace();
   const [problem, setProblem] = useState<string | undefined>();
@@ -182,10 +199,20 @@ export function PluginPanel({ id, base, connector, sites, manages, onRemoved }: 
       {known ? null : <p className="text-hint text-muted">{t('This console does not know this connector yet.')}</p>}
       {connector.attention === undefined ? null : (
         <Problem>
-          {t(ATTENTION[connector.attention.reason], { when: moment(connector.attention.since), source })}
+          {t(
+            trackerOf(connector.kind)?.attention?.[connector.attention.reason] ?? ATTENTION[connector.attention.reason],
+            {
+              when: moment(connector.attention.since),
+              source,
+            },
+          )}
         </Problem>
       )}
       <SendersList connector={connector} sites={sites} workspaceId={workspace.id} />
+      {/* FRU-624: a connector that receives says the notes that did not arrive, as an address does. */}
+      {trackerOf(connector.kind)?.receives ? (
+        <LateDeliveries base={base} connector={connector} manages={manages} onChanged={onChanged} source={source} />
+      ) : null}
       {problem === undefined ? null : <Problem>{t(problem)}</Problem>}
     </SidePanel>
   );

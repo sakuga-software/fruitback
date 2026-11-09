@@ -147,6 +147,7 @@ export function accountStoreOn(database: Database): AccountStore {
     dropAbandonedDeliveries: true,
     keepAgentSession: true,
     agentSessions: true,
+    agentSessionsOfSite: true,
     dropAgentSessions: true,
     addDomain: true,
     domains: true,

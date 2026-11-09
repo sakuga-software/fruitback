@@ -128,11 +128,24 @@ export async function getFeedback(
     const editsHere = own.size > 0 && places.length < 2 && (await takesEdits(store, route.client, route.policy));
     // FRU-605: and withdraw it, where the store takes a withdrawal. The route decides again.
     const withdrawalsHere = own.size > 0 && places.length < 2 && (await takesWithdrawals(store, route.client));
+    // FRU-618: the notes an agent works on, and for a member of the team the address of its session.
+    const agents = await agentsOf(
+      request,
+      config,
+      context?.accounts,
+      route.client?.workspace,
+      clientId,
+      checks,
+      route.policy,
+    );
     const issues: NoteIssue[] = all.map((issue) => {
       const checked = issue.stage === 'done' ? checkedOf(issue.comments) : undefined;
       const mine = own.has(issue.note.id);
+      const agent = agents.sessions.get(issue.identifier);
       const marked = {
         ...issue,
+        // An address the contract does not take (https only) is not given: the note would not parse.
+        ...(agent === undefined ? {} : { agent: agents.team && HTTPS.test(agent) ? { url: agent } : {} }),
         ...(checked === undefined ? {} : { checked }),
         ...(mine ? { mine: true as const } : {}),
         ...(mine && editsHere && EDITABLE_STAGES.has(issue.stage) ? { editable: true as const } : {}),
@@ -713,6 +726,49 @@ async function postBatch(
 }
 
 /** The stages a connector gives some states (FRU-102), read at this request. None when it cannot say. */
+/** The address of a session that the read gives, as `noteIssueSchema` takes it (FRU-618). */
+const HTTPS = /^https:\/\/\S+$/u;
+
+/**
+ * The notes of a site an agent works on (FRU-618): the identifiers that a session of a routine names,
+ * with the address of the newest session of each. `team`: the reader may see that address, a member
+ * of the workspace who sees the tracker. A reviewer, a guest and a visitor are told only that an agent
+ * works on it: the session is the team's, and they could not open it.
+ *
+ * WARNING: asked at each request, after the cache, as `mine`. The cached answer is shared by every
+ * reader of the page, and the address is for a member only. A store that does not answer says
+ * nothing: no line is better than a read that fails.
+ */
+async function agentsOf(
+  request: Request,
+  config: Served,
+  accounts: AccountStore | undefined,
+  workspace: string | undefined,
+  site: string | undefined,
+  checks: CallerChecks,
+  policy: ClientPolicy,
+): Promise<{ sessions: Map<string, string>; team: boolean }> {
+  const sessions = new Map<string, string>();
+  if (accounts === undefined || workspace === undefined || site === undefined) return { sessions, team: false };
+  try {
+    // Newest first: the first session that names a note is its newest.
+    for (const session of await accounts.agentSessionsOfSite(workspace, site)) {
+      for (const identifier of session.identifiers)
+        if (!sessions.has(identifier)) sessions.set(identifier, session.url);
+    }
+  } catch (error) {
+    console.error('[fruitback] the sessions of the agents of a site were not read', error);
+
+    return { sessions, team: false };
+  }
+  if (sessions.size === 0) return { sessions, team: false };
+  const team =
+    (await checks.memberOf(request, config, workspace, site)) !== undefined &&
+    (await checks.seesTracker(request, config, policy));
+
+  return { sessions, team };
+}
+
 async function exceptionsOf(accounts: AccountStore | undefined, connector: string): Promise<StageExceptions> {
   if (accounts === undefined) return {};
   try {

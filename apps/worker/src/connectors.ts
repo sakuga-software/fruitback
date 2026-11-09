@@ -10,7 +10,8 @@ import { type LinearOAuth, linearAuthorization } from './linear-oauth.ts';
 import { pluginOf } from './trackers/index.ts';
 import { type PluginKind, isPluginKind } from './trackers/kinds.ts';
 import type { TrackerApps } from './trackers/oauth.ts';
-import { type Http, trackerAccess } from './trackers/plugin.ts';
+import { type Http, readTrackerCredential, trackerAccess } from './trackers/plugin.ts';
+import { open } from './secrets.ts';
 import {
   type NoteStore,
   type ReplyTarget,
@@ -196,7 +197,14 @@ export type ConnectorStores = (connector: string, workspace: string | undefined,
  * note exists, and a failure here would make the widget send it again and keep it twice. The cost
  * is a note that is kept and never sent, which is logged.
  */
-function receivingStore(own: NoteStore, accounts: AccountStore, connector: string, now: () => number): NoteStore {
+function receivingStore(
+  own: NoteStore,
+  accounts: AccountStore,
+  connector: string,
+  now: () => number,
+  /** FRU-624: whether this note is sent. A note it does not take is kept, and goes nowhere else. */
+  takes: (note: Note) => boolean = () => true,
+): NoteStore {
   // An address only receives: it sends no reply back, so a site of it takes none (FRU-257), and no
   // verdict (FRU-294). An edit and a withdrawal are kept here, and the address is told by
   // `note.edited` and `note.withdrawn` (FRU-605).
@@ -281,6 +289,9 @@ function receivingStore(own: NoteStore, accounts: AccountStore, connector: strin
     async create(note, client, policy, files = []) {
       const created = await own.create(note, client, policy);
       const ids = files.map((file) => file.id);
+      // The worker's own store keeps no file: a note that is not sent loses its files now.
+      if (!takes(note))
+        return files.length === 0 ? created : { ...created, files: { sent: [], lost: ids, waiting: [] } };
       try {
         await accounts.enqueueDelivery(
           connector,
@@ -359,9 +370,46 @@ export function createConnectorStores(
     const kept = await accounts.sealedKey(connector);
     if (kept === undefined || kept.workspaceId !== workspace)
       throw new StoreError('The connector of this site is gone');
+    // FRU-624: a plugin that receives (Slack) keeps the note in the worker's own store, as an address
+    // does. Its credential is opened for its setting only (which notes go); the key is for the loop.
+    const receiver = isPluginKind(kept.kind) ? pluginOf(kept.kind)?.receiver : undefined;
+    let takes: ((note: Note) => boolean) | undefined;
+    if (receiver !== undefined) {
+      // The setting is read from the credential, opened here with the key of the server. It is never
+      // refreshed here: a receiver connects by a token.
+      const plain = secretsKey === undefined ? undefined : open(kept.sealed, secretsKey);
+      const credential = plain === undefined ? undefined : readTrackerCredential(plain);
+      // WARNING: the note is kept whatever its credential says (review of #871). A setting that cannot
+      // be read is the default of the plugin: for Slack, verified notes only, so a note of a visitor
+      // is never queued for a channel that may have said « verified only ».
+      takes = (note) => receiver.takes(note, credential ?? { via: 'token', token: '', extra: {} });
+      // Only a credential that this key really does not open makes the connector need attention: it
+      // must be connected again. A server with no key says nothing here, as a REST address does not.
+      // Written once: a connector that already says it is not written again at each note (review of #871).
+      if (secretsKey !== undefined && credential === undefined) {
+        const said = (await accounts.connectors(workspace).catch(() => [])).find((each) => each.id === connector);
+        if (said?.attention?.reason !== 'key-refused') {
+          console.error('[fruitback] the credential of a connector that receives does not open', connector);
+          await accounts.noteConnector(connector, 'key-refused', now()).catch((failure: unknown) => {
+            console.error('[fruitback] the state of a connector was not kept', connector, failure);
+          });
+        }
+      }
+    }
     // Nothing is opened to keep a note and queue it: the key is for the loop that sends.
-    if (kept.kind === 'rest') {
-      const receiving = receivingStore(own, accounts, connector, now);
+    if (kept.kind === 'rest' || takes !== undefined) {
+      const told = receivingStore(own, accounts, connector, now, takes);
+      // FRU-624: a plugin that receives (Slack) posted a copy of the note, and takes no edit and no
+      // withdrawal of it: `note.edited` and `note.withdrawn` carry ids only, which a channel cannot
+      // read, and the copy stays in the channel. The note keeps its text.
+      const {
+        edit: _edit,
+        editsFor: _editsFor,
+        withdraw: _withdraw,
+        withdrawalsFor: _withdrawalsFor,
+        ...noEdit
+      } = told;
+      const receiving: NoteStore = takes === undefined ? told : noEdit;
       if (filesReachable) return receiving;
       // Takes no file, and never queues one: the route refuses files before it (`409`), and a call
       // that would still bring some sends the note alone, with no file said to wait (raised in review).

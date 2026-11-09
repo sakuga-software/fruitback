@@ -1,8 +1,10 @@
+import type { Note } from '@fruitback/shared';
 import type { AccountStore } from '../accounts.ts';
 import type { StageExceptions } from '../linear.ts';
 import type { OAuthClient } from '../oauth-client.ts';
 import { open, seal } from '../secrets.ts';
 import { type NoteStore, StoreError } from '../store.ts';
+import type { DeliveryBody, SentAttachment } from '../rest-connector.ts';
 import type { PluginKind } from './kinds.ts';
 
 /**
@@ -122,6 +124,37 @@ export type TrackerPlugin = {
   store(access: TrackerAccess, options: { connector: string; stages?: StageExceptions }): NoteStore;
   /** Best effort, before the connector goes: the service forgets the token. */
   disconnect?(access: TrackerAccess, client: OAuthClient | undefined): Promise<void>;
+  /**
+   * A connector that receives each note, and keeps none (FRU-624, Slack): the note stays in the
+   * worker's own store, as for a REST address, and a delivery is queued for it. `store` is then never
+   * asked for. Absent: the plugin is a tracker.
+   */
+  receiver?: TrackerReceiver;
+};
+
+/** A delivery as a receiver sends it: the body of the queue, its files signed for this attempt. */
+export type ReceiverDelivery = Omit<DeliveryBody, 'attachments'> & { attachments?: SentAttachment[] };
+
+/**
+ * What a receiver says of one attempt. `retry: false`: the next attempts would get the same answer,
+ * and the delivery is given up (a body the service refuses). A credential that the service refuses is
+ * a `TrackerKeyRefused` thrown: the delivery is given up, and the connector needs attention.
+ */
+export type ReceiverAnswer =
+  | { ok: true }
+  | {
+      ok: false;
+      status?: number;
+      error: string;
+      retry: boolean;
+      /** What the service asked to wait before the next attempt, in seconds (`Retry-After`). */
+      retryAfterSeconds?: number;
+    };
+
+export type TrackerReceiver = {
+  /** Whether this note is sent, by what the connector keeps (a setting in `extra`). */
+  takes(note: Note, credential: TrackerCredential): boolean;
+  deliver(access: TrackerAccess, delivery: ReceiverDelivery): Promise<ReceiverAnswer>;
 };
 
 /** A token this close to its end is refreshed before it is used. */

@@ -347,6 +347,8 @@ describe('every word the widget shows', () => {
       editable: true,
       // FRU-605: and may withdraw it.
       withdrawable: true,
+      // FRU-618: an agent works on it, and its reader is of the team.
+      agent: { url: 'https://claude.ai/code/session_1' },
       note: noteFixture({
         id: 'sd_found',
         text: 'NOTE ONE',

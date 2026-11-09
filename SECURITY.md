@@ -177,7 +177,10 @@ clear unless this list says otherwise:
   are not encrypted by that key. The token of a Claude Code routine is one of them.
 - The sessions a Claude Code routine started for a call, in `agent_sessions`: the site,
   what Fruitback calls the notes of the call, and the address of the session, never their text,
-  for 30 days.
+  for 30 days. The read of a page tells every reader of a note that an agent works on it, and gives
+  the address of the session only to a session of a member of the workspace whose role sees the
+  tracker. It is added to each answer after the cache, so a reader never gets it from the answer
+  of another; and only an `https` address is given.
 - The addresses of callers, for two minutes, in the table `kv` of the rate limit.
 - The logo of a workspace, when its owner or an admin sent one: the bytes of one image,
   in the table `workspace_logos`, until it is removed or replaced, or its workspace goes. See below.
@@ -1710,6 +1713,33 @@ what it reaches in its own guide; what they share is here.
 - A note lands in the project of its destination, and anybody who can see that project in Asana reads
   it: its text, its page, and the name and the address of its author when they gave them. Its tag is
   a hash of its site and its page, readable by the members of the Asana workspace.
+
+### GitLab
+
+The token reaches what its role reaches; the guide asks for a project access
+token, Reporter, scope `api`. The address of a self-managed GitLab is the workspace's word: it is
+https, with no name and password in it, and an IP address written in it must be public
+(`parseGitlabUrl`). Every call then goes through `createGuardedFetch` (`guarded-fetch.ts`), which
+checks the address the socket connects to against the list of the REST connector, follows no
+redirect, asks for no compression, and reads 8 MB of an answer at most, unpacked included: a body that a
+proxy compressed anyway stops unpacking past that limit. So a name that resolves to an internal network is
+refused at each call, on the Cloud and on an instance that a team runs: a GitLab that only an
+internal network reaches cannot be connected. The files of a note are uploaded to the project, and
+GitLab serves them with the rights of the project.
+
+### Slack
+
+- Slack connects by an Incoming Webhook that the team makes in its own Slack app: one URL that posts
+  in one channel. The URL is the secret; it is sealed like a token and answered by no route. Only an
+  address of `https://hooks.slack.com/services/` is taken (`readWebhook`), so the worker posts to
+  Slack and nowhere else.
+- Slack keeps no note. The note stays in the worker, and a delivery posts a copy: its text, its page,
+  its element, the name its reporter gave, and an address of one hour for each of its files, which
+  anybody who reads the channel can open in that hour.
+- By default only a verified note is posted: `reporter.verified`, which the worker sets and a browser
+  cannot (`stripClaimedVerification`). « Every note » posts what any visitor writes on a public site.
+- A webhook that Slack says is gone (`no_service`, `invalid_token`…) or a channel it refuses is given
+  up at once, and the connector says « Needs attention ».
 
 ### The GitHub App, installed on a workspace (FRU-360)
 
