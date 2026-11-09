@@ -99,6 +99,8 @@ test.describe('on a phone, where the pointer is coarse too (review of #860)', ()
   test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
 
   test('every target of the sheet is still 44 px', async ({ page }) => {
+    // The sheet slides in with a fractional translate, and a box measured during it is 43.9999 px tall.
+    await page.emulateMedia({ reducedMotion: 'reduce' });
     await mountAt(page, `/?widget=off&case=${caseOf('narrow-coarse')}`);
     expect(await page.evaluate(() => matchMedia('(pointer: coarse)').matches)).toBe(true);
     await page.locator('[data-fruitback-host-launch]').tap();

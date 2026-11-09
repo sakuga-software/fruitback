@@ -57,6 +57,10 @@ immutable.
   the checks twice: in `CI`, and in `Release image`.
 - **Trivy runs with `ignore-unfixed`**, and its version carries the `v` (`# v0.36.0`). One tag out
   of seventy-five is unprefixed, so the wrong form looks valid until the next bump.
+- **The checks of `release-image.yml` build the runtime stage with no cache** (`no-cache-filters:
+  runtime`). From the cache of GitHub Actions, its `apk upgrade` kept the packages of the day the layer
+  was made: the console was refused from 2026-11-08 on `musl` 1.2.5-r23, while Alpine already shipped
+  r24. The publish job reads the layers that the checks wrote, so it pushes the image they scanned.
 - **Every `uses:` is pinned to a 40-character commit SHA, with its version as a trailing comment**
   (FRU-69). A tag can move to other code, and the `publish` job of `release-image.yml` holds
   `packages: write`.
