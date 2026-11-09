@@ -223,6 +223,16 @@ describe('the reply that says a note was edited (FRU-475)', () => {
     );
   });
 
+  it('reads the reply of an edit in a tracker, with the new text quoted under it (FRU-605)', () => {
+    const t = createTranslator({});
+
+    assert.deepEqual(
+      editFromPage('**Ana** via Fruitback · member of Acme\nEdited the note\n\n> The new words\n>\n> Two lines', t),
+      { name: 'Ana', who: 'member of Acme', text: 'Edited the note' },
+    );
+    assert.equal(editFromPage('**Ana** via Fruitback · member of Acme\nEdited the note\n\nNot quoted', t), undefined);
+  });
+
   it('is no other comment: a quoted reply, a verdict, or a line typed after it', () => {
     const t = createTranslator({});
 

@@ -5,6 +5,7 @@ import type { ClientConfig } from './clients.ts';
 import { type GithubApp, createGithubConnectorStore, openInstallation } from './github-connector.ts';
 import { type StageExceptions, createLinearStore } from './linear.ts';
 import { deliveryBody } from './rest-connector.ts';
+import { noteEventBody } from './note-events.ts';
 import { type LinearOAuth, linearAuthorization } from './linear-oauth.ts';
 import { pluginOf } from './trackers/index.ts';
 import { type PluginKind, isPluginKind } from './trackers/kinds.ts';
@@ -176,6 +177,8 @@ function withSettings(store: NoteStore, settings: ConnectorSettings): NoteStore 
         }),
     findForPage: (query, client, policy) => store.findForPage(query, client, quiet(policy)),
     findNote: (lookup, client, policy) => findNote(store, lookup, client, quiet(policy)),
+    // FRU-605: a tracker keeps the new text of an edit in a reply, which nobody reads here.
+    editsFor: (client, policy) => takesEdits(store, client, quiet(policy)),
   };
 }
 
@@ -193,12 +196,48 @@ export type ConnectorStores = (connector: string, workspace: string | undefined,
  */
 function receivingStore(own: NoteStore, accounts: AccountStore, connector: string, now: () => number): NoteStore {
   // An address only receives: it sends no reply back, so a site of it takes none (FRU-257), and no
-  // verdict (FRU-294). No edit either (FRU-475): the address has the note as it was sent, and an
-  // edit here would make the two say different things.
-  const { reply: _reply, check: _check, edit: _edit, editsFor: _editsFor, ...noReply } = own;
+  // verdict (FRU-294). An edit is kept here, and the address is told by `note.edited` (FRU-605).
+  const { reply: _reply, check: _check, ...noReply } = own;
 
   return {
     ...noReply,
+    ...(own.edit === undefined
+      ? {}
+      : {
+          async edit(target, edit, client, policy) {
+            const answer = await (own.edit as NonNullable<NoteStore['edit']>)(target, edit, client, policy);
+            if (typeof answer !== 'object') return answer;
+            // The site the route found the note in, which is the one the note was written for. With
+            // none, the id of the note could not be read back by `/mcp`: nothing is queued.
+            const site = target.clientId ?? edit.note.client?.id;
+            if (site === undefined || site === '') {
+              console.error('[fruitback] an edit was kept with no site, and no event was queued', edit.identifier);
+
+              return answer;
+            }
+            // As for a note: the edit is kept first, and a queue that refuses the row is logged. The
+            // author is answered: a failure would make them send it again, and the text is kept.
+            try {
+              await accounts.enqueueDelivery(
+                connector,
+                noteEventBody('note.edited', {
+                  workspace: client?.workspace ?? '',
+                  site,
+                  ...(client?.origins?.[0] === undefined ? {} : { origin: client.origins[0] }),
+                  identifier: edit.identifier,
+                  note: edit.note.id,
+                  at: now(),
+                }),
+                now(),
+                'note.edited',
+              );
+            } catch (error) {
+              console.error('[fruitback] an edit was kept and its event was not queued', edit.identifier, error);
+            }
+
+            return answer;
+          },
+        }),
     // FRU-331: the files of a note travel with its delivery, by the addresses of short life that each
     // attempt signs (`deliverDue`). The worker's own store takes none: the files never stay with it.
     attachments: true,
@@ -336,8 +375,8 @@ export function createRoutedStore(base: NoteStore, connectors: ConnectorStores):
     checksFor: async (client) => takesChecks(await pick(client), client),
     // FRU-367: only the worker's own store sets the status of a note; a tracker keeps its own.
     statusesFor: async (client) => takesStatuses(await pick(client), client),
-    // FRU-475: only the worker's own store edits a note; a tracker and an address keep what they got.
-    editsFor: async (client) => takesEdits(await pick(client), client),
+    // FRU-475, FRU-605: the worker's own store, an address (with `note.edited`) and Linear (a reply).
+    editsFor: async (client, policy) => takesEdits(await pick(client), client, policy),
     // FRU-368: the states of the tracker of the client, for the statuses of its site.
     trackerStatesFor: async (client) => {
       const store = await pick(client);
