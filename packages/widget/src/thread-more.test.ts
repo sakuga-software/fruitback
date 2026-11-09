@@ -48,11 +48,17 @@ function anIssue(overrides: Parameters<typeof noteIssueFixture>[0] = {}): NoteIs
 const neverSent: EditSeam = { send: () => new Promise(() => {}) };
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-function open(page: MountedPage, issue: NoteIssue, withdraw?: WithdrawSeam) {
+function open(
+  page: MountedPage,
+  issue: NoteIssue,
+  withdraw?: WithdrawSeam,
+  move?: (issue: NoteIssue) => Promise<boolean | undefined>,
+) {
   overlay = createOverlay({
     document: page.document,
     edit: neverSent,
     ...(withdraw === undefined ? {} : { withdraw }),
+    ...(move === undefined ? {} : { move }),
   });
   overlay.render([issue]);
   (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
@@ -314,6 +320,54 @@ describe('the withdrawal of a note by its author, from « ⋯ » (FRU-605)', () 
       assert.equal(q(page, '.fruitback-thread-withdraw-status')?.textContent, words, failure);
       assert.notEqual(q(page, '.fruitback-thread-withdraw-confirm'), null);
     }
+  });
+});
+
+describe('the move of a note by its author, from « ⋯ » (FRU-605)', () => {
+  it('is offered where the read says `editable`, closes the thread for the choice, and opens it again', async () => {
+    const page = mounted();
+    let answer: (moved: boolean | undefined) => void = () => {};
+    const asked: string[] = [];
+    const move = (issue: NoteIssue) => {
+      asked.push(issue.id);
+
+      return new Promise<boolean | undefined>((resolve) => (answer = resolve));
+    };
+    let thread = open(page, anIssue(), undefined, move);
+    thread.more()?.click();
+    assert.deepEqual(thread.items(), ['Copy link to the note']);
+    overlay?.destroy();
+
+    const issue = anIssue({ editable: true });
+    thread = open(page, issue, undefined, move);
+    thread.more()?.click();
+    assert.deepEqual(thread.items(), ['Edit the note', 'Copy link to the note', 'Move the note']);
+    thread.item('Move the note')?.click();
+    assert.deepEqual(asked, [issue.id]);
+    assert.equal(thread.thread(), null);
+
+    answer(true);
+    await settle();
+    assert.notEqual(thread.thread(), null);
+    assert.equal(thread.said(), 'Moved.');
+  });
+
+  it('says it did not move, and says nothing when the choice was given up', async () => {
+    const page = mounted();
+    const answers: ((moved: boolean | undefined) => void)[] = [];
+    const move = () => new Promise<boolean | undefined>((resolve) => answers.push(resolve));
+    const thread = open(page, anIssue({ editable: true }), undefined, move);
+    thread.more()?.click();
+    thread.item('Move the note')?.click();
+    answers.shift()?.(false);
+    await settle();
+    assert.equal(thread.said(), 'Not moved. Try again.');
+
+    thread.more()?.click();
+    thread.item('Move the note')?.click();
+    answers.shift()?.(undefined);
+    await settle();
+    assert.equal(thread.thread(), null);
   });
 });
 

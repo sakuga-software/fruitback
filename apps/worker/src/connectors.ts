@@ -258,6 +258,16 @@ function receivingStore(
             return answer;
           },
         }),
+    ...(own.move === undefined
+      ? {}
+      : {
+          async move(target, move, client, policy) {
+            const answer = await (own.move as NonNullable<NoteStore['move']>)(target, move, client, policy);
+            if (typeof answer === 'object') await tell('note.moved', target, move, client);
+
+            return answer;
+          },
+        }),
     ...(own.withdraw === undefined
       ? {}
       : {
@@ -483,6 +493,12 @@ export function createRoutedStore(base: NoteStore, connectors: ConnectorStores):
       if (store.edit === undefined) throw new StoreError('The store of this site takes no edit');
 
       return store.edit(target, edit, client, policy);
+    },
+    async move(target, move, client, policy) {
+      const store = await pick(client);
+      if (store.move === undefined) throw new StoreError('The store of this site takes no move');
+
+      return store.move(target, move, client, policy);
     },
     async withdraw(target, withdrawal, client, policy) {
       const store = await pick(client);

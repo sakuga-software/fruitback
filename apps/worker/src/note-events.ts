@@ -4,11 +4,12 @@ import { DELIVERY_VERSION } from './rest-connector.ts';
 
 /**
  * What the author did to a note already sent to an address (FRU-605), as the address receives it:
- * `note.edited`, or `note.withdrawn` (the note is closed, and nothing is deleted). Identifiers only, as `agent.requested` (FRU-468): the address reads the note
+ * `note.edited`, `note.moved` (another element of its page), or `note.withdrawn` (the note is closed,
+ * and nothing is deleted). Identifiers only, as `agent.requested` (FRU-468): the address reads the note
  * of now by `/mcp` (`get_note` takes `note.id`), or keeps the one `note.created` sent. Never the text:
  * a person may edit a note to take out what they should not have written.
  */
-export type NoteEvent = Extract<DeliveryEvent, 'note.edited' | 'note.withdrawn'>;
+export type NoteEvent = Extract<DeliveryEvent, 'note.edited' | 'note.moved' | 'note.withdrawn'>;
 
 export function noteEventBody(
   event: NoteEvent,

@@ -3520,6 +3520,43 @@ replies, and on a public site mounted by the extension with no session, only the
 - **The event names the site the route found the note in** (`target.clientId`), and none is queued
   when there is no site: an id of a note that `/mcp` cannot read back helps nobody (review of #866).
 
+## The author moves an open note (FRU-605)
+
+**The rules, in short** (arbitrated by the orchestrator on 2026-11-08, Q4 of FRU-605):
+
+- **`POST /feedback/<id>/place?client=<site>`, body `{ url, anchor, viewport }`** (`postMove`,
+  `edit-routes.ts`). The anchor and the viewport are checked by `noteAnchorSchema` and
+  `noteViewportSchema` (`400 invalid-place`). **The same page only**: the note is read in the store by
+  `url`, its page.
+- **Taken where an edit is** (`takesEdits` and `NoteStore.move`), with its guards: the author, an
+  open stage (`409 not-open`), one place. The read offers it where it says `editable`: one flag for
+  two actions that have the same rule.
+- **The worker's own store** replaces the anchor and the viewport, and writes « Moved the note »
+  with the element quoted (`moveText`), under the lock of the row. **Linear** keeps its description:
+  the comment holds the new place too, in base64url between a fence (`moveText(…, true)`), so that no
+  text of the page closes the fence. A read takes the newest place written before the issue left the
+  open stages (`withMovedPlace` in `toNoteIssue`, `closedAtOf`). The comment is kept only while the
+  issue is open (`commentWhileOpen`, shared with the edit).
+- **An address** keeps the move and gets `note.moved`, ids only. GitHub takes none (FRU-628).
+- **One move at a time on a note**, a key of the KV as for a withdrawal (`409 move-in-progress`,
+  review of #877): a tracker has no lock, and a double click would write two comments. The key holds
+  15 minutes (`MOVE_LOCK_MS`), longer than a call to a tracker can last (`fetch` of Node gives up
+  after 300 s with no headers and 300 s with no body), so it never expires under a move still running;
+  it is let go as soon as the store answers, in three tries, and a key that stays is said in the log
+  (`letGo`, round 6 of #877). Then each move of that note answers `409 move-in-progress` until the
+  key expires, and the widget tells the author why (round 10 of #877). This is accepted: a shorter
+  key, or a key renewed during the call, writes to the KV that just refused three writes, and a key
+  that expires under a move still running lets in a second move, which writes a second comment.
+- **The limit of the read of Linear** (review of #877): a read takes the newest
+  `COMMENTS_PER_ISSUE` (20) comments of an issue, newest first as Linear gives them. An edit or a
+  move older than the 20 newest comments is not read, and the note shows the text or the place it
+  was sent with. It is accepted: a note with twenty comments after its last edit is a conversation
+  of the team in Linear, and rewriting the description, which would hold it for ever, is excluded
+  (Q2 and Q4 of FRU-605). The author can edit or move it again.
+- **The key is let go by `set(key, '0', 1)`**, as for a verdict: the next count is 1 at once, on
+  every `Kv` (test:`counts from 1 again at once when a count is set back to "0" for 1 ms, and after that ms`).
+- The extension relays `/place` (`PLACE_PATH`).
+
 ## The author withdraws an open note (FRU-605)
 
 **The rules, in short** (arbitrated by the orchestrator on 2026-11-08, Q3 of FRU-605):

@@ -116,6 +116,31 @@ export function watchedStore(
               (store.setStatus as NonNullable<NoteStore['setStatus']>)(target, status, client),
             ),
         }),
+    // FRU-605: an edit, a move and a withdrawal call the tracker too, and say as much of its key.
+    ...(store.edit === undefined
+      ? {}
+      : {
+          edit: (target, edit, client, policy) =>
+            watched(client?.connector, () =>
+              (store.edit as NonNullable<NoteStore['edit']>)(target, edit, client, policy),
+            ),
+        }),
+    ...(store.move === undefined
+      ? {}
+      : {
+          move: (target, move, client, policy) =>
+            watched(client?.connector, () =>
+              (store.move as NonNullable<NoteStore['move']>)(target, move, client, policy),
+            ),
+        }),
+    ...(store.withdraw === undefined
+      ? {}
+      : {
+          withdraw: (target, withdrawal, client, policy) =>
+            watched(client?.connector, () =>
+              (store.withdraw as NonNullable<NoteStore['withdraw']>)(target, withdrawal, client, policy),
+            ),
+        }),
     ...(store.statusesFor === undefined ? {} : { statusesFor: store.statusesFor }),
   };
 }

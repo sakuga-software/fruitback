@@ -35,7 +35,7 @@ import {
   readableName,
 } from './host.ts';
 import type { FruitbackTheme } from './theme.ts';
-import type { FruitbackTransport } from './transport.ts';
+import type { FruitbackTransport, TransportResponse } from './transport.ts';
 import { callWorker, errorOf, noteWriteFailure } from './worker-client.ts';
 import type { WithdrawAnswer, WithdrawFailure } from './thread-more.ts';
 import { type NotifyAsk, createNotifyAsk } from './notify-ask.ts';
@@ -89,7 +89,7 @@ import {
   replyFromPage,
 } from './overlay.ts';
 import { type ConfigPanel, type OfferedStages, createConfigPanel, createOfferedStages } from './panel.ts';
-import { linkedNote, withoutLinkedNote } from './page.ts';
+import { captureViewport, linkedNote, withoutLinkedNote } from './page.ts';
 
 /**
  * One call that mounts the whole widget on a page (FRU-16).
@@ -532,6 +532,12 @@ export function init(options: FruitbackOptions): Fruitback {
     onConfigure: () => panel.toggle(),
     onList: () => openList(),
     onSelect: (selected) => {
+      // FRU-605: the new element of a note its author moves, and no new note.
+      if (selected.purpose === 'move') {
+        void moveTo(selected.element);
+
+        return;
+      }
       // A note is on its way, about the element chosen before: a choice now would point the
       // composer at another element under a send it cannot change. The choice is let go, and the
       // frame goes back to the element of the note in flight.
@@ -620,6 +626,12 @@ export function init(options: FruitbackOptions): Fruitback {
         return answer;
       },
     },
+    // FRU-605: the author moves their open note: a capture for its new element, then `moveTo`.
+    move: (issue: NoteIssue) =>
+      new Promise<boolean | 'busy' | undefined>((resolve) => {
+        moving = { issue, resolve };
+        host.start('move.banner');
+      }),
     // FRU-605: the author withdraws their open note. No read after it, as for an edit: the stage and
     // the reply go on the issue (the overlay draws the pins again), and the lists follow.
     withdraw: {
@@ -654,6 +666,32 @@ export function init(options: FruitbackOptions): Fruitback {
         }),
   });
 
+  /** The note its author moves (FRU-605), until the element of its new place is chosen. */
+  let moving: { issue: NoteIssue; resolve: (moved: boolean | 'busy') => void } | undefined;
+  /** Sends the new place of the note that moves, and gives it to the note when the store kept it. */
+  async function moveTo(element: Element): Promise<void> {
+    const pending = moving;
+    moving = undefined;
+    if (pending === undefined) return;
+    const { issue } = pending;
+    const response = await callWorker(options, {
+      url: `${options.endpoint}/feedback/${encodeURIComponent(issue.id)}/place?client=${encodeURIComponent(options.clientId)}`,
+      method: 'POST',
+      contentType: 'application/json',
+      body: JSON.stringify({
+        url: canonicalizePageUrl(view.location.href),
+        anchor: captureAnchor(element),
+        viewport: captureViewport(view),
+      }),
+    }).catch(() => undefined);
+    const answer = movedOf(response);
+    if (typeof answer === 'object') {
+      applyEdit(issue, answer);
+      sidebar.refresh();
+      tellNotes({ kind: 'list' });
+    }
+    pending.resolve(typeof answer === 'object' ? true : answer);
+  }
   const stages = createOfferedStages();
   const destinations = createOfferedDestinations();
   // The worker's word at the last read that answered (FRU-112): it would sign a note of this reader.
@@ -1889,6 +1927,28 @@ async function sendEdit(
   const body = JSON.parse(response.body) as { note?: unknown; comment?: unknown };
   const note = noteSchema.safeParse(body.note);
   if (!note.success) return 'retry';
+  const comment = noteCommentSchema.safeParse(body.comment);
+
+  return { note: note.data, ...(comment.success ? { comment: comment.data } : {}) };
+}
+
+/**
+ * What the worker answered to a move of a note (FRU-605): the note at its new place, `busy` for
+ * `409 move-in-progress` (another move of this note holds its key: the author is told to wait), or
+ * `false` for any other answer, and for none.
+ */
+export function movedOf(response: TransportResponse | undefined): EditAnswer | 'busy' | false {
+  if (response === undefined) return false;
+  if (response.status === 409 && errorOf(response.body) === 'move-in-progress') return 'busy';
+  if (!response.ok) return false;
+  let body: { note?: unknown; comment?: unknown };
+  try {
+    body = JSON.parse(response.body) as typeof body;
+  } catch {
+    return false;
+  }
+  const note = noteSchema.safeParse(body?.note);
+  if (!note.success) return false;
   const comment = noteCommentSchema.safeParse(body.comment);
 
   return { note: note.data, ...(comment.success ? { comment: comment.data } : {}) };

@@ -1,7 +1,7 @@
 import { afterEach, describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseNote } from '@fruitback/shared';
-import { failureOf, init, plant, sendDrafts } from './embed.ts';
+import { failureOf, init, movedOf, plant, sendDrafts } from './embed.ts';
 import { capturePlace } from './capture.ts';
 import type { TransportRequest, TransportResponse } from './transport.ts';
 import { noteFixture, noteIssueFixture } from '@fruitback/shared/note.fixture';
@@ -2084,5 +2084,28 @@ describe('a session of the host that ends, and comes back (FRU-315)', () => {
     } finally {
       widget.destroy();
     }
+  });
+});
+
+describe('the answer of the worker to a move of a note (FRU-605)', () => {
+  const answer = (status: number, body: unknown): TransportResponse => ({
+    ok: status < 300,
+    status,
+    body: typeof body === 'string' ? body : JSON.stringify(body),
+  });
+
+  it('is busy for 409 move-in-progress only, and not moved for any other failure', () => {
+    assert.equal(movedOf(answer(409, { error: 'move-in-progress' })), 'busy');
+    assert.equal(movedOf(answer(409, { error: 'not-open' })), false);
+    assert.equal(movedOf(answer(409, 'not json')), false);
+    assert.equal(movedOf(answer(500, { error: 'move-in-progress' })), false);
+    assert.equal(movedOf(answer(200, { note: 'not a note' })), false);
+    assert.equal(movedOf(undefined), false);
+  });
+
+  it('gives the note at its new place, with the reply when there is one', () => {
+    const note = noteFixture();
+
+    assert.deepEqual(movedOf(answer(200, { note })), { note });
   });
 });

@@ -37,6 +37,8 @@ export type CaptureTarget = {
   element: Element;
   /** From react-grab, when the build kept the metadata. Goes straight into `captureNote`. */
   source: NoteSource | undefined;
+  /** `move`: chosen by a capture that `start('move.banner')` began, for the new place of a note (FRU-605). */
+  purpose?: 'move';
 };
 
 export type CaptureHostOptions = {
@@ -96,7 +98,8 @@ export type CaptureHost = {
   moveDock(position: DockPosition | undefined): void;
   /** Paints « Send » in a colour (FRU-601). `undefined`, or a colour refused: the accent again. */
   paintAction(color: string | undefined): void;
-  start(): void;
+  /** `'move.banner'`: the banner asks for the new element of a note, and `onSelect` says `move` (FRU-605). */
+  start(purpose?: 'move.banner'): void;
   stop(): void;
   capturing(): boolean;
   /**
@@ -401,13 +404,19 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
     select(element);
   }
 
+  /** What the capture that runs is for (FRU-605): a new note, or the new place of one. */
+  let asked: 'move.banner' | undefined;
+
   function select(element: Element): void {
     // A choice ends what was held: the frame of the element before must not come back under a
     // note that is about this one. The caller holds the new element if it wants its frame.
     chosen = null;
     stopSettling();
+    const purpose = asked;
     stop();
-    void sourceOf(element).then((source) => options.onSelect({ element, source }));
+    void sourceOf(element).then((source) =>
+      options.onSelect({ element, source, ...(purpose ? { purpose: 'move' as const } : {}) }),
+    );
   }
 
   function hold(element: Element): void {
@@ -532,10 +541,11 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
     announcer.textContent = describe(element, t);
   }
 
-  function start(): void {
+  function start(purpose?: 'move.banner'): void {
     // FRU-330: no note can start that the worker refuses, whoever asks for the capture.
     if (closed !== undefined) return;
     capturing = true;
+    asked = purpose;
     markGround(container, readGround(document));
     // `chosen` is left as it is: a capture started over an open composer must give the frame back
     // to the element the composer is about when it stops.
@@ -556,7 +566,7 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
     // is read and not drawn. Then the button, which a thumb needs, with the key that does the same.
     halt.replaceChildren(...(touch ? [] : [haltKey]), haltLabel);
     banner.replaceChildren(
-      say('fruitback-banner-ask', touch ? 'capture.bannerTouch' : 'capture.banner'),
+      say('fruitback-banner-ask', purpose ?? (touch ? 'capture.bannerTouch' : 'capture.banner')),
       ...(touch ? [] : [say('fruitback-banner-keys', 'capture.instructions')]),
       halt,
     );
@@ -582,6 +592,7 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   function stop(): void {
     const outHadFocus = deepActiveElement(document) === halt;
     capturing = false;
+    asked = undefined;
     hovered = null;
     delete container.dataset.fruitbackCapturing;
     button.setAttribute('aria-pressed', 'false');

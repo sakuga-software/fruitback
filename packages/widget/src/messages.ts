@@ -230,6 +230,7 @@ export const ENGLISH = {
   'thread.edited': 'Edited the note',
   /** The reply the worker writes when the author withdraws their note (FRU-605). */
   'thread.withdrawn': 'Withdrew the note',
+  'thread.moved': 'Moved the note',
   // FRU-618: a session of a routine was started for the note; its address for the team only.
   'thread.agentWorks': 'An agent is working on this note',
   'thread.agentSession': 'Open the session',
@@ -280,6 +281,12 @@ export const ENGLISH = {
   'more.copyManually': 'The link could not be copied. Select it, then copy it.',
   'more.linkLabel': 'Link to the note',
   'more.withdraw': 'Withdraw the note',
+  // FRU-605: the author moves their note to another element of its page.
+  'more.move': 'Move the note',
+  'move.banner': 'Point at the new element of your note',
+  'move.done': 'Moved.',
+  'move.failed': 'Not moved. Try again.',
+  'move.failedBusy': 'Not moved: another move of this note is under way. Try again in a few minutes.',
   // FRU-605: the author withdraws their note. It is closed for the team, and nothing is deleted.
   'withdraw.ask': 'Withdraw this note? The team will see it closed. Nothing is deleted.',
   'withdraw.confirm': 'Withdraw',

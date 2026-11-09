@@ -410,9 +410,15 @@ export type DeliveryOutcome =
 /**
  * What a delivery sends (FRU-468): a note to its place, or the call of a trigger that starts an
  * agent, which carries ids only. Only the first is the place of a note. `note.edited` (FRU-605): the
- * author changed the text of a note already sent, ids only too; `note.withdrawn`: they withdrew it.
+ * author changed the text of a note already sent, ids only too; `note.withdrawn`: they withdrew it; `note.moved`: they moved it.
  */
-export const DELIVERY_EVENTS = ['note.created', 'agent.requested', 'note.edited', 'note.withdrawn'] as const;
+export const DELIVERY_EVENTS = [
+  'note.created',
+  'agent.requested',
+  'note.edited',
+  'note.moved',
+  'note.withdrawn',
+] as const;
 export type DeliveryEvent = (typeof DELIVERY_EVENTS)[number];
 
 /** The kinds of connector the trigger of a site can call (FRU-468, FRU-594). */

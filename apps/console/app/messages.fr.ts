@@ -1513,6 +1513,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Call of an agent': 'Appel d’un agent',
   'Note edited by its author': 'Note modifiée par son auteur',
   'Note withdrawn by its author': 'Note retirée par son auteur',
+  'Note moved by its author': 'Note déplacée par son auteur',
   'This address is not in the workspace any more. Choose another one.':
     'Cette adresse n’est plus dans l’espace de travail. Choisissez-en une autre.',
   'Only an owner or an admin of the workspace starts an agent from a site.':

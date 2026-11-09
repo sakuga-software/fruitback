@@ -185,7 +185,10 @@ export function pendingDeliveryOf(row: Record<string, unknown>): PendingDelivery
   return {
     id: row.id,
     // FRU-605: an edit of a note already sent; `note.created` stays absent, as from a worker of before.
-    ...(row.event === 'agent.requested' || row.event === 'note.edited' || row.event === 'note.withdrawn'
+    ...(row.event === 'agent.requested' ||
+    row.event === 'note.edited' ||
+    row.event === 'note.moved' ||
+    row.event === 'note.withdrawn'
       ? { event: row.event }
       : {}),
     createdAt: new Date(typeof row.created_at === 'number' ? row.created_at : 0).toISOString(),

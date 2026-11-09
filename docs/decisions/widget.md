@@ -1919,6 +1919,21 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
   focus on « ⋯ » included (review of #863), and Tab or a focus out of it closes it. An item gives the
   focus back to « ⋯ » at once, before its action ends: the item is hidden, and a clipboard answers late.
 
+## « Move the note », from « ⋯ » (FRU-605)
+
+### The rules, in short
+
+- **Offered where the read says `editable`**, the rule of a move being the rule of an edit.
+- **The thread closes, and a capture asks for the new element** (`host.start('move.banner')`: the banner
+  says « Point at the new element of your note »). The choice comes back with `purpose: 'move'`, so it
+  opens no composer; a capture started by the launch button after it is for a note again.
+- **The embed sends `POST /place`** with `captureAnchor` and `captureViewport`, gives the note its new
+  place when the store kept it, and the overlay resolves the pins again and opens the thread on the
+  new element, which says « Moved. » or « Not moved. Try again. ». A capture given up says nothing.
+  A `409 move-in-progress` says why: another move of this note is under way, try again in a few
+  minutes (`movedOf`, review of #877).
+- **The widget budget**: 199 851 bytes gzipped when this was written, of 200 000; #879 made room since.
+
 ## « Withdraw this note? », in the thread (FRU-605)
 
 ### The rules, in short

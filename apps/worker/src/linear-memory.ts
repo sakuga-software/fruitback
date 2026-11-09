@@ -11,13 +11,14 @@ import { z } from 'zod';
 import type { ClientPolicy } from './clients.ts';
 import { ATTACHMENT_SUBTITLE, type IssueNode, stageForLinearState, toNoteIssue } from './linear.ts';
 import type { OutgoingFile } from './attachments.ts';
-import { checkText, editText, replyText, withdrawText } from './reply-text.ts';
+import { checkText, editText, moveText, replyText, withdrawText } from './reply-text.ts';
 import type {
   CheckAnswer,
   CreatedWithFiles,
   NewCheck,
   NewEdit,
   NewReply,
+  NewMove,
   NewWithdrawal,
   NoteIssueQuery,
   NoteStore,
@@ -190,6 +191,29 @@ async function createEdit(
   };
 }
 
+/** A move of its author (FRU-605), as Linear keeps it: a reply with the new place. */
+async function createMove(
+  id: string,
+  move: NewMove,
+  clientId: string | undefined,
+  locale?: string,
+): Promise<{ note: Note; comment: NoteComment } | undefined> {
+  const issue = issues.find((each) => each.id === id && (clientId === undefined || each.clientId === clientId));
+  if (issue === undefined) return undefined;
+  const comment = {
+    id: `dev_reply_${issue.id}_${issue.comments?.nodes.length ?? 0}`,
+    body: moveText(move, locale, true),
+    createdAt: new Date().toISOString(),
+    user: { name: 'Fruitback' },
+  };
+  issue.comments = { nodes: [comment, ...(issue.comments?.nodes ?? [])] };
+
+  return {
+    note: { ...move.note, anchor: move.anchor, viewport: move.viewport },
+    comment: { id: comment.id, body: comment.body, createdAt: comment.createdAt, author: comment.user.name },
+  };
+}
+
 /** A withdrawal of its author (FRU-605), as Linear keeps it: a reply, then the issue canceled. */
 async function createWithdrawal(
   id: string,
@@ -319,6 +343,7 @@ export function createMemoryStore(): NoteStore {
     // FRU-605: as Linear, a reply with the new text; the description stays as it was sent.
     editsInReplies: true,
     edit: (target, edit, _client, policy) => createEdit(target.issue, edit, target.clientId, policy.locale),
+    move: (target, move, _client, policy) => createMove(target.issue, move, target.clientId, policy.locale),
     withdraw: (target, withdrawal, _client, policy) =>
       createWithdrawal(target.issue, withdrawal, target.clientId, policy.locale),
   };

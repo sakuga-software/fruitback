@@ -16,7 +16,7 @@ import {
   toNoteIssue,
   widgetIdOf,
 } from './note-rows.ts';
-import { checkText, editText, replyText, withdrawText } from './reply-text.ts';
+import { checkText, editText, moveText, replyText, withdrawText } from './reply-text.ts';
 import {
   type BatchAnswer,
   type CreatedIssue,
@@ -298,6 +298,45 @@ export function createPostgresNoteStore(database: Database): NoteStore {
             .values({ note_id: id, author: null, body: editText(edit, policy.locale), created_at: now })
             .returning({ id: note_comments.id, body: note_comments.body });
           if (comment === undefined) throw new StoreError('PostgreSQL kept an edit and answered no number for it');
+
+          return {
+            note,
+            comment: { id: String(comment.id), body: comment.body, createdAt: new Date(now).toISOString() },
+          };
+        }),
+      ),
+    // FRU-605: the author moves an open note to another element of its page. Its anchor and viewport
+    // change, and nothing else, with the reply that says so, under the lock of the row.
+    move: (target, move, _client, policy) =>
+      through('keep the move', ({ transaction }) =>
+        transaction(async (tx) => {
+          const id = Number(target.issue);
+          if (!Number.isSafeInteger(id)) return undefined;
+          const [row] = await tx
+            .select({ stage: notes.stage, payload: notes.payload })
+            .from(notes)
+            .where(
+              and(
+                eq(notes.id, id),
+                target.clientId === undefined ? isNull(notes.client_id) : eq(notes.client_id, target.clientId),
+              ),
+            )
+            .for('update');
+          if (row === undefined) return undefined;
+          if (!EDITABLE_STAGES.has(stageOf(row.stage))) return 'not-open' as const;
+          const parsed = noteSchema.safeParse(readJson(row.payload));
+          if (!parsed.success) return undefined;
+          const note: Note = { ...parsed.data, anchor: move.anchor, viewport: move.viewport };
+          const now = Date.now();
+          await tx
+            .update(notes)
+            .set({ payload: JSON.stringify(note), updated_at: now })
+            .where(eq(notes.id, id));
+          const [comment] = await tx
+            .insert(note_comments)
+            .values({ note_id: id, author: null, body: moveText(move, policy.locale), created_at: now })
+            .returning({ id: note_comments.id, body: note_comments.body });
+          if (comment === undefined) throw new StoreError('PostgreSQL kept a move and answered no number for it');
 
           return {
             note,

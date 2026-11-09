@@ -23,6 +23,7 @@ import {
   EDITABLE_STAGES,
   type NewCheck,
   type NewEdit,
+  type NewMove,
   type NewReply,
   type NewWithdrawal,
   type NoteIssueQuery,
@@ -30,7 +31,15 @@ import {
   StoreError,
 } from './store.ts';
 import { type StoreSpec, defineStore } from './store-config.ts';
-import { checkText, editText, replyText, withEditedText, withdrawText } from './reply-text.ts';
+import {
+  checkText,
+  editText,
+  moveText,
+  replyText,
+  withEditedText,
+  withMovedPlace,
+  withdrawText,
+} from './reply-text.ts';
 import type { OutgoingFile } from './attachments.ts';
 
 const LINEAR_GRAPHQL_ENDPOINT = 'https://api.linear.app/graphql';
@@ -248,32 +257,63 @@ export async function createEdit(
   locale?: string,
   stages: StageExceptions = {},
 ): Promise<{ note: Note; comment: NoteComment } | 'not-open'> {
-  const created = await graphql<CreateCommentResult>(config, CREATE_COMMENT_MUTATION, {
-    input: { issueId, body: editText(edit, locale, true) },
-  });
+  const comment = await commentWhileOpen(config, issueId, editText(edit, locale, true), editText(edit, locale), stages);
+
+  return comment === 'not-open' ? comment : { note: { ...edit.note, text: edit.text }, comment };
+}
+
+/**
+ * A comment of the author that changes the note (FRU-605: an edit, a move), kept only while the issue
+ * is open. Linear has no lock, so the stage is read again **after** the comment. An issue done or
+ * canceled by then had its move before that read: the comment is taken back (`retractEdit`: deleted,
+ * else written again as `bare`, which holds nothing a read takes), and the answer is `not-open`. A
+ * stage that cannot be read takes it back too, and fails (`502`).
+ */
+async function commentWhileOpen(
+  config: LinearConfig,
+  issueId: string,
+  body: string,
+  bare: string,
+  stages: StageExceptions,
+): Promise<NoteComment | 'not-open'> {
+  const created = await graphql<CreateCommentResult>(config, CREATE_COMMENT_MUTATION, { input: { issueId, body } });
   const comment = created.commentCreate.comment;
-  if (!created.commentCreate.success || comment === null) throw new StoreError('Linear refused the edit');
+  if (!created.commentCreate.success || comment === null) throw new StoreError('Linear refused the comment');
   let open: boolean;
   try {
     const now = await graphql<IssueStateResult>(config, ISSUE_STATE_QUERY, { id: issueId });
-    if (now.issue === null) throw new StoreError('Linear lost the issue after the edit');
+    if (now.issue === null) throw new StoreError('Linear lost the issue after the comment');
     open = EDITABLE_STAGES.has(stageOf(now.issue.state, stages));
   } catch (error) {
-    // The stage is not known: the comment goes, as far as Linear lets it, and the author is told the
-    // edit did not go (`502`). Kept, it would be an edit nobody answered for (round 5 of #866).
-    await retractEdit(config, comment.id, editText(edit, locale));
-    throw error instanceof StoreError ? error : new StoreError('Linear did not say the stage after the edit');
+    await retractEdit(config, comment.id, bare);
+    throw error instanceof StoreError ? error : new StoreError('Linear did not say the stage after the comment');
   }
   if (!open) {
-    // Deleted, or written again with no text: a reopen never makes it the text (round 6 of #866).
-    if (!(await retractEdit(config, comment.id, editText(edit, locale)))) {
-      throw new StoreError('Linear kept an edit of a note done');
-    }
+    if (!(await retractEdit(config, comment.id, bare))) throw new StoreError('Linear kept a comment of a note done');
 
     return 'not-open';
   }
 
-  return { note: { ...edit.note, text: edit.text }, comment: noteCommentOf(comment) };
+  return noteCommentOf(comment);
+}
+
+/**
+ * The new place of a note by its author (FRU-605): a comment « Moved the note » that names the
+ * element, with the anchor and the viewport in it (`moveText(…, true)`). The description stays the
+ * team's, and a read takes the place from the comment (`withMovedPlace`). Kept while open, as an edit.
+ */
+export async function createMove(
+  config: LinearConfig,
+  issueId: string,
+  move: NewMove,
+  locale?: string,
+  stages: StageExceptions = {},
+): Promise<{ note: Note; comment: NoteComment } | 'not-open'> {
+  const comment = await commentWhileOpen(config, issueId, moveText(move, locale, true), moveText(move, locale), stages);
+
+  return comment === 'not-open'
+    ? comment
+    : { note: { ...move.note, anchor: move.anchor, viewport: move.viewport }, comment };
 }
 
 /**
@@ -1021,7 +1061,10 @@ export function toNoteIssue(
   // FRU-605: the text of the newest edit of its author, written before the issue was done or canceled.
   // An edit that crossed a move to done (a tracker has no lock) is a reply, not the text of the note.
   // A move to done after the re-read of `createEdit` comes after the comment: the edit holds (#b7d262).
-  const result = noteIssueSchema.safeParse(withEditedText(candidate, closedAtOf(node)));
+  // FRU-605: and its newest place, by the same rule.
+  const result = noteIssueSchema.safeParse(
+    withMovedPlace(withEditedText(candidate, closedAtOf(node)), closedAtOf(node)),
+  );
 
   return result.success ? result.data : null;
 }
@@ -1446,6 +1489,8 @@ export function createLinearStore(
     // FRU-605: a comment with the new text; the description stays the team's.
     editsInReplies: true,
     edit: (target, edit, _client, policy) => createEdit(config, target.issue, edit, policy.locale, stages),
+    // FRU-605: a comment with the new place; the description stays the team's.
+    move: (target, move, _client, policy) => createMove(config, target.issue, move, policy.locale, stages),
     // FRU-605: a reply, then the first canceled state of the team.
     withdraw: (target, withdrawal, _client, policy) =>
       createWithdrawal(config, target.issue, withdrawal, policy.locale, stages),

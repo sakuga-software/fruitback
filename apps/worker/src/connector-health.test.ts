@@ -287,6 +287,35 @@ describe('the store that notes its connector', () => {
     assert.equal(watchedStore(store, undefined), store);
   });
 
+  it('notes the edit, the move and the withdrawal of a note, and keeps the store without them', async () => {
+    const noted: unknown[] = [];
+    const accounts = accountsThat(async (connector, trouble) => void noted.push([connector, trouble]));
+    const refusal = new LinearKeyRefused('no');
+    const store = {
+      name: 'fake',
+      scope: () => '',
+      edit: async () => 'not-open',
+      move: async () => 'not-open',
+      withdraw: async () => {
+        throw refusal;
+      },
+    } as unknown as NoteStore;
+    const watched = watchedStore(store, accounts, () => 7);
+    const target = { id: '1', identifier: 'DES-1' } as unknown as Parameters<NonNullable<NoteStore['edit']>>[0];
+
+    assert.equal(await watched.edit?.(target, {} as never, routed, policy), 'not-open');
+    assert.equal(await watched.move?.(target, {} as never, routed, policy), 'not-open');
+    await assert.rejects(watched.withdraw?.(target, {} as never, routed, policy) as Promise<unknown>);
+
+    assert.deepEqual(noted, [
+      ['con_a', undefined],
+      ['con_a', undefined],
+      ['con_a', 'key-refused'],
+    ]);
+    const bare = watchedStore({ name: 'fake', scope: () => '' } as unknown as NoteStore, accounts);
+    assert.deepEqual([bare.edit, bare.move, bare.withdraw], [undefined, undefined, undefined]);
+  });
+
   it('keeps the name, the stages and the scope of the store it watches', () => {
     const store = { name: 'fake', stages: ['new'], scope: () => 'a-scope' } as unknown as NoteStore;
     const watched = watchedStore(

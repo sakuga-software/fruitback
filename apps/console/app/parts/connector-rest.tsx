@@ -83,6 +83,9 @@ export function LateDeliveries({
             {delivery.event === 'note.edited' ? (
               <span className="block text-hint text-muted">{t('Note edited by its author')}</span>
             ) : null}
+            {delivery.event === 'note.moved' ? (
+              <span className="block text-hint text-muted">{t('Note moved by its author')}</span>
+            ) : null}
             {delivery.event === 'note.withdrawn' ? (
               <span className="block text-hint text-muted">{t('Note withdrawn by its author')}</span>
             ) : null}

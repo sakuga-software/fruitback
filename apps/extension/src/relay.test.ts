@@ -7,6 +7,7 @@ import {
   CHECK_PATH,
   EDIT_PATH,
   WITHDRAW_PATH,
+  PLACE_PATH,
   FEEDBACK_PATH,
   REPLY_PATH,
   type RelaySeams,
@@ -177,10 +178,14 @@ describe('the relay refuses before it sends', () => {
     }
   });
 
-  it('relays the withdrawal of one note by its author, with the credential of the session (FRU-605)', async () => {
-    for (const endpoint of ['https://worker.test', 'https://worker.test/fruitback']) {
+  it('relays the withdrawal and the move of one note by its author, with the credential of the session (FRU-605)', async () => {
+    for (const [endpoint, path] of [
+      ['https://worker.test', 'withdraw'],
+      ['https://worker.test/fruitback', 'withdraw'],
+      ['https://worker.test', 'place'],
+    ] as const) {
       const { relay, sent } = harness({ readSite: async () => ({ ...TEAM, endpoint }) });
-      const url = `${endpoint}/feedback/issue_1/withdraw?client=acme`;
+      const url = `${endpoint}/feedback/issue_1/${path}?client=acme`;
 
       const answer = await relay({ ...WRITE, url, body: '{"url":"https://acme.dev/"}' }, 'https://acme.dev');
 
@@ -218,6 +223,9 @@ describe('the relay refuses before it sends', () => {
       '/feedback/issue_1/withdraw/x',
       '/feedback/issue_1/withdraw/../../../session/pair',
       '/feedback//withdraw',
+      // FRU-605: a move of one note, and nothing around it.
+      '/feedback/issue_1/place/x',
+      '/feedback//place',
     ]) {
       const answer = await relay({ ...READ, url: `https://worker.test${path}` }, 'https://acme.dev');
       assert.partialDeepStrictEqual(answer, { ok: false, body: 'endpoint-not-declared-for-this-site' }, path);
@@ -423,7 +431,7 @@ describe('what the widget sends is what the relay allows', () => {
     assert.ok(resolved.includes('/feedback/issue_1/check'), 'the guard no longer sees the path of a verdict');
     assert.ok(resolved.includes('/feedback/issue_1/text'), 'the guard no longer sees the path of an edit (FRU-475)');
     assert.ok(
-      resolved.includes('/feedback/issue_1/withdraw'),
+      resolved.includes('/feedback/issue_1/withdraw') && resolved.includes('/feedback/issue_1/place'),
       'the guard no longer sees the path of a withdrawal (FRU-605)',
     );
     assert.ok(resolved.includes(ATTACHMENTS_PATH), 'the guard no longer sees the path of a file (FRU-332)');
@@ -438,7 +446,8 @@ describe('what the widget sends is what the relay allows', () => {
           REPLY_PATH.test(path ?? '') ||
           CHECK_PATH.test(path ?? '') ||
           EDIT_PATH.test(path ?? '') ||
-          WITHDRAW_PATH.test(path ?? ''),
+          WITHDRAW_PATH.test(path ?? '') ||
+          PLACE_PATH.test(path ?? ''),
         path ?? '',
       );
     }
