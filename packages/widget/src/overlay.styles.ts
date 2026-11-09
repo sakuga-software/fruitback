@@ -620,4 +620,36 @@ export const STYLES = `
 @media (pointer: coarse) {
   .fruitback-thread-check button { min-height: 44px; }
 }
+/* « Withdraw this note? » under its text (FRU-605): asked before the note closes for the team. */
+.fruitback-thread-withdraw {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--fruitback-color-border);
+  border-radius: var(--fruitback-radius-sm);
+  background: var(--fruitback-color-surface-sunken);
+}
+.fruitback-thread-withdraw-ask { margin: 0; font: 600 13px/1.4 var(--fruitback-font-sans); }
+.fruitback-thread-withdraw-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.fruitback-thread-withdraw-confirm, .fruitback-thread-withdraw-keep {
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--fruitback-color-border-strong);
+  border-radius: var(--fruitback-radius-pill);
+  background: var(--fruitback-color-surface);
+  color: var(--fruitback-color-text);
+  font: 600 13px/1 var(--fruitback-font-sans);
+  cursor: pointer;
+}
+.fruitback-thread-withdraw-confirm { border-color: transparent; background: var(--fruitback-color-accent); color: var(--fruitback-color-on-accent); }
+.fruitback-thread-withdraw-confirm:hover:not([disabled]) { background: var(--fruitback-color-accent-strong); }
+.fruitback-thread-withdraw-keep:hover:not([disabled]) { background: var(--fruitback-color-surface-sunken); }
+.fruitback-thread-withdraw [disabled] { opacity: 0.55; cursor: default; }
+.fruitback-thread-withdraw button:focus-visible { outline: 2px solid var(--fruitback-color-accent); outline-offset: 2px; }
+.fruitback-thread-withdraw-status, .fruitback-thread-withdraw-said { margin: 0; font-size: 12px; color: var(--fruitback-color-text-muted); outline: none; }
+.fruitback-thread-withdraw-status:empty { display: none; }
+@media (pointer: coarse) {
+  .fruitback-thread-withdraw button { min-height: 44px; }
+}
 `;

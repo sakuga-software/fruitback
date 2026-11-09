@@ -43,6 +43,12 @@ export const CHECK_PATH = /^\/feedback\/[A-Za-z0-9_-]{1,100}\/check$/;
 export const EDIT_PATH = /^\/feedback\/[A-Za-z0-9_-]{1,100}\/text$/;
 
 /**
+ * The path of a withdrawal of one note by its author (FRU-605): `FEEDBACK_PATH`, the id, then
+ * `/withdraw`. The worker decides who may, as for an edit.
+ */
+export const WITHDRAW_PATH = /^\/feedback\/[A-Za-z0-9_-]{1,100}\/withdraw$/;
+
+/**
  * The path of a file of a note on its way (FRU-332): `POST /attachments`, its bytes in base64 between
  * the page and the background. The only path that takes a body in base64.
  */
@@ -185,7 +191,13 @@ function targets(url: string, endpoint: string): boolean {
     if (!target.pathname.startsWith(base)) return false;
     const rest = target.pathname.slice(base.length);
 
-    return REPLY_PATH.test(rest) || CHECK_PATH.test(rest) || EDIT_PATH.test(rest) || rest === ATTACHMENTS_PATH;
+    return (
+      REPLY_PATH.test(rest) ||
+      CHECK_PATH.test(rest) ||
+      EDIT_PATH.test(rest) ||
+      WITHDRAW_PATH.test(rest) ||
+      rest === ATTACHMENTS_PATH
+    );
   } catch {
     return false;
   }

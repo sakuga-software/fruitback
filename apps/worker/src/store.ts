@@ -213,6 +213,22 @@ export type NoteStore = {
     client: ClientConfig | undefined,
     policy: ClientPolicy,
   ): Promise<{ note: Note; comment: NoteComment } | 'not-open' | undefined>;
+  /**
+   * The author withdraws an open note (FRU-605): it goes to `closed`, with a marked reply under it
+   * (`withdrawText`), and nothing is deleted. The worker's own store does both in one transaction,
+   * under the lock of the row: `not-open` when the note was done or closed since the caller read it.
+   * Linear writes the reply, then moves the issue to the first state of type `canceled` of its team.
+   * The answer is the reply and the stage of the note now. `undefined`: this store holds no such
+   * note for this client. Absent: this store takes no withdrawal (GitHub, FRU-628).
+   */
+  withdraw?(
+    target: ReplyTarget,
+    withdrawal: NewWithdrawal,
+    client: ClientConfig | undefined,
+    policy: ClientPolicy,
+  ): Promise<{ comment: NoteComment; stage: NoteStage } | 'not-open' | undefined>;
+  /** Whether the store of this client takes a withdrawal, for a store that routes by client. */
+  withdrawalsFor?(client: ClientConfig | undefined): Promise<boolean>;
   /** Whether the store of this client takes an edit, for a store that routes by client. */
   editsFor?(client: ClientConfig | undefined, policy: Pick<ClientPolicy, 'showComments'>): Promise<boolean>;
   /**
@@ -277,6 +293,12 @@ export type NewEdit = {
 };
 
 /**
+ * A withdrawal of a note by its author (FRU-605). `note` and `identifier`: the note as the route read
+ * it, which an address names in `note.withdrawn`.
+ */
+export type NewWithdrawal = { author: Extract<ReplyAuthor, { kind: 'member' }>; note: Note; identifier: string };
+
+/**
  * The stages where the author edits a note (FRU-605): open, before the team marks it done. A note
  * done waits for the verdict of its author (FRU-294), and a closed note says nothing more.
  */
@@ -330,6 +352,11 @@ export async function takesEdits(
   if (store.editsFor !== undefined) return store.editsFor(client, policy);
 
   return store.edit !== undefined && (store.editsInReplies !== true || policy.showComments);
+}
+
+/** Whether a store takes a withdrawal of a note for this client (FRU-605). */
+export async function takesWithdrawals(store: NoteStore, client: ClientConfig | undefined): Promise<boolean> {
+  return store.withdrawalsFor === undefined ? store.withdraw !== undefined : store.withdrawalsFor(client);
 }
 
 /**

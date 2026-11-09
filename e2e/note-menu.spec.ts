@@ -13,6 +13,7 @@ const NAME = 'Camille Durand';
 const MORE = /^(More actions on your note|Autres actions sur votre note)$/;
 const EDIT = /^(Edit the note|Modifier la note)$/;
 const COPY = /^(Copy link to the note|Copier le lien de la note)$/;
+const WITHDRAW = /^(Withdraw the note|Retirer la note)$/;
 
 async function paired(extension: LoadedExtension): Promise<void> {
   const { link } = await mintPairing(NAME);
@@ -52,7 +53,7 @@ test('the author of an open note copies its link and opens the edit from « ⋯ 
   const id = await pinFor(page, 'The price is wrong').getAttribute('data-fruitback-pin');
 
   await more.click();
-  await expect(thread.getByRole('menuitem')).toHaveText([EDIT, COPY]);
+  await expect(thread.getByRole('menuitem')).toHaveText([EDIT, COPY, WITHDRAW]);
   await page.emulateMedia({ reducedMotion: 'reduce' });
   const scanned = await new AxeBuilder({ page }).include('[data-fruitback-host]').analyze();
   expect(scanned.violations.map((violation) => violation.id)).toEqual([]);
@@ -100,5 +101,41 @@ test('the author of an open note copies its link and opens the edit from « ⋯ 
   await other.goto(copied);
   await expect(other.locator('.fruitback-thread .fruitback-thread-note')).toHaveText('The price is wrong', {
     timeout: 15_000,
+  });
+});
+
+test('the author withdraws an open note from « ⋯ »: asked first, then closed, and it stays closed (FRU-605)', async ({
+  extension,
+}) => {
+  test.slow();
+  await paired(extension);
+  const page = await extension.context.newPage();
+  await openBareSite(page, 'note-withdraw');
+  const popup = await openPopup(extension, page);
+  await popup.getByRole('button', { name: /^(Turn on|Activer)$/ }).click();
+  await expect(page.locator('[data-fruitback-host-launch]')).toBeVisible();
+  await plantOn(page, '[data-testid="card-espresso"] .add', 'Please take this back');
+
+  await pinFor(page, 'Please take this back').locator('.fruitback-pin-badge').click();
+  const thread = page.locator('.fruitback-thread');
+  await thread.getByRole('button', { name: MORE }).click();
+  await thread.getByRole('menuitem', { name: WITHDRAW }).click();
+  await expect(thread.getByText(/^(Withdraw this note\?|Retirer cette note)/)).toBeVisible();
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const scanned = await new AxeBuilder({ page }).include('[data-fruitback-host]').analyze();
+  expect(scanned.violations.map((violation) => violation.id)).toEqual([]);
+  await thread.getByRole('button', { name: /^(Withdraw|Retirer)$/ }).click();
+
+  await expect(thread.locator('.fruitback-thread-withdraw-said')).toHaveText(
+    /^(Withdrawn\. The note is closed\.|Retirée\. La note est fermée\.)$/,
+  );
+  await expect(pinFor(page, 'Please take this back')).toHaveAttribute('data-fruitback-stage', 'closed');
+  await expect(thread.getByRole('button', { name: MORE })).toHaveCount(0);
+  await expect(thread.locator('.fruitback-thread-reply-body')).toContainText([/Withdrew the note|A retiré la note/]);
+
+  // The store says it too: the note is closed after a read, and nothing offers it again.
+  await page.reload();
+  await expect(pinFor(page, 'Please take this back')).toHaveAttribute('data-fruitback-stage', 'closed', {
+    timeout: 20_000,
   });
 });

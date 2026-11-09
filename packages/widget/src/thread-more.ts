@@ -1,4 +1,4 @@
-import type { NoteIssue, NoteStage } from '@fruitback/shared';
+import type { NoteComment, NoteIssue, NoteStage } from '@fruitback/shared';
 import { createIcon } from './icons.ts';
 import { deepActiveElement } from './focus.ts';
 import type { Translator } from './messages.ts';
@@ -38,6 +38,8 @@ export type MoreFooter = {
   said: Map<string, MoreSaid>;
   /** Opens the field of the edit (FRU-475). Left out: the worker does not offer an edit now. */
   edit?: () => void;
+  /** Asks « Withdraw this note? » in the thread. Left out: the worker does not offer it now. */
+  withdraw?: () => void;
   /** Draws the thread again, with the focus on « ⋯ », or on the link to copy by hand. */
   settled: () => void;
 };
@@ -68,7 +70,7 @@ export function moreMenu(document: Document, issue: NoteIssue, t: Translator, mo
   menu.setAttribute('aria-label', t.text('more.open'));
   menu.hidden = true;
 
-  const item = (key: 'more.edit' | 'more.copyLink', run: () => void): HTMLButtonElement => {
+  const item = (key: 'more.edit' | 'more.copyLink' | 'more.withdraw', run: () => void): HTMLButtonElement => {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'fruitback-thread-more-item';
@@ -103,6 +105,7 @@ export function moreMenu(document: Document, issue: NoteIssue, t: Translator, mo
           more.settled();
         });
     }),
+    ...(more.withdraw === undefined ? [] : [item('more.withdraw', more.withdraw)]),
   ];
 
   function open(focus: 'first' | 'last'): void {
@@ -199,4 +202,131 @@ export function moreSaid(
   field.addEventListener('focus', () => field.select());
 
   return [line, field];
+}
+
+/** Why a withdrawal did not go (FRU-605). `refused`: the worker takes none of this note any more. */
+export type WithdrawFailure = 'retry' | 'wait' | 'signed-out' | 'refused';
+
+/** What the store kept of a withdrawal: the stage of the note now, and the reply that says so. */
+export type WithdrawAnswer = { stage: NoteStage; comment?: NoteComment };
+
+/** A seam like the edit's (FRU-605): the overlay does not know the worker. */
+export type WithdrawSeam = { send(issue: NoteIssue): Promise<WithdrawAnswer | WithdrawFailure> };
+
+/** What the withdrawals of the notes share, by note: a block is built again with its thread. */
+export type WithdrawFooter = {
+  seam: WithdrawSeam;
+  /** The notes whose question « Withdraw this note? » is open. */
+  asking: Set<string>;
+  inFlight: Set<string>;
+  said: Map<string, string>;
+  /** Draws the thread again; with `kept`, the pins too, with this thread kept open. */
+  settled: (issue: NoteIssue, focus: 'confirm' | 'said' | 'more', kept?: WithdrawAnswer) => void;
+};
+
+const WITHDRAW_FAILURES = {
+  retry: 'withdraw.failed',
+  wait: 'withdraw.failedWait',
+  'signed-out': 'withdraw.failedSignedOut',
+  refused: 'withdraw.refused',
+} as const;
+
+/**
+ * « Withdraw this note? », with « Withdraw » and « Keep it », under the text of the note (FRU-605).
+ * A withdrawal closes the note for the team, so it is asked first. After it, one line says it was
+ * done, in the thread it was done in.
+ */
+export function withdrawBlock(
+  document: Document,
+  issue: NoteIssue,
+  t: Translator,
+  withdraw: WithdrawFooter | undefined,
+): HTMLElement[] {
+  if (withdraw === undefined) return [];
+  const id = issue.note.id;
+  const said = withdraw.said.get(id);
+  if (!withdraw.asking.has(id)) {
+    if (said === undefined) return [];
+    const line = document.createElement('p');
+    line.className = 'fruitback-thread-withdraw-said';
+    line.setAttribute('role', 'status');
+    line.tabIndex = -1;
+    line.textContent = said;
+
+    return [line];
+  }
+
+  const block = document.createElement('div');
+  block.className = 'fruitback-thread-withdraw';
+  const askId = `fruitback-withdraw-${id}`;
+  const ask = document.createElement('p');
+  ask.className = 'fruitback-thread-withdraw-ask';
+  ask.id = askId;
+  ask.textContent = t.text('withdraw.ask');
+  const sending = withdraw.inFlight.has(id);
+  const confirm = document.createElement('button');
+  confirm.type = 'button';
+  confirm.className = 'fruitback-thread-withdraw-confirm';
+  confirm.textContent = sending ? t.text('withdraw.sending') : t.text('withdraw.confirm');
+  confirm.disabled = sending;
+  const keep = document.createElement('button');
+  keep.type = 'button';
+  keep.className = 'fruitback-thread-withdraw-keep';
+  keep.textContent = t.text('withdraw.keep');
+  keep.disabled = sending;
+  const actions = document.createElement('div');
+  actions.className = 'fruitback-thread-withdraw-actions';
+  actions.setAttribute('role', 'group');
+  actions.setAttribute('aria-labelledby', askId);
+  actions.append(confirm, keep);
+  const status = document.createElement('span');
+  status.className = 'fruitback-thread-withdraw-status';
+  status.setAttribute('role', 'status');
+  status.setAttribute('aria-live', 'polite');
+  status.textContent = sending ? t.text('withdraw.sending') : (said ?? '');
+
+  keep.addEventListener('click', () => {
+    withdraw.asking.delete(id);
+    withdraw.said.delete(id);
+    withdraw.settled(issue, 'more');
+  });
+  confirm.addEventListener('click', () => {
+    if (withdraw.inFlight.has(id)) return;
+    withdraw.inFlight.add(id);
+    withdraw.said.delete(id);
+    withdraw.settled(issue, 'confirm');
+    void withdraw.seam
+      .send(issue)
+      .catch((): WithdrawFailure => 'retry')
+      .then((answer) => {
+        withdraw.inFlight.delete(id);
+        if (typeof answer === 'string') {
+          withdraw.said.set(id, t.text(WITHDRAW_FAILURES[answer]));
+          withdraw.settled(issue, 'confirm');
+
+          return;
+        }
+        withdraw.asking.delete(id);
+        withdraw.said.set(id, t.text('withdraw.done'));
+        withdraw.settled(issue, 'said', answer);
+      });
+  });
+  block.append(ask, actions, status);
+
+  return [block];
+}
+
+/** The stage the store answers, and the reply of the withdrawal once, on the issue on screen. */
+export function applyWithdraw(issue: NoteIssue, answer: WithdrawAnswer): void {
+  const { comment } = answer;
+  if (comment !== undefined && issue.comments !== undefined && !issue.comments.some((each) => each.id === comment.id)) {
+    issue.comments = [...issue.comments, comment];
+  }
+  if (answer.stage !== issue.stage) {
+    issue.stage = answer.stage;
+    // The store's word was for the stage of before: the stage says it until the next read.
+    issue.stateName = '';
+  }
+  delete issue.editable;
+  delete issue.withdrawable;
 }
