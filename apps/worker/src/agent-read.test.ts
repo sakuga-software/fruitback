@@ -3,6 +3,7 @@ import { describe, it } from 'vitest';
 import { noteFixture } from '@fruitback/shared/note.fixture';
 import { type World, callOn, memberOf, shareWith, signInTo, workspaceIn, worlds } from './console-world.fixture.ts';
 import { createPostgresNoteStore } from './notes-postgres.ts';
+import { rowsOf } from './postgres.fixture.ts';
 import { createPairing, redeemPairing } from './session.ts';
 import type { NoteStore } from './store.ts';
 
@@ -113,6 +114,42 @@ describe('the notes an agent works on, in the read of a page (FRU-618)', () => {
       assert.equal(agentOf(issues, 'ag_2'), undefined);
       assert.ok(!JSON.stringify(issues).includes('claude.ai'), 'the address reached a reader who is not of the team');
     }
+  });
+
+  it('finds the session of an old note of a busy site: only the sessions that name the notes of the page count (review of #880)', async () => {
+    const { world, store, site, tokens, identifiers } = await aSite();
+    // 600 newer sessions of other notes of the site, after the one of the note.
+    const connector = (await rowsOf(world.database, `SELECT connector_id FROM agent_sessions LIMIT 1`))[0]
+      ?.connector_id as string;
+    for (let n = 0; n < 600; n += 1) {
+      await world.accounts.keepAgentSession(connector, {
+        id: `dlv_other_${n}`,
+        site,
+        identifiers: [`OTHER-${n}`],
+        url: `https://claude.ai/code/session_other_${n}`,
+        at: Date.now() + 1_000 + n,
+      });
+    }
+
+    const issues = await read(world, site, tokens.alice, store);
+    assert.deepEqual(agentOf(issues, 'ag_1'), { url: SESSION });
+    assert.equal(agentOf(issues, 'ag_2'), undefined);
+    assert.equal(identifiers.length, 2);
+  });
+
+  it('keeps the line of every note when a session of the site holds identifiers that are not JSON (review of #887)', async () => {
+    const { world, store, site, tokens } = await aSite();
+    // A row written by hand, or by a worker of before: its text is no JSON array.
+    await rowsOf(
+      world.database,
+      `INSERT INTO agent_sessions (id, connector_id, site_id, identifiers, session_url, started_at)
+       SELECT 'dlv_broken', connector_id, site_id, 'not json', 'https://claude.ai/code/session_broken', started_at + 1
+       FROM agent_sessions LIMIT 1`,
+    );
+
+    const issues = await read(world, site, tokens.alice, store);
+    assert.deepEqual(agentOf(issues, 'ag_1'), { url: SESSION });
+    assert.equal(agentOf(issues, 'ag_2'), undefined);
   });
 
   it('gives no address that is not https, and keeps the line', async () => {

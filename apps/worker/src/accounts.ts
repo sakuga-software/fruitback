@@ -924,10 +924,12 @@ export type AccountStore = {
   /** The sessions a routine connector of this workspace started, newest first, 50 at most. */
   agentSessions(workspace: string, connector: string): Promise<AgentSession[]>;
   /**
-   * The sessions started for the notes of one site of this workspace (FRU-618), newest first, 200 at
-   * most: the thread of a note says an agent works on it. Kept `AGENT_SESSION_KEPT_DAYS`.
+   * The sessions started for these notes of one site of this workspace (FRU-618), by what Fruitback
+   * calls them, newest first: the thread of a note says an agent works on it. Only the sessions that
+   * name one of `identifiers`, the notes of the page read, so an old note of a busy site is not
+   * pushed out by newer sessions of other notes. Kept `AGENT_SESSION_KEPT_DAYS`.
    */
-  agentSessionsOfSite(workspace: string, site: string): Promise<AgentSession[]>;
+  agentSessionsOfSite(workspace: string, site: string, identifiers: readonly string[]): Promise<AgentSession[]>;
   /** Removes the sessions started before `before`. Answers how many. */
   dropAgentSessions(before: number): Promise<number>;
   /**
