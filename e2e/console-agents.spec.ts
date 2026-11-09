@@ -362,6 +362,28 @@ test('the last key revoked: one « New key », in the empty card, with the focus
   await expect(page.getByRole('button', { name: 'New key' })).toBeFocused();
 });
 
+test('the last key revoked while React commits after the next frame: the focus is still on « New key » (FRU-630)', async ({
+  page,
+}) => {
+  // A loaded runner, made sure: React's scheduler posts its renders on a MessageChannel, and here
+  // each post runs 100 ms late, so a frame always comes before the commit that empties the list.
+  // A focus given in a frame then went to the « New key » of the head, which the commit removed.
+  await page.addInitScript(() => {
+    const post = MessagePort.prototype.postMessage;
+    MessagePort.prototype.postMessage = function (this: MessagePort, ...args: Parameters<typeof post>) {
+      setTimeout(() => post.apply(this, args), 100);
+    } as typeof post;
+  });
+  await workerWith(page, { keys: KEYS().slice(0, 1) });
+  await page.goto(`${CONSOLE}/w/w1/settings/agents`);
+  const ci = row(page, 'Claude on CI');
+  await ci.getByRole('button', { name: 'Revoke', exact: true }).click();
+  await ci.getByRole('button', { name: 'Revoke « Claude on CI »' }).click();
+  await expect(page.getByRole('heading', { name: 'No agent key yet' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'New key' })).toHaveCount(1);
+  await expect(page.getByRole('button', { name: 'New key' })).toBeFocused();
+});
+
 test('with no key, the screen says what a key is for; at 390 px in French nothing scrolls sideways', async ({
   page,
 }) => {

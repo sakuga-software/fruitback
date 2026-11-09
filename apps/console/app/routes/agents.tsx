@@ -1,4 +1,4 @@
-import { type FormEvent, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import { type FormEvent, type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { STAGE_NAMES, isStage } from '../stages';
 import {
   API,
@@ -78,8 +78,17 @@ function AgentsScreen() {
     if (may) void load();
   }, [load, may]);
 
-  /** Focus goes back to « New key » once the form or the key shown once is gone. */
-  const backToNew = () => requestAnimationFrame(() => newKey.current?.querySelector<HTMLElement>('a, button')?.focus());
+  // Focus goes back to « New key » once the form, the key shown once or the last key is gone.
+  // It is given after the commit that places the button, not in a frame (FRU-630). The button moves
+  // from the head to the empty card when the last key goes. A frame can run before that commit: the
+  // focus then went to the button of the head, and fell to the body when the commit removed it.
+  const [focusNew, setFocusNew] = useState(false);
+  const backToNew = () => setFocusNew(true);
+  useLayoutEffect(() => {
+    if (!focusNew) return;
+    setFocusNew(false);
+    newKey.current?.querySelector<HTMLElement>('a, button')?.focus();
+  }, [focusNew]);
 
   const crumbs = (
     // The crumbs are in the room above the title, as on the page of the statuses (FRU-405).
