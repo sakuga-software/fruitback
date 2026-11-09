@@ -1466,12 +1466,20 @@ export function createComposer(options: ComposerOptions): Composer {
   }
 
   /**
+   * The open that asked for the capture of the element. It is asked once per open: a read that comes
+   * after it takes no second one, and a capture the person removed does not come back.
+   */
+  let elementAsked = -1;
+
+  /**
    * The capture of the element, joined at the open (FRU-609), where the host captures and the note
    * takes files. It waits in the field and leaves only with the note. Nothing is said when it does
    * not come: the person did not ask for it, and the camera icon still takes one.
    */
   function takeElement(): void {
+    if (elementAsked === session) return;
     if (seam?.captureElement === undefined || !seam.captures() || seam.offer(selected) !== 'offered') return;
+    elementAsked = session;
     const mine = session;
     void seam
       .captureElement()
@@ -1826,7 +1834,12 @@ export function createComposer(options: ComposerOptions): Composer {
     drawDestinations();
     drawAttachments();
   });
-  const stopFollowingOffer = seam?.subscribe(drawAttachments);
+  // A composer opened before the first read of the page offers no file yet. When the read says that
+  // files go, the capture of the element joins then, as it does at an open after the read.
+  const stopFollowingOffer = seam?.subscribe(() => {
+    drawAttachments();
+    if (!root.hidden) takeElement();
+  });
   attachPage.addEventListener('click', () => void capture('page', attachTrigger));
   attachArea.addEventListener('click', () => void capture('area', attachTrigger));
   // A file dropped on the field joins the note (FRU-607): the field is where the files are.

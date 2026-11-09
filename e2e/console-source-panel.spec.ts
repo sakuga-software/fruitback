@@ -1,6 +1,7 @@
 import { type Page, expect, test } from '@playwright/test';
 import { fulfillSites } from './console-workspace.ts';
 import { WORKER_ORIGIN } from './pin.ts';
+import { unfolded } from './settled.ts';
 
 /**
  * Where the panel of a source opens (FRU-161, FRU-403). At every width it is an accordion under the
@@ -78,7 +79,7 @@ for (const { width, height, locale } of [
       // It takes the width of its row, right under it, inside its card, and the next card comes after
       // it (FRU-542): the border of the card, 12 px, and the border of the next card.
       // Measured once it unfolded (FRU-563).
-      await expect(panel(page)).toHaveAttribute('data-settled', '');
+      await unfolded(page);
       const under = (await row.boundingBox())!;
       const opened = (await panel(page).boundingBox())!;
       expect(Math.abs(opened.x - under.x)).toBeLessThan(2);
@@ -139,6 +140,7 @@ for (const { width, height, locale, name } of [
     // Escape in something of the panel that is open closes that thing, and the panel stays. The
     // places of a site are chosen on the Sites screen since FRU-399: the confirmation is that thing.
     const disconnect = region.getByRole('button', { name: /^(Disconnect|Déconnecter) Linear$/ });
+    await unfolded(page);
     await disconnect.click();
     await page.keyboard.press('Escape');
     await expect(disconnect).toBeFocused();

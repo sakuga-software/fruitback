@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { type Page, type Route, expect, test } from '@playwright/test';
 import { ACME, type Role, sideScroll, stubWorker, fulfillSites } from './console-workspace.ts';
+import { unfolded } from './settled.ts';
 
 /**
  * GitHub on the Connectors screen (FRU-361): « Connect » goes to the App by the start of the worker,
@@ -163,7 +164,7 @@ async function expectNoViolation(page: Page, name: string): Promise<void> {
 async function openGithub(page: Page): Promise<void> {
   await page.goto(`${CONSOLE}/w/w1/connectors`);
   await rows(page).nth(1).click();
-  await expect(panel(page)).toBeVisible();
+  await unfolded(page);
 }
 
 test('« Connect » of GitHub asks the worker where to go, then goes there', async ({ page }) => {
