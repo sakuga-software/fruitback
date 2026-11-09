@@ -618,6 +618,35 @@ describe('the address and the token of a GitLab connector (FRU-623)', () => {
     assert.notEqual(seen[0]?.connection, 'upgrade');
   });
 
+  it('the guarded fetch closes the socket of an answer it cuts, or a redirect it refuses (review of #865)', async () => {
+    const closed: string[] = [];
+    const server = createServer((request, response) => {
+      request.socket.on('close', () => closed.push(request.url ?? ''));
+      if (request.url === '/moved') {
+        response.writeHead(302, { Location: '/elsewhere' });
+        // The answer goes on, and never ends by itself.
+        response.write('.');
+
+        return;
+      }
+      response.writeHead(200, { 'Content-Type': 'application/json' });
+      // An answer that never ends: only the client can end it.
+      const timer = setInterval(() => response.write('x'.repeat(1_024)), 5);
+      response.on('close', () => clearInterval(timer));
+    });
+    server.keepAliveTimeout = 60_000;
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    servers.push(server);
+    const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    const small = createGuardedFetch({ request: httpRequest as never, allows: () => true, maxBytes: 4_096 });
+    await assert.rejects(small(`${origin}/endless`, {}), /too long/);
+    await assert.rejects(small(`${origin}/moved`, {}), /redirect/);
+    // The server sees both sockets close, well before a caller's timeout.
+    for (let wait = 0; wait < 50 && closed.length < 2; wait += 1)
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.deepEqual(closed.sort(), ['/endless', '/moved']);
+  });
+
   it('the guarded fetch of the worker refuses the loopback by default', async () => {
     const gitlab = await fakeGitlab({ [TOKEN]: { user: 'bot', projects: {} } });
     const guarded = createGuardedFetch({ request: httpRequest as never });
