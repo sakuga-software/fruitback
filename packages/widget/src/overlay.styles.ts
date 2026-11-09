@@ -596,7 +596,9 @@ export const STYLES = `
   .fruitback-thread-reply-send { min-height: 44px; }
 }
 /* FRU-603: a note the team marked done, and the verdict of its author. Its field and « Send » are the edit's. */
-.fruitback-thread-done { margin: 0; padding: 10px 16px 0; font: 600 12px/1.5 var(--fruitback-font-sans); color: var(--fruitback-color-text-muted); }
+.fruitback-thread-agent a { color: var(--fruitback-color-text); }
+.fruitback-thread-done, .fruitback-thread-agent { margin: 0; padding: 10px 16px 0; font: 600 12px/1.5 var(--fruitback-font-sans); color: var(--fruitback-color-text-muted); }
+.fruitback-thread-agent { padding-bottom: 10px; }
 .fruitback-thread-check { display: flex; flex-direction: column; gap: 10px; padding: 12px 16px 14px; border-top: 1px solid var(--fruitback-color-border); }
 .fruitback-thread-check-ask { margin: 0; font: 600 13px/1.4 var(--fruitback-font-sans); }
 .fruitback-thread-check-actions, .fruitback-thread-check-form-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }

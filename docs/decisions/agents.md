@@ -302,6 +302,22 @@ Mathieu answered on 2026-11-05, and the orchestrator took the five recommendatio
 This section changes a rule of security of this page (decision 1): the PR that brings it is
 critical, and Mathieu merges it.
 
+## The line of an agent in the thread (FRU-618)
+
+### The rules, in short
+
+- **The read says `agent` on a note that a session of a routine names** (`agentSessionsOfSite`, the
+  newest 200 of the site, kept 30 days): `{}` for every reader, `{ url }` for a session of a member
+  of the workspace who sees the tracker (`memberOf` and `seesTracker`). Added after the cache, as
+  `mine`: the cached answer is shared by every reader of the page.
+- **Decision of the orchestrator, 2026-11-08** (Mathieu's recommendation of 2026-11-05, taken): the
+  line « An agent is working on this note » for everybody, the address of the session for the team
+  only. A reviewer could not open it: the session is the team's.
+- **Only an `https` address is given**, as `noteIssueSchema` takes it: another would make the widget
+  drop the note.
+- A read of the sessions that fails is said in the log, and the notes come with no line.
+- The `404` of `/fire` is FRU-627, out of this ticket.
+
 ## The decisions
 
 On 2026-10-26 Mathieu answered:

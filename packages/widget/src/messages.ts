@@ -230,6 +230,9 @@ export const ENGLISH = {
   'thread.edited': 'Edited the note',
   /** The reply the worker writes when the author withdraws their note (FRU-605). */
   'thread.withdrawn': 'Withdrew the note',
+  // FRU-618: a session of a routine was started for the note; its address for the team only.
+  'thread.agentWorks': 'An agent is working on this note',
+  'thread.agentSession': 'Open the session',
   // FRU-603: the verdict of the author on a note the team marked done, in its thread.
   /** Who marked the note done: the author of the newest reply of the team. */
   'check.doneBy': '{name} marked it done',

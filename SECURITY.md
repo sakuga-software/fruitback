@@ -177,7 +177,10 @@ clear unless this list says otherwise:
   are not encrypted by that key. The token of a Claude Code routine is one of them.
 - The sessions a Claude Code routine started for a call, in `agent_sessions`: the site,
   what Fruitback calls the notes of the call, and the address of the session, never their text,
-  for 30 days.
+  for 30 days. The read of a page tells every reader of a note that an agent works on it, and gives
+  the address of the session only to a session of a member of the workspace whose role sees the
+  tracker. It is added to each answer after the cache, so a reader never gets it from the answer
+  of another; and only an `https` address is given.
 - The addresses of callers, for two minutes, in the table `kv` of the rate limit.
 - The logo of a workspace, when its owner or an admin sent one: the bytes of one image,
   in the table `workspace_logos`, until it is removed or replaced, or its workspace goes. See below.

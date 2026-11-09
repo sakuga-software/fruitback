@@ -56,6 +56,9 @@ first publish made it expensive.
 - **An issue says `withdrawable: true`** (FRU-605) to the reader who may withdraw it now: their own
   note, open, on a site with one place whose store takes a withdrawal. Optional, a read-envelope
   field: `NOTE_VERSION` does not move.
+- **An issue says `agent`** (FRU-618) when an agent works on the note: `{}`, or `{ url }` with the
+  address of its session (`https` only) for a member of the team who sees the tracker. Optional, a
+  read-envelope field: `NOTE_VERSION` does not move.
 - **An issue says `editable: true`** (FRU-475) to the reader who may edit its text now: their own
   note, open (`new`, `todo`, `progress` since FRU-605), on a site whose store takes an edit. Optional, a read-envelope field: `NOTE_VERSION` does not move.
 
