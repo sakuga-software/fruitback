@@ -27,6 +27,20 @@ export type GuardedFetchSeams = {
 /** An answer of a tracker is a page of JSON. 8 MB holds a page of 100 issues with long descriptions. */
 export const GUARDED_ANSWER_MAX_BYTES = 8 * 1024 * 1024;
 
+/** The headers of a request that describe its connection, which the worker writes itself. */
+const CONNECTION_HEADERS = new Set([
+  'host',
+  'content-length',
+  'transfer-encoding',
+  'connection',
+  'keep-alive',
+  'upgrade',
+  'te',
+  'trailer',
+  'proxy-connection',
+  'proxy-authorization',
+]);
+
 /** The headers of the transfer of an answer, which no longer describe the body once it is read whole. */
 const TRANSFER_HEADERS = new Set(['content-encoding', 'content-length', 'transfer-encoding']);
 
@@ -58,7 +72,11 @@ export function createGuardedFetch({
     if (isIP(literal) !== 0 && !allows(literal)) {
       throw new TypeError('The address resolves to a network the worker does not call');
     }
-    const headers: Record<string, string> = Object.fromEntries(asked.headers);
+    // The headers of the connection are the worker's, never the caller's: the host comes from the
+    // address, and the length from the bytes that go (review of #865).
+    const headers: Record<string, string> = Object.fromEntries(
+      [...asked.headers].filter(([name]) => !CONNECTION_HEADERS.has(name)),
+    );
     if (body !== undefined) headers['content-length'] = String(body.byteLength);
     // The bytes of an answer are read as they come: none is asked compressed (review of #865).
     headers['accept-encoding'] = 'identity';

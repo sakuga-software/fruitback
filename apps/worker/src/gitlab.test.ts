@@ -592,6 +592,32 @@ describe('the address and the token of a GitLab connector (FRU-623)', () => {
     await assert.rejects(http(`http://127.0.0.1:${(bomb.address() as AddressInfo).port}/`, {}), TypeError);
   });
 
+  it('the guarded fetch writes the headers of the connection itself, whatever the caller gives (review of #865)', async () => {
+    const seen: Record<string, string | string[] | undefined>[] = [];
+    const server = createServer((request, response) => {
+      seen.push(request.headers);
+      request.resume();
+      request.on('end', () => response.end('{}'));
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    servers.push(server);
+    const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    await http(`${origin}/`, {
+      method: 'POST',
+      headers: {
+        'Content-Length': '999',
+        'Transfer-Encoding': 'chunked',
+        Host: 'internal.acme',
+        Connection: 'upgrade',
+      },
+      body: 'four',
+    });
+    assert.equal(seen[0]?.host, new URL(origin).host);
+    assert.equal(seen[0]?.['content-length'], '4');
+    assert.equal(seen[0]?.['transfer-encoding'], undefined);
+    assert.notEqual(seen[0]?.connection, 'upgrade');
+  });
+
   it('the guarded fetch of the worker refuses the loopback by default', async () => {
     const gitlab = await fakeGitlab({ [TOKEN]: { user: 'bot', projects: {} } });
     const guarded = createGuardedFetch({ request: httpRequest as never });
