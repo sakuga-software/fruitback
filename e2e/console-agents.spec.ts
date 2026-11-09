@@ -30,7 +30,10 @@ type Key = {
   lastUsedAt: string | null;
 };
 
-const iso = (ms: number) => new Date(Date.now() + ms).toISOString();
+// « Yesterday » is a day of the calendar: 26 h before 01:00 is two days before. The clock of the page
+// stops at noon, and the moments below count from it.
+const NOON = new Date(2026, 9, 13, 12, 0, 0);
+const iso = (ms: number) => new Date(NOON.getTime() + ms).toISOString();
 
 /** A key in use, one that ends in 5 days and was used yesterday, one that ended and was never used. */
 const KEYS = (): Key[] => [
@@ -84,6 +87,7 @@ async function workerWith(
   options: { workspace?: StubbedWorkspace; keys?: Key[]; locale?: 'en' | 'fr'; sites?: typeof SITES } = {},
 ): Promise<Worker> {
   const worker: Worker = { keys: options.keys ?? KEYS(), made: [], revoked: [], asked: [] };
+  await page.clock.setFixedTime(NOON);
   const workspace = options.workspace ?? ACME;
   await stubWorker(page, {
     workspaces: [workspace],
