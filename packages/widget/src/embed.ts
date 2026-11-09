@@ -35,7 +35,7 @@ import {
   readableName,
 } from './host.ts';
 import type { FruitbackTheme } from './theme.ts';
-import type { FruitbackTransport } from './transport.ts';
+import type { FruitbackTransport, TransportResponse } from './transport.ts';
 import { callWorker, errorOf, noteWriteFailure } from './worker-client.ts';
 import type { WithdrawAnswer, WithdrawFailure } from './thread-more.ts';
 import { type NotifyAsk, createNotifyAsk } from './notify-ask.ts';
@@ -628,7 +628,7 @@ export function init(options: FruitbackOptions): Fruitback {
     },
     // FRU-605: the author moves their open note: a capture for its new element, then `moveTo`.
     move: (issue: NoteIssue) =>
-      new Promise<boolean | undefined>((resolve) => {
+      new Promise<boolean | 'busy' | undefined>((resolve) => {
         moving = { issue, resolve };
         host.start('move.banner');
       }),
@@ -667,7 +667,7 @@ export function init(options: FruitbackOptions): Fruitback {
   });
 
   /** The note its author moves (FRU-605), until the element of its new place is chosen. */
-  let moving: { issue: NoteIssue; resolve: (moved: boolean) => void } | undefined;
+  let moving: { issue: NoteIssue; resolve: (moved: boolean | 'busy') => void } | undefined;
   /** Sends the new place of the note that moves, and gives it to the note when the store kept it. */
   async function moveTo(element: Element): Promise<void> {
     const pending = moving;
@@ -684,20 +684,13 @@ export function init(options: FruitbackOptions): Fruitback {
         viewport: captureViewport(view),
       }),
     }).catch(() => undefined);
-    let body: { note?: unknown; comment?: unknown } = {};
-    try {
-      if (response?.ok === true) body = JSON.parse(response.body) as typeof body;
-    } catch {
-      // Not the answer of a worker: not moved, and it says so.
-    }
-    const note = noteSchema.safeParse(body.note);
-    if (note.success) {
-      const comment = noteCommentSchema.safeParse(body.comment);
-      applyEdit(issue, { note: note.data, ...(comment.success ? { comment: comment.data } : {}) });
+    const answer = movedOf(response);
+    if (typeof answer === 'object') {
+      applyEdit(issue, answer);
       sidebar.refresh();
       tellNotes({ kind: 'list' });
     }
-    pending.resolve(note.success);
+    pending.resolve(typeof answer === 'object' ? true : answer);
   }
   const stages = createOfferedStages();
   const destinations = createOfferedDestinations();
@@ -1934,6 +1927,28 @@ async function sendEdit(
   const body = JSON.parse(response.body) as { note?: unknown; comment?: unknown };
   const note = noteSchema.safeParse(body.note);
   if (!note.success) return 'retry';
+  const comment = noteCommentSchema.safeParse(body.comment);
+
+  return { note: note.data, ...(comment.success ? { comment: comment.data } : {}) };
+}
+
+/**
+ * What the worker answered to a move of a note (FRU-605): the note at its new place, `busy` for
+ * `409 move-in-progress` (another move of this note holds its key: the author is told to wait), or
+ * `false` for any other answer, and for none.
+ */
+export function movedOf(response: TransportResponse | undefined): EditAnswer | 'busy' | false {
+  if (response === undefined) return false;
+  if (response.status === 409 && errorOf(response.body) === 'move-in-progress') return 'busy';
+  if (!response.ok) return false;
+  let body: { note?: unknown; comment?: unknown };
+  try {
+    body = JSON.parse(response.body) as typeof body;
+  } catch {
+    return false;
+  }
+  const note = noteSchema.safeParse(body?.note);
+  if (!note.success) return false;
   const comment = noteCommentSchema.safeParse(body.comment);
 
   return { note: note.data, ...(comment.success ? { comment: comment.data } : {}) };

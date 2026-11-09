@@ -36,10 +36,11 @@ const SAID = {
   manual: 'more.copyManually',
   moved: 'move.done',
   moveFailed: 'move.failed',
+  moveBusy: 'move.failedBusy',
 } as const;
 
 /** What the last action of the menu said, by note: the link copied, or the link to copy by hand. */
-export type MoreSaid = 'copied' | 'manual' | 'moved' | 'moveFailed';
+export type MoreSaid = 'copied' | 'manual' | 'moved' | 'moveFailed' | 'moveBusy';
 
 /** What the menus of the threads share, by note: a menu is built again with its thread. */
 export type MoreFooter = {

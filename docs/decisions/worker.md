@@ -3543,7 +3543,10 @@ replies, and on a public site mounted by the extension with no session, only the
   15 minutes (`MOVE_LOCK_MS`), longer than a call to a tracker can last (`fetch` of Node gives up
   after 300 s with no headers and 300 s with no body), so it never expires under a move still running;
   it is let go as soon as the store answers, in three tries, and a key that stays is said in the log
-  (`letGo`, round 6 of #877).
+  (`letGo`, round 6 of #877). Then each move of that note answers `409 move-in-progress` until the
+  key expires, and the widget tells the author why (round 10 of #877). This is accepted: a shorter
+  key, or a key renewed during the call, writes to the KV that just refused three writes, and a key
+  that expires under a move still running lets in a second move, which writes a second comment.
 - **The limit of the read of Linear** (review of #877): a read takes the newest
   `COMMENTS_PER_ISSUE` (20) comments of an issue, newest first as Linear gives them. An edit or a
   move older than the 20 newest comments is not read, and the note shows the text or the place it

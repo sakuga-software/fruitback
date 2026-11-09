@@ -157,10 +157,10 @@ export type OverlayOptions = {
   /**
    * How the author moves an open note to another element (FRU-605), from « ⋯ » of its thread, where
    * the read says `editable`. The thread closes while the person chooses; the answer says whether
-   * the note moved (the caller has given it its new place), or `undefined` when the choice was given
-   * up. Left out: no thread offers it.
+   * the note moved (the caller has given it its new place), `busy` when another move of it is under
+   * way, or `undefined` when the choice was given up. Left out: no thread offers it.
    */
-  move?: (issue: NoteIssue) => Promise<boolean | undefined>;
+  move?: (issue: NoteIssue) => Promise<boolean | 'busy' | undefined>;
   /**
    * Show the CSS selector of the element in a thread (FRU-349). Off by default: a reviewer reads the
    * note, and the selector is for a developer. The note and the issue keep it either way.
@@ -1061,7 +1061,8 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
                 // On its new element, its thread opens again, and says how it went.
                 resolve();
                 api.select(issue.note.id);
-                moreSaidOf.set(issue.note.id, moved ? 'moved' : 'moveFailed');
+                // `busy`: another move holds the note (FRU-605), and the author is told to wait.
+                moreSaidOf.set(issue.note.id, moved === 'busy' ? 'moveBusy' : moveSaid(moved));
                 const entry = placed.find((candidate) => candidate.issue.note.id === issue.note.id);
                 if (entry !== undefined) reopenThread(entry);
               });
@@ -2405,4 +2406,9 @@ function boundsToPixels(
     width: (bounds.wPct / 100) * width,
     height: (bounds.hPct / 100) * height,
   };
+}
+
+/** What the thread says after a move that ended: moved, or not moved. */
+function moveSaid(moved: boolean): MoreSaid {
+  return moved ? 'moved' : 'moveFailed';
 }

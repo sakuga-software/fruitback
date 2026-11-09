@@ -321,7 +321,7 @@ describe('every word the widget shows', () => {
     // And each withdrawal of a note by its author (FRU-605).
     const withdrawAnswers: ((answer: WithdrawAnswer | WithdrawFailure) => void)[] = [];
     // And each move of a note (FRU-605).
-    const moveAnswers: ((moved: boolean | undefined) => void)[] = [];
+    const moveAnswers: ((moved: boolean | 'busy' | undefined) => void)[] = [];
     const overlay = createOverlay({
       document: page.document,
       host: host.root,
@@ -643,17 +643,17 @@ describe('every word the widget shows', () => {
     checkAnswers.shift()?.(verdictOf('Reopened: still wrong'));
     await settleReply();
     snapshots.push(...shown(host.root));
-    // The move of a note by its author (FRU-605): the banner of its capture, not moved, then moved.
+    // The move of a note by its author (FRU-605): the banner of its capture, not moved, not moved while another move holds the note, then moved.
     host.start('move.banner');
     snapshots.push(...shown(host.root));
     host.stop();
-    for (const moved of [false, true]) {
+    for (const moved of [false, 'busy', true] as const) {
       overlay.select(found.note.id);
       (host.root.querySelector('.fruitback-thread-more') as HTMLButtonElement).click();
       [...host.root.querySelectorAll<HTMLButtonElement>('.fruitback-thread-more-item')]
         .find((each) => each.textContent === translator.text('more.move'))
         ?.click();
-      if (moved) {
+      if (moved === true) {
         found.comments = [
           ...(found.comments ?? []),
           {

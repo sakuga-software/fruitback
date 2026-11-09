@@ -283,6 +283,7 @@ export const ENGLISH = {
   'move.banner': 'Point at the new element of your note',
   'move.done': 'Moved.',
   'move.failed': 'Not moved. Try again.',
+  'move.failedBusy': 'Not moved: another move of this note is under way. Try again in a few minutes.',
   // FRU-605: the author withdraws their note. It is closed for the team, and nothing is deleted.
   'withdraw.ask': 'Withdraw this note? The team will see it closed. Nothing is deleted.',
   'withdraw.confirm': 'Withdraw',

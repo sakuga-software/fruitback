@@ -216,6 +216,7 @@ export const FRENCH: Catalog = {
   'move.banner': 'Pointez le nouvel élément de votre note',
   'move.done': 'Déplacée.',
   'move.failed': 'Pas déplacée. Réessayez.',
+  'move.failedBusy': 'Pas déplacée : un autre déplacement de cette note est en cours. Réessayez dans quelques minutes.',
   'withdraw.ask': 'Retirer cette note ? L’équipe la verra fermée. Rien n’est supprimé.',
   'withdraw.confirm': 'Retirer',
   'withdraw.keep': 'La garder',
