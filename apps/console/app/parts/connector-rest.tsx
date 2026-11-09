@@ -79,6 +79,10 @@ export function LateDeliveries({
             {delivery.event === 'agent.requested' ? (
               <span className="block text-hint text-muted">{t('Call of an agent')}</span>
             ) : null}
+            {/* FRU-605: the author changed the text of a note already sent. */}
+            {delivery.event === 'note.edited' ? (
+              <span className="block text-hint text-muted">{t('Note edited by its author')}</span>
+            ) : null}
             <span className="block text-hint text-muted">
               {t('Written {when}', { when: moment(delivery.createdAt) })} ·{' '}
               {delivery.attempts === 1 ? t('1 attempt') : t('{count} attempts', { count: delivery.attempts })}

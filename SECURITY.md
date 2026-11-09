@@ -1696,6 +1696,21 @@ what it reaches in its own guide; what they share is here.
 - ClickUp has no route to revoke a token for an app: « Disconnect » removes the connector, and the app
   is removed in ClickUp, or the personal token regenerated, to end the token at once.
 
+### Asana
+
+- Asana connects by consent (OAuth, with PKCE) with an app that the operator makes once
+  (`FRUITBACK_ASANA_OAUTH`, « Full permissions »), or by a personal access token where the server has
+  no app. Each is sealed with `FRUITBACK_SECRETS_KEY`, and no route answers it.
+- A token of OAuth lasts an hour and is refreshed with the refresh token of the consent, one refresh
+  at a time for a connector. « Disconnect » revokes the refresh token at Asana, and its access tokens
+  with it. A personal access token stays valid until its person revokes it.
+- Each token acts with the rights of its person in Asana. A personal access token is asked of Asana
+  before it is kept: a token Asana refuses is never stored.
+- The worker calls `app.asana.com` only.
+- A note lands in the project of its destination, and anybody who can see that project in Asana reads
+  it: its text, its page, and the name and the address of its author when they gave them. Its tag is
+  a hash of its site and its page, readable by the members of the Asana workspace.
+
 ### GitLab
 
 The token reaches what its role reaches; the guide asks for a project access

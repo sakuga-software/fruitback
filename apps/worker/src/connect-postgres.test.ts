@@ -444,8 +444,7 @@ describe('two replicas on one database (FRU-238)', { skip: NO_REAL_POSTGRES !== 
       );
       assert.deepEqual(answers.map((answer) => answer?.status).sort(), [200, 429]);
       // Once the interval went by, the claim is spent, on either replica.
-      await a.kv.set(`fruitback:connect-poll:${await digest(asked.claim)}`, '0', 1);
-      await new Promise((resolve) => setTimeout(resolve, 5));
+      await a.kv.set(`fruitback:connect-poll:${await digest(asked.claim)}`, '0', 0);
       assert.equal((await call(b, '/session/connect/claim', { claim: asked.claim }))?.status, 410);
       assert.equal((await rowsOf(pools[0] as Database, 'SELECT 1 FROM sessions')).length, 1);
     } finally {

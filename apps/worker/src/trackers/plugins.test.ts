@@ -59,13 +59,11 @@ describe('the plugins of this build (FRU-621)', () => {
     assert.deepEqual([...PLUGIN_KINDS], ['jira', 'gitlab', 'slack', 'clickup', 'asana']);
     for (const plugin of shippedPlugins()) assert.equal(pluginOf(plugin.kind), plugin);
     for (const kind of PLUGIN_KINDS) assert.equal(pluginOf(kind)?.kind ?? kind, kind);
-    // The fake plugin takes the kind of a plugin that has not shipped: these tests need it free.
-    assert.equal(pluginOf('asana'), undefined);
     assert.equal(pluginOf('linear'), undefined);
     assert.equal(pluginOf('constructor'), undefined);
   });
 
-  it('offers no plugin, and refuses to connect one that has not shipped', async () => {
+  it('offers the plugins of the build, and refuses a kind that is no plugin', async () => {
     const { env } = await envWith();
     const world = await acme(env);
 
@@ -75,10 +73,9 @@ describe('the plugins of this build (FRU-621)', () => {
       offered,
       shippedPlugins().map((each) => each.kind),
     );
-    assert.equal(offered.includes('asana'), false);
     const refused = await callOn(env, 'POST', `${world.base}/connectors`, {
       token: world.token,
-      body: { kind: 'asana', token: 'typed-token' },
+      body: { kind: 'trello', token: 'typed-token' },
     });
     assert.equal(refused.status, 400);
     assert.deepEqual(await refused.json(), { error: 'invalid-connector' });

@@ -56,6 +56,10 @@
       url: /connectors/clickup.html
     - title: ClickUp (français)
       url: /connectors/clickup.fr.html
+    - title: Asana
+      url: /connectors/asana.html
+    - title: Asana (français)
+      url: /connectors/asana.fr.html
 - title: Reference
   pages:
     - title: Widget options

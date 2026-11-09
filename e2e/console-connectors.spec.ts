@@ -14,6 +14,7 @@ import {
   styles,
   fulfillSites,
 } from './console-workspace.ts';
+import { unfolded } from './settled.ts';
 
 /**
  * The Connectors screen (FRU-246), measured in a browser against screen 11 of the mockup of
@@ -203,7 +204,7 @@ test('the list of the sources and the panel of a Linear are the ones of the mock
   ).toBeVisible();
   await expect(rows(page)).toHaveCount(2);
   await rows(page).first().click();
-  await expect(panel(page)).toBeVisible();
+  await unfolded(page);
 
   // One column (FRU-403): the panel opens under its row, where the mockup draws a column beside the list.
   const list = page.locator('main > div').last();
@@ -669,7 +670,7 @@ test('the panel of a connector unfolds as its card opens, and is there at once w
     .soft(await styles(panel(page), ['animation-name', 'animation-duration']))
     .toEqual({ 'animation-name': 'source-panel-open', 'animation-duration': '0.22s' });
   // Settled, nothing is clipped, and focus is in the panel as before (FRU-197).
-  await expect(panel(page)).toHaveAttribute('data-settled', '');
+  await unfolded(page);
   await rows(page).first().click();
   await expect(panel(page)).toHaveCount(0);
 
@@ -678,7 +679,7 @@ test('the panel of a connector unfolds as its card opens, and is there at once w
   expect(still.early, 'at once with reduced motion').toBe(still.settled);
   expect.soft(await styles(panel(page), ['animation-name'])).toEqual({ 'animation-name': 'none' });
   // No move, so no event of its end: the panel is settled from the start (raised in review).
-  await expect(panel(page)).toHaveAttribute('data-settled', '');
+  await unfolded(page);
 });
 
 test('a move of the panel that never ends leaves it unclipped (FRU-563)', async ({ page }) => {
@@ -752,6 +753,7 @@ test('`?new` with a worker that cannot keep a key opens nothing, also after a re
   // A later read that can add a source opens no dialog by itself (raised in review).
   worker.unavailable = false;
   await rows(page).nth(1).click();
+  await unfolded(page);
   await panel(page).getByRole('button', { name: 'Try now' }).first().click();
   await expect(page.getByRole('button', { name: 'New connector', exact: true })).toBeVisible();
   await expect(page.getByRole('dialog')).toHaveCount(0);
@@ -932,6 +934,7 @@ test('a link of the panel leads to the statuses of its site (FRU-368)', async ({
   await workerWith(page);
   await open(page);
   await rows(page).first().click();
+  await unfolded(page);
   await panel(page).getByRole('link', { name: 'Statuses of https://staging.acme.dev' }).click();
   // A cold dev server once reloaded the page here, for a dependency it bundled late: vite.config.ts.
   await expect(page).toHaveURL(/\/w\/w1\/sites\/s1\/statuses$/);
@@ -1032,6 +1035,7 @@ for (const { width, height, locale, words } of [
     await open(page);
     const row = rows(page).first();
     await row.click();
+    await unfolded(page);
 
     // A refused name keeps the form open, with what was typed.
     await panel(page).getByRole('button', { name: words.rename, exact: true }).click();
@@ -1081,6 +1085,7 @@ test('« Rename » starts from the name of the last read, not the one of when th
   // The panel of the address: « Try now » of a late note reads the list of the sources again.
   const row = rows(page).nth(1);
   await row.click();
+  await unfolded(page);
   // Another admin names it meanwhile.
   worker.connectors = [LINEAR, { ...ADDRESS, name: 'Support' }];
   await panel(page).getByRole('button', { name: 'Try now' }).first().click();

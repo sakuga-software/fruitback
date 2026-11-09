@@ -194,19 +194,32 @@ export type NoteStore = {
   /** Whether the store of this client takes a status, for a store that routes by client. */
   statusesFor?(client: ClientConfig | undefined): Promise<boolean>;
   /**
-   * Replaces the text of a note (FRU-475), and writes a marked reply under it (`editText`), in one
-   * transaction. Only while the note is `new`: `not-new` when it moved since the caller read it, and
-   * nothing is written. The answer is the note as it is now. `undefined`: this store holds no such
-   * note for this client. Absent: the text of a note is its tracker's, and is not edited here.
+   * The new text of a note, by its author (FRU-475, FRU-605). Only while the note is open (`new`,
+   * `todo`, `progress`, `EDITABLE_STAGES`).
+   *
+   * - The worker's own store replaces the text, and writes a marked reply under it (`editText`), in
+   *   one transaction, under the lock of the row: `not-open` when the note moved to done or closed
+   *   since the caller read it, and nothing is written.
+   * - A tracker writes the reply only, with the new text in it (`editText` with the text): the
+   *   description of its issue is the team's, and is never written again. A read takes the text
+   *   from the reply (`withEditedText`). The stage is the one the route read: a tracker has no lock.
+   *
+   * The answer is the note as a read will show it. `undefined`: this store holds no such note for
+   * this client. Absent: this store takes no edit (GitHub, which takes no reply either).
    */
   edit?(
     target: ReplyTarget,
     edit: NewEdit,
     client: ClientConfig | undefined,
     policy: ClientPolicy,
-  ): Promise<{ note: Note; comment: NoteComment } | 'not-new' | undefined>;
+  ): Promise<{ note: Note; comment: NoteComment } | 'not-open' | undefined>;
   /** Whether the store of this client takes an edit, for a store that routes by client. */
-  editsFor?(client: ClientConfig | undefined): Promise<boolean>;
+  editsFor?(client: ClientConfig | undefined, policy: Pick<ClientPolicy, 'showComments'>): Promise<boolean>;
+  /**
+   * The new text of an edit lives in its reply (FRU-605): a tracker. A read that does not show the
+   * replies would show the text of before, so such a store takes no edit where the replies are hidden.
+   */
+  editsInReplies?: true;
   /**
    * The states of the tracker where this client's notes are (FRU-368), each with the stage the store
    * gives it: what the statuses of a site list for that source. Absent: the store has no states of
@@ -251,8 +264,23 @@ export type ReplyAuthor =
 /** The note a reply goes under: the `id` of its issue, and the client whose note it must be. */
 export type ReplyTarget = { issue: string; clientId: string | undefined };
 
-/** A new text for a note (FRU-475). Only its author gives one: the route refuses everybody else. */
-export type NewEdit = { text: string; author: Extract<ReplyAuthor, { kind: 'member' }> };
+/**
+ * A new text for a note (FRU-475). Only its author gives one: the route refuses everybody else.
+ * `note` and `identifier`: the note as the route read it, which a tracker answers with the new text,
+ * and an address names in `note.edited` (FRU-605).
+ */
+export type NewEdit = {
+  text: string;
+  author: Extract<ReplyAuthor, { kind: 'member' }>;
+  note: Note;
+  identifier: string;
+};
+
+/**
+ * The stages where the author edits a note (FRU-605): open, before the team marks it done. A note
+ * done waits for the verdict of its author (FRU-294), and a closed note says nothing more.
+ */
+export const EDITABLE_STAGES: ReadonlySet<NoteStage> = new Set(['new', 'todo', 'progress']);
 
 /** A reply to write: what somebody typed, and who they are. */
 export type NewReply = { body: string; author: ReplyAuthor };
@@ -293,9 +321,15 @@ export async function takesStatuses(store: NoteStore, client: ClientConfig | und
   return store.statusesFor === undefined ? store.setStatus !== undefined : store.statusesFor(client);
 }
 
-/** Whether a store edits the text of a note for this client (FRU-475): only the worker's own store does. */
-export async function takesEdits(store: NoteStore, client: ClientConfig | undefined): Promise<boolean> {
-  return store.editsFor === undefined ? store.edit !== undefined : store.editsFor(client);
+/** Whether a store edits the text of a note for this client (FRU-475, FRU-605). */
+export async function takesEdits(
+  store: NoteStore,
+  client: ClientConfig | undefined,
+  policy: Pick<ClientPolicy, 'showComments'>,
+): Promise<boolean> {
+  if (store.editsFor !== undefined) return store.editsFor(client, policy);
+
+  return store.edit !== undefined && (store.editsInReplies !== true || policy.showComments);
 }
 
 /**

@@ -8,6 +8,7 @@ import { type World, callOn, signInTo, worlds } from '../console-world.fixture.t
 import { createMemoryStore } from '../linear-memory.ts';
 import { deliverDue } from '../rest-connector.ts';
 import { open } from '../secrets.ts';
+import { pluginOf } from './index.ts';
 import { readTrackerCredential } from './plugin.ts';
 import { escapeSlack, noteLink, readWebhook, slackMessage, slackTakes } from './slack.ts';
 
@@ -316,6 +317,23 @@ describe('a Slack connector through the routes and the deliveries (FRU-624)', ()
     const [late] = await world.env.accounts.deliveries(world.workspace.id, id);
     assert.match(late?.lastError ?? '', /^The files of the note could not be signed: the store of files is down/);
     assert.notEqual(late?.nextAt, undefined);
+  });
+
+  it('takes no edit of a note it posted, and posts no event but a new note (FRU-605)', async () => {
+    const world = await setup();
+    const { id } = (await (await connect(world, { url: HOOK })).json()) as { id: string };
+    const stores = createConnectorStores(world.env.accounts, SECRETS_KEY, Date.now, undefined, {
+      filesReachable: true,
+    });
+    const own = { ...createMemoryStore(), edit: async () => undefined };
+    const store = await stores(id, world.workspace.id, own);
+    assert.equal(store.edit, undefined);
+    assert.equal(store.editsFor, undefined);
+    const answer = await pluginOf('slack')?.receiver?.deliver(
+      { credential: async () => ({ via: 'token', token: HOOK, extra: {} }), http: world.slack.http, now: Date.now },
+      { version: 2, event: 'note.edited' } as never,
+    );
+    assert.deepEqual(answer, { ok: false, error: 'Slack takes new notes only', retry: false });
   });
 
   it('keeps a note when the credential of the connector does not open, and queues a verified one only (review of #871)', async () => {

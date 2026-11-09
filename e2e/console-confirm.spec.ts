@@ -1,6 +1,7 @@
 import { type Page, expect, test } from '@playwright/test';
 import { fulfillSites } from './console-workspace.ts';
 import { WORKER_ORIGIN } from './pin.ts';
+import { unfolded } from './settled.ts';
 
 /**
  * `Confirm` (FRU-165), the gesture that asks twice, measured where the console uses it (FRU-191):
@@ -76,8 +77,13 @@ const screens = [
       page.getByRole('button', { name: WORDS[locale].disconnect, exact: true }).click(),
     askWithKeys: (page: Page) => page.keyboard.press('Enter'),
     second: (locale: Locale) => (locale === 'en' ? 'Disconnect Key of Ana' : 'Déconnecter Clé de Ana'),
-    // The panel of the source opens from its row.
-    open: (page: Page) => page.locator('button[id^="source-row-"]').first().click(),
+    // The panel of the source opens from its row. It unfolds in 220 ms and clips its body until then
+    // (FRU-563). The layout box of « Disconnect » is already there, so Playwright finds it visible and
+    // stable, but the press lands on the card under the clipped edge and asks nothing.
+    open: async (page: Page) => {
+      await page.locator('button[id^="source-row-"]').first().click();
+      await unfolded(page);
+    },
     deletes: '/console/workspaces/w1/connectors/c1',
   },
 ] as const;

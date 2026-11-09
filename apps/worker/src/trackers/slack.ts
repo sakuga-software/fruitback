@@ -210,6 +210,11 @@ export const plugin: TrackerPlugin | undefined = {
   receiver: {
     takes: (note, credential) => slackTakes(note, credential.extra.notes),
     async deliver(access, delivery) {
+      // Only a note is posted. Another event of the queue (`note.edited`, FRU-605) is never queued for
+      // Slack, and one of a row of before is given up rather than posted as a note.
+      if ((delivery as { event?: string }).event !== 'note.created') {
+        return { ok: false, error: 'Slack takes new notes only', retry: false };
+      }
       const credential = await access.credential();
       if (credential.via !== 'token' || readWebhook(credential.token) === undefined) {
         throw new StoreError('The webhook of this Slack connector could not be opened');
