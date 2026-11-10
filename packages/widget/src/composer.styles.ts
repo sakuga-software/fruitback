@@ -202,7 +202,10 @@ export const STYLES = `
 /* The picture of the element is a box, drawn as an icon that is lit while it is ticked. */
 .fruitback-composer-toggle input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
 .fruitback-composer-toggle:has(input:checked) { background: var(--fruitback-color-surface-sunken); color: var(--fruitback-color-accent); }
-/* The signature (FRU-607): the initials in a round, or « Guest » in dashes. */
+/*
+  The signature (FRU-607): the initials in a round, or « Guest » in dashes. Only « Guest » has a word,
+  so only it takes the corners of a button (FRU-632). The initials stay round.
+*/
 .fruitback-composer-avatar {
   display: inline-grid;
   place-items: center;
@@ -212,7 +215,7 @@ export const STYLES = `
   padding: 0 6px;
   box-sizing: border-box;
   border: 1px solid var(--fruitback-color-border-strong);
-  border-radius: var(--fruitback-radius-field);
+  border-radius: var(--fruitback-radius-pill);
   background: var(--fruitback-color-surface-sunken);
   color: var(--fruitback-color-text);
   font: 600 11px/1 var(--fruitback-font-sans);
@@ -221,6 +224,7 @@ export const STYLES = `
 }
 .fruitback-composer-avatar[data-fruitback-avatar="guest"] {
   border-style: dashed;
+  border-radius: var(--fruitback-radius-field);
   background: transparent;
   color: var(--fruitback-color-text-muted);
   font-weight: 500;

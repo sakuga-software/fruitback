@@ -271,6 +271,11 @@ test('the composer has the measures of the mock-up, beside its element, with the
   );
   await name.fill('Camille Durand');
   await expect(page.getByRole('button', { name: 'Signed as Camille Durand. Change the name' })).toHaveText('CD');
+  // The initials are in a round, its ends half of its 28 px: the corners of « Guest » are not theirs (FRU-632).
+  const initials = await read('[data-fruitback-avatar]', ['border-top-left-radius', 'border-bottom-right-radius']);
+  expect(initials).toMatchObject({ height: 28 });
+  expect(parseFloat(String(initials['border-top-left-radius']))).toBeGreaterThanOrEqual(14);
+  expect(parseFloat(String(initials['border-bottom-right-radius']))).toBeGreaterThanOrEqual(14);
 
   expect(
     await read('.fruitback-composer-foot', ['padding', 'gap', 'border-top-width', 'border-top-color']),
