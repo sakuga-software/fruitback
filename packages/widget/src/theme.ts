@@ -269,8 +269,12 @@ export const THEME_STYLES = `
   --fruitback-font-sans: -apple-system, system-ui, sans-serif;
   --fruitback-font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
 
-  --fruitback-duration-fast: 220ms;
-  --fruitback-duration-slow: 420ms;
+  /*
+    FRU-632: fast, on a steep curve. A press, a fade and a menu take 150 ms; the composer and the drop
+    of a pin take 240 ms. They were 220 and 420 ms, and the composer arrived after the hand had moved on.
+  */
+  --fruitback-duration-fast: 150ms;
+  --fruitback-duration-slow: 240ms;
   /* Arrives fast and settles with no overshoot. */
   --fruitback-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 }

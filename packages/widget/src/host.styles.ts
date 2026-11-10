@@ -107,6 +107,38 @@ li { display: list-item; }
   .fruitback-dock button:active:not([aria-disabled='true']) { transform: none; }
 }
 /*
+  FRU-632: every button of the widget answers the pointer. Its colours ease in 120 ms, a press gives
+  way to 97 % and comes back, and a chevron turns. All the parts of the widget are in this root.
+  The selector :where keeps the specificity at zero: a rule of a part that sets its own transition or transform wins.
+*/
+:where(.fruitback-composer, .fruitback-thread, .fruitback-sidebar, .fruitback-panel-config, .fruitback-area-bar,
+  .fruitback-orphans, .fruitback-banner) button {
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease,
+    box-shadow 120ms ease,
+    transform var(--fruitback-duration-fast) var(--fruitback-ease-out);
+}
+:where(.fruitback-composer, .fruitback-thread, .fruitback-sidebar, .fruitback-panel-config, .fruitback-area-bar,
+  .fruitback-orphans, .fruitback-banner) button:where(:active:not([disabled], [aria-disabled='true'])) {
+  transform: scale(0.97);
+}
+:where(.fruitback-composer, .fruitback-thread, .fruitback-sidebar, .fruitback-panel-config) button .fruitback-icon {
+  transition: transform var(--fruitback-duration-fast) var(--fruitback-ease-out);
+}
+@media (prefers-reduced-motion: reduce) {
+  :where(.fruitback-composer, .fruitback-thread, .fruitback-sidebar, .fruitback-panel-config, .fruitback-area-bar,
+    .fruitback-orphans, .fruitback-banner) button,
+  :where(.fruitback-composer, .fruitback-thread, .fruitback-sidebar, .fruitback-panel-config) button .fruitback-icon {
+    transition: none;
+  }
+  :where(.fruitback-composer, .fruitback-thread, .fruitback-sidebar, .fruitback-panel-config, .fruitback-area-bar,
+    .fruitback-orphans, .fruitback-banner) button:where(:active) {
+    transform: none;
+  }
+}
+/*
   FRU-443: a corner that was chosen is a corner of the window, whatever the direction of the page.
   The settings and the list of the detached notes open from the dock: see panel.ts and orphans.ts.
 */
@@ -257,7 +289,7 @@ li { display: list-item; }
   height: 44px;
   padding: 0 14px;
   border: 4px solid transparent;
-  border-radius: var(--fruitback-radius-pill);
+  border-radius: calc(var(--fruitback-radius-md) + 4px);
   background: var(--fruitback-color-chip) padding-box;
   color: var(--fruitback-color-on-chip);
   font: 600 13px/1 var(--fruitback-font-sans);

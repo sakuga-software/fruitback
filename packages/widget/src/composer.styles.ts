@@ -126,7 +126,7 @@ export const STYLES = `
   padding: 4px 6px;
   border: 9px solid transparent;
   border-inline-width: 0;
-  border-radius: var(--fruitback-radius-sm);
+  border-radius: var(--fruitback-radius-sm) / calc(var(--fruitback-radius-sm) + 9px);
   background: transparent;
   color: var(--fruitback-color-text-muted);
   font: 600 12px/1.5 var(--fruitback-font-sans);
@@ -202,7 +202,10 @@ export const STYLES = `
 /* The picture of the element is a box, drawn as an icon that is lit while it is ticked. */
 .fruitback-composer-toggle input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
 .fruitback-composer-toggle:has(input:checked) { background: var(--fruitback-color-surface-sunken); color: var(--fruitback-color-accent); }
-/* The signature (FRU-607): the initials in a round, or « Guest » in dashes. */
+/*
+  The signature (FRU-607): the initials in a round, or « Guest » in dashes. Only « Guest » has a word,
+  so only it takes the corners of a button (FRU-632). The initials stay round.
+*/
 .fruitback-composer-avatar {
   display: inline-grid;
   place-items: center;
@@ -221,6 +224,7 @@ export const STYLES = `
 }
 .fruitback-composer-avatar[data-fruitback-avatar="guest"] {
   border-style: dashed;
+  border-radius: var(--fruitback-radius-field);
   background: transparent;
   color: var(--fruitback-color-text-muted);
   font-weight: 500;
@@ -445,7 +449,7 @@ export const STYLES = `
   padding: 0 8px;
   border: 5px solid transparent;
   border-inline-width: 0;
-  border-radius: var(--fruitback-radius-pill);
+  border-radius: var(--fruitback-radius-field) / calc(var(--fruitback-radius-field) + 5px);
   background: transparent;
   color: var(--fruitback-color-text-muted);
   font: 500 12px/1 var(--fruitback-font-sans);
@@ -607,7 +611,7 @@ export const STYLES = `
   margin-block: -5px;
   border: 5px solid transparent;
   border-inline-width: 0;
-  border-radius: var(--fruitback-radius-pill);
+  border-radius: var(--fruitback-radius-md) / calc(var(--fruitback-radius-md) + 5px);
   font: 600 13px/1 var(--fruitback-font-sans);
   cursor: pointer;
 }
@@ -649,7 +653,7 @@ export const STYLES = `
   and « Send only this note ». The menu opens above: the foot is the end of the composer.
 */
 /* 44 px to press, as « Send » beside it: a transparent border gives back the size drawn. */
-.fruitback-composer-keep { width: 44px; height: 44px; margin-block: -5px; border: 5px solid transparent; border-radius: var(--fruitback-radius-sm); }
+.fruitback-composer-keep { width: 44px; height: 44px; margin-block: -5px; border: 5px solid transparent; border-radius: calc(var(--fruitback-radius-sm) + 5px); }
 .fruitback-composer-keep:hover:not([disabled]) { background: var(--fruitback-color-surface-sunken) padding-box; }
 .fruitback-composer-badge {
   position: absolute;
@@ -814,7 +818,14 @@ export const STYLES = `
   to { transform: none; }
 }
 
+/* FRU-632: the menu of « Attachments » fades in. Opacity only: its room above or below is measured. */
+.fruitback-composer-attach-menu:not([hidden]) { animation: fruitback-composer-menu-in var(--fruitback-duration-fast) var(--fruitback-ease-out); }
+@keyframes fruitback-composer-menu-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
 @media (prefers-reduced-motion: reduce) {
   .fruitback-composer, .fruitback-composer[data-fruitback-side] { animation: none; }
+  .fruitback-composer-attach-menu:not([hidden]) { animation: none; }
 }
 `;

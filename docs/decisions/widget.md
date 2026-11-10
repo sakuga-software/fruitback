@@ -207,6 +207,24 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
   reducing them would have frozen the accident.
 - The pin's silhouette is **not** in that scale: `border-radius: 50% 50% 50% 0` is a shape, not a
   corner size, and it is the product's identity rather than a preference a host may set.
+- **A button or a tag with a word in it is not a pill** (FRU-632). Its corners take a quarter to a
+  third of the height it draws: `field` on a tag of 28 to 32 px, `md` on a button of 34 to 44 px. The
+  pill stays on the capsule of the dock and « Leave a note » in it; a count, an avatar and a switch are
+  circles. This differs from the mock-up of 2026-10-13, at Mathieu's request on 2026-11-10. A button
+  drawn inside a transparent border adds that border to its radius, else its corner is gone:
+  `md / calc(md + 5px)` when only the top and the bottom border are there. `widget-radius.spec.ts`
+  holds the rule in the composer, the thread, the list and the settings. `dock.spec.ts` holds it on
+  the detached notes in the dock (10 px drawn in a border of 4 px), and `composer.spec.ts` holds the
+  round of the initials: only « Guest » takes the corners of a button.
+- **The motion is fast, on the steep curve** (FRU-632). `duration-fast` is 150 ms and
+  `duration-slow` 240 ms; they were 220 and 420 ms, the time of the mock-up (FRU-233), and the
+  composer arrived after the hand had moved on. Every button of the composer, the thread, the list,
+  the settings, the capture bar, the detached notes and the banner eases its colours in 120 ms and
+  gives way to `scale(0.97)` under a press, from one rule of `host.styles.ts` under `:where`, so a
+  part that sets its own transition keeps it. A part that sets a `transform` on a button takes the
+  press away from it: no button does today, and a chevron turns its icon, not its button. The menus « Attachments » and « More » fade in. Opacity
+  only, as the thread and the list: their place is measured on the first frame.
+  `prefers-reduced-motion` still turns all of it off, the press included.
 - Spacing is still literal — nobody overrides it, and substituting sixty numbers is where a silent
   visual regression hides.
 - FRU-35 changed **no colour**: every token holds the hexadecimal that was already there, and

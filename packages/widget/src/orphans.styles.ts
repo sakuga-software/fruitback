@@ -36,7 +36,7 @@ export const STYLES = `
   gap: 6px;
   padding: 7px 12px;
   border: 0;
-  border-radius: var(--fruitback-radius-pill);
+  border-radius: var(--fruitback-radius-field);
   /* The grey of a note whose element is gone, and white on it (FRU-334). */
   --fruitback-pin-color: var(--fruitback-color-unplaced);
   background: var(--fruitback-pin-color);
@@ -47,7 +47,8 @@ export const STYLES = `
 }
 /*
   In the capsule of the dock (FRU-303): its first control, 44 px tall like the others, with the
-  grey pill of 36 px (FRU-334) inside a transparent border. The list opens above the capsule.
+  grey chip of 36 px (FRU-334) inside a transparent border. The list opens above the capsule.
+  The radius adds the border: the corner drawn is 10 px, as on « Stop » (FRU-632).
 */
 .fruitback-orphans[data-fruitback-docked] { position: relative; inset: auto; z-index: auto; max-width: none; }
 .fruitback-orphans[data-fruitback-docked] .fruitback-orphans-toggle {
@@ -55,6 +56,7 @@ export const STYLES = `
   height: 44px;
   padding-inline: 12px 14px;
   border: 4px solid transparent;
+  border-radius: calc(var(--fruitback-radius-md) + 4px);
   background: var(--fruitback-pin-color) padding-box;
   font-size: 13px;
   letter-spacing: -0.006em;

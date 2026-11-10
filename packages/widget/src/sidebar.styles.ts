@@ -19,7 +19,7 @@ export const STYLES = `
   font: 14px/1.45 var(--fruitback-font-sans);
   /* The shadow of the board, cast over the page, which is at the start side of the list. */
   box-shadow: -10px 0 30px rgba(0, 0, 0, 0.06);
-  animation: fruitback-sidebar-in var(--fruitback-duration-fast) ease-out;
+  animation: fruitback-sidebar-in var(--fruitback-duration-fast) var(--fruitback-ease-out);
 }
 .fruitback-sidebar:dir(rtl) { box-shadow: 10px 0 30px rgba(0, 0, 0, 0.06); }
 .fruitback-sidebar[hidden] { display: none; }
@@ -201,7 +201,7 @@ export const STYLES = `
   height: 28px;
   padding: 0 10px;
   border: 1px solid var(--fruitback-color-border);
-  border-radius: var(--fruitback-radius-pill);
+  border-radius: var(--fruitback-radius-field);
   background: var(--fruitback-color-surface);
   color: var(--fruitback-color-text);
   font: 600 12px/1 var(--fruitback-font-sans);
@@ -397,7 +397,7 @@ export const STYLES = `
   gap: 8px;
   height: 44px;
   border: 0;
-  border-radius: var(--fruitback-radius-pill);
+  border-radius: var(--fruitback-radius-md);
   background: var(--fruitback-color-accent);
   color: var(--fruitback-color-on-accent);
   font: 600 13px/1.45 var(--fruitback-font-sans);

@@ -343,7 +343,8 @@ test('the list is the board « Sidebar mode »: its measures, its chips, its sea
     height: 28,
     'border-top-color': 'rgb(24, 24, 27)',
     'background-color': 'rgb(244, 244, 245)',
-    'border-radius': '999px',
+    // A tag, not a pill (FRU-632).
+    'border-radius': '8px',
     'font-size': '12px',
     'font-weight': '600',
     'padding-left': '10px',
@@ -496,7 +497,8 @@ test('the list is the board « Sidebar mode »: its measures, its chips, its sea
     x: 1067,
     width: 355,
     height: 44,
-    'border-radius': '999px',
+    // A button, not a pill (FRU-632).
+    'border-radius': '10px',
     'background-color': 'rgb(221, 44, 39)',
     color: 'rgb(255, 255, 255)',
     'font-size': '13px',

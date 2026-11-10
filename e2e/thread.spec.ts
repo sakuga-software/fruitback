@@ -253,13 +253,14 @@ test('the bubble of a note has the measures of the mock-up, and opens under its 
       'padding',
     ]),
   ).toMatchObject({
-    // 44 px to press: a chip of 26 px inside a transparent border of 9 px.
+    // 44 px to press: a chip of 26 px inside a transparent border of 9 px. The vertical radius counts
+    // that border, so the chip keeps a corner of 6 px (FRU-632).
     height: 44,
     'font-size': '12px',
     'font-weight': '600',
     'text-decoration-line': 'none',
     'background-color': 'rgb(244, 244, 245)',
-    'border-top-left-radius': '6px',
+    'border-top-left-radius': '6px 15px',
     padding: '4px 8px',
   });
   await expect(thread.getByRole('link')).toHaveText(/^DEV-\d+ →$/);

@@ -365,16 +365,19 @@ test('the detached notes are the first control of the capsule, and overlap nothi
       'background-color',
       'background-clip',
       'border-top-width',
+      'border-top-left-radius',
       'color',
       'font-size',
       'font-weight',
     ]),
   ).toMatchObject({
     height: 44,
-    // The grey of a note whose element is gone, in a pill of 36 px (FRU-334).
+    // The grey of a note whose element is gone, 36 px drawn (FRU-334).
     'background-color': 'rgb(113, 113, 122)',
     'background-clip': 'padding-box',
     'border-top-width': '4px',
+    // A corner of 10 px is drawn inside the transparent border of 4 px, as on « Stop » (FRU-632).
+    'border-top-left-radius': '14px',
     color: 'rgb(255, 255, 255)',
     'font-size': '13px',
     'font-weight': '600',
