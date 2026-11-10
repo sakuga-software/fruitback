@@ -814,7 +814,14 @@ export const STYLES = `
   to { transform: none; }
 }
 
+/* FRU-632: the menu of « Attachments » fades in. Opacity only: its room above or below is measured. */
+.fruitback-composer-attach-menu:not([hidden]) { animation: fruitback-composer-menu-in var(--fruitback-duration-fast) var(--fruitback-ease-out); }
+@keyframes fruitback-composer-menu-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
 @media (prefers-reduced-motion: reduce) {
   .fruitback-composer, .fruitback-composer[data-fruitback-side] { animation: none; }
+  .fruitback-composer-attach-menu:not([hidden]) { animation: none; }
 }
 `;

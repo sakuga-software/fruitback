@@ -214,6 +214,14 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
   drawn inside a transparent border adds that border to its radius, else its corner is gone:
   `md / calc(md + 5px)` when only the top and the bottom border are there. `widget-radius.spec.ts`
   holds the rule in the composer, the thread, the list and the settings.
+- **The motion is fast, on the steep curve** (FRU-632). `duration-fast` is 150 ms and
+  `duration-slow` 240 ms; they were 220 and 420 ms, the time of the mock-up (FRU-233), and the
+  composer arrived after the hand had moved on. Every button of the composer, the thread, the list,
+  the settings, the capture bar, the detached notes and the banner eases its colours in 120 ms and
+  gives way to `scale(0.97)` under a press, from one rule of `host.styles.ts` under `:where`, so a
+  part that sets its own transition keeps it. The menus « Attachments » and « More » fade in. Opacity
+  only, as the thread and the list: their place is measured on the first frame.
+  `prefers-reduced-motion` still turns all of it off, the press included.
 - Spacing is still literal — nobody overrides it, and substituting sixty numbers is where a silent
   visual regression hides.
 - FRU-35 changed **no colour**: every token holds the hexadecimal that was already there, and

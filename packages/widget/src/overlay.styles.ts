@@ -392,6 +392,11 @@ export const STYLES = `
   box-shadow: var(--fruitback-shadow-xl);
 }
 .fruitback-thread-more-menu[hidden] { display: none; }
+/* FRU-632: the menu « More » fades in, as the thread does. */
+.fruitback-thread-more-menu:not([hidden]) { animation: fruitback-thread-in var(--fruitback-duration-fast) var(--fruitback-ease-out); }
+@media (prefers-reduced-motion: reduce) {
+  .fruitback-thread-more-menu:not([hidden]) { animation: none; }
+}
 .fruitback-thread-more-menu li { display: block; margin: 0; padding: 0; }
 .fruitback-thread-more-item {
   display: block;

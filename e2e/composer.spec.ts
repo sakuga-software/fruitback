@@ -409,7 +409,8 @@ test('it rises from the corner nearest to its element, with no fade', async ({ p
   });
   expect(motion).toMatchObject({
     name: 'fruitback-composer-from-left',
-    duration: '0.42s',
+    // Fast, on the steep curve (FRU-632).
+    duration: '0.24s',
     curve: 'cubic-bezier(0.16, 1, 0.3, 1)',
   });
   // « top left », in the pixels of its own box: the corner on the side of the element.

@@ -19,7 +19,7 @@ export const STYLES = `
   font: 14px/1.45 var(--fruitback-font-sans);
   /* The shadow of the board, cast over the page, which is at the start side of the list. */
   box-shadow: -10px 0 30px rgba(0, 0, 0, 0.06);
-  animation: fruitback-sidebar-in var(--fruitback-duration-fast) ease-out;
+  animation: fruitback-sidebar-in var(--fruitback-duration-fast) var(--fruitback-ease-out);
 }
 .fruitback-sidebar:dir(rtl) { box-shadow: 10px 0 30px rgba(0, 0, 0, 0.06); }
 .fruitback-sidebar[hidden] { display: none; }
