@@ -126,7 +126,7 @@ export const STYLES = `
   padding: 4px 6px;
   border: 9px solid transparent;
   border-inline-width: 0;
-  border-radius: var(--fruitback-radius-sm);
+  border-radius: var(--fruitback-radius-sm) / calc(var(--fruitback-radius-sm) + 9px);
   background: transparent;
   color: var(--fruitback-color-text-muted);
   font: 600 12px/1.5 var(--fruitback-font-sans);
@@ -212,7 +212,7 @@ export const STYLES = `
   padding: 0 6px;
   box-sizing: border-box;
   border: 1px solid var(--fruitback-color-border-strong);
-  border-radius: var(--fruitback-radius-pill);
+  border-radius: var(--fruitback-radius-field);
   background: var(--fruitback-color-surface-sunken);
   color: var(--fruitback-color-text);
   font: 600 11px/1 var(--fruitback-font-sans);
@@ -445,7 +445,7 @@ export const STYLES = `
   padding: 0 8px;
   border: 5px solid transparent;
   border-inline-width: 0;
-  border-radius: var(--fruitback-radius-pill);
+  border-radius: var(--fruitback-radius-field) / calc(var(--fruitback-radius-field) + 5px);
   background: transparent;
   color: var(--fruitback-color-text-muted);
   font: 500 12px/1 var(--fruitback-font-sans);
@@ -607,7 +607,7 @@ export const STYLES = `
   margin-block: -5px;
   border: 5px solid transparent;
   border-inline-width: 0;
-  border-radius: var(--fruitback-radius-pill);
+  border-radius: var(--fruitback-radius-md) / calc(var(--fruitback-radius-md) + 5px);
   font: 600 13px/1 var(--fruitback-font-sans);
   cursor: pointer;
 }
@@ -649,7 +649,7 @@ export const STYLES = `
   and « Send only this note ». The menu opens above: the foot is the end of the composer.
 */
 /* 44 px to press, as « Send » beside it: a transparent border gives back the size drawn. */
-.fruitback-composer-keep { width: 44px; height: 44px; margin-block: -5px; border: 5px solid transparent; border-radius: var(--fruitback-radius-sm); }
+.fruitback-composer-keep { width: 44px; height: 44px; margin-block: -5px; border: 5px solid transparent; border-radius: calc(var(--fruitback-radius-sm) + 5px); }
 .fruitback-composer-keep:hover:not([disabled]) { background: var(--fruitback-color-surface-sunken) padding-box; }
 .fruitback-composer-badge {
   position: absolute;

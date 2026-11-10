@@ -257,7 +257,7 @@ li { display: list-item; }
   height: 44px;
   padding: 0 14px;
   border: 4px solid transparent;
-  border-radius: var(--fruitback-radius-pill);
+  border-radius: calc(var(--fruitback-radius-md) + 4px);
   background: var(--fruitback-color-chip) padding-box;
   color: var(--fruitback-color-on-chip);
   font: 600 13px/1 var(--fruitback-font-sans);

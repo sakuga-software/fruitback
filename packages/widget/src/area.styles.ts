@@ -50,7 +50,7 @@ export const STYLES = `
   min-height: 44px;
   padding: 0 14px;
   border: 0;
-  border-radius: var(--fruitback-radius-pill);
+  border-radius: var(--fruitback-radius-md);
   font: 600 13px/1 var(--fruitback-font-sans);
   cursor: pointer;
 }

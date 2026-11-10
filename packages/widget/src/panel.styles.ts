@@ -70,7 +70,7 @@ export const STYLES = `
   padding: 0 10px;
   border: 7px solid transparent;
   border-inline-width: 0;
-  border-radius: var(--fruitback-radius-pill);
+  border-radius: var(--fruitback-radius-field) / calc(var(--fruitback-radius-field) + 7px);
   background: var(--fruitback-color-surface) padding-box;
   box-shadow: inset 0 0 0 1px var(--fruitback-color-border);
   font: 600 12px/1 var(--fruitback-font-sans);
@@ -244,7 +244,7 @@ export const STYLES = `
 .fruitback-config-hide-button {
   min-height: 36px;
   border: 1px solid var(--fruitback-color-border-strong);
-  border-radius: var(--fruitback-radius-pill);
+  border-radius: var(--fruitback-radius-md);
   padding: 6px 12px;
   background: none;
   color: var(--fruitback-color-text);

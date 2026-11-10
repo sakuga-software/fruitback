@@ -36,7 +36,7 @@ export const STYLES = `
   gap: 6px;
   padding: 7px 12px;
   border: 0;
-  border-radius: var(--fruitback-radius-pill);
+  border-radius: var(--fruitback-radius-field);
   /* The grey of a note whose element is gone, and white on it (FRU-334). */
   --fruitback-pin-color: var(--fruitback-color-unplaced);
   background: var(--fruitback-pin-color);

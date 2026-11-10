@@ -322,7 +322,7 @@ export const STYLES = `
   padding: 4px 8px;
   border: 9px solid transparent;
   border-inline-width: 0;
-  border-radius: var(--fruitback-radius-sm);
+  border-radius: var(--fruitback-radius-sm) / calc(var(--fruitback-radius-sm) + 9px);
   background: var(--fruitback-color-surface-sunken) padding-box;
   color: var(--fruitback-color-text);
   font: 600 12px/1.5 var(--fruitback-font-sans);
@@ -535,7 +535,7 @@ export const STYLES = `
   height: 32px;
   padding: 0 14px;
   border: 0;
-  border-radius: var(--fruitback-radius-pill);
+  border-radius: var(--fruitback-radius-field);
   background: var(--fruitback-color-accent);
   color: var(--fruitback-color-on-accent);
   font: 600 13px/1 var(--fruitback-font-sans);
@@ -580,7 +580,7 @@ export const STYLES = `
   height: 36px;
   padding: 0 16px;
   border: 0;
-  border-radius: var(--fruitback-radius-pill);
+  border-radius: var(--fruitback-radius-md);
   background: var(--fruitback-color-accent);
   color: var(--fruitback-color-on-accent);
   font: 600 13px/1 var(--fruitback-font-sans);
@@ -607,7 +607,7 @@ export const STYLES = `
   height: 32px;
   padding: 0 14px;
   border: 1px solid var(--fruitback-color-border-strong);
-  border-radius: var(--fruitback-radius-pill);
+  border-radius: var(--fruitback-radius-field);
   background: var(--fruitback-color-surface);
   color: var(--fruitback-color-text);
   font: 600 13px/1 var(--fruitback-font-sans);
