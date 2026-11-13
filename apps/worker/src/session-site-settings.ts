@@ -10,6 +10,8 @@ import {
 import { parseJsonObject, readBoundedBytes } from './bounded-body.ts';
 import { type TrackerContext, UnknownPlace, offerOf, placeOf } from './console-api.ts';
 import { isExtensionOrigin } from './cors.ts';
+import type { Kv } from './kv.ts';
+import { OAUTH_LABEL_PREFIX, linearTicket } from './linear-oauth.ts';
 import { StoreError } from './store.ts';
 import { type SourceFact, destinationField, sourceFactsOf } from './session-sites.ts';
 
@@ -38,6 +40,7 @@ import { type SourceFact, destinationField, sourceFactsOf } from './session-site
  */
 export const SESSION_SITE_SETTINGS_PATH = '/session/sites/settings';
 export const SESSION_SITE_PLACES_PATH = '/session/sites/places';
+export const SESSION_SOURCE_RECONNECT_PATH = '/session/sources/reconnect';
 
 /** A body of this route is two ids, a word and one place. */
 const MAX_BODY_BYTES = 2 * 1_024;
@@ -200,6 +203,50 @@ export async function setSessionSite(request: Request, context: SiteSettingsCont
       },
     },
   };
+}
+
+/** What a new consent for a Linear connector needs from the worker: the start of the flow at Linear. */
+export type ReconnectContext = SiteSettingsContext & {
+  kv: Kv;
+  /** `undefined`: this worker has no Linear application, or no address or key for its flow. */
+  publicUrl: string | undefined;
+};
+
+/**
+ * `POST /session/sources/reconnect` with `{ workspace, connector }`: where the browser goes to give a
+ * Linear connector made with OAuth a new pair of tokens, from the popup (FRU-633). The console starts
+ * the same flow from the panel of the connector, with `…/connectors/<id>/reconnect`.
+ *
+ * The role is `manage-workspace`, the role of the console's route, read now. The ticket names the
+ * account of the session and the connector, and the `state` is bound to the browser that opens it:
+ * the tab of the popup. Linear sends that browser back to the panel of the connector in the console.
+ */
+export async function reconnectSource(request: Request, context: ReconnectContext): Promise<Answer> {
+  const origin = request.headers.get('Origin');
+  if (origin !== null && !isExtensionOrigin(origin)) return { status: 403, body: { error: 'origin-not-allowed' } };
+  const body = await bodyOf(request);
+  if (body === undefined) return { status: 400, body: { error: 'invalid-body' } };
+  const { workspace, connector } = body;
+  const id = idOf(connector);
+  if (typeof workspace !== 'string' || workspace === '' || workspace.length > 100 || id === undefined || id === null) {
+    return { status: 400, body: { error: 'invalid-body' } };
+  }
+  const role = await context.accounts.role(workspace, context.account);
+  if (role === undefined || (await context.accounts.suspension(workspace)) !== undefined) {
+    return { status: 404, body: { error: 'not-found' } };
+  }
+  if (!can(role, 'manage-workspace')) return { status: 403, body: { error: 'forbidden', role } };
+  const held = (await context.accounts.connectors(workspace)).find((each) => each.id === id);
+  if (held === undefined || held.kind !== 'linear' || !held.label.startsWith(OAUTH_LABEL_PREFIX)) {
+    return { status: 404, body: { error: 'not-found' } };
+  }
+  if (context.publicUrl === undefined) return { status: 404, body: { error: 'connectors-unavailable' } };
+  const url = await linearTicket(
+    { kv: context.kv, publicUrl: context.publicUrl },
+    { workspace, account: context.account, connector: id },
+  );
+
+  return { status: 201, body: { url } };
 }
 
 async function bodyOf(request: Request): Promise<Record<string, unknown> | undefined> {

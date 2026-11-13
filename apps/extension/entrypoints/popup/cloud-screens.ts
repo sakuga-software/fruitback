@@ -19,6 +19,7 @@ import {
   cloudEntry,
   offerFor,
   setSiteSettings,
+  reconnectSource,
   sourceOffer,
 } from '../../src/cloud.ts';
 import { msg, t } from '../../src/i18n.ts';
@@ -440,15 +441,25 @@ export async function siteOfWorkspaceOn(
           );
           app?.querySelector<HTMLElement>('input:checked, .destination-back')?.focus();
         };
-        // FRU-633: an owner or an admin opens the panel of the connector in the console, and reconnects it.
-        const refusedFacts = (): { reconnect?: () => void } => {
+        // FRU-633: an owner or an admin reconnects a Linear at Linear, from here. The worker gives the
+        // way there; a refusal, or another tracker, opens the panel of the connector in the console.
+        const refusedFacts = (): { reconnect?: () => void; direct?: boolean } => {
           const connector = listed.site.place?.connector;
-          const reconnect =
-            connector === undefined || !RECONNECTS.has(listed.workspace.role ?? '')
-              ? undefined
-              : consoleConnectors(account, listed.workspace.id, connector);
+          if (connector === undefined || !RECONNECTS.has(listed.workspace.role ?? '')) return {};
+          const inConsole = consoleConnectors(account, listed.workspace.id, connector);
+          if (destination?.kind !== 'linear') return inConsole === undefined ? {} : { reconnect: inConsole };
 
-          return reconnect === undefined ? {} : { reconnect };
+          return {
+            direct: true,
+            reconnect: () =>
+              void reconnectSource(listed.endpoint, listed.workspace.id, connector, cloudSeams())
+                .catch(() => undefined)
+                .then((url) => {
+                  if (url === undefined) return inConsole?.();
+                  void browser.tabs.create({ url });
+                  window.close();
+                }),
+          };
         };
         // FRU-530: a role that may change where the notes go gets the sources of the workspace, and
         // « Change » writes through the route of « Turn on » (FRU-453): no route of its own.

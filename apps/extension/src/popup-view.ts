@@ -697,10 +697,10 @@ export type SiteFacts = {
   /** The notes of the site that are New, To do or In progress. */
   open?: number;
   /**
-   * The tracker of `destination` refuses the connection (FRU-633). `reconnect` opens its connector in
-   * the console, for a role that may reconnect it. Absent: the line says who can.
+   * The tracker of `destination` refuses the connection (FRU-633). `reconnect`, for a role that may
+   * reconnect it: at the tracker itself when `direct`, else in the console. Absent: the line says who can.
    */
-  refused?: { reconnect?: () => void };
+  refused?: { reconnect?: () => void; direct?: boolean };
 };
 
 export type SiteOnOptions = {
@@ -944,7 +944,7 @@ export function showSiteFacts(
   }
   screen.querySelector('.site-refused')?.remove();
   if (where !== null && facts.refused !== undefined && facts.destination !== undefined) {
-    where.after(refusedLine(document, facts.destination, facts.destinationKind, facts.refused.reconnect));
+    where.after(refusedLine(document, facts.destination, facts.destinationKind, facts.refused));
   }
   const counts = screen.querySelector('.panel-counts');
   if (counts === null) return;
@@ -980,7 +980,7 @@ function refusedLine(
   document: Document,
   label: string,
   kind: DestinationKind | undefined,
-  reconnect: (() => void) | undefined,
+  { reconnect, direct }: NonNullable<SiteFacts['refused']>,
 ): HTMLElement {
   const provider = readDestination(label, kind).provider ?? label;
   const line = make(document, 'div', 'site-refused');
@@ -1002,7 +1002,11 @@ function refusedLine(
           'site-refused-who',
           t('An owner or an admin of the workspace can reconnect it in the console.'),
         )
-      : textButton(document, t('Reconnect in the console'), reconnect),
+      : textButton(
+          document,
+          direct === true ? t('Reconnect {provider}', { provider }) : t('Reconnect in the console'),
+          reconnect,
+        ),
   );
 
   return line;

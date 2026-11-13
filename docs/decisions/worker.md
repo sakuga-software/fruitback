@@ -2681,7 +2681,8 @@ ticket removes; it adds no route and no table.
   end. Each pair now holds the id of its workspace of Linear, and the column `linear_organization`
   finds the connectors that share it. `shareLinearPair` writes a refreshed or consented pair to all of
   them, the lock of a refresh is per workspace of Linear, and `revokeLinear` revokes only when no
-  connector holds the pair. `POST …/connectors/<id>/reconnect` starts a consent for one connector,
+  connector holds the pair. `POST …/connectors/<id>/reconnect` (the console) and
+  `POST /session/sources/reconnect` (the popup) start a consent for one connector,
   which keeps its id, so its sites keep their places. A « Connect » for a workspace of Linear that this
   workspace already holds brings the connector of before back, and makes no second one. A connector
   of before FRU-633 says its workspace of Linear only while its pair works:

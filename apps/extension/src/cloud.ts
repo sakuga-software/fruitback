@@ -618,6 +618,41 @@ export type SettingsResult = { ok: true; site: WorkspaceSite } | { ok: false; re
  * `POST /session/sites/settings` (FRU-453): who sees the notes of a site of the workspace, and where
  * they go. The answer is the site as the worker holds it now, so the screen says what is true.
  */
+/**
+ * `POST /session/sources/reconnect` (FRU-633): where the browser goes to give a Linear connector of the
+ * workspace a new pair of tokens, at Linear. `undefined` when the worker refuses (a role that may not,
+ * a connector made with a key, a worker of before) or does not answer: the popup then opens the
+ * connector in the console. Only the start of the flow on the worker asked is taken.
+ */
+export async function reconnectSource(
+  endpoint: string,
+  workspace: string,
+  connector: string,
+  seams: Pick<CloudSeams, 'ensureAccess' | 'renewAccess' | 'fetcher'>,
+): Promise<string | undefined> {
+  const fetcher = seams.fetcher ?? fetch;
+  const sent = await withAccess(endpoint, seams, (accessToken) =>
+    fetcher(`${endpoint}/session/sources/reconnect`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workspace, connector }),
+      signal: AbortSignal.timeout(ASK_TIMEOUT_MS),
+    }),
+  );
+  if (!sent.ok || sent.response.status !== 201) return undefined;
+  const { url } = ((await sent.response.json().catch(() => undefined)) ?? {}) as { url?: unknown };
+  if (typeof url !== 'string') return undefined;
+  try {
+    const start = new URL(url);
+
+    return start.origin === new URL(endpoint).origin && start.pathname === '/auth/linear/start'
+      ? start.toString()
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function setSiteSettings(
   endpoint: string,
   workspace: Workspace,

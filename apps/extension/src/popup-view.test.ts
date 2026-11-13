@@ -1041,6 +1041,14 @@ describe('where the notes of a site that is on go (FRU-530)', () => {
     reconnect?.click();
     assert.equal(opened, 1);
 
+    // A Linear is reconnected at Linear itself (FRU-633): the button names it.
+    showSiteFacts(screen, facts, {
+      destination: 'Acme web',
+      destinationKind: 'linear',
+      refused: { reconnect: () => (opened += 1), direct: true },
+    });
+    assert.equal(screen.querySelector('.site-refused button')?.textContent, 'Reconnect Linear');
+
     // A role that may not reconnect it reads who can, and gets no button.
     showSiteFacts(screen, facts, { destination: 'Acme web', destinationKind: 'linear', refused: {} });
     assert.equal(screen.querySelectorAll('.site-refused').length, 1);

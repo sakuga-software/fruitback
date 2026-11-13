@@ -82,6 +82,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'An owner or an admin of the workspace can reconnect it in the console.':
     'Un propriétaire ou un administrateur de l’espace de travail peut la reconnecter dans la console.',
   'Reconnect in the console': 'Reconnecter dans la console',
+  'Reconnect {provider}': 'Reconnecter {provider}',
   'Change where notes go': 'Changer la destination des notes',
   'More for this site': 'Plus pour ce site',
   'Fruitback is on for this site': 'Fruitback est actif sur ce site',
