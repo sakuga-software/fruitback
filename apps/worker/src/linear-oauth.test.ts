@@ -18,6 +18,7 @@ import { REFRESH_MARGIN_MS, readCredential } from './linear-oauth.ts';
 import { rowsOf } from './postgres.fixture.ts';
 import { createPostgresNoteStore } from './notes-postgres.ts';
 import { open, seal } from './secrets.ts';
+import { digest } from './session.ts';
 
 const SECRETS_KEY = 'another-secret-that-opens-the-connectors';
 const SITE = 'https://staging.acme.dev';
@@ -863,5 +864,103 @@ describe('one pair of tokens for each workspace of Linear (FRU-633)', () => {
     assert.equal((await ask(world.base, connector, reader.token)).status, 403);
     const key = await world.accounts.addConnector(world.workspace.id, { kind: 'linear', label: 'Linear', sealed: 'x' });
     assert.equal((await ask(world.base, key.id, world.owner.token)).status, 404);
+  });
+});
+
+const EXTENSION = 'chrome-extension://abcdefghijklmnopabcdefghijklmnop';
+
+/** A call with the store of the connections of the world: a session of the extension goes through it. */
+function sessionCall(
+  env: Env,
+  method: string,
+  path: string,
+  options: { token?: string; body?: unknown; origin?: string } = {},
+) {
+  return callOn(env, method, path, options, { connectStore: env.connectStore });
+}
+
+/** The access token of a session of the extension for `who`, the whole way of FRU-238. */
+async function extensionToken(env: Env, who: { account: { id: string }; token: string }): Promise<string> {
+  const asked = await sessionCall(env, 'POST', '/session/connect', { origin: EXTENSION, body: { browser: 'Chrome' } });
+  assert.equal(asked.status, 201, await asked.clone().text());
+  const { request, claim } = (await asked.json()) as { request: string; claim: string };
+  const shown = await sessionCall(env, 'GET', `/console/connect/${request}`, { token: who.token });
+  const { word } = (await shown.json()) as { word: string };
+  const approved = await sessionCall(env, 'POST', `/console/connect/${request}/approve`, {
+    token: who.token,
+    body: { word, account: who.account.id },
+  });
+  assert.equal(approved.status, 200, await approved.clone().text());
+  await env.kv.set(`fruitback:connect-poll:${await digest(claim)}`, '0', 0);
+  const claimed = await sessionCall(env, 'POST', '/session/connect/claim', { origin: EXTENSION, body: { claim } });
+  assert.equal(claimed.status, 200, await claimed.clone().text());
+
+  return ((await claimed.json()) as { accessToken: string }).accessToken;
+}
+
+describe('a new consent started from the popup (FRU-633)', () => {
+  const ask = (env: Env, token: string, body: unknown, origin: string = EXTENSION) =>
+    sessionCall(env, 'POST', '/session/sources/reconnect', { token, body, origin });
+
+  it('gives an owner the way to Linear for one connector, and Linear sends the browser back to its panel', async () => {
+    const env = await envWith();
+    const linear = fakeLinear();
+    const world = await acme(env);
+    const connector = await connected(env, linear, world);
+    linear.refresh = 'ended';
+    linear.access = 'ended';
+    const token = await extensionToken(env, world.owner);
+
+    const asked = await ask(env, token, { workspace: world.workspace.id, connector });
+    assert.equal(asked.status, 201, await asked.clone().text());
+    const { url } = (await asked.json()) as { url: string };
+    const started = await call(env, 'GET', new URL(url).pathname + new URL(url).search);
+    assert.equal(started.status, 302);
+    const at = new URL(started.headers.get('Location') as string);
+    const cookie = (started.headers.get('Set-Cookie') ?? '').split(';')[0] as string;
+    const back = await comeBack(env, linear, {
+      ticket: url,
+      at,
+      cookie,
+      state: at.searchParams.get('state') as string,
+    });
+
+    assert.equal(
+      back.headers.get('Location'),
+      `${CONSOLE}/w/${world.workspace.id}/connectors?linear=reconnected&connector=${connector}`,
+    );
+    const pair = await pairOf(world, connector);
+    assert.equal(pair.via === 'oauth' && pair.accessToken, linear.access);
+  });
+
+  it('answers only an owner or an admin of the workspace, from an extension, for a Linear connector made with OAuth', async () => {
+    const env = await envWith();
+    const linear = fakeLinear();
+    const world = await acme(env);
+    const connector = await connected(env, linear, world);
+    const admin = await world.person('admin@acme.dev');
+    await memberOf(env, world.workspace.id, admin.account.id, 'admin');
+    const member = await world.person('member@acme.dev');
+    await memberOf(env, world.workspace.id, member.account.id, 'member');
+    const elsewhere = await globex(env);
+    const key = await world.accounts.addConnector(world.workspace.id, { kind: 'linear', label: 'Linear', sealed: 'x' });
+    const owner = await extensionToken(env, world.owner);
+    const body = { workspace: world.workspace.id, connector };
+
+    assert.equal((await ask(env, await extensionToken(env, admin), body)).status, 201);
+    assert.equal((await ask(env, await extensionToken(env, member), body)).status, 403);
+    assert.equal(
+      (await ask(env, await extensionToken(env, elsewhere.owner), { workspace: elsewhere.workspace.id, connector }))
+        .status,
+      404,
+    );
+    assert.equal((await ask(env, await extensionToken(env, elsewhere.owner), body)).status, 404);
+    assert.equal((await ask(env, owner, { workspace: world.workspace.id, connector: key.id })).status, 404);
+    assert.equal((await ask(env, owner, body, 'https://evil.example')).status, 403);
+    assert.equal((await ask(env, owner, { workspace: world.workspace.id })).status, 400);
+    assert.equal(
+      (await sessionCall(env, 'POST', '/session/sources/reconnect', { body, origin: EXTENSION })).status,
+      401,
+    );
   });
 });

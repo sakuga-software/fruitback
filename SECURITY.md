@@ -1314,6 +1314,16 @@ emptied from here (`409`). Each of these guards, taken out, fails a test of
 id, a kind, a name) and where each site sends (`place`: ids) to a role of `manage-sites` only, which
 already reads them in the console.
 
+`POST /session/sources/reconnect` gives the popup the start of a new consent at Linear for one
+connector that Linear ended. It asks what the console's `…/connectors/<id>/reconnect` asks: a session
+of an account, read again in the store; an `Origin` of an extension, or none; `manage-workspace` in
+the workspace named, read at this call (a member gets `403`, an account outside the workspace `404`);
+and a Linear connector of that workspace made with OAuth (`404` otherwise). The answer is the address
+of the start of the flow, with a ticket that names the account and the connector, spent once and good
+for a minute. The popup opens it only on the address of the worker it asked. Taken out, the guard of
+the role and the guard of the connector each fail
+test:`answers only an owner or an admin of the workspace, from an extension, for a Linear connector made with OAuth`.
+
 ### Signing in to the console (FRU-98)
 
 The console signs in with better-auth, and with nothing else: the section below. The
@@ -1655,7 +1665,8 @@ by consent at Linear, and no personal key is typed.
   what the one installation of the application at Linear reaches.
 - The refresh token changes at each refresh. One refresh runs at a time for a pair, and the new pair
   is written before it is used. A refresh that Linear refuses answers `502`: the note stays in the
-  widget, and an owner or an admin gives the connector a new pair with « Reconnect Linear ». The
+  widget, and an owner or an admin gives the connector a new pair with « Reconnect Linear », in the
+  console or in the popup. The
   connector keeps its id, its sites and its settings. A consent for another workspace of Linear than
   the one of the connector changes nothing on that connector.
 - Disconnecting removes the connector whatever Linear answers, then revokes the pair at Linear when

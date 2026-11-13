@@ -23,6 +23,8 @@ import { SESSION_SITES_PATH, handleSessionSites } from './session-sites.ts';
 import {
   SESSION_SITE_PLACES_PATH,
   SESSION_SITE_SETTINGS_PATH,
+  SESSION_SOURCE_RECONNECT_PATH,
+  reconnectSource,
   setSessionSite,
   sourceOffer,
 } from './session-site-settings.ts';
@@ -109,6 +111,24 @@ export async function handleSessionRoutes(request: Request, pathname: string, se
       if (session.account !== true) return json(403, { error: 'account-required' }, cors.headers);
       const seams = { accounts, account: session.subject, tracker: { accounts, ...trackerOf(served, githubApp) } };
       const answer = settings ? await setSessionSite(request, seams) : await sourceOffer(request, seams);
+
+      return json(answer.status, answer.body, cors.headers);
+    }
+
+    // FRU-633: a new consent at Linear for a connector that Linear ended, started from the popup.
+    if (pathname === SESSION_SOURCE_RECONNECT_PATH && accounts !== undefined && served.identitySecret !== undefined) {
+      if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, cors.headers);
+      const session = await sessionWrites(request, served, context);
+      if (session === undefined) return json(401, { error: 'identity-required' }, cors.headers);
+      if (session.account !== true) return json(403, { error: 'account-required' }, cors.headers);
+      const ready = served.linearOAuth !== undefined && served.secretsKey !== undefined;
+      const answer = await reconnectSource(request, {
+        accounts,
+        account: session.subject,
+        tracker: { accounts, ...trackerOf(served, githubApp) },
+        kv,
+        publicUrl: ready ? served.publicUrl : undefined,
+      });
 
       return json(answer.status, answer.body, cors.headers);
     }

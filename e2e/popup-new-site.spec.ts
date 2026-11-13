@@ -291,7 +291,7 @@ test('a site of no workspace: added to one and turned on, in one click, then scr
   await expect(page.locator('[data-fruitback-host]')).toHaveCount(1);
 });
 
-test('a site whose tracker refuses the connection says so, and an admin opens the connector in the console (FRU-633)', async ({
+test('a site whose tracker refuses the connection says so, and an admin reconnects it at Linear from the popup (FRU-633)', async ({
   extension,
 }) => {
   const page = await extension.context.newPage();
@@ -321,9 +321,31 @@ test('a site whose tracker refuses the connection says so, and an admin opens th
   expect(await popup.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(380);
   await clean(popup, 'a site whose tracker refuses the connection');
 
+  // An admin goes to Linear from here: the worker gives the start of the flow, on its own address.
+  const start = `${CLOUD}/auth/linear/start?ticket=abcdefghijklmnopqrstuvwx`;
+  const asked: unknown[] = [];
+  await extension.context.route(`${CLOUD}/session/sources/reconnect`, async (route) => {
+    asked.push(route.request().postDataJSON());
+
+    return route.fulfill({ status: 201, json: { url: start } });
+  });
+  await extension.context.route(`${CLOUD}/auth/linear/start?*`, (route) =>
+    route.fulfill({ contentType: 'text/html', body: '<title>Linear</title>' }),
+  );
   const opened = extension.context.waitForEvent('page');
-  await refused.getByRole('button', { name: 'Reconnect in the console' }).click();
-  expect((await opened).url()).toBe(`${CONSOLE}/w/ws_2/connectors?connector=conn_1`);
+  await refused.getByRole('button', { name: 'Reconnect Linear' }).click();
+  expect((await opened).url()).toBe(start);
+  expect(asked).toEqual([{ workspace: 'ws_2', connector: 'conn_1' }]);
+
+  // A worker that refuses (a connector made with a key, a worker of before): the panel in the console.
+  await extension.context.unroute(`${CLOUD}/session/sources/reconnect`);
+  await extension.context.route(`${CLOUD}/session/sources/reconnect`, (route) =>
+    route.fulfill({ status: 404, json: { error: 'not-found' } }),
+  );
+  const again = await openPopup(extension, page);
+  const fallback = extension.context.waitForEvent('page');
+  await again.locator('.site-refused').getByRole('button', { name: 'Reconnect Linear' }).click();
+  expect((await fallback).url()).toBe(`${CONSOLE}/w/ws_2/connectors?connector=conn_1`);
 });
 
 test('a site added, whose rule is not stored, is drawn as it is: a site of the workspace to turn on', async ({

@@ -12,6 +12,7 @@ import {
   finishAdd,
   offerFor,
   parseWorkspaceSites,
+  reconnectSource,
   setSiteSettings,
   sitesOf,
   sourceOffer,
@@ -829,6 +830,46 @@ describe('who sees the notes and where they go, from the popup (FRU-453)', () =>
     );
     for (const failed of [answer({}, 502), answer({ kind: 'jira' })]) {
       assert.equal(await sourceOffer('https://api.fruitback.test', 'ws_1', 'c', seamsWith(failed)), undefined);
+    }
+  });
+});
+
+describe('a new consent at Linear, from the popup (FRU-633)', () => {
+  const seamsWith = (fetcher: typeof fetch) => ({ ensureAccess: async () => GRANTED, fetcher });
+
+  it('asks the worker with the token, and takes only an address of the start of the flow', async () => {
+    const sent: { url: string; body: unknown }[] = [];
+    const answer = (body: unknown, status = 201) =>
+      (async (url: string, init: RequestInit) => {
+        sent.push({ url, body: JSON.parse(String(init.body)) });
+
+        return new Response(JSON.stringify(body), { status });
+      }) as unknown as typeof fetch;
+    const START = 'https://api.fruitback.test/auth/linear/start?ticket=abcdefghijklmnopqrstuvwx';
+
+    assert.equal(
+      await reconnectSource('https://api.fruitback.test', 'ws_1', 'conn_1', seamsWith(answer({ url: START }))),
+      START,
+    );
+    assert.deepEqual(sent[0], {
+      url: 'https://api.fruitback.test/session/sources/reconnect',
+      body: { workspace: 'ws_1', connector: 'conn_1' },
+    });
+    for (const [body, status] of [
+      [{ url: START }, 403],
+      [{ url: START }, 404],
+      [{ url: START }, 200],
+      [{ url: 'javascript:alert(1)' }, 201],
+      [{ url: 'https://evil.example/elsewhere' }, 201],
+      [{ url: 'https://evil.example/auth/linear/start?ticket=abcdefghijklmnopqrstuvwx' }, 201],
+      [{ url: 3 }, 201],
+      [{}, 201],
+    ] as const) {
+      assert.equal(
+        await reconnectSource('https://api.fruitback.test', 'ws_1', 'conn_1', seamsWith(answer(body, status))),
+        undefined,
+        `${status} ${JSON.stringify(body)}`,
+      );
     }
   });
 });
