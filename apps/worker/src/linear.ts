@@ -1142,7 +1142,7 @@ const TEAM_PROJECTS_QUERY = `
 const VIEWER_QUERY = `
   query FruitbackViewer {
     viewer { name }
-    organization { name }
+    organization { id name }
   }
 `;
 
@@ -1232,8 +1232,10 @@ function projectsOf(nodes: ProjectNode[] | undefined): LinearProject[] {
  * is kept, so that a key or a token Linear refuses is never stored. Throws a `StoreError` for a key
  * Linear refuses.
  */
-export async function readLinearViewer(apiKey: string): Promise<{ viewer: string; organization: string }> {
-  const data = await graphql<{ viewer?: { name?: unknown }; organization?: { name?: unknown } }>(
+export async function readLinearViewer(
+  apiKey: string,
+): Promise<{ viewer: string; organization: string; organizationId: string }> {
+  const data = await graphql<{ viewer?: { name?: unknown }; organization?: { id?: unknown; name?: unknown } }>(
     { apiKey, teamId: 'none' },
     VIEWER_QUERY,
     {},
@@ -1244,6 +1246,8 @@ export async function readLinearViewer(apiKey: string): Promise<{ viewer: string
     viewer: typeof data.viewer?.name === 'string' ? data.viewer.name : '',
     // The workspace of Linear. A connector made with OAuth is named after it: its actor is the application.
     organization: typeof data.organization?.name === 'string' ? data.organization.name : '',
+    // FRU-633: the connectors made with OAuth in one workspace of Linear share one pair of tokens.
+    organizationId: typeof data.organization?.id === 'string' ? data.organization.id : '',
   };
 }
 

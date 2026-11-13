@@ -1,6 +1,7 @@
 import { json } from './http.ts';
 import {
   type AccountStore,
+  type Connector,
   type ConnectorKind,
   type Destination,
   type Role,
@@ -172,7 +173,7 @@ async function sitesOfAccount(
     const toCheck = await toCheckIn(noteIndex, workspace.id, account);
     const manages = can(role, 'manage-sites');
     const connectors = can(reach.role, 'see-tracker') ? await accounts.connectors(workspace.id) : [];
-    const kinds = new Map(connectors.map((each) => [each.id, each.kind]));
+    const kinds = sourceFactsOf(connectors);
     // FRU-453: the sources the popup offers, for a role that changes the place of a site.
     const sources = manages
       ? connectors.map((each) => ({ id: each.id, kind: each.kind, label: each.name ?? each.label }))
@@ -238,18 +239,37 @@ function placeIdsOf(site: Site): { place: { connector: string; teamId?: string; 
  * its notes in the worker. A guest, and any role without `see-tracker`, gets nothing, as for the
  * places of `GET /feedback` (FRU-123). A destination with no label is not named: absent, not a guess.
  */
-function destinationFor(site: Site, role: Role, kinds: ReadonlyMap<string, ConnectorKind>): DestinationField {
+function destinationFor(site: Site, role: Role, kinds: ReadonlyMap<string, SourceFact>): DestinationField {
   return can(role, 'see-tracker') ? destinationField(site.destinations[0], kinds) : {};
 }
 
-/** The kind of each connector of a workspace, by its id: what `destinationField` names. */
-async function kindsIn(accounts: AccountStore, workspace: string): Promise<Map<string, ConnectorKind>> {
-  return new Map((await accounts.connectors(workspace)).map((each) => [each.id, each.kind]));
+/** What `destinationField` says of a connector: its kind, and whether its tracker refuses it (FRU-633). */
+export type SourceFact = { kind: ConnectorKind; refused: boolean };
+
+/**
+ * The facts of each connector of a workspace, by its id. `refused`: the tracker refuses the connector
+ * itself, and no note of its sites reaches it. A place that a key does not reach is not that.
+ */
+export function sourceFactsOf(connectors: readonly Connector[]): Map<string, SourceFact> {
+  return new Map(
+    connectors.map((each) => [
+      each.id,
+      {
+        kind: each.kind,
+        refused: each.attention?.reason === 'key-refused' || each.attention?.reason === 'connection-ended',
+      },
+    ]),
+  );
+}
+
+/** The facts of each connector of a workspace, by its id: what `destinationField` names. */
+async function kindsIn(accounts: AccountStore, workspace: string): Promise<Map<string, SourceFact>> {
+  return sourceFactsOf(await accounts.connectors(workspace));
 }
 
 /** The kind of provider of a destination (FRU-554): a kind of connector, or the worker's own store. */
 export type DestinationKind = ConnectorKind | 'fruitback';
-export type DestinationField = { destination?: { label: string; kind?: DestinationKind } };
+export type DestinationField = { destination?: { label: string; kind?: DestinationKind; refused?: true } };
 
 /**
  * `destination` of a site in `GET /session/sites` and `POST /session/sites/settings`: the label of
@@ -261,13 +281,20 @@ export type DestinationField = { destination?: { label: string; kind?: Destinati
  */
 export function destinationField(
   first: Destination | undefined,
-  kinds: ReadonlyMap<string, ConnectorKind>,
+  kinds: ReadonlyMap<string, SourceFact>,
 ): DestinationField {
   if (first === undefined) return { destination: { label: 'Fruitback', kind: 'fruitback' } };
   if (first.label === undefined || first.label === '') return {};
-  const kind = kinds.get(first.connector);
+  const fact = kinds.get(first.connector);
 
-  return { destination: { label: first.label, ...(kind === undefined ? {} : { kind }) } };
+  return {
+    destination: {
+      label: first.label,
+      ...(fact === undefined ? {} : { kind: fact.kind }),
+      // FRU-633: the popup says that the notes do not reach it, and where a manager reconnects it.
+      ...(fact?.refused === true ? { refused: true } : {}),
+    },
+  };
 }
 
 /**

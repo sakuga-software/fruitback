@@ -166,6 +166,8 @@ export type PanelProps = {
   manages: boolean;
   onChanged: () => Promise<void>;
   onRemoved: () => void;
+  /** The word of a way back from a new consent for this connector (FRU-633), once. */
+  back?: string;
 };
 
 /** The title of a block of a panel. */

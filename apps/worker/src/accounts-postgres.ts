@@ -1832,11 +1832,19 @@ export function createPostgresAccountStore(database: Database): AccountStore {
       );
     },
 
-    async addConnector(workspace, { kind, label, sealed }) {
+    async addConnector(workspace, { kind, label, sealed, linearOrganization }) {
       const id = newId('con');
       const now = Date.now();
       await run((db) =>
-        db.insert(connectors).values({ id, workspace_id: workspace, kind, label, sealed, created_at: now }),
+        db.insert(connectors).values({
+          id,
+          workspace_id: workspace,
+          kind,
+          label,
+          sealed,
+          created_at: now,
+          linear_organization: kind === 'linear' ? (linearOrganization ?? null) : null,
+        }),
       );
 
       return {
@@ -1949,6 +1957,67 @@ export function createPostgresAccountStore(database: Database): AccountStore {
       given(connector, 'resealConnector: connector');
       given(sealed, 'resealConnector: sealed');
       await run((db) => db.update(connectors).set({ sealed }).where(eq(connectors.id, connector)));
+    },
+
+    async shareLinearPair(organization, sealed, adopt) {
+      given(organization, 'shareLinearPair: organization');
+      given(sealed, 'shareLinearPair: sealed');
+      const ended = sql`${connectors.attention} IN ('key-refused', 'connection-ended')`;
+      const changed = await run((db) =>
+        db
+          .update(connectors)
+          .set({
+            sealed,
+            linear_organization: organization,
+            attention: sql`CASE WHEN ${ended} THEN NULL ELSE ${connectors.attention} END`,
+            attention_at: sql`CASE WHEN ${ended} THEN NULL ELSE ${connectors.attention_at} END`,
+          })
+          .where(
+            and(
+              eq(connectors.kind, 'linear'),
+              adopt === undefined
+                ? eq(connectors.linear_organization, organization)
+                : or(eq(connectors.linear_organization, organization), eq(connectors.id, adopt)),
+            ),
+          )
+          .returning({ id: connectors.id }),
+      );
+
+      return changed.map((row) => row.id);
+    },
+
+    async linearConnectorsWithoutOrganization() {
+      return run((db) =>
+        db
+          .select({ id: connectors.id, sealed: connectors.sealed })
+          .from(connectors)
+          .where(and(eq(connectors.kind, 'linear'), isNull(connectors.linear_organization))),
+      );
+    },
+
+    async setLinearOrganization(connector, organization, sealed) {
+      given(connector, 'setLinearOrganization: connector');
+      given(organization, 'setLinearOrganization: organization');
+      given(sealed, 'setLinearOrganization: sealed');
+      await run((db) =>
+        db
+          .update(connectors)
+          .set({ linear_organization: organization, sealed })
+          .where(and(eq(connectors.id, connector), eq(connectors.kind, 'linear'))),
+      );
+    },
+
+    async holdsLinearOrganization(organization) {
+      given(organization, 'holdsLinearOrganization: organization');
+      const held = await run((db) =>
+        db
+          .select({ id: connectors.id })
+          .from(connectors)
+          .where(eq(connectors.linear_organization, organization))
+          .limit(1),
+      );
+
+      return held.length > 0;
     },
 
     async noteConnector(connector, trouble, now) {

@@ -77,6 +77,11 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Copy a message for an admin': 'Copier un message pour un admin',
   Copied: 'Copié',
   'Now: {place}': 'Maintenant : {place}',
+  '{provider} refuses the connection of this workspace, and the notes of this site do not reach it.':
+    '{provider} refuse la connexion de cet espace de travail, et les notes de ce site n’y arrivent pas.',
+  'An owner or an admin of the workspace can reconnect it in the console.':
+    'Un propriétaire ou un administrateur de l’espace de travail peut la reconnecter dans la console.',
+  'Reconnect in the console': 'Reconnecter dans la console',
   'Change where notes go': 'Changer la destination des notes',
   'More for this site': 'Plus pour ce site',
   'Fruitback is on for this site': 'Fruitback est actif sur ce site',

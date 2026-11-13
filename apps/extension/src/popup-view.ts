@@ -696,6 +696,11 @@ export type SiteFacts = {
   toCheck?: number;
   /** The notes of the site that are New, To do or In progress. */
   open?: number;
+  /**
+   * The tracker of `destination` refuses the connection (FRU-633). `reconnect` opens its connector in
+   * the console, for a role that may reconnect it. Absent: the line says who can.
+   */
+  refused?: { reconnect?: () => void };
 };
 
 export type SiteOnOptions = {
@@ -937,6 +942,10 @@ export function showSiteFacts(
       facts.destination === undefined ? undefined : facts.destinationKind,
     );
   }
+  screen.querySelector('.site-refused')?.remove();
+  if (where !== null && facts.refused !== undefined && facts.destination !== undefined) {
+    where.after(refusedLine(document, facts.destination, facts.destinationKind, facts.refused.reconnect));
+  }
   const counts = screen.querySelector('.panel-counts');
   if (counts === null) return;
   const parts: Node[] = [];
@@ -961,6 +970,42 @@ export function showSiteFacts(
     );
   }
   counts.replaceChildren(...parts);
+}
+
+/**
+ * The tracker of the place refuses the connection (FRU-633): its notes do not arrive there, and an owner
+ * or an admin reconnects it in the console, where its sites and its settings stay.
+ */
+function refusedLine(
+  document: Document,
+  label: string,
+  kind: DestinationKind | undefined,
+  reconnect: (() => void) | undefined,
+): HTMLElement {
+  const provider = readDestination(label, kind).provider ?? label;
+  const line = make(document, 'div', 'site-refused');
+  line.append(
+    make(
+      document,
+      'p',
+      'site-refused-words',
+      t('{provider} refuses the connection of this workspace, and the notes of this site do not reach it.', {
+        provider,
+      }),
+    ),
+  );
+  line.append(
+    reconnect === undefined
+      ? make(
+          document,
+          'p',
+          'site-refused-who',
+          t('An owner or an admin of the workspace can reconnect it in the console.'),
+        )
+      : textButton(document, t('Reconnect in the console'), reconnect),
+  );
+
+  return line;
 }
 
 /** « Change where notes go » of the menu hidden, and the opener of facts of before taken off. */

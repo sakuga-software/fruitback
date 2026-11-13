@@ -370,8 +370,19 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Linear refuse cette connexion depuis {when}, et les notes de ses sites n’arrivent pas dans Linear. Déconnectez-la, puis connectez Linear de nouveau.',
   'Since {when}, Linear refuses what Fruitback asks with this key, and the notes of its sites do not reach Linear. Disconnect it, then connect Linear with a key that has read and write access.':
     'Depuis {when}, Linear refuse ce que Fruitback demande avec cette clé, et les notes de ses sites n’arrivent pas dans Linear. Déconnectez-la, puis connectez Linear avec une clé qui a les droits de lecture et d’écriture.',
-  'Linear ended this connection, and since {when} the notes of its sites do not reach Linear. Disconnect it, then connect Linear again.':
-    'Linear a mis fin à cette connexion, et depuis {when} les notes de ses sites n’arrivent pas dans Linear. Déconnectez-la, puis connectez Linear de nouveau.',
+  'Linear ended this connection, and since {when} the notes of its sites do not reach Linear.':
+    'Linear a mis fin à cette connexion, et depuis {when} les notes de ses sites n’arrivent pas dans Linear.',
+  'Linear refuses this connection since {when}, and the notes of its sites do not reach Linear.':
+    'Linear refuse cette connexion depuis {when}, et les notes de ses sites n’arrivent pas dans Linear.',
+  'Reconnect it: its sites and its settings stay as they are.':
+    'Reconnectez-la : ses sites et ses réglages restent tels quels.',
+  'An owner or an admin of the workspace can reconnect it here.':
+    'Un propriétaire ou un administrateur de l’espace de travail peut la reconnecter ici.',
+  'Reconnect Linear': 'Reconnecter Linear',
+  'Linear is connected again. Its sites send their notes to the same places.':
+    'Linear est de nouveau connecté. Ses sites envoient leurs notes aux mêmes endroits.',
+  'This connector did not change: you chose another workspace of Linear at Linear. Reconnect it, and choose its workspace of Linear.':
+    'Ce connecteur n’a pas changé : vous avez choisi un autre espace Linear chez Linear. Reconnectez-le, et choisissez son espace Linear.',
   '{count} site': '{count} site',
   '{count} sites': '{count} sites',
   'This connector is still connected. Try again.': 'Ce connecteur est toujours connecté. Réessayez.',

@@ -1646,10 +1646,21 @@ by consent at Linear, and no personal key is typed.
 - The access token and the refresh token are kept like a key: sealed with `FRUITBACK_SECRETS_KEY`,
   and answered by no route. Nothing Linear says is echoed to the console: the way back carries one
   word of ours.
-- The refresh token changes at each refresh. One refresh runs at a time for a connector, and the
-  new pair is written before it is used. A refresh that Linear refuses answers `502`: the note stays
-  in the widget, and the workspace connects Linear again.
-- Disconnecting revokes the token at Linear, and removes the connector whatever Linear answers.
+- Linear keeps one pair of tokens for each workspace of Linear and application: a new consent ends
+  the pair of before. So the connectors of the instance in one workspace of Linear share one pair,
+  whatever workspace of Fruitback holds them. A consent, or a refresh, writes the new pair to all of
+  them. A connector of a workspace of Fruitback thus uses a pair that an owner or an admin of another
+  workspace of Fruitback got. That gives it nothing more: each connector exists because an owner or an
+  admin of its own workspace consented at Linear for that workspace of Linear, and the pair reaches
+  what the one installation of the application at Linear reaches.
+- The refresh token changes at each refresh. One refresh runs at a time for a pair, and the new pair
+  is written before it is used. A refresh that Linear refuses answers `502`: the note stays in the
+  widget, and an owner or an admin gives the connector a new pair with « Reconnect Linear ». The
+  connector keeps its id, its sites and its settings. A consent for another workspace of Linear than
+  the one of the connector changes nothing on that connector.
+- Disconnecting removes the connector whatever Linear answers, then revokes the pair at Linear when
+  no connector of the instance still holds it. A pair kept before the worker knew its workspace of
+  Linear was made for its connector alone, and is revoked.
 
 ### The connectors of a plugin (FRU-621)
 
@@ -2336,11 +2347,12 @@ the console. Each one has a rule in `ORGANIZATION_PATHS` (`organization-paths.ts
   most, its 10 minutes and the 60 seconds of clock skew. `GET /feedback` and `POST /feedback`
   compare the workspace of the token, and read no role.
 - A workspace is deleted by its owner only, by `DELETE /console/workspaces/<id>`. The tokens of
-  its Linear connectors are revoked at Linear first, as when one connector is removed; then its
-  members, sites, connectors and waiting deliveries go, and every extension paired for it stops.
-  The route of the plugin that deletes a workspace does none of that: it is closed to a request,
-  and refused to a call in the process.
-  test:`deletes a workspace for its owner only: the tokens of Linear first, then its sites, connectors, deliveries and extensions`.
+  its Linear connectors are read first; then its members, sites, connectors and waiting deliveries
+  go, every extension paired for it stops, and each token is revoked at Linear as when one connector
+  is removed: only when no connector of the instance still holds its pair. The route of the plugin
+  that deletes a workspace does none of that: it is closed to a request, and refused to a call in
+  the process.
+  test:`deletes a workspace for its owner only: the tokens of Linear read first, then its sites, connectors, deliveries and extensions`.
 - A workspace is made by the plugin for somebody of the cookie: `POST /console/workspaces`
   reads the name, then calls it in the process. Its route stays closed to a request: it takes a
   slug, a logo and metadata that nothing reads.

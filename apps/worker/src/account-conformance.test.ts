@@ -579,6 +579,11 @@ const VIOLATIONS: Violation<AccountStore>[] = [
     replace: { from: 'sql`${connectors.attention} IS DISTINCT FROM ${trouble ?? null}`', to: 'sql`true`' },
   },
   {
+    breaks: 'gives one pair of Linear to the connectors of one workspace of Linear, in every workspace (FRU-633)',
+    by: 'forgets every trouble, a key that lacks access too',
+    replace: { from: "${connectors.attention} IN ('key-refused', 'connection-ended')", to: 'true' },
+  },
+  {
     breaks: 'gives the deliveries that are due, oldest first, up to the limit',
     by: 'gives the newest first',
     replace: {

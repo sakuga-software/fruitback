@@ -825,10 +825,13 @@ export type AccountStore = {
    * `connector` to `repository` takes it, so that a repository that turned public is said at once.
    */
   noteRepositoryPrivacy(connector: string, repository: string, isPrivate: boolean): Promise<void>;
-  /** `sealed` is the key as `secrets.ts` encrypts it: the store never sees the plain value. */
+  /**
+   * `sealed` is the key as `secrets.ts` encrypts it: the store never sees the plain value.
+   * `linearOrganization`: the workspace of Linear of a connector made with OAuth (FRU-633).
+   */
   addConnector(
     workspace: string,
-    connector: { kind: ConnectorKind; label: string; sealed: string },
+    connector: { kind: ConnectorKind; label: string; sealed: string; linearOrganization?: string },
   ): Promise<Connector>;
   connectors(workspace: string): Promise<Connector[]>;
   /**
@@ -846,6 +849,23 @@ export type AccountStore = {
   removeConnector(workspace: string, connector: string): Promise<boolean>;
   /** Replaces what a connector keeps sealed: a refreshed token takes the place of the one it spent. */
   resealConnector(connector: string, sealed: string): Promise<void>;
+  /**
+   * Gives one pair of Linear tokens to every `linear` connector of the instance in the workspace of
+   * Linear `organization` (FRU-633), and to `adopt` if it is given. Linear keeps one pair for each
+   * workspace of Linear: a new pair ends the pair of before, so every connector that held it takes the
+   * new one. A `key-refused` or a `connection-ended` goes; a `key-lacks-access` stays, because a new pair
+   * does not change what a team gives the application. Returns the ids of the connectors it changed.
+   */
+  shareLinearPair(organization: string, sealed: string, adopt?: string): Promise<string[]>;
+  /** The `linear` connectors of the instance whose workspace of Linear is not known yet (FRU-633). */
+  linearConnectorsWithoutOrganization(): Promise<{ id: string; sealed: string }[]>;
+  /**
+   * Keeps the workspace of Linear of a connector made before FRU-633, and `sealed`: its same pair, now
+   * with that workspace in it.
+   */
+  setLinearOrganization(connector: string, organization: string, sealed: string): Promise<void>;
+  /** Whether a connector of the instance still uses the pair of this workspace of Linear (FRU-633). */
+  holdsLinearOrganization(organization: string): Promise<boolean>;
   /**
    * What the tracker last said of a connector (FRU-102): a refusal, or `undefined` for a call it
    * answered. A refusal of the same kind keeps its first moment. A connector that is gone is ignored.

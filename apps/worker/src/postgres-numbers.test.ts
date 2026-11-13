@@ -500,11 +500,12 @@ describe('why the type of an instant matters (FRU-180)', () => {
     // Three more for the search of the members (FRU-496): a name and an address with no accent, in a `where`.
     // Two more for a page of sites (FRU-497): no site for a guest of none, and the host of an address,
     // each in a `where`. One more for the sessions of a site that name a note of the page (FRU-618): `?|`
-    // of a JSON array against a list of texts, in a `where`.
+    // of a JSON array against a list of texts, in a `where`. Three more for the pair of a workspace of
+    // Linear (FRU-633): the troubles a new pair ends, in a `set`.
     const fragments = (source: string): number => source.match(/\bsql(<[^>`]*>)?`/g)?.length ?? 0;
     assert.deepEqual(
       { accounts: fragments(stores['accounts-postgres.ts']), sessions: fragments(stores['session-postgres.ts']) },
-      { accounts: 22, sessions: 9 },
+      { accounts: 25, sessions: 9 },
     );
   });
 });

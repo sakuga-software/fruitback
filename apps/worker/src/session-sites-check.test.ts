@@ -5,7 +5,7 @@ import { type World, callOn, memberOf, shareWith, signInTo, workspaceIn, worlds 
 import { resetMemoryLinear, setMemoryIssueState } from './linear-memory.ts';
 import { rowsOf } from './postgres.fixture.ts';
 import { createPairing, digest, redeemPairing } from './session.ts';
-import { destinationField } from './session-sites.ts';
+import { destinationField, sourceFactsOf } from './session-sites.ts';
 
 /**
  * `GET /session/sites` (FRU-295): where the notes of each site go, for a role that sees the tracker,
@@ -211,7 +211,37 @@ describe('destinationField (FRU-554)', () => {
     assert.deepEqual(destinationField({ connector: 'con_gone', label: 'Linear · Old' }, new Map()), {
       destination: { label: 'Linear · Old' },
     });
-    assert.deepEqual(destinationField({ connector: 'con_1' }, new Map([['con_1', 'linear']])), {});
+    assert.deepEqual(
+      destinationField({ connector: 'con_1' }, new Map([['con_1', { kind: 'linear', refused: false }]])),
+      {},
+    );
+  });
+
+  it('reads a refusal of the connector as refused, and a place that a key does not reach as not (FRU-633)', () => {
+    const at = (reason: 'key-refused' | 'key-lacks-access' | 'connection-ended') => ({
+      id: reason,
+      workspaceId: 'w',
+      kind: 'linear' as const,
+      label: 'Linear',
+      createdAt: '2026-11-12T09:54:53.000Z',
+      settings: { showComments: true, stages: {} },
+      attention: { reason, since: '2026-11-12T09:54:53.000Z' },
+    });
+    const facts = sourceFactsOf([at('key-refused'), at('key-lacks-access'), at('connection-ended')]);
+    assert.deepEqual(
+      [...facts.values()].map((fact) => fact.refused),
+      [true, false, true],
+    );
+  });
+
+  it('says that the tracker refuses the connector of the first place, and only then (FRU-633)', () => {
+    const place = { connector: 'con_1', label: 'Linear · Acme web' };
+    assert.deepEqual(destinationField(place, new Map([['con_1', { kind: 'linear', refused: true }]])), {
+      destination: { label: 'Linear · Acme web', kind: 'linear', refused: true },
+    });
+    assert.deepEqual(destinationField(place, new Map([['con_1', { kind: 'linear', refused: false }]])), {
+      destination: { label: 'Linear · Acme web', kind: 'linear' },
+    });
     assert.deepEqual(destinationField(undefined, new Map()), {
       destination: { label: 'Fruitback', kind: 'fruitback' },
     });

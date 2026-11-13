@@ -100,6 +100,7 @@ async function signedIn(extension: LoadedExtension, page: Page, request: string)
 async function sitesRoute(
   context: BrowserContext,
   workspaces: { id: string; name: string; role: string; canAddSite: boolean; sources?: unknown[] }[],
+  destination: Record<string, unknown> = { label: 'Linear · Northwind' },
 ) {
   const sites: Record<string, unknown>[] = [];
   const posted: { body: unknown; authorization: string | null }[] = [];
@@ -140,7 +141,7 @@ async function sitesRoute(
       // Listed after, with what FRU-295 adds for an account: where the notes go, and the fixes to check.
       sites.push({
         ...site,
-        destination: { label: 'Linear · Northwind' },
+        destination,
         // FRU-530: where the notes go by ids, for a role that changes it from screen 3.
         place: { connector: 'conn_1', teamId: 'team_1', projectId: 'proj_1' },
         toCheck: 2,
@@ -288,6 +289,41 @@ test('a site of no workspace: added to one and turned on, in one click, then scr
     },
   });
   await expect(page.locator('[data-fruitback-host]')).toHaveCount(1);
+});
+
+test('a site whose tracker refuses the connection says so, and an admin opens the connector in the console (FRU-633)', async ({
+  extension,
+}) => {
+  const page = await extension.context.newPage();
+  await openBareSite(page, 'popup-refused-source');
+  await sitesRoute(
+    extension.context,
+    [{ id: 'ws_2', name: 'Northwind', role: 'admin', canAddSite: true, sources: [] }],
+    { label: 'Linear · Northwind', kind: 'linear', refused: true },
+  );
+  await signedIn(extension, page, 'req_refused_1');
+  const popup = await openPopup(extension, page);
+  await popup.setViewportSize({ width: 380, height: 580 });
+  await popup.getByRole('button', { name: 'Turn on' }).click();
+
+  const refused = popup.locator('.site-refused');
+  await expect(refused.locator('.site-refused-words')).toHaveText(
+    'Linear refuses the connection of this workspace, and the notes of this site do not reach it.',
+  );
+  // Right under « Sent to », above « Leave a note ».
+  const [sent, line, leave] = await Promise.all([
+    boxOf(popup.locator('.site-destination')),
+    boxOf(refused),
+    boxOf(popup.getByRole('button', { name: 'Leave a note' })),
+  ]);
+  expect(line.y).toBeGreaterThanOrEqual(sent.y + sent.height);
+  expect(leave.y).toBeGreaterThanOrEqual(line.y + line.height);
+  expect(await popup.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(380);
+  await clean(popup, 'a site whose tracker refuses the connection');
+
+  const opened = extension.context.waitForEvent('page');
+  await refused.getByRole('button', { name: 'Reconnect in the console' }).click();
+  expect((await opened).url()).toBe(`${CONSOLE}/w/ws_2/connectors?connector=conn_1`);
 });
 
 test('a site added, whose rule is not stored, is drawn as it is: a site of the workspace to turn on', async ({

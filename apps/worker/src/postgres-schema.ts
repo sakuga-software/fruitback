@@ -52,6 +52,10 @@ const instant = (name: string) => bigint(name, { mode: 'number' });
  * `installation` is the fingerprint of the installation of a `github` connector (FRU-360,
  * `installationFingerprint`), and NULL for every other kind. Its unique constraint makes one installation
  * feed one connector of the whole instance.
+ *
+ * `linear_organization` is the id of the workspace of Linear of a `linear` connector made with OAuth
+ * (FRU-633), and NULL for every other one. Linear keeps one pair of tokens for each workspace of Linear:
+ * the connectors that share a value share that pair.
  */
 export const connectors = pgTable(
   'connectors',
@@ -69,9 +73,11 @@ export const connectors = pgTable(
     installation: text('installation'),
     // The name a workspace gave the connector (FRU-404), NULL for none: `label` stays the worker's.
     name: text('name'),
+    linear_organization: text('linear_organization'),
   },
   (table) => [
     unique('connectors_installation_key').on(table.installation),
+    index('connectors_by_linear_organization').on(table.linear_organization),
     foreignKey({
       name: 'connectors_workspace_id_fkey',
       columns: [table.workspace_id],

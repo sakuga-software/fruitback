@@ -265,7 +265,11 @@ describe('the reads of Linear for one choice (FRU-501)', () => {
   it('reads who a key belongs to, and nothing of its teams', async () => {
     const asked = linear(() => ({ viewer: { name: 'Camille' }, organization: { name: 'Acme' } }));
 
-    assert.deepEqual(await readLinearViewer('lin_api_key'), { viewer: 'Camille', organization: 'Acme' });
+    assert.deepEqual(await readLinearViewer('lin_api_key'), {
+      viewer: 'Camille',
+      organization: 'Acme',
+      organizationId: '',
+    });
     assert.equal(asked[0]?.operation, 'FruitbackViewer');
     assert.ok(!asked[0]?.query.includes('teams'));
   });
