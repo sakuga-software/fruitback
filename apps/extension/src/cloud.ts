@@ -58,7 +58,7 @@ export type WorkspaceSite = {
    * Where the notes of the site go (FRU-295): « Linear · Northwind », or « Fruitback ». Only for a
    * role that sees the tracker. Absent: not known, never « nowhere ».
    */
-  destination?: { label: string; kind?: DestinationKind };
+  destination?: { label: string; kind?: DestinationKind; refused?: true };
   /**
    * The notes of the person that the team marked done and that they did not confirm (FRU-295), for
    * the session of an account. Absent: not known, never zero.
@@ -178,17 +178,22 @@ export function parseWorkspaceSites(body: unknown): WorkspaceSites | undefined {
 export type DestinationKind = Source['kind'] | 'fruitback';
 const DESTINATION_KINDS: ReadonlySet<string> = new Set<DestinationKind>(['linear', 'github', 'rest', 'fruitback']);
 
-/** The label of a destination: a short line of text, or nothing. With it, its kind when the worker said a known one. */
-function destinationOf(value: unknown): { label: string; kind?: DestinationKind } | undefined {
+/**
+ * The label of a destination: a short line of text, or nothing. With it, its kind when the worker said
+ * a known one, and `refused` when its tracker refuses the connection (FRU-633).
+ */
+function destinationOf(value: unknown): { label: string; kind?: DestinationKind; refused?: true } | undefined {
   if (typeof value !== 'object' || value === null) return undefined;
-  const { label, kind } = value as Record<string, unknown>;
+  const { label, kind, refused } = value as Record<string, unknown>;
   if (typeof label !== 'string') return undefined;
   const flat = label.replace(/\s+/gu, ' ').trim();
   if (flat === '' || flat.length > 200) return undefined;
 
-  return typeof kind === 'string' && DESTINATION_KINDS.has(kind)
-    ? { label: flat, kind: kind as DestinationKind }
-    : { label: flat };
+  return {
+    label: flat,
+    ...(typeof kind === 'string' && DESTINATION_KINDS.has(kind) ? { kind: kind as DestinationKind } : {}),
+    ...(refused === true ? { refused: true } : {}),
+  };
 }
 
 /** A count the worker gave: a whole number from zero, or nothing. */

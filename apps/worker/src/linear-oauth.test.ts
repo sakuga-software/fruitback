@@ -17,7 +17,7 @@ import { type Kv, KvError, createMemoryKv } from './kv.ts';
 import { REFRESH_MARGIN_MS, readCredential } from './linear-oauth.ts';
 import { rowsOf } from './postgres.fixture.ts';
 import { createPostgresNoteStore } from './notes-postgres.ts';
-import { open } from './secrets.ts';
+import { open, seal } from './secrets.ts';
 
 const SECRETS_KEY = 'another-secret-that-opens-the-connectors';
 const SITE = 'https://staging.acme.dev';
@@ -64,6 +64,8 @@ function fakeLinear() {
     /** What the token route answers to a refresh: a status, or `down` for no answer at all. */
     refreshAnswer: 200 as number | 'down',
     slowRefresh: undefined as Promise<void> | undefined,
+    /** The workspace of Linear the next consent is for (FRU-633). */
+    organization: { id: 'org_acme', name: 'Acme Inc' },
   };
   const mint = () => {
     state.generation += 1;
@@ -122,7 +124,7 @@ function fakeLinear() {
       return Response.json({
         data: {
           viewer: { name: 'Fruitback' },
-          organization: { name: 'Acme Inc' },
+          organization: state.organization,
           teams: { nodes: [{ id: 'team_design', name: 'Design', key: 'DES', projects: { nodes: [] } }] },
         },
       });
@@ -181,8 +183,8 @@ async function acme(env: Env, name = 'Acme') {
 type World = Awaited<ReturnType<typeof acme>>;
 
 /** The console asks where to go, and the browser goes there: the address at Linear, and the cookie it left with. */
-async function leave(env: Env, world: World, token = world.owner.token) {
-  const asked = await call(env, 'POST', `${world.base}/connectors/linear/oauth`, { token });
+async function leave(env: Env, world: World, token = world.owner.token, path = '/connectors/linear/oauth') {
+  const asked = await call(env, 'POST', `${world.base}${path}`, { token });
   assert.equal(asked.status, 201, await asked.clone().text());
   const { url } = (await asked.json()) as { url: string };
   const started = await call(env, 'GET', new URL(url).pathname + new URL(url).search);
@@ -265,6 +267,8 @@ describe('a workspace connects Linear with OAuth (FRU-134)', () => {
         accessToken: 'access-1',
         refreshToken: 'refresh-1',
         expiresAt: 0,
+        // FRU-633: the workspace of Linear, whose connectors share the pair.
+        organization: 'org_acme',
       },
     );
 
@@ -621,5 +625,243 @@ describe('what a Linear connector keeps (FRU-134)', () => {
     assert.equal(readConfig({ ...env, FRUITBACK_LINEAR_OAUTH: 'nocolon' }).ok, false);
     assert.equal(readConfig({ ...env, FRUITBACK_PUBLIC_URL: undefined }).ok, false);
     assert.equal(readConfig({ ...env, FRUITBACK_SECRETS_KEY: undefined }).ok, false);
+  });
+});
+
+/** A second workspace of Fruitback, with its own site, for the same workspace of Linear (FRU-633). */
+async function globex(env: Env) {
+  const { id, token } = await signInTo(env, 'owner@globex.dev');
+  const workspace = await env.accounts.createWorkspace('Globex', id);
+  const site = await env.accounts.addSite(workspace.id, { origin: OTHER_SITE, visibility: 'everyone' });
+
+  return {
+    accounts: env.accounts,
+    owner: { account: { id }, token },
+    workspace,
+    site,
+    base: `/console/workspaces/${workspace.id}`,
+  };
+}
+
+const OTHER_SITE = 'https://staging.globex.dev';
+
+function otherNote(site: string, id: string) {
+  const base = noteFixture();
+
+  return { ...base, id, page: { ...base.page, url: `${OTHER_SITE}/pricing` }, client: { id: site } };
+}
+
+/** The pair a connector keeps now. */
+async function pairOf(world: { accounts: World['accounts'] }, connector: string) {
+  const kept = await world.accounts.sealedKey(connector);
+
+  return readCredential(open(kept?.sealed as string, SECRETS_KEY) as string);
+}
+
+/** Sends the site of `world` to `connector`, as the console does. */
+async function sendTo(
+  env: Env,
+  world: { base: string; site: { id: string }; owner: { token: string } },
+  connector: string,
+) {
+  const set = await call(env, 'POST', `${world.base}/sites/${world.site.id}/destination`, {
+    token: world.owner.token,
+    body: { connector, teamId: 'team_design' },
+  });
+  assert.equal(set.status, 200, await set.clone().text());
+}
+
+/** A connector as the worker kept it before FRU-633: its pair says no workspace of Linear. */
+async function asBefore(env: Env, connector: string): Promise<void> {
+  const pair = await pairOf(env, connector);
+  assert.ok(pair.via === 'oauth');
+  const { accessToken, refreshToken, expiresAt } = pair;
+  const sealed = seal(JSON.stringify({ accessToken, refreshToken, expiresAt }), SECRETS_KEY);
+  await rowsOf(
+    env.database,
+    `UPDATE connectors SET sealed = '${sealed}', linear_organization = NULL WHERE id = '${connector}'`,
+  );
+}
+
+describe('one pair of tokens for each workspace of Linear (FRU-633)', () => {
+  it('keeps the connector of another workspace of Fruitback working after a consent for the same workspace of Linear', async () => {
+    const env = await envWith();
+    const linear = fakeLinear();
+    const first = await acme(env);
+    const before = await connected(env, linear, first);
+    const second = await globex(env);
+
+    const back = await comeBack(env, linear, await leave(env, second as unknown as World, second.owner.token));
+    assert.equal(back.headers.get('Location'), `${CONSOLE}/w/${second.workspace.id}/connectors?linear=connected`);
+
+    // Linear ended `refresh-1` and `access-1` with the second consent. The first connector holds the new pair.
+    const written = await call(env, 'POST', '/feedback', { origin: SITE, body: note(first.site.id) });
+    assert.equal(written.status, 201, await written.clone().text());
+    assert.equal(linear.graphql.at(-1), 'Bearer access-2');
+    const [made] = await second.accounts.connectors(second.workspace.id);
+    assert.ok(made !== undefined && made.id !== before);
+    assert.deepEqual(await pairOf(first, before), await pairOf(second, made.id));
+  });
+
+  it('gives the pair that one connector refreshed to every connector of its workspace of Linear, with one refresh', async () => {
+    const env = await envWith();
+    const linear = fakeLinear();
+    const first = await acme(env);
+    await connected(env, linear, first);
+    const second = await globex(env);
+    await comeBack(env, linear, await leave(env, second as unknown as World, second.owner.token));
+    const [made] = await second.accounts.connectors(second.workspace.id);
+    await sendTo(env, second, made?.id as string);
+    vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 86_400_000 - REFRESH_MARGIN_MS + 1_000 });
+
+    const one = await call(env, 'POST', '/feedback', { origin: SITE, body: note(first.site.id) });
+    const other = await call(env, 'POST', '/feedback', {
+      origin: OTHER_SITE,
+      body: otherNote(second.site.id, 'sd_globex000001'),
+    });
+
+    assert.equal(one.status, 201, await one.clone().text());
+    assert.equal(other.status, 201, await other.clone().text());
+    assert.deepEqual(
+      linear.tokenCalls.filter((form) => form.grant_type === 'refresh_token').map((form) => form.refresh_token),
+      ['refresh-2'],
+    );
+    assert.equal(linear.graphql.at(-1), 'Bearer access-3');
+  });
+
+  it('gives a connector that Linear ended a new pair in its own panel: it keeps its id, its site and its settings', async () => {
+    const env = await envWith();
+    const linear = fakeLinear();
+    const world = await acme(env);
+    const connector = await connected(env, linear, world);
+    const settings = (await world.accounts.connectors(world.workspace.id))[0]?.settings;
+    assert.ok(settings !== undefined);
+    await world.accounts.setConnectorSettings(world.workspace.id, connector, { ...settings, showComments: false });
+    // Linear ends the pair, as a consent elsewhere does: the next note finds it refused.
+    linear.refresh = 'ended';
+    linear.access = 'ended';
+    vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 86_400_000 });
+    assert.equal((await call(env, 'POST', '/feedback', { origin: SITE, body: note(world.site.id) })).status, 502);
+    assert.equal((await world.accounts.connectors(world.workspace.id))[0]?.attention?.reason, 'connection-ended');
+    vi.useRealTimers();
+
+    const left = await leave(env, world, world.owner.token, `/connectors/${connector}/reconnect`);
+    const back = await comeBack(env, linear, left);
+
+    assert.equal(
+      back.headers.get('Location'),
+      `${CONSOLE}/w/${world.workspace.id}/connectors?linear=reconnected&connector=${connector}`,
+    );
+    const listed = await world.accounts.connectors(world.workspace.id);
+    assert.deepEqual(
+      listed.map((each) => [each.id, each.attention, each.settings.showComments]),
+      [[connector, undefined, false]],
+    );
+    const written = await call(env, 'POST', '/feedback', {
+      origin: SITE,
+      body: { ...note(world.site.id), id: 'sd_again0000001' },
+    });
+    assert.equal(written.status, 201, await written.clone().text());
+    assert.equal(linear.issues.at(-1)?.teamId, 'team_design');
+    assert.equal(linear.graphql.at(-1), `Bearer ${linear.access}`);
+  });
+
+  it('keeps the pair of the connector when the consent is for another workspace of Linear, and gives it to that one', async () => {
+    const env = await envWith();
+    const linear = fakeLinear();
+    const world = await acme(env);
+    const connector = await connected(env, linear, world);
+    const kept = await pairOf(world, connector);
+    const elsewhere = await globex(env);
+    linear.organization = { id: 'org_globex', name: 'Globex' };
+    await comeBack(env, linear, await leave(env, elsewhere as unknown as World, elsewhere.owner.token));
+    const [globexLinear] = await elsewhere.accounts.connectors(elsewhere.workspace.id);
+
+    linear.organization = { id: 'org_globex', name: 'Globex' };
+    const back = await comeBack(
+      env,
+      linear,
+      await leave(env, world, world.owner.token, `/connectors/${connector}/reconnect`),
+    );
+
+    assert.equal(
+      back.headers.get('Location'),
+      `${CONSOLE}/w/${world.workspace.id}/connectors?linear=other-organization&connector=${connector}`,
+    );
+    assert.deepEqual(await pairOf(world, connector), kept);
+    // The exchange ended the pair of before in the workspace of Linear Globex: its connector has the new one.
+    const globexPair = await pairOf(elsewhere, globexLinear?.id as string);
+    assert.equal(globexPair.via === 'oauth' && globexPair.accessToken, linear.access);
+  });
+
+  it('brings the connector of before back on a plain « Connect », with no second connector', async () => {
+    const env = await envWith();
+    const linear = fakeLinear();
+    const world = await acme(env);
+    const connector = await connected(env, linear, world);
+    await asBefore(env, connector);
+    linear.refresh = 'ended';
+    linear.access = 'ended';
+
+    const back = await comeBack(env, linear, await leave(env, world));
+
+    assert.equal(
+      back.headers.get('Location'),
+      `${CONSOLE}/w/${world.workspace.id}/connectors?linear=reconnected&connector=${connector}`,
+    );
+    assert.deepEqual(
+      (await world.accounts.connectors(world.workspace.id)).map((each) => each.id),
+      [connector],
+    );
+    const pair = await pairOf(world, connector);
+    assert.equal(pair.via === 'oauth' && pair.organization, 'org_acme');
+  });
+
+  it('asks a working connector of before for its workspace of Linear before a consent ends its pair', async () => {
+    const env = await envWith();
+    const linear = fakeLinear();
+    const first = await acme(env);
+    const before = await connected(env, linear, first);
+    await asBefore(env, before);
+    const second = await globex(env);
+
+    await comeBack(env, linear, await leave(env, second as unknown as World, second.owner.token));
+
+    const written = await call(env, 'POST', '/feedback', { origin: SITE, body: note(first.site.id) });
+    assert.equal(written.status, 201, await written.clone().text());
+    assert.equal(linear.graphql.at(-1), `Bearer ${linear.access}`);
+  });
+
+  it('revokes the pair only when the last connector of its workspace of Linear goes', async () => {
+    const env = await envWith();
+    const linear = fakeLinear();
+    const first = await acme(env);
+    const before = await connected(env, linear, first);
+    const second = await globex(env);
+    await comeBack(env, linear, await leave(env, second as unknown as World, second.owner.token));
+    const [made] = await second.accounts.connectors(second.workspace.id);
+
+    await call(env, 'DELETE', `${first.base}/connectors/${before}`, { token: first.owner.token });
+    assert.deepEqual(linear.revoked, []);
+    await call(env, 'DELETE', `${second.base}/connectors/${made?.id}`, { token: second.owner.token });
+    assert.deepEqual(linear.revoked, ['refresh-2']);
+  });
+
+  it('starts a new consent for a connector made with OAuth of the workspace only, and for its owner or admin', async () => {
+    const env = await envWith();
+    const linear = fakeLinear();
+    const world = await acme(env);
+    const connector = await connected(env, linear, world);
+    const other = await globex(env);
+    const reader = await world.person('reader@acme.dev');
+    await memberOf(env, world.workspace.id, reader.account.id, 'member');
+
+    const ask = (base: string, id: string, token: string) =>
+      call(env, 'POST', `${base}/connectors/${id}/reconnect`, { token });
+    assert.equal((await ask(world.base, connector, world.owner.token)).status, 201);
+    assert.equal((await ask(other.base, connector, other.owner.token)).status, 404);
+    assert.equal((await ask(world.base, connector, reader.token)).status, 403);
+    const key = await world.accounts.addConnector(world.workspace.id, { kind: 'linear', label: 'Linear', sealed: 'x' });
+    assert.equal((await ask(world.base, key.id, world.owner.token)).status, 404);
   });
 });

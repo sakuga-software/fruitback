@@ -2671,9 +2671,22 @@ ticket removes; it adds no route and no table.
   The `state` is bound to the browser by a `SameSite=Lax` cookie, like GitHub's: without it, somebody
   could get a victim's consent on their own `state`, and the victim's Linear would land in their
   workspace. **A Linear connector keeps a key or a pair of tokens**, and `linearAuthorization` is the
-  one way to the header: it refreshes a token near its end, one refresh at a time for a connector,
+  one way to the header: it refreshes a token near its end, one refresh at a time for a pair,
   and writes the new pair before it uses it. A personal key goes raw, a token goes with `Bearer`.
   The connector is named `Linear OAuth · <workspace>`, and the console reads that prefix.
+- **A pair of Linear tokens belongs to the workspace of Linear, not to the connector** (FRU-633).
+  Linear keeps one installation of the application for each of its workspaces, and a consent replaces
+  its pair. Measured on Fruitback Cloud on 2026-11-13: a connector made in a second workspace of
+  Fruitback ended the first one, whose refresh token then answered `invalid_grant` 20 days before its
+  end. Each pair now holds the id of its workspace of Linear, and the column `linear_organization`
+  finds the connectors that share it. `shareLinearPair` writes a refreshed or consented pair to all of
+  them, the lock of a refresh is per workspace of Linear, and `revokeLinear` revokes only when no
+  connector holds the pair. `POST …/connectors/<id>/reconnect` starts a consent for one connector,
+  which keeps its id, so its sites keep their places. A « Connect » for a workspace of Linear that this
+  workspace already holds brings the connector of before back, and makes no second one. A connector
+  of before FRU-633 says its workspace of Linear only while its pair works:
+  `placeConnectorsOfBefore` asks each one before a code is exchanged, because the exchange ends the
+  pair. A dead one is matched by its label, which is named after its workspace of Linear.
 - **A connector can be an address that only receives** (FRU-122). `rest` is no store: the note is
   kept in the worker's own store first, then `receivingStore` puts a row in `deliveries`, and the
   server's loop (`deliverPending`, every 15 seconds, one pass at a time) posts the rows that are due.

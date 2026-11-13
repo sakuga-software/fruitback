@@ -729,6 +729,23 @@ body.popup-page {
   display: none;
 }
 
+/* FRU-633: the tracker of the place refuses the connection. In the accent, as a problem. */
+.popup .site-refused {
+  margin-top: 8px;
+  color: var(--accent-strong);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.popup .site-refused p {
+  margin: 0;
+}
+
+.popup .site-refused .site-refused-who {
+  margin-top: 4px;
+  color: var(--muted);
+}
+
 /*
   A line that appears, the team after the provider, the project after the team: it fades in. Screen 2
   only: on a site that is on, « Notes go to » comes when the worker answers, and a line that fades

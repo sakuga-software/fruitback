@@ -31,7 +31,7 @@ export async function spend(kv: Kv, key: string): Promise<Record<string, unknown
 export async function issueTicket(
   kv: Kv,
   prefix: string,
-  who: { workspace: string; account: string },
+  who: { workspace: string; account: string; connector?: string },
 ): Promise<string> {
   const ticket = random(24);
   await kv.set(`${prefix}${ticket}`, JSON.stringify(who), TICKET_TTL_MS);
@@ -44,11 +44,15 @@ export async function spendTicket(
   kv: Kv,
   prefix: string,
   ticket: string,
-): Promise<{ workspace: string; account: string } | undefined> {
+): Promise<{ workspace: string; account: string; connector?: string } | undefined> {
   const who = /^[\w-]{16,64}$/.test(ticket) ? await spend(kv, `${prefix}${ticket}`) : undefined;
   if (typeof who?.workspace !== 'string' || typeof who.account !== 'string') return undefined;
 
-  return { workspace: who.workspace, account: who.account };
+  return {
+    workspace: who.workspace,
+    account: who.account,
+    ...(typeof who.connector === 'string' ? { connector: who.connector } : {}),
+  };
 }
 
 export function redirect(location: string, cookies: string[] = []): Response {

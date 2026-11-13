@@ -1022,6 +1022,39 @@ describe('where the notes of a site that is on go (FRU-530)', () => {
     assert.deepEqual(readDestination('Store', 'fruitback'), { kind: 'fruitback', place: 'Store' });
   });
 
+  // FRU-633: the tracker refuses the connection. An owner or an admin opens the connector in the console.
+  it('says that the notes do not reach a tracker that refuses the connection, and who reconnects it', () => {
+    const screen = on();
+    let opened = 0;
+    showSiteFacts(screen, facts, {
+      destination: 'Acme web',
+      destinationKind: 'linear',
+      refused: { reconnect: () => (opened += 1) },
+    });
+    const line = screen.querySelector('.site-refused');
+    assert.equal(
+      line?.querySelector('.site-refused-words')?.textContent,
+      'Linear refuses the connection of this workspace, and the notes of this site do not reach it.',
+    );
+    const reconnect = line?.querySelector<HTMLButtonElement>('button');
+    assert.equal(reconnect?.textContent, 'Reconnect in the console');
+    reconnect?.click();
+    assert.equal(opened, 1);
+
+    // A role that may not reconnect it reads who can, and gets no button.
+    showSiteFacts(screen, facts, { destination: 'Acme web', destinationKind: 'linear', refused: {} });
+    assert.equal(screen.querySelectorAll('.site-refused').length, 1);
+    assert.equal(screen.querySelector('.site-refused button'), null);
+    assert.equal(
+      screen.querySelector('.site-refused-who')?.textContent,
+      'An owner or an admin of the workspace can reconnect it in the console.',
+    );
+
+    // Facts read again with a connection that works: the line goes.
+    showSiteFacts(screen, facts, { destination: 'Acme web', destinationKind: 'linear' });
+    assert.equal(screen.querySelector('.site-refused'), null);
+  });
+
   it('draws the mark of the kind the worker names, on a site that is on and on « Turn on »', () => {
     const screen = on();
     showSiteFacts(screen, facts, { destination: 'acme/web', destinationKind: 'github' });

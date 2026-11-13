@@ -97,6 +97,12 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
     if (!pathname.startsWith('/console/workspaces/w1/')) return undefined;
     if (request.method() !== 'GET') {
       worker.sent.push({ pathname, body: request.postDataJSON() });
+      // FRU-633: the consent at Linear is skipped. The browser comes back as the worker sends it back.
+      if (pathname.endsWith('/connectors/c1/reconnect')) {
+        worker.connectors = worker.connectors.map((each) => ((each as { id: string }).id === 'c1' ? LINEAR : each));
+
+        return json({ url: `${CONSOLE}/w/w1/connectors?linear=reconnected&connector=c1` }, 201);
+      }
       const named = /\/connectors\/(\w+)$/.exec(pathname);
       if (named !== null && request.method() === 'POST') {
         if (worker.refusesName !== undefined) return json({ error: worker.refusesName }, 400);
@@ -447,6 +453,50 @@ test('a source that its tracker refuses says so in red, on its row and in its pa
   expect.soft(await painted(state, 'color')).toEqual(rgb(ACCENT_STRONG));
   await expect(panel(page).getByRole('alert').first()).toContainText('Linear refuses this connection since');
   await expect(panel(page).getByText('Connected with the key of Ana')).toBeVisible();
+});
+
+test('a connection that Linear ended is reconnected from its panel, and keeps its sites (FRU-633)', async ({
+  page,
+}) => {
+  const worker = await workerWith(page);
+  const ended = { ...LINEAR, attention: { reason: 'connection-ended', since: '2026-11-12T09:54:53.000Z' } };
+  worker.connectors = [ended, ADDRESS];
+  await open(page);
+  await rows(page).first().click();
+  const alert = panel(page).getByRole('alert').first();
+  await expect(alert).toContainText('Linear ended this connection, and since');
+  await expect(alert).toContainText('Reconnect it: its sites and its settings stay as they are.');
+  await expect(alert).not.toContainText('Disconnect');
+
+  await panel(page).getByRole('button', { name: 'Reconnect Linear', exact: true }).click();
+
+  await expect(page).toHaveURL(`${CONSOLE}/w/w1/connectors`);
+  expect(worker.sent.map((each) => each.pathname)).toContain('/console/workspaces/w1/connectors/c1/reconnect');
+  await expect(panel(page).getByRole('status')).toHaveText(
+    'Linear is connected again. Its sites send their notes to the same places.',
+  );
+  await expect(panel(page).getByRole('alert')).toHaveCount(0);
+  await expect(rows(page).first().getByText('Connected', { exact: true })).toBeVisible();
+});
+
+test('a member reads that a connection ended, and is not offered to reconnect it (FRU-633)', async ({ page }) => {
+  const worker = await workerWith(page, 'member');
+  worker.connectors = [{ ...LINEAR, attention: { reason: 'connection-ended', since: '2026-11-12T09:54:53.000Z' } }];
+  await open(page);
+  await rows(page).first().click();
+  await expect(panel(page).getByRole('alert').first()).toContainText(
+    'An owner or an admin of the workspace can reconnect it here.',
+  );
+  await expect(panel(page).getByRole('button', { name: 'Reconnect Linear' })).toHaveCount(0);
+});
+
+test('a consent for another workspace of Linear says so in the panel of the connector (FRU-633)', async ({ page }) => {
+  await workerWith(page);
+  await page.goto(`${CONSOLE}/w/w1/connectors?linear=other-organization&connector=c1`);
+  await expect(panel(page).getByRole('alert').first()).toHaveText(
+    'This connector did not change: you chose another workspace of Linear at Linear. Reconnect it, and choose its workspace of Linear.',
+  );
+  await expect(page).toHaveURL(`${CONSOLE}/w/w1/connectors`);
 });
 
 test('with no source, and with a read that failed, the screen says which of the two it is', async ({ page }) => {

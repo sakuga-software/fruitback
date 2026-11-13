@@ -914,7 +914,7 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
       assert.deepEqual(await rowsOf(worker.database, live), []);
     });
 
-    it('deletes a workspace for its owner only: the tokens of Linear first, then its sites, connectors, deliveries and extensions', async () => {
+    it('deletes a workspace for its owner only: the tokens of Linear read first, then its sites, connectors, deliveries and extensions', async () => {
       const worker = await workerOn(open);
       const acme = await team(worker);
       const other = await team(worker, 'globex');
@@ -973,12 +973,13 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
         fetched.mockRestore();
       }
 
-      // Linear was told while the connector was still there to read the token from.
+      // The token was read while the connector was there, and Linear was told after the rows went:
+      // another workspace can hold the same pair, and it is revoked only when no connector does (FRU-633).
       assert.deepEqual(revoked, [
         {
           url: 'https://api.linear.app/oauth/revoke',
           body: 'token=lin_refresh&token_type_hint=refresh_token',
-          connectors: 2,
+          connectors: 0,
         },
       ]);
       assert.equal(typeof linear.id, 'string');

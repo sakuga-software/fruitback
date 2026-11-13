@@ -573,7 +573,7 @@ export async function handleConsoleApi(
         endSessionsOf: (account, now) => context.sessions.endSessionsOf({ subject: account }, now),
         // As the deletion by its owner, below: Linear revokes its tokens, and its extensions stop (FRU-284).
         afterDeletion: {
-          revoke: (sealed) => revokeLinear(sealed, context.secretsKey),
+          revoke: (sealed) => revokeLinear(sealed, context.secretsKey, context.accounts),
           endWorkspaceSessions: (workspace, now) => context.sessions.endSessionsOf({ workspace }, now),
         },
         ...(context.instance?.reads === undefined ? {} : { reads: context.instance.reads }),
@@ -1228,15 +1228,17 @@ export async function handleConsoleApi(
   if (rest === '') {
     if (request.method !== 'DELETE') return json(405, { error: 'method-not-allowed' }, headers);
     if (!allowed('delete-workspace')) return forbidden();
-    // The tokens of its trackers are revoked at Linear first, as when one connector is removed
-    // (FRU-149): once the rows are gone, nothing holds a token to revoke it with. What Linear answers
-    // changes nothing.
+    // The tokens of its trackers are read first, as when one connector is removed (FRU-149): once the
+    // rows are gone, nothing holds a token to revoke it with. They are revoked after the rows are gone:
+    // another workspace can share the pair (FRU-633). What Linear answers changes nothing.
+    const leaving: string[] = [];
     for (const connector of await context.accounts.connectors(workspaceId as string)) {
       if (connector.kind !== 'linear') continue;
-      const leaving = await context.accounts.sealedKey(connector.id);
-      if (leaving !== undefined) await revokeLinear(leaving.sealed, context.secretsKey);
+      const kept = await context.accounts.sealedKey(connector.id);
+      if (kept !== undefined) leaving.push(kept.sealed);
     }
     await context.accounts.deleteWorkspace(workspaceId as string);
+    for (const sealed of new Set(leaving)) await revokeLinear(sealed, context.secretsKey, context.accounts);
     // Nobody is a member of it any more: the extensions that were paired for it stop.
     await context.sessions.endSessionsOf({ workspace: workspaceId as string }, context.now ?? Date.now());
 

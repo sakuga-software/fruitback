@@ -58,17 +58,28 @@ import {
 /** FRU-537: the popup adds a site over https, or the loopback; another http site from the console. */
 export const HTTP_SITE = msg('This site is on http. Add it to a workspace from the console, then turn it on here.');
 
-/** The connectors of a workspace in the console, where « + Connect another tool » leads (FRU-600). */
-function consoleConnectors(account: Account | undefined, workspace: string): (() => void) | undefined {
+/**
+ * The connectors of a workspace in the console, where « + Connect another tool » leads (FRU-600).
+ * `connector`: the panel of that connector opens, where it is reconnected (FRU-633).
+ */
+function consoleConnectors(
+  account: Account | undefined,
+  workspace: string,
+  connector?: string,
+): (() => void) | undefined {
   if (account?.console === undefined) return undefined;
   const base = account.console.endsWith('/') ? account.console : `${account.console}/`;
-  const url = new URL(`w/${encodeURIComponent(workspace)}/connectors`, base).toString();
+  const url = new URL(`w/${encodeURIComponent(workspace)}/connectors`, base);
+  if (connector !== undefined) url.searchParams.set('connector', connector);
 
   return () => {
-    void browser.tabs.create({ url });
+    void browser.tabs.create({ url: url.toString() });
     window.close();
   };
 }
+
+/** The roles that reconnect a connector of the workspace (FRU-633), as `manage-workspace` of the worker. */
+const RECONNECTS: ReadonlySet<string> = new Set(['owner', 'admin']);
 
 /** Copies a text with the clipboard of the popup. `false`: the browser refused. */
 const copyText = (text: string): Promise<boolean> =>
@@ -429,6 +440,16 @@ export async function siteOfWorkspaceOn(
           );
           app?.querySelector<HTMLElement>('input:checked, .destination-back')?.focus();
         };
+        // FRU-633: an owner or an admin opens the panel of the connector in the console, and reconnects it.
+        const refusedFacts = (): { reconnect?: () => void } => {
+          const connector = listed.site.place?.connector;
+          const reconnect =
+            connector === undefined || !RECONNECTS.has(listed.workspace.role ?? '')
+              ? undefined
+              : consoleConnectors(account, listed.workspace.id, connector);
+
+          return reconnect === undefined ? {} : { reconnect };
+        };
         // FRU-530: a role that may change where the notes go gets the sources of the workspace, and
         // « Change » writes through the route of « Turn on » (FRU-453): no route of its own.
         const sources = listed.workspace.sources;
@@ -465,6 +486,7 @@ export async function siteOfWorkspaceOn(
             ...(change === undefined ? { locked: () => showScreen(undefined) } : {}),
             ...(toCheck === undefined ? {} : { toCheck }),
             ...(notes === undefined ? {} : { open: notes.new + notes.todo + notes.progress }),
+            ...(destination?.refused === true ? { refused: refusedFacts() } : {}),
           },
         );
       });

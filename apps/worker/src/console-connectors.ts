@@ -28,7 +28,7 @@ import {
   readLinearViewer,
 } from './linear.ts';
 import { isAcceptableSecret, newSecret, parseTargetUrl, sealTarget, targetLabel } from './rest-connector.ts';
-import { linearAuthorization, linearTicket, revokeLinear } from './linear-oauth.ts';
+import { OAUTH_LABEL_PREFIX, linearAuthorization, linearTicket, revokeLinear } from './linear-oauth.ts';
 import { isAcceptableToken, parseFireUrl, routineLabel, sealRoutine } from './claude-routine.ts';
 import { seal } from './secrets.ts';
 import { StoreError } from './store.ts';
@@ -272,6 +272,28 @@ export async function handleConnectors(
     return json(201, { url }, headers);
   }
 
+  // FRU-633: where the browser goes to give a Linear connector made with OAuth a new pair of tokens. The
+  // connector keeps its id, so its sites keep their places and it keeps its settings.
+  const again = /^\/connectors\/([A-Za-z0-9_-]+)\/reconnect$/.exec(rest);
+  if (again !== null) {
+    if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
+    if (!allowed('manage-workspace')) return forbidden();
+    if (!linearOAuthReady(context) || context.kv === undefined || context.publicUrl === undefined) {
+      return json(404, CONNECTORS_UNAVAILABLE, headers);
+    }
+    const id = again[1] as string;
+    const held = (await context.accounts.connectors(workspaceId as string)).find((each) => each.id === id);
+    if (held === undefined || held.kind !== 'linear' || !held.label.startsWith(OAUTH_LABEL_PREFIX)) {
+      return json(404, { error: 'not-found' }, headers);
+    }
+    const url = await linearTicket(
+      { kv: context.kv, publicUrl: context.publicUrl },
+      { workspace: workspaceId as string, account: account.id, connector: id },
+    );
+
+    return json(201, { url }, headers);
+  }
+
   // FRU-621: where the browser goes to connect the service of a plugin by OAuth.
   const viaPlugin = /^\/connectors\/([a-z]+)\/oauth$/.exec(rest);
   if (viaPlugin !== null && isPluginKind(viaPlugin[1])) {
@@ -438,12 +460,12 @@ export async function handleConnectors(
     if (connector[2] === undefined) {
       if (request.method !== 'DELETE') return json(405, { error: 'method-not-allowed' }, headers);
       if (!allowed('manage-workspace')) return forbidden();
-      // A token of OAuth is revoked at Linear before the connector goes. Linear's answer changes
-      // nothing: the connector goes, and a token nobody holds ends in a day.
+      // A token of OAuth is revoked at Linear after the connector goes, if no other connector holds
+      // its pair (FRU-633). Linear's answer changes nothing: the connector goes.
       const leaving = await context.accounts.sealedKey(id);
       const removed = await context.accounts.removeConnector(workspaceId as string, id);
       if (removed && leaving?.kind === 'linear' && leaving.workspaceId === workspaceId) {
-        await revokeLinear(leaving.sealed, context.secretsKey);
+        await revokeLinear(leaving.sealed, context.secretsKey, context.accounts);
       }
       // FRU-621: the service of a plugin forgets its token, best effort, as Linear's.
       if (removed && leaving !== undefined && leaving.workspaceId === workspaceId && isPluginKind(leaving.kind)) {

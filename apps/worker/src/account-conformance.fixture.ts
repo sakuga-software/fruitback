@@ -833,6 +833,48 @@ export function accountCases(it: Declare<AccountStore>): void {
     await store.noteConnector('con_nobody', 'key-refused', at(12));
   });
 
+  it('gives one pair of Linear to the connectors of one workspace of Linear, in every workspace (FRU-633)', async (store) => {
+    const { workspace } = await world(store);
+    const { workspace: other } = await otherWorld(store);
+    const add = (where: string, organization?: string) =>
+      store.addConnector(where, {
+        kind: 'linear',
+        label: 'Linear',
+        sealed: 'old',
+        ...(organization === undefined ? {} : { linearOrganization: organization }),
+      });
+    const [ended, lacking, elsewhere, foreign, unplaced] = [
+      await add(workspace.id, 'org_acme'),
+      await add(workspace.id, 'org_acme'),
+      await add(other.id, 'org_acme'),
+      await add(other.id, 'org_globex'),
+      await add(other.id),
+    ];
+    await store.noteConnector(ended.id, 'connection-ended', Date.UTC(2026, 10, 12));
+    await store.noteConnector(lacking.id, 'key-lacks-access', Date.UTC(2026, 10, 12));
+    const sealed = async (id: string) => (await store.sealedKey(id))?.sealed;
+
+    const changed = await store.shareLinearPair('org_acme', 'new', unplaced.id);
+
+    assert.deepEqual(changed.sort(), [ended.id, lacking.id, elsewhere.id, unplaced.id].sort());
+    assert.deepEqual(
+      [await sealed(ended.id), await sealed(elsewhere.id), await sealed(foreign.id), await sealed(unplaced.id)],
+      ['new', 'new', 'old', 'new'],
+    );
+    const attention = Object.fromEntries(
+      (await store.connectors(workspace.id)).map((each) => [each.id, each.attention]),
+    );
+    // A new pair answers a refusal of the pair. It does not change what a team of Linear gives the application.
+    assert.equal(attention[ended.id], undefined);
+    assert.equal(attention[lacking.id]?.reason, 'key-lacks-access');
+    assert.equal(await store.holdsLinearOrganization('org_acme'), true);
+    assert.deepEqual(
+      (await store.linearConnectorsWithoutOrganization()).map((each) => each.id),
+      [],
+    );
+    assert.equal(await store.holdsLinearOrganization('org_nobody'), false);
+  });
+
   // --- Deliveries
 
   it('gives the deliveries that are due, oldest first, up to the limit', async (store) => {

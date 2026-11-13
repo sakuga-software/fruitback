@@ -211,6 +211,21 @@ describe('where the notes of a site go, and the fixes to check (FRU-295)', () =>
     // A kind with no label names nothing: the label is what is said.
     assert.equal(read({ kind: 'linear' }), undefined);
   });
+
+  // FRU-633: the worker says that the tracker refuses the connection. Only `true` says it.
+  it('keeps that the tracker of a destination refuses the connection, and nothing else for it', () => {
+    const site = ACCOUNT.sites[0];
+    const read = (destination: unknown) =>
+      parseWorkspaceSites({ ...ACCOUNT, sites: [{ ...site, destination }] })?.sites[0]?.destination;
+    assert.deepEqual(read({ label: 'Acme web', kind: 'linear', refused: true }), {
+      label: 'Acme web',
+      kind: 'linear',
+      refused: true,
+    });
+    for (const refused of [false, 'true', 1, null]) {
+      assert.deepEqual(read({ label: 'Acme web', kind: 'linear', refused }), { label: 'Acme web', kind: 'linear' });
+    }
+  });
 });
 
 describe('the sites of every workspace of an account (FRU-254)', () => {

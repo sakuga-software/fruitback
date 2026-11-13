@@ -1,7 +1,6 @@
 import { isOneOf } from './one-of.ts';
 import {
   type AccountStore,
-  type ConnectorKind,
   type Destination,
   MAX_DESTINATIONS,
   VISIBILITIES,
@@ -12,7 +11,7 @@ import { parseJsonObject, readBoundedBytes } from './bounded-body.ts';
 import { type TrackerContext, UnknownPlace, offerOf, placeOf } from './console-api.ts';
 import { isExtensionOrigin } from './cors.ts';
 import { StoreError } from './store.ts';
-import { destinationField } from './session-sites.ts';
+import { type SourceFact, destinationField, sourceFactsOf } from './session-sites.ts';
 
 /**
  * `POST /session/sites/settings`: the popup changes who sees the notes of a site and where they go,
@@ -177,8 +176,8 @@ export async function setSessionSite(request: Request, context: SiteSettingsCont
   // blocks nothing: the label is what the answer said before FRU-554 (raised twice in review of #784).
   const kinds = await context.accounts
     .connectors(workspace)
-    .then((each) => new Map(each.map((connector) => [connector.id, connector.kind])))
-    .catch(() => new Map<string, ConnectorKind>());
+    .then(sourceFactsOf)
+    .catch(() => new Map<string, SourceFact>());
   // On the site read above only: a site removed since is not made again (raised in review).
   if (visibility !== undefined && !(await context.accounts.setSiteVisibility(workspace, site.id, visibility))) {
     return { status: 404, body: { error: 'not-found' } };

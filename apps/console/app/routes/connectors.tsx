@@ -148,6 +148,8 @@ export default function Connectors() {
   // A read that failed is not an empty list (FRU-162): no « 0 site », and a way to read again.
   const [unread, setUnread] = useState(false);
   const [selected, setSelected] = useState<string | undefined>();
+  // FRU-633: the word of the way back from a new consent for one connector, for its panel, once.
+  const [back, setBack] = useState<{ connector: string; word: string } | undefined>();
   // Whether the panel that is about to appear was opened by a press of its row: see `Opened`.
   const opening = useRef(false);
   // The form that is open, and where (FRU-562): on the page when no source was connected as it opened.
@@ -224,7 +226,13 @@ export default function Connectors() {
       const github = search.get('github');
       const plugin = pluginReturn(search);
       const asked = search.get('new') !== null;
-      if (linear === null && github === null && plugin === undefined && !asked) return;
+      // FRU-633: the panel of one connector opens, from a new consent or from a link of the extension.
+      const opened = search.get('connector');
+      if (linear === null && github === null && plugin === undefined && !asked && opened === null) return;
+      if (opened !== null && found.some((each) => each.id === opened)) {
+        setSelected(opened);
+        if (linear !== null) setBack({ connector: opened, word: linear });
+      }
       if (plugin?.word === 'connected') setSelected(found.filter((each) => each.kind === plugin.kind).at(-1)?.id);
       // `?new` opens nothing for a person who cannot add a source: no dialog of disabled buttons, now
       // or after a later read.
@@ -297,6 +305,7 @@ export default function Connectors() {
             setSelected(undefined);
             void load();
           }}
+          {...(back?.connector === open.id ? { back: back.word } : {})}
         />
       </Opened>
     );
