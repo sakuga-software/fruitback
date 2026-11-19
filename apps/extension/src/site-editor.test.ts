@@ -8,10 +8,10 @@ import {
   createEditor,
   latestOnly,
 } from './site-editor.ts';
-import { PATTERN_PROBLEM, WILDCARD_TEAM_PROBLEM } from './site-form.ts';
+import { CLOUD_PRIVATE_PROBLEM, PATTERN_PROBLEM, WILDCARD_TEAM_PROBLEM } from './site-form.ts';
 import type { SiteConfig } from './sites.ts';
 
-function editor(granted: boolean, current: Record<string, SiteConfig> = {}) {
+function editor(granted: boolean, current: Record<string, SiteConfig> = {}, cloud?: string) {
   const requests: string[] = [];
   const writes: [string, SiteConfig][] = [];
   const activated: string[] = [];
@@ -29,12 +29,44 @@ function editor(granted: boolean, current: Record<string, SiteConfig> = {}) {
       writes.push([pattern, site]);
     },
     current: () => current,
+    cloud,
   });
 
   return { ...seams, requests, writes, activated };
 }
 
 const fields = { sites: '*.staging.acme.dev', mode: 'private' as const, endpoint: 'https://w.test/', clientId: 'acme' };
+
+describe('createEditor on the Fruitback of the build (FRU-643)', () => {
+  const CLOUD = 'https://api.fruitback.com';
+  const onCloud = { mode: 'private' as const, endpoint: CLOUD, clientId: 'acme' };
+
+  it('refuses a new private-mode rule on the Cloud without asking the browser, and stores nothing', async () => {
+    const page = editor(true, {}, CLOUD);
+
+    assert.equal(await page.add({ ...onCloud, sites: 'https://acme.dev' }), CLOUD_PRIVATE_PROBLEM);
+    assert.deepEqual(page.requests, []);
+    assert.deepEqual(page.writes, []);
+  });
+
+  it('saves a private-mode rule stored on the Cloud before, and refuses a team rule changed to one', async () => {
+    const page = editor(
+      true,
+      {
+        'https://acme.dev': { ...onCloud, enabled: true },
+        'https://beta.acme.dev': { mode: 'team', endpoint: CLOUD, enabled: true },
+      },
+      CLOUD,
+    );
+
+    assert.equal(await page.save('https://acme.dev', { ...onCloud, clientId: 'acme-2' }), '');
+    assert.equal(await page.save('https://beta.acme.dev', onCloud), CLOUD_PRIVATE_PROBLEM);
+    assert.deepEqual(
+      page.writes.map(([pattern]) => pattern),
+      ['https://acme.dev'],
+    );
+  });
+});
 
 describe('createEditor', () => {
   it('asks for the pattern in the same turn as the click, before anything is awaited', () => {

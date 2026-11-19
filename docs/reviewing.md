@@ -154,6 +154,11 @@ it goes back when you sign out and no site that is on uses that worker.
 A grant reaches the next page load, so the popup injects into the tab you have open. Come back to
 the page and the widget is there.
 
+Private mode runs on a server you run yourself. With the address of Fruitback Cloud, the popup and
+the options page refuse it and say
+`Fruitback Cloud shows notes to a signed-in reviewer only, so private mode does not run on it. Sign in to Fruitback, then turn the site on from the popup.`
+In the popup, « Sign in to Fruitback » beside it starts the sign-in.
+
 If a private-mode site shows no note, open the popup. When the worker reads `authenticated`, the
 popup says `This server answers a signed-in reader only, and in private mode the extension holds no session. Notes do not show on this site.`,
 with a link to [the three modes](modes.md). Private mode carries no session, so the fix is on the

@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  CLOUD_PRIVATE_PROBLEM,
   PAIRING_LINK_PROBLEM,
   PAIR_PATH_PROBLEM,
   WILDCARD_TEAM_PROBLEM,
@@ -12,6 +13,39 @@ import {
 import type { PairLink } from './pair-link.ts';
 
 const ORIGIN = 'https://acme.dev';
+
+describe('complaint on the Fruitback of the build (FRU-643)', () => {
+  const CLOUD = 'https://api.fruitback.com';
+  const privateOn = (endpoint: string) => ({ mode: 'private' as const, endpoint, clientId: 'acme' });
+
+  it('refuses a new private-mode rule on the Cloud, whatever the spelling of its address', () => {
+    for (const endpoint of [CLOUD, `${CLOUD}/`, 'https://API.fruitback.com', 'https://api.fruitback.com:443/']) {
+      assert.equal(complaint(privateOn(endpoint), ORIGIN, { cloud: CLOUD }), CLOUD_PRIVATE_PROBLEM, endpoint);
+    }
+  });
+
+  it('takes team mode on the Cloud, private mode on another server, and every rule of a build with no Cloud', () => {
+    assert.equal(complaint({ mode: 'team', endpoint: CLOUD, clientId: '' }, ORIGIN, { cloud: CLOUD }), '');
+    assert.equal(complaint(privateOn('https://feedback.acme.dev'), ORIGIN, { cloud: CLOUD }), '');
+    assert.equal(complaint(privateOn(CLOUD), ORIGIN, {}), '');
+    assert.equal(complaint(privateOn(CLOUD), ORIGIN), '');
+  });
+
+  it('keeps a private-mode rule stored on the Cloud before, and refuses a rule that turns into one', () => {
+    const stored = { mode: 'private' as const, endpoint: CLOUD, clientId: 'acme', enabled: true };
+    assert.equal(complaint(privateOn(`${CLOUD}/`), ORIGIN, { cloud: CLOUD, before: stored }), '');
+
+    const team = { mode: 'team' as const, endpoint: CLOUD, enabled: true };
+    assert.equal(complaint(privateOn(CLOUD), ORIGIN, { cloud: CLOUD, before: team }), CLOUD_PRIVATE_PROBLEM);
+    const elsewhere = {
+      mode: 'private' as const,
+      endpoint: 'https://feedback.acme.dev',
+      clientId: 'acme',
+      enabled: true,
+    };
+    assert.equal(complaint(privateOn(CLOUD), ORIGIN, { cloud: CLOUD, before: elsewhere }), CLOUD_PRIVATE_PROBLEM);
+  });
+});
 
 describe('complaint', () => {
   it('accepts a complete entry in each mode', () => {

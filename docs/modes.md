@@ -83,6 +83,12 @@ nothing to ask anybody to ship.
 Both extension modes are one field on the site's entry, chosen in the popup, and an entry with no
 mode reads as private.
 
+Private mode is for a server you run yourself. Fruitback Cloud shows notes to a signed-in reviewer
+only, so the extension refuses a new private-mode rule on it, and offers to sign in instead. On the
+Cloud, a client's site that embeds nothing is reviewed by a reviewer who signs in: the extension
+then mounts the widget with their session. A private-mode rule on the Cloud that the extension
+already holds stays as it is.
+
 ## What each one needs
 
 |                                          | Public | Private                      | Team         |

@@ -28,6 +28,8 @@ export type EditorSeams = {
   activate: (pattern: string) => Promise<void>;
   /** Storage, read after a write the background did not confirm. See `activateStored`. */
   stored: () => Promise<Record<string, SiteConfig>>;
+  /** The Fruitback of this build (FRU-643): a new private-mode rule on it is refused. */
+  cloud?: string | undefined;
 };
 
 /**
@@ -54,7 +56,7 @@ export async function activateStored(
 
 export type RuleFields = SiteFields & { sites: string };
 
-export function createEditor({ request, write, current, activate, stored }: EditorSeams): {
+export function createEditor({ request, write, current, activate, stored, cloud }: EditorSeams): {
   add: (fields: RuleFields) => Promise<string>;
   save: (pattern: string, fields: SiteFields) => Promise<string>;
   switchOn: (pattern: string, site: SiteConfig) => Promise<boolean>;
@@ -65,7 +67,7 @@ export function createEditor({ request, write, current, activate, stored }: Edit
       const pattern = parseSitePattern(fields.sites);
       if (pattern === undefined) return Promise.resolve(PATTERN_PROBLEM);
       if (current()[pattern] !== undefined) return Promise.resolve(DUPLICATE_PROBLEM);
-      const problem = complaint(fields, pattern);
+      const problem = complaint(fields, pattern, { cloud });
       if (problem !== '') return Promise.resolve(problem);
 
       return request(pattern).then(
@@ -100,7 +102,7 @@ export function createEditor({ request, write, current, activate, stored }: Edit
     async save(pattern, fields) {
       const before = current()[pattern];
       if (before === undefined) return STORE_PROBLEM;
-      const problem = complaint(fields, pattern);
+      const problem = complaint(fields, pattern, { cloud, before });
       if (problem !== '') return problem;
 
       let kept = siteFrom(fields, before.enabled);

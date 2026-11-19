@@ -1,5 +1,6 @@
 import { DUPLICATE_PROBLEM, NO_ACCESS_PROBLEM, STORE_PROBLEM } from './site-editor.ts';
 import {
+  CLOUD_PRIVATE_PROBLEM,
   PAIRING_LINK_PROBLEM,
   PAIR_PATH_PROBLEM,
   PATTERN_PROBLEM,
@@ -51,7 +52,9 @@ export type Remedy =
   /** Read about it. The reviewer cannot fix it from the browser. */
   | 'guide'
   /** Pair with the link that was typed where the worker goes (FRU-395). */
-  | 'pair';
+  | 'pair'
+  /** Sign in to the Fruitback of this build (FRU-643). The popup alone offers it. */
+  | 'sign-in';
 
 /** The words on the button. One word for one remedy, on both pages. */
 export const REMEDY_LABEL: Record<Remedy, string> = {
@@ -61,6 +64,7 @@ export const REMEDY_LABEL: Record<Remedy, string> = {
   list: 'Check the list',
   guide: 'How to get a code',
   pair: 'Connect with this link',
+  'sign-in': 'Sign in to Fruitback',
 };
 
 export type Problem = { text: string } & ({ remedy: Remedy } | { remedy: null; why: string });
@@ -79,6 +83,7 @@ export const PROBLEMS: readonly Problem[] = [
   { text: PATTERN_PROBLEM, remedy: null, why: 'The field to correct is beside the message.' },
   { text: WILDCARD_TEAM_PROBLEM, remedy: null, why: 'The field to correct is beside the message.' },
   { text: PAIRING_LINK_PROBLEM, remedy: 'pair' },
+  { text: CLOUD_PRIVATE_PROBLEM, remedy: 'sign-in' },
   { text: PAIR_PATH_PROBLEM, remedy: null, why: 'The field to correct is beside the message.' },
   { text: STALE_TEAM_WILDCARD, remedy: null, why: 'The row offers Remove, and nothing else can run that rule.' },
   {
