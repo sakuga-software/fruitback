@@ -39,6 +39,12 @@
       <symbol id="g-drop" viewBox="0 0 24 24">
         <path d="M12 19.9 L7.05 14.95 A7 7 0 1 1 16.95 14.95 Z" fill="currentColor" />
       </symbol>
+      <symbol id="g-globe" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
+        </g>
+      </symbol>
       <symbol id="g-arrow" viewBox="0 0 16 16">
         <path
           d="M3 8h9.5M9 4.5 12.5 8 9 11.5"
@@ -62,6 +68,7 @@
           <a href="#pricing">Pricing</a>
           <a href="#faq">FAQ</a>
           <a href="{{ '/docs.html' | relative_url }}">Docs</a>
+          <a href="{{ '/self-hosting.html' | relative_url }}">Self-host</a>
         </nav>
         <div class="top-end">
           <a class="top-link" href="https://app.fruitback.com/sign-in">Sign in</a>
@@ -76,13 +83,31 @@
           <p class="badge">Open source · Cloud or self-hosted</p>
           <h1>Leave a note on the page. Find it in your tracker.</h1>
           <p class="tagline">Your clients point. Your team fixes.</p>
-          <div class="actions">
-            <a class="button" href="https://app.fruitback.com">
+          <form class="try" action="https://app.fruitback.com/setup" method="get">
+            <label class="try-field">
+              <svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-globe" /></svg>
+              <input
+                name="site"
+                type="text"
+                inputmode="url"
+                autocomplete="url"
+                autocapitalize="off"
+                spellcheck="false"
+                placeholder="staging.yoursite.com"
+                aria-label="The address of your site"
+                required
+              />
+            </label>
+            <button class="button" type="submit">
               <svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-drop" /></svg>
-              Create a workspace
-            </a>
-            <a class="button button-outline" href="{{ '/self-hosting.html' | relative_url }}">Host it yourself</a>
-          </div>
+              Try it on your site
+            </button>
+          </form>
+          <p class="try-other">
+            No access to the site’s code? Add the extension to
+            <a href="https://chromewebstore.google.com/detail/fruitback/jjjemdloknmggncbickofjgbodplekoa">Chrome</a>
+            or <a href="https://addons.mozilla.org/en-US/firefox/addon/fruitback/">Firefox</a>.
+          </p>
           <p class="fine">
             The Cloud is free during the beta and runs in Europe. On a public site, visitors leave a note with no
             account.
