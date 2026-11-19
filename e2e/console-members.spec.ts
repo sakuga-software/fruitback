@@ -648,7 +648,7 @@ test('an invitation that was kept gives its link, whatever became of its message
   await expect(notice).toContainText(`${CONSOLE}/invitations`);
   await expect(notice.getByRole('button', { name: 'Copy the link' })).toBeVisible();
   // FRU-642: the short guide of a client, to send with the link.
-  await expect(notice.getByRole('link', { name: 'Leave a note' })).toHaveAttribute(
+  await expect(notice.getByRole('link', { name: 'How to leave a note' })).toHaveAttribute(
     'href',
     'https://fruitback.com/leave-a-note.html',
   );

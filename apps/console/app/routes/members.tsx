@@ -641,7 +641,7 @@ function Invited({ email, message }: { email: string; message: Message }) {
       <p className="mt-[10px] text-hint text-muted">
         {t('Their first note, in two minutes:')}{' '}
         <LinkButton space="inline" href={LEAVE_A_NOTE_GUIDE} newTab>
-          {t('Leave a note')}
+          {t('How to leave a note')}
         </LinkButton>
       </p>
       <div className="mt-[14px]">
