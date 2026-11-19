@@ -175,12 +175,13 @@ describe('the landing (FRU-418)', () => {
   it('sends the address of the hero to the setup of the console, which reads it from `site` (FRU-641)', () => {
     const landing = readFileSync(new URL('_layouts/landing.html', DOCS), 'utf8');
     const form = /<form class="try"([^>]*)>([\s\S]*?)<\/form>/.exec(landing);
+    const [, attributes = '', fields = ''] = form ?? [];
 
     assert.ok(form, 'the hero has no form for the address');
-    assert.match(form[1], /action="https:\/\/app\.fruitback\.com\/setup"/, 'the form does not go to the setup');
-    assert.match(form[1], /method="get"/, 'the form does not put the address in the query');
-    assert.match(form[2], /<input[^>]*\bname="site"/, 'the field is not named `site`, the name the setup reads');
-    assert.match(form[2], /type="submit"/, 'the form has no button that sends it');
+    assert.match(attributes, /action="https:\/\/app\.fruitback\.com\/setup"/, 'the form does not go to the setup');
+    assert.match(attributes, /method="get"/, 'the form does not put the address in the query');
+    assert.match(fields, /<input[^>]*\bname="site"/, 'the field is not named `site`, the name the setup reads');
+    assert.match(fields, /type="submit"/, 'the form has no button that sends it');
   });
 
   it('keeps no word of the garden in its title, and promises the component only when the build exposes it (FRU-514)', () => {
