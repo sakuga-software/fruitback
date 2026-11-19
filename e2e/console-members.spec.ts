@@ -647,6 +647,11 @@ test('an invitation that was kept gives its link, whatever became of its message
   await expect(notice).toContainText('Invitation sent to zoe@client.fr. You can also send them this link:');
   await expect(notice).toContainText(`${CONSOLE}/invitations`);
   await expect(notice.getByRole('button', { name: 'Copy the link' })).toBeVisible();
+  // FRU-642: the short guide of a client, to send with the link.
+  await expect(notice.getByRole('link', { name: 'Leave a note' })).toHaveAttribute(
+    'href',
+    'https://fruitback.com/leave-a-note.html',
+  );
   // The block is between the head and the table, on the tint of a block of the mockup.
   const head = await box(page.locator('main header'));
   expect((await box(notice)).y).toBeGreaterThanOrEqual(head.y + head.height);

@@ -405,6 +405,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Invitation kept for {email}. Send them this link:': 'Invitation gardée pour {email}. Envoyez-lui ce lien :',
   'They open it, sign in with {email}, and join. The link alone opens nothing.':
     'La personne l’ouvre, se connecte avec {email}, et rejoint l’espace de travail. Le lien seul n’ouvre rien.',
+  'Their first note, in two minutes:': 'Sa première note, en deux minutes :',
   'Copy the link': 'Copier le lien',
   'The browser refused the copy. Select the link above and copy it by hand.':
     'Le navigateur a refusé la copie. Sélectionnez le lien ci-dessus et copiez-le à la main.',
