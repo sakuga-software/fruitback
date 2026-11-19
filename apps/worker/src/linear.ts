@@ -95,8 +95,10 @@ async function writtenToPlace<T>(config: LinearConfig, routing: LinearRouting, w
     return await write();
   } catch (error) {
     if (!(error instanceof LinearInputRefused)) throw error;
-    const [place] = await readLinearPlaces(config.apiKey, [routing]).catch(() => [{ team: '' }]);
-    if (place === undefined) throw new PlaceUnavailable(error.message);
+    // Only an answer for this one place that does not find it says the place is gone. A read that
+    // fails, or that answers no entry for it, says nothing: the error stays `INPUT_ERROR`.
+    const read = await readLinearPlaces(config.apiKey, [routing]).catch(() => undefined);
+    if (read?.length === 1 && read[0] === undefined) throw new PlaceUnavailable(error.message);
     throw error;
   }
 }

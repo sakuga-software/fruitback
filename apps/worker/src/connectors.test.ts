@@ -445,6 +445,34 @@ describe('a place that the tracker refuses (FRU-640)', () => {
     );
   });
 
+  it('answers store-unavailable when Linear refuses an input and the read of the place fails', async () => {
+    const env = await envWith();
+    const moved = { project: false };
+    const world = await placed(env, moved);
+    vi.restoreAllMocks();
+    mockMethod(globalThis, 'fetch', async (_url: unknown, init: { body: string }) => {
+      const operation = /Fruitback\w+/.exec((JSON.parse(init.body) as { query: string }).query)?.[0];
+      // The read of the place fails: it says nothing of the place.
+      if (operation === 'FruitbackPlaces') return new Response('busy', { status: 503 });
+      if (operation === 'FruitbackLabels') return Response.json({ data: { team: { labels: { nodes: [] } } } });
+
+      return Response.json({
+        data: null,
+        errors: [{ message: 'project not in same team as issue', extensions: { code: 'INPUT_ERROR' } }],
+      });
+    });
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const refused = await call(env, 'POST', '/feedback', { origin: SITE, body: note(world.site.id) });
+
+    assert.equal(refused.status, 502);
+    assert.equal(((await refused.json()) as { error: string }).error, 'store-unavailable');
+    assert.deepEqual(
+      (await placesOf(env, world)).map((each) => each.attention),
+      [undefined],
+    );
+  });
+
   it('clears the state when a note arrives at the place again', async () => {
     const env = await envWith();
     const moved = { project: false };
