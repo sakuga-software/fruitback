@@ -474,12 +474,20 @@ test('a session held with the worker of a private-mode site stays on the popup, 
   await openBareSite(page, 'ext-private-held-session');
   await pairFromPopup(extension, page, await mintPairingCode(REVIEWER), REVIEWER);
 
-  // The same rule, moved to private mode from the popup. The session stays in storage.
-  const popup = await openPopup(extension, page);
+  // The same rule, moved to private mode from the popup. The worker is the Cloud of the suite, so the
+  // popup refuses it and offers the sign-in (FRU-643).
+  let popup = await openPopup(extension, page);
   await popup.getByRole('button', { name: 'Change' }).click();
   await popup.getByLabel(/^Mode/).selectOption('private');
   await popup.getByLabel('Client id', { exact: true }).fill('playground');
   await popup.getByRole('button', { name: 'Save' }).click();
+  await expect(popup.getByText(/private mode does not run on it/)).toBeVisible();
+  await expect(popup.getByRole('button', { name: 'Sign in to Fruitback' })).toBeVisible();
+  await popup.close();
+
+  // A private-mode rule stored before FRU-643 runs. The session stays in storage.
+  await addRule(extension, { mode: 'private', clientId: 'playground', endpoint: AUTHENTICATED_WORKER_ORIGIN });
+  popup = await openPopup(extension, page);
 
   await expect(popup.getByText('On · playground', { exact: false })).toBeVisible();
   await expect(popup.getByText(`Connected as ${REVIEWER}`)).toBeVisible();
@@ -593,11 +601,9 @@ test('the popup, the options page and the mounted widget speak the language of t
   await openBareSite(page, 'ext-language');
   // The control: English, in the popup and then on the page.
   await pairFromPopup(extension, page, await mintPairingCode(REVIEWER), REVIEWER);
+  // The same rule in private mode, as a version before FRU-643 stored it on the Cloud of the suite.
+  await addRule(extension, { mode: 'private', clientId: 'playground', endpoint: AUTHENTICATED_WORKER_ORIGIN });
   const setUp = await openPopup(extension, page);
-  await setUp.getByRole('button', { name: 'Change' }).click();
-  await setUp.getByLabel(/^Mode/).selectOption('private');
-  await setUp.getByLabel('Client id', { exact: true }).fill('playground');
-  await setUp.getByRole('button', { name: 'Save' }).click();
   await expect(setUp.getByText('On · playground', { exact: false })).toBeVisible();
   await setUp.close();
   await expect(page.getByRole('button', { name: 'Leave a note' })).toBeVisible();
