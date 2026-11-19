@@ -282,6 +282,87 @@ kbd {
   justify-content: center;
 }
 
+/*
+  The address goes to the setup of the console, which adds the site once the person is signed in
+  (FRU-635). It is a plain GET form: the page needs no script.
+*/
+.try {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 6px;
+  box-sizing: border-box;
+  border: 1px solid var(--edge);
+  border-radius: 999px;
+  background: var(--surface);
+}
+
+.try:has(input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.try-field {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding-left: 14px;
+  color: var(--muted);
+  cursor: text;
+}
+
+.try-field input {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 16px;
+}
+
+.try-field input:focus {
+  outline: none;
+}
+
+.try-field input::placeholder {
+  color: var(--muted);
+}
+
+.try .button {
+  min-height: 44px;
+}
+
+.try-other {
+  margin: 16px 0 0;
+  color: var(--body);
+  font-size: 14px;
+}
+
+.try-other a {
+  color: var(--accent-strong);
+  font-weight: 600;
+}
+
+@media (max-width: 520px) {
+  .try {
+    flex-direction: column;
+    align-items: stretch;
+    border-radius: 24px;
+  }
+
+  .try-field {
+    padding: 0 10px;
+  }
+}
+
 .badge {
   display: inline-flex;
   align-items: center;

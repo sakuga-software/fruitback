@@ -95,7 +95,10 @@ How this repository is formatted, tested and documented, and which test holds ea
   `layout: landing`, and `docs/_layouts/landing.html` draws the mock-up « Fruitback — landing V2 »
   around it (FRU-387, after the board « Landing » of FRU-309): the hero, without and with, how it
   works and the five stages, the product, three cases, the connectors, the two offers, care and the
-  questions. `index.md` keeps the guides. A layout is HTML, so its links name the `.html` page through
+  questions. `index.md` keeps the guides. The hero asks for the address of the site (FRU-641, board L2 of FRU-636): a GET form
+  to `https://app.fruitback.com/setup` with the field `site`, the name the setup reads (FRU-635), and
+  the two stores of the extension under it. « Host it yourself » left the hero for « Self-host » in
+  the nav. `docs-site.test.ts` holds the action, the method and the name of the field. A layout is HTML, so its links name the `.html` page through
   `relative_url`. It needs no script: the questions are `<details>`, and the three cases sit side by
   side rather than in tabs. The glyphs are inline SVG (icons.md), the stage colours are the widget's
   `--fruitback-stage-*`, and the text wraps as in the console (widget.md, FRU-350).
