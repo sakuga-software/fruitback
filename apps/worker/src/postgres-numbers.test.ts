@@ -194,7 +194,7 @@ async function write({ table, column }: Bigint, database: PgDatabase, value: num
   await rowsOf(database, `UPDATE "${getTableConfig(table).name}" SET "${column.name}" = ${String(value)}`);
 }
 
-it('knows the fifty-four BIGINT columns of the worker, and that better-auth has none', () => {
+it('knows the fifty-five BIGINT columns of the worker, and that better-auth has none', () => {
   assert.deepEqual(BIGINTS.map(({ name }) => name).toSorted(), [
     'account_emails.created_at',
     'account_emails.verified_at',
@@ -246,6 +246,7 @@ it('knows the fifty-four BIGINT columns of the worker, and that better-auth has 
     'sessions.revoked_at',
     'sessions.rotated_at',
     'site_agent_triggers.updated_at',
+    'site_destinations.attention_at',
     'site_shares.created_at',
     'sites.created_at',
     'workspace_logos.updated_at',
@@ -292,7 +293,7 @@ for (const { label, open, skip } of [
         }
       }
 
-      assert.equal(nullable.length, 16);
+      assert.equal(nullable.length, 17);
       assert.deepEqual(wrong, []);
     });
 
@@ -501,11 +502,12 @@ describe('why the type of an instant matters (FRU-180)', () => {
     // Two more for a page of sites (FRU-497): no site for a guest of none, and the host of an address,
     // each in a `where`. One more for the sessions of a site that name a note of the page (FRU-618): `?|`
     // of a JSON array against a list of texts, in a `where`. Three more for the pair of a workspace of
-    // Linear (FRU-633): the troubles a new pair ends, in a `set`.
+    // Linear (FRU-633): the troubles a new pair ends, in a `set`. One more for the trouble of a
+    // destination (FRU-640): `IS DISTINCT FROM` of a text, in a `where`.
     const fragments = (source: string): number => source.match(/\bsql(<[^>`]*>)?`/g)?.length ?? 0;
     assert.deepEqual(
       { accounts: fragments(stores['accounts-postgres.ts']), sessions: fragments(stores['session-postgres.ts']) },
-      { accounts: 25, sessions: 9 },
+      { accounts: 26, sessions: 9 },
     );
   });
 });

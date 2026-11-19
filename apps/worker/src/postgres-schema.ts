@@ -293,6 +293,10 @@ export const site_destinations = pgTable(
     // keys Linear answers when the destination is written. Empty: another kind, written before, or
     // Linear gave no key.
     url: text('url'),
+    // FRU-640: `place-gone` if the tracker refused the place of the last note, since `attention_at`.
+    // NULL: the last note that went there arrived, or no note went there after the destination was written.
+    attention: text('attention'),
+    attention_at: instant('attention_at'),
   },
   (table) => [
     primaryKey({ name: 'site_destinations_pkey', columns: [table.site_id, table.position] }),

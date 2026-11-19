@@ -10,6 +10,7 @@ import { isElement } from './dom.ts';
 import { deepActiveElement, holdFocus } from './focus.ts';
 import { createIcon } from './icons.ts';
 import { type MessageKey, type Translator, createTranslator, languageOf } from './messages.ts';
+import type { PlaceHelp } from './place-help.ts';
 import { framesOf, settle } from './settle.ts';
 import {
   type AttachOffer,
@@ -147,7 +148,8 @@ export type SendFailure =
   | 'members-only'
   | 'too-large'
   | 'attachment-gone'
-  | 'no-tracker';
+  | 'no-tracker'
+  | 'place-gone';
 
 export type ComposerOptions = {
   document?: Document;
@@ -178,6 +180,11 @@ export type ComposerOptions = {
     attachments?: readonly string[],
   ) => Promise<boolean | void | SendFailure | SentWithoutPicture | SentAs>;
   onClose?: () => void;
+  /**
+   * What to do about a place of the site that its tracker no longer has (FRU-640), as the last answer
+   * that failed said it. Read when a send fails with `place-gone`.
+   */
+  placeHelp?: () => PlaceHelp | undefined;
   /**
    * « Choose another element » in the head (FRU-305): the host starts a capture over the open composer, which
    * keeps its text and moves to the element chosen. Left out: no such button.
@@ -428,6 +435,7 @@ export function createComposer(options: ComposerOptions): Composer {
   const failedCard = part('[data-fruitback-failed]');
   const failedTitle = part('[data-fruitback-failed-title]');
   const failedText = part('[data-fruitback-failed-text]');
+  const failedHelp = part<HTMLAnchorElement>('[data-fruitback-failed-help]');
   const sentCard = part('[data-fruitback-sent]');
   const sentDrop = part('[data-fruitback-sent-drop]');
   const sentTitle = part('[data-fruitback-sent-title]');
@@ -979,7 +987,9 @@ export function createComposer(options: ComposerOptions): Composer {
     field.readOnly = next === 'sending';
     // A failure is a card of its own above the foot (FRU-305): « Not sent », then what to
     // do. The sentence is the one of its cause (FRU-156).
-    failedText.textContent = next === 'failed' ? t.text(FAILURES[failure]) : '';
+    const help = next === 'failed' && failure === 'place-gone' ? options.placeHelp?.() : undefined;
+    failedText.textContent = next === 'failed' ? failureSentence(t, failure, help) : '';
+    showHelp(failedHelp, t, help);
     failedCard.hidden = next !== 'failed';
     status.textContent =
       next === 'idle' || next === 'failed' || next === 'sent' || next === 'receipt' ? '' : t.text(STATUS[next]);
@@ -1256,7 +1266,10 @@ export function createComposer(options: ComposerOptions): Composer {
       ? t.plural('composer.receiptSent', receiptSent.length)
       : t.text('composer.receiptPartial', { sent: receiptSent.length, unsent: result.unsent.length });
     receiptTo.textContent = whereItWent();
-    receiptStatus.textContent = whole || result.failure === undefined ? '' : failureText(t, result.failure);
+    receiptStatus.textContent =
+      whole || result.failure === undefined
+        ? ''
+        : failureText(t, result.failure, result.failure === 'place-gone' ? options.placeHelp?.() : undefined);
     receiptList.replaceChildren(
       ...receiptSent.map((note) => receiptRow(note, 'sent')),
       ...result.unsent.map((note) => receiptRow(note, 'unsent')),
@@ -2167,8 +2180,31 @@ const RECEIPT_ROWS = 5;
  * The sentence of a failed send, for another part of the widget that sends: the list of drafts
  * (FRU-124). It has no title above it, so a send to try again says it all in one sentence.
  */
-export function failureText(t: Translator, failure: SendFailure): string {
-  return t.text(failure === 'retry' ? 'composer.failed' : FAILURES[failure]);
+export function failureText(t: Translator, failure: SendFailure, help?: PlaceHelp): string {
+  return failure === 'retry' ? t.text('composer.failed') : failureSentence(t, failure, help);
+}
+
+/** The sentence under « Not sent ». A place that is gone says more to a member, who can choose another. */
+function failureSentence(t: Translator, failure: SendFailure, help: PlaceHelp | undefined): string {
+  if (failure === 'place-gone' && help?.for === 'member') return t.text('composer.failedPlaceGoneMember');
+
+  return t.text(FAILURES[failure]);
+}
+
+/**
+ * The link of a place that is gone (FRU-640): to the console for a member, to a page of help for
+ * anybody else. Hidden with no help.
+ */
+export function showHelp(link: HTMLAnchorElement, t: Translator, help: PlaceHelp | undefined): void {
+  link.hidden = help === undefined;
+  if (help === undefined) {
+    link.removeAttribute('href');
+    link.textContent = '';
+
+    return;
+  }
+  link.href = help.url;
+  link.textContent = t.text(help.for === 'member' ? 'composer.placeGoneConsole' : 'composer.placeGoneHelp');
 }
 
 /** What a failed send says under « Not sent », by its cause (FRU-156, FRU-305). */
@@ -2181,6 +2217,7 @@ const FAILURES = {
   'too-large': 'composer.failedTooLarge',
   'attachment-gone': 'composer.failedAttachmentGone',
   'no-tracker': 'composer.failedNoTracker',
+  'place-gone': 'composer.failedPlaceGone',
 } as const satisfies Record<SendFailure, MessageKey>;
 
 /** Why a file did not go, under its name (FRU-332). */
@@ -2423,6 +2460,16 @@ const TEMPLATE: readonly Markup[] = [
     [
       ['p', { 'data-fruitback-failed-title': '', class: 'fruitback-composer-failed-title' }],
       ['p', { 'data-fruitback-failed-text': '', class: 'fruitback-composer-failed-text' }],
+      [
+        'a',
+        {
+          'data-fruitback-failed-help': '',
+          class: 'fruitback-composer-failed-help',
+          target: '_blank',
+          rel: 'noreferrer noopener',
+          hidden: '',
+        },
+      ],
     ],
   ],
   [

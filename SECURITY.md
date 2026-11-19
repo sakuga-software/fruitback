@@ -1556,6 +1556,11 @@ go there. **This is the first secret of a customer that the Cloud holds.**
   sees nothing of the tracker: not the connector, not the destination of a site.
 - A connector that cannot be used answers `502`, and the widget keeps the note. The note is never
   written to the worker's own store in its place: its team would not see it.
+- A place that the tracker refuses answers `502 destination-unavailable`. The answer does
+  not hold the words of the tracker: they go to the log. It holds an address of help. A caller who
+  sees the tracker gets the page of the site in the console, with the ids of the workspace and the
+  site. Any other caller gets a page of fruitback.com, and no id. The trouble is kept on the
+  destination, where only a person who sees the tracker reads it.
 - A `github` connector keeps no key of the customer: the id of an installation of the App
   of the worker, sealed the same way. « The GitHub App key » above says what the key of the App
   reaches.

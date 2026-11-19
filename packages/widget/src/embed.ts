@@ -48,6 +48,7 @@ import {
   refusalOf,
 } from './attachments.ts';
 import { pickArea } from './area.ts';
+import { PLACE_GONE_ERROR, type PlaceHelp, placeHelpOf } from './place-help.ts';
 import {
   type BatchSent,
   type Composer,
@@ -995,10 +996,14 @@ export function init(options: FruitbackOptions): Fruitback {
     }
   }
 
+  /** What the last answer that failed said to do about a place that is gone (FRU-640). */
+  let placeHelp: PlaceHelp | undefined;
+
   composer = createComposer({
     document,
     translator,
     host: host.panel,
+    placeHelp: () => placeHelp,
     // FRU-302: the name the host suggests, for a reporter who kept none here.
     suggestName: () => suggestedName(options.reporterName),
     // The name lives with the other preferences of this browser, under the same key.
@@ -1149,6 +1154,7 @@ export function init(options: FruitbackOptions): Fruitback {
       config: config.get(),
       options,
       onNote: (id) => (noteId = id),
+      onPlaceHelp: (help) => (placeHelp = help),
     });
     if (typeof planted !== 'string' && about !== undefined) typing.remove(about);
     if (typeof planted === 'string') {
@@ -1210,7 +1216,13 @@ export function init(options: FruitbackOptions): Fruitback {
     sending = true;
     try {
       const waiting = withPlacesOfNow(drafts.list(), destinations.get());
-      const outcome = await sendDrafts({ drafts: waiting, offer: readerIdentity.batch, options, onProgress });
+      const outcome = await sendDrafts({
+        drafts: waiting,
+        offer: readerIdentity.batch,
+        options,
+        onProgress,
+        onPlaceHelp: (help) => (placeHelp = help),
+      });
       drafts.remove(outcome.kept);
       // After a failure too: the worker refuses a place the site no longer has, and the list of
       // places on screen is then old. The read brings the list of now, and the next try follows it.
@@ -1230,10 +1242,15 @@ export function init(options: FruitbackOptions): Fruitback {
       sending = false;
     }
   };
-  const sendKept = async (): Promise<{ sent: number; failure?: SendFailure }> => {
+  const sendKept = async (): Promise<{ sent: number; failure?: SendFailure; help?: PlaceHelp }> => {
     const outcome = await sendBatch();
+    const help = outcome.failure === 'place-gone' ? placeHelp : undefined;
 
-    return { sent: outcome.sent.length, ...(outcome.failure === undefined ? {} : { failure: outcome.failure }) };
+    return {
+      sent: outcome.sent.length,
+      ...(outcome.failure === undefined ? {} : { failure: outcome.failure }),
+      ...(help === undefined ? {} : { help }),
+    };
   };
 
   const asText = (): string =>
@@ -1667,6 +1684,7 @@ export async function plant({
   options,
   onNote,
   onNotify,
+  onPlaceHelp,
   attachments = [],
 }: {
   note: string;
@@ -1684,6 +1702,8 @@ export async function plant({
   attachments?: readonly string[];
   /** The token the worker gave to ask for an address for this note (FRU-604), when it gave one. */
   onNotify?: (token: string) => void;
+  /** What to do about a place that is gone (FRU-640), told at each answer that failed. */
+  onPlaceHelp?: (help: PlaceHelp | undefined) => void;
 }): Promise<true | SentWithoutPicture | SendFailure> {
   const made = await noteFor({ text: note, target, place, reporter, config, options });
   if (made === undefined) return 'retry';
@@ -1699,7 +1719,11 @@ export async function plant({
     body: JSON.stringify(built),
   });
 
-  if (!response.ok) return failureOf(response);
+  if (!response.ok) {
+    onPlaceHelp?.(placeHelpOf(response.body));
+
+    return failureOf(response);
+  }
   const token = notifyTokenOf(response.body);
   if (token !== undefined) onNotify?.(token);
 
@@ -2138,10 +2162,13 @@ export async function sendDrafts({
   offer,
   options,
   onProgress,
+  onPlaceHelp,
 }: {
   drafts: readonly Draft[];
   offer: BatchOffer | undefined;
   options: FruitbackOptions;
+  /** What to do about a place that is gone (FRU-640), told at each answer that failed. */
+  onPlaceHelp?: (help: PlaceHelp | undefined) => void;
   /** Told after each request how many notes went, of how many (FRU-608). */
   onProgress?: (done: number, total: number) => void;
 }): Promise<{ kept: string[]; failure?: SendFailure; issues: Map<string, SentIssue> }> {
@@ -2167,7 +2194,11 @@ export async function sendDrafts({
     }
 
     if (offer === undefined) {
-      if (!response.ok) return { kept, failure: failureOf(response), issues };
+      if (!response.ok) {
+        onPlaceHelp?.(placeHelpOf(response.body));
+
+        return { kept, failure: failureOf(response), issues };
+      }
       kept.push(first.note.id);
       const issue = issueIn(response.body);
       if (issue !== undefined) issues.set(first.note.id, issue);
@@ -2191,7 +2222,11 @@ export async function sendDrafts({
     for (const [id, issue] of answered) issues.set(id, issue);
     told();
     if (response.status === 207) partial = true;
-    else return { kept, failure: failureOf(response), issues };
+    else {
+      onPlaceHelp?.(placeHelpOf(response.body));
+
+      return { kept, failure: failureOf(response), issues };
+    }
   }
 
   return partial ? { kept, failure: 'retry', issues } : { kept, issues };
@@ -2278,6 +2313,8 @@ export function failureOf(response: { status: number; body: string }): SendFailu
   if (response.status === 403) {
     return errorOf(response.body) === 'destination-not-allowed' ? 'retry' : 'refused';
   }
+  // FRU-640: the tracker no longer has the place of the site. A try again at once is refused the same way.
+  if (response.status === 502 && errorOf(response.body) === PLACE_GONE_ERROR) return 'place-gone';
 
   return 'retry';
 }

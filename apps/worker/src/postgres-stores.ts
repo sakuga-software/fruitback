@@ -136,6 +136,7 @@ export function accountStoreOn(database: Database): AccountStore {
     setLinearOrganization: true,
     holdsLinearOrganization: true,
     noteConnector: true,
+    noteDestination: true,
     setConnectorSettings: true,
     renameConnector: true,
     sealedKey: true,

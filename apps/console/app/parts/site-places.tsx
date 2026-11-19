@@ -11,6 +11,7 @@ import {
   samePlace,
   setPlaces,
 } from '../api';
+import { moment } from '../ago';
 import { ConnectorMark } from '../connector-marks';
 import { msg, t } from '../i18n';
 import { type Fetched, type Listed } from '../listed';
@@ -429,6 +430,11 @@ export function SitePlaces({
                     </span>
                   )}
                   <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{nameOf(each)}</span>
+                  {each.attention === undefined ? null : (
+                    <span className="flex-none text-hint leading-auto font-semibold text-accent" data-place-attention>
+                      {t('Needs attention')}
+                    </span>
+                  )}
                   {index === 0 ? <Chip>{t('Default')}</Chip> : null}
                 </span>
                 <span className="flex flex-wrap gap-x-[16px]">
@@ -441,6 +447,16 @@ export function SitePlaces({
                     {t('Remove')}
                   </LinkButton>
                 </span>
+                {each.attention === undefined ? null : (
+                  <div className="basis-full" data-place-gone>
+                    <Problem>
+                      {t(
+                        'Since {when}, the tracker refuses this place, and the notes of this site do not leave: the team or the project is gone, or the project moved to another team. Add the right place, make it the default, then remove this one.',
+                        { when: moment(each.attention.since) },
+                      )}
+                    </Problem>
+                  </div>
+                )}
                 {isPublic(each) ? (
                   <div className="basis-full" data-public>
                     <Problem>

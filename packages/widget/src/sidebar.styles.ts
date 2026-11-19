@@ -241,6 +241,16 @@ export const STYLES = `
 .fruitback-sidebar-retry[aria-disabled='true'], .fruitback-sidebar-send[aria-disabled='true'], .fruitback-sidebar-more[aria-disabled='true'] { opacity: 0.6; cursor: progress; }
 .fruitback-sidebar-sent { margin: 0; padding: 0 10px 8px; font-size: 13px; }
 .fruitback-sidebar-sent:empty { padding: 0; }
+.fruitback-sidebar-sent-help {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 10px;
+  color: var(--fruitback-color-text);
+  font: 600 13px/1.5 var(--fruitback-font-sans);
+  text-decoration: underline;
+}
+.fruitback-sidebar-sent-help[hidden] { display: none; }
 .fruitback-sidebar-retry, .fruitback-sidebar-send, .fruitback-sidebar-more {
   padding: 6px 12px;
   border: 1px solid var(--fruitback-color-text-muted);

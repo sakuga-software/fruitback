@@ -1571,7 +1571,7 @@ Read on drizzle-orm 0.45.4 and drizzle-kit 0.31.11, the versions of the catalogu
   store of the accounts`, test:`decides a pairing and a session by their instants, on each side of
   2^32`.
 - **better-auth reads no `BIGINT` of its tables on that pool, and a count is one.** Its seven tables
-  have none (test:`knows the fifty-four BIGINT columns of the worker, and that better-auth has none`).
+  have none (test:`knows the fifty-five BIGINT columns of the worker, and that better-auth has none`).
   `count(*)` is a `BIGINT` whatever the table: the pool now answers it as a string, and better-auth
   reads it as a number, through its adapter and the layer of FRU-181
   (test:`gives better-auth a count as a string, which better-auth reads as a number`).
@@ -2727,6 +2727,21 @@ ticket removes; it adds no route and no table.
   nobody of the workspace can fix it. The first call that the tracker answers clears the state.
   **Keeping the state never changes the answer**: the note exists when it runs, and an error there
   would have the widget send the note again.
+- **A place that the tracker refuses is kept on the destination, not on the connector** (FRU-640).
+  A connector serves several sites, and one place that is gone says nothing of the others. Measured
+  on 2026-11-19: Linear answers status 200 and `INPUT_ERROR` for a team or a project that is gone, and
+  for a project that moved to another team. A bad label is `INPUT_ERROR` too, so after one
+  `writtenToPlace` asks Linear for the place (`readLinearPlaces`). Only a place that Linear does not
+  find is `PlaceUnavailable`. The route then:
+  - writes the reason of Linear in the log, never in the answer;
+  - keeps `place-gone` on the row of `site_destinations`, which the console shows. A note that
+    arrives there clears it, and a new list of destinations writes rows with no trouble;
+  - answers `502 destination-unavailable`, with `help` and `for`. A member who sees the tracker gets
+    the page of the site in the console. Anybody else gets `fruitback.com/note-not-sent`, in the
+    language of the note. A widget of before reads a `502` and keeps the note.
+
+  Any other `StoreError` of a note is written in the log too, with its site.
+
 - **A delivery that comes back to a worker is refused by its header, not by its host** (FRU-133).
   `handleRequest` answers `508` to every request that carries `X-Fruitback-Delivery`, before the
   readiness probe: `/health` answered 200 to a delivery, and the sender counted the note as arrived.
@@ -3229,7 +3244,7 @@ workspace too: the reason is free text, « impayé » for example.
 - **Why a table of its own, and not two columns of `organization`.** The ticket offered columns on
   `organization`. That table is of better-auth, and two tests hold it: `auth-schema.test.ts` compares
   its columns with the ones that better-auth makes, and
-  test:`knows the fifty-four BIGINT columns of the worker, and that better-auth has none` says that
+  test:`knows the fifty-five BIGINT columns of the worker, and that better-auth has none` says that
   better-auth reads no `BIGINT`, on a pool with no parser of ours. A `suspended_at` there breaks
   both, or is not a `BIGINT`. A row of the worker keeps the convention, cascades with the workspace,
   and makes « changed » one statement.

@@ -485,6 +485,18 @@ export const STYLES = `
 .fruitback-composer-failed[hidden] { display: none; }
 .fruitback-composer-failed-title { margin: 0; font-size: 13px; font-weight: 600; color: var(--fruitback-color-accent); }
 .fruitback-composer-failed-text { margin: 0; font-size: 12px; color: var(--fruitback-color-text-muted); }
+.fruitback-composer-failed-help {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--fruitback-color-text);
+  font: 600 12px/1.5 var(--fruitback-font-sans);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.fruitback-composer-failed-help:hover { color: var(--fruitback-color-accent-strong); }
+.fruitback-composer-failed-help[hidden] { display: none; }
 /*
   The card of a sent note (FRU-305): it takes the place of the note and of the foot. The drop of the
   new pin with its number, « Sent as DEV-3 », the sentence in green, « Open → ».

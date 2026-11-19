@@ -147,6 +147,8 @@ const SITE_WITH_DESTINATION = {
   label: site_destinations.label,
   private: site_destinations.private,
   url: site_destinations.url,
+  attention: site_destinations.attention,
+  attention_at: site_destinations.attention_at,
 };
 
 /**
@@ -1437,6 +1439,8 @@ export function createPostgresAccountStore(database: Database): AccountStore {
             label: site_destinations.label,
             private: site_destinations.private,
             url: site_destinations.url,
+            attention: site_destinations.attention,
+            attention_at: site_destinations.attention_at,
           })
           .from(site)
           .leftJoin(site_destinations, eq(site_destinations.site_id, site.id))
@@ -2030,6 +2034,32 @@ export function createPostgresAccountStore(database: Database): AccountStore {
           .update(connectors)
           .set({ attention: trouble ?? null, attention_at: trouble === undefined ? null : now })
           .where(and(eq(connectors.id, connector), sql`${connectors.attention} IS DISTINCT FROM ${trouble ?? null}`)),
+      );
+    },
+
+    async noteDestination(site, place, trouble, now) {
+      given(site, 'noteDestination: site');
+      given(place.connector, 'noteDestination: connector');
+      given(now, 'noteDestination: now');
+      // As `noteConnector`: a row that already says this is not written again. A note that arrives
+      // writes nothing on a place with no trouble, so the cost is one statement with no row.
+      await run((db) =>
+        db
+          .update(site_destinations)
+          .set({ attention: trouble ?? null, attention_at: trouble === undefined ? null : now })
+          .where(
+            and(
+              eq(site_destinations.site_id, site),
+              eq(site_destinations.connector_id, place.connector),
+              place.teamId === undefined
+                ? isNull(site_destinations.team_id)
+                : eq(site_destinations.team_id, place.teamId),
+              place.projectId === undefined
+                ? isNull(site_destinations.project_id)
+                : eq(site_destinations.project_id, place.projectId),
+              sql`${site_destinations.attention} IS DISTINCT FROM ${trouble ?? null}`,
+            ),
+          ),
       );
     },
 

@@ -7,7 +7,9 @@ import {
   type Connector,
   type ConnectorSettings,
   type ConnectorTrouble,
+  DESTINATION_TROUBLES,
   type Destination,
+  type DestinationTrouble,
   type Domain,
   type DueDelivery,
   type PendingDelivery,
@@ -113,6 +115,15 @@ export function destinationOf(row: Record<string, unknown>): Destination | undef
     ...(typeof row.private === 'boolean' ? { private: row.private } : {}),
     // FRU-574: only an address of Linear is read back, whatever an operator wrote in the column.
     ...(typeof row.url === 'string' && row.url.startsWith('https://linear.app/') ? { url: row.url } : {}),
+    // A word this build does not know is no trouble it can explain: the destination reads as working.
+    ...(isOneOf(row.attention, DESTINATION_TROUBLES)
+      ? {
+          attention: {
+            reason: row.attention as DestinationTrouble,
+            since: new Date(typeof row.attention_at === 'number' ? row.attention_at : 0).toISOString(),
+          },
+        }
+      : {}),
   };
 }
 

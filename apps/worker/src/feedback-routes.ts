@@ -5,7 +5,8 @@ import { attachmentIdsOf } from './attachments.ts';
 import { SENT_TTL_MS, batchMemory, createAll, hold, release, sentKey } from './batch.ts';
 import { MAX_BODY_BYTES, readBoundedText } from './bounded-body.ts';
 import { cached } from './cache.ts';
-import { type ClientConfig, type ClientPolicy, normalizeClientId } from './clients.ts';
+import { type ClientConfig, type ClientPolicy, type ClientResolution, normalizeClientId } from './clients.ts';
+import { type PlaceGoneReader, notePlaceGone, notePlaceWorks, placeGoneHelp, placeGoneResponse } from './place-gone.ts';
 import { type Kv, KvError } from './kv.ts';
 import {
   batchOffer,
@@ -30,6 +31,7 @@ import {
   type BatchAnswer,
   type CreatedIssue,
   type NoteStore,
+  PlaceUnavailable,
   StoreError,
   takesAttachments,
   takesChecks,
@@ -443,7 +445,19 @@ export async function postFeedback(
   if (Array.isArray(payload)) {
     // A note with files goes alone: the files of a batch would have to say which note is theirs.
     if (attachmentIds.length > 0) return json(400, { error: 'attachments-in-batch' }, corsHeaders);
-    return postBatch(request, config, store, kv, corsHeaders, clientIp, payload, noteIndex, stillWrites, checks);
+    return postBatch(
+      request,
+      config,
+      store,
+      kv,
+      corsHeaders,
+      clientIp,
+      payload,
+      noteIndex,
+      stillWrites,
+      checks,
+      context,
+    );
   }
 
   const parsed = parseNote(payload);
@@ -497,6 +511,7 @@ export async function postFeedback(
       route.policy,
       taken?.ok === true ? taken.files : undefined,
     );
+    await notePlaceWorks(context?.accounts, clientId, target);
     // The tracker has the files, or refused them once the note was written: none stays in transit.
     // A file that a delivery carries later stays until that delivery arrives, or its transit ends.
     const filesOutcome = taken?.ok === true ? await settleFiles(taken.store, taken.files, answered) : undefined;
@@ -539,12 +554,39 @@ export async function postFeedback(
       corsHeaders,
     );
   } catch (error) {
+    if (error instanceof PlaceUnavailable) {
+      await notePlaceGone(context?.accounts, clientId, target, error);
+      const help = await placeGoneHelpFor(request, config, checks, route, clientId, attributed.env?.locale);
+
+      return placeGoneResponse(help, corsHeaders);
+    }
     if (error instanceof StoreError) {
+      console.error(`[fruitback] a note of site ${clientId ?? '-'} was not kept: ${error.message}`);
       // Upstream failed, not the caller: 502 tells the widget to keep the note and retry.
       return json(502, { error: 'store-unavailable', message: error.message }, corsHeaders);
     }
     throw error;
   }
+}
+
+/** The help of a `502 destination-unavailable` for the author of this request (FRU-640). */
+async function placeGoneHelpFor(
+  request: Request,
+  config: Served,
+  checks: CallerChecks,
+  route: Extract<ClientResolution, { ok: true }>,
+  site: string | undefined,
+  locale: string | undefined,
+): Promise<{ help: string; for: PlaceGoneReader }> {
+  const member = await checks.seesTracker(request, config, route.policy).catch(() => false);
+
+  return placeGoneHelp({
+    reader: member ? 'member' : 'visitor',
+    consoleUrl: config.consoleUrl,
+    workspace: route.client?.workspace,
+    site,
+    locale: locale ?? route.policy.locale,
+  });
 }
 
 /**
@@ -571,6 +613,7 @@ async function postBatch(
   noteIndex: NoteIndex | undefined,
   stillWrites: () => Promise<boolean>,
   checks: CallerChecks,
+  context: RequestContext | undefined,
 ): Promise<Response> {
   const { routeFor, attributionFor, endedSession, chosenPlace, hidesTracker } = checks;
   const max = maxBatch(config.rateLimitPerMinute);
@@ -645,11 +688,19 @@ async function postBatch(
   const fresh = attributed.filter((_, index) => held[index]);
 
   let planted: BatchAnswer[] = [];
+  let gone: PlaceUnavailable | undefined;
   try {
     if (fresh.length > 0) {
       planted = await createAll(store, fresh, target, route.policy, batchMemory(kv, store, clientId, target, fresh));
+      await notePlaceWorks(context?.accounts, clientId, target);
     }
   } catch (error) {
+    if (error instanceof PlaceUnavailable) {
+      gone = error;
+      await notePlaceGone(context?.accounts, clientId, target, error);
+    } else if (error instanceof StoreError) {
+      console.error(`[fruitback] a batch of site ${clientId ?? '-'} was not kept: ${error.message}`);
+    }
     if (!(error instanceof StoreError)) {
       // An error nobody expected answers `500`. The notes are given back first: the next attempt
       // must not wait for the hold to end.
@@ -721,6 +772,11 @@ async function postBatch(
           : result,
       )
     : results;
+  if (kept.length === 0 && gone !== undefined) {
+    const help = await placeGoneHelpFor(request, config, checks, route, clientId, attributed[0]?.env?.locale);
+
+    return placeGoneResponse(help, corsHeaders, { results: answered });
+  }
   if (kept.length === 0) return json(502, { error: 'store-unavailable', results: answered }, corsHeaders);
 
   return json(kept.length === results.length ? 201 : 207, { results: answered }, corsHeaders);

@@ -143,6 +143,12 @@ export const FRENCH: Catalog = {
   'composer.signIn': 'Se reconnecter',
   'composer.failedTooLarge':
     'Cette note est trop lourde. Votre texte est toujours là. Raccourcissez-la, ou désactivez l’image dans les réglages.',
+  'composer.failedPlaceGone':
+    'Cette note n’a pas pu rejoindre l’équipe. Votre texte est toujours là. Renvoyez-la plus tard.',
+  'composer.failedPlaceGoneMember':
+    'L’endroit où ce site envoie ses notes n’existe plus dans l’outil de suivi. Votre texte est toujours là. Un propriétaire ou un admin choisit un autre endroit dans la console, puis vous la renvoyez.',
+  'composer.placeGoneConsole': 'Corriger dans la console',
+  'composer.placeGoneHelp': 'Que faire ?',
   'composer.destination': 'Envoyer vers : {destination}',
   'composer.destinations': 'Destination de cette note',
   'composer.destinationUnnamed': 'Destination {position}',

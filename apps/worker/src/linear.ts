@@ -28,6 +28,7 @@ import {
   type NewWithdrawal,
   type NoteIssueQuery,
   type NoteStore,
+  PlaceUnavailable,
   StoreError,
 } from './store.ts';
 import { type StoreSpec, defineStore } from './store-config.ts';
@@ -81,6 +82,25 @@ export class LinearKeyRefused extends StoreError {}
 /** Linear accepts the key, and the key does not have the rights for what was asked. */
 export class LinearKeyForbidden extends StoreError {}
 
+/** Linear refused an input of the call (`INPUT_ERROR`): an id that it does not find, for example. */
+export class LinearInputRefused extends StoreError {}
+
+/**
+ * A write to the place of `routing`. If Linear refuses an input, this asks Linear whether the place
+ * still exists. A place that does not exist is `PlaceUnavailable`. `INPUT_ERROR` alone does not say
+ * which input Linear refused.
+ */
+async function writtenToPlace<T>(config: LinearConfig, routing: LinearRouting, write: () => Promise<T>): Promise<T> {
+  try {
+    return await write();
+  } catch (error) {
+    if (!(error instanceof LinearInputRefused)) throw error;
+    const [place] = await readLinearPlaces(config.apiKey, [routing]).catch(() => [{ team: '' }]);
+    if (place === undefined) throw new PlaceUnavailable(error.message);
+    throw error;
+  }
+}
+
 /**
  * How long a read of the console waits for Linear (FRU-501), as the calls of `linear-oauth.ts` do. A
  * write of a note has no limit: a write that Linear finishes after the worker gave up would be written
@@ -131,6 +151,11 @@ async function graphql<T>(
 
   if (!response.ok) {
     throw new StoreError(`Linear responded ${response.status}`);
+  }
+  // FRU-640, measured on 2026-11-19: a team or a project that does not exist, or a project of
+  // another team, is `INPUT_ERROR` in an answer of status 200. A bad label is too.
+  if (payload?.errors?.some((error) => error.extensions?.code === 'INPUT_ERROR') === true) {
+    throw new LinearInputRefused(message ?? 'Linear refused the input');
   }
   if (message !== undefined && message !== '') {
     throw new StoreError(message);
@@ -1472,10 +1497,16 @@ export function createLinearStore(
     scope: (client) => linearRoutingFor(config, client).teamId,
     // FRU-331: the files of a note go to the issue.
     attachments: true,
-    create: (note, client, policy, files) =>
-      createNoteIssue(config, linearRoutingFor(config, client), note, policy.locale, undefined, files),
-    createBatch: (notes, client, policy, memory) =>
-      createNoteBatch(config, linearRoutingFor(config, client), notes, policy.locale, memory),
+    create: (note, client, policy, files) => {
+      const routing = linearRoutingFor(config, client);
+      return writtenToPlace(config, routing, () =>
+        createNoteIssue(config, routing, note, policy.locale, undefined, files),
+      );
+    },
+    createBatch: (notes, client, policy, memory) => {
+      const routing = linearRoutingFor(config, client);
+      return writtenToPlace(config, routing, () => createNoteBatch(config, routing, notes, policy.locale, memory));
+    },
     findForPage: (query, client, policy) =>
       fetchNoteIssues(config, linearRoutingFor(config, client), query, policy, stages, statusSource),
     // FRU-368: the states of the team of the client, as Linear says them: the stage of their type. The

@@ -683,7 +683,8 @@ async function routed(
         context.clientIp,
         noteIndex,
         () => sessionWrites(request, served, context).then((session) => session !== undefined),
-        context,
+        // FRU-640: the accounts of this request, which the state of a destination is written to.
+        accounts === undefined ? context : { ...context, accounts },
         checks,
       );
 }

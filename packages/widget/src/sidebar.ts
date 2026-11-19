@@ -1,5 +1,6 @@
 import { NOTE_STAGES, NOTE_TABS, type NoteStage, type NoteTab, firstTab, noteTab, shortCount } from '@fruitback/shared';
-import { type SendFailure, failureText } from './composer.ts';
+import { type SendFailure, failureText, showHelp } from './composer.ts';
+import type { PlaceHelp } from './place-help.ts';
 import { type Draft } from './drafts.ts';
 import { type FeedbackEntry } from './export.ts';
 import { deepActiveElement } from './focus.ts';
@@ -89,7 +90,7 @@ export type SidebarOptions = {
    */
   drafts?: () => readonly Draft[];
   /** Send every draft. Says how many the worker kept, and why the others stay. */
-  onSendDrafts?: () => Promise<{ sent: number; failure?: SendFailure }>;
+  onSendDrafts?: () => Promise<{ sent: number; failure?: SendFailure; help?: PlaceHelp }>;
   /** The note whose thread is open now, if any: its row says so. Read on each draw. */
   current?: () => string | undefined;
   /**
@@ -466,25 +467,34 @@ export function createSidebar(options: SidebarOptions): Sidebar {
   sentText.className = 'fruitback-sidebar-sent';
   sentText.dataset.fruitbackDraftsSent = '';
   sentText.setAttribute('aria-live', 'polite');
+  // FRU-640: the way out of a place that is gone, under the sentence that says so.
+  const sentHelp = document.createElement('a');
+  sentHelp.className = 'fruitback-sidebar-sent-help';
+  sentHelp.dataset.fruitbackDraftsHelp = '';
+  sentHelp.target = '_blank';
+  sentHelp.rel = 'noreferrer noopener';
+  sentHelp.hidden = true;
   let sendingDrafts = false;
   sendAll.addEventListener('click', () => {
     if (sendingDrafts || options.onSendDrafts === undefined) return;
     sendingDrafts = true;
     sentText.textContent = '';
+    showHelp(sentHelp, t, undefined);
     draw();
     void options
       .onSendDrafts()
-      .catch(() => ({ sent: 0, failure: 'retry' as const }))
+      .catch((): { sent: number; failure?: SendFailure; help?: PlaceHelp } => ({ sent: 0, failure: 'retry' }))
       .then((outcome) => {
         sendingDrafts = false;
         // Both when some left and some stay: the rows that went are gone from the group, and the
         // sentence of the failure alone would not say where.
         sentText.textContent = [
           outcome.sent > 0 || outcome.failure === undefined ? t.plural('sidebar.draftsSent', outcome.sent) : '',
-          outcome.failure === undefined ? '' : failureText(t, outcome.failure),
+          outcome.failure === undefined ? '' : failureText(t, outcome.failure, outcome.help),
         ]
           .filter((part) => part !== '')
           .join(' — ');
+        showHelp(sentHelp, t, outcome.failure === 'place-gone' ? outcome.help : undefined);
         draw();
       });
   });
@@ -523,6 +533,7 @@ export function createSidebar(options: SidebarOptions): Sidebar {
   panel.append(
     drafted,
     sentText,
+    sentHelp,
     empty,
     failedText,
     failed,
