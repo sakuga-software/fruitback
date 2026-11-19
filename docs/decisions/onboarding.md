@@ -114,7 +114,13 @@ With question 1 answered yes (FRU-487), the console of the Cloud connects the ex
 browser in place, with no word to check and no tab to open: about **15 actions**.
 
 A sign-in with Google or GitHub, where the instance offers it, can replace steps 2 to 6 with one click
-and the consent of the provider. **Not measured**: the worker of the tests offers no provider.
+and the consent of the provider. **Not measured**: the worker of the tests offers no provider. Since
+FRU-635 the setup offers them first, above the e-mail.
+
+**From the landing, with the address** (FRU-635, board S1): `/setup?site=<address>` adds the site once
+the person is signed in, so « type the address » and « Add site » go. Measured by
+`e2e/console-setup.spec.ts` up to step 3: **6 actions instead of 8** with an e-mail link. The board S2
+estimates 13 actions to the first note with Google; the e-mail path from the landing is 16.
 
 ### Why the welcome page carries the path
 

@@ -761,6 +761,10 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Your account': 'Votre compte',
   'Your site': 'Votre site',
   'The address you review.': 'L’adresse que vous relisez.',
+  'Three steps to your first note on {site}.': 'Trois étapes jusqu’à votre première note sur {site}.',
+  'Three steps to your first note on {site}. Hosted in Europe.':
+    'Trois étapes jusqu’à votre première note sur {site}. Hébergé en Europe.',
+  'Added as soon as you are signed in.': 'Ajouté dès que vous êtes connecté.',
   'Put it on the site': 'Le mettre sur le site',
   'The extension, or a script tag.': 'L’extension, ou une balise de script.',
   'Preview of your site': 'Aperçu de votre site',

@@ -16,6 +16,7 @@ import {
   siteNow,
   siteStage,
 } from './setup-stage.ts';
+import { SITE_PROBLEMS } from './problems.ts';
 
 /**
  * Where the setup takes a person (FRU-239), with a worker of fakes: each case says what the worker
@@ -35,6 +36,8 @@ type Worker = {
   invitations?: Answer<never> | number;
   sites?: Answer<never> | number;
   creates?: Answer<never>;
+  /** What the worker answers to the add of a site (FRU-635). */
+  adds?: Answer<never>;
 };
 
 /** A worker of fakes, and the list of what the setup asked of it. */
@@ -73,6 +76,12 @@ function fake(worker: Worker): { calls: SetupCalls; asked: string[] } {
       workspaces = [made];
 
       return yes(made);
+    },
+    addSite: async (workspace, url) => {
+      asked.push(`add ${url} to ${workspace.id}`);
+      if (worker.adds !== undefined) return worker.adds;
+
+      return yes({ ...site, id: 's2', origin: new URL(url).origin });
     },
     alone: (task) => {
       asked.push('lock');
@@ -191,6 +200,63 @@ describe('where the setup takes a person (FRU-239)', () => {
     assert.deepEqual(await siteNow(fake({ sites: 1 }).calls, owner, site), site);
     assert.equal(await siteNow(fake({ sites: 0 }).calls, owner, site), undefined);
     assert.equal(await siteNow(fake({ sites: no(503) }).calls, owner, site), undefined);
+  });
+});
+
+describe('the setup that takes the address of the visit (FRU-635)', () => {
+  const KNOWN = 'https://staging.globex.dev';
+
+  it('adds the site of the visit to a new workspace, once signed in, and goes to the last step', async () => {
+    const { calls, asked } = fake({});
+
+    const stage = await resolveStage(calls, () => {}, KNOWN);
+
+    assert.equal(stage.kind, 'install');
+    assert.equal(stage.kind === 'install' && stage.site.origin, KNOWN);
+    assert.equal(stage.kind === 'install' && stage.fresh, true);
+    assert.deepEqual(asked.slice(-2), ['sites', `add ${KNOWN} to w1`]);
+  });
+
+  it('asks nothing of a person who is not signed in, and adds nothing', async () => {
+    const { calls, asked } = fake({ signedIn: false });
+
+    assert.deepEqual(await resolveStage(calls, () => {}, KNOWN), { kind: 'email' });
+    assert.deepEqual(asked, ['me']);
+  });
+
+  it('adds no site to a workspace that has one, or for a member who adds none', async () => {
+    const has = fake({ workspaces: [owner], sites: 1 });
+    assert.equal((await resolveStage(has.calls, () => {}, KNOWN)).kind, 'install');
+    assert.ok(!has.asked.some((each) => each.startsWith('add')));
+
+    const reads = fake({ workspaces: [member] });
+    assert.equal((await resolveStage(reads.calls, () => {}, KNOWN)).kind, 'waiting');
+    assert.ok(!reads.asked.some((each) => each.startsWith('add')));
+
+    const unread = fake({ workspaces: [owner], sites: no(503) });
+    assert.equal((await resolveStage(unread.calls, () => {}, KNOWN)).kind, 'unread');
+    assert.ok(!unread.asked.some((each) => each.startsWith('add')));
+  });
+
+  it('opens the form on the address that the worker refused, with what it said', async () => {
+    const { calls } = fake({ workspaces: [owner], adds: no(400, 'invalid-url') });
+
+    const stage = await resolveStage(calls, () => {}, KNOWN);
+
+    assert.equal(stage.kind, 'site');
+    assert.deepEqual(stage.kind === 'site' && stage.asked, {
+      url: KNOWN,
+      problem: SITE_PROBLEMS['invalid-url'],
+    });
+  });
+
+  it('adds the site of the visit after a workspace made by hand too', async () => {
+    const { calls, asked } = fake({ workspaces: [owner] });
+
+    const stage = await siteStage(calls, account, owner, KNOWN);
+
+    assert.equal(stage.kind === 'install' && stage.site.origin, KNOWN);
+    assert.ok(asked.includes(`add ${KNOWN} to w1`));
   });
 });
 

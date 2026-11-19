@@ -1,5 +1,5 @@
 import { type Dispatch, type SetStateAction, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import { API, type Me, type Site, type Workspace, call, myInvitations, readSite, saveLanguage } from '../api';
 import { adoptLanguage, t } from '../i18n';
 import { InstallOptions } from '../install-options';
@@ -21,6 +21,9 @@ import { SiteForm, SiteSummary } from '../parts/setup-site';
 import { SitePreview } from '../site-preview';
 import { instanceOf } from '../instance';
 import { ReadProblem } from '../read-problem';
+import { forgetSetupAddress, setupAddress } from '../setup-address';
+import { siteLabel } from '../site-address';
+import { NEW_SITE } from '../setup-stage';
 
 /** Whether this console calls Fruitback Cloud: the build holds no flag, the host of the worker decides. */
 const CLOUD = instanceOf(API).cloud;
@@ -48,6 +51,8 @@ const CALLS: SetupCalls = {
   sites: (workspace) => call<{ sites: Site[] }>('GET', `/console/workspaces/${workspace.id}/sites?limit=1`),
   site: (workspace, site) => readSite(workspace.id, site),
   createWorkspace: (name) => call<Workspace>('POST', '/console/workspaces', { name }),
+  // Said, not left to the worker: the sentence of step 2 names these two values (FRU-610).
+  addSite: (workspace, url) => call<Site>('POST', `/console/workspaces/${workspace.id}/sites`, { url, ...NEW_SITE }),
   // No lock outside a secure context (`http` on a host other than localhost): two tabs can then each
   // make one. docs/decisions/console.md says so.
   alone: (task) =>
@@ -64,15 +69,30 @@ function stepAfter(before: StepState): StepState {
 let resolving: Promise<Stage> | undefined;
 
 /**
- * WARNING: one resolution at a time in this tab. It can make the first workspace, and two
- * resolutions in flight would ask for it twice.
+ * WARNING: one resolution at a time in this tab. It can make the first workspace and add the site of
+ * `known`, and two resolutions in flight would ask for each twice.
  */
-function resolveOnce(): Promise<Stage> {
-  resolving ??= resolveStage(CALLS, (me) => adoptLanguage(me.account, saveLanguage)).finally(() => {
+function resolveOnce(known: string | undefined): Promise<Stage> {
+  resolving ??= resolveStage(CALLS, (me) => adoptLanguage(me.account, saveLanguage), known).finally(() => {
     resolving = undefined;
   });
 
   return resolving;
+}
+
+/** The sentence under the title: it names the site when the visit came with its address (FRU-635). */
+function leadOf(known: string | undefined): string {
+  // Only Fruitback Cloud is hosted in Europe: a self-hosted worker is where its owner put it (FRU-321).
+  if (known === undefined) {
+    return CLOUD
+      ? t('Three steps to your first note on a live page. Hosted in Europe.')
+      : t('Three steps to your first note on a live page.');
+  }
+  const site = siteLabel(known);
+
+  return CLOUD
+    ? t('Three steps to your first note on {site}. Hosted in Europe.', { site })
+    : t('Three steps to your first note on {site}.', { site });
 }
 
 /** How often the site is read again while the setup waits for its first note (FRU-242). */
@@ -123,20 +143,29 @@ function useFirstNote(stage: Stage, setStage: Dispatch<SetStateAction<Stage>>): 
 export default function Setup() {
   useLocale();
   const navigate = useNavigate();
+  const [search] = useSearchParams();
+  // FRU-635: the address of the site that came with the visit, read once: `?site=`, or the one kept
+  // in this tab before a sign-in with a provider.
+  const [known] = useState(() => setupAddress(search));
   const [stage, setStage] = useState<Stage>({ kind: 'loading' });
   // Kept above the stages: « Use another address » gives the form back with the address in it.
   const [email, setEmail] = useState('');
 
   useEffect(() => {
     let live = true;
-    void resolveOnce().then((resolved) => {
+    void resolveOnce(known).then((resolved) => {
       if (live) setStage(resolved);
     });
 
     return () => {
       live = false;
     };
-  }, []);
+  }, [known]);
+
+  // The site of the setup is there: the address of the visit is spent.
+  useEffect(() => {
+    if (stage.kind === 'install') forgetSetupAddress();
+  }, [stage.kind]);
 
   useFirstNote(stage, setStage);
 
@@ -169,6 +198,11 @@ export default function Setup() {
   let third: StepState = installing ? 'current' : 'pending';
   if (finished) third = 'done';
   const prefix = t('Current step:');
+  // The site the preview frames: the one added, or the address of the visit from the first screen
+  // (FRU-635). The form of step 2, open on an address the worker refused, frames none.
+  let previewed: string | undefined;
+  if (stage.kind === 'install') previewed = stage.site.origin;
+  else if (known !== undefined && stage.kind !== 'site') previewed = new URL(known).origin;
 
   return (
     <EntryPage
@@ -190,11 +224,8 @@ export default function Setup() {
         <div id="setup-title" className="mb-2">
           <Title size="setup">{t('Set up Fruitback')}</Title>
         </div>
-        {/* Only Fruitback Cloud is hosted in Europe: a self-hosted worker is where its owner put it (FRU-321). */}
         <Lead className="mb-9">
-          {CLOUD
-            ? t('Three steps to your first note on a live page. Hosted in Europe.')
-            : t('Three steps to your first note on a live page.')}
+          <span className="wrap-anywhere">{leadOf(known)}</span>
         </Lead>
 
         <Steps>
@@ -208,7 +239,7 @@ export default function Setup() {
                 email={stage.email}
                 onBack={() => setStage({ kind: 'email' })}
                 // Signed in from another tab: the same resolution as a visit.
-                onSignedIn={() => void resolveOnce().then(setStage)}
+                onSignedIn={() => void resolveOnce(known).then(setStage)}
               />
             ) : null}
             {stage.kind === 'unchecked' ? (
@@ -216,7 +247,7 @@ export default function Setup() {
                 <Problem>
                   <ReadProblem />
                 </Problem>
-                <Button tone="outline" onClick={() => void resolveOnce().then(setStage)}>
+                <Button tone="outline" onClick={() => void resolveOnce(known).then(setStage)}>
                   {t('Try again')}
                 </Button>
               </div>
@@ -226,7 +257,7 @@ export default function Setup() {
                 account={stage.account}
                 tried={stage.problem}
                 make={(name) => firstWorkspace(CALLS, stage.account, name)}
-                onCreated={(made) => void siteStage(CALLS, stage.account, made).then(setStage)}
+                onCreated={(made) => void siteStage(CALLS, stage.account, made, known).then(setStage)}
               />
             ) : null}
             {account !== undefined && workspace !== undefined ? (
@@ -239,8 +270,15 @@ export default function Setup() {
           </Step>
 
           <Step state={second} number={2} title={t('Your site')} currentPrefix={prefix}>
-            {second === 'pending' ? (
+            {second === 'pending' && known === undefined ? (
               <p className="mt-0.5 text-small text-muted">{t('The address you review.')}</p>
+            ) : null}
+            {/* FRU-635: the address of the visit is said before the sign-in, as what will be added. */}
+            {second === 'pending' && known !== undefined ? (
+              <div className="mt-0.5 flex flex-col gap-0.5">
+                <p className="text-body font-semibold wrap-anywhere">{siteLabel(known)}</p>
+                <p className="text-small text-muted">{t('Added as soon as you are signed in.')}</p>
+              </div>
             ) : null}
             {stage.kind === 'unread' ? (
               <div className="mt-3 flex flex-col items-start gap-3 [&>[role=alert]]:self-stretch">
@@ -249,7 +287,7 @@ export default function Setup() {
                 </Problem>
                 <Button
                   tone="outline"
-                  onClick={() => void siteStage(CALLS, stage.account, stage.workspace).then(setStage)}
+                  onClick={() => void siteStage(CALLS, stage.account, stage.workspace, known).then(setStage)}
                 >
                   {t('Try again')}
                 </Button>
@@ -259,6 +297,7 @@ export default function Setup() {
               <SiteForm
                 workspace={stage.workspace}
                 replaces={stage.replaces}
+                asked={stage.asked}
                 onDone={(added) =>
                   setStage({ kind: 'install', account: stage.account, workspace: stage.workspace, ...added })
                 }
@@ -294,15 +333,15 @@ export default function Setup() {
 
       {/* Sticky: the steps grow longer than a screen, and the site stays in view beside them. */}
       <section aria-label={t('Preview of your site')} className="sticky top-8 min-w-0 flex-999 basis-130">
-        {stage.kind === 'install' ? (
-          // The site itself, live (FRU-354): `key` gives a site that changed a frame of its own.
-          <SitePreview key={stage.site.origin} origin={stage.site.origin} />
-        ) : (
+        {/* The site itself, live (FRU-354): `key` gives a site that changed a frame of its own. */}
+        {previewed === undefined ? (
           <BrowserFrame
             address={t('your site')}
             empty={t('Your site shows here once you add it, with its pins.')}
             caption={t('A preview of your site. Pins show the same way on the real page.')}
           />
+        ) : (
+          <SitePreview key={previewed} origin={previewed} />
         )}
       </section>
     </EntryPage>
