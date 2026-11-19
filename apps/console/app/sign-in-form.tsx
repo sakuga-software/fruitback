@@ -86,9 +86,15 @@ export function providerProblem(code: string | null): string | undefined {
 const PROVIDERS_AT_FIRST: Providers = { github: import.meta.env.VITE_FRUITBACK_GITHUB === '1', google: false };
 
 /**
+ * How long a screen waits for the providers of the worker before it draws its ways in (FRU-635). A
+ * call ends after 15 seconds: a worker that is slow must not leave the form blank that long.
+ */
+const SETTLE_MS = 1_500;
+
+/**
  * The ways this worker signs people in. `closed`: it answered that it has none (FRU-217), so no form
  * is shown: a link asked for there is never sent. `settled`: the worker answered which providers it
- * has, or did not answer at all.
+ * has, did not answer, or `SETTLE_MS` went by.
  */
 export function useSignInWays(): { providers: Providers; closed: boolean; settled: boolean } {
   const [providers, setProviders] = useState(PROVIDERS_AT_FIRST);
@@ -97,25 +103,31 @@ export function useSignInWays(): { providers: Providers; closed: boolean; settle
 
   useEffect(() => {
     let asked = true;
-    void signInProviders().then((has) => {
-      // A worker that does not answer keeps what the build said: no button is taken away by an outage.
-      if (asked && has !== undefined) {
-        setProviders((before) => ({ github: before.github || has.github, google: has.google }));
-      }
+    const late = setTimeout(() => {
       if (asked) setSettled(true);
-      void offersSignIn().then((offered) => {
-        if (asked && offered === false) setClosed(true);
+    }, SETTLE_MS);
+    void signInProviders()
+      .catch(() => undefined)
+      .then((has) => {
+        // A worker that does not answer keeps what the build said: no button is taken away by an outage.
+        if (asked && has !== undefined) {
+          setProviders((before) => ({ github: before.github || has.github, google: has.google }));
+        }
+        if (asked) setSettled(true);
+        void offersSignIn().then((offered) => {
+          if (asked && offered === false) setClosed(true);
+        });
+        // FRU-221: a worker with no mail and no provider. A link asked for there is never sent either.
+        void signsInByOperatorOnly().then((only) => {
+          if (!asked || !only) return;
+          closedByOperator = true;
+          setClosed(true);
+        });
       });
-      // FRU-221: a worker with no mail and no provider. A link asked for there is never sent either.
-      void signsInByOperatorOnly().then((only) => {
-        if (!asked || !only) return;
-        closedByOperator = true;
-        setClosed(true);
-      });
-    });
 
     return () => {
       asked = false;
+      clearTimeout(late);
     };
   }, []);
 

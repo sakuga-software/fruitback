@@ -1335,6 +1335,16 @@ test.describe('the address of the visit, against stubs (FRU-635)', () => {
     await expect(page.getByText('https://staging.acme.dev', { exact: true }).first()).toBeVisible();
   });
 
+  test('a worker that does not say its providers leaves no blank first step', async ({ page }) => {
+    await stubWorker(page, { as: 'nobody' });
+    // Registered after the stub, so it is the one that answers: never, as a worker that hangs.
+    await page.context().route(`${WORKER_ORIGIN}/auth/providers`, () => undefined);
+    await page.goto(`${CONSOLE}/setup`);
+
+    // Before the 15 seconds of a call: the e-mail form shows, with the providers of the build only.
+    await expect(page.getByRole('textbox', { name: 'Work email' })).toBeVisible({ timeout: 4_000 });
+  });
+
   test('a site the worker does not add opens the form on its address, with the reason', async ({ page }) => {
     await stubWorker(page, { as: 'named', refuses: { site: 403 } });
     await page.goto(`${CONSOLE}/setup?site=staging.acme.dev`);
