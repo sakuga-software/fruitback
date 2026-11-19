@@ -106,6 +106,63 @@ test.describe('the setup, against a worker with accounts (FRU-239)', () => {
     await expect(page).toHaveURL(/\/w\/ws_[0-9a-f]{20}\/sites$/);
   });
 
+  // FRU-635 (board S1): the landing sends `/setup?site=`. The address is said before the sign-in, the
+  // site shows at once, and it is added when the person is signed in: no field, no « Add site ».
+  test('an address that comes with the visit is shown, then added once signed in (FRU-635)', async ({
+    page,
+    context,
+  }) => {
+    await context.route(/^https:\/\/staging\.globex\.dev\//, (route) =>
+      route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>Globex</title><h1>Globex</h1>' }),
+    );
+    // Each action of the person, as `e2e/first-note.spec.ts` counts them, up to step 3.
+    const actions: string[] = [];
+    await page.goto(`${CONSOLE}/setup?site=staging.globex.dev`);
+    actions.push('open the setup from the landing');
+    await expect(page.getByText('Three steps to your first note on https://staging.globex.dev.')).toBeVisible();
+    const second = page.locator('main ol > li').nth(1);
+    await expect(second.getByText('https://staging.globex.dev', { exact: true })).toBeVisible();
+    await expect(second.getByText('Added as soon as you are signed in.')).toBeVisible();
+    // The preview frames the site from the first screen, not the empty frame of « your site ».
+    const preview = page.getByRole('region', { name: 'Preview of your site' });
+    await expect(preview.getByText('your site', { exact: true })).toHaveCount(0);
+    await expect(preview.locator('iframe')).toHaveAttribute('src', /^https:\/\/staging\.globex\.dev/);
+
+    await page.getByRole('textbox', { name: 'Work email' }).fill('ana@globex.dev');
+    actions.push('type the e-mail address');
+    await page.getByRole('button', { name: 'Email me a link' }).click();
+    actions.push('click « Email me a link »');
+    await expect.poll(async () => (await worker.sent()).length).toBe(1);
+    actions.push('open the mailbox, then the message');
+    const other = await context.newPage();
+    await other.goto(await linkIn(worker));
+    actions.push('click the link');
+    actions.push('go back to the tab of the setup');
+
+    await expect(page.getByRole('heading', { name: `${CURRENT}Put it on the site` })).toBeVisible();
+    await expect(page.getByRole('textbox', { name: 'Site address' })).toHaveCount(0);
+    await expect(page.getByText('Members of Globex see the notes')).toBeVisible();
+    // Six actions to step 3, where the setup without the address takes eight (`first-note.spec.ts`).
+    expect(actions).toHaveLength(6);
+    const sites = await page.evaluate(async (origin) => {
+      const me = (await (await fetch(`${origin}/console/me`, { credentials: 'include' })).json()) as {
+        workspaces: { id: string }[];
+      };
+      const answer = await fetch(`${origin}/console/workspaces/${me.workspaces[0]!.id}/sites`, {
+        credentials: 'include',
+      });
+
+      return ((await answer.json()) as { sites: { origin: string; visibility: string; writers?: string }[] }).sites;
+    }, WORKER_ORIGIN);
+    expect(sites.map(({ origin, visibility, writers }) => ({ origin, visibility, writers }))).toEqual([
+      { origin: 'https://staging.globex.dev', visibility: 'members', writers: 'members' },
+    ]);
+    // Spent: a visit after the site was added does not add it again, nor another.
+    await page.goto(`${CONSOLE}/setup`);
+    await expect(page.getByRole('heading', { name: `${CURRENT}Put it on the site` })).toBeVisible();
+    await expect(page.getByText('Three steps to your first note on a live page.')).toBeVisible();
+  });
+
   test('two tabs of one browser make one workspace, not one each', async ({ page, context }) => {
     await page.goto(`${CONSOLE}/sign-in`);
     await page.getByRole('textbox', { name: 'Work email' }).fill('ana@acme.dev');
@@ -560,25 +617,27 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
       { x: 160, y: 240 - LEAD, width: 352.2, height: 26 },
       'step 1',
     );
-    expectNear(
-      await boxOf(page.getByRole('textbox', { name: 'Work email' })),
-      { x: 160, y: 361 - LEAD, width: 352.2, height: 44 },
-      'field',
-    );
-    expectNear(
-      await boxOf(page.getByRole('button', { name: 'Email me a link' })),
-      { x: 160, y: 415 - LEAD, width: 142.5, height: 44 },
-      'main button',
-    );
+    // FRU-635 (board S1 of FRU-598): Google and GitHub come before the e-mail, where the mockup of
+    // 2026-10-13 put them after. The two parts swap places; the steps below stay where they were.
     expectNear(
       await boxOf(page.getByRole('button', { name: 'Continue with Google' })),
-      { x: 160, y: 562 - LEAD, width: 352.2, height: 44 },
+      { x: 160, y: 253.5, width: 352.2, height: 44 },
       'Google',
     );
     expectNear(
       await boxOf(page.getByRole('button', { name: 'Continue with GitHub' })),
-      { x: 160, y: 616 - LEAD, width: 352.2, height: 44 },
+      { x: 160, y: 307.5, width: 352.2, height: 44 },
       'GitHub',
+    );
+    expectNear(
+      await boxOf(page.getByRole('textbox', { name: 'Work email' })),
+      { x: 160, y: 482.5, width: 352.2, height: 44 },
+      'field',
+    );
+    expectNear(
+      await boxOf(page.getByRole('button', { name: 'Email me a link' })),
+      { x: 160, y: 536.5, width: 142.5, height: 44 },
+      'main button',
     );
     expectNear(
       await boxOf(page.getByRole('heading', { name: 'Your site', exact: true })),
@@ -1017,20 +1076,26 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
     await stubWorker(page, { as: 'nobody' });
     await page.goto(`${CONSOLE}/setup`);
     await expect(page.getByRole('textbox', { name: 'Work email' })).toBeVisible();
+    // FRU-635: the providers come first, so the step is drawn once the worker said which it has.
+    await expect(page.getByRole('button', { name: 'Continue with Google' })).toBeVisible();
     const order = [
       page.getByRole('link', { name: 'Fruitback' }),
       page.getByRole('link', { name: 'Self-hosting guide' }),
-      page.getByRole('textbox', { name: 'Work email' }),
-      page.getByRole('button', { name: 'Email me a link' }),
+      // FRU-635: the providers first, as they read.
       page.getByRole('button', { name: 'Continue with Google' }),
       page.getByRole('button', { name: 'Continue with GitHub' }),
+      page.getByRole('textbox', { name: 'Work email' }),
+      page.getByRole('button', { name: 'Email me a link' }),
     ];
     for (const control of order) {
       await page.keyboard.press('Tab');
       await expect(control).toBeFocused();
     }
     // The ring of the mockup on the control the keyboard is on.
+    await page.keyboard.press('Shift+Tab');
+    await page.keyboard.press('Shift+Tab');
     const focused = page.getByRole('button', { name: 'Continue with GitHub' });
+    await expect(focused).toBeFocused();
     expect(await focused.evaluate((element) => getComputedStyle(element).outline)).toBe('rgb(221, 44, 39) solid 2px');
   });
 
@@ -1252,5 +1317,52 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
     ).toBeVisible();
     await expect(page).toHaveTitle('Mettre en place Fruitback');
     await context.close();
+  });
+});
+
+test.describe('the address of the visit, against stubs (FRU-635)', () => {
+  test('comes back from a provider to /setup with no query, and the site is added all the same', async ({ page }) => {
+    await stubWorker(page, { as: 'nobody' });
+    await page.goto(`${CONSOLE}/setup?site=staging.acme.dev`);
+    await expect(page.getByRole('button', { name: 'Continue with Google' })).toBeVisible();
+    // Google brings the browser back to the root, and the front door sends a person with no site to
+    // /setup, with no query: the address waits in the tab.
+    const asked = await stubWorker(page, { as: 'named' });
+    await page.goto(`${CONSOLE}/setup`);
+
+    await expect(page.getByRole('heading', { name: `${CURRENT}Put it on the site` })).toBeVisible();
+    expect(asked.filter((each) => each === 'POST /console/workspaces/w1/sites')).toHaveLength(1);
+    await expect(page.getByText('https://staging.acme.dev', { exact: true }).first()).toBeVisible();
+  });
+
+  test('a worker that does not say its providers leaves no blank first step', async ({ page }) => {
+    await stubWorker(page, { as: 'nobody' });
+    // Registered after the stub, so it is the one that answers: never, as a worker that hangs.
+    await page.context().route(`${WORKER_ORIGIN}/auth/providers`, () => undefined);
+    await page.goto(`${CONSOLE}/setup`);
+
+    // Before the 15 seconds of a call: the e-mail form shows, with the providers of the build only.
+    await expect(page.getByRole('textbox', { name: 'Work email' })).toBeVisible({ timeout: 4_000 });
+  });
+
+  test('a site the worker does not add opens the form on its address, with the reason', async ({ page }) => {
+    await stubWorker(page, { as: 'named', refuses: { site: 403 } });
+    await page.goto(`${CONSOLE}/setup?site=staging.acme.dev`);
+
+    await expect(page.getByRole('heading', { name: `${CURRENT}Your site` })).toBeVisible();
+    await expect(page.getByRole('textbox', { name: 'Site address' })).toHaveValue('https://staging.acme.dev');
+    await expect(page.getByRole('alert')).toHaveText('Only an owner or an admin of the workspace adds a site.');
+  });
+
+  test('adds nothing to a workspace that has a site, and takes no address that is none', async ({ page }) => {
+    const asked = await stubWorker(page, { as: 'sited' });
+    await page.goto(`${CONSOLE}/setup?site=staging.globex.dev`);
+    await expect(page.getByRole('heading', { name: `${CURRENT}Put it on the site` })).toBeVisible();
+    expect(asked.filter((each) => each.startsWith('POST'))).toEqual([]);
+
+    await stubWorker(page, { as: 'nobody' });
+    await page.goto(`${CONSOLE}/setup?site=javascript:alert(1)`);
+    await expect(page.getByText('Three steps to your first note on a live page.')).toBeVisible();
+    await expect(page.locator('main ol > li').nth(1).getByText('The address you review.')).toBeVisible();
   });
 });

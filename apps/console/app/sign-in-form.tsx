@@ -86,37 +86,52 @@ export function providerProblem(code: string | null): string | undefined {
 const PROVIDERS_AT_FIRST: Providers = { github: import.meta.env.VITE_FRUITBACK_GITHUB === '1', google: false };
 
 /**
- * The ways this worker signs people in. `closed`: it answered that it has none (FRU-217), so no form
- * is shown: a link asked for there is never sent.
+ * How long a screen waits for the providers of the worker before it draws its ways in (FRU-635). A
+ * call ends after 15 seconds: a worker that is slow must not leave the form blank that long.
  */
-export function useSignInWays(): { providers: Providers; closed: boolean } {
+const SETTLE_MS = 1_500;
+
+/**
+ * The ways this worker signs people in. `closed`: it answered that it has none (FRU-217), so no form
+ * is shown: a link asked for there is never sent. `settled`: the worker answered which providers it
+ * has, did not answer, or `SETTLE_MS` went by.
+ */
+export function useSignInWays(): { providers: Providers; closed: boolean; settled: boolean } {
   const [providers, setProviders] = useState(PROVIDERS_AT_FIRST);
   const [closed, setClosed] = useState(false);
+  const [settled, setSettled] = useState(false);
 
   useEffect(() => {
     let asked = true;
-    void signInProviders().then((has) => {
-      // A worker that does not answer keeps what the build said: no button is taken away by an outage.
-      if (asked && has !== undefined) {
-        setProviders((before) => ({ github: before.github || has.github, google: has.google }));
-      }
-      void offersSignIn().then((offered) => {
-        if (asked && offered === false) setClosed(true);
+    const late = setTimeout(() => {
+      if (asked) setSettled(true);
+    }, SETTLE_MS);
+    void signInProviders()
+      .catch(() => undefined)
+      .then((has) => {
+        // A worker that does not answer keeps what the build said: no button is taken away by an outage.
+        if (asked && has !== undefined) {
+          setProviders((before) => ({ github: before.github || has.github, google: has.google }));
+        }
+        if (asked) setSettled(true);
+        void offersSignIn().then((offered) => {
+          if (asked && offered === false) setClosed(true);
+        });
+        // FRU-221: a worker with no mail and no provider. A link asked for there is never sent either.
+        void signsInByOperatorOnly().then((only) => {
+          if (!asked || !only) return;
+          closedByOperator = true;
+          setClosed(true);
+        });
       });
-      // FRU-221: a worker with no mail and no provider. A link asked for there is never sent either.
-      void signsInByOperatorOnly().then((only) => {
-        if (!asked || !only) return;
-        closedByOperator = true;
-        setClosed(true);
-      });
-    });
 
     return () => {
       asked = false;
+      clearTimeout(late);
     };
   }, []);
 
-  return { providers, closed };
+  return { providers, closed, settled };
 }
 
 /**
@@ -231,7 +246,10 @@ export function ProviderButtons({
   providers: Providers;
   /** Runs before the page leaves for the provider: what the page keeps to come back to (FRU-240). */
   onLeave?: () => void;
-  /** « grid »: side by side while there is room, in a column that spaces its own parts (the setup). */
+  /**
+   * « grid »: side by side while there is room, in a column that spaces its own parts, above the
+   * e-mail form, so « or » comes after the buttons (the setup, FRU-635).
+   */
   layout?: 'column' | 'grid';
 }) {
   useLocale();
@@ -263,8 +281,8 @@ export function ProviderButtons({
   if (layout === 'grid') {
     return (
       <>
-        <Divider>{t('or')}</Divider>
         <AutoGrid>{buttons}</AutoGrid>
+        <Divider>{t('or')}</Divider>
       </>
     );
   }

@@ -2,7 +2,7 @@ import { type FormEvent, useState } from 'react';
 import { type Site, type Workspace, call } from '../api';
 import { t } from '../i18n';
 import { SITE_NOT_ADDED, SITE_PROBLEMS, problemOf } from '../problems';
-import { type Added, NEW_SITE, manages } from '../setup-stage';
+import { type Added, type Asked, NEW_SITE, manages } from '../setup-stage';
 import { siteAddress, siteLabel } from '../site-address';
 import { Button, Field, LinkButton, Problem } from '../ui';
 import { useLocale } from '../use-locale';
@@ -13,6 +13,8 @@ type SiteFormProps = {
   workspace: Workspace;
   /** The site this form changes: its values are in the form, and « Cancel » keeps it. */
   replaces?: Added | undefined;
+  /** The address of the visit that the worker did not add (FRU-635): in the field, with its problem. */
+  asked?: Asked | undefined;
   onDone: (added: Added) => void;
 };
 
@@ -33,12 +35,16 @@ type SiteFormProps = {
  * was noted on it yet. A site of a visit before stays, the summary says so, and the Sites screen
  * removes it with its two presses (FRU-165).
  */
-export function SiteForm({ workspace, replaces, onDone }: SiteFormProps) {
+export function SiteForm({ workspace, replaces, asked, onDone }: SiteFormProps) {
   useLocale();
   const before = replaces?.site;
-  const [url, setUrl] = useState(before === undefined ? '' : siteLabel(before.origin));
+  const [url, setUrl] = useState(() => {
+    if (before !== undefined) return siteLabel(before.origin);
+
+    return asked === undefined ? '' : siteLabel(asked.url);
+  });
   const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<string | undefined>();
+  const [problem, setProblem] = useState<string | undefined>(asked?.problem);
 
   async function submit(event: FormEvent) {
     event.preventDefault();

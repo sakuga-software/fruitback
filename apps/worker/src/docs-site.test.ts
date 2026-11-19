@@ -149,8 +149,8 @@ describe('the landing (FRU-418)', () => {
     const guide = readFileSync(new URL('reviewing.md', DOCS), 'utf8');
     const amo = 'https://addons.mozilla.org/en-US/firefox/addon/fruitback/';
 
-    // The card, the question, and the footer.
-    assert.equal(landing.split(`href="${amo}"`).length - 1, 3, 'the landing lost a link to addons.mozilla.org');
+    // The hero, the card, the question, and the footer.
+    assert.equal(landing.split(`href="${amo}"`).length - 1, 4, 'the landing lost a link to addons.mozilla.org');
     assert.doesNotMatch(
       landing,
       /Firefox, by hand|In Firefox you load it by hand/,
@@ -167,9 +167,21 @@ describe('the landing (FRU-418)', () => {
     const landing = readFileSync(new URL('_layouts/landing.html', DOCS), 'utf8');
     const store = 'https://chromewebstore.google.com/detail/fruitback/jjjemdloknmggncbickofjgbodplekoa';
 
-    // The card, the question, and the footer.
-    assert.equal(landing.split(`href="${store}"`).length - 1, 3, 'the landing lost a link to the Chrome Web Store');
+    // The hero, the card, the question, and the footer.
+    assert.equal(landing.split(`href="${store}"`).length - 1, 4, 'the landing lost a link to the Chrome Web Store');
     assert.ok(!landing.includes('not in a store yet'), 'the landing still says the extension is in no store');
+  });
+
+  it('sends the address of the hero to the setup of the console, which reads it from `site` (FRU-641)', () => {
+    const landing = readFileSync(new URL('_layouts/landing.html', DOCS), 'utf8');
+    const form = /<form class="try"([^>]*)>([\s\S]*?)<\/form>/.exec(landing);
+    const [, attributes = '', fields = ''] = form ?? [];
+
+    assert.ok(form, 'the hero has no form for the address');
+    assert.match(attributes, /action="https:\/\/app\.fruitback\.com\/setup"/, 'the form does not go to the setup');
+    assert.match(attributes, /method="get"/, 'the form does not put the address in the query');
+    assert.match(fields, /<input[^>]*\bname="site"/, 'the field is not named `site`, the name the setup reads');
+    assert.match(fields, /type="submit"/, 'the form has no button that sends it');
   });
 
   it('keeps no word of the garden in its title, and promises the component only when the build exposes it (FRU-514)', () => {

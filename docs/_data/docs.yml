@@ -8,6 +8,8 @@
   pages:
     - title: Overview
       url: /docs.html
+    - title: Leave a note
+      url: /leave-a-note.html
     - title: Choose a mode
       url: /modes.html
     - title: Install the widget

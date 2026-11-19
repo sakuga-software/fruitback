@@ -23,19 +23,27 @@ import { workspaceNameFrom } from '../workspace-name';
 
 type AskProps = { email: string; onEmail: (email: string) => void; onSent: (email: string) => void };
 
-/** Step 1, to do: the address a link goes to, or a provider. */
+/**
+ * Step 1, to do: a provider, or the address a link goes to. The providers come first (FRU-635, board
+ * S1): they need no inbox and no way back to this tab, three actions fewer than a link.
+ */
 export function Ask({ email, onEmail, onSent }: AskProps) {
   useLocale();
   const [search] = useSearchParams();
-  const { providers, closed } = useSignInWays();
+  const { providers, closed, settled } = useSignInWays();
+
+  // WARNING: the providers come above the field. Drawn before the worker says which it has, the field
+  // would move down under the hand of somebody who started to type.
+  if (!settled) return <p aria-busy="true" className="mt-3" />;
 
   return (
     <div className="mt-3 flex flex-col gap-4">
-      <p className="text-body text-muted">{t('We send you a sign-in link. No password to make up.')}</p>
       {closed ? (
         <SignInClosed />
       ) : (
         <>
+          <ProviderButtons providers={providers} layout="grid" />
+          <p className="text-body text-muted">{t('We send you a sign-in link. No password to make up.')}</p>
           <EmailForm
             action={msg('Email me a link')}
             email={email}
@@ -47,7 +55,6 @@ export function Ask({ email, onEmail, onSent }: AskProps) {
           <p className="text-hint text-muted">
             {t('Your workspace takes the name of your domain. Rename it whenever you like.')}
           </p>
-          <ProviderButtons providers={providers} layout="grid" />
         </>
       )}
     </div>

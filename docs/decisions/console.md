@@ -308,6 +308,20 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   - **Still waiting**: « Signs in with this account. No code to type. » (a browser is still connected
     from here until the popup asks, FRU-238, FRU-251). **The script keeps `data-fruitback-endpoint`**
     (inventory A24): the widget finds its worker by that attribute only.
+- **The setup takes the address of a visit** (FRU-635, board S1 of the « état des lieux UX »). The
+  landing sends `/setup?site=<address>`.
+  - **Before the sign-in**, the lead names the site, step 2 says « Added as soon as you are signed
+    in. » under it, and the preview frames it at once. `?site=` is read as a typed address
+    (`siteAddress`); one that cannot be an address is ignored, and the setup is the one of before.
+  - **It is kept in the tab for an hour** (`setup-address.ts`, in `sessionStorage`), as
+    `connect-return.ts` keeps a request: a provider brings the browser back to the root, and the front
+    door sends to `/setup` with no query. It is forgotten when a site is there.
+  - **It is added once signed in, only to a workspace with no site**, with the values of `NEW_SITE`,
+    by `siteStage`. A link of somebody else can name the address, so it is said before the sign-in,
+    it adds nothing to a workspace that has sites, and its notes are seen by the members only. A
+    refusal opens the form on the address, with the reason.
+  - **The providers come before the e-mail** in step 1: they need no inbox and no return to this tab.
+    The boxes of step 1 differ from the mockup of 2026-10-13 on that point only.
 - **An invitation has a screen, and joining says what comes next** (FRU-241, screen 03 of the mockup
   of 2026-10-13). `/invitations` shows the most recent invitation of the address that is signed in:
   the workspace that invites, the role and what it lets its person do, « Join », and « Decline »
