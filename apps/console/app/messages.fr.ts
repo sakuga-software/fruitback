@@ -985,6 +985,10 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'GitHub did not answer. Try again in a moment.': 'GitHub n’a pas répondu. Réessayez dans un instant.',
   'Where the notes of {site} go': 'Où vont les notes de {site}',
   'Where the notes go': 'Où vont les notes',
+  'The tracker refuses a place of this site, and its notes do not leave. Open the site to change it.':
+    'L’outil de suivi refuse un endroit de ce site, et ses notes ne partent plus. Ouvrez le site pour le changer.',
+  'Since {when}, the tracker refuses this place, and the notes of this site do not leave: the team or the project is gone, or the project moved to another team. Add the right place, make it the default, then remove this one.':
+    'Depuis {when}, l’outil de suivi refuse cet endroit, et les notes de ce site ne partent plus : l’équipe ou le projet n’existe plus, ou le projet a changé d’équipe. Ajoutez le bon endroit, faites-en l’endroit par défaut, puis retirez celui-ci.',
   'Destinations of {site}': 'Destinations de {site}',
   'Add a destination': 'Ajouter une destination',
   '(opens in a new tab)': '(s’ouvre dans un nouvel onglet)',

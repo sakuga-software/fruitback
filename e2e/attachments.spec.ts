@@ -237,10 +237,13 @@ async function openOnLatte(page: Page, url: string): Promise<void> {
   await page.locator('[data-testid="card-latte"] .add').click();
   await removeElementShot(page);
   await page.getByPlaceholder('Que faut-il changer\u202F?').fill('Le texte reste');
-  // The composer rises and scales as it comes: its box is its own only once that is over.
+  // The composer rises and scales as it comes: its box is its own only once that is over. An
+  // animation that the widget cancels rejects `finished` with an AbortError: it is over too.
   await page.evaluate(() =>
     Promise.all(
-      (document.querySelector('[data-fruitback-host]')?.shadowRoot?.getAnimations() ?? []).map((each) => each.finished),
+      (document.querySelector('[data-fruitback-host]')?.shadowRoot?.getAnimations() ?? []).map((each) =>
+        each.finished.catch(() => undefined),
+      ),
     ),
   );
 }
@@ -290,6 +293,12 @@ for (const [width, height, up] of [
     const files = page.getByRole('dialog', { name: 'Nouvelle note', exact: true });
     const trigger = files.getByRole('button', { name: 'Prendre une capture' });
     const menu = files.getByRole('menu');
+    // On a desktop the composer moves with the page, and the clicks that open it scroll the page by
+    // an amount that depends on the rise of the composer: on CI the icon stood 109 px higher than
+    // here, with room under it at 1440 × 260. The premise must not depend on that scroll, so the icon
+    // goes to the foot of the window (no room under it) or to its top (room under it). On a phone
+    // the sheet is fixed to the foot of the window and stays where it is.
+    if (width > 700) await trigger.evaluate((icon, foot) => icon.scrollIntoView({ block: foot ? 'end' : 'start' }), up);
     await trigger.focus();
     await page.keyboard.press('ArrowDown');
     await expect(menu).toBeVisible();

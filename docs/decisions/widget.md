@@ -650,7 +650,11 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
       `init` finds them in the read that follows the send, by the id of the note (`onNote` of
       `plant`). It said « Sent » for 1.1 s before. A note kept for later still says so in the foot.
     - **Failed**: a card above the foot, `role="alert"`: « Not sent », then the sentence of
-      its cause (FRU-156). The text stays in the field.
+      its cause (FRU-156). The text stays in the field. **A place that the tracker refuses**
+      (FRU-640, `502 destination-unavailable`) has its own sentence and a link under it, from the
+      `help` of the answer: « Fix it in the console » for a member, « What to do » for anybody
+      else. The widget takes only an `https:` address (or `http:` on a local host), and opens it
+      in a new tab. The widget knows no console: the address is the worker's.
   - **« Attach a picture of the element » is the preference of the settings panel**, shown beside
     the note (`PictureChoice`, a seam like `NameMemory`). It is there only when the host gave
     `captureScreenshot`, **the composer never ticks it**, and a tick is kept at once. The mock-up

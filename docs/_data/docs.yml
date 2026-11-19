@@ -42,6 +42,10 @@
       url: /translating.html
     - title: What the team sees
       url: /install/team-view.html
+    - title: A note that did not go
+      url: /note-not-sent.html
+    - title: A note that did not go (français)
+      url: /note-not-sent.fr.html
     - title: Jira Cloud
       url: /connectors/jira.html
     - title: Jira Cloud (français)

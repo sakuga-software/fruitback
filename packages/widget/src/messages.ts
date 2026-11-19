@@ -195,6 +195,14 @@ export const ENGLISH = {
   'composer.signIn': 'Sign in again',
   'composer.failedTooLarge':
     'This note is too large. Your text is still here. Shorten it, or turn the picture off in the settings.',
+  // FRU-640: the tracker no longer has the place this site sends notes to. A visitor cannot fix it.
+  'composer.failedPlaceGone': 'This note could not reach the team. Your text is still here. Send it again later.',
+  // The same, for a member of the workspace, who can choose another place in the console.
+  'composer.failedPlaceGoneMember':
+    'The place this site sends notes to no longer exists in the tracker. Your text is still here. An owner or an admin chooses another place in the console, then you send it again.',
+  // The link under that sentence: to the page of the site in the console, or to a page of help.
+  'composer.placeGoneConsole': 'Fix it in the console',
+  'composer.placeGoneHelp': 'What to do',
   // The line that says where the note goes (FRU-123). A member of the team reads it, nobody else.
   // `{destination}` is the name the worker gives a place, or `composer.destinationUnnamed`.
   'composer.destination': 'Send to: {destination}',

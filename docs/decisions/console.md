@@ -740,6 +740,12 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   on the line under it, the chips and the places of Notes, and the lists of a site's statuses
   (`placeLabel`: « Clients · Design » for « Linear · Design »). A worker of before sends no `name`,
   and every source is named by its kind, as before.
+- **A place that the tracker refuses says « Needs attention »** (FRU-640): the worker keeps
+  `attention` on the destination when a note did not reach its place, and clears it when a note
+  arrives. The row of the place in « Where the notes go » says « Needs attention » and, under it,
+  since when and what to do: add the right place, make it the default, remove this one. The card of
+  the site in the Sites list says it too, to whoever sees the tracker. A worker of before sends no
+  `attention`, and the row reads as it did.
 - **GitHub connects with its App, where the worker has one** (FRU-361, routes of FRU-359 and
   FRU-360): `connectors.tsx` (the card), `connector-github.tsx` (the panel). The card « GitHub
   Issues » is always in « Add a connector », between Linear and the REST API. With `githubApp: true`,

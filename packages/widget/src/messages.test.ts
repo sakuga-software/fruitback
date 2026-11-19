@@ -31,6 +31,7 @@ import { type ListState, createSidebar } from './sidebar.ts';
 import type { SiteRead } from './site-notes.ts';
 import { feedbackAsText, placementOf } from './export.ts';
 import { createConfigStore } from './config.ts';
+import type { PlaceHelp } from './place-help.ts';
 import {
   type CheckAnswer,
   type CheckFailure,
@@ -277,6 +278,7 @@ describe('every word the widget shows', () => {
     let waiting = 0;
     let batchAnswer: BatchSent = { sent: [], unsent: [] };
     let restoredText: string | undefined;
+    let placeHelp: PlaceHelp | undefined;
     const places = createOfferedDestinations();
     places.set([{ id: 'dst_one', label: 'PLACE ONE' }, { id: 'dst_two' }]);
     const composer = createComposer({
@@ -284,6 +286,7 @@ describe('every word the widget shows', () => {
       host: host.panel,
       translator,
       onSubmit: () => new Promise<boolean | SendFailure | SentWithoutPicture | SentAs>((resolve) => (answer = resolve)),
+      placeHelp: () => placeHelp,
       // Offered, so « Add to batch » is drawn (FRU-124, FRU-608), with the notes waiting and a receipt.
       batch: {
         offered: () => true,
@@ -722,6 +725,18 @@ describe('every word the widget shows', () => {
       await settle();
       snapshots.push(...shown(host.root));
     }
+    // A place that is gone (FRU-640): the words and the link of a member, then of a visitor.
+    for (const help of [
+      { url: 'https://console.test/w/ws_1/sites/site_1', for: 'member' },
+      { url: 'https://help.test/note-not-sent', for: 'visitor' },
+    ] as const) {
+      placeHelp = help;
+      send.click();
+      answer('place-gone');
+      await settle();
+      snapshots.push(...shown(host.root));
+    }
+    placeHelp = undefined;
     // Sent without the picture it asked for (FRU-238).
     composer.open({ left: 0, top: 0, bottom: 10, right: 10 }, 'ELEMENT');
     send.click();

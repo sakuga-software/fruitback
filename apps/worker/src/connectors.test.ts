@@ -3,7 +3,7 @@ import { mockMethod } from './mock.fixture.ts';
 import assert from 'node:assert/strict';
 import { noteFixture } from '@fruitback/shared/note.fixture';
 import { IDENTITY_SECRET, envWith as workerEnv } from './auth-worker.fixture.ts';
-import { type CallOptions, type World, callOn, memberOf, signInTo, worlds } from './console-world.fixture.ts';
+import { CONSOLE, type CallOptions, type World, callOn, memberOf, signInTo, worlds } from './console-world.fixture.ts';
 import { type WorkerEnv, readConfig } from './env.ts';
 import { createMemoryKv } from './kv.ts';
 import { rowsOf } from './postgres.fixture.ts';
@@ -26,7 +26,7 @@ function envWith(overrides: Partial<WorkerEnv> = {}): Promise<World> {
  * Linear, as far as a connector uses it: it answers the key it knows and refuses every other one, and
  * keeps the issues it receives, by team.
  */
-function fakeLinear(keys: string[] = [LINEAR_KEY]) {
+function fakeLinear(keys: string[] = [LINEAR_KEY], moved = { project: false }) {
   const issues: { teamId: string; projectId?: string; description: string; id: string }[] = [];
   const asked: string[] = [];
   mockMethod(globalThis, 'fetch', async (_url: unknown, init: { body: string; headers: Record<string, string> }) => {
@@ -47,7 +47,8 @@ function fakeLinear(keys: string[] = [LINEAR_KEY]) {
                 id: 'team_design',
                 name: 'Design',
                 key: 'DES',
-                projects: { nodes: [{ id: 'proj_site', name: 'Site' }] },
+                // FRU-640: a project moved to another team is not a project of this one.
+                projects: { nodes: moved.project ? [] : [{ id: 'proj_site', name: 'Site' }] },
               },
             ],
           },
@@ -62,6 +63,18 @@ function fakeLinear(keys: string[] = [LINEAR_KEY]) {
     }
     if (operation === 'FruitbackCreateIssue') {
       const input = variables.input as { teamId: string; projectId?: string; description: string };
+      // FRU-640: what Linear answered on 2026-11-19 for a project of another team.
+      if (moved.project && input.projectId === 'proj_site') {
+        return Response.json({
+          data: null,
+          errors: [
+            {
+              message: 'project not in same team as issue',
+              extensions: { type: 'invalid input', code: 'INPUT_ERROR', statusCode: 400, userError: true },
+            },
+          ],
+        });
+      }
       const id = `issue_${issues.length + 1}`;
       issues.push({
         teamId: input.teamId,
@@ -322,6 +335,160 @@ describe('a workspace connects Linear (FRU-121)', () => {
     assert.equal((await call(env, 'POST', '/feedback', { origin: SITE, body: note(world.site.id) })).status, 201);
     assert.deepEqual(linear.asked, []);
     assert.deepEqual((await world.accounts.sites(world.workspace.id))[0]?.destinations, []);
+  });
+});
+
+describe('a place that the tracker refuses (FRU-640)', () => {
+  async function placed(env: World, moved: { project: boolean }) {
+    fakeLinear([LINEAR_KEY], moved);
+    const world = await acme(env);
+    const connector = await connected(env, world);
+    const set = await call(env, 'POST', `${world.base}/sites/${world.site.id}/destination`, {
+      token: world.owner.token,
+      body: { connector, teamId: 'team_design', projectId: 'proj_site' },
+    });
+    assert.equal(set.status, 200, await set.clone().text());
+
+    return world;
+  }
+
+  async function placesOf(env: World, world: Awaited<ReturnType<typeof acme>>) {
+    const read = await call(env, 'GET', `${world.base}/sites/${world.site.id}`, { token: world.owner.token });
+    assert.equal(read.status, 200, await read.clone().text());
+
+    return ((await read.json()) as { destinations: { attention?: { reason: string } }[] }).destinations;
+  }
+
+  it('answers 502 destination-unavailable to a visitor, logs why, and tells the console', async () => {
+    const env = await envWith();
+    const moved = { project: false };
+    const world = await placed(env, moved);
+    moved.project = true;
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const refused = await call(env, 'POST', '/feedback', { origin: SITE, body: note(world.site.id) });
+
+    assert.equal(refused.status, 502);
+    // The note of the fixture is in French: the help is the French page.
+    assert.deepEqual(await refused.json(), {
+      error: 'destination-unavailable',
+      help: 'https://fruitback.com/note-not-sent.fr',
+      for: 'visitor',
+    });
+    assert.ok(
+      logged.mock.calls.some((args) => String(args[0]).includes('project not in same team as issue')),
+      'the reason of Linear is in the log',
+    );
+    assert.deepEqual(
+      (await placesOf(env, world)).map((each) => each.attention?.reason),
+      ['place-gone'],
+    );
+  });
+
+  it('gives a member the page of the site in the console', async () => {
+    const env = await envWith();
+    const moved = { project: false };
+    const world = await placed(env, moved);
+    moved.project = true;
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const minted = await call(env, 'POST', `${world.base}/connect`, { token: world.owner.token, body: {} });
+    const { code } = (await minted.json()) as { code: string };
+    const paired = await call(env, 'POST', '/session/pair', { body: { code }, origin: null });
+    const { accessToken } = (await paired.json()) as { accessToken: string };
+
+    const refused = await call(env, 'POST', '/feedback', {
+      origin: SITE,
+      token: accessToken,
+      body: [note(world.site.id), { ...note(world.site.id, '/team'), id: 'sd_second' }],
+    });
+
+    assert.equal(refused.status, 502);
+    const body = (await refused.json()) as { error: string; help: string; for: string; results: unknown[] };
+    assert.equal(body.error, 'destination-unavailable');
+    assert.equal(body.for, 'member');
+    assert.equal(body.help, `${CONSOLE}/w/${world.workspace.id}/sites/${world.site.id}`);
+    assert.equal(body.results.length, 2);
+  });
+
+  it('answers store-unavailable when Linear refuses an input and the place is still there', async () => {
+    const env = await envWith();
+    const moved = { project: false };
+    const world = await placed(env, moved);
+    vi.restoreAllMocks();
+    mockMethod(globalThis, 'fetch', async (_url: unknown, init: { body: string }) => {
+      const operation = /Fruitback\w+/.exec((JSON.parse(init.body) as { query: string }).query)?.[0];
+      if (operation === 'FruitbackPlaces') {
+        return Response.json({
+          data: {
+            teams: {
+              nodes: [{ id: 'team_design', name: 'Design', projects: { nodes: [{ id: 'proj_site', name: 'Site' }] } }],
+            },
+          },
+        });
+      }
+      if (operation === 'FruitbackLabels') return Response.json({ data: { team: { labels: { nodes: [] } } } });
+
+      return Response.json({
+        data: null,
+        errors: [{ message: 'title too long', extensions: { code: 'INPUT_ERROR' } }],
+      });
+    });
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const refused = await call(env, 'POST', '/feedback', { origin: SITE, body: note(world.site.id) });
+
+    assert.equal(refused.status, 502);
+    assert.equal(((await refused.json()) as { error: string }).error, 'store-unavailable');
+    assert.deepEqual(
+      (await placesOf(env, world)).map((each) => each.attention),
+      [undefined],
+    );
+  });
+
+  it('answers store-unavailable when Linear refuses an input and the read of the place fails', async () => {
+    const env = await envWith();
+    const moved = { project: false };
+    const world = await placed(env, moved);
+    vi.restoreAllMocks();
+    mockMethod(globalThis, 'fetch', async (_url: unknown, init: { body: string }) => {
+      const operation = /Fruitback\w+/.exec((JSON.parse(init.body) as { query: string }).query)?.[0];
+      // The read of the place fails: it says nothing of the place.
+      if (operation === 'FruitbackPlaces') return new Response('busy', { status: 503 });
+      if (operation === 'FruitbackLabels') return Response.json({ data: { team: { labels: { nodes: [] } } } });
+
+      return Response.json({
+        data: null,
+        errors: [{ message: 'project not in same team as issue', extensions: { code: 'INPUT_ERROR' } }],
+      });
+    });
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const refused = await call(env, 'POST', '/feedback', { origin: SITE, body: note(world.site.id) });
+
+    assert.equal(refused.status, 502);
+    assert.equal(((await refused.json()) as { error: string }).error, 'store-unavailable');
+    assert.deepEqual(
+      (await placesOf(env, world)).map((each) => each.attention),
+      [undefined],
+    );
+  });
+
+  it('clears the state when a note arrives at the place again', async () => {
+    const env = await envWith();
+    const moved = { project: false };
+    const world = await placed(env, moved);
+    moved.project = true;
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    assert.equal((await call(env, 'POST', '/feedback', { origin: SITE, body: note(world.site.id) })).status, 502);
+
+    moved.project = false;
+    const written = await call(env, 'POST', '/feedback', { origin: SITE, body: note(world.site.id, '/again') });
+
+    assert.equal(written.status, 201, await written.clone().text());
+    assert.deepEqual(
+      (await placesOf(env, world)).map((each) => each.attention),
+      [undefined],
+    );
   });
 });
 

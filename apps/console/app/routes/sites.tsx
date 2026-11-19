@@ -614,6 +614,12 @@ function SiteCard({ workspace, site, manages, seesTracker }: SiteCardProps) {
               </Problem>
             ))
         : null}
+      {/* FRU-640: a place that the tracker refuses keeps every note of the site from leaving. */}
+      {seesTracker && placesOf(site).some((each) => each.attention !== undefined) ? (
+        <Problem>
+          {t('The tracker refuses a place of this site, and its notes do not leave. Open the site to change it.')}
+        </Problem>
+      ) : null}
     </li>
   );
 }

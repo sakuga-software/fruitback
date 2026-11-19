@@ -320,7 +320,23 @@ export type Destination = {
    * Absent: another kind of connector, a destination written before, or Linear gave no key.
    */
   url?: string;
+  /**
+   * FRU-640: the tracker refused this place when a note went there. The worker writes it, never a
+   * request, and a new list of destinations clears it. Absent: no refusal since the list was written.
+   */
+  attention?: DestinationAttention;
 };
+
+/**
+ * Why a destination cannot take notes until somebody changes it (FRU-640).
+ *
+ * - `place-gone`: the team or the project is not in the tracker now, or the project is in another team.
+ */
+export const DESTINATION_TROUBLES = ['place-gone'] as const;
+export type DestinationTrouble = (typeof DESTINATION_TROUBLES)[number];
+
+/** `since` is the first refusal, so that the console says how long the notes did not leave. */
+export type DestinationAttention = { reason: DestinationTrouble; since: string };
 
 /**
  * How many places a site can send to (FRU-123). A read asks each one, so the number is the cost of
@@ -871,6 +887,17 @@ export type AccountStore = {
    * answered. A refusal of the same kind keeps its first moment. A connector that is gone is ignored.
    */
   noteConnector(connector: string, trouble: ConnectorTrouble | undefined, now: number): Promise<void>;
+  /**
+   * Keeps what the tracker said of a place of a site when a note went there (FRU-640). `trouble`
+   * absent: the note arrived, and the place loses its trouble. The place is the destination of the
+   * site with this connector, this team and this project. It never rejects for a place that is gone.
+   */
+  noteDestination(
+    site: string,
+    place: { connector: string; teamId?: string | undefined; projectId?: string | undefined },
+    trouble: DestinationTrouble | undefined,
+    now: number,
+  ): Promise<void>;
   /**
    * What a workspace set on its connector (FRU-102). `false` when the connector is not of this
    * workspace, and then nothing changes.

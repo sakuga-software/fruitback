@@ -58,6 +58,11 @@ export type Destination = {
    * keys Linear answered. Absent: another kind, a destination written before, or a worker of before.
    */
   url?: string;
+  /**
+   * FRU-640: the tracker refused this place when a note went there, since `since`. For example, the
+   * project moved to another team. Absent: no refusal, or a worker of before.
+   */
+  attention?: { reason: 'place-gone'; since: string };
 };
 /**
  * `destinations` is every place the site can send to, in order (FRU-123): the first one is where a

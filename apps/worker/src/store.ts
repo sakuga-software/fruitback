@@ -27,6 +27,16 @@ import type { OutgoingFile } from './attachments.ts';
 export class StoreError extends Error {}
 
 /**
+ * The tracker refused the place of the client: the team or the project of its destination does not
+ * exist there now, or the project is in another team (FRU-640). For example, somebody moved the
+ * project to another team after the destination was written.
+ *
+ * Another try fails the same way. Only a person who changes the destination of the site can fix it.
+ * The message is the tracker's: it goes to the log and the console, never to the page.
+ */
+export class PlaceUnavailable extends StoreError {}
+
+/**
  * What a store hands back after planting a note.
  *
  * `url` is optional for the same reason it is on `NoteIssue`: a store may have no interface to open

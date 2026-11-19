@@ -15,7 +15,13 @@ import { unfolded } from './settled.ts';
 const CONSOLE = 'http://localhost:5178';
 const SITE = 'staging.acme.dev';
 
-type Place = { connector: string; teamId?: string; projectId?: string; repository?: string };
+type Place = {
+  connector: string;
+  teamId?: string;
+  projectId?: string;
+  repository?: string;
+  attention?: { reason: 'place-gone'; since: string };
+};
 
 const LINEAR = { id: 'c1', kind: 'linear', label: 'Linear · Ana', createdAt: '2026-10-01T10:00:00.000Z' };
 const GITHUB = { id: 'g1', kind: 'github', label: 'GitHub App · acme', createdAt: '2026-10-20T10:00:00.000Z' };
@@ -283,6 +289,35 @@ test('an owner chooses where the notes of a site go, on the page of the site (FR
   // Back on the grid, the card of the site says where its notes go now.
   await page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'Sites' }).click();
   await expect(card(page).locator('dd').first()).toHaveText('LinearTeam Web and 1 more');
+});
+
+test('a place that the tracker refuses says « Needs attention » and what to do, here and on the card of the site (FRU-640)', async ({
+  page,
+}) => {
+  const worker = await workerWith(page);
+  worker.places = [
+    {
+      connector: 'c1',
+      teamId: 't1',
+      projectId: 'p1',
+      attention: { reason: 'place-gone', since: '2026-11-13T10:00:00.000Z' },
+    },
+  ];
+  await openPlaces(page);
+
+  const row = panel(page).locator('[data-place]');
+  await expect(row.getByText('Needs attention', { exact: true })).toBeVisible();
+  await expect(row.getByRole('alert')).toContainText(
+    'the tracker refuses this place, and the notes of this site do not leave: the team or the project is gone, or the project moved to another team. Add the right place, make it the default, then remove this one.',
+  );
+  await expectNoViolation(page, 'a place that the tracker refuses');
+  await panel(page).screenshot({ path: 'test-results/console-place-gone.png' });
+
+  await page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'Sites' }).click();
+  await expect(card(page)).toContainText(
+    'The tracker refuses a place of this site, and its notes do not leave. Open the site to change it.',
+  );
+  await card(page).screenshot({ path: 'test-results/console-place-gone-card.png' });
 });
 
 test('the section says what a place does, then the places in one frame, each with its actions on its line (FRU-576)', async ({
