@@ -1,5 +1,5 @@
 import type { Account, Answer, Invitation, Me, Site, Visibility, Workspace, Writers } from './api.ts';
-import { NAME_PROBLEMS, WORKSPACE_NOT_CREATED, problemOf } from './problems.ts';
+import { NAME_PROBLEMS, SITE_NOT_ADDED, SITE_PROBLEMS, WORKSPACE_NOT_CREATED, problemOf } from './problems.ts';
 import { workspaceNameFrom } from './workspace-name.ts';
 
 /**
@@ -24,8 +24,11 @@ export type Stage =
   | { kind: 'unnamed'; account: Account; problem: string }
   /** The sites of the workspace could not be read. That is not « no site »: nothing is asked again. */
   | { kind: 'unread'; account: Account; workspace: Workspace }
-  /** `replaces`: the site that « Change » opened again, with its values in the form. */
-  | { kind: 'site'; account: Account; workspace: Workspace; replaces?: Added }
+  /**
+   * `replaces`: the site that « Change » opened again, with its values in the form. `asked`: the
+   * address that came with the visit (FRU-635), which the worker did not add, and what it said.
+   */
+  | { kind: 'site'; account: Account; workspace: Workspace; replaces?: Added; asked?: Asked }
   | ({ kind: 'install'; account: Account; workspace: Workspace } & Added)
   /** An invitation waits for this person: they came to join a workspace, not to make one. */
   | { kind: 'invited' }
@@ -40,6 +43,9 @@ export type Stage =
    */
   | { kind: 'waiting'; workspace: Workspace };
 
+/** An address that came with the visit and was not added: the form opens on it, with the problem. */
+export type Asked = { url: string; problem: string };
+
 export type Made = { workspace: Workspace; problem?: undefined } | { workspace?: undefined; problem: string };
 
 /** What the setup asks of the worker and of the browser. */
@@ -52,6 +58,8 @@ export type SetupCalls = {
   /** One site by its id (FRU-497), with its notes. */
   site: (workspace: Workspace, site: string) => Promise<Answer<Site>>;
   createWorkspace: (name: string) => Promise<Answer<Workspace>>;
+  /** Adds a site with the values of `NEW_SITE` (FRU-635): the address that came with the visit. */
+  addSite: (workspace: Workspace, url: string) => Promise<Answer<Site>>;
   /** Runs `task` alone in every tab of the browser, when the browser has a lock. */
   alone: <T>(task: () => Promise<T>) => Promise<T>;
 };
@@ -107,9 +115,14 @@ export function firstWorkspace(calls: SetupCalls, account: Account, name?: strin
 
 /**
  * Where the setup of this person is: read from the worker at each visit, so it resumes anywhere.
- * `signedIn` hears the account, for the language of the person.
+ * `signedIn` hears the account, for the language of the person. `known`: the address of a site that
+ * came with the visit (FRU-635), added once the person is signed in.
  */
-export async function resolveStage(calls: SetupCalls, signedIn: (me: Me) => void = () => {}): Promise<Stage> {
+export async function resolveStage(
+  calls: SetupCalls,
+  signedIn: (me: Me) => void = () => {},
+  known?: string,
+): Promise<Stage> {
   const me = await calls.me();
   if (!me.ok) return { kind: 'email' };
   signedIn(me.data);
@@ -127,17 +140,38 @@ export async function resolveStage(calls: SetupCalls, signedIn: (me: Me) => void
     workspace = made.workspace;
   }
 
-  return siteStage(calls, account, workspace);
+  return siteStage(calls, account, workspace, known);
 }
 
-/** The step of a person who has a workspace: its first site, or the form that adds one. */
-export async function siteStage(calls: SetupCalls, account: Account, workspace: Workspace): Promise<Stage> {
+/**
+ * The step of a person who has a workspace: its first site, or the form that adds one.
+ *
+ * `known`: the address that came with the visit (`?site=`, FRU-635). It is added at once, with the
+ * safe values of `NEW_SITE`, only to a workspace that has no site yet: the setup said the address
+ * before the sign-in, and a workspace that has sites does not get one more behind its back. A refusal
+ * opens the form on that address, with what the worker said.
+ */
+export async function siteStage(
+  calls: SetupCalls,
+  account: Account,
+  workspace: Workspace,
+  known?: string,
+): Promise<Stage> {
   const listed = await calls.sites(workspace);
   if (!listed.ok) return { kind: 'unread', account, workspace };
   const site = listed.data.sites[0];
   if (site !== undefined) return { kind: 'install', account, workspace, site };
+  if (!manages(workspace)) return { kind: 'waiting', workspace };
+  if (known === undefined) return { kind: 'site', account, workspace };
+  const added = await calls.addSite(workspace, known);
+  if (added.ok) return { kind: 'install', account, workspace, site: added.data, fresh: true };
 
-  return manages(workspace) ? { kind: 'site', account, workspace } : { kind: 'waiting', workspace };
+  return {
+    kind: 'site',
+    account,
+    workspace,
+    asked: { url: known, problem: problemOf(added, SITE_PROBLEMS, SITE_NOT_ADDED) },
+  };
 }
 
 /**

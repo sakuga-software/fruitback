@@ -87,11 +87,13 @@ const PROVIDERS_AT_FIRST: Providers = { github: import.meta.env.VITE_FRUITBACK_G
 
 /**
  * The ways this worker signs people in. `closed`: it answered that it has none (FRU-217), so no form
- * is shown: a link asked for there is never sent.
+ * is shown: a link asked for there is never sent. `settled`: the worker answered which providers it
+ * has, or did not answer at all.
  */
-export function useSignInWays(): { providers: Providers; closed: boolean } {
+export function useSignInWays(): { providers: Providers; closed: boolean; settled: boolean } {
   const [providers, setProviders] = useState(PROVIDERS_AT_FIRST);
   const [closed, setClosed] = useState(false);
+  const [settled, setSettled] = useState(false);
 
   useEffect(() => {
     let asked = true;
@@ -100,6 +102,7 @@ export function useSignInWays(): { providers: Providers; closed: boolean } {
       if (asked && has !== undefined) {
         setProviders((before) => ({ github: before.github || has.github, google: has.google }));
       }
+      if (asked) setSettled(true);
       void offersSignIn().then((offered) => {
         if (asked && offered === false) setClosed(true);
       });
@@ -116,7 +119,7 @@ export function useSignInWays(): { providers: Providers; closed: boolean } {
     };
   }, []);
 
-  return { providers, closed };
+  return { providers, closed, settled };
 }
 
 /**
@@ -231,7 +234,10 @@ export function ProviderButtons({
   providers: Providers;
   /** Runs before the page leaves for the provider: what the page keeps to come back to (FRU-240). */
   onLeave?: () => void;
-  /** « grid »: side by side while there is room, in a column that spaces its own parts (the setup). */
+  /**
+   * « grid »: side by side while there is room, in a column that spaces its own parts, above the
+   * e-mail form, so « or » comes after the buttons (the setup, FRU-635).
+   */
   layout?: 'column' | 'grid';
 }) {
   useLocale();
@@ -263,8 +269,8 @@ export function ProviderButtons({
   if (layout === 'grid') {
     return (
       <>
-        <Divider>{t('or')}</Divider>
         <AutoGrid>{buttons}</AutoGrid>
+        <Divider>{t('or')}</Divider>
       </>
     );
   }
