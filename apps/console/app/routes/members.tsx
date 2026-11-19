@@ -621,6 +621,9 @@ export default function Members() {
  * opens nothing by itself, so a chat is as good as a message. With a mailer, the message went too.
  * The mockup draws none: it is a block of its « Check your inbox ».
  */
+/** The short guide of a client who leaves notes: `docs/leave-a-note.md` (FRU-642). */
+const LEAVE_A_NOTE_GUIDE = 'https://fruitback.com/leave-a-note.html';
+
 function Invited({ email, message }: { email: string; message: Message }) {
   useLocale();
   const [copied, setCopied] = useState<'no' | 'yes' | 'refused'>('no');
@@ -634,6 +637,12 @@ function Invited({ email, message }: { email: string; message: Message }) {
       </p>
       <p className="mt-[10px] text-hint text-muted">
         {t('They open it, sign in with {email}, and join. The link alone opens nothing.', { email })}
+      </p>
+      <p className="mt-[10px] text-hint text-muted">
+        {t('Their first note, in two minutes:')}{' '}
+        <LinkButton space="inline" href={LEAVE_A_NOTE_GUIDE} newTab>
+          {t('How to leave a note')}
+        </LinkButton>
       </p>
       <div className="mt-[14px]">
         <Button
