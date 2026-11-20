@@ -227,6 +227,28 @@ describe('localNotes (FRU-646)', () => {
     assert.equal(JSON.parse(storage.getItem('fruitback:notes') ?? '[]').length, 2);
   });
 
+  it('finds a note kept under another form of the address, and skips one with no address', async () => {
+    const storage = memoryStorage();
+    const note = noteFixture({ id: 'a', page: { url: PAGE, path: '/pricing' } });
+    storage.setItem(
+      'fruitback:notes',
+      JSON.stringify([
+        { id: 'a', note: { ...note, page: { ...note.page, url: 'https://PREVIEW.acme.test/pricing/#top' } } },
+        { id: 'b', note: { ...note, page: { path: '/' } } },
+        { id: 'c', note: { ...note, page: { url: 'not an address', path: '/' } } },
+      ]),
+    );
+
+    assert.deepEqual(
+      (await localNotes({ storage }).read?.({ url: PAGE, path: '/pricing' }))?.map((stored) => stored.id),
+      ['a'],
+    );
+  });
+
+  it('refuses a read of an address that is not one', async () => {
+    assert.equal((await call(localNotes({ storage: memoryStorage() }), '/feedback?url=nowhere')).status, 400);
+  });
+
   it('fails the write when the storage refuses it, so the composer keeps the text', async () => {
     assert.equal(await send(page(), localNotes({ storage: memoryStorage(true) })), 'retry');
   });

@@ -56,7 +56,8 @@ export function notesTransport(notes: FruitbackNotes): FruitbackTransport {
 async function readPage(notes: FruitbackNotes, address: string | null): Promise<TransportResponse> {
   if (address === null) return answer(400, { error: 'invalid-url' });
   if (notes.read === undefined) return answer(200, { issues: [] });
-  const page = canonicalizePageUrl(address);
+  const page = canonicalOrNothing(address);
+  if (page === undefined) return answer(400, { error: 'invalid-url' });
   let stored: unknown;
   try {
     stored = await notes.read({ url: page, path: new URL(page).pathname });
@@ -115,6 +116,16 @@ function issuesOf(stored: unknown, page: string): NoteIssue[] {
   return issues;
 }
 
+/** The canonical form of an address, or `undefined` for a value that is not one. */
+function canonicalOrNothing(address: unknown): string | undefined {
+  if (typeof address !== 'string') return undefined;
+  try {
+    return canonicalizePageUrl(address);
+  } catch {
+    return undefined;
+  }
+}
+
 function answer(status: number, body: unknown): TransportResponse {
   return { ok: status >= 200 && status < 300, status, body: JSON.stringify(body) };
 }
@@ -154,7 +165,8 @@ export function localNotes(options: LocalNotesOptions = {}): FruitbackNotes {
       return { id: note.id };
     },
     async read(page) {
-      return all().filter((each) => each?.note?.page?.url === page.url);
+      // The address as the read asks for it: a note written with another form of it is still found.
+      return all().filter((each) => canonicalOrNothing(each?.note?.page?.url) === page.url);
     },
   };
 }
