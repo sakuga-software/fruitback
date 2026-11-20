@@ -46,7 +46,8 @@ describe('the ESM build', () => {
     // accident and we are stuck with it until a major version.
     const module = (await import(join(dist, 'fruitback.mjs'))) as Record<string, unknown>;
 
-    assert.deepEqual(Object.keys(module).sort(), ['init']);
+    // `localNotes` since FRU-646: the notes of a widget with no worker, kept in the browser.
+    assert.deepEqual(Object.keys(module).sort(), ['init', 'localNotes']);
   });
 });
 
@@ -252,6 +253,11 @@ describe('a consumer installing this from npm', () => {
           'export const key: MessageKey = "settings.open";',
           'export const mountFrench = () => init({ endpoint: "https://w.test", clientId: "acme", locale: "fr", messages: { fr: french } });',
           'export const mountScoped = () => initScoped({ endpoint: "https://w.test", clientId: "acme" });',
+          // FRU-646: a widget with no worker, its notes kept by the host or in the browser.
+          'import { localNotes, type FruitbackNotes, type StoredNote } from "fruitback";',
+          'const kept: StoredNote[] = [];',
+          'const mine: FruitbackNotes = { write: async (note) => (kept.push({ id: note.id, note }), { id: note.id }), read: async () => kept };',
+          'export const offline = () => [init({ notes: localNotes() }), init({ notes: mine, clientId: "acme" })];',
           // The two wrappers (FRU-126, FRU-127). Each forwards the options of `init`, so a consumer must
           // be able to name them through the wrapper alone.
           'import { FRUITBACK_TAG, defineFruitbackElement, type ElementOptions, type FruitbackElement } from "@fruitback/element";',

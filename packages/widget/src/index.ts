@@ -11,6 +11,7 @@ export * from './engine.ts';
 export * from './export.ts';
 export * from './host.ts';
 export * from './messages.ts';
+export * from './notes.ts';
 export * from './orphans.ts';
 export * from './overlay.ts';
 export * from './page.ts';

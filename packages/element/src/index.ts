@@ -14,8 +14,14 @@ export const FRUITBACK_TAG = 'fruitback-widget';
 /** The attributes the element reads. Every other option of `init` goes through `options`. */
 export const FRUITBACK_ATTRIBUTES = ['endpoint', 'client-id', 'label', 'locale', 'include-env'] as const;
 
-/** What `init` cannot take from an attribute: a function, or an object. */
-export type ElementOptions = Omit<FruitbackOptions, 'endpoint' | 'clientId' | 'label' | 'locale' | 'includeEnv'>;
+/**
+ * What `init` cannot take from an attribute: a function, or an object. Not `notes` (FRU-646): the
+ * element sends to the worker of its `endpoint`.
+ */
+export type ElementOptions = Omit<
+  FruitbackOptions,
+  'endpoint' | 'clientId' | 'label' | 'locale' | 'includeEnv' | 'notes'
+>;
 
 export type FruitbackElement = HTMLElement & {
   /** The options an attribute cannot carry. Setting it mounts the widget again. */

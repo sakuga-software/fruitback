@@ -38,3 +38,5 @@ export type { DockPosition } from './dock-position.ts';
 export type { CaptureArea, PickedFile } from './attachments.ts';
 // FRU-470: what `siteNotes` is asked and answers.
 export type { SiteNote, SiteNotes, SiteQuery, SiteRead, SiteStage } from './site-notes.ts';
+// FRU-646: `FruitbackOptions.notes` names them, and `localNotes` is the one a page can take as it is.
+export { localNotes, type FruitbackNotes, type LocalNotesOptions, type StoredNote } from './notes.ts';
