@@ -220,6 +220,9 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Une autre copie de Fruitback tourne sur cette page, ou la version précédente de celle-ci. Rechargez la page. Si cela reste, retirez l’autre copie dans {place}.',
   'Another copy of Fruitback ({version}) runs on this page. Reload the page. If this stays, remove that copy in {place}.':
     'Une autre copie de Fruitback ({version}) tourne sur cette page. Rechargez la page. Si cela reste, retirez cette copie dans {place}.',
+  // FRU-648: Opera keeps extensions off search results.
+  'Fruitback cannot run on this page. Opera keeps extensions off search results: in opera://extensions, open the details of Fruitback, turn on « Allow access to search page results », then reload this page.':
+    'Fruitback ne peut pas tourner sur cette page. Opera bloque les extensions sur les résultats de recherche : dans opera://extensions, ouvrez les détails de Fruitback, cochez « Autoriser l’accès aux résultats de recherche », puis rechargez cette page.',
   // A site of no workspace (FRU-255).
   Workspace: 'Espace de travail',
   'Your role in this workspace does not let you add a site.':

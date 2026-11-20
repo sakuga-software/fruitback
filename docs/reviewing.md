@@ -390,6 +390,17 @@ If the popup reads `Another copy of Fruitback runs on this page`, reload the pag
 was open while the extension updated keeps the script of the earlier version. If the line stays
 after the reload, remove the other copy from the extensions page of your browser.
 
+### Opera, on a page of search results
+
+Opera keeps every extension off the pages of search results, Google included. The site is on, and
+nothing of Fruitback runs there. The popup reads
+`Fruitback cannot run on this page. Opera keeps extensions off search results: in opera://extensions, open the details of Fruitback, turn on « Allow access to search page results », then reload this page.`
+
+1. Open `opera://extensions`.
+2. Press « Details » under Fruitback.
+3. Turn on « Allow access to search page results ».
+4. Reload the page.
+
 ## Who can add a site to a workspace
 
 **An owner or an admin of the workspace.** A member can turn on a site that is already in their

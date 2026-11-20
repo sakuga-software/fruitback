@@ -9,7 +9,7 @@ import { msg, t } from '../../src/i18n.ts';
 import { holdsSiteAccess } from '../../src/site-grant.ts';
 import { wantsSession as siteWantsSession } from '../../src/popup-state.ts';
 import { type TabCommand } from '../../src/protocol.ts';
-import { browserFamily, extensionsPlace } from '../../src/browser-family.ts';
+import { browserFamily, extensionsPlace, unreachedPageLine } from '../../src/browser-family.ts';
 import { type TabCommandAnswer, parseAnswer, tabCommand } from '../../src/tab-command.ts';
 import { make } from '../../src/kit.ts';
 
@@ -52,6 +52,29 @@ export async function askTab(tab: PopupTab | undefined, command: TabCommand): Pr
   return parseAnswer(await browser.tabs.sendMessage(tab.id, tabCommand(command)).catch(() => undefined));
 }
 
+/** How long a tab gets to start its scripts before a second ask: the popup can open as it loads. */
+const SECOND_ASK_MS = 1_000;
+
+/**
+ * The counts of the tab, or `unreached` when no script of the extension listens there (FRU-648).
+ * `tabs.sendMessage` rejects only then: the bridge answers each command, after a timeout too.
+ */
+async function reachTab(tab: PopupTab | undefined): Promise<TabCommandAnswer | 'unreached'> {
+  if (tab?.id === undefined) return { done: false };
+  const ask = (id: number): Promise<unknown> => browser.tabs.sendMessage(id, tabCommand('counts'));
+  const id = tab.id;
+  try {
+    return parseAnswer(await ask(id));
+  } catch {
+    await new Promise((resolve) => setTimeout(resolve, SECOND_ASK_MS));
+  }
+  try {
+    return parseAnswer(await ask(id));
+  } catch {
+    return 'unreached';
+  }
+}
+
 /**
  * FRU-397: another copy of Fruitback runs on this page, an old one or an unpacked one. Its rules and
  * its widget are its own, and nothing in this copy can stop them: removing it is the one thing that
@@ -60,7 +83,14 @@ export async function askTab(tab: PopupTab | undefined, command: TabCommand): Pr
 export function otherCopyLine(tab: PopupTab | undefined, on: boolean): HTMLElement {
   const line = make(document, 'p', 'problem');
   if (!on) return line;
-  void askTab(tab, 'counts').then(({ otherCopy }) => {
+  void reachTab(tab).then((answer) => {
+    if (answer === 'unreached') {
+      const unreached = unreachedPageLine(navigator.userAgent);
+      if (unreached !== undefined) line.textContent = t(unreached);
+
+      return;
+    }
+    const { otherCopy } = answer;
     if (otherCopy === undefined) return;
     // An address stays as it is (no catalog has it); Safari's words are translated (FRU-380).
     const place = t(extensionsPlace(browserFamily(import.meta.env)));
