@@ -23,7 +23,13 @@ import { AUTHENTICATED_WORKER_ORIGIN } from './worker-sessions.ts';
 /** The only `chrome.*` calls the specs make, from the service worker. */
 declare const chrome: {
   scripting: { getRegisteredContentScripts(): Promise<{ matches?: string[] }[]> };
-  storage: Record<'local' | 'session', { get(keys: null): Promise<Record<string, unknown>> }>;
+  storage: Record<
+    'local' | 'session',
+    {
+      get(keys: null | string): Promise<Record<string, unknown>>;
+      set(items: Record<string, unknown>): Promise<void>;
+    }
+  >;
   tabs: { create(properties: { url: string; active: boolean }): Promise<unknown> };
 };
 
@@ -211,18 +217,8 @@ export async function addRule(
   extension: LoadedExtension,
   rule: { endpoint: string } & ({ mode: 'private'; clientId: string } | { mode: 'team' }),
 ): Promise<void> {
-  const options = await extension.context.newPage();
-  await options.goto(`chrome-extension://${extension.id}/options.html`);
-  // The page of the extension (FRU-301): « Add a site » opens the form in the panel.
-  await options.getByRole('button', { name: 'Add a site' }).click();
-  await options.getByLabel('Sites', { exact: true }).fill(PLAYGROUND_ORIGIN);
-  // The name of a select in a label includes the chosen option, so it only starts with the label.
-  await options.getByLabel(/^Mode/).selectOption(rule.mode);
-  await options.getByLabel('Server address', { exact: true }).fill(rule.endpoint);
-  if (rule.mode === 'private') await options.getByLabel('Client id', { exact: true }).fill(rule.clientId);
-  await options.getByRole('button', { name: 'Add rule' }).click();
-  await expect(options.locator(`tr.rule-row[data-pattern="${PLAYGROUND_ORIGIN}"]`)).toContainText('Granted');
-  await options.close();
+  if (rule.mode === 'private' && rule.endpoint === AUTHENTICATED_WORKER_ORIGIN) await storeRule(extension, rule);
+  else await addRuleOnThePage(extension, rule);
 
   // The background registers the two scripts of the origin after the storage change (FRU-74: a
   // pair for each origin). A page loaded before that gets neither.
@@ -236,6 +232,43 @@ export async function addRule(
       ),
     )
     .toBe(2);
+}
+
+/**
+ * A private-mode rule on the second worker, written to storage as a version before FRU-643 stored it.
+ *
+ * The suite builds the extension with that worker as its Cloud, and the page of the extension refuses
+ * a new private-mode rule on the Cloud (`cloud-private-mode.spec.ts`). A rule stored before still
+ * runs, and the specs of private mode on a worker that wants a session read that rule.
+ */
+async function storeRule(extension: LoadedExtension, rule: { endpoint: string; clientId: string }): Promise<void> {
+  await extension.worker.evaluate(
+    async ([origin, endpoint, clientId]: readonly [string, string, string]) => {
+      const { sites } = await chrome.storage.local.get('sites');
+      await chrome.storage.local.set({
+        sites: { ...(sites as object | undefined), [origin]: { mode: 'private', endpoint, clientId, enabled: true } },
+      });
+    },
+    [PLAYGROUND_ORIGIN, rule.endpoint, rule.clientId] as const,
+  );
+}
+
+async function addRuleOnThePage(
+  extension: LoadedExtension,
+  rule: { endpoint: string } & ({ mode: 'private'; clientId: string } | { mode: 'team' }),
+): Promise<void> {
+  const options = await extension.context.newPage();
+  await options.goto(`chrome-extension://${extension.id}/options.html`);
+  // The page of the extension (FRU-301): « Add a site » opens the form in the panel.
+  await options.getByRole('button', { name: 'Add a site' }).click();
+  await options.getByLabel('Sites', { exact: true }).fill(PLAYGROUND_ORIGIN);
+  // The name of a select in a label includes the chosen option, so it only starts with the label.
+  await options.getByLabel(/^Mode/).selectOption(rule.mode);
+  await options.getByLabel('Server address', { exact: true }).fill(rule.endpoint);
+  if (rule.mode === 'private') await options.getByLabel('Client id', { exact: true }).fill(rule.clientId);
+  await options.getByRole('button', { name: 'Add rule' }).click();
+  await expect(options.locator(`tr.rule-row[data-pattern="${PLAYGROUND_ORIGIN}"]`)).toContainText('Granted');
+  await options.close();
 }
 
 /**

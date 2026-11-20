@@ -90,6 +90,7 @@ const editor = createEditor({
   current: () => current,
   activate: (pattern) => injectIntoOpenTabs(scripting, pattern),
   stored: readAll,
+  cloud: cloudEndpoint(import.meta.env.WXT_FRUITBACK_CLOUD),
 });
 const beginRender = latestOnly();
 

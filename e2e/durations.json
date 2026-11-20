@@ -7,6 +7,7 @@
   "capture-everywhere.spec.ts": 3.9,
   "capture.spec.ts": 13.6,
   "click-that-closes-popup.spec.ts": 2.7,
+  "cloud-private-mode.spec.ts": 4.2,
   "composer-autosave.spec.ts": 23,
   "composer.spec.ts": 31.2,
   "config.spec.ts": 10.4,

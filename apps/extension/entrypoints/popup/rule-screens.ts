@@ -17,7 +17,8 @@ import { type Account, problem, visibilityButton } from '../../src/popup-view.ts
 import { hostOf, make } from '../../src/kit.ts';
 
 import { activateOpenTabs, turnOn, visibility } from './site-actions.ts';
-import { actions, failed, field, openSettings, refused, render } from './context.ts';
+import { CLOUD, actions, failed, field, openSettings, refused, render } from './context.ts';
+import { signIn } from './sign-in.ts';
 
 /** The screens of a rule typed in the popup (FRU-41, FRU-43): its form, its switch, its access (FRU-560). */
 
@@ -138,10 +139,12 @@ export function form(origin: string, found?: ResolvedSite, draft?: SiteConfig): 
     // Said out loud rather than refused in silence. The bridge applies the same rule before it
     // mounts, so an endpoint that fails here would have been stored, shown as **On**, and then
     // ignored by a page that reported nothing — which reads as a broken extension. Raised in review.
-    const wrong = complaint(values, pattern);
+    const wrong = complaint(values, pattern, { cloud: CLOUD, before: site });
     // FRU-395: a pairing link where the worker goes. Its pairing is on the page of the extension.
     const link = pairingLinkIn(values.endpoint);
     showProblem(problem, wrong, {
+      // FRU-643: private mode on the Cloud is refused, and the sign-in is what makes the site run.
+      ...(CLOUD === undefined ? {} : { 'sign-in': () => signIn(origin, false) }),
       ...(link === undefined
         ? {}
         : {

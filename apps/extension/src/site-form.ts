@@ -42,6 +42,13 @@ export const PAIRING_LINK_PROBLEM =
 export const PAIR_PATH_PROBLEM =
   'An address that ends in /pair, or that carries a #, is a connection link, not a server. Give the address before /pair.';
 
+/**
+ * FRU-643: a private-mode rule on Fruitback Cloud. Private mode carries no session, and a site of the
+ * Cloud reads and takes notes with a session: such a rule shows no pin, and its notes are refused.
+ */
+export const CLOUD_PRIVATE_PROBLEM =
+  'Fruitback Cloud shows notes to a signed-in reviewer only, so private mode does not run on it. Sign in to Fruitback, then turn the site on from the popup.';
+
 /** Whether this address is a pairing link, or the page of one, rather than a worker. */
 export function isPairingAddress(value: string): boolean {
   try {
@@ -64,10 +71,16 @@ export function pairingLinkIn(value: string): PairLink | undefined {
 }
 
 /**
+ * What the check knows besides the fields. `cloud`: the Fruitback of this build. `before`: the rule
+ * stored under the pattern now, when the fields change one.
+ */
+export type ComplaintContext = { cloud?: string | undefined; before?: SiteConfig | undefined };
+
+/**
  * What is wrong with these fields, for the rule stored under `pattern`, in the reporter's words, or
  * nothing.
  */
-export function complaint(values: SiteFields, pattern: string): string {
+export function complaint(values: SiteFields, pattern: string, context: ComplaintContext = {}): string {
   if (lendsSession(pattern, values)) return WILDCARD_TEAM_PROBLEM;
   if (values.endpoint === '') return 'The server address is required.';
   if (!isWorkerEndpoint(values.endpoint)) return 'The endpoint must be a full http:// or https:// URL.';
@@ -77,6 +90,7 @@ export function complaint(values: SiteFields, pattern: string): string {
   // Trimmed, because an id made of spaces is an absent id. `importSites` passes the value of a file
   // here as it is, and a worker with several clients answers `client-required` for it (FRU-73).
   if (values.mode === 'private' && values.clientId.trim() === '') return 'The client id is required.';
+  if (becomesCloudPrivate(values, context)) return CLOUD_PRIVATE_PROBLEM;
   // Team mode cannot work without a session, and a session may not be opened over plain http — so
   // this entry would be stored, shown as **On**, and refuse every call. Say it here instead.
   if (values.mode === 'team' && !isSecureWorkerEndpoint(values.endpoint)) {
@@ -84,6 +98,19 @@ export function complaint(values: SiteFields, pattern: string): string {
   }
 
   return '';
+}
+
+/**
+ * Whether these fields make a private-mode rule on the Fruitback of this build, from a rule that was
+ * not one. A rule stored before FRU-643 keeps its mode: a save that leaves its mode and its worker as
+ * they are is not refused.
+ */
+function becomesCloudPrivate(values: SiteFields, { cloud, before }: ComplaintContext): boolean {
+  if (values.mode !== 'private' || cloud === undefined) return false;
+  const endpoint = normalizeWorkerEndpoint(values.endpoint);
+  if (endpoint !== cloud) return false;
+
+  return before?.mode !== 'private' || before.endpoint !== endpoint;
 }
 
 /**

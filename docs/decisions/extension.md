@@ -23,6 +23,13 @@ it changes who is shown the feedback and never who may fetch it.
   because the E2E copy holds one and its fetch skips CORS. **A client keeps its own `read`** since
   FRU-95: a worker holding sessions can serve several clients, grouped in workspaces, so a
   private-mode client can stay `public` beside a team-mode one.
+- **No new private-mode rule on the Fruitback of the build** (FRU-643, decided by Mathieu on
+  2026-11-19). `complaint` refuses private mode on `WXT_FRUITBACK_CLOUD`, after the address is
+  normalised, in the popup and on the options page, and the popup offers « Sign in to Fruitback ».
+  The Cloud reads and takes notes with a session, and a private-mode widget carries none: on a site
+  read by its members, the default, it shows no pin and its notes are refused. A rule stored before
+  stays. A save that keeps its mode and its server is taken, and an import is a copy of a rule
+  that exists, so `site-transfer` passes no Cloud. A server of somebody else keeps private mode.
 - **The popup offers pairing in team mode only** (FRU-88). A session changes nothing in private mode,
   and a form that does nothing reads as the fix for a page with no pins. A session the extension
   already holds with that worker stays on the screen with its log out: a credential is never hidden.

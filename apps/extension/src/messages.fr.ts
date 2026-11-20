@@ -213,6 +213,9 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'An address that ends in /pair, or that carries a #, is a connection link, not a server. Give the address before /pair.':
     'Une adresse qui finit par /pair, ou qui porte un #, est un lien de connexion, pas un serveur. Donnez l’adresse avant /pair.',
   'Connect with this link': 'Se connecter avec ce lien',
+  'Sign in to Fruitback': 'Se connecter à Fruitback',
+  'Fruitback Cloud shows notes to a signed-in reviewer only, so private mode does not run on it. Sign in to Fruitback, then turn the site on from the popup.':
+    'Fruitback Cloud ne montre les notes qu’à un relecteur connecté : le mode privé n’y fonctionne pas. Connectez-vous à Fruitback, puis activez le site depuis la fenêtre de l’extension.',
   'The server of this rule does not answer. Check its address in the options.':
     'Le serveur de cette règle ne répond pas. Vérifiez son adresse dans les options.',
   // FRU-397: another copy of Fruitback on the page of the tab.
