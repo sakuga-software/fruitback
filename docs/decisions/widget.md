@@ -845,6 +845,28 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
   default, so the relay is dead. Unifying them belongs with the extension side, not here, where there
   is nothing yet to unify against.
 
+## Notes with no worker (FRU-646)
+
+### The rules, in short
+
+- **`notes` is one more transport, not a second widget.** `notes.ts` turns `{ write, read? }` into a
+  `FruitbackTransport` that answers `GET /feedback` and `POST /feedback` as the worker does, and
+  `404` to every other call. `embed.ts` does not know about it: the errors, the drafts, the queue of
+  sends and the re-reads stay the paths a worker uses.
+- **A function that is absent hides what it serves.** The read answers `{ issues }` and nothing
+  else, so the widget offers no reply, no place, no batch, no address to ask and no file. Without
+  `read`, the read answers no issue, and the list says « no note », not « could not be read ».
+- **The address of the calls is `https://notes.fruitback.invalid`.** No DNS resolves `.invalid`: a
+  call that took another way than the transport fails, and sends nothing. `notes.test.ts` forbids
+  `fetch`, and `offline-notes.spec.ts` asserts that no request leaves the page.
+- **What `read` gives is not trusted.** `localStorage` is open to every script of the page. Each
+  note goes through `parseNote`, and a note of another page is dropped.
+- **No client id, no `client`.** `noteClientSchema` refuses an empty id, so a note with no
+  `clientId` has no `client`, and `write` gets a note that `parseNote` reads.
+- **`init` refuses `notes` beside `endpoint` or `transport`, and a call with neither form.** The type keeps
+  `endpoint` and `clientId` optional rather than a union: a union broke `Partial<FruitbackOptions>`
+  and `Omit<…>`, which a consumer can write, so it was a major change in a minor version.
+
 ## The optional picture
 
 - **The widget does not bundle a rasteriser** (FRU-6). `captureScreenshot` is a seam the embedder

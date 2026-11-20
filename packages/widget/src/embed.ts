@@ -37,6 +37,7 @@ import {
 import type { FruitbackTheme } from './theme.ts';
 import type { FruitbackTransport, TransportResponse } from './transport.ts';
 import { callWorker, errorOf, noteWriteFailure } from './worker-client.ts';
+import { type FruitbackNotes, NOTES_ENDPOINT, notesTransport } from './notes.ts';
 import type { WithdrawAnswer, WithdrawFailure } from './thread-more.ts';
 import { type NotifyAsk, createNotifyAsk } from './notify-ask.ts';
 import {
@@ -107,10 +108,31 @@ import { captureViewport, linkedNote, withoutLinkedNote } from './page.ts';
  */
 
 export type FruitbackOptions = {
-  /** Where the worker answers, e.g. `https://feedback.acme.dev`. */
+  /**
+   * Where the worker answers, e.g. `https://feedback.acme.dev`. Required, with `clientId`, unless
+   * `notes` is given.
+   */
+  endpoint?: string;
+  /**
+   * Which client this site is, as the worker's map knows it. With `notes`, it is optional, and
+   * written in each note as `client.id` when given.
+   */
+  clientId?: string;
+  /**
+   * Where the notes go and where the pins come from, in place of a worker (FRU-646): `localNotes()`,
+   * or functions of the host. The widget then offers no reply, no place to choose, no address to ask
+   * and no file. `endpoint` and `transport` go with a worker, so `init` refuses them with `notes`.
+   */
+  notes?: FruitbackNotes;
+} & WidgetOptions;
+
+/** The options a mount reads: `init` gives an endpoint and a client id to a mount with `notes`. */
+export type MountOptions = Omit<FruitbackOptions, 'endpoint' | 'clientId' | 'notes'> & {
   endpoint: string;
-  /** Which client this site is, as the worker's map knows it. */
   clientId: string;
+};
+
+type WidgetOptions = {
   /** Shown on the floating button. Wins over `launch.label` in `messages`. */
   label?: string;
   /**
@@ -462,7 +484,30 @@ const REREAD_AFTER_MS = 15_000;
 /** How often a page whose notes could not be read is read again, while it fails (FRU-316). */
 const READ_RETRY_MS = 30_000;
 
-export function init(options: FruitbackOptions): Fruitback {
+/**
+ * The options of a mount. With `notes`, its transport answers the calls, at an address that no
+ * call can reach by another way. Exported for its tests, never from `public.ts`.
+ */
+export function mountOptions(given: FruitbackOptions): MountOptions {
+  const { notes, endpoint, clientId, ...rest } = given;
+  if (notes === undefined) {
+    if (endpoint === undefined || clientId === undefined) {
+      throw new Error('Fruitback.init: pass `endpoint` and `clientId` to send the notes to a worker, or `notes`.');
+    }
+
+    return { ...rest, endpoint, clientId };
+  }
+  if (endpoint !== undefined || given.transport !== undefined) {
+    throw new Error(
+      'Fruitback.init: `notes` takes the place of a worker. Pass `notes`, or `endpoint` and `clientId`, not both.',
+    );
+  }
+
+  return { ...rest, endpoint: NOTES_ENDPOINT, clientId: clientId ?? '', transport: notesTransport(notes) };
+}
+
+export function init(given: FruitbackOptions): Fruitback {
+  const options = mountOptions(given);
   const document = options.document ?? globalThis.document;
   // Named rather than left to fail. This is the published entry point, so the first thing anyone
   // does wrong with it is call it while server-rendering — and `Cannot read properties of undefined`
@@ -1573,7 +1618,7 @@ function createReader(
   destinations: OfferedDestinations,
   identity: ReaderIdentity,
   view: Window & typeof globalThis,
-  options: FruitbackOptions,
+  options: MountOptions,
   /** Called after a read that answered, once the reader identity is set. */
   onRead: () => void = () => undefined,
 ): () => Promise<ReadOutcome> {
@@ -1695,7 +1740,7 @@ export async function plant({
   /** The opaque id of the place a member chose, when it is not the first one (FRU-123). */
   destination?: string | undefined;
   config: WidgetConfig;
-  options: FruitbackOptions;
+  options: MountOptions;
   /** The id of the note about to be sent, so the caller finds its pin after the read (FRU-305). */
   onNote?: (id: string) => void;
   /** The ids in transit of the files of the note (FRU-332). */
@@ -1745,7 +1790,7 @@ function storageOf(view: Window): Storage | null {
  * the address, or when the note can take none any more.
  */
 function notifyOffer(
-  options: FruitbackOptions,
+  options: MountOptions,
   locale: string,
   noteId: string,
   token: string,
@@ -1807,14 +1852,15 @@ async function noteFor({
   place?: CapturedPlace | undefined;
   reporter: NoteReporter | undefined;
   config: WidgetConfig;
-  options: FruitbackOptions;
+  options: MountOptions;
 }): Promise<{ note: Note; missedPicture: boolean } | undefined> {
   if (target === null) return undefined;
   const picture = stillThere(target.element, place) ? await screenshotFor(target.element, config, options) : undefined;
   const note = captureNote({
     element: target.element,
     text,
-    client: { id: options.clientId },
+    // A widget with `notes` and no client id writes no `client`: an empty id is not a client.
+    ...(options.clientId === '' ? {} : { client: { id: options.clientId } }),
     source: target.source,
     reporter,
     includeEnv: options.includeEnv,
@@ -1830,7 +1876,7 @@ async function noteFor({
  * files of the note travel the same way, as `?attachments=` (FRU-332): their ids are no part of a note.
  */
 function feedbackUrl(
-  options: FruitbackOptions,
+  options: MountOptions,
   destination: string | undefined,
   attachments: readonly string[] = [],
 ): string {
@@ -1878,7 +1924,7 @@ export function attachOffer(
  * is its id in transit, which the note names, or why it did not go.
  */
 export async function uploadAttachment(
-  options: FruitbackOptions,
+  options: MountOptions,
   file: PickedFile,
   destination: string | undefined,
 ): Promise<{ ok: true; id: string } | { ok: false; refusal: AttachRefusal }> {
@@ -1906,7 +1952,7 @@ export async function uploadAttachment(
  * the one the reporter asked the widget to remember, and only for a reader the worker does not name.
  */
 async function sendReply(
-  options: FruitbackOptions,
+  options: MountOptions,
   view: Window & typeof globalThis,
   issue: NoteIssue,
   body: string,
@@ -1935,7 +1981,7 @@ async function sendReply(
  * does not change it.
  */
 async function sendEdit(
-  options: FruitbackOptions,
+  options: MountOptions,
   view: Window & typeof globalThis,
   issue: NoteIssue,
   text: string,
@@ -1984,7 +2030,7 @@ export function movedOf(response: TransportResponse | undefined): EditAnswer | '
  * not change it. `409 withdraw-in-progress` is `retry`: the first one is on its way.
  */
 async function sendWithdraw(
-  options: FruitbackOptions,
+  options: MountOptions,
   view: Window & typeof globalThis,
   issue: NoteIssue,
 ): Promise<WithdrawAnswer | WithdrawFailure> {
@@ -2021,7 +2067,7 @@ async function sendWithdraw(
  * that says neither is `kept`: the verdict went, and only a read says what the store made of it.
  */
 async function sendCheck(
-  options: FruitbackOptions,
+  options: MountOptions,
   view: Window & typeof globalThis,
   issue: NoteIssue,
   verdict: 'fixed' | 'wrong',
@@ -2166,7 +2212,7 @@ export async function sendDrafts({
 }: {
   drafts: readonly Draft[];
   offer: BatchOffer | undefined;
-  options: FruitbackOptions;
+  options: MountOptions;
   /** What to do about a place that is gone (FRU-640), told at each answer that failed. */
   onPlaceHelp?: (help: PlaceHelp | undefined) => void;
   /** Told after each request how many notes went, of how many (FRU-608). */
@@ -2363,7 +2409,7 @@ function stillThere(element: Element, place: CapturedPlace | undefined): boolean
 async function screenshotFor(
   element: Element,
   config: WidgetConfig,
-  options: FruitbackOptions,
+  options: MountOptions,
 ): Promise<NoteScreenshot | 'missed' | undefined> {
   if (!config.screenshot || options.captureScreenshot === undefined) return undefined;
 

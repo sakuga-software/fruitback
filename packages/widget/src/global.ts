@@ -1,5 +1,6 @@
 import { parseDockPosition } from './dock-position.ts';
 import { type Fruitback, type FruitbackOptions, init } from './embed.ts';
+import { localNotes } from './notes.ts';
 
 /**
  * The `<script>` tag entry point (FRU-16).
@@ -23,7 +24,8 @@ import { type Fruitback, type FruitbackOptions, init } from './embed.ts';
  * `Fruitback.init(...)` is the caller's to make — which is what a site with its own bootstrap wants.
  */
 
-export { init };
+// `localNotes` too (FRU-646): a page with no build step reaches it as `Fruitback.localNotes()`.
+export { init, localNotes };
 export type { Fruitback, FruitbackOptions };
 
 /** Read where the tag is evaluated, not later: `currentScript` is null once anything awaits. */

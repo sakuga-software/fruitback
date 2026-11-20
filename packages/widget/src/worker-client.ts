@@ -1,4 +1,4 @@
-import type { FruitbackOptions } from './embed.ts';
+import type { MountOptions } from './embed.ts';
 import { type FruitbackTransport, type TransportRequest, type TransportResponse, fetchTransport } from './transport.ts';
 
 /**
@@ -7,7 +7,7 @@ import { type FruitbackTransport, type TransportRequest, type TransportResponse,
  */
 
 /** What a call needs of the options of `init`. */
-export type WorkerOptions = Pick<FruitbackOptions, 'endpoint' | 'clientId' | 'identityToken' | 'transport'>;
+export type WorkerOptions = Pick<MountOptions, 'endpoint' | 'clientId' | 'identityToken' | 'transport'>;
 
 /**
  * The transport of this mount: the host's, or `fetch` from this page.

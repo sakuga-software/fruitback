@@ -259,6 +259,64 @@ the five other things the relay checks first.
 > reads, the same pins are readable by anyone who can build the URL, and all it buys is a page your
 > users do not see the widget on.
 
+### No worker: the notes go where you say
+
+The widget can run with no worker. Give `init` a `notes` option in place of `endpoint` and
+`clientId`: the widget hands each note to `write`, and asks `read` for the notes of a page to draw
+their pins.
+
+```ts
+import { init, localNotes } from 'fruitback';
+
+init({ notes: localNotes() });
+```
+
+`localNotes()` keeps the notes in `localStorage`, in this browser only, under `fruitback:notes`. It
+is for a demo, a test, or a page with no server. On a page with no build step, the script tag gives it
+as `Fruitback.localNotes()`.
+
+To send the notes to a route of your own, write the two functions:
+
+```ts
+import { init, type FruitbackNotes } from 'fruitback';
+
+function routeNotes(url: string): FruitbackNotes {
+  return {
+    async write(note) {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(note),
+      });
+      if (!response.ok) throw new Error(`${url} answered ${response.status}`);
+
+      return { id: note.id };
+    },
+    async read(page) {
+      const response = await fetch(`${url}?page=${encodeURIComponent(page.url)}`);
+
+      return response.ok ? response.json() : [];
+    },
+  };
+}
+
+init({ notes: routeNotes('/api/feedback') });
+```
+
+- `write(note)` gets the note as `@fruitback/shared` describes it, the shape `parseNote` reads. It
+  answers `{ id }`. A rejection, or an answer with no `id`, is a send that failed: the composer keeps
+  the text and says so. The same note can come twice after a failed send, with the same `note.id`:
+  keep it once.
+- `read(page)` is optional. It answers the notes of `page.url`, each as `{ id, note, stage? }`. A note
+  with no `stage` is « New ». Without `read`, a note goes and no pin comes back.
+- With `notes`, the widget offers no reply, no place to choose, no address to ask and no file. It
+  sends no request of its own. `endpoint` and `transport` go with a worker, and `init` refuses them
+  beside `notes`.
+- What `read` answers is checked: a note that `parseNote` refuses, or a note of another page, is
+  dropped.
+- With `@fruitback/react`, create `notes` once, outside the component or in a `useMemo`. The widget
+  keeps the `notes` of its first mount. `@fruitback/element` sends to a worker only.
+
 ---
 
 ## Next steps
