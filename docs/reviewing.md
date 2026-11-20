@@ -394,7 +394,7 @@ after the reload, remove the other copy from the extensions page of your browser
 
 Opera keeps every extension off the pages of search results, Google included. The site is on, and
 nothing of Fruitback runs there. The popup reads
-`Fruitback cannot run on this page. Opera keeps extensions off search results: in opera://extensions, open the details of Fruitback, turn on « Allow access to search page results », then reload this page.`
+`Fruitback cannot run on this page. Reload it. If this is a page of search results, Opera keeps extensions off it: in opera://extensions, open the details of Fruitback, turn on « Allow access to search page results », then reload the page.`
 
 1. Open `opera://extensions`.
 2. Press « Details » under Fruitback.

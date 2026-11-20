@@ -67,12 +67,13 @@ export function opensChromiumShortcuts(family: BrowserFamily): boolean {
  * user agent tells it apart.
  */
 export const OPERA_SEARCH_PAGES = msg(
-  'Fruitback cannot run on this page. Opera keeps extensions off search results: in opera://extensions, open the details of Fruitback, turn on « Allow access to search page results », then reload this page.',
+  'Fruitback cannot run on this page. Reload it. If this is a page of search results, Opera keeps extensions off it: in opera://extensions, open the details of Fruitback, turn on « Allow access to search page results », then reload the page.',
 );
 
 /**
  * What the popup says when a site is on and nothing of the extension answers in the tab. Only Opera
- * has a cause the popup can name: another browser gets no line.
+ * has a cause the popup can name: another browser gets no line. The cause is not sure on Opera either
+ * (a tab can miss the scripts for another reason), so the line asks for a reload first.
  */
 export function unreachedPageLine(userAgent: string): string | undefined {
   return /\bOPR\//.test(userAgent) ? OPERA_SEARCH_PAGES : undefined;
