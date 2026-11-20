@@ -12,6 +12,8 @@ import { AUTHENTICATED_WORKER_ORIGIN } from './worker-sessions.ts';
  * extension off the tab as Opera does: it unregisters them, then reloads the page.
  */
 
+declare const chrome: { scripting: { unregisterContentScripts(): Promise<void> } };
+
 const OPERA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 OPR/116.0.0.0';
 const LINE = /Opera keeps extensions off search results/;
