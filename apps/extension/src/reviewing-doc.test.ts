@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { GUIDE, GUIDE_ANCHORS } from './guide.ts';
+import { OPERA_SEARCH_PAGES } from './browser-family.ts';
 import { NOTES_NEED_SESSION, READ_NEEDS_SESSION, WORKER_NOT_FOUND } from './read-probe.ts';
 import { PAIRING_NEEDS_HTTPS, PAIRING_PROBLEM, PROBLEMS, REMEDY_LABEL } from './remedy.ts';
 import { popupSource } from './popup-source.fixture.ts';
@@ -199,6 +200,9 @@ describe('the guide quotes the popup this extension renders', () => {
         assert.ok(popup.includes(quote), `the popup no longer draws: ${quote}`);
       }
       // Drawn from their modules, which the popup imports.
+      // FRU-648: the guide quotes the line of Opera as the popup draws it, and names the setting.
+      assert.ok(troubleshooting.includes(OPERA_SEARCH_PAGES), 'the section does not quote the line of Opera');
+      assert.ok(popup.includes('unreachedPageLine('), 'the popup no longer says why Opera keeps it off a page');
       assert.ok(troubleshooting.includes(WORKER_NOT_FOUND), 'the section does not quote the worker that is not there');
       assert.ok(popup.includes('WORKER_NOT_FOUND'), 'the popup no longer says that the worker of a rule is not there');
       assert.ok(

@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
+  OPERA_SEARCH_PAGES,
   SAFARI_EXTENSIONS,
   SAFARI_MIN_VERSION,
   browserFamily,
   extensionsPlace,
   opensChromiumShortcuts,
   safariManifest,
+  unreachedPageLine,
 } from './browser-family.ts';
 import { openPanelForTab } from './panel-request.ts';
 import { type PanelApis, openPanelOrPage } from './side-panel.ts';
@@ -72,5 +74,23 @@ describe('Safari, which has no side panel (FRU-380)', () => {
     assert.equal(await openPanelForTab(safari, 7, gate), false);
     // The next click may try again at once.
     assert.equal(forgotten, 7);
+  });
+});
+
+describe('a site that is on, in a tab where nothing of the extension answers (FRU-648)', () => {
+  const OPERA =
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 OPR/116.0.0.0';
+  const CHROME =
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+  const EDGE = `${CHROME} Edg/131.0.0.0`;
+
+  it('names the setting of Opera on Opera', () => {
+    assert.equal(unreachedPageLine(OPERA), OPERA_SEARCH_PAGES);
+  });
+
+  it('says nothing on another browser, because no cause was measured there', () => {
+    for (const userAgent of [CHROME, EDGE, 'Mozilla/5.0 (Macintosh) Gecko/20100101 Firefox/133.0', '']) {
+      assert.equal(unreachedPageLine(userAgent), undefined, userAgent);
+    }
   });
 });

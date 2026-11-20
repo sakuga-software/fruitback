@@ -16,6 +16,9 @@ Open the site. Look for « Leave a note » in a corner of the page.
   or to [Firefox](https://addons.mozilla.org/en-US/firefox/addon/fruitback/). Sign in in the tab that
   opens, with the email the invitation was sent to. Then open the site, click the Fruitback icon in
   the toolbar, and press « Turn on ». The button appears.
+- On Opera, a page of search results, Google included, shows no button until you allow it. Open
+  `opera://extensions`, press « Details » under Fruitback, turn on « Allow access to search page
+  results », then reload the page.
 
 ## 2. Point, write, send
 

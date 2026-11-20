@@ -60,3 +60,21 @@ export const SAFARI_EXTENSIONS = msg('Safari Settings, Extensions');
 export function opensChromiumShortcuts(family: BrowserFamily): boolean {
   return family === 'chromium';
 }
+
+/**
+ * Opera keeps every extension off the pages of search results, Google included, until the person
+ * allows it in the details of the extension (FRU-648). Opera runs the Chromium build, so only its
+ * user agent tells it apart.
+ */
+export const OPERA_SEARCH_PAGES = msg(
+  'Fruitback cannot run on this page. Reload it. If this is a page of search results, Opera keeps extensions off it: in opera://extensions, open the details of Fruitback, turn on « Allow access to search page results », then reload the page.',
+);
+
+/**
+ * What the popup says when a site is on and nothing of the extension answers in the tab. Only Opera
+ * has a cause the popup can name: another browser gets no line. The cause is not sure on Opera either
+ * (a tab can miss the scripts for another reason), so the line asks for a reload first.
+ */
+export function unreachedPageLine(userAgent: string): string | undefined {
+  return /\bOPR\//.test(userAgent) ? OPERA_SEARCH_PAGES : undefined;
+}
