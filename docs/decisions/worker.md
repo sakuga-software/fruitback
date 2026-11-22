@@ -4927,8 +4927,10 @@ agents write them at once, so each one lives in files of its own, and no list is
 - **With `off`, a site with no destination gets the own store read-only** (`readOnly` in
   `connectors.ts`): its notes of before stay readable, and a new note, a status, an edit, a reply or
   a withdrawal is refused. A new note answers `502 no-destination`, so the widget keeps it.
-- **A connector that only receives still gets the own store whole.** An address, Slack or a routine
-  keeps its notes there: they are a delivery, not a task.
+- **A connector that only receives still gets the own store whole**, but no status. An address,
+  Slack or a routine keeps its notes there: they are a delivery, not a task. A status is a task:
+  `statusesFor` answers `false` and `setStatus` refuses, for every client, so the routes of the
+  extension and of MCP refuse it as the console does.
 - **The console reads it twice**: `/console/me` says `tasks`, and the list of the notes answers
   `canSetStatus: false`, which hides the select and the drag. The status route answers
   `403 tasks-off`. `/health` says `"tasks": "off"`, and nothing when it is `on`.

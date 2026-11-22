@@ -439,6 +439,7 @@ export function createConnectorStores(
  * With `tasks: 'off'` (FRU-651), a client with no destination gets the own store read-only: its
  * notes of before stay readable, and a new note, a status, an edit or a reply is refused. A
  * connector that only receives still keeps its notes in the own store: `connectors` gets `base`.
+ * No status changes for any client: a status is a task.
  */
 export function createRoutedStore(
   base: NoteStore,
@@ -473,7 +474,8 @@ export function createRoutedStore(
     repliesFor: async (client) => takesReplies(await pick(client), client),
     checksFor: async (client) => takesChecks(await pick(client), client),
     // FRU-367: only the worker's own store sets the status of a note; a tracker keeps its own.
-    statusesFor: async (client) => takesStatuses(await pick(client), client),
+    // FRU-651: a status is a task: none changes here when the worker keeps no task, receivers included.
+    statusesFor: async (client) => options.tasks !== 'off' && takesStatuses(await pick(client), client),
     // FRU-475, FRU-605: the worker's own store, an address (with `note.edited`) and Linear (a reply).
     editsFor: async (client, policy) => takesEdits(await pick(client), client, policy),
     // FRU-605: the worker's own store, an address (with `note.withdrawn`) and Linear (canceled).
@@ -497,6 +499,7 @@ export function createRoutedStore(
       return store.check(target, check, client, policy);
     },
     async setStatus(target, status, client) {
+      if (options.tasks === 'off') throw new StoreError('This server keeps no task: no status changes here');
       const store = await pick(client);
       if (store.setStatus === undefined) throw new StoreError('The store of this site takes no status');
 

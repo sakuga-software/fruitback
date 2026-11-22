@@ -166,9 +166,16 @@ describe('the store of a site with no destination, on a worker that keeps no tas
     assert.equal(await takesWithdrawals(routed, plain), false);
   });
 
-  it('hands a connector that only receives the own store whole, which keeps its notes', async () => {
+  it('hands a connector that only receives the own store whole, which keeps its notes, with no status', async () => {
     assert.deepEqual(await routed.create(noteFixture(), hooked, policy), { id: 'n', identifier: 'FB-1' });
     assert.equal(received.at(-1), own);
-    assert.equal(await takesStatuses(routed, hooked), true);
+    // A status is a task: the extension and MCP routes ask `statusesFor`, and the write is refused too.
+    assert.equal(await takesStatuses(routed, hooked), false);
+    await assert.rejects(
+      routed.setStatus?.({ issue: 'n', clientId: 's' }, { key: null, stage: 'done' }, hooked) as Promise<unknown>,
+    );
+    // The control: on, the same receiver takes a status.
+    const on = createRoutedStore(own, async (_c, _w, base) => base, { tasks: 'on' });
+    assert.equal(await takesStatuses(on, hooked), true);
   });
 });
