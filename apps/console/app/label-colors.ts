@@ -7,7 +7,7 @@ export const LABEL_COLORS = {
   red: '#dc2626',
   orange: '#ea580c',
   yellow: '#ca8a04',
-  green: '#16a34a',
+  emerald: '#16a34a',
   teal: '#0891b2',
   blue: '#2563eb',
   purple: '#7c3aed',

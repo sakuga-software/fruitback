@@ -34,7 +34,7 @@ function colourName(color: LabelColor): string {
       return t('Orange');
     case 'yellow':
       return t('Yellow');
-    case 'green':
+    case 'emerald':
       return t('Green');
     case 'teal':
       return t('Teal');
