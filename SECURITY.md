@@ -2115,8 +2115,11 @@ seen » is shown to owners and admins only.
   test:`answers 404 to a guest of another site, and writes nothing`.
 - The assignee is a member of the workspace, and each label a label of the workspace: another one
   is `409`, and nothing is written. test:`refuses an assignee who is not a member, and a label of another workspace`.
-- The labels of a workspace are read by whoever reads its notes, and written by a role with
-  `manage-sites` only. test:`keeps label names unique in a workspace, and lets only a role that manages the sites write them`.
+- The labels of a workspace are read by whoever reads its notes, a guest of one site included, as
+  the statuses of a site are: a label is a word of the team, no secret, and a guest who changes
+  their own task chooses among them. They are written by a role with `manage-sites` only. test:`keeps label names unique in a workspace, and lets only a role that manages the sites write them`.
+- A suspended workspace writes none of them: the routes are writes of the console, behind its one
+  guard. test:`writes nothing in a suspended workspace, and still reads the labels`.
 - On a worker that keeps no task (`FRUITBACK_TASKS=off`), every one of these writes is
   `403 tasks-off`. test:`changes nothing on a worker that keeps no task, and still reads the labels`.
 

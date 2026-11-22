@@ -4,6 +4,7 @@ import { noteFixture } from '@fruitback/shared/note.fixture';
 import { noteIdOf } from './console-notes.ts';
 import { type World, callOn, memberOf, shareWith, signInTo, workspaceIn, worlds } from './console-world.fixture.ts';
 import { createPostgresNoteStore } from './notes-postgres.ts';
+import { rowsOf } from './postgres.fixture.ts';
 import { createPairing, redeemPairing } from './session.ts';
 import { isDay, readLabel, readTaskChange } from './task-fields.ts';
 
@@ -99,6 +100,23 @@ describe('the fields of a task (FRU-652)', () => {
     assert.equal(after.priority, undefined);
     assert.deepEqual(after.labels, []);
     assert.equal(after.dueOn, '2026-12-01');
+    assert.equal(after.assignee?.id, alice.id);
+    assert.equal((await call('POST', `/notes/${note}/task`, bob.token, { assignee: null })).status, 204);
+    assert.equal((await taskOf()).assignee, undefined);
+  });
+
+  it('writes nothing in a suspended workspace, and still reads the labels', async () => {
+    const { world, alice, workspace, note, call, taskOf } = await acme();
+    await rowsOf(world.database, `INSERT INTO workspace_suspensions (workspace_id, since) VALUES ('${workspace}', 1)`);
+
+    for (const [path, body] of [
+      [`/notes/${note}/task`, { priority: 'high' }],
+      ['/labels', { name: 'Bug', color: '#dc2626' }],
+    ] as const) {
+      assert.equal((await call('POST', path, alice.token, body)).body.error, 'workspace-suspended', path);
+    }
+    assert.equal((await taskOf()).priority, undefined);
+    assert.equal((await call('GET', '/labels', alice.token)).status, 200);
   });
 
   it('lets a role that manages the sites change the task of somebody else, and refuses another member', async () => {
