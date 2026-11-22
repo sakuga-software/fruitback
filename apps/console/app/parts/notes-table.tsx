@@ -11,6 +11,7 @@ import { NoteIcon } from '../note-icons';
 import { type StatusChoice } from '../note-status';
 import { type IndexedNote, type NotesAnswer, groupsOf } from './notes-model';
 import { Author, NoteStatus, Place, excerptOf } from './note-parts';
+import { TaskMarks } from './task-marks';
 
 export function NoteRow({
   note,
@@ -74,7 +75,10 @@ export function NoteRow({
               bare
             />
           </span>
-          <span className="line-clamp-2 [overflow-wrap:anywhere]">{excerptOf(note.excerpt)}</span>
+          <span className="flex min-w-0 flex-col gap-[4px]">
+            <span className="line-clamp-2 [overflow-wrap:anywhere]">{excerptOf(note.excerpt)}</span>
+            <TaskMarks task={note.task} />
+          </span>
         </span>
         {statusRefused === undefined ? null : (
           <span className="mt-[6px] block pl-[36px]">

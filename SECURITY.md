@@ -2105,6 +2105,24 @@ seen » is shown to owners and admins only.
   status is no secret of the team: the widget and the extension read the same ones.
   test:`lists the status of a kept note, who may change it, and the statuses of its site`.
 
+### The fields of a task, chosen in the console (FRU-652)
+
+- `POST /console/workspaces/<id>/notes/<note>/task` changes the assignee, the priority, the day and
+  the labels of a note the worker keeps, with the rights of the status: the person who left the
+  note, or a role with `manage-sites`. Anybody else of the workspace is `403 not-allowed`, a site
+  the caller does not read (a guest) is `404`, and nothing is written.
+  test:`lets a role that manages the sites change the task of somebody else, and refuses another member`,
+  test:`answers 404 to a guest of another site, and writes nothing`.
+- The assignee is a member of the workspace, and each label a label of the workspace: another one
+  is `409`, and nothing is written. test:`refuses an assignee who is not a member, and a label of another workspace`.
+- The labels of a workspace are read by whoever reads its notes, a guest of one site included, as
+  the statuses of a site are: a label is a word of the team, no secret, and a guest who changes
+  their own task chooses among them. They are written by a role with `manage-sites` only. test:`keeps label names unique in a workspace, and lets only a role that manages the sites write them`.
+- A suspended workspace writes none of them: the routes are writes of the console, behind its one
+  guard. test:`writes nothing in a suspended workspace, and still reads the labels`.
+- On a worker that keeps no task (`FRUITBACK_TASKS=off`), every one of these writes is
+  `403 tasks-off`. test:`changes nothing on a worker that keeps no task, and still reads the labels`.
+
 ### The image of the console (FRU-222)
 
 The console is static files behind nginx, in an image of its own. **It holds no secret**: nothing

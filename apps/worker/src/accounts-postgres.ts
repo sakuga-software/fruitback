@@ -70,7 +70,9 @@ import {
   domains,
   invitation_sites,
   last_seen,
+  labels,
   note_index,
+  note_labels,
   notes,
   oauth_clients,
   oauth_tokens,
@@ -85,6 +87,7 @@ import { MAX_STATUSES, type NoteStage } from '@fruitback/shared';
 import { OWN_SOURCE, type SiteStatus, isBuiltIn } from './site-statuses.ts';
 import { identifierFor, isSameNote, keptRowOf } from './note-rows.ts';
 import { StoreError } from './store.ts';
+import type { TaskLabel } from './task-fields.ts';
 
 /**
  * The accounts in PostgreSQL (FRU-141), the one place they live since FRU-150. The store on a file
@@ -1819,6 +1822,119 @@ export function createPostgresAccountStore(database: Database): AccountStore {
           page: written.page,
         };
       });
+    },
+
+    async setTaskFields(workspace, site, noteId, change, who) {
+      return transaction(async (db) => {
+        const refused = <R extends string>(reason: R) => ({ set: false as const, reason });
+        if (!(await siteHeld(db, workspace, site))) return refused('not-found');
+        const [note] = await db
+          .select({
+            place: note_index.place,
+            connectorKind: connectors.kind,
+            reference: note_index.reference,
+            author: note_index.author_account_id,
+          })
+          .from(note_index)
+          .leftJoin(connectors, eq(connectors.id, note_index.connector_id))
+          .where(
+            and(eq(note_index.workspace_id, workspace), eq(note_index.site_id, site), eq(note_index.note_id, noteId)),
+          );
+        if (note === undefined) return refused('not-found');
+        if (!who.manages && (note.author === null || note.author !== who.account)) return refused('not-allowed');
+        const id = keptRowOf(note.place, note.connectorKind, note.reference);
+        if (id === undefined) return refused('not-kept');
+        const [kept] = await db
+          .select({ payload: notes.payload, page: notes.page_url })
+          .from(notes)
+          .where(and(eq(notes.id, id), eq(notes.client_id, site)));
+        if (kept === undefined || !isSameNote(kept.payload, noteId)) return refused('not-kept');
+
+        if (typeof change.assignee === 'string') {
+          const [one] = await db
+            .select({ id: member.id })
+            .from(member)
+            .where(and(eq(member.organizationId, workspace), eq(member.userId, change.assignee)));
+          if (one === undefined) return refused('not-member');
+        }
+        if (change.labels !== undefined && change.labels.length > 0) {
+          const found = await db
+            .select({ id: labels.id })
+            .from(labels)
+            .where(and(eq(labels.workspace_id, workspace), inArray(labels.id, change.labels)));
+          if (found.length !== change.labels.length) return refused('unknown-label');
+        }
+
+        await db
+          .update(notes)
+          .set({
+            ...(change.assignee === undefined ? {} : { assignee_account_id: change.assignee }),
+            ...(change.priority === undefined ? {} : { priority: change.priority }),
+            ...(change.dueOn === undefined ? {} : { due_on: change.dueOn }),
+            updated_at: Date.now(),
+          })
+          .where(and(eq(notes.id, id), eq(notes.client_id, site)));
+        if (change.labels !== undefined) {
+          await db.delete(note_labels).where(eq(note_labels.note_id, id));
+          if (change.labels.length > 0) {
+            await db.insert(note_labels).values(change.labels.map((label) => ({ note_id: id, label_id: label })));
+          }
+        }
+
+        return { set: true as const, identifier: note.reference ?? `FB-${id}`, page: kept.page };
+      });
+    },
+
+    async labels(workspace) {
+      return run((db) =>
+        db
+          .select({ id: labels.id, name: labels.name, color: labels.color })
+          .from(labels)
+          .where(eq(labels.workspace_id, workspace))
+          .orderBy(asc(labels.name)),
+      );
+    },
+
+    async addLabel(workspace, { name, color }) {
+      const label: TaskLabel = { id: newId('lbl'), name, color };
+      try {
+        await run((db) => db.insert(labels).values({ ...label, workspace_id: workspace, created_at: Date.now() }));
+      } catch (error) {
+        if (isUniqueViolation(error)) return { added: false as const, reason: 'taken' as const };
+        throw error;
+      }
+
+      return { added: true as const, label };
+    },
+
+    async changeLabel(workspace, id, change) {
+      try {
+        const [label] = await run((db) =>
+          db
+            .update(labels)
+            .set(change)
+            .where(and(eq(labels.workspace_id, workspace), eq(labels.id, id)))
+            .returning({ id: labels.id, name: labels.name, color: labels.color }),
+        );
+
+        return label === undefined
+          ? { changed: false as const, reason: 'not-found' as const }
+          : { changed: true as const, label };
+      } catch (error) {
+        if (isUniqueViolation(error)) return { changed: false as const, reason: 'taken' as const };
+        throw error;
+      }
+    },
+
+    async removeLabel(workspace, id) {
+      const removed = await run((db) =>
+        db
+          .delete(labels)
+          .where(and(eq(labels.workspace_id, workspace), eq(labels.id, id)))
+          .returning({ id: labels.id }),
+      );
+
+      return removed.length > 0;
     },
 
     async noteRepositoryPrivacy(connector, repository, isPrivate) {

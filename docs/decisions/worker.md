@@ -1571,7 +1571,7 @@ Read on drizzle-orm 0.45.4 and drizzle-kit 0.31.11, the versions of the catalogu
   store of the accounts`, test:`decides a pairing and a session by their instants, on each side of
   2^32`.
 - **better-auth reads no `BIGINT` of its tables on that pool, and a count is one.** Its seven tables
-  have none (test:`knows the fifty-five BIGINT columns of the worker, and that better-auth has none`).
+  have none (test:`knows the fifty-seven BIGINT columns of the worker, and that better-auth has none`).
   `count(*)` is a `BIGINT` whatever the table: the pool now answers it as a string, and better-auth
   reads it as a number, through its adapter and the layer of FRU-181
   (test:`gives better-auth a count as a string, which better-auth reads as a number`).
@@ -3244,7 +3244,7 @@ workspace too: the reason is free text, « impayé » for example.
 - **Why a table of its own, and not two columns of `organization`.** The ticket offered columns on
   `organization`. That table is of better-auth, and two tests hold it: `auth-schema.test.ts` compares
   its columns with the ones that better-auth makes, and
-  test:`knows the fifty-five BIGINT columns of the worker, and that better-auth has none` says that
+  test:`knows the fifty-seven BIGINT columns of the worker, and that better-auth has none` says that
   better-auth reads no `BIGINT`, on a pool with no parser of ours. A `suspended_at` there breaks
   both, or is not a `BIGINT`. A row of the worker keeps the convention, cascades with the workspace,
   and makes « changed » one statement.
@@ -4940,3 +4940,22 @@ agents write them at once, so each one lives in files of its own, and no list is
 Mathieu, 2026-11-22: tasks in Fruitback are a module that a self-hosted worker can turn off, for a
 team that keeps its tasks in its own tracker. The setup of the console does not ask for a
 destination yet when it is off: a note is then refused, and the widget keeps it.
+
+## The fields of a task (FRU-652)
+
+### The rules, in short
+
+- **A task the worker keeps has an assignee, a priority, a day and labels**, in `notes`
+  (`assignee_account_id`, `priority`, `due_on`) and in `labels` and `note_labels`. They belong to
+  the worker, not to the note contract: the widget neither writes nor reads them, and
+  `NOTE_VERSION` does not move. `task-fields.ts` reads a change and a label.
+- **The rights are the rights of the status**: the author of the note, or a role that manages the
+  sites. The assignee must be a member of the workspace, and each label a label of it (`409`
+  otherwise). A guest changes only a task of a site shared with them.
+- **A label is a name unique in its workspace and a colour `#rrggbb`.** Whoever reads the notes
+  reads the labels; a role that manages the sites writes them. A label removed leaves every task.
+- **The routes are `POST …/notes/<note>/task`, `GET` and `POST …/labels`, and `POST` and `DELETE
+  …/labels/<id>`** (`console-tasks.ts`). The console API takes no `PATCH`: a change is a `POST`.
+  Every write answers `403 tasks-off` on a worker that keeps no task.
+- **The list of the notes gives each kept note its `task`**, read with the status in one statement
+  per page, and its labels in a second one.

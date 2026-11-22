@@ -4,6 +4,7 @@ import type { SiteStatus } from './site-statuses.ts';
 import { NOTE_STAGES, type NoteStage } from '@fruitback/shared';
 import type { ClientMap } from './clients.ts';
 import { PLUGIN_KINDS } from './trackers/kinds.ts';
+import type { TaskChange, TaskLabel } from './task-fields.ts';
 
 /**
  * People, teams and the sites a team reviews (FRU-96).
@@ -836,6 +837,37 @@ export type AccountStore = {
     | { set: true; stage: NoteStage; was: NoteStage; identifier: string; page: string }
     | { set: false; reason: 'not-found' | 'not-kept' | 'not-allowed' | 'unknown-status' | 'status-hidden' }
   >;
+  /**
+   * Changes the fields of a task the worker keeps (FRU-652), with the rights of `setNoteStatus`: the
+   * author of the note, or a caller who manages the sites. A field left out does not change.
+   *
+   * - `not-member`: the assignee is not a member of the workspace.
+   * - `unknown-label`: a label is not one of the workspace.
+   */
+  setTaskFields(
+    workspace: string,
+    site: string,
+    note: string,
+    change: TaskChange,
+    who: { account: string; manages: boolean },
+  ): Promise<
+    | { set: true; identifier: string; page: string }
+    | { set: false; reason: 'not-found' | 'not-kept' | 'not-allowed' | 'not-member' | 'unknown-label' }
+  >;
+  /** The labels of a workspace (FRU-652), by name. */
+  labels(workspace: string): Promise<TaskLabel[]>;
+  /** `taken`: the workspace has a label of this name. */
+  addLabel(
+    workspace: string,
+    label: { name: string; color: string },
+  ): Promise<{ added: true; label: TaskLabel } | { added: false; reason: 'taken' }>;
+  changeLabel(
+    workspace: string,
+    id: string,
+    change: { name?: string; color?: string },
+  ): Promise<{ changed: true; label: TaskLabel } | { changed: false; reason: 'not-found' | 'taken' }>;
+  /** Removes a label and takes it off every task. `false`: no such label in the workspace. */
+  removeLabel(workspace: string, id: string): Promise<boolean>;
   /**
    * What GitHub said of a repository when a note went there (FRU-382): every destination of
    * `connector` to `repository` takes it, so that a repository that turned public is said at once.

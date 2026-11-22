@@ -1133,6 +1133,12 @@ textarea {
   box-shadow: 0 0 0 1px var(--color-status-edge);
 }
 
+.kit-swatch-small {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+
 .kit-success {
   display: flex;
   align-items: center;

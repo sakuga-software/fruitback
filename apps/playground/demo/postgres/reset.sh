@@ -22,7 +22,7 @@ if [ "$(sql -c "SELECT to_regclass('notes') IS NOT NULL")" != t ]; then
   echo "$(now) reset: nothing stored yet"
   exit 0
 fi
-sql -q -c 'TRUNCATE notes, note_comments, screenshots RESTART IDENTITY'
+sql -q -c 'TRUNCATE notes, note_comments, note_labels, screenshots RESTART IDENTITY'
 sql -q -v "origin=$ORIGIN" <"$HERE/seed.sql"
 NOTES=$(sql -c 'SELECT count(*) FROM notes')
 COMMENTS=$(sql -c 'SELECT count(*) FROM note_comments')

@@ -9,6 +9,7 @@ import { NoteIcon } from '../note-icons';
 import { type StatusChoice } from '../note-status';
 import { type IndexedNote } from './notes-model';
 import { NoteStatus, Place, excerptOf } from './note-parts';
+import { TaskMarks } from './task-marks';
 
 /**
  * A note on the board (FRU-436): what a row of the table says, one under the other.
@@ -68,6 +69,7 @@ export function NoteCard({
             </span>
           ) : null}
         </div>
+        <TaskMarks task={note.task} className="mt-[6px]" />
         {statusRefused === undefined ? null : (
           <span className="mt-[6px] block">
             <Problem>{t(statusRefused)}</Problem>
