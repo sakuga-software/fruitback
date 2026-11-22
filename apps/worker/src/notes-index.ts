@@ -1,4 +1,5 @@
 import { NOTE_STAGES, type Note, type NoteIssue, type NoteStage, anchorSelectorPath } from '@fruitback/shared';
+import type { TaskFields } from './task-fields.ts';
 
 /**
  * The index of the notes of a workspace (FRU-237): one row for each note this worker planted for a
@@ -258,7 +259,7 @@ export type ListedNote = {
    * it now, `null` for the built-in status of its stage. Absent: a note in a tracker, whose status is
    * the tracker's.
    */
-  kept?: { statusKey: string | null; stage: string };
+  kept?: { statusKey: string | null; stage: string; task: TaskFields };
 };
 
 export type NoteList = {

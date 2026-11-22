@@ -41,7 +41,17 @@ export type IndexedNote = {
    */
   status?: string;
   canSetStatus?: boolean;
+  /** FRU-652: the fields of a note the worker keeps. Absent for a note of a tracker. */
+  task?: TaskFields;
   createdAt: string;
+};
+
+export type TaskFields = {
+  assignee?: { id: string; name: string };
+  priority?: 'low' | 'medium' | 'high' | 'urgent';
+  /** A day, `YYYY-MM-DD`. */
+  dueOn?: string;
+  labels: { id: string; name: string; color: string }[];
 };
 
 export type NotesAnswer = {

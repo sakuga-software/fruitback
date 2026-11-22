@@ -330,6 +330,13 @@
       "when": 1795102124385,
       "tag": "0046_place_gone",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1795359572544,
+      "tag": "0047_task_fields",
+      "breakpoints": true
     }
   ]
 }

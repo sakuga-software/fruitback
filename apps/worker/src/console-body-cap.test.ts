@@ -135,6 +135,7 @@ describe('the body of a route of the console (FRU-506)', () => {
       'console-api.ts',
       'console-connectors.ts',
       'console-notes.ts',
+      'console-tasks.ts',
       'instance-admin.ts',
     ]);
     // And these modules answer no route by another way: their handlers are called by these files only.
@@ -144,6 +145,7 @@ describe('the body of a route of the console (FRU-506)', () => {
       'handleConsoleApi',
       'handleNotes',
       'handleConnectors',
+      'handleTasks',
     ]) {
       const callers = sources.filter((name) =>
         new RegExp(`\\b${handler}\\(`).test(
@@ -152,8 +154,12 @@ describe('the body of a route of the console (FRU-506)', () => {
             .replace(/function \w+\(/g, ''),
         ),
       );
-      const inConsoleApi = handler === 'handleNotes' || handler === 'handleConnectors';
-      assert.deepEqual(callers, [inConsoleApi ? 'console-api.ts' : 'console-routes.ts'], handler);
+      const callerOf: Record<string, string> = {
+        handleNotes: 'console-api.ts',
+        handleConnectors: 'console-api.ts',
+        handleTasks: 'console-notes.ts',
+      };
+      assert.deepEqual(callers, [callerOf[handler] ?? 'console-routes.ts'], handler);
     }
   });
 

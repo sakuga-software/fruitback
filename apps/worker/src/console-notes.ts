@@ -2,6 +2,7 @@ import { type DoneNoticeSeams, sendDoneNotices } from './done-notices.ts';
 import { json } from './http.ts';
 import { requestAgent } from './agent-triggers.ts';
 import { readJsonObject } from './bounded-body.ts';
+import { handleTasks } from './console-tasks.ts';
 import { DEFAULT_NOTE_STAGE, NOTE_STAGES, type NoteStage, type NoteStatus } from '@fruitback/shared';
 import type { Action, AccountStore, Reach } from './accounts.ts';
 import type { Kv } from './kv.ts';
@@ -61,7 +62,19 @@ export type NotesContext = {
   tasks: 'on' | 'off';
   /** Who to tell when a note is done (FRU-604). */
   done?: DoneNoticeSeams;
-  accounts: Pick<AccountStore, 'retryDelivery' | 'setNoteStatus' | 'siteStatuses' | 'agentTrigger' | 'enqueueDelivery'>;
+  accounts: Pick<
+    AccountStore,
+    | 'retryDelivery'
+    | 'setNoteStatus'
+    | 'siteStatuses'
+    | 'agentTrigger'
+    | 'enqueueDelivery'
+    | 'setTaskFields'
+    | 'labels'
+    | 'addLabel'
+    | 'changeLabel'
+    | 'removeLabel'
+  >;
   /** The cache of the reads of the pages: a status changed makes the read of its page wrong. */
   kv: Kv | undefined;
   now: number;
@@ -76,6 +89,9 @@ export async function handleNotes(
   request: Request,
   context: NotesContext,
 ): Promise<Response | undefined> {
+  // FRU-652: the fields of a task, and the labels of the workspace.
+  const tasks = await handleTasks(rest, request, context, noteKeyOf);
+  if (tasks !== undefined) return tasks;
   const retry = /^\/notes\/([A-Za-z0-9_-]+)\/retry$/.exec(rest);
   const status = /^\/notes\/([A-Za-z0-9_-]+)\/status$/.exec(rest);
   if (rest !== '/notes' && retry === null && status === null) return undefined;
@@ -252,6 +268,8 @@ function noteView(note: ListedNote, account: string, seesTracker: boolean, manag
           // FRU-651: a worker that keeps no task changes no status.
           canSetStatus:
             keepsTasks && (manages || (note.author.account !== undefined && note.author.account === account)),
+          // FRU-652: the fields of the task, which the same right changes.
+          task: kept.task,
         }),
     ...(seesTracker
       ? {

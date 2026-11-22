@@ -819,11 +819,67 @@ export const notes = pgTable(
     payload: text('payload').notNull(),
     created_at: instant('created_at').notNull(),
     updated_at: instant('updated_at').notNull(),
+    // FRU-652: the fields of a task. NULL: nobody, no priority, no date. `priority` is one of
+    // `TASK_PRIORITIES` of `task-fields.ts`; `due_on` a day, `YYYY-MM-DD`, with no time and no zone.
+    assignee_account_id: text('assignee_account_id'),
+    priority: text('priority'),
+    due_on: text('due_on'),
   },
   (table) => [
     index('notes_by_page').using('hash', table.page_url),
     // Every note of one site: what a removed site deletes (FRU-194), and the read by site.
     index('notes_by_client').on(table.client_id),
+    // The account goes when the person goes: no task names an account that is not one.
+    foreignKey({
+      name: 'notes_assignee_account_id_fkey',
+      columns: [table.assignee_account_id],
+      foreignColumns: [user.id],
+    }).onDelete('set null'),
+    index('notes_by_assignee').on(table.assignee_account_id),
+  ],
+);
+
+/**
+ * The labels of a workspace (FRU-652), for the tasks the worker keeps. A name is unique in its
+ * workspace; the colour is `#rrggbb`. A label goes with its workspace.
+ */
+export const labels = pgTable(
+  'labels',
+  {
+    id: text('id').primaryKey(),
+    workspace_id: text('workspace_id').notNull(),
+    name: text('name').notNull(),
+    color: text('color').notNull(),
+    created_at: instant('created_at').notNull(),
+  },
+  (table) => [
+    foreignKey({
+      name: 'labels_workspace_id_fkey',
+      columns: [table.workspace_id],
+      foreignColumns: [organization.id],
+    }).onDelete('cascade'),
+    unique('labels_workspace_id_name_key').on(table.workspace_id, table.name),
+  ],
+);
+
+/** The labels of a task the worker keeps (FRU-652). A row goes with its note and with its label. */
+export const note_labels = pgTable(
+  'note_labels',
+  {
+    note_id: bigint('note_id', { mode: 'number' }).notNull(),
+    label_id: text('label_id').notNull(),
+  },
+  (table) => [
+    primaryKey({ name: 'note_labels_pkey', columns: [table.note_id, table.label_id] }),
+    foreignKey({ name: 'note_labels_note_id_fkey', columns: [table.note_id], foreignColumns: [notes.id] }).onDelete(
+      'cascade',
+    ),
+    foreignKey({
+      name: 'note_labels_label_id_fkey',
+      columns: [table.label_id],
+      foreignColumns: [labels.id],
+    }).onDelete('cascade'),
+    index('note_labels_by_label').on(table.label_id),
   ],
 );
 

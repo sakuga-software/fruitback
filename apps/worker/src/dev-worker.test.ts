@@ -339,7 +339,7 @@ describe('the demonstration on PostgreSQL, as it is prepared (FRU-223)', () => {
   it('empties tables that the schema has, and no other, in reset.sh', async () => {
     const script = readFileSync(new URL('../../playground/demo/postgres/reset.sh', import.meta.url), 'utf8');
     const truncate = /'(TRUNCATE [a-z_, ]+ RESTART IDENTITY)'/.exec(script)?.[1];
-    assert.equal(truncate, 'TRUNCATE notes, note_comments, screenshots RESTART IDENTITY');
+    assert.equal(truncate, 'TRUNCATE notes, note_comments, note_labels, screenshots RESTART IDENTITY');
     const database = await createPgliteDatabase();
     try {
       await migrate(database);

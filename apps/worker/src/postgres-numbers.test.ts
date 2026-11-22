@@ -91,6 +91,13 @@ async function withEveryTableFilled(open: () => Promise<PgDatabase>): Promise<Pg
   );
   await rowsOf(database, `INSERT INTO note_comments (note_id, body, created_at) VALUES (1, 'a reply', 1)`);
   await rowsOf(database, 'ALTER TABLE note_comments DROP CONSTRAINT note_comments_note_id_fkey');
+  // A label of the workspace on that note (FRU-652), with the key to its note taken off as above.
+  await rowsOf(
+    database,
+    `INSERT INTO labels (id, workspace_id, name, color, created_at) VALUES ('lbl_1', 'ws_acme', 'Bug', '#dc2626', 1)`,
+  );
+  await rowsOf(database, `INSERT INTO note_labels (note_id, label_id) VALUES (1, 'lbl_1')`);
+  await rowsOf(database, 'ALTER TABLE note_labels DROP CONSTRAINT note_labels_note_id_fkey');
   await rowsOf(database, `INSERT INTO kv (key, value, expires_at) VALUES ('fruitback:test:count', '1', 1)`);
   // A site shared with a guest (FRU-250).
   await rowsOf(
@@ -194,7 +201,7 @@ async function write({ table, column }: Bigint, database: PgDatabase, value: num
   await rowsOf(database, `UPDATE "${getTableConfig(table).name}" SET "${column.name}" = ${String(value)}`);
 }
 
-it('knows the fifty-five BIGINT columns of the worker, and that better-auth has none', () => {
+it('knows the fifty-seven BIGINT columns of the worker, and that better-auth has none', () => {
   assert.deepEqual(BIGINTS.map(({ name }) => name).toSorted(), [
     'account_emails.created_at',
     'account_emails.verified_at',
@@ -225,11 +232,13 @@ it('knows the fifty-five BIGINT columns of the worker, and that better-auth has 
     'email_links.expires_at',
     'email_links.spent_at',
     'kv.expires_at',
+    'labels.created_at',
     'note_comments.created_at',
     'note_comments.id',
     'note_comments.note_id',
     'note_index.checked_at',
     'note_index.created_at',
+    'note_labels.note_id',
     'notes.created_at',
     'notes.id',
     'notes.updated_at',

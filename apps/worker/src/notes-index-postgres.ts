@@ -20,7 +20,17 @@ import {
 } from './notes-index.ts';
 import type { Database } from './postgres.ts';
 import { migrated } from './postgres-migrate.ts';
-import { connectors, deliveries, done_notices, note_index, notes, sites } from './postgres-schema.ts';
+import {
+  connectors,
+  deliveries,
+  done_notices,
+  labels,
+  note_index,
+  note_labels,
+  notes,
+  sites,
+} from './postgres-schema.ts';
+import { type TaskFields, type TaskLabel, isPriority } from './task-fields.ts';
 import { DONE_CLAIM_MS, DONE_NOTICE_KEEP_MS, type DoneNotice, type DoneNotices } from './done-notices.ts';
 import { isSameNote, keptRowOf } from './note-rows.ts';
 import { checkedOf } from './reply-text.ts';
@@ -462,7 +472,7 @@ function keyOfNoteId(row: typeof note_index.$inferSelect): string {
 async function keptOf(
   db: Db,
   rows: readonly { row: typeof note_index.$inferSelect; connector: { kind: string } | null }[],
-): Promise<Map<string, { statusKey: string | null; stage: string }>> {
+): Promise<Map<string, { statusKey: string | null; stage: string; task: TaskFields }>> {
   const owned = rows.flatMap(({ row, connector }) => {
     const id = keptRowOf(row.place, connector?.kind, row.reference);
 
@@ -476,20 +486,46 @@ async function keptOf(
       payload: notes.payload,
       statusKey: notes.status_key,
       stage: notes.stage,
+      // FRU-652: the fields of the task.
+      assignee: notes.assignee_account_id,
+      assigneeName: user.name,
+      priority: notes.priority,
+      dueOn: notes.due_on,
     })
     .from(notes)
+    .leftJoin(user, eq(user.id, notes.assignee_account_id))
     .where(
       inArray(
         notes.id,
         owned.map(({ id }) => id),
       ),
     );
-  const kept = new Map<string, { statusKey: string | null; stage: string }>();
+  const labelled = await db
+    .select({ note: note_labels.note_id, id: labels.id, name: labels.name, color: labels.color })
+    .from(note_labels)
+    .innerJoin(labels, eq(labels.id, note_labels.label_id))
+    .where(
+      inArray(
+        note_labels.note_id,
+        owned.map(({ id }) => id),
+      ),
+    )
+    .orderBy(labels.name);
+  const labelsOf = new Map<number, TaskLabel[]>();
+  for (const { note, ...label } of labelled) labelsOf.set(Number(note), [...(labelsOf.get(Number(note)) ?? []), label]);
+  const kept = new Map<string, { statusKey: string | null; stage: string; task: TaskFields }>();
   for (const { id, row } of owned) {
     const note = found.find(
       (one) => Number(one.id) === id && one.site === row.site_id && isSameNote(one.payload, row.note_id),
     );
-    if (note !== undefined) kept.set(keyOfNoteId(row), { statusKey: note.statusKey, stage: note.stage });
+    if (note === undefined) continue;
+    const task: TaskFields = {
+      ...(note.assignee === null ? {} : { assignee: { id: note.assignee, name: note.assigneeName ?? '' } }),
+      ...(isPriority(note.priority) ? { priority: note.priority } : {}),
+      ...(note.dueOn === null ? {} : { dueOn: note.dueOn }),
+      labels: labelsOf.get(id) ?? [],
+    };
+    kept.set(keyOfNoteId(row), { statusKey: note.statusKey, stage: note.stage, task });
   }
 
   return kept;
@@ -608,7 +644,7 @@ type PageRow = {
   memberName: string | null;
   memberRole: string | null;
   delivery: Pending | undefined;
-  kept: { statusKey: string | null; stage: string } | undefined;
+  kept: { statusKey: string | null; stage: string; task: TaskFields } | undefined;
 };
 
 function listedOf({ row, connector, memberName, memberRole, delivery, kept }: PageRow): ListedNote {
