@@ -90,6 +90,8 @@ export type ConsoleApiContext = {
   kv?: Kv;
   /** The index of the notes (FRU-237). Absent: the sites are answered with no count. */
   noteIndex?: NoteIndex;
+  /** Whether this worker keeps tasks (FRU-651). Absent: `on`. */
+  tasks?: 'on' | 'off';
   /** Who to tell when a note is done (FRU-604). */
   done?: DoneNoticeSeams;
   /** The Linear application, when this worker has one: a workspace then connects Linear with no key. */
@@ -610,6 +612,8 @@ export async function handleConsoleApi(
       {
         account,
         instanceAdmin,
+        // FRU-651: the console offers no change to a note this worker keeps when it keeps no task.
+        tasks: context.tasks !== 'off',
         // FRU-282: each workspace says whether it is suspended, and since when, for the banner.
         // Not why (FRU-328): the reason is a note of the administrator of the instance.
         // FRU-428: the address of its logo, or `null`.
@@ -751,6 +755,7 @@ export async function handleConsoleApi(
     reach: () => context.accounts.reach(workspaceId as string, account.id),
     allowed,
     noteIndex: context.noteIndex,
+    tasks: context.tasks ?? 'on',
     ...(context.done === undefined ? {} : { done: context.done }),
     accounts: context.accounts,
     kv: context.kv,

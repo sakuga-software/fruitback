@@ -4916,3 +4916,27 @@ agents write them at once, so each one lives in files of its own, and no list is
   reference of the variables to it.
 - The popup of the extension does not choose a place of a plugin yet (`offerOf` answers none): the
   Sites screen does.
+
+## A worker that keeps no task (FRU-651)
+
+### The rules, in short
+
+- **`FRUITBACK_TASKS` is `on` by default, or `off`.** Another value is refused at boot. `on` is the
+  default because a worker of before keeps the notes of a site with no destination: `off` by
+  default would refuse them after an upgrade.
+- **With `off`, a site with no destination gets the own store read-only** (`readOnly` in
+  `connectors.ts`): its notes of before stay readable, and a new note, a status, an edit, a reply or
+  a withdrawal is refused. A new note answers `502 no-destination`, so the widget keeps it.
+- **A connector that only receives still gets the own store whole**, but no status. An address,
+  Slack or a routine keeps its notes there: they are a delivery, not a task. A status is a task:
+  `statusesFor` answers `false` and `setStatus` refuses, for every client, so the routes of the
+  extension and of MCP refuse it as the console does.
+- **The console reads it twice**: `/console/me` says `tasks`, and the list of the notes answers
+  `canSetStatus: false`, which hides the select and the drag. The status route answers
+  `403 tasks-off`. `/health` says `"tasks": "off"`, and nothing when it is `on`.
+
+### The reasons
+
+Mathieu, 2026-11-22: tasks in Fruitback are a module that a self-hosted worker can turn off, for a
+team that keeps its tasks in its own tracker. The setup of the console does not ask for a
+destination yet when it is off: a note is then refused, and the widget keeps it.
