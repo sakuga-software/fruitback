@@ -13,6 +13,7 @@ import type { TrackerApps } from './trackers/oauth.ts';
 import { type Http, readTrackerCredential, trackerAccess } from './trackers/plugin.ts';
 import { open } from './secrets.ts';
 import {
+  NoDestination,
   type NoteStore,
   type ReplyTarget,
   StoreError,
@@ -432,10 +433,23 @@ export function createConnectorStores(
   };
 }
 
-/** The worker's own store for a client with no destination, the connector's store for the others. */
-export function createRoutedStore(base: NoteStore, connectors: ConnectorStores): NoteStore {
+/**
+ * The worker's own store for a client with no destination, the connector's store for the others.
+ *
+ * With `tasks: 'off'` (FRU-651), a client with no destination gets the own store read-only: its
+ * notes of before stay readable, and a new note, a status, an edit or a reply is refused. A
+ * connector that only receives still keeps its notes in the own store: `connectors` gets `base`.
+ */
+export function createRoutedStore(
+  base: NoteStore,
+  connectors: ConnectorStores,
+  options: { tasks?: 'on' | 'off' } = {},
+): NoteStore {
+  const withoutDestination = options.tasks === 'off' ? readOnly(base) : base;
   const pick = (client: ClientConfig | undefined): Promise<NoteStore> =>
-    client?.connector === undefined ? Promise.resolve(base) : connectors(client.connector, client.workspace, base);
+    client?.connector === undefined
+      ? Promise.resolve(withoutDestination)
+      : connectors(client.connector, client.workspace, base);
 
   return {
     name: base.name,
@@ -506,5 +520,19 @@ export function createRoutedStore(base: NoteStore, connectors: ConnectorStores):
 
       return store.withdraw(target, withdrawal, client, policy);
     },
+  };
+}
+
+/** The own store with its reads only (FRU-651). A write that has no method here is not offered. */
+function readOnly(base: NoteStore): NoteStore {
+  return {
+    name: base.name,
+    ...(base.stages === undefined ? {} : { stages: base.stages }),
+    scope: (client) => base.scope(client),
+    create: async () => {
+      throw new NoDestination('This site has no destination, and this server keeps no task');
+    },
+    findForPage: (query, client, policy) => base.findForPage(query, client, policy),
+    ...(base.findNote === undefined ? {} : { findNote: base.findNote.bind(base) }),
   };
 }

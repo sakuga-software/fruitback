@@ -217,6 +217,7 @@ export async function handleConsole(request: Request, pathname: string, seams: C
         sessions,
         ...(served.secretsKey === undefined ? {} : { secretsKey: served.secretsKey }),
         kv,
+        tasks: served.tasks,
         ...(noteIndex === undefined ? {} : { noteIndex }),
         ...(done === undefined ? {} : { done }),
         ...(served.linearOAuth === undefined ? {} : { linearOAuth: served.linearOAuth }),

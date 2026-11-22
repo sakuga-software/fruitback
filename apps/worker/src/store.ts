@@ -37,6 +37,14 @@ export class StoreError extends Error {}
 export class PlaceUnavailable extends StoreError {}
 
 /**
+ * The site has no destination, and this worker keeps no task (`FRUITBACK_TASKS=off`, FRU-651).
+ *
+ * Another try fails the same way until a person gives the site a destination. The widget keeps the
+ * note, as for any store that is down.
+ */
+export class NoDestination extends StoreError {}
+
+/**
  * What a store hands back after planting a note.
  *
  * `url` is optional for the same reason it is on `NoteIssue`: a store may have no interface to open

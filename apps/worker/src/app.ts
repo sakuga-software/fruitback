@@ -294,6 +294,8 @@ async function routed(
       // provider in the answer was the last place `/health` assumed there was only ever one.
       store: config.config.store.provider,
       ...(openRead > 0 ? { openRead } : {}),
+      // FRU-651: said only when off, the state an operator chose against the default.
+      ...(config.config.tasks === 'off' ? { tasks: 'off' } : {}),
     });
   }
 
@@ -443,6 +445,7 @@ async function routed(
             ...(served.trackerApps === undefined ? {} : { trackerApps: served.trackerApps }),
             ...(context.trackerHttp === undefined ? {} : { trackerHttp: context.trackerHttp }),
           }),
+          { tasks: served.tasks },
         );
   };
 

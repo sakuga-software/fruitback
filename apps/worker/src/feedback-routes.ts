@@ -31,6 +31,7 @@ import {
   type BatchAnswer,
   type CreatedIssue,
   type NoteStore,
+  NoDestination,
   PlaceUnavailable,
   StoreError,
   takesAttachments,
@@ -559,6 +560,10 @@ export async function postFeedback(
       const help = await placeGoneHelpFor(request, config, checks, route, clientId, attributed.env?.locale);
 
       return placeGoneResponse(help, corsHeaders);
+    }
+    // FRU-651: no destination on a worker that keeps no task. A 502, so the widget keeps the note.
+    if (error instanceof NoDestination) {
+      return json(502, { error: 'no-destination', message: error.message }, corsHeaders);
     }
     if (error instanceof StoreError) {
       console.error(`[fruitback] a note of site ${clientId ?? '-'} was not kept: ${error.message}`);

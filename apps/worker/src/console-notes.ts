@@ -57,6 +57,8 @@ export type NotesContext = {
   /** The role and the sites of the caller, read when a route of the notes is asked (FRU-250). */
   reach: () => Promise<Reach | undefined>;
   noteIndex: NoteIndex | undefined;
+  /** Whether this worker keeps tasks (FRU-651). `off`: no status of a note changes here. */
+  tasks: 'on' | 'off';
   /** Who to tell when a note is done (FRU-604). */
   done?: DoneNoticeSeams;
   accounts: Pick<AccountStore, 'retryDelivery' | 'setNoteStatus' | 'siteStatuses' | 'agentTrigger' | 'enqueueDelivery'>;
@@ -133,7 +135,7 @@ export async function handleNotes(
   return json(
     200,
     {
-      notes: list.notes.map((note) => noteView(note, context.account, seesTracker, manages)),
+      notes: list.notes.map((note) => noteView(note, context.account, seesTracker, manages, context.tasks === 'on')),
       ...(list.counted === undefined ? {} : countsView(list.counted, seesTracker)),
       searched: seesTracker ? SEARCHED : SEARCHED_WITHOUT_TRACKER,
       ...(statuses === undefined ? {} : { statuses }),
@@ -227,7 +229,7 @@ export function authorView(author: ListedNote['author'], account: string): Autho
   return author.kind === 'visitor' ? { kind: 'anonymous' } : { kind: 'verified' };
 }
 
-function noteView(note: ListedNote, account: string, seesTracker: boolean, manages: boolean) {
+function noteView(note: ListedNote, account: string, seesTracker: boolean, manages: boolean, keepsTasks: boolean) {
   const page = pageOf(note.pageUrl);
   const kept = note.kept;
 
@@ -247,7 +249,9 @@ function noteView(note: ListedNote, account: string, seesTracker: boolean, manag
       ? {}
       : {
           status: `${OWN_SOURCE}:${kept.statusKey ?? kept.stage}`,
-          canSetStatus: manages || (note.author.account !== undefined && note.author.account === account),
+          // FRU-651: a worker that keeps no task changes no status.
+          canSetStatus:
+            keepsTasks && (manages || (note.author.account !== undefined && note.author.account === account)),
         }),
     ...(seesTracker
       ? {
@@ -382,6 +386,7 @@ async function setStatus(id: string, request: Request, context: NotesContext): P
   const { headers } = context;
   if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
   if (!context.allowed('read-feedback')) return forbidden(context);
+  if (context.tasks === 'off') return json(403, { error: 'tasks-off' }, headers);
   const note = noteKeyOf(id);
   if (note === undefined) return json(404, { error: 'not-found' }, headers);
   // A guest changes only the notes of the sites shared with them (FRU-250).
