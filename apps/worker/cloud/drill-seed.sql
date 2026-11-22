@@ -137,11 +137,18 @@ INSERT INTO screenshots (id, workspace_id, account_id, site_id, content, width, 
 -- copy of a SQLite file writes them, and the sequence moved after it: a restore that left the
 -- sequence at 1 would give the next note the number of one that exists. Three notes and two replies.
 -- The second note is in a status of its site (FRU-365); the others are drawn by their stage.
-INSERT INTO notes (id, client_id, page_url, stage, status_key, payload, created_at, updated_at) VALUES
-  (1, 'site_drill1', 'https://staging.acme.dev/pricing', 'new', NULL, '{"id":"sd_drill1","text":"The price is cut off on a phone."}', 1, 1),
-  (2, 'site_drill1', 'https://staging.acme.dev/pricing', 'done', 'done', '{"id":"sd_drill2","text":"Done."}', 2, 3),
-  (7, NULL, 'https://staging.acme.dev/', 'new', NULL, '{"id":"sd_drill7","text":"A note that names no site."}', 4, 4);
+-- The first note is a task with its fields (FRU-652): an assignee, a priority, a day and a label.
+INSERT INTO notes (id, client_id, page_url, stage, status_key, payload, created_at, updated_at, assignee_account_id, priority, due_on) VALUES
+  (1, 'site_drill1', 'https://staging.acme.dev/pricing', 'new', NULL, '{"id":"sd_drill1","text":"The price is cut off on a phone."}', 1, 1, 'acc_drill1', 'high', '2026-12-01'),
+  (2, 'site_drill1', 'https://staging.acme.dev/pricing', 'done', 'done', '{"id":"sd_drill2","text":"Done."}', 2, 3, NULL, NULL, NULL),
+  (7, NULL, 'https://staging.acme.dev/', 'new', NULL, '{"id":"sd_drill7","text":"A note that names no site."}', 4, 4, NULL, NULL, NULL);
 SELECT setval(pg_get_serial_sequence('notes', 'id'), 7);
+
+INSERT INTO labels (id, workspace_id, name, color, created_at) VALUES
+  ('lbl_drill1', 'ws_drill1', 'Bug', '#dc2626', 5);
+
+INSERT INTO note_labels (note_id, label_id) VALUES
+  (1, 'lbl_drill1');
 
 INSERT INTO note_comments (note_id, author, body, created_at) VALUES
   (1, 'Alice Martin', 'We see it too.', 5),
