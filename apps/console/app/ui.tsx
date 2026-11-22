@@ -804,7 +804,8 @@ type RadiosProps<Value extends string> = {
   label: string;
   value: Value;
   onChange?: (value: Value) => void;
-  options: readonly { value: Value; label: string }[];
+  /** `swatch`: a colour drawn before the label, as the colour of a label of a task (FRU-654). */
+  options: readonly { value: Value; label: string; swatch?: string }[];
   /** The choice is made elsewhere: the radios show it, and take no press. */
   disabled?: boolean;
   /** Under the radios, and the description of the group for a screen reader. */
@@ -834,7 +835,14 @@ export function Radios<Value extends string>({
             <Radio.Control>
               <Radio.Indicator />
             </Radio.Control>
-            <Label>{option.label}</Label>
+            {option.swatch === undefined ? (
+              <Label>{option.label}</Label>
+            ) : (
+              <span className="inline-flex items-center gap-[8px]">
+                <span aria-hidden="true" className="kit-swatch" style={{ background: option.swatch }} />
+                <Label>{option.label}</Label>
+              </span>
+            )}
           </Radio.Content>
         </Radio>
       ))}
@@ -1547,6 +1555,102 @@ export function Menu({
               </Dropdown.Section>
             </>
           )}
+        </Dropdown.Menu>
+      </Dropdown.Popover>
+    </Dropdown>
+  );
+}
+
+/** An item of a submenu of `MenuTree`: `swatch` draws a colour before it. */
+export type TreeItem = MenuItem & { swatch?: string };
+
+/** A submenu of `MenuTree`: its items, and the ones checked when it is a choice. */
+export type TreeBranch = {
+  id: string;
+  label: string;
+  /** `single`: one item is checked; `multiple`: each item is checked or not; absent: a list of actions. */
+  choice?: 'single' | 'multiple';
+  checked?: readonly string[];
+  items: readonly TreeItem[];
+  onAction: (id: string) => void;
+};
+
+/**
+ * A menu with submenus (FRU-654), as the dropdown of HeroUI: its button is a picture named by
+ * `triggerLabel`, and `open` lets the screen open it on a right click. The arrows walk the items, the
+ * right arrow opens a submenu, Escape closes it. The branches come first, then the plain `items`.
+ */
+export function MenuTree({
+  branches,
+  items,
+  onAction,
+  triggerLabel,
+  open,
+  onOpenChange,
+  children,
+}: {
+  branches: readonly TreeBranch[];
+  items: readonly MenuItem[];
+  onAction: (id: string) => void;
+  triggerLabel: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  children: ReactNode;
+}) {
+  return (
+    <Dropdown isOpen={open} onOpenChange={onOpenChange}>
+      <Dropdown.Trigger className="kit-menu-trigger kit-icon-button" aria-label={triggerLabel}>
+        {children}
+      </Dropdown.Trigger>
+      <Dropdown.Popover className="kit-menu" placement="bottom end">
+        <Dropdown.Menu onAction={(id) => onAction(String(id))}>
+          {[
+            ...branches.map((branch) => (
+              <Dropdown.SubmenuTrigger key={branch.id}>
+                <Dropdown.Item id={branch.id} textValue={branch.label}>
+                  <span className="kit-menu__words">
+                    <Label>{branch.label}</Label>
+                  </span>
+                  <Dropdown.SubmenuIndicator />
+                </Dropdown.Item>
+                <Dropdown.Popover className="kit-menu">
+                  <Dropdown.Menu
+                    aria-label={branch.label}
+                    onAction={(id) => branch.onAction(String(id))}
+                    disabledKeys={branch.items.filter((item) => item.disabled === true).map((item) => item.id)}
+                    {...(branch.choice === undefined
+                      ? {}
+                      : { selectionMode: branch.choice, selectedKeys: [...(branch.checked ?? [])] })}
+                  >
+                    {branch.items.map((item) => (
+                      <Dropdown.Item
+                        key={item.id}
+                        id={item.id}
+                        textValue={item.label}
+                        data-danger={item.danger === true}
+                      >
+                        {branch.choice === undefined ? null : <Dropdown.ItemIndicator />}
+                        <span className="kit-menu__words">
+                          <span className="inline-flex items-center gap-[8px]">
+                            {item.swatch === undefined ? null : (
+                              <span
+                                aria-hidden="true"
+                                className="kit-swatch kit-swatch-small"
+                                style={{ background: item.swatch }}
+                              />
+                            )}
+                            <Label>{item.label}</Label>
+                          </span>
+                          {item.detail === undefined ? null : <Description>{item.detail}</Description>}
+                        </span>
+                      </Dropdown.Item>
+                    ))}
+                  </Dropdown.Menu>
+                </Dropdown.Popover>
+              </Dropdown.SubmenuTrigger>
+            )),
+            ...items.map((item) => menuItem(item, false)),
+          ]}
         </Dropdown.Menu>
       </Dropdown.Popover>
     </Dropdown>

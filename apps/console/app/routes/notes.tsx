@@ -18,6 +18,8 @@ import { NotePages } from '../parts/note-pages';
 import { NotesFilters, Pinned, ViewChoice } from '../parts/notes-filters';
 import { NotesTable } from '../parts/notes-table';
 import { NoteCard } from '../parts/note-card';
+import { TaskMenuContext } from '../parts/task-menu';
+import { useTaskSeam } from '../parts/task-seam';
 
 /**
  * Every note left on the sites of a workspace, and where it went: screen 10 of the mockup of
@@ -222,9 +224,19 @@ export default function Notes() {
   const choose = (note: IndexedNote, status: string) =>
     call<{ status: string; stage: Stage }>('POST', `${base}/notes/${encodeURIComponent(note.id)}/status`, { status });
   const sourceOf = (note: IndexedNote) => connectors.find((each) => each.id === note.place?.connector);
+  // FRU-654: the menu of each task, its members, its labels and its writes.
+  const tasks = useTaskSeam({
+    workspace: workspace.id,
+    base,
+    manages,
+    statusesOf: (note) => (typeof shown === 'object' ? shown.statuses?.[note.site.id] : undefined),
+    choose,
+    read,
+  });
 
   return (
-    <>
+    <TaskMenuContext.Provider value={tasks.seam}>
+      {tasks.dialog}
       <PageHead
         title={t('Notes')}
         lead={t('Every note left on the sites of {workspace}, and where it went.', { workspace: workspace.name })}
@@ -345,6 +357,6 @@ export default function Notes() {
           )}
         </Pinned>
       ) : null}
-    </>
+    </TaskMenuContext.Provider>
   );
 }

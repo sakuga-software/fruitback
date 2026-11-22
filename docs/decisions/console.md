@@ -1163,3 +1163,24 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   else `400 invalid-notify-done`). Absent, a new site is off and a site that exists keeps its value.
 - `e2e/console-site-page.spec.ts` holds the three cases: hidden for members only, shown and sent on,
   and the summary.
+
+## The menu of a task (FRU-654)
+
+### The rules, in short
+
+- **A row of the table and a card of the board end with « Actions of this note »**, a button that
+  opens `MenuTree` of the kit (`ui.tsx`): the dropdown of HeroUI, with submenus. A right click on the
+  row or the card opens it too (`contextmenu`, which a long press of Android sends), and so do the
+  key of the menu and Shift+F10. A right click on a link keeps the menu of the browser.
+- **A note the worker keeps, that this person may change (`canSetStatus`), offers its status, its
+  assignee, its priority, its day and its labels**, each a submenu with its value checked. A change
+  is saved at once with `POST …/notes/<note>/task` or `…/status`, then the list is read again; a
+  refusal is said under the note. Every note offers « Copy the link to the note ».
+- **The assignee is a member of the workspace**, read with `list-members`; a guest is not offered.
+  **The day is today, tomorrow or in a week**, in the calendar of the browser; a day of a calendar
+  comes with the page of a task (FRU-653).
+- **« New label… » is for an owner or an admin** (`manage-sites`, as the worker says). It opens a
+  dialog, a name and one of eight colours (`label-colors.ts`: data the worker keeps, not tokens),
+  and the label goes on the task it was asked from. The menu closes before the dialog opens.
+- **Not here yet**: the order of a task in its column, and to archive or delete a task. The worker
+  has no route for them.

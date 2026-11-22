@@ -12,6 +12,7 @@ import { type StatusChoice } from '../note-status';
 import { type IndexedNote, type NotesAnswer, groupsOf } from './notes-model';
 import { Author, NoteStatus, Place, excerptOf } from './note-parts';
 import { TaskMarks } from './task-marks';
+import { useTaskMenu } from './task-menu';
 
 export function NoteRow({
   note,
@@ -42,6 +43,8 @@ export function NoteRow({
   const [refused, setRefused] = useState<string | undefined>();
   // A status the worker did not save (FRU-551): said under the note, the select keeps the choice.
   const [statusRefused, setStatusRefused] = useState<string | undefined>();
+  // FRU-654: the menu of the task, on its button and on a right click of the row.
+  const taskMenu = useTaskMenu(note);
   const { author, place } = note;
   // The link of the widget opens the note by the id it gave it, or by its issue (FRU-253).
   const opened = note.note ?? note.ref;
@@ -59,7 +62,7 @@ export function NoteRow({
   }
 
   return (
-    <tr data-note={note.id}>
+    <tr data-note={note.id} onContextMenu={taskMenu.onContextMenu} onKeyDown={taskMenu.onKeyDown}>
       {/* The note keeps 240 px of the row: the columns beside it are short words. */}
       <td className="max-w-[380px] min-[640px]:min-w-[240px]">
         {/* FRU-551: the status is its drop before the note, a list of the statuses for whoever may
@@ -83,6 +86,11 @@ export function NoteRow({
         {statusRefused === undefined ? null : (
           <span className="mt-[6px] block pl-[36px]">
             <Problem>{t(statusRefused)}</Problem>
+          </span>
+        )}
+        {taskMenu.problem === undefined ? null : (
+          <span className="mt-[6px] block pl-[36px]">
+            <Problem>{t(taskMenu.problem)}</Problem>
           </span>
         )}
       </td>
@@ -124,10 +132,13 @@ export function NoteRow({
         {ago(note.createdAt)}
       </td>
       <td data-align="end">
-        {/* FRU-546: the page of the note, in a new tab, its address in the tooltip. */}
-        <IconLink label={t('Show on the page')} href={show} tip={note.page.url}>
-          <NoteIcon name="open" />
-        </IconLink>
+        <span className="inline-flex items-center gap-[4px]">
+          {/* FRU-546: the page of the note, in a new tab, its address in the tooltip. */}
+          <IconLink label={t('Show on the page')} href={show} tip={note.page.url}>
+            <NoteIcon name="open" />
+          </IconLink>
+          {taskMenu.menu}
+        </span>
       </td>
     </tr>
   );
@@ -184,7 +195,7 @@ export function NotesTable({
               {t('When')}
             </th>
             {/* The column of the link to the page (FRU-546): its head is for a screen reader. */}
-            <th scope="col" className="w-[56px]">
+            <th scope="col" className="w-[96px]">
               <span className="sr-only">{t('Page')}</span>
             </th>
           </tr>

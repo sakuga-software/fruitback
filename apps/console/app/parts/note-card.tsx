@@ -10,6 +10,7 @@ import { type StatusChoice } from '../note-status';
 import { type IndexedNote } from './notes-model';
 import { NoteStatus, Place, excerptOf } from './note-parts';
 import { TaskMarks } from './task-marks';
+import { useTaskMenu } from './task-menu';
 
 /**
  * A note on the board (FRU-436): what a row of the table says, one under the other.
@@ -37,6 +38,8 @@ export function NoteCard({
   useLocale();
   // A status the worker did not save: said under the note, the select keeps the choice.
   const [statusRefused, setStatusRefused] = useState<string | undefined>();
+  // FRU-654: the menu of the task, on its button at the foot and on a right click of the card.
+  const taskMenu = useTaskMenu(note);
   const opened = note.note ?? note.ref;
   const show = opened === undefined ? note.page.url : `${note.page.url}#fruitback-note=${encodeURIComponent(opened)}`;
   const visitor = note.author.kind === 'verified' || note.author.kind === 'anonymous';
@@ -45,7 +48,7 @@ export function NoteCard({
   const settable = note.canSetStatus === true && note.status !== undefined && statuses !== undefined;
 
   return (
-    <div className="flex flex-col gap-[8px]">
+    <div className="flex flex-col gap-[8px]" onContextMenu={taskMenu.onContextMenu} onKeyDown={taskMenu.onKeyDown}>
       <div>
         <div className="flex items-start gap-[8px] text-body">
           <span className="line-clamp-3 min-w-0 flex-1 [overflow-wrap:anywhere]">{excerptOf(note.excerpt)}</span>
@@ -75,6 +78,11 @@ export function NoteCard({
             <Problem>{t(statusRefused)}</Problem>
           </span>
         )}
+        {taskMenu.problem === undefined ? null : (
+          <span className="mt-[6px] block">
+            <Problem>{t(taskMenu.problem)}</Problem>
+          </span>
+        )}
       </div>
       {seesTracker && note.place !== undefined ? (
         <div className="text-hint">
@@ -101,6 +109,7 @@ export function NoteCard({
         <IconLink label={t('Show on the page')} href={show} tip={note.page.url}>
           <NoteIcon name="open" />
         </IconLink>
+        {taskMenu.menu}
       </div>
     </div>
   );
