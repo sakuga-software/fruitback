@@ -25,6 +25,7 @@ const LABEL_PROBLEMS: Readonly<Record<string, string>> = {
   'invalid-label': msg('Give the label a name of 40 characters at most.'),
 };
 const LABEL_NOT_SAVED = msg('The label was not saved. Try again.');
+const LABEL_NOT_ON_TASK = msg('The label is added to the workspace, but not to this note: {why}');
 
 function colourName(color: LabelColor): string {
   switch (color) {
@@ -130,15 +131,19 @@ export function useTaskSeam({
       onClose={() => setLabelFor(undefined)}
       create={async (label) => {
         const answer = await call<{ label: TaskLabel }>('POST', `${base}/labels`, label);
-        if (!answer.ok) return problemOf(answer, LABEL_PROBLEMS, LABEL_NOT_SAVED);
+        if (!answer.ok) return { created: false, refused: t(problemOf(answer, LABEL_PROBLEMS, LABEL_NOT_SAVED)) };
         await readLabels();
         const note = labelFor;
-        setLabelFor(undefined);
         if (note?.task !== undefined) {
-          await change(note, { labels: [...note.task.labels.map((one) => one.id), answer.data.label.id] });
+          // The label exists now: a refusal to put it on the task stays in the dialog, which keeps open.
+          const refused = await change(note, {
+            labels: [...note.task.labels.map((one) => one.id), answer.data.label.id],
+          });
+          if (refused !== undefined) return { created: true, refused: t(LABEL_NOT_ON_TASK, { why: t(refused) }) };
         }
+        setLabelFor(undefined);
 
-        return undefined;
+        return { created: true };
       }}
     />
   );
@@ -154,7 +159,7 @@ function NewLabel({
 }: {
   open: boolean;
   onClose: () => void;
-  create: (label: { name: string; color: string }) => Promise<string | undefined>;
+  create: (label: { name: string; color: string }) => Promise<{ created: boolean; refused?: string }>;
 }) {
   useLocale();
   const [name, setName] = useState('');
@@ -165,10 +170,11 @@ function NewLabel({
   async function save() {
     setSaving(true);
     setProblem(undefined);
-    const refused = await create({ name: name.trim(), color });
+    const { created, refused } = await create({ name: name.trim(), color });
     setSaving(false);
-    if (refused !== undefined) return setProblem(refused);
-    setName('');
+    // A label made is not made again: its name goes, even when the task did not take it.
+    if (created) setName('');
+    if (refused !== undefined) setProblem(refused);
   }
 
   return (
@@ -191,7 +197,8 @@ function NewLabel({
             swatch: LABEL_COLORS[each],
           }))}
         />
-        {problem === undefined ? null : <Problem>{t(problem)}</Problem>}
+        {/* `create` answers the sentence in the language of the screen. */}
+        {problem === undefined ? null : <Problem>{problem}</Problem>}
         <div className="flex justify-end">
           <Button type="submit" disabled={name.trim() === '' || saving}>
             {saving ? t('Saving…') : t('Add the label')}

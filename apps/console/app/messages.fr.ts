@@ -983,6 +983,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Ce serveur ne garde pas de tâches : rien d’une note ne se modifie ici.',
   'The change was not saved. Try again.': 'La modification n’a pas été enregistrée. Réessayez.',
   'The workspace has a label of this name.': 'L’espace de travail a déjà un label de ce nom.',
+  'The label is added to the workspace, but not to this note: {why}':
+    'Le label est ajouté à l’espace de travail, mais pas à cette note : {why}',
   'The label was not saved. Try again.': 'Le label n’a pas été enregistré. Réessayez.',
   'Give the label a name of 40 characters at most.': 'Donnez au label un nom de 40 caractères au plus.',
   Red: 'Rouge',

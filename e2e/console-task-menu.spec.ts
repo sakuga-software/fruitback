@@ -180,3 +180,22 @@ test('a member who may not add a label is told who does, and a refusal is said u
   expect(sent).toEqual([{ path: '/console/workspaces/w1/notes/n1/task', body: { labels: ['l1'] } }]);
   await expect(row(p, 'The headline').getByRole('alert')).toContainText('no longer a member');
 });
+
+test('a new label that the task does not take keeps the dialog open, and says why', async ({ page: p }) => {
+  const sent = await worker(p, { refuse: 'not-allowed' });
+  await p.goto(`${CONSOLE}/w/w1/notes`);
+  await row(p, 'The headline').getByText('The headline').click({ button: 'right' });
+  await p.getByRole('menuitem', { name: 'Labels' }).hover();
+  await p.getByRole('menuitemcheckbox', { name: 'New label…' }).click();
+  const dialog = p.getByRole('dialog', { name: 'New label' });
+  await dialog.getByRole('textbox', { name: 'Name' }).fill('Mobile');
+  await dialog.getByRole('button', { name: 'Add the label' }).click();
+
+  await expect(dialog.getByRole('alert')).toContainText('added to the workspace, but not to this note');
+  // The label is made once: its name goes, so a second press does not make it again.
+  await expect(dialog.getByRole('textbox', { name: 'Name' })).toHaveValue('');
+  expect(sent.map((one) => one.path)).toEqual([
+    '/console/workspaces/w1/labels',
+    '/console/workspaces/w1/notes/n1/task',
+  ]);
+});
