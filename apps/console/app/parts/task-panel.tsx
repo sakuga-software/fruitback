@@ -34,7 +34,8 @@ export function TaskPanel({
 }) {
   useLocale();
   const seam = useContext(TaskMenuContext);
-  const [read, setRead] = useState<NoteIssue | 'loading' | 'failed' | 'gone'>('loading');
+  // Each answer names the note it is of: a panel opened on another note shows no answer of the one before.
+  const [answer, setAnswer] = useState<{ of: string; value: NoteIssue | 'failed' | 'gone' } | undefined>();
   const [problem, setProblem] = useState<string | undefined>();
   // « Try again » asks again: the read follows this count, as it follows the note.
   const [attempt, setAttempt] = useState(0);
@@ -42,12 +43,12 @@ export function TaskPanel({
   useEffect(() => {
     if (id === undefined) return;
     let current = true;
-    setRead('loading');
+    setAnswer(undefined);
     setProblem(undefined);
-    void call<{ note: NoteIssue }>('GET', `${base}/notes/${encodeURIComponent(id)}`).then((answer) => {
+    void call<{ note: NoteIssue }>('GET', `${base}/notes/${encodeURIComponent(id)}`).then((got) => {
       if (!current) return;
-      if (answer.ok) setRead(answer.data.note);
-      else setRead(answer.status === 404 ? 'gone' : 'failed');
+      if (got.ok) setAnswer({ of: id, value: got.data.note });
+      else setAnswer({ of: id, value: got.status === 404 ? 'gone' : 'failed' });
     });
 
     return () => {
@@ -55,6 +56,7 @@ export function TaskPanel({
     };
   }, [id, base, attempt]);
 
+  const read = answer !== undefined && answer.of === id ? answer.value : 'loading';
   const issue = typeof read === 'object' ? read : undefined;
   const title = issue?.note.text.split('\n')[0] ?? listed?.excerpt ?? t('Note');
 

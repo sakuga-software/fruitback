@@ -81,19 +81,22 @@ async function worker(p: Page): Promise<Sent[]> {
         });
       }
       if (pathname === '/console/workspaces/w1/notes/n2') {
-        return route.fulfill({
-          json: {
-            note: {
-              id: 'x',
-              identifier: 'ACM-149',
-              title: '',
-              stage: 'progress',
-              stateName: '',
-              updatedAt: AT,
-              note: { ...NOTE, id: 'sd_2' },
+        // Slow: the panel is seen while it reads.
+        return new Promise<void>((resolve) => setTimeout(resolve, 1500)).then(() =>
+          route.fulfill({
+            json: {
+              note: {
+                id: 'x',
+                identifier: 'ACM-149',
+                title: '',
+                stage: 'progress',
+                stateName: '',
+                updatedAt: AT,
+                note: { ...NOTE, id: 'sd_2', text: 'The returns policy says "recieve".' },
+              },
             },
-          },
-        });
+          }),
+        );
       }
       if (pathname === '/console/workspaces/w1/notes/n1/task') {
         const body = request.postDataJSON() as { priority?: string; dueOn?: string };
@@ -143,6 +146,24 @@ test('the text of a note opens its page: its text, its element and its replies, 
   await expect(p.locator('tr', { hasText: 'The price' }).locator('[data-task-marks]')).toContainText('High');
 });
 
+test('a panel opened on another note shows nothing of the one before while it reads', async ({ page: p }) => {
+  await worker(p);
+  await p.goto(`${CONSOLE}/w/w1/notes?task=n1`);
+  const panel = p.getByRole('dialog');
+  await expect(panel.locator('[data-task-text]')).toContainText('The monthly plan is fine.');
+  await p.keyboard.press('Escape');
+  await expect(panel).toBeHidden();
+
+  await p
+    .locator('tr', { hasText: 'The returns policy' })
+    .getByRole('button', { name: /The returns policy/ })
+    .click();
+  // While the second note is read, the panel says so, and draws no text or field of the first one.
+  await expect(p.getByRole('dialog').getByText('Loading…')).toBeVisible();
+  await expect(p.getByRole('dialog').locator('[data-task-text], [data-task-fields]')).toHaveCount(0);
+  await expect(p.getByRole('dialog').locator('[data-task-text]')).toContainText('recieve');
+});
+
 test('a link with the task opens it, a note of a tracker shows no field, and the panel fits a phone', async ({
   page: p,
 }) => {
@@ -150,7 +171,7 @@ test('a link with the task opens it, a note of a tracker shows no field, and the
   await p.setViewportSize({ width: 390, height: 844 });
   await p.goto(`${CONSOLE}/w/w1/notes?task=n2`);
 
-  const panel = p.getByRole('dialog', { name: /The price of the yearly plan/ });
+  const panel = p.getByRole('dialog', { name: /The returns policy/ });
   await expect(panel).toBeVisible();
   await expect(panel.locator('[data-task-reference]')).toHaveText('ACM-149');
   await expect(panel.locator('[data-task-fields]')).toHaveCount(0);
