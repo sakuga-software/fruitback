@@ -1,6 +1,7 @@
 import {
   Alert,
   Description,
+  Drawer as HeroDrawer,
   Dropdown,
   FieldError,
   Header,
@@ -569,7 +570,8 @@ type FieldProps = {
   hint?: string;
   value?: string;
   onChange?: (event: ChangeEvent<HTMLInputElement>) => void;
-  type?: 'text' | 'email' | 'url' | 'password' | 'search';
+  /** `date`: a day of the calendar of the browser, `YYYY-MM-DD` (FRU-653). */
+  type?: 'text' | 'email' | 'url' | 'password' | 'search' | 'date';
   /**
    * The keyboard of a phone, for a field that is not `type="url"` so that the screen judges what is
    * typed, or the digits of a number of days (FRU-462).
@@ -1275,6 +1277,50 @@ export function Dialog({
         </Modal.Dialog>
       </Modal.Container>
     </Modal.Backdrop>
+  );
+}
+
+/**
+ * A panel over the screen, at its right edge (FRU-653), as the drawer of HeroUI: named by its title,
+ * focus kept inside, Escape and its close button close it, and focus goes back to what opened it. A
+ * press outside closes it too: the list under it is where the person goes back to. At 390 px it takes
+ * the whole width.
+ */
+export function Drawer({
+  open,
+  onClose,
+  title,
+  closeLabel,
+  head,
+  children,
+}: {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  closeLabel: string;
+  /** What stands above the title: the reference of the task, its buttons. */
+  head?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <HeroDrawer.Backdrop
+      isOpen={open}
+      isDismissable
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+    >
+      <HeroDrawer.Content placement="right" className="kit-drawer">
+        <HeroDrawer.Dialog className="kit-drawer__dialog">
+          <HeroDrawer.CloseTrigger aria-label={closeLabel} />
+          <HeroDrawer.Header>
+            {head}
+            <HeroDrawer.Heading className="kit-drawer__title">{title}</HeroDrawer.Heading>
+          </HeroDrawer.Header>
+          <HeroDrawer.Body className="kit-drawer__body">{children}</HeroDrawer.Body>
+        </HeroDrawer.Dialog>
+      </HeroDrawer.Content>
+    </HeroDrawer.Backdrop>
   );
 }
 

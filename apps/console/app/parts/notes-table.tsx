@@ -12,7 +12,7 @@ import { type StatusChoice } from '../note-status';
 import { type IndexedNote, type NotesAnswer, groupsOf } from './notes-model';
 import { Author, NoteStatus, Place, excerptOf } from './note-parts';
 import { TaskMarks } from './task-marks';
-import { useTaskMenu } from './task-menu';
+import { NoteText, useTaskMenu } from './task-menu';
 
 export function NoteRow({
   note,
@@ -79,7 +79,9 @@ export function NoteRow({
             />
           </span>
           <span className="flex min-w-0 flex-col gap-[4px]">
-            <span className="line-clamp-2 [overflow-wrap:anywhere]">{excerptOf(note.excerpt)}</span>
+            <span className="line-clamp-2 [overflow-wrap:anywhere]">
+              <NoteText note={note}>{excerptOf(note.excerpt)}</NoteText>
+            </span>
             <TaskMarks task={note.task} />
           </span>
         </span>

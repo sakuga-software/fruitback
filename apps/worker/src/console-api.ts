@@ -1,3 +1,4 @@
+import type { NoteIssue } from '@fruitback/shared';
 import type { DoneNoticeSeams } from './done-notices.ts';
 import { isOneOf } from './one-of.ts';
 import { json } from './http.ts';
@@ -92,6 +93,8 @@ export type ConsoleApiContext = {
   noteIndex?: NoteIndex;
   /** Whether this worker keeps tasks (FRU-651). Absent: `on`. */
   tasks?: 'on' | 'off';
+  /** FRU-653: one note as its page reads it. Absent: the page of a task is not read. */
+  readNote?: (workspace: string, site: string, note: string) => Promise<NoteIssue | undefined>;
   /** Who to tell when a note is done (FRU-604). */
   done?: DoneNoticeSeams;
   /** The Linear application, when this worker has one: a workspace then connects Linear with no key. */
@@ -756,6 +759,7 @@ export async function handleConsoleApi(
     allowed,
     noteIndex: context.noteIndex,
     tasks: context.tasks ?? 'on',
+    ...(context.readNote === undefined ? {} : { readNote: context.readNote }),
     ...(context.done === undefined ? {} : { done: context.done }),
     accounts: context.accounts,
     kv: context.kv,

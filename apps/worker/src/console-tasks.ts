@@ -1,8 +1,9 @@
 import { readJsonObject } from './bounded-body.ts';
 import { json } from './http.ts';
-import { invalidatePages } from './note-helpers.ts';
+import { invalidatePages, withoutTracker } from './note-helpers.ts';
 import type { NotesContext } from './console-notes.ts';
 import { readLabel, readTaskChange } from './task-fields.ts';
+import { withoutTrackerStatus } from './site-statuses.ts';
 
 /**
  * The routes of the tasks the worker keeps (FRU-652), in the console:
@@ -23,9 +24,27 @@ export async function handleTasks(
 ): Promise<Response | undefined> {
   const task = /^\/notes\/([A-Za-z0-9_-]+)\/task$/.exec(rest);
   const label = /^\/labels\/([A-Za-z0-9_-]+)$/.exec(rest);
-  if (task === null && label === null && rest !== '/labels') return undefined;
+  const one = /^\/notes\/([A-Za-z0-9_-]+)$/.exec(rest);
+  if (task === null && label === null && one === null && rest !== '/labels') return undefined;
   const { headers } = context;
   if (!context.allowed('read-feedback')) return json(403, { error: 'forbidden' }, headers);
+
+  // FRU-653: one note, whole, as its page reads it: the page of a task in the console.
+  if (one !== null) {
+    if (request.method !== 'GET') return json(405, { error: 'method-not-allowed' }, headers);
+    const note = noteKeyOf(one[1] as string);
+    if (note === undefined || context.readNote === undefined) return json(404, { error: 'not-found' }, headers);
+    const reach = await context.reach();
+    if (reach === undefined || (reach.sites !== 'every' && !reach.sites.includes(note.site))) {
+      return json(404, { error: 'not-found' }, headers);
+    }
+    const issue = await context.readNote(context.workspace, note.site, note.note);
+    if (issue === undefined) return json(404, { error: 'not-found' }, headers);
+    // A guest reads nothing of the tracker (FRU-244), as in the list.
+    const shown = context.allowed('see-tracker') ? issue : withoutTrackerStatus(withoutTracker(issue, issue.note.id));
+
+    return json(200, { note: shown }, headers);
+  }
   const writes = request.method !== 'GET';
   if (writes && context.tasks === 'off') return json(403, { error: 'tasks-off' }, headers);
 

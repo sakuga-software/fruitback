@@ -1,3 +1,4 @@
+import type { NoteIssue } from '@fruitback/shared';
 import type { DoneNoticeSeams } from './done-notices.ts';
 import { json } from './http.ts';
 import type { AccountStore } from './accounts.ts';
@@ -50,10 +51,12 @@ export type ConsoleSeams = {
   cors: CorsDecision;
   /** The GitHub App of the workspace connectors (FRU-359), when this worker has one. */
   githubApp?: GithubApp;
+  /** FRU-653: one note as its page reads it, by the id the widget gave it, or `undefined`. */
+  readNote?: (workspace: string, site: string, note: string) => Promise<NoteIssue | undefined>;
 };
 
 export async function handleConsole(request: Request, pathname: string, seams: ConsoleSeams): Promise<Response> {
-  const { served, context, accounts, kv, noteIndex, done, cors, githubApp } = seams;
+  const { served, context, accounts, kv, noteIndex, done, cors, githubApp, readNote } = seams;
   const sessions = context.sessionStore ?? sessionStoreFor(served);
   if (sessions === undefined || served.identitySecret === undefined)
     return json(404, { error: 'not-found' }, cors.headers);
@@ -218,6 +221,7 @@ export async function handleConsole(request: Request, pathname: string, seams: C
         ...(served.secretsKey === undefined ? {} : { secretsKey: served.secretsKey }),
         kv,
         tasks: served.tasks,
+        ...(readNote === undefined ? {} : { readNote }),
         ...(noteIndex === undefined ? {} : { noteIndex }),
         ...(done === undefined ? {} : { done }),
         ...(served.linearOAuth === undefined ? {} : { linearOAuth: served.linearOAuth }),

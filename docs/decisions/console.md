@@ -1207,3 +1207,18 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   mockup's, and a workspace whose notes all go to a tracker sees no filter that finds nothing.
 - **Each filter is in the address** (`assignee`, `priority`, `label`, `due`), as the others. The day
   filters send `today`, the day of the browser.
+
+## The page of a task (FRU-653)
+
+### The rules, in short
+
+- **A panel over the list, at the right edge** (option A of the board of 2026-11-22): `Drawer` of the
+  kit, on the drawer of HeroUI, 560 px wide and the whole width at 390 px. The text of a note in a
+  row or on a card opens it (« Open the note »), and its address is `?task=<id>`: a link opens it,
+  and Escape, its close button or a press outside close it.
+- **It reads the note whole** (`GET …/notes/<note>`): the text, the page and its link, the element,
+  the component and the file, the size of the screen, and the replies. A task Fruitback keeps, that
+  this person may change, shows its fields as controls that save at once, as the menu does, the day
+  as a field of the calendar of the browser. Any other note shows them disabled, or not at all.
+- **Not here yet**: to write a reply, to edit the text, the files of a note. The console has no route
+  to write a reply, and a note Fruitback keeps keeps no file.

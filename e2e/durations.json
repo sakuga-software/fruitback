@@ -60,6 +60,7 @@
   "console-task-filters.spec.ts": 6.4,
   "console-task-menu.spec.ts": 9.6,
   "console-task-order.spec.ts": 8.7,
+  "console-task-panel.spec.ts": 14.1,
   "console-titles.spec.ts": 17.1,
   "console-workspace-logo.spec.ts": 9.5,
   "console-workspace-settings.spec.ts": 15.6,

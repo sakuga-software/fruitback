@@ -33,6 +33,7 @@
 @import '@heroui/styles/components/textfield.css' layer(components);
 @import '@heroui/styles/components/header.css' layer(components);
 @import '@heroui/styles/components/surface.css' layer(components);
+@import '@heroui/styles/components/drawer.css' layer(components);
 @import '@heroui/styles/components/modal.css' layer(components);
 @import '@heroui/styles/components/tooltip.css' layer(components);
 @import '@heroui/styles/components/combo-box.css' layer(components);
@@ -2275,4 +2276,25 @@ textarea {
   .source-panel:not([data-settled]) > .source-panel__body {
     overflow: visible;
   }
+}
+
+/* The panel of a task (FRU-653): 560 px at the right edge, the whole width at 390 px. HeroUI draws a
+   drawer of 320 px, 85 % of the screen at most: the dialog is what takes its width. */
+.kit-drawer__dialog {
+  width: min(560px, 100vw);
+  max-width: 100vw;
+  height: 100%;
+}
+
+.kit-drawer__title {
+  font-size: var(--text-conclusion);
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.kit-drawer__body {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  overflow-y: auto;
 }
