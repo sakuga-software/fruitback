@@ -23,7 +23,11 @@ export const STYLES = `
 .fruitback-overlay { position: absolute; top: 0; left: 0; }
 .fruitback-pin {
   position: absolute;
-  z-index: 2147483000;
+  /*
+    Above the dock (2147483200) and the settings of the widget (FRU-666): a note under the dock is a
+    note the reporter cannot see. The badge then takes the pointer over the dock where they meet.
+  */
+  z-index: 2147483210;
   /* Clicks go through to the client's page: the pin is an annotation, not a lid. */
   pointer-events: none;
   /*
@@ -41,7 +45,7 @@ export const STYLES = `
   frame of an open thread must not go with it.
 */
 .fruitback-pin[data-fruitback-open] {
-  z-index: 2147483001;
+  z-index: 2147483211;
   border-color: var(--fruitback-pin-color);
   outline: 1px var(--fruitback-pin-frame-style, solid) var(--fruitback-color-stage-edge);
 }
@@ -60,7 +64,7 @@ export const STYLES = `
 .fruitback-pin-orphan:not([data-fruitback-draft]) { display: none; }
 /*
   The pin of the row a list outside the page has open (FRU-299): above the others, a fifth bigger.
-  Its z-index counts against the one of every pin, 2147483000, not against 0 (FRU-326).
+  Its z-index counts against the one of every pin, 2147483210, not against 0 (FRU-326).
 */
 /*
   A note chosen in the list of the page (FRU-308): its frame is the ring of the board, 12 px round with
@@ -76,7 +80,7 @@ export const STYLES = `
   its pin, and the note chosen in the list keeps its ring and its drop.
 */
 .fruitback-overlay[data-fruitback-pins-hidden] .fruitback-pin:not([data-fruitback-open]) { display: none; }
-.fruitback-pin[data-fruitback-marked] { z-index: 2147483001; }
+.fruitback-pin[data-fruitback-marked] { z-index: 2147483211; }
 .fruitback-pin[data-fruitback-marked] .fruitback-pin-badge { scale: 1.2; }
 .fruitback-pin-orphan { border-style: dotted; }
 .fruitback-pin-badge {
@@ -151,7 +155,8 @@ export const STYLES = `
 }
 .fruitback-thread {
   position: absolute;
-  z-index: 2147483100;
+  /* Above every pin (2147483210), so that the pin of another note never cuts into an open thread. */
+  z-index: 2147483230;
   /* 344 px, and what a narrower window leaves: 8 px on each side, the gap the placement keeps. */
   width: min(344px, calc(100vw - 16px));
   pointer-events: auto;
@@ -267,7 +272,7 @@ export const STYLES = `
 /* The line from the pin to a thread moved away from it (FRU-420): dashed, in the colour of its status. */
 .fruitback-thread-tether {
   position: absolute;
-  z-index: 2147483099;
+  z-index: 2147483229;
   height: 0;
   border-top: 2px dashed var(--fruitback-pin-color);
   transform-origin: 0 0;
