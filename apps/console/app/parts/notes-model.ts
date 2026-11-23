@@ -104,7 +104,19 @@ export type NotesAnswer = {
 
 /** The filters of the page, in its address: a reload keeps the view, and a link shares it. */
 // FRU-665: `archived` reads the archived tasks, in place of the others.
-export const FILTERS = ['place', 'site', 'stage', 'mine', 'archived', 'q'] as const;
+// FRU-655: `assignee`, `priority`, `label` and `due` read the fields of the tasks.
+export const FILTERS = [
+  'place',
+  'site',
+  'stage',
+  'mine',
+  'archived',
+  'assignee',
+  'priority',
+  'label',
+  'due',
+  'q',
+] as const;
 export type Filter = (typeof FILTERS)[number];
 
 /** How the notes are drawn (FRU-436): the table, or the board, as `?view=board` keeps it. */

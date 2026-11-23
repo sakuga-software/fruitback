@@ -3,6 +3,7 @@ import { json } from './http.ts';
 import { requestAgent } from './agent-triggers.ts';
 import { readJsonObject } from './bounded-body.ts';
 import { handleTasks } from './console-tasks.ts';
+import { isDay, isPriority } from './task-fields.ts';
 import { DEFAULT_NOTE_STAGE, NOTE_STAGES, type NoteStage, type NoteStatus } from '@fruitback/shared';
 import type { Action, AccountStore, Reach } from './accounts.ts';
 import type { Kv } from './kv.ts';
@@ -198,6 +199,18 @@ export function queryOf(params: URLSearchParams, account: string, options: { ord
   if (archived !== undefined && archived !== '1') return { ok: false, error: 'invalid-archived' };
   const q = params.get('q')?.trim() || undefined;
   if (q !== undefined && q.length > QUERY_LENGTH) return { ok: false, error: 'invalid-q' };
+  // FRU-655: the fields of a task. `me` and `none` for the assignee, `none` for the priority.
+  const assignee = params.get('assignee') ?? undefined;
+  if (assignee !== undefined && !ID.test(assignee)) return { ok: false, error: 'invalid-assignee' };
+  const priority = params.get('priority') ?? undefined;
+  if (priority !== undefined && priority !== 'none' && !isPriority(priority))
+    return { ok: false, error: 'invalid-priority' };
+  const label = params.get('label') ?? undefined;
+  if (label !== undefined && !ID.test(label)) return { ok: false, error: 'invalid-label' };
+  const dueBy = params.get('due') ?? undefined;
+  const today = params.get('today') ?? undefined;
+  if (dueBy !== undefined && !['overdue', 'week', 'none'].includes(dueBy)) return { ok: false, error: 'invalid-due' };
+  if ((dueBy === 'overdue' || dueBy === 'week') && !isDay(today)) return { ok: false, error: 'invalid-today' };
   const order = options.orders === true ? (params.get('order') ?? undefined) : undefined;
   if (order !== undefined && order !== 'status') return { ok: false, error: 'invalid-order' };
   const cursor = params.get('cursor') ?? undefined;
@@ -222,6 +235,10 @@ export function queryOf(params: URLSearchParams, account: string, options: { ord
       ...(place === undefined ? {} : { place }),
       ...(mine === undefined ? {} : { author: account }),
       ...(archived === undefined ? {} : { archived: true }),
+      ...(assignee === undefined ? {} : { assignee: assigneeOf(assignee, account) }),
+      ...(priority === undefined ? {} : { priority: priority === 'none' ? null : priority }),
+      ...(label === undefined ? {} : { label }),
+      ...(dueBy === undefined ? {} : { due: dueOf(dueBy, today as string) }),
       ...(q === undefined ? {} : { q }),
       ...(after === undefined ? {} : { after }),
       ...(order === undefined ? {} : { order }),
@@ -489,4 +506,20 @@ async function answered<T>(read: () => Promise<T>): Promise<T | typeof failed> {
 
 function forbidden(context: NotesContext): Response {
   return json(403, { error: 'forbidden' }, context.headers);
+}
+
+/** The assignee of a filter (FRU-655): `me` is the caller, `none` nobody. */
+function assigneeOf(asked: string, account: string): string | null {
+  if (asked === 'me') return account;
+
+  return asked === 'none' ? null : asked;
+}
+
+/** The day of a filter (FRU-655): `week` is `today` and the six days after it. */
+function dueOf(by: string, today: string): NonNullable<NoteQuery['due']> {
+  if (by === 'none') return { by: 'none' };
+  const end = new Date(`${today}T00:00:00Z`);
+  end.setUTCDate(end.getUTCDate() + 6);
+
+  return { by: by as 'overdue' | 'week', today, weekEnd: end.toISOString().slice(0, 10) };
 }

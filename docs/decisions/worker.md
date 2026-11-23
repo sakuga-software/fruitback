@@ -4972,3 +4972,19 @@ destination yet when it is off: a note is then refused, and the widget keeps it.
 - **`DELETE …/notes/<note>/task` deletes the task**, its replies and its labels (`cascade`), and its
   row of the index, with the rights of the status. The read of its page is invalidated.
 - `position` and `archived` are fields of `POST …/task`, refused at `403 tasks-off` like the others.
+
+## The filters on the fields of a task (FRU-655)
+
+### The rules, in short
+
+- **The index keeps the fields of a task** (`task_assignee_id`, `task_priority`, `task_due_on`,
+  `task_label_ids`): the list reads the index, and a filter on a field of `notes` would read a second
+  table at each page. `setTaskFields` writes them in the transaction that writes `notes`;
+  `removeLabel` takes the label out of every row; the assignee goes when the account goes (`set null`).
+  `0049_task_filters` fills them for the tasks kept before.
+- **The filters of `GET …/notes`**: `assignee` (an account, `me` or `none`), `priority` (one of them or
+  `none`), `label`, and `due` (`overdue`, `week` or `none`). `overdue` and `week` need `today`, the
+  day of the person as `YYYY-MM-DD`: the worker does not know the zone. Each filter holds with the
+  others, and the counts read the same filter.
+- **Not here yet**: the sorts by priority or by day, and the groups by assignee, priority or label. A
+  page of the list is read by date with a cursor; another order needs its own cursor.

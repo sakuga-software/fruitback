@@ -1876,20 +1876,27 @@ export function createPostgresAccountStore(database: Database): AccountStore {
             updated_at: Date.now(),
           })
           .where(and(eq(notes.id, id), eq(notes.client_id, site)));
-        // FRU-665: the lists read the archive in the index.
-        if (change.archived !== undefined) {
-          await db
-            .update(note_index)
-            .set({ archived_at: change.archived ? Date.now() : null })
-            .where(
-              and(eq(note_index.workspace_id, workspace), eq(note_index.site_id, site), eq(note_index.note_id, noteId)),
-            );
-        }
         if (change.labels !== undefined) {
           await db.delete(note_labels).where(eq(note_labels.note_id, id));
           if (change.labels.length > 0) {
             await db.insert(note_labels).values(change.labels.map((label) => ({ note_id: id, label_id: label })));
           }
+        }
+        // FRU-665, FRU-655: the lists read the archive and the fields in the index.
+        const mirrored = {
+          ...(change.archived === undefined ? {} : { archived_at: change.archived ? Date.now() : null }),
+          ...(change.assignee === undefined ? {} : { task_assignee_id: change.assignee }),
+          ...(change.priority === undefined ? {} : { task_priority: change.priority }),
+          ...(change.dueOn === undefined ? {} : { task_due_on: change.dueOn }),
+          ...(change.labels === undefined ? {} : { task_label_ids: [...change.labels].sort() }),
+        };
+        if (Object.keys(mirrored).length > 0) {
+          await db
+            .update(note_index)
+            .set(mirrored)
+            .where(
+              and(eq(note_index.workspace_id, workspace), eq(note_index.site_id, site), eq(note_index.note_id, noteId)),
+            );
         }
 
         return { set: true as const, identifier: note.reference ?? `FB-${id}`, page: kept.page };
@@ -1976,14 +1983,21 @@ export function createPostgresAccountStore(database: Database): AccountStore {
     },
 
     async removeLabel(workspace, id) {
-      const removed = await run((db) =>
-        db
+      return transaction(async (db) => {
+        const removed = await db
           .delete(labels)
           .where(and(eq(labels.workspace_id, workspace), eq(labels.id, id)))
-          .returning({ id: labels.id }),
-      );
+          .returning({ id: labels.id });
+        // FRU-655: the index forgets it too, or a filter on it would still find the tasks it left.
+        if (removed.length > 0) {
+          await db
+            .update(note_index)
+            .set({ task_label_ids: sql`array_remove(${note_index.task_label_ids}, ${id})` })
+            .where(and(eq(note_index.workspace_id, workspace), sql`${id} = ANY(${note_index.task_label_ids})`));
+        }
 
-      return removed.length > 0;
+        return removed.length > 0;
+      });
     },
 
     async noteRepositoryPrivacy(connector, repository, isPrivate) {

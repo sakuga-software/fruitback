@@ -514,11 +514,12 @@ describe('why the type of an instant matters (FRU-180)', () => {
     // each in a `where`. One more for the sessions of a site that name a note of the page (FRU-618): `?|`
     // of a JSON array against a list of texts, in a `where`. Three more for the pair of a workspace of
     // Linear (FRU-633): the troubles a new pair ends, in a `set`. One more for the trouble of a
-    // destination (FRU-640): `IS DISTINCT FROM` of a text, in a `where`.
+    // destination (FRU-640): `IS DISTINCT FROM` of a text, in a `where`. Two more for a label removed
+    // (FRU-655): `array_remove` of the labels of a row, in a `set`, and `= ANY` of them, in a `where`.
     const fragments = (source: string): number => source.match(/\bsql(<[^>`]*>)?`/g)?.length ?? 0;
     assert.deepEqual(
       { accounts: fragments(stores['accounts-postgres.ts']), sessions: fragments(stores['session-postgres.ts']) },
-      { accounts: 26, sessions: 9 },
+      { accounts: 28, sessions: 9 },
     );
   });
 });

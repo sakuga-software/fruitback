@@ -945,6 +945,12 @@ export const note_index = pgTable(
     component: text('component'),
     // FRU-665: when the task the worker keeps was archived, as `notes` says. The lists read it.
     archived_at: instant('archived_at'),
+    // FRU-655: the fields of the task, as `notes` and `note_labels` say, for the filters of the list.
+    // Written with them, in the same transaction. Empty for a note of a tracker.
+    task_assignee_id: text('task_assignee_id'),
+    task_priority: text('task_priority'),
+    task_due_on: text('task_due_on'),
+    task_label_ids: text('task_label_ids').array(),
   },
   (table) => [
     primaryKey({ name: 'note_index_pkey', columns: [table.site_id, table.note_id] }),
@@ -969,6 +975,12 @@ export const note_index = pgTable(
     foreignKey({
       name: 'note_index_author_account_id_fkey',
       columns: [table.author_account_id],
+      foreignColumns: [user.id],
+    }).onDelete('set null'),
+    // FRU-655: the assignee of a task too, as `notes` forgets it.
+    foreignKey({
+      name: 'note_index_task_assignee_id_fkey',
+      columns: [table.task_assignee_id],
       foreignColumns: [user.id],
     }).onDelete('set null'),
     // What `ON DELETE SET NULL` of an account looks for, and the notes of one member (FRU-244).
