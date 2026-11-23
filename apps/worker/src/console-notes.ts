@@ -70,6 +70,7 @@ export type NotesContext = {
     | 'agentTrigger'
     | 'enqueueDelivery'
     | 'setTaskFields'
+    | 'deleteTask'
     | 'labels'
     | 'addLabel'
     | 'changeLabel'
@@ -192,6 +193,9 @@ export function queryOf(params: URLSearchParams, account: string, options: { ord
   if (place !== undefined && !ID.test(place)) return { ok: false, error: 'invalid-place' };
   const mine = params.get('mine') ?? undefined;
   if (mine !== undefined && mine !== '1' && mine !== 'true') return { ok: false, error: 'invalid-mine' };
+  // FRU-665: the archived tasks, in place of the others.
+  const archived = params.get('archived') ?? undefined;
+  if (archived !== undefined && archived !== '1') return { ok: false, error: 'invalid-archived' };
   const q = params.get('q')?.trim() || undefined;
   if (q !== undefined && q.length > QUERY_LENGTH) return { ok: false, error: 'invalid-q' };
   const order = options.orders === true ? (params.get('order') ?? undefined) : undefined;
@@ -217,6 +221,7 @@ export function queryOf(params: URLSearchParams, account: string, options: { ord
       ...(stage === undefined ? {} : { stage: stage as NoteStage }),
       ...(place === undefined ? {} : { place }),
       ...(mine === undefined ? {} : { author: account }),
+      ...(archived === undefined ? {} : { archived: true }),
       ...(q === undefined ? {} : { q }),
       ...(after === undefined ? {} : { after }),
       ...(order === undefined ? {} : { order }),

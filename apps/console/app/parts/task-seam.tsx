@@ -7,7 +7,7 @@ import { type Stage } from '../stages';
 import { Button, Dialog, Field, Problem, Radios } from '../ui';
 import { LABEL_COLORS, type LabelColor } from '../label-colors';
 import { useLocale } from '../use-locale';
-import { type IndexedNote } from './notes-model';
+import { type IndexedNote, placeBetween } from './notes-model';
 import { type TaskChange, type TaskLabel, type TaskMenuSeam, type TaskPerson } from './task-menu';
 
 /** The sentence for a change of a task the worker did not save (FRU-654). */
@@ -19,7 +19,7 @@ export const TASK_PROBLEMS: Readonly<Record<string, string>> = {
   'tasks-off': msg('This server keeps no task: nothing of a note changes here.'),
   'not-found': msg('This note is no longer in Fruitback. Reload the page.'),
 };
-const TASK_NOT_SAVED = msg('The change was not saved. Try again.');
+export const TASK_NOT_SAVED = msg('The change was not saved. Try again.');
 const LABEL_PROBLEMS: Readonly<Record<string, string>> = {
   'label-taken': msg('The workspace has a label of this name.'),
   'invalid-label': msg('Give the label a name of 40 characters at most.'),
@@ -48,6 +48,24 @@ function colourName(color: LabelColor): string {
   }
 }
 
+/**
+ * « Move up » and « Move down » of a note of the board (FRU-665): the way of the keyboard to the place
+ * that a drag inside its column gives. None at the end of the column it would go past.
+ */
+function movesOf(
+  note: IndexedNote,
+  column: readonly IndexedNote[] | undefined,
+  save: (position: number) => Promise<string | undefined>,
+): { moveUp?: () => Promise<string | undefined>; moveDown?: () => Promise<string | undefined> } {
+  const at = column?.findIndex((each) => each.id === note.id) ?? -1;
+  if (column === undefined || at < 0) return {};
+
+  return {
+    ...(at > 0 ? { moveUp: () => save(placeBetween(column[at - 2], column[at - 1])) } : {}),
+    ...(at < column.length - 1 ? { moveDown: () => save(placeBetween(column[at + 1], column[at + 2])) } : {}),
+  };
+}
+
 /** The link of the widget that opens the note on its page (FRU-253). */
 function linkOf(note: IndexedNote): string {
   const opened = note.note ?? note.ref;
@@ -67,6 +85,7 @@ export function useTaskSeam({
   statusesOf,
   choose,
   read,
+  columnOf,
 }: {
   workspace: string;
   base: string;
@@ -74,6 +93,8 @@ export function useTaskSeam({
   statusesOf: (note: IndexedNote) => readonly StatusChoice[] | undefined;
   choose: (note: IndexedNote, status: string) => Promise<Answer<{ status: string; stage: Stage }>>;
   read: () => Promise<void>;
+  /** FRU-665: the notes of the column of the board a note is in, in their order. Absent: no board. */
+  columnOf?: (note: IndexedNote) => readonly IndexedNote[] | undefined;
 }): { seam: TaskMenuSeam; dialog: ReactNode } {
   const [people, setPeople] = useState<TaskPerson[]>([]);
   const [labels, setLabels] = useState<TaskLabel[]>([]);
@@ -122,6 +143,15 @@ export function useTaskSeam({
       change: (body) => change(note, body),
       newLabel: () => setLabelFor(note),
       copyLink: () => void navigator.clipboard?.writeText(linkOf(note)),
+      archive: (archived) => change(note, { archived }),
+      remove: async () => {
+        const answer = await call('DELETE', `${base}/notes/${encodeURIComponent(note.id)}/task`);
+        if (!answer.ok) return problemOf(answer, TASK_PROBLEMS, TASK_NOT_SAVED);
+        await read();
+
+        return undefined;
+      },
+      ...movesOf(note, columnOf?.(note), (position) => change(note, { position })),
     }),
   };
 

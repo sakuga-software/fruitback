@@ -83,6 +83,7 @@ export function NoteCard({
             <Problem>{t(taskMenu.problem)}</Problem>
           </span>
         )}
+        {taskMenu.confirm === null ? null : <span className="mt-[8px] block">{taskMenu.confirm}</span>}
       </div>
       {seesTracker && note.place !== undefined ? (
         <div className="text-hint">

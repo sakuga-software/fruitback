@@ -212,6 +212,8 @@ export type NoteQuery = {
   after?: NoteCursor;
   /** The notes left at this instant or after it, in milliseconds (FRU-463). */
   since?: number;
+  /** FRU-665: the archived tasks only. Absent: the notes that are not archived. */
+  archived?: boolean;
   /**
    * `status`: by the stages of `STAGE_ORDER`, then the newest first in each (FRU-551, the table of
    * the console). Absent: the newest first.

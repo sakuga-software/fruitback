@@ -24,6 +24,7 @@ export function NotesBoard<Note extends BoardNote>({
   card,
   movable,
   move,
+  reorder,
 }: {
   columns: readonly BoardColumn<Note>[];
   /** A read is on its way: the board stays as it is until its answer. */
@@ -36,6 +37,11 @@ export function NotesBoard<Note extends BoardNote>({
   movable: (note: Note) => boolean;
   /** Saves the status of a note; answers the sentence of a refusal, or `undefined` once saved. */
   move: (note: Note, status: string) => Promise<string | undefined>;
+  /**
+   * FRU-665: puts a note of a column between two others of it, by a drag inside the column. Absent:
+   * the board does not order its columns. Answers the sentence of a refusal, or `undefined`.
+   */
+  reorder?: (note: Note, before: Note | undefined, after: Note | undefined) => Promise<string | undefined>;
 }) {
   useLocale();
   const id = useId();
@@ -43,6 +49,8 @@ export function NotesBoard<Note extends BoardNote>({
   const [over, setOver] = useState<string | undefined>();
   const [moving, setMoving] = useState<string | undefined>();
   const [refused, setRefused] = useState<string | undefined>();
+  // FRU-665: where a drag inside its own column would put the note: before the note of this index.
+  const [insert, setInsert] = useState<{ column: string; index: number } | undefined>();
   const frame = useRef<HTMLDivElement>(null);
   // The note whose select moved it. Its card is drawn again in another column, and the focus of the
   // keyboard went back to the page: it is given back to the select once the list is read again. A
@@ -62,7 +70,35 @@ export function NotesBoard<Note extends BoardNote>({
   const accepts = (column: BoardColumn<Note>) =>
     dragged !== undefined && takesNotes(column) && !column.notes.some((note) => note.id === dragged.id);
 
+  /** A drag inside the column of the note: it goes between two notes of it. */
+  const ordering = (column: BoardColumn<Note>) =>
+    reorder !== undefined && dragged !== undefined && column.notes.some((note) => note.id === dragged.id);
+
+  async function place(column: BoardColumn<Note>, index: number) {
+    const note = dragged;
+    setDragged(undefined);
+    setInsert(undefined);
+    if (note === undefined || reorder === undefined) return;
+    const others = column.notes.filter((each) => each.id !== note.id);
+    const at = Math.min(index - (column.notes.findIndex((each) => each.id === note.id) < index ? 1 : 0), others.length);
+    const before = others[at - 1];
+    const after = others[at];
+    // Dropped where it was: nothing to save.
+    if (
+      column.notes[column.notes.indexOf(note) - 1] === before &&
+      column.notes[column.notes.indexOf(note) + 1] === after
+    ) {
+      return;
+    }
+    setMoving(note.id);
+    setRefused(undefined);
+    const problem = await reorder(note, before, after);
+    setMoving(undefined);
+    if (problem !== undefined) setRefused(problem);
+  }
+
   async function drop(column: BoardColumn<Note>) {
+    if (ordering(column)) return place(column, insert?.column === column.key ? insert.index : column.notes.length);
     const note = dragged;
     setDragged(undefined);
     setOver(undefined);
@@ -105,6 +141,12 @@ export function NotesBoard<Note extends BoardNote>({
               data-column={column.key}
               data-drop={dropping}
               onDragOver={(event: DragEvent) => {
+                if (ordering(column)) {
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = 'move';
+
+                  return;
+                }
                 if (!accepts(column)) return;
                 event.preventDefault();
                 event.dataTransfer.dropEffect = 'move';
@@ -136,8 +178,14 @@ export function NotesBoard<Note extends BoardNote>({
                 <p className="px-[4px] py-[8px] text-hint text-muted">{t('No note here.')}</p>
               ) : (
                 <ul className="flex flex-col gap-[8px]">
-                  {column.notes.map((note) => {
+                  {column.notes.map((note, index) => {
                     const draggable = movable(note) && moving === undefined;
+                    const here = insert?.column === column.key;
+                    let inserted: 'before' | 'after' | undefined;
+                    if (here && insert.index === index) inserted = 'before';
+                    else if (here && insert.index === column.notes.length && index === column.notes.length - 1) {
+                      inserted = 'after';
+                    }
 
                     return (
                       <li
@@ -152,9 +200,18 @@ export function NotesBoard<Note extends BoardNote>({
                         onDragEnd={() => {
                           setDragged(undefined);
                           setOver(undefined);
+                          setInsert(undefined);
+                        }}
+                        onDragOver={(event: DragEvent) => {
+                          if (!ordering(column)) return;
+                          // Over the upper half of a note, the drag goes before it; over the lower half, after it.
+                          const box = event.currentTarget.getBoundingClientRect();
+                          const below = event.clientY > box.top + box.height / 2;
+                          setInsert({ column: column.key, index: below ? index + 1 : index });
                         }}
                         data-note={note.id}
-                        className={`box-border rounded-box border border-line bg-page p-[12px] text-small ${
+                        data-insert={inserted}
+                        className={`box-border rounded-box border border-line bg-page p-[12px] text-small data-[insert=before]:shadow-[0_-3px_0_0_var(--color-ink)] data-[insert=after]:shadow-[0_3px_0_0_var(--color-ink)] ${
                           draggable ? 'cursor-grab active:cursor-grabbing' : ''
                         } ${moving === note.id || dragged?.id === note.id ? 'opacity-60' : ''}`}
                       >

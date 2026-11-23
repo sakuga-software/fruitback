@@ -3,6 +3,7 @@ import {
   bigint,
   boolean,
   customType,
+  doublePrecision,
   foreignKey,
   index,
   integer,
@@ -824,6 +825,10 @@ export const notes = pgTable(
     assignee_account_id: text('assignee_account_id'),
     priority: text('priority'),
     due_on: text('due_on'),
+    // FRU-665: where the task sits in its column, smaller first; NULL sits by its date, the newest
+    // first. And when it was archived: an archived task leaves the lists until it is brought back.
+    position: doublePrecision('position'),
+    archived_at: instant('archived_at'),
   },
   (table) => [
     index('notes_by_page').using('hash', table.page_url),
@@ -938,6 +943,8 @@ export const note_index = pgTable(
     // site, not text of the note. Empty for a row from before the migration, until a read of its page.
     selector: text('selector'),
     component: text('component'),
+    // FRU-665: when the task the worker keeps was archived, as `notes` says. The lists read it.
+    archived_at: instant('archived_at'),
   },
   (table) => [
     primaryKey({ name: 'note_index_pkey', columns: [table.site_id, table.note_id] }),

@@ -4,6 +4,7 @@ import { useLocale } from '../use-locale';
 import { type StatusChoice, statusName } from '../note-status';
 import { STAGE_NAMES, type Stage } from '../stages';
 import { MenuTree, type TreeBranch } from '../ui';
+import { Confirmation } from '../confirm';
 import { type IndexedNote, type TaskFields } from './notes-model';
 
 export type TaskLabel = { id: string; name: string; color: string };
@@ -13,6 +14,8 @@ export type TaskChange = {
   priority?: TaskFields['priority'] | null;
   dueOn?: string | null;
   labels?: string[];
+  position?: number;
+  archived?: boolean;
 };
 
 /** What the menu of a task does: each write answers a refusal to say, or `undefined` once saved. */
@@ -21,6 +24,13 @@ export type TaskActions = {
   change: (change: TaskChange) => Promise<string | undefined>;
   newLabel: () => void;
   copyLink: () => void;
+  /** FRU-665: out of the lists, or back in them. */
+  archive: (archived: boolean) => Promise<string | undefined>;
+  /** FRU-665: deleted for good, once the person confirmed it. */
+  remove: () => Promise<string | undefined>;
+  /** FRU-665: one place up or down in its column of the board; absent at its end, or out of the board. */
+  moveUp?: () => Promise<string | undefined>;
+  moveDown?: () => Promise<string | undefined>;
 };
 
 type Priority = NonNullable<TaskFields['priority']>;
@@ -155,6 +165,8 @@ export const TaskMenuContext = createContext<TaskMenuSeam | undefined>(undefined
 export function useTaskMenu(note: IndexedNote): {
   menu: ReactNode;
   problem: string | undefined;
+  /** FRU-665: « Delete… » asks again under the note, with the words of `Confirmation`. */
+  confirm: ReactNode;
   onContextMenu: (event: MouseEvent) => void;
   onKeyDown: (event: KeyboardEvent) => void;
 } {
@@ -162,7 +174,10 @@ export function useTaskMenu(note: IndexedNote): {
   const seam = useContext(TaskMenuContext);
   const [open, setOpen] = useState(false);
   const [problem, setProblem] = useState<string | undefined>();
-  if (seam === undefined) return { menu: null, problem: undefined, onContextMenu: () => {}, onKeyDown: () => {} };
+  const [deleting, setDeleting] = useState(false);
+  if (seam === undefined) {
+    return { menu: null, problem: undefined, confirm: null, onContextMenu: () => {}, onKeyDown: () => {} };
+  }
   const given = seam.actionsOf(note);
   // The dialog of a new label opens over the screen: the menu closes first, or it would stay above it.
   const actions = {
@@ -185,9 +200,21 @@ export function useTaskMenu(note: IndexedNote): {
         open={open}
         onOpenChange={setOpen}
         branches={editable && note.task !== undefined ? branchesOf(note, note.task, seam, actions, settle) : []}
-        items={[{ id: 'copy', label: t('Copy the link to the note') }]}
+        items={[
+          ...(editable && actions.moveUp !== undefined ? [{ id: 'up', label: t('Move up') }] : []),
+          ...(editable && actions.moveDown !== undefined ? [{ id: 'down', label: t('Move down') }] : []),
+          ...(editable
+            ? [{ id: 'archive', label: note.task?.archived === true ? t('Bring back') : t('Archive') }]
+            : []),
+          { id: 'copy', label: t('Copy the link to the note') },
+          ...(editable ? [{ id: 'delete', label: t('Delete…'), danger: true }] : []),
+        ]}
         onAction={(id) => {
           if (id === 'copy') actions.copyLink();
+          if (id === 'up' && actions.moveUp !== undefined) settle(actions.moveUp());
+          if (id === 'down' && actions.moveDown !== undefined) settle(actions.moveDown());
+          if (id === 'archive') settle(actions.archive(note.task?.archived !== true));
+          if (id === 'delete') setDeleting(true);
         }}
       >
         <svg aria-hidden="true" viewBox="0 0 24 24">
@@ -198,6 +225,17 @@ export function useTaskMenu(note: IndexedNote): {
       </MenuTree>
     ),
     problem,
+    confirm: deleting ? (
+      <Confirmation
+        confirmLabel={t('Delete this note')}
+        consequence={t('The note, its replies and its labels go for good. Nobody can bring them back.')}
+        onKeep={() => setDeleting(false)}
+        onConfirm={() => {
+          setDeleting(false);
+          settle(actions.remove());
+        }}
+      />
+    ) : null,
     onContextMenu: (event) => {
       if (event.target instanceof Element && event.target.closest('a, input, textarea') !== null) return;
       event.preventDefault();

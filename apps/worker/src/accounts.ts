@@ -854,6 +854,16 @@ export type AccountStore = {
     | { set: true; identifier: string; page: string }
     | { set: false; reason: 'not-found' | 'not-kept' | 'not-allowed' | 'not-member' | 'unknown-label' }
   >;
+  /**
+   * Deletes a task the worker keeps (FRU-665), its replies and its labels, with the rights of
+   * `setNoteStatus`. `page`: the page whose cached reads are now wrong.
+   */
+  deleteTask(
+    workspace: string,
+    site: string,
+    note: string,
+    who: { account: string; manages: boolean },
+  ): Promise<{ deleted: true; page: string } | { deleted: false; reason: 'not-found' | 'not-kept' | 'not-allowed' }>;
   /** The labels of a workspace (FRU-652), by name. */
   labels(workspace: string): Promise<TaskLabel[]>;
   /** `taken`: the workspace has a label of this name. */

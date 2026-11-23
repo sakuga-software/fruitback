@@ -126,6 +126,7 @@ export function accountStoreOn(database: Database): AccountStore {
     removeSiteStatus: true,
     setNoteStatus: true,
     setTaskFields: true,
+    deleteTask: true,
     labels: true,
     addLabel: true,
     changeLabel: true,
