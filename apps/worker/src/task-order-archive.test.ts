@@ -92,7 +92,11 @@ describe('the place, the archive and the deletion of a task (FRU-665)', () => {
 
     assert.equal((await call('POST', `/notes/${note}/task`, alice.token, { archived: true })).status, 204);
     assert.deepEqual(await ids(), []);
+    // The counts read the same filter: the archived task is in none of them.
+    const counted = (await call('GET', '/notes', alice.token)).body.counts;
+    assert.equal(counted.all, 0, JSON.stringify(counted));
     assert.deepEqual(await ids('?archived=1'), [note]);
+    assert.equal((await call('GET', '/notes?archived=1', alice.token)).body.counts.all, 1);
     assert.equal((await call('GET', '/notes?archived=yes', alice.token)).status, 400);
 
     assert.equal((await call('POST', `/notes/${note}/task`, alice.token, { archived: false })).status, 204);
