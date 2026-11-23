@@ -185,11 +185,19 @@ export function NotesFilters({
             label={t('Status')}
             labelHidden
             compact
-            value={filters.stage === '' ? 'any' : filters.stage}
-            onChange={(stage) => onFilter({ stage: stage === 'any' ? '' : stage })}
+            value={statusChoiceOf(filters)}
+            // FRU-665: « Archived » is the last choice: the archived tasks, of every status.
+            onChange={(stage) =>
+              onFilter(
+                stage === 'archived'
+                  ? { stage: '', archived: '1' }
+                  : { stage: stage === 'any' ? '' : stage, archived: '' },
+              )
+            }
             options={[
               { value: 'any', label: t('Any status') },
               ...STAGES.map((stage) => ({ value: stage, label: t(STAGE_NAMES[stage]) })),
+              { value: 'archived', label: t('Archived') },
             ]}
           />
         </div>
@@ -201,4 +209,11 @@ export function NotesFilters({
       </div>
     </>
   );
+}
+
+/** The choice of the status filter: « Archived » (FRU-665), a stage, or « Any status ». */
+function statusChoiceOf(filters: { stage: string; archived: string }): string {
+  if (filters.archived === '1') return 'archived';
+
+  return filters.stage === '' ? 'any' : filters.stage;
 }

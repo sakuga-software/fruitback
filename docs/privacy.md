@@ -338,7 +338,7 @@ The table `done_notices` keeps one row for each note that waits:
   A note goes from there when it arrives, and 30 days after its last attempt when it never does.
 
 - The fields of a task that the worker keeps, in the table `notes`: the account it is assigned to,
-  its priority and its day. The labels of a workspace are in `labels` (a name and a colour), and
+  its priority, its day, its place in its column and when it was archived. The labels of a workspace are in `labels` (a name and a colour), and
   the labels of each task in `note_labels`. Every member who reads the site of a task reads its
   fields. The assignee is cleared when the account goes. A label goes with its workspace, or when
   a person removes it. The fields go with their note.

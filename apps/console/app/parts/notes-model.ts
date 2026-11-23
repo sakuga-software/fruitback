@@ -52,7 +52,39 @@ export type TaskFields = {
   /** A day, `YYYY-MM-DD`. */
   dueOn?: string;
   labels: { id: string; name: string; color: string }[];
+  /** FRU-665: where it sits in its column, smaller first. Absent: by its date, the newest first. */
+  position?: number;
+  /** FRU-665: archived. */
+  archived?: true;
 };
+
+/**
+ * Where a note sits in its column of the board (FRU-665): the place its task keeps, or its date, the
+ * newest first, for a note with none. A place written between two notes is the middle of theirs.
+ */
+export function rankOf(note: Pick<IndexedNote, 'task' | 'createdAt'>): number {
+  return note.task?.position ?? -Date.parse(note.createdAt);
+}
+
+/** The notes in the order of the board: by `rankOf`, the date for a tie. */
+export function byRank<Note extends Pick<IndexedNote, 'task' | 'createdAt'>>(notes: readonly Note[]): Note[] {
+  return [...notes].sort((one, other) => rankOf(one) - rankOf(other));
+}
+
+/**
+ * The place that puts a note between `before` and `after`, the notes it lands between: the middle of
+ * their places, or one step past the one there is.
+ */
+export function placeBetween(
+  before: Pick<IndexedNote, 'task' | 'createdAt'> | undefined,
+  after: Pick<IndexedNote, 'task' | 'createdAt'> | undefined,
+): number {
+  if (before === undefined && after === undefined) return 0;
+  if (before === undefined) return rankOf(after as IndexedNote) - 1024;
+  if (after === undefined) return rankOf(before) + 1024;
+
+  return (rankOf(before) + rankOf(after)) / 2;
+}
 
 export type NotesAnswer = {
   notes: IndexedNote[];
@@ -71,7 +103,8 @@ export type NotesAnswer = {
 };
 
 /** The filters of the page, in its address: a reload keeps the view, and a link shares it. */
-export const FILTERS = ['place', 'site', 'stage', 'mine', 'q'] as const;
+// FRU-665: `archived` reads the archived tasks, in place of the others.
+export const FILTERS = ['place', 'site', 'stage', 'mine', 'archived', 'q'] as const;
 export type Filter = (typeof FILTERS)[number];
 
 /** How the notes are drawn (FRU-436): the table, or the board, as `?view=board` keeps it. */

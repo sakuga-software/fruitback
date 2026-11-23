@@ -93,6 +93,7 @@ export function NoteRow({
             <Problem>{t(taskMenu.problem)}</Problem>
           </span>
         )}
+        {taskMenu.confirm === null ? null : <span className="mt-[8px] block pl-[36px]">{taskMenu.confirm}</span>}
       </td>
       <td className="whitespace-nowrap">
         <span className="block max-w-[140px] truncate">{domain}</span>

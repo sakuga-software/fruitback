@@ -12,14 +12,23 @@ import { useLocale } from '../use-locale';
 import { STATUS_NOT_SAVED, STATUS_PROBLEMS } from '../note-status';
 import { boardColumns } from '../board-columns';
 import { NotesBoard } from '../parts/notes-board';
-import { FILTERS, type IndexedNote, NOTES_PER_PAGE, type NotesAnswer, type View, pageOf } from '../parts/notes-model';
+import {
+  FILTERS,
+  type IndexedNote,
+  NOTES_PER_PAGE,
+  type NotesAnswer,
+  type View,
+  byRank,
+  pageOf,
+  placeBetween,
+} from '../parts/notes-model';
 import { NotesFailed } from '../parts/note-parts';
 import { NotePages } from '../parts/note-pages';
 import { NotesFilters, Pinned, ViewChoice } from '../parts/notes-filters';
 import { NotesTable } from '../parts/notes-table';
 import { NoteCard } from '../parts/note-card';
 import { TaskMenuContext } from '../parts/task-menu';
-import { useTaskSeam } from '../parts/task-seam';
+import { TASK_NOT_SAVED, TASK_PROBLEMS, useTaskSeam } from '../parts/task-seam';
 
 /**
  * Every note left on the sites of a workspace, and where it went: screen 10 of the mockup of
@@ -224,8 +233,16 @@ export default function Notes() {
   const choose = (note: IndexedNote, status: string) =>
     call<{ status: string; stage: Stage }>('POST', `${base}/notes/${encodeURIComponent(note.id)}/status`, { status });
   const sourceOf = (note: IndexedNote) => connectors.find((each) => each.id === note.place?.connector);
+  // FRU-665: the columns of the board, each in the order of its tasks.
+  const columns =
+    typeof shown === 'object'
+      ? boardColumns(byRank(shown.notes), siteInView === undefined ? undefined : shown.statuses?.[siteInView])
+      : [];
+  const columnOf = (note: IndexedNote) =>
+    view === 'board' ? columns.find((column) => column.notes.some((each) => each.id === note.id))?.notes : undefined;
   // FRU-654: the menu of each task, its members, its labels and its writes.
   const tasks = useTaskSeam({
+    columnOf,
     workspace: workspace.id,
     base,
     manages,
@@ -278,7 +295,7 @@ export default function Notes() {
                 autoFocus={movedOut}
                 onClick={() => {
                   setTyped('');
-                  filter({ place: '', site: '', stage: '', mine: '', q: '' });
+                  filter({ place: '', site: '', stage: '', mine: '', archived: '', q: '' });
                 }}
               >
                 {t('Clear the filters')}
@@ -288,10 +305,17 @@ export default function Notes() {
             <>
               {view === 'board' ? (
                 <NotesBoard
-                  columns={boardColumns(
-                    shown.notes,
-                    siteInView === undefined ? undefined : shown.statuses?.[siteInView],
-                  )}
+                  columns={columns}
+                  reorder={async (note, before, after) => {
+                    if (note.task === undefined || note.canSetStatus !== true) return undefined;
+                    const answer = await call('POST', `${base}/notes/${encodeURIComponent(note.id)}/task`, {
+                      position: placeBetween(before, after),
+                    });
+                    if (!answer.ok) return problemOf(answer, TASK_PROBLEMS, TASK_NOT_SAVED);
+                    await read();
+
+                    return undefined;
+                  }}
                   busy={reading}
                   movable={(note) =>
                     note.canSetStatus === true && siteInView !== undefined && shown.statuses?.[siteInView] !== undefined

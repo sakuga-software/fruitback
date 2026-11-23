@@ -1571,7 +1571,7 @@ Read on drizzle-orm 0.45.4 and drizzle-kit 0.31.11, the versions of the catalogu
   store of the accounts`, test:`decides a pairing and a session by their instants, on each side of
   2^32`.
 - **better-auth reads no `BIGINT` of its tables on that pool, and a count is one.** Its seven tables
-  have none (test:`knows the fifty-seven BIGINT columns of the worker, and that better-auth has none`).
+  have none (test:`knows the fifty-nine BIGINT columns of the worker, and that better-auth has none`).
   `count(*)` is a `BIGINT` whatever the table: the pool now answers it as a string, and better-auth
   reads it as a number, through its adapter and the layer of FRU-181
   (test:`gives better-auth a count as a string, which better-auth reads as a number`).
@@ -3244,7 +3244,7 @@ workspace too: the reason is free text, « impayé » for example.
 - **Why a table of its own, and not two columns of `organization`.** The ticket offered columns on
   `organization`. That table is of better-auth, and two tests hold it: `auth-schema.test.ts` compares
   its columns with the ones that better-auth makes, and
-  test:`knows the fifty-seven BIGINT columns of the worker, and that better-auth has none` says that
+  test:`knows the fifty-nine BIGINT columns of the worker, and that better-auth has none` says that
   better-auth reads no `BIGINT`, on a pool with no parser of ours. A `suspended_at` there breaks
   both, or is not a `BIGINT`. A row of the worker keeps the convention, cascades with the workspace,
   and makes « changed » one statement.
@@ -4959,3 +4959,16 @@ destination yet when it is off: a note is then refused, and the widget keeps it.
   Every write answers `403 tasks-off` on a worker that keeps no task.
 - **The list of the notes gives each kept note its `task`**, read with the status in one statement
   per page, and its labels in a second one.
+
+## The place, the archive and the deletion of a task (FRU-665)
+
+### The rules, in short
+
+- **A task keeps its place in its column** (`notes.position`, a `double precision`, smaller first).
+  A task with none sits by its date, the newest first: the console reads `-createdAt` for it, so a
+  place written between two tasks is the middle of theirs, and no row of before is rewritten.
+- **An archived task has `archived_at`**, in `notes` and in `note_index`: the list reads the index,
+  leaves the archived ones out, and `?archived=1` reads them alone. A page still shows its pin.
+- **`DELETE …/notes/<note>/task` deletes the task**, its replies and its labels (`cascade`), and its
+  row of the index, with the rights of the status. The read of its page is invalidated.
+- `position` and `archived` are fields of `POST …/task`, refused at `403 tasks-off` like the others.

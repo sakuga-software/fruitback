@@ -1,6 +1,6 @@
 import type { NoteIssue, NoteStage } from '@fruitback/shared';
 import { NOTE_STAGES } from '@fruitback/shared';
-import { type SQL, and, count, eq, gte, ilike, inArray, isNull, lt, max, min, or, sql } from 'drizzle-orm';
+import { type SQL, and, count, eq, gte, ilike, inArray, isNotNull, isNull, lt, max, min, or, sql } from 'drizzle-orm';
 import { member, user } from './auth-schema.ts';
 import {
   type AuthorKind,
@@ -491,6 +491,8 @@ async function keptOf(
       assigneeName: user.name,
       priority: notes.priority,
       dueOn: notes.due_on,
+      position: notes.position,
+      archivedAt: notes.archived_at,
     })
     .from(notes)
     .leftJoin(user, eq(user.id, notes.assignee_account_id))
@@ -524,6 +526,8 @@ async function keptOf(
       ...(isPriority(note.priority) ? { priority: note.priority } : {}),
       ...(note.dueOn === null ? {} : { dueOn: note.dueOn }),
       labels: labelsOf.get(id) ?? [],
+      ...(note.position === null ? {} : { position: note.position }),
+      ...(note.archivedAt === null ? {} : { archived: true as const }),
     };
     kept.set(keyOfNoteId(row), { statusKey: note.statusKey, stage: note.stage, task });
   }
@@ -619,6 +623,8 @@ function filtered(workspace: string, query: NoteQuery) {
     query.stage === undefined ? undefined : eq(note_index.stage, query.stage),
     query.author === undefined ? undefined : eq(note_index.author_account_id, query.author),
     query.since === undefined ? undefined : gte(note_index.created_at, query.since),
+    // FRU-665: an archived task is out of the list, unless the list asks for the archived ones.
+    query.archived === true ? isNotNull(note_index.archived_at) : isNull(note_index.archived_at),
     ...wordsOf(query.q).map((word) => {
       const like = `%${word.replace(/[\\%_]/gu, (c) => `\\${c}`)}%`;
 

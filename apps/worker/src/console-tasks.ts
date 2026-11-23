@@ -7,8 +7,9 @@ import { readLabel, readTaskChange } from './task-fields.ts';
 /**
  * The routes of the tasks the worker keeps (FRU-652), in the console:
  *
- * - `POST …/notes/<note>/task`: changes the assignee, the priority, the day and the labels, with the
- *   rights of the status (the author of the note, or a role that manages the sites).
+ * - `POST …/notes/<note>/task`: changes the assignee, the priority, the day, the labels, the place in
+ *   its column and the archive, with the rights of the status (the author of the note, or a role that
+ *   manages the sites). `DELETE …/notes/<note>/task` deletes it, with the same rights (FRU-665).
  * - `GET …/labels`: the labels of the workspace, for whoever reads its notes.
  * - `POST …/labels`, `POST …/labels/<id>` (a change), `DELETE …/labels/<id>`: for a role that manages the sites.
  *
@@ -29,7 +30,9 @@ export async function handleTasks(
   if (writes && context.tasks === 'off') return json(403, { error: 'tasks-off' }, headers);
 
   if (task !== null) {
-    if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
+    if (request.method !== 'POST' && request.method !== 'DELETE') {
+      return json(405, { error: 'method-not-allowed' }, headers);
+    }
     const note = noteKeyOf(task[1] as string);
     if (note === undefined) return json(404, { error: 'not-found' }, headers);
     // A guest changes only the notes of the sites shared with them (FRU-250).
@@ -37,12 +40,21 @@ export async function handleTasks(
     if (reach === undefined || (reach.sites !== 'every' && !reach.sites.includes(note.site))) {
       return json(404, { error: 'not-found' }, headers);
     }
+    const who = { account: context.account, manages: context.allowed('manage-sites') };
+    // FRU-665: a task deleted for good, with its replies and its labels.
+    if (request.method === 'DELETE') {
+      const gone = await context.accounts.deleteTask(context.workspace, note.site, note.note, who);
+      if (!gone.deleted) {
+        if (gone.reason === 'not-found') return json(404, { error: 'not-found' }, headers);
+        return json(403, { error: gone.reason === 'not-kept' ? 'fields-not-taken' : 'not-allowed' }, headers);
+      }
+      if (context.kv !== undefined) await invalidatePages(context.kv, [gone.page]);
+
+      return new Response(null, { status: 204, headers });
+    }
     const change = readTaskChange(await readJsonObject(request));
     if ('invalid' in change) return json(400, { error: 'invalid-task', field: change.invalid }, headers);
-    const answer = await context.accounts.setTaskFields(context.workspace, note.site, note.note, change, {
-      account: context.account,
-      manages: context.allowed('manage-sites'),
-    });
+    const answer = await context.accounts.setTaskFields(context.workspace, note.site, note.note, change, who);
     if (!answer.set) {
       switch (answer.reason) {
         case 'not-found':

@@ -2118,6 +2118,10 @@ seen » is shown to owners and admins only.
 - The labels of a workspace are read by whoever reads its notes, a guest of one site included, as
   the statuses of a site are: a label is a word of the team, no secret, and a guest who changes
   their own task chooses among them. They are written by a role with `manage-sites` only. test:`keeps label names unique in a workspace, and lets only a role that manages the sites write them`.
+- `DELETE /console/workspaces/<id>/notes/<note>/task` deletes a task the worker keeps, its replies
+  and its labels, with the same rights: anybody else of the workspace is `403 not-allowed`, and
+  nothing is deleted. Archiving a task is a field of the same `POST`, with the same rights.
+  test:`deletes a task for good, its replies included, with the rights of the status`.
 - A suspended workspace writes none of them: the routes are writes of the console, behind its one
   guard. test:`writes nothing in a suspended workspace, and still reads the labels`.
 - On a worker that keeps no task (`FRUITBACK_TASKS=off`), every one of these writes is

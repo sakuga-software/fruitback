@@ -1871,9 +1871,20 @@ export function createPostgresAccountStore(database: Database): AccountStore {
             ...(change.assignee === undefined ? {} : { assignee_account_id: change.assignee }),
             ...(change.priority === undefined ? {} : { priority: change.priority }),
             ...(change.dueOn === undefined ? {} : { due_on: change.dueOn }),
+            ...(change.position === undefined ? {} : { position: change.position }),
+            ...(change.archived === undefined ? {} : { archived_at: change.archived ? Date.now() : null }),
             updated_at: Date.now(),
           })
           .where(and(eq(notes.id, id), eq(notes.client_id, site)));
+        // FRU-665: the lists read the archive in the index.
+        if (change.archived !== undefined) {
+          await db
+            .update(note_index)
+            .set({ archived_at: change.archived ? Date.now() : null })
+            .where(
+              and(eq(note_index.workspace_id, workspace), eq(note_index.site_id, site), eq(note_index.note_id, noteId)),
+            );
+        }
         if (change.labels !== undefined) {
           await db.delete(note_labels).where(eq(note_labels.note_id, id));
           if (change.labels.length > 0) {
@@ -1882,6 +1893,44 @@ export function createPostgresAccountStore(database: Database): AccountStore {
         }
 
         return { set: true as const, identifier: note.reference ?? `FB-${id}`, page: kept.page };
+      });
+    },
+
+    async deleteTask(workspace, site, noteId, who) {
+      return transaction(async (db) => {
+        const refused = <R extends string>(reason: R) => ({ deleted: false as const, reason });
+        if (!(await siteHeld(db, workspace, site))) return refused('not-found');
+        const [note] = await db
+          .select({
+            place: note_index.place,
+            connectorKind: connectors.kind,
+            reference: note_index.reference,
+            author: note_index.author_account_id,
+          })
+          .from(note_index)
+          .leftJoin(connectors, eq(connectors.id, note_index.connector_id))
+          .where(
+            and(eq(note_index.workspace_id, workspace), eq(note_index.site_id, site), eq(note_index.note_id, noteId)),
+          );
+        if (note === undefined) return refused('not-found');
+        if (!who.manages && (note.author === null || note.author !== who.account)) return refused('not-allowed');
+        const id = keptRowOf(note.place, note.connectorKind, note.reference);
+        if (id === undefined) return refused('not-kept');
+        const [kept] = await db
+          .select({ payload: notes.payload, page: notes.page_url })
+          .from(notes)
+          .where(and(eq(notes.id, id), eq(notes.client_id, site)));
+        if (kept === undefined || !isSameNote(kept.payload, noteId)) return refused('not-kept');
+
+        // The replies and the labels of the task go with it (`cascade`); its row of the index too.
+        await db.delete(notes).where(and(eq(notes.id, id), eq(notes.client_id, site)));
+        await db
+          .delete(note_index)
+          .where(
+            and(eq(note_index.workspace_id, workspace), eq(note_index.site_id, site), eq(note_index.note_id, noteId)),
+          );
+
+        return { deleted: true as const, page: kept.page };
       });
     },
 

@@ -17,6 +17,10 @@ export type TaskFields = {
   /** A day, `YYYY-MM-DD`, with no time and no zone. */
   dueOn?: string;
   labels: TaskLabel[];
+  /** FRU-665: where it sits in its column, smaller first. Absent: by its date, the newest first. */
+  position?: number;
+  /** FRU-665: archived, out of the lists until it is brought back. */
+  archived?: true;
 };
 
 /** A change of the fields: a field left out does not change, `null` clears it. */
@@ -25,6 +29,8 @@ export type TaskChange = {
   priority?: TaskPriority | null;
   dueOn?: string | null;
   labels?: string[];
+  position?: number;
+  archived?: boolean;
 };
 
 const LABEL_NAME_MAX = 40;
@@ -75,6 +81,14 @@ export function readTaskChange(body: Record<string, unknown> | undefined): TaskC
       return { invalid: 'labels' };
     }
     change.labels = [...new Set(labels as string[])];
+  }
+  if ('position' in body) {
+    if (typeof body.position !== 'number' || !Number.isFinite(body.position)) return { invalid: 'position' };
+    change.position = body.position;
+  }
+  if ('archived' in body) {
+    if (typeof body.archived !== 'boolean') return { invalid: 'archived' };
+    change.archived = body.archived;
   }
   if (Object.keys(change).length === 0) return { invalid: 'body' };
 

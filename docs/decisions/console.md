@@ -1184,3 +1184,16 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   and the label goes on the task it was asked from. The menu closes before the dialog opens.
 - **Not here yet**: the order of a task in its column, and to archive or delete a task. The worker
   has no route for them.
+
+## The place, the archive and the deletion of a task (FRU-665)
+
+### The rules, in short
+
+- **A drag inside a column of the board puts a task between two others**: a line of the ink says
+  where, over the upper half of a card before it, over the lower half after it. The board draws each
+  column by `rankOf` (`notes-model.ts`). **« Move up » and « Move down » of the menu do the same
+  from the keyboard**, on the board only, and not past the end of the column.
+- **« Archive » and « Bring back » are items of the menu.** « Archived » is the last choice of the
+  filter of the status: a choice, not one more box, so the row of the filters stays the mockup's.
+- **« Delete… » asks again under the note** (`Confirmation` of `confirm.tsx`): « Keep it » has the
+  focus, and only « Delete this note » deletes.
