@@ -6,7 +6,7 @@ ALTER TABLE "note_index" ADD COLUMN "task_assignee_id" text;--> statement-breakp
 ALTER TABLE "note_index" ADD COLUMN "task_priority" text;--> statement-breakpoint
 ALTER TABLE "note_index" ADD COLUMN "task_due_on" text;--> statement-breakpoint
 ALTER TABLE "note_index" ADD COLUMN "task_label_ids" text[];--> statement-breakpoint
-ALTER TABLE "note_index" ADD CONSTRAINT "note_index_task_assignee_id_fkey" FOREIGN KEY ("task_assignee_id") REFERENCES "public"."user"("id") ON DELETE set null ON UPDATE no action;;--> statement-breakpoint
+ALTER TABLE "note_index" ADD CONSTRAINT "note_index_task_assignee_id_fkey" FOREIGN KEY ("task_assignee_id") REFERENCES "public"."user"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 UPDATE "note_index" AS "ni"
 SET
   "task_assignee_id" = "n"."assignee_account_id",
