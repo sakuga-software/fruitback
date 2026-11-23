@@ -111,7 +111,7 @@ export function TaskPanel({
                   ? []
                   : [
                       {
-                        term: t('Source file'),
+                        term: t('File'),
                         value: (
                           <code>
                             {issue.note.source.file}

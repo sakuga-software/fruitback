@@ -963,7 +963,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'On the page': 'Sur la page',
   Element: 'Élément',
   Component: 'Composant',
-  'Source file': 'Fichier source',
+  File: 'Fichier',
   Screen: 'Écran',
   Replies: 'Réponses',
   'No reply yet.': 'Aucune réponse pour l’instant.',
