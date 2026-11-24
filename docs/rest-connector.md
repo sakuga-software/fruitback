@@ -167,6 +167,10 @@ replies of the note, and not its text:
 "reply": { "id": "42" }
 ```
 
+A note sent to an address takes a reply from the page and from `reply_to_note` of `/mcp`, since
+0.8.0. Fruitback keeps it under the note, and the thread of its pin shows it. A workspace that hides
+the replies of this connector takes none.
+
 **A field changed**, `event: "note.updated"`. It holds the names of the fields whose value changed,
 in this order, and never their values:
 

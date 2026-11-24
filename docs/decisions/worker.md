@@ -3437,10 +3437,10 @@ under a client that is not a site looks the same. `forget` deletes them.
 - **`NoteStore.reply` writes a reply under one note, and `takesReplies` says which store takes one.**
   Linear (`commentCreate`), the database (`note_comments`) and the store of the dev loop take one.
   GitHub does not: it is a store of the environment, and no connector of a workspace yet (FRU-188).
-- **A site takes no reply when nobody would read it back**: an address that only receives (REST),
-  though the worker keeps its notes, and a tracker whose workspace hides its replies (FRU-102).
-  `withSettings` and `receivingStore` take `reply` off, and the routed store asks the store of the
-  client (`repliesFor`).
+- **A site takes no reply when nobody would read it back**: a tracker whose workspace hides its
+  replies (FRU-102), and a plugin that receives (Slack). `withSettings` and `receivingStore` take
+  `reply` off, and the routed store asks the store of the client (`repliesFor`). An address (REST)
+  takes one since FRU-660: the worker keeps it, and the address is told by `note.replied`.
 - **The text says who wrote it, on a line that the reply cannot imitate** (`reply-text.ts`). A
   tracker writes under the identity of its key: the app of Fruitback for OAuth, the owner of a
   personal key. So the first line names the person, and says « member of {workspace} » or « not
@@ -5046,6 +5046,9 @@ destination yet when it is off: a note is then refused, and the widget keeps it.
   archive are no field of the event: they emit nothing.
 - **A removed status that moves its tasks emits one event for each task.** A status that changes
   stage changes no status of a task, and emits nothing. A withdrawal emits `note.withdrawn` only.
+- **An address takes a reply**, kept in the worker's own store (`createConnectorStores` gives the
+  reply of the own store back), unless its workspace hides the replies of the connector. It still
+  takes no verdict (FRU-294).
 
 ### The reasons
 
@@ -5055,3 +5058,8 @@ status) and more come (the change of many tasks, `/mcp` for the fields): a route
 be a change the address never hears of. In the transaction, because an event queued after the
 commit is lost when the process stops between the two, and one queued before is sent for a change
 that rolled back.
+
+Before FRU-660 an address took no reply, because nobody of the team would read it: the address
+received the note once, and nothing after. It now receives `note.replied`, and the thread of the
+pin is read from the worker, so the reason is gone. Decided on 2026-11-24 by the orchestrator, in
+FRU-660, in place of the rule of FRU-257 for an address; Mathieu confirms it when he merges.

@@ -241,6 +241,36 @@ describe('a status changed on a task sent to an address (FRU-660)', () => {
   });
 });
 
+describe('a reply to a task sent to an address (FRU-660)', () => {
+  it('an address takes a reply, and is told of it by its id alone', async () => {
+    const { workspace, site, issue, note, world, deliver, reply } = await acme();
+    const id = await reply('Seen on my phone too.');
+    const bodies = parsed(await deliver());
+
+    assert.equal(bodies.length, 1);
+    assert.deepEqual(
+      { ...bodies[0], at: undefined },
+      {
+        version: 2,
+        event: 'note.replied',
+        workspace,
+        site: { id: site, origin: SITE },
+        identifier: issue.identifier,
+        note: { id: note },
+        at: undefined,
+        reply: { id },
+      },
+    );
+    assert.ok(!JSON.stringify(bodies[0]).includes('Seen on my phone'), 'no text of the reply');
+    // The id is the one the thread of the note reads.
+    const read = await call(world, 'GET', `/feedback?url=${encodeURIComponent(PAGE)}&client=${site}`, {
+      origin: SITE,
+    });
+    const [pin] = ((await read.json()) as { issues: { comments?: { id: string }[] }[] }).issues;
+    assert.ok(pin?.comments?.some((comment) => comment.id === id));
+  });
+});
+
 describe('the fields of a task sent to an address (FRU-660)', () => {
   it('sends one `note.updated` that names the fields whose value changed, and no value', async () => {
     const { owner, asOwner, deliver, setTask } = await acme();

@@ -190,7 +190,8 @@ assignee, the priority, the labels, the day) or its replies change, the address 
 that holds identifiers and names only: the status before and after, the names of the fields that
 changed, or the id of a new reply. **Never the text of a reply, nor who is assigned, nor a label or
 a day.** The address reads them by `/mcp`, with an agent key of the workspace, if the workspace gives
-it one.
+it one. A reply under a note sent to an address is kept in the worker, as under a note with no
+destination.
 
 ### An e-mail when a note is done
 

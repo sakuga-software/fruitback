@@ -482,6 +482,7 @@ describe('the sites that take a reply, by where their notes go (FRU-257)', () =>
         con_linear: { kind: 'linear', showComments: true },
         con_quiet: { kind: 'linear', showComments: false },
         con_rest: { kind: 'rest', showComments: true },
+        con_rest_quiet: { kind: 'rest', showComments: false },
       };
       const shape = shapes[connector];
 
@@ -500,17 +501,19 @@ describe('the sites that take a reply, by where their notes go (FRU-257)', () =>
   const site = (connector?: string) =>
     ({ workspace: 'ws_a', ...(connector === undefined ? {} : { connector }) }) as ClientConfig;
 
-  it('a site with no destination, and a tracker that shows its replies', async () => {
+  it('a site with no destination, a tracker that shows its replies, and an address (FRU-660)', async () => {
     assert.equal(await takesReplies(routed, site()), true);
     assert.equal(await takesReplies(routed, site('con_linear')), true);
+    // FRU-660: the worker keeps the reply, and the address is told by `note.replied`.
+    assert.equal(await takesReplies(routed, site('con_rest')), true);
   });
 
-  it('never a tracker whose replies are hidden, nor an address that only receives, though it keeps the notes', async () => {
+  it('never a tracker whose replies are hidden, nor an address whose workspace hides them', async () => {
     assert.equal(await takesReplies(routed, site('con_quiet')), false);
-    assert.equal(await takesReplies(routed, site('con_rest')), false);
+    assert.equal(await takesReplies(routed, site('con_rest_quiet')), false);
 
     const reply = { body: 'Seen.', author: { kind: 'visitor' as const } };
-    for (const connector of ['con_quiet', 'con_rest']) {
+    for (const connector of ['con_quiet', 'con_rest_quiet']) {
       await assert.rejects(
         routed.reply?.({ issue: 'dev_issue_1', clientId: 'site_a' }, reply, site(connector), policy) ??
           Promise.reject(),

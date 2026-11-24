@@ -2463,8 +2463,11 @@ the database for a site with no destination.
 - Which note. The id names an issue of a tracker, which can be of another site. The worker reads
   the page for the site first and writes only under a note that the read answers, else `404`.
   test:`answers 404 for a note of another site on the same page, and writes nothing`.
-- Where not. An address that only receives (REST), and a tracker whose workspace hides its
-  replies, take none: `403 replies-not-taken`, and `GET /feedback` answers no `canReply` there.
+- Where not. A tracker whose workspace hides its replies, Slack, and GitHub take none:
+  `403 replies-not-taken`, and `GET /feedback` answers no `canReply` there. An address (REST) takes
+  one since FRU-660, unless its workspace hides the replies of that connector: the worker keeps it,
+  as for a site with no destination, and the address receives `note.replied` with its id, never its
+  text. test:`an address takes a reply, and is told of it by its id alone`.
 - How much. 1 to 2 000 characters, refused beyond and never cut. 5 replies a minute with no
   session from one address, counted apart from the requests and in the same database; a member is
   not counted. test:`takes 5 replies with no session from one address in a minute, and a member's after them`.
