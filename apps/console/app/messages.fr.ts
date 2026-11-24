@@ -1823,7 +1823,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'New task': 'Nouvelle tâche',
   'New task in {column}': 'Nouvelle tâche dans {column}',
   'This server keeps no task: write the task in the tracker of the site.':
-    'Ce serveur ne garde aucune tâche : écrivez la tâche dans le tracker du site.',
+    'Ce serveur ne garde aucune tâche : écrivez la tâche dans l’outil de suivi du site.',
   'This site is no longer here. Reload the page.': 'Ce site n’est plus là. Rechargez la page.',
   'This status was removed since the list was read. Reload the page.':
     'Ce statut a été retiré depuis la lecture de la liste. Rechargez la page.',
@@ -1834,10 +1834,10 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Give the task a title.': 'Donnez un titre à la tâche.',
   'Optional. What to do, for a person or an agent.': 'Facultatif. Ce qu’il faut faire, pour une personne ou un agent.',
   'A task has no page and no pin. It is kept in Fruitback.':
-    'Une tâche n’a ni page ni pin. Elle est gardée dans Fruitback.',
+    'Une tâche n’a ni page ni repère. Elle est gardée dans Fruitback.',
   'Create the task': 'Créer la tâche',
   'No text.': 'Aucun texte.',
-  'Written by hand: no page and no pin.': 'Écrite à la main : ni page ni pin.',
+  'Written by hand: no page and no pin.': 'Écrite à la main : ni page ni repère.',
 
   ...JIRA,
   ...GITLAB,
