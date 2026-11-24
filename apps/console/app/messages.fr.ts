@@ -1530,7 +1530,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Read the notes': 'Lire les notes',
   'Their text, page, element, component, file and line, picture, replies and status.':
     'Leur texte, page, élément, composant, fichier et ligne, capture, réponses et statut.',
-  'Read, reply and set a status': 'Lire, répondre et changer un statut',
+  'Read, reply and change the tasks': 'Lire, répondre et changer les tâches',
   'A reply says it is from an agent. A status is set only on a note that Fruitback keeps.':
     'Une réponse dit qu’elle vient d’un agent. Un statut ne change que sur une note que garde Fruitback.',
   'Expires after (days)': 'Expire après (jours)',
@@ -1580,6 +1580,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'An agent that uses this key is refused from its next request, and the key never works again. What it wrote stays in the threads of the notes.':
     'Un agent qui utilise cette clé est refusé dès sa prochaine requête, et la clé ne fonctionne plus jamais. Ce qu’elle a écrit reste dans les fils des notes.',
   'Replied to a note': 'A répondu à une note',
+  'Changed the fields of a task': 'A changé les champs d’une tâche',
   'Set the status to « {status} »': 'A passé le statut à « {status} »',
   'Writes of {name}': 'Écritures de {name}',
   'What this key wrote': 'Ce que cette clé a écrit',

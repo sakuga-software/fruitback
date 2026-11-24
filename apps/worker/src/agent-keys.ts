@@ -56,6 +56,8 @@ export type AgentGrant = {
   key: string;
   name: string;
   workspace: string;
+  /** FRU-659: the member who made the key, whose rights the grant reads now. */
+  account: string;
   role: Role;
   sites: string[];
   write: boolean;
@@ -88,6 +90,7 @@ export function grantOf(key: AgentKey, reach: Reach): AgentGrant | undefined {
     key: key.id,
     name: key.name,
     workspace: key.workspaceId,
+    account: key.createdBy,
     role: reach.role,
     sites,
     write: key.write && can(reach.role, 'manage-sites'),

@@ -229,7 +229,7 @@ describe('the transport of /mcp (FRU-463)', () => {
     const tools = await rpc(world, good, 'tools/list');
     assert.deepEqual(
       tools.body.result.tools.map((tool: { name: string }) => tool.name),
-      ['list_notes', 'get_note', 'notes_as_text'],
+      ['list_notes', 'get_note', 'notes_as_text', 'task_choices'],
     );
   });
 

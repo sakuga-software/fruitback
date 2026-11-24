@@ -117,6 +117,12 @@ never to a guest, a reviewer of the site, or a visitor. With no key, no note lea
 the notes of a known person unless the team made it otherwise. A reply that an agent writes is
 stored where the note is, under the name of the key and the word « agent ».
 
+An agent also reads the fields of a task that Fruitback keeps: the name of the member it
+is assigned to, its priority, its day and its labels. A key whose member reads the members of the
+workspace reads the names of its members who are not guests, to choose an assignee, and the
+address of a member who gave no name, as the console shows it. A key that writes changes these fields, as a person of the team does in the console, and
+each change is in the log of the key.
+
 ### Who can read a note back
 
 The widget reads the notes of a page to draw their pins, and the answer carries **the whole note**,
@@ -340,7 +346,7 @@ The table `done_notices` keeps one row for each note that waits:
 - The fields of a task that the worker keeps, in the table `notes`: the account it is assigned to,
   its priority, its day, its place in its column and when it was archived. The labels of a workspace are in `labels` (a name and a colour), and
   the labels of each task in `note_labels`. Every member who reads the site of a task reads its
-  fields. The assignee is cleared when the account goes. A label goes with its workspace, or when
+  fields, and so does an agent key of that site. The assignee is cleared when the account goes. A label goes with its workspace, or when
   a person removes it. The fields go with their note.
 
 - A task written by hand in the console, in the table `notes` with the notes of its site:

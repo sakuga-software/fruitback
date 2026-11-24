@@ -196,7 +196,7 @@ export const MAX_OAUTH_CLIENTS = 1000;
 
 /**
  * An agent key of a workspace (FRU-461), as the store reads it: never the key, which the worker does
- * not keep. `write`: the key may reply and set a status, beside the reads. `agent-keys.ts` says what
+ * not keep. `write`: the key may reply, set a status and change a task, beside the reads. `agent-keys.ts` says what
  * a key reaches.
  */
 export type AgentKey = {
@@ -256,7 +256,8 @@ export type AgentWrite = {
   keyName: string;
   site: string;
   note: string;
-  action: 'reply' | 'status';
+  /** FRU-659: `task`, the fields of a task (`update_task`). */
+  action: 'reply' | 'status' | 'task';
   status?: string;
   at: number;
 };
