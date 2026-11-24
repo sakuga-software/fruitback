@@ -1222,3 +1222,23 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   as a field of the calendar of the browser. Any other note shows them disabled, or not at all.
 - **Not here yet**: to write a reply, to edit the text, the files of a note. The console has no route
   to write a reply, and a note Fruitback keeps keeps no file.
+
+## A task written by hand (FRU-657)
+
+### The rules, in short
+
+- **« New task » is at the head of the list, beside the view, and at the head of each column of the
+  board**, as a « + » named « New task in <column> ». The key « C » opens it too, as in Linear: alone,
+  out of a field, and when no dialog, menu or list is open. The button writes the key beside its
+  words, so the key is found.
+- **A dialog of the kit** (`Dialog`, `md`): the title first and required, a text of several lines
+  (`TextBox`, the text area of HeroUI), the site when the workspace has more than one, then the
+  status, the assignee, the priority and the day, and the labels. The site is the one of the filter,
+  or the only one; a column gives its status. No board in `design/`: the dialog is made of controls of
+  the kit, in the order of the panel of a task.
+- **What is typed stays until the task is written.** A refusal is said in the dialog over the
+  buttons, and Escape or « Cancel » keep the draft for the next « New task ». Once written, the list
+  is read again and the task opens in its panel (`?task=<id>`).
+- **A task has no page**: its row and its card draw no link to a page, its menu no « Copy the link to
+  the note », and its panel says « Written by hand: no page and no pin. » in place of the page and the
+  element.

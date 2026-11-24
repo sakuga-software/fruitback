@@ -221,7 +221,8 @@ export function useTaskMenu(note: IndexedNote): {
           ...(editable
             ? [{ id: 'archive', label: note.task?.archived === true ? t('Bring back') : t('Archive') }]
             : []),
-          { id: 'copy', label: t('Copy the link to the note') },
+          // FRU-657: a task written by hand has no page for a link to open.
+          ...(note.page.url === '' ? [] : [{ id: 'copy', label: t('Copy the link to the note') }]),
           ...(editable ? [{ id: 'delete', label: t('Delete…'), danger: true }] : []),
         ]}
         onAction={(id) => {

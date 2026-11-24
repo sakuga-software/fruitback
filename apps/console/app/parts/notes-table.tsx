@@ -137,9 +137,12 @@ export function NoteRow({
       <td data-align="end">
         <span className="inline-flex items-center gap-[4px]">
           {/* FRU-546: the page of the note, in a new tab, its address in the tooltip. */}
-          <IconLink label={t('Show on the page')} href={show} tip={note.page.url}>
-            <NoteIcon name="open" />
-          </IconLink>
+          {/* FRU-657: a task written by hand has no page to show. */}
+          {note.page.url === '' ? null : (
+            <IconLink label={t('Show on the page')} href={show} tip={note.page.url}>
+              <NoteIcon name="open" />
+            </IconLink>
+          )}
           {taskMenu.menu}
         </span>
       </td>

@@ -29,6 +29,26 @@ describe('a task (FRU-657)', () => {
       assert.equal(parseTask({ ...createTask(input), title }).ok, false, JSON.stringify(title));
     }
     assert.equal(parseTask({ ...createTask(input), text: '' }).ok, false);
+    for (const v of [0, 1.5, '1', undefined]) {
+      assert.deepEqual(parseTask({ ...createTask(input), v }), {
+        ok: false,
+        reason: 'invalid',
+        message: 'missing or malformed task version',
+      });
+    }
+    assert.deepEqual(parseTask({ ...createTask(input), title: '', createdAt: 'never' }), {
+      ok: false,
+      reason: 'invalid',
+      message: 'createdAt: expected an ISO 8601 timestamp; title: Too small: expected string to have >=1 characters',
+    });
+    assert.deepEqual(parseTask({ ...createTask(input), title: 'two\nlines' }), {
+      ok: false,
+      reason: 'invalid',
+      message: 'title: expected one trimmed line',
+    });
+    for (const value of [null, undefined, 'fruitback.task', 3]) {
+      assert.deepEqual(parseTask(value), { ok: false, reason: 'not-found' });
+    }
     assert.throws(() => createTask({ ...input, title: '' }));
   });
 

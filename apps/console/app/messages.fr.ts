@@ -1819,6 +1819,26 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Ses sites gardent de nouveau leurs notes dans l’espace de travail. Les tickets déjà dans {source} y restent.',
   'This console does not know this connector yet.': 'Cette console ne connaît pas encore ce connecteur.',
 
+  // FRU-657: a task written by hand.
+  'New task': 'Nouvelle tâche',
+  'New task in {column}': 'Nouvelle tâche dans {column}',
+  'This server keeps no task: write the task in the tracker of the site.':
+    'Ce serveur ne garde aucune tâche : écrivez la tâche dans le tracker du site.',
+  'This site is no longer here. Reload the page.': 'Ce site n’est plus là. Rechargez la page.',
+  'This status was removed since the list was read. Reload the page.':
+    'Ce statut a été retiré depuis la lecture de la liste. Rechargez la page.',
+  'This status is hidden on its site. Choose another one.':
+    'Ce statut est masqué sur son site. Choisissez-en un autre.',
+  'The task was not created. Try again.': 'La tâche n’a pas été créée. Réessayez.',
+  Title: 'Titre',
+  'Give the task a title.': 'Donnez un titre à la tâche.',
+  'Optional. What to do, for a person or an agent.': 'Facultatif. Ce qu’il faut faire, pour une personne ou un agent.',
+  'A task has no page and no pin. It is kept in Fruitback.':
+    'Une tâche n’a ni page ni pin. Elle est gardée dans Fruitback.',
+  'Create the task': 'Créer la tâche',
+  'No text.': 'Aucun texte.',
+  'Written by hand: no page and no pin.': 'Écrite à la main : ni page ni pin.',
+
   ...JIRA,
   ...GITLAB,
   ...SLACK,

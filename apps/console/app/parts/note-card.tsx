@@ -109,9 +109,12 @@ export function NoteCard({
         <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{who}</span>
         <span className="tabular-nums">{ago(note.createdAt)}</span>
         {/* FRU-588: the page of the note in a new tab, its address in the tooltip, as in the table. */}
-        <IconLink label={t('Show on the page')} href={show} tip={note.page.url}>
-          <NoteIcon name="open" />
-        </IconLink>
+        {/* FRU-657: a task written by hand has no page to show. */}
+        {note.page.url === '' ? null : (
+          <IconLink label={t('Show on the page')} href={show} tip={note.page.url}>
+            <NoteIcon name="open" />
+          </IconLink>
+        )}
         {taskMenu.menu}
       </div>
     </div>
