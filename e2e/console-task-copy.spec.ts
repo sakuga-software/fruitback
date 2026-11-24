@@ -223,3 +223,35 @@ test('with the panel closed, the keyboard copies the link of the row that holds 
   await expect(p.locator('[data-copy-status]')).toHaveText('Link copied.');
   expect(await clipboard(p)).toBe(`${CONSOLE}/w/w1/notes?task=n1`);
 });
+
+test('a selection copies the IDs and the Markdown of all its notes, from its bar and from the menu of one of them', async ({
+  page: p,
+}) => {
+  await worker(p);
+  await p.goto(`${CONSOLE}/w/w1/notes`);
+  const select = (text: string) =>
+    p.locator('tr[data-note]', { hasText: text }).locator('.kit-select .checkbox__control').click();
+  await select('The price');
+  await select('Write the release notes');
+  const bar = p.getByRole('region', { name: 'The selected notes' });
+  const status = p.locator('[data-copy-status]');
+
+  await bar.getByRole('button', { name: 'Copy' }).click();
+  await p.getByRole('menuitem', { name: 'Copy the ID' }).click();
+  await expect(status).toHaveText('2 IDs copied.');
+  // In the order of the screen: the table groups by status, To do before New.
+  expect(await clipboard(p)).toBe('FB-41\nFB-12');
+  // A copy closes the menu of the bar.
+  await expect(p.getByRole('menu', { name: 'Copy' })).toBeHidden();
+
+  await p
+    .locator('tr', { hasText: 'The price' })
+    .getByRole('button', { name: /Actions of the 2 selected notes/ })
+    .click();
+  await p.getByRole('menuitem', { name: 'Copy as Markdown' }).click();
+  await expect(status).toHaveText('2 notes copied as Markdown.');
+  const markdown = await clipboard(p);
+  expect(markdown).toContain('# Notes on https://staging.acme.dev/pricing');
+  expect(markdown).toContain('# Tasks with no page');
+  expect(markdown.indexOf('# Notes on')).toBeLessThan(markdown.indexOf('# Tasks with no page'));
+});

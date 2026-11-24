@@ -2127,6 +2127,20 @@ seen » is shown to owners and admins only.
 - On a worker that keeps no task (`FRUITBACK_TASKS=off`), every one of these writes is
   `403 tasks-off`. test:`changes nothing on a worker that keeps no task, and still reads the labels`.
 
+### Several tasks at once, from the console (FRU-656)
+
+- `POST /console/workspaces/<id>/tasks` changes several tasks the worker keeps in one call (100 at
+  most), and `POST /console/workspaces/<id>/tasks/delete` deletes them. Each task is checked as the
+  route of one task checks it: the person who left the note or a role with `manage-sites`, a site the
+  caller reads, an assignee who is a member and labels of the workspace. One refusal changes and
+  deletes none of them: the store writes them in one transaction, and the answer names the task.
+  test:`changes none of the tasks when one of them is refused, and names it`,
+  test:`deletes several tasks in one call, and none when one is refused`,
+  test:`answers 404 to a guest for a task of a site not shared with them, and writes nothing`.
+- A suspended workspace writes none of them, and a worker that keeps no task answers `403 tasks-off`.
+  test:`changes and deletes nothing in a suspended workspace`,
+  test:`changes and deletes nothing on a worker that keeps no task`.
+
 ### One note, read whole in the console (FRU-653)
 
 - `GET /console/workspaces/<id>/notes/<note>` reads one note as its page reads it (`readPage`, the

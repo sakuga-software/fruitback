@@ -11,6 +11,7 @@ import { type IndexedNote } from './notes-model';
 import { NoteStatus, Place, excerptOf } from './note-parts';
 import { TaskMarks } from './task-marks';
 import { NoteText, useTaskMenu } from './task-menu';
+import { SelectTask, useSelectRow } from './task-selection';
 
 /**
  * A note on the board (FRU-436): what a row of the table says, one under the other.
@@ -40,6 +41,8 @@ export function NoteCard({
   const [statusRefused, setStatusRefused] = useState<string | undefined>();
   // FRU-654: the menu of the task, on its button at the foot and on a right click of the card.
   const taskMenu = useTaskMenu(note);
+  // FRU-656: its box before its text, and Shift and a click on the card for a range.
+  const selectRow = useSelectRow(note);
   const opened = note.note ?? note.ref;
   const show = opened === undefined ? note.page.url : `${note.page.url}#fruitback-note=${encodeURIComponent(opened)}`;
   const visitor = note.author.kind === 'verified' || note.author.kind === 'anonymous';
@@ -48,9 +51,15 @@ export function NoteCard({
   const settable = note.canSetStatus === true && note.status !== undefined && statuses !== undefined;
 
   return (
-    <div className="flex flex-col gap-[8px]" onContextMenu={taskMenu.onContextMenu} onKeyDown={taskMenu.onKeyDown}>
+    <div
+      className="flex flex-col gap-[8px]"
+      onContextMenu={taskMenu.onContextMenu}
+      onKeyDown={taskMenu.onKeyDown}
+      {...selectRow}
+    >
       <div>
         <div className="flex items-start gap-[8px] text-body">
+          <SelectTask note={note} className="-my-[4px] -ml-[6px]" />
           <span className="line-clamp-3 min-w-0 flex-1 [overflow-wrap:anywhere]">
             <NoteText note={note}>{excerptOf(note.excerpt)}</NoteText>
           </span>

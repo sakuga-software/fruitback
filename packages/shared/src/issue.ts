@@ -34,6 +34,12 @@ export const NOTE_STAGES = ['new', 'todo', 'progress', 'done', 'closed'] as cons
 export type NoteStage = (typeof NOTE_STAGES)[number];
 
 /**
+ * The stages that a reporter usually stops caring about: done, and closed without being done. The
+ * widget hides them with « Hide resolved notes », the console with « Unresolved » (FRU-667).
+ */
+export const RESOLVED_STAGES = ['done', 'closed'] as const satisfies readonly NoteStage[];
+
+/**
  * What a connector reports for a state it does not recognise.
  *
  * The tolerance is the contract's, not the connector's. A provider gains a state, or a team renames

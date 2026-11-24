@@ -1,15 +1,15 @@
 import type { NoteIssue } from '@fruitback/shared';
-import { type DoneNoticeSeams, sendDoneNotices } from './done-notices.ts';
+import type { DoneNoticeSeams } from './done-notices.ts';
 import { json } from './http.ts';
-import { requestAgent } from './agent-triggers.ts';
+import { afterStatusMoved, ownKeyOf } from './console-status.ts';
 import { readJsonObject } from './bounded-body.ts';
 import { handleTasks } from './console-tasks.ts';
 import { isDay, isPriority } from './task-fields.ts';
-import { DEFAULT_NOTE_STAGE, NOTE_STAGES, type NoteStage, type NoteStatus } from '@fruitback/shared';
+import { NOTE_STAGES, type NoteStage, type NoteStatus } from '@fruitback/shared';
 import type { Action, AccountStore, Reach } from './accounts.ts';
 import type { Kv } from './kv.ts';
 import { invalidatePages } from './note-helpers.ts';
-import { OWN_SOURCE, envelopeStatuses, readSiteStatus } from './site-statuses.ts';
+import { OWN_SOURCE, envelopeStatuses } from './site-statuses.ts';
 import {
   type ListedNote,
   type NoteCursor,
@@ -77,6 +77,8 @@ export type NotesContext = {
     | 'deleteTask'
     | 'createTask'
     | 'readTask'
+    | 'changeTasks'
+    | 'deleteTasks'
     | 'labels'
     | 'addLabel'
     | 'changeLabel'
@@ -202,6 +204,11 @@ export function queryOf(params: URLSearchParams, account: string, options: { ord
   // FRU-665: the archived tasks, in place of the others.
   const archived = params.get('archived') ?? undefined;
   if (archived !== undefined && archived !== '1') return { ok: false, error: 'invalid-archived' };
+  // FRU-667: the notes that are not done nor closed. A stage that is asked says the stage already.
+  const unresolved = params.get('unresolved') ?? undefined;
+  if (unresolved !== undefined && (unresolved !== '1' || stage !== undefined)) {
+    return { ok: false, error: 'invalid-unresolved' };
+  }
   const q = params.get('q')?.trim() || undefined;
   if (q !== undefined && q.length > QUERY_LENGTH) return { ok: false, error: 'invalid-q' };
   // FRU-655: the fields of a task. `me` and `none` for the assignee, `none` for the priority.
@@ -240,6 +247,7 @@ export function queryOf(params: URLSearchParams, account: string, options: { ord
       ...(place === undefined ? {} : { place }),
       ...(mine === undefined ? {} : { author: account }),
       ...(archived === undefined ? {} : { archived: true }),
+      ...(unresolved === undefined ? {} : { unresolved: true }),
       ...(assignee === undefined ? {} : { assignee: assigneeOf(assignee, account) }),
       ...(priority === undefined ? {} : { priority: priority === 'none' ? null : priority }),
       ...(label === undefined ? {} : { label }),
@@ -441,13 +449,9 @@ async function setStatus(id: string, request: Request, context: NotesContext): P
   }
 
   const asked = (await readJsonObject(request))?.status;
-  const prefix = `${OWN_SOURCE}:`;
-  if (typeof asked !== 'string') return json(400, { error: 'invalid-status' }, headers);
-  if (!asked.startsWith(prefix)) return json(400, { error: 'not-own' }, headers);
-  const key = asked.slice(prefix.length);
-  if (!readSiteStatus({ source: OWN_SOURCE, key, stage: DEFAULT_NOTE_STAGE }).ok) {
-    return json(400, { error: 'invalid-status' }, headers);
-  }
+  const own = ownKeyOf(asked);
+  if ('error' in own) return json(400, { error: own.error }, headers);
+  const { key } = own;
 
   const answer = await context.accounts.setNoteStatus(context.workspace, note.site, note.note, key, {
     account: context.account,
@@ -470,26 +474,7 @@ async function setStatus(id: string, request: Request, context: NotesContext): P
     }
   }
   if (context.kv !== undefined) await invalidatePages(context.kv, [answer.page]);
-  // FRU-604: a person moved the note to Done: whoever left it is told, once (`take` holds the once).
-  if (answer.stage === 'done' && answer.was !== 'done' && context.done !== undefined) {
-    void sendDoneNotices(context.done, note.site, [
-      { stage: 'done', note: { id: note.note, page: { url: answer.page } } },
-    ]);
-  }
-  // FRU-468: a person moved the note to To do, from another stage: the trigger of its site may call.
-  if (answer.stage === 'todo' && answer.was !== 'todo') {
-    await requestAgent(
-      context.accounts,
-      {
-        workspace: context.workspace,
-        site: note.site,
-        identifier: answer.identifier,
-        note: note.note,
-        reason: 'moved-to-todo',
-      },
-      Date.now(),
-    );
-  }
+  await afterStatusMoved(context, { ...note, ...answer });
 
   return json(200, { status: asked, stage: answer.stage }, headers);
 }

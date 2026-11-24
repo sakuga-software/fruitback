@@ -7,6 +7,7 @@ import { LinkButton, MenuTree, type TreeBranch } from '../ui';
 import { Confirmation } from '../confirm';
 import { type IndexedNote, type TaskFields } from './notes-model';
 import type { TaskCopy } from './task-copy';
+import { TaskSelectionContext, isEditable } from './task-selection';
 
 export type TaskLabel = { id: string; name: string; color: string };
 export type TaskPerson = { id: string; name: string };
@@ -14,7 +15,11 @@ export type TaskChange = {
   assignee?: string | null;
   priority?: TaskFields['priority'] | null;
   dueOn?: string | null;
+  /** Every label of one task: the page of a task writes them so. */
   labels?: string[];
+  /** FRU-656: labels put on, and taken off, each task; its other labels stay. */
+  addLabels?: string[];
+  removeLabels?: string[];
   position?: number;
   archived?: boolean;
 };
@@ -24,7 +29,8 @@ export type TaskActions = {
   setStatus: (status: string) => Promise<string | undefined>;
   change: (change: TaskChange) => Promise<string | undefined>;
   newLabel: () => void;
-  copyLink: () => void;
+  /** Absent for several tasks: a link is of one note. */
+  copyLink?: () => void;
   /** FRU-665: out of the lists, or back in them. */
   archive: (archived: boolean) => Promise<string | undefined>;
   /** FRU-665: deleted for good, once the person confirmed it. */
@@ -61,23 +67,38 @@ function priorityWord(priority: Priority): string {
   }
 }
 
+/** The value every task has, or `undefined` when they differ. */
+function sameOf<Value>(values: readonly Value[]): Value | undefined {
+  const [first] = values;
+
+  return values.every((value) => value === first) ? first : undefined;
+}
+
 /**
- * The submenus of a task the worker keeps, that this person may change (FRU-654): its status, its
- * assignee, its priority, its day and its labels, each with its current value checked. A change is
- * saved at once; its refusal goes to `settle`.
+ * The submenus of tasks the worker keeps, that this person may change (FRU-654): their status, their
+ * assignee, their priority, their day and their labels. One task, or the tasks of a selection
+ * (FRU-656): a value is checked when every task has it, a status is offered when the site of every
+ * task has it, and a label checked is taken off every task, one not checked put on every one. A
+ * change is saved at once; its refusal goes to `settle`.
  */
-function branchesOf(
-  note: IndexedNote,
-  task: TaskFields,
+export function branchesOf(
+  notes: readonly IndexedNote[],
   seam: TaskMenuSeam,
   actions: TaskActions,
   settle: (done: Promise<string | undefined>) => void,
 ): TreeBranch[] {
-  const statuses = seam.statusesOf(note)?.filter((status) => status.hidden !== true) ?? [];
-  const chosen = task.labels.map((label) => label.id);
+  const tasks = notes.flatMap((note) => (note.task === undefined ? [] : [note.task]));
+  const [first, ...rest] = notes.map((note) => seam.statusesOf(note)?.filter((status) => status.hidden !== true) ?? []);
+  const statuses = (first ?? []).filter((status) => rest.every((each) => each.some((one) => one.key === status.key)));
+  const status = sameOf(notes.map((note) => note.status));
+  const assignee = sameOf(tasks.map((task) => task.assignee?.id ?? NONE));
+  const priority = sameOf(tasks.map((task) => task.priority ?? NONE));
+  const chosen = seam.labels
+    .map((label) => label.id)
+    .filter((id) => tasks.every((task) => task.labels.some((label) => label.id === id)));
   const labelItems = [
     ...seam.labels.map((label) => ({ id: label.id, label: label.name, swatch: label.color })),
-    ...(seam.canAddLabel ? [{ id: NEW_LABEL, label: t('New label…') }] : []),
+    ...(seam.canAddLabel ? [{ id: NEW_LABEL, label: t('New label…'), closes: true }] : []),
     ...(seam.labels.length === 0 && !seam.canAddLabel
       ? [{ id: NONE, label: t('No label yet'), detail: t('An owner or an admin adds them.'), disabled: true }]
       : []),
@@ -91,8 +112,8 @@ function branchesOf(
             id: 'status',
             label: t('Status'),
             choice: 'single' as const,
-            checked: note.status === undefined ? [] : [note.status],
-            items: statuses.map((status) => ({ id: status.key, label: statusName(status, stageName) })),
+            checked: status === undefined ? [] : [status],
+            items: statuses.map((each) => ({ id: each.key, label: statusName(each, stageName) })),
             onAction: (key: string) => settle(actions.setStatus(key)),
           },
         ]),
@@ -100,7 +121,7 @@ function branchesOf(
       id: 'assignee',
       label: t('Assignee'),
       choice: 'single',
-      checked: [task.assignee?.id ?? NONE],
+      checked: assignee === undefined ? [] : [assignee],
       items: [
         { id: NONE, label: t('Nobody') },
         ...seam.people.map((person) => ({ id: person.id, label: person.name })),
@@ -111,9 +132,9 @@ function branchesOf(
       id: 'priority',
       label: t('Priority'),
       choice: 'single',
-      checked: [task.priority ?? NONE],
+      checked: priority === undefined ? [] : [priority],
       items: [
-        ...PRIORITIES.map((priority) => ({ id: priority, label: priorityWord(priority) })),
+        ...PRIORITIES.map((each) => ({ id: each, label: priorityWord(each) })),
         { id: NONE, label: t('No priority') },
       ],
       onAction: (key) => settle(actions.change({ priority: key === NONE ? null : (key as Priority) })),
@@ -137,10 +158,7 @@ function branchesOf(
       items: labelItems,
       onAction: (key) => {
         if (key === NEW_LABEL) return actions.newLabel();
-        const next = new Set(chosen);
-        if (next.has(key)) next.delete(key);
-        else next.add(key);
-        settle(actions.change({ labels: [...next] }));
+        settle(actions.change(chosen.includes(key) ? { removeLabels: [key] } : { addLabels: [key] }));
       },
     },
   ];
@@ -153,6 +171,8 @@ export type TaskMenuSeam = {
   canAddLabel: boolean;
   statusesOf: (note: IndexedNote) => readonly StatusChoice[] | undefined;
   actionsOf: (note: IndexedNote) => TaskActions;
+  /** FRU-656: the writes of several tasks at once, in one call each; of one task, its own. */
+  actionsOfAll: (notes: readonly IndexedNote[]) => TaskActions;
   /** FRU-653: opens the page of a task, from its text. Absent: the text opens nothing. */
   openTask?: (note: IndexedNote) => void;
   /** FRU-658: the link, the ID and the Markdown of a task. Absent: the menu offers no copy. */
@@ -174,11 +194,29 @@ export function NoteText({ note, children }: { note: IndexedNote; children: Reac
 
 export const TaskMenuContext = createContext<TaskMenuSeam | undefined>(undefined);
 
+/** The words of « Delete… » asked again (FRU-665), for one note or several (FRU-656). */
+export function deleteWords(count: number): { confirmLabel: string; consequence: string } {
+  return count === 1
+    ? {
+        confirmLabel: t('Delete this note'),
+        consequence: t('The note, its replies and its labels go for good. Nobody can bring them back.'),
+      }
+    : {
+        confirmLabel: t('Delete {count} notes', { count }),
+        consequence: t('The {count} notes, their replies and their labels go for good. Nobody can bring them back.', {
+          count,
+        }),
+      };
+}
+
 /**
  * The menu of one task, for a row or a card (FRU-654): its button, its last refusal, and the handlers
  * that open it on a right click (`contextmenu`, which a long press of Android sends too) and on the
  * key of the menu or Shift+F10. A right click on a link keeps the menu of the browser. Every note
  * offers its link; a note the worker keeps, that this person may change, offers its fields too.
+ *
+ * FRU-656: on a task of a selection of several, the menu acts on the tasks of the selection this
+ * person may change, all at once; one note's own items (its place, its link) are not offered there.
  */
 export function useTaskMenu(note: IndexedNote): {
   menu: ReactNode;
@@ -190,13 +228,25 @@ export function useTaskMenu(note: IndexedNote): {
 } {
   useLocale();
   const seam = useContext(TaskMenuContext);
+  const selection = useContext(TaskSelectionContext);
   const [open, setOpen] = useState(false);
   const [problem, setProblem] = useState<string | undefined>();
   const [deleting, setDeleting] = useState(false);
   if (seam === undefined) {
     return { menu: null, problem: undefined, confirm: null, onContextMenu: () => {}, onKeyDown: () => {} };
   }
-  const given = seam.actionsOf(note);
+  const editable = isEditable(note);
+  const group =
+    selection !== undefined && selection.has(note.id) && selection.notes.length > 1
+      ? selection.notes.filter(isEditable)
+      : [];
+  // A selection where this person may change nothing: the menu of the note alone.
+  const several = group.length > 0;
+  const targets = several ? group : [note];
+  // FRU-658: a copy takes every note of the selection, those this person may not change too.
+  const copied =
+    selection !== undefined && selection.has(note.id) && selection.notes.length > 1 ? selection.notes : [note];
+  const given = several ? seam.actionsOfAll(group) : seam.actionsOf(note);
   // The dialog of a new label opens over the screen: the menu closes first, or it would stay above it.
   const actions = {
     ...given,
@@ -209,41 +259,44 @@ export function useTaskMenu(note: IndexedNote): {
     setProblem(undefined);
     void done.then(setProblem);
   };
-  const editable = note.canSetStatus === true && note.task !== undefined;
+  const archived = targets.every((each) => each.task?.archived === true);
+  const changes = several || editable;
 
   return {
     menu: (
       <MenuTree
-        triggerLabel={t('Actions of this note')}
+        triggerLabel={
+          several
+            ? t('Actions of the {count} selected notes', { count: selection?.notes.length ?? 0 })
+            : t('Actions of this note')
+        }
         open={open}
         onOpenChange={setOpen}
-        branches={editable && note.task !== undefined ? branchesOf(note, note.task, seam, actions, settle) : []}
+        branches={changes ? branchesOf(targets, seam, actions, settle) : []}
         items={[
-          ...(editable && actions.moveUp !== undefined ? [{ id: 'up', label: t('Move up') }] : []),
-          ...(editable && actions.moveDown !== undefined ? [{ id: 'down', label: t('Move down') }] : []),
-          ...(editable
-            ? [{ id: 'archive', label: note.task?.archived === true ? t('Bring back') : t('Archive') }]
-            : []),
-          // FRU-658: the link of the note in the console, its ID and its Markdown.
+          ...(!several && editable && actions.moveUp !== undefined ? [{ id: 'up', label: t('Move up') }] : []),
+          ...(!several && editable && actions.moveDown !== undefined ? [{ id: 'down', label: t('Move down') }] : []),
+          ...(changes ? [{ id: 'archive', label: archived ? t('Bring back') : t('Archive') }] : []),
+          // FRU-658: the link in the console, the ID and the Markdown, of the note or of the selection.
           ...(seam.copy === undefined
             ? []
             : [
                 { id: 'copy-link', label: t('Copy the link') },
-                ...(note.ref === undefined ? [] : [{ id: 'copy-id', label: t('Copy the ID') }]),
+                ...(copied.some((each) => each.ref !== undefined) ? [{ id: 'copy-id', label: t('Copy the ID') }] : []),
                 { id: 'copy-markdown', label: t('Copy as Markdown') },
               ]),
           // FRU-657: a task written by hand has no page for a link to open.
-          ...(note.page.url === '' ? [] : [{ id: 'copy', label: t('Copy the link to its page') }]),
-          ...(editable ? [{ id: 'delete', label: t('Delete…'), danger: true }] : []),
+          ...(several || note.page.url === '' ? [] : [{ id: 'copy', label: t('Copy the link to its page') }]),
+          ...(changes ? [{ id: 'delete', label: t('Delete…'), danger: true }] : []),
         ]}
         onAction={(id) => {
-          if (id === 'copy') actions.copyLink();
-          if (id === 'copy-link') seam.copy?.link([note]);
-          if (id === 'copy-id') seam.copy?.identifier([note]);
-          if (id === 'copy-markdown') seam.copy?.markdown([note]);
+          if (id === 'copy') actions.copyLink?.();
+          if (id === 'copy-link') seam.copy?.link(copied);
+          if (id === 'copy-id') seam.copy?.identifier(copied);
+          if (id === 'copy-markdown') seam.copy?.markdown(copied);
           if (id === 'up' && actions.moveUp !== undefined) settle(actions.moveUp());
           if (id === 'down' && actions.moveDown !== undefined) settle(actions.moveDown());
-          if (id === 'archive') settle(actions.archive(note.task?.archived !== true));
+          if (id === 'archive') settle(actions.archive(!archived));
           if (id === 'delete') setDeleting(true);
         }}
       >
@@ -257,8 +310,7 @@ export function useTaskMenu(note: IndexedNote): {
     problem,
     confirm: deleting ? (
       <Confirmation
-        confirmLabel={t('Delete this note')}
-        consequence={t('The note, its replies and its labels go for good. Nobody can bring them back.')}
+        {...deleteWords(targets.length)}
         onKeep={() => setDeleting(false)}
         onConfirm={() => {
           setDeleting(false);
