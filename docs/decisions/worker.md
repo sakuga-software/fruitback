@@ -5068,5 +5068,5 @@ that rolled back.
 
 Before FRU-660 an address took no reply, because nobody of the team would read it: the address
 received the note once, and nothing after. It now receives `note.replied`, and the thread of the
-pin is read from the worker, so the reason is gone. Decided on 2026-11-24 by the orchestrator, in
-FRU-660, in place of the rule of FRU-257 for an address; Mathieu confirms it when he merges.
+pin is read from the worker, so the reason is gone. Proposed on 2026-11-24 in FRU-660, in place of
+the rule of FRU-257 for an address; it waits for the explicit agreement of Mathieu.
