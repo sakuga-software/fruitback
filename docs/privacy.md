@@ -183,6 +183,16 @@ receives a `note.withdrawn` event that holds identifiers only. On a note sent to
 gets the same reply as a comment, and moves to the first canceled state of its team. A note sent to
 GitHub cannot be withdrawn. To have a note deleted, ask the team of the site.
 
+### The changes of a task, told to an address
+
+A note sent to an address is a task the worker keeps. When its status, one of its fields (the
+assignee, the priority, the labels, the day) or its replies change, the address receives an event
+that holds identifiers and names only: the status before and after, the names of the fields that
+changed, or the id of a new reply. **Never the text of a reply, nor who is assigned, nor a label or
+a day.** The address reads them by `/mcp`, with an agent key of the workspace, if the workspace gives
+it one. A reply under a note sent to an address is kept in the worker, as under a note with no
+destination.
+
 ### An e-mail when a note is done
 
 When the team marks a note done, the worker can write once to the person who left it. **It is a

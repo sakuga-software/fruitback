@@ -89,6 +89,16 @@ export function LateDeliveries({
             {delivery.event === 'note.withdrawn' ? (
               <span className="block text-hint text-muted">{t('Note withdrawn by its author')}</span>
             ) : null}
+            {/* FRU-660: a status, a reply or a field of the task changed. */}
+            {delivery.event === 'note.status_changed' ? (
+              <span className="block text-hint text-muted">{t('Status of the task changed')}</span>
+            ) : null}
+            {delivery.event === 'note.replied' ? (
+              <span className="block text-hint text-muted">{t('Reply to the note')}</span>
+            ) : null}
+            {delivery.event === 'note.updated' ? (
+              <span className="block text-hint text-muted">{t('Fields of the task changed')}</span>
+            ) : null}
             <span className="block text-hint text-muted">
               {t('Written {when}', { when: moment(delivery.createdAt) })} ·{' '}
               {delivery.attempts === 1 ? t('1 attempt') : t('{count} attempts', { count: delivery.attempts })}

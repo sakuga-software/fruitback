@@ -125,6 +125,80 @@ signature and attempts, and `event: "note.withdrawn"`. Its body has the fields o
 item you made of the note, or mark it withdrawn: the person who left it does not expect an answer
 any more. `X-Fruitback-Delivery` is new for this event.
 
+### The task of a note
+
+Fruitback keeps each note it sends to an address as a task, since 0.8.0: the team gives it a status,
+an assignee, a priority, labels and a day, in the console or through `/mcp`, and a person replies
+under it from the page. The address is told of each change by a request of this page, with the same
+headers, signature and attempts, and the fields of `note.edited` above: `version`, `event`,
+`workspace`, `site`, `identifier`, `note.id` and `at`, the moment of the change. Each holds
+identifiers and names only, never a value a person wrote: read the note of now with the `get_note`
+tool of `/mcp`. `X-Fruitback-Delivery` is new for each change.
+
+**To receive the events of the tasks of a site, connect an address to that site**, in its « Where
+notes go ». The events go to the address a note was sent to. A note that Fruitback keeps with no
+destination, or that went to a tracker, sends none, and neither does a note of an address you
+disconnected since.
+
+- One request for each change of one task. A change of many tasks at once, in the console, sends
+  one request for each task.
+- A change that changes nothing sends nothing: the status the task is in already, the assignee it
+  has, the same labels in another order.
+- The requests come in no fixed order: an attempt that failed comes after a later change, and the
+  requests of one pass leave together. Order the changes of a task by `at`, or read the note of now.
+  A change of many tasks that sets a field and the status sends `note.updated` and
+  `note.status_changed` for each task with the same `at`: they say different things, and their
+  order does not matter.
+- A receiver written before these events answers `2xx` and reads nothing from them, or answers
+  something else, and they are tried again as any delivery.
+
+### A status changed
+
+The request of a status changed has `event: "note.status_changed"`. It holds the status before and after, as
+`set_note_status` of `/mcp` names a status (`own:` and the key of the status in the site), and the
+stage of each, one of `new`, `todo`, `progress`, `done` and `closed`:
+
+```text
+"status": { "from": "own:new", "to": "own:review" },
+"stage": { "from": "new", "to": "progress" }
+```
+
+A status that the team removes from the site, with its tasks moved to another, sends one for each
+task it moved. A status that changes stage moves no task to another status, and sends nothing. A
+note its author withdrew gets `note.withdrawn` above, and no `note.status_changed`.
+
+### A reply
+
+The request of a reply has `event: "note.replied"`. It holds the id of the reply, as `get_note` answers it in the
+replies of the note, and not its text:
+
+```text
+"reply": { "id": "42" }
+```
+
+A note sent to an address takes a reply from the page and from `reply_to_note` of `/mcp`, since
+0.8.0. Fruitback keeps it under the note, and the thread of its pin shows it. A workspace that hides
+the replies of this connector takes none.
+
+### A field changed
+
+The request of a field changed has `event: "note.updated"`. It holds the names of the fields whose value changed,
+in this order, and never their values:
+
+```text
+"fields": ["assignee", "priority", "labels", "dueOn"]
+```
+
+| Field      | What changed                  |
+| ---------- | ----------------------------- |
+| `assignee` | The member who does the task. |
+| `priority` | How urgent it is.             |
+| `labels`   | Its labels, as a set.         |
+| `dueOn`    | The day it is due.            |
+
+A field that is cleared changed. The place of a task in its column, and its archive, are not fields:
+they send nothing.
+
 ## Check the signature
 
 The signature is the HMAC-SHA256, with your secret, of the timestamp, a dot and the body **as it

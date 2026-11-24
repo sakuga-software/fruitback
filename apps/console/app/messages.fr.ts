@@ -1645,6 +1645,9 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Note edited by its author': 'Note modifiée par son auteur',
   'Note withdrawn by its author': 'Note retirée par son auteur',
   'Note moved by its author': 'Note déplacée par son auteur',
+  'Status of the task changed': 'Statut de la tâche changé',
+  'Reply to the note': 'Réponse à la note',
+  'Fields of the task changed': 'Champs de la tâche changés',
   'This address is not in the workspace any more. Choose another one.':
     'Cette adresse n’est plus dans l’espace de travail. Choisissez-en une autre.',
   'Only an owner or an admin of the workspace starts an agent from a site.':

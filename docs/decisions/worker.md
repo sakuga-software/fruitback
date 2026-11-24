@@ -3437,10 +3437,10 @@ under a client that is not a site looks the same. `forget` deletes them.
 - **`NoteStore.reply` writes a reply under one note, and `takesReplies` says which store takes one.**
   Linear (`commentCreate`), the database (`note_comments`) and the store of the dev loop take one.
   GitHub does not: it is a store of the environment, and no connector of a workspace yet (FRU-188).
-- **A site takes no reply when nobody would read it back**: an address that only receives (REST),
-  though the worker keeps its notes, and a tracker whose workspace hides its replies (FRU-102).
-  `withSettings` and `receivingStore` take `reply` off, and the routed store asks the store of the
-  client (`repliesFor`).
+- **A site takes no reply when nobody would read it back**: a tracker whose workspace hides its
+  replies (FRU-102), and a plugin that receives (Slack). `withSettings` and `receivingStore` take
+  `reply` off, and the routed store asks the store of the client (`repliesFor`). An address (REST)
+  takes one since FRU-660: the worker keeps it, and the address is told by `note.replied`.
 - **The text says who wrote it, on a line that the reply cannot imitate** (`reply-text.ts`). A
   tracker writes under the identity of its key: the app of Fruitback for OAuth, the owner of a
   personal key. So the first line names the person, and says « member of {workspace} » or « not
@@ -5022,3 +5022,51 @@ destination yet when it is off: a note is then refused, and the widget keeps it.
 
 - Before, the console had no gesture for several tasks. Changing 25 of them was 25 calls, each
   followed by a read of the list; a refusal in the middle left some changed and some not.
+
+## The events of a task, sent to an address (FRU-660)
+
+### The rules, in short
+
+- **Three events of the queue of the deliveries**: `note.status_changed` (the status before and
+  after as `own:<key>`, and the stage of each), `note.replied` (the id of the reply) and
+  `note.updated` (the names of the fields that changed, in the order of `TASK_EVENT_FIELDS`:
+  `assignee`, `priority`, `labels`, `dueOn`). Ids and names only, as `note.edited` (FRU-605): never
+  the text of a reply nor the value of a field. `note-events.ts` writes the bodies.
+- **The store queues them, in the transaction that writes the change** (`queueTaskEvents` of
+  `note-events-postgres.ts`): `writeStatus` and `writeTaskFields` of the accounts, which write one
+  task and each task of `changeTasks` (FRU-656), `removeSiteStatus`, and `setStatus` and `reply` of
+  the notes. So the console, `/mcp`, the extension and a change of many tasks (one event for each
+  task) emit, and no event is sent for a change that rolled back. A path that writes a status, a
+  field or a reply some other way must call it too.
+- **A queue that refuses the event never fails the change**: the event is queued in a savepoint of
+  the transaction, and its failure is logged. The change is kept first, as for `note.created` and
+  `note.edited`: losing what a person just wrote is the one failure the product cannot afford. The
+  cost is an event that is not sent, which the log says. Chosen on 2026-11-24 for the review of #912,
+  in place of a first version that failed the change.
+- **No order between the requests**: the queue sends a pass together and tries a failed one later.
+  `at` orders the changes of a task; the two events of one change of many tasks share it.
+- **Only a note sent to an address**: the row of the index that names it `FB-<row>`, and the same
+  note, whose connector is a `rest` connector of its workspace. A note with no destination, of a
+  tracker, of Slack, or of a connector removed since gets none.
+- **A change that changes nothing emits nothing**: the status compared as `own:<key>`, the fields
+  compared one by one, the labels as a set (`changedTaskFields`). The place in a column and the
+  archive are no field of the event: they emit nothing.
+- **A removed status that moves its tasks emits one event for each task.** A status that changes
+  stage changes no status of a task, and emits nothing. A withdrawal emits `note.withdrawn` only.
+- **An address takes a reply**, kept in the worker's own store (`createConnectorStores` gives the
+  reply of the own store back), unless its workspace hides the replies of the connector. It still
+  takes no verdict (FRU-294).
+
+### The reasons
+
+FRU-649 asked for an event for a status, a reply and a field. The store, and not a route, queues
+them, because four paths write a status (the console, the extension, `/mcp`, the removal of a
+status) and more come (the change of many tasks, `/mcp` for the fields): a route that forgot would
+be a change the address never hears of. In the transaction, because an event queued after the
+commit is lost when the process stops between the two, and one queued before is sent for a change
+that rolled back.
+
+Before FRU-660 an address took no reply, because nobody of the team would read it: the address
+received the note once, and nothing after. It now receives `note.replied`, and the thread of the
+pin is read from the worker, so the reason is gone. Proposed on 2026-11-24 in FRU-660, in place of
+the rule of FRU-257 for an address; it waits for the explicit agreement of Mathieu.
