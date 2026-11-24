@@ -11,7 +11,7 @@ import { ReadProblem } from '../read-problem';
 import { useLocale } from '../use-locale';
 import { type IndexedNote } from './notes-model';
 import { TaskMenuContext } from './task-menu';
-import { siteOfId } from './task-copy';
+import { siteOfId } from '../note-id';
 
 const NONE = 'none';
 const stageName = (stage: Stage) => t(STAGE_NAMES[stage]);

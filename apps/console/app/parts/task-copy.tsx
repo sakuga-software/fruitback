@@ -12,7 +12,6 @@ import { call } from '../api';
 import { t } from '../i18n';
 import type { StatusChoice } from '../note-status';
 import { STAGE_NAMES } from '../stages';
-export { siteOfId } from '../note-id';
 import type { IndexedNote } from './notes-model';
 
 /** What « Copy » needs of a note: its id in the console, its site, and its reference when the list gives it. */
