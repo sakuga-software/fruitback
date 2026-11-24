@@ -38,6 +38,8 @@ type Draft = {
   text: string;
   site: string;
   status: string;
+  /** The person chose the status in the dialog: it stays with the rest of what they typed. */
+  chosenStatus: boolean;
   assignee: string;
   priority: string;
   dueOn: string;
@@ -49,6 +51,7 @@ const EMPTY: Draft = {
   text: '',
   site: '',
   status: '',
+  chosenStatus: false,
   assignee: NONE,
   priority: NONE,
   dueOn: '',
@@ -112,12 +115,24 @@ export function useTaskCreate({
 
   const open = (ask: NewTaskAsk = {}) => {
     setProblem(undefined);
-    // The words typed stay; the status is the one of where « New task » was pressed, or none.
-    setDraft((was) => ({
-      ...was,
-      ...(ask.site === undefined ? {} : { site: ask.site }),
-      status: ask.status ?? '',
-    }));
+    // What was typed stays, a status chosen in the dialog with it. Else the status is the one of where
+    // « New task » was pressed, or none: a column's status does not follow to another press.
+    setDraft((was) => {
+      if (ask.status !== undefined) {
+        return {
+          ...was,
+          ...(ask.site === undefined ? {} : { site: ask.site }),
+          status: ask.status,
+          chosenStatus: false,
+        };
+      }
+
+      return {
+        ...was,
+        ...(ask.site === undefined ? {} : { site: ask.site }),
+        status: was.chosenStatus ? was.status : '',
+      };
+    });
     setOpen(true);
   };
 
@@ -144,7 +159,7 @@ export function useTaskCreate({
       // A status the site no longer offers leaves the draft: a second press sends none, and the site
       // gives its first status, even when the dialog has no list of its statuses to choose from.
       if (answer.error === 'status-hidden' || answer.error === 'status-changed') {
-        setDraft((was) => ({ ...was, status: NONE }));
+        setDraft((was) => ({ ...was, status: NONE, chosenStatus: false }));
       }
       setProblem(problemOf(answer, CREATE_PROBLEMS, NOT_CREATED));
       return;
@@ -193,7 +208,7 @@ export function useTaskCreate({
               setDraft((was) => ({
                 ...was,
                 site: chosen,
-                status: was.site === chosen || BUILT_IN.test(was.status) ? was.status : '',
+                ...(was.site === chosen || BUILT_IN.test(was.status) ? {} : { status: '', chosenStatus: false }),
               }))
             }
             options={sites.map((one) => ({ value: one.id, label: one.origin }))}
@@ -204,7 +219,7 @@ export function useTaskCreate({
             <Choice
               label={t('Status')}
               value={status}
-              onChange={(chosen) => set('status', chosen)}
+              onChange={(chosen) => setDraft((was) => ({ ...was, status: chosen, chosenStatus: true }))}
               options={statuses.map((one) => ({
                 value: one.key,
                 label: statusName(one, stageName),
