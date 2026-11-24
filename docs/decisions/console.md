@@ -1240,3 +1240,33 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   as a field of the calendar of the browser. Any other note shows them disabled, or not at all.
 - **Not here yet**: to write a reply, to edit the text, the files of a note. The console has no route
   to write a reply, and a note Fruitback keeps keeps no file.
+
+## Several tasks at once (FRU-656)
+
+### The rules, in short
+
+- **The screen follows its board**, `design/task-bulk/` (FRU-656): a box on each task Fruitback
+  keeps, in the table and on the board, none on a note of a tracker. Out of a selection a box shows
+  under the pointer, under the keyboard, and always on a touch screen. The box of the head of the
+  table selects the page. `task-selection.tsx` holds the selection, and `TaskSelectionContext` gives
+  it to what acts on it: the bar, the menu of a task, and a copy (FRU-658).
+- **The keys.** Shift and a click on a box, or on a row or a card out of its links and buttons,
+  selects every task between it and the box pressed before, in the order of the screen. Cmd or Ctrl
+  and A selects every task of the page, unless the focus is in a field, a menu or a dialog, which
+  keep the key. Escape clears the selection, unless something of the screen took it first.
+- **The whole view is the page shown**, 25 notes at most under the filters: a selection of every
+  page would change notes the screen never read. A task that leaves the screen leaves the selection.
+- **The bar is under the list, and stays at the foot of the screen** while the list is there
+  (`sticky`). It says how many tasks are selected, offers the rest of the page, and holds the five
+  submenus of the menu of a task as buttons (`BranchMenu` of the kit), « Archive » and « Delete… »,
+  which asks again. A value is checked when every selected task has it; a label checked is taken off
+  every task, another one put on every task, and their other labels stay.
+- **One change is one call**, `POST …/tasks` or `POST …/tasks/delete`: the worker changes every task
+  or none, and a refusal is said in the bar. A task this person may not change stays selected, the
+  bar says how many, and the change leaves it out.
+- **The menu of a task on a selection of several acts on all of it**: the same code (`branchesOf`),
+  its button named « Actions of the N selected notes », without the items of one note (its place,
+  its link). A task out of the selection keeps its own menu.
+- **Said to a screen reader**: a line of status, always in the page, says the count of the selection
+  and the end of a change (« 3 notes changed. »). A selection emptied with the focus in the bar gives
+  the focus to the list. `e2e/console-task-bulk.spec.ts` holds it, at 1440 px and at 390 px in French.

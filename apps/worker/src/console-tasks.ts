@@ -2,7 +2,8 @@ import { readJsonObject } from './bounded-body.ts';
 import { json } from './http.ts';
 import { invalidatePages, withoutTracker } from './note-helpers.ts';
 import type { NotesContext } from './console-notes.ts';
-import { readLabel, readTaskChange } from './task-fields.ts';
+import { notesOf, readLabel, readTaskChange, readTasksChange } from './task-fields.ts';
+import { afterStatusMoved, ownKeyOf } from './console-status.ts';
 import { withoutTrackerStatus } from './site-statuses.ts';
 
 /**
@@ -14,6 +15,10 @@ import { withoutTrackerStatus } from './site-statuses.ts';
  * - `GET …/labels`: the labels of the workspace, for whoever reads its notes.
  * - `POST …/labels`, `POST …/labels/<id>` (a change), `DELETE …/labels/<id>`: for a role that manages the sites.
  *
+ * - `POST …/tasks`, `{ notes, change }`: changes several tasks at once (FRU-656), and
+ *   `POST …/tasks/delete`, `{ notes }`, deletes them. One call, one transaction, and every task with
+ *   the rights of a change of one: one refusal changes none, and names the task in `note`.
+ *
  * Every write answers `403 tasks-off` on a worker that keeps no task (FRU-651).
  */
 export async function handleTasks(
@@ -22,6 +27,7 @@ export async function handleTasks(
   context: NotesContext,
   noteKeyOf: (id: string) => { site: string; note: string } | undefined,
 ): Promise<Response | undefined> {
+  if (rest === '/tasks' || rest === '/tasks/delete') return handleSeveral(rest, request, context, noteKeyOf);
   const task = /^\/notes\/([A-Za-z0-9_-]+)\/task$/.exec(rest);
   const label = /^\/labels\/([A-Za-z0-9_-]+)$/.exec(rest);
   const one = /^\/notes\/([A-Za-z0-9_-]+)$/.exec(rest);
@@ -122,4 +128,95 @@ export async function handleTasks(
     { error: changed.reason === 'taken' ? 'label-taken' : 'not-found' },
     headers,
   );
+}
+
+/** Why a change of several tasks was refused (FRU-656), as the route of one task says it. */
+const REFUSED: Readonly<Record<string, { status: number; error: string }>> = {
+  'not-found': { status: 404, error: 'not-found' },
+  'not-allowed': { status: 403, error: 'not-allowed' },
+  'not-kept': { status: 403, error: 'fields-not-taken' },
+  'not-member': { status: 409, error: 'not-member' },
+  'unknown-label': { status: 409, error: 'unknown-label' },
+  'too-many-labels': { status: 409, error: 'too-many-labels' },
+  'status-hidden': { status: 409, error: 'status-hidden' },
+  // No such status of a site now: removed since the list was read, as far as a caller knows.
+  'unknown-status': { status: 409, error: 'status-changed' },
+};
+
+/**
+ * `POST …/tasks` and `POST …/tasks/delete` (FRU-656): several tasks in one call. The checks of the
+ * route of one task, for each: the reach of a guest here, the rights and the rest in the store, in one
+ * transaction.
+ */
+async function handleSeveral(
+  rest: string,
+  request: Request,
+  context: NotesContext,
+  noteKeyOf: (id: string) => { site: string; note: string } | undefined,
+): Promise<Response> {
+  const { headers } = context;
+  if (!context.allowed('read-feedback')) return json(403, { error: 'forbidden' }, headers);
+  if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
+  if (context.tasks === 'off') return json(403, { error: 'tasks-off' }, headers);
+  const body = await readJsonObject(request);
+  const removing = rest === '/tasks/delete';
+  const read = removing ? notesOf(body) : readTasksChange(body);
+  if (read === undefined) return json(400, { error: 'invalid-task', field: 'notes' }, headers);
+  if ('invalid' in read) return json(400, { error: 'invalid-task', field: read.invalid }, headers);
+  const ids = Array.isArray(read) ? read : read.notes;
+
+  // The id of the console of each task, by its key: a refusal names the task as the list does.
+  const idOf = new Map<string, string>();
+  const tasks: { site: string; note: string }[] = [];
+  for (const id of ids) {
+    const key = noteKeyOf(id);
+    if (key === undefined) return json(404, { error: 'not-found', note: id }, headers);
+    idOf.set(JSON.stringify([key.site, key.note]), id);
+    tasks.push(key);
+  }
+  // A guest changes only the notes of the sites shared with them (FRU-250).
+  const reach = await context.reach();
+  const out = tasks.find(
+    (task) => reach === undefined || (reach.sites !== 'every' && !reach.sites.includes(task.site)),
+  );
+  if (out !== undefined)
+    return json(404, { error: 'not-found', note: idOf.get(JSON.stringify([out.site, out.note])) }, headers);
+  const who = { account: context.account, manages: context.allowed('manage-sites') };
+  const refused = (reason: string, task: { site: string; note: string } | undefined) => {
+    const { status, error } = REFUSED[reason] as { status: number; error: string };
+    const note = task === undefined ? undefined : idOf.get(JSON.stringify([task.site, task.note]));
+
+    return json(status, { error, ...(note === undefined ? {} : { note }) }, headers);
+  };
+
+  if (Array.isArray(read)) {
+    const gone = await context.accounts.deleteTasks(context.workspace, tasks, who);
+    if (!gone.deleted) return refused(gone.reason, gone.task);
+    if (context.kv !== undefined) await invalidatePages(context.kv, gone.pages);
+
+    return json(200, { deleted: tasks.length }, headers);
+  }
+
+  const { status, ...change } = read.change;
+  let key: string | undefined;
+  if (status !== undefined) {
+    const own = ownKeyOf(status);
+    if ('error' in own) return json(400, { error: own.error }, headers);
+    key = own.key;
+  }
+  const answer = await context.accounts.changeTasks(
+    context.workspace,
+    tasks,
+    key === undefined ? change : { ...change, status: key },
+    who,
+  );
+  if (!answer.set) return refused(answer.reason, answer.task);
+  if (context.kv !== undefined) await invalidatePages(context.kv, [...new Set(answer.notes.map((note) => note.page))]);
+  for (const moved of answer.notes) {
+    if (moved.stage !== undefined && moved.was !== undefined) {
+      await afterStatusMoved(context, { ...moved, stage: moved.stage, was: moved.was });
+    }
+  }
+
+  return json(200, { changed: answer.notes.length }, headers);
 }

@@ -295,6 +295,29 @@ describe('a call when a person moves a note to To do (FRU-468)', () => {
     assert.equal((await calls()).length, 2);
   });
 
+  it('queues a call for each note that one change of several tasks moves into To do (FRU-656)', async () => {
+    const { world, workspace, shop, hook, alice, trigger, calls } = await acme();
+    await trigger({ connector: hook.id, moment: 'moved-to-todo', enabled: true });
+    await leave(world, shop, 'sd_one');
+    await leave(world, shop, 'sd_two');
+    const several = (to: string) =>
+      call(world, 'POST', `/console/workspaces/${workspace}/tasks`, {
+        token: alice.token,
+        body: { notes: [noteIdOf(shop.id, 'sd_one'), noteIdOf(shop.id, 'sd_two')], change: { status: `own:${to}` } },
+      });
+
+    assert.equal((await several('progress')).status, 200);
+    assert.deepEqual(await calls(), [], 'another stage calls nothing');
+    assert.equal((await several('todo')).status, 200);
+    assert.deepEqual(
+      (await calls()).map((each) => each.body.note.id).sort(),
+      [noteIdOf(shop.id, 'sd_one'), noteIdOf(shop.id, 'sd_two')].sort(),
+    );
+    // Already in To do: no second call.
+    assert.equal((await several('todo')).status, 200);
+    assert.equal((await calls()).length, 2);
+  });
+
   it('queues a call when a member moves the note from the extension', async () => {
     const { world, shop, hook, member, trigger, calls } = await acme();
     await trigger({ connector: hook.id, moment: 'moved-to-todo', enabled: true });

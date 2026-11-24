@@ -4998,3 +4998,27 @@ destination yet when it is off: a note is then refused, and the widget keeps it.
   this read (`readNote` of `ConsoleSeams`), with the store of the request.
 - **The site is routed with no `Origin`**: the request comes from the console, which is no origin of
   the site, and the route of the console checks the reach of the caller before it reads.
+
+## Several tasks at once (FRU-656)
+
+### The rules, in short
+
+- **`POST …/tasks`, `{ notes, change }`, changes several tasks in one call**, and
+  `POST …/tasks/delete`, `{ notes }`, deletes them (`console-tasks.ts`). `notes` are the ids of the
+  list, 1 to 100 (`MAX_TASKS`). `change` takes the fields of `POST …/notes/<note>/task` but the
+  labels and the place, `status` as `POST …/notes/<note>/status` takes it (`own:<key>`), and
+  `addLabels` and `removeLabels`, which keep the other labels of each task.
+- **One transaction, the rights of one task for each** (`changeTasks`, `deleteTasks`): the store holds
+  the sites of the tasks in one order, then checks and writes each task with the code of the routes of
+  one task (`keptTaskOf`, `writeTaskFields`, `writeStatus`, `dropTask`). One refusal throws, nothing
+  is written, and the answer names the task in `note`, with the error of the route of one task;
+  `too-many-labels` is a task that would hold more than 20 labels.
+- **A status is a key that the site of every task has**: a status the team added to one site only is
+  `409 status-changed` for a task of another. A task moved to Done tells whoever left it, and a task
+  moved to To do may start the agent of its site, for each task, as the route of one does
+  (`afterStatusMoved`, `console-status.ts`).
+
+### The reasons
+
+- Before, the console had no gesture for several tasks. Changing 25 of them was 25 calls, each
+  followed by a read of the list; a refusal in the middle left some changed and some not.
