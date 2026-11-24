@@ -302,7 +302,11 @@ export default function Notes() {
   const newTask = (
     <Button tone="outline" onClick={() => create.open()} disabled={typeof sites !== 'object' || sites.length === 0}>
       {t('New task')}
-      <kbd className="ml-[8px] font-mono text-hint text-muted" aria-hidden="true">
+      {/* The key, in a box of its own: the glyph alone was cut by the end of the button. */}
+      <kbd
+        className="ml-[8px] inline-flex h-[20px] min-w-[20px] flex-none items-center justify-center rounded-[4px] border border-line px-[4px] font-sans text-hint leading-none font-semibold text-muted"
+        aria-hidden="true"
+      >
         C
       </kbd>
     </Button>
