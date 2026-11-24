@@ -29,16 +29,18 @@ async function sessionOf(world: World, account: string, workspace: string): Prom
 }
 
 /** Alice owns Acme. Bob is a member and left a note the worker keeps. Carol is a member too. */
-async function acme(tasks?: string) {
+async function acme(tasks?: string, options: { rest?: boolean } = {}) {
   const world = await open(tasks === undefined ? {} : { env: { FRUITBACK_TASKS: tasks } });
   const store = createPostgresNoteStore(world.database);
   const alice = await signInTo(world, 'alice@acme.dev');
   const workspace = await workspaceIn(world, alice.token, 'Acme');
   const site = (await world.accounts.addSite(workspace, { origin: ORIGIN, visibility: 'members' })).id;
   // An address keeps the note in the worker too, on a worker that keeps tasks or not.
-  const rest = (await world.accounts.addConnector(workspace, { kind: 'rest', label: 'hooks.acme.dev', sealed: 'x' }))
-    .id;
-  await world.accounts.setDestination(workspace, site, { connector: rest });
+  if (options.rest !== false) {
+    const rest = (await world.accounts.addConnector(workspace, { kind: 'rest', label: 'hooks.acme.dev', sealed: 'x' }))
+      .id;
+    await world.accounts.setDestination(workspace, site, { connector: rest });
+  }
   const bob = await signInTo(world, 'bob@acme.dev');
   const carol = await signInTo(world, 'carol@acme.dev');
   await memberOf(world, workspace, bob.id, 'member');
@@ -130,6 +132,50 @@ describe('the filters on the fields of a task (FRU-655)', () => {
     assert.deepEqual(await ids(`label=${bug.id}`), []);
   });
 
+  it('reads the notes that are not done nor closed, counts them alone, and brings back a note reopened (FRU-667)', async () => {
+    // Notes kept in Fruitback: the index follows the status of each one.
+    const { world, store, alice, site, extension, note, call } = await acme(undefined, { rest: false });
+    const second = await plantAnother(world, store, site, extension);
+    const third = await (async () => {
+      const planted = await callOn(
+        world,
+        'POST',
+        '/feedback',
+        {
+          origin: ORIGIN,
+          body: noteFixture({
+            id: 'sd_3',
+            page: { url: `${ORIGIN}/help`, path: '/help' },
+            client: { id: site, name: 'Acme' },
+          }),
+          headers: { Authorization: `Bearer ${extension}` },
+        },
+        { store },
+      );
+      assert.equal(planted.status, 201);
+
+      return noteIdOf(site, 'sd_3');
+    })();
+    const setStatus = (id: string, status: string) =>
+      call('POST', `/notes/${id}/status`, alice.token, { status }).then((answer) => assert.equal(answer.status, 200));
+    await setStatus(note, 'own:done');
+    await setStatus(second, 'own:closed');
+    const read = async (query: string) => (await call('GET', `/notes?${query}`, alice.token)).body;
+    const ids = (body: Record<string, any>) => (body.notes as { id: string }[]).map((one) => one.id).sort();
+
+    const unresolved = await read('unresolved=1&order=status');
+    assert.deepEqual(ids(unresolved), [third]);
+    assert.equal(unresolved.total, 1);
+    assert.equal(unresolved.counts.all, 1);
+    assert.deepEqual(unresolved.counts.byStage, { new: 1 });
+    // Without the filter, every note is there: the filter hides, it does not change a note.
+    assert.deepEqual(ids(await read('')), [note, second, third].sort());
+
+    // The other direction: a done note set back to do is in the list of the unresolved again.
+    await setStatus(note, 'own:todo');
+    assert.deepEqual(ids(await read('unresolved=1')), [note, third].sort());
+  });
+
   it('refuses a filter that is not one, and a day filter with no day of the person', async () => {
     const { alice, call } = await acme();
 
@@ -139,6 +185,9 @@ describe('the filters on the fields of a task (FRU-655)', () => {
       ['due=overdue', 'invalid-today'],
       ['due=week&today=2026-02-30', 'invalid-today'],
       ['assignee=a%20b', 'invalid-assignee'],
+      ['unresolved=yes', 'invalid-unresolved'],
+      // A stage that is asked says the stage already: the two together are not one list.
+      ['unresolved=1&stage=done', 'invalid-unresolved'],
     ] as const) {
       assert.deepEqual((await call('GET', `/notes?${query}`, alice.token)).body, { error }, query);
     }

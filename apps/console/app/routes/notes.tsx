@@ -362,6 +362,7 @@ export default function Notes() {
                     stage: '',
                     mine: '',
                     archived: '',
+                    unresolved: '',
                     assignee: '',
                     priority: '',
                     label: '',
