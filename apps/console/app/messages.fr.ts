@@ -1013,6 +1013,43 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'The label is added to the workspace, but not to this note: {why}':
     'Le label est ajouté à l’espace de travail, mais pas à cette note : {why}',
   'The label was not saved. Try again.': 'Le label n’a pas été enregistré. Réessayez.',
+  // FRU-656: several tasks at once.
+  'Select: {note}': 'Sélectionner : {note}',
+  'Select every task of this page': 'Sélectionner toutes les tâches de cette page',
+  '1 note selected': '1 note sélectionnée',
+  '{count} notes selected': '{count} notes sélectionnées',
+  'Select the {count} of this page': 'Sélectionner les {count} de cette page',
+  'The selected notes': 'Les notes sélectionnées',
+  'Clear the selection': 'Vider la sélection',
+  'Actions of the {count} selected notes': 'Actions des {count} notes sélectionnées',
+  'Delete {count} notes': 'Supprimer {count} notes',
+  'The {count} notes, their replies and their labels go for good. Nobody can bring them back.':
+    'Les {count} notes, leurs réponses et leurs labels partent pour de bon. Personne ne pourra les récupérer.',
+  'Keep them': 'Les garder',
+  '1 note changed.': '1 note modifiée.',
+  '{count} notes changed.': '{count} notes modifiées.',
+  '1 note deleted.': '1 note supprimée.',
+  '{count} notes deleted.': '{count} notes supprimées.',
+  'None of these notes is yours to change: only the person who left a note, or an owner or an admin, changes it.':
+    'Aucune de ces notes ne peut être modifiée par vous : seule la personne qui a laissé une note, ou un propriétaire ou un admin, peut la modifier.',
+  '1 of them is not yours to change: it stays as it is.':
+    '1 d’entre elles ne peut pas être modifiée par vous : elle reste telle quelle.',
+  '{count} of them are not yours to change: they stay as they are.':
+    '{count} d’entre elles ne peuvent pas être modifiées par vous : elles restent telles quelles.',
+  'One of these notes is not yours to change. Nothing changed.':
+    'L’une de ces notes ne peut pas être modifiée par vous. Rien n’a changé.',
+  'One of these notes would hold more than 20 labels. Nothing changed.':
+    'L’une de ces notes aurait plus de 20 labels. Rien n’a changé.',
+  'One of these notes changes in its tracker. Nothing changed.':
+    'L’une de ces notes se modifie dans son outil de suivi. Rien n’a changé.',
+  'This status is not one of the site of every note any more. Reload the page.':
+    'Ce statut n’est plus un statut du site de chaque note. Rechargez la page.',
+  'One of these notes is no longer in Fruitback. Reload the page.':
+    'L’une de ces notes n’est plus dans Fruitback. Rechargez la page.',
+  'Nothing was saved. Try again.': 'Rien n’a été enregistré. Réessayez.',
+  'The label is added to the workspace, but not to these notes: {why}':
+    'Le label est ajouté à l’espace de travail, mais pas à ces notes : {why}',
+
   'Give the label a name of 40 characters at most.': 'Donnez au label un nom de 40 caractères au plus.',
   Red: 'Rouge',
   Orange: 'Orange',

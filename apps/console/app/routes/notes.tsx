@@ -19,6 +19,7 @@ import {
   type NotesAnswer,
   type View,
   byRank,
+  groupsOf,
   pageOf,
   placeBetween,
 } from '../parts/notes-model';
@@ -30,6 +31,8 @@ import { NoteCard } from '../parts/note-card';
 import { TaskMenuContext, dayFromToday } from '../parts/task-menu';
 import { TASK_NOT_SAVED, TASK_PROBLEMS, useTaskSeam } from '../parts/task-seam';
 import { TaskPanel } from '../parts/task-panel';
+import { SelectionStatus, TaskSelectionContext, useSelectionKeys, useTaskSelection } from '../parts/task-selection';
+import { TaskBulkBar } from '../parts/task-bulk-bar';
 
 /** FRU-655: the filters on the fields of the tasks Fruitback keeps. */
 const TASK_FILTERS = ['assignee', 'priority', 'label', 'due'] as const;
@@ -241,10 +244,36 @@ export default function Notes() {
     call<{ status: string; stage: Stage }>('POST', `${base}/notes/${encodeURIComponent(note.id)}/status`, { status });
   const sourceOf = (note: IndexedNote) => connectors.find((each) => each.id === note.place?.connector);
   // FRU-665: the columns of the board, each in the order of its tasks.
-  const columns =
-    typeof shown === 'object'
-      ? boardColumns(byRank(shown.notes), siteInView === undefined ? undefined : shown.statuses?.[siteInView])
-      : [];
+  const columns = useMemo(
+    () =>
+      typeof shown === 'object'
+        ? boardColumns(byRank(shown.notes), siteInView === undefined ? undefined : shown.statuses?.[siteInView])
+        : [],
+    [shown, siteInView],
+  );
+  // FRU-656: the tasks selected, in the order of the screen: the groups of the table, the columns of the board.
+  const ordered = useMemo(() => {
+    if (typeof shown !== 'object') return [];
+
+    return view === 'board'
+      ? columns.flatMap((column) => column.notes)
+      : groupsOf(shown.notes).flatMap((group) => group.notes);
+  }, [shown, view, columns]);
+  const selection = useTaskSelection(ordered);
+  useSelectionKeys(selection);
+  // A selection emptied with the focus in its bar (« Clear », a deletion): the focus goes to the list.
+  const selected = selection.notes.length;
+  const wasSelected = useRef(0);
+  useEffect(() => {
+    if (
+      wasSelected.current > 0 &&
+      selected === 0 &&
+      (document.activeElement === null || document.activeElement === document.body)
+    ) {
+      document.querySelector<HTMLElement>('[data-notes-list] [role="region"]')?.focus();
+    }
+    wasSelected.current = selected;
+  }, [selected]);
   const columnOf = (note: IndexedNote) =>
     view === 'board' ? columns.find((column) => column.notes.some((each) => each.id === note.id))?.notes : undefined;
   // FRU-654: the menu of each task, its members, its labels and its writes.
@@ -273,156 +302,164 @@ export default function Notes() {
 
   return (
     <TaskMenuContext.Provider value={{ ...tasks.seam, openTask }}>
-      {tasks.dialog}
-      <TaskPanel
-        id={opened}
-        listed={typeof shown === 'object' ? shown.notes.find((note) => note.id === opened) : undefined}
-        base={base}
-        onClose={closeTask}
-      />
-      <PageHead
-        title={t('Notes')}
-        lead={t('Every note left on the sites of {workspace}, and where it went.', { workspace: workspace.name })}
-        className="mb-[24px]"
-        {...(listed ? { action: <ViewChoice view={view} onChoose={show} /> } : {})}
-      />
+      <TaskSelectionContext.Provider value={selection}>
+        {tasks.dialog}
+        <SelectionStatus />
+        <TaskPanel
+          id={opened}
+          listed={typeof shown === 'object' ? shown.notes.find((note) => note.id === opened) : undefined}
+          base={base}
+          onClose={closeTask}
+        />
+        <PageHead
+          title={t('Notes')}
+          lead={t('Every note left on the sites of {workspace}, and where it went.', { workspace: workspace.name })}
+          className="mb-[24px]"
+          {...(listed ? { action: <ViewChoice view={view} onChoose={show} /> } : {})}
+        />
 
-      {shown === 'loading' ? <p className="text-small text-muted">{t('Loading…')}</p> : null}
+        {shown === 'loading' ? <p className="text-small text-muted">{t('Loading…')}</p> : null}
 
-      {shown === 'failed' ? <NotesFailed onRetry={() => void read()} /> : null}
+        {shown === 'failed' ? <NotesFailed onRetry={() => void read()} /> : null}
 
-      {typeof shown === 'object' && shown.counts.all === 0 && !filtered ? (
-        <p className="max-w-[640px] text-body text-muted">
-          {t('No note yet. Notes show here as soon as someone leaves one on a site of {workspace}.', {
-            workspace: workspace.name,
-          })}
-        </p>
-      ) : null}
+        {typeof shown === 'object' && shown.counts.all === 0 && !filtered ? (
+          <p className="max-w-[640px] text-body text-muted">
+            {t('No note yet. Notes show here as soon as someone leaves one on a site of {workspace}.', {
+              workspace: workspace.name,
+            })}
+          </p>
+        ) : null}
 
-      {typeof shown === 'object' && (shown.counts.all > 0 || filtered) ? (
-        <Pinned
-          bar={
-            <NotesFilters
-              counts={shown.counts}
-              connectors={connectors}
-              sites={sites}
-              seesTracker={seesTracker}
-              filters={filters}
-              onFilter={filter}
-              typed={typed}
-              onType={setTyped}
-              // FRU-655: the filters on the tasks, once the list holds one Fruitback keeps, or one is set.
-              {...(shown.notes.some((note) => note.task !== undefined) ||
-              TASK_FILTERS.some((name) => filters[name] !== '')
-                ? { tasks: { people: tasks.seam.people, labels: tasks.seam.labels } }
-                : {})}
-            />
-          }
-        >
-          {shown.notes.length === 0 ? (
-            <div className="flex flex-wrap items-center gap-x-[12px] text-body text-muted">
-              <p>{t('No note matches.')}</p>
-              <LinkButton
-                autoFocus={movedOut}
-                onClick={() => {
-                  setTyped('');
-                  filter({
-                    place: '',
-                    site: '',
-                    stage: '',
-                    mine: '',
-                    archived: '',
-                    assignee: '',
-                    priority: '',
-                    label: '',
-                    due: '',
-                    q: '',
-                  });
-                }}
-              >
-                {t('Clear the filters')}
-              </LinkButton>
-            </div>
-          ) : (
-            <>
-              {view === 'board' ? (
-                <NotesBoard
-                  columns={columns}
-                  reorder={async (note, before, after) => {
-                    if (note.task === undefined || note.canSetStatus !== true) return undefined;
-                    const answer = await call('POST', `${base}/notes/${encodeURIComponent(note.id)}/task`, {
-                      position: placeBetween(before, after),
+        {typeof shown === 'object' && (shown.counts.all > 0 || filtered) ? (
+          <Pinned
+            bar={
+              <NotesFilters
+                counts={shown.counts}
+                connectors={connectors}
+                sites={sites}
+                seesTracker={seesTracker}
+                filters={filters}
+                onFilter={filter}
+                typed={typed}
+                onType={setTyped}
+                // FRU-655: the filters on the tasks, once the list holds one Fruitback keeps, or one is set.
+                {...(shown.notes.some((note) => note.task !== undefined) ||
+                TASK_FILTERS.some((name) => filters[name] !== '')
+                  ? { tasks: { people: tasks.seam.people, labels: tasks.seam.labels } }
+                  : {})}
+              />
+            }
+          >
+            {shown.notes.length === 0 ? (
+              <div className="flex flex-wrap items-center gap-x-[12px] text-body text-muted">
+                <p>{t('No note matches.')}</p>
+                <LinkButton
+                  autoFocus={movedOut}
+                  onClick={() => {
+                    setTyped('');
+                    filter({
+                      place: '',
+                      site: '',
+                      stage: '',
+                      mine: '',
+                      archived: '',
+                      assignee: '',
+                      priority: '',
+                      label: '',
+                      due: '',
+                      q: '',
                     });
-                    if (!answer.ok) return problemOf(answer, TASK_PROBLEMS, TASK_NOT_SAVED);
-                    await read();
-
-                    return undefined;
                   }}
-                  busy={reading}
-                  movable={(note) =>
-                    note.canSetStatus === true && siteInView !== undefined && shown.statuses?.[siteInView] !== undefined
-                  }
-                  move={async (note, status) => {
-                    const answer = await choose(note, status);
-                    if (!answer.ok) return problemOf(answer, STATUS_PROBLEMS, STATUS_NOT_SAVED);
-                    await read();
+                >
+                  {t('Clear the filters')}
+                </LinkButton>
+              </div>
+            ) : (
+              <>
+                <div data-notes-list="" data-selecting={selected > 0}>
+                  {view === 'board' ? (
+                    <NotesBoard
+                      columns={columns}
+                      reorder={async (note, before, after) => {
+                        if (note.task === undefined || note.canSetStatus !== true) return undefined;
+                        const answer = await call('POST', `${base}/notes/${encodeURIComponent(note.id)}/task`, {
+                          position: placeBetween(before, after),
+                        });
+                        if (!answer.ok) return problemOf(answer, TASK_PROBLEMS, TASK_NOT_SAVED);
+                        await read();
 
-                    return undefined;
-                  }}
-                  card={(note, moved) => (
-                    <NoteCard
-                      note={note}
-                      source={sourceOf(note)}
+                        return undefined;
+                      }}
+                      busy={reading}
+                      movable={(note) =>
+                        note.canSetStatus === true &&
+                        siteInView !== undefined &&
+                        shown.statuses?.[siteInView] !== undefined
+                      }
+                      move={async (note, status) => {
+                        const answer = await choose(note, status);
+                        if (!answer.ok) return problemOf(answer, STATUS_PROBLEMS, STATUS_NOT_SAVED);
+                        await read();
+
+                        return undefined;
+                      }}
+                      card={(note, moved) => (
+                        <NoteCard
+                          note={note}
+                          source={sourceOf(note)}
+                          seesTracker={seesTracker}
+                          statuses={shown.statuses?.[note.site.id]}
+                          choose={(status) => choose(note, status)}
+                          onSaved={() => {
+                            moved();
+                            setMovedOut(true);
+                            void read();
+                          }}
+                        />
+                      )}
+                    />
+                  ) : (
+                    <NotesTable
+                      notes={shown.notes}
+                      counts={shown.counts}
+                      statuses={shown.statuses}
                       seesTracker={seesTracker}
-                      statuses={shown.statuses?.[note.site.id]}
-                      choose={(status) => choose(note, status)}
-                      onSaved={() => {
-                        moved();
-                        setMovedOut(true);
+                      manages={manages}
+                      reading={reading}
+                      base={base}
+                      originOf={originOf}
+                      sourceOf={sourceOf}
+                      choose={choose}
+                      onSent={() => void read()}
+                      onStatusSaved={(note) => {
+                        setRefocus(note);
                         void read();
                       }}
                     />
                   )}
-                />
-              ) : (
-                <NotesTable
-                  notes={shown.notes}
-                  counts={shown.counts}
-                  statuses={shown.statuses}
-                  seesTracker={seesTracker}
-                  manages={manages}
-                  reading={reading}
-                  base={base}
-                  originOf={originOf}
-                  sourceOf={sourceOf}
-                  choose={choose}
-                  onSent={() => void read()}
-                  onStatusSaved={(note) => {
-                    setRefocus(note);
-                    void read();
+                </div>
+                <NotePages
+                  from={from}
+                  shown={shown.notes.length}
+                  total={shown.total}
+                  first={cursor === ''}
+                  last={shown.next === undefined}
+                  onPage={(to) => page(to, shown)}
+                  // Opened from a link past the second page, the page before has no known cursor.
+                  previousIsFirst={at > 2 && known[at - 1] === undefined}
+                  numbers={{
+                    at,
+                    count: Math.ceil(shown.total / NOTES_PER_PAGE),
+                    reach: (to) => reach(to, shown),
+                    onGo: (to) => go(to, shown),
                   }}
                 />
-              )}
-              <NotePages
-                from={from}
-                shown={shown.notes.length}
-                total={shown.total}
-                first={cursor === ''}
-                last={shown.next === undefined}
-                onPage={(to) => page(to, shown)}
-                // Opened from a link past the second page, the page before has no known cursor.
-                previousIsFirst={at > 2 && known[at - 1] === undefined}
-                numbers={{
-                  at,
-                  count: Math.ceil(shown.total / NOTES_PER_PAGE),
-                  reach: (to) => reach(to, shown),
-                  onGo: (to) => go(to, shown),
-                }}
-              />
-            </>
-          )}
-        </Pinned>
-      ) : null}
+                <TaskBulkBar />
+              </>
+            )}
+          </Pinned>
+        ) : null}
+      </TaskSelectionContext.Provider>
     </TaskMenuContext.Provider>
   );
 }
