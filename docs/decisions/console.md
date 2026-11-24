@@ -1255,7 +1255,7 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
 - **From the menu of a task** (« Copy the link », « Copy the ID », « Copy as Markdown »; « Copy the
   link to its page » for a note of a page), **from its panel** (three buttons under its reference),
   and **from the keyboard**: Cmd or Ctrl, Shift and C for the link, Cmd or Ctrl, Shift and the full
-  stop for the ID, on the task of the panel, else on the row or the card that holds the focus. The
+  stop for the ID, on the row or the card that holds the focus, else on the task of the panel. The
   keys are read by their place (`code`), and never in a field.
 - **No ID for a guest**: the list gives a guest no reference, so the menu offers none, and the panel
   offers one only when its read names a reference.

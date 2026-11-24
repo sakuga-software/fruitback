@@ -307,10 +307,10 @@ export default function Notes() {
       const kind = copyShortcutOf(event);
       const current = copyRef.current;
       if (kind === undefined || current === undefined) return;
-      // The task of the panel, else the row or the card that holds the focus.
+      // The row or the card that holds the focus, else the task of the panel. The address is read as
+      // it is now: a panel closed a moment ago is out of it already, whatever React drew.
       const focused = document.activeElement?.closest<HTMLElement>('[data-note]')?.dataset.note;
-      // The address as it is now: a panel closed a moment ago is out of it already, whatever React drew.
-      const id = new URLSearchParams(window.location.search).get('task') ?? focused;
+      const id = focused ?? new URLSearchParams(window.location.search).get('task') ?? undefined;
       if (id === undefined) return;
       const note = current.noteOf(id) ?? { id, site: { id: '' } };
       event.preventDefault();
