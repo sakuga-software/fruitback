@@ -70,6 +70,8 @@ async function open(page: Page, query = '', locale: 'en' | 'fr' = 'en'): Promise
   });
   await page.goto(`${CONSOLE}/w/w1/notes${query}`);
   await expect(page.locator('main h1')).toBeVisible();
+  // The title comes before the list is read: a scroll made before the notes are drawn stays at the top.
+  await expect(page.locator('[data-note]')).toHaveCount(NOTES.length);
 }
 
 const frame = (page: Page) => page.locator('.kit-table');
