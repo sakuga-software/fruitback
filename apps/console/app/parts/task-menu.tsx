@@ -5,6 +5,8 @@ import { type StatusChoice, statusName } from '../note-status';
 import { STAGE_NAMES, type Stage } from '../stages';
 import { LinkButton, MenuTree, type TreeBranch } from '../ui';
 import { Confirmation } from '../confirm';
+import { SERVER_CAUSE, UNREACHABLE_CAUSE } from '../problems';
+import { isReachable } from '../transport';
 import { type IndexedNote, type TaskFields } from './notes-model';
 
 export type TaskLabel = { id: string; name: string; color: string };
@@ -37,6 +39,9 @@ type Priority = NonNullable<TaskFields['priority']>;
 const PRIORITIES: readonly Priority[] = ['urgent', 'high', 'medium', 'low'];
 const NONE = 'none';
 const NEW_LABEL = 'new-label';
+const MEMBERS_LOADING = 'members-loading';
+const MEMBERS_FAILED = 'members-failed';
+const TRY_AGAIN = 'try-again';
 const stageName = (stage: Stage) => t(STAGE_NAMES[stage]);
 
 /** A day `YYYY-MM-DD` of the calendar of the browser, `days` after today. */
@@ -95,17 +100,7 @@ function branchesOf(
             onAction: (key: string) => settle(actions.setStatus(key)),
           },
         ]),
-    {
-      id: 'assignee',
-      label: t('Assignee'),
-      choice: 'single',
-      checked: [task.assignee?.id ?? NONE],
-      items: [
-        { id: NONE, label: t('Nobody') },
-        ...seam.people.map((person) => ({ id: person.id, label: person.name })),
-      ],
-      onAction: (key) => settle(actions.change({ assignee: key === NONE ? null : key })),
-    },
+    assigneeBranch(seam, [task.assignee?.id ?? NONE], (assignee) => settle(actions.change({ assignee }))),
     {
       id: 'priority',
       label: t('Priority'),
@@ -145,9 +140,57 @@ function branchesOf(
   ];
 }
 
+/**
+ * The submenu « Assignee » (FRU-673): « Nobody » and the members, once they are read. A read that
+ * failed says so, with « Try again », and never shows a menu with nobody in it.
+ */
+function assigneeBranch(
+  seam: TaskMenuSeam,
+  checked: readonly string[],
+  give: (assignee: string | null) => void,
+): TreeBranch {
+  if (seam.peopleRead === 'failed') {
+    return {
+      id: 'assignee',
+      label: t('Assignee'),
+      items: [
+        {
+          id: MEMBERS_FAILED,
+          label: t('The members did not load.'),
+          detail: t(isReachable() ? SERVER_CAUSE : UNREACHABLE_CAUSE),
+          disabled: true,
+        },
+        { id: TRY_AGAIN, label: t('Try again') },
+      ],
+      onAction: (key) => {
+        if (key === TRY_AGAIN) seam.readPeople();
+      },
+    };
+  }
+
+  return {
+    id: 'assignee',
+    label: t('Assignee'),
+    choice: 'single',
+    checked,
+    items: [
+      { id: NONE, label: t('Nobody') },
+      ...(seam.peopleRead === 'loading'
+        ? [{ id: MEMBERS_LOADING, label: t('Loading…'), disabled: true }]
+        : seam.people.map((person) => ({ id: person.id, label: person.name }))),
+    ],
+    onAction: (key) => give(key === NONE ? null : key),
+  };
+}
+
 /** What the screen of the notes gives every menu of a task: the people, the labels, the writes. */
 export type TaskMenuSeam = {
+  /** The members a task can be given to: none until they are read (`peopleRead`). */
   people: readonly TaskPerson[];
+  /** FRU-673: whether the members were read. `failed`: the menus say so, with « Try again ». */
+  peopleRead: 'loading' | 'failed' | 'read';
+  /** FRU-673: reads the members again, for « Try again ». */
+  readPeople: () => void;
   labels: readonly TaskLabel[];
   canAddLabel: boolean;
   statusesOf: (note: IndexedNote) => readonly StatusChoice[] | undefined;
