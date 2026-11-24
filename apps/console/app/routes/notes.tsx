@@ -27,8 +27,11 @@ import { NotePages } from '../parts/note-pages';
 import { NotesFilters, Pinned, ViewChoice } from '../parts/notes-filters';
 import { NotesTable } from '../parts/notes-table';
 import { NoteCard } from '../parts/note-card';
-import { TaskMenuContext } from '../parts/task-menu';
+import { TaskMenuContext, dayFromToday } from '../parts/task-menu';
 import { TASK_NOT_SAVED, TASK_PROBLEMS, useTaskSeam } from '../parts/task-seam';
+
+/** FRU-655: the filters on the fields of the tasks Fruitback keeps. */
+const TASK_FILTERS = ['assignee', 'priority', 'label', 'due'] as const;
 
 /**
  * Every note left on the sites of a workspace, and where it went: screen 10 of the mockup of
@@ -125,6 +128,9 @@ export default function Notes() {
     setReading(true);
     const query = new URLSearchParams();
     for (const name of FILTERS) if (filters[name] !== '') query.set(name, filters[name]);
+    // FRU-655: « Overdue » and « Due this week » count from the day of the person, which the worker
+    // cannot know.
+    if (filters.due === 'overdue' || filters.due === 'week') query.set('today', dayFromToday(0));
     // The table groups the notes by status (FRU-551): the worker reads them in that order, so that a
     // group goes on from one page to the next. The board draws a page by date in its columns.
     if (view === 'table') query.set('order', 'status');
@@ -285,6 +291,11 @@ export default function Notes() {
               onFilter={filter}
               typed={typed}
               onType={setTyped}
+              // FRU-655: the filters on the tasks, once the list holds one Fruitback keeps, or one is set.
+              {...(shown.notes.some((note) => note.task !== undefined) ||
+              TASK_FILTERS.some((name) => filters[name] !== '')
+                ? { tasks: { people: tasks.seam.people, labels: tasks.seam.labels } }
+                : {})}
             />
           }
         >
@@ -295,7 +306,18 @@ export default function Notes() {
                 autoFocus={movedOut}
                 onClick={() => {
                   setTyped('');
-                  filter({ place: '', site: '', stage: '', mine: '', archived: '', q: '' });
+                  filter({
+                    place: '',
+                    site: '',
+                    stage: '',
+                    mine: '',
+                    archived: '',
+                    assignee: '',
+                    priority: '',
+                    label: '',
+                    due: '',
+                    q: '',
+                  });
                 }}
               >
                 {t('Clear the filters')}

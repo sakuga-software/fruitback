@@ -124,6 +124,7 @@ export function NotesFilters({
   onFilter,
   typed,
   onType,
+  tasks,
 }: {
   counts: NotesAnswer['counts'];
   connectors: readonly Connector[];
@@ -135,6 +136,11 @@ export function NotesFilters({
   /** The search as it is typed: the address takes it 300 ms after the last key (`useTypedSearch`). */
   typed: string;
   onType: (typed: string) => void;
+  /**
+   * FRU-655: the people and the labels of the filters on the tasks. Absent: the row of these filters
+   * is not drawn, as on a list with no task Fruitback keeps.
+   */
+  tasks?: { people: readonly { id: string; name: string }[]; labels: readonly { id: string; name: string }[] };
 }) {
   useLocale();
 
@@ -207,6 +213,7 @@ export function NotesFilters({
           onChange={(mine) => onFilter({ mine: mine ? '1' : '' })}
         />
       </div>
+      {tasks === undefined ? null : <TaskFilters filters={filters} onFilter={onFilter} tasks={tasks} />}
     </>
   );
 }
@@ -216,4 +223,82 @@ function statusChoiceOf(filters: { stage: string; archived: string }): string {
   if (filters.archived === '1') return 'archived';
 
   return filters.stage === '' ? 'any' : filters.stage;
+}
+
+/** FRU-655: the filters on the fields of the tasks Fruitback keeps, a row under the others. */
+function TaskFilters({
+  filters,
+  onFilter,
+  tasks,
+}: {
+  filters: Readonly<Record<Filter, string>>;
+  onFilter: (changes: Partial<Record<Filter, string>>) => void;
+  tasks: NonNullable<Parameters<typeof NotesFilters>[0]['tasks']>;
+}) {
+  useLocale();
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-[16px] gap-y-[10px]" data-task-filters="">
+      <div className="min-w-0 flex-[1_1_170px]">
+        <Choice
+          label={t('Assignee')}
+          labelHidden
+          compact
+          value={filters.assignee === '' ? 'anyone' : filters.assignee}
+          onChange={(assignee) => onFilter({ assignee: assignee === 'anyone' ? '' : assignee })}
+          options={[
+            { value: 'anyone', label: t('Anyone assigned') },
+            { value: 'me', label: t('Assigned to me') },
+            { value: 'none', label: t('Assigned to nobody') },
+            ...tasks.people.map((person) => ({ value: person.id, label: person.name })),
+          ]}
+        />
+      </div>
+      <div className="min-w-0 flex-[1_1_150px]">
+        <Choice
+          label={t('Priority')}
+          labelHidden
+          compact
+          value={filters.priority === '' ? 'any' : filters.priority}
+          onChange={(priority) => onFilter({ priority: priority === 'any' ? '' : priority })}
+          options={[
+            { value: 'any', label: t('Any priority') },
+            { value: 'urgent', label: t('Urgent') },
+            { value: 'high', label: t('High') },
+            { value: 'medium', label: t('Medium') },
+            { value: 'low', label: t('Low') },
+            { value: 'none', label: t('No priority') },
+          ]}
+        />
+      </div>
+      <div className="min-w-0 flex-[1_1_150px]">
+        <Choice
+          label={t('Label')}
+          labelHidden
+          compact
+          value={filters.label === '' ? 'any' : filters.label}
+          onChange={(label) => onFilter({ label: label === 'any' ? '' : label })}
+          options={[
+            { value: 'any', label: t('Any label') },
+            ...tasks.labels.map((label) => ({ value: label.id, label: label.name })),
+          ]}
+        />
+      </div>
+      <div className="min-w-0 flex-[1_1_150px]">
+        <Choice
+          label={t('Due day')}
+          labelHidden
+          compact
+          value={filters.due === '' ? 'any' : filters.due}
+          onChange={(due) => onFilter({ due: due === 'any' ? '' : due })}
+          options={[
+            { value: 'any', label: t('Any due day') },
+            { value: 'overdue', label: t('Overdue') },
+            { value: 'week', label: t('Due this week') },
+            { value: 'none', label: t('No due day') },
+          ]}
+        />
+      </div>
+    </div>
+  );
 }

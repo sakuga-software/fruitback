@@ -1,6 +1,22 @@
 import type { NoteIssue, NoteStage } from '@fruitback/shared';
 import { NOTE_STAGES } from '@fruitback/shared';
-import { type SQL, and, count, eq, gte, ilike, inArray, isNotNull, isNull, lt, max, min, or, sql } from 'drizzle-orm';
+import {
+  type SQL,
+  and,
+  count,
+  eq,
+  gte,
+  ilike,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  lte,
+  max,
+  min,
+  or,
+  sql,
+} from 'drizzle-orm';
 import { member, user } from './auth-schema.ts';
 import {
   type AuthorKind,
@@ -625,6 +641,7 @@ function filtered(workspace: string, query: NoteQuery) {
     query.since === undefined ? undefined : gte(note_index.created_at, query.since),
     // FRU-665: an archived task is out of the list, unless the list asks for the archived ones.
     query.archived === true ? isNotNull(note_index.archived_at) : isNull(note_index.archived_at),
+    ...taskFilters(query),
     ...wordsOf(query.q).map((word) => {
       const like = `%${word.replace(/[\\%_]/gu, (c) => `\\${c}`)}%`;
 
@@ -637,6 +654,33 @@ function filtered(workspace: string, query: NoteQuery) {
       );
     }),
   );
+}
+
+/** FRU-655: the filters on the fields of a task, read in the index. */
+function taskFilters(query: NoteQuery): (SQL | undefined)[] {
+  const due = query.due;
+  let byDay: SQL | undefined;
+  if (due?.by === 'none') byDay = isNull(note_index.task_due_on);
+  else if (due?.by === 'overdue') byDay = lt(note_index.task_due_on, due.today);
+  else if (due?.by === 'week')
+    byDay = and(gte(note_index.task_due_on, due.today), lte(note_index.task_due_on, due.weekEnd));
+
+  return [
+    nullable(note_index.task_assignee_id, query.assignee),
+    nullable(note_index.task_priority, query.priority),
+    query.label === undefined ? undefined : sql`${query.label} = ANY(${note_index.task_label_ids})`,
+    byDay,
+  ];
+}
+
+/** A filter on a column a value or `null` can be in: absent, no filter. */
+function nullable(
+  column: typeof note_index.task_priority | typeof note_index.task_assignee_id,
+  value: string | null | undefined,
+): SQL | undefined {
+  if (value === undefined) return undefined;
+
+  return value === null ? isNull(column) : eq(column, value);
 }
 
 /** The words of a search: each must be found, in any of the fields. At most eight. */

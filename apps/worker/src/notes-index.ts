@@ -214,6 +214,18 @@ export type NoteQuery = {
   since?: number;
   /** FRU-665: the archived tasks only. Absent: the notes that are not archived. */
   archived?: boolean;
+  /** FRU-655: the tasks of this account; `null`, the tasks of nobody. */
+  assignee?: string | null;
+  /** FRU-655: the tasks of this priority; `null`, the tasks with none. */
+  priority?: string | null;
+  /** FRU-655: the tasks with this label. */
+  label?: string;
+  /**
+   * FRU-655: the tasks by their day. `today` is the day of the person, `YYYY-MM-DD`: the worker does
+   * not know the zone. `overdue`: a day before today. `week`: today and the six days after it.
+   * `none`: no day.
+   */
+  due?: { by: 'overdue' | 'week'; today: string; weekEnd: string } | { by: 'none' };
   /**
    * `status`: by the stages of `STAGE_ORDER`, then the newest first in each (FRU-551, the table of
    * the console). Absent: the newest first.

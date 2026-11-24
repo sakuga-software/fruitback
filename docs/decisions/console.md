@@ -1197,3 +1197,13 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   filter of the status: a choice, not one more box, so the row of the filters stays the mockup's.
 - **« Delete… » asks again under the note** (`Confirmation` of `confirm.tsx`): « Keep it » has the
   focus, and only « Delete this note » deletes.
+
+## The filters on the fields of a task (FRU-655)
+
+### The rules, in short
+
+- **A row of four filters under the others**: assignee, priority, label, due day. It is drawn once
+  the list holds a task Fruitback keeps, or once one of them is set: the first row stays the
+  mockup's, and a workspace whose notes all go to a tracker sees no filter that finds nothing.
+- **Each filter is in the address** (`assignee`, `priority`, `label`, `due`), as the others. The day
+  filters send `today`, the day of the browser.
