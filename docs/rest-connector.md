@@ -140,14 +140,16 @@ notes go ». The events go to the address a note was sent to. A note that Fruitb
 destination, or that went to a tracker, sends none, and neither does a note of an address you
 disconnected since.
 
-- **One request for each change of one task.** A change of many tasks at once, in the console, sends
+- One request for each change of one task. A change of many tasks at once, in the console, sends
   one request for each task.
-- **A change that changes nothing sends nothing**: the status the task is in already, the assignee it
+- A change that changes nothing sends nothing: the status the task is in already, the assignee it
   has, the same labels in another order.
 - A receiver written before these events answers `2xx` and reads nothing from them, or answers
   something else, and they are tried again as any delivery.
 
-**A status changed**, `event: "note.status_changed"`. It holds the status before and after, as
+### A status changed
+
+The request of a status changed has `event: "note.status_changed"`. It holds the status before and after, as
 `set_note_status` of `/mcp` names a status (`own:` and the key of the status in the site), and the
 stage of each, one of `new`, `todo`, `progress`, `done` and `closed`:
 
@@ -160,7 +162,9 @@ A status that the team removes from the site, with its tasks moved to another, s
 task it moved. A status that changes stage moves no task to another status, and sends nothing. A
 note its author withdrew gets `note.withdrawn` above, and no `note.status_changed`.
 
-**A reply**, `event: "note.replied"`. It holds the id of the reply, as `get_note` answers it in the
+### A reply
+
+The request of a reply has `event: "note.replied"`. It holds the id of the reply, as `get_note` answers it in the
 replies of the note, and not its text:
 
 ```text
@@ -171,7 +175,9 @@ A note sent to an address takes a reply from the page and from `reply_to_note` o
 0.8.0. Fruitback keeps it under the note, and the thread of its pin shows it. A workspace that hides
 the replies of this connector takes none.
 
-**A field changed**, `event: "note.updated"`. It holds the names of the fields whose value changed,
+### A field changed
+
+The request of a field changed has `event: "note.updated"`. It holds the names of the fields whose value changed,
 in this order, and never their values:
 
 ```text
