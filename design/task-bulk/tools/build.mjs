@@ -243,7 +243,7 @@ frame(
     'Each row of a task Fruitback keeps starts with a box, before the drop of its status. A note of a tracker has no box: it changes in its tracker.',
     'The box of the head selects every task of the page, or none; it is half ticked when some are. The page is what the list shows: 25 notes at most, under the filters.',
     'A selected row is tinted with the chip colour. Shift and a click on a box, or on the row out of its links and buttons, selects every task between it and the box pressed before.',
-    'The bar stands at the foot of the screen, over the list, from the first selected task. It says how many, offers the rest of the page, and holds the five fields of the menu of a task, then Archive and Delete…. The cross, and Escape, clear the selection.',
+    'The bar is under the list, and stays at the foot of the screen while the list is there, from the first selected task; it is drawn as a panel of the console (the surface, its line and its shadow). It says how many, offers the rest of the page, and holds the five fields of the menu of a task, then Archive and Delete…. The cross, and Escape, clear the selection.',
   ],
   () => page(1440, table([1, 2, 3]), bar({ count: 3, page: 5 })),
 );
@@ -412,23 +412,23 @@ tr.sel .mark{background:#fff}
 .stack{list-style:none;margin:0;padding:0;border:1px solid var(--line);border-radius:14px;overflow:hidden}
 .stack li{padding:14px 16px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:6px}
 .stack li.sel{background:var(--chip)}
-.bar{position:absolute;left:50%;transform:translateX(-50%);bottom:24px;width:max-content;max-width:calc(100% - 96px);background:var(--ink);color:#fff;border-radius:14px;padding:10px 10px 10px 18px;box-shadow:0 12px 32px rgba(0,0,0,.28)}
-.bar.narrow{left:16px;right:16px;transform:none;width:auto;max-width:none;bottom:16px;padding:10px 10px 10px 14px}
+.bar{position:absolute;left:48px;right:48px;bottom:24px;background:#fff;color:var(--ink);border:1px solid var(--line);border-radius:14px;padding:10px 10px 10px 14px;box-shadow:0 10px 30px rgba(24,24,27,.08)}
+.bar.narrow{left:16px;right:16px;bottom:16px}
 .bar-row{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center}
 .bar-count{display:flex;flex-direction:column;gap:2px;font-size:14px;margin-right:6px}
-.bar-count a{color:#fff;font-size:13px;text-underline-offset:3px}
+.bar-count a{color:var(--ink);font-size:13px;font-weight:600;text-underline-offset:3px}
 .bar-actions{display:flex;flex-wrap:wrap;gap:6px}
-.b-bar{height:36px;padding:0 12px;border:1px solid #52525b;border-radius:8px;background:transparent;color:#fff;font-size:14px;font-weight:600}
-.b-bar.pressed{background:#3f3f46}
-.b-bar.danger{color:#fca5a5}
-.bar .close{color:#fff;margin-left:auto}
+.b-bar{height:32px;padding:0 14px;border:1px solid var(--control);border-radius:999px;background:#fff;color:var(--ink);font-size:13px;font-weight:600}
+.b-bar.pressed{background:var(--chip)}
+.b-bar.danger{color:var(--accent-strong)}
+.bar .close{color:var(--muted);margin-left:auto}
 .bar.narrow .bar-count{flex-basis:calc(100% - 48px)}
 .bar-note,.bar-problem,.bar-done{margin:8px 0 2px;font-size:13px;line-height:1.45}
-.bar-note{color:#d4d4d8}.bar-problem{color:#fca5a5;font-weight:600}.bar-done{color:#86efac;font-weight:600}
-.bar-confirm{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px;padding-top:10px;border-top:1px solid #3f3f46}
+.bar-note{color:var(--muted)}.bar-problem{color:var(--accent-strong);font-weight:600}.bar-done{color:var(--done);font-weight:600}
+.bar-confirm{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
 .bar-confirm p{flex-basis:100%;margin:0 0 2px;font-size:14px}
-.b-quiet{height:36px;padding:0 14px;border:0;border-radius:8px;background:#fff;color:var(--ink);font-size:14px;font-weight:600}
-.b-danger{height:36px;padding:0 14px;border:0;border-radius:8px;background:var(--accent-strong);color:#fff;font-size:14px;font-weight:600}
+.b-quiet{height:36px;padding:0 14px;border:0;border-radius:999px;background:var(--chip);color:var(--ink);font-size:14px;font-weight:600}
+.b-danger{height:36px;padding:0 14px;border:0;border-radius:999px;background:var(--accent-strong);color:#fff;font-size:14px;font-weight:600}
 .popover{position:absolute;z-index:3}
 .menu{list-style:none;margin:0;padding:6px;min-width:220px;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,.16);font-size:14px}
 .menu li{display:flex;align-items:center;gap:8px;min-height:36px;padding:0 10px;border-radius:8px}

@@ -1607,8 +1607,11 @@ export function Menu({
   );
 }
 
-/** An item of a submenu of `MenuTree`: `swatch` draws a colour before it. */
-export type TreeItem = MenuItem & { swatch?: string };
+/**
+ * An item of a submenu of `MenuTree`: `swatch` draws a colour before it. `closes`: choosing it closes a
+ * `BranchMenu`, as an item that opens a dialog must (FRU-656).
+ */
+export type TreeItem = MenuItem & { swatch?: string; closes?: boolean };
 
 /** A submenu of `MenuTree`: its items, and the ones checked when it is a choice. */
 export type TreeBranch = {
@@ -1671,11 +1674,11 @@ export function MenuTree({
 }
 
 /** The items of one branch, as a menu of its own: a submenu of `MenuTree`, or the menu of `BranchMenu`. */
-function branchMenu(branch: TreeBranch) {
+function branchMenu(branch: TreeBranch, onAction: (id: string) => void = branch.onAction) {
   return (
     <Dropdown.Menu
       aria-label={branch.label}
-      onAction={(id) => branch.onAction(String(id))}
+      onAction={(id) => onAction(String(id))}
       disabledKeys={branch.items.filter((item) => item.disabled === true).map((item) => item.id)}
       {...(branch.choice === undefined
         ? {}
@@ -1705,8 +1708,10 @@ function branchMenu(branch: TreeBranch) {
  * menu above it.
  */
 export function BranchMenu({ branch, disabled = false }: { branch: TreeBranch; disabled?: boolean }) {
+  const [open, setOpen] = useState(false);
+
   return (
-    <Dropdown>
+    <Dropdown isOpen={open} onOpenChange={setOpen}>
       <Dropdown.Trigger
         className="kit-menu-trigger kit-button kit-button--outline kit-branch-trigger"
         data-size="small"
@@ -1725,7 +1730,10 @@ export function BranchMenu({ branch, disabled = false }: { branch: TreeBranch; d
         </svg>
       </Dropdown.Trigger>
       <Dropdown.Popover className="kit-menu" placement="top start">
-        {branchMenu(branch)}
+        {branchMenu(branch, (id) => {
+          if (branch.items.some((item) => item.id === id && item.closes === true)) setOpen(false);
+          branch.onAction(id);
+        })}
       </Dropdown.Popover>
     </Dropdown>
   );

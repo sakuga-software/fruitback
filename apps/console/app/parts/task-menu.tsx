@@ -97,7 +97,7 @@ export function branchesOf(
     .filter((id) => tasks.every((task) => task.labels.some((label) => label.id === id)));
   const labelItems = [
     ...seam.labels.map((label) => ({ id: label.id, label: label.name, swatch: label.color })),
-    ...(seam.canAddLabel ? [{ id: NEW_LABEL, label: t('New label…') }] : []),
+    ...(seam.canAddLabel ? [{ id: NEW_LABEL, label: t('New label…'), closes: true }] : []),
     ...(seam.labels.length === 0 && !seam.canAddLabel
       ? [{ id: NONE, label: t('No label yet'), detail: t('An owner or an admin adds them.'), disabled: true }]
       : []),
