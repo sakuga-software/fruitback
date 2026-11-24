@@ -244,3 +244,22 @@ test('a status the team added is of its site: another site chosen starts from it
   await create('To do', 'Call the printer');
   expect(sent.at(-1)?.body).toEqual({ site: 's2', title: 'Call the printer', status: 'own:todo' });
 });
+
+test('a status asked from a column does not stay for the next « New task », once cancelled', async ({ page: p }) => {
+  const sent = await worker(p);
+  await p.goto(`${CONSOLE}/w/w1/notes?view=board&site=s1`);
+  const dialog = p.getByRole('dialog', { name: 'New task' });
+  await p.getByRole('button', { name: 'New task in Review' }).click();
+  await dialog.getByLabel('Title').fill('Order the banners');
+  await p.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+
+  // The head of the list asks no status: the title typed stays, the status is the first of the site.
+  await p
+    .getByRole('button', { name: /^New task/ })
+    .first()
+    .click();
+  await expect(dialog.getByLabel('Title')).toHaveValue('Order the banners');
+  await dialog.getByRole('button', { name: 'Create the task' }).click();
+  await expect.poll(() => sent.at(-1)?.body).toEqual({ site: 's1', title: 'Order the banners', status: 'own:new' });
+});
