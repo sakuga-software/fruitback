@@ -370,18 +370,40 @@ function siteStatusOf(row: typeof statuses.$inferSelect): SiteStatus {
  * the list and the counts of the console for good. A note of the worker is `FB-<id>` there, with no
  * connector; `checked_at` is now, since the worker is the store that just set the stage.
  */
-async function restageIndex(db: Db, site: string, ids: readonly number[], stage: string, now: number): Promise<void> {
-  if (ids.length === 0) return;
+async function restageIndex(
+  db: Db,
+  site: string,
+  rows: readonly { id: number; note: string }[],
+  stage: string,
+  now: number,
+): Promise<void> {
+  if (rows.length === 0) return;
+  // FRU-671: the rule of `keptRowOf`. A note in Fruitback names no connector; a note sent on to an
+  // address names a `rest` connector, and its row is this very note only with the id the widget gave
+  // it: a row of a tracker that names an issue `FB-<n>` keeps the stage of its tracker.
+  const addresses = db.select({ id: connectors.id }).from(connectors).where(eq(connectors.kind, 'rest'));
   await db
     .update(note_index)
     .set({ stage, checked_at: now })
     .where(
       and(
         eq(note_index.site_id, site),
-        isNull(note_index.connector_id),
-        inArray(
-          note_index.reference,
-          ids.map((id) => identifierFor(id)),
+        or(
+          and(
+            isNull(note_index.connector_id),
+            inArray(
+              note_index.reference,
+              rows.map((row) => identifierFor(row.id)),
+            ),
+          ),
+          and(
+            inArray(note_index.connector_id, addresses),
+            or(
+              ...rows.map((row) =>
+                and(eq(note_index.reference, identifierFor(row.id)), eq(note_index.note_id, row.note)),
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -516,8 +538,8 @@ async function writeStatus(
     .update(notes)
     .set({ status_key: chosen.key, stage: chosen.stage, updated_at: now })
     .where(and(eq(notes.id, id), eq(notes.client_id, site)));
-  await restageIndex(db, site, [id], chosen.stage, now);
   if (before === undefined) return;
+  await restageIndex(db, site, [{ id, note: widgetIdOf(before.payload) }], chosen.stage, now);
   const [from, to] = [ownStatusName(before.status, before.stage), ownStatusName(chosen.key, chosen.stage)];
   if (from === to) return;
   await queueTaskEvents(
@@ -1905,12 +1927,12 @@ export function createPostgresAccountStore(database: Database): AccountStore {
             .update(notes)
             .set({ stage: status.stage, updated_at: now })
             .where(and(eq(notes.client_id, site), eq(notes.status_key, status.key), ne(notes.stage, status.stage)))
-            .returning({ id: notes.id, page: notes.page_url });
+            .returning({ id: notes.id, page: notes.page_url, payload: notes.payload });
           pages = moved.map((row) => row.page);
           await restageIndex(
             db,
             site,
-            moved.map((row) => row.id),
+            moved.map((row) => ({ id: row.id, note: widgetIdOf(row.payload) })),
             status.stage,
             now,
           );
@@ -1996,7 +2018,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
             await restageIndex(
               db,
               site,
-              changed.map((row) => row.id),
+              changed.map((row) => ({ id: row.id, note: widgetIdOf(row.payload) })),
               target.stage,
               now,
             );
