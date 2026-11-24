@@ -281,7 +281,7 @@ test('a selection of which one note does not load copies the others, and says th
   }
   await p.getByRole('region', { name: 'The selected notes' }).getByRole('button', { name: 'Copy' }).click();
   await p.getByRole('menuitem', { name: 'Copy as Markdown' }).click();
-  await expect(p.locator('[data-copy-status]')).toHaveText('1 note did not load, and is not in the Markdown.');
+  await expect(p.locator('[data-copy-status]')).toHaveText('1 of 2 notes copied as Markdown: the others did not load.');
   const markdown = await clipboard(p);
   expect(markdown.startsWith('# Tasks with no page')).toBe(true);
   expect(markdown).not.toContain('# Notes on');

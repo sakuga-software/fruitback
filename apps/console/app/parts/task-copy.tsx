@@ -227,8 +227,13 @@ export function useTaskCopy({
       });
       text.catch(() => {});
       copied(text, () => {
-        if (missing === 1) return t('1 note did not load, and is not in the Markdown.');
-        if (missing > 1) return t('{count} notes did not load, and are not in the Markdown.', { count: missing });
+        // Both facts: what was copied, and that the rest is not in it.
+        if (missing > 0) {
+          return t('{copied} of {count} notes copied as Markdown: the others did not load.', {
+            copied: notes.length - missing,
+            count: notes.length,
+          });
+        }
 
         return notes.length === 1
           ? t('Copied as Markdown.')
