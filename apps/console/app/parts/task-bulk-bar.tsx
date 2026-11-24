@@ -103,7 +103,7 @@ export function TaskBulkBar() {
                 tone="outline"
                 size="small"
                 disabled={busy}
-                className="text-accent-strong"
+                className="!text-accent-strong"
                 onClick={() => setDeleting(true)}
               >
                 {t('Delete…')}
