@@ -13,6 +13,12 @@ const IIFE = 'packages/widget/dist/fruitback.iife.js';
 
 type Read = { stateName: string; replies: number };
 
+/**
+ * The status and the date in its title use this one instant (FRU-670). Before 00:21, it is on the
+ * day before, and a date read from now fails.
+ */
+const STATUS_CHANGED_AT = new Date(Date.now() - 21 * 60_000);
+
 /** What the read gives: the status of Mathieu's screenshot, changed 21 minutes ago, a source, and replies. */
 async function rewriteReads(page: Page, read: Read): Promise<void> {
   await page.route(`${WORKER_ORIGIN}/feedback?**`, async (route) => {
@@ -30,7 +36,7 @@ async function rewriteReads(page: Page, read: Read): Promise<void> {
     for (const issue of body.issues) {
       issue.stateName = read.stateName;
       issue.stage = 'progress';
-      issue.updatedAt = new Date(Date.now() - 21 * 60_000).toISOString();
+      issue.updatedAt = STATUS_CHANGED_AT.toISOString();
       issue.note.source = { component: 'HeroBanner', file: 'src/components/Hero.tsx', line: 42 };
       issue.comments = Array.from({ length: read.replies }, (_, index) => ({
         id: `reply-${index}`,
@@ -117,8 +123,11 @@ for (const width of [1280, 390] as const) {
     expect(box.headRight - box.closeRight).toBeCloseTo(14, 0);
 
     // The age of the status is in the title of its word, and no longer in the head.
-    const today = new Date().toLocaleDateString('fr-FR');
-    await expect(thread.locator('.fruitback-thread-state')).toHaveAttribute('title', `In Progress depuis le ${today}`);
+    const changed = STATUS_CHANGED_AT.toLocaleDateString('fr-FR');
+    await expect(thread.locator('.fruitback-thread-state')).toHaveAttribute(
+      'title',
+      `In Progress depuis le ${changed}`,
+    );
     await expect(thread.locator('.fruitback-thread-head')).not.toContainText('il y a');
     // The age of the note stays under the note.
     await expect(thread.locator('.fruitback-thread-meta')).toContainText('il y a');
