@@ -2040,6 +2040,25 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
   measured: the list of the detached notes in a top corner (a rule of `orphans.ts`, read by no spec).
   It also chooses a corner in the settings, and reloads to see the choice kept (FRU-472).
 
+## What is drawn over what (FRU-666)
+
+### The rules, in short
+
+- **A pin is drawn over the dock, the settings and the list of the page** (2147483210, its open or
+  marked pin 2147483211). The reporter comes back to the page to see their notes: a pin under the
+  dock is a note they cannot see, and on a site its element can stand in any corner.
+- **What a pin opens is drawn over every pin**: its thread (2147483230), the tether of a thread
+  moved away (2147483229), and the preview of a badge (2147483240). The pin of another note never
+  cuts into them.
+- **What the reporter is doing now is drawn over everything**: the composer (2147483300), then the
+  capture of an area (2147483600). The dock (2147483200), then the list of the page (2147483050),
+  then the settings and the list of the detached notes (2147483000) stay under the pins.
+- **The cost, accepted**: where a badge and the dock meet, the badge takes the pointer, as it takes
+  it over the page. The badge is 40 px, the dock is 52 px tall, and its other buttons still answer.
+- `e2e/pin-over-dock.spec.ts` plants a note under the column of the dock, scrolls its badge onto the
+  dock, then onto the open settings, and asks the Shadow root what is painted at the centre of the
+  badge. Before FRU-666 it answered « fruitback-launch », the button « Leave a note ».
+
 ## « Want to know when it's fixed? » after a note of a visitor (FRU-604)
 
 ### The rules, in short

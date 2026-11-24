@@ -107,10 +107,10 @@ export const PREVIEW_STYLES = `
 .fruitback-preview {
   position: absolute;
   /*
-    Above the frame of a capture and its label (2147483100), which stay on the element for a moment
-    after a note is sent, and under the dock of the widget (2147483200).
+    Above the pins (2147483210) that it describes, and above the frame of a capture and its label
+    (2147483100), which stay on the element for a moment after a note is sent.
   */
-  z-index: 2147483150;
+  z-index: 2147483240;
   width: min(240px, calc(100vw - 16px));
   padding: 10px 12px;
   pointer-events: none;
