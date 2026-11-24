@@ -6,6 +6,7 @@ import { STAGE_NAMES, type Stage } from '../stages';
 import { LinkButton, MenuTree, type TreeBranch } from '../ui';
 import { Confirmation } from '../confirm';
 import { type IndexedNote, type TaskFields } from './notes-model';
+import type { TaskCopy } from './task-copy';
 
 export type TaskLabel = { id: string; name: string; color: string };
 export type TaskPerson = { id: string; name: string };
@@ -154,6 +155,8 @@ export type TaskMenuSeam = {
   actionsOf: (note: IndexedNote) => TaskActions;
   /** FRU-653: opens the page of a task, from its text. Absent: the text opens nothing. */
   openTask?: (note: IndexedNote) => void;
+  /** FRU-658: the link, the ID and the Markdown of a task. Absent: the menu offers no copy. */
+  copy?: TaskCopy;
 };
 
 /** The text of a note in a row or a card: a link to the page of its task, when there is one (FRU-653). */
@@ -221,12 +224,23 @@ export function useTaskMenu(note: IndexedNote): {
           ...(editable
             ? [{ id: 'archive', label: note.task?.archived === true ? t('Bring back') : t('Archive') }]
             : []),
+          // FRU-658: the link of the note in the console, its ID and its Markdown.
+          ...(seam.copy === undefined
+            ? []
+            : [
+                { id: 'copy-link', label: t('Copy the link') },
+                ...(note.ref === undefined ? [] : [{ id: 'copy-id', label: t('Copy the ID') }]),
+                { id: 'copy-markdown', label: t('Copy as Markdown') },
+              ]),
           // FRU-657: a task written by hand has no page for a link to open.
-          ...(note.page.url === '' ? [] : [{ id: 'copy', label: t('Copy the link to the note') }]),
+          ...(note.page.url === '' ? [] : [{ id: 'copy', label: t('Copy the link to its page') }]),
           ...(editable ? [{ id: 'delete', label: t('Delete…'), danger: true }] : []),
         ]}
         onAction={(id) => {
           if (id === 'copy') actions.copyLink();
+          if (id === 'copy-link') seam.copy?.link([note]);
+          if (id === 'copy-id') seam.copy?.identifier([note]);
+          if (id === 'copy-markdown') seam.copy?.markdown([note]);
           if (id === 'up' && actions.moveUp !== undefined) settle(actions.moveUp());
           if (id === 'down' && actions.moveDown !== undefined) settle(actions.moveDown());
           if (id === 'archive') settle(actions.archive(note.task?.archived !== true));

@@ -61,15 +61,15 @@ Read on `main` on 2026-10-26.
 
 ### The tools of the server
 
-| Tool                                                                             | Right | What it does                                                                                                                          |
-| -------------------------------------------------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `list_notes({ site, stage?, status?, since?, q?, cursor?, …filters of a task })` | read  | The notes of a site, newest first, each with its whole content. `since` is a date; the filters of a task are the console's (FRU-659). |
-| `get_note({ id })`                                                               | read  | One note, its replies and its status.                                                                                                 |
-| `notes_as_text({ site, page? })`                                                 | read  | The text of FRU-109, for a site or one page.                                                                                          |
-| `reply_to_note({ id, body })`                                                    | write | A reply in the thread, said to be from an agent.                                                                                      |
-| `set_note_status({ id, status })`                                                | write | A status of the site, for a note that the worker keeps.                                                                               |
-| `task_choices({})`                                                               | read  | The labels of the workspace and its members who are not guests (FRU-659).                                                             |
-| `update_task({ id, status?, assignee?, priority?, dueOn?, labels? })`            | write | The status and the fields of a task that the worker keeps (FRU-659).                                                                  |
+| Tool                                                                             | Right | What it does                                                                                                                           |
+| -------------------------------------------------------------------------------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `list_notes({ site, stage?, status?, since?, q?, cursor?, …filters of a task })` | read  | The notes of a site, newest first, each with its whole content. `since` is a date; the filters of a task are the console's (FRU-659).  |
+| `get_note({ id })`                                                               | read  | One note, its replies and its status.                                                                                                  |
+| `notes_as_text({ site, page? })`                                                 | read  | The text of FRU-109, for a site or one page. A whole site ends with its tasks written by hand (FRU-658), under « Tasks with no page ». |
+| `reply_to_note({ id, body })`                                                    | write | A reply in the thread, said to be from an agent.                                                                                       |
+| `set_note_status({ id, status })`                                                | write | A status of the site, for a note that the worker keeps.                                                                                |
+| `task_choices({})`                                                               | read  | The labels of the workspace and its members who are not guests (FRU-659).                                                              |
+| `update_task({ id, status?, assignee?, priority?, dueOn?, labels? })`            | write | The status and the fields of a task that the worker keeps (FRU-659).                                                                   |
 
 A key with the right `read` only gets the read tools: a write tool is not listed to it, and is
 refused if called. On a worker that keeps no task (`FRUITBACK_TASKS=off`, FRU-651), no key gets

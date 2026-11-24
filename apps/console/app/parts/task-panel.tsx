@@ -6,7 +6,7 @@ import { t } from '../i18n';
 import { NoteIcon } from '../note-icons';
 import { statusName } from '../note-status';
 import { STAGE_NAMES, type Stage } from '../stages';
-import { Checks, Choice, Drawer, Field, IconLink, KeyValue, LoadFailed, Problem } from '../ui';
+import { Button, Checks, Choice, Drawer, Field, IconLink, KeyValue, LoadFailed, Problem } from '../ui';
 import { useLocale } from '../use-locale';
 import { type IndexedNote } from './notes-model';
 import { TaskMenuContext } from './task-menu';
@@ -64,6 +64,17 @@ export function TaskPanel({
   const issue = typeof read === 'object' && 'note' in read ? read : undefined;
   const replies = (written ?? issue)?.comments;
   const title = written?.task.title ?? issue?.note.text.split('\n')[0] ?? listed?.excerpt ?? t('Note');
+  // FRU-658: what « Copy » names. The reference of the list, else the one the read gives, when it is a
+  // reference (`FB-12`) and not the id a guest reads in its place.
+  const reference = listed?.ref ?? (written ?? issue)?.identifier;
+  const copied =
+    id === undefined
+      ? undefined
+      : {
+          id,
+          site: listed?.site ?? { id: '' },
+          ...(reference !== undefined && /^[A-Z][A-Z0-9]*-\d+$/u.test(reference) ? { ref: reference } : {}),
+        };
 
   return (
     <Drawer
@@ -73,9 +84,26 @@ export function TaskPanel({
       closeLabel={t('Close')}
       head={
         (written ?? issue) === undefined ? null : (
-          <p className="text-hint text-muted tabular-nums" data-task-reference="">
-            {(written ?? issue)?.identifier}
-          </p>
+          <div className="flex flex-col gap-[8px]">
+            <p className="text-hint text-muted tabular-nums" data-task-reference="">
+              {(written ?? issue)?.identifier}
+            </p>
+            {seam?.copy === undefined || copied === undefined ? null : (
+              <div className="flex flex-wrap gap-[8px]" data-task-copy="">
+                <Button tone="outline" size="small" onClick={() => seam.copy?.link([copied])}>
+                  {t('Copy the link')}
+                </Button>
+                {copied.ref === undefined ? null : (
+                  <Button tone="outline" size="small" onClick={() => seam.copy?.identifier([copied])}>
+                    {t('Copy the ID')}
+                  </Button>
+                )}
+                <Button tone="outline" size="small" onClick={() => seam.copy?.markdown([copied])}>
+                  {t('Copy as Markdown')}
+                </Button>
+              </div>
+            )}
+          </div>
         )
       }
     >

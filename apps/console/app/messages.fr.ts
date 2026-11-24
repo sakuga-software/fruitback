@@ -1000,7 +1000,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'No due day': 'Aucune échéance',
   Labels: 'Labels',
   'Actions of this note': 'Actions de cette note',
-  'Copy the link to the note': 'Copier le lien de la note',
   'Only the person who left this note, or an owner or an admin, changes it.':
     'Seule la personne qui a laissé cette note, ou un propriétaire ou un admin, peut la modifier.',
   'This label was removed since the list was read. Reload the page.':
@@ -1839,6 +1838,36 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Create the task': 'Créer la tâche',
   'No text.': 'Aucun texte.',
   'Written by hand: no page and no pin.': 'Écrite à la main : ni page ni repère.',
+
+  // FRU-658: copy a task.
+  'Copy the link to its page': 'Copier le lien vers sa page',
+  'Copy the ID': 'Copier l’identifiant',
+  'Copy as Markdown': 'Copier en Markdown',
+  'Link copied.': 'Lien copié.',
+  '{count} links copied.': '{count} liens copiés.',
+  'No ID to copy: these notes have no reference here.':
+    'Aucun identifiant à copier : ces notes n’ont pas de référence ici.',
+  '{id} copied.': '{id} copié.',
+  '{count} IDs copied.': '{count} identifiants copiés.',
+  'Copied as Markdown.': 'Copié en Markdown.',
+  '{count} notes copied as Markdown.': '{count} notes copiées en Markdown.',
+  '{count} notes did not load, and are not in the Markdown.':
+    '{count} notes ne se sont pas chargées, et ne sont pas dans le Markdown.',
+  'The browser did not let Fruitback copy. Allow the clipboard for this page, then try again.':
+    'Le navigateur n’a pas laissé Fruitback copier. Autorisez le presse-papiers pour cette page, puis réessayez.',
+  'Notes on {url}': 'Notes sur {url}',
+  'No note on this page.': 'Aucune note sur cette page.',
+  'Element: {element}': 'Élément : {element}',
+  'Component: {component}': 'Composant : {component}',
+  'By: {name}': 'Par : {name}',
+  'Written: {date}': 'Écrite le : {date}',
+  'Position: approximate, found by its place on the page': 'Position : approximative, trouvée par sa place sur la page',
+  'Position: element not found on this page': 'Position : élément introuvable sur cette page',
+  'Picture: {url}': 'Capture : {url}',
+  'No note.': 'Aucune note.',
+  Team: 'Équipe',
+  'Reply from {author}': 'Réponse de {author}',
+  'Tasks with no page': 'Tâches sans page',
 
   ...JIRA,
   ...GITLAB,

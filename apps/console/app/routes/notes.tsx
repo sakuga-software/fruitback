@@ -31,6 +31,7 @@ import { TaskMenuContext, dayFromToday } from '../parts/task-menu';
 import { TASK_NOT_SAVED, TASK_PROBLEMS, useTaskSeam } from '../parts/task-seam';
 import { TaskPanel } from '../parts/task-panel';
 import { isNewTaskKey, useTaskCreate } from '../parts/task-create';
+import { copyShortcutOf, useTaskCopy } from '../parts/task-copy';
 
 /** FRU-655: the filters on the fields of the tasks Fruitback keeps. */
 const TASK_FILTERS = ['assignee', 'priority', 'label', 'due'] as const;
@@ -289,6 +290,36 @@ export default function Notes() {
     },
   });
   const openCreate = create.open;
+
+  // FRU-658: the link, the ID and the Markdown of a task, from its menu, its panel and the keyboard.
+  const taskCopy = useTaskCopy({
+    base,
+    workspace: workspace.id,
+    statusesOf: (site) => (typeof shown === 'object' ? shown.statuses?.[site] : undefined),
+  });
+  const copyRef = useRef<{ copy: typeof taskCopy.copy; noteOf: (id: string) => IndexedNote | undefined }>(undefined);
+  copyRef.current = {
+    copy: taskCopy.copy,
+    noteOf: (id) => (typeof shown === 'object' ? shown.notes.find((note) => note.id === id) : undefined),
+  };
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const kind = copyShortcutOf(event);
+      const current = copyRef.current;
+      if (kind === undefined || current === undefined) return;
+      // The task of the panel, else the row or the card that holds the focus.
+      const focused = document.activeElement?.closest<HTMLElement>('[data-note]')?.dataset.note;
+      const id = latest.current.get('task') ?? focused;
+      if (id === undefined) return;
+      const note = current.noteOf(id) ?? { id, site: { id: '' } };
+      event.preventDefault();
+      if (kind === 'link') current.copy.link([note]);
+      else current.copy.identifier([note]);
+    };
+    document.addEventListener('keydown', onKey);
+
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (!isNewTaskKey(event)) return;
@@ -313,7 +344,8 @@ export default function Notes() {
   );
 
   return (
-    <TaskMenuContext.Provider value={{ ...tasks.seam, openTask }}>
+    <TaskMenuContext.Provider value={{ ...tasks.seam, openTask, copy: taskCopy.copy }}>
+      {taskCopy.status}
       {tasks.dialog}
       {create.dialog}
       <TaskPanel

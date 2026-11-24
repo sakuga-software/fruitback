@@ -1,5 +1,6 @@
 import type { NoteComment, NoteIssue, NoteStatus } from './issue.ts';
-import { anchorSelectorPath } from './note.ts';
+import { type NoteReporter, anchorSelectorPath } from './note.ts';
+import type { TaskIssue } from './task.ts';
 
 /**
  * The feedback of a page as plain text (FRU-109): the format of « Copy as text » in the widget, and
@@ -35,8 +36,8 @@ export type FeedbackWords = {
   noNote: string;
   team: string;
   reply(author: string): string;
-  /** The status of a note as a person reads it. */
-  status(issue: NoteIssue, status: NoteStatus | undefined): string;
+  /** The status of a note, or of a task written by hand (FRU-658), as a person reads it. */
+  status(issue: NoteIssue | TaskIssue, status: NoteStatus | undefined): string;
 };
 
 export function feedbackText(
@@ -51,12 +52,38 @@ export function feedbackText(
   return `${[title, ...blocks].join('\n\n')}\n`;
 }
 
+/** `status`: the status of the task in its read, when it has one. */
+export type TaskTextEntry = { issue: TaskIssue; status?: NoteStatus };
+
+/**
+ * The tasks written by hand as plain text (FRU-658), in the format of `feedbackText`: a heading the
+ * caller gives, then one block for each task, its number and status, who wrote it and when, its title
+ * and text quoted, and its replies. A task has no page, no element and no picture: no line says them.
+ */
+export function tasksText(
+  entries: readonly TaskTextEntry[],
+  { heading, words }: { heading: string; words: FeedbackWords },
+): string {
+  const blocks = entries.map(({ issue, status }, index) =>
+    [
+      `## ${index + 1}. ${oneLine(issue.identifier)} — ${oneLine(words.status(issue, status))}`,
+      ...[signature(issue.task.reporter, issue.task.createdAt, words)].flatMap((fact) =>
+        fact === undefined ? [] : [`- ${fact}`],
+      ),
+      quote(issue.task.text === undefined ? issue.task.title : `${issue.task.title}\n\n${issue.task.text}`),
+      ...(issue.comments ?? []).map((comment) => reply(comment, words)),
+    ].join('\n\n'),
+  );
+
+  return `${[`# ${oneLine(heading)}`, ...blocks].join('\n\n')}\n`;
+}
+
 function block({ issue, placement, status }: FeedbackTextEntry, position: number, words: FeedbackWords): string {
   const note = issue.note;
   const facts = [
     words.element(element(issue)),
     component(issue, words),
-    signature(issue, words),
+    signature(issue.note.reporter, issue.note.createdAt, words),
     placement === 'approximate' ? words.approximate : undefined,
     placement === 'detached' ? words.detached : undefined,
     note.screenshot?.url !== undefined ? words.picture(note.screenshot.url) : undefined,
@@ -88,9 +115,9 @@ function component(issue: NoteIssue, words: FeedbackWords): string | undefined {
   return parts.length > 0 ? words.component(parts.join(' · ')) : undefined;
 }
 
-function signature(issue: NoteIssue, words: FeedbackWords): string | undefined {
-  const name = issue.note.reporter?.name ?? issue.note.reporter?.email;
-  const date = day(issue.note.createdAt);
+function signature(reporter: NoteReporter | undefined, createdAt: string, words: FeedbackWords): string | undefined {
+  const name = reporter?.name ?? reporter?.email;
+  const date = day(createdAt);
   if (name !== undefined) return dated(words.by(oneLine(name)), date);
 
   return date === '' ? undefined : words.written(date);

@@ -144,7 +144,7 @@ test('the keyboard opens the menu with Shift+F10, and a note of a tracker offers
 
   await row(p, 'The returns policy').getByRole('button', { name: 'Actions of this note' }).focus();
   await p.keyboard.press('Shift+F10');
-  await expect(p.getByRole('menuitem', { name: 'Copy the link to the note' })).toBeVisible();
+  await expect(p.getByRole('menuitem', { name: 'Copy the link to its page' })).toBeVisible();
   await expect(p.getByRole('menuitem', { name: 'Priority' })).toHaveCount(0);
 });
 

@@ -1242,3 +1242,25 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
 - **A task has no page**: its row and its card draw no link to a page, its menu no « Copy the link to
   the note », and its panel says « Written by hand: no page and no pin. » in place of the page and the
   element.
+
+## Copy a task (FRU-658)
+
+### The rules, in short
+
+- **Three copies, for a note of a page and a task written by hand alike**: the link of the note in the
+  console (`/w/<workspace>/notes?task=<id>`, which opens its panel), its ID (`FB-12`, or the
+  reference of its tracker), and the note as Markdown for an agent, in the format of `notes_as_text`
+  (`feedbackText`, `tasksText`). The Markdown reads the note whole (`GET …/notes/<note>`): the list
+  keeps 64 characters of it.
+- **From the menu of a task** (« Copy the link », « Copy the ID », « Copy as Markdown »; « Copy the
+  link to its page » for a note of a page), **from its panel** (three buttons under its reference),
+  and **from the keyboard**: Cmd or Ctrl, Shift and C for the link, Cmd or Ctrl, Shift and the full
+  stop for the ID, on the task of the panel, else on the row or the card that holds the focus. The
+  keys are read by their place (`code`), and never in a field.
+- **No ID for a guest**: the list gives a guest no reference, so the menu offers none, and the panel
+  offers one only when its read names a reference.
+- **A status line says what was copied**, for a person and a screen reader (`role="status"`), and
+  says it when the browser refused the clipboard. The Markdown is written as a `ClipboardItem` of the
+  read still on its way, so that Safari, which wants the write in the gesture, takes it.
+- **Not here yet**: the copy of a selection of several tasks, which comes with the selection
+  (FRU-656). `TaskCopy` already takes a list.
