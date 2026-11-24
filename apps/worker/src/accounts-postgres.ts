@@ -87,7 +87,7 @@ import { MAX_STATUSES, type NoteStage } from '@fruitback/shared';
 import { OWN_SOURCE, type SiteStatus, isBuiltIn } from './site-statuses.ts';
 import { identifierFor, isSameNote, keptRowOf } from './note-rows.ts';
 import { StoreError } from './store.ts';
-import type { TaskLabel } from './task-fields.ts';
+import { MAX_LABELS, type TaskChange, type TaskLabel } from './task-fields.ts';
 
 /**
  * The accounts in PostgreSQL (FRU-141), the one place they live since FRU-150. The store on a file
@@ -396,6 +396,197 @@ function isUniqueViolation(error: unknown): boolean {
 
 /** Thrown inside a transaction to roll it back, and caught by the method that threw it. */
 class RolledBack extends Error {}
+
+type TasksRefusal =
+  | 'not-found'
+  | 'not-kept'
+  | 'not-allowed'
+  | 'not-member'
+  | 'unknown-label'
+  | 'too-many-labels'
+  | 'unknown-status'
+  | 'status-hidden';
+
+/** A refusal of one of several tasks (FRU-656): thrown, so the transaction changes none of them. */
+class TasksRefused extends Error {
+  readonly reason: TasksRefusal;
+  readonly task: { site: string; note: string } | undefined;
+
+  constructor(reason: TasksRefusal, task?: { site: string; note: string }) {
+    super(reason);
+    this.reason = reason;
+    this.task = task;
+  }
+}
+
+/**
+ * Holds the sites of several tasks (FRU-656), each once and in one order, so that two calls never
+ * wait on each other. A site of no workspace of the caller refuses the call.
+ */
+async function holdSites(db: Db, workspace: string, tasks: readonly { site: string; note: string }[]): Promise<void> {
+  for (const site of [...new Set(tasks.map((task) => task.site))].sort()) {
+    if (!(await siteHeld(db, workspace, site))) {
+      throw new TasksRefused(
+        'not-found',
+        tasks.find((task) => task.site === site),
+      );
+    }
+  }
+}
+
+/**
+ * A task the worker keeps, once its rights are checked (FRU-652): the note of the index in this site
+ * of this workspace, its author or a caller who manages the sites, and the row of `notes` that is this
+ * very note. The checks of a change of one task and of several (FRU-656). The caller holds the site.
+ */
+async function keptTaskOf(
+  db: Db,
+  workspace: string,
+  site: string,
+  noteId: string,
+  who: { account: string; manages: boolean },
+): Promise<
+  | { id: number; identifier: string; page: string; stage: string }
+  | { refused: 'not-found' | 'not-allowed' | 'not-kept' }
+> {
+  const [note] = await db
+    .select({
+      place: note_index.place,
+      connectorKind: connectors.kind,
+      reference: note_index.reference,
+      author: note_index.author_account_id,
+    })
+    .from(note_index)
+    .leftJoin(connectors, eq(connectors.id, note_index.connector_id))
+    .where(and(eq(note_index.workspace_id, workspace), eq(note_index.site_id, site), eq(note_index.note_id, noteId)));
+  if (note === undefined) return { refused: 'not-found' };
+  // The author as the index keeps it, the one the route of the extension reads too (FRU-367).
+  if (!who.manages && (note.author === null || note.author !== who.account)) return { refused: 'not-allowed' };
+  // In Fruitback, or sent on to an address: the worker keeps it, as `FB-<id>` (FRU-237).
+  const id = keptRowOf(note.place, note.connectorKind, note.reference);
+  if (id === undefined) return { refused: 'not-kept' };
+  // That row, of this site, and this very note: a tracker can name an issue `FB-12` too.
+  const [kept] = await db
+    .select({ payload: notes.payload, page: notes.page_url, stage: notes.stage })
+    .from(notes)
+    .where(and(eq(notes.id, id), eq(notes.client_id, site)));
+  if (kept === undefined || !isSameNote(kept.payload, noteId)) return { refused: 'not-kept' };
+
+  return { id, identifier: note.reference ?? `FB-${id}`, page: kept.page, stage: kept.stage };
+}
+
+/**
+ * A status of the worker's store for a site (FRU-384): a built-in status writes no key, as a note with
+ * none is in the built-in status of its stage. Or why it cannot be chosen.
+ */
+async function ownStatusOf(
+  db: Db,
+  site: string,
+  key: string,
+): Promise<{ key: string | null; stage: NoteStage } | 'unknown-status' | 'status-hidden'> {
+  const [row] = await db
+    .select({ stage: statuses.stage, hidden: statuses.hidden })
+    .from(statuses)
+    .where(and(eq(statuses.site_id, site), eq(statuses.source, OWN_SOURCE), eq(statuses.key, key)));
+  if (row?.hidden === true) return 'status-hidden';
+  if (isBuiltIn(OWN_SOURCE, key)) return { key: null, stage: key as NoteStage };
+
+  return row === undefined ? 'unknown-status' : { key, stage: row.stage as NoteStage };
+}
+
+/** Puts a kept note in a status, and its row of the index in its stage. */
+async function writeStatus(
+  db: Db,
+  site: string,
+  id: number,
+  chosen: { key: string | null; stage: NoteStage },
+  now: number,
+): Promise<void> {
+  await db
+    .update(notes)
+    .set({ status_key: chosen.key, stage: chosen.stage, updated_at: now })
+    .where(and(eq(notes.id, id), eq(notes.client_id, site)));
+  await restageIndex(db, site, [id], chosen.stage, now);
+}
+
+/**
+ * Why an assignee or labels cannot be written in a workspace (FRU-652): an assignee who is not a
+ * member, a label that is not one of its labels. `undefined`: they can.
+ */
+async function namedOf(
+  db: Db,
+  workspace: string,
+  assignee: string | null | undefined,
+  named: readonly string[],
+): Promise<'not-member' | 'unknown-label' | undefined> {
+  if (typeof assignee === 'string') {
+    const [one] = await db
+      .select({ id: member.id })
+      .from(member)
+      .where(and(eq(member.organizationId, workspace), eq(member.userId, assignee)));
+    if (one === undefined) return 'not-member';
+  }
+  const asked = [...new Set(named)];
+  if (asked.length > 0) {
+    const found = await db
+      .select({ id: labels.id })
+      .from(labels)
+      .where(and(eq(labels.workspace_id, workspace), inArray(labels.id, asked)));
+    if (found.length !== asked.length) return 'unknown-label';
+  }
+
+  return undefined;
+}
+
+/** Writes the fields of a kept task, and the copies the lists read in the index (FRU-665, FRU-655). */
+async function writeTaskFields(
+  db: Db,
+  workspace: string,
+  site: string,
+  noteId: string,
+  id: number,
+  change: TaskChange,
+  now: number,
+): Promise<void> {
+  await db
+    .update(notes)
+    .set({
+      ...(change.assignee === undefined ? {} : { assignee_account_id: change.assignee }),
+      ...(change.priority === undefined ? {} : { priority: change.priority }),
+      ...(change.dueOn === undefined ? {} : { due_on: change.dueOn }),
+      ...(change.position === undefined ? {} : { position: change.position }),
+      ...(change.archived === undefined ? {} : { archived_at: change.archived ? now : null }),
+      updated_at: now,
+    })
+    .where(and(eq(notes.id, id), eq(notes.client_id, site)));
+  if (change.labels !== undefined) {
+    await db.delete(note_labels).where(eq(note_labels.note_id, id));
+    if (change.labels.length > 0) {
+      await db.insert(note_labels).values(change.labels.map((label) => ({ note_id: id, label_id: label })));
+    }
+  }
+  const mirrored = {
+    ...(change.archived === undefined ? {} : { archived_at: change.archived ? now : null }),
+    ...(change.assignee === undefined ? {} : { task_assignee_id: change.assignee }),
+    ...(change.priority === undefined ? {} : { task_priority: change.priority }),
+    ...(change.dueOn === undefined ? {} : { task_due_on: change.dueOn }),
+    ...(change.labels === undefined ? {} : { task_label_ids: [...change.labels].sort() }),
+  };
+  if (Object.keys(mirrored).length > 0) {
+    await db
+      .update(note_index)
+      .set(mirrored)
+      .where(and(eq(note_index.workspace_id, workspace), eq(note_index.site_id, site), eq(note_index.note_id, noteId)));
+  }
+}
+
+/** Deletes a kept task: its replies and its labels go with it (`cascade`), and its row of the index. */
+async function dropTask(db: Db, workspace: string, site: string, noteId: string, id: number): Promise<void> {
+  await db.delete(notes).where(and(eq(notes.id, id), eq(notes.client_id, site)));
+  await db
+    .delete(note_index)
+    .where(and(eq(note_index.workspace_id, workspace), eq(note_index.site_id, site), eq(note_index.note_id, noteId)));
+}
 
 export function createPostgresAccountStore(database: Database): AccountStore {
   /** `work` on the database, with its schema. The first call of a process applies the migrations. */
@@ -1769,57 +1960,18 @@ export function createPostgresAccountStore(database: Database): AccountStore {
         // The site, for update: the same lock as a status added, moved or removed (FRU-366), so the
         // status read below is the one written.
         if (!(await siteHeld(db, workspace, site))) return refused('not-found');
-        const [note] = await db
-          .select({
-            place: note_index.place,
-            connectorKind: connectors.kind,
-            reference: note_index.reference,
-            author: note_index.author_account_id,
-          })
-          .from(note_index)
-          .leftJoin(connectors, eq(connectors.id, note_index.connector_id))
-          .where(
-            and(eq(note_index.workspace_id, workspace), eq(note_index.site_id, site), eq(note_index.note_id, noteId)),
-          );
-        if (note === undefined) return refused('not-found');
-        // The author as the index keeps it, the one the route of the extension reads too (FRU-367).
-        if (!who.manages && (note.author === null || note.author !== who.account)) return refused('not-allowed');
-        // In Fruitback, or sent on to an address: the worker keeps it, as `FB-<id>` (FRU-237).
-        const id = keptRowOf(note.place, note.connectorKind, note.reference);
-        if (id === undefined) return refused('not-kept');
-        // That row, of this site, and this very note: a tracker can name an issue `FB-12` too.
-        const [kept] = await db
-          .select({ payload: notes.payload, stage: notes.stage })
-          .from(notes)
-          .where(and(eq(notes.id, id), eq(notes.client_id, site)));
-        if (kept === undefined || !isSameNote(kept.payload, noteId)) return refused('not-kept');
-
-        const [row] = await db
-          .select({ stage: statuses.stage, hidden: statuses.hidden })
-          .from(statuses)
-          .where(and(eq(statuses.site_id, site), eq(statuses.source, OWN_SOURCE), eq(statuses.key, key)));
-        if (row?.hidden === true) return refused('status-hidden');
-        // A built-in status writes no key: a note with none is in the built-in status of its stage.
-        let chosen: { key: string | null; stage: NoteStage };
-        if (isBuiltIn(OWN_SOURCE, key)) chosen = { key: null, stage: key as NoteStage };
-        else if (row !== undefined) chosen = { key, stage: row.stage as NoteStage };
-        else return refused('unknown-status');
-
-        const now = Date.now();
-        const [written] = await db
-          .update(notes)
-          .set({ status_key: chosen.key, stage: chosen.stage, updated_at: now })
-          .where(and(eq(notes.id, id), eq(notes.client_id, site)))
-          .returning({ page: notes.page_url });
-        if (written === undefined) return refused('not-kept');
-        await restageIndex(db, site, [id], chosen.stage, now);
+        const kept = await keptTaskOf(db, workspace, site, noteId, who);
+        if ('refused' in kept) return refused(kept.refused);
+        const chosen = await ownStatusOf(db, site, key);
+        if (typeof chosen === 'string') return refused(chosen);
+        await writeStatus(db, site, kept.id, chosen, Date.now());
 
         return {
           set: true as const,
           stage: chosen.stage,
           was: kept.stage as NoteStage,
-          identifier: note.reference ?? `FB-${id}`,
-          page: written.page,
+          identifier: kept.identifier,
+          page: kept.page,
         };
       });
     },
@@ -1828,78 +1980,13 @@ export function createPostgresAccountStore(database: Database): AccountStore {
       return transaction(async (db) => {
         const refused = <R extends string>(reason: R) => ({ set: false as const, reason });
         if (!(await siteHeld(db, workspace, site))) return refused('not-found');
-        const [note] = await db
-          .select({
-            place: note_index.place,
-            connectorKind: connectors.kind,
-            reference: note_index.reference,
-            author: note_index.author_account_id,
-          })
-          .from(note_index)
-          .leftJoin(connectors, eq(connectors.id, note_index.connector_id))
-          .where(
-            and(eq(note_index.workspace_id, workspace), eq(note_index.site_id, site), eq(note_index.note_id, noteId)),
-          );
-        if (note === undefined) return refused('not-found');
-        if (!who.manages && (note.author === null || note.author !== who.account)) return refused('not-allowed');
-        const id = keptRowOf(note.place, note.connectorKind, note.reference);
-        if (id === undefined) return refused('not-kept');
-        const [kept] = await db
-          .select({ payload: notes.payload, page: notes.page_url })
-          .from(notes)
-          .where(and(eq(notes.id, id), eq(notes.client_id, site)));
-        if (kept === undefined || !isSameNote(kept.payload, noteId)) return refused('not-kept');
+        const kept = await keptTaskOf(db, workspace, site, noteId, who);
+        if ('refused' in kept) return refused(kept.refused);
+        const named = await namedOf(db, workspace, change.assignee, change.labels ?? []);
+        if (named !== undefined) return refused(named);
+        await writeTaskFields(db, workspace, site, noteId, kept.id, change, Date.now());
 
-        if (typeof change.assignee === 'string') {
-          const [one] = await db
-            .select({ id: member.id })
-            .from(member)
-            .where(and(eq(member.organizationId, workspace), eq(member.userId, change.assignee)));
-          if (one === undefined) return refused('not-member');
-        }
-        if (change.labels !== undefined && change.labels.length > 0) {
-          const found = await db
-            .select({ id: labels.id })
-            .from(labels)
-            .where(and(eq(labels.workspace_id, workspace), inArray(labels.id, change.labels)));
-          if (found.length !== change.labels.length) return refused('unknown-label');
-        }
-
-        await db
-          .update(notes)
-          .set({
-            ...(change.assignee === undefined ? {} : { assignee_account_id: change.assignee }),
-            ...(change.priority === undefined ? {} : { priority: change.priority }),
-            ...(change.dueOn === undefined ? {} : { due_on: change.dueOn }),
-            ...(change.position === undefined ? {} : { position: change.position }),
-            ...(change.archived === undefined ? {} : { archived_at: change.archived ? Date.now() : null }),
-            updated_at: Date.now(),
-          })
-          .where(and(eq(notes.id, id), eq(notes.client_id, site)));
-        if (change.labels !== undefined) {
-          await db.delete(note_labels).where(eq(note_labels.note_id, id));
-          if (change.labels.length > 0) {
-            await db.insert(note_labels).values(change.labels.map((label) => ({ note_id: id, label_id: label })));
-          }
-        }
-        // FRU-665, FRU-655: the lists read the archive and the fields in the index.
-        const mirrored = {
-          ...(change.archived === undefined ? {} : { archived_at: change.archived ? Date.now() : null }),
-          ...(change.assignee === undefined ? {} : { task_assignee_id: change.assignee }),
-          ...(change.priority === undefined ? {} : { task_priority: change.priority }),
-          ...(change.dueOn === undefined ? {} : { task_due_on: change.dueOn }),
-          ...(change.labels === undefined ? {} : { task_label_ids: [...change.labels].sort() }),
-        };
-        if (Object.keys(mirrored).length > 0) {
-          await db
-            .update(note_index)
-            .set(mirrored)
-            .where(
-              and(eq(note_index.workspace_id, workspace), eq(note_index.site_id, site), eq(note_index.note_id, noteId)),
-            );
-        }
-
-        return { set: true as const, identifier: note.reference ?? `FB-${id}`, page: kept.page };
+        return { set: true as const, identifier: kept.identifier, page: kept.page };
       });
     },
 
@@ -1907,38 +1994,103 @@ export function createPostgresAccountStore(database: Database): AccountStore {
       return transaction(async (db) => {
         const refused = <R extends string>(reason: R) => ({ deleted: false as const, reason });
         if (!(await siteHeld(db, workspace, site))) return refused('not-found');
-        const [note] = await db
-          .select({
-            place: note_index.place,
-            connectorKind: connectors.kind,
-            reference: note_index.reference,
-            author: note_index.author_account_id,
-          })
-          .from(note_index)
-          .leftJoin(connectors, eq(connectors.id, note_index.connector_id))
-          .where(
-            and(eq(note_index.workspace_id, workspace), eq(note_index.site_id, site), eq(note_index.note_id, noteId)),
-          );
-        if (note === undefined) return refused('not-found');
-        if (!who.manages && (note.author === null || note.author !== who.account)) return refused('not-allowed');
-        const id = keptRowOf(note.place, note.connectorKind, note.reference);
-        if (id === undefined) return refused('not-kept');
-        const [kept] = await db
-          .select({ payload: notes.payload, page: notes.page_url })
-          .from(notes)
-          .where(and(eq(notes.id, id), eq(notes.client_id, site)));
-        if (kept === undefined || !isSameNote(kept.payload, noteId)) return refused('not-kept');
-
-        // The replies and the labels of the task go with it (`cascade`); its row of the index too.
-        await db.delete(notes).where(and(eq(notes.id, id), eq(notes.client_id, site)));
-        await db
-          .delete(note_index)
-          .where(
-            and(eq(note_index.workspace_id, workspace), eq(note_index.site_id, site), eq(note_index.note_id, noteId)),
-          );
+        const kept = await keptTaskOf(db, workspace, site, noteId, who);
+        if ('refused' in kept) return refused(kept.refused);
+        await dropTask(db, workspace, site, noteId, kept.id);
 
         return { deleted: true as const, page: kept.page };
       });
+    },
+
+    async changeTasks(workspace, tasks, change, who) {
+      try {
+        return await transaction(async (db) => {
+          await holdSites(db, workspace, tasks);
+          const { status, addLabels = [], removeLabels = [], ...fields } = change;
+          const named = await namedOf(db, workspace, fields.assignee, [...addLabels, ...removeLabels]);
+          if (named !== undefined) throw new TasksRefused(named);
+          // The status of each site, read once: every site of the tasks must have it.
+          const chosen = new Map<string, { key: string | null; stage: NoteStage }>();
+          const now = Date.now();
+          const changed = [];
+          for (const task of tasks) {
+            const kept = await keptTaskOf(db, workspace, task.site, task.note, who);
+            if ('refused' in kept) throw new TasksRefused(kept.refused, task);
+            let labels: string[] | undefined;
+            if (addLabels.length > 0 || removeLabels.length > 0) {
+              const held = await db
+                .select({ id: note_labels.label_id })
+                .from(note_labels)
+                .where(eq(note_labels.note_id, kept.id));
+              const next = new Set(held.map((row) => row.id));
+              for (const label of removeLabels) next.delete(label);
+              for (const label of addLabels) next.add(label);
+              if (next.size > MAX_LABELS) throw new TasksRefused('too-many-labels', task);
+              labels = [...next];
+            }
+            const written = { ...fields, ...(labels === undefined ? {} : { labels }) };
+            if (Object.keys(written).length > 0) {
+              await writeTaskFields(db, workspace, task.site, task.note, kept.id, written, now);
+            }
+            if (status === undefined) {
+              changed.push({ ...task, identifier: kept.identifier, page: kept.page });
+              continue;
+            }
+            let target = chosen.get(task.site);
+            if (target === undefined) {
+              const read = await ownStatusOf(db, task.site, status);
+              if (typeof read === 'string') throw new TasksRefused(read, task);
+              target = read;
+              chosen.set(task.site, target);
+            }
+            await writeStatus(db, task.site, kept.id, target, now);
+            changed.push({
+              ...task,
+              identifier: kept.identifier,
+              page: kept.page,
+              stage: target.stage,
+              was: kept.stage as NoteStage,
+            });
+          }
+
+          return { set: true as const, notes: changed };
+        });
+      } catch (error) {
+        if (error instanceof TasksRefused) {
+          return {
+            set: false as const,
+            reason: error.reason,
+            ...(error.task === undefined ? {} : { task: error.task }),
+          };
+        }
+        throw error;
+      }
+    },
+
+    async deleteTasks(workspace, tasks, who) {
+      try {
+        return await transaction(async (db) => {
+          await holdSites(db, workspace, tasks);
+          const pages: string[] = [];
+          for (const task of tasks) {
+            const kept = await keptTaskOf(db, workspace, task.site, task.note, who);
+            if ('refused' in kept) throw new TasksRefused(kept.refused, task);
+            await dropTask(db, workspace, task.site, task.note, kept.id);
+            pages.push(kept.page);
+          }
+
+          return { deleted: true as const, pages };
+        });
+      } catch (error) {
+        if (error instanceof TasksRefused && error.task !== undefined) {
+          return {
+            deleted: false as const,
+            reason: error.reason as 'not-found' | 'not-kept' | 'not-allowed',
+            task: error.task,
+          };
+        }
+        throw error;
+      }
     },
 
     async labels(workspace) {

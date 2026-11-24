@@ -1,5 +1,5 @@
 import type { NoteIssue, NoteStage } from '@fruitback/shared';
-import { NOTE_STAGES } from '@fruitback/shared';
+import { NOTE_STAGES, RESOLVED_STAGES } from '@fruitback/shared';
 import {
   type SQL,
   and,
@@ -14,6 +14,7 @@ import {
   lte,
   max,
   min,
+  notInArray,
   or,
   sql,
 } from 'drizzle-orm';
@@ -654,6 +655,7 @@ function filtered(workspace: string, query: NoteQuery) {
     readable(query.sites),
     query.site === undefined ? undefined : eq(note_index.site_id, query.site),
     query.stage === undefined ? undefined : eq(note_index.stage, query.stage),
+    query.unresolved === true ? notInArray(note_index.stage, [...RESOLVED_STAGES]) : undefined,
     query.author === undefined ? undefined : eq(note_index.author_account_id, query.author),
     query.since === undefined ? undefined : gte(note_index.created_at, query.since),
     // FRU-665: an archived task is out of the list, unless the list asks for the archived ones.
