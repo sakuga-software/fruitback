@@ -241,6 +241,37 @@ describe('a status changed on a task sent to an address (FRU-660)', () => {
   });
 });
 
+describe('several tasks changed at once (FRU-656, FRU-660)', () => {
+  it('sends one event for each task that changed, and none for a task the change leaves as it is', async () => {
+    const { world, site, note, asOwner, deliver, setTask } = await acme();
+    const second = noteFixture({ id: 'sd_second' });
+    const written = await call(world, 'POST', '/feedback', {
+      origin: SITE,
+      body: { ...second, page: { ...second.page, url: PAGE }, client: { id: site } },
+    });
+    assert.equal(written.status, 201, await written.clone().text());
+    const other = noteIdOf(site, 'sd_second');
+    await setTask({ priority: 'high' });
+    assert.equal((await deliver()).length, 2, 'the note.created of the second note, and the priority of the first');
+
+    const changed = await asOwner('POST', '/tasks', { notes: [note, other], change: { priority: 'high' } });
+    assert.equal(changed.status, 200, await changed.clone().text());
+    const bodies = parsed(await deliver());
+    assert.deepEqual(
+      bodies.map((body) => [body.event, (body.note as { id: string }).id, body.fields]),
+      [['note.updated', other, ['priority']]],
+      'the first task had this priority already',
+    );
+
+    const moved = await asOwner('POST', '/tasks', { notes: [note, other], change: { status: 'own:todo' } });
+    assert.equal(moved.status, 200, await moved.clone().text());
+    const statuses = parsed(await deliver());
+    assert.equal(statuses.length, 2);
+    assert.deepEqual(new Set(statuses.map((body) => (body.note as { id: string }).id)), new Set([note, other]));
+    assert.ok(statuses.every((body) => body.event === 'note.status_changed'));
+  });
+});
+
 describe('a reply to a task sent to an address (FRU-660)', () => {
   it('an address takes a reply, and is told of it by its id alone', async () => {
     const { workspace, site, issue, note, world, deliver, reply } = await acme();
