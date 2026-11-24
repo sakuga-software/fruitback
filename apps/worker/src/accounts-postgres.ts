@@ -1269,7 +1269,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
         keyName: row.key_name,
         site: row.site_id,
         note: row.note_id,
-        action: row.action === 'status' ? 'status' : 'reply',
+        action: row.action === 'status' || row.action === 'task' ? row.action : 'reply',
         ...(row.status === null ? {} : { status: row.status }),
         at: row.at,
       }));

@@ -256,7 +256,8 @@ export type AgentWrite = {
   keyName: string;
   site: string;
   note: string;
-  action: 'reply' | 'status';
+  /** FRU-659: `task`, the fields of a task (`update_task`). */
+  action: 'reply' | 'status' | 'task';
   status?: string;
   at: number;
 };

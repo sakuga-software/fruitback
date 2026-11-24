@@ -21,6 +21,7 @@ import type { NoteStage } from '@fruitback/shared';
 import type { ListedNote, NoteIndex } from './notes-index.ts';
 import { withoutTrackerStatus } from './site-statuses.ts';
 import { type NoteStore, StoreError, findNote, takesChecks, takesReplies, takesStatuses } from './store.ts';
+import { TASK_PRIORITIES, type TaskChange, type TaskFields, readTaskChange } from './task-fields.ts';
 
 /**
  * The read tools of `/mcp` (FRU-463): the notes of the sites of an agent key, with their whole
@@ -37,12 +38,17 @@ import { type NoteStore, StoreError, findNote, takesChecks, takesReplies, takesS
  *   still says if more wait.
  * - **A key whose member does not see the tracker reads no reference of it**, as a guest in the
  *   console (FRU-250).
+ * - **The tools of a task follow the module** (FRU-659): on a worker that keeps no task (FRU-651),
+ *   `task_choices`, `set_note_status` and `update_task` are not given. The reads still give the
+ *   fields of a task kept before, as the list of the console does.
  */
 
 export type AgentToolsContext = {
   grant: AgentGrant;
-  /** What the write tools read and write beside the store (FRU-464). */
-  accounts: Pick<AccountStore, 'siteStatuses' | 'recordAgentWrite'>;
+  /** What the write tools read and write beside the store (FRU-464), and the fields of a task (FRU-659). */
+  accounts: Pick<AccountStore, 'siteStatuses' | 'recordAgentWrite' | 'setTaskFields' | 'labels' | 'membersOf'>;
+  /** Whether this worker keeps tasks (FRU-651). `off`: no tool of a task is given. */
+  tasks: 'on' | 'off';
   /** The longest reply, as `POST /feedback/<id>/replies` takes it. */
   replyLength: number;
   store: NoteStore;
@@ -85,6 +91,9 @@ const WORDS: FeedbackWords = {
 
 const STAGE_NAMES = ['new', 'todo', 'progress', 'done', 'closed'];
 
+/** The most members `task_choices` gives, as the menu of the console reads them. */
+export const MAX_TASK_MEMBERS = 200;
+
 export function agentTools(context: AgentToolsContext): McpTool[] {
   const { grant } = context;
   const seesTracker = can(grant.role, 'see-tracker');
@@ -106,6 +115,23 @@ export function agentTools(context: AgentToolsContext): McpTool[] {
           },
           since: { type: 'string', description: 'An ISO 8601 date: only the notes left at it or after it.' },
           q: { type: 'string', description: 'Words to look for in the excerpt, the page and the stage.' },
+          assignee: {
+            type: 'string',
+            description: 'The tasks of a member, by the id that task_choices gives; `none`: the tasks of nobody.',
+          },
+          priority: { type: 'string', enum: [...TASK_PRIORITIES, 'none'] },
+          label: { type: 'string', description: 'The tasks with a label, by the id that task_choices gives.' },
+          due: {
+            type: 'string',
+            enum: ['overdue', 'week', 'none'],
+            description:
+              '`overdue`: a due day before `today`. `week`: `today` and the six days after it. `none`: no due day.',
+          },
+          today: {
+            type: 'string',
+            description: 'The day of `due`, YYYY-MM-DD, in the zone of the team. Absent: the day of UTC.',
+          },
+          archived: { type: 'boolean', description: '`true`: the archived tasks, in place of the others.' },
           cursor: { type: 'string', description: 'The `next` of the answer before.' },
           limit: { type: 'integer', minimum: 8, maximum: 50 },
         },
@@ -139,6 +165,17 @@ export function agentTools(context: AgentToolsContext): McpTool[] {
       },
       call: (args) => notesAsText(context, seesTracker, args),
     },
+    ...(context.tasks === 'on'
+      ? [
+          {
+            name: 'task_choices',
+            description:
+              'The labels of the workspace, and the members a task can be given to: the ids that update_task and the filters of list_notes take.',
+            inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+            call: () => taskChoices(context),
+          },
+        ]
+      : []),
     ...(grant.write ? writeTools(context) : []),
   ];
 }
@@ -168,6 +205,13 @@ function writeTools(context: AgentToolsContext): McpTool[] {
       },
       call: (args) => replyToNote(context, args),
     },
+    ...(context.tasks === 'on' ? taskWriteTools(context) : []),
+  ];
+}
+
+/** The write tools of a task (FRU-464, FRU-659), on a worker that keeps tasks only. */
+function taskWriteTools(context: AgentToolsContext): McpTool[] {
+  return [
     {
       name: 'set_note_status',
       description: `Sets the status of a note that Fruitback keeps: a key of the statuses of its site, as \`${OWN_SOURCE}:<key>\`. A note in a tracker takes its status from the tracker.`,
@@ -181,6 +225,33 @@ function writeTools(context: AgentToolsContext): McpTool[] {
         additionalProperties: false,
       },
       call: (args) => setNoteStatus(context, args),
+    },
+    {
+      name: 'update_task',
+      description:
+        'Changes a task that Fruitback keeps: its status, its assignee, its priority, its due day and its labels. A field left out does not change, and `null` clears it. A note in a tracker is changed in its tracker.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'The `id` that list_notes gives.' },
+          status: { type: 'string', description: `A status of its site, as \`${OWN_SOURCE}:<key>\`.` },
+          assignee: {
+            type: ['string', 'null'],
+            description: 'The id of a member, as task_choices gives it. `null`: nobody.',
+          },
+          priority: { type: ['string', 'null'], enum: [...TASK_PRIORITIES, null] },
+          dueOn: { type: ['string', 'null'], description: 'A day, YYYY-MM-DD. `null`: no due day.' },
+          labels: {
+            type: 'array',
+            items: { type: 'string' },
+            maxItems: 20,
+            description: 'The ids of its labels, as task_choices gives them: they replace the labels it has.',
+          },
+        },
+        required: ['id'],
+        additionalProperties: false,
+      },
+      call: (args) => updateTask(context, args),
     },
   ];
 }
@@ -228,10 +299,31 @@ function readable(context: AgentToolsContext, site: Site, issue: NoteIssue): boo
  * A note as an agent reads it: the issue as `GET /feedback` gives it, with `id` for `get_note`
  * and its site. The id of the issue in its tracker is `issueId`, for a key that sees the tracker.
  */
-function noteView(site: Site, issue: NoteIssue, seesTracker: boolean): Record<string, unknown> {
+function noteView(
+  site: Site,
+  issue: NoteIssue,
+  seesTracker: boolean,
+  task: TaskFields | undefined,
+): Record<string, unknown> {
   const { id: issueId, ...fields } = seesTracker ? issue : withoutTrackerStatus(withoutTracker(issue, issue.note.id));
 
-  return { id: noteIdOf(site.id, issue.note.id), site: site.id, ...(seesTracker ? { issueId } : {}), ...fields };
+  return {
+    id: noteIdOf(site.id, issue.note.id),
+    site: site.id,
+    ...(seesTracker ? { issueId } : {}),
+    ...fields,
+    ...(task === undefined ? {} : { task: taskView(task) }),
+  };
+}
+
+/**
+ * The fields of a task as an agent reads them (FRU-659): those of the console, with no place in its
+ * column, which only the board reads.
+ */
+function taskView(task: TaskFields): Omit<TaskFields, 'position'> {
+  const { position: _position, ...shown } = task;
+
+  return shown;
 }
 
 /**
@@ -289,11 +381,18 @@ function listNotes(
     const index = context.noteIndex;
     if (site === undefined || index === undefined) return { ok: false, error: NO_SITE };
     const params = new URLSearchParams();
-    for (const field of ['stage', 'q', 'cursor', 'limit'] as const) {
+    for (const field of ['stage', 'q', 'cursor', 'limit', 'assignee', 'priority', 'label', 'due', 'today'] as const) {
       const value = args[field];
       if (typeof value === 'string' || typeof value === 'number') params.set(field, String(value));
       else if (value !== undefined) return { ok: false, error: `Invalid ${field}.` };
     }
+    // FRU-659: the filters of a task, as the console reads them (FRU-655). A key is no account: no `me`.
+    if (params.get('assignee') === 'me')
+      return { ok: false, error: 'Invalid assignee: the id of a member, or `none`.' };
+    if (args.archived === true) params.set('archived', '1');
+    else if (args.archived !== undefined && args.archived !== false) return { ok: false, error: 'Invalid archived.' };
+    // The console sends the day of the browser; an agent that says none reads the day of UTC.
+    if (params.has('due') && !params.has('today')) params.set('today', new Date().toISOString().slice(0, 10));
     const query = queryOf(params, '');
     if (!query.ok) return { ok: false, error: `Invalid ${query.error.replace(/^invalid-/, '')}.` };
     const since = args.since === undefined ? undefined : Date.parse(String(args.since));
@@ -311,12 +410,13 @@ function listNotes(
     const issues = (await contentOf(site, listed.notes)).filter(
       (issue) => readable(context, site, issue) && (status === undefined || issue.status === status),
     );
+    const tasks = new Map(listed.notes.map((note) => [note.note, note.kept?.task]));
 
     return {
       ok: true,
       content: {
         site: site.id,
-        notes: issues.map((issue) => noteView(site, issue, seesTracker)),
+        notes: issues.map((issue) => noteView(site, issue, seesTracker, tasks.get(issue.note.id))),
         ...(listed.next === undefined ? {} : { next: cursorOf(listed.next) }),
       },
     };
@@ -332,8 +432,9 @@ function getNote(context: AgentToolsContext, seesTracker: boolean, args: Record<
     const page = await context.noteIndex.pageOfNote(site.workspace, site.id, key.note);
     const issue = page === undefined ? undefined : (await site.read(page)).find((each) => each.note.id === key.note);
     if (issue === undefined || !readable(context, site, issue)) return { ok: false, error: NO_NOTE };
+    const task = await context.noteIndex.taskOf(site.workspace, site.id, key.note);
 
-    return { ok: true, content: { note: noteView(site, issue, seesTracker) } };
+    return { ok: true, content: { note: noteView(site, issue, seesTracker, task) } };
   });
 }
 
@@ -478,6 +579,30 @@ function replyToNote(context: AgentToolsContext, args: Record<string, unknown>):
   });
 }
 
+type ChosenStatus = { key: string | null; stage: NoteStage };
+
+/** The status of its site that `asked` names, as `postStatus` reads it, or the error of the tool. */
+async function statusOf(
+  context: AgentToolsContext,
+  site: Site,
+  asked: unknown,
+): Promise<{ chosen: ChosenStatus } | { error: string }> {
+  const prefix = `${OWN_SOURCE}:`;
+  if (typeof asked !== 'string' || !asked.startsWith(prefix)) {
+    return { error: `Invalid status: a status of the site, as \`${prefix}<key>\`.` };
+  }
+  const key = asked.slice(prefix.length);
+  const rows = (await context.accounts.siteStatuses(site.workspace, site.id)) ?? [];
+  const row = rows.find((one) => one.source === OWN_SOURCE && one.key === key);
+  if (row?.hidden === true) return { error: 'This status is hidden on its site.' };
+  if (isBuiltIn(OWN_SOURCE, key)) return { chosen: { key: null, stage: key as NoteStage } };
+  if (row !== undefined) return { chosen: { key, stage: row.stage } };
+
+  return { error: 'No status of this site has this key.' };
+}
+
+const IN_TRACKER = 'statuses-not-taken: this note is in a tracker, which sets its status.';
+
 function setNoteStatus(context: AgentToolsContext, args: Record<string, unknown>): Promise<ToolAnswer> {
   return guarded(async () => {
     const prefix = `${OWN_SOURCE}:`;
@@ -485,18 +610,12 @@ function setNoteStatus(context: AgentToolsContext, args: Record<string, unknown>
     if (typeof asked !== 'string' || !asked.startsWith(prefix)) {
       return { ok: false, error: `Invalid status: a status of the site, as \`${prefix}<key>\`.` };
     }
-    const key = asked.slice(prefix.length);
     const found = await writableNote(context, args.id);
     if (found === undefined) return { ok: false, error: NO_NOTE };
     const { site, note, page } = found;
-
-    const rows = (await context.accounts.siteStatuses(site.workspace, site.id)) ?? [];
-    const row = rows.find((one) => one.source === OWN_SOURCE && one.key === key);
-    if (row?.hidden === true) return { ok: false, error: 'This status is hidden on its site.' };
-    let chosen: { key: string | null; stage: NoteStage };
-    if (isBuiltIn(OWN_SOURCE, key)) chosen = { key: null, stage: key as NoteStage };
-    else if (row !== undefined) chosen = { key, stage: row.stage };
-    else return { ok: false, error: 'No status of this site has this key.' };
+    const status = await statusOf(context, site, asked);
+    if ('error' in status) return { ok: false, error: status.error };
+    const { chosen } = status;
 
     for (const target of found.targets) {
       const issue = await findNote(
@@ -507,20 +626,12 @@ function setNoteStatus(context: AgentToolsContext, args: Record<string, unknown>
       );
       if (issue === undefined) continue;
       if (!readable(context, site, issue)) return { ok: false, error: NO_NOTE };
-      if (!(await takesStatuses(context.store, target))) {
-        return { ok: false, error: 'statuses-not-taken: this note is in a tracker, which sets its status.' };
-      }
+      if (!(await takesStatuses(context.store, target))) return { ok: false, error: IN_TRACKER };
       if (!(await chargeKey(context))) return { ok: false, error: LIMITED };
-      const answer = await context.store.setStatus?.({ issue: issue.id, clientId: site.id }, chosen, target);
+      const answer = await writeStatus(context, site, target, issue, chosen);
       if (answer === undefined) break;
       if (answer === 'status-changed') return { ok: false, error: 'The status changed in the console. Try again.' };
       await invalidatePages(context.kv, [page]);
-      const verdicts = site.policy.showComments && (await takesChecks(context.store, target));
-      await indexed(context.noteIndex, (index) =>
-        index.refresh(site.workspace, site.id, placeOf(target), [{ ...issue, stage: answer.stage }], Date.now(), {
-          verdicts,
-        }),
-      );
       await logged(context, site.workspace, {
         key: context.grant.key,
         keyName: context.grant.name,
@@ -535,5 +646,140 @@ function setNoteStatus(context: AgentToolsContext, args: Record<string, unknown>
     }
 
     return { ok: false, error: NO_NOTE };
+  });
+}
+
+/** Writes a status through the store, then the index, as `set_note_status` does. */
+async function writeStatus(
+  context: AgentToolsContext,
+  site: Site,
+  target: ClientConfig | undefined,
+  issue: NoteIssue,
+  chosen: ChosenStatus,
+): Promise<{ stage: NoteStage } | 'status-changed' | undefined> {
+  const answer = await context.store.setStatus?.({ issue: issue.id, clientId: site.id }, chosen, target);
+  if (answer === undefined || answer === 'status-changed') return answer;
+  const verdicts = site.policy.showComments && (await takesChecks(context.store, target));
+  await indexed(context.noteIndex, (index) =>
+    index.refresh(site.workspace, site.id, placeOf(target), [{ ...issue, stage: answer.stage }], Date.now(), {
+      verdicts,
+    }),
+  );
+
+  return answer;
+}
+
+/** The fields of `update_task` (FRU-659): the fields of the console, with no place and no archive. */
+const TASK_FIELDS = ['assignee', 'priority', 'dueOn', 'labels'] as const;
+
+/** Why `setTaskFields` refused, as the agent reads it. */
+const TASK_REFUSED = {
+  'not-found': NO_NOTE,
+  'not-allowed': NO_NOTE,
+  'not-kept': 'fields-not-taken: this note is in a tracker, which keeps its fields.',
+  'not-member': 'No member of this workspace has this assignee id: task_choices lists them.',
+  'unknown-label': 'No label of this workspace has one of these ids: task_choices lists them.',
+} as const;
+
+/**
+ * `update_task` (FRU-659): the fields of a task as `POST …/notes/<note>/task` writes them, and its
+ * status as `set_note_status` writes it. Everything is checked before the first write. The fields
+ * are written first, in one transaction that a refusal leaves untouched; then the status.
+ */
+function updateTask(context: AgentToolsContext, args: Record<string, unknown>): Promise<ToolAnswer> {
+  return guarded(async () => {
+    const asked = Object.fromEntries(TASK_FIELDS.flatMap((field) => (field in args ? [[field, args[field]]] : [])));
+    let change: TaskChange | undefined;
+    if (Object.keys(asked).length > 0) {
+      const read = readTaskChange(asked);
+      if ('invalid' in read) return { ok: false, error: `Invalid ${read.invalid}.` };
+      change = read;
+    }
+    if (change === undefined && args.status === undefined) {
+      return { ok: false, error: 'Nothing to change: give a status, an assignee, a priority, a due day or labels.' };
+    }
+    const found = await writableNote(context, args.id);
+    if (found === undefined) return { ok: false, error: NO_NOTE };
+    const { site, note, page } = found;
+    let chosen: ChosenStatus | undefined;
+    if (args.status !== undefined) {
+      const status = await statusOf(context, site, args.status);
+      if ('error' in status) return { ok: false, error: status.error };
+      chosen = status.chosen;
+    }
+
+    for (const target of found.targets) {
+      const issue = await findNote(
+        context.store,
+        { url: page, clientId: site.id, id: note, by: 'note' },
+        target,
+        site.policy,
+      );
+      if (issue === undefined) continue;
+      if (!readable(context, site, issue)) return { ok: false, error: NO_NOTE };
+      if (chosen !== undefined && !(await takesStatuses(context.store, target))) {
+        return { ok: false, error: IN_TRACKER };
+      }
+      if (!(await chargeKey(context))) return { ok: false, error: LIMITED };
+      const write = { key: context.grant.key, keyName: context.grant.name, site: site.id, note };
+
+      if (change !== undefined) {
+        // The member of a key that writes manages the sites (FRU-461): the right of the console.
+        const set = await context.accounts.setTaskFields(site.workspace, site.id, note, change, {
+          account: '',
+          manages: true,
+        });
+        if (!set.set) return { ok: false, error: TASK_REFUSED[set.reason] };
+        await invalidatePages(context.kv, [page]);
+        await logged(context, site.workspace, { ...write, action: 'task', at: Date.now() });
+      }
+      let stage: NoteStage | undefined;
+      if (chosen !== undefined) {
+        const answer = await writeStatus(context, site, target, issue, chosen);
+        if (answer === undefined) break;
+        if (answer === 'status-changed') {
+          const saved = change === undefined ? '' : 'The fields were saved. ';
+          return { ok: false, error: `${saved}The status changed in the console. Try again.` };
+        }
+        stage = answer.stage;
+        await invalidatePages(context.kv, [page]);
+        await logged(context, site.workspace, {
+          ...write,
+          action: 'status',
+          status: args.status as string,
+          at: Date.now(),
+        });
+      }
+      const task = await context.noteIndex?.taskOf(site.workspace, site.id, note);
+
+      return {
+        ok: true,
+        content: {
+          id: noteIdOf(site.id, note),
+          ...(chosen === undefined ? {} : { status: args.status, stage }),
+          ...(task === undefined ? {} : { task: taskView(task) }),
+        },
+      };
+    }
+
+    return { ok: false, error: NO_NOTE };
+  });
+}
+
+/**
+ * `task_choices` (FRU-659): the labels of the workspace, and its members who are not guests, as the
+ * menu of the console offers them. A key whose member does not read the members gets no member.
+ */
+function taskChoices(context: AgentToolsContext): Promise<ToolAnswer> {
+  return guarded(async () => {
+    const { workspace, role } = context.grant;
+    const labels = await context.accounts.labels(workspace);
+    const members = can(role, 'read-members')
+      ? (await context.accounts.membersOf(workspace, { limit: MAX_TASK_MEMBERS, offset: 0 })).members
+          .filter((member) => member.role !== 'guest')
+          .map((member) => ({ id: member.user.id, name: member.user.name }))
+      : [];
+
+    return { ok: true, content: { labels, members } };
   });
 }

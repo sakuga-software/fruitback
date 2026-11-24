@@ -2853,7 +2853,8 @@ offers no OAuth.
 
 [docs/agents.md](docs/agents.md) is the guide for a team. An agent reads the notes of the sites of its
 agent key through `POST /mcp`, the Streamable
-HTTP transport of MCP. Three tools, all reads: `list_notes`, `get_note`, `notes_as_text`.
+HTTP transport of MCP. Its reads: `list_notes`, `get_note`, `notes_as_text`, and `task_choices`
+where the worker keeps tasks.
 
 - No valid key, no route. No key, a key of another shape, a revoked or expired key, a key whose
   member left or was suspended, and a key of a suspended workspace: `401` with
@@ -2882,9 +2883,10 @@ HTTP transport of MCP. Three tools, all reads: `list_notes`, `get_note`, `notes_
 - What a read costs a store: each page of the answer is one read of the page, through the read
   cache of `GET /feedback`. The rate limit per address applies.
 - A key writes only with the right `write`, and while its member may manage the sites:
-  `reply_to_note` and `set_note_status`. A key `read`, or a key whose member no longer has
+  `reply_to_note`, `set_note_status` and `update_task`. A key `read`, or a key whose member no longer has
   `manage-sites`, is not given them, and `tools/call` refuses them (`-32602`).
-  test:`gives a key read no write tool, and refuses both when it calls them`.
+  test:`gives a key read no write tool, and refuses both when it calls them`,
+  test:`gives a key read the fields of a task and the filters of the console, and no write of a task`.
 - A reply of an agent says that it is one, and never names the member who made the key: its
   first line is `**<name of the key>** via Fruitback · agent`, and a read gives it `by: 'agent'`. A
   person who types that line in a reply of the page does not pass for an agent: what a person typed is
@@ -2892,6 +2894,22 @@ HTTP transport of MCP. Three tools, all reads: `list_notes`, `get_note`, `notes_
   as for a verdict. test:`never reads a reply that a person typed as a reply of an agent`.
 - A status is set only on a note that the worker keeps; a note in a tracker answers
   `statuses-not-taken`.
+- `update_task` changes the status, the assignee, the priority, the due day and the labels
+  of a task the worker keeps, with the right of a role that manages the sites, as the console's
+  `POST …/notes/<note>/task`: the member of a key that writes has it. It reaches only a note the key
+  reads (its sites, `verifiedOnly`). The assignee is a member of the workspace and each label a label
+  of the workspace; another one is refused and nothing is written, the status included. A note in a
+  tracker answers `fields-not-taken` or `statuses-not-taken`, and nothing is written. Each change is
+  one write of the limit, and goes in the log of its key (`task`, and `status` for its status).
+  test:`changes the status and every field of a task, which the console reads, and logs both writes`,
+  test:`refuses an update that is not one, and writes nothing of a refused one`,
+  test:`refuses the fields and the status of a note in a tracker`.
+- `task_choices` gives the labels of the workspace to every key, and its members who are not guests
+  (an id and a name, no address) to a key whose member reads the members: never to a key of a guest.
+  test:`lists the labels and the members a task can be given to, never a guest`.
+- On a worker that keeps no task (`FRUITBACK_TASKS=off`), no key is given `task_choices`,
+  `set_note_status` or `update_task`, and `tools/call` refuses them (`-32602`).
+  test:`gives no tool of a task on a worker that keeps none, and refuses each when called`.
 - Each key writes 30 times a minute at most, and each write is in the log of its key: the
   owner and the admins read it at `GET /console/workspaces/<id>/agent-keys/<key>/writes`, the
   newest 100. The log of a revoked key stays until its workspace goes.

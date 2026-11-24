@@ -458,6 +458,23 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
 
       return rows[0]?.page;
     },
+
+    async taskOf(workspace, site, note) {
+      return run(async (db) => {
+        const rows = await db
+          .select({ row: note_index, connector: { kind: connectors.kind } })
+          .from(note_index)
+          .leftJoin(connectors, eq(connectors.id, note_index.connector_id))
+          .where(
+            and(eq(note_index.workspace_id, workspace), eq(note_index.site_id, site), eq(note_index.note_id, note)),
+          )
+          .limit(1);
+        const [first] = rows;
+        if (first === undefined) return undefined;
+
+        return (await keptOf(db, rows)).get(keyOfNoteId(first.row))?.task;
+      });
+    },
   };
 
   return index;

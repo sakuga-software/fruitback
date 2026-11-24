@@ -4998,3 +4998,29 @@ destination yet when it is off: a note is then refused, and the widget keeps it.
   this read (`readNote` of `ConsoleSeams`), with the store of the request.
 - **The site is routed with no `Origin`**: the request comes from the console, which is no origin of
   the site, and the route of the console checks the reach of the caller before it reads.
+
+## The tools of a task in `/mcp` (FRU-659)
+
+### The rules, in short
+
+- **`list_notes` and `get_note` give the fields of a task in `task`**, as the list of the console
+  does: `list_notes` from the rows of the index it reads (`kept.task`), `get_note` from `taskOf` of
+  the index, the same read (`keptOf`) for one note. The place in its column is left out: only the
+  board reads it. A note in a tracker has no `task`.
+- **`list_notes` takes the filters of the console** (FRU-655) through `queryOf`: `assignee` (an id or
+  `none`), `priority` (one or `none`), `label`, `due` with `today`, and `archived`. A key is no
+  account, so `assignee: 'me'` is refused. With no `today`, the day of UTC: an agent has no browser.
+- **`task_choices` gives the ids**: the labels of the workspace (`labels`), and its members who are
+  not guests (`membersOf`, `MAX_TASK_MEMBERS`, as the menu of the console reads them), an id and a
+  name. A grant whose role does not `read-members` gets no member.
+- **`update_task` writes as the console and `set_note_status` do.** It reads every field with
+  `readTaskChange`, and the status with the reads of `set_note_status`, before any write. The fields
+  go through `setTaskFields`, with `manages: true`: a key that writes has a member with
+  `manage-sites` (FRU-461). Its transaction refuses a member or a label of elsewhere, and writes
+  nothing then. The status goes through `store.setStatus` and the index after. Each part is one row of
+  `agent_writes` (`task`, `status`), and one charge of the limit for the call.
+- **The tools of a task follow the module** (FRU-651): with `FRUITBACK_TASKS=off`, `task_choices`,
+  `set_note_status` and `update_task` are not listed and `tools/call` refuses them. `set_note_status`
+  could only answer `statuses-not-taken` there. `TOOLS_VERSION` is `2`.
+- **`create_task` comes with FRU-657**, the creation of a task by hand: a pull request of its own, on
+  top of that one.

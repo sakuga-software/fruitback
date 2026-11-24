@@ -113,7 +113,7 @@ describe('the write tools of /mcp (FRU-464)', () => {
     const tools = await rpc(world, secret, 'tools/list');
     assert.deepEqual(
       tools.body.result.tools.map((tool: { name: string }) => tool.name),
-      ['list_notes', 'get_note', 'notes_as_text'],
+      ['list_notes', 'get_note', 'notes_as_text', 'task_choices'],
     );
     for (const [name, args] of [
       ['reply_to_note', { id, body: 'Done.' }],

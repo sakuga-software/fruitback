@@ -651,6 +651,7 @@ function Writes({ id, agentKey: key }: { id: string; agentKey: AgentKey }) {
   };
   const what = (write: AgentWrite) => {
     if (write.action === 'reply') return t('Replied to a note');
+    if (write.action === 'task') return t('Changed the fields of a task');
     const status = statusKey(write.status);
 
     return t('Set the status to « {status} »', {

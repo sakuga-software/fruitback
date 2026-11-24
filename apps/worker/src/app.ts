@@ -498,6 +498,8 @@ async function routed(
           accounts,
           kv,
           noteIndex,
+          // FRU-659: the tools of a task follow the module (FRU-651).
+          tasks: served.tasks,
           replyLength: REPLY_LENGTH,
           // FRU-524: a site that the accounts do not read fails one call of a tool, not the request.
           // The tool answers its `StoreError` as an error of the tool.

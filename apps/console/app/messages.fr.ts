@@ -1580,6 +1580,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'An agent that uses this key is refused from its next request, and the key never works again. What it wrote stays in the threads of the notes.':
     'Un agent qui utilise cette clé est refusé dès sa prochaine requête, et la clé ne fonctionne plus jamais. Ce qu’elle a écrit reste dans les fils des notes.',
   'Replied to a note': 'A répondu à une note',
+  'Changed the fields of a task': 'A changé les champs d’une tâche',
   'Set the status to « {status} »': 'A passé le statut à « {status} »',
   'Writes of {name}': 'Écritures de {name}',
   'What this key wrote': 'Ce que cette clé a écrit',
