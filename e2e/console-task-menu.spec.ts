@@ -66,10 +66,13 @@ async function worker(
     membersFail?: { reads: number };
     /** FRU-675: the reads of `GET …/labels` that answer `503` first. */
     labelsFail?: { reads: number };
+    /** FRU-675: the milliseconds each read of `GET …/labels` but the first one waits. */
+    labelsSlow?: number;
   } = {},
 ): Promise<Sent[]> {
   const sent: Sent[] = [];
   const labels = [{ id: 'l1', name: 'Bug', color: '#dc2626' }];
+  let labelReads = 0;
   const notes = [
     {
       id: 'n1',
@@ -111,6 +114,14 @@ async function worker(
             options.labelsFail.reads -= 1;
 
             return route.fulfill({ status: 503, json: { error: 'store-unavailable' } });
+          }
+          labelReads += 1;
+          if (options.labelsSlow !== undefined && labelReads > 1) {
+            const now = [...labels];
+
+            return new Promise<void>((resolve) => setTimeout(resolve, options.labelsSlow)).then(() =>
+              route.fulfill({ json: { labels: now } }),
+            );
           }
 
           return route.fulfill({ json: { labels } });
@@ -320,4 +331,24 @@ test('an owner whose labels did not load is not offered « New label… » alone
   await p.getByRole('menuitem', { name: 'Labels' }).hover();
   await expect(p.getByRole('menuitemcheckbox', { name: 'Bug' })).toBeVisible();
   await expect(p.getByRole('menuitemcheckbox', { name: 'New label…' })).toBeVisible();
+});
+
+test('a new label keeps the labels the screen has while they are read again (FRU-675)', async ({ page: p }) => {
+  // The read after a new label waits 1.5 s. The filter « Label » of the screen, under the dialog,
+  // showed nothing meanwhile: the labels went back to « loading ».
+  await worker(p, { labelsSlow: 1500 });
+  await p.goto(`${CONSOLE}/w/w1/notes?label=l1`);
+  const filter = p.getByRole('button', { name: 'Bug Label' });
+  await expect(filter).toBeVisible();
+  await row(p, 'The headline').getByText('The headline').click({ button: 'right' });
+  await p.getByRole('menuitem', { name: 'Labels' }).hover();
+  await p.getByRole('menuitemcheckbox', { name: 'New label…' }).click();
+  const dialog = p.getByRole('dialog', { name: 'New label' });
+  await dialog.getByRole('textbox', { name: 'Name' }).fill('Mobile');
+  await dialog.getByRole('button', { name: 'Add the label' }).click();
+
+  await p.waitForTimeout(600);
+  expect(await filter.count()).toBe(1);
+  await expect(dialog).toBeHidden();
+  await expect(row(p, 'The headline').locator('[data-task-marks]')).toContainText('Mobile');
 });
