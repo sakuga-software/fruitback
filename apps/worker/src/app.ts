@@ -31,7 +31,7 @@ import { handleConsole } from './console-routes.ts';
 import { handlePairing, handleSessionRoutes } from './session-routes.ts';
 import { CHECK_PATH, REPLY_PATH, STATUS_PATH, postCheck, postReply, postStatus } from './reply-routes.ts';
 import { EDIT_PATH, PLACE_PATH, WITHDRAW_PATH, postEdit, postMove, postWithdraw } from './edit-routes.ts';
-import { getFeedback, postFeedback } from './feedback-routes.ts';
+import { getFeedback, postFeedback, readPage } from './feedback-routes.ts';
 import { MCP_PATH, handleMcp } from './mcp.ts';
 import { KEY_PREFIX, resolveAgentKey } from './agent-keys.ts';
 import { handleOAuth, isOAuthRoute, issuerOf, resolveAccessToken, resourceMetadataUrl } from './oauth.ts';
@@ -401,8 +401,48 @@ async function routed(
     );
   }
 
+  // Resolved once here, not inside each handler: see `RequestContext.store`.
+  const storeOfRequest = (): NoteStore => {
+    const own = context.store ?? storeFor(served);
+
+    // FRU-121: a site that chose a destination writes and reads through the connector of its workspace.
+    return accounts === undefined
+      ? own
+      : createRoutedStore(
+          own,
+          createConnectorStores(accounts, served.secretsKey, Date.now, served.linearOAuth, {
+            // FRU-331: a delivery carries the address of a file on this worker, which needs both.
+            filesReachable: served.publicUrl !== undefined && served.secretsKey !== undefined,
+            ...githubAppOf(context, served),
+            ...(served.trackerApps === undefined ? {} : { trackerApps: served.trackerApps }),
+            ...(context.trackerHttp === undefined ? {} : { trackerHttp: context.trackerHttp }),
+          }),
+          { tasks: served.tasks },
+        );
+  };
+
   if (consoleRoute && accounts !== undefined) {
     return handleConsole(request, pathname, {
+      // FRU-653: one note as the page reads it, for the page of a task in the console.
+      readNote: async (workspace, site, note) => {
+        const page = await noteIndex?.pageOfNote(workspace, site, note);
+        if (page === undefined) return undefined;
+        // Read as an agent reads it, with no `Origin`: the console is no origin of the site, and the
+        // route is the rights of the console, checked before this read.
+        const route = await routeFor(new Request(request.url), served, site);
+        if (!route.ok) return undefined;
+        const issues = await readPage({
+          store: watchedStore(storeOfRequest(), accounts),
+          kv,
+          noteIndex,
+          client: route.client,
+          clientId: site,
+          url: page,
+          policy: route.policy,
+        });
+
+        return issues.find((issue) => issue.note.id === note);
+      },
       served,
       context,
       accounts,
@@ -428,26 +468,6 @@ async function routed(
       ...githubAppOf(context, served),
     });
   }
-
-  // Resolved once here, not inside each handler: see `RequestContext.store`.
-  const storeOfRequest = (): NoteStore => {
-    const own = context.store ?? storeFor(served);
-
-    // FRU-121: a site that chose a destination writes and reads through the connector of its workspace.
-    return accounts === undefined
-      ? own
-      : createRoutedStore(
-          own,
-          createConnectorStores(accounts, served.secretsKey, Date.now, served.linearOAuth, {
-            // FRU-331: a delivery carries the address of a file on this worker, which needs both.
-            filesReachable: served.publicUrl !== undefined && served.secretsKey !== undefined,
-            ...githubAppOf(context, served),
-            ...(served.trackerApps === undefined ? {} : { trackerApps: served.trackerApps }),
-            ...(context.trackerHttp === undefined ? {} : { trackerHttp: context.trackerHttp }),
-          }),
-          { tasks: served.tasks },
-        );
-  };
 
   // FRU-463: the remote MCP server, for an agent key of a workspace (FRU-461).
   if (pathname === MCP_PATH) {

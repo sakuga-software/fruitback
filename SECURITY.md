@@ -2127,6 +2127,17 @@ seen » is shown to owners and admins only.
 - On a worker that keeps no task (`FRUITBACK_TASKS=off`), every one of these writes is
   `403 tasks-off`. test:`changes nothing on a worker that keeps no task, and still reads the labels`.
 
+### One note, read whole in the console (FRU-653)
+
+- `GET /console/workspaces/<id>/notes/<note>` reads one note as its page reads it (`readPage`, the
+  read of `GET /feedback` and its cache): its text, its element and its replies. Whoever reads the
+  notes of the workspace reads it; a guest reads only a note of a site shared with them, and any other
+  is `404`. A guest reads nothing of the tracker, as in the list.
+  test:`reads the whole note, its text and its element, for a member of the workspace`,
+  test:`answers 404 to a guest of another site, to a note that is not one, and to any method but GET`.
+- The read takes the site with no `Origin`, as a tool of MCP does: the console is no origin of the
+  site, and its own rights are checked before the read.
+
 ### The image of the console (FRU-222)
 
 The console is static files behind nginx, in an image of its own. **It holds no secret**: nothing

@@ -3,7 +3,7 @@ import { t } from '../i18n';
 import { useLocale } from '../use-locale';
 import { type StatusChoice, statusName } from '../note-status';
 import { STAGE_NAMES, type Stage } from '../stages';
-import { MenuTree, type TreeBranch } from '../ui';
+import { LinkButton, MenuTree, type TreeBranch } from '../ui';
 import { Confirmation } from '../confirm';
 import { type IndexedNote, type TaskFields } from './notes-model';
 
@@ -152,7 +152,22 @@ export type TaskMenuSeam = {
   canAddLabel: boolean;
   statusesOf: (note: IndexedNote) => readonly StatusChoice[] | undefined;
   actionsOf: (note: IndexedNote) => TaskActions;
+  /** FRU-653: opens the page of a task, from its text. Absent: the text opens nothing. */
+  openTask?: (note: IndexedNote) => void;
 };
+
+/** The text of a note in a row or a card: a link to the page of its task, when there is one (FRU-653). */
+export function NoteText({ note, children }: { note: IndexedNote; children: ReactNode }) {
+  useLocale();
+  const seam = useContext(TaskMenuContext);
+  if (seam?.openTask === undefined) return <>{children}</>;
+  const open = seam.openTask;
+
+  return (
+    // The text it shows is its name: a name of its own would not be the words a person sees (WCAG 2.5.3).
+    <LinkButton onClick={() => open(note)}>{children}</LinkButton>
+  );
+}
 
 export const TaskMenuContext = createContext<TaskMenuSeam | undefined>(undefined);
 

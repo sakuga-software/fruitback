@@ -4988,3 +4988,13 @@ destination yet when it is off: a note is then refused, and the widget keeps it.
   others, and the counts read the same filter.
 - **Not here yet**: the sorts by priority or by day, and the groups by assignee, priority or label. A
   page of the list is read by date with a cursor; another order needs its own cursor.
+
+## One note, read whole for the console (FRU-653)
+
+### The rules, in short
+
+- **`GET …/notes/<note>` reads the note through `readPage`**, as `get_note` of MCP does: the page of
+  the note from the index, then the read of that page, with its cache. `app.ts` gives the console
+  this read (`readNote` of `ConsoleSeams`), with the store of the request.
+- **The site is routed with no `Origin`**: the request comes from the console, which is no origin of
+  the site, and the route of the console checks the reach of the caller before it reads.

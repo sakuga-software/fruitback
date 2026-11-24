@@ -10,7 +10,7 @@ import { type StatusChoice } from '../note-status';
 import { type IndexedNote } from './notes-model';
 import { NoteStatus, Place, excerptOf } from './note-parts';
 import { TaskMarks } from './task-marks';
-import { useTaskMenu } from './task-menu';
+import { NoteText, useTaskMenu } from './task-menu';
 
 /**
  * A note on the board (FRU-436): what a row of the table says, one under the other.
@@ -51,7 +51,9 @@ export function NoteCard({
     <div className="flex flex-col gap-[8px]" onContextMenu={taskMenu.onContextMenu} onKeyDown={taskMenu.onKeyDown}>
       <div>
         <div className="flex items-start gap-[8px] text-body">
-          <span className="line-clamp-3 min-w-0 flex-1 [overflow-wrap:anywhere]">{excerptOf(note.excerpt)}</span>
+          <span className="line-clamp-3 min-w-0 flex-1 [overflow-wrap:anywhere]">
+            <NoteText note={note}>{excerptOf(note.excerpt)}</NoteText>
+          </span>
           {/* At the right: the text of every card of a column starts at one edge, with a select or not. */}
           {settable ? (
             <span className="-my-[4px] flex h-[28px] w-[28px] flex-none items-center justify-center">

@@ -29,6 +29,7 @@ import { NotesTable } from '../parts/notes-table';
 import { NoteCard } from '../parts/note-card';
 import { TaskMenuContext, dayFromToday } from '../parts/task-menu';
 import { TASK_NOT_SAVED, TASK_PROBLEMS, useTaskSeam } from '../parts/task-seam';
+import { TaskPanel } from '../parts/task-panel';
 
 /** FRU-655: the filters on the fields of the tasks Fruitback keeps. */
 const TASK_FILTERS = ['assignee', 'priority', 'label', 'due'] as const;
@@ -257,9 +258,28 @@ export default function Notes() {
     read,
   });
 
+  // FRU-653: the page of a task, in the address: a link opens it, Escape and « Back » close it.
+  const opened = params.get('task') ?? undefined;
+  const openTask = (note: IndexedNote) => {
+    const next = new URLSearchParams(params);
+    next.set('task', note.id);
+    setParams(next);
+  };
+  const closeTask = () => {
+    const next = new URLSearchParams(params);
+    next.delete('task');
+    setParams(next);
+  };
+
   return (
-    <TaskMenuContext.Provider value={tasks.seam}>
+    <TaskMenuContext.Provider value={{ ...tasks.seam, openTask }}>
       {tasks.dialog}
+      <TaskPanel
+        id={opened}
+        listed={typeof shown === 'object' ? shown.notes.find((note) => note.id === opened) : undefined}
+        base={base}
+        onClose={closeTask}
+      />
       <PageHead
         title={t('Notes')}
         lead={t('Every note left on the sites of {workspace}, and where it went.', { workspace: workspace.name })}

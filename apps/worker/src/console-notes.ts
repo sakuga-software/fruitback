@@ -1,3 +1,4 @@
+import type { NoteIssue } from '@fruitback/shared';
 import { type DoneNoticeSeams, sendDoneNotices } from './done-notices.ts';
 import { json } from './http.ts';
 import { requestAgent } from './agent-triggers.ts';
@@ -61,6 +62,8 @@ export type NotesContext = {
   noteIndex: NoteIndex | undefined;
   /** Whether this worker keeps tasks (FRU-651). `off`: no status of a note changes here. */
   tasks: 'on' | 'off';
+  /** FRU-653: one note as its page reads it. Absent: `GET …/notes/<note>` answers 404. */
+  readNote?: (workspace: string, site: string, note: string) => Promise<NoteIssue | undefined>;
   /** Who to tell when a note is done (FRU-604). */
   done?: DoneNoticeSeams;
   accounts: Pick<
