@@ -364,7 +364,10 @@ Routes under `/console/workspaces/<id>/sites/<site>/statuses`, all `manage-sites
   offers only what the list read, so a key it sends that is gone was removed in between.
 - **A note the worker keeps is one in Fruitback or sent on to an address** (a `rest` connector, whose
   notes the index places at the connector, as `FB-<id>`; heavy review of #505). Its row of `notes` must
-  be of the same site and hold the same note: a tracker can name an issue `FB-12` too.
+  be of the same site and hold the same note: a tracker can name an issue `FB-12` too. Its row of the
+  index takes the new stage with the same rule (`restageIndex`, FRU-671): with no connector by its
+  reference, or at a `rest` connector by its reference and its note. Before FRU-671 only the first
+  moved, and a note of an address stayed in its old group of the list until its page was read again.
 - **`GET …/notes` gives the status of each note the worker keeps** (`own:<key>`, read in `notes` for
   the page in one statement), `canSetStatus`, and `statuses`: per site with such a note, the statuses
   of the worker's store, hidden ones marked `hidden`. A note of a tracker gets none of the three, and

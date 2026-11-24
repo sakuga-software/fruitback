@@ -102,8 +102,11 @@ import {
   readJson,
   stageOf,
   threadsOf,
+  widgetIdOf,
 } from './note-rows.ts';
 import { excerptOf } from './notes-index.ts';
+import { changedTaskFields, ownStatusName } from './note-events.ts';
+import { queueTaskEvents } from './note-events-postgres.ts';
 import { StoreError } from './store.ts';
 import { MAX_LABELS, type TaskChange, type TaskLabel } from './task-fields.ts';
 
@@ -386,18 +389,40 @@ function siteStatusOf(row: typeof statuses.$inferSelect): SiteStatus {
  * the list and the counts of the console for good. A note of the worker is `FB-<id>` there, with no
  * connector; `checked_at` is now, since the worker is the store that just set the stage.
  */
-async function restageIndex(db: Db, site: string, ids: readonly number[], stage: string, now: number): Promise<void> {
-  if (ids.length === 0) return;
+async function restageIndex(
+  db: Db,
+  site: string,
+  rows: readonly { id: number; note: string }[],
+  stage: string,
+  now: number,
+): Promise<void> {
+  if (rows.length === 0) return;
+  // FRU-671: the rule of `keptRowOf`. A note in Fruitback names no connector; a note sent on to an
+  // address names a `rest` connector, and its row is this very note only with the id the widget gave
+  // it: a row of a tracker that names an issue `FB-<n>` keeps the stage of its tracker.
+  const addresses = db.select({ id: connectors.id }).from(connectors).where(eq(connectors.kind, 'rest'));
   await db
     .update(note_index)
     .set({ stage, checked_at: now })
     .where(
       and(
         eq(note_index.site_id, site),
-        isNull(note_index.connector_id),
-        inArray(
-          note_index.reference,
-          ids.map((id) => identifierFor(id)),
+        or(
+          and(
+            isNull(note_index.connector_id),
+            inArray(
+              note_index.reference,
+              rows.map((row) => identifierFor(row.id)),
+            ),
+          ),
+          and(
+            inArray(note_index.connector_id, addresses),
+            or(
+              ...rows.map((row) =>
+                and(eq(note_index.reference, identifierFor(row.id)), eq(note_index.note_id, row.note)),
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -512,7 +537,10 @@ async function ownStatusOf(
   return row === undefined ? 'unknown-status' : { key, stage: row.stage as NoteStage };
 }
 
-/** Puts a kept note in a status, and its row of the index in its stage. */
+/**
+ * Puts a kept note in a status, and its row of the index in its stage. FRU-660: the address of the
+ * note is told, in this transaction, and not for the status the note is in already.
+ */
 async function writeStatus(
   db: Db,
   site: string,
@@ -520,11 +548,35 @@ async function writeStatus(
   chosen: { key: string | null; stage: NoteStage },
   now: number,
 ): Promise<void> {
+  const [before] = await db
+    .select({ status: notes.status_key, stage: notes.stage, payload: notes.payload })
+    .from(notes)
+    .where(and(eq(notes.id, id), eq(notes.client_id, site)))
+    .for('update');
   await db
     .update(notes)
     .set({ status_key: chosen.key, stage: chosen.stage, updated_at: now })
     .where(and(eq(notes.id, id), eq(notes.client_id, site)));
-  await restageIndex(db, site, [id], chosen.stage, now);
+  if (before === undefined) return;
+  await restageIndex(db, site, [{ id, note: widgetIdOf(before.payload) }], chosen.stage, now);
+  const [from, to] = [ownStatusName(before.status, before.stage), ownStatusName(chosen.key, chosen.stage)];
+  if (from === to) return;
+  await queueTaskEvents(
+    db,
+    site,
+    [
+      {
+        row: id,
+        note: widgetIdOf(before.payload),
+        change: {
+          event: 'note.status_changed',
+          status: { from, to },
+          stage: { from: before.stage as NoteStage, to: chosen.stage },
+        },
+      },
+    ],
+    now,
+  );
 }
 
 /**
@@ -556,7 +608,11 @@ async function namedOf(
   return undefined;
 }
 
-/** Writes the fields of a kept task, and the copies the lists read in the index (FRU-665, FRU-655). */
+/**
+ * Writes the fields of a kept task, and the copies the lists read in the index (FRU-665, FRU-655).
+ * FRU-660: the address of the note is told which fields changed, in this transaction, and not when
+ * none did.
+ */
 async function writeTaskFields(
   db: Db,
   workspace: string,
@@ -566,6 +622,17 @@ async function writeTaskFields(
   change: TaskChange,
   now: number,
 ): Promise<void> {
+  const [before] = await db
+    .select({ assignee: notes.assignee_account_id, priority: notes.priority, dueOn: notes.due_on })
+    .from(notes)
+    .where(and(eq(notes.id, id), eq(notes.client_id, site)))
+    .for('update');
+  const labelsBefore =
+    change.labels === undefined
+      ? []
+      : (await db.select({ id: note_labels.label_id }).from(note_labels).where(eq(note_labels.note_id, id))).map(
+          (one) => one.id,
+        );
   await db
     .update(notes)
     .set({
@@ -595,6 +662,10 @@ async function writeTaskFields(
       .update(note_index)
       .set(mirrored)
       .where(and(eq(note_index.workspace_id, workspace), eq(note_index.site_id, site), eq(note_index.note_id, noteId)));
+  }
+  const fields = before === undefined ? [] : changedTaskFields({ ...before, labels: labelsBefore }, change);
+  if (fields.length > 0) {
+    await queueTaskEvents(db, site, [{ row: id, note: noteId, change: { event: 'note.updated', fields } }], now);
   }
 }
 
@@ -1875,12 +1946,12 @@ export function createPostgresAccountStore(database: Database): AccountStore {
             .update(notes)
             .set({ stage: status.stage, updated_at: now })
             .where(and(eq(notes.client_id, site), eq(notes.status_key, status.key), ne(notes.stage, status.stage)))
-            .returning({ id: notes.id, page: notes.page_url });
+            .returning({ id: notes.id, page: notes.page_url, payload: notes.payload });
           pages = moved.map((row) => row.page);
           await restageIndex(
             db,
             site,
-            moved.map((row) => row.id),
+            moved.map((row) => ({ id: row.id, note: widgetIdOf(row.payload) })),
             status.stage,
             now,
           );
@@ -1948,18 +2019,42 @@ export function createPostgresAccountStore(database: Database): AccountStore {
             if (inUse > 0) return { removed: false as const, reason: 'in-use' as const, notes: inUse };
           } else {
             const now = Date.now();
+            // FRU-660: the stage of each note before, for its event. The site is held for update, so
+            // no status of its notes changes between this read and the write.
+            const before = new Map(
+              (await db.select({ id: notes.id, stage: notes.stage }).from(notes).where(held)).map((row) => [
+                row.id,
+                row.stage,
+              ]),
+            );
             const changed = await db
               .update(notes)
               .set({ status_key: target.key, stage: target.stage, updated_at: now })
               .where(held)
-              .returning({ id: notes.id, page: notes.page_url });
+              .returning({ id: notes.id, page: notes.page_url, payload: notes.payload });
             moved = changed.length;
             pages = changed.map((row) => row.page);
             await restageIndex(
               db,
               site,
-              changed.map((row) => row.id),
+              changed.map((row) => ({ id: row.id, note: widgetIdOf(row.payload) })),
               target.stage,
+              now,
+            );
+            // Each note moved out of the status removed is a status changed: one event for each.
+            const to = ownStatusName(target.key, target.stage);
+            await queueTaskEvents(
+              db,
+              site,
+              changed.map((row) => ({
+                row: row.id,
+                note: widgetIdOf(row.payload),
+                change: {
+                  event: 'note.status_changed' as const,
+                  status: { from: ownStatusName(key, before.get(row.id) ?? target.stage), to },
+                  stage: { from: (before.get(row.id) ?? target.stage) as NoteStage, to: target.stage as NoteStage },
+                },
+              })),
               now,
             );
           }

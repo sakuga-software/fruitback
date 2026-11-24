@@ -206,9 +206,9 @@ function receivingStore(
   /** FRU-624: whether this note is sent. A note it does not take is kept, and goes nowhere else. */
   takes: (note: Note) => boolean = () => true,
 ): NoteStore {
-  // An address only receives: it sends no reply back, so a site of it takes none (FRU-257), and no
-  // verdict (FRU-294). An edit and a withdrawal are kept here, and the address is told by
-  // `note.edited` and `note.withdrawn` (FRU-605).
+  // A receiver takes no verdict (FRU-294), and no reply here: `createConnectorStores` gives an address
+  // the reply of the own store back (FRU-660). An edit and a withdrawal are kept here, and the address
+  // is told by `note.edited` and `note.withdrawn` (FRU-605).
   const { reply: _reply, check: _check, ...noReply } = own;
   /**
    * Queues what the author did to a note already sent (FRU-605), ids only. The site is the one the
@@ -410,7 +410,15 @@ export function createConnectorStores(
         withdrawalsFor: _withdrawalsFor,
         ...noEdit
       } = told;
-      const receiving: NoteStore = takes === undefined ? told : noEdit;
+      // FRU-660: an address takes a reply, kept in the worker's own store, whose transaction queues
+      // `note.replied` for it: the thread is read from the worker, and the address is told. A workspace
+      // that hides the replies of this connector takes none (FRU-102). Slack takes none: a channel
+      // keeps its copy, and cannot read an id.
+      let receiving: NoteStore = noEdit;
+      if (takes === undefined) {
+        const replies = kept.settings.showComments && own.reply !== undefined;
+        receiving = replies ? { ...told, reply: own.reply as NonNullable<NoteStore['reply']> } : told;
+      }
       if (filesReachable) return receiving;
       // Takes no file, and never queues one: the route refuses files before it (`409`), and a call
       // that would still bring some sends the note alone, with no file said to wait (raised in review).

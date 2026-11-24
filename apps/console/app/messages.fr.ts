@@ -1115,6 +1115,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Page {page}': 'Page {page}',
   'The notes did not load': 'Les notes ne se sont pas chargées',
   'The members did not load': 'Les membres ne se sont pas chargés',
+  'The members did not load.': 'Les membres ne se sont pas chargés.',
   'Your members are safe.': 'Vos membres ne sont pas perdus.',
   'Your notes are safe.': 'Vos notes ne sont pas perdues.',
   'No note yet. Notes show here as soon as someone leaves one on a site of {workspace}.':
@@ -1646,6 +1647,9 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Note edited by its author': 'Note modifiée par son auteur',
   'Note withdrawn by its author': 'Note retirée par son auteur',
   'Note moved by its author': 'Note déplacée par son auteur',
+  'Status of the task changed': 'Statut de la tâche changé',
+  'Reply to the note': 'Réponse à la note',
+  'Fields of the task changed': 'Champs de la tâche changés',
   'This address is not in the workspace any more. Choose another one.':
     'Cette adresse n’est plus dans l’espace de travail. Choisissez-en une autre.',
   'Only an owner or an admin of the workspace starts an agent from a site.':

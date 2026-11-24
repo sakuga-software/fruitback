@@ -16,6 +16,8 @@ import {
   toNoteIssue,
   widgetIdOf,
 } from './note-rows.ts';
+import { ownStatusName } from './note-events.ts';
+import { queueTaskEvents } from './note-events-postgres.ts';
 import { checkText, editText, moveText, replyText, withdrawText } from './reply-text.ts';
 import {
   type BatchAnswer,
@@ -156,7 +158,7 @@ export function createPostgresNoteStore(database: Database): NoteStore {
           const id = Number(target.issue);
           if (!Number.isSafeInteger(id)) return undefined;
           const [note] = await tx
-            .select({ id: notes.id })
+            .select({ id: notes.id, payload: notes.payload })
             .from(notes)
             .where(
               and(
@@ -172,6 +174,21 @@ export function createPostgresNoteStore(database: Database): NoteStore {
             .values({ note_id: id, author: null, body: replyText(reply, policy.locale), created_at: now })
             .returning({ id: note_comments.id, body: note_comments.body });
           if (row === undefined) throw new StoreError('PostgreSQL kept a reply and answered no number for it');
+          // FRU-660: the address of the note is told, in this transaction, by the id of the reply.
+          if (target.clientId !== undefined) {
+            await queueTaskEvents(
+              tx,
+              target.clientId,
+              [
+                {
+                  row: id,
+                  note: widgetIdOf(note.payload),
+                  change: { event: 'note.replied', reply: { id: String(row.id) } },
+                },
+              ],
+              now,
+            );
+          }
 
           return { id: String(row.id), body: row.body, createdAt: new Date(now).toISOString() };
         }),
@@ -247,16 +264,37 @@ export function createPostgresNoteStore(database: Database): NoteStore {
           // The stage before, under a lock of the row: two moves at once read it one after the other,
           // so only one of them moves the note into To do (FRU-468: one call of its trigger).
           const [before] = await tx
-            .select({ stage: notes.stage })
+            .select({ stage: notes.stage, status: notes.status_key, payload: notes.payload })
             .from(notes)
             .where(and(eq(notes.id, id), eq(notes.client_id, target.clientId)))
             .for('update');
           if (before === undefined) return undefined;
+          const now = Date.now();
           const [note] = await tx
             .update(notes)
-            .set({ status_key: status.key, stage, updated_at: Date.now() })
+            .set({ status_key: status.key, stage, updated_at: now })
             .where(and(eq(notes.id, id), eq(notes.client_id, target.clientId)))
             .returning({ stage: notes.stage, page: notes.page_url });
+          // FRU-660: the address of the note is told, in this transaction. A status chosen again tells nothing.
+          const [from, to] = [ownStatusName(before.status, before.stage), ownStatusName(status.key, stage)];
+          if (note !== undefined && from !== to) {
+            await queueTaskEvents(
+              tx,
+              target.clientId,
+              [
+                {
+                  row: id,
+                  note: widgetIdOf(before.payload),
+                  change: {
+                    event: 'note.status_changed',
+                    status: { from, to },
+                    stage: { from: stageOf(before.stage), to: stageOf(note.stage) },
+                  },
+                },
+              ],
+              now,
+            );
+          }
 
           return note === undefined
             ? undefined

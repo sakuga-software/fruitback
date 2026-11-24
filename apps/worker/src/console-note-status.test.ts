@@ -241,7 +241,7 @@ describe('the status of a note, chosen in the console (FRU-384)', () => {
   });
 
   it('takes the note of a site that sends to an address: the worker keeps it too (heavy review of #505)', async () => {
-    const { world, workspace, bob, rest, note } = await aNote({ rest: true });
+    const { world, workspace, site, bob, rest, note } = await aNote({ rest: true });
     // The index says where the note went: the connector of the address, as `FB-<id>`.
     assert.deepEqual(
       await rowsOf(world.database, `SELECT place, connector_id, reference LIKE 'FB-%' AS kept FROM note_index`),
@@ -256,6 +256,34 @@ describe('the status of a note, chosen in the console (FRU-384)', () => {
       body: { status: 'own:waiting', stage: TODO },
     });
     assert.deepEqual(await stored(world), [{ stage: TODO, status_key: 'waiting' }]);
+    // FRU-671: the list reads the index, which follows the status of a note sent on to an address too.
+    assert.deepEqual(await indexed(world, site), [{ stage: TODO }]);
+    const [moved] = (await listed(world, workspace, bob.token)).notes;
+    assert.equal(moved?.stage, TODO);
+    assert.equal(moved?.status, 'own:waiting');
+  });
+
+  it('moves the index of the notes of an address with the stage of their status (FRU-671)', async () => {
+    const { world, workspace, site, bob, note } = await aNote({ rest: true });
+    assert.equal((await choose(world, workspace, note, 'own:waiting', bob.token)).status, 200);
+    // The status the team added moves to another stage: its notes, and their rows of the index, follow.
+    const saved = await world.accounts.putSiteStatus(workspace, site, {
+      source: 'own',
+      key: 'waiting',
+      stage: 'progress' as never,
+      name: 'Waiting',
+      color: '#2563eb',
+      textColor: null,
+      position: 0,
+      origin: 'team',
+      hidden: false,
+    });
+    assert.equal(saved.saved, true);
+    assert.deepEqual(await indexed(world, site), [{ stage: 'progress' }]);
+    // Removed, with its notes moved to Done: the same.
+    const removed = await world.accounts.removeSiteStatus(workspace, site, { source: 'own', key: 'waiting' }, 'done');
+    assert.equal(removed.removed, true);
+    assert.deepEqual(await indexed(world, site), [{ stage: DONE }]);
   });
 
   it('leaves to its tracker a note it named FB-<n>, the number of another note of the site', async () => {
@@ -296,6 +324,20 @@ describe('the status of a note, chosen in the console (FRU-384)', () => {
         kind,
       );
       assert.deepEqual(await stored(world), [{ stage: DEFAULT_NOTE_STAGE, status_key: null }]);
+      // FRU-671: the kept note moves; the row of the tracker that names it FB-<n> keeps its stage.
+      const kept = noteIdOf(site, 'sd_1');
+      assert.equal((await choose(world, workspace, kept, 'own:waiting', alice.token)).status, 200, kind);
+      assert.deepEqual(
+        await rowsOf(
+          world.database,
+          `SELECT note_id, stage FROM note_index WHERE site_id = '${site}' ORDER BY note_id`,
+        ),
+        [
+          { note_id: 'sd_1', stage: TODO },
+          { note_id: 'sd_2', stage: DEFAULT_NOTE_STAGE },
+        ],
+        kind,
+      );
     }
   });
 

@@ -429,6 +429,8 @@ export type DeliveryOutcome =
  * What a delivery sends (FRU-468): a note to its place, or the call of a trigger that starts an
  * agent, which carries ids only. Only the first is the place of a note. `note.edited` (FRU-605): the
  * author changed the text of a note already sent, ids only too; `note.withdrawn`: they withdrew it; `note.moved`: they moved it.
+ * `note.status_changed`, `note.replied` and `note.updated` (FRU-660): a status, a reply or a field of
+ * the task changed, ids and names only (`note-events.ts`).
  */
 export const DELIVERY_EVENTS = [
   'note.created',
@@ -436,6 +438,9 @@ export const DELIVERY_EVENTS = [
   'note.edited',
   'note.moved',
   'note.withdrawn',
+  'note.status_changed',
+  'note.replied',
+  'note.updated',
 ] as const;
 export type DeliveryEvent = (typeof DELIVERY_EVENTS)[number];
 
