@@ -1116,6 +1116,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'The notes did not load': 'Les notes ne se sont pas chargées',
   'The members did not load': 'Les membres ne se sont pas chargés',
   'The members did not load.': 'Les membres ne se sont pas chargés.',
+  'The labels did not load.': 'Les labels ne se sont pas chargés.',
   'Your members are safe.': 'Vos membres ne sont pas perdus.',
   'Your notes are safe.': 'Vos notes ne sont pas perdues.',
   'No note yet. Notes show here as soon as someone leaves one on a site of {workspace}.':
