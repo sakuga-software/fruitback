@@ -106,10 +106,11 @@ export function useTaskCreate({
 
   const open = (ask: NewTaskAsk = {}) => {
     setProblem(undefined);
+    // The words typed stay; the status is the one of where « New task » was pressed, or none.
     setDraft((was) => ({
       ...was,
       ...(ask.site === undefined ? {} : { site: ask.site }),
-      ...(ask.status === undefined ? {} : { status: ask.status }),
+      status: ask.status ?? '',
     }));
     setOpen(true);
   };
@@ -137,8 +138,8 @@ export function useTaskCreate({
       setProblem(problemOf(answer, CREATE_PROBLEMS, NOT_CREATED));
       return;
     }
-    // Written: the draft goes, the site and the status stay for the next task.
-    setDraft((was) => ({ ...EMPTY, site: was.site, status: was.status }));
+    // Written: the draft goes, the site stays for the next task.
+    setDraft((was) => ({ ...EMPTY, site: was.site }));
     setOpen(false);
     onCreated(answer.data.id);
   }

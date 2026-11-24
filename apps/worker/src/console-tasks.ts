@@ -3,6 +3,7 @@ import { requestAgent } from './agent-triggers.ts';
 import { readJsonObject } from './bounded-body.ts';
 import { json } from './http.ts';
 import { invalidatePages, withoutTracker } from './note-helpers.ts';
+import { NO_PAGE } from './note-rows.ts';
 import { type NotesContext, noteIdOf } from './console-notes.ts';
 import { readLabel, readNewTask, readTaskChange } from './task-fields.ts';
 import { withoutTrackerStatus } from './site-statuses.ts';
@@ -46,9 +47,11 @@ export async function handleTasks(
       return json(404, { error: 'not-found' }, headers);
     }
     // FRU-657: a task written by hand has no page to read it on: the store of the worker answers it.
-    const written = await context.accounts.readTask(context.workspace, note.site, note.note, {
-      account: context.account,
-    });
+    // The index says which one it is, so a note of a page costs no read of the store more.
+    const written =
+      (await context.noteIndex?.pageOfNote(context.workspace, note.site, note.note)) === NO_PAGE
+        ? await context.accounts.readTask(context.workspace, note.site, note.note, { account: context.account })
+        : undefined;
     if (written !== undefined) {
       return json(
         200,
