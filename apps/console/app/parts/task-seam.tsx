@@ -10,7 +10,7 @@ import { Button, Dialog, Field, Problem, Radios } from '../ui';
 import { LABEL_COLORS, type LabelColor } from '../label-colors';
 import { useLocale } from '../use-locale';
 import { type IndexedNote, placeBetween } from './notes-model';
-import { type TaskChange, type TaskLabel, type TaskMenuSeam, type TaskPerson } from './task-menu';
+import { type TaskActions, type TaskChange, type TaskLabel, type TaskMenuSeam, type TaskPerson } from './task-menu';
 
 /** The sentence for a change of a task the worker did not save (FRU-654). */
 export const TASK_PROBLEMS: Readonly<Record<string, string>> = {
@@ -22,12 +22,26 @@ export const TASK_PROBLEMS: Readonly<Record<string, string>> = {
   'not-found': msg('This note is no longer in Fruitback. Reload the page.'),
 };
 export const TASK_NOT_SAVED = msg('The change was not saved. Try again.');
+/** The sentence for a change of several tasks the worker did not save (FRU-656): none of them changed. */
+export const TASKS_PROBLEMS: Readonly<Record<string, string>> = {
+  'not-allowed': msg('One of these notes is not yours to change. Nothing changed.'),
+  'not-member': msg('This person is no longer a member of the workspace. Reload the page.'),
+  'unknown-label': msg('This label was removed since the list was read. Reload the page.'),
+  'too-many-labels': msg('One of these notes would hold more than 20 labels. Nothing changed.'),
+  'fields-not-taken': msg('One of these notes changes in its tracker. Nothing changed.'),
+  'status-changed': msg('This status is not one of the site of every note any more. Reload the page.'),
+  'status-hidden': msg('This status is hidden now, so no note goes in it. Choose another one.'),
+  'tasks-off': msg('This server keeps no task: nothing of a note changes here.'),
+  'not-found': msg('One of these notes is no longer in Fruitback. Reload the page.'),
+};
+export const TASKS_NOT_SAVED = msg('Nothing was saved. Try again.');
 const LABEL_PROBLEMS: Readonly<Record<string, string>> = {
   'label-taken': msg('The workspace has a label of this name.'),
   'invalid-label': msg('Give the label a name of 40 characters at most.'),
 };
 const LABEL_NOT_SAVED = msg('The label was not saved. Try again.');
 const LABEL_NOT_ON_TASK = msg('The label is added to the workspace, but not to this note: {why}');
+const LABEL_NOT_ON_TASKS = msg('The label is added to the workspace, but not to these notes: {why}');
 
 function colourName(color: LabelColor): string {
   switch (color) {
@@ -101,7 +115,8 @@ export function useTaskSeam({
   const [people, setPeople] = useState<Listed<TaskPerson>>('loading');
   const peopleAsked = useRef(0);
   const [labels, setLabels] = useState<TaskLabel[]>([]);
-  const [labelFor, setLabelFor] = useState<IndexedNote | undefined>();
+  // The tasks a new label goes on: the one of a menu, or the selection (FRU-656).
+  const [labelFor, setLabelFor] = useState<readonly IndexedNote[] | undefined>();
 
   const readLabels = useCallback(async () => {
     const answer = await call<{ labels: TaskLabel[] }>('GET', `${base}/labels`);
@@ -130,12 +145,59 @@ export function useTaskSeam({
   }, [readLabels, readPeople]);
 
   const change = async (note: IndexedNote, body: TaskChange): Promise<string | undefined> => {
-    const answer = await call('POST', `${base}/notes/${encodeURIComponent(note.id)}/task`, body);
+    // The route of one task writes all its labels: a label put on or taken off is the set it makes.
+    const { addLabels, removeLabels, ...rest } = body;
+    const sent =
+      addLabels === undefined && removeLabels === undefined
+        ? rest
+        : {
+            ...rest,
+            labels: [
+              ...(note.task?.labels ?? []).map((label) => label.id).filter((id) => removeLabels?.includes(id) !== true),
+              ...(addLabels ?? []).filter((id) => note.task?.labels.some((label) => label.id === id) !== true),
+            ],
+          };
+    const answer = await call('POST', `${base}/notes/${encodeURIComponent(note.id)}/task`, sent);
     if (!answer.ok) return problemOf(answer, TASK_PROBLEMS, TASK_NOT_SAVED);
     await read();
 
     return undefined;
   };
+
+  /** FRU-656: one call for several tasks; the worker changes all of them or none. */
+  const several = async (notes: readonly IndexedNote[], path: string, body: object): Promise<string | undefined> => {
+    const answer = await call('POST', `${base}${path}`, { notes: notes.map((note) => note.id), ...body });
+    if (!answer.ok) return problemOf(answer, TASKS_PROBLEMS, TASKS_NOT_SAVED);
+    await read();
+
+    return undefined;
+  };
+  const changeAll = (
+    notes: readonly IndexedNote[],
+    body: Omit<TaskChange, 'labels' | 'position'> & { status?: string },
+  ) => several(notes, '/tasks', { change: body });
+
+  const actionsOf = (note: IndexedNote): TaskActions => ({
+    setStatus: async (status) => {
+      const answer = await choose(note, status);
+      if (!answer.ok) return problemOf(answer, STATUS_PROBLEMS, STATUS_NOT_SAVED);
+      await read();
+
+      return undefined;
+    },
+    change: (body) => change(note, body),
+    newLabel: () => setLabelFor([note]),
+    copyLink: () => void navigator.clipboard?.writeText(linkOf(note)),
+    archive: (archived) => change(note, { archived }),
+    remove: async () => {
+      const answer = await call('DELETE', `${base}/notes/${encodeURIComponent(note.id)}/task`);
+      if (!answer.ok) return problemOf(answer, TASK_PROBLEMS, TASK_NOT_SAVED);
+      await read();
+
+      return undefined;
+    },
+    ...movesOf(note, columnOf?.(note), (position) => change(note, { position })),
+  });
 
   const seam: TaskMenuSeam = {
     people: known(people) ?? [],
@@ -144,27 +206,19 @@ export function useTaskSeam({
     labels,
     canAddLabel: manages,
     statusesOf,
-    actionsOf: (note) => ({
-      setStatus: async (status) => {
-        const answer = await choose(note, status);
-        if (!answer.ok) return problemOf(answer, STATUS_PROBLEMS, STATUS_NOT_SAVED);
-        await read();
+    actionsOf,
+    actionsOfAll: (notes) => {
+      const [only] = notes;
+      if (notes.length === 1 && only !== undefined) return actionsOf(only);
 
-        return undefined;
-      },
-      change: (body) => change(note, body),
-      newLabel: () => setLabelFor(note),
-      copyLink: () => void navigator.clipboard?.writeText(linkOf(note)),
-      archive: (archived) => change(note, { archived }),
-      remove: async () => {
-        const answer = await call('DELETE', `${base}/notes/${encodeURIComponent(note.id)}/task`);
-        if (!answer.ok) return problemOf(answer, TASK_PROBLEMS, TASK_NOT_SAVED);
-        await read();
-
-        return undefined;
-      },
-      ...movesOf(note, columnOf?.(note), (position) => change(note, { position })),
-    }),
+      return {
+        setStatus: (status) => changeAll(notes, { status }),
+        change: ({ labels: _labels, position: _position, ...body }) => changeAll(notes, body),
+        newLabel: () => setLabelFor(notes),
+        archive: (archived) => changeAll(notes, { archived }),
+        remove: () => several(notes, '/tasks/delete', {}),
+      };
+    },
   };
 
   const dialog = (
@@ -175,13 +229,15 @@ export function useTaskSeam({
         const answer = await call<{ label: TaskLabel }>('POST', `${base}/labels`, label);
         if (!answer.ok) return { created: false, refused: t(problemOf(answer, LABEL_PROBLEMS, LABEL_NOT_SAVED)) };
         await readLabels();
-        const note = labelFor;
-        if (note?.task !== undefined) {
-          // The label exists now: a refusal to put it on the task stays in the dialog, which keeps open.
-          const refused = await change(note, {
-            labels: [...note.task.labels.map((one) => one.id), answer.data.label.id],
-          });
-          if (refused !== undefined) return { created: true, refused: t(LABEL_NOT_ON_TASK, { why: t(refused) }) };
+        const notes = labelFor ?? [];
+        const [only] = notes;
+        if (notes.length > 0) {
+          // The label exists now: a refusal to put it on the tasks stays in the dialog, which keeps open.
+          const put = { addLabels: [answer.data.label.id] };
+          const refused =
+            notes.length === 1 && only !== undefined ? await change(only, put) : await changeAll(notes, put);
+          const words = notes.length === 1 ? LABEL_NOT_ON_TASK : LABEL_NOT_ON_TASKS;
+          if (refused !== undefined) return { created: true, refused: t(words, { why: t(refused) }) };
         }
         setLabelFor(undefined);
 

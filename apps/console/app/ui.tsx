@@ -1607,8 +1607,11 @@ export function Menu({
   );
 }
 
-/** An item of a submenu of `MenuTree`: `swatch` draws a colour before it. */
-export type TreeItem = MenuItem & { swatch?: string };
+/**
+ * An item of a submenu of `MenuTree`: `swatch` draws a colour before it. `closes`: choosing it closes a
+ * `BranchMenu`, as an item that opens a dialog must (FRU-656).
+ */
+export type TreeItem = MenuItem & { swatch?: string; closes?: boolean };
 
 /** A submenu of `MenuTree`: its items, and the ones checked when it is a choice. */
 export type TreeBranch = {
@@ -1659,40 +1662,7 @@ export function MenuTree({
                   </span>
                   <Dropdown.SubmenuIndicator />
                 </Dropdown.Item>
-                <Dropdown.Popover className="kit-menu">
-                  <Dropdown.Menu
-                    aria-label={branch.label}
-                    onAction={(id) => branch.onAction(String(id))}
-                    disabledKeys={branch.items.filter((item) => item.disabled === true).map((item) => item.id)}
-                    {...(branch.choice === undefined
-                      ? {}
-                      : { selectionMode: branch.choice, selectedKeys: [...(branch.checked ?? [])] })}
-                  >
-                    {branch.items.map((item) => (
-                      <Dropdown.Item
-                        key={item.id}
-                        id={item.id}
-                        textValue={item.label}
-                        data-danger={item.danger === true}
-                      >
-                        {branch.choice === undefined ? null : <Dropdown.ItemIndicator />}
-                        <span className="kit-menu__words">
-                          <span className="inline-flex items-center gap-[8px]">
-                            {item.swatch === undefined ? null : (
-                              <span
-                                aria-hidden="true"
-                                className="kit-swatch kit-swatch-small"
-                                style={{ background: item.swatch }}
-                              />
-                            )}
-                            <Label>{item.label}</Label>
-                          </span>
-                          {item.detail === undefined ? null : <Description>{item.detail}</Description>}
-                        </span>
-                      </Dropdown.Item>
-                    ))}
-                  </Dropdown.Menu>
-                </Dropdown.Popover>
+                <Dropdown.Popover className="kit-menu">{branchMenu(branch)}</Dropdown.Popover>
               </Dropdown.SubmenuTrigger>
             )),
             ...items.map((item) => menuItem(item, false)),
@@ -1700,6 +1670,115 @@ export function MenuTree({
         </Dropdown.Menu>
       </Dropdown.Popover>
     </Dropdown>
+  );
+}
+
+/** The items of one branch, as a menu of its own: a submenu of `MenuTree`, or the menu of `BranchMenu`. */
+function branchMenu(branch: TreeBranch, onAction: (id: string) => void = branch.onAction) {
+  return (
+    <Dropdown.Menu
+      aria-label={branch.label}
+      onAction={(id) => onAction(String(id))}
+      disabledKeys={branch.items.filter((item) => item.disabled === true).map((item) => item.id)}
+      {...(branch.choice === undefined
+        ? {}
+        : { selectionMode: branch.choice, selectedKeys: [...(branch.checked ?? [])] })}
+    >
+      {branch.items.map((item) => (
+        <Dropdown.Item key={item.id} id={item.id} textValue={item.label} data-danger={item.danger === true}>
+          {branch.choice === undefined ? null : <Dropdown.ItemIndicator />}
+          <span className="kit-menu__words">
+            <span className="inline-flex items-center gap-[8px]">
+              {item.swatch === undefined ? null : (
+                <span aria-hidden="true" className="kit-swatch kit-swatch-small" style={{ background: item.swatch }} />
+              )}
+              <Label>{item.label}</Label>
+            </span>
+            {item.detail === undefined ? null : <Description>{item.detail}</Description>}
+          </span>
+        </Dropdown.Item>
+      ))}
+    </Dropdown.Menu>
+  );
+}
+
+/**
+ * One branch of `MenuTree` behind a button of its own (FRU-656): the bar of a selection offers the
+ * submenus of the menu of a task as buttons. The button says the name of the branch, and opens its
+ * menu above it.
+ */
+export function BranchMenu({ branch, disabled = false }: { branch: TreeBranch; disabled?: boolean }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <Dropdown isOpen={open} onOpenChange={setOpen}>
+      <Dropdown.Trigger
+        className="kit-menu-trigger kit-button kit-button--outline kit-branch-trigger"
+        data-size="small"
+        isDisabled={disabled}
+      >
+        {branch.label}
+        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-[14px] w-[14px]">
+          <path
+            d="M6 9l6 6 6-6"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </Dropdown.Trigger>
+      <Dropdown.Popover className="kit-menu" placement="top start">
+        {branchMenu(branch, (id) => {
+          if (branch.items.some((item) => item.id === id && item.closes === true)) setOpen(false);
+          branch.onAction(id);
+        })}
+      </Dropdown.Popover>
+    </Dropdown>
+  );
+}
+
+/**
+ * The box that selects a row or a card (FRU-656): the checkbox of HeroUI, named by `label`, its box of
+ * 16 px in a frame of 28 px that takes the press too. `onToggle` says whether Shift was held (`range`),
+ * for a press of the pointer and for the Space key. `mixed`: some of what it stands for is selected.
+ */
+export function SelectBox({
+  label,
+  checked,
+  mixed = false,
+  onToggle,
+  className = '',
+}: {
+  label: string;
+  checked: boolean;
+  mixed?: boolean;
+  onToggle: (checked: boolean, range: boolean) => void;
+  className?: string;
+}) {
+  // The change of HeroUI carries no event: Shift is read from the press or the key that makes it.
+  const shift = useRef(false);
+  const held = (event: { shiftKey: boolean }) => {
+    shift.current = event.shiftKey;
+  };
+
+  return (
+    <span className={`kit-select ${className}`} onPointerDownCapture={held} onKeyDownCapture={held}>
+      <HeroCheckbox
+        aria-label={label}
+        isSelected={checked}
+        isIndeterminate={mixed}
+        onChange={(next) => onToggle(next, shift.current)}
+        className="kit-checkbox"
+      >
+        <HeroCheckbox.Content>
+          <HeroCheckbox.Control>
+            <HeroCheckbox.Indicator />
+          </HeroCheckbox.Control>
+        </HeroCheckbox.Content>
+      </HeroCheckbox>
+    </span>
   );
 }
 
