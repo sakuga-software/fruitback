@@ -12,6 +12,8 @@ import type { TaskLabel, TaskPerson } from './task-menu';
 const TITLE_LENGTH = 200;
 const TEXT_LENGTH = 5_000;
 const NONE = 'none';
+/** A built-in status, which every site has (`own:<stage>`); any other is a status of one site. */
+const BUILT_IN = /^own:(new|todo|progress|done|closed)$/u;
 
 /** The sentence for a task the worker did not write (FRU-657). */
 const CREATE_PROBLEMS: Readonly<Record<string, string>> = {
@@ -88,10 +90,11 @@ export function useTaskCreate({
   // A site that is no longer offered leaves the draft: the choice shows the first one.
   const site = sites.some((one) => one.id === draft.site) ? draft.site : (siteInView ?? sites[0]?.id ?? '');
   const statuses = (statusesOf(site) ?? []).filter((status) => status.hidden !== true);
-  // The status asked, when the site has it or the list did not read its statuses (a column of a
-  // stage asks for its built-in status); else the first status of the site, or none.
+  // The status asked, when the site has it, or when it is a built-in one and the list did not read
+  // the statuses of the site; else the first status of the site, or none.
   const status =
-    draft.status !== '' && (statuses.length === 0 || statuses.some((one) => one.key === draft.status))
+    draft.status !== '' &&
+    (statuses.some((one) => one.key === draft.status) || (statuses.length === 0 && BUILT_IN.test(draft.status)))
       ? draft.status
       : (statuses[0]?.key ?? '');
   useEffect(() => {
@@ -173,7 +176,14 @@ export function useTaskCreate({
           <Choice
             label={t('Site')}
             value={site}
-            onChange={(chosen) => set('site', chosen)}
+            // A status the team added is of one site: another site starts again from its first status.
+            onChange={(chosen) =>
+              setDraft((was) => ({
+                ...was,
+                site: chosen,
+                status: was.site === chosen || BUILT_IN.test(was.status) ? was.status : '',
+              }))
+            }
             options={sites.map((one) => ({ value: one.id, label: one.origin }))}
           />
         )}
