@@ -1826,10 +1826,10 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'This server keeps no task: write the task in the tracker of the site.':
     'Ce serveur ne garde aucune tâche : écrivez la tâche dans l’outil de suivi du site.',
   'This site is no longer here. Reload the page.': 'Ce site n’est plus là. Rechargez la page.',
-  'This status was removed since the list was read. Reload the page.':
-    'Ce statut a été retiré depuis la lecture de la liste. Rechargez la page.',
-  'This status is hidden on its site. Choose another one.':
-    'Ce statut est masqué sur son site. Choisissez-en un autre.',
+  'This status was removed since the list was read. Create the task again: it takes the first status of its site.':
+    'Ce statut a été retiré depuis la lecture de la liste. Créez la tâche de nouveau : elle prend le premier statut de son site.',
+  'This status is hidden on its site. Create the task again: it takes the first status of its site.':
+    'Ce statut est masqué sur son site. Créez la tâche de nouveau : elle prend le premier statut de son site.',
   'The task was not created. Try again.': 'La tâche n’a pas été créée. Réessayez.',
   Title: 'Titre',
   'Give the task a title.': 'Donnez un titre à la tâche.',

@@ -208,10 +208,18 @@ test('a refusal keeps what was typed, and the dialog fits a phone', async ({ pag
   await dialog.getByLabel('Title').fill('Check the invoices');
   await dialog.getByLabel('Text').fill('All of May.');
   await dialog.getByRole('button', { name: 'Create the task' }).click();
-  await expect(dialog.getByText('This status was removed since the list was read. Reload the page.')).toBeVisible();
+  await expect(
+    dialog.getByText(
+      'This status was removed since the list was read. Create the task again: it takes the first status of its site.',
+    ),
+  ).toBeVisible();
   await expect(dialog.getByLabel('Title')).toHaveValue('Check the invoices');
   expect(sent).toHaveLength(1);
   expect(await sideScroll(p)).toBe(0);
+  // A second press sends no status: the site gives its first one.
+  await dialog.getByRole('button', { name: 'Create the task' }).click();
+  await expect.poll(() => sent.length).toBe(2);
+  expect(sent[1]?.body.status).toBeUndefined();
 
   // Closed, then opened again: the draft is still there.
   await p.keyboard.press('Escape');

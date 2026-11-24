@@ -19,8 +19,12 @@ const BUILT_IN = /^own:(new|todo|progress|done|closed)$/u;
 const CREATE_PROBLEMS: Readonly<Record<string, string>> = {
   'tasks-off': msg('This server keeps no task: write the task in the tracker of the site.'),
   'not-found': msg('This site is no longer here. Reload the page.'),
-  'status-changed': msg('This status was removed since the list was read. Reload the page.'),
-  'status-hidden': msg('This status is hidden on its site. Choose another one.'),
+  'status-changed': msg(
+    'This status was removed since the list was read. Create the task again: it takes the first status of its site.',
+  ),
+  'status-hidden': msg(
+    'This status is hidden on its site. Create the task again: it takes the first status of its site.',
+  ),
   'not-member': msg('This person is no longer a member of the workspace. Reload the page.'),
   'unknown-label': msg('This label was removed since the list was read. Reload the page.'),
 };
@@ -92,11 +96,13 @@ export function useTaskCreate({
   const statuses = (statusesOf(site) ?? []).filter((status) => status.hidden !== true);
   // The status asked, when the site has it, or when it is a built-in one and the list did not read
   // the statuses of the site; else the first status of the site, or none.
-  const status =
+  const kept =
+    draft.status !== NONE &&
     draft.status !== '' &&
-    (statuses.some((one) => one.key === draft.status) || (statuses.length === 0 && BUILT_IN.test(draft.status)))
-      ? draft.status
-      : (statuses[0]?.key ?? '');
+    (statuses.some((one) => one.key === draft.status) || (statuses.length === 0 && BUILT_IN.test(draft.status)));
+  // After a refusal of its status (`NONE`), none is sent: the worker gives the first one of the site.
+  let status = kept ? draft.status : (statuses[0]?.key ?? '');
+  if (draft.status === NONE) status = '';
   useEffect(() => {
     if (!isOpen) setTitleMissing(false);
   }, [isOpen]);
@@ -135,6 +141,11 @@ export function useTaskCreate({
     });
     setSaving(false);
     if (!answer.ok) {
+      // A status the site no longer offers leaves the draft: a second press sends none, and the site
+      // gives its first status, even when the dialog has no list of its statuses to choose from.
+      if (answer.error === 'status-hidden' || answer.error === 'status-changed') {
+        setDraft((was) => ({ ...was, status: NONE }));
+      }
       setProblem(problemOf(answer, CREATE_PROBLEMS, NOT_CREATED));
       return;
     }
