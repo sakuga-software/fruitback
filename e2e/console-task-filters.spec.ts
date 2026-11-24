@@ -99,3 +99,32 @@ test('a list with no task Fruitback keeps draws no row of task filters', async (
   await expect(p.getByText('The headline runs')).toBeVisible();
   await expect(p.locator('[data-task-filters]')).toHaveCount(0);
 });
+
+test('« Unresolved » of the status asks the worker for the notes not done nor closed, and « Any status » for every note again (FRU-667)', async ({
+  page: p,
+}) => {
+  const asked = await worker(p, true);
+  await p.goto(`${CONSOLE}/w/w1/notes`);
+  await expect(p.getByText('The headline runs')).toBeVisible();
+
+  await pick(p, /Any status/, 'Unresolved');
+  await expect(p).toHaveURL(/unresolved=1/);
+  await expect.poll(() => asked.at(-1)?.get('unresolved')).toBe('1');
+  expect(asked.at(-1)?.get('stage')).toBeNull();
+  // A reload keeps it: it is in the address.
+  await p.reload();
+  await expect(p.getByRole('button', { name: /Unresolved/ })).toBeVisible();
+
+  // A stage takes its place: the worker gets one of the two, never both.
+  await pick(p, /Unresolved/, 'Done');
+  await expect.poll(() => asked.at(-1)?.get('stage')).toBe('done');
+  expect(asked.at(-1)?.get('unresolved')).toBeNull();
+  await expect(p).not.toHaveURL(/unresolved=/);
+
+  // The other direction: « Any status » reads every note again.
+  await pick(p, /Done/, 'Unresolved');
+  await expect.poll(() => asked.at(-1)?.get('unresolved')).toBe('1');
+  await pick(p, /Unresolved/, 'Any status');
+  await expect.poll(() => asked.at(-1)?.has('unresolved')).toBe(false);
+  await expect(p).not.toHaveURL(/unresolved=/);
+});

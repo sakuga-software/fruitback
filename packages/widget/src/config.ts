@@ -81,7 +81,7 @@ export type ConfigStoreOptions = {
 export const CONFIG_STORAGE_KEY = 'fruitback:config';
 
 /** The stages a reporter usually stops caring about: done, and cancelled. */
-export const RESOLVED_STAGES: NoteStage[] = ['done', 'closed'];
+export { RESOLVED_STAGES } from '@fruitback/shared';
 
 export function createConfigStore(options: ConfigStoreOptions): ConfigStore {
   const key = options.key ?? CONFIG_STORAGE_KEY;

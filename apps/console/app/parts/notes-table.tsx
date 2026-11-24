@@ -13,6 +13,7 @@ import { type IndexedNote, type NotesAnswer, groupsOf } from './notes-model';
 import { Author, NoteStatus, Place, excerptOf } from './note-parts';
 import { TaskMarks } from './task-marks';
 import { NoteText, useTaskMenu } from './task-menu';
+import { SelectPage, SelectTask, useSelectRow } from './task-selection';
 
 export function NoteRow({
   note,
@@ -45,6 +46,8 @@ export function NoteRow({
   const [statusRefused, setStatusRefused] = useState<string | undefined>();
   // FRU-654: the menu of the task, on its button and on a right click of the row.
   const taskMenu = useTaskMenu(note);
+  // FRU-656: its box, and Shift and a click on the row for a range.
+  const selectRow = useSelectRow(note);
   const { author, place } = note;
   // The link of the widget opens the note by the id it gave it, or by its issue (FRU-253).
   const opened = note.note ?? note.ref;
@@ -62,12 +65,13 @@ export function NoteRow({
   }
 
   return (
-    <tr data-note={note.id} onContextMenu={taskMenu.onContextMenu} onKeyDown={taskMenu.onKeyDown}>
+    <tr data-note={note.id} onContextMenu={taskMenu.onContextMenu} onKeyDown={taskMenu.onKeyDown} {...selectRow}>
       {/* The note keeps 240 px of the row: the columns beside it are short words. */}
       <td className="max-w-[380px] min-[640px]:min-w-[240px]">
         {/* FRU-551: the status is its drop before the note, a list of the statuses for whoever may
           change it; the group above says it in words. */}
         <span className="flex items-start gap-[8px]">
+          <SelectTask note={note} room className="-my-[4px]" />
           <span className="-my-[4px] flex h-[28px] w-[28px] flex-none items-center justify-center">
             <NoteStatus
               note={note}
@@ -189,7 +193,15 @@ export function NotesTable({
       <DataTable label={t('Notes')} minWidth={720} hover stack pinned>
         <thead>
           <tr>
-            <th scope="col">{t('Note')}</th>
+            <th scope="col">
+              {/* FRU-656: the box of every task of the page. */}
+              <span className="inline-flex items-center gap-[8px]">
+                <span className="-my-[6px] inline-flex">
+                  <SelectPage />
+                </span>
+                {t('Note')}
+              </span>
+            </th>
             <th scope="col">{t('Site')}</th>
             <th scope="col">{t('Left by')}</th>
             {/* The worker tells a guest nothing of where a note went (FRU-244). */}

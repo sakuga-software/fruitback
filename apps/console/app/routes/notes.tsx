@@ -19,6 +19,7 @@ import {
   type NotesAnswer,
   type View,
   byRank,
+  groupsOf,
   pageOf,
   placeBetween,
 } from '../parts/notes-model';
@@ -27,9 +28,11 @@ import { NotePages } from '../parts/note-pages';
 import { NotesFilters, Pinned, ViewChoice } from '../parts/notes-filters';
 import { NotesTable } from '../parts/notes-table';
 import { NoteCard } from '../parts/note-card';
-import { TaskMenuContext, dayFromToday } from '../parts/task-menu';
+import { dayFromToday } from '../parts/task-menu';
 import { TASK_NOT_SAVED, TASK_PROBLEMS, useTaskSeam } from '../parts/task-seam';
 import { TaskPanel } from '../parts/task-panel';
+import { SelectionStatus, useSelectionKeys, useTaskSelection } from '../parts/task-selection';
+import { TaskBulkBar, TaskContexts } from '../parts/task-bulk-bar';
 
 /** FRU-655: the filters on the fields of the tasks Fruitback keeps. */
 const TASK_FILTERS = ['assignee', 'priority', 'label', 'due'] as const;
@@ -241,10 +244,36 @@ export default function Notes() {
     call<{ status: string; stage: Stage }>('POST', `${base}/notes/${encodeURIComponent(note.id)}/status`, { status });
   const sourceOf = (note: IndexedNote) => connectors.find((each) => each.id === note.place?.connector);
   // FRU-665: the columns of the board, each in the order of its tasks.
-  const columns =
-    typeof shown === 'object'
-      ? boardColumns(byRank(shown.notes), siteInView === undefined ? undefined : shown.statuses?.[siteInView])
-      : [];
+  const columns = useMemo(
+    () =>
+      typeof shown === 'object'
+        ? boardColumns(byRank(shown.notes), siteInView === undefined ? undefined : shown.statuses?.[siteInView])
+        : [],
+    [shown, siteInView],
+  );
+  // FRU-656: the tasks selected, in the order of the screen: the groups of the table, the columns of the board.
+  const ordered = useMemo(() => {
+    if (typeof shown !== 'object') return [];
+
+    return view === 'board'
+      ? columns.flatMap((column) => column.notes)
+      : groupsOf(shown.notes).flatMap((group) => group.notes);
+  }, [shown, view, columns]);
+  const selection = useTaskSelection(ordered);
+  useSelectionKeys(selection);
+  // A selection emptied with the focus in its bar (« Clear », a deletion): the focus goes to the list.
+  const selected = selection.notes.length;
+  const wasSelected = useRef(0);
+  useEffect(() => {
+    if (
+      wasSelected.current > 0 &&
+      selected === 0 &&
+      (document.activeElement === null || document.activeElement === document.body)
+    ) {
+      document.querySelector<HTMLElement>('[data-notes-list] [role="region"]')?.focus();
+    }
+    wasSelected.current = selected;
+  }, [selected]);
   const columnOf = (note: IndexedNote) =>
     view === 'board' ? columns.find((column) => column.notes.some((each) => each.id === note.id))?.notes : undefined;
   // FRU-654: the menu of each task, its members, its labels and its writes.
@@ -272,8 +301,9 @@ export default function Notes() {
   };
 
   return (
-    <TaskMenuContext.Provider value={{ ...tasks.seam, openTask }}>
+    <TaskContexts seam={{ ...tasks.seam, openTask }} selection={selection}>
       {tasks.dialog}
+      <SelectionStatus />
       <TaskPanel
         id={opened}
         listed={typeof shown === 'object' ? shown.notes.find((note) => note.id === opened) : undefined}
@@ -332,6 +362,7 @@ export default function Notes() {
                     stage: '',
                     mine: '',
                     archived: '',
+                    unresolved: '',
                     assignee: '',
                     priority: '',
                     label: '',
@@ -344,7 +375,7 @@ export default function Notes() {
               </LinkButton>
             </div>
           ) : (
-            <>
+            <div data-notes-list="" data-selecting={selected > 0}>
               {view === 'board' ? (
                 <NotesBoard
                   columns={columns}
@@ -419,10 +450,11 @@ export default function Notes() {
                   onGo: (to) => go(to, shown),
                 }}
               />
-            </>
+              <TaskBulkBar />
+            </div>
           )}
         </Pinned>
       ) : null}
-    </TaskMenuContext.Provider>
+    </TaskContexts>
   );
 }

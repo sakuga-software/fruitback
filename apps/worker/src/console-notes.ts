@@ -202,6 +202,11 @@ export function queryOf(params: URLSearchParams, account: string, options: { ord
   // FRU-665: the archived tasks, in place of the others.
   const archived = params.get('archived') ?? undefined;
   if (archived !== undefined && archived !== '1') return { ok: false, error: 'invalid-archived' };
+  // FRU-667: the notes that are not done nor closed. A stage that is asked says the stage already.
+  const unresolved = params.get('unresolved') ?? undefined;
+  if (unresolved !== undefined && (unresolved !== '1' || stage !== undefined)) {
+    return { ok: false, error: 'invalid-unresolved' };
+  }
   const q = params.get('q')?.trim() || undefined;
   if (q !== undefined && q.length > QUERY_LENGTH) return { ok: false, error: 'invalid-q' };
   // FRU-655: the fields of a task. `me` and `none` for the assignee, `none` for the priority.
@@ -240,6 +245,7 @@ export function queryOf(params: URLSearchParams, account: string, options: { ord
       ...(place === undefined ? {} : { place }),
       ...(mine === undefined ? {} : { author: account }),
       ...(archived === undefined ? {} : { archived: true }),
+      ...(unresolved === undefined ? {} : { unresolved: true }),
       ...(assignee === undefined ? {} : { assignee: assigneeOf(assignee, account) }),
       ...(priority === undefined ? {} : { priority: priority === 'none' ? null : priority }),
       ...(label === undefined ? {} : { label }),
