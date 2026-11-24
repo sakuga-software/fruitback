@@ -937,6 +937,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Search the text or the page': 'Chercher le texte ou la page',
   Status: 'Statut',
   'Any status': 'Tous les statuts',
+  // FRU-667: every status but Done and Closed.
+  Unresolved: 'Non résolues',
   // The board of the notes (FRU-436).
   'Show the notes as': 'Afficher les notes en',
   Table: 'Liste',

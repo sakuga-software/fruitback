@@ -193,15 +193,21 @@ export function NotesFilters({
             compact
             value={statusChoiceOf(filters)}
             // FRU-665: « Archived » is the last choice: the archived tasks, of every status.
+            // FRU-667: « Unresolved », after « Any status »: every status but Done and Closed.
             onChange={(stage) =>
               onFilter(
-                stage === 'archived'
-                  ? { stage: '', archived: '1' }
-                  : { stage: stage === 'any' ? '' : stage, archived: '' },
+                stage === 'archived' || stage === 'unresolved'
+                  ? {
+                      stage: '',
+                      archived: stage === 'archived' ? '1' : '',
+                      unresolved: stage === 'unresolved' ? '1' : '',
+                    }
+                  : { stage: stage === 'any' ? '' : stage, archived: '', unresolved: '' },
               )
             }
             options={[
               { value: 'any', label: t('Any status') },
+              { value: 'unresolved', label: t('Unresolved') },
               ...STAGES.map((stage) => ({ value: stage, label: t(STAGE_NAMES[stage]) })),
               { value: 'archived', label: t('Archived') },
             ]}
@@ -218,9 +224,10 @@ export function NotesFilters({
   );
 }
 
-/** The choice of the status filter: « Archived » (FRU-665), a stage, or « Any status ». */
-function statusChoiceOf(filters: { stage: string; archived: string }): string {
+/** The choice of the status filter: « Archived » (FRU-665), « Unresolved » (FRU-667), a stage, or « Any status ». */
+function statusChoiceOf(filters: { stage: string; archived: string; unresolved: string }): string {
   if (filters.archived === '1') return 'archived';
+  if (filters.unresolved === '1') return 'unresolved';
 
   return filters.stage === '' ? 'any' : filters.stage;
 }

@@ -1198,6 +1198,24 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
 - **« Delete… » asks again under the note** (`Confirmation` of `confirm.tsx`): « Keep it » has the
   focus, and only « Delete this note » deletes.
 
+## The notes not resolved yet (FRU-667)
+
+### The rules, in short
+
+- **« Unresolved » is a choice of the filter of the status**, the second, after « Any status »: every
+  note but the ones done or closed. A choice, not one more box, as « Archived » (FRU-665), so the row
+  of the filters stays the mockup's, and a stage and « Unresolved » are never asked together.
+- **Resolved means `RESOLVED_STAGES` of `@fruitback/shared`**: done, and closed. The widget hides the
+  same two with « Hide resolved notes », so a note gone from the pins is gone from this list too.
+- **It is in the address**, `unresolved=1`, and the worker filters it in the index: the pages, the
+  counts and the heads of the groups are those of the list. The worker refuses `unresolved` with
+  `stage` (`invalid-unresolved`).
+- **The board keeps its columns.** As under a filter on one stage, Done and Closed stay, empty, and
+  a card dropped in one leaves the list at the next read.
+- `task-filters.test.ts` reads the list on a real PostgreSQL, in both directions: a note done or
+  closed leaves it, and a note set back to do comes back. `console-task-filters.spec.ts` holds the
+  address and the read the console asks.
+
 ## The filters on the fields of a task (FRU-655)
 
 ### The rules, in short
