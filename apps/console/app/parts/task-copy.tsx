@@ -97,6 +97,24 @@ async function markdownOf(
 /** No note of a copy could be read. */
 class NotRead extends Error {}
 
+/** No note of a copy has a reference that this person reads. */
+class NoReference extends Error {}
+
+/**
+ * The reference of one note, read whole: `FB-12`, or the one of its tracker. A guest reads the id of
+ * the note in its place, which is no reference: `undefined`, as for a note that does not load.
+ */
+async function referenceOf(base: string, id: string): Promise<string | undefined> {
+  const got = await call<{ note: NoteIssue } | { task: TaskIssue }>(
+    'GET',
+    `${base}/notes/${encodeURIComponent(id)}`,
+  ).catch(() => undefined);
+  if (got?.ok !== true) return undefined;
+  const identifier = 'task' in got.data ? got.data.task.identifier : got.data.note.identifier;
+
+  return /^[A-Z][A-Z0-9]*-\d+$/u.test(identifier) ? identifier : undefined;
+}
+
 /**
  * Writes `text` to the clipboard. A text that is still being read goes as a `ClipboardItem` of a
  * promise, so that Safari, which wants the write in the gesture of the person, takes it too.
@@ -137,19 +155,21 @@ export function useTaskCopy({
   }, []);
 
   const copied = useCallback(
-    (text: string | Promise<string>, done: string) => {
+    (text: string | Promise<string>, done: string | ((copied: string) => string)) => {
       writeClipboard(text).then(
-        () => say(done),
+        async () => say(typeof done === 'string' ? done : done(await text)),
         async () => {
-          // The read failed, or the browser refused: each is said as it is.
-          const readFailed =
-            typeof text !== 'string' &&
-            (await text.then(
-              () => false,
-              () => true,
-            ));
+          // The read failed, there was nothing to copy, or the browser refused: each is said as it is.
+          const failure =
+            typeof text === 'string'
+              ? undefined
+              : await text.then(
+                  () => undefined,
+                  (error: unknown) => error,
+                );
+          if (failure instanceof NoReference) return say(t('No ID to copy: these notes have no reference here.'));
           say(
-            readFailed
+            failure !== undefined
               ? t('The notes did not load, and nothing was copied. Try again.')
               : t('The browser did not let Fruitback copy. Allow the clipboard for this page, then try again.'),
           );
@@ -170,14 +190,26 @@ export function useTaskCopy({
       );
     },
     identifier: (notes) => {
-      const references = notes.flatMap((note) => (note.ref === undefined ? [] : [note.ref]));
-      if (references.length === 0) return say(t('No ID to copy: these notes have no reference here.'));
-      copied(
-        references.join('\n'),
+      if (notes.length === 0) return;
+      const said = (references: readonly string[]) =>
         references.length === 1
           ? t('{id} copied.', { id: references[0] as string })
-          : t('{count} IDs copied.', { count: references.length }),
-      );
+          : t('{count} IDs copied.', { count: references.length });
+      // A note of the list gives its reference. A note the list does not hold (a panel opened by its
+      // link, on another page) is read for it: the panel shows one, so the key copies it.
+      if (notes.every((note) => note.ref !== undefined || note.site.id !== '')) {
+        const references = notes.flatMap((note) => (note.ref === undefined ? [] : [note.ref]));
+        if (references.length === 0) return say(t('No ID to copy: these notes have no reference here.'));
+        return copied(references.join('\n'), said(references));
+      }
+      const text = Promise.all(notes.map((note) => note.ref ?? referenceOf(base, note.id))).then((found) => {
+        const references = found.flatMap((each) => (each === undefined ? [] : [each]));
+        if (references.length === 0) throw new NoReference();
+
+        return references.join('\n');
+      });
+      text.catch(() => {});
+      copied(text, (copiedText) => said(copiedText.split('\n')));
     },
     markdown: (notes) => {
       if (notes.length === 0) return;

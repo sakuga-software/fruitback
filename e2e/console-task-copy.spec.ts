@@ -25,7 +25,10 @@ const NOTE = noteFixture({
 
 test.use({ permissions: ['clipboard-read', 'clipboard-write'] });
 
-async function worker(p: Page, { failing = false }: { failing?: boolean } = {}): Promise<void> {
+async function worker(
+  p: Page,
+  { failing = false, onePage = false }: { failing?: boolean; onePage?: boolean } = {},
+): Promise<void> {
   const listed = [
     {
       id: 'n1',
@@ -63,7 +66,12 @@ async function worker(p: Page, { failing = false }: { failing?: boolean } = {}):
     sites: SITES,
     answer: (pathname: string, route: Route) => {
       if (pathname === '/console/workspaces/w1/notes') {
-        return route.fulfill({ json: { notes: listed, total: 2, counts: { all: 2 }, statuses: { s1: STATUSES } } });
+        // `onePage`: the task is on another page of the list, and only its link opens it.
+        const notes = onePage ? listed.slice(0, 1) : listed;
+
+        return route.fulfill({
+          json: { notes, total: notes.length, counts: { all: notes.length }, statuses: { s1: STATUSES } },
+        });
       }
       if (pathname.endsWith('/list-members') || pathname === '/console/workspaces/w1/labels') {
         return route.fulfill({ json: { members: [], labels: [] } });
@@ -254,4 +262,13 @@ test('a selection copies the IDs and the Markdown of all its notes, from its bar
   expect(markdown).toContain('# Notes on https://staging.acme.dev/pricing');
   expect(markdown).toContain('# Tasks with no page');
   expect(markdown.indexOf('# Notes on')).toBeLessThan(markdown.indexOf('# Tasks with no page'));
+});
+
+test('the panel of a task the list does not hold still copies its ID with the keyboard', async ({ page: p }) => {
+  await worker(p, { onePage: true });
+  await p.goto(`${CONSOLE}/w/w1/notes?task=t1`);
+  await expect(p.getByRole('dialog', { name: 'Write the release notes' })).toBeVisible();
+  await p.keyboard.press('ControlOrMeta+Shift+Period');
+  await expect(p.locator('[data-copy-status]')).toHaveText('FB-41 copied.');
+  expect(await clipboard(p)).toBe('FB-41');
 });
