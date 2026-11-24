@@ -59,7 +59,14 @@ function members(route: Route, all: readonly Member[], fail?: { reads: number })
 
 async function worker(
   p: Page,
-  options: { role?: Role; refuse?: string; members?: readonly Member[]; membersFail?: { reads: number } } = {},
+  options: {
+    role?: Role;
+    refuse?: string;
+    members?: readonly Member[];
+    membersFail?: { reads: number };
+    /** FRU-675: the reads of `GET …/labels` that answer `503` first. */
+    labelsFail?: { reads: number };
+  } = {},
 ): Promise<Sent[]> {
   const sent: Sent[] = [];
   const labels = [{ id: 'l1', name: 'Bug', color: '#dc2626' }];
@@ -99,7 +106,15 @@ async function worker(
       }
       if (pathname.endsWith('/list-members')) return members(route, options.members ?? MEMBERS, options.membersFail);
       if (pathname === '/console/workspaces/w1/labels') {
-        if (request.method() === 'GET') return route.fulfill({ json: { labels } });
+        if (request.method() === 'GET') {
+          if (options.labelsFail !== undefined && options.labelsFail.reads > 0) {
+            options.labelsFail.reads -= 1;
+
+            return route.fulfill({ status: 503, json: { error: 'store-unavailable' } });
+          }
+
+          return route.fulfill({ json: { labels } });
+        }
         const body = request.postDataJSON() as { name: string; color: string };
         sent.push({ path: pathname, body });
         const label = { id: `l${labels.length + 1}`, ...body };
@@ -262,4 +277,47 @@ test('the members that did not load are said in the menu, and « Try again » re
   await p.getByRole('menuitemradio', { name: 'Ben Martin' }).click();
   expect(sent).toEqual([{ path: '/console/workspaces/w1/notes/n1/task', body: { assignee: 'a2' } }]);
   await expect(row(p, 'The headline').locator('[data-task-marks]')).toContainText('Ben Martin');
+});
+
+test('the labels that did not load are said in the menu, never « No label yet », and « Try again » reads them (FRU-675)', async ({
+  page: p,
+}) => {
+  // A member: the menu of before said « No label yet » to them, as if the workspace had none.
+  const sent = await worker(p, { role: 'member', labelsFail: { reads: 1 } });
+  await p.goto(`${CONSOLE}/w/w1/notes`);
+  await row(p, 'The headline').getByText('The headline').click({ button: 'right' });
+  await p.getByRole('menuitem', { name: 'Labels' }).hover();
+
+  const labels = p.getByRole('menu', { name: 'Labels' });
+  await expect(labels.getByRole('menuitem', { name: /The labels did not load\./ })).toBeDisabled();
+  await expect(labels.getByRole('menuitem', { name: /The labels did not load\./ })).toContainText(
+    'Fruitback hit an error.',
+  );
+  await expect(labels.getByText('No label yet')).toHaveCount(0);
+  await expect(labels.getByRole('menuitemcheckbox')).toHaveCount(0);
+  await labels.getByRole('menuitem', { name: 'Try again' }).click();
+
+  await row(p, 'The headline').getByText('The headline').click({ button: 'right' });
+  await p.getByRole('menuitem', { name: 'Labels' }).hover();
+  await p.getByRole('menuitemcheckbox', { name: 'Bug' }).click();
+  expect(sent).toEqual([{ path: '/console/workspaces/w1/notes/n1/task', body: { labels: ['l1'] } }]);
+  await expect(row(p, 'The headline').locator('[data-task-marks]')).toContainText('Bug');
+});
+
+test('an owner whose labels did not load is not offered « New label… » alone (FRU-675)', async ({ page: p }) => {
+  await worker(p, { labelsFail: { reads: 1 } });
+  await p.goto(`${CONSOLE}/w/w1/notes`);
+  await row(p, 'The headline').getByText('The headline').click({ button: 'right' });
+  await p.getByRole('menuitem', { name: 'Labels' }).hover();
+
+  // Which labels the workspace holds is not known: a new one could take the name of one of them.
+  const labels = p.getByRole('menu', { name: 'Labels' });
+  await expect(labels.getByRole('menuitem', { name: /The labels did not load\./ })).toBeVisible();
+  await expect(labels.getByRole('menuitemcheckbox')).toHaveCount(0);
+  await labels.getByRole('menuitem', { name: 'Try again' }).click();
+
+  await row(p, 'The headline').getByText('The headline').click({ button: 'right' });
+  await p.getByRole('menuitem', { name: 'Labels' }).hover();
+  await expect(p.getByRole('menuitemcheckbox', { name: 'Bug' })).toBeVisible();
+  await expect(p.getByRole('menuitemcheckbox', { name: 'New label…' })).toBeVisible();
 });
