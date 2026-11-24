@@ -1,0 +1,40 @@
+import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
+import { parseNote } from './note.ts';
+import { TASK_KIND, TASK_VERSION, createTask, isTaskIssue, parseTask } from './task.ts';
+
+/** A task written by hand (FRU-657): its own kind, which no reader of a note takes. */
+
+const input = { id: 'task_1', createdAt: '2026-11-24T10:00:00.000Z', title: 'Write the release notes' };
+
+describe('a task (FRU-657)', () => {
+  it('round-trips with no field the caller did not give', () => {
+    const task = createTask(input);
+    assert.deepEqual(task, { ...input, kind: TASK_KIND, v: TASK_VERSION });
+    assert.deepEqual(parseTask(JSON.parse(JSON.stringify(task))), { ok: true, task });
+  });
+
+  it('is no note: parseNote answers not-found, as a reader of before does', () => {
+    assert.deepEqual(parseNote(createTask(input)), { ok: false, reason: 'not-found' });
+  });
+
+  it('refuses a note, a newer version, an empty or a multi-line title, and an empty text', () => {
+    assert.deepEqual(parseTask({ kind: 'fruitback.note', v: 3 }), { ok: false, reason: 'not-found' });
+    assert.deepEqual(parseTask({ ...createTask(input), v: TASK_VERSION + 1 }), {
+      ok: false,
+      reason: 'unsupported-version',
+      version: TASK_VERSION + 1,
+    });
+    for (const title of ['', ' padded ', 'two\nlines', 'x'.repeat(201)]) {
+      assert.equal(parseTask({ ...createTask(input), title }).ok, false, JSON.stringify(title));
+    }
+    assert.equal(parseTask({ ...createTask(input), text: '' }).ok, false);
+    assert.throws(() => createTask({ ...input, title: '' }));
+  });
+
+  it('tells a read of a task from a read of a note', () => {
+    const issue = { id: '1', identifier: 'FB-1', title: 't', stage: 'new', stateName: '', updatedAt: '' } as const;
+    assert.equal(isTaskIssue({ ...issue, task: createTask(input) }), true);
+    assert.equal(isTaskIssue({ ...issue, note: {} } as never), false);
+  });
+});

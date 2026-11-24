@@ -39,6 +39,7 @@ import { agentTools } from './agent-tools.ts';
 import type { SessionIdentity } from './session.ts';
 import { type RequestContext, type Served, type Verified, withSites } from './request-context.ts';
 import { placedAt, routingFailure } from './note-helpers.ts';
+import { NO_PAGE } from './note-rows.ts';
 
 import {
   accountStoreFor,
@@ -426,7 +427,9 @@ async function routed(
       // FRU-653: one note as the page reads it, for the page of a task in the console.
       readNote: async (workspace, site, note) => {
         const page = await noteIndex?.pageOfNote(workspace, site, note);
-        if (page === undefined) return undefined;
+        // FRU-657: a task written by hand has no page; `readTask` reads it, and a read of no page
+        // would ask a tracker for every issue of its team.
+        if (page === undefined || page === NO_PAGE) return undefined;
         // Read as an agent reads it, with no `Origin`: the console is no origin of the site, and the
         // route is the rights of the console, checked before this read.
         const route = await routeFor(new Request(request.url), served, site);

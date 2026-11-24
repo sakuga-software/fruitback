@@ -75,6 +75,8 @@ export type NotesContext = {
     | 'enqueueDelivery'
     | 'setTaskFields'
     | 'deleteTask'
+    | 'createTask'
+    | 'readTask'
     | 'labels'
     | 'addLabel'
     | 'changeLabel'

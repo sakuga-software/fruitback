@@ -212,6 +212,11 @@ export type NoteQuery = {
   after?: NoteCursor;
   /** The notes left at this instant or after it, in milliseconds (FRU-463). */
   since?: number;
+  /**
+   * FRU-657: the notes of a page only, not the tasks written by hand. The side panel of the extension
+   * opens the page of each note it lists.
+   */
+  onPages?: true;
   /** FRU-665: the archived tasks only. Absent: the notes that are not archived. */
   archived?: boolean;
   /** FRU-655: the tasks of this account; `null`, the tasks of nobody. */

@@ -14,10 +14,12 @@ import {
   lte,
   max,
   min,
+  ne,
   or,
   sql,
 } from 'drizzle-orm';
 import { member, user } from './auth-schema.ts';
+import { NO_PAGE } from './note-rows.ts';
 import {
   type AuthorKind,
   type ForgetIndex,
@@ -639,6 +641,7 @@ function filtered(workspace: string, query: NoteQuery) {
     query.stage === undefined ? undefined : eq(note_index.stage, query.stage),
     query.author === undefined ? undefined : eq(note_index.author_account_id, query.author),
     query.since === undefined ? undefined : gte(note_index.created_at, query.since),
+    query.onPages === true ? ne(note_index.page_url, NO_PAGE) : undefined,
     // FRU-665: an archived task is out of the list, unless the list asks for the archived ones.
     query.archived === true ? isNotNull(note_index.archived_at) : isNull(note_index.archived_at),
     ...taskFilters(query),

@@ -114,3 +114,58 @@ export function readLabel(
 
   return label;
 }
+
+/**
+ * A task written by hand (FRU-657): a title, and the rest if the person gave it. `status` is the key
+ * of a status of the worker's store for its site, with no `own:` (a body writes `own:<key>`). Absent:
+ * the built-in status of the first stage.
+ */
+export type NewTask = {
+  title: string;
+  text?: string;
+  status?: string;
+  assignee?: string;
+  priority?: TaskPriority;
+  dueOn?: string;
+  labels?: string[];
+};
+
+/**
+ * A new task read from a body, or the name of the first field that is wrong. The title is trimmed
+ * and its line breaks become spaces; an empty text is no text. The fields read as `readTaskChange`
+ * reads them, with `null` for « none ».
+ */
+export function readNewTask(
+  body: Record<string, unknown> | undefined,
+  limits: { title: number; text: number },
+): NewTask | { invalid: string } {
+  if (body === undefined) return { invalid: 'body' };
+  const title = typeof body.title === 'string' ? body.title.replace(/\s+/gu, ' ').trim() : '';
+  if (title === '' || [...title].length > limits.title) return { invalid: 'title' };
+  const task: NewTask = { title };
+  if (body.text !== undefined && body.text !== null) {
+    if (typeof body.text !== 'string' || [...body.text].length > limits.text) return { invalid: 'text' };
+    if (body.text.trim() !== '') task.text = body.text;
+  }
+  if (body.status !== undefined && body.status !== null) {
+    // As `POST …/notes/<note>/status` takes it: `own:<key>`.
+    if (typeof body.status !== 'string' || !/^own:[A-Za-z0-9_:-]{1,64}$/u.test(body.status))
+      return { invalid: 'status' };
+    task.status = body.status.slice('own:'.length);
+  }
+  const fields = Object.fromEntries(
+    (['assignee', 'priority', 'dueOn', 'labels'] as const).flatMap((field) =>
+      body[field] === undefined || body[field] === null ? [] : [[field, body[field]]],
+    ),
+  );
+  if (Object.keys(fields).length > 0) {
+    const change = readTaskChange(fields);
+    if ('invalid' in change) return change;
+    if (typeof change.assignee === 'string') task.assignee = change.assignee;
+    if (typeof change.priority === 'string') task.priority = change.priority;
+    if (typeof change.dueOn === 'string') task.dueOn = change.dueOn;
+    if (change.labels !== undefined && change.labels.length > 0) task.labels = change.labels;
+  }
+
+  return task;
+}
