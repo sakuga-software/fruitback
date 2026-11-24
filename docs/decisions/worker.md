@@ -5015,7 +5015,7 @@ destination yet when it is off: a note is then refused, and the widget keeps it.
   name, or the address of a member with no name, as the menu shows it. A grant whose role does not `read-members` gets no member.
 - **`update_task` writes as the console and `set_note_status` do.** It reads every field with
   `readTaskChange`, and the status with the reads of `set_note_status`, before any write. The fields
-  go through `setTaskFields`, with `manages: true`: a key that writes has a member with
+  go through `setTaskFields`, with the member of the key (`grant.account`) and `manages: true`: a key that writes has a member with
   `manage-sites` (FRU-461). Its transaction refuses a member or a label of elsewhere, and writes
   nothing then. The status goes through `store.setStatus` and the index after; a status that fails
   then answers « The fields were saved; the status was not. », so that the agent sends the status

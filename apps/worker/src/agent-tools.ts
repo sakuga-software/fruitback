@@ -727,7 +727,7 @@ function updateTask(context: AgentToolsContext, args: Record<string, unknown>): 
       if (change !== undefined) {
         // The member of a key that writes manages the sites (FRU-461): the right of the console.
         const set = await context.accounts.setTaskFields(site.workspace, site.id, note, change, {
-          account: '',
+          account: context.grant.account,
           manages: true,
         });
         if (!set.set) return { ok: false, error: TASK_REFUSED[set.reason] };
