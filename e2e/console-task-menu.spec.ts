@@ -19,7 +19,48 @@ const STATUSES = ['new', 'todo', 'progress', 'done', 'closed'].map((stage) => ({
 
 type Sent = { path: string; body: unknown };
 
-async function worker(p: Page, options: { role?: Role; refuse?: string } = {}): Promise<Sent[]> {
+type Member = {
+  id: string;
+  userId: string;
+  role: Role;
+  createdAt: string;
+  user: { id: string; email: string; name: string };
+};
+const member = (n: number, name: string, role: Role = 'member'): Member => ({
+  id: `m${n}`,
+  userId: `a${n}`,
+  role,
+  createdAt: AT,
+  user: { id: `a${n}`, email: `p${n}@acme.dev`, name },
+});
+const MEMBERS = [member(1, 'Ana', 'owner'), member(2, 'Ben Martin'), member(3, 'Gus', 'guest')];
+
+/**
+ * `list-members` with the rule of the worker (FRU-673): a page of 1 to 100 members (`MEMBERS_PAGE` of
+ * `organization-paths.ts`), else `400 invalid-request`, from `offset`, in the order they joined, with
+ * `total`. The stub of before answered any `limit`, so the menu that asked for 200 passed here and
+ * listed nobody on a worker. `fail` counts down the reads that answer `503` first.
+ */
+function members(route: Route, all: readonly Member[], fail?: { reads: number }) {
+  const query = new URL(route.request().url()).searchParams;
+  const limit = Number(query.get('limit') ?? 100);
+  const offset = Number(query.get('offset') ?? 0);
+  if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
+    return route.fulfill({ status: 400, json: { error: 'invalid-request', field: 'limit' } });
+  }
+  if (fail !== undefined && fail.reads > 0) {
+    fail.reads -= 1;
+
+    return route.fulfill({ status: 503, json: { error: 'store-unavailable' } });
+  }
+
+  return route.fulfill({ json: { members: all.slice(offset, offset + limit), total: all.length } });
+}
+
+async function worker(
+  p: Page,
+  options: { role?: Role; refuse?: string; members?: readonly Member[]; membersFail?: { reads: number } } = {},
+): Promise<Sent[]> {
   const sent: Sent[] = [];
   const labels = [{ id: 'l1', name: 'Bug', color: '#dc2626' }];
   const notes = [
@@ -56,35 +97,7 @@ async function worker(p: Page, options: { role?: Role; refuse?: string } = {}): 
       if (pathname === '/console/workspaces/w1/notes') {
         return route.fulfill({ json: { notes, total: 2, counts: { all: 2 }, statuses: { s1: STATUSES } } });
       }
-      if (pathname.endsWith('/list-members')) {
-        return route.fulfill({
-          json: {
-            members: [
-              {
-                id: 'm1',
-                userId: 'a1',
-                role: 'owner',
-                createdAt: AT,
-                user: { id: 'a1', email: 'ana@acme.dev', name: 'Ana' },
-              },
-              {
-                id: 'm2',
-                userId: 'a2',
-                role: 'member',
-                createdAt: AT,
-                user: { id: 'a2', email: 'ben@acme.dev', name: 'Ben Martin' },
-              },
-              {
-                id: 'm3',
-                userId: 'a3',
-                role: 'guest',
-                createdAt: AT,
-                user: { id: 'a3', email: 'gus@else.dev', name: 'Gus' },
-              },
-            ],
-          },
-        });
-      }
+      if (pathname.endsWith('/list-members')) return members(route, options.members ?? MEMBERS, options.membersFail);
       if (pathname === '/console/workspaces/w1/labels') {
         if (request.method() === 'GET') return route.fulfill({ json: { labels } });
         const body = request.postDataJSON() as { name: string; color: string };
@@ -103,8 +116,10 @@ async function worker(p: Page, options: { role?: Role; refuse?: string } = {}): 
         if (note?.task !== undefined) {
           Object.assign(note.task, body.priority === undefined ? {} : { priority: body.priority });
           if (body.labels !== undefined) note.task.labels = labels.filter((one) => body.labels?.includes(one.id));
-          if (body.assignee !== undefined)
-            Object.assign(note.task, { assignee: { id: body.assignee, name: 'Ben Martin' } });
+          if (body.assignee !== undefined) {
+            const named = (options.members ?? MEMBERS).find((one) => one.user.id === body.assignee);
+            Object.assign(note.task, { assignee: { id: body.assignee, name: named?.user.name ?? '' } });
+          }
         }
 
         return route.fulfill({ status: 204 });
@@ -198,4 +213,53 @@ test('a new label that the task does not take keeps the dialog open, and says wh
     '/console/workspaces/w1/labels',
     '/console/workspaces/w1/notes/n1/task',
   ]);
+});
+
+test('a workspace past a hundred members offers every one of them, and a task goes to the last one (FRU-673)', async ({
+  page: p,
+}) => {
+  // 130 members: two pages of the worker. The menu asked for 200 in one page, got a 400, and listed nobody.
+  const crowd = [member(1, 'Ana', 'owner'), ...Array.from({ length: 129 }, (_, n) => member(n + 2, `Person ${n + 2}`))];
+  const sent = await worker(p, { members: crowd });
+  const asked: string[] = [];
+  p.on('request', (request) => {
+    if (request.url().includes('/list-members')) asked.push(new URL(request.url()).searchParams.toString());
+  });
+  await p.goto(`${CONSOLE}/w/w1/notes`);
+  await row(p, 'The headline').getByText('The headline').click({ button: 'right' });
+  await p.getByRole('menuitem', { name: 'Assignee' }).hover();
+
+  const assignee = p.getByRole('menu', { name: 'Assignee' });
+  await expect(assignee.getByRole('menuitemradio', { name: 'Ana' })).toBeVisible();
+  await expect(assignee.getByRole('menuitemradio')).toHaveCount(1 + 130);
+  await assignee.getByRole('menuitemradio', { name: 'Person 130' }).click();
+
+  expect(sent).toEqual([{ path: '/console/workspaces/w1/notes/n1/task', body: { assignee: 'a130' } }]);
+  await expect(row(p, 'The headline').locator('[data-task-marks]')).toContainText('Person 130');
+  // Two pages of a hundred at most, the second from the hundredth member.
+  expect(asked).toEqual(['organizationId=w1&limit=100&offset=0', 'organizationId=w1&limit=100&offset=100']);
+});
+
+test('the members that did not load are said in the menu, and « Try again » reads them (FRU-673)', async ({
+  page: p,
+}) => {
+  const sent = await worker(p, { membersFail: { reads: 1 } });
+  await p.goto(`${CONSOLE}/w/w1/notes`);
+  await row(p, 'The headline').getByText('The headline').click({ button: 'right' });
+  await p.getByRole('menuitem', { name: 'Assignee' }).hover();
+
+  const assignee = p.getByRole('menu', { name: 'Assignee' });
+  // Not a menu with nobody in it: the sentence, the cause, and a way to read them again.
+  await expect(assignee.getByRole('menuitem', { name: /The members did not load\./ })).toBeDisabled();
+  await expect(assignee.getByRole('menuitem', { name: /The members did not load\./ })).toContainText(
+    'Fruitback hit an error.',
+  );
+  await expect(assignee.getByRole('menuitemradio')).toHaveCount(0);
+  await assignee.getByRole('menuitem', { name: 'Try again' }).click();
+
+  await row(p, 'The headline').getByText('The headline').click({ button: 'right' });
+  await p.getByRole('menuitem', { name: 'Assignee' }).hover();
+  await p.getByRole('menuitemradio', { name: 'Ben Martin' }).click();
+  expect(sent).toEqual([{ path: '/console/workspaces/w1/notes/n1/task', body: { assignee: 'a2' } }]);
+  await expect(row(p, 'The headline').locator('[data-task-marks]')).toContainText('Ben Martin');
 });

@@ -7,6 +7,7 @@ import { NoteIcon } from '../note-icons';
 import { statusName } from '../note-status';
 import { STAGE_NAMES, type Stage } from '../stages';
 import { Button, Checks, Choice, Drawer, Field, IconLink, KeyValue, LoadFailed, Problem } from '../ui';
+import { ReadProblem } from '../read-problem';
 import { useLocale } from '../use-locale';
 import { type IndexedNote } from './notes-model';
 import { TaskMenuContext } from './task-menu';
@@ -252,6 +253,17 @@ function TaskFieldsForm({ note, onProblem }: { note: IndexedNote; onProblem: (pr
             : [{ value: task.assignee.id, label: task.assignee.name || t('a member') }]),
         ]}
       />
+      {/* FRU-673: the members did not load, so the field offers none of them: it says so. */}
+      {editable && seam.peopleRead === 'failed' ? (
+        <div className="flex flex-col items-start gap-[8px]" data-task-people-failed="">
+          <Problem>
+            {t('The members did not load.')} <ReadProblem />
+          </Problem>
+          <Button tone="outline" onClick={seam.readPeople}>
+            {t('Try again')}
+          </Button>
+        </div>
+      ) : null}
       <Choice
         label={t('Priority')}
         value={task.priority ?? NONE}

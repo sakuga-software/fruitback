@@ -1839,6 +1839,16 @@ chose it. The notes stay in the worker: this is one more copy, sent out.
   whatever the receiver sends in that time, and the body of the answer is not read.
 - A workspace can make the worker send requests to a third party: one per note its own sites
   receive, and six more attempts at most. The notes are rate-limited where they come in.
+- The address is told of each change of a task it was sent: `note.status_changed`,
+  `note.replied` and `note.updated`, one request for each task changed, and none for a change that
+  changes nothing. Each holds the ids of the workspace, the site, the note and the reply, the names
+  of the statuses and stages, and the names of the fields that changed: never the text of a reply
+  nor the value of a field (the assignee, the labels, the day). The event is queued in the
+  transaction that writes the change, so no event is sent for a change that rolled back, and it goes
+  by the same queue, signature and attempts as a note. A queue that refuses the event is logged, and
+  the change is kept: the event is then not sent. The members who change tasks are the members who may
+  (the rights of the status), so a workspace sends no more requests than its own members
+  make changes.
 - The files of a note travel as addresses, not as bytes. The queue keeps the id, the
   name, the type and the size of each file. Each attempt signs, in its body, an address of one hour
   on the public address of the worker for each file that still waits, and leaves out a file whose
@@ -2477,8 +2487,11 @@ the database for a site with no destination.
 - Which note. The id names an issue of a tracker, which can be of another site. The worker reads
   the page for the site first and writes only under a note that the read answers, else `404`.
   test:`answers 404 for a note of another site on the same page, and writes nothing`.
-- Where not. An address that only receives (REST), and a tracker whose workspace hides its
-  replies, take none: `403 replies-not-taken`, and `GET /feedback` answers no `canReply` there.
+- Where not. A tracker whose workspace hides its replies, Slack, and GitHub take none:
+  `403 replies-not-taken`, and `GET /feedback` answers no `canReply` there. An address (REST) takes
+  one since 0.8.0, unless its workspace hides the replies of that connector: the worker keeps it,
+  as for a site with no destination, and the address receives `note.replied` with its id, never its
+  text. test:`an address takes a reply, and is told of it by its id alone`.
 - How much. 1 to 2 000 characters, refused beyond and never cut. 5 replies a minute with no
   session from one address, counted apart from the requests and in the same database; a member is
   not counted. test:`takes 5 replies with no session from one address in a minute, and a member's after them`.

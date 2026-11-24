@@ -1177,6 +1177,13 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   is saved at once with `POST …/notes/<note>/task` or `…/status`, then the list is read again; a
   refusal is said under the note. Every note offers « Copy the link to the note ».
 - **The assignee is a member of the workspace**, read with `list-members`; a guest is not offered.
+  **The members are read a page of 100 at a time, to the last one** (FRU-673,
+  `assignable-people.ts`): 100 is `MEMBERS_PAGE` of the worker, which refuses a larger page with a
+  `400`. The menu asked for 200 in one page, and listed nobody. **A read that failed is said**, in
+  the menu and under the field of the page of a task, with « Try again »: never a menu with nobody
+  in it. `assignable-people.test.ts` reads `MEMBERS_PAGE` in the worker, so a smaller page there
+  fails it; the stub of `list-members` in `e2e/console-task-menu.spec.ts` keeps the rule of the
+  worker.
   **The day is today, tomorrow or in a week**, in the calendar of the browser; a day of a calendar
   comes with the page of a task (FRU-653).
 - **« New label… » is for an owner or an admin** (`manage-sites`, as the worker says). It opens a
