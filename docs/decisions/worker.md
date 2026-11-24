@@ -5038,6 +5038,13 @@ destination yet when it is off: a note is then refused, and the widget keeps it.
   the notes. So the console, `/mcp`, the extension and a change of many tasks (one event for each
   task) emit, and a change is kept with its event or not at all. A path that writes a status, a
   field or a reply some other way must call it too.
+- **A queue that refuses the event fails the change**, in its one transaction: the person is answered
+  `502 store-unavailable`, keeps what they typed, and tries again. `note.created` does the opposite
+  (the note is kept, the delivery is logged as lost), because the widget would send a kept note
+  twice; a change here is not kept, so it cannot be done twice, and an event is never lost. Chosen
+  on 2026-11-24 for the review of #912.
+- **No order between the requests**: the queue sends a pass together and tries a failed one later.
+  `at` orders the changes of a task; the two events of one change of many tasks share it.
 - **Only a note sent to an address**: the row of the index that names it `FB-<row>`, and the same
   note, whose connector is a `rest` connector of its workspace. A note with no destination, of a
   tracker, of Slack, or of a connector removed since gets none.

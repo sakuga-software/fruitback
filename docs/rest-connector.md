@@ -144,6 +144,11 @@ disconnected since.
   one request for each task.
 - A change that changes nothing sends nothing: the status the task is in already, the assignee it
   has, the same labels in another order.
+- The requests come in no fixed order: an attempt that failed comes after a later change, and the
+  requests of one pass leave together. Order the changes of a task by `at`, or read the note of now.
+  A change of many tasks that sets a field and the status sends `note.updated` and
+  `note.status_changed` for each task with the same `at`: they say different things, and their
+  order does not matter.
 - A receiver written before these events answers `2xx` and reads nothing from them, or answers
   something else, and they are tried again as any delivery.
 
