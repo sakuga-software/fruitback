@@ -270,7 +270,7 @@ frame(
     page(
       1440,
       table([1, 2, 3]),
-      `<div style="--x:640px">${bar({ count: 3, page: 5, open: 'labels' })}${labelsMenu()}</div>`,
+      `<div style="--x:804px">${bar({ count: 3, page: 5, open: 'labels' })}${labelsMenu()}</div>`,
     ),
 );
 frame(
