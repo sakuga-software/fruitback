@@ -159,7 +159,6 @@ export function useTaskCreate({
             setTitleMissing(false);
           }}
           maxLength={TITLE_LENGTH}
-          required
           autoFocus
           {...(titleMissing ? { error: t('Give the task a title.') } : {})}
         />
@@ -233,7 +232,9 @@ export function useTaskCreate({
           <Button tone="outline" onClick={() => setOpen(false)}>
             {t('Cancel')}
           </Button>
-          <Button type="submit" disabled={saving || site === ''}>
+          {/* Not disabled while it saves: the focus would leave the dialog, and Escape with it. The form
+            sends once. */}
+          <Button type="submit" disabled={site === ''}>
             {saving ? t('Creating…') : t('Create the task')}
           </Button>
         </div>
