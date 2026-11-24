@@ -1,7 +1,7 @@
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { type Answer, type Member, ORGANIZATION, call } from '../api';
 import { assignablePeople } from '../assignable-people';
-import { type Listed, known } from '../listed';
+import { type Listed, known, listedOf } from '../listed';
 import { msg, t } from '../i18n';
 import { problemOf } from '../problems';
 import { STATUS_NOT_SAVED, STATUS_PROBLEMS, type StatusChoice } from '../note-status';
@@ -114,13 +114,21 @@ export function useTaskSeam({
 }): { seam: TaskMenuSeam; dialog: ReactNode } {
   const [people, setPeople] = useState<Listed<TaskPerson>>('loading');
   const peopleAsked = useRef(0);
-  const [labels, setLabels] = useState<TaskLabel[]>([]);
+  const [labels, setLabels] = useState<Listed<TaskLabel>>('loading');
+  const labelsAsked = useRef(0);
   // The tasks a new label goes on: the one of a menu, or the selection (FRU-656).
   const [labelFor, setLabelFor] = useState<readonly IndexedNote[] | undefined>();
 
+  /**
+   * FRU-675: the labels of the workspace. A refused read was dropped, and the menu said « No label
+   * yet » to a member, as if the workspace had none. A failed read says so now, as the members do.
+   */
   const readLabels = useCallback(async () => {
+    // The answer of a read that is no longer the last one, of another workspace maybe, is dropped.
+    const asked = (labelsAsked.current += 1);
+    setLabels('loading');
     const answer = await call<{ labels: TaskLabel[] }>('GET', `${base}/labels`);
-    if (answer.ok) setLabels(answer.data.labels);
+    if (asked === labelsAsked.current) setLabels(listedOf(answer, (data) => data.labels));
   }, [base]);
 
   /**
@@ -203,7 +211,9 @@ export function useTaskSeam({
     people: known(people) ?? [],
     peopleRead: typeof people === 'string' ? people : 'read',
     readPeople: () => void readPeople(),
-    labels,
+    labels: known(labels) ?? [],
+    labelsRead: typeof labels === 'string' ? labels : 'read',
+    readLabels: () => void readLabels(),
     canAddLabel: manages,
     statusesOf,
     actionsOf,
