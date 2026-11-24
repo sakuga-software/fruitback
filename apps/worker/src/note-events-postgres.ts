@@ -9,10 +9,15 @@ import { connectors, deliveries, note_index, sites } from './postgres-schema.ts'
 export type TaskChangeOf = { row: number; note: string; change: TaskEvent };
 
 /**
- * Queues the events of the tasks of one site (FRU-660), **in the transaction that wrote them**: the
- * change and its event are kept together, or neither is. Each store that writes a status, a reply
- * or a field calls it, so every path emits: the console, `/mcp`, the extension, a change of many
- * tasks at once (one event for each task).
+ * Queues the events of the tasks of one site (FRU-660), in the transaction that wrote them: an event
+ * is never sent for a change that rolled back. Each store that writes a status, a reply or a field
+ * calls it, so every path emits: the console, `/mcp`, the extension, a change of many tasks at once
+ * (one event for each task).
+ *
+ * WARNING: the queue is a savepoint of that transaction, and a failure of it is logged, never thrown.
+ * The change is kept first, as for `note.created` and `note.edited`: losing what a person just wrote
+ * is the one failure the product cannot afford (review of #912). The cost is an event that is not
+ * sent, which the log says.
  *
  * Only a note sent to an address gets one: the row of the index that names it `FB-<row>` and the same
  * note, through a `rest` connector of the workspace of that row. A note with no destination, of a
@@ -26,6 +31,18 @@ export async function queueTaskEvents(
   now: number,
 ): Promise<void> {
   if (changes.length === 0) return;
+  try {
+    await db.transaction((savepoint) => queue(savepoint, site, changes, now));
+  } catch (error) {
+    console.error(
+      `[fruitback] a change of a task was kept and its event not queued: ${error instanceof Error ? error.message : String(error)}`,
+      site,
+      changes.map((one) => identifierFor(one.row)),
+    );
+  }
+}
+
+async function queue(db: Db, site: string, changes: readonly TaskChangeOf[], now: number): Promise<void> {
   const found = await db
     .select({
       reference: note_index.reference,

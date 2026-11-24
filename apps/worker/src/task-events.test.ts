@@ -346,6 +346,38 @@ describe('the fields of a task sent to an address (FRU-660)', () => {
   });
 });
 
+describe('a queue that refuses an event (review of #912)', () => {
+  it('keeps the change, the status, the fields and the reply, and logs the event it could not queue', async () => {
+    const { world, setStatus, setTask, reply, waiting } = await acme();
+    // The queue refuses every event of a task, as a broken table would.
+    await rowsOf(
+      world.database,
+      `ALTER TABLE deliveries ADD CONSTRAINT refuses_events CHECK (event IN ('note.created', 'agent.requested'))`,
+    );
+    const logged: unknown[][] = [];
+    const error = console.error;
+    console.error = (...said: unknown[]) => void logged.push(said);
+    try {
+      await setStatus('own:todo');
+      await setTask({ priority: 'high' });
+      await reply('Kept whatever the queue says.');
+    } finally {
+      console.error = error;
+    }
+
+    assert.deepEqual(await rowsOf(world.database, 'SELECT stage, priority FROM notes'), [
+      { stage: 'todo', priority: 'high' },
+    ]);
+    assert.equal((await rowsOf(world.database, 'SELECT id FROM note_comments')).length, 1, 'the reply is kept');
+    assert.deepEqual(await waiting(), []);
+    assert.equal(
+      logged.filter((said) => String(said[0]).includes('its event not queued')).length,
+      3,
+      'one line for each change',
+    );
+  });
+});
+
 describe('a task with no address (FRU-660)', () => {
   it('sends no event: a note with no destination has no address to tell', async () => {
     const { world, setStatus, setTask, deliver } = await acme({ destination: 'none' });
