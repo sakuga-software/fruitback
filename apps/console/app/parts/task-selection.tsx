@@ -136,9 +136,11 @@ export function useSelectionKeys(selection: TaskSelection): void {
         selection.clear();
       }
     };
-    document.addEventListener('keydown', onKey);
+    // On the window, past the root of React (the document, in this console): a handler of the screen
+    // that stops the key (a question asked again) stops it before it reaches here.
+    window.addEventListener('keydown', onKey);
 
-    return () => document.removeEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
   }, [selection]);
 }
 

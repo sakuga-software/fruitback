@@ -1740,9 +1740,9 @@ export function BranchMenu({ branch, disabled = false }: { branch: TreeBranch; d
 }
 
 /**
- * The box that selects a row or a card (FRU-656): a box of the browser, named by `label`, in a frame of
- * 28 px that takes the press too. `onToggle` says whether Shift was held (`range`): a press of the
- * pointer and the Space key both say it. `mixed`: some of what it stands for is selected.
+ * The box that selects a row or a card (FRU-656): the checkbox of HeroUI, named by `label`, its box of
+ * 16 px in a frame of 28 px that takes the press too. `onToggle` says whether Shift was held (`range`),
+ * for a press of the pointer and for the Space key. `mixed`: some of what it stands for is selected.
  */
 export function SelectBox({
   label,
@@ -1757,25 +1757,28 @@ export function SelectBox({
   onToggle: (checked: boolean, range: boolean) => void;
   className?: string;
 }) {
-  const box = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-    if (box.current !== null) box.current.indeterminate = mixed;
-  }, [mixed]);
+  // The change of HeroUI carries no event: Shift is read from the press or the key that makes it.
+  const shift = useRef(false);
+  const held = (event: { shiftKey: boolean }) => {
+    shift.current = event.shiftKey;
+  };
 
   return (
-    <label className={`kit-select ${className}`}>
-      <input
-        ref={box}
-        type="checkbox"
+    <span className={`kit-select ${className}`} onPointerDownCapture={held} onKeyDownCapture={held}>
+      <HeroCheckbox
         aria-label={label}
-        checked={checked}
-        onChange={(event) => {
-          // A checkbox changes on a click, of the pointer or of the Space key: it carries Shift.
-          const { nativeEvent } = event;
-          onToggle(event.target.checked, 'shiftKey' in nativeEvent && nativeEvent.shiftKey === true);
-        }}
-      />
-    </label>
+        isSelected={checked}
+        isIndeterminate={mixed}
+        onChange={(next) => onToggle(next, shift.current)}
+        className="kit-checkbox"
+      >
+        <HeroCheckbox.Content>
+          <HeroCheckbox.Control>
+            <HeroCheckbox.Indicator />
+          </HeroCheckbox.Control>
+        </HeroCheckbox.Content>
+      </HeroCheckbox>
+    </span>
   );
 }
 

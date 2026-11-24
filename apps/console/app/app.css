@@ -2314,12 +2314,15 @@ textarea {
   cursor: pointer;
 }
 
-.kit-select input {
-  width: 16px;
-  height: 16px;
-  margin: 0;
-  accent-color: var(--color-ink);
-  cursor: pointer;
+.kit-select .kit-checkbox,
+.kit-select .kit-checkbox .checkbox__content {
+  min-height: 0;
+}
+
+.kit-checkbox[data-indeterminate='true'] .checkbox__control {
+  border-color: var(--color-ink);
+  background: var(--color-ink);
+  color: var(--surface);
 }
 
 [data-selecting='false'] .kit-select-reveal {

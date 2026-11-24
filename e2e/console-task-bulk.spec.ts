@@ -104,6 +104,15 @@ async function worker(p: Page, options: { refuse?: string; locale?: 'en' | 'fr';
 const row = (p: Page, text: string) => p.locator('tr', { hasText: text });
 const box = (p: Page, text: string) => p.getByRole('checkbox', { name: new RegExp(`^Select: ${text}`) });
 const bar = (p: Page) => p.getByRole('region', { name: 'The selected notes' });
+/**
+ * Presses the box of the row or the card of a note. The input of a box of HeroUI is hidden under its
+ * drawing: a person presses the box (FRU-550).
+ */
+const press = (p: Page, text: string, modifiers: ('Shift' | 'ControlOrMeta')[] = []) =>
+  p
+    .locator('tr[data-note], li[data-note]', { hasText: text })
+    .locator('.kit-select .checkbox__control')
+    .click({ modifiers });
 
 test('a box, then Shift and a click, select a range; the bar changes them in one call; Escape clears', async ({
   page: p,
@@ -115,9 +124,9 @@ test('a box, then Shift and a click, select a range; the bar changes them in one
   await expect(row(p, 'The returns policy').getByRole('checkbox')).toHaveCount(0);
   await expect(bar(p)).toHaveCount(0);
 
-  await box(p, 'The headline').check();
+  await press(p, 'The headline');
   await expect(bar(p)).toContainText('1 note selected');
-  await box(p, 'The footer').click({ modifiers: ['Shift'] });
+  await press(p, 'The footer', ['Shift']);
   await expect(bar(p)).toContainText('3 notes selected');
   await expect(box(p, 'The logo')).toBeChecked();
   await expect(p.getByRole('status').filter({ hasText: '3 notes selected' })).toHaveCount(1);
@@ -140,9 +149,14 @@ test('a box, then Shift and a click, select a range; the bar changes them in one
     body: { notes: ['n1', 'n2', 'n3'], change: { addLabels: ['l1'] } },
   });
 
+  // The first Escape closes the menu, which keeps it; the next one clears the selection.
   await p.keyboard.press('Escape');
+  await expect(p.getByRole('menu')).toHaveCount(0);
+  await expect(bar(p)).toBeVisible();
   await p.keyboard.press('Escape');
   await expect(bar(p)).toHaveCount(0);
+  // The focus was in the bar: it goes to the list, not to the page.
+  await expect(p.getByRole('region', { name: 'Notes', exact: true })).toBeFocused();
   await expect(box(p, 'The logo')).not.toBeChecked();
 });
 
@@ -182,8 +196,8 @@ test('Cmd or Ctrl and A selects the page; a task that is not yours is said; Dele
 test('a right click on a selected task opens the menu of the whole selection', async ({ page: p }) => {
   const sent = await worker(p);
   await p.goto(`${CONSOLE}/w/w1/notes`);
-  await box(p, 'The headline').check();
-  await box(p, 'The logo').check();
+  await press(p, 'The headline');
+  await press(p, 'The logo');
 
   await row(p, 'The logo').getByText('The logo').click({ button: 'right' });
   await expect(p.getByRole('menuitem', { name: 'Copy the link to the note' })).toHaveCount(0);
@@ -202,10 +216,8 @@ test('a right click on a selected task opens the menu of the whole selection', a
 test('on the board, a card is selected by its box, and a refusal is said in the bar', async ({ page: p }) => {
   const sent = await worker(p, { refuse: 'unknown-label' });
   await p.goto(`${CONSOLE}/w/w1/notes?view=board`);
-  const card = (text: string) => p.locator('li[data-note]', { hasText: text });
-  await card('The headline').hover();
-  await box(p, 'The headline').check();
-  await box(p, 'The footer').check();
+  await press(p, 'The headline');
+  await press(p, 'The footer');
   await expect(bar(p)).toContainText('2 notes selected');
 
   await bar(p).getByRole('button', { name: 'Labels' }).click();
@@ -219,7 +231,7 @@ test('at 390 px in French, the bar holds in the screen', async ({ page: p }) => 
   await p.setViewportSize({ width: 390, height: 844 });
   await worker(p, { locale: 'fr' });
   await p.goto(`${CONSOLE}/w/w1/notes`);
-  await p.getByRole('checkbox', { name: /^Sélectionner : The headline/ }).check();
+  await press(p, 'The headline');
   const french = p.getByRole('region', { name: 'Les notes sélectionnées' });
   await expect(french).toContainText('1 note sélectionnée');
   await expect(french.getByRole('button', { name: 'Échéance' })).toBeVisible();
