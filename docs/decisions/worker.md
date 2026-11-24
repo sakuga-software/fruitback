@@ -5022,3 +5022,36 @@ destination yet when it is off: a note is then refused, and the widget keeps it.
 
 - Before, the console had no gesture for several tasks. Changing 25 of them was 25 calls, each
   followed by a read of the list; a refusal in the middle left some changed and some not.
+
+## The events of a task, sent to an address (FRU-660)
+
+### The rules, in short
+
+- **Three events of the queue of the deliveries**: `note.status_changed` (the status before and
+  after as `own:<key>`, and the stage of each), `note.replied` (the id of the reply) and
+  `note.updated` (the names of the fields that changed, in the order of `TASK_EVENT_FIELDS`:
+  `assignee`, `priority`, `labels`, `dueOn`). Ids and names only, as `note.edited` (FRU-605): never
+  the text of a reply nor the value of a field. `note-events.ts` writes the bodies.
+- **The store queues them, in the transaction that writes the change** (`queueTaskEvents` of
+  `note-events-postgres.ts`): `writeStatus` and `writeTaskFields` of the accounts, which write one
+  task and each task of `changeTasks` (FRU-656), `removeSiteStatus`, and `setStatus` and `reply` of
+  the notes. So the console, `/mcp`, the extension and a change of many tasks (one event for each
+  task) emit, and a change is kept with its event or not at all. A path that writes a status, a
+  field or a reply some other way must call it too.
+- **Only a note sent to an address**: the row of the index that names it `FB-<row>`, and the same
+  note, whose connector is a `rest` connector of its workspace. A note with no destination, of a
+  tracker, of Slack, or of a connector removed since gets none.
+- **A change that changes nothing emits nothing**: the status compared as `own:<key>`, the fields
+  compared one by one, the labels as a set (`changedTaskFields`). The place in a column and the
+  archive are no field of the event: they emit nothing.
+- **A removed status that moves its tasks emits one event for each task.** A status that changes
+  stage changes no status of a task, and emits nothing. A withdrawal emits `note.withdrawn` only.
+
+### The reasons
+
+FRU-649 asked for an event for a status, a reply and a field. The store, and not a route, queues
+them, because four paths write a status (the console, the extension, `/mcp`, the removal of a
+status) and more come (the change of many tasks, `/mcp` for the fields): a route that forgot would
+be a change the address never hears of. In the transaction, because an event queued after the
+commit is lost when the process stops between the two, and one queued before is sent for a change
+that rolled back.
