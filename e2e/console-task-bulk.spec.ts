@@ -150,6 +150,12 @@ test('a box, then Shift and a click, select a range; the bar changes them in one
   for (const text of ['The headline', 'The logo', 'The footer']) {
     await expect(row(p, text).locator('[data-task-marks]')).toContainText('High');
   }
+  // A list read again makes what the bar said stale: the board shows the same selection, unsaid.
+  await p.getByRole('button', { name: 'Board', exact: true }).click();
+  await expect(bar(p)).toContainText('3 notes selected');
+  await expect(bar(p)).not.toContainText('3 notes changed.');
+  await p.getByRole('button', { name: 'Table', exact: true }).click();
+  await expect(bar(p)).toContainText('3 notes selected');
   // The selection stays after a change: a label goes on every task, in one more call.
   await bar(p).getByRole('button', { name: 'Labels' }).click();
   await p.getByRole('menuitemcheckbox', { name: 'Bug' }).click();

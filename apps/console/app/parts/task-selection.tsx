@@ -53,6 +53,15 @@ export function useTaskSelection(
   const anchor = useRef<string | undefined>(undefined);
   const choosable = useMemo(() => shown.filter(selectable), [shown, selectable]);
 
+  // What a change said holds for the list it was said over: the list read after that change. A list
+  // read again later (a filter, a page, the board) makes it stale, and it goes.
+  const saidOver = useRef<readonly IndexedNote[] | undefined>(undefined);
+  useEffect(() => {
+    if (said === undefined) saidOver.current = undefined;
+    else if (saidOver.current === undefined) saidOver.current = choosable;
+    else if (saidOver.current !== choosable) say(undefined);
+  }, [said, choosable]);
+
   // A task no longer shown is no longer selected: a change of the bar never reaches a task off screen.
   useEffect(() => {
     setIds((was) => {
