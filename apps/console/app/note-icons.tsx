@@ -28,7 +28,9 @@ const PATHS = {
   verified: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M8.5 12.5l2.5 2.5 4.5-5',
   // A circle with a question mark: nobody vouched for the visitor.
   anonymous: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.4M12 17h.01',
-} as const satisfies Record<NoteAuthor['kind'] | 'open' | 'add', string>;
+  // A cross: what is chosen is let go (FRU-656).
+  close: 'M6 6l12 12M18 6L6 18',
+} as const satisfies Record<NoteAuthor['kind'] | 'open' | 'add' | 'close', string>;
 
 type NoteIconName = keyof typeof PATHS;
 

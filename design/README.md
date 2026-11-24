@@ -183,3 +183,15 @@ step (FRU-168). The mockup of 2026-10-13 keeps all three.
 follows them: the field stays required for the browser and for a screen reader, and the step says
 what is missing when it is sent empty. Arbitrated by the orchestrator on 2026-10-12, on delegation
 from Mathieu (FRU-168): what the board shows.
+
+## Several tasks at once (FRU-656, 2026-11-24)
+
+`task-bulk/task-bulk.html` is the board of the selection of the screen « Notes » (FRU-656,
+[console.md](../docs/decisions/console.md), « Several tasks at once »): a box on each task
+Fruitback keeps, in the table and on the board; Shift and a click for a range, Cmd or Ctrl and A for
+the page, Escape to clear; the bar at the foot of the screen with the five fields of the menu of a
+task, « Archive » and « Delete… » asked again; the menu of a task on a selection; tasks the person
+cannot change, a refusal; and 390 px. Frames at 1440 px are in English, at 390 px in French, and the
+board ends with its decisions and every text in both languages. It is drawn on the tokens of the
+console. `tools/build.mjs` writes it (edit the script, not the HTML); `shots/` holds a picture of
+each frame. The agent fru-tasks-bulk decided its choices, as the orchestrator asked.

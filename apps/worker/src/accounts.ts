@@ -4,7 +4,7 @@ import type { SiteStatus } from './site-statuses.ts';
 import { NOTE_STAGES, type NoteStage, type TaskIssue } from '@fruitback/shared';
 import type { ClientMap } from './clients.ts';
 import { PLUGIN_KINDS } from './trackers/kinds.ts';
-import type { NewTask, TaskChange, TaskLabel } from './task-fields.ts';
+import type { NewTask, TaskChange, TaskLabel, TasksChange } from './task-fields.ts';
 
 /**
  * People, teams and the sites a team reviews (FRU-96).
@@ -897,6 +897,54 @@ export type AccountStore = {
    * reads. `who`: the reader, whose own task says `mine`.
    */
   readTask(workspace: string, site: string, note: string, who?: { account: string }): Promise<TaskIssue | undefined>;
+  /**
+   * Changes several tasks the worker keeps at once (FRU-656), in one transaction: every task is
+   * checked as `setNoteStatus` and `setTaskFields` check one, with the same rights, and one refusal
+   * changes none of them. `change.status` is a key of the worker's store that the site of every task
+   * must have. `addLabels` and `removeLabels` keep the other labels of each task.
+   *
+   * A refusal names the first task it is about, by its site and its note, and says why: the reasons of
+   * `setNoteStatus` and `setTaskFields`, and `too-many-labels` for a task that would hold more than
+   * `MAX_LABELS`. `notes`: each task changed, as `setNoteStatus` answers one; `stage` and `was` are
+   * there when the status changed.
+   */
+  changeTasks(
+    workspace: string,
+    tasks: readonly { site: string; note: string }[],
+    change: TasksChange,
+    who: { account: string; manages: boolean },
+  ): Promise<
+    | {
+        set: true;
+        notes: { site: string; note: string; identifier: string; page: string; stage?: NoteStage; was?: NoteStage }[];
+      }
+    | {
+        set: false;
+        reason:
+          | 'not-found'
+          | 'not-kept'
+          | 'not-allowed'
+          | 'not-member'
+          | 'unknown-label'
+          | 'too-many-labels'
+          | 'unknown-status'
+          | 'status-hidden';
+        task?: { site: string; note: string };
+      }
+  >;
+  /**
+   * Deletes several tasks the worker keeps at once (FRU-656), in one transaction, each with the
+   * rights of `deleteTask`: one refusal deletes none of them. `pages`: the pages whose cached reads
+   * are now wrong.
+   */
+  deleteTasks(
+    workspace: string,
+    tasks: readonly { site: string; note: string }[],
+    who: { account: string; manages: boolean },
+  ): Promise<
+    | { deleted: true; pages: string[] }
+    | { deleted: false; reason: 'not-found' | 'not-kept' | 'not-allowed'; task: { site: string; note: string } }
+  >;
   /** The labels of a workspace (FRU-652), by name. */
   labels(workspace: string): Promise<TaskLabel[]>;
   /** `taken`: the workspace has a label of this name. */
