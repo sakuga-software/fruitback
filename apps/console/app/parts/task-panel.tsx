@@ -294,6 +294,17 @@ function TaskFieldsForm({ note, onProblem }: { note: IndexedNote; onProblem: (pr
           void settle(actions.change({ dueOn: day === '' ? null : day }));
         }}
       />
+      {/* FRU-675: the labels did not load, so the field has none to offer: it says so, to whoever reads it. */}
+      {seam.labelsRead === 'failed' ? (
+        <div className="flex flex-col items-start gap-[8px]" data-task-labels-failed="">
+          <Problem>
+            {t('The labels did not load.')} <ReadProblem />
+          </Problem>
+          <Button tone="outline" onClick={seam.readLabels}>
+            {t('Try again')}
+          </Button>
+        </div>
+      ) : null}
       {seam.labels.length === 0 ? null : (
         <Checks
           label={t('Labels')}
