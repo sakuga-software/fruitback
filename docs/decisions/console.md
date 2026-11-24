@@ -1189,6 +1189,12 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
 - **« New label… » is for an owner or an admin** (`manage-sites`, as the worker says). It opens a
   dialog, a name and one of eight colours (`label-colors.ts`: data the worker keeps, not tokens),
   and the label goes on the task it was asked from. The menu closes before the dialog opens.
+- **The labels of the workspace are read as the members are** (FRU-675): `labelsRead` and
+  `readLabels` in the seam. **A read that failed is said**, in the menu and under the fields of the
+  page of a task, with « Try again »: never « No label yet », which said to a member that the
+  workspace had none. « New label… » waits for the read too: a new label could take the name of one
+  that is not shown. `listed.test.ts` finds a list that starts as `[]` and that a refused answer
+  leaves so (`if (!answer.ok) return;` before its setter, or `if (answer.ok) setX(…)`).
 - **Not here yet**: the order of a task in its column, and to archive or delete a task. The worker
   has no route for them.
 

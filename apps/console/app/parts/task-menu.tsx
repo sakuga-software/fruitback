@@ -47,6 +47,8 @@ const NONE = 'none';
 const NEW_LABEL = 'new-label';
 const MEMBERS_LOADING = 'members-loading';
 const MEMBERS_FAILED = 'members-failed';
+const LABELS_LOADING = 'labels-loading';
+const LABELS_FAILED = 'labels-failed';
 const TRY_AGAIN = 'try-again';
 const stageName = (stage: Stage) => t(STAGE_NAMES[stage]);
 
@@ -97,16 +99,6 @@ export function branchesOf(
   const status = sameOf(notes.map((note) => note.status));
   const assignee = sameOf(tasks.map((task) => task.assignee?.id ?? NONE));
   const priority = sameOf(tasks.map((task) => task.priority ?? NONE));
-  const chosen = seam.labels
-    .map((label) => label.id)
-    .filter((id) => tasks.every((task) => task.labels.some((label) => label.id === id)));
-  const labelItems = [
-    ...seam.labels.map((label) => ({ id: label.id, label: label.name, swatch: label.color })),
-    ...(seam.canAddLabel ? [{ id: NEW_LABEL, label: t('New label…'), closes: true }] : []),
-    ...(seam.labels.length === 0 && !seam.canAddLabel
-      ? [{ id: NONE, label: t('No label yet'), detail: t('An owner or an admin adds them.'), disabled: true }]
-      : []),
-  ];
 
   return [
     ...(statuses.length === 0
@@ -146,18 +138,65 @@ export function branchesOf(
       ],
       onAction: (key) => settle(actions.change({ dueOn: key === NONE ? null : dayFromToday(Number(key)) })),
     },
-    {
+    labelsBranch(seam, tasks, actions, settle),
+  ];
+}
+
+/**
+ * The submenu « Labels » (FRU-675): the labels of the workspace, once they are read, and « New
+ * label… » for an owner or an admin. A read that failed says so, with « Try again », and never
+ * « No label yet »: the workspace may hold labels. « New label… » waits for the read too, as a new
+ * label could take the name of one that is not shown.
+ */
+function labelsBranch(
+  seam: TaskMenuSeam,
+  tasks: readonly TaskFields[],
+  actions: TaskActions,
+  settle: (done: Promise<string | undefined>) => void,
+): TreeBranch {
+  if (seam.labelsRead === 'failed') {
+    return {
       id: 'labels',
       label: t('Labels'),
-      choice: 'multiple',
-      checked: chosen,
-      items: labelItems,
+      items: [
+        {
+          id: LABELS_FAILED,
+          label: t('The labels did not load.'),
+          detail: t(isReachable() ? SERVER_CAUSE : UNREACHABLE_CAUSE),
+          disabled: true,
+        },
+        { id: TRY_AGAIN, label: t('Try again') },
+      ],
       onAction: (key) => {
-        if (key === NEW_LABEL) return actions.newLabel();
-        settle(actions.change(chosen.includes(key) ? { removeLabels: [key] } : { addLabels: [key] }));
+        if (key === TRY_AGAIN) seam.readLabels();
       },
+    };
+  }
+
+  const chosen = seam.labels
+    .map((label) => label.id)
+    .filter((id) => tasks.every((task) => task.labels.some((label) => label.id === id)));
+
+  return {
+    id: 'labels',
+    label: t('Labels'),
+    choice: 'multiple',
+    checked: chosen,
+    items:
+      seam.labelsRead === 'loading'
+        ? [{ id: LABELS_LOADING, label: t('Loading…'), disabled: true }]
+        : [
+            ...seam.labels.map((label) => ({ id: label.id, label: label.name, swatch: label.color })),
+            ...(seam.canAddLabel ? [{ id: NEW_LABEL, label: t('New label…'), closes: true }] : []),
+            ...(seam.labels.length === 0 && !seam.canAddLabel
+              ? [{ id: NONE, label: t('No label yet'), detail: t('An owner or an admin adds them.'), disabled: true }]
+              : []),
+          ],
+    onAction: (key) => {
+      if (key === NEW_LABEL) return actions.newLabel();
+      settle(actions.change(chosen.includes(key) ? { removeLabels: [key] } : { addLabels: [key] }));
     },
-  ];
+  };
 }
 
 /**
@@ -211,7 +250,12 @@ export type TaskMenuSeam = {
   peopleRead: 'loading' | 'failed' | 'read';
   /** FRU-673: reads the members again, for « Try again ». */
   readPeople: () => void;
+  /** The labels of the workspace: none until they are read (`labelsRead`). */
   labels: readonly TaskLabel[];
+  /** FRU-675: whether the labels were read. `failed`: the menus say so, with « Try again ». */
+  labelsRead: 'loading' | 'failed' | 'read';
+  /** FRU-675: reads the labels again, for « Try again ». */
+  readLabels: () => void;
   canAddLabel: boolean;
   statusesOf: (note: IndexedNote) => readonly StatusChoice[] | undefined;
   actionsOf: (note: IndexedNote) => TaskActions;

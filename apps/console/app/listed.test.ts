@@ -46,6 +46,30 @@ describe('a screen that reads a list (FRU-162)', () => {
   const EMPTY_FOR_A_FAILURE = /!\w+\.ok\)[^;\n]*set\w+\(\[\]\)/;
   // The screens, and their parts (FRU-614).
   const folders = ['./routes/', './parts/'].map((folder) => new URL(folder, import.meta.url));
+  /** The setters of a state that starts as an empty list: `const [x, setX] = useState<T[]>([])`. */
+  const EMPTY_AT_FIRST = /const \[\w+, (set\w+)\] = useState(?:<[^>]*>)?\(\[\]\)/g;
+  /**
+   * FRU-675: a refused answer that leaves such a state as it was, empty, with nothing said.
+   * `if (!answer.ok) return;` before its setter (the members of the menu of a task before FRU-673),
+   * and `if (answer.ok) setX(…)` with nothing for a refusal (its labels before FRU-675).
+   */
+  const KEPT_EMPTY = [/if \(!\w+\.ok\) return;\s*(set\w+)\(/g, /if \(\w+\.ok\) (set\w+)\(/g];
+  /** The setters of a state that starts empty, that a failed answer leaves so. */
+  const keptEmpty = (source: string): string[] => {
+    const empty = new Set([...source.matchAll(EMPTY_AT_FIRST)].map((found) => found[1]));
+
+    return KEPT_EMPTY.flatMap((form) => [...source.matchAll(form)].map((found) => found[1] ?? '')).filter((setter) =>
+      empty.has(setter),
+    );
+  };
+  /**
+   * The cases of before FRU-675 that a ticket of their own fixes: each one needs a place on the screen
+   * to say its failure. Remove a line when its case is fixed: the test fails until it is removed.
+   */
+  const KNOWN_KEPT_EMPTY = [
+    // FRU-682: the connectors of the screen of the notes, which name the chips and the trackers.
+    'notes.tsx setConnectors',
+  ];
 
   it('never keeps an empty list for an answer that failed', () => {
     const found = folders.flatMap((folder) =>
@@ -53,6 +77,34 @@ describe('a screen that reads a list (FRU-162)', () => {
     );
 
     assert.deepEqual(found, []);
+  });
+
+  it('never leaves a list that starts empty as it is for an answer that failed (FRU-675)', () => {
+    const found = folders.flatMap((folder) =>
+      readdirSync(folder).flatMap((name) =>
+        keptEmpty(readFileSync(new URL(name, folder), 'utf8')).map((setter) => `${name} ${setter}`),
+      ),
+    );
+
+    assert.deepEqual(found, KNOWN_KEPT_EMPTY);
+  });
+
+  it('finds the two forms it looks for: the control (FRU-675)', () => {
+    // The members of the menu of a task before FRU-673, and its labels before FRU-675.
+    const members = `const [people, setPeople] = useState<TaskPerson[]>([]);
+      if (!answer.ok) return;
+      setPeople(answer.data.members);`;
+    const labels = `const [labels, setLabels] = useState<TaskLabel[]>([]);
+      if (answer.ok) setLabels(answer.data.labels);`;
+    assert.deepEqual(keptEmpty(members), ['setPeople']);
+    assert.deepEqual(keptEmpty(labels), ['setLabels']);
+    // A state that does not start as an empty list, or a list that says its failure: not this defect.
+    assert.deepEqual(keptEmpty(`const [x, setX] = useState('loading');\n if (answer.ok) setX(answer.data);`), []);
+    assert.deepEqual(
+      keptEmpty(`const [labels, setLabels] = useState<Listed<TaskLabel>>('loading');
+      setLabels(listedOf(answer, (data) => data.labels));`),
+      [],
+    );
   });
 
   it('finds the line it looks for: the control', () => {
