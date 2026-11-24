@@ -270,7 +270,16 @@ describe('the tools of a task in /mcp (FRU-659)', () => {
     const members = choices.members.map((member: { id: string }) => member.id);
     assert.deepEqual(members.toSorted(), [alice.id, bob.id].toSorted());
     assert.equal(members.includes(gus.id), false);
-    assert.deepEqual(Object.keys(choices.members[0]).toSorted(), ['id', 'name'], 'no e-mail');
+    assert.deepEqual(Object.keys(choices.members[0]).toSorted(), ['id', 'name']);
+    // As the menu of the console: a name, or the address of a member who gave none.
+    const names = await rowsOf(
+      world.database,
+      `SELECT id, name, email FROM "user" WHERE id IN ('${alice.id}', '${bob.id}')`,
+    );
+    for (const person of names as { id: string; name: string; email: string }[]) {
+      const given = choices.members.find((member: { id: string }) => member.id === person.id).name;
+      assert.equal(given, person.name || person.email);
+    }
 
     // A key whose member no longer reads the members (a guest now) gets the labels only.
     await rowsOf(world.database, `UPDATE member SET role = 'admin' WHERE "userId" = '${bob.id}'`);

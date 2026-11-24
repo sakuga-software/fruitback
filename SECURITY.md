@@ -2905,7 +2905,8 @@ where the worker keeps tasks.
   test:`refuses an update that is not one, and writes nothing of a refused one`,
   test:`refuses the fields and the status of a note in a tracker`.
 - `task_choices` gives the labels of the workspace to every key, and its members who are not guests
-  (an id and a name, no address) to a key whose member reads the members: never to a key of a guest.
+  to a key whose member reads the members, never to a key of a guest: an id and a name, or the
+  address of a member who gave no name, as the menu of the console shows them.
   test:`lists the labels and the members a task can be given to, never a guest`.
 - On a worker that keeps no task (`FRUITBACK_TASKS=off`), no key is given `task_choices`,
   `set_note_status` or `update_task`, and `tools/call` refuses them (`-32602`).

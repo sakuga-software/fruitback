@@ -119,8 +119,8 @@ stored where the note is, under the name of the key and the word « agent ».
 
 An agent also reads the fields of a task that Fruitback keeps: the name of the member it
 is assigned to, its priority, its day and its labels. A key whose member reads the members of the
-workspace reads the names of its members who are not guests, to choose an assignee; never their
-address. A key that writes changes these fields, as a person of the team does in the console, and
+workspace reads the names of its members who are not guests, to choose an assignee, and the
+address of a member who gave no name, as the console shows it. A key that writes changes these fields, as a person of the team does in the console, and
 each change is in the log of the key.
 
 ### Who can read a note back

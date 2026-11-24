@@ -5012,7 +5012,7 @@ destination yet when it is off: a note is then refused, and the widget keeps it.
   account, so `assignee: 'me'` is refused. With no `today`, the day of UTC: an agent has no browser.
 - **`task_choices` gives the ids**: the labels of the workspace (`labels`), and its members who are
   not guests (`membersOf`, `MAX_TASK_MEMBERS`, as the menu of the console reads them), an id and a
-  name. A grant whose role does not `read-members` gets no member.
+  name, or the address of a member with no name, as the menu shows it. A grant whose role does not `read-members` gets no member.
 - **`update_task` writes as the console and `set_note_status` do.** It reads every field with
   `readTaskChange`, and the status with the reads of `set_note_status`, before any write. The fields
   go through `setTaskFields`, with `manages: true`: a key that writes has a member with

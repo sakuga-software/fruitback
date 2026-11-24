@@ -74,7 +74,7 @@ note in a tracker has no `task`: its tracker keeps its fields.
 - `archived: true`: the archived tasks, in place of the others.
 
 `task_choices` gives the ids these filters and `update_task` take: the labels of the workspace, and
-its members who are not guests, by their name. A key whose member does not read the members of the
+its members who are not guests, by their name (their address when they gave none). A key whose member does not read the members of the
 workspace gets the labels only.
 
 `update_task` changes what it is given and nothing else: `null` clears a field, and `labels` replaces

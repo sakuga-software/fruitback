@@ -1530,7 +1530,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Read the notes': 'Lire les notes',
   'Their text, page, element, component, file and line, picture, replies and status.':
     'Leur texte, page, élément, composant, fichier et ligne, capture, réponses et statut.',
-  'Read, reply and set a status': 'Lire, répondre et changer un statut',
+  'Read, reply and change the tasks': 'Lire, répondre et changer les tâches',
   'A reply says it is from an agent. A status is set only on a note that Fruitback keeps.':
     'Une réponse dit qu’elle vient d’un agent. Un statut ne change que sur une note que garde Fruitback.',
   'Expires after (days)': 'Expire après (jours)',

@@ -768,7 +768,7 @@ function updateTask(context: AgentToolsContext, args: Record<string, unknown>): 
 
 /**
  * `task_choices` (FRU-659): the labels of the workspace, and its members who are not guests, as the
- * menu of the console offers them. A key whose member does not read the members gets no member.
+ * menu of the console offers them: an id and a name, the address for a member with no name. A key whose member does not read the members gets no member.
  */
 function taskChoices(context: AgentToolsContext): Promise<ToolAnswer> {
   return guarded(async () => {
@@ -777,7 +777,8 @@ function taskChoices(context: AgentToolsContext): Promise<ToolAnswer> {
     const members = can(role, 'read-members')
       ? (await context.accounts.membersOf(workspace, { limit: MAX_TASK_MEMBERS, offset: 0 })).members
           .filter((member) => member.role !== 'guest')
-          .map((member) => ({ id: member.user.id, name: member.user.name }))
+          // As the menu of the console names them: a member who gave no name is named by their address.
+          .map((member) => ({ id: member.user.id, name: member.user.name || member.user.email }))
       : [];
 
     return { ok: true, content: { labels, members } };
