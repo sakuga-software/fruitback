@@ -123,13 +123,18 @@ export function useTaskSeam({
    * FRU-675: the labels of the workspace. A refused read was dropped, and the menu said « No label
    * yet » to a member, as if the workspace had none. A failed read says so now, as the members do.
    */
-  const readLabels = useCallback(async () => {
-    // The answer of a read that is no longer the last one, of another workspace maybe, is dropped.
-    const asked = (labelsAsked.current += 1);
-    setLabels('loading');
-    const answer = await call<{ labels: TaskLabel[] }>('GET', `${base}/labels`);
-    if (asked === labelsAsked.current) setLabels(listedOf(answer, (data) => data.labels));
-  }, [base]);
+  const readLabels = useCallback(
+    async ({ keep = false }: { keep?: boolean } = {}) => {
+      // The answer of a read that is no longer the last one, of another workspace maybe, is dropped.
+      const asked = (labelsAsked.current += 1);
+      // A read again after a new label keeps the list of this workspace while it reads: the filter
+      // « Label » would show nothing meanwhile. A failure still says so: the new label is not in it.
+      if (!keep) setLabels('loading');
+      const answer = await call<{ labels: TaskLabel[] }>('GET', `${base}/labels`);
+      if (asked === labelsAsked.current) setLabels(listedOf(answer, (data) => data.labels));
+    },
+    [base],
+  );
 
   /**
    * FRU-673: every member, a page of the worker at a time. The menu asked for 200 in one page, the
@@ -238,7 +243,7 @@ export function useTaskSeam({
       create={async (label) => {
         const answer = await call<{ label: TaskLabel }>('POST', `${base}/labels`, label);
         if (!answer.ok) return { created: false, refused: t(problemOf(answer, LABEL_PROBLEMS, LABEL_NOT_SAVED)) };
-        await readLabels();
+        await readLabels({ keep: true });
         const notes = labelFor ?? [];
         const [only] = notes;
         if (notes.length > 0) {
