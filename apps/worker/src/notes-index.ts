@@ -214,6 +214,8 @@ export type NoteQuery = {
   since?: number;
   /** FRU-665: the archived tasks only. Absent: the notes that are not archived. */
   archived?: boolean;
+  /** FRU-667: the notes whose stage is not one of `RESOLVED_STAGES` (done, closed). */
+  unresolved?: boolean;
   /** FRU-655: the tasks of this account; `null`, the tasks of nobody. */
   assignee?: string | null;
   /** FRU-655: the tasks of this priority; `null`, the tasks with none. */

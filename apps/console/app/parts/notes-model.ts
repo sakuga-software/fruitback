@@ -104,6 +104,7 @@ export type NotesAnswer = {
 
 /** The filters of the page, in its address: a reload keeps the view, and a link shares it. */
 // FRU-665: `archived` reads the archived tasks, in place of the others.
+// FRU-667: `unresolved` reads the notes that are not done nor closed.
 // FRU-655: `assignee`, `priority`, `label` and `due` read the fields of the tasks.
 export const FILTERS = [
   'place',
@@ -111,6 +112,7 @@ export const FILTERS = [
   'stage',
   'mine',
   'archived',
+  'unresolved',
   'assignee',
   'priority',
   'label',
