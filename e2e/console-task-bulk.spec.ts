@@ -19,6 +19,15 @@ const STATUSES = ['new', 'todo', 'progress', 'done', 'closed'].map((stage) => ({
 
 type Sent = { path: string; body: Record<string, unknown> };
 type Label = { id: string; name: string; color: string };
+/** A note of the list, as the stub answers it: a task carries its status and its fields. */
+type Listed =
+  | ReturnType<typeof task>
+  | (Omit<ReturnType<typeof task>, 'status' | 'canSetStatus' | 'task'> & {
+      status?: string;
+      canSetStatus?: boolean;
+      task?: ReturnType<typeof task>['task'];
+      ref?: string;
+    });
 
 function task(id: string, excerpt: string, stage: string, mine = true) {
   return {
@@ -30,7 +39,7 @@ function task(id: string, excerpt: string, stage: string, mine = true) {
     status: `own:${stage}`,
     canSetStatus: mine,
     author: mine ? { kind: 'you', name: 'Ana' } : { kind: 'member', name: 'Ben' },
-    place: { kind: 'fruitback' },
+    place: { kind: 'fruitback' } as { kind: string; connector?: string; label?: string },
     task: { labels: [] as Label[] } as { labels: Label[]; priority?: string },
     createdAt: AT,
   };
@@ -39,7 +48,7 @@ function task(id: string, excerpt: string, stage: string, mine = true) {
 async function worker(p: Page, options: { refuse?: string; locale?: 'en' | 'fr'; role?: 'owner' | 'member' } = {}) {
   const sent: Sent[] = [];
   const labels: Label[] = [{ id: 'l1', name: 'Bug', color: '#dc2626' }];
-  let notes = [
+  let notes: Listed[] = [
     task('n1', 'The headline runs to three lines on a phone.', 'new'),
     task('n2', 'The logo is blurred on a retina screen.', 'new'),
     task('n3', 'The footer links are too close together.', 'new'),
