@@ -64,16 +64,17 @@ export function tasksText(
   entries: readonly TaskTextEntry[],
   { heading, words }: { heading: string; words: FeedbackWords },
 ): string {
-  const blocks = entries.map(({ issue, status }, index) =>
-    [
+  const blocks = entries.map(({ issue, status }, index) => {
+    const fact = signature(issue.task.reporter, issue.task.createdAt, words);
+
+    return [
       `## ${index + 1}. ${oneLine(issue.identifier)} — ${oneLine(words.status(issue, status))}`,
-      ...[signature(issue.task.reporter, issue.task.createdAt, words)].flatMap((fact) =>
-        fact === undefined ? [] : [`- ${fact}`],
-      ),
+      // Stryker disable next-line ConditionalExpression,ArrayDeclaration: a task always has a `createdAt`, so its signature is never `undefined`. The check narrows the type.
+      ...(fact === undefined ? [] : [`- ${fact}`]),
       quote(issue.task.text === undefined ? issue.task.title : `${issue.task.title}\n\n${issue.task.text}`),
       ...(issue.comments ?? []).map((comment) => reply(comment, words)),
-    ].join('\n\n'),
-  );
+    ].join('\n\n');
+  });
 
   return `${[`# ${oneLine(heading)}`, ...blocks].join('\n\n')}\n`;
 }
