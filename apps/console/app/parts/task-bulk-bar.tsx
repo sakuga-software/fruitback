@@ -1,11 +1,11 @@
-import { useContext, useEffect, useRef, useState } from 'react';
+import { type ReactNode, useContext, useEffect, useRef, useState } from 'react';
 import { Confirmation } from '../confirm';
 import { t } from '../i18n';
 import { NoteIcon } from '../note-icons';
 import { BranchMenu, Button, IconButton, LinkButton, Problem } from '../ui';
 import { useLocale } from '../use-locale';
-import { TaskMenuContext, branchesOf, deleteWords } from './task-menu';
-import { TaskSelectionContext, isEditable, selectedWords } from './task-selection';
+import { TaskMenuContext, type TaskMenuSeam, branchesOf, deleteWords } from './task-menu';
+import { type TaskSelection, TaskSelectionContext, isEditable, selectedWords } from './task-selection';
 
 /** « 3 notes changed. », once the worker saved a change of the bar. */
 function changedWords(count: number): string {
@@ -135,5 +135,22 @@ export function TaskBulkBar() {
         />
       ) : null}
     </section>
+  );
+}
+
+/** What the screen of the notes gives its tasks: the menu of a task (FRU-654) and the selection (FRU-656). */
+export function TaskContexts({
+  seam,
+  selection,
+  children,
+}: {
+  seam: TaskMenuSeam;
+  selection: TaskSelection;
+  children: ReactNode;
+}) {
+  return (
+    <TaskMenuContext.Provider value={seam}>
+      <TaskSelectionContext.Provider value={selection}>{children}</TaskSelectionContext.Provider>
+    </TaskMenuContext.Provider>
   );
 }
