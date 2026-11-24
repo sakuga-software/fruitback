@@ -217,19 +217,23 @@ export function useTaskCopy({
     },
     markdown: (notes) => {
       if (notes.length === 0) return;
-      // A failed request is a note not read, never an error past this point.
-      const done = markdownOf(base, notes, statusesOf);
-      done.catch(() => {});
-      copied(
-        done.then(({ text }) => text),
-        notes.length === 1 ? t('Copied as Markdown.') : t('{count} notes copied as Markdown.', { count: notes.length }),
-      );
-      done.then(
-        ({ missing }) => {
-          if (missing > 0) say(t('{count} notes did not load, and are not in the Markdown.', { count: missing }));
-        },
-        () => {},
-      );
+      // A failed request is a note not read, never an error past this point. One sentence is said at
+      // the end: the notes that did not load, or the copy.
+      let missing = 0;
+      const text = markdownOf(base, notes, statusesOf).then((read) => {
+        missing = read.missing;
+
+        return read.text;
+      });
+      text.catch(() => {});
+      copied(text, () => {
+        if (missing === 1) return t('1 note did not load, and is not in the Markdown.');
+        if (missing > 1) return t('{count} notes did not load, and are not in the Markdown.', { count: missing });
+
+        return notes.length === 1
+          ? t('Copied as Markdown.')
+          : t('{count} notes copied as Markdown.', { count: notes.length });
+      });
     },
   };
 

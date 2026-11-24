@@ -1895,6 +1895,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   '{count} IDs copied.': '{count} identifiants copiés.',
   'Copied as Markdown.': 'Copié en Markdown.',
   '{count} notes copied as Markdown.': '{count} notes copiées en Markdown.',
+  '1 note did not load, and is not in the Markdown.': '1 note ne s’est pas chargée, et n’est pas dans le Markdown.',
   '{count} notes did not load, and are not in the Markdown.':
     '{count} notes ne se sont pas chargées, et ne sont pas dans le Markdown.',
   'The browser did not let Fruitback copy. Allow the clipboard for this page, then try again.':

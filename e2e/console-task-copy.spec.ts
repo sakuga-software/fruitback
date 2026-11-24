@@ -272,3 +272,17 @@ test('the panel of a task the list does not hold still copies its ID with the ke
   await expect(p.locator('[data-copy-status]')).toHaveText('FB-41 copied.');
   expect(await clipboard(p)).toBe('FB-41');
 });
+
+test('a selection of which one note does not load copies the others, and says the one missing', async ({ page: p }) => {
+  await worker(p, { failing: true });
+  await p.goto(`${CONSOLE}/w/w1/notes`);
+  for (const text of ['The price', 'Write the release notes']) {
+    await p.locator('tr[data-note]', { hasText: text }).locator('.kit-select .checkbox__control').click();
+  }
+  await p.getByRole('region', { name: 'The selected notes' }).getByRole('button', { name: 'Copy' }).click();
+  await p.getByRole('menuitem', { name: 'Copy as Markdown' }).click();
+  await expect(p.locator('[data-copy-status]')).toHaveText('1 note did not load, and is not in the Markdown.');
+  const markdown = await clipboard(p);
+  expect(markdown.startsWith('# Tasks with no page')).toBe(true);
+  expect(markdown).not.toContain('# Notes on');
+});
