@@ -1868,6 +1868,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Team: 'Équipe',
   'Reply from {author}': 'Réponse de {author}',
   'Tasks with no page': 'Tâches sans page',
+  'The notes did not load, and nothing was copied. Try again.':
+    'Les notes ne se sont pas chargées, et rien n’a été copié. Réessayez.',
 
   ...JIRA,
   ...GITLAB,

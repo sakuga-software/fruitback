@@ -25,7 +25,7 @@ const NOTE = noteFixture({
 
 test.use({ permissions: ['clipboard-read', 'clipboard-write'] });
 
-async function worker(p: Page): Promise<void> {
+async function worker(p: Page, { failing = false }: { failing?: boolean } = {}): Promise<void> {
   const listed = [
     {
       id: 'n1',
@@ -69,6 +69,7 @@ async function worker(p: Page): Promise<void> {
         return route.fulfill({ json: { members: [], labels: [] } });
       }
       if (pathname === '/console/workspaces/w1/notes/n1') {
+        if (failing) return route.fulfill({ status: 500, json: { error: 'store-unavailable' } });
         return route.fulfill({
           json: {
             note: {
@@ -193,4 +194,32 @@ test('the panel of a task written by hand copies its Markdown, and the keyboard 
   await p.keyboard.press('ControlOrMeta+Shift+Period');
   await expect(status).toHaveText('FB-41 copied.');
   expect(await clipboard(p)).toBe('FB-41');
+});
+
+test('a note that does not load copies nothing, and the line says the read failed, not the browser', async ({
+  page: p,
+}) => {
+  await worker(p, { failing: true });
+  await p.goto(`${CONSOLE}/w/w1/notes`);
+  await p.evaluate(() => navigator.clipboard.writeText('kept'));
+  const row = p.locator('tr', { hasText: 'The price' });
+  await row.getByRole('button', { name: 'Actions of this note' }).click();
+  await p.getByRole('menuitem', { name: 'Copy as Markdown' }).click();
+  await expect(p.locator('[data-copy-status]')).toHaveText(
+    'The notes did not load, and nothing was copied. Try again.',
+  );
+  expect(await clipboard(p)).toBe('kept');
+});
+
+test('with the panel closed, the keyboard copies the link of the row that holds the focus', async ({ page: p }) => {
+  await worker(p);
+  await p.goto(`${CONSOLE}/w/w1/notes?task=t1`);
+  await expect(p.getByRole('dialog', { name: 'Write the release notes' })).toBeVisible();
+  await p.keyboard.press('Escape');
+  await expect(p.getByRole('dialog')).toHaveCount(0);
+
+  await p.locator('tr', { hasText: 'The price' }).getByRole('button', { name: 'Actions of this note' }).focus();
+  await p.keyboard.press('ControlOrMeta+Shift+C');
+  await expect(p.locator('[data-copy-status]')).toHaveText('Link copied.');
+  expect(await clipboard(p)).toBe(`${CONSOLE}/w/w1/notes?task=n1`);
 });

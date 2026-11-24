@@ -61,8 +61,8 @@ async function markdownOf(
       const got = await call<{ note: NoteIssue } | { task: TaskIssue }>(
         'GET',
         `${base}/notes/${encodeURIComponent(note.id)}`,
-      );
-      if (!got.ok) return undefined;
+      ).catch(() => undefined);
+      if (got?.ok !== true) return undefined;
       const issue = 'task' in got.data ? got.data.task : got.data.note;
       const status: NoteStatus | undefined = statusesOf(note.site.id)?.find((each) => each.key === issue.status);
 
@@ -87,8 +87,15 @@ async function markdownOf(
     ...(tasks.length === 0 ? [] : [tasksText(tasks, { heading: t('Tasks with no page'), words })]),
   ].join('\n');
 
-  return { text, missing: read.filter((entry) => entry === undefined).length };
+  const missing = read.filter((entry) => entry === undefined).length;
+  // Nothing read: nothing is copied, and the person is told the read failed, not the clipboard.
+  if (missing === notes.length) throw new NotRead();
+
+  return { text, missing };
 }
+
+/** No note of a copy could be read. */
+class NotRead extends Error {}
 
 /**
  * Writes `text` to the clipboard. A text that is still being read goes as a `ClipboardItem` of a
@@ -133,7 +140,20 @@ export function useTaskCopy({
     (text: string | Promise<string>, done: string) => {
       writeClipboard(text).then(
         () => say(done),
-        () => say(t('The browser did not let Fruitback copy. Allow the clipboard for this page, then try again.')),
+        async () => {
+          // The read failed, or the browser refused: each is said as it is.
+          const readFailed =
+            typeof text !== 'string' &&
+            (await text.then(
+              () => false,
+              () => true,
+            ));
+          say(
+            readFailed
+              ? t('The notes did not load, and nothing was copied. Try again.')
+              : t('The browser did not let Fruitback copy. Allow the clipboard for this page, then try again.'),
+          );
+        },
       );
     },
     [say],
@@ -161,14 +181,19 @@ export function useTaskCopy({
     },
     markdown: (notes) => {
       if (notes.length === 0) return;
+      // A failed request is a note not read, never an error past this point.
       const done = markdownOf(base, notes, statusesOf);
+      done.catch(() => {});
       copied(
         done.then(({ text }) => text),
         notes.length === 1 ? t('Copied as Markdown.') : t('{count} notes copied as Markdown.', { count: notes.length }),
       );
-      void done.then(({ missing }) => {
-        if (missing > 0) say(t('{count} notes did not load, and are not in the Markdown.', { count: missing }));
-      });
+      done.then(
+        ({ missing }) => {
+          if (missing > 0) say(t('{count} notes did not load, and are not in the Markdown.', { count: missing }));
+        },
+        () => {},
+      );
     },
   };
 
