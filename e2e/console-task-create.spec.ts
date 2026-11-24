@@ -271,3 +271,25 @@ test('a status asked from a column does not stay for the next « New task », on
   await dialog.getByRole('button', { name: 'Create the task' }).click();
   await expect.poll(() => sent.at(-1)?.body).toEqual({ site: 's1', title: 'Order the banners', status: 'own:new' });
 });
+
+test('a status chosen in the dialog stays with the draft, as the words typed do', async ({ page: p }) => {
+  const sent = await worker(p);
+  await p.goto(`${CONSOLE}/w/w1/notes?site=s1`);
+  const dialog = p.getByRole('dialog', { name: 'New task' });
+  await p
+    .getByRole('button', { name: /^New task/ })
+    .first()
+    .click();
+  await dialog.getByLabel('Title').fill('Print the menus');
+  await dialog.getByRole('button', { name: /Status/ }).click();
+  await p.getByRole('option', { name: 'In progress' }).click();
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await expect(dialog).toBeHidden();
+
+  await p
+    .getByRole('button', { name: /^New task/ })
+    .first()
+    .click();
+  await dialog.getByRole('button', { name: 'Create the task' }).click();
+  await expect.poll(() => sent.at(-1)?.body).toEqual({ site: 's1', title: 'Print the menus', status: 'own:progress' });
+});
