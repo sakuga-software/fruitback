@@ -1844,8 +1844,9 @@ chose it. The notes stay in the worker: this is one more copy, sent out.
   changes nothing. Each holds the ids of the workspace, the site, the note and the reply, the names
   of the statuses and stages, and the names of the fields that changed: never the text of a reply
   nor the value of a field (the assignee, the labels, the day). The event is queued in the
-  transaction that writes the change, so it is sent if and only if the change is kept, by the same
-  queue, signature and attempts as a note. The members who change tasks are the members who may
+  transaction that writes the change, so no event is sent for a change that rolled back, and it goes
+  by the same queue, signature and attempts as a note. A queue that refuses the event is logged, and
+  the change is kept: the event is then not sent. The members who change tasks are the members who may
   (the rights of the status), so a workspace sends no more requests than its own members
   make changes.
 - The files of a note travel as addresses, not as bytes. The queue keeps the id, the
