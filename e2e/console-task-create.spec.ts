@@ -15,9 +15,15 @@ const STATUSES = ['new', 'todo', 'progress', 'done', 'closed'].map((stage) => ({
   stage,
 }));
 
+/** A status the team of `s1` added, which no other site has. */
+const REVIEW = { key: 'own:review', name: 'Review', stage: 'progress' };
+
 type Sent = { path: string; body: Record<string, unknown> };
 
-async function worker(p: Page, { refuse = false }: { refuse?: boolean } = {}): Promise<Sent[]> {
+async function worker(
+  p: Page,
+  { refuse = false, sites = SITES }: { refuse?: boolean; sites?: typeof SITES } = {},
+): Promise<Sent[]> {
   const sent: Sent[] = [];
   const written: Record<string, unknown>[] = [];
   const listed = () => [
@@ -52,7 +58,7 @@ async function worker(p: Page, { refuse = false }: { refuse?: boolean } = {}): P
   ];
   await stubWorker(p, {
     workspaces: [{ ...ACME, role: 'owner' }],
-    sites: SITES,
+    sites,
     answer: (pathname: string, route: Route) => {
       const request = route.request();
       if (pathname === '/console/workspaces/w1/notes' && request.method() === 'POST') {
@@ -70,7 +76,7 @@ async function worker(p: Page, { refuse = false }: { refuse?: boolean } = {}): P
         const notes = listed();
 
         return route.fulfill({
-          json: { notes, total: notes.length, counts: { all: notes.length }, statuses: { s1: STATUSES } },
+          json: { notes, total: notes.length, counts: { all: notes.length }, statuses: { s1: [...STATUSES, REVIEW] } },
         });
       }
       if (pathname.endsWith('/list-members') || pathname === '/console/workspaces/w1/labels') {
@@ -211,4 +217,30 @@ test('a refusal keeps what was typed, and the dialog fits a phone', async ({ pag
   await p.keyboard.press('Escape');
   await p.getByRole('button', { name: /New task/ }).click();
   await expect(p.getByRole('dialog', { name: 'New task' }).getByLabel('Text')).toHaveValue('All of May.');
+});
+
+test('a status the team added is of its site: another site chosen starts from its own, a built-in one stays', async ({
+  page: p,
+}) => {
+  const sent = await worker(p, {
+    sites: [...SITES, { id: 's2', origin: 'https://www.acme.dev', visibility: 'members' }],
+  });
+  await p.goto(`${CONSOLE}/w/w1/notes?view=board&site=s1`);
+  const dialog = p.getByRole('dialog', { name: 'New task' });
+  const create = async (column: string, title: string) => {
+    await p.getByRole('button', { name: `New task in ${column}` }).click();
+    await dialog.getByLabel('Title').fill(title);
+    await dialog.getByRole('button', { name: /Site/ }).click();
+    await p.getByRole('option', { name: 'https://www.acme.dev' }).click();
+    await dialog.getByRole('button', { name: 'Create the task' }).click();
+    await expect(p.getByRole('dialog', { name: title })).toBeVisible();
+    await p.keyboard.press('Escape');
+  };
+
+  // `s2` has no « Review »: the list read no status of it, so none is sent, and the worker gives the first.
+  await create('Review', 'Order the banners');
+  expect(sent.at(-1)?.body).toEqual({ site: 's2', title: 'Order the banners' });
+  // « To do » is a status of every site.
+  await create('To do', 'Call the printer');
+  expect(sent.at(-1)?.body).toEqual({ site: 's2', title: 'Call the printer', status: 'own:todo' });
 });
