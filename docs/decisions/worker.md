@@ -5017,7 +5017,9 @@ destination yet when it is off: a note is then refused, and the widget keeps it.
   `readTaskChange`, and the status with the reads of `set_note_status`, before any write. The fields
   go through `setTaskFields`, with `manages: true`: a key that writes has a member with
   `manage-sites` (FRU-461). Its transaction refuses a member or a label of elsewhere, and writes
-  nothing then. The status goes through `store.setStatus` and the index after. Each part is one row of
+  nothing then. The status goes through `store.setStatus` and the index after; a status that fails
+  then answers « The fields were saved; the status was not. », so that the agent sends the status
+  again and not the fields. Each part is one row of
   `agent_writes` (`task`, `status`), and one charge of the limit for the call.
 - **The tools of a task follow the module** (FRU-651): with `FRUITBACK_TASKS=off`, `task_choices`,
   `set_note_status` and `update_task` are not listed and `tools/call` refuses them. `set_note_status`

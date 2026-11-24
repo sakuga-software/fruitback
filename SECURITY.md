@@ -2902,6 +2902,7 @@ where the worker keeps tasks.
   tracker answers `fields-not-taken` or `statuses-not-taken`, and nothing is written. Each change is
   one write of the limit, and goes in the log of its key (`task`, and `status` for its status).
   test:`changes the status and every field of a task, which the console reads, and logs both writes`,
+  test:`changes the task of somebody else with the right of a role that manages the sites`,
   test:`refuses an update that is not one, and writes nothing of a refused one`,
   test:`refuses the fields and the status of a note in a tracker`.
 - `task_choices` gives the labels of the workspace to every key, and its members who are not guests

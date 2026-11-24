@@ -6,6 +6,7 @@ import { resetMemoryLinear } from './linear-memory.ts';
 import { createPostgresNoteStore } from './notes-postgres.ts';
 import { rowsOf } from './postgres.fixture.ts';
 import { createPairing, redeemPairing } from './session.ts';
+import { type NoteStore, StoreError } from './store.ts';
 
 /**
  * The tools of a task in `/mcp` (FRU-659): the fields in `list_notes` and `get_note`, the filters of
@@ -212,6 +213,48 @@ describe('the tools of a task in /mcp (FRU-659)', () => {
     const after = await consoleRow();
     assert.deepEqual(after.task, { priority: 'urgent', labels: [] });
     assert.equal(after.status, 'own:progress');
+  });
+
+  it('changes the task of somebody else with the right of a role that manages the sites', async () => {
+    // The note is Alice's; the key is of Bob, an admin: the write is the right of the role, never of
+    // the author.
+    const { world, bob, shop, key, consoleRow } = await acme();
+    await rowsOf(world.database, `UPDATE member SET role = 'admin' WHERE "userId" = '${bob.id}'`);
+    const { id: keyId, secret } = await key('write');
+    await rowsOf(world.database, `UPDATE agent_keys SET created_by = '${bob.id}' WHERE id = '${keyId}'`);
+    const [note] = (await listed(world, secret, { site: shop.id })) as any[];
+
+    const updated = await call(world, secret, 'update_task', { id: note.id, priority: 'high', assignee: bob.id });
+    assert.equal(updated.body.result.isError, undefined, JSON.stringify(updated.body));
+    assert.equal((await consoleRow()).task.priority, 'high');
+  });
+
+  it('says that the fields were saved when the status fails after them', async () => {
+    const { world, bob, shop, key, consoleRow, writesOf } = await acme();
+    const kept = world.context.store as NoteStore;
+    world.context.store = {
+      ...kept,
+      setStatus: async () => {
+        throw new StoreError('the database went away');
+      },
+    };
+    const { id: keyId, secret } = await key('write');
+    const [note] = (await listed(world, secret, { site: shop.id })) as any[];
+
+    const failed = await call(world, secret, 'update_task', { id: note.id, status: 'own:done', assignee: bob.id });
+    assert.equal(failed.body.result.isError, true);
+    assert.match(failed.body.result.content[0].text, /^The fields were saved; the status was not\. /);
+    const row = await consoleRow();
+    assert.equal(row.task.assignee.id, bob.id);
+    assert.equal(row.status, 'own:new');
+    assert.deepEqual(
+      (await writesOf(keyId)).map((write) => write.action),
+      ['task'],
+    );
+
+    // With no field, the failure is the one of set_note_status.
+    const alone = await call(world, secret, 'update_task', { id: note.id, status: 'own:done' });
+    assert.match(alone.body.result.content[0].text, /^The store of the notes did not answer/);
   });
 
   it('refuses an update that is not one, and writes nothing of a refused one', async () => {

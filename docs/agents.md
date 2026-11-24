@@ -79,8 +79,8 @@ workspace gets the labels only.
 
 `update_task` changes what it is given and nothing else: `null` clears a field, and `labels` replaces
 the labels of the task. It checks everything before it writes, and refuses a member or a label that
-is not of the workspace. The fields are written first, then the status: if the status changed in
-the console in between, the answer says that the fields were saved. A person sees the change at once
+is not of the workspace. The fields are written first, then the status: if the status then fails,
+the answer says that the fields were saved and the status was not, so send the status again. A person sees the change at once
 in the console, and the log of the key shows it.
 
 On a worker that keeps no task (`FRUITBACK_TASKS=off`), `task_choices`, `set_note_status` and

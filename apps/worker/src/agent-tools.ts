@@ -684,7 +684,8 @@ const TASK_REFUSED = {
 /**
  * `update_task` (FRU-659): the fields of a task as `POST …/notes/<note>/task` writes them, and its
  * status as `set_note_status` writes it. Everything is checked before the first write. The fields
- * are written first, in one transaction that a refusal leaves untouched; then the status.
+ * are written first, in one transaction that a refusal leaves untouched; then the status. A status
+ * that fails after the fields were written answers « The fields were saved; the status was not. »
  */
 function updateTask(context: AgentToolsContext, args: Record<string, unknown>): Promise<ToolAnswer> {
   return guarded(async () => {
@@ -735,10 +736,18 @@ function updateTask(context: AgentToolsContext, args: Record<string, unknown>): 
       }
       let stage: NoteStage | undefined;
       if (chosen !== undefined) {
-        const answer = await writeStatus(context, site, target, issue, chosen);
-        if (answer === undefined) break;
+        // Once the fields are written, every failure of the status says so: the agent then sends the
+        // status again, not the fields.
+        const saved = change === undefined ? '' : 'The fields were saved; the status was not. ';
+        let answer: Awaited<ReturnType<typeof writeStatus>>;
+        try {
+          answer = await writeStatus(context, site, target, issue, chosen);
+        } catch (error) {
+          if (saved !== '' && error instanceof StoreError) return { ok: false, error: `${saved}${UNAVAILABLE}` };
+          throw error;
+        }
+        if (answer === undefined) return { ok: false, error: `${saved}${IN_TRACKER}` };
         if (answer === 'status-changed') {
-          const saved = change === undefined ? '' : 'The fields were saved. ';
           return { ok: false, error: `${saved}The status changed in the console. Try again.` };
         }
         stage = answer.stage;
