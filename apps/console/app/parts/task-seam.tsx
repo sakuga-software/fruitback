@@ -1,5 +1,7 @@
-import { type ReactNode, useCallback, useEffect, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { type Answer, type Member, ORGANIZATION, call } from '../api';
+import { assignablePeople } from '../assignable-people';
+import { type Listed, known } from '../listed';
 import { msg, t } from '../i18n';
 import { problemOf } from '../problems';
 import { STATUS_NOT_SAVED, STATUS_PROBLEMS, type StatusChoice } from '../note-status';
@@ -110,7 +112,8 @@ export function useTaskSeam({
   /** FRU-665: the notes of the column of the board a note is in, in their order. Absent: no board. */
   columnOf?: (note: IndexedNote) => readonly IndexedNote[] | undefined;
 }): { seam: TaskMenuSeam; dialog: ReactNode } {
-  const [people, setPeople] = useState<TaskPerson[]>([]);
+  const [people, setPeople] = useState<Listed<TaskPerson>>('loading');
+  const peopleAsked = useRef(0);
   const [labels, setLabels] = useState<TaskLabel[]>([]);
   // The tasks a new label goes on: the one of a menu, or the selection (FRU-656).
   const [labelFor, setLabelFor] = useState<readonly IndexedNote[] | undefined>();
@@ -120,19 +123,26 @@ export function useTaskSeam({
     if (answer.ok) setLabels(answer.data.labels);
   }, [base]);
 
+  /**
+   * FRU-673: every member, a page of the worker at a time. The menu asked for 200 in one page, the
+   * worker refused it, and the menu listed nobody and said nothing. A failed read says so now.
+   */
+  const readPeople = useCallback(async () => {
+    // The answer of a read that is no longer the last one, of another workspace maybe, is dropped.
+    const asked = (peopleAsked.current += 1);
+    setPeople('loading');
+    const read = await assignablePeople(({ limit, offset }) => {
+      const query = new URLSearchParams({ organizationId: workspace, limit: String(limit), offset: String(offset) });
+
+      return call<{ members: Member[]; total?: number }>('GET', `${ORGANIZATION}/list-members?${query}`);
+    });
+    if (asked === peopleAsked.current) setPeople(read);
+  }, [workspace]);
+
   useEffect(() => {
     void readLabels();
-    const query = new URLSearchParams({ organizationId: workspace, limit: '200', offset: '0' });
-    void call<{ members: Member[] }>('GET', `${ORGANIZATION}/list-members?${query}`).then((answer) => {
-      if (!answer.ok) return;
-      setPeople(
-        answer.data.members
-          .filter((member) => member.role !== 'guest')
-          .map((member) => ({ id: member.user.id, name: member.user.name || member.user.email }))
-          .sort((one, other) => one.name.localeCompare(other.name)),
-      );
-    });
-  }, [workspace, readLabels]);
+    void readPeople();
+  }, [readLabels, readPeople]);
 
   const change = async (note: IndexedNote, body: TaskChange): Promise<string | undefined> => {
     // The route of one task writes all its labels: a label put on or taken off is the set it makes.
@@ -190,7 +200,9 @@ export function useTaskSeam({
   });
 
   const seam: TaskMenuSeam = {
-    people,
+    people: known(people) ?? [],
+    peopleRead: typeof people === 'string' ? people : 'read',
+    readPeople: () => void readPeople(),
     labels,
     canAddLabel: manages,
     statusesOf,

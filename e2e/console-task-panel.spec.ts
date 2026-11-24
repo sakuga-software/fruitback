@@ -23,8 +23,9 @@ const NOTE = noteFixture({
 
 type Sent = { path: string; body: unknown };
 
-async function worker(p: Page): Promise<Sent[]> {
+async function worker(p: Page, options: { membersFail?: number } = {}): Promise<Sent[]> {
   const sent: Sent[] = [];
+  let failing = options.membersFail ?? 0;
   const task: { labels: never[]; priority?: string; dueOn?: string } = { labels: [] };
   const listed = () => [
     {
@@ -61,9 +62,20 @@ async function worker(p: Page): Promise<Sent[]> {
       if (pathname === '/console/workspaces/w1/notes') {
         return route.fulfill({ json: { notes: listed(), total: 2, counts: { all: 2 }, statuses: { s1: STATUSES } } });
       }
-      if (pathname.endsWith('/list-members') || pathname === '/console/workspaces/w1/labels') {
-        return route.fulfill({ json: { members: [], labels: [] } });
+      if (pathname.endsWith('/list-members')) {
+        // FRU-673: the first reads fail, as a worker that is down answers.
+        if (failing > 0) {
+          failing -= 1;
+
+          return route.fulfill({ status: 503, json: { error: 'store-unavailable' } });
+        }
+        const ben = { id: 'a2', email: 'ben@acme.dev', name: 'Ben Martin' };
+
+        return route.fulfill({
+          json: { members: [{ id: 'm2', userId: 'a2', role: 'member', createdAt: AT, user: ben }], total: 1 },
+        });
       }
+      if (pathname === '/console/workspaces/w1/labels') return route.fulfill({ json: { labels: [] } });
       if (pathname === '/console/workspaces/w1/notes/n1') {
         return route.fulfill({
           json: {
@@ -178,4 +190,20 @@ test('a link with the task opens it, a note of a tracker shows no field, and the
   const box = await panel.boundingBox();
   expect(Math.round(box?.width ?? 0)).toBe(390);
   expect(await sideScroll(p)).toBe(0);
+});
+
+test('the members that did not load are said under « Assignee », and « Try again » reads them (FRU-673)', async ({
+  page: p,
+}) => {
+  await worker(p, { membersFail: 1 });
+  await p.goto(`${CONSOLE}/w/w1/notes?task=n1`);
+  const panel = p.getByRole('dialog', { name: /The price of the yearly plan/ });
+
+  const failed = panel.locator('[data-task-people-failed]');
+  await expect(failed.getByRole('alert')).toContainText('The members did not load. Fruitback hit an error.');
+  await failed.getByRole('button', { name: 'Try again' }).click();
+
+  await expect(failed).toHaveCount(0);
+  await panel.getByRole('button', { name: /Assignee/ }).click();
+  await expect(p.getByRole('option', { name: 'Ben Martin', exact: true })).toBeVisible();
 });
