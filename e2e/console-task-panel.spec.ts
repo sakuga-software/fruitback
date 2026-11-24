@@ -23,9 +23,13 @@ const NOTE = noteFixture({
 
 type Sent = { path: string; body: unknown };
 
-async function worker(p: Page, options: { membersFail?: number } = {}): Promise<Sent[]> {
+async function worker(
+  p: Page,
+  options: { membersFail?: number; labelsFail?: number; labels?: { id: string; name: string; color: string }[] } = {},
+): Promise<Sent[]> {
   const sent: Sent[] = [];
   let failing = options.membersFail ?? 0;
+  let labelsFailing = options.labelsFail ?? 0;
   const task: { labels: never[]; priority?: string; dueOn?: string } = { labels: [] };
   const listed = () => [
     {
@@ -75,7 +79,16 @@ async function worker(p: Page, options: { membersFail?: number } = {}): Promise<
           json: { members: [{ id: 'm2', userId: 'a2', role: 'member', createdAt: AT, user: ben }], total: 1 },
         });
       }
-      if (pathname === '/console/workspaces/w1/labels') return route.fulfill({ json: { labels: [] } });
+      if (pathname === '/console/workspaces/w1/labels') {
+        // FRU-675: the first reads fail too.
+        if (labelsFailing > 0) {
+          labelsFailing -= 1;
+
+          return route.fulfill({ status: 503, json: { error: 'store-unavailable' } });
+        }
+
+        return route.fulfill({ json: { labels: options.labels ?? [] } });
+      }
       if (pathname === '/console/workspaces/w1/notes/n1') {
         return route.fulfill({
           json: {
@@ -206,4 +219,21 @@ test('the members that did not load are said under « Assignee », and « Try ag
   await expect(failed).toHaveCount(0);
   await panel.getByRole('button', { name: /Assignee/ }).click();
   await expect(p.getByRole('option', { name: 'Ben Martin', exact: true })).toBeVisible();
+});
+
+test('the labels that did not load are said under the fields, and « Try again » reads them (FRU-675)', async ({
+  page: p,
+}) => {
+  await worker(p, { labelsFail: 1, labels: [{ id: 'l1', name: 'Bug', color: '#dc2626' }] });
+  await p.goto(`${CONSOLE}/w/w1/notes?task=n1`);
+  const panel = p.getByRole('dialog', { name: /The price of the yearly plan/ });
+
+  // The page of before drew no field « Labels » at all, and said nothing.
+  const failed = panel.locator('[data-task-labels-failed]');
+  await expect(failed.getByRole('alert')).toContainText('The labels did not load. Fruitback hit an error.');
+  await expect(panel.getByRole('group', { name: 'Labels' })).toHaveCount(0);
+  await failed.getByRole('button', { name: 'Try again' }).click();
+
+  await expect(failed).toHaveCount(0);
+  await expect(panel.getByRole('checkbox', { name: 'Bug' })).toBeVisible();
 });
