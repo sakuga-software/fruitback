@@ -151,6 +151,9 @@ describe('a task written by hand (FRU-657)', () => {
     assert.deepEqual(await refused({ site, title: '   ' }), [400, 'title']);
     assert.deepEqual(await refused({ site }), [400, 'title']);
     assert.deepEqual(await refused({ site, title: 'x'.repeat(201) }), [400, 'title']);
+    // Counted in code points, as zod counts them in `taskSchema`: 201 emoji are refused here, never a 500.
+    assert.deepEqual(await refused({ site, title: '🍓'.repeat(201) }), [400, 'title']);
+    assert.deepEqual(await refused({ site, title: 'A', text: '🍓'.repeat(5_001) }), [400, 'text']);
     assert.deepEqual(await refused({ title: 'No site' }), [400, 'site']);
     assert.deepEqual(await refused({ site, title: 'A', status: 'done' }), [400, 'status']);
     assert.deepEqual(await refused({ site, title: 'A', priority: 'soon' }), [400, 'priority']);
@@ -159,6 +162,8 @@ describe('a task written by hand (FRU-657)', () => {
     assert.deepEqual(await refused({ site, title: 'A', assignee: 'acc_nobody' }), [409, 'not-member']);
     assert.deepEqual(await refused({ site, title: 'A', labels: ['lbl_none'] }), [409, 'unknown-label']);
     assert.equal((await call('GET', '/notes', alice.token)).body.notes.length, 1, 'no refusal wrote a task');
+    // And 200 emoji, 400 UTF-16 units, are a title the route and the schema both take.
+    assert.equal((await call('POST', '/notes', alice.token, { site, title: '🍓'.repeat(200) })).status, 201);
 
     const off = await acme('off');
     const answer = await off.call('POST', '/notes', off.alice.token, { site: off.site, title: 'A' });

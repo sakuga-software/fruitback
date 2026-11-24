@@ -72,10 +72,12 @@ export function createTask(input: TaskInput): Task {
 export function parseTask(value: unknown): TaskParseResult {
   if ((value as { kind?: unknown } | null | undefined)?.kind !== TASK_KIND) return { ok: false, reason: 'not-found' };
   const version = (value as { v?: unknown }).v;
-  if (typeof version !== 'number' || !Number.isInteger(version) || version < 1) {
+  // `Number.isInteger` refuses whatever is not a number: the cast only tells TypeScript.
+  if (!Number.isInteger(version) || (version as number) < 1) {
     return { ok: false, reason: 'invalid', message: 'missing or malformed task version' };
   }
-  if (version > TASK_VERSION) return { ok: false, reason: 'unsupported-version', version };
+  if ((version as number) > TASK_VERSION)
+    return { ok: false, reason: 'unsupported-version', version: version as number };
 
   const result = taskSchema.safeParse(value);
   if (!result.success) {
