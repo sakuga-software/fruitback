@@ -12,10 +12,15 @@ import { call } from '../api';
 import { t } from '../i18n';
 import type { StatusChoice } from '../note-status';
 import { STAGE_NAMES } from '../stages';
+export { siteOfId } from '../note-id';
 import type { IndexedNote } from './notes-model';
 
 /** What « Copy » needs of a note: its id in the console, its site, and its reference when the list gives it. */
-export type CopiedNote = Pick<IndexedNote, 'id' | 'site'> & { ref?: string };
+export type CopiedNote = Pick<IndexedNote, 'id' | 'site'> & {
+  ref?: string;
+  /** A note the list does not hold (a panel opened by its link): its reference is read, not given. */
+  unlisted?: true;
+};
 
 /** The three copies of a task (FRU-658), for one note or several, in the order given. */
 export type TaskCopy = {
@@ -197,7 +202,7 @@ export function useTaskCopy({
           : t('{count} IDs copied.', { count: references.length });
       // A note of the list gives its reference. A note the list does not hold (a panel opened by its
       // link, on another page) is read for it: the panel shows one, so the key copies it.
-      if (notes.every((note) => note.ref !== undefined || note.site.id !== '')) {
+      if (notes.every((note) => note.ref !== undefined || note.unlisted !== true)) {
         const references = notes.flatMap((note) => (note.ref === undefined ? [] : [note.ref]));
         if (references.length === 0) return say(t('No ID to copy: these notes have no reference here.'));
         return copied(references.join('\n'), said(references));
@@ -236,7 +241,8 @@ export function useTaskCopy({
       className={
         said === undefined
           ? 'sr-only'
-          : 'fixed bottom-[24px] left-1/2 z-50 max-w-[calc(100vw-32px)] -translate-x-1/2 rounded-full bg-ink px-[16px] py-[8px] text-small text-page shadow-lg'
+          : // The pill lets the pointer through: a button under it stays pressable while it shows.
+            'pointer-events-none fixed bottom-[24px] left-1/2 z-50 max-w-[calc(100vw-32px)] -translate-x-1/2 rounded-full bg-ink px-[16px] py-[8px] text-small text-page shadow-lg'
       }
     >
       {said ?? ''}

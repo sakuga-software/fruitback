@@ -32,7 +32,7 @@ import { dayFromToday } from '../parts/task-menu';
 import { TASK_NOT_SAVED, TASK_PROBLEMS, useTaskSeam } from '../parts/task-seam';
 import { TaskPanel } from '../parts/task-panel';
 import { isNewTaskKey, useTaskCreate } from '../parts/task-create';
-import { copyShortcutOf, useTaskCopy } from '../parts/task-copy';
+import { copyShortcutOf, siteOfId, useTaskCopy } from '../parts/task-copy';
 import { SelectionStatus, useSelectionKeys, useTaskSelection } from '../parts/task-selection';
 import { TaskBulkBar, TaskContexts } from '../parts/task-bulk-bar';
 
@@ -341,7 +341,7 @@ export default function Notes() {
       const focused = document.activeElement?.closest<HTMLElement>('[data-note]')?.dataset.note;
       const id = focused ?? new URLSearchParams(window.location.search).get('task') ?? undefined;
       if (id === undefined) return;
-      const note = current.noteOf(id) ?? { id, site: { id: '' } };
+      const note = current.noteOf(id) ?? { id, site: { id: siteOfId(id) }, unlisted: true as const };
       event.preventDefault();
       if (kind === 'link') current.copy.link([note]);
       else current.copy.identifier([note]);

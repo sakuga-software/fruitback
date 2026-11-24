@@ -11,6 +11,7 @@ import { ReadProblem } from '../read-problem';
 import { useLocale } from '../use-locale';
 import { type IndexedNote } from './notes-model';
 import { TaskMenuContext } from './task-menu';
+import { siteOfId } from './task-copy';
 
 const NONE = 'none';
 const stageName = (stage: Stage) => t(STAGE_NAMES[stage]);
@@ -73,7 +74,7 @@ export function TaskPanel({
       ? undefined
       : {
           id,
-          site: listed?.site ?? { id: '' },
+          site: listed?.site ?? { id: siteOfId(id) },
           ...(reference !== undefined && /^[A-Z][A-Z0-9]*-\d+$/u.test(reference) ? { ref: reference } : {}),
         };
 
