@@ -453,10 +453,18 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   the person. **The section « Agents » shows the whole way of an agent** (FRU-503): its key, an
   address that receives (Connectors), then the trigger of each site, a link to `#agent` on the page
   of the site; anybody but an owner or an admin reads one sentence, and the page asks nothing.
-  **The settings have two pages** (FRU-544, asked by Mathieu): « General » (`/settings`: the name,
-  the logo, the deletion) and « AI » (`/settings/ai`: the section « Agents »), two links of
-  `SubNav` of the kit under the head of both, the page on screen with `aria-current="page"`. The
-  keys of the agents (`/settings/agents`) are reached from « AI », and their crumbs lead back to it.
+  **The settings are pages of a shell** (FRU-692, `routes/settings-shell.tsx`; before, FRU-544 put
+  « General » and « AI » in two links of `SubNav`): a bar of 48 px that says « Settings », a
+  navigation of 220 px with an icon on each entry, in two groups, and the page beside it, with a head
+  of its own (`SettingsHead`: a title of 20 px, its sentence, its actions at the right). « Account »:
+  Profile (`/account`) and Sessions (`/account/sessions`). « Workspace »: General (`/settings`), AI
+  (`/settings/ai`), Agents (`/settings/agents`, no crumbs any more), and Members and Connectors, which
+  lead to the screens of the rail. The addresses did not change, so no redirection. **The navigation
+  shows an entry only for a page that exists**: `ACCOUNT_PAGES` and `WORKSPACE_PAGES` hold « Sign-in
+  and addresses », « Appearance » (FRU-694) and « Notifications » with `built: false`, and
+  `settings-shell.test.ts` holds `built` to the routes of a build. Under 768 px the navigation is one
+  row above the page, which scrolls in its frame. The shell takes back the padding of `Screen` with
+  the same values, so its bar and its navigation reach the edges of the column.
   `e2e/console-workspace-settings.spec.ts` holds the entry by role, the section and the deletion. **At 900 px and under the sections are one row
   that scrolls in the rail, and the page never scrolls sideways**: the mockup does at 390 px (its
   document is 547 px wide). An edge of the row that hides a section fades, and the section on
@@ -854,6 +862,19 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   shown**: Linear documents it as « an emoji or a decorative icon type », and the icon types are
   names of Linear's own glyphs (`Rocket`…), with no public set to draw them from; an emoji is the
   system's font, which `icons.md` turned away.
+- **My account is the page « Profile » of the shell of the settings** (FRU-692, the mockup « Mon
+  compte (Profil) » of the ticket): four cards, in two columns from 1280 px and one column under it,
+  the profile and where the person is signed in, then the addresses and how the person signs in.
+  Each card is a region named by its title, with an icon; each row of a card has an icon in a box of
+  24 px. **The rare actions are in the menu of a row or in a dialog, never underlined words**:
+  « Make primary » and « Remove » of an address (« Remove » asks the second time under its row),
+  « Disconnect » of a browser, « Add » an address (a dialog, which keeps what was typed when it
+  closes), « Sign out everywhere » (a dialog, on « Sessions »). « Unlink » is a button whose second
+  time is under its row; a second time that the worker refused stays, so the person tries again in
+  one press. « Sign out » is the action of the head of the profile. The card of the browsers shows the
+  last three, a short line under each (« Used 2 h ago »), and « See all » to « Sessions », which lists
+  every browser with when it signed in. The worker keeps no photo of a person: the profile shows the
+  initial of the name.
 - **My account shows the sessions of the console, and ends them, with the routes of FRU-181**
   (FRU-248, `routes/account.tsx`). `GET /console/sessions` lists them by id, with no token: this
   browser first, then the others, each with « Disconnect » (`DELETE /console/sessions/<id>`, one
@@ -861,9 +882,10 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   `/console/auth/revoke-sessions`, asks twice, and ends this browser too. **A way out that the
   worker did not confirm says so and stays** (FRU-204), for the three of them. **A list that was
   not read is no list.** **The list keeps the room of one row while it is read, and when it could
-  not be**: it arrives above « Sign out », and a press that starts before a button moves and ends
-  after is lost, with no request and no message (measured: 53 px, `main` red on 30c62f8). A second
-  browser still adds its row. **A browser is named as the worker names it** (FRU-249, Q7): « Console
+  not be**: it arrived above « Sign out » until FRU-692, and a press that starts before a button
+  moves and ends after is lost, with no request and no message (measured: 53 px, `main` red on
+  30c62f8). « Sign out » is in the head now, and the card under the list still moves by one row less.
+  A second browser still adds its row. **A browser is named as the worker names it** (FRU-249, Q7): « Console
   · Chrome on macOS », a short label of its user agent; one it could not name reads « Console · this
   browser » or « Console · another browser ». **The name on the notes is changed here**
   (`POST /console/me/name`), kept when the field is left or by Enter, as the mockup draws no button; a
@@ -887,7 +909,8 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   the worker answers, so nothing under them moves. The worker keeps no login of a provider: « Linked »,
   not « Linked as ». **The browsers of the extension are rows of the same list** (`GET
   /console/me/browsers`, FRU-238): « Extension · Chrome on macOS », « Connected 12 Oct · used 2 h ago »,
-  after the browsers of the console. The two lists are read together and drawn once, so nothing under
+  among the browsers of the console, the one used last first, this browser before all (FRU-692: the
+  mockup mixes them). The two lists are read together and drawn once, so nothing under
   them moves when the second answer comes. A list of the console that could not be read is no list; a
   list of the extension that could not be read leaves the browsers of the console and their
   « Disconnect », with a line that says what is missing and « Try again ».
