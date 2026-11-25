@@ -235,8 +235,12 @@ export default function Members() {
       ...(role === 'guest' && site !== undefined ? { sites: [site] } : {}),
     });
     if (sent.ok) return { ok: true, invitation: sent.data };
-    // A message that did not leave: the invitation is kept, so it is shown, to send again.
-    if (sent.error === 'mail-unavailable') readAll();
+    // A message that did not leave: the invitation is kept, so it is shown, to send again from its row.
+    if (sent.error === 'mail-unavailable') {
+      readAll();
+
+      return { ok: false, problem: problemOf(sent, INVITE_PROBLEMS, NOT_INVITED), kept: true };
+    }
     // The site was removed meanwhile: the list is read again, and the sentence says so.
     if (sent.error === 'invalid-request' && sent.field === 'sites') {
       readAll();
@@ -250,10 +254,7 @@ export default function Members() {
   function invited(kept: readonly Invitation[]) {
     setSentTo(kept.map((each) => ({ email: each.email, message: messageOf(each, mailed) })));
     setInvitations((current) =>
-      edited(current, (items) => [
-        ...items.filter((each) => !kept.some((one) => one.id === each.id)),
-        ...kept.map(({ mailed: _left, ...rest }) => ({ ...rest, ...(_left === false ? { mailed: false } : {}) })),
-      ]),
+      edited(current, (items) => [...items.filter((each) => !kept.some((one) => one.id === each.id)), ...kept]),
     );
   }
 

@@ -10,8 +10,12 @@ import { siteName } from '../site-address';
 /** The roles an invitation gives: the worker refuses the others (FRU-104), and a guest names a site (FRU-250). */
 export type InvitedRole = 'guest' | 'member' | 'admin';
 
-/** What one invitation became: the invitation the worker kept, or the sentence of its refusal. */
-export type Sent = { ok: true; invitation: Invitation } | { ok: false; problem: string };
+/**
+ * What one invitation became: the invitation the worker kept, or the sentence of its refusal.
+ * `kept`: the worker kept the invitation and said so with a refusal (its message did not leave): the
+ * address leaves the field, as one that went, and its sentence is said.
+ */
+export type Sent = { ok: true; invitation: Invitation } | { ok: false; problem: string; kept?: boolean };
 
 /** The three roles of the dialog, in the order of the mockup, each with what it lets its person do. */
 const ROLES: readonly { role: InvitedRole; name: string; does: string }[] = [
@@ -76,19 +80,20 @@ export function InviteDialog({
     setProblems({ sent: 0, refused: [] });
     setBusy(true);
     const kept: Invitation[] = [];
-    const refused: { email: string; problem: string }[] = [];
+    const refused: { email: string; problem: string; kept: boolean }[] = [];
     for (const email of addresses.valid) {
       const sent = await invite(email, chosen, chosen === 'guest' ? shared : undefined);
       if (sent.ok) kept.push(sent.invitation);
-      else refused.push({ email, problem: sent.problem });
+      else refused.push({ email, problem: sent.problem, kept: sent.kept === true });
     }
     setBusy(false);
     if (kept.length > 0) onInvited(kept);
-    // What went leaves the field; what was refused, and what is no address, stays in it.
+    // What went leaves the field, and what the worker kept with a refusal too: sent again, it would be
+    // refused as invited already. What was refused, and what is no address, stays in it.
     setTyped(
       addressesLeft(
         addresses,
-        refused.map((each) => each.email),
+        refused.filter((each) => !each.kept).map((each) => each.email),
       ),
     );
     setProblems({ sent: addresses.valid.length, refused });

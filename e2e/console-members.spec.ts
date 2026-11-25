@@ -254,6 +254,8 @@ async function fromMenu(page: Page, name: string, item: string): Promise<void> {
     .getByRole('button', { name: `Actions for ${name}` })
     .click();
   await page.getByRole('menuitem', { name: item, exact: true }).click();
+  // The menu fades out: what comes next is pressed once it is gone, as a hand does.
+  await expect(page.getByRole('menu')).toHaveCount(0);
 }
 const search = (page: Page) => page.getByRole('searchbox', { name: 'Search members' });
 
@@ -790,6 +792,25 @@ test('an invitation that is refused says its cause, and clears nothing that was 
   expect(worker.sent.length).toBe(before + 1);
 });
 
+test('an invitation kept with a message that did not leave leaves the field, and says so (FRU-691)', async ({
+  page,
+}) => {
+  const worker = await workerWith(page);
+  await open(page);
+  await inviting(page);
+  worker.refusesFor = { 'zoe@client.fr': { status: 503, error: 'mail-unavailable' } };
+  await emails(page).fill('zoe@client.fr, lou@client.fr');
+  await send(page).click();
+  await expect(dialog(page).getByRole('alert')).toHaveText(
+    'zoe@client.fr: The invitation is kept, but its message did not leave. Send it again from its row.',
+  );
+  // The worker kept it: sent again from the field, it would be refused as invited already.
+  await expect(emails(page)).toHaveValue('');
+  await expect(send(page)).toBeDisabled();
+  await expect(page.getByRole('status')).toContainText('Invitation sent to lou@client.fr.');
+  expect(worker.sent.map((each) => each.body.email)).toEqual(['zoe@client.fr', 'lou@client.fr']);
+});
+
 test('an owner changes a role in its row; a guest made a member asks twice; a refusal is said (FRU-691)', async ({
   page,
 }) => {
@@ -875,11 +896,8 @@ test('removing a member and cancelling an invitation ask twice, from the menu of
   await expect(removing).toHaveCount(0);
   const menu = row(page, 'Tom').getByRole('button', { name: 'Actions for Tom' });
   await expect(menu).toBeFocused();
-  // The keyboard alone: Enter opens the menu, the arrow reaches its item, Enter takes it, Escape
-  // steps back.
+  // The keyboard alone: Enter opens the menu on its item, Enter takes it, Escape steps back.
   await page.keyboard.press('Enter');
-  await expect(page.getByRole('menu')).toBeVisible();
-  await page.keyboard.press('ArrowDown');
   await expect(page.getByRole('menuitem', { name: 'Remove from workspace' })).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(removing.getByRole('button', { name: 'Keep it' })).toBeFocused();
@@ -1037,10 +1055,11 @@ test('what was typed in the invitation stays through a read that failed, and « 
   const worker = await workerWith(page);
   await open(page);
   await inviting(page);
+  await cardBox(page, 'Guest').click();
   await emails(page).fill('zoe@client.fr');
-  // A message that did not leave makes the screen read its lists again, and that read fails.
+  // A site removed meanwhile makes the screen read its lists again, and that read fails.
   worker.members = 'fails';
-  worker.refuses = { status: 503, error: 'mail-unavailable' };
+  worker.refuses = { status: 400, error: 'invalid-request', field: 'sites' };
   await send(page).click();
   await expect(dialog(page).getByRole('alert')).toBeVisible();
   await page.keyboard.press('Escape');
