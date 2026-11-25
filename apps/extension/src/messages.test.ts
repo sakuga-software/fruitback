@@ -33,6 +33,8 @@ const OPTIONS = '../entrypoints/options/main.ts';
 /** The modules that draw a screen of the popup: their words go through `t` like a page's (FRU-251). */
 const VIEWS = [
   './popup-view.ts',
+  // FRU-695: « On this page » of screen 3.
+  './popup-notes.ts',
   // FRU-453: the lists of « Notes go to ».
   './place-choice.ts',
   // FRU-600: « Where notes go », a screen of its own.

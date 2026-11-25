@@ -341,7 +341,7 @@ function cross(document: Document): SVGSVGElement {
 }
 
 /** The word of each stage: the widget's words, as the popup says them. */
-const STAGE_WORD: Record<PanelNote['stage'], string> = {
+export const STAGE_WORD: Record<PanelNote['stage'], string> = {
   new: msg('New'),
   todo: msg('To do'),
   progress: msg('In progress'),

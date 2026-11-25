@@ -234,22 +234,19 @@ test('a site of no workspace: added to one and turned on, in one click, then scr
   await expect(popup.getByRole('img', { name: SITE_ON })).toBeVisible();
   // What the worker says of the site (FRU-295), once it answers: the tracker, and what waits.
   // FRU-599: the state line names the workspace; « Sent to » has its own line, with its mark.
-  await expect(popup.locator('.kit-site-state')).toHaveText('On · Northwind');
+  // FRU-695: the state line says the open notes too, « On this page » the fixes to check.
+  await expect(popup.locator('.kit-site-state')).toHaveText('On · Northwind · 3 open notes');
   const destination = popup.locator('.site-destination');
-  await expect(destination.locator('.destination-place')).toHaveText('Linear / Northwind');
+  await expect(destination.locator('.destination-place')).toHaveText('Linear · Northwind');
   await expect(destination.locator('svg.source-mark')).toHaveAttribute('data-kind', 'linear');
-  await expect(popup.locator('.panel-counts')).toHaveText('3 open notes · 2 to check');
-  // Screen 3 of an account, against the board P1 of FRU-598: 20 px around.
-  expectNear(await boxOf(popup.getByRole('button', { name: SITE_MENU })), { x: 328, width: 32, height: 32 }, 'menu');
+  await expect(popup.locator('.page-notes-check')).toHaveText('2 to check');
+  // Screen 3 of an account, against the mock-up of 2026-11-25: 12 px around, the menu in the foot.
+  expectNear(await boxOf(popup.getByRole('button', { name: SITE_MENU })), { x: 344, width: 28, height: 28 }, 'menu');
+  expectNear(await boxOf(destination), { x: 12, width: 356, height: 32 }, 'sent to');
   expectNear(
-    await boxOf(popup.getByRole('button', { name: 'Leave a note' })),
-    { x: 20, width: 340, height: 56 },
+    await boxOf(popup.getByRole('button', { name: 'Leave a note', exact: true })),
+    { x: 12, width: 356, height: 40 },
     'leave',
-  );
-  expectNear(
-    await boxOf(popup.getByRole('button', { name: /^Show all notes in a sidebar/ })),
-    { x: 20, width: 340 },
-    'sidebar',
   );
   expect(await popup.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(380);
   await clean(popup, 'the popup on a site that is on, for an account');
