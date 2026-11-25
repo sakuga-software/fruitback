@@ -73,9 +73,14 @@ export default function Notes() {
   const [sites, setSites] = useState<Listed<SiteChoice>>('loading');
   // FRU-682: a read that failed is no empty list. The screen says it, with « Try again ».
   const [connectors, setConnectors] = useState<Listed<Connector>>('loading');
+  // The read asked last: the answer of a read of before is dropped, as the address can go to the
+  // notes of another workspace while it is on its way.
+  const connectorsAsked = useRef(0);
   const readConnectors = useCallback(async () => {
+    const mine = (connectorsAsked.current += 1);
     setConnectors('loading');
     const answer = await call<{ connectors: Connector[] }>('GET', `${base}/connectors`);
+    if (mine !== connectorsAsked.current) return;
     setConnectors(listedOf(answer, (data) => data.connectors));
   }, [base]);
   useEffect(() => {

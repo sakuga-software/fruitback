@@ -4,6 +4,7 @@ import { WORKER_ORIGIN } from './pin.ts';
 import {
   ACME,
   BAR_SHIFT,
+  LUMEN,
   type Role,
   box,
   expectBox,
@@ -1066,4 +1067,40 @@ test('sources that did not load are said above the list, no chip calls them remo
   await failed.getByRole('button', { name: 'Try again' }).click();
   await expect(chips(page)).toHaveText(['All10', 'Linear6', 'REST API3', 'In Fruitback1']);
   await expect(failed).toHaveCount(0);
+});
+
+test('a read of the sources of a workspace left before its answer does not land on the next one (review of #959)', async ({
+  page,
+}) => {
+  let release: () => void = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  const empty = { notes: [], total: 0, counts: { all: 0, byPlace: {} } };
+  await stubWorker(page, {
+    workspaces: [ACME, { ...LUMEN, role: 'owner' }],
+    sites: SITES,
+    answer: (pathname, route) => {
+      // The sources of Acme answer last, and refuse.
+      if (pathname === '/console/workspaces/w1/connectors')
+        return held.then(() => route.fulfill({ status: 500, json: { error: 'unknown' } }));
+      if (/^\/console\/workspaces\/w[12]\/notes$/.test(pathname)) return route.fulfill({ json: empty });
+
+      return undefined;
+    },
+  });
+  const acme = page.waitForRequest((request) => request.url().endsWith('/console/workspaces/w1/connectors'));
+  await open(page);
+  await acme;
+  // The buttons of the browser go to the notes of another workspace: the same screen, not drawn again.
+  const lumen = page.waitForResponse((response) => response.url().endsWith('/console/workspaces/w2/connectors'));
+  await page.evaluate(() => {
+    window.history.pushState(null, '', '/w/w2/notes');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  });
+  await expect(page).toHaveURL(`${CONSOLE}/w/w2/notes`);
+  await lumen;
+  const refused = page.waitForResponse((response) => response.url().endsWith('/console/workspaces/w1/connectors'));
+  release();
+  await refused;
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  await expect(page.locator('[data-connectors-failed]')).toHaveCount(0);
 });
