@@ -72,6 +72,10 @@
   --radius-control: 6px;
   --radius-card: 8px;
   --radius-modal: 10px;
+  /* What sits inside a control or is smaller than one: a box to tick, a swatch, a tile, a key. */
+  --radius-inner: 4px;
+  /* The drop of Fruitback: a shape, not a radius. A setting of the radius leaves it. */
+  --radius-drop: 50% 50% 50% 0;
   /*
     The scale of Tailwind, that HeroUI applies (a button is rounded-3xl, a menu item rounded-2xl, a
     checkbox rounded-md): each step is the radius of a control. app.css gives a card and a modal of

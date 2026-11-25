@@ -672,7 +672,7 @@ export default function Connectors() {
                       }}
                       // Under 640 px the state goes under the address, in line with it (FRU-321).
                       className={`flex w-full cursor-pointer flex-wrap items-center gap-x-[14px] gap-y-[4px] px-[18px] py-[14px] text-left -outline-offset-2 sm:flex-nowrap ${
-                        chosen ? 'bg-chip' : 'hover:bg-subtle'
+                        chosen ? 'bg-selected' : 'hover:bg-hover'
                       }`}
                     >
                       <SourceMark kind={connector.kind} />

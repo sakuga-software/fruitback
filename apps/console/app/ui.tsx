@@ -137,7 +137,7 @@ const BUTTON_WIDE = {
 function toneClasses(tone: Tone, size: ControlSize, wide: boolean): string {
   if (tone === 'primary' || tone === 'outline') return buttonClasses(tone, size, wide);
 
-  return 'rounded-full font-semibold';
+  return 'rounded-control font-semibold';
 }
 
 /** Where a control goes when it is a link: a screen of the console, or an address outside it. */
@@ -395,7 +395,7 @@ type IconButtonProps = {
 
 /** A button that is a picture: 28 px, or 24 px (« small »), its picture at 18 px. */
 const ICON_BUTTON =
-  'kit-icon-button inline-flex flex-none items-center justify-center p-0 border-0 border-none border-current rounded-control bg-transparent text-muted cursor-pointer transform-none [transition:none] [&:hover:not(:disabled,[aria-disabled=true])]:bg-chip data-[hovered=true]:bg-chip data-[pressed=true]:bg-chip disabled:opacity-50 disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:cursor-not-allowed [&_svg]:size-[18px] [&_svg]:m-0';
+  'kit-icon-button inline-flex flex-none items-center justify-center p-0 border-0 border-none border-current rounded-control bg-transparent text-muted cursor-pointer transform-none [transition:none] [&:hover:not(:disabled,[aria-disabled=true])]:bg-hover data-[hovered=true]:bg-hover data-[pressed=true]:bg-hover disabled:opacity-50 disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:cursor-not-allowed [&_svg]:size-[18px] [&_svg]:m-0';
 
 const ICON_BUTTON_SIZE = { chip: 'size-control-md', small: 'size-control-sm' } as const;
 
@@ -455,7 +455,7 @@ export function PageNumber({
       onPress={() => {
         if (!current) onClick();
       }}
-      className={`${PAGE_NUMBER} ${current ? 'bg-ink text-surface font-semibold cursor-default' : 'bg-transparent text-muted cursor-pointer [&:hover]:bg-chip [&:hover]:text-ink data-[hovered=true]:bg-chip data-[hovered=true]:text-ink'}`}
+      className={`${PAGE_NUMBER} ${current ? 'bg-ink text-surface font-semibold cursor-default' : 'bg-transparent text-muted cursor-pointer [&:hover]:bg-hover [&:hover]:text-ink data-[hovered=true]:bg-hover data-[hovered=true]:text-ink'}`}
     >
       {children}
     </HeroButton>
@@ -485,7 +485,7 @@ export function IconLink({ label, href, tip, children }: IconLinkProps) {
         target="_blank"
         rel="noreferrer"
         aria-label={label}
-        className="kit-icon-link inline-flex flex-none items-center justify-center size-control-sm rounded-control text-muted [text-decoration:none] [&:hover]:bg-chip [&:hover]:text-ink data-[hovered=true]:bg-chip data-[hovered=true]:text-ink [&_svg]:size-[16px]"
+        className="kit-icon-link inline-flex flex-none items-center justify-center size-control-sm rounded-control text-muted [text-decoration:none] [&:hover]:bg-hover [&:hover]:text-ink data-[hovered=true]:bg-hover data-[hovered=true]:text-ink [&_svg]:size-[16px]"
       >
         {children}
       </HeroLink>
@@ -880,7 +880,7 @@ const OPTION_LABEL = 'kit-option-label block min-w-0 truncate';
  */
 function triggerClasses(compact: boolean, status: boolean, bare: boolean): string {
   if (bare)
-    return `${CONTROL} items-center justify-center size-[28px] p-0 border-transparent bg-transparent text-field-foreground ${status ? 'gap-[9px]' : ''} ${compact || status ? 'text-(length:--text-small)' : 'text-(length:--text-body)'} leading-auto [&:hover]:bg-chip data-[hovered=true]:bg-chip data-[disabled=true]:opacity-50 data-[disabled=true]:cursor-not-allowed`;
+    return `${CONTROL} items-center justify-center size-[28px] p-0 border-transparent bg-transparent text-field-foreground ${status ? 'gap-[9px]' : ''} ${compact || status ? 'text-(length:--text-small)' : 'text-(length:--text-body)'} leading-auto [&:hover]:bg-hover data-[hovered=true]:bg-hover data-[disabled=true]:opacity-50 data-[disabled=true]:cursor-not-allowed`;
   const size = status
     ? 'gap-[9px] h-control-md pl-[11px] pr-[28px] py-0 text-(length:--text-small)'
     : `${compact ? 'h-control-md text-(length:--text-small)' : 'h-control-lg text-(length:--text-body)'} pl-[12px] pr-[28px] py-0`;
@@ -1482,7 +1482,7 @@ const TABLE_CELLS = [
   '[&_th]:px-[16px] [&_th]:py-[12px] [&_th]:[border-bottom:1px_solid_var(--color-line)] [&_th]:text-muted [&_th]:text-(length:--text-hint) [&_th]:font-semibold [&_th]:text-left [&_th]:whitespace-nowrap',
   '[&_td]:px-[16px] [&_td]:[border-bottom:1px_solid_var(--color-line)]',
   '[&_:is(th,td):first-child]:pl-[20px] [&_:is(th,td):last-child]:pr-[20px]',
-  '[&_tbody_tr[data-chosen=true]]:bg-chip [&_tr[data-selected=true]>td]:bg-chip',
+  '[&_tbody_tr[data-chosen=true]]:bg-selected [&_tr[data-selected=true]>td]:bg-selected',
   '[&_[data-align=end]]:text-right',
   // The head of a group of rows (FRU-551): a band of the subtle tint, the words of the group in ink.
   '[&_.kit-table-group_th]:py-[8px] [&_.kit-table-group_th]:bg-subtle [&_.kit-table-group_th]:text-ink [&_.kit-table-group_th]:text-(length:--text-small)',
@@ -1569,7 +1569,7 @@ export function DataTable({
         TABLE_CELLS,
         dense ? '[&_td]:py-[12px]' : '[&_td]:py-[14px]',
         // The head of a group opens nothing: its tint stays under the pointer.
-        hover ? '[&_tbody_tr:hover:not([data-chosen=true],.kit-table-group)]:bg-subtle' : '',
+        hover ? '[&_tbody_tr:hover:not([data-chosen=true],.kit-table-group)]:bg-hover' : '',
         TABLE_STACKED,
         stack && pinned ? '' : '[&[data-stacked=true]_tr.kit-table-group_th]:static',
       ].join(' ')}
@@ -1985,7 +1985,7 @@ const MENU =
  * tint, where the accent is 4.28:1.
  */
 function itemClasses(danger: boolean): string {
-  return `min-h-control-md rounded-control text-(length:--text-small) leading-(--text-small--line-height) transform-none [transition:none] data-[hovered=true]:bg-chip data-[focused=true]:bg-chip data-[focus-visible=true]:[outline:2px_solid_var(--color-accent)] data-[focus-visible=true]:outline-offset-[-2px]! data-[focus-visible=true]:[box-shadow:none] ${danger ? 'text-accent-strong' : ''}`;
+  return `min-h-control-md rounded-control text-(length:--text-small) leading-(--text-small--line-height) transform-none [transition:none] data-[hovered=true]:bg-hover data-[focused=true]:bg-hover data-[focus-visible=true]:[outline:2px_solid_var(--color-accent)] data-[focus-visible=true]:outline-offset-[-2px]! data-[focus-visible=true]:[box-shadow:none] ${danger ? 'text-accent-strong' : ''}`;
 }
 const MENU_WORDS = 'kit-menu__words flex min-w-0 flex-col';
 const MENU_LABEL = 'text-inherit font-semibold';
@@ -2338,7 +2338,7 @@ export function Step({ state, number, title, currentPrefix, children }: StepProp
         </span>
         <span
           aria-hidden="true"
-          className="kit-step__line flex-auto w-[2px] min-h-[24px] rounded-inner bg-line group-last/step:hidden"
+          className="kit-step__line flex-auto w-[2px] min-h-[24px] rounded-full bg-line group-last/step:hidden"
         />
       </div>
       <div className="kit-step__body min-w-0 pb-[32px] group-last/step:pb-0">

@@ -535,7 +535,7 @@ function KeyRow({ agentKey: key, now, onRevoked }: { agentKey: AgentKey; now: nu
           <h2 className="text-body font-bold [overflow-wrap:anywhere]">{key.name}</h2>
           {/* A connection of OAuth (FRU-467): the host its codes went to, the name a person approved. */}
           {key.client ? (
-            <span className="mt-[2px] inline-block rounded-full bg-chip px-[8px] py-[2px] text-hint font-semibold text-ink-soft">
+            <span className="mt-[2px] inline-block rounded-control bg-chip px-[8px] py-[2px] text-hint font-semibold text-ink-soft">
               {t('OAuth · {host}', { host: key.client.host })}
             </span>
           ) : null}
@@ -584,7 +584,7 @@ function KeyRow({ agentKey: key, now, onRevoked }: { agentKey: AgentKey; now: nu
               ) : null}
               {end.state === 'ended' ? (
                 <>
-                  <span className="rounded-full bg-chip px-[8px] py-[2px] text-hint font-semibold text-ink-soft">
+                  <span className="rounded-control bg-chip px-[8px] py-[2px] text-hint font-semibold text-ink-soft">
                     {t('Ended')}
                   </span>
                   <span className="block text-hint text-muted">{t('On {day}', { day: dayOf(key.expiresAt) })}</span>

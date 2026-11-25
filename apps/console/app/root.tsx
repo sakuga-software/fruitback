@@ -219,7 +219,7 @@ function SignedOut() {
         href="/sign-in"
         target="_blank"
         rel="noopener"
-        className="rounded-full border border-on-ink px-3 py-1 font-semibold hover:bg-on-ink/10"
+        className="rounded-control border border-on-ink px-3 py-1 font-semibold hover:bg-on-ink/10"
       >
         {t('Sign in')}
       </a>
