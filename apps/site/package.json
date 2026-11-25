@@ -1,0 +1,36 @@
+{
+  "name": "@fruitback/site",
+  "version": "0.7.0",
+  "private": true,
+  "description": "The stylesheets of fruitback.com: docs/ is the site, and these are the Tailwind sources of its CSS.",
+  "type": "module",
+  "scripts": {
+    "css": "node build.ts",
+    "format": "oxfmt --check .",
+    "format:fix": "oxfmt .",
+    "lint": "oxlint .",
+    "test": "node --test ${FRUITBACK_TEST_CONCURRENCY:+--test-concurrency=$FRUITBACK_TEST_CONCURRENCY} '*.test.ts'",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@fruitback/shared": "workspace:*",
+    "@tailwindcss/cli": "^4.3.3",
+    "@types/node": "catalog:",
+    "oxfmt": "catalog:",
+    "oxlint": "catalog:",
+    "tailwindcss": "^4.3.3",
+    "typescript": "catalog:"
+  },
+  "nx": {
+    "targets": {
+      "test": {
+        "inputs": [
+          "default",
+          "^production",
+          "{workspaceRoot}/docs/assets/landing.css",
+          "{workspaceRoot}/docs/assets/docs.css"
+        ]
+      }
+    }
+  }
+}
