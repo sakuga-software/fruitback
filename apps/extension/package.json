@@ -31,6 +31,7 @@
   "devDependencies": {
     "@resvg/resvg-js": "^2.6.2",
     "@storybook/html-vite": "10.6.3",
+    "@tailwindcss/node": "^4.3.3",
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "catalog:",
     "happy-dom": "catalog:",
