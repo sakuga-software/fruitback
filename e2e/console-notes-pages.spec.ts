@@ -133,6 +133,9 @@ test('the last page is offered once its cursor is known, and « Next page » is 
   await expect(summary(page)).toHaveText('226 to 250 of 263');
   await expect(page).toHaveURL(/[?&]from=226(&|$)/);
   await number(page, 11).click();
+  // FRU-719: the address changes before the page is drawn. A press on « 10 » before that lands on the
+  // page shown, which a press does nothing with, and an assertion reads the screen of before.
+  await expect(summary(page)).toHaveText('251 to 263 of 263');
   await number(page, 10).click();
   await expect(summary(page)).toHaveText('226 to 250 of 263');
   // Still from the link: the arrow goes to the first page, and reads it.
@@ -162,6 +165,9 @@ test('after the Back button of the browser, each number still reads its own page
   expect(asked.at(-1)?.cursor).toBeUndefined();
   await number(page, 2).click();
   await number(page, 3).click();
+  // FRU-719: the third page is drawn before the browser goes back. Until then « Back » leaves the
+  // page of before, and the assertion below reads the screen of before.
+  await expect(summary(page)).toHaveText('51 to 75 of 263');
   await page.goBack();
   await expect(summary(page)).toHaveText('26 to 50 of 263');
   // « Previous page » too.
