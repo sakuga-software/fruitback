@@ -659,7 +659,7 @@ export default function Connectors() {
                 const chosen = connector.id === selected;
 
                 return (
-                  <li key={connector.id} className="overflow-hidden rounded-frame border border-line bg-surface">
+                  <li key={connector.id} className="overflow-hidden rounded-card border border-line bg-surface">
                     <button
                       type="button"
                       aria-expanded={chosen}
@@ -744,7 +744,7 @@ function Source({
 }) {
   return (
     <li
-      className={`flex min-w-0 flex-col gap-[14px] rounded-frame border border-line bg-surface p-[16px] ${
+      className={`flex min-w-0 flex-col gap-[14px] rounded-card border border-line bg-surface p-[16px] ${
         wide ? 'col-span-full' : ''
       }`}
       data-source={name}

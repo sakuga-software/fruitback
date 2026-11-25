@@ -116,7 +116,7 @@ export function AddRest({
         <p className="text-hint text-muted">
           {t('Your receiver checks each request with it. Fruitback does not show it again.')}
         </p>
-        <code className="block rounded-button bg-chip px-[12px] py-[8px] font-mono text-tiny break-all" data-secret>
+        <code className="block rounded-control bg-chip px-[12px] py-[8px] font-mono text-tiny break-all" data-secret>
           {made}
         </code>
         <div className="flex flex-wrap items-center gap-[8px]">

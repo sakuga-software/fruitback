@@ -403,7 +403,7 @@ export function SitePlaces({
       {places.length === 0 ? null : (
         <ol
           aria-label={t('Destinations of {site}', { site: host })}
-          className="flex flex-col rounded-frame border border-line bg-surface"
+          className="flex flex-col rounded-card border border-line bg-surface"
         >
           {places.map((each, index) => {
             const rest = places.filter((_, position) => position !== index);

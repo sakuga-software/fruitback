@@ -75,7 +75,7 @@ export function TaskBulkBar() {
       aria-label={t('The selected notes')}
       aria-busy={busy}
       // At the foot of the screen while its list is, over the rows.
-      className="kit-selection-bar sticky bottom-[16px] z-5 border border-line rounded-frame bg-surface [box-shadow:var(--shadow-frame)] mt-[16px] flex flex-col gap-[8px] px-[14px] py-[10px]"
+      className="kit-selection-bar sticky bottom-[16px] z-5 border border-line rounded-card bg-surface [box-shadow:var(--shadow-frame)] mt-[16px] flex flex-col gap-[8px] px-[14px] py-[10px]"
     >
       <div className="flex flex-wrap items-center gap-x-[14px] gap-y-[8px]">
         <span className="flex flex-col items-start">

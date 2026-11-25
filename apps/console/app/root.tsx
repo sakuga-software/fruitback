@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Links, Meta, Outlet, Scripts, ScrollRestoration } from 'react-router';
 import { type Left, call, checkTab, onLeft, onReachability, onSignedOut } from './api';
+import '@fontsource-variable/inter';
 import './app.css';
 import { ready, t } from './i18n';
 import { useLocale } from './use-locale';
@@ -127,7 +128,7 @@ function Gone({ why, drafts }: { why: Left; drafts: Draft[] }) {
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-setup px-4 py-8">
-      <div role="alert" className="w-full max-w-md rounded-[14px] border border-line bg-surface p-7">
+      <div role="alert" className="w-full max-w-md rounded-card border border-line bg-surface p-7">
         <h1 className="text-lg font-bold">
           {why === 'changed' ? t('Another account is signed in in this browser') : t('You were signed out')}
         </h1>

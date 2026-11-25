@@ -310,7 +310,7 @@ function Redirect({ address }: { address: string }) {
   return (
     <div className="mt-[10px] mb-[6px] flex flex-wrap items-center gap-x-[16px] gap-y-[10px] text-hint text-muted">
       <span>{t('Redirect address to give Google:')}</span>
-      <code className="rounded-button border border-line bg-subtle px-[8px] py-[4px] font-mono text-tiny text-ink [overflow-wrap:anywhere]">
+      <code className="rounded-control border border-line bg-subtle px-[8px] py-[4px] font-mono text-tiny text-ink [overflow-wrap:anywhere]">
         {address}
       </code>
       <LinkButton onClick={copy}>{copied === 'yes' ? t('Copied') : t('Copy')}</LinkButton>

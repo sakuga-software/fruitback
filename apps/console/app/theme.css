@@ -1,0 +1,90 @@
+/*
+  The slate theme of the console (FRU-683): the default of the redesign of 2026-11-25. The console
+  alone imports this file, after the shared theme (packages/shared/tailwind/theme.css): the
+  extension, the widget and the docs keep the shared values. design/README.md has the table.
+
+  Every token is a CSS variable on :root, and every utility reads it through var(). A setting of the
+  appearance (FRU-694) changes a token on <html> and the console follows at once. `static` writes
+  every token, used or not, so a setting finds each one.
+
+  A screen writes the name of a token and never a value: `app/theme.test.ts` fails on a radius or a
+  height written as a value in a screen or in the kit.
+*/
+@theme static {
+  /*
+    Slate. Measured on white, the sidebar, the hover and the selection (theme.test.ts computes each
+    ratio): ink 17.85 to 14.48, ink-soft 10.35 to 8.40, muted (app.css) 5.74 to 4.65.
+  */
+  --color-ink: #0f172a;
+  --color-ink-soft: #334155;
+  --color-page: #ffffff;
+  /* The background of the sidebar. */
+  --color-sidebar: #f1f4f8;
+  /* A panel, a callout, the band of a group of rows, an empty state. */
+  --color-subtle: #f7f9fb;
+  /* A row, an entry or a control under the pointer. */
+  --color-hover: #e8edf3;
+  /* A row or an entry that is chosen. */
+  --color-selected: #e2e8f0;
+  /* The fill of a chip and of a light button. */
+  --color-chip: #e8edf3;
+  /* A rule, the frame of a table or a card. */
+  --color-line: #e3e8ef;
+  /* The border of a field and of a control: 3.65:1 on white, 3.31:1 on the sidebar (WCAG 1.4.11). */
+  --color-control: #7b8797;
+  /* The round initial of a person: white on it is 10.35:1. */
+  --color-avatar: #334155;
+
+  --font-sans: 'Inter Variable', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+
+  /* Inter at 13 px is the text of the console. A title stays a step over it. */
+  --text-title: 20px;
+  --text-title--line-height: 1.25;
+  --text-title-setup: 24px;
+  --text-title-setup--line-height: 1.2;
+  --text-conclusion: 18px;
+  --text-conclusion--line-height: 1.3;
+  --text-section: 15px;
+  --text-section--line-height: 1.4;
+  --text-step: 14px;
+  --text-step--line-height: 20px;
+  --text-lead: 14px;
+  --text-lead--line-height: 1.5;
+  --text-body: 13px;
+  --text-body--line-height: 1.5;
+  --text-small: 13px;
+  --text-small--line-height: 1.45;
+  --text-table: 13px;
+  --text-table--line-height: 1.4;
+  --text-hint: 12px;
+  --text-hint--line-height: 1.45;
+  --text-label: 13px;
+  --text-label--line-height: normal;
+  --text-tiny: 11px;
+  --text-tiny--line-height: normal;
+
+  /* The three heights of a control: small (a chip, an icon), default (a button, a field), large. */
+  --spacing-control-sm: 24px;
+  --spacing-control-md: 28px;
+  --spacing-control-lg: 32px;
+
+  /* One radius for a button, a field, a select, a search, a chip and a menu; a card; a modal. */
+  --radius-control: 6px;
+  --radius-card: 8px;
+  --radius-modal: 10px;
+  /*
+    The scale of Tailwind, that HeroUI applies (a button is rounded-3xl, a menu item rounded-2xl, a
+    checkbox rounded-md): each step is the radius of a control. app.css gives a card and a modal of
+    HeroUI theirs. A screen names control, card or modal, never a step of this scale.
+  */
+  --radius-xs: var(--radius-control);
+  --radius-sm: var(--radius-control);
+  --radius-md: var(--radius-control);
+  --radius-lg: var(--radius-control);
+  --radius-xl: var(--radius-control);
+  --radius-2xl: var(--radius-control);
+  --radius-3xl: var(--radius-control);
+  --radius-4xl: var(--radius-control);
+
+  --shadow-frame: 0 10px 30px rgba(15, 23, 42, 0.08);
+}
