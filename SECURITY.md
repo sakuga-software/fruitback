@@ -2933,10 +2933,11 @@ where the worker keeps tasks.
 - What a read costs a store: each page of the answer is one read of the page, through the read
   cache of `GET /feedback`. The rate limit per address applies.
 - A key writes only with the right `write`, and while its member may manage the sites:
-  `reply_to_note`, `set_note_status` and `update_task`. A key `read`, or a key whose member no longer has
-  `manage-sites`, is not given them, and `tools/call` refuses them (`-32602`).
+  `reply_to_note`, `set_note_status`, `update_task` and `create_task`. A key `read`, or a key whose
+  member no longer has `manage-sites`, is not given them, and `tools/call` refuses them (`-32602`).
   test:`gives a key read no write tool, and refuses both when it calls them`,
-  test:`gives a key read the fields of a task and the filters of the console, and no write of a task`.
+  test:`gives a key read the fields of a task and the filters of the console, and no write of a task`,
+  test:`is given to a key that writes only, and refused to a key read`.
 - A reply of an agent says that it is one, and never names the member who made the key: its
   first line is `**<name of the key>** via Fruitback · agent`, and a read gives it `by: 'agent'`. A
   person who types that line in a reply of the page does not pass for an agent: what a person typed is
@@ -2955,17 +2956,35 @@ where the worker keeps tasks.
   test:`changes the task of somebody else with the right of a role that manages the sites`,
   test:`refuses an update that is not one, and writes nothing of a refused one`,
   test:`refuses the fields and the status of a note in a tracker`.
+- `create_task` writes a task with no page and no pin in a site the key names, and in no
+  other: a site of another workspace, or of the workspace but not of the key, answers as one that
+  does not exist. It writes as « New task » of the console, in one transaction, with the member of
+  the key as its author. Before that transaction it refuses an argument it does not take (so that
+  nothing an agent sent is dropped in silence) and a field that the console refuses; the
+  transaction refuses a status that the site does not have or hides, a member who is not of the
+  workspace and a label of another workspace, and writes nothing then. Each call that reaches the
+  write is one write of the limit, and a task written goes in the log of its key (`create`, with its
+  status). It starts no agent: a task it puts in To do calls no trigger of its site.
+  test:`writes a task with every field, which the console lists and get_note reads, and logs it`,
+  test:`refuses before it writes what it cannot take, and writes nothing then`,
+  test:`starts no agent: a task in To do calls no trigger of its site, where one of the console does`.
+- `update_task` and `set_note_status` change a task written by hand as the console does
+  (`setTaskFields`, then `setNoteStatus` of the accounts), with the same rights and the same checks
+  as for a note that the worker keeps. test:`changes its fields and its status, as the console does, and logs each write`,
+  test:`refuses a status or a field it cannot take, and writes nothing of a refused one`.
 - `task_choices` gives the labels of the workspace to every key, and its members who are not guests
   to a key whose member reads the members, never to a key of a guest: an id and a name, or the
   address of a member who gave no name, as the menu of the console shows them.
   test:`lists the labels and the members a task can be given to, never a guest`.
 - On a worker that keeps no task (`FRUITBACK_TASKS=off`), no key is given `task_choices`,
-  `set_note_status` or `update_task`, and `tools/call` refuses them (`-32602`).
-  test:`gives no tool of a task on a worker that keeps none, and refuses each when called`.
+  `set_note_status`, `update_task` or `create_task`, and `tools/call` refuses them (`-32602`).
+  test:`gives no tool of a task on a worker that keeps none, and refuses each when called`,
+  test:`is not given on a worker that keeps no task, and refused when called`.
 - Each key writes 30 times a minute at most, and each write is in the log of its key: the
   owner and the admins read it at `GET /console/workspaces/<id>/agent-keys/<key>/writes`, the
   newest 100. The log of a revoked key stays until its workspace goes.
-  test:`stops a key after 30 writes in a minute, and keeps the log of a revoked key`.
+  test:`stops a key after 30 writes in a minute, and keeps the log of a revoked key`,
+  test:`counts in the limit of the writes of its key, with update_task`.
 
 ### OAuth for `/mcp`, for a connector of claude.ai (FRU-467)
 
