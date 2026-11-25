@@ -155,7 +155,8 @@ test('a server with no Asana app connects it by a personal access token, and kee
 
 test('« Add a destination » of a site lists the projects of Asana, and keeps the one chosen', async ({ page }) => {
   const worker = await workerWith(page, [ASANA]);
-  await page.goto(`${CONSOLE}/w/w1/sites/s1`);
+  // FRU-689: the places are set in the tab « Destinations » of the site.
+  await page.goto(`${CONSOLE}/w/w1/sites/s1/destinations`);
   const places = page.getByRole('region', { name: `Where the notes of ${SITE} go` });
   await expect(places).toBeVisible();
 

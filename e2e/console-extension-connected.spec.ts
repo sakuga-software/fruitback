@@ -170,7 +170,8 @@ test.describe('the rail', () => {
 test.describe('the page of a site (FRU-455)', () => {
   test('the block of the extension says it is connected, and offers to connect another browser', async ({ page }) => {
     await stubWorker(page, { answer: browsersAnswer([MAC]) });
-    await page.goto(`${CONSOLE}/w/w1/sites/s1`);
+    // FRU-689: the block of the extension is in the tab « Install » of the site.
+    await page.goto(`${CONSOLE}/w/w1/sites/s1/install`);
     const block = page
       .locator('main div')
       .filter({ has: page.getByRole('heading', { name: 'Extension', exact: true }) })
@@ -183,7 +184,8 @@ test.describe('the page of a site (FRU-455)', () => {
 
   test('offers to connect this browser when none is connected', async ({ page }) => {
     await stubWorker(page, { answer: browsersAnswer([]) });
-    await page.goto(`${CONSOLE}/w/w1/sites/s1`);
+    // FRU-689: the block of the extension is in the tab « Install » of the site.
+    await page.goto(`${CONSOLE}/w/w1/sites/s1/install`);
     const block = page
       .locator('main div')
       .filter({ has: page.getByRole('heading', { name: 'Extension', exact: true }) })

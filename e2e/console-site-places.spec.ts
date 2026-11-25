@@ -234,7 +234,8 @@ const search = (page: Page) => panel(page).getByRole('searchbox', { name: 'Searc
 
 /** Opens the page of the site (FRU-433), where its destinations are. */
 async function openPlaces(page: Page): Promise<void> {
-  await page.goto(`${CONSOLE}/w/w1/sites/s1`);
+  // FRU-689: the places are set in the tab « Destinations » of the site.
+  await page.goto(`${CONSOLE}/w/w1/sites/s1/destinations`);
   await expect(panel(page)).toBeVisible();
 }
 
@@ -751,7 +752,8 @@ for (const locale of ['en', 'fr'] as const) {
       { connector: 'g1', teamId: 'acme/docs' },
       { connector: 'c1', teamId: 't1', projectId: 'p1' },
     ];
-    await page.goto(`${CONSOLE}/w/w1/sites/s1`);
+    // FRU-689: the places are set in the tab « Destinations » of the site.
+    await page.goto(`${CONSOLE}/w/w1/sites/s1/destinations`);
     const opened = page.getByRole('region', {
       name: locale === 'en' ? `Where the notes of ${SITE} go` : `Où vont les notes de ${SITE}`,
     });

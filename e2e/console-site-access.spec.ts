@@ -90,12 +90,20 @@ test('an owner reaches the tab from the page of a site, and reads its access as 
 }) => {
   const worker = await workerWith(page);
   await page.goto(`${CONSOLE}/w/w1/sites/s1`);
-  await page.getByRole('link', { name: 'Change the access of staging.acme.dev' }).click();
+  // FRU-689: « Change » on the row of who sees the notes leads to the tab.
+  await page.getByRole('link', { name: 'Change who sees the notes of staging.acme.dev' }).click();
   await expect(page).toHaveURL(`${CONSOLE}/w/w1/sites/s1/access`);
 
   await expect(page.locator('main h1')).toHaveText('staging.acme.dev');
   const tabs = page.getByRole('navigation', { name: 'Sections of the site' });
-  await expect(tabs.getByRole('link')).toHaveText(['Overview', 'Access']);
+  await expect(tabs.getByRole('link')).toHaveText([
+    'Overview',
+    'Install',
+    'Destinations',
+    'Statuses',
+    'Access',
+    'Advanced',
+  ]);
   await expect(tabs.getByRole('link', { name: 'Access' })).toHaveAttribute('aria-current', 'page');
   await expect(page.locator('main h2')).toHaveText([
     'Public access',
@@ -293,9 +301,9 @@ test('a refusal says why and keeps what was chosen, and a member reads the tab w
   }
   await expect(levels(page).getByRole('radio', { name: 'Contribute' })).toBeChecked();
   await expect(card(page, 'After a note').getByRole('switch')).toBeDisabled();
-  // The overview shows no way to change it either.
+  // The overview shows no way to change it either: its one « Change » leads to « Install » (FRU-689).
   await page.goto(`${CONSOLE}/w/w1/sites/s2`);
-  await expect(page.getByRole('link', { name: /Change the access/ })).toHaveCount(0);
+  await expect(page.locator('a[href$="/access"]').filter({ hasText: 'Change' })).toHaveCount(0);
 });
 
 for (const locale of ['en', 'fr'] as const) {

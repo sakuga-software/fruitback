@@ -14,8 +14,8 @@ const CONSOLE = 'http://localhost:5178';
 
 const PAGES = [
   // FRU-688: Sites has the head of 48 px of the redesign, as Notes: console-sites.spec.ts measures it.
-  '/w/w1/sites/s1',
-  '/w/w1/sites/s1/statuses',
+  // FRU-689: the page of a site and its tabs (the statuses among them) have it too, the site as their
+  // title: console-site-page.spec.ts measures it.
   // FRU-686: Notes has the head of 48 px of its mockup, « Notes » at 14 px beside its tabs:
   // console-notes.spec.ts measures it. FRU-691: Members has it too, console-members.spec.ts.
   '/w/w1/connectors',
@@ -79,16 +79,14 @@ for (const [width, locale] of [
   });
 }
 
-test('the crumbs of the statuses of a site are above the title, in the room of the top of the screen', async ({
-  page,
-}) => {
+test('the statuses of a site are a tab of its page, under the crumbs « Sites › site » (FRU-689)', async ({ page }) => {
   await stub(page, 'en');
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`${CONSOLE}/w/w1/sites/s1/statuses`);
-  const crumbs = await box(page.getByRole('navigation', { name: 'Breadcrumb' }));
-  const title = await box(page.locator('main h1'));
-  const main = await box(page.locator('main'));
-  expect(crumbs.y).toBeGreaterThan(main.y);
-  expect(crumbs.y + crumbs.height).toBeLessThanOrEqual(title.y);
-  await expect(page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'Sites' })).toBeVisible();
+  const crumbs = page.getByRole('navigation', { name: 'Breadcrumb' });
+  await expect(crumbs.getByRole('link', { name: 'Sites' })).toBeVisible();
+  await expect(crumbs.locator('h1')).toHaveText('staging.acme.dev');
+  await expect(
+    page.getByRole('navigation', { name: 'Sections of the site' }).getByRole('link', { name: 'Statuses' }),
+  ).toHaveAttribute('aria-current', 'page');
 });
