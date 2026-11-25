@@ -47,6 +47,11 @@ first publish made it expensive.
   « Copy as text » and the tool `notes_as_text` of the worker write it. The contract holds the
   format and no word: the caller gives `FeedbackWords`, in its language. `placement` is absent where
   the caller has no page to find a note on, and the text then says nothing of it.
+- **The text of the tasks written by hand is `tasksText`** (FRU-658), in the format of
+  `feedbackText`: a heading the caller gives, then each task with its number, its status, who wrote
+  it, and its title and text quoted, then its replies. The console's « Copy as Markdown » and
+  `notes_as_text` of a whole site write it after the notes of the pages. `FeedbackWords.status` takes
+  a task too: a method of the type, so a caller of before still compiles.
 - **An issue says `checked: { by, at }` and `mine: true`** (FRU-294): `checked` on a done note whose
   newest verdict in its replies is « looks fixed », `mine` to the reader who left the note. Both
   optional, both read-envelope fields: `NOTE_VERSION` does not move.

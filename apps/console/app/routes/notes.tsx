@@ -32,6 +32,8 @@ import { dayFromToday } from '../parts/task-menu';
 import { TASK_NOT_SAVED, TASK_PROBLEMS, useTaskSeam } from '../parts/task-seam';
 import { TaskPanel } from '../parts/task-panel';
 import { isNewTaskKey, useTaskCreate } from '../parts/task-create';
+import { copyShortcutOf, useTaskCopy } from '../parts/task-copy';
+import { siteOfId } from '../note-id';
 import { SelectionStatus, useSelectionKeys, useTaskSelection } from '../parts/task-selection';
 import { TaskBulkBar, TaskContexts } from '../parts/task-bulk-bar';
 
@@ -318,6 +320,37 @@ export default function Notes() {
     },
   });
   const openCreate = create.open;
+
+  // FRU-658: the link, the ID and the Markdown of a task, from its menu, its panel and the keyboard.
+  const taskCopy = useTaskCopy({
+    base,
+    workspace: workspace.id,
+    statusesOf: (site) => (typeof shown === 'object' ? shown.statuses?.[site] : undefined),
+  });
+  const copyRef = useRef<{ copy: typeof taskCopy.copy; noteOf: (id: string) => IndexedNote | undefined }>(undefined);
+  copyRef.current = {
+    copy: taskCopy.copy,
+    noteOf: (id) => (typeof shown === 'object' ? shown.notes.find((note) => note.id === id) : undefined),
+  };
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const kind = copyShortcutOf(event);
+      const current = copyRef.current;
+      if (kind === undefined || current === undefined) return;
+      // The row or the card that holds the focus, else the task of the panel. The address is read as
+      // it is now: a panel closed a moment ago is out of it already, whatever React drew.
+      const focused = document.activeElement?.closest<HTMLElement>('[data-note]')?.dataset.note;
+      const id = focused ?? new URLSearchParams(window.location.search).get('task') ?? undefined;
+      if (id === undefined) return;
+      const note = current.noteOf(id) ?? { id, site: { id: siteOfId(id) }, unlisted: true as const };
+      event.preventDefault();
+      if (kind === 'link') current.copy.link([note]);
+      else current.copy.identifier([note]);
+    };
+    document.addEventListener('keydown', onKey);
+
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (!isNewTaskKey(event)) return;
@@ -342,7 +375,8 @@ export default function Notes() {
   );
 
   return (
-    <TaskContexts seam={{ ...tasks.seam, openTask }} selection={selection}>
+    <TaskContexts seam={{ ...tasks.seam, openTask, copy: taskCopy.copy }} selection={selection}>
+      {taskCopy.status}
       {tasks.dialog}
       {create.dialog}
       <SelectionStatus />
