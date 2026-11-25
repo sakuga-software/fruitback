@@ -1,6 +1,7 @@
 import { dayIn } from '../ago';
 import { t } from '../i18n';
 import { useLocale } from '../use-locale';
+import { Swatch } from '../ui';
 import { type TaskFields } from './notes-model';
 
 // Each sentence is written out, so the guard of the catalogue finds it.
@@ -37,7 +38,7 @@ export function TaskMarks({ task, className = '' }: { task: TaskFields | undefin
       {assignee === undefined ? null : <span>{t('Assigned to {name}', { name: assignee.name || t('a member') })}</span>}
       {labels.map((label) => (
         <span key={label.id} className="inline-flex items-center gap-[6px]">
-          <span aria-hidden="true" className="kit-swatch kit-swatch-small" style={{ background: label.color }} />
+          <Swatch colour={label.color} small />
           {label.name}
         </span>
       ))}

@@ -19,7 +19,7 @@ import {
   rowOf,
   statusesOf,
 } from '../site-statuses';
-import { Button, IconButton, Problem, StatusDot, Toggle } from '../ui';
+import { Button, IconButton, Problem, StatusDot, Swatch, Toggle } from '../ui';
 import { useLocale } from '../use-locale';
 import { MoveNotes, Ratio, StatusEditor } from './status-editor';
 import {
@@ -505,7 +505,7 @@ function StatusItem({
         </span>
         <span className="flex min-w-0 items-center gap-[8px]">
           <span className={`${label} w-[64px]`}>{t('Colour')}</span>
-          <span aria-hidden="true" className="kit-swatch" style={{ background: style.background }} />
+          <Swatch colour={style.background} />
           {/* FRU-504: the colour of the stage is said once, under the list; a screen reader hears it here. */}
           {status.color === null ? (
             <span className={stageColoured(status) ? 'sr-only' : ''}>{t(defaultColourOf(status))}</span>
