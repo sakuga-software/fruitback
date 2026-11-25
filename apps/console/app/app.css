@@ -41,7 +41,7 @@
 @import '@heroui/styles/themes/default' layer(theme);
 @import '@heroui/styles/utilities';
 @import '@heroui/styles/variants';
-@import '@fruitback/design-tokens/theme.css';
+@import '@fruitback/shared/tailwind/theme.css';
 
 /*
   HeroUI takes the theme, it does not set it: its variables get the tokens of design/README.md. It

@@ -13,7 +13,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 const APP = new URL('./', import.meta.url);
 const css = readFileSync(new URL('app.css', APP), 'utf8');
 /** The Tailwind theme the console shares with the extension, the widget and the docs (FRU-677). */
-const theme = readFileSync(new URL('../../../packages/design-tokens/theme.css', import.meta.url), 'utf8');
+const theme = readFileSync(new URL('../../../packages/shared/tailwind/theme.css', import.meta.url), 'utf8');
 
 /** Every source of the console that draws something: the screens, their parts, the kit. */
 function drawn(): Map<string, string> {
@@ -120,7 +120,7 @@ describe('the tokens of the console (FRU-232)', () => {
   });
 
   it('holds no colour of the palette of before, in any file of the console', () => {
-    const files = new Map([...drawn(), ['app.css', css], ['design-tokens/theme.css', theme]]);
+    const files = new Map([...drawn(), ['app.css', css], ['shared/tailwind/theme.css', theme]]);
     const found = (sources: Map<string, string>) =>
       [...sources].flatMap(([name, source]) =>
         BEFORE.filter((colour) => source.toLowerCase().includes(colour)).map((colour) => `${name}: ${colour}`),

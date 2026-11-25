@@ -18,13 +18,11 @@ COPY --from=pnpm /opt/pnpm /opt/pnpm
 RUN ln -s /opt/pnpm/pnpm /usr/local/bin/pnpm
 
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
-COPY packages/design-tokens/package.json packages/design-tokens/
 COPY packages/shared/package.json packages/shared/
 COPY packages/widget/package.json packages/widget/
 COPY apps/console/package.json apps/console/
 RUN pnpm install --frozen-lockfile --filter @fruitback/console... --filter @fruitback/widget...
 
-COPY packages/design-tokens packages/design-tokens
 COPY packages/shared packages/shared
 COPY packages/widget packages/widget
 COPY apps/console apps/console
