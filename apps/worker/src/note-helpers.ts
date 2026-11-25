@@ -73,7 +73,10 @@ export async function indexed(index: NoteIndex | undefined, work: (index: NoteIn
   }
 }
 
-/** The row of the index of one note this worker just planted. */
+/**
+ * The row of the index of one note this worker just planted. `visitor`: the digest of the key of the
+ * browser that sent it (FRU-700), which the row keeps for a note of a visitor only.
+ */
 export function noteEntry(
   workspace: string,
   site: string,
@@ -81,13 +84,14 @@ export function noteEntry(
   channel: Channel,
   target: ClientConfig | undefined,
   issue: CreatedIssue,
+  visitor?: string,
 ): NoteEntry {
   return {
     workspace,
     site,
     note,
     channel,
-    author: authorOf(note, channel === 'extension'),
+    author: authorOf(note, channel === 'extension', visitor),
     place: placeOf(target),
     issue: { identifier: issue.identifier, ...(issue.url === undefined ? {} : { url: issue.url }) },
     stage: 'new',

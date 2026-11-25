@@ -234,6 +234,7 @@ export const FRENCH: Catalog = {
   'withdraw.failedWait': 'Trop de demandes en ce moment. Réessayez dans une minute.',
   'withdraw.failedSignedOut': 'Votre session a pris fin. Reconnectez-vous, puis réessayez.',
   'withdraw.refused': 'Cette note ne peut plus être retirée : l’équipe l’a marquée comme faite ou l’a fermée.',
+  'thread.youBrowser': 'Vous · ce navigateur',
   'thread.anonymous': 'Anonyme',
   'thread.orphan': 'Élément introuvable. La position est approximative.',
   'thread.uncertain':

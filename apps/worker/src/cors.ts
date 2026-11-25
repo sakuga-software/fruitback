@@ -65,13 +65,16 @@ export function resolveCors(request: Request, allowedOrigins: string[]): CorsDec
  *   sees anything — `read: 'authenticated'` answered nobody, and a verified reporter could never be
  *   posted cross-origin. Raised in review; nothing server-side could have noticed, because the
  *   request never arrived.
+ * - `X-Fruitback-Visitor`, the key of a visitor's browser (FRU-700, `visitor-key.ts`), for the same
+ *   reason: the widget sends it on the reads and the writes of a visitor who sent a note, and a
+ *   preflight that does not list it refuses those calls.
  */
 function allowOrigin(origin: string): Record<string, string> {
   return {
     'Access-Control-Allow-Origin': origin,
     Vary: 'Origin',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Fruitback-Visitor',
     'Access-Control-Max-Age': '86400',
   };
 }

@@ -298,9 +298,33 @@ export const STYLES = `
   gap: 7px;
   flex: 1 1 auto;
   min-width: 0;
+  /*
+    As tall as the cross is drawn, as the heading: when the heading wraps (FRU-700: the chip of a
+    visitor, the way out), its first line stays centred on the cross.
+  */
+  min-height: 28px;
   font-weight: 600;
   font-size: 13px;
   letter-spacing: -0.006em;
+}
+/*
+  « You · this browser » (FRU-700): a chip of the sunken surface, after the word of the state, in the
+  heading that wraps. Its words wrap too, in a thread narrower than the chip.
+*/
+.fruitback-thread-you {
+  flex: 0 1 auto;
+  min-width: 0;
+  padding: 1px 7px;
+  border-radius: var(--fruitback-radius-sm);
+  background: var(--fruitback-color-surface-sunken);
+  color: var(--fruitback-color-text);
+  font: 500 12px/1.5 var(--fruitback-font-sans);
+  letter-spacing: 0;
+  overflow-wrap: anywhere;
+}
+.fruitback-thread-head[data-fruitback-you] .fruitback-thread-stage { flex-grow: 0; }
+@media (forced-colors: active) {
+  .fruitback-thread-you { border: 1px solid CanvasText; }
 }
 /* The silhouette of the pin, which is not in the scale and is not settable (see theme.ts). */
 .fruitback-thread-drop {
