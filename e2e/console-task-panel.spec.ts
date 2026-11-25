@@ -228,6 +228,18 @@ test('the panel is beside the list: the arrows change the note, Escape gives the
     .soft(axe.violations.map((violation) => `${violation.id}: ${violation.nodes[0]?.target.join(' ')}`))
     .toEqual([]);
 
+  // A closed list of the panel keeps the arrows: they open it, and the note stays. React Aria stops
+  // the key before the panel reads it (raised in review, measured).
+  const priority = panel.getByRole('button', { name: /Priority/ });
+  await priority.focus();
+  await p.keyboard.press('ArrowDown');
+  await expect(p.getByRole('listbox')).toBeVisible();
+  await expect(p).toHaveURL(/task=n1/);
+  await p.keyboard.press('Escape');
+  await expect(p.getByRole('listbox')).toHaveCount(0);
+  await expect(panel).toBeVisible();
+  await panel.evaluate((element) => (element as HTMLElement).focus());
+
   // The arrow up goes to the note above it in the list: « In progress » is before « New ».
   await p.keyboard.press('ArrowUp');
   await expect(p).toHaveURL(/task=n2/);
