@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router';
 import { type Stage } from '../stages';
 import { type Connector, type SiteChoice, call, siteChoices } from '../api';
 import { type Fetched, type Listed, listedOf } from '../listed';
-import { Button, LinkButton, PageHead } from '../ui';
+import { Button, LinkButton } from '../ui';
 import { useWorkspace } from './workspace';
 import { t } from '../i18n';
 import { problemOf } from '../problems';
@@ -26,7 +26,7 @@ import {
 } from '../parts/notes-model';
 import { NotesFailed } from '../parts/note-parts';
 import { NotePages } from '../parts/note-pages';
-import { NotesFilters, Pinned, ViewChoice } from '../parts/notes-filters';
+import { NotesHead, NotesToolbar, Pinned, Places } from '../parts/notes-filters';
 import { NotesTable, useFoldedGroups } from '../parts/notes-table';
 import { NoteCard } from '../parts/note-card';
 import { dayFromToday } from '../parts/task-menu';
@@ -401,11 +401,16 @@ export default function Notes() {
     return () => document.removeEventListener('keydown', onKey);
   }, [openCreate]);
   const newTask = (
-    <Button tone="outline" onClick={() => create.open()} disabled={typeof sites !== 'object' || sites.length === 0}>
+    <Button
+      tone="primary"
+      size="panel"
+      onClick={() => create.open()}
+      disabled={typeof sites !== 'object' || sites.length === 0}
+    >
       {t('New task')}
       {/* The key, in a box of its own: the glyph alone was cut by the end of the button. */}
       <kbd
-        className="ml-[8px] inline-flex h-[20px] min-w-[20px] flex-none items-center justify-center rounded-inner border border-line px-[4px] font-sans text-hint leading-none font-semibold text-muted"
+        className="ml-[6px] inline-flex h-[18px] min-w-[18px] flex-none items-center justify-center rounded-inner border border-page/50 px-[4px] font-sans text-tiny leading-none font-semibold text-page"
         aria-hidden="true"
       >
         C
@@ -432,24 +437,31 @@ export default function Notes() {
       />
       {/* FRU-687: beside the panel, from 1024 px, the screen keeps the room the panel takes. */}
       <div className={opened === undefined ? '' : 'min-[1024px]:mr-[440px]'}>
-        <PageHead
-          title={t('Notes')}
-          lead={t('Every note left on the sites of {workspace}, and where it went.', { workspace: workspace.name })}
-          className="mb-[24px]"
-          action={
-            <div className="flex flex-wrap items-center gap-[12px]">
-              {listed ? <ViewChoice view={view} onChoose={show} /> : null}
-              {newTask}
-            </div>
+        {/* FRU-686: the head of 48 px, « Notes » and a tab per place, then « New task ». */}
+        <NotesHead
+          tabs={
+            typeof shown === 'object' && listed && seesTracker ? (
+              <Places
+                counts={shown.counts}
+                connectors={connectors}
+                chosen={filters.place}
+                onChoose={(place) => filter({ place })}
+              />
+            ) : null
           }
+          action={newTask}
         />
 
-        {shown === 'loading' ? <p className="text-small text-muted">{t('Loading…')}</p> : null}
+        {shown === 'loading' ? <p className="mt-[24px] text-small text-muted">{t('Loading…')}</p> : null}
 
-        {shown === 'failed' ? <NotesFailed onRetry={() => void read()} /> : null}
+        {shown === 'failed' ? (
+          <div className="mt-[24px]">
+            <NotesFailed onRetry={() => void read()} />
+          </div>
+        ) : null}
 
         {typeof shown === 'object' && shown.counts.all === 0 && !filtered ? (
-          <p className="max-w-[640px] text-body text-muted">
+          <p className="mt-[24px] max-w-[640px] text-body text-muted">
             {t('No note yet. Notes show here as soon as someone leaves one on a site of {workspace}.', {
               workspace: workspace.name,
             })}
@@ -459,15 +471,15 @@ export default function Notes() {
         {typeof shown === 'object' && (shown.counts.all > 0 || filtered) ? (
           <Pinned
             bar={
-              <NotesFilters
-                counts={shown.counts}
-                connectors={connectors}
+              <NotesToolbar
+                total={shown.total}
                 sites={sites}
-                seesTracker={seesTracker}
                 filters={filters}
                 onFilter={filter}
                 typed={typed}
                 onType={setTyped}
+                view={view}
+                onView={show}
                 // FRU-655: the filters on the tasks, once the list holds one Fruitback keeps, or one is set.
                 {...(shown.notes.some((note) => note.task !== undefined) ||
                 TASK_FILTERS.some((name) => filters[name] !== '')
@@ -477,7 +489,7 @@ export default function Notes() {
             }
           >
             {shown.notes.length === 0 ? (
-              <div className="flex flex-wrap items-center gap-x-[12px] text-body text-muted">
+              <div className="flex flex-wrap items-center gap-x-[12px] pt-[16px] text-body text-muted">
                 <p>{t('No note matches.')}</p>
                 <LinkButton
                   autoFocus={movedOut}

@@ -26,8 +26,16 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Loading…': 'Chargement…',
 
   'My account': 'Mon compte',
-  'Your name on notes, your addresses, how you sign in, and where.':
-    'Votre nom sur les notes, vos adresses, comment vous vous connectez, et où.',
+  'Your name on notes, your addresses and how you sign in.':
+    'Votre nom sur les notes, vos adresses et comment vous vous connectez.',
+  'Sign-in and addresses': 'Connexion et adresses',
+  Appearance: 'Apparence',
+  Notifications: 'Notifications',
+  Primary: 'Principale',
+  'More for {email}': 'Plus pour {email}',
+  'See all {count}': 'Tout voir ({count})',
+  'Used {last}': 'Utilisé {last}',
+  'More for {browser}': 'Plus pour {browser}',
   '{provider} gives your primary address. Make another address primary first, under « Addresses ».':
     '{provider} fournit votre adresse principale. Choisissez d’abord une autre adresse principale, dans « Adresses ».',
   'Type one email address, like name@company.com.': 'Saisissez une adresse e-mail, comme nom@entreprise.com.',
@@ -81,8 +89,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'The address is not added yet': 'L’adresse n’est pas encore ajoutée',
   'Name shown on notes': 'Nom affiché sur les notes',
   'How you sign in': 'Comment vous vous connectez',
-  'Any of these opens the same account, in the console and in the extension.':
-    'Chacune ouvre le même compte, dans la console et dans l’extension.',
   'Always on': 'Toujours actif',
   'Disconnect a browser you no longer use. It stops showing notes at once.':
     'Déconnectez un navigateur que vous n’utilisez plus. Il cesse aussitôt d’afficher les notes.',
@@ -104,8 +110,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Email link': 'Lien par e-mail',
   'After the beta': 'Après la bêta',
   Language: 'Langue',
-  'The language of the console, and of the e-mails Fruitback sends you.':
-    'La langue de la console, et des e-mails que Fruitback vous envoie.',
   'Your account did not take this language yet. It is kept in this browser, and sent again the next time you open the console.':
     'Votre compte n’a pas encore pris cette langue. Elle est gardée dans ce navigateur, et renvoyée la prochaine fois que vous ouvrez la console.',
   'Fruitback cannot send to this address. Use a full https:// address that the internet can reach.':
@@ -935,15 +939,11 @@ export const FRENCH: Readonly<Record<string, string>> = {
   '{count} notes: {new} new, {todo} to do, {progress} in progress, {done} done, {closed} closed':
     '{count} notes : {new} nouvelles, {todo} à faire, {progress} en cours, {done} terminées, {closed} fermées',
   // Notes (FRU-245).
-  'Every note left on the sites of {workspace}, and where it went.':
-    'Chaque note laissée sur les sites de {workspace}, et où elle est partie.',
   'Where the notes went': 'Où sont parties les notes',
   All: 'Toutes',
   'In Fruitback': 'Dans Fruitback',
   'A connector that was removed': 'Un connecteur retiré',
   'Search notes': 'Chercher dans les notes',
-  'Search the text, the page or the reference': 'Chercher le texte, la page ou la référence',
-  'Search the text or the page': 'Chercher le texte ou la page',
   Status: 'Statut',
   'Any status': 'Tous les statuts',
   // FRU-667: every status but Done and Closed.
@@ -955,7 +955,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Notes by status': 'Notes par statut',
   'Notes in this column:': 'Notes dans cette colonne :',
   'No note here.': 'Aucune note ici.',
-  'Only my notes': 'Seulement mes notes',
   Note: 'Note',
   'Left by': 'Laissée par',
   'Went to': 'Partie vers',
@@ -1029,6 +1028,13 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Fruitback: 'Fruitback',
   Failed: 'Échec',
   Actions: 'Actions',
+  // The head and the bar of the notes (FRU-686).
+  Me: 'Moi',
+  Filter: 'Filtrer',
+  'Filters on': 'Filtres actifs',
+  'Remove the filter {field}: {value}': 'Retirer le filtre {field} : {value}',
+  Clear: 'Effacer',
+  Display: 'Affichage',
   // The panel of a note, beside the list (FRU-687).
   'Open in {place}': 'Ouvrir dans {place}',
   'the tracker': 'l’outil de suivi',
@@ -1166,7 +1172,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Settings that every member of {name} sees.': 'Les réglages que voit chaque membre de {name}.',
   'The name is saved.': 'Le nom est enregistré.',
   // The pages of the settings, FRU-544.
-  'Pages of the settings': 'Pages des réglages',
   General: 'Général',
   AI: 'IA',
   // The logo of a workspace, FRU-428.
@@ -1241,6 +1246,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   '{provider} is linked to your account.': '{provider} est lié à votre compte.',
   'Not sent by this Fruitback': 'Pas envoyé par ce Fruitback',
   Unlink: 'Délier',
+  Link: 'Lier',
   'Unlink {provider}': 'Délier {provider}',
   'You no longer sign in with {provider}. Your account and its notes stay.':
     'Vous ne vous connectez plus avec {provider}. Votre compte et ses notes restent.',

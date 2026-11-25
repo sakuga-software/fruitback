@@ -75,6 +75,13 @@ function offered(page: Page, name?: string): Promise<string[]> {
     );
 }
 
+/** FRU-686: a filter is chosen from « Filter »: its field, then its value. */
+async function choose(page: Page, field: string, value: string): Promise<void> {
+  await page.getByRole('button', { name: 'Filter', exact: true }).click();
+  await page.getByRole('menuitem', { name: field, exact: true }).click();
+  await page.getByRole('menuitemradio', { name: value, exact: true }).click();
+}
+
 test('the numbers go to the pages around, by the cursors the screen knows', async ({ page }) => {
   const asked = await open(page);
   // The worker is asked for 25 notes a page, by name.
@@ -169,8 +176,7 @@ test('after a Back across a filter, no number reads a cursor of the other list (
   await number(page, 3).click();
   await expect(summary(page)).toHaveText('51 to 75 of 263');
   // Another list: the status « New », and its second page.
-  await page.getByRole('button', { name: /Any status/ }).click();
-  await page.getByRole('option', { name: 'New', exact: true }).click();
+  await choose(page, 'Status', 'New');
   await expect(page).toHaveURL(/[?&]stage=new(&|$)/);
   await number(page, 2).click();
   await expect(summary(page)).toHaveText('26 to 50 of 263');

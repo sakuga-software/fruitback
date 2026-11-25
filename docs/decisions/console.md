@@ -482,11 +482,19 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   last, for the owner alone, under a rule. « My account » keeps what is about the person. **The
   section « Agents » shows the whole way of an agent** (FRU-503): its key, an address that receives
   (Connectors), then the trigger of each site, a link to `#agent` on the page of the site; anybody
-  but an owner or an admin reads one sentence, and the page asks nothing. **The settings have two
-  pages** (FRU-544, asked by Mathieu): « General » (`/settings`: the name, the logo, the deletion)
-  and « AI » (`/settings/ai`: the section « Agents »), two links of `SubNav` of the kit under the
-  head of both, the page on screen with `aria-current="page"`. The keys of the agents
-  (`/settings/agents`) are reached from « AI », and their crumbs lead back to it.
+  but an owner or an admin reads one sentence, and the page asks nothing. **The settings are pages
+  of a shell** (FRU-692, `routes/settings-shell.tsx`; before, FRU-544 put « General » and « AI » in
+  two links of `SubNav`): a bar of 48 px that says « Settings », a navigation of 220 px with an icon
+  on each entry, in two groups, and the page beside it, with a head of its own (`SettingsHead`: a
+  title of 20 px, its sentence, its actions at the right). « Account »: Profile (`/account`) and
+  Sessions (`/account/sessions`). « Workspace »: General (`/settings`), AI (`/settings/ai`), Agents
+  (`/settings/agents`, no crumbs any more), and Members and Connectors, which lead to the screens of
+  the bar. The addresses did not change, so no redirection. **The navigation shows an entry only for
+  a page that exists**: `ACCOUNT_PAGES` and `WORKSPACE_PAGES` hold « Sign-in and addresses »,
+  « Appearance » (FRU-694) and « Notifications » with `built: false`, and `settings-shell.test.ts`
+  holds `built` to the routes of a build. Under 768 px the navigation is one row above the page,
+  which scrolls in its frame. The shell takes back the padding of `Screen` with the same values, so
+  its bar and its navigation reach the edges of the column.
   `e2e/console-workspace-settings.spec.ts` holds the entry by role, the section and the deletion.
 
 - **The bar is as high as the window, and only the screen scrolls** (FRU-402, FRU-398). `Frame`
@@ -654,8 +662,8 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   after a status it saves, so the person sees the note in its new group. The chips are every note and each place that has notes, in the order
   of the sources of the workspace. **No chip « Not delivered »**, which the mockup draws: the route
   counts those notes and does not filter them, and a chip that chooses nothing is not drawn; each of
-  them says « Not delivered yet » on its row. The search says what the index searches (the 64
-  characters, the page, the reference), and not « the author » of the mockup. A guest
+  them says « Not delivered yet » on its row. The search searches the 64 characters, the page and the reference, and not « the author » of the
+  mockup; since FRU-686 its field says « Search notes », in 220 px. A guest
   gets no chip, no reference and no « Send again », as the worker sends a guest none of them. **The
   filters live in the address** (`place`, `site`, `stage`, `mine`, `q`, `cursor`, `from`): a reload
   keeps the view, the search reads 300 ms after the last key, and a filter goes back to the first
@@ -728,6 +736,28 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
     the other.
   - **j and k** give the focus to the text of the next note and of the one before; Enter opens it.
     A field, a menu and a dialog keep their keys.
+- **The head and the bar of the notes are Linear's** (FRU-686, the mockup « Notes après » of
+  2026-11-25), from one edge of the screen to the other. `parts/notes-filters.tsx`.
+  - **The head, 48 px**: « Notes » at 14 px, a tab per place the notes went with its mark and its
+    count (`ViewTab` of the kit, the rule of FRU-548: no tabs with one place), then « New task ». No
+    lead under the title. The title is not at the place of the others (`console-titles.spec.ts`
+    leaves Notes out). No bell: the console has no notification to show.
+  - **A tab is a place, not a kind.** The mockup draws « Webhook and REST »; the filter `place` of
+    the worker reads one connector, so two connectors of one kind are two tabs, as the chips were.
+  - **The bar, 44 px**: « Filter » opens a menu by field (Status, Site, Left by, then Assignee,
+    Priority, Label and Due day once the list holds a task Fruitback keeps), each a choice that shows
+    the value of the address. Each filter on is a chip, « field value » with a cross
+    (`FilterTag`), and « Clear » takes them all off with the search. The chips are read from the
+    address the list is read from, so they say exactly what the list shows. « Only my notes » is
+    « Left by: Me ». **No chip « Created · Last 30 days »**: the worker reads no date of creation, and
+    a filter it does not read would show a list it did not filter.
+  - **At the end**: the count of the notes of the whole filter, the search of 220 px (« Search
+    notes »; « / » gives it the focus, unless a field, a menu or a dialog has the key) and
+    « Display », whose menu shows the table or the board. Grouping and order stay those of FRU-551 and
+    FRU-436: the table is read by status, the board by date, and another order is a change of the
+    worker.
+  - **Controls of 28 px**, the token `h-control-md` of FRU-683, where the mockup draws 26: no token is
+    26 px. Under 640 px the bar goes on two lines, and a submenu opens under its item.
 - **The notes are a table or a board, and the address says which** (FRU-436, decided by Mathieu on
   2026-10-24). « Table » and « Board », two pressed buttons at the right of the head, write
   `?view=board` (the table writes nothing); the filters, the search and the page are the same, and the
@@ -910,6 +940,19 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   shown**: Linear documents it as « an emoji or a decorative icon type », and the icon types are
   names of Linear's own glyphs (`Rocket`…), with no public set to draw them from; an emoji is the
   system's font, which `icons.md` turned away.
+- **My account is the page « Profile » of the shell of the settings** (FRU-692, the mockup « Mon
+  compte (Profil) » of the ticket): four cards, in two columns from 1280 px and one column under it,
+  the profile and where the person is signed in, then the addresses and how the person signs in.
+  Each card is a region named by its title, with an icon; each row of a card has an icon in a box of
+  24 px. **The rare actions are in the menu of a row or in a dialog, never underlined words**:
+  « Make primary » and « Remove » of an address (« Remove » asks the second time under its row),
+  « Disconnect » of a browser, « Add » an address (a dialog, which keeps what was typed when it
+  closes), « Sign out everywhere » (a dialog, on « Sessions »). « Unlink » is a button whose second
+  time is under its row; a second time that the worker refused stays, so the person tries again in
+  one press. « Sign out » is the action of the head of the profile. The card of the browsers shows the
+  last three, a short line under each (« Used 2 h ago »), and « See all » to « Sessions », which lists
+  every browser with when it signed in. The worker keeps no photo of a person: the profile shows the
+  initial of the name.
 - **My account shows the sessions of the console, and ends them, with the routes of FRU-181**
   (FRU-248, `routes/account.tsx`). `GET /console/sessions` lists them by id, with no token: this
   browser first, then the others, each with « Disconnect » (`DELETE /console/sessions/<id>`, one
@@ -917,9 +960,10 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   `/console/auth/revoke-sessions`, asks twice, and ends this browser too. **A way out that the
   worker did not confirm says so and stays** (FRU-204), for the three of them. **A list that was
   not read is no list.** **The list keeps the room of one row while it is read, and when it could
-  not be**: it arrives above « Sign out », and a press that starts before a button moves and ends
-  after is lost, with no request and no message (measured: 53 px, `main` red on 30c62f8). A second
-  browser still adds its row. **A browser is named as the worker names it** (FRU-249, Q7): « Console
+  not be**: it arrived above « Sign out » until FRU-692, and a press that starts before a button
+  moves and ends after is lost, with no request and no message (measured: 53 px, `main` red on
+  30c62f8). « Sign out » is in the head now, and the card under the list still moves by one row less.
+  A second browser still adds its row. **A browser is named as the worker names it** (FRU-249, Q7): « Console
   · Chrome on macOS », a short label of its user agent; one it could not name reads « Console · this
   browser » or « Console · another browser ». **The name on the notes is changed here**
   (`POST /console/me/name`), kept when the field is left or by Enter, as the mockup draws no button; a
@@ -943,7 +987,8 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   the worker answers, so nothing under them moves. The worker keeps no login of a provider: « Linked »,
   not « Linked as ». **The browsers of the extension are rows of the same list** (`GET
   /console/me/browsers`, FRU-238): « Extension · Chrome on macOS », « Connected 12 Oct · used 2 h ago »,
-  after the browsers of the console. The two lists are read together and drawn once, so nothing under
+  among the browsers of the console, the one used last first, this browser before all (FRU-692: the
+  mockup mixes them). The two lists are read together and drawn once, so nothing under
   them moves when the second answer comes. A list of the console that could not be read is no list; a
   list of the extension that could not be read leaves the browsers of the console and their
   « Disconnect », with a line that says what is missing and « Try again ».
