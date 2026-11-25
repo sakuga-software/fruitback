@@ -9,6 +9,8 @@
   popup/style.css by its selector, as it did. A measure of one component is written as it is drawn
   (h-[46px]). A few declarations stay as CSS, each for a reason given beside it:
   - `font: inherit`, `all: unset`: no utility, and each comes before what overrides it;
+  - `border: 0`: `border-none` of Tailwind also sets `--tw-border-style: none` on the element, and a
+    `border` written later for the same element (a sheet of a page) would read it and draw nothing;
   - `transform`: the utilities of Tailwind write `rotate` and `translate`, and sidepanel/style.css
     moves the knob of its small switch with `transform`; the two would add up;
   - `transition`: the utilities of Tailwind add a timing function the mock-up does not draw;
@@ -44,7 +46,8 @@
 
 /* The button of the account: a target of 44 px around a dot of 28. */
 button.kit-avatar {
-  @apply inline-flex size-[44px] flex-none items-center justify-center rounded-pill border-none bg-transparent p-0;
+  @apply inline-flex size-[44px] flex-none items-center justify-center rounded-pill bg-transparent p-0;
+  border: 0;
 }
 
 .kit-gear {
@@ -58,7 +61,8 @@ button.kit-avatar {
 /* The main action: 46 px, the corner of 10. */
 button.kit-primary {
   font: inherit;
-  @apply box-border flex h-[46px] cursor-pointer items-center justify-center gap-[10px] rounded-action border-none bg-accent px-[16px] py-0 text-[15px] font-semibold whitespace-nowrap text-on-accent;
+  @apply box-border flex h-[46px] cursor-pointer items-center justify-center gap-[10px] rounded-action bg-accent px-[16px] py-0 text-[15px] font-semibold whitespace-nowrap text-on-accent;
+  border: 0;
 }
 
 button.kit-primary:hover {
@@ -142,7 +146,8 @@ a.kit-help-link {
 /* « Change »: a word in the accent, in a target of 44 px. */
 button.kit-text {
   font: inherit;
-  @apply h-[44px] cursor-pointer rounded-control border-none bg-transparent px-[8px] py-0 font-semibold whitespace-nowrap text-accent;
+  @apply h-[44px] cursor-pointer rounded-control bg-transparent px-[8px] py-0 font-semibold whitespace-nowrap text-accent;
+  border: 0;
 }
 
 button.kit-text:hover {
@@ -158,7 +163,8 @@ button.kit-switch {
     Off: the edge of a field, 3.42:1 on the surface. The lighter grey of the mock-up (line-soft) is 1.48:1, and the
     track is what says the switch is there (WCAG 1.4.11).
   */
-  @apply relative h-(--kit-switch-height) w-(--kit-switch-width) flex-none cursor-pointer rounded-pill border-none bg-line-strong p-0;
+  @apply relative h-(--kit-switch-height) w-(--kit-switch-width) flex-none cursor-pointer rounded-pill bg-line-strong p-0;
+  border: 0;
   transition: background 0.2s;
 }
 
@@ -279,7 +285,8 @@ button.kit-switch[aria-checked='true'] .kit-knob {
 }
 
 .kit-drop[data-size='mark'] {
-  @apply size-[12px] border-none;
+  @apply size-[12px];
+  border: 0;
   box-shadow: 0 0 0 1px var(--color-status-edge);
 }
 
@@ -396,7 +403,8 @@ button.kit-row {
 
 button.kit-tab {
   font: inherit;
-  @apply h-[40px] flex-[1_1_0] cursor-pointer rounded-field border-none bg-transparent px-[12px] py-0 text-[14px] font-[650] whitespace-nowrap text-ink-soft;
+  @apply h-[40px] flex-[1_1_0] cursor-pointer rounded-field bg-transparent px-[12px] py-0 text-[14px] font-[650] whitespace-nowrap text-ink-soft;
+  border: 0;
 }
 
 .kit-tabs[data-size='page'] button.kit-tab {

@@ -89,6 +89,18 @@ describe('what Tailwind writes for the kit (FRU-679)', () => {
     assert.deepEqual(writtenColours(body), ['#123456', 'var(--color-red-500)']);
   });
 
+  it('sets no style of edge through a variable, which a later edge of the same element would read', async () => {
+    // `border-none` writes `--tw-border-style: none`; then `border` on the same element, from the sheet
+    // of a page, reads it and draws nothing: a button of the kit lost its edge so. `border: 0` stays CSS.
+    const css = await built(KIT);
+    assert.doesNotMatch(css, /--tw-border-style: none/);
+    // The control: the utility does write it.
+    assert.match(
+      await built(KIT, "@reference './theme.css';\n.kit-planted { @apply border-none; }"),
+      /--tw-border-style: none/,
+    );
+  });
+
   it('gives each variable of Tailwind that a rule reads a start value, in the same output', async () => {
     const css = await built(KIT);
     const read = new Set([...css.matchAll(/var\((--tw-[a-z-]+)\)/g)].map(([, name]) => name));
