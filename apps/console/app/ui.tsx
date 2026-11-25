@@ -2417,6 +2417,7 @@ function itemClasses(danger: boolean): string {
   return `min-h-control-md rounded-control text-(length:--text-small) leading-(--text-small--line-height) transform-none [transition:none] data-[hovered=true]:bg-hover data-[focused=true]:bg-hover data-[focus-visible=true]:[outline:2px_solid_var(--color-accent)] data-[focus-visible=true]:outline-offset-[-2px]! data-[focus-visible=true]:[box-shadow:none] ${danger ? 'text-accent-strong' : ''}`;
 }
 const MENU_WORDS = 'kit-menu__words flex min-w-0 flex-col';
+const MENU_MARK = 'kit-menu__mark inline-flex flex-none';
 const MENU_LABEL = 'text-inherit font-semibold';
 const MENU_DETAIL = 'text-(length:--text-hint) leading-(--text-hint--line-height) text-muted';
 
@@ -2428,6 +2429,8 @@ export type MenuItem = {
   /** The item takes something away: « Remove ». */
   danger?: boolean;
   disabled?: boolean;
+  /** A picture before the words, decorative: the tile of a workspace in the menu of the workspaces (FRU-661). */
+  mark?: ReactNode;
 };
 
 type MenuProps = {
@@ -2721,6 +2724,7 @@ function menuItem(item: MenuItem, checkable: boolean) {
       className={itemClasses(item.danger === true)}
     >
       {checkable ? <Dropdown.ItemIndicator /> : null}
+      {item.mark === undefined ? null : <span className={MENU_MARK}>{item.mark}</span>}
       <span className={MENU_WORDS}>
         <Label className={MENU_LABEL}>{item.label}</Label>
         {item.detail === undefined ? null : <Description className={MENU_DETAIL}>{item.detail}</Description>}
