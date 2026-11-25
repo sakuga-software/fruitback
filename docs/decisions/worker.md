@@ -1739,10 +1739,9 @@ Read on drizzle-orm 0.45.4 and drizzle-kit 0.31.11, the versions of the catalogu
   `visitor:<digest>`. The route then compares it with `NoteIndex.authors` as it compares an account,
   reads the stage in the store and again under the lock of the row, and calls the same
   `NoteStore.edit`. No second path of a write.
-- **`visitorMay(policy, action)` is the one place that says what a visitor may do** (`visitor-key.ts`,
-  `CallerChecks.visitorMay`). Today: the default of the mock-ups, on a site whose `write` is
-  `public`; the stage is the route's. FRU-703 turns it into a setting of each site
-  (`visitorEdit`, `visitorDelete`), and only this function reads it.
+- **`visitorMay(client, action)` is the one place that says what a visitor may do** (`visitor-key.ts`,
+  `CallerChecks.visitorMay`): the setting of the site (FRU-703), `visitorEdit` for an edit and
+  `visitorDelete` for a withdrawal, `while-open` or nothing; the stage is the route's.
 - **A request with a token is never read as a visitor**: a session that ended is told `401`, and is
   not taken for the browser it came from.
 - **An edit of a visitor counts with their replies** (`checkReplyLimit`): it writes a reply.
@@ -1750,7 +1749,7 @@ Read on drizzle-orm 0.45.4 and drizzle-kit 0.31.11, the versions of the catalogu
   (`replyAuthorOf`). `NewEdit.author` takes a visitor now; `editText` already wrote one.
 
 - **A visitor deletes through the route of a member's withdrawal** (FRU-702), with `callerOf` and
-  `visitorMay(policy, 'withdraw')`. The store closes the note as for a member: nothing is deleted
+  `visitorMay(client, 'withdraw')`. The store closes the note as for a member: nothing is deleted
   there. Decision of the orchestrator for FRU-699, 2026-11-25: the ticket is closed as withdrawn in
   the tracker, not deleted.
 - **The pin of a note a visitor deleted leaves the page, for everybody** (`note_index.removed_at`,
@@ -1777,9 +1776,14 @@ Read on drizzle-orm 0.45.4 and drizzle-kit 0.31.11, the versions of the catalogu
 ### The rules, in short
 
 - **`writers` of a site: `members` (« Members only ») or `anyone` (« Anyone on the page »).** The
-  decision of Mathieu of 2026-10-20 on FRU-286: a setting, closed by default. `clientOf` turns it
-  into `write: 'authenticated'` only for a site that `members` read; a site that everyone reads takes
-  a note from anybody, whatever the field says.
+  decision of Mathieu of 2026-10-20 on FRU-286: a setting, closed by default. `clientOf` turns
+  `members` into `write: 'authenticated'` on every site since FRU-703: a site that everyone reads
+  and its members write is « Read only ». `0052` gave `anyone` to every site that everyone read,
+  which took a note from anybody then, and a caller that names no `writers` gets `defaultWriters` of the visibility it asks when that
+  visibility is new: `addSite` of a new site, `addSite` and `setSiteVisibility` of a site whose
+  visibility changes. The extension sends the visibility alone, and « Everyone who visits » still
+  opens a site to anybody's notes. A reply with no token asks for the
+  write too (`replyAuthorFor`).
 - **A new site is `members`, by the store and by the column.** `0021_sites_writers` adds the column
   with `anyone`, the value of every site that exists then: they took a note from anybody, and a
   migration does not close them in silence. `0022_sites_writers_default` makes `members` the default
@@ -1806,6 +1810,25 @@ and the case that holds it fails: the refusal of a note with no session, `canWri
 site opened to anyone, a site closed again when a caller names no `writers`, and a site whose
 `writers` never change. By hand, on 2026-10-21: `clientOf` without the visibility fails the table of
 `accounts.test.ts` and four cases of `visitor.test.ts`.
+
+## What a visitor may do on a site (FRU-703)
+
+- **`visitor_edit` and `visitor_delete` of `sites`: `never` or `while-open`**, what a visitor with
+  no account may do to a note of their own. No value reaches a note that is done or closed (the
+  decision for FRU-699): the mockup's « Allowed » is not offered. `0052` adds them with `never`, the value of
+  every site that exists then (a visitor could do neither); `0053` makes `while-open`, the default of
+  the mockup, the default of a new site. Both are generated; `0052` adds one statement by hand, the
+  `UPDATE` of `writers` above.
+- **`addSite` keeps them on a site added again when the caller names neither**, as `writers`.
+- **`clientOf` gives them to the routes (`visitorEdit`, `visitorDelete` of the client) only where
+  `writers` is `anyone`**; absent is `never`. A row with another value gives `never`.
+- **The console changes them through `POST …/sites`, for `manage-sites` only.** A value that is not
+  one of the two answers `400` (`invalid-visitor-edit`, `invalid-visitor-delete`).
+- **`visitorMay` of `visitor-key.ts` reads them for the routes**: the edit of a visitor (FRU-701)
+  reads `visitorEdit` of the client, and the withdrawal (FRU-702) reads `visitorDelete`. Only
+  `while-open` lets a visitor act; absent (a site of members, a client of `FRUITBACK_CLIENTS`) is no. `site-access.test.ts`, `sites-visitor-rights-migration.test.ts` and
+  the account suite hold the rest; the guard of `manage-sites` and the change of `clientOf` were each
+  taken out by hand on 2026-11-25, and the case that holds them failed.
 
 ## The notes in PostgreSQL (FRU-218)
 

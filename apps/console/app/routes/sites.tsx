@@ -885,6 +885,14 @@ function Who({ site }: { site: Site }) {
           <span className="sr-only">{t('Notes from anyone on the page')}</span>
         </Tip>
       ) : null}
+      {/* FRU-703: « Read only », the other exception: everyone reads, and only members write. */}
+      {!members && site.writers === 'members' ? (
+        <Tip tip={t('Notes from members only')} className="flex-none text-muted">
+          <span className="sr-only">, </span>
+          <AccessIcon icon="members" />
+          <span className="sr-only">{t('Notes from members only')}</span>
+        </Tip>
+      ) : null}
     </>
   );
 }

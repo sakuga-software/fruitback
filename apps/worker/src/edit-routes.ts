@@ -58,7 +58,7 @@ async function callerOf(
     const token = readBearerToken(request.headers.get('Authorization'));
     const digest = token === undefined ? checks.visitorOf(request, site) : undefined;
     if (digest === undefined) return { ok: false, status: 401, error: 'identity-required' };
-    if (!checks.visitorMay(route.policy, action)) return { ok: false, status: 403, error: 'not-allowed' };
+    if (!checks.visitorMay(route.client, action)) return { ok: false, status: 403, error: 'not-allowed' };
 
     return { ok: true, kind: 'visitor', author: visitorAuthor(digest) };
   }

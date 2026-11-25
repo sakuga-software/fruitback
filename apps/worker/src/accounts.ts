@@ -285,18 +285,48 @@ export type Visibility = (typeof VISIBILITIES)[number];
 /**
  * Who may leave a note on a site (FRU-330, the decision of Mathieu of 2026-10-20 on FRU-286).
  *
- * - `members`, « Members only »: on a site that its members read, a note, a reply and a picture need
- *   a session of somebody who reads the site. The default of a new site.
+ * - `members`, « Members only »: a note, a reply and a picture need a session of somebody who reads
+ *   the site. The default of a new site that its members read.
  * - `anyone`, « Anyone on the page »: a note with no session is kept, as a claim. Every site made
  *   before FRU-330 has this value: the migration `0021` gives it.
  *
- * It decides nothing on a site that everyone reads: such a site takes a note from anybody.
+ * FRU-703: it decides on every site. A site that everyone reads and `members` write is « Read only ».
+ * `0052` gives `anyone` to every site that everyone read, as they took a note from anybody.
  */
 export const WRITERS = ['members', 'anyone'] as const;
 export type Writers = (typeof WRITERS)[number];
 
 /** What a new site takes when nobody chose (FRU-330): closed. */
 export const DEFAULT_WRITERS: Writers = 'members';
+
+/**
+ * Who writes on a new site when the caller does not say (FRU-703). A site that everyone reads is open
+ * to anybody, as such a site always was: a caller of before (the extension) asks for a public site.
+ */
+export function defaultWriters(visibility: Visibility): Writers {
+  return visibility === 'everyone' ? 'anyone' : DEFAULT_WRITERS;
+}
+
+/**
+ * What a visitor with no account may do to a note of their own (FRU-703): change its text
+ * (`visitorEdit`) or take it back (`visitorDelete`). A note of another visitor stays out of reach
+ * until FRU-707.
+ *
+ * - `never`: not at all.
+ * - `while-open`: while the note is not done nor closed. The default of a new site (the mockup).
+ *
+ * No value lets a visitor act on a note that is done or closed: a visitor acts on their own notes
+ * that are still open, and on nothing else (the decision for FRU-699). The mockup's « Allowed » is
+ * not offered for that reason.
+ *
+ * Only a note the visitor left counts (FRU-700): the worker checks it, the widget only shows it. Every
+ * site of before FRU-703 is `never`: the migration `0052` gives it, so no site changes.
+ */
+export const VISITOR_RIGHTS = ['never', 'while-open'] as const;
+export type VisitorRight = (typeof VISITOR_RIGHTS)[number];
+
+/** What a new site takes when nobody chose (FRU-703): the level « Contribute » of the mockup. */
+export const DEFAULT_VISITOR_RIGHT: VisitorRight = 'while-open';
 
 /**
  * Where the notes of a site go: a connector of its workspace, and the place inside it. A tracker has
@@ -351,8 +381,12 @@ export type Site = {
   workspaceId: string;
   origin: string;
   visibility: Visibility;
-  /** Who may leave a note (FRU-330). It decides only on a site that `members` read. */
+  /** Who may leave a note (FRU-330). It decides on every site since FRU-703. */
   writers: Writers;
+  /** Whether a visitor changes the text of their own note (FRU-703). */
+  visitorEdit: VisitorRight;
+  /** Whether a visitor takes back their own note (FRU-703). */
+  visitorDelete: VisitorRight;
   /**
    * Whether a visitor is offered one e-mail when their note is done (FRU-604). Off by default, and of
    * no effect on a site whose notes come from its members only: `offersDoneNotice`.
@@ -728,12 +762,20 @@ export type AccountStore = {
   lastSeen(workspace: string): Promise<Record<string, string>>;
   /**
    * A new site, or the site of that address again with the visibility asked for last. `writers`
-   * absent: `DEFAULT_WRITERS` for a new site, and what it was for a site that exists (FRU-330), so a
-   * caller that does not know the field opens nothing and closes nothing.
+   * absent: `defaultWriters` for a new site, and what it was for a site that exists (FRU-330), so a
+   * caller that does not know the field opens nothing and closes nothing. The same for
+   * `visitorEdit` and `visitorDelete` (FRU-703), with `DEFAULT_VISITOR_RIGHT` for a new site.
    */
   addSite(
     workspace: string,
-    site: { origin: string; visibility: Visibility; writers?: Writers; notifyDone?: boolean },
+    site: {
+      origin: string;
+      visibility: Visibility;
+      writers?: Writers;
+      notifyDone?: boolean;
+      visitorEdit?: VisitorRight;
+      visitorDelete?: VisitorRight;
+    },
   ): Promise<Site>;
   sites(workspace: string): Promise<Site[]>;
   /**
@@ -1156,8 +1198,8 @@ export type AccountStore = {
  * Whether a site offers a visitor one e-mail when their note is done (FRU-604): its switch is on, and
  * anybody may leave a note there. With notes of its members only, the switch is hidden and does nothing.
  */
-export function offersDoneNotice(site: Pick<Site, 'notifyDone' | 'visibility' | 'writers'>): boolean {
-  return site.notifyDone && !(site.visibility === 'members' && site.writers === 'members');
+export function offersDoneNotice(site: Pick<Site, 'notifyDone' | 'writers'>): boolean {
+  return site.notifyDone && site.writers === 'anyone';
 }
 
 /**
@@ -1179,10 +1221,14 @@ export function clientOf(site: Site): ClientMap[string] {
     workspace: site.workspaceId,
     origins: [site.origin],
     read: site.visibility === 'members' ? 'authenticated' : 'public',
-    // FRU-330: « Members only » closes the writes of a site that its members read, and only there.
-    write: site.visibility === 'members' && site.writers === 'members' ? 'authenticated' : 'public',
+    // FRU-330: « Members only » closes the writes. FRU-703: on every site, so « Read only » is a site
+    // that everyone reads and its members write.
+    write: site.writers === 'members' ? 'authenticated' : 'public',
     // FRU-604: the e-mail of a note done, when the site offers it and takes notes from anyone.
     ...(offersDoneNotice(site) ? { notifyDone: true } : {}),
+    // FRU-703: what a visitor may do to a note of their own. Said only where a visitor may write: a
+    // site of members only has no note of a visitor, and absent is `never`.
+    ...(site.writers === 'anyone' ? { visitorEdit: site.visitorEdit, visitorDelete: site.visitorDelete } : {}),
     // The first place is where the client routes, as when a site had one destination.
     ...(first === undefined
       ? {}

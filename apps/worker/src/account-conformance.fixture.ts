@@ -233,11 +233,22 @@ export function accountCases(it: Declare<AccountStore>): void {
       writers: 'members',
       // FRU-604: off for a new site.
       notifyDone: false,
+      // FRU-703: the level « Contribute » of the mockup, for a new site.
+      visitorEdit: 'while-open',
+      visitorDelete: 'while-open',
       destinations: [],
     });
-    assert.deepEqual(await store.sites(workspace.id), [{ ...first, visibility: 'everyone' }]);
+    // FRU-703: a caller that names no `writers` and opens a site to everyone opens it to anybody's notes.
+    assert.deepEqual(await store.sites(workspace.id), [{ ...first, visibility: 'everyone', writers: 'anyone' }]);
     assert.deepEqual(await store.clientMap(), {
-      [first.id]: { workspace: workspace.id, origins: ['https://acme.dev'], read: 'public', write: 'public' },
+      [first.id]: {
+        workspace: workspace.id,
+        origins: ['https://acme.dev'],
+        read: 'public',
+        write: 'public',
+        visitorEdit: 'while-open',
+        visitorDelete: 'while-open',
+      },
     });
   });
 
@@ -288,6 +299,78 @@ export function accountCases(it: Declare<AccountStore>): void {
     assert.equal((await store.clientMap())[made.id]?.write, 'authenticated');
   });
 
+  it('opens a site to anybody when a caller of before opens it to everyone, and closes it when it closes it (FRU-703)', async (store) => {
+    const { workspace } = await world(store);
+    const origin = 'https://acme.dev';
+    const made = await store.addSite(workspace.id, { origin, visibility: 'members' });
+    const writes = async () => (await store.clientMap())[made.id]?.write;
+    assert.equal(await writes(), 'authenticated');
+
+    // The extension sends the visibility alone: « Everyone who visits » meant anybody writes.
+    assert.equal((await store.addSite(workspace.id, { origin, visibility: 'everyone' })).writers, 'anyone');
+    assert.equal(await writes(), 'public');
+    assert.equal((await store.addSite(workspace.id, { origin, visibility: 'members' })).writers, 'members');
+    assert.equal(await writes(), 'authenticated');
+    assert.equal(await store.setSiteVisibility(workspace.id, made.id, 'everyone'), true);
+    assert.equal(await writes(), 'public');
+    assert.equal(await store.setSiteVisibility(workspace.id, made.id, 'members'), true);
+    assert.equal(await writes(), 'authenticated');
+
+    // « Read only », set by the console, stays when the same visibility is asked again with no `writers`.
+    await store.addSite(workspace.id, { origin, visibility: 'everyone', writers: 'members' });
+    assert.equal((await store.addSite(workspace.id, { origin, visibility: 'everyone' })).writers, 'members');
+    assert.equal(await store.setSiteVisibility(workspace.id, made.id, 'everyone'), true);
+    assert.equal(await writes(), 'authenticated');
+  });
+
+  it('opens a new site that everyone reads to anybody when nobody chose who writes (FRU-703)', async (store) => {
+    const { workspace } = await world(store);
+
+    const made = await store.addSite(workspace.id, { origin: 'https://acme.dev', visibility: 'everyone' });
+    assert.equal(made.writers, 'anyone');
+    assert.equal((await store.clientMap())[made.id]?.write, 'public');
+    // « Read only », when the caller says it.
+    const closed = await store.addSite(workspace.id, {
+      origin: 'https://docs.acme.dev',
+      visibility: 'everyone',
+      writers: 'members',
+    });
+    assert.equal(closed.writers, 'members');
+    assert.equal((await store.clientMap())[closed.id]?.write, 'authenticated');
+  });
+
+  it('gives a new site what the mockup gives a visitor, keeps it on a site added again, and serves it where a visitor writes (FRU-703)', async (store) => {
+    const { workspace } = await world(store);
+    const origin = 'https://acme.dev';
+
+    const made = await store.addSite(workspace.id, { origin, visibility: 'everyone', writers: 'anyone' });
+    assert.deepEqual([made.visitorEdit, made.visitorDelete], ['while-open', 'while-open']);
+
+    const set = await store.addSite(workspace.id, {
+      origin,
+      visibility: 'everyone',
+      visitorEdit: 'never',
+      visitorDelete: 'never',
+    });
+    assert.deepEqual([set.visitorEdit, set.visitorDelete], ['never', 'never']);
+    // A caller that names neither (a console of before, the extension) changes neither.
+    const again = await store.addSite(workspace.id, { origin, visibility: 'everyone' });
+    assert.deepEqual([again.visitorEdit, again.visitorDelete], ['never', 'never']);
+    assert.deepEqual(
+      (await store.sites(workspace.id)).map((site) => [site.visitorEdit, site.visitorDelete]),
+      [['never', 'never']],
+    );
+    const client = (await store.clientMap())[made.id];
+    assert.deepEqual([client?.visitorEdit, client?.visitorDelete], ['never', 'never']);
+    assert.deepEqual(await store.client(made.id), client);
+
+    // Where only a member writes, the routes are told nothing: absent is `never`.
+    await store.addSite(workspace.id, { origin, visibility: 'everyone', writers: 'members' });
+    const closed = (await store.clientMap())[made.id];
+    assert.equal(closed?.visitorEdit, undefined);
+    assert.equal(closed?.visitorDelete, undefined);
+  });
+
   it('keeps one address apart in two workspaces', async (store) => {
     const { workspace: acme } = await world(store);
     const { workspace: globex } = await otherWorld(store);
@@ -300,7 +383,14 @@ export function accountCases(it: Declare<AccountStore>): void {
     assert.deepEqual(await store.sites(globex.id), [theirs]);
     assert.deepEqual(await store.clientMap(), {
       [ours.id]: { workspace: acme.id, origins: ['https://shared.dev'], read: 'authenticated', write: 'authenticated' },
-      [theirs.id]: { workspace: globex.id, origins: ['https://shared.dev'], read: 'public', write: 'public' },
+      [theirs.id]: {
+        workspace: globex.id,
+        origins: ['https://shared.dev'],
+        read: 'public',
+        write: 'public',
+        visitorEdit: 'while-open',
+        visitorDelete: 'while-open',
+      },
     });
   });
 
@@ -643,6 +733,8 @@ export function accountCases(it: Declare<AccountStore>): void {
     assert.deepEqual(await store.addSite(workspace.id, { origin: 'https://acme.dev', visibility: 'everyone' }), {
       ...site,
       visibility: 'everyone',
+      // FRU-703: opened to everyone by a caller that names no `writers`: open to anybody's notes.
+      writers: 'anyone',
       destinations: reversed,
     });
 

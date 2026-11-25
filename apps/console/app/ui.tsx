@@ -49,7 +49,7 @@ export function Mark({ size = 14 }: { size?: number }) {
   );
 }
 
-type Tone = 'primary' | 'outline' | 'danger' | 'danger-outline' | 'quiet' | 'ghost';
+type Tone = 'primary' | 'outline' | 'danger' | 'danger-outline' | 'on-ink' | 'quiet' | 'ghost';
 /** The height of a control (FRU-683): of a page (32 px), of a panel or a row (28 px), small (24 px). */
 type ControlSize = 'page' | 'panel' | 'small';
 
@@ -59,6 +59,7 @@ const VARIANTS = {
   outline: 'outline',
   danger: 'danger-soft',
   'danger-outline': 'outline',
+  'on-ink': 'outline',
   quiet: 'ghost',
   ghost: 'ghost',
 } as const satisfies Record<Tone, string>;
@@ -108,20 +109,31 @@ const GHOST =
 const OUTLINE_DANGER =
   'kit-button--danger-outline rounded-control border border-danger-line bg-surface text-accent-strong [&:hover:not(:disabled,[aria-disabled=true])]:border-accent-strong [&:hover:not(:disabled,[aria-disabled=true])]:bg-subtle data-[hovered=true]:border-accent-strong data-[hovered=true]:bg-subtle data-[pressed=true]:border-accent-strong data-[pressed=true]:bg-subtle';
 
+/**
+ * A control on ink (FRU-698): « Try again » of the banner of a worker that does not answer, « Sign
+ * in » and « Continue » of the banner of a session that ended. The shape of an outlined control, with
+ * no fill, its words and its border in `on-ink`; the pointer tints it with `on-ink` at 10 %.
+ */
+const OUTLINE_ON_INK =
+  'kit-button--on-ink rounded-control border border-on-ink bg-transparent text-on-ink [&:hover:not(:disabled,[aria-disabled=true])]:bg-on-ink/10 data-[hovered=true]:bg-on-ink/10 data-[pressed=true]:bg-on-ink/10';
+
 /** The tones the kit draws in the shapes of the mockup. */
-type ShapedTone = 'primary' | 'outline' | 'danger-outline';
+type ShapedTone = 'primary' | 'outline' | 'danger-outline' | 'on-ink';
 
 /** The padding at each end, by tone and size. */
 const BUTTON_INSET = {
   primary: { page: 'px-[22px]', panel: 'px-[16px]', small: 'px-[14px]' },
   outline: { page: 'px-[18px]', panel: 'px-[16px]', small: 'px-[10px]' },
   'danger-outline': { page: 'px-[18px]', panel: 'px-[16px]', small: 'px-[10px]' },
+  'on-ink': { page: 'px-[18px]', panel: 'px-[16px]', small: 'px-[10px]' },
 } as const satisfies Record<ShapedTone, Record<ControlSize, string>>;
 
-const SHAPED = { primary: PRIMARY, outline: OUTLINE, 'danger-outline': OUTLINE_DANGER } as const satisfies Record<
-  ShapedTone,
-  string
->;
+const SHAPED = {
+  primary: PRIMARY,
+  outline: OUTLINE,
+  'danger-outline': OUTLINE_DANGER,
+  'on-ink': OUTLINE_ON_INK,
+} as const satisfies Record<ShapedTone, string>;
 
 /**
  * The classes of a button of the mockup. Over its column (`wide`), its words can be a name somebody
@@ -163,7 +175,7 @@ const BUTTON_WIDE = {
  * a column of 320 px.
  */
 function toneClasses(tone: Tone, size: ControlSize, wide: boolean, gap?: 6): string {
-  if (tone === 'primary' || tone === 'outline' || tone === 'danger-outline')
+  if (tone === 'primary' || tone === 'outline' || tone === 'danger-outline' || tone === 'on-ink')
     return buttonClasses(tone, size, wide, gap === 6 ? 'gap-[6px] [&_svg]:m-0' : undefined);
   if (tone === 'ghost') return `${GHOST} ${BUTTON_HEIGHT[size]}`;
 
@@ -241,7 +253,7 @@ function anchor({ to, href, newTab = false }: Destination, className: string, da
  */
 export function Button({
   tone = 'primary',
-  size = tone === 'outline' || tone === 'danger-outline' ? 'panel' : 'page',
+  size = tone === 'outline' || tone === 'danger-outline' || tone === 'on-ink' ? 'panel' : 'page',
   wide = false,
   inset,
   gap,
@@ -1223,6 +1235,78 @@ export function RadioCards<Value extends string>({
           </Radio>
         ))}
       </div>
+    </RadioGroup>
+  );
+}
+
+type PickCardsProps<Value extends string> = {
+  /** The name of the group, for a screen reader: the card around it says it to the eye. */
+  label: string;
+  value: Value;
+  onChange: (value: Value) => void;
+  options: readonly { value: Value; label: string; detail: string; icon?: ReactNode; disabled?: boolean }[];
+  /** `grid`: cards side by side while each has 150 px, as the levels of a site. `rows`: one row each. */
+  layout?: 'grid' | 'rows';
+  /** The choice is made elsewhere: the group shows it, and takes no press. */
+  disabled?: boolean;
+};
+
+/**
+ * One choice among a few, with an icon, a title and a line each, the radio at the end (FRU-703): the
+ * levels of access of a site, side by side, and the ways to recognise a visitor, one under the other.
+ * An option can be drawn and not chosen (`disabled`): a level that comes later. A value that is no
+ * option checks no card: the table of a site that is no level.
+ */
+export function PickCards<Value extends string>({
+  label,
+  value,
+  onChange,
+  options,
+  layout = 'grid',
+  disabled = false,
+}: PickCardsProps<Value>) {
+  const grid = layout === 'grid';
+  // A card has its own frame; a row has a rule above it, but the first.
+  const frame = (index: number) => {
+    if (grid) {
+      return 'rounded-card border border-line data-selected:border-ink data-selected:[box-shadow:0_0_0_1px_var(--color-ink)]';
+    }
+
+    return index > 0 ? 'border-t border-line' : '';
+  };
+
+  return (
+    <RadioGroup
+      aria-label={label}
+      value={value}
+      isDisabled={disabled}
+      onChange={(chosen) => onChange(chosen as Value)}
+      className={`kit-pick-cards min-w-0 ${grid ? 'grid grid-cols-[repeat(auto-fit,minmax(min(150px,100%),1fr))] gap-[10px]' : 'flex flex-col gap-0'}`}
+      data-layout={layout}
+    >
+      {options.map((option, index) => (
+        <Radio
+          key={option.value}
+          value={option.value}
+          isDisabled={disabled || option.disabled === true}
+          className={`kit-pick-cards__item group/cards m-0 w-full min-w-0 cursor-pointer data-disabled:cursor-not-allowed ${frame(index)}`}
+        >
+          <Radio.Content
+            className={`grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-[10px] gap-y-[2px] ${grid ? 'px-[12px] py-[10px]' : 'px-[16px] py-[10px]'}`}
+          >
+            <span className="flex min-w-0 items-center gap-[8px] text-ink group-data-disabled/cards:text-muted">
+              {option.icon ?? null}
+              <Label className="min-w-0 text-(length:--text-small) font-semibold leading-auto text-ink group-data-disabled/cards:text-muted">
+                {option.label}
+              </Label>
+            </span>
+            <Radio.Control className="group-data-selected/cards:bg-ink">
+              <Radio.Indicator />
+            </Radio.Control>
+            <Description className={`[grid-column:1/-1] ${FIELD_HINT}`}>{option.detail}</Description>
+          </Radio.Content>
+        </Radio>
+      ))}
     </RadioGroup>
   );
 }

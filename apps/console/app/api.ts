@@ -35,6 +35,8 @@ export type Workspace = Omit<WorkspaceSuspension, 'reason'> & {
 export type Visibility = 'members' | 'everyone';
 /** Who may leave a note on a site that its members read (FRU-330). `members` is « Members only ». */
 export type Writers = 'members' | 'anyone';
+/** What a visitor may do to a note of their own (FRU-703): change its text, or take it back. */
+export type VisitorRight = 'never' | 'while-open';
 /**
  * Where the notes of a site go. Absent: they stay in the workspace. Only a member reads it.
  *
@@ -79,6 +81,12 @@ export type Site = {
    * where anybody may leave a note. A worker of before sends nothing: off.
    */
   notifyDone?: boolean;
+  /**
+   * FRU-703: whether a visitor changes the text of a note of their own, and takes it back. A worker of
+   * before sends nothing: `never`, as a visitor could do neither.
+   */
+  visitorEdit?: VisitorRight;
+  visitorDelete?: VisitorRight;
   destination?: Destination;
   destinations?: Destination[];
   /**
