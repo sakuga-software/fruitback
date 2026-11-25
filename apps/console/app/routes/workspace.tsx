@@ -297,7 +297,7 @@ const SETTINGS = 'workspace settings';
 
 /**
  * The classes of an entry of the bar (FRU-684): 28 px, 8 px in, the icon 16 px and 8 px from the
- * words. Under the pointer an entry takes the tint of the entry on screen.
+ * words. Under the pointer an entry takes `hover`, a step lighter than the entry on screen.
  */
 const ENTRY =
   'flex h-control-md min-w-0 items-center gap-[8px] rounded-control px-[8px] text-label leading-none font-medium whitespace-nowrap text-ink-soft hover:bg-hover hover:text-ink';
@@ -358,7 +358,7 @@ export function RailFrame({
         <span className="inline-flex flex-none min-[1024px]:hidden">
           <IconButton
             label={t('Menu')}
-            size="small"
+            size="chip"
             expanded={open}
             controls={panel}
             onClick={() => setOpen((before) => !before)}

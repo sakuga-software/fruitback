@@ -34,6 +34,8 @@ const KIT = 'http://localhost:5179';
 const BAR = '#f1f4f8';
 const LINE = '#e3e8ef';
 const ACTIVE = '#e2e8f0';
+/** An entry under the pointer: `hover` of the slate theme (FRU-683), a step lighter than the one on screen. */
+const HOVER = '#e8edf3';
 const INK = '#0f172a';
 const ENTRY_TEXT = '#334155';
 const SECONDARY = '#5b6779';
@@ -336,14 +338,14 @@ test('the counts are at the right of the entries, and the failed sends of the co
   await expect(links.nth(3)).toHaveText('Members');
 });
 
-test('a section under the pointer takes the tint, and the keyboard walks the bar with a visible ring', async ({
+test('a section under the pointer takes the hover, and the keyboard walks the bar with a visible ring', async ({
   page,
 }) => {
   await stubWorker(page);
   await open(page);
   const resting = sections(page).getByRole('link', { name: 'Members' });
   await resting.hover();
-  expect.soft(await painted(resting, 'backgroundColor')).toEqual(rgb(ACTIVE));
+  expect.soft(await painted(resting, 'backgroundColor')).toEqual(rgb(HOVER));
   await page.mouse.move(700, 500);
 
   // The keyboard enters the bar by the workspace and the search, walks the sections in their order,
@@ -403,7 +405,7 @@ test('every text of the bar is at 4.5:1 on what is behind it', async ({ page }) 
   for (const [name, text, behind] of pairs) {
     expect.soft(contrast(await painted(text, 'color'), rgb(behind)), name).toBeGreaterThanOrEqual(4.5);
   }
-  // Under the pointer a section is on the tint of the section on screen.
+  // Under the pointer a section is on the hover.
   const hovered = sections(page).getByRole('link', { name: 'Members' });
   await hovered.hover();
   expect(contrast(await painted(hovered, 'color'), await painted(hovered, 'backgroundColor'))).toBeGreaterThanOrEqual(
