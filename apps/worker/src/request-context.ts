@@ -18,6 +18,7 @@ import type { Channel, NoteIndex } from './notes-index.ts';
 import type { SessionIdentity, SessionStore } from './session.ts';
 import type { Release } from './release.ts';
 import type { ReplyAuthor, NoteStore } from './store.ts';
+import type { VisitorAction } from './visitor-key.ts';
 
 /**
  * What one request of `app.ts` reads, out of `app.ts` so that each module of routes names it
@@ -213,6 +214,11 @@ export type CallerChecks = {
    * right shape (FRU-700): `visitorDigestOf` of `visitor-key.ts`, which `app.ts` alone imports.
    */
   visitorOf: (request: Request, site: string | undefined) => string | undefined;
+  /**
+   * Whether a visitor known by their browser may edit or withdraw a note of theirs on a site of this
+   * policy (FRU-701, FRU-702): `visitorMay` of `visitor-key.ts`.
+   */
+  visitorMay: (policy: Pick<ClientPolicy, 'write'>, action: VisitorAction) => boolean;
   /** Whether the caller is a person who may see the tracker of this client: `seesTracker` of `app.ts`. */
   seesTracker: (request: Request, config: Served, policy: ClientPolicy) => Promise<boolean>;
   /** Whether the worker would sign a note of this caller with an identity it verified: `signsNotes` of `app.ts`. */

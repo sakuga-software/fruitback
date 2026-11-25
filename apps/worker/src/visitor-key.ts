@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import type { ClientPolicy } from './clients.ts';
 
 /**
  * The key of a browser (FRU-700): how the worker knows a visitor with no account as the author of
@@ -40,4 +41,19 @@ export function visitorDigestOf(request: Request, site: string | undefined): str
 /** The author of a note of a visitor, as `NoteIndex.authors` names it and a route compares it. */
 export function visitorAuthor(digest: string): string {
   return `${VISITOR_AUTHOR_PREFIX}${digest}`;
+}
+
+/** What a visitor known by their browser does on a note of theirs (FRU-701, FRU-702). */
+export type VisitorAction = 'edit' | 'withdraw';
+
+/**
+ * Whether a visitor known by their browser may `action` a note of theirs on a site of this policy
+ * (FRU-701, FRU-702). The default of the mock-ups, decided for FRU-699: on a site that takes the
+ * notes of anybody, while the note is open (the routes read the stage, `EDITABLE_STAGES`). The tab
+ * « Access » of the console makes it a setting of each site (FRU-703).
+ *
+ * Only `app.ts` imports it, as `visitorDigestOf`: the routes call it as `visitorMay` of `CallerChecks`.
+ */
+export function visitorMay(policy: Pick<ClientPolicy, 'write'>, _action: VisitorAction): boolean {
+  return policy.write === 'public';
 }
