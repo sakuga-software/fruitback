@@ -114,9 +114,12 @@ export default function WorkspaceFrame() {
   const [asked, askAgain] = useState(0);
   // A change of workspace draws the new one from the last answer too, while the worker is asked.
   const context = read?.workspace.id === id ? read : (contextOf(knownMe(), id) ?? read);
-  // FRU-690: the sends that wait, as the Connectors screen last read them, for the workspace it read.
-  // No read gives them on another screen yet (FRU-711): before one, the bar counts nothing.
+  // FRU-690: the sends that wait, as the Connectors screen last read them in this workspace. No read
+  // gives them on another screen yet (FRU-711): before one, the bar counts nothing.
   const [failing, setFailing] = useState<{ workspace: string; count: number } | undefined>();
+  // A change of workspace forgets the count: back in the first one, a count read before would be old
+  // (raised in review). The Connectors screen of the workspace reads it again.
+  useEffect(() => setFailing(undefined), [id]);
 
   // No answer is not a signed-out person: the call waits under the banner and asks again.
   useEffect(() => {

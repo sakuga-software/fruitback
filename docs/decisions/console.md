@@ -830,7 +830,7 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
     places, read only, with a link to the Sites screen (FRU-399) and « Statuses » on the row of each
     site of a Linear (FRU-478); the notes that did not arrive; « Use an API key ». « Connect » is
     written many times, so each button also holds the name of its source for a screen reader.
-    `e2e/console-connectors.spec.ts` holds the values, the states, the roles, 390 px and axe.
+    `e2e/console-connectors-table.spec.ts` and `console-connectors-catalogue.spec.ts` hold the values, the states, the roles, 390 px and axe.
     **A source can have a name** (FRU-404): several sources can reach one tracker, so an owner or an
     admin names one at the top of its panel (`connector-name.tsx`, « Rename » in place, as for a
     workspace), and an empty name gives it back the name of its kind. `connectorName` of

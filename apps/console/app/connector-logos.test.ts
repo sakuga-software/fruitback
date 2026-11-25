@@ -6,7 +6,8 @@ import { LOGO_KINDS, logoPath } from './connector-logo-kinds.ts';
 /** The console has no DOM under `node --test`: the guard reads the files (FRU-690). */
 const PUBLIC = new URL('../public/', import.meta.url);
 const LOGOS = new URL('logos/', PUBLIC);
-const connectors = readFileSync(new URL('routes/connectors.tsx', import.meta.url), 'utf8');
+const catalogueSource = readFileSync(new URL('parts/connector-catalogue.tsx', import.meta.url), 'utf8');
+const table = readFileSync(new URL('parts/connector-table.tsx', import.meta.url), 'utf8');
 const parts = readFileSync(new URL('parts/connector-parts.tsx', import.meta.url), 'utf8');
 
 /** The kinds a worker connects today: the keys of `KINDS` (a key may be quoted, 'claude-routine'). */
@@ -58,10 +59,10 @@ describe('the logos of the Connectors screen (FRU-690)', () => {
 
   it('is drawn before the name of each tile and of each row of the screen', () => {
     // Each entry of the catalogue names a kind that has a logo.
-    const catalogue = /const CATALOGUE: readonly Entry\[\] = \[([^]*?)\n\];/.exec(connectors)?.[1] ?? '';
+    const catalogue = /const CATALOGUE: readonly Entry\[\] = \[([^]*?)\n\];/.exec(catalogueSource)?.[1] ?? '';
     const kinds = [...catalogue.matchAll(/\bkind: '([\w-]+)'/g)].map((match) => match[1] ?? '');
     assert.deepEqual(kinds.sort(), [...LOGO_KINDS].sort());
-    assert.match(connectors, /<ConnectorLogo kind=\{entry\.kind\} \/>/);
-    assert.match(connectors, /<ConnectorLogo kind=\{connector\.kind\} size="row" \/>/);
+    assert.match(catalogueSource, /<ConnectorLogo kind=\{entry\.kind\} \/>/);
+    assert.match(table, /<ConnectorLogo kind=\{connector\.kind\} size="row" \/>/);
   });
 });

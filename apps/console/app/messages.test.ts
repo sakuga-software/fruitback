@@ -330,7 +330,8 @@ describe('the state of one connector', () => {
     assert.equal(FRENCH['Connected'], 'Connecté');
     const connectors = sources.get('routes/connectors.tsx') ?? '';
     // FRU-690: « Connected » is the state of a row or a tile; the heading of the table is its own key.
-    assert.ok(connectors.includes("t('Connected')"));
+    assert.ok((sources.get('parts/connector-health.tsx') ?? '').includes("t('Connected')"));
+    assert.ok((sources.get('parts/connector-catalogue.tsx') ?? '').includes("t('Connected')"));
     assert.match(connectors, /id=\{CONNECTED_TITLE\}[^]*?\{t\('Your connectors'\)\}/);
   });
 });

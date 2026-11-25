@@ -1,8 +1,8 @@
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
-import { type Connector, type Delivery, type Site, call, placesOf } from '../api';
+import { type Connector, type Delivery, type Site, call } from '../api';
 import { type Listed, known, listedOf } from '../listed';
-import { Button, DataTable, Dialog, Field, IconButton, Menu, Problem, ViewTab, folded } from '../ui';
+import { Button, Dialog, Problem } from '../ui';
 import { PageHead, useWorkspace } from './workspace';
 import { msg, t } from '../i18n';
 import { WORKSPACE_SUSPENDED, problemOf, writeProblemOf } from '../problems';
@@ -11,16 +11,17 @@ import { AddLinear, AddRest, AddRoutine } from '../parts/connector-add';
 import { GithubPanel } from '../parts/connector-github';
 import { LinearPanel } from '../parts/connector-linear';
 import { ConnectorName } from '../parts/connector-name';
-import { KEY_PROBLEMS, KINDS, type PanelProps, connectorName, siteCount, sourceLine } from '../parts/connector-parts';
+import { KEY_PROBLEMS, KINDS, type PanelProps, connectorName, sourceLine } from '../parts/connector-parts';
 import { RestPanel } from '../parts/connector-rest';
 import { AddPlugin, PLUGIN_RETURNS, PluginPanel, leaveForPlugin, pluginSentence } from '../parts/connector-plugin';
 import { trackerOf } from '../trackers/index.ts';
 import { PLUGIN_KINDS, type PluginKind, isPluginKind } from '../trackers/plugin.ts';
 import { RoutinePanel } from '../parts/connector-routine';
 import { NoCodeRecipes } from '../parts/agent-recipes';
-import { ConnectorLogo } from '../connector-logos';
 import type { LogoKind } from '../connector-logo-kinds.ts';
-import { NoteIcon } from '../note-icons';
+import { ADD_TITLE, Catalogue, type Entry, type Offer } from '../parts/connector-catalogue';
+import { type Late, receives } from '../parts/connector-health';
+import { ConnectorsTable } from '../parts/connector-table';
 import { ReadProblem } from '../read-problem';
 
 /**
@@ -34,60 +35,6 @@ import { ReadProblem } from '../read-problem';
  * of the worker connect as they say (FRU-621). The other trackers of the catalogue say « Soon »: no
  * button connects what does not exist.
  */
-
-/** A group of the catalogue: the segment above the tiles (FRU-690). */
-type Group = 'trackers' | 'agents' | 'developers';
-
-/** What a tile of the catalogue says before it is connected: what a note becomes there, in one line. */
-type Entry = { kind: LogoKind; name: string; short: string; group: Group; fresh?: true };
-
-/**
- * The catalogue, in the order of the mockup of FRU-690. `name` is the name of the kind where it can
- * be connected, so a tile and a row say the same; `short` is the one line of the tile, and the long
- * sentence of the kind is its tooltip.
- */
-const CATALOGUE: readonly Entry[] = [
-  { kind: 'linear', name: KINDS.linear.name, short: msg('An issue in a team'), group: 'trackers' },
-  { kind: 'jira', name: KINDS.jira.name, short: msg('An issue in a project'), group: 'trackers' },
-  { kind: 'github', name: KINDS.github.name, short: msg('An issue in a repository'), group: 'trackers' },
-  { kind: 'gitlab', name: KINDS.gitlab.name, short: msg('An issue in a project'), group: 'trackers' },
-  { kind: 'asana', name: KINDS.asana.name, short: msg('A task in a project'), group: 'trackers' },
-  { kind: 'clickup', name: KINDS.clickup.name, short: msg('A task in a list'), group: 'trackers' },
-  { kind: 'trello', name: 'Trello', short: msg('A card on a board'), group: 'trackers' },
-  { kind: 'notion', name: 'Notion', short: msg('A row in a database'), group: 'trackers' },
-  { kind: 'slack', name: KINDS.slack.name, short: msg('A message in a channel'), group: 'trackers' },
-  { kind: 'webhook', name: msg('Webhook'), short: msg('Tells any address when a note arrives'), group: 'developers' },
-  { kind: 'rest', name: KINDS.rest.name, short: msg('A POST to your endpoint'), group: 'developers' },
-  {
-    kind: 'claude-routine',
-    name: KINDS['claude-routine'].name,
-    short: msg('A routine of your team starts'),
-    group: 'agents',
-    fresh: true,
-  },
-];
-
-/** The long sentence of a kind that this console connects, for the tooltip of its tile. */
-const DETAILS: Readonly<Partial<Record<LogoKind, string>>> = {
-  linear: msg('An issue per note, in the team you choose.'),
-  // FRU-331: the API of an issue of GitHub takes no file, so the files of a note do not go there.
-  github: msg('An issue per note, in one repository. The files of a note do not go: GitHub takes none by its API.'),
-  rest: msg('POST each note to your own endpoint, with an address of one hour for each of its files.'),
-  'claude-routine': msg(
-    'Starts a routine of your team when the trigger of a site calls it. The routine reads the notes through the MCP server.',
-  ),
-  trello: msg('A card in the list you choose.'),
-  notion: msg('A row in a database.'),
-  webhook: msg('Tells Slack or any address when a note arrives.'),
-};
-
-/** The segment of the catalogue: every tile, or one group. */
-const GROUPS: readonly { id: Group | 'all'; label: string }[] = [
-  { id: 'all', label: msg('All kinds') },
-  { id: 'trackers', label: msg('Trackers') },
-  { id: 'agents', label: msg('Agents') },
-  { id: 'developers', label: msg('Developers') },
-];
 
 /** What the way back from Linear says, as the worker words it in the address (FRU-134). */
 const LINEAR_RETURNS: Record<string, string> = {
@@ -152,27 +99,11 @@ function pluginReturn(search: URLSearchParams): { kind: PluginKind; word: string
   return undefined;
 }
 
-/**
- * Whether a connector receives each note, and so has a list of the sends that wait: an address, a
- * routine (FRU-594), and a plugin that keeps nothing (FRU-624, Slack). A tracker has none.
- */
-function receives(connector: Connector): boolean {
-  if (connector.kind === 'rest' || connector.kind === 'claude-routine') return true;
-
-  return isPluginKind(connector.kind) && trackerOf(connector.kind)?.receives === true;
-}
-
 /** The id of the title of the open panel. */
 const PANEL_TITLE = 'source-panel-title';
 
 /** The id of the title « Your connectors ». */
 const CONNECTED_TITLE = 'connected-title';
-
-/** The id of the title « Add a connector ». */
-const ADD_TITLE = 'add-title';
-
-/** What did not reach a connector that receives: notes, and calls of a trigger of a site (FRU-468). */
-type Late = { notes: number; calls: number; ids: readonly string[] };
 
 export default function Connectors() {
   useLocale();
@@ -215,9 +146,6 @@ export default function Connectors() {
   const [adding, setAdding] = useState<Connector['kind'] | undefined>();
   // An address connected from its form, whose secret is still on the screen (see `AddRest`).
   const restAdded = useRef<string | undefined>(undefined);
-  // The search and the segment of the catalogue (FRU-690).
-  const [typed, setTyped] = useState('');
-  const [group, setGroup] = useState<Group | 'all'>('all');
   const searchField = useRef<HTMLInputElement>(null);
   // « Retry » of a row: the connector whose sends are asked again, and a refusal of it.
   const [retrying, setRetrying] = useState<string | undefined>();
@@ -361,9 +289,6 @@ export default function Connectors() {
 
   const open = connectors?.find((connector) => connector.id === selected);
   const placed = known(sites);
-  /** The sites that send to a connector, from a list that was read. */
-  const sitesOf = (connector: Connector): readonly Site[] | undefined =>
-    placed?.filter((site) => placesOf(site).some((place) => place.connector === connector.id));
 
   const Panel = open === undefined ? undefined : PANELS[open.kind];
   const cannot = !manages || !available;
@@ -472,15 +397,6 @@ export default function Connectors() {
     return [...(form === null ? [] : [form]), ...(said === null ? [] : [<Problem key="problem">{said}</Problem>])];
   };
 
-  const shownEntries = CATALOGUE.filter(
-    (entry) =>
-      (group === 'all' || entry.group === group) &&
-      (typed.trim() === '' ||
-        [t(entry.name), t(entry.short), detailOf(entry.kind)].some((words) =>
-          folded(words).includes(folded(typed.trim())),
-        )),
-  );
-
   return (
     <>
       <PageHead
@@ -554,374 +470,35 @@ export default function Connectors() {
                 <Problem>{t(retryProblem.problem)}</Problem>
               </div>
             )}
-            <DataTable label={t('Your connectors')} minWidth={680} dense hover stack>
-              {/* Widths of their own: a health that changes after « Retry » moves no column. */}
-              <colgroup>
-                <col className="w-[24%]" />
-                <col className="w-[32%]" />
-                <col className="w-[12%]" />
-                <col className="w-[20%]" />
-                <col className="w-[12%]" />
-              </colgroup>
-              <thead>
-                <tr>
-                  <th scope="col">{t('Connector')}</th>
-                  <th scope="col">{t('Account')}</th>
-                  <th scope="col">{t('Used by')}</th>
-                  <th scope="col">{t('Health')}</th>
-                  <th scope="col" data-align="end">
-                    <span className="sr-only">{t('Actions')}</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {connectors.map((connector) => {
-                  const name = connectorName(connector);
-                  const waits = late[connector.id];
-                  const using = sitesOf(connector);
-                  const failed = waits !== undefined && waits.notes + waits.calls > 0;
-
-                  return (
-                    <tr
-                      key={connector.id}
-                      data-connector={connector.id}
-                      data-chosen={connector.id === selected}
-                      className="cursor-pointer"
-                      // A press on the row opens its settings, as « … » does: the button is the way of a
-                      // keyboard and of a screen reader, and a press on a button of the row is its own.
-                      onClick={(event) => {
-                        if ((event.target as Element).closest('button, a') !== null) return;
-                        setSelected(connector.id);
-                      }}
-                    >
-                      <td>
-                        <span className="flex min-w-0 items-center gap-[10px]">
-                          <ConnectorLogo kind={connector.kind} size="row" />
-                          {/* The name its workspace gave it, or its kind (FRU-404). */}
-                          <span className="min-w-0 truncate font-semibold">{name}</span>
-                        </span>
-                      </td>
-                      <td className="max-w-[320px]">
-                        {/* One line: a long address is cut at its end, and the settings write it whole (FRU-321). */}
-                        <span className="block truncate text-ink-soft" title={lineOf(connector)} data-source-line>
-                          {lineOf(connector)}
-                        </span>
-                      </td>
-                      <td className="whitespace-nowrap text-muted">
-                        {/* FRU-594: no site sends its notes to a routine, so its row counts none. */}
-                        {using === undefined || connector.kind === 'claude-routine' ? null : siteCount(using.length)}
-                      </td>
-                      <td>
-                        <Health
-                          connector={connector}
-                          late={waits}
-                          read={!receives(connector) || waits !== undefined}
-                          placeAttention={using?.some((site) =>
-                            placesOf(site).some(
-                              (place) => place.connector === connector.id && place.attention !== undefined,
-                            ),
-                          )}
-                        />
-                      </td>
-                      <td data-align="end">
-                        <span className="inline-flex items-center justify-end gap-[4px]">
-                          {failed && manages ? (
-                            <Button
-                              tone="outline"
-                              size="small"
-                              disabled={retrying === connector.id}
-                              label={t('Retry {name}', { name })}
-                              onClick={() => void retry(connector, waits.ids)}
-                            >
-                              <NoteIcon name="retry" />
-                              {retrying === connector.id ? t('Retrying…') : t('Retry')}
-                            </Button>
-                          ) : null}
-                          <IconButton
-                            size="small"
-                            label={t('Settings of {name}', { name })}
-                            onClick={() => setSelected(connector.id)}
-                          >
-                            <NoteIcon name="more" />
-                          </IconButton>
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </DataTable>
+            <ConnectorsTable
+              connectors={connectors}
+              selected={selected}
+              sites={placed}
+              late={late}
+              manages={manages}
+              retrying={retrying}
+              onRetry={(connector, ids) => void retry(connector, ids)}
+              onOpen={setSelected}
+            />
             {/* FRU-595: the recipes start from the issue of a note, so they come with a tracker that makes one. */}
             <NoCodeRecipes kinds={connectors.map((connector) => connector.kind)} />
           </section>
         ) : null}
 
         {answered ? (
-          <section aria-labelledby={ADD_TITLE}>
-            <div className="mb-[10px] flex flex-wrap items-center gap-x-[12px] gap-y-[8px]">
-              <h2 id={ADD_TITLE} className="text-body leading-auto font-semibold">
-                {t('Add a connector')}
-              </h2>
-              <div className="w-[220px] min-w-0 flex-shrink">
-                <Field
-                  label={t('Search trackers and tools')}
-                  labelHidden
-                  compact
-                  type="search"
-                  inputRef={searchField}
-                  placeholder={t('Search trackers and tools')}
-                  value={typed}
-                  onChange={(event) => setTyped(event.target.value)}
-                />
-              </div>
-              <div role="group" aria-label={t('Kind of connector')} className="ml-auto flex flex-wrap gap-[2px]">
-                {GROUPS.map((each) => (
-                  <ViewTab key={each.id} pressed={group === each.id} onChange={() => setGroup(each.id)}>
-                    {t(each.label)}
-                  </ViewTab>
-                ))}
-              </div>
-            </div>
-            {connected ? null : (
-              <p className="mb-[10px] text-hint text-muted">{t('No tracker yet. The notes stay in Fruitback.')}</p>
-            )}
-            {manages ? null : (
-              <p className="mb-[10px] text-hint text-muted">{t('An owner or an admin adds a connector')}</p>
-            )}
-            {available ? null : (
-              <p className="mb-[10px] text-hint text-muted">{t(KEY_PROBLEMS['connectors-unavailable'] ?? '')}</p>
-            )}
-            {shownEntries.length === 0 ? (
-              <p className="text-small text-muted" role="status">
-                {t('No connector matches « {search} ».', { search: typed.trim() })}
-              </p>
-            ) : (
-              // FRU-690: tiles of 64 px, four in a row at 1440 px, one at 390 px. A tile whose form is
-              // open, or that says why it did not connect, takes the whole row.
-              <ul className="grid grid-flow-row-dense grid-cols-[repeat(auto-fill,minmax(min(100%,220px),1fr))] gap-[10px]">
-                {shownEntries.map((entry) => {
-                  const under = underOf(entry.kind);
-                  const isConnected = connectors?.some((connector) => connector.kind === entry.kind) === true;
-
-                  return (
-                    <Tile
-                      key={entry.kind}
-                      entry={entry}
-                      detail={detailOf(entry.kind)}
-                      offer={offerOf(entry)}
-                      connected={isConnected}
-                      cannot={cannot}
-                      typing={adding === entry.kind}
-                      under={under}
-                    />
-                  );
-                })}
-              </ul>
-            )}
-          </section>
+          <Catalogue
+            connected={connected}
+            manages={manages}
+            available={available}
+            adding={adding}
+            connectedKinds={(connectors ?? []).map((connector) => connector.kind)}
+            offerOf={offerOf}
+            underOf={underOf}
+            searchRef={searchField}
+          />
         ) : null}
       </div>
     </>
-  );
-}
-
-/** The long sentence of a kind: its own, or the one of its plugin (FRU-621). */
-function detailOf(kind: LogoKind): string {
-  const own = DETAILS[kind];
-  if (own !== undefined) return t(own);
-  const tracker = isPluginKind(kind) ? trackerOf(kind) : undefined;
-
-  return tracker === undefined ? '' : t(tracker.detail);
-}
-
-/** The account of a source, in its row: its kind first when a name hides it (FRU-404). */
-function lineOf(connector: Connector): string {
-  return connector.name === undefined
-    ? sourceLine(connector)
-    : `${t(KINDS[connector.kind].name)} · ${sourceLine(connector)}`;
-}
-
-/** What a tile offers: a way to connect, a source that is not set up here, or one that comes later. */
-type Offer =
-  | {
-      state: 'connect';
-      primary: () => void;
-      /** The words of the button while the browser leaves for the service. */
-      busy?: string | undefined;
-      /** A second way: an API key or a token where the consent is the first one. */
-      secondary?: { label: string; act: () => void };
-    }
-  | { state: 'unset'; why: string }
-  | { state: 'soon' };
-
-/** The words of a state pill: a dot and a word, in a tint of its colour. */
-function Pill({ tone, children }: { tone: 'done' | 'alert' | 'neutral'; children: ReactNode }) {
-  const colours = {
-    done: 'bg-done/10 text-done',
-    alert: 'bg-accent/10 text-accent-strong',
-    neutral: 'bg-chip text-muted',
-  }[tone];
-  const dot = { done: 'bg-done', alert: 'bg-accent', neutral: 'bg-control' }[tone];
-
-  return (
-    <span
-      className={`inline-flex h-[20px] flex-none items-center gap-[5px] rounded-control px-[7px] text-hint leading-none font-semibold whitespace-nowrap ${colours}`}
-      data-pill={tone}
-    >
-      <span aria-hidden="true" className={`size-[6px] flex-none rounded-pill ${dot}`} />
-      {children}
-    </span>
-  );
-}
-
-/**
- * The health of a connector, in its row (FRU-690), from what the worker says today:
- *
- * - « Needs attention »: its tracker refuses it (FRU-102), or refused a place of a site (FRU-640).
- * - « N not delivered »: sends that wait, for a connector that receives (an address, a routine, Slack).
- * - « Healthy »: a connector that receives, whose sends were read, and none waits.
- * - « Connected »: a tracker. The worker does not say yet whether its notes arrived (FRU-714).
- * - « Not read »: the sends of a connector that receives were not read. Never « Healthy ».
- *
- * The red words are the strong accent: the accent is under 4.5:1 on the tints of a row (FRU-683).
- */
-function Health({
-  connector,
-  late,
-  read,
-  placeAttention = false,
-}: {
-  connector: Connector;
-  late: Late | undefined;
-  /** Whether the sends of a connector that receives were read. A tracker has none to read. */
-  read: boolean;
-  placeAttention?: boolean | undefined;
-}) {
-  useLocale();
-  if (connector.attention !== undefined || placeAttention) return <Pill tone="alert">{t('Needs attention')}</Pill>;
-  if (!read) return <Pill tone="neutral">{t('Not read')}</Pill>;
-  if (late === undefined) return <Pill tone="done">{t('Connected')}</Pill>;
-  const waiting = late.notes + late.calls;
-  if (waiting === 0) return <Pill tone="done">{t('Healthy')}</Pill>;
-
-  return (
-    <span className="inline-flex flex-wrap gap-[4px]">
-      {late.notes > 0 ? (
-        <Pill tone="alert">
-          {late.notes === 1 ? t('1 note not delivered') : t('{count} notes not delivered', { count: late.notes })}
-        </Pill>
-      ) : null}
-      {/* FRU-468: a call that waits is said too: its agent did not start. */}
-      {late.calls > 0 ? (
-        <Pill tone="alert">
-          {late.calls === 1 ? t('1 call not delivered') : t('{count} calls not delivered', { count: late.calls })}
-        </Pill>
-      ) : null}
-    </span>
-  );
-}
-
-/** « Connect », with the name of the source for a screen reader: twelve buttons would say the same word. */
-function Connect({ name }: { name: string }) {
-  useLocale();
-
-  return (
-    <>
-      {t('Connect')}
-      <span className="sr-only"> {name}</span>
-    </>
-  );
-}
-
-/**
- * A tile of the catalogue (FRU-690): the logo in its box of 36 px, the name, one line of what a note
- * becomes there, cut at its end, and the state at the right: « Connected », « Connect », « Soon »,
- * or « Not set up ». A tile that is open (its form, a refusal) takes the whole row, and what opened
- * is under its line.
- */
-function Tile({
-  entry,
-  detail,
-  offer,
-  connected,
-  cannot,
-  typing,
-  under,
-}: {
-  entry: Entry;
-  detail: string;
-  offer: Offer;
-  connected: boolean;
-  /**
-   * The person cannot add a source here: a member, or a worker that cannot keep a key. The tile then
-   * offers no button: a line above the tiles says why, and a disabled button would say nothing more.
-   */
-  cannot: boolean;
-  /** Its form is open. */
-  typing: boolean;
-  /** What opened under its line, or nothing. */
-  under: readonly ReactNode[];
-}) {
-  useLocale();
-  const name = t(entry.name);
-  const wide = under.length > 0;
-  const why = offer.state === 'unset' ? offer.why : undefined;
-
-  return (
-    <li
-      className={`flex min-w-0 flex-col rounded-card border border-line bg-surface px-[14px] ${wide ? 'col-span-full pb-[14px]' : ''}`}
-      data-source={name}
-      data-state={connected ? 'connected' : offer.state}
-    >
-      <div className="flex h-[62px] min-w-0 items-center gap-[12px]">
-        <ConnectorLogo kind={entry.kind} />
-        <span className="flex min-w-0 flex-1 flex-col gap-[4px]" title={detail === '' ? undefined : detail}>
-          <span className="flex min-w-0 items-center gap-[6px]">
-            <span className="truncate text-body leading-auto font-semibold">{name}</span>
-            {entry.fresh === true && !connected ? <Pill tone="alert">{t('New')}</Pill> : null}
-          </span>
-          {/* One line, cut at its end; the whole sentence is the tooltip. */}
-          <span className="truncate text-hint leading-auto text-muted" data-tile-line>
-            {why ?? t(entry.short)}
-          </span>
-        </span>
-        <span className="flex flex-none items-center gap-[4px]">
-          {connected ? <Pill tone="done">{t('Connected')}</Pill> : null}
-          {offer.state === 'soon' && !connected ? <Pill tone="neutral">{t('Soon')}</Pill> : null}
-          {offer.state === 'unset' && !connected ? <Pill tone="neutral">{t('Not set up')}</Pill> : null}
-          {/* A workspace can connect a second one: another team of Linear, another address. */}
-          {offer.state === 'connect' && !cannot && !typing && connected ? (
-            <IconButton
-              size="small"
-              label={t('Connect another {source}', { source: name })}
-              disabled={offer.busy !== undefined}
-              onClick={offer.primary}
-            >
-              <NoteIcon name="add" />
-            </IconButton>
-          ) : null}
-          {offer.state === 'connect' && !cannot && !typing && !connected ? (
-            <>
-              <Button tone="outline" size="small" disabled={offer.busy !== undefined} onClick={offer.primary}>
-                {offer.busy ?? <Connect name={name} />}
-              </Button>
-              {offer.secondary === undefined ? null : (
-                <Menu
-                  trigger="icon"
-                  triggerLabel={t('Other ways to connect {source}', { source: name })}
-                  triggerClassName="size-control-sm!"
-                  items={[{ id: 'secondary', label: offer.secondary.label }]}
-                  onAction={() => offer.secondary?.act()}
-                >
-                  <NoteIcon name="down" />
-                </Menu>
-              )}
-            </>
-          ) : null}
-        </span>
-      </div>
-      {wide ? <div className="flex w-full flex-col gap-[10px]">{under}</div> : null}
-    </li>
   );
 }
 
