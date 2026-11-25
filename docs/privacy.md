@@ -134,7 +134,7 @@ session of its workspace and nobody else, which is what a site added with no vis
 `everyone`, anybody who knows a page address and the id of the site, with or without the widget.
 [SECURITY.md](https://github.com/sakuga-software/fruitback/blob/main/SECURITY.md#who-reads-the-pins-the-visibility-of-each-site) says it in full.
 The tab « Access » of a site in the console sets it, with who may leave a note and what a visitor
-may do to a note of their own (FRU-703). These are settings of the site, kept on its row: they
+may do to a note of their own. These are settings of the site, kept on its row: they
 hold nothing about a person.
 
 - A worker of before 0.3.0 read `FRUITBACK_READ` instead, public by default. That worker no longer

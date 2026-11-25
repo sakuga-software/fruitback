@@ -57,8 +57,7 @@ site: it was the setting of a worker with no database, and that worker no longer
 A site that only members read takes a note from its members only, unless its « Who can leave a
 note » says « Anyone on the page ». A new site says « Members only », and a site made before 0.3.0
 says « Anyone on the page ». The paragraph that starts « The visibility of a site decides who reads
-it », further down, gives the tests. Since FRU-703 that field decides on a site that everyone reads
-too: « Read only » is read by anyone and written by its members only.
+it », further down, gives the tests. That field decides on a site that everyone reads too: « Read only » is read by anyone and written by its members only.
 
 A link that opens a note on its page, `<page>#fruitback-note=<id>`, opens nothing to somebody who
 cannot already read that page: the widget opens the note among those `GET /feedback` answered to
@@ -1150,7 +1149,7 @@ and plants none`. As above, `Origin` binds a claim to a site and authenticates n
 that is not from a browser sends the one it wants, or none.
 
 The visibility of a site decides who reads it; « Who can leave a note » decides who writes on it
-(decided on 2026-10-20 for a site that its members read, and on every site since FRU-703). On a
+(decided on 2026-10-20 for a site that its members read, and on 2026-11-25 for every site). On a
 site read by `members`, a read with no session answers `401`
 (test:`reads no note: the worker asks for a session, and says so`). A site has one of two values:
 
@@ -1175,8 +1174,8 @@ site read by `members`, a read with no session answers `401`
   The migration `0021` gave this value to every site made before 0.3.0, which is what the worker
   did for them then (test:`gives « anyone » to every site of before, and « members » to a site made after`).
 
-On a site that everyone reads, « Members only » is the level « Read only » of the tab « Access »
-(FRU-703): the read answers anyone, with `canWrite: false`, and a note, a batch and a reply from
+On a site that everyone reads, « Members only » is the level « Read only » of the tab « Access »:
+the read answers anyone, with `canWrite: false`, and a note, a batch and a reply from
 the page with no session answer `401` and write nothing
 (test:`reads the notes, is told a note would be refused, and leaves none, by a note or by a batch`,
 test:`refuses a reply from the page with no session on a site « Read only », and takes it when the check is out (FRU-703)`).
@@ -1191,8 +1190,8 @@ anybody, as such a site always was
 A console that does not send the field changes no site: a site that is added again keeps the value
 it had.
 
-What a visitor with no account may do to a note of their own is a setting of the site too
-(FRU-703): `visitorEdit` and `visitorDelete`, each `never`, `while-open` or `always`. The console
+What a visitor with no account may do to a note of their own is a setting of the site too:
+`visitorEdit` and `visitorDelete`, each `never`, `while-open` or `always`. The console
 shows and sends them; only a role that changes a site (an owner or an admin, `manage-sites`) changes
 them, and a member or a guest is refused with nothing changed
 (test:`refuses a member and a guest, who do not change a site, and changes nothing`). A value that is
@@ -1200,7 +1199,7 @@ not one of the three is refused (test:`refuses a value that is not a right, and 
 and a row that holds another one gives the visitor nothing. The routes are given the two values only
 where a visitor writes; absent is `never`. A new site takes `while-open`, the mockup's default, and
 `0050` gives `never` to every site of before, so no site changes. The routes that check them for a
-visitor come with FRU-701 and FRU-702: until then a visitor can change and take back nothing, whatever
+visitor are not there yet: until then a visitor can change and take back nothing, whatever
 the site says.
 
 With `FRUITBACK_DATABASE_URL` the same accounts are in a PostgreSQL database, in place
