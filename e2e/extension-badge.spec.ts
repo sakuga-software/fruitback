@@ -54,8 +54,13 @@ test('the icon shows the notes to check of the site of the tab, in the blue of d
       forTheSite = true;
     }
 
-    await route.fulfill({ response, json: body });
-    if (forTheSite) answered.push(count);
+    try {
+      await route.fulfill({ response, json: body });
+    } finally {
+      // A fulfill that throws fails the test with its own cause. The poll for « 0 » below must not
+      // hide that cause behind its timeout.
+      if (forTheSite) answered.push(count);
+    }
   });
   await paired(extension);
   const page = await extension.context.newPage();
