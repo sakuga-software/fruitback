@@ -119,8 +119,11 @@ page (FRU-129) was built that way, on the tokens of the widget.
 The console takes the tokens of the mockup « Fruitback, simpler flow » of 2026-10-13 (FRU-230,
 FRU-232): a neutral grey on a white page, and five colours of status. Mathieu drew the mockup; the
 orchestrator read it as his answer on the palette on 2026-10-13, and he may come back on it. So
-every value is named once, in `apps/console/app/app.css`, and a screen writes the name:
-`app/tokens.test.ts` fails on a colour written as a value in a screen or in the kit.
+every value is named once, and a screen writes the name: `app/tokens.test.ts` fails on a colour
+written as a value in a screen or in the kit. The Tailwind theme (`@theme`) is
+`packages/shared/tailwind/theme.css` (FRU-677), which the console, the extension, the widget and the
+docs import; the variables that HeroUI reads (`muted`, `surface`, `accent`, `rounded-field`) stay in
+`apps/console/app/app.css`.
 
 | Token                                                            | Value                                                            | What it is for                                               |
 | ---------------------------------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------ |
@@ -138,7 +141,7 @@ every value is named once, in `apps/console/app/app.css`, and a screen writes th
 | `text-body`, `-small`, `-table`, `-hint`, `-label`, `-tiny`      | `15px/1.5`, `14px/1.5`, `14px/1.45`, `13px/1.5`, `13px`, `12px`  | text                                                         |
 | `h-control`, `-control-panel`, `-control-chip`, `-control-small` | `44px`, `40px`, `36px`, `32px`                                   | the height of a control                                      |
 | `rounded-button`, `-field`, `-box`, `-frame`                     | `6px`, `8px`, `10px`, `14px`                                     | a control, a field, an option card, a table or a panel       |
-| `shadow-frame`, `-pin`, `-thumb`                                 | see `app.css`                                                    | the preview, a drop, the thumb of a switch                   |
+| `shadow-frame`, `-pin`, `-thumb`                                 | see `theme.css`                                                  | the preview, a drop, the thumb of a switch                   |
 | `ease-settle`, `--duration-fast`                                 | `cubic-bezier(.16, 1, .3, 1)`, `220ms`                           | the one movement of the console: a switch                    |
 | Font                                                             | the system font (`-apple-system, BlinkMacSystemFont`)            | weights 400, 600 and 700 only                                |
 
@@ -158,7 +161,11 @@ to do `#d9dbdf`, in progress `#f3bb3d`, done `#5560c4`, closed `#a52a3a`. `packa
 is their one source; the console and the extension copy them, and `app/tokens.test.ts` and
 `apps/extension/src/design-tokens.test.ts` fail when a copy differs.
 
-**The console has no dark theme**: the mockup draws none.
+**The console has no dark theme**: the mockup draws none. The shared theme is one plain `@theme`
+block, so each utility reads `var(--color-…)`: a surface with a dark scheme (the extension) sets the
+tokens again in its own file, under `prefers-color-scheme: dark`, and `app/shared-theme.test.ts`
+holds the theme to that shape. The tokens of one surface alone go in a file of that surface,
+imported after the shared theme.
 
 ## The tokens of the first boards (2026-10-07)
 

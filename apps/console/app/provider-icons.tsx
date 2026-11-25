@@ -3,7 +3,7 @@
  *
  * - Google: the « G » of Google's sign-in branding guidelines
  *   (developers.google.com/identity/branding-guidelines), in its four colours, which the guidelines
- *   forbid to change. They are tokens of `app.css` (`--color-google-*`), as every colour here.
+ *   forbid to change. They are tokens of the theme (`--color-google-*`), as every colour here.
  * - GitHub: the mark of GitHub's logo guidelines (github.com/logos), the `mark-github` of Octicons
  *   (MIT). It takes one colour, the colour of the words beside it.
  *
