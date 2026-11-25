@@ -841,6 +841,17 @@ test('what is typed in « Emails » while the invitations go stays in it (FRU-69
   await expect(emails(page)).toHaveValue('ana@acme.dev');
   await expect(dialog(page)).toBeVisible();
   await expect(send(page)).toHaveText('Send 1 invite');
+
+  // One address refused, and one typed meanwhile: the sentence names the address it is about.
+  worker.refusesFor = { 'tom@acme.dev': { status: 400, error: 'USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION' } };
+  await emails(page).fill('tom@acme.dev');
+  await send(page).click();
+  await expect(form(page).getByRole('button', { name: 'Sending…' })).toBeVisible();
+  await emails(page).fill('tom@acme.dev, lou@client.fr');
+  await expect(dialog(page).getByRole('alert')).toHaveText(
+    'tom@acme.dev: This person is already a member of the workspace.',
+  );
+  await expect(emails(page)).toHaveValue('tom@acme.dev, lou@client.fr');
 });
 
 test('an owner changes a role in its row; a guest made a member asks twice; a refusal is said (FRU-691)', async ({

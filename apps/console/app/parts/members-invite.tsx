@@ -59,10 +59,10 @@ export function InviteDialog({
   const [role, setRole] = useState<InvitedRole>('member');
   const [site, setSite] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
-  // The refusals of the last send, and how many addresses it sent: one is said alone, several each
-  // after its address.
-  const [problems, setProblems] = useState<{ sent: number; refused: readonly { email: string; problem: string }[] }>({
-    sent: 0,
+  // The refusals of the last send, and whether each is said after its address: a refusal is said alone
+  // when it is of the one address the field held and holds, else each after its address.
+  const [problems, setProblems] = useState<{ named: boolean; refused: readonly { email: string; problem: string }[] }>({
+    named: false,
     refused: [],
   });
   const [copied, setCopied] = useState<'no' | 'yes' | 'refused'>('no');
@@ -77,7 +77,7 @@ export function InviteDialog({
   async function send(event: FormEvent) {
     event.preventDefault();
     if (busy || count === 0) return;
-    setProblems({ sent: 0, refused: [] });
+    setProblems({ named: false, refused: [] });
     setBusy(true);
     const kept: Invitation[] = [];
     const refused: { email: string; problem: string; kept: boolean }[] = [];
@@ -96,7 +96,8 @@ export function InviteDialog({
     ];
     const left = addressesWithout(field.current?.value ?? typed, gone);
     setTyped(left);
-    setProblems({ sent: addresses.valid.length, refused });
+    // An address typed during the send stays beside the refused one: the sentence then names its address.
+    setProblems({ named: addresses.valid.length > 1 || addressesIn(left).valid.length > 1, refused });
     if (left === '' && refused.length === 0) return onClose();
     // The button was disabled while it sent, so focus left it: it goes back to the field, where the
     // sentence of the refusal is read next.
@@ -152,7 +153,7 @@ export function InviteDialog({
           )}
           {problems.refused.length === 0 ? null : (
             <Problem>
-              {problems.sent === 1
+              {!problems.named
                 ? t(problems.refused[0]!.problem)
                 : problems.refused.map((each) => (
                     <span key={each.email} className="block">
