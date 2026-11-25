@@ -78,6 +78,8 @@ type Worker = {
   held: boolean;
   /** An invitation that is asked and not answered yet. */
   slow: boolean;
+  /** How long a change waits before its answer, in milliseconds. */
+  lag?: number;
   /** What the worker answers to a change it refuses. */
   refuses?: { status: number; error: string; field?: string };
   /** The addresses whose invitation the worker refuses, with what it answers. */
@@ -116,7 +118,7 @@ async function workerWith(page: Page, world: World = {}): Promise<Worker> {
   // Copies: a change of role writes on them, and the next test reads the people as they were.
   const members = (world.members ?? MEMBERS).map((each) => ({ ...(each as object) })) as { id: string; role: string }[];
   const invitations = [...(world.invitations ?? [PAUL])] as (typeof PAUL)[];
-  const answer = (pathname: string, route: Route) => {
+  const answer = (pathname: string, route: Route): Promise<void> | undefined => {
     const request = route.request();
     const call = pathname.split('/').at(-1) ?? '';
     const json = (body: unknown, status = 200) => route.fulfill({ status, json: body });
@@ -165,6 +167,20 @@ async function workerWith(page: Page, world: World = {}): Promise<Worker> {
         setTimeout(() => worker.sent.push({ call, body }), 300);
       });
     worker.sent.push({ call, body });
+    if (worker.lag !== undefined) {
+      const lag = worker.lag;
+
+      return new Promise<void>((resolve) => setTimeout(resolve, lag)).then(() => answered(call, body, json));
+    }
+
+    return answered(call, body, json);
+  };
+  /** The answer of the worker to a change it was sent. */
+  const answered = (
+    call: string,
+    body: Record<string, unknown>,
+    json: (body: unknown, status?: number) => Promise<void>,
+  ): Promise<void> => {
     const refused = worker.refusesFor?.[String(body.email)] ?? worker.refuses;
     if (refused !== undefined) {
       const { status, ...rest } = refused;
@@ -809,6 +825,22 @@ test('an invitation kept with a message that did not leave leaves the field, and
   await expect(send(page)).toBeDisabled();
   await expect(page.getByRole('status')).toContainText('Invitation sent to lou@client.fr.');
   expect(worker.sent.map((each) => each.body.email)).toEqual(['zoe@client.fr', 'lou@client.fr']);
+});
+
+test('what is typed in « Emails » while the invitations go stays in it (FRU-691)', async ({ page }) => {
+  const worker = await workerWith(page);
+  await open(page);
+  await inviting(page);
+  worker.lag = 1500;
+  await emails(page).fill('zoe@client.fr');
+  await send(page).click();
+  await expect(form(page).getByRole('button', { name: 'Sending…' })).toBeVisible();
+  // Typed before the answer: the address that goes, and one more.
+  await emails(page).fill('zoe@client.fr, ana@acme.dev');
+  await expect(page.getByRole('status')).toContainText('Invitation sent to zoe@client.fr.');
+  await expect(emails(page)).toHaveValue('ana@acme.dev');
+  await expect(dialog(page)).toBeVisible();
+  await expect(send(page)).toHaveText('Send 1 invite');
 });
 
 test('an owner changes a role in its row; a guest made a member asks twice; a refusal is said (FRU-691)', async ({

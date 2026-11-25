@@ -1,6 +1,6 @@
 import { type FormEvent, useRef, useState } from 'react';
 import { type Invitation, type SiteChoice, invitationLink } from '../api';
-import { addressesIn, addressesLeft } from '../invite-addresses';
+import { addressesIn, addressesWithout } from '../invite-addresses';
 import { copyText } from '../problems';
 import { Button, Choice, Dialog, DialogFoot, Field, Problem, RadioCards } from '../ui';
 import { msg, t } from '../i18n';
@@ -89,15 +89,15 @@ export function InviteDialog({
     setBusy(false);
     if (kept.length > 0) onInvited(kept);
     // What went leaves the field, and what the worker kept with a refusal too: sent again, it would be
-    // refused as invited already. What was refused, and what is no address, stays in it.
-    setTyped(
-      addressesLeft(
-        addresses,
-        refused.filter((each) => !each.kept).map((each) => each.email),
-      ),
-    );
+    // refused as invited already. The field is read as it is now: what was typed during the send stays.
+    const gone = [
+      ...kept.map((each) => each.email.toLowerCase()),
+      ...refused.filter((each) => each.kept).map((each) => each.email),
+    ];
+    const left = addressesWithout(field.current?.value ?? typed, gone);
+    setTyped(left);
     setProblems({ sent: addresses.valid.length, refused });
-    if (refused.length === 0 && addresses.invalid.length === 0) return onClose();
+    if (left === '' && refused.length === 0) return onClose();
     // The button was disabled while it sent, so focus left it: it goes back to the field, where the
     // sentence of the refusal is read next.
     field.current?.focus();

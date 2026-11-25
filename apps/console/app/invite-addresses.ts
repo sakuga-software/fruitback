@@ -37,9 +37,12 @@ export function addressesIn(typed: string): Addresses {
 }
 
 /**
- * What stays in « Emails » after a send: the addresses that did not go, and what is no address. What
- * was sent goes; nothing else that was typed is lost.
+ * What stays in « Emails » after a send: what is typed now, less the addresses that went. The field
+ * stays editable while the invitations go, so it is read again at the end, and what was typed during
+ * the send is kept. An address the worker refused stays; what is no address stays as it was typed.
  */
-export function addressesLeft(addresses: Addresses, refused: readonly string[]): string {
-  return [...addresses.valid.filter((each) => refused.includes(each)), ...addresses.invalid].join(', ');
+export function addressesWithout(typed: string, gone: readonly string[]): string {
+  const { valid, invalid } = addressesIn(typed);
+
+  return [...valid.filter((each) => !gone.includes(each)), ...invalid].join(', ');
 }
