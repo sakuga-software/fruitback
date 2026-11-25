@@ -14,6 +14,7 @@
     "test": "node --test ${FRUITBACK_TEST_CONCURRENCY:+--test-concurrency=$FRUITBACK_TEST_CONCURRENCY} 'app/**/*.test.ts'"
   },
   "dependencies": {
+    "@fruitback/design-tokens": "workspace:*",
     "@fruitback/shared": "workspace:*",
     "@heroui/react": "^3.2.6",
     "@heroui/styles": "3.2.6",

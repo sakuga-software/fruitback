@@ -1,0 +1,16 @@
+{
+  "name": "@fruitback/design-tokens",
+  "version": "0.7.0",
+  "private": true,
+  "description": "The Tailwind theme of Fruitback: the tokens of design/README.md, shared by the console, the extension, the widget and the docs.",
+  "license": "MIT",
+  "files": [
+    "theme.css",
+    "LICENSE"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    "./theme.css": "./theme.css"
+  }
+}
