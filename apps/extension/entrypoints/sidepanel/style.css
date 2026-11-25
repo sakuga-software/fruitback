@@ -1,14 +1,17 @@
 /*
   The side panel (FRU-296, FRU-299), as `ExtSidebar` of the mock-up of 2026-10-20 draws it, on the
   tokens of popup/style.css and the kit. The browser sets its width; the mock-up draws it at 400 px.
+
+  Tailwind writes the rules (@apply, FRU-679) on the theme, read with @reference, which writes
+  nothing: the variables are those of popup/style.css. The rules stay in no cascade layer, as the
+  kit's do; what no utility writes the same stays CSS (see the header of src/kit.css).
 */
+@reference '../../src/theme.css';
+
 body.side-panel-page {
-  min-width: 0;
-  margin: 0;
+  @apply min-w-0 m-0;
   /* The 14 px of the body of the popup put every block 14 px further in (FRU-533). */
-  padding: 0;
-  background: var(--color-surface);
-  color: var(--color-text);
+  @apply p-0 bg-surface text-text;
   font: 14px/1.5 var(--font-ui);
   scrollbar-width: thin;
   scrollbar-color: var(--color-line-soft) transparent;
@@ -23,114 +26,88 @@ body.side-panel-page {
   /* The inset of the words in a row, inside the box an open row draws. */
   --panel-row-inset: 8px;
 
-  display: flex;
-  flex-direction: column;
-  min-height: 100vh;
+  @apply flex flex-col min-h-[100vh];
 }
 
 .side-panel p {
-  margin: 0;
+  @apply m-0;
 }
 
 /* The head: the title and « Close the sidebar ». */
 .panel-head {
-  display: flex;
-  align-items: center;
-  gap: 4px;
+  @apply flex items-center gap-[4px];
   /* The cross of « Close the sidebar » sits in its target of 44 px, 14 px from the edge of it. */
   padding: 4px 0 4px var(--panel-gutter);
 }
 
 .panel-title {
-  flex: 1;
-  margin: 0;
-  font-size: 17px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  @apply flex-1 m-0 text-[17px] font-bold tracking-[-0.01em];
 }
 
 button.panel-close {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-  padding: 0;
+  @apply inline-flex items-center justify-center w-[44px] h-[44px] p-0;
   border: 0;
-  border-radius: var(--radius-action);
-  background: transparent;
-  color: var(--color-ink-soft);
+  @apply rounded-action bg-transparent text-ink-soft;
 }
 
 button.panel-close:hover {
-  background: var(--color-surface-sunken);
+  @apply bg-surface-sunken;
 }
 
 .panel-cross {
-  width: 15px;
-  height: 15px;
+  @apply w-[15px] h-[15px];
 }
 
 /* A page Fruitback is not on. */
 .panel-state {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  @apply flex flex-col gap-[4px];
   padding: 4px var(--panel-gutter) 16px;
 }
 
 .panel-state-title {
-  font-weight: 650;
+  @apply font-[650];
 }
 
 .panel-state-text {
-  color: var(--color-ink-soft);
+  @apply text-ink-soft;
 }
 
 /* « Open Fruitback » (FRU-532): the main button, on the whole width, under the sentence. */
 .panel-state .panel-open-popup,
 .panel-signed-out .panel-open-popup {
-  margin-top: 12px;
+  @apply mt-[12px];
 }
 
 .panel-signed-out {
-  display: flex;
-  flex-direction: column;
+  @apply flex flex-col;
   padding: 16px var(--panel-gutter);
 }
 
 .panel-signed-out .panel-reading {
-  padding: 0;
+  @apply p-0;
 }
 
 /* « Leave a note », and what to do next. */
 .panel-action {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  @apply flex flex-col gap-[4px];
   padding: 0 var(--panel-gutter) 12px;
-  border-bottom: 1px solid var(--color-line);
+  @apply border-b border-b-line;
 }
 
 .panel-action .kit-primary {
-  gap: 8px;
+  @apply gap-[8px];
 }
 
 .panel-action .kit-primary .kit-mark {
-  width: 15px;
-  height: 15px;
+  @apply w-[15px] h-[15px];
 }
 
 .panel-hint {
-  color: var(--color-ink-soft);
-  font-size: 12px;
-  text-align: center;
+  @apply text-ink-soft text-[12px] text-center;
 }
 
 .panel-notes {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
+  @apply flex flex-1 flex-col;
 }
 
 .panel-tabs {
@@ -143,60 +120,41 @@ button.panel-close:hover {
   past the panel (wrap-extension.spec.ts).
 */
 .panel-tabs button.kit-tab {
-  min-width: 0;
-  height: auto;
-  min-height: 40px;
-  padding: 4px 6px;
-  line-height: 1.2;
-  white-space: normal;
-  overflow-wrap: anywhere;
+  @apply min-w-0 h-auto min-h-[40px] py-[4px] px-[6px] leading-[1.2] whitespace-normal wrap-anywhere;
 }
 
 .panel-list {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin: 0;
+  @apply flex flex-col gap-[2px] m-0;
   /* The words of a row are at the gutter: the list gives what the row does not. */
   padding: 4px calc(var(--panel-gutter) - var(--panel-row-inset)) 16px;
-  list-style: none;
+  @apply list-none;
 }
 
 .panel-row {
   padding: 12px var(--panel-row-inset);
-  border-radius: var(--radius-action);
+  @apply rounded-action;
 }
 
 .panel-row[data-open='true'] {
-  background: var(--color-surface-raised);
+  @apply bg-surface-raised;
   box-shadow: inset 0 0 0 1px var(--color-line);
 }
 
 button.panel-row-head {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  width: 100%;
-  min-height: 44px;
-  padding: 0;
+  @apply flex items-start gap-[12px] w-full min-h-[44px] p-0;
   border: 0;
-  background: transparent;
-  color: inherit;
+  @apply bg-transparent text-inherit;
   font: inherit;
-  text-align: start;
+  @apply text-start;
   /*
     The meta line wraps: the buttons of popup/style.css stay on one line. The note holds one line by
     its own rule, with « … », and wraps in an open row.
   */
-  white-space: normal;
+  @apply whitespace-normal;
 }
 
 .panel-row-words {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
+  @apply flex flex-1 flex-col gap-[2px] min-w-0;
 }
 
 /*
@@ -206,239 +164,166 @@ button.panel-row-head {
 .panel-row-note,
 .ready-note,
 .search-detached-note {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  @apply overflow-hidden whitespace-nowrap text-ellipsis;
 }
 
 .panel-row-note {
-  font-size: 14px;
-  line-height: 1.45;
+  @apply text-[14px] leading-[1.45];
 }
 
 /* An open row shows the whole note. */
 .panel-row[data-open='true'] .panel-row-note {
-  white-space: normal;
-  overflow-wrap: anywhere;
+  @apply whitespace-normal wrap-anywhere;
 }
 
 .panel-row-meta {
-  color: var(--color-ink-soft);
-  font-size: 12px;
+  @apply text-ink-soft text-[12px];
 }
 
 .panel-row-stage {
-  color: var(--color-text);
-  font-weight: 650;
+  @apply text-text font-[650];
 }
 
 /* An open row: its replies, then « Show on the page » and « Reply ». */
 .panel-row-more {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin: 10px 0 4px 36px;
+  @apply flex flex-col gap-[10px] mt-[10px] mr-0 mb-[4px] ml-[36px];
 }
 
 .panel-replies {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+  @apply flex flex-col gap-[6px] m-0 p-0 list-none;
 }
 
 .panel-reply {
-  display: flex;
-  flex-direction: column;
-  padding: 8px 10px;
-  border-radius: var(--radius-field);
-  background: var(--color-surface-sunken);
+  @apply flex flex-col py-[8px] px-[10px] rounded-field bg-surface-sunken;
 }
 
 .panel-reply-meta {
-  font-size: 12px;
+  @apply text-[12px];
 }
 
 .panel-reply-meta strong {
-  font-weight: 650;
+  @apply font-[650];
 }
 
 .panel-reply-body {
-  font-size: 13px;
-  overflow-wrap: anywhere;
+  @apply text-[13px] wrap-anywhere;
 }
 
 .panel-row-links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16px;
+  @apply flex flex-wrap gap-[16px];
 }
 
 button.panel-link {
-  min-height: 24px;
-  padding: 0;
+  @apply min-h-[24px] p-0;
   border: 0;
-  background: transparent;
-  color: var(--color-accent);
+  @apply bg-transparent text-accent;
   font: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  @apply text-[13px] font-semibold underline underline-offset-[3px];
 }
 
 .panel-reply-form {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  @apply flex flex-col gap-[8px];
 }
 
 .panel-reply-field {
-  box-sizing: border-box;
-  width: 100%;
-  padding: 8px 10px;
-  border: 1px solid var(--color-line-strong);
-  border-radius: var(--radius-control);
-  background: var(--color-surface);
-  color: var(--color-text);
+  @apply box-border w-full py-[8px] px-[10px] border border-line-strong rounded-control bg-surface text-text;
   font: inherit;
-  resize: vertical;
+  @apply resize-y;
 }
 
 .panel-reply-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 16px;
+  @apply flex items-center justify-end gap-[16px];
 }
 
 button.panel-send {
-  height: 34px;
-  padding: 0 14px;
+  @apply h-[34px] py-0 px-[14px];
   border: 0;
-  border-radius: var(--radius-pill);
-  background: var(--color-accent);
-  color: var(--color-on-accent);
+  @apply rounded-pill bg-accent text-on-accent;
   font: inherit;
-  font-weight: 600;
+  @apply font-semibold;
 }
 
 button.panel-send:disabled {
-  opacity: 0.6;
+  @apply opacity-60;
 }
 
 .panel-reply-problem {
-  color: var(--color-alert-text);
-  font-size: 13px;
+  @apply text-alert-text text-[13px];
 }
 
 /* Reading, a failed read, a tab with no note. */
 .panel-reading,
 .panel-none {
   padding: 16px var(--panel-gutter);
-  color: var(--color-ink-soft);
+  @apply text-ink-soft;
 }
 
 .panel-failed {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
+  @apply flex flex-col items-start gap-[6px];
   margin: 16px var(--panel-gutter);
 }
 
 /* No note on the page. */
 .panel-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
+  @apply flex flex-col items-center gap-[12px];
   padding: 40px calc(var(--panel-gutter) * 2);
-  text-align: center;
+  @apply text-center;
 }
 
 .panel-empty-drop {
-  box-sizing: border-box;
-  width: 34px;
-  height: 34px;
-  border: 2px dashed var(--color-line-control);
+  @apply box-border w-[34px] h-[34px] border-[2px] border-dashed border-line-control;
   border-radius: 50% 50% 50% 0;
   transform: rotate(-45deg);
 }
 
 .panel-empty-title {
-  font-size: 17px;
-  font-weight: 700;
+  @apply text-[17px] font-bold;
 }
 
 .panel-empty-text {
-  max-width: 280px;
-  color: var(--color-ink-soft);
+  @apply max-w-[280px] text-ink-soft;
 }
 
 /* The foot: « Show pins on the page » while the search is open, then the site and « Settings ». */
 .panel-foot {
-  position: sticky;
-  bottom: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  @apply sticky bottom-0 flex flex-col gap-[8px];
   padding: 10px var(--panel-gutter);
-  border-top: 1px solid var(--color-line);
-  background: var(--color-surface);
-  color: var(--color-ink-soft);
-  font-size: 13px;
+  @apply border-t border-t-line bg-surface text-ink-soft text-[13px];
 }
 
 .panel-foot-line {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  @apply flex items-center justify-between gap-[12px];
 }
 
 /* The host, cut at its start when long (FRU-611), then the workspace, which keeps its words. */
 .panel-where {
-  display: flex;
-  min-width: 0;
-  white-space: nowrap;
+  @apply flex min-w-0 whitespace-nowrap;
 }
 
 .panel-where-workspace {
-  flex: none;
+  @apply flex-none;
 }
 
 .panel-foot button.panel-link {
-  min-height: 24px;
+  @apply min-h-[24px];
 }
 
 /* « To check » (FRU-300), the first of the three tabs since FRU-606: its rows carry the verdict. */
 .ready {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  @apply flex flex-col gap-[10px];
   padding: 6px var(--panel-gutter) 6px;
 }
 
 .ready-text {
-  color: var(--color-ink-soft);
-  font-size: 13px;
+  @apply text-ink-soft text-[13px];
 }
 
 .ready-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
+  @apply m-0 p-0 list-none;
 }
 
 .ready-item {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 12px 0 14px;
-  border-top: 1px solid var(--color-ready-divider);
+  @apply flex flex-col gap-[10px] pt-[12px] px-0 pb-[14px] border-t border-t-ready-divider;
 }
 
 .ready-item:first-child {
@@ -446,71 +331,49 @@ button.panel-send:disabled {
 }
 
 .ready-head {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
+  @apply flex items-start gap-[12px];
 }
 
 .ready-words {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
+  @apply flex flex-col gap-[2px] min-w-0;
 }
 
 .ready-note {
-  font-size: 14px;
-  line-height: 1.45;
+  @apply text-[14px] leading-[1.45];
 }
 
 .ready-meta {
-  color: var(--color-ink-soft);
-  font-size: 12px;
+  @apply text-ink-soft text-[12px];
 }
 
 .ready-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  padding-left: 36px;
+  @apply grid grid-cols-[1fr_1fr] gap-[8px] pl-[36px];
 }
 
 .ready-actions button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  height: 44px;
-  padding: 0 10px;
-  border-radius: var(--radius-action);
-  background: var(--color-surface);
+  @apply inline-flex items-center justify-center gap-[6px] h-[44px] py-0 px-[10px] rounded-action bg-surface;
   font: inherit;
-  font-weight: 650;
+  @apply font-[650];
 }
 
 button.ready-fixed {
-  border: 1px solid var(--color-success-line);
-  color: var(--color-success);
+  @apply border border-success-line text-success;
 }
 
 button.ready-wrong {
-  border: 1px solid var(--color-line-control);
-  color: var(--color-text);
+  @apply border border-line-control text-text;
 }
 
 .ready-actions button:disabled {
-  opacity: 0.6;
+  @apply opacity-60;
 }
 
 .ready-tick {
-  width: 15px;
-  height: 15px;
+  @apply w-[15px] h-[15px];
 }
 
 .ready-problem {
-  padding-left: 36px;
-  color: var(--color-alert-text);
-  font-size: 13px;
+  @apply pl-[36px] text-alert-text text-[13px];
 }
 
 /*
@@ -518,253 +381,173 @@ button.ready-wrong {
   « Sidebar mode » under it: the scope, the search, the chips of the statuses.
 */
 button.panel-search {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-  padding: 0;
+  @apply inline-flex items-center justify-center w-[44px] h-[44px] p-0;
   border: 0;
-  border-radius: var(--radius-action);
-  background: transparent;
-  color: var(--color-ink-soft);
+  @apply rounded-action bg-transparent text-ink-soft;
 }
 
 button.panel-search:hover,
 button.panel-search[aria-expanded='true'] {
-  background: var(--color-surface-sunken);
+  @apply bg-surface-sunken;
 }
 
 .panel-glass {
-  width: 18px;
-  height: 18px;
+  @apply w-[18px] h-[18px];
 }
 
 .search-options {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  @apply flex flex-col gap-[10px];
   padding: 0 var(--panel-gutter) 12px;
-  border-bottom: 1px solid var(--color-line);
+  @apply border-b border-b-line;
 }
 
 .search-scope.kit-tabs button.kit-tab {
-  height: 30px;
-  font-size: 12px;
-  font-weight: 600;
+  @apply h-[30px] text-[12px] font-semibold;
 }
 
 .search-field {
-  position: relative;
+  @apply relative;
 }
 
 .search-glass {
-  position: absolute;
-  top: 50%;
-  left: 10px;
-  width: 15px;
-  height: 15px;
-  color: var(--color-muted);
+  @apply absolute top-[50%] left-[10px] w-[15px] h-[15px] text-muted;
   transform: translateY(-50%);
-  pointer-events: none;
+  @apply pointer-events-none;
 }
 
 input.search-input {
-  box-sizing: border-box;
-  width: 100%;
-  height: 34px;
-  padding: 0 10px 0 32px;
-  border: 1px solid var(--color-line-strong);
-  border-radius: var(--radius-control);
-  background: var(--color-surface);
-  color: var(--color-text);
+  @apply box-border w-full h-[34px] pt-0 pr-[10px] pb-0 pl-[32px] border border-line-strong rounded-control bg-surface text-text;
   font: inherit;
-  font-size: 13px;
+  @apply text-[13px];
 }
 
 input.search-input::placeholder {
-  color: var(--color-muted);
+  @apply text-muted;
 }
 
 .search-hint {
-  color: var(--color-muted);
-  font-size: 12px;
+  @apply text-muted text-[12px];
 }
 
 .search-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  @apply flex flex-wrap gap-[6px];
 }
 
 button.search-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 28px;
-  padding: 0 10px;
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-pill);
-  background: var(--color-surface);
-  color: var(--color-text);
+  @apply inline-flex items-center gap-[6px] h-[28px] py-0 px-[10px] border border-line rounded-pill bg-surface text-text;
   font: inherit;
-  font-size: 12px;
-  font-weight: 600;
+  @apply text-[12px] font-semibold;
 }
 
 button.search-chip[aria-pressed='true'] {
-  border-color: var(--color-text);
-  background: var(--color-surface-sunken);
+  @apply border-text bg-surface-sunken;
 }
 
 button.search-chip .kit-drop[data-size='mark'] {
-  width: 9px;
-  height: 9px;
+  @apply w-[9px] h-[9px];
 }
 
 .search-chip-count {
-  color: var(--color-muted);
-  font-weight: 500;
+  @apply text-muted font-medium;
 }
 
 /* A note of the whole site: a hollow drop for a note of another page. */
 .kit-drop[data-size='site'] {
-  width: 18px;
-  height: 18px;
-  margin-top: 2px;
+  @apply w-[18px] h-[18px] mt-[2px];
 }
 
 .kit-drop[data-hollow='true'] {
-  border-color: currentColor;
-  background: var(--color-surface);
+  @apply border-current bg-surface;
   box-shadow: 0 0 0 1px var(--color-status-edge);
 }
 
 .kit-drop[data-hollow='true'][data-stage='new'] {
-  color: var(--color-status-new);
+  @apply text-status-new;
 }
 
 .kit-drop[data-hollow='true'][data-stage='todo'] {
-  color: var(--color-status-todo);
+  @apply text-status-todo;
 }
 
 .kit-drop[data-hollow='true'][data-stage='progress'] {
-  color: var(--color-status-progress);
+  @apply text-status-progress;
 }
 
 .kit-drop[data-hollow='true'][data-stage='done'] {
-  color: var(--color-status-done);
+  @apply text-status-done;
 }
 
 .kit-drop[data-hollow='true'][data-stage='closed'] {
-  color: var(--color-status-closed);
+  @apply text-status-closed;
 }
 
 .site-row-links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 16px;
-  margin: 6px 0 0 30px;
+  @apply flex flex-wrap gap-y-[4px] gap-x-[16px] mt-[6px] mr-0 mb-0 ml-[30px];
 }
 
 .site-row-ref {
-  display: inline-flex;
-  align-items: center;
+  @apply inline-flex items-center;
   /* A target of 24 px at least (WCAG 2.5.8). */
-  min-height: 24px;
-  color: var(--color-accent);
-  font-size: 13px;
-  font-weight: 600;
-  text-underline-offset: 3px;
+  @apply min-h-[24px] text-accent text-[13px] font-semibold underline-offset-[3px];
 }
 
 /* FRU-434: the link of a note of the page of the tab is a button, drawn as the others. */
 button.site-row-ref {
-  padding: 0;
+  @apply p-0;
   border: 0;
   background: none;
   font-family: inherit;
-  text-decoration: underline;
-  cursor: pointer;
+  @apply underline cursor-pointer;
 }
 
 .site-more {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
+  @apply flex flex-col items-start gap-[4px];
   padding: 0 var(--panel-gutter) 16px;
 }
 
 .site-more-count {
-  color: var(--color-muted);
-  font-size: 12px;
+  @apply text-muted text-[12px];
 }
 
 /* The notes that lost their element, at the end of the list. */
 .search-detached {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  @apply flex flex-col gap-[8px];
   padding: 14px var(--panel-gutter) 18px;
-  border-top: 1px solid var(--color-line);
+  @apply border-t border-t-line;
 }
 
 .search-detached-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0;
+  @apply flex items-center gap-[8px] m-0;
   /* The words in the muted text: the grey of a note with no place is 3.67:1 on the dark surface. */
-  color: var(--color-muted);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
+  @apply text-muted text-[11px] font-semibold tracking-[0.04em];
   text-transform: uppercase;
 }
 
 .search-detached-drop {
-  box-sizing: border-box;
-  width: 14px;
-  height: 14px;
-  border: 1.5px dashed var(--color-unplaced);
+  @apply box-border w-[14px] h-[14px] border-[1.5px] border-dashed border-unplaced;
   border-radius: 50% 50% 50% 0;
   transform: rotate(-45deg);
 }
 
 .search-detached-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+  @apply flex flex-col gap-[8px] m-0 p-0 list-none;
 }
 
 .search-detached-card {
-  padding: 10px 12px;
-  border: 1px dashed var(--color-unplaced);
-  border-radius: var(--radius-action);
-  background: var(--color-surface-warm);
+  @apply py-[10px] px-[12px] border border-dashed border-unplaced rounded-action bg-surface-warm;
 }
 
 .search-detached-note {
-  font-size: 14px;
+  @apply text-[14px];
 }
 
 .search-detached-meta {
-  color: var(--color-ink-soft);
-  font-size: 12px;
+  @apply text-ink-soft text-[12px];
 }
 
 /* « Show pins on the page »: a switch of 32 × 18. */
 .search-pins {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  color: var(--color-muted);
-  font-size: 12px;
+  @apply flex items-center justify-between gap-[12px] text-muted text-[12px];
 }
 
 .search-pins button.kit-switch {
@@ -774,8 +557,7 @@ button.site-row-ref {
 }
 
 .search-pins button.kit-switch .kit-knob {
-  top: 2px;
-  left: 2px;
+  @apply top-[2px] left-[2px];
 }
 
 .search-pins button.kit-switch[aria-checked='true'] .kit-knob {
