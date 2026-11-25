@@ -1,5 +1,7 @@
 import { execFileSync } from 'node:child_process';
-import { writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /**
@@ -26,11 +28,22 @@ export function output(sheet: Sheet): URL {
   return new URL(`../../docs/assets/${sheet}.css`, HERE);
 }
 
+/**
+ * The script of the CLI, run by this Node rather than through `node_modules/.bin`: on Windows that entry
+ * is a `.cmd` shim, which `execFileSync` cannot start.
+ */
+function cli(): string {
+  const manifest = createRequire(import.meta.url).resolve('@tailwindcss/cli/package.json');
+  const { bin } = JSON.parse(readFileSync(manifest, 'utf8')) as { bin: Record<string, string> };
+
+  return join(dirname(manifest), bin['tailwindcss'] ?? 'dist/index.mjs');
+}
+
 /** The CSS of a sheet, as its source builds it now: minified, with a line that says where it comes from. */
 export function build(sheet: Sheet): string {
   const css = execFileSync(
-    fileURLToPath(new URL('node_modules/.bin/tailwindcss', HERE)),
-    ['--input', fileURLToPath(new URL(`src/${sheet}.css`, HERE)), '--minify'],
+    process.execPath,
+    [cli(), '--input', fileURLToPath(new URL(`src/${sheet}.css`, HERE)), '--minify'],
     { cwd: fileURLToPath(HERE), encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
   );
 

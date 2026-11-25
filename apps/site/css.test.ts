@@ -15,7 +15,7 @@ describe('the stylesheets of fruitback.com (FRU-681)', () => {
       assert.equal(
         readFileSync(output(sheet), 'utf8'),
         build(sheet),
-        `docs/assets/${sheet}.css is not what its source builds: run pnpm --filter @fruitback/site css`,
+        `docs/assets/${sheet}.css is not what its source builds. A changed source, or a new version of Tailwind or of a package it pulls (lightningcss) in pnpm-lock.yaml, changes the output: run pnpm --filter @fruitback/site css and commit the sheet`,
       );
     });
   }
