@@ -111,7 +111,7 @@ export async function getFeedback(
     // a note by where it is. Each place has its own entry: the scope of the store names it.
     const places = route.client?.destinations ?? [];
     const targets = targetsOf(route.client);
-    const all = await readPage({
+    const read = await readPage({
       store,
       kv,
       noteIndex,
@@ -121,6 +121,9 @@ export async function getFeedback(
       policy: route.policy,
       done: checks.done,
     });
+    // FRU-702: a note its visitor deleted leaves the page, for every reader. The team keeps it, closed,
+    // in its tracker and in the console.
+    const all = await withoutRemoved(noteIndex, route.client?.workspace, clientId, read);
     // Asked at each request, after the cache, whose answer every reader of the page shares.
     const hidden = await hidesTracker(request, config, route.policy);
     // FRU-294: the notes of this reader, and the confirmation of each note done. Never in the cached
@@ -142,9 +145,10 @@ export async function getFeedback(
     const byAccount = own.size > 0 && reader.by === 'account';
     const mayEdit = byAccount || (own.size > 0 && checks.visitorMay(route.policy, 'edit'));
     const editsHere = mayEdit && places.length < 2 && (await takesEdits(store, route.client, route.policy));
-    // FRU-605: and withdraw it, where the store takes a withdrawal. The route decides again. A visitor
-    // known by their browser withdraws nothing yet (FRU-702).
-    const withdrawalsHere = byAccount && places.length < 2 && (await takesWithdrawals(store, route.client));
+    // FRU-605: and withdraw it, where the store takes a withdrawal. The route decides again. FRU-702: a
+    // visitor known by their browser too, where the site lets its visitors delete.
+    const mayWithdraw = byAccount || (own.size > 0 && checks.visitorMay(route.policy, 'withdraw'));
+    const withdrawalsHere = mayWithdraw && places.length < 2 && (await takesWithdrawals(store, route.client));
     // FRU-618: the notes an agent works on, and for a member of the team the address of its session.
     const agents = await agentsOf(
       request,
@@ -254,6 +258,34 @@ export async function getFeedback(
       return json(502, { error: 'store-unavailable', message: error.message }, corsHeaders);
     }
     throw error;
+  }
+}
+
+/**
+ * The notes of a page without the ones a visitor deleted (FRU-702), as the index of the notes says.
+ * An index that does not answer keeps every note: a pin shown closed is better than a read that fails.
+ */
+async function withoutRemoved(
+  noteIndex: NoteIndex | undefined,
+  workspace: string | undefined,
+  site: string | undefined,
+  issues: NoteIssue[],
+): Promise<NoteIssue[]> {
+  if (noteIndex === undefined || workspace === undefined || site === undefined || issues.length === 0) return issues;
+  try {
+    const removed = await noteIndex.removed(
+      workspace,
+      site,
+      issues.map((issue) => issue.note.id),
+    );
+
+    return removed.size === 0 ? issues : issues.filter((issue) => !removed.has(issue.note.id));
+  } catch (error) {
+    console.error(
+      `[fruitback] the index of the notes did not answer: ${error instanceof Error ? error.message : String(error)}`,
+    );
+
+    return issues;
   }
 }
 
