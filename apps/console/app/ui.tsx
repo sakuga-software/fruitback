@@ -1112,7 +1112,7 @@ export function PickCards<Value extends string>({
   // A card has its own frame; a row has a rule above it, but the first.
   const frame = (index: number) => {
     if (grid) {
-      return 'rounded-box border border-line data-selected:border-ink data-selected:[box-shadow:0_0_0_1px_var(--color-ink)]';
+      return 'rounded-card border border-line data-selected:border-ink data-selected:[box-shadow:0_0_0_1px_var(--color-ink)]';
     }
 
     return index > 0 ? 'border-t border-line' : '';

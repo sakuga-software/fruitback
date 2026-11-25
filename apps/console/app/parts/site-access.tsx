@@ -75,7 +75,7 @@ function AccessCard({
   return (
     <section
       aria-labelledby={`${id}-title`}
-      className="min-w-0 overflow-hidden rounded-frame border border-line bg-surface"
+      className="min-w-0 overflow-hidden rounded-card border border-line bg-surface"
       data-access-card={id}
     >
       <div className="flex min-h-[48px] items-center gap-[10px] border-b border-line px-[16px] py-[8px]">
@@ -95,7 +95,7 @@ function AccessCard({
 /** The small label at the end of the head of a card: the host, or the level of the table. */
 function HeadChip({ children }: { children: ReactNode }) {
   return (
-    <span className="rounded-button bg-chip px-[8px] py-[2px] text-(length:--text-tiny) font-semibold text-ink-soft">
+    <span className="rounded-control bg-chip px-[8px] py-[2px] text-(length:--text-tiny) font-semibold text-ink-soft">
       {children}
     </span>
   );
@@ -404,12 +404,12 @@ function PreviewNote({
   useLocale();
 
   return (
-    <div className="flex flex-col gap-[8px] rounded-box border border-line bg-surface p-[12px] [box-shadow:var(--shadow-frame)]">
+    <div className="flex flex-col gap-[8px] rounded-card border border-line bg-surface p-[12px] [box-shadow:var(--shadow-frame)]">
       <div className="flex items-center gap-[8px]">
         <StatusDot status={status} />
         <span className="text-(length:--text-small) font-semibold text-ink">{statusWord}</span>
         {you === true ? (
-          <span className="rounded-button bg-chip px-[6px] text-(length:--text-tiny) font-semibold text-ink-soft">
+          <span className="rounded-control bg-chip px-[6px] text-(length:--text-tiny) font-semibold text-ink-soft">
             {t('You')}
           </span>
         ) : null}
@@ -467,7 +467,7 @@ export function VisitorPreview({ access }: { access: Access }) {
             text={t('The headline runs to three lines on a phone.')}
             under={
               visitorReplies(access) ? (
-                <span className="inline-flex w-fit items-center gap-[6px] rounded-button border border-line px-[10px] py-[4px] text-(length:--text-small) text-ink">
+                <span className="inline-flex w-fit items-center gap-[6px] rounded-control border border-line px-[10px] py-[4px] text-(length:--text-small) text-ink">
                   <Icon name="bubble" size={14} />
                   {t('Reply')}
                 </span>
