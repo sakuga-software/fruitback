@@ -156,6 +156,24 @@ test('a choice made in another tab shows here, and the next press builds on it (
   await other.close();
 });
 
+test('a browser that refuses to keep the choice shows it in this tab, and says so (raised in review)', async ({
+  page,
+}) => {
+  await stubWorker(page, { workspaces: [ACME] });
+  await page.addInitScript(() => {
+    Storage.prototype.setItem = () => {
+      throw new DOMException('The quota has been exceeded.', 'QuotaExceededError');
+    };
+  });
+  await page.goto(APPEARANCE);
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await choose(page, 'Theme', 'Midnight');
+  expect(await painted(page.locator('body'), 'backgroundColor')).toEqual(rgb('#111a2e'));
+  await expect(page.getByRole('alert')).toHaveText(
+    'This browser does not keep your choice: it shows in this tab only, until you close it.',
+  );
+});
+
 test('an ink sidebar on a light theme writes its words light, and keeps its ring', async ({ page }) => {
   await stubWorker(page, { workspaces: [ACME] });
   await page.goto(APPEARANCE);

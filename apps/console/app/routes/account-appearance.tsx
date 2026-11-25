@@ -27,7 +27,7 @@ import {
 } from '../appearance';
 import { msg, t } from '../i18n';
 import { SettingsIcon } from '../settings-icons';
-import { Button, ColourPick, PicturePick, Segments } from '../ui';
+import { Button, ColourPick, PicturePick, Problem, Segments } from '../ui';
 import { useLocale } from '../use-locale';
 import { SettingsCard } from '../parts/account-rows';
 import { SettingsHead } from './settings-shell';
@@ -99,10 +99,13 @@ export default function AccountAppearance() {
     return () => window.removeEventListener('storage', other);
   }, []);
 
+  // The browser refused to keep the last choice (a private window, a full storage): it shows in this
+  // tab only, and the page says so (raised in review).
+  const [unkept, setUnkept] = useState(false);
   const choose = (next: Appearance) => {
     latest.current = next;
     setAppearance(next);
-    applyAppearance(next, document.documentElement, storage(), systemIsDark());
+    setUnkept(!applyAppearance(next, document.documentElement, storage(), systemIsDark()));
   };
   // A press builds on the last choice known, made here or in another tab, and not on the state drawn,
   // which renders a moment later: the order of the events of a change elsewhere never loses it
@@ -117,6 +120,11 @@ export default function AccountAppearance() {
     <>
       <SettingsHead title={t('Appearance')} lead={t('Only for you, on this account. Every member picks their own.')} />
       <div className="flex flex-col gap-[16px]">
+        {unkept ? (
+          <Problem>
+            {t('This browser does not keep your choice: it shows in this tab only, until you close it.')}
+          </Problem>
+        ) : null}
         <SettingsCard id="theme-title" icon="appearance" title={t('Theme')}>
           <div className="px-[16px] pt-[2px] pb-[18px]">
             <PicturePick

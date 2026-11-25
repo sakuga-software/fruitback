@@ -502,16 +502,19 @@ export function writtenNames(): string[] {
 
 /**
  * Writes `appearance` on `root` for the theme of the mode, and keeps it in `storage`. The default
- * writes nothing and keeps nothing: the tokens of the stylesheets are the default.
+ * writes nothing and keeps nothing: the tokens of the stylesheets are the default. Answers whether
+ * the storage took the choice: with no storage, or one that refused it, the choice shows in this tab
+ * only.
  */
 export function applyAppearance(
   appearance: Appearance,
   root: { style: Pick<CSSStyleDeclaration, 'setProperty' | 'removeProperty'> },
   storage: Pick<Storage, 'setItem' | 'removeItem'> | undefined,
   systemDark: boolean,
-): void {
+): boolean {
   for (const name of writtenNames()) root.style.removeProperty(name);
   const preset = presetOf(appearance, systemDark);
+  let kept = storage !== undefined;
   try {
     if (isDefault(appearance)) storage?.removeItem(STORAGE_KEY);
     else {
@@ -523,10 +526,13 @@ export function applyAppearance(
       storage?.setItem(STORAGE_KEY, JSON.stringify(kept));
     }
   } catch {
-    // A storage that is full or refused: the choice still shows in this tab.
+    // A storage that is full or refused: the choice still shows in this tab, and the page says so.
+    kept = false;
   }
-  if (isDefault(appearance)) return;
-  for (const [name, value] of Object.entries(variablesOf(appearance, preset))) root.style.setProperty(name, value);
+  if (!isDefault(appearance))
+    for (const [name, value] of Object.entries(variablesOf(appearance, preset))) root.style.setProperty(name, value);
+
+  return kept;
 }
 
 /** Whether the system of this browser asks for a dark page. */

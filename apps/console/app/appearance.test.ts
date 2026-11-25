@@ -234,6 +234,18 @@ describe('the appearance of the console (FRU-694)', () => {
     applyAppearance(DEFAULT_APPEARANCE, root, storage, true);
     assert.equal(kept.size, 0);
     assert.equal(style.size, 0);
+
+    // A storage that refuses: the choice shows on <html>, and the answer says it was not kept.
+    const refusing = {
+      setItem: () => {
+        throw new Error('QuotaExceededError');
+      },
+      removeItem: () => undefined,
+    };
+    assert.equal(applyAppearance(chosen, root, refusing, false), false);
+    assert.equal(style.get('--spacing-row'), '32px');
+    assert.equal(applyAppearance(chosen, root, undefined, false), false);
+    assert.equal(applyAppearance(chosen, root, storage, false), true);
   });
 
   it('reads back only known values, and a storage that throws as no choice', () => {

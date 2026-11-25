@@ -1230,6 +1230,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Same on every button, field and menu': 'Le même pour chaque bouton, champ et menu',
   'Font size': 'Taille du texte',
   'Base size of the console': 'Taille de base de la console',
+  'This browser does not keep your choice: it shows in this tab only, until you close it.':
+    'Ce navigateur ne garde pas votre choix : il s’affiche dans cet onglet seulement, jusqu’à sa fermeture.',
   // The page « General » of the settings, FRU-693.
   'Every member of {name} sees these.': 'Chaque membre de {name} les voit.',
   Identity: 'Identité',
