@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { ago, agoInSentence, dayIn, dayOf, moment, seenOn } from './ago.ts';
+import { ago, agoInSentence, agoShort, dayIn, dayOf, moment, seenOn } from './ago.ts';
 import { setLocale } from './i18n.ts';
 
 // Noon of a day, in the time zone of the machine: « Yesterday » is the day before, whatever the zone.
@@ -126,5 +126,28 @@ describe('a day, a moment and a day seen, in one module', () => {
     // A day after today (a clock of the worker ahead) is today.
     assert.equal(seenOn('2026-10-14', now), 'Today');
     assert.equal(seenOn('not a day', now), 'not a day');
+  });
+});
+
+describe('how long ago, in the fewest characters (FRU-685)', () => {
+  beforeEach(() => void setLocale('en', false));
+  afterEach(() => void setLocale('en', false));
+
+  it('says minutes, hours, days and weeks in one or two figures and a letter, then the day', () => {
+    assert.equal(agoShort(before(20_000), NOW), '1m');
+    assert.equal(agoShort(before(40 * MIN), NOW), '40m');
+    assert.equal(agoShort(before(60 * MIN), NOW), '1h');
+    assert.equal(agoShort(before(23 * 60 * MIN), NOW), '23h');
+    assert.equal(agoShort(before(2 * 24 * 60 * MIN), NOW), '2d');
+    assert.equal(agoShort(before(8 * 24 * 60 * MIN), NOW), '1w');
+    assert.equal(agoShort(before(40 * 24 * 60 * MIN), NOW), dayOf(before(40 * 24 * 60 * MIN)));
+    assert.equal(agoShort('not a date', NOW), 'not a date');
+  });
+
+  it('is French in French', async () => {
+    await setLocale('fr', false);
+    assert.equal(agoShort(before(40 * MIN), NOW), '40 min');
+    assert.equal(agoShort(before(2 * 24 * 60 * MIN), NOW), '2 j');
+    assert.equal(agoShort(before(8 * 24 * 60 * MIN), NOW), '1 sem.');
   });
 });
