@@ -121,6 +121,8 @@ export function TaskPanel({
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
+      // A control that has its list or its picker open takes Escape and the arrows first (raised in review).
+      if (event.target instanceof Element && event.target.closest('[aria-expanded="true"]') !== null) return;
       // Escape closes the panel from a field of it too, as it closed the drawer of before.
       const field =
         event.target instanceof Element &&
