@@ -3,11 +3,11 @@ import { ACME, sideScroll, stubWorker } from './console-workspace.ts';
 
 /**
  * The notes scroll under their filters (FRU-586, Mathieu): the filters stay at the top of the window
- * in every case, the head of the columns under them, and the head of a group of a status while a note
- * of that group is on screen. Measured in the table at 1440 and 1280 px, in the cards at 1024 and
- * 390 px, and in the board.
+ * in every case, and the head of a group of a status under them while a note of that group is on
+ * screen. FRU-685: the list has no head of columns to the eye, and no cards; a narrow list takes
+ * columns out. Measured at 1440, 1280, 1024 and 390 px, and in the board.
  *
- * The worker is answered by stubs: one page of 50 notes in five groups, as `order=status` reads them.
+ * The worker is answered by stubs: one page of 100 notes in five groups, as `order=status` reads them.
  */
 const CONSOLE = 'http://localhost:5178';
 
@@ -18,11 +18,11 @@ const SITES = [
 const CONNECTORS = [{ id: 'c1', kind: 'linear', label: 'Acme', createdAt: '2026-10-01T08:00:00.000Z' }];
 /** The groups in the order of the table (FRU-551), and the notes of each. */
 const GROUPS = [
-  ['progress', 6],
-  ['todo', 9],
-  ['new', 12],
-  ['closed', 3],
-  ['done', 20],
+  ['progress', 12],
+  ['todo', 18],
+  ['new', 24],
+  ['closed', 6],
+  ['done', 40],
 ] as const;
 
 const NOTES = GROUPS.flatMap(([stage, count], group) =>
@@ -74,7 +74,7 @@ async function open(page: Page, query = '', locale: 'en' | 'fr' = 'en'): Promise
   await expect(page.locator('[data-note]')).toHaveCount(NOTES.length);
 }
 
-const frame = (page: Page) => page.locator('.kit-table');
+const frame = (page: Page) => page.locator('.kit-notes-list');
 
 /** Scrolls the window, and waits for the frame that the scroll paints. */
 async function scrollTo(page: Page, y: number): Promise<void> {
@@ -91,10 +91,8 @@ async function scrollTo(page: Page, y: number): Promise<void> {
 function pinned(page: Page) {
   return page.evaluate(() => {
     const bar = document.querySelector('[data-pinned-filters]')!.getBoundingClientRect();
-    const table = document.querySelector('.kit-table')!;
-    const head = table.querySelector('thead th')!.getBoundingClientRect();
-    const stacked = (table as HTMLElement).dataset.stacked === 'true';
-    const under = stacked ? bar.bottom : head.bottom;
+    const table = document.querySelector('.kit-notes-list')!;
+    const under = bar.bottom;
     const x = table.getBoundingClientRect().left + 40;
     const shownHead = document.elementFromPoint(x, under + 4)?.closest('tr.kit-table-group');
     const shown = shownHead?.querySelector('th')?.getBoundingClientRect();
@@ -114,7 +112,6 @@ function pinned(page: Page) {
     return {
       barTop: bar.top,
       barBottom: bar.bottom,
-      headTop: head.top,
       under,
       headBottom,
       headGroup: shownHead?.closest('tbody')?.dataset.group,
@@ -127,7 +124,7 @@ function pinned(page: Page) {
 }
 
 /** At each depth of the list: the filters at the top, and the head of the group of the first note under them. */
-async function expectPinnedDown(page: Page, stacked: boolean): Promise<void> {
+async function expectPinnedDown(page: Page): Promise<void> {
   const height = await page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight);
   expect(height, 'the list is longer than the window').toBeGreaterThan(2000);
   const seen = new Set<string>();
@@ -135,8 +132,6 @@ async function expectPinnedDown(page: Page, stacked: boolean): Promise<void> {
     await scrollTo(page, y);
     const at = await pinned(page);
     expect.soft(at.barTop, `the filters at the top, at ${y}`).toBeCloseTo(0, 0);
-    if (!stacked)
-      expect.soft(at.headTop, `the head of the columns under the filters, at ${y}`).toBeCloseTo(at.barBottom, 0);
     if (at.arriving === undefined) {
       // A head that is just arriving reads a few pixels under the line, never more.
       expect
@@ -157,45 +152,33 @@ async function expectPinnedDown(page: Page, stacked: boolean): Promise<void> {
   expect.soft(await frame(page).evaluate((element) => element.scrollWidth - element.clientWidth)).toBe(0);
 }
 
-for (const [width, height] of [
-  [1440, 900],
-  [1280, 800],
+for (const [width, height, locale] of [
+  [1440, 900, 'en'],
+  [1280, 800, 'en'],
+  [1024, 844, 'en'],
+  [390, 844, 'fr'],
 ] as const) {
-  test(`at ${width} px the filters and the heads stay at the top, the head of a group while its notes are there`, async ({
+  test(`at ${width} px the filters and the head of a group stay at the top while its notes are there, in ${locale}`, async ({
     page,
   }) => {
     await page.setViewportSize({ width, height });
-    await open(page);
-    await expect(frame(page)).toHaveAttribute('data-stacked', 'false');
-    await expect(frame(page).locator('thead th').first()).toBeVisible();
-    await expectPinnedDown(page, false);
-  });
-}
-
-for (const [width, locale] of [
-  [1024, 'en'],
-  [390, 'fr'],
-] as const) {
-  test(`at ${width} px the notes are cards, and the filters and the head of a group stay, in ${locale}`, async ({
-    page,
-  }) => {
-    await page.setViewportSize({ width, height: 844 });
     await open(page, '', locale);
-    // Narrower than the 720 px the table takes, a note is a card: nothing is past the frame.
-    await expect(frame(page)).toHaveAttribute('data-stacked', 'true');
-    await expectPinnedDown(page, true);
+    // FRU-685: the heads of the columns are for a screen reader, and take no height.
+    expect((await frame(page).locator('thead').boundingBox())?.height ?? 0).toBe(0);
+    await expectPinnedDown(page);
   });
 }
 
-test('the table is cards in a narrow window, and a table again once the window is wide', async ({ page }) => {
+test('a narrow list takes columns out, and gives them back once it is wide (FRU-685)', async ({ page }) => {
   await page.setViewportSize({ width: 1024, height: 800 });
   await open(page);
-  await expect(frame(page)).toHaveAttribute('data-stacked', 'true');
+  const site = frame(page).locator('tr[data-note]').first().locator('td').nth(3);
+  await expect(site.getByText('staging.acme.dev')).toBeHidden();
   await page.setViewportSize({ width: 1440, height: 900 });
-  await expect(frame(page)).toHaveAttribute('data-stacked', 'false');
-  await expect(frame(page).locator('thead th').first()).toBeVisible();
+  await expect(site.getByText('staging.acme.dev')).toBeVisible();
   await page.setViewportSize({ width: 1024, height: 800 });
-  await expect(frame(page)).toHaveAttribute('data-stacked', 'true');
+  await expect(site.getByText('staging.acme.dev')).toBeHidden();
+  expect.soft(await sideScroll(page)).toBe(0);
 });
 
 test('the keyboard never leaves focus behind the pinned heads', async ({ page }) => {
@@ -211,8 +194,8 @@ test('the keyboard never leaves focus behind the pinned heads', async ({ page })
     await page.keyboard.press('Shift+Tab');
     const at = await page.evaluate(() => {
       const focused = document.activeElement!.getBoundingClientRect();
-      const table = document.querySelector('.kit-table')!;
-      const heads = [table.querySelector('thead th'), ...table.querySelectorAll('.kit-table-group th')]
+      const table = document.querySelector('.kit-notes-list')!;
+      const heads = [...table.querySelectorAll('.kit-table-group th')]
         .map((head) => head!.getBoundingClientRect())
         .filter((head) => head.top <= 200);
 
@@ -233,9 +216,7 @@ test('in the board the filters stay at the top too', async ({ page }) => {
   await expect(page.getByRole('searchbox', { name: 'Search notes' })).toBeInViewport();
 });
 
-test('a long cell wraps in its column: the pinned frame, which clips, cuts nothing (review of #822)', async ({
-  page,
-}) => {
+test('a long cell is cut with « … » in its column, never past the list (review of #822, FRU-685)', async ({ page }) => {
   // An address that receives, whose host has no space and no hyphen to break at.
   const host = 'hooks.averylongclientdomainnameforthefeedbackofthenotes.example.com';
   const { ref: _ref, url: _url, ...first } = NOTES[0]!;
@@ -253,11 +234,14 @@ test('a long cell wraps in its column: the pinned frame, which clips, cuts nothi
       });
     },
   });
-  // A frame of about 760 px: just over the 720 px under which the notes are cards.
   await page.setViewportSize({ width: 1100, height: 800 });
   await page.goto(`${CONSOLE}/w/w1/notes`);
-  await expect(page.getByText(host)).toBeVisible();
-  await expect(frame(page)).toHaveAttribute('data-stacked', 'false');
+  const cut = page.getByText(host);
+  await expect(cut).toBeVisible();
+  // One line, cut with « … », the host whole under the pointer.
+  expect(await cut.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+  expect(await cut.evaluate((element) => getComputedStyle(element).textOverflow)).toBe('ellipsis');
+  await expect(page.locator('[data-place="rest"]')).toHaveAttribute('title', host);
   const sizes = await frame(page).evaluate((element) => ({
     over: element.scrollWidth - element.clientWidth,
     table: element.querySelector('table')!.getBoundingClientRect().right - element.getBoundingClientRect().right,
