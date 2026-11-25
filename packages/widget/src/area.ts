@@ -15,7 +15,7 @@ import type { Translator } from './messages.ts';
 
 /** The buttons of the bar: « Cancel », « Visible part » and « Take this area ». */
 const BUTTON =
-  'fruitback:min-h-11 fruitback:px-3.5 fruitback:py-0 fruitback:border-0 fruitback:rounded-md fruitback:font-sans fruitback:font-semibold fruitback:text-hint fruitback:leading-none fruitback:cursor-pointer ' +
+  'fruitback:min-h-control fruitback:px-3.5 fruitback:py-0 fruitback:border-0 fruitback:rounded-md fruitback:font-sans fruitback:font-semibold fruitback:text-hint fruitback:leading-none fruitback:cursor-pointer ' +
   'fruitback:focus-visible:outline-2 fruitback:focus-visible:outline-accent fruitback:focus-visible:outline-offset-2 ' +
   'fruitback:forced-colors:outline-1 fruitback:forced-colors:outline-button-text';
 const CANCEL = 'fruitback:bg-transparent fruitback:text-text-muted fruitback:hover:bg-surface-sunken';

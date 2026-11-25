@@ -30,16 +30,17 @@
 @custom-variant hover (&:hover);
 
 /*
-  The sizes of the widget that the shared theme does not name (FRU-677 brings it). Written into the
-  utility, never declared on :host: a custom property on :host loses to a rule of the page on the host
-  element, such as the * of Tailwind 3.
+  The shared theme (FRU-677): its values are written into the utility, fruitback:text-hint is
+  font-size: 13px. Nothing is declared on :host: a custom property there loses to a rule of the page
+  on the host element, such as the * of Tailwind 3.
 */
+@import '@fruitback/shared/tailwind/theme.css' theme(inline reference) prefix(fruitback);
+
+/* What the widget needs and the shared theme does not name. */
 @theme inline prefix(fruitback) {
   --spacing: 4px;
   --text-caption: 11px;
   --text-caption--line-height: 1.4;
-  --text-hint: 13px;
-  --text-hint--line-height: 1.5;
   --font-weight-semibold: 600;
   --color-highlight: Highlight;
   --color-button-text: ButtonText;

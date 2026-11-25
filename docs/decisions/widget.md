@@ -683,12 +683,13 @@ The ceiling replaces the old tripwire of 200 000 B gzipped: 150 000 B gzipped an
 brotli leave about 12 000 B over the projection, for the features of the same weeks. A sheet past
 64 000 B raw holds rules nobody writes: a scan of a wrong source, or a theme read whole.
 
-**The shared theme.** Measured on the file of #924 (FRU-677): imported `theme(inline reference)
-prefix(fruitback)`, `fruitback:h-control` is `height: 44px`, `fruitback:rounded-box` is
-`border-radius: 10px`, `fruitback:text-ink` is `color: #18181b`, and `fruitback:bg-chip` stays
-`var(--fruitback-color-chip)`, the chip of the widget, since `theme.ts` is read after it. Until #924 is
-on `main`, `tailwind.css` declares the two sizes the area needs (`--text-hint`, with the values of the
-shared one, and `--text-caption`); the import replaces the first one then.
+**The shared theme.** `tailwind.css` imports it `theme(inline reference) prefix(fruitback)`:
+`fruitback:min-h-control` is `min-height: 44px` and `fruitback:text-hint` is `font-size: 13px` with
+`line-height: 1.5`, the values of the bar of the area. Measured on the file of #924 before its merge:
+`fruitback:rounded-box` is `border-radius: 10px`, `fruitback:text-ink` is `color: #18181b`, and
+`fruitback:bg-chip` stays `var(--fruitback-color-chip)`, the chip of the widget, since `theme.ts` is
+read after it. What the area needs and the shared theme does not name (`--text-caption`, 11 px, the
+weight 600, the colours of forced colours) is a short `@theme` of the widget in `tailwind.css`.
 
 ## The popover
 
