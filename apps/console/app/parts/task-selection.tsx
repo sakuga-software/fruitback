@@ -24,6 +24,8 @@ export type TaskSelection = {
   toggle: (note: IndexedNote, checked: boolean, range: boolean) => void;
   /** Every task of the screen, or none. */
   all: (checked: boolean) => void;
+  /** These tasks, all set to `checked`: the box of a group of the list (FRU-685). */
+  some: (notes: readonly IndexedNote[], checked: boolean) => void;
   clear: () => void;
   /** What the line of status of the selection says after a change: « 3 notes changed. » */
   said: string | undefined;
@@ -100,6 +102,20 @@ export function useTaskSelection(
     [choosable],
   );
 
+  const some = useCallback((notes: readonly IndexedNote[], checked: boolean) => {
+    say(undefined);
+    anchor.current = undefined;
+    setIds((was) => {
+      const next = new Set(was);
+      for (const note of notes) {
+        if (checked) next.add(note.id);
+        else next.delete(note.id);
+      }
+
+      return next;
+    });
+  }, []);
+
   return useMemo(
     () => ({
       notes: choosable.filter((note) => ids.has(note.id)),
@@ -108,16 +124,17 @@ export function useTaskSelection(
       canSelect: selectable,
       toggle,
       all,
+      some,
       clear: () => all(false),
       said,
       say,
     }),
-    [choosable, ids, selectable, toggle, all, said],
+    [choosable, ids, selectable, toggle, all, some, said],
   );
 }
 
 /** Whether a key or a press is the work of a field of text, a menu or a dialog: they keep their keys. */
-function ownsKeys(target: EventTarget | null): boolean {
+export function ownsKeys(target: EventTarget | null): boolean {
   if (!(target instanceof Element)) return false;
   if (target.closest('[role="dialog"], [role="menu"], [role="listbox"], [role="alertdialog"]') !== null) return true;
 

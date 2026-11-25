@@ -27,7 +27,7 @@ import {
 import { NotesFailed } from '../parts/note-parts';
 import { NotePages } from '../parts/note-pages';
 import { NotesFilters, Pinned, ViewChoice } from '../parts/notes-filters';
-import { NotesTable } from '../parts/notes-table';
+import { NotesTable, useFoldedGroups } from '../parts/notes-table';
 import { NoteCard } from '../parts/note-card';
 import { dayFromToday } from '../parts/task-menu';
 import { TASK_NOT_SAVED, TASK_PROBLEMS, useTaskSeam } from '../parts/task-seam';
@@ -52,7 +52,9 @@ const TASK_FILTERS = ['assignee', 'priority', 'label', 'due'] as const;
  */
 export default function Notes() {
   useLocale();
-  const { workspace } = useWorkspace();
+  const { workspace, me } = useWorkspace();
+  // FRU-685: the groups folded, by person and workspace.
+  const { folded, fold } = useFoldedGroups(me.account.id, workspace.id);
   const [params, setParams] = useSearchParams();
   // The address as the last change wrote it. A render can still carry the address of before a
   // navigation lands: it is taken only when the address of React Router changes.
@@ -536,6 +538,18 @@ export default function Notes() {
                     setRefocus(note);
                     void read();
                   }}
+                  folded={folded}
+                  onFold={fold}
+                  // FRU-685: « + » in the head of a group, a new task of its stage.
+                  onAdd={
+                    typeof sites === 'object' && sites.length > 0
+                      ? (stage) =>
+                          create.open({
+                            ...(siteInView === undefined ? {} : { site: siteInView }),
+                            status: `own:${stage}`,
+                          })
+                      : undefined
+                  }
                 />
               )}
               <NotePages
