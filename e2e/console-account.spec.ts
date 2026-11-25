@@ -237,6 +237,8 @@ async function openSessions(page: Page): Promise<void> {
 
 /** Chooses `item` in the menu of a row (FRU-692): the rare actions of a row are there. */
 async function choose(row: Locator, item: string): Promise<void> {
+  // A menu chosen just before is still closing: two menus would hold the item.
+  await expect(row.page().getByRole('menu')).toHaveCount(0);
   await row.getByRole('button', { name: /^(More for|Plus pour) / }).click();
   await row.page().getByRole('menu').getByRole('menuitem', { name: item, exact: true }).click();
 }
