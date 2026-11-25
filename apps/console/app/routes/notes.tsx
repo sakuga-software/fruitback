@@ -164,7 +164,10 @@ export default function Notes() {
 
   const read = useCallback(async () => {
     const mine = (asked.current += 1);
-    const again = !asNew.current;
+    // FRU-697: a read again follows a write, which can change what a view counts. The counts of the
+    // views go when it starts, not when it is answered: its answer can be dropped (raised in review).
+    // A view read again says its new count with its answer.
+    if (!asNew.current) for (const each of VIEWS) reportView.current(each.id, undefined);
     asNew.current = false;
     setReading(true);
     const query = new URLSearchParams();
@@ -193,12 +196,9 @@ export default function Notes() {
     const { total, counts } = answer.data;
     if (total !== undefined && counts !== undefined) {
       counted.current = { filter, total, counts };
-      // The filters of a view and no other: the total is the count of that view (FRU-697). A read again
-      // of another list follows a write, which can change what a view counts: its count goes, until
-      // the view is read again (raised in review).
+      // The filters of a view and no other: the total is the count of that view (FRU-697).
       const view = viewOf(filters);
       if (view !== undefined) reportView.current(view.id, total);
-      else if (again) for (const each of VIEWS) reportView.current(each.id, undefined);
     }
     const whole = total !== undefined && counts !== undefined ? { total, counts } : kept;
     if (whole === undefined) return setShown('failed');

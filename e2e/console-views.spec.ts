@@ -51,7 +51,12 @@ const LATE = {
   delivery: { id: 'd2', state: 'gave-up' },
 };
 
-type Worker = { asked: { pathname: string; query: string }[]; total: number };
+type Worker = {
+  asked: { pathname: string; query: string }[];
+  total: number;
+  /** Holds the answer of the next read that is not of the view, until it settles. */
+  hold?: Promise<void>;
+};
 
 /**
  * A worker that answers the notes: `total` notes for `assignee=me`, and 12 for every other filter. It
@@ -69,14 +74,19 @@ async function workerWith(page: Page, workspaces?: StubbedWorkspace[], locale: '
       worker.asked.push({ pathname, query: query.toString() });
       const mine = query.get('assignee') === 'me';
       const total = mine ? worker.total : 12;
+      const held = mine ? undefined : worker.hold;
+      worker.hold = undefined;
 
-      return route.fulfill({
-        json: {
-          notes: mine ? [NOTE] : [NOTE, LATE],
-          total,
-          counts: { all: total, byPlace: {}, byStage: { todo: total } },
-        },
-      });
+      const fulfil = () =>
+        route.fulfill({
+          json: {
+            notes: mine ? [NOTE] : [NOTE, LATE],
+            total,
+            counts: { all: total, byPlace: {}, byStage: { todo: total } },
+          },
+        });
+
+      return held === undefined ? fulfil() : held.then(fulfil);
     },
   });
 
@@ -210,6 +220,24 @@ test('the count of a view is the total the notes read for its filter, and the ba
   await expect(assigned(page)).toHaveAccessibleName('Assigned to me');
   await assigned(page).click();
   await expect(assigned(page)).toHaveAccessibleName('Assigned to me 5');
+
+  // The count goes when the read after a write starts, not when it is answered: a filter chosen
+  // meanwhile drops that answer, and the count of before the write must not stay (raised in review).
+  await sections(page).getByRole('link', { name: 'Notes' }).click();
+  await expect(page.locator('main').getByText('The menu closes too fast')).toBeVisible();
+  await expect(assigned(page)).toHaveAccessibleName('Assigned to me 5');
+  let release: () => void = () => {};
+  worker.hold = new Promise<void>((resolve) => (release = resolve));
+  await page.locator('main').getByRole('button', { name: 'Send again' }).click();
+  await expect(assigned(page)).toHaveAccessibleName('Assigned to me');
+  await page.getByRole('button', { name: 'Filter', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Status', exact: true }).click();
+  await page.getByRole('menuitemradio', { name: 'Unresolved', exact: true }).click();
+  await expect(page).toHaveURL(/unresolved=1/);
+  release();
+  await expect.poll(() => worker.asked.at(-1)?.query ?? '').toContain('unresolved=1');
+  await expect(page.locator('main').getByText('The menu closes too fast')).toBeVisible();
+  await expect(assigned(page)).toHaveAccessibleName('Assigned to me');
 
   // Another workspace forgets the count: it was of the first one.
   await page.goto(`${CONSOLE}/w/w2/sites`);

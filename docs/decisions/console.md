@@ -470,9 +470,10 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
     view is the `total` of the last read of the Notes screen with exactly its filter**, kept by the
     frame for this workspace as the red count of « Connectors »: the bar reads nothing for it, so no
     screen asks the worker more than before (`e2e/console-views.spec.ts` counts the reads), and a view
-    the screen did not read shows no count. A read of another list again, after a write (a status,
-    a task, « Send again »), drops the counts of the views, which the write can change: a count that
-    may be wrong is not shown. A read for the bar is FRU-711. A view a person makes
+    the screen did not read shows no count. A read again, after a write (a status, a task, « Send
+    again »), drops the counts of the views when it starts, as the write can change them and its
+    answer can be dropped: a count that may be wrong is not shown, and a view read again says its new
+    count. A read for the bar is FRU-711. A view a person makes
     from the bar of filters needs the worker to keep it (FRU-723): the console keeps none.
   - **The fixed foot**: « What's new » (the releases on GitHub, with a dot until this browser opened
     it with this version of the console, `whats-new.ts`), the extension (« Install the extension
