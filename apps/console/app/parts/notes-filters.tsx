@@ -1,4 +1,5 @@
-import { type ReactNode, useLayoutEffect, useRef } from 'react';
+import { type ReactNode, useEffect, useLayoutEffect, useRef } from 'react';
+import { useLocation } from 'react-router';
 import { STAGES, STAGE_NAMES } from '../stages';
 import { type Connector, type SiteChoice } from '../api';
 import { type Listed } from '../listed';
@@ -143,6 +144,13 @@ export function NotesFilters({
   tasks?: { people: readonly { id: string; name: string }[]; labels: readonly { id: string; name: string }[] };
 }) {
   useLocale();
+  // FRU-684: the search of the bar opens the notes with `search` in the state of the move, and the
+  // field takes focus. Each move has its key, so a second press focuses it again.
+  const { key, state } = useLocation();
+  const search = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if ((state as { search?: unknown } | null)?.search === true) search.current?.querySelector('input')?.focus();
+  }, [key, state]);
 
   return (
     <>
@@ -155,7 +163,7 @@ export function NotesFilters({
         />
       ) : null}
       <div className="flex flex-wrap items-center gap-x-[16px] gap-y-[10px]">
-        <div className="min-w-0 flex-[999_1_240px]">
+        <div ref={search} className="min-w-0 flex-[999_1_240px]">
           <Field
             label={t('Search notes')}
             labelHidden
