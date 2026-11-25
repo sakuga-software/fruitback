@@ -133,7 +133,10 @@ export function TaskPanel({
       if (event.key === 'Escape') {
         event.preventDefault();
         close();
-      } else if (event.key === 'ArrowUp' && above !== undefined) {
+        return;
+      }
+      // A closed list of the panel opens on an arrow and stops the key first: `defaultPrevented` above.
+      if (event.key === 'ArrowUp' && above !== undefined) {
         event.preventDefault();
         step(above);
       } else if (event.key === 'ArrowDown' && under !== undefined) {
