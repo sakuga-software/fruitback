@@ -62,10 +62,16 @@ test('the name of the only workspace leads to its settings, which rename it', as
 
   const name = page.getByRole('textbox', { name: 'Workspace name' });
   await expect(name).toHaveValue('Acme');
+  // FRU-693: « Save » is in the head of the page, and does nothing until the name changes.
+  const save = page.getByRole('button', { name: 'Save' });
+  await expect(save).toBeDisabled();
+  await name.fill('Acme ');
+  await expect(save).toBeDisabled();
   // A refusal says why, and keeps what was typed.
   worker.refuses = 'invalid-name';
   await name.fill('Acme Labs');
-  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(save).toBeEnabled();
+  await save.click();
   await expect(page.getByRole('alert')).toHaveText('A workspace needs a name of one line, up to 80 characters.');
   await expect(name).toHaveValue('Acme Labs');
   await expect(rail(page)).toContainText('Acme');
@@ -168,7 +174,8 @@ test('the settings are pages of the shell, beside the pages of the person (FRU-6
   await expect(pages.first()).toHaveAttribute('aria-current', 'page');
   await expect(nav.locator('[aria-current]')).toHaveCount(1);
   // « General » holds the name, the logo and the deletion; the agents are not there.
-  await expect(page.getByRole('region', { name: 'Name' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Identity' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Danger zone' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Agents' })).toHaveCount(0);
 
   await pages.nth(1).click();
@@ -177,7 +184,7 @@ test('the settings are pages of the shell, beside the pages of the person (FRU-6
   await expect(pages.nth(1)).toHaveAttribute('aria-current', 'page');
   await expect(nav.locator('[aria-current]')).toHaveCount(1);
   await expect(page.getByRole('region', { name: 'Agents' })).toBeVisible();
-  await expect(page.getByRole('region', { name: 'Name' })).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Identity' })).toHaveCount(0);
   await expect(page.getByText('Delete the workspace')).toHaveCount(0);
   // The entry « Settings » of the rail stays the one on screen.
   await expect(rail(page).getByRole('link', { name: 'Settings', exact: true })).toHaveAttribute('aria-current', 'page');
@@ -197,7 +204,7 @@ test('the settings are pages of the shell, beside the pages of the person (FRU-6
   await pages.first().focus();
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL(/\/w\/w1\/settings$/);
-  await expect(page.getByRole('region', { name: 'Name' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Identity' })).toBeVisible();
 });
 
 test('the section « Agents » leads to the keys, the addresses that receive, and the trigger of each site (FRU-503)', async ({
@@ -237,21 +244,57 @@ test('the section « Agents » leads to the keys, the addresses that receive, an
   expect(asked).toEqual([]);
 });
 
-test('the owner alone deletes the workspace, from its settings, and asks twice (FRU-503)', async ({ page }) => {
+test('the owner alone deletes the workspace, in a dialog, once its name is typed (FRU-503, FRU-693)', async ({
+  page,
+}) => {
   const worker = await workerWith(page, [ACME]);
   await page.goto(`${CONSOLE}/w/w1/settings`);
-  const end = page.getByRole('region', { name: 'Delete the workspace', exact: true });
-  await end.getByRole('button', { name: 'Delete workspace', exact: true }).click();
-  await expect(end.getByRole('button', { name: 'Keep it', exact: true })).toBeFocused();
-  // The control: one press deletes nothing.
+  const zone = page.getByRole('region', { name: 'Danger zone', exact: true });
+  await expect(zone).toContainText('Sites, members and pin positions go. Items in your trackers stay there.');
+  const open = zone.getByRole('button', { name: 'Delete the workspace' });
+  await expect(open).toHaveText('Delete…');
+  await open.click();
+  const dialog = page.getByRole('dialog', { name: 'Delete Acme?' });
+  await expect(dialog).toBeVisible();
+  const confirm = dialog.getByRole('button', { name: 'Delete Acme', exact: true });
+  // The control: the button that deletes waits for the name, typed as the rail shows it.
+  await expect(confirm).toBeDisabled();
+  const typed = dialog.getByRole('textbox', { name: 'Type Acme to confirm' });
+  await typed.fill('acme');
+  await expect(confirm).toBeDisabled();
+  await typed.press('Enter');
   expect(worker.deleted).toEqual([]);
-  const results = await new AxeBuilder({ page }).include('main').analyze();
+  // A colour read while the dialog fades in is the colour of its fade.
+  await page.evaluate(() => Promise.all(document.getAnimations().map((each) => each.finished)));
+  const results = await new AxeBuilder({ page }).analyze();
   expect(results.violations.map((violation) => violation.id)).toEqual([]);
-  await end.getByRole('button', { name: 'Keep it', exact: true }).click();
-  await expect(end.getByRole('button', { name: 'Delete workspace', exact: true })).toBeVisible();
+  // « Keep it » closes it, sends nothing, and the name typed is gone the next time.
+  await dialog.getByRole('button', { name: 'Keep it', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await expect(open).toBeFocused();
+  expect(worker.deleted).toEqual([]);
+  // Escape closes it too.
+  await open.click();
+  await expect(typed).toHaveValue('');
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+  expect(worker.deleted).toEqual([]);
 
-  await end.getByRole('button', { name: 'Delete workspace', exact: true }).click();
-  await end.getByRole('button', { name: 'Delete Acme', exact: true }).click();
+  // A refusal of the worker is said in the dialog, which stays open with the name typed.
+  await page.unroute('**/console/workspaces/w1');
+  await page.route('**/console/workspaces/w1', (route) =>
+    route.request().method() === 'DELETE'
+      ? route.fulfill({ status: 403, json: { error: 'forbidden', role: 'admin' } })
+      : route.fallback(),
+  );
+  await open.click();
+  await typed.fill(' Acme ');
+  await confirm.click();
+  await expect(dialog.getByRole('alert')).toHaveText('Only the owner of the workspace deletes it.');
+  await expect(typed).toHaveValue(' Acme ');
+  await page.unroute('**/console/workspaces/w1');
+
+  await confirm.click();
   await expect.poll(() => worker.deleted).toEqual(['/console/workspaces/w1']);
   await expect(page).not.toHaveURL(/\/w\/w1\/settings$/);
 
@@ -260,6 +303,7 @@ test('the owner alone deletes the workspace, from its settings, and asks twice (
     await workerWith(page, [{ ...ACME, role }]);
     await page.goto(`${CONSOLE}/w/w1/settings`);
     await expect(page.getByRole('heading', { level: 1, name: 'General' }), role).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Danger zone' }), role).toHaveCount(0);
     await expect(page.getByText('Delete the workspace'), role).toHaveCount(0);
   }
 });

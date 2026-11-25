@@ -49,7 +49,7 @@ export function Mark({ size = 14 }: { size?: number }) {
   );
 }
 
-type Tone = 'primary' | 'outline' | 'danger' | 'quiet';
+type Tone = 'primary' | 'outline' | 'danger' | 'danger-outline' | 'quiet';
 /** The height of a control (FRU-683): of a page (32 px), of a panel or a row (28 px), small (24 px). */
 type ControlSize = 'page' | 'panel' | 'small';
 
@@ -58,6 +58,7 @@ const VARIANTS = {
   primary: 'primary',
   outline: 'outline',
   danger: 'danger-soft',
+  'danger-outline': 'outline',
   quiet: 'ghost',
 } as const satisfies Record<Tone, string>;
 
@@ -91,25 +92,42 @@ const PRIMARY =
 const OUTLINE =
   'kit-button--outline rounded-control border border-field-border bg-surface text-ink [&:hover:not(:disabled,[aria-disabled=true])]:border-ink [&:hover:not(:disabled,[aria-disabled=true])]:bg-subtle data-[hovered=true]:border-ink data-[hovered=true]:bg-subtle data-[pressed=true]:border-ink data-[pressed=true]:bg-subtle';
 
+/**
+ * The control that opens a gesture that cannot be undone (FRU-693): « Delete… » in the danger zone of
+ * the settings. The shape of an outlined control, its words in the red of a refusal, its border the
+ * light red of the zone. The red does not follow the accent: a deletion stays red in every theme.
+ */
+const OUTLINE_DANGER =
+  'kit-button--danger-outline rounded-control border border-danger-line bg-surface text-accent-strong [&:hover:not(:disabled,[aria-disabled=true])]:border-accent-strong [&:hover:not(:disabled,[aria-disabled=true])]:bg-subtle data-[hovered=true]:border-accent-strong data-[hovered=true]:bg-subtle data-[pressed=true]:border-accent-strong data-[pressed=true]:bg-subtle';
+
+/** The tones the kit draws in the shapes of the mockup. */
+type ShapedTone = 'primary' | 'outline' | 'danger-outline';
+
 /** The padding at each end, by tone and size. */
 const BUTTON_INSET = {
   primary: { page: 'px-[22px]', panel: 'px-[16px]', small: 'px-[14px]' },
   outline: { page: 'px-[18px]', panel: 'px-[16px]', small: 'px-[10px]' },
-} as const satisfies Record<'primary' | 'outline', Record<ControlSize, string>>;
+  'danger-outline': { page: 'px-[18px]', panel: 'px-[16px]', small: 'px-[10px]' },
+} as const satisfies Record<ShapedTone, Record<ControlSize, string>>;
+
+const SHAPED = { primary: PRIMARY, outline: OUTLINE, 'danger-outline': OUTLINE_DANGER } as const satisfies Record<
+  ShapedTone,
+  string
+>;
 
 /**
  * The classes of a button of the mockup. Over its column (`wide`), its words can be a name somebody
  * typed: they take the lines they need, and the button grows, where a button of its own width would
  * make the page scroll sideways. A wide button of a panel keeps no padding above and under its words.
  */
-function buttonClasses(tone: 'primary' | 'outline', size: ControlSize, wide: boolean, gap = 'gap-[8px]'): string {
+function buttonClasses(tone: ShapedTone, size: ControlSize, wide: boolean, gap = 'gap-[8px]'): string {
   const block = wide
     ? `flex w-full h-auto ${BUTTON_WIDE[size]} text-center whitespace-normal! [overflow-wrap:anywhere]`
     : `inline-flex ${BUTTON_HEIGHT[size]} py-0 whitespace-nowrap`;
 
   return [
     BUTTON.replace('gap-[8px]', gap),
-    tone === 'primary' ? PRIMARY : OUTLINE,
+    SHAPED[tone],
     BUTTON_INSET[tone][size],
     block,
     size === 'small' ? 'text-(length:--text-hint)' : 'text-(length:--text-small)',
@@ -137,7 +155,7 @@ const BUTTON_WIDE = {
  * a column of 320 px.
  */
 function toneClasses(tone: Tone, size: ControlSize, wide: boolean): string {
-  if (tone === 'primary' || tone === 'outline') return buttonClasses(tone, size, wide);
+  if (tone === 'primary' || tone === 'outline' || tone === 'danger-outline') return buttonClasses(tone, size, wide);
 
   return 'rounded-control font-semibold text-(length:--text-small) leading-auto';
 }
@@ -206,7 +224,7 @@ function anchor({ to, href, newTab = false }: Destination, className: string, da
  */
 export function Button({
   tone = 'primary',
-  size = tone === 'outline' ? 'panel' : 'page',
+  size = tone === 'outline' || tone === 'danger-outline' ? 'panel' : 'page',
   wide = false,
   inset,
   type = 'button',
@@ -257,12 +275,18 @@ export function FilePick({
   accept,
   disabled = false,
   onFile,
+  size = 'page',
+  label,
   children,
 }: {
   /** The types the picker offers, as `accept` takes them. */
   accept: string;
   disabled?: boolean;
   onFile: (file: File) => void;
+  /** The height of the button: 32 px, or 24 px in a row of a card (FRU-693). */
+  size?: 'page' | 'small';
+  /** The name a screen reader says, as `label` of `Button`: it starts with the words shown. */
+  label?: string;
   children: ReactNode;
 }) {
   const input = useRef<HTMLInputElement>(null);
@@ -280,7 +304,13 @@ export function FilePick({
           if (file !== undefined) onFile(file);
         }}
       />
-      <Button tone="outline" size="page" disabled={disabled} onClick={() => input.current?.click()}>
+      <Button
+        tone="outline"
+        size={size}
+        disabled={disabled}
+        onClick={() => input.current?.click()}
+        {...(label === undefined ? {} : { label })}
+      >
         {children}
       </Button>
     </>

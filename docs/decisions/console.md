@@ -470,7 +470,7 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   several, the menu of the workspaces ends with « Workspace settings », in a group of its own under
   a rule that chooses nothing (`after` of `Menu`). The screen renames the workspace for an owner or
   an admin (FRU-236), and the bar shows the new name at once; another role reads the name, locked.
-  **The logo** (FRU-428): `WorkspaceMark` draws it at 20 px in the bar and 64 px on the settings
+  **The logo** (FRU-428): `WorkspaceMark` draws it at 20 px in the bar and 40 px on the settings
   (`object-contain`, the worker resizes nothing), and the initial of the name when there is none or
   it does not load. An owner or an admin sends it (`FilePick` of the kit), replaces it and removes it
   in one press, with no confirmation: it is sent again as easily. The console refuses a type that is
@@ -478,8 +478,19 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   says each refusal of the worker. `e2e/console-workspace-logo.spec.ts` holds it. **The settings are
   « Settings » in the bar, last, for an owner or an admin** (FRU-503, `sectionsFor`): a member and a
   guest have no entry and read the settings from the name. On the settings the entry is the one on
-  screen, and the name is not a second one. **The settings hold the deletion of the workspace**,
-  last, for the owner alone, under a rule. « My account » keeps what is about the person. **The
+  screen, and the name is not a second one. **« General » is two cards** (FRU-693, the mockup
+  « Réglages General »): « Identity », a row each for the logo, the name and the address of the
+  workspace in this console (`<host>/w/<id>`, read only: the worker keeps no other name for it),
+  each box 320 px wide at the end of its row and under the words below 640 px; then **« Danger
+  zone »**, a light red border (`danger-line`), for the owner alone. The name leaves by « Save » in
+  the head of the page, disabled while the name typed, trimmed, is the one kept, or by Enter in its
+  field; the logo leaves as soon as it is chosen, as before. **« Delete… » opens a dialog** that says
+  what goes and deletes only once the name of the workspace is typed in it, case and all (spaces
+  around do not count): `DELETE /console/workspaces/<id>`, which the worker refuses to anybody but
+  the owner (`delete-workspace`). A refusal is said in the dialog, which keeps what was typed; « Keep
+  it » and Escape close it and send nothing. The control of the zone is the tone `danger-outline` of
+  `Button`, and the button of the dialog `danger`: a deletion stays red whatever the accent (FRU-694).
+  « My account » keeps what is about the person. **The
   section « Agents » shows the whole way of an agent** (FRU-503): its key, an address that receives
   (Connectors), then the trigger of each site, a link to `#agent` on the page of the site; anybody
   but an owner or an admin reads one sentence, and the page asks nothing. **The settings are pages
@@ -495,7 +506,8 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   holds `built` to the routes of a build. Under 768 px the navigation is one row above the page,
   which scrolls in its frame. The shell takes back the padding of `Screen` with the same values, so
   its bar and its navigation reach the edges of the column.
-  `e2e/console-workspace-settings.spec.ts` holds the entry by role, the section and the deletion.
+  `e2e/console-workspace-settings.spec.ts` holds the entry by role, the section, « Save » disabled
+  with no change, and the deletion typed in its dialog.
 
 - **The bar is as high as the window, and only the screen scrolls** (FRU-402, FRU-398). `Frame`
   of `routes/workspace.tsx` is the frame of a workspace and of the instance: from 1024 px the bar
