@@ -24,6 +24,7 @@ import { manages } from '../setup-stage';
 import { useLocale } from '../use-locale';
 import { underSettings } from '../settings-path';
 import { CONSOLE_VERSION, RELEASES, hasNews, markSeen, seenVersion } from '../whats-new';
+import { type SavedView, type ViewId, viewAddress, viewOf, viewsFor } from '../saved-views';
 
 /**
  * The frame of a workspace (FRU-234): the bar with the workspace and its sections, and the section
@@ -43,9 +44,15 @@ type WorkspaceContext = {
    * bar follows it, on every screen of this workspace, until a read says another number.
    */
   failingRead: (count: number) => void;
+  /**
+   * The Notes screen counted the filter of a view (FRU-697): the count of the view in the bar follows
+   * it, on every screen of this workspace, until a read says another number. `undefined`: the count
+   * may be wrong now (a task was written), and the bar shows none.
+   */
+  viewCounted: (view: ViewId, count: number | undefined) => void;
 };
 
-type Read = Omit<WorkspaceContext, 'renamed' | 'logoChanged' | 'failingRead'>;
+type Read = Omit<WorkspaceContext, 'renamed' | 'logoChanged' | 'failingRead' | 'viewCounted'>;
 
 export function useWorkspace(): WorkspaceContext {
   return useOutletContext<WorkspaceContext>();
@@ -106,7 +113,7 @@ function contextOf(me: Me | undefined, id: string | undefined): Read | undefined
 export default function WorkspaceFrame() {
   useLocale();
   const { workspace: id } = useParams();
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
   const navigate = useNavigate();
   // Drawn at once from the last answer of this tab (FRU-356), and read again below.
   const [read, setContext] = useState<Read | undefined>(() => contextOf(knownMe(), id));
@@ -119,7 +126,13 @@ export default function WorkspaceFrame() {
   const [failing, setFailing] = useState<{ workspace: string; count: number } | undefined>();
   // A change of workspace forgets the count: back in the first one, a count read before would be old
   // (raised in review). The Connectors screen of the workspace reads it again.
-  useEffect(() => setFailing(undefined), [id]);
+  // FRU-697: the counts of the views, as the Notes screen last read their filters in this workspace.
+  // The bar reads nothing for them (FRU-711): a view the screen did not count shows no count.
+  const [viewCounts, setViewCounts] = useState<{ workspace: string; counts: Partial<Record<ViewId, number>> }>();
+  useEffect(() => {
+    setFailing(undefined);
+    setViewCounts(undefined);
+  }, [id]);
 
   // No answer is not a signed-out person: the call waits under the banner and asks again.
   useEffect(() => {
@@ -175,10 +188,27 @@ export default function WorkspaceFrame() {
     renamed: (workspace) => changed({ name: workspace.name }),
     logoChanged: (logo) => changed({ logo }),
     failingRead: (count) => setFailing({ workspace: context.workspace.id, count }),
+    viewCounted: (view, count) => {
+      const workspace = context.workspace.id;
+      setViewCounts((was) => {
+        const counts = { ...(was?.workspace === workspace ? was.counts : {}) };
+        if (count === undefined) delete counts[view];
+        else counts[view] = count;
+
+        return { workspace, counts };
+      });
+    },
   };
 
   const sections = sectionsFor(context.workspace);
   const current = sections.find((section) => pathname.startsWith(`/w/${context.workspace.id}/${section.path}`));
+  // FRU-697: the Notes screen with the filters of a view, and no other, is that view: its entry is the
+  // one on screen, not « Notes ».
+  const views = viewsFor(context.workspace.role);
+  const inView =
+    pathname === `/w/${context.workspace.id}/notes`
+      ? views.find((view) => view.id === viewOf(new URLSearchParams(search))?.id)
+      : undefined;
 
   return (
     <Frame
@@ -187,7 +217,10 @@ export default function WorkspaceFrame() {
           workspace={context.workspace}
           workspaces={context.me.workspaces}
           sections={sections}
-          current={current?.path}
+          current={inView === undefined ? current?.path : undefined}
+          views={views}
+          {...(inView === undefined ? {} : { currentView: inView.id })}
+          {...(viewCounts?.workspace === context.workspace.id ? { viewCounts: viewCounts.counts } : {})}
           onWorkspace={(chosen) => navigate(`/w/${chosen}/sites`, { viewTransition: true })}
           onSettings={() => navigate(`/w/${context.workspace.id}/settings`, { viewTransition: true })}
           // The entry « Settings » is the one on screen when the rail has it: the name is not a second one.
@@ -299,13 +332,33 @@ type RailProps = {
   counts?: Readonly<Partial<Record<string, number>>>;
   /** How many sends of the connectors failed: a red dot and the number on « Connectors ». */
   failing?: number;
+  /** The views of the person (FRU-697), under the sections. None: no section « Views ». */
+  views?: readonly SavedView[];
+  /** The view on screen: the Notes screen with its filters. */
+  currentView?: ViewId;
+  /** The count of each view, when the Notes screen read it. A view with no count shows none. */
+  viewCounts?: Readonly<Partial<Record<ViewId, number>>>;
 };
 
 /**
  * An entry of the bar: where it leads, its words, whether its screen is the one shown, its icon
  * (FRU-477), and what it counts at its right (FRU-684). `alert` is a count that something failed.
  */
-type RailEntry = { to: string; label: string; current: boolean; icon?: RailIconName; count?: number; alert?: number };
+type RailEntry = {
+  to: string;
+  label: string;
+  current: boolean;
+  icon?: RailIconName;
+  /** A mark of 16 px in place of an icon: the initial of the person for « Assigned to me » (FRU-697). */
+  mark?: ReactNode;
+  count?: number;
+  alert?: number;
+};
+
+/** The words of each view of the bar (FRU-697). */
+const VIEW_LABELS: Readonly<Record<ViewId, string>> = {
+  assigned: msg('Assigned to me'),
+};
 
 /** The item of the menu of the workspaces that opens the settings: no workspace id has a space. */
 const SETTINGS = 'workspace settings';
@@ -411,6 +464,9 @@ export function Rail({
   account,
   counts = {},
   failing = 0,
+  views = [],
+  currentView,
+  viewCounts = {},
 }: RailProps) {
   useLocale();
   const name = (
@@ -491,6 +547,19 @@ export function Rail({
           ...(section.path === 'connectors' && failing > 0 ? { alert: failing } : {}),
         }))}
       />
+      {views.length === 0 ? null : (
+        <RailNav
+          label={t('Views')}
+          heading
+          entries={views.map((view) => ({
+            to: viewAddress(workspace.id, view),
+            label: t(VIEW_LABELS[view.id]),
+            current: view.id === currentView,
+            mark: <PersonMark account={account} />,
+            ...(viewCounts[view.id] === undefined ? {} : { count: viewCounts[view.id] }),
+          }))}
+        />
+      )}
       {admin ? (
         <RailNav
           label={t('Instance')}
@@ -733,6 +802,24 @@ function PersonMenu({ account, accountPage }: { account: Account; accountPage?: 
   );
 }
 
+/**
+ * The person in 16 px, before « Assigned to me » (FRU-697): their initial on `avatar`, the one token of
+ * a person, as at the foot of the bar. Decorative: the words of the entry name the view.
+ */
+function PersonMark({ account }: { account: Account }) {
+  const name = account.name?.trim() || account.email;
+
+  return (
+    <span
+      aria-hidden="true"
+      data-view-mark=""
+      className="flex size-[16px] flex-none items-center justify-center rounded-pill bg-avatar text-[7px] leading-none font-semibold text-on-ink"
+    >
+      {name.charAt(0).toUpperCase()}
+    </span>
+  );
+}
+
 /** What an entry counts, at its right: a count of what failed is red, after a red dot. */
 function EntryCount({ count, alert }: { count: number | undefined; alert: number | undefined }) {
   useLocale();
@@ -756,12 +843,35 @@ function EntryCount({ count, alert }: { count: number | undefined; alert: number
  * The entries of the bar, one under the other. An entry has its icon, its words, and at its right
  * what it counts (FRU-684); a count of what failed is red, after a red dot. The words of a count are
  * read with the entry.
+ *
+ * `heading`: the label is shown above the entries, as « Views » (FRU-697), and names the navigation.
+ * Its box puts the first entry 31 px under the last entry of the navigation above, as the mockup does.
  */
-export function RailNav({ label, entries }: { label: string; entries: readonly RailEntry[] }) {
+export function RailNav({
+  label,
+  entries,
+  heading = false,
+}: {
+  label: string;
+  entries: readonly RailEntry[];
+  heading?: boolean;
+}) {
   useLocale();
+  const id = useId();
 
   return (
-    <nav aria-label={label} className="flex min-w-0 flex-col gap-px px-[6px] py-[4px]">
+    <nav
+      {...(heading ? { 'aria-labelledby': id } : { 'aria-label': label })}
+      className="flex min-w-0 flex-col gap-px px-[6px] py-[4px]"
+    >
+      {heading ? (
+        <div
+          id={id}
+          className="px-[8px] pt-[7px] pb-[4px] text-[11px] leading-none font-semibold tracking-[0.01em] text-muted"
+        >
+          {label}
+        </div>
+      ) : null}
       {entries.map((entry) => (
         <Link
           key={entry.to}
@@ -771,11 +881,12 @@ export function RailNav({ label, entries }: { label: string; entries: readonly R
           {...(entry.current ? { 'aria-current': 'page' as const } : {})}
           className={`${ENTRY} ${entry.current ? ENTRY_CURRENT : ENTRY_REST}`}
         >
-          {entry.icon === undefined ? null : (
-            <span className={`${ENTRY_ICON} ${entry.current ? 'text-ink-soft' : ''}`}>
-              <RailIcon name={entry.icon} />
-            </span>
-          )}
+          {entry.mark ??
+            (entry.icon === undefined ? null : (
+              <span className={`${ENTRY_ICON} ${entry.current ? 'text-ink-soft' : ''}`}>
+                <RailIcon name={entry.icon} />
+              </span>
+            ))}
           <span className="min-w-0 truncate">{entry.label}</span>
           <EntryCount count={entry.count} alert={entry.alert} />
         </Link>

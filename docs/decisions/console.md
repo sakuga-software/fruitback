@@ -457,6 +457,24 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
     notes of every site on every screen was taken away for its cost (FRU-497), and a summary of the
     worker is FRU-711. With no count the entry shows none. `/kit/frame`, a page of the development
     server, mounts the bar with the counts of the mockup.
+  - **The views are under the sections** (FRU-697, « Views » of the same mockup): a view is a filter
+    of the Notes screen with a name, and its entry is a link to the address of that filter
+    (`saved-views.ts`, which has its own test). « Views » is 600 11px in `muted` and names the
+    navigation; an entry is one of the bar, its first one 31 px under « Settings ». **Only « Assigned
+    to me » is a view** (`assignee=me`), with the initial of the person on `avatar` in 16 px: « New
+    this week » needs a filter on the day a note was left and « Not delivered » one on its delivery,
+    and the route of the notes reads neither (FRU-722). A view the worker does not filter would show
+    a list it did not filter. A guest has no view: a task is never given to a guest (FRU-673). **The
+    Notes screen with the filters of a view, and no other, is that view**: its entry is the one on
+    screen, not « Notes »; the page, the board and a task opened are no filter. **The count of a
+    view is the `total` of the last read of the Notes screen with exactly its filter**, kept by the
+    frame for this workspace as the red count of « Connectors »: the bar reads nothing for it, so no
+    screen asks the worker more than before (`e2e/console-views.spec.ts` counts the reads), and a view
+    the screen did not read shows no count. A read again, after a write (a status, a task, « Send
+    again »), drops the counts of the views when it starts, as the write can change them and its
+    answer can be dropped: a count that may be wrong is not shown, and a view read again says its new
+    count. A read for the bar is FRU-711. A view a person makes
+    from the bar of filters needs the worker to keep it (FRU-723): the console keeps none.
   - **The fixed foot**: « What's new » (the releases on GitHub, with a dot until this browser opened
     it with this version of the console, `whats-new.ts`), the extension (« Install the extension
     (beta) », or « Extension » with a green dot and the browser connected), « Help and docs », a
