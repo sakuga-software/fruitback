@@ -293,7 +293,7 @@ export function FirstNoteIn({ workspace, site }: { workspace: Workspace; site: S
     <div role="status" className="mt-9 flex flex-col gap-2.5 border-t border-line pt-7">
       <h2 className="text-conclusion font-bold tracking-[-0.01em]">{t('Your first note is in')}</h2>
       {first === undefined ? null : (
-        <figure className="flex flex-col gap-1.5 rounded-[12px] border border-line px-4 py-3.5">
+        <figure className="flex flex-col gap-1.5 rounded-card border border-line px-4 py-3.5">
           <blockquote className="text-body font-semibold wrap-anywhere">{excerptShown(first.excerpt)}</blockquote>
           <figcaption className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-small text-muted">
             <span className="wrap-anywhere">

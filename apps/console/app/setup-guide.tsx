@@ -21,7 +21,7 @@ export function SetupGuide() {
   const words = (sentence: string): string => translate(tag, sentence);
 
   return (
-    <details className="mt-4.5 rounded-[12px] border border-line">
+    <details className="mt-4.5 rounded-card border border-line">
       <summary className="flex cursor-pointer flex-wrap items-baseline gap-x-2 px-4 py-3 text-small font-semibold">
         {t('The extension, step by step')}
         <span className="text-hint font-normal text-muted">
@@ -49,7 +49,7 @@ export function SetupGuide() {
                 src={captureOf(step.id)}
                 alt={words(step.alt)}
                 loading="lazy"
-                className="block h-auto max-w-full rounded-[8px] border border-line"
+                className="block h-auto max-w-full rounded-card border border-line"
               />
             </a>
           </li>

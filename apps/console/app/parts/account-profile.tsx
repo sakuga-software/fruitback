@@ -65,8 +65,8 @@ export function ProfileSection({ me, primary }: { me: Me; primary: string }) {
           {shown.trim().charAt(0).toUpperCase() || '?'}
         </span>
         <span className="flex min-w-0 flex-col gap-[4px]">
-          <span className="text-hint leading-auto font-semibold [overflow-wrap:anywhere]">{shown}</span>
-          <span className="text-tiny text-muted [overflow-wrap:anywhere]">{primary}</span>
+          <span className="text-small leading-auto font-semibold [overflow-wrap:anywhere]">{shown}</span>
+          <span className="text-hint text-muted [overflow-wrap:anywhere]">{primary}</span>
         </span>
       </div>
       <div className="grid grid-cols-[repeat(auto-fit,minmax(min(180px,100%),1fr))] gap-[16px] px-[16px] pb-[18px]">

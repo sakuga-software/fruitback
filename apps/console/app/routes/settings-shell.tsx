@@ -64,7 +64,7 @@ export default function SettingsShell() {
   return (
     <div className="kit-settings -mx-[clamp(16px,4vw,48px)] -mt-[40px] -mb-[72px] flex flex-col">
       {/* The name of the frame, as the mockup draws it above the page: no heading, the page has its own. */}
-      <div className="flex h-[48px] flex-none items-center border-b border-line px-[20px] text-small leading-auto font-semibold">
+      <div className="flex h-[48px] flex-none items-center border-b border-line px-[20px] text-lead leading-auto font-semibold">
         {t('Settings')}
       </div>
       {/* As high as the window under the bar, so the rule of the navigation reaches its foot. */}
@@ -105,7 +105,7 @@ export function SettingsNav({ workspace }: { workspace: string }) {
         <div key={group.id} className="flex flex-none flex-col gap-[1px] max-[767px]:flex-row">
           <p
             id={group.id}
-            className="px-[8px] pt-[14px] pb-[4px] text-[11px] leading-none font-semibold tracking-[0.01em] text-muted max-[767px]:hidden"
+            className="px-[8px] pt-[14px] pb-[4px] text-tiny leading-none font-semibold tracking-[0.01em] text-muted max-[767px]:hidden"
           >
             {group.title}
           </p>
@@ -121,10 +121,10 @@ export function SettingsNav({ workspace }: { workspace: string }) {
                       to={`/w/${workspace}/${page.path}`}
                       viewTransition
                       {...(current ? { 'aria-current': 'page' as const } : {})}
-                      className={`flex h-[28px] min-w-0 flex-1 items-center gap-[8px] rounded-button px-[8px] text-hint leading-none whitespace-nowrap no-underline ${
+                      className={`flex h-control-md min-w-0 flex-1 items-center gap-[8px] rounded-control px-[8px] text-small leading-none whitespace-nowrap no-underline ${
                         current
-                          ? 'bg-chip font-semibold text-ink'
-                          : 'font-medium text-ink-soft [&:hover]:bg-subtle [&:hover]:text-ink'
+                          ? 'bg-selected font-semibold text-ink'
+                          : 'font-medium text-ink-soft [&:hover]:bg-hover [&:hover]:text-ink'
                       }`}
                     >
                       <span className={`inline-flex ${current ? 'text-ink-soft' : 'text-muted'}`}>
@@ -150,8 +150,8 @@ export function SettingsHead({ title, lead, action }: { title: string; lead: str
   return (
     <header className="kit-settings-head mb-[20px] flex flex-wrap items-end gap-x-[24px] gap-y-[12px]">
       <div className="min-w-0 flex-[1_1_320px]">
-        <h1 className="text-[20px] leading-[1.2] font-semibold tracking-[-0.01em]">{title}</h1>
-        <p className="mt-[6px] text-hint text-muted">{lead}</p>
+        <h1 className="text-title font-semibold tracking-[-0.01em]">{title}</h1>
+        <p className="mt-[6px] text-small text-muted">{lead}</p>
       </div>
       {action === undefined ? null : <div className="ms-auto flex flex-none flex-wrap gap-[8px]">{action}</div>}
     </header>

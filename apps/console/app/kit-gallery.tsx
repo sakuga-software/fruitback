@@ -364,7 +364,7 @@ export default function KitGallery() {
           <Menu
             chosen={workspace}
             onAction={setWorkspace}
-            triggerClassName="flex items-center gap-2 rounded-box p-2 text-on-ink"
+            triggerClassName="flex items-center gap-2 rounded-card p-2 text-on-ink"
             items={[
               { id: 'acme', label: 'Acme', detail: 'Owner' },
               { id: 'lumen', label: 'Lumen Studio', detail: 'Member' },

@@ -160,12 +160,12 @@ export function AddressesSection({ workspace, onPrimary }: { workspace: string; 
     >
       {emails === 'loading' ? (
         <div className={ONE_ROW}>
-          <p className="text-tiny text-muted">{t('Loading…')}</p>
+          <p className="text-hint text-muted">{t('Loading…')}</p>
         </div>
       ) : null}
       {emails === 'failed' ? (
         <div className={ONE_ROW}>
-          <p role="alert" className="min-w-0 flex-1 text-tiny text-muted">
+          <p role="alert" className="min-w-0 flex-1 text-hint text-muted">
             {t('The addresses of your account did not load.')} <ReadProblem />
           </p>
           <Button tone="outline" size="small" onClick={() => void readEmails()}>
@@ -237,7 +237,7 @@ export function AddressesSection({ workspace, onPrimary }: { workspace: string; 
           aria-label={t('Add an address')}
           className="flex flex-col gap-[12px]"
         >
-          <p className="text-hint text-muted">
+          <p className="text-small text-muted">
             {t(
               'A sign-in link sent to any of them opens your account, and their invitations are yours. Your notes and the messages of Fruitback use the primary one.',
             )}

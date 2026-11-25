@@ -233,7 +233,7 @@ export function StatusList({
             <span />
           </span>
         </div>
-        <ol aria-labelledby={heading} className="overflow-hidden rounded-frame border border-line">
+        <ol aria-labelledby={heading} className="overflow-hidden rounded-card border border-line">
           {statuses.map((status, index) => (
             <StatusItem
               key={status.key}
@@ -389,7 +389,7 @@ export function TrackerColours({
   const [problem, setProblem] = useState<string | undefined>();
 
   return (
-    <div className="mb-[20px] max-w-[760px] rounded-frame border border-line px-[20px] py-[16px]">
+    <div className="mb-[20px] max-w-[760px] rounded-card border border-line px-[20px] py-[16px]">
       <Toggle
         strong
         label={t("Use Linear's colours")}
@@ -417,13 +417,13 @@ export function StatusMark({ name, style }: { name: string; style: ReturnType<ty
       {/* The drop of 28 px with its white ring and its edge: the edge keeps a light colour visible on white (FRU-334). */}
       <span
         aria-hidden="true"
-        className="kit-pin grid flex-none place-items-center size-[28px] border-2 border-page rounded-[50%_50%_50%_0] [box-shadow:0_0_0_1px_var(--color-status-edge)] text-(length:--text-tiny) font-bold leading-none [transform:rotate(-45deg)]"
+        className="kit-pin grid flex-none place-items-center size-[28px] border-2 border-page rounded-drop [box-shadow:0_0_0_1px_var(--color-status-edge)] text-(length:--text-tiny) font-bold leading-none [transform:rotate(-45deg)]"
         style={style}
       >
         <span className="[transform:rotate(45deg)]">3</span>
       </span>
       <span
-        className="kit-status-chip inline-block max-w-full py-[2px] px-[9px] rounded-[12px] [box-shadow:0_0_0_1px_var(--color-status-edge)] text-(length:--text-hint) font-semibold leading-[1.45] [overflow-wrap:anywhere]"
+        className="kit-status-chip inline-block max-w-full py-[2px] px-[9px] rounded-control [box-shadow:0_0_0_1px_var(--color-status-edge)] text-(length:--text-hint) font-semibold leading-[1.45] [overflow-wrap:anywhere]"
         style={style}
       >
         {name}

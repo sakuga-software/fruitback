@@ -209,17 +209,17 @@ export function SignInSection({ workspace, primary }: { workspace: string; prima
       {said ? (
         <div className="flex flex-col gap-[12px] px-[16px] pb-[12px]">
           {isLinkable(linked) ? (
-            <p role="status" className="text-tiny text-muted">
+            <p role="status" className="text-hint text-muted">
               {t('{provider} is linked to your account.', { provider: PROVIDER_NAMES[linked] })}
             </p>
           ) : null}
           {linkError === null ? null : <Problem>{linkProblem(linkError.code, linkError.provider, primary)}</Problem>}
           {cancelled === undefined ? null : (
-            <p role="status" className="text-tiny text-muted">
+            <p role="status" className="text-hint text-muted">
               {t('{provider} was not linked.', { provider: PROVIDER_NAMES[cancelled] })}
             </p>
           )}
-          {question === 'reading' ? <p className="text-tiny text-muted">{t('Checking…')}</p> : null}
+          {question === 'reading' ? <p className="text-hint text-muted">{t('Checking…')}</p> : null}
           {typeof question === 'object' ? (
             <LinkQuestion
               provider={PROVIDER_NAMES[question.provider]}
@@ -234,7 +234,7 @@ export function SignInSection({ workspace, primary }: { workspace: string; prima
       {/* The three rows are drawn before the worker answers, so nothing under them moves when it does. */}
       <ul>
         <Row icon={<RowMark name="mail" />} title={t('Email link')} detail={primary}>
-          <span className="text-tiny text-muted">
+          <span className="text-hint text-muted">
             {typeof providers === 'object' && !providers.email ? t('Not sent by this Fruitback') : t('Always on')}
           </span>
         </Row>
@@ -332,7 +332,7 @@ function LinkQuestion({
   return (
     <section
       aria-labelledby="link-question"
-      className="rounded-box border border-line p-[16px] [overflow-wrap:anywhere]"
+      className="rounded-card border border-line p-[16px] [overflow-wrap:anywhere]"
     >
       <p id="link-question" className="text-body leading-auto font-semibold">
         {t('Link the {provider} account {email} to your Fruitback account?', { provider, email })}

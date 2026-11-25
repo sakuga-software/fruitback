@@ -8,6 +8,7 @@ import { useWorkspace } from './workspace';
 import { t } from '../i18n';
 import { problemOf } from '../problems';
 import { useTypedSearch } from '../typed-search';
+import { usePagesAhead } from '../pages-ahead';
 import { useLocale } from '../use-locale';
 import { STATUS_NOT_SAVED, STATUS_PROBLEMS } from '../note-status';
 import { boardColumns } from '../board-columns';
@@ -130,6 +131,18 @@ export default function Notes() {
     moved?.querySelector<HTMLElement>('.select__trigger')?.focus();
   }, [refocus, reading, shown]);
 
+  /** The page after an answer, by its cursor. */
+  function forward(answer: NotesAnswer) {
+    if (answer.next === undefined) return;
+    paging.current = true;
+    const next = new URLSearchParams(params);
+    next.set('cursor', answer.next);
+    next.set('from', String(from + answer.notes.length));
+    setParams(next);
+  }
+  // FRU-709: each press goes on from the page asked last, not from the page shown.
+  const ahead = usePagesAhead({ list, cursor, shown, forward, stay: () => setParams(new URLSearchParams(params)) });
+
   const read = useCallback(async () => {
     const mine = (asked.current += 1);
     setReading(true);
@@ -159,7 +172,12 @@ export default function Notes() {
     const { total, counts } = answer.data;
     if (total !== undefined && counts !== undefined) counted.current = { filter, total, counts };
     const whole = total !== undefined && counts !== undefined ? { total, counts } : kept;
-    setShown(whole === undefined ? 'failed' : { ...answer.data, notes: answer.data.notes, ...whole });
+    if (whole === undefined) return setShown('failed');
+    const answered = { ...answer.data, notes: answer.data.notes, ...whole };
+    ahead.drawn(answered, list, cursor);
+    setShown(answered);
+    // `ahead` keeps its state in refs, and `list` is made of the view and the filters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [base, filters, cursor, view]);
   useEffect(() => void read(), [read]);
   // Only the read that follows the move: once it is drawn, a list emptied later takes no focus.
@@ -185,17 +203,14 @@ export default function Notes() {
   }
 
   function page(to: 'next' | 'previous', answer: NotesAnswer) {
-    paging.current = true;
-    const next = new URLSearchParams(params);
-    if (to === 'next' && answer.next !== undefined) {
-      next.set('cursor', answer.next);
-      next.set('from', String(from + answer.notes.length));
-      setParams(next);
-    } else {
-      // The page before by its cursor and its number; the first page when its cursor is not known.
-      // Never `from` less the notes of this page: the last page holds fewer than the others.
-      go(known[at - 1] === undefined ? 1 : at - 1, answer);
-    }
+    if (to === 'next') return ahead.next(answer);
+    // The page before the one asked last: the page of the address, when a press of « Next page » waits.
+    // « First page » goes to the first page.
+    const before = known[at - 1];
+    if ((at <= 2 || before !== undefined) && ahead.back()) return;
+    // The page before by its cursor and its number; the first page when its cursor is not known.
+    // Never `from` less the notes of this page: the last page holds fewer than the others.
+    go(before === undefined ? 1 : at - 1, answer);
   }
 
   /** Whether a page has a known cursor: the first, the next one, and the pages shown since the filter. */
@@ -209,9 +224,11 @@ export default function Notes() {
   function go(to: number, answer: NotesAnswer) {
     // A page with no known cursor is not offered; a press that comes anyway reads nothing.
     if (!reach(to, answer)) return;
-    if (to === at + 1) return page('next', answer);
+    // A number names its page, from the address: a press of « Next page » that waits goes nowhere now.
+    if (to === at + 1) return ahead.after(answer);
     paging.current = true;
     const back = to === 1 ? '' : (known[to] ?? '');
+    ahead.to(back);
     const next = new URLSearchParams(params);
     if (back === '') next.delete('cursor');
     else next.set('cursor', back);
@@ -366,7 +383,7 @@ export default function Notes() {
       {t('New task')}
       {/* The key, in a box of its own: the glyph alone was cut by the end of the button. */}
       <kbd
-        className="ml-[8px] inline-flex h-[20px] min-w-[20px] flex-none items-center justify-center rounded-[4px] border border-line px-[4px] font-sans text-hint leading-none font-semibold text-muted"
+        className="ml-[8px] inline-flex h-[20px] min-w-[20px] flex-none items-center justify-center rounded-inner border border-line px-[4px] font-sans text-hint leading-none font-semibold text-muted"
         aria-hidden="true"
       >
         C

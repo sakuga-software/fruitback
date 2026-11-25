@@ -30,13 +30,13 @@ export function SettingsCard({
   return (
     <section
       aria-labelledby={id}
-      className="kit-settings-card overflow-hidden rounded-box border border-line bg-surface"
+      className="kit-settings-card overflow-hidden rounded-card border border-line bg-surface"
     >
       <div className="flex min-h-[44px] items-center gap-[8px] px-[16px]">
         <span className="inline-flex text-muted">
           <SettingsIcon name={icon} />
         </span>
-        <h2 id={id} className="min-w-0 text-hint leading-auto font-semibold">
+        <h2 id={id} className="min-w-0 text-small leading-auto font-semibold">
           {title}
         </h2>
         {actions === undefined ? null : <span className="ms-auto flex items-center gap-[8px]">{actions}</span>}
@@ -49,7 +49,7 @@ export function SettingsCard({
 /** The box of the icon of a row: 24 px, its icon 14 px, a mark of a provider in its own colours. */
 export function RowIcon({ children }: { children: ReactNode }) {
   return (
-    <span className="inline-flex size-[24px] flex-none items-center justify-center rounded-button border border-line text-muted [&_svg]:size-[14px]!">
+    <span className="inline-flex size-[24px] flex-none items-center justify-center rounded-control border border-line text-muted [&_svg]:size-[14px]!">
       {children}
     </span>
   );
@@ -95,8 +95,8 @@ export function Row({
       <div className="flex min-h-[52px] items-center gap-[12px] py-[8px]">
         {icon}
         <span className="flex min-w-0 flex-1 flex-col gap-[4px]">
-          <span className="text-hint leading-auto font-semibold [overflow-wrap:anywhere]">{title}</span>
-          <span className="text-tiny text-muted [overflow-wrap:anywhere]">{detail}</span>
+          <span className="text-small leading-auto font-semibold [overflow-wrap:anywhere]">{title}</span>
+          <span className="text-hint text-muted [overflow-wrap:anywhere]">{detail}</span>
         </span>
         {children ?? null}
       </div>
@@ -110,7 +110,7 @@ export function CardNote({ children, status = false }: { children: ReactNode; st
   return (
     <p
       {...(status ? { role: 'status' } : {})}
-      className="border-t border-line px-[16px] py-[12px] text-tiny text-muted [overflow-wrap:anywhere]"
+      className="border-t border-line px-[16px] py-[12px] text-hint text-muted [overflow-wrap:anywhere]"
     >
       {children}
     </p>

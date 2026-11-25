@@ -148,7 +148,7 @@ export function SessionsSection({ workspace, limit }: { workspace: string; limit
       <Link
         to={`/w/${workspace}/account/sessions`}
         viewTransition
-        className="text-tiny font-medium text-muted no-underline [&:hover]:text-ink"
+        className="text-hint font-medium text-muted no-underline [&:hover]:text-ink"
       >
         {t('See all {count}', { count: browsers.length })}
       </Link>
@@ -163,12 +163,12 @@ export function SessionsSection({ workspace, limit }: { workspace: string; limit
     >
       {sessions === 'loading' ? (
         <div className={ONE_ROW}>
-          <p className="text-tiny text-muted">{t('Loading…')}</p>
+          <p className="text-hint text-muted">{t('Loading…')}</p>
         </div>
       ) : null}
       {sessions === 'failed' ? (
         <div className={ONE_ROW}>
-          <p role="alert" className="min-w-0 flex-1 text-tiny text-muted">
+          <p role="alert" className="min-w-0 flex-1 text-hint text-muted">
             {t('The browsers where you are signed in did not load.')} <ReadProblem />
           </p>
           <Button tone="outline" size="small" onClick={() => void read()}>
@@ -280,7 +280,7 @@ export function SessionsSection({ workspace, limit }: { workspace: string; limit
           })}
           {extensionsFailed ? (
             <li className={ONE_ROW}>
-              <p role="alert" className="min-w-0 flex-1 text-tiny text-muted">
+              <p role="alert" className="min-w-0 flex-1 text-hint text-muted">
                 {t('The browsers of the extension did not load.')} <ReadProblem />
               </p>
               <Button tone="outline" size="small" onClick={() => void read()}>
@@ -327,7 +327,7 @@ export function SignOutButton({ onPress }: { onPress: () => void }) {
   useLocale();
 
   return (
-    <Button tone="outline" size="small" onClick={onPress}>
+    <Button tone="outline" size="panel" onClick={onPress}>
       <SettingsIcon name="out" size={14} />
       {t('Sign out')}
     </Button>
@@ -344,7 +344,7 @@ export function SignOutEverywhere({ onConfirm }: { onConfirm: () => void }) {
 
   return (
     <>
-      <Button tone="outline" size="small" onClick={() => setAsking(true)}>
+      <Button tone="outline" size="panel" onClick={() => setAsking(true)}>
         <SettingsIcon name="out" size={14} />
         {t('Sign out everywhere')}
       </Button>
