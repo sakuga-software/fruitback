@@ -154,8 +154,9 @@ const BUTTON_WIDE = {
  * with the radius and the 13 px of the console (FRU-683): Inter at HeroUI's 14 px ran 11 px out of
  * a column of 320 px.
  */
-function toneClasses(tone: Tone, size: ControlSize, wide: boolean): string {
-  if (tone === 'primary' || tone === 'outline' || tone === 'danger-outline') return buttonClasses(tone, size, wide);
+function toneClasses(tone: Tone, size: ControlSize, wide: boolean, gap?: 6): string {
+  if (tone === 'primary' || tone === 'outline' || tone === 'danger-outline')
+    return buttonClasses(tone, size, wide, gap === 6 ? 'gap-[6px] [&_svg]:m-0' : undefined);
 
   return 'rounded-control font-semibold text-(length:--text-small) leading-auto';
 }
@@ -178,9 +179,14 @@ type ButtonProps = Destination & {
   wide?: boolean;
   /**
    * The padding at each end, in pixels, where the mockup writes another one than the one of the
-   * size: 16 on « Send again », 24 on « Invite », 26 on « Connect Chrome ».
+   * size: 10 on « Add a site », 16 on « Send again », 24 on « Invite », 26 on « Connect Chrome ».
    */
-  inset?: 14 | 16 | 18 | 22 | 24 | 26;
+  inset?: 10 | 14 | 16 | 18 | 22 | 24 | 26;
+  /**
+   * The space between an icon and the words, where the mockup writes 6 px: « Add a site » (FRU-650).
+   * The icon then loses the margins HeroUI gives it (2 px out at each side), so 6 px is what is drawn.
+   */
+  gap?: 6;
   type?: 'button' | 'submit';
   /** The id of the form a submit button sends, when it stands outside it: « Save » of a head (FRU-693). */
   form?: string;
@@ -229,6 +235,7 @@ export function Button({
   size = tone === 'outline' || tone === 'danger-outline' ? 'panel' : 'page',
   wide = false,
   inset,
+  gap,
   type = 'button',
   form,
   disabled = false,
@@ -243,7 +250,7 @@ export function Button({
   controls,
   children,
 }: ButtonProps) {
-  const classes = `${toneClasses(tone, size, wide)} ${className}`;
+  const classes = `${toneClasses(tone, size, wide, gap)} ${className}`;
   const data = {
     'data-size': size,
     'data-wide': wide,
