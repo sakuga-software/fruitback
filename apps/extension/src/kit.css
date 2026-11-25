@@ -1,20 +1,31 @@
 /*
   The kit of the extension (FRU-293), as the mock-up of 2026-10-20 draws it: src/kit.ts builds the
-  parts, this sheet gives their measures. Every colour is a token of entrypoints/popup/style.css,
-  which the popup and the page of the extension load first. design-tokens.test.ts holds that no rule
-  here writes a colour.
+  parts, this sheet gives their measures. Every colour, corner and shadow is a token of src/theme.css
+  (FRU-679), which entrypoints/popup/style.css brings to every page first. design-tokens.test.ts
+  holds that no rule here writes a colour.
+
+  Tailwind writes the rules (@apply), and each rule stays in no cascade layer, as before: the sheets
+  of the pages are in no layer either, and a rule of the kit must keep winning over `button` of
+  popup/style.css by its selector, as it did. A measure of one component is written as it is drawn
+  (h-[46px]). A few declarations stay as CSS, each for a reason given beside it:
+  - `font: inherit`, `all: unset`: no utility, and each comes before what overrides it;
+  - `border: 0`: `border-none` of Tailwind also sets `--tw-border-style: none` on the element, and a
+    `border` written later for the same element (a sheet of a page) would read it and draw nothing;
+  - `transform`: the utilities of Tailwind write `rotate` and `translate`, and sidepanel/style.css
+    moves the knob of its small switch with `transform`; the two would add up;
+  - `transition`: the utilities of Tailwind add a timing function the mock-up does not draw;
+  - `box-shadow: var(--shadow-…)`: the shadow utilities write the value of the light scheme, and the
+    dark scheme of src/theme.css sets the variable again;
+  - a variable that src/action-color.ts writes at run time (`--action`), which is no token.
 */
+@reference './theme.css';
 
 .kit-mark {
-  flex: none;
-  width: 16px;
-  height: 16px;
-  color: var(--accent);
+  @apply size-[16px] flex-none text-accent;
 }
 
 :focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+  @apply outline-2 outline-offset-2 outline-accent;
 }
 
 /*
@@ -22,97 +33,59 @@
   rule: 53 px from the top to the body, as the mock-up draws it (its title is measured at 85 px).
 */
 .kit-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 52px;
-  padding: 0 16px;
-  border-bottom: 1px solid var(--line);
+  @apply flex h-[52px] items-center gap-[8px] border-b border-b-line px-[16px] py-0;
 }
 
 .kit-head:has(.kit-avatar) {
-  padding: 0 8px 0 16px;
+  @apply py-0 pr-[8px] pl-[16px];
 }
 
 .kit-brand {
-  margin-inline-end: auto;
-  font-size: 14px;
-  font-weight: 650;
+  @apply me-auto text-[14px] font-[650];
 }
 
 /* The button of the account: a target of 44 px around a dot of 28. */
 button.kit-avatar {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-  padding: 0;
+  @apply inline-flex size-[44px] flex-none items-center justify-center rounded-pill bg-transparent p-0;
   border: 0;
-  border-radius: var(--radius-pill);
-  background: transparent;
 }
 
 .kit-gear {
-  width: 16px;
-  height: 16px;
+  @apply size-[16px];
 }
 
 .kit-avatar-dot {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: var(--radius-pill);
-  background: var(--avatar-surface);
-  color: var(--on-avatar);
-  font-size: 12px;
-  font-weight: 700;
+  @apply flex size-[28px] items-center justify-center rounded-pill bg-avatar-surface text-[12px] font-bold text-on-avatar;
 }
 
 /* The main action: 46 px, the corner of 10. */
 button.kit-primary {
-  box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  height: 46px;
-  padding: 0 16px;
-  border: 0;
-  border-radius: var(--radius-action);
-  background: var(--accent);
-  color: var(--on-accent);
   font: inherit;
-  font-size: 15px;
-  font-weight: 600;
-  white-space: nowrap;
-  cursor: pointer;
+  @apply box-border flex h-[46px] cursor-pointer items-center justify-center gap-[10px] rounded-action bg-accent px-[16px] py-0 text-[15px] font-semibold whitespace-nowrap text-on-accent;
+  border: 0;
 }
 
 button.kit-primary:hover {
-  background: var(--accent-strong);
+  @apply bg-accent-strong;
 }
 
 button.kit-primary:disabled,
 button.kit-secondary:disabled {
-  opacity: 0.5;
-  cursor: default;
+  @apply cursor-default opacity-50;
 }
 
 /*
   FRU-601: « Leave a note », in the colour the person chose in « Appearance ». No colour chosen: the
   accent, in both schemes. A colour chosen holds white text at 4.5:1 or more (src/action-color.ts).
+  The colour chosen is a variable that src/action-color.ts writes, not a token: it stays CSS.
 */
 button.kit-primary.kit-note {
-  background: var(--action, var(--accent));
-  color: var(--on-action, var(--on-accent));
+  background: var(--action, var(--color-accent));
+  color: var(--on-action, var(--color-on-accent));
 }
 
 button.kit-primary.kit-note:hover {
-  background: var(--action-strong, var(--accent-strong));
+  background: var(--action-strong, var(--color-accent-strong));
 }
 
 button.kit-primary.kit-note[data-size] .kit-mark {
@@ -121,48 +94,28 @@ button.kit-primary.kit-note[data-size] .kit-mark {
 
 /* The action of a site: 56 px, the drop before the words. */
 button.kit-primary[data-size='tall'] {
-  height: 56px;
-  border-radius: var(--radius-card);
-  font-size: 16px;
-  font-weight: 650;
+  @apply h-[56px] rounded-card text-[16px] font-[650];
 }
 
 button.kit-primary[data-size='tall'] .kit-mark {
-  color: currentColor;
+  @apply text-current;
 }
 
 /* The action of the side panel. */
 button.kit-primary[data-size='panel'] {
-  height: 48px;
-  border-radius: var(--radius-card);
-  font-weight: 650;
+  @apply h-[48px] rounded-card font-[650];
 }
 
 /* A second action: 44 px, a border on the surface. */
 button.kit-secondary,
 a.kit-secondary {
-  box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  height: 44px;
-  padding: 0 16px;
-  border: 1px solid var(--line-control);
-  border-radius: var(--radius-action);
-  background: var(--surface);
-  color: var(--text);
   font: inherit;
-  font-size: 14px;
-  font-weight: 600;
-  white-space: nowrap;
-  cursor: pointer;
+  @apply box-border flex h-[44px] cursor-pointer items-center justify-center gap-[8px] rounded-action border border-line-control bg-surface px-[16px] py-0 text-[14px] font-semibold whitespace-nowrap text-text;
 }
 
 button.kit-secondary:hover,
 a.kit-secondary:hover {
-  border-color: var(--text);
-  background: var(--surface-raised);
+  @apply border-text bg-surface-raised;
 }
 
 /*
@@ -170,9 +123,7 @@ a.kit-secondary:hover {
   paths carry their paint: the four colours of the « G », and currentColor for the GitHub mark.
 */
 .kit-provider-mark {
-  flex: none;
-  width: 18px;
-  height: 18px;
+  @apply size-[18px] flex-none;
 }
 
 /*
@@ -180,44 +131,27 @@ a.kit-secondary:hover {
   takes the look of the button, without the line under it.
 */
 .kit-help {
-  display: flex;
-  justify-content: center;
+  @apply flex justify-center;
 }
 
 a.kit-help-link {
-  height: auto;
-  min-height: 44px;
-  max-width: 100%;
-  padding-block: 10px;
-  text-align: center;
-  text-decoration: none;
   /* « What to check when Fruitback does not answer » takes two lines in 380 px: two of one length. */
-  text-wrap: balance;
-  white-space: normal;
+  @apply h-auto min-h-[44px] max-w-full py-[10px] text-center text-balance whitespace-normal no-underline;
 }
 
 .kit-help-icon {
-  flex: none;
-  width: 16px;
-  height: 16px;
+  @apply size-[16px] flex-none;
 }
 
 /* « Change »: a word in the accent, in a target of 44 px. */
 button.kit-text {
-  height: 44px;
-  padding: 0 8px;
-  border: 0;
-  border-radius: var(--radius-control);
-  background: transparent;
-  color: var(--accent);
   font: inherit;
-  font-weight: 600;
-  white-space: nowrap;
-  cursor: pointer;
+  @apply h-[44px] cursor-pointer rounded-control bg-transparent px-[8px] py-0 font-semibold whitespace-nowrap text-accent;
+  border: 0;
 }
 
 button.kit-text:hover {
-  color: var(--accent-strong);
+  @apply text-accent-strong;
 }
 
 /* A switch: 44 × 26, a knob of 20 that slides 18 px. */
@@ -225,19 +159,12 @@ button.kit-switch {
   --kit-switch-width: 44px;
   --kit-switch-height: 26px;
   --kit-knob: 20px;
-  position: relative;
-  flex: none;
-  width: var(--kit-switch-width);
-  height: var(--kit-switch-height);
-  padding: 0;
-  border: 0;
-  border-radius: var(--radius-pill);
   /*
-    Off: the edge of a field, 3.42:1 on the surface. The lighter grey of the mock-up (--line-soft) is 1.48:1, and the
+    Off: the edge of a field, 3.42:1 on the surface. The lighter grey of the mock-up (line-soft) is 1.48:1, and the
     track is what says the switch is there (WCAG 1.4.11).
   */
-  background: var(--line-strong);
-  cursor: pointer;
+  @apply relative h-(--kit-switch-height) w-(--kit-switch-width) flex-none cursor-pointer rounded-pill bg-line-strong p-0;
+  border: 0;
   transition: background 0.2s;
 }
 
@@ -254,18 +181,12 @@ button.kit-switch[data-size='preference'] {
 }
 
 button.kit-switch[aria-checked='true'] {
-  background: var(--accent);
+  @apply bg-accent;
 }
 
 .kit-knob {
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  width: var(--kit-knob);
-  height: var(--kit-knob);
-  border-radius: var(--radius-pill);
-  background: var(--knob);
-  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  @apply absolute top-[3px] left-[3px] size-(--kit-knob) rounded-pill bg-knob;
+  transition: transform var(--duration-fast) var(--ease-settle);
 }
 
 button.kit-switch[data-size='table'] .kit-knob {
@@ -278,69 +199,43 @@ button.kit-switch[aria-checked='true'] .kit-knob {
 
 /* The word beside a switch, « On », in a target of 44 px. */
 .kit-switch-field {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  gap: 8px;
-  min-height: 44px;
+  @apply inline-flex min-h-[44px] flex-none items-center gap-[8px];
 }
 
 .kit-switch-word {
-  font-size: 13px;
-  font-weight: 600;
+  @apply text-[13px] font-semibold;
 }
 
 /* The tile of a site. */
 .kit-tile {
-  display: flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: var(--radius-action);
-  background: var(--avatar-surface);
-  color: var(--on-avatar);
-  font-weight: 700;
+  @apply flex size-[40px] flex-none items-center justify-center rounded-action bg-avatar-surface font-bold text-on-avatar;
 }
 
 .kit-tile[data-on='true'] {
-  background: var(--tile-on);
-  color: var(--on-tile);
+  @apply bg-tile-on text-on-tile;
 }
 
 .kit-site {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
+  @apply flex min-w-0 items-center gap-[12px];
 }
 
 .kit-site-words {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  min-width: 0;
+  @apply flex min-w-0 flex-auto flex-col;
 }
 
 .kit-site-host {
-  font-size: 15px;
-  font-weight: 650;
+  @apply text-[15px] font-[650];
 }
 
 /*
   A host cut at its start (FRU-611, P7): the box is written from right to left, so « … » takes the start
   and the end stays in sight; the words inside run from left to right, isolated, as a host reads.
+  Tailwind has a variant for a direction, and no utility that sets one: `direction` stays CSS.
 */
 .kit-host-tail {
-  display: block;
-  min-width: 0;
-  overflow: hidden;
   direction: rtl;
   /* The end of a box written right to left is the left: a host that fits starts there. */
-  text-align: end;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  @apply block min-w-0 truncate text-end;
 }
 
 .kit-host-tail > span {
@@ -349,32 +244,26 @@ button.kit-switch[aria-checked='true'] .kit-knob {
 }
 
 .kit-site-state {
-  color: var(--subtle);
-  font-size: 13px;
+  @apply text-[13px] text-ink-soft;
 }
 
 .kit-site-state[data-paused='true'] {
-  color: var(--alert-text);
-  font-weight: 600;
+  @apply font-semibold text-alert-text;
 }
 
 /*
   The drop of a status: a mark of 12, a pin of 24 in a list, of 28 on a page. A white ring, and one
-  pixel of --stage-edge outside it (FRU-334): the grey of « to do » is 1.39:1 on white, the edge
+  pixel of the status edge outside it (FRU-334): the grey of « to do » is 1.39:1 on white, the edge
   3.42:1, and blueberry and cherry are under 3:1 on the dark surface, where the edge is 5.18:1.
 */
 /* The round of a stage (FRU-606), before its word: 13 px, in the colour of the stage or its status. */
 .kit-stage-ring {
-  --fruitback-stage-ring-mark: var(--surface);
-  flex: none;
-  width: 13px;
-  height: 13px;
-  margin-inline-end: 5px;
-  vertical-align: -2px;
+  --fruitback-stage-ring-mark: var(--color-surface);
+  @apply me-[5px] size-[13px] flex-none align-[-2px];
 }
 
 .search-chip .kit-stage-ring {
-  margin-inline-end: 0;
+  @apply me-0;
 }
 
 @media (forced-colors: active) {
@@ -384,219 +273,146 @@ button.kit-switch[aria-checked='true'] .kit-knob {
 }
 
 .kit-drop {
-  box-sizing: border-box;
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border: 2px solid var(--on-stage);
-  border-radius: 50% 50% 50% 0;
+  @apply box-border inline-flex size-[24px] flex-none items-center justify-center rounded-[50%_50%_50%_0] border-2 border-on-status;
   transform: rotate(-45deg);
   box-shadow:
-    0 0 0 1px var(--stage-edge),
+    0 0 0 1px var(--color-status-edge),
     var(--shadow-drop);
 }
 
 .kit-drop[data-size='page'] {
-  width: 28px;
-  height: 28px;
+  @apply size-[28px];
 }
 
 .kit-drop[data-size='mark'] {
-  width: 12px;
-  height: 12px;
+  @apply size-[12px];
   border: 0;
-  box-shadow: 0 0 0 1px var(--stage-edge);
+  box-shadow: 0 0 0 1px var(--color-status-edge);
 }
 
 .kit-drop-number {
-  color: var(--drop-on, var(--on-stage));
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1;
+  @apply text-[11px] leading-none font-bold;
+  color: var(--drop-on, var(--color-on-status));
   transform: rotate(45deg);
 }
 
 .kit-drop[data-stage='new'] {
-  --drop-on: var(--on-stage-new);
-  background: var(--stage-new);
+  --drop-on: var(--color-on-status-new);
+  @apply bg-status-new;
 }
 
 .kit-drop[data-stage='todo'] {
-  --drop-on: var(--on-stage-todo);
-  background: var(--stage-todo);
+  --drop-on: var(--color-on-status-todo);
+  @apply bg-status-todo;
 }
 
 .kit-drop[data-stage='progress'] {
-  --drop-on: var(--on-stage-progress);
-  background: var(--stage-progress);
+  --drop-on: var(--color-on-status-progress);
+  @apply bg-status-progress;
 }
 
 .kit-drop[data-stage='done'] {
-  background: var(--stage-done);
+  @apply bg-status-done;
 }
 
 .kit-drop[data-stage='closed'] {
-  background: var(--stage-closed);
+  @apply bg-status-closed;
 }
 
 /* A row that leads somewhere: 52 px, the drop, the words, the chevron. */
 button.kit-row {
   all: unset;
-  box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  min-height: 52px;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--line);
-  cursor: pointer;
+  @apply box-border flex min-h-[52px] w-full cursor-pointer items-center gap-[12px] border-b border-b-line px-0 py-[8px];
 }
 
 .kit-row-words {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  min-width: 0;
+  @apply flex min-w-0 flex-auto flex-col;
 }
 
 .kit-row-title {
-  font-weight: 650;
+  @apply font-[650];
 }
 
 .kit-row-subtitle {
-  color: var(--subtle);
-  font-size: 13px;
+  @apply text-[13px] text-ink-soft;
 }
 
 .kit-chevron {
-  color: var(--muted);
-  font-size: 18px;
+  @apply text-[18px] text-muted;
 }
 
 /* Terms and values, between two rules. */
 .kit-dl {
-  display: flex;
-  flex-direction: column;
-  margin: 0;
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
+  @apply m-0 flex flex-col border-y border-y-line;
 }
 
 .kit-dl-entry {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  column-gap: 8px;
-  padding: 10px 0;
+  @apply grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-[8px] px-0 py-[10px];
 }
 
 .kit-dl-entry > dt,
 .kit-dl-entry > dd:not(.kit-dl-action) {
-  grid-column: 1;
+  @apply col-1;
 }
 
 .kit-dl dd.kit-dl-action {
-  grid-column: 2;
-  grid-row: 1 / span 2;
+  @apply col-2 row-[1/span_2];
   font-weight: inherit;
 }
 
 .kit-dl-entry + .kit-dl-entry {
-  border-top: 1px solid var(--line);
+  @apply border-t border-t-line;
 }
 
 .kit-dl dt {
-  color: var(--subtle);
-  font-size: 13px;
+  @apply text-[13px] text-ink-soft;
 }
 
 .kit-dl dd {
-  margin: 0;
-  font-weight: 600;
-  overflow-wrap: anywhere;
+  @apply m-0 font-semibold wrap-anywhere;
 }
 
 /* A problem: 16 px of padding, the corner of 12. */
 .kit-alert {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 16px;
-  border: 1px solid var(--alert-line);
-  border-radius: var(--radius-card);
-  background: var(--alert-surface);
+  @apply flex flex-col gap-[8px] rounded-card border border-alert-line bg-alert-surface p-[16px];
 }
 
 .kit-alert-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--alert-text);
-  font-weight: 650;
+  @apply flex items-center gap-[8px] font-[650] text-alert-text;
 }
 
 .kit-alert-icon {
-  flex: none;
-  width: 16px;
-  height: 16px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2.2;
+  @apply size-[16px] flex-none fill-none stroke-current stroke-[2.2];
   stroke-linecap: round;
 }
 
 .kit-alert-body {
-  color: var(--alert-body);
+  @apply text-alert-body;
 }
 
 /* A key of a shortcut. */
 .kit-kbd {
-  padding: 0 5px;
-  border: 1px solid var(--line-control);
-  border-bottom-width: 2px;
-  border-radius: 5px;
-  color: var(--text);
   font-family: inherit;
-  font-size: 12px;
-  font-weight: 600;
+  @apply rounded-[5px] border border-b-2 border-line-control px-[5px] py-0 text-[12px] font-semibold text-text;
 }
 
 /* Segmented tabs: a rail of 3 px, a tab of 40 px (the panel) or 28 px (the page). */
 .kit-tabs {
-  display: flex;
-  gap: 4px;
-  padding: 3px;
-  border-radius: var(--radius-action);
-  background: var(--surface-sunken);
+  @apply flex gap-[4px] rounded-action bg-surface-sunken p-[3px];
 }
 
 button.kit-tab {
-  flex: 1 1 0;
-  height: 40px;
-  padding: 0 12px;
-  border: 0;
-  border-radius: var(--radius-field);
-  background: transparent;
-  color: var(--subtle);
   font: inherit;
-  font-size: 14px;
-  font-weight: 650;
-  white-space: nowrap;
-  cursor: pointer;
+  @apply h-[40px] flex-[1_1_0] cursor-pointer rounded-field bg-transparent px-[12px] py-0 text-[14px] font-[650] whitespace-nowrap text-ink-soft;
+  border: 0;
 }
 
 .kit-tabs[data-size='page'] button.kit-tab {
-  height: 28px;
-  border-radius: var(--radius-control);
+  @apply h-[28px] rounded-control;
 }
 
 button.kit-tab[aria-selected='true'] {
-  background: var(--surface);
-  color: var(--text);
+  @apply bg-surface text-text;
   box-shadow: var(--shadow-xs);
 }
 
@@ -605,121 +421,63 @@ button.kit-tab[aria-selected='true'] {
   placed against the button and pushes nothing down.
 */
 .kit-select {
-  position: relative;
+  @apply relative;
 }
 
 button.kit-select-trigger {
-  box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  min-height: 34px;
-  padding: 0 10px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-control);
-  background: var(--surface);
-  color: var(--text);
   font: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  text-align: start;
-  cursor: pointer;
+  @apply box-border flex min-h-[34px] w-full cursor-pointer items-center gap-[8px] rounded-control border border-line-strong bg-surface px-[10px] py-0 text-start text-[13px] font-semibold text-text;
 }
 
 .kit-select-words {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  @apply min-w-0 flex-1 truncate;
 }
 
 .kit-select-caret {
-  color: var(--subtle);
+  @apply text-ink-soft;
 }
 
 .kit-select-list {
-  position: absolute;
-  z-index: 10;
-  top: calc(100% + 4px);
-  right: 0;
-  left: 0;
-  box-sizing: border-box;
-  max-height: 320px;
-  margin: 0;
-  padding: 4px;
-  overflow-y: auto;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-action);
-  background: var(--surface);
+  @apply absolute top-[calc(100%+4px)] right-0 left-0 z-10 box-border m-0 max-h-[320px] list-none overflow-y-auto rounded-action border border-line bg-surface p-[4px];
   box-shadow: var(--shadow-popup);
-  list-style: none;
 }
 
 .kit-select-option {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 36px;
-  padding: 0 10px;
-  border-radius: var(--radius-control);
-  color: var(--text);
-  font-size: 13px;
-  cursor: pointer;
+  @apply flex min-h-[36px] cursor-pointer items-center gap-[8px] rounded-control px-[10px] py-0 text-[13px] text-text;
 }
 
 .kit-select-option[data-active='true'],
 .kit-select-option:hover {
-  background: var(--surface-sunken);
+  @apply bg-surface-sunken;
 }
 
 .kit-select-option[aria-selected='true'] {
-  font-weight: 650;
+  @apply font-[650];
 }
 
 .kit-select-name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  @apply min-w-0 flex-1 truncate;
 }
 
 .kit-select-count {
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
+  @apply text-muted tabular-nums;
 }
 
 /* Words for a screen reader alone: the provider beside its mark (FRU-530). */
 .visually-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
+  @apply absolute h-px w-px overflow-hidden whitespace-nowrap;
   clip-path: inset(50%);
-  white-space: nowrap;
 }
 
 /* « Fruitback 0.6.0 is out. Update » (FRU-519): a line of 13 px, the link a target of 44 px. */
 .kit-update {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0 4px;
-  margin: 0;
-  color: var(--muted);
-  font-size: 13px;
+  @apply m-0 flex flex-wrap items-center gap-x-[4px] gap-y-0 text-[13px] text-muted;
 }
 
 a.kit-update-link {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-  color: var(--accent);
-  font-weight: 600;
+  @apply inline-flex min-h-[44px] items-center font-semibold text-accent;
 }
 
 a.kit-update-link:hover {
-  color: var(--accent-strong);
+  @apply text-accent-strong;
 }
