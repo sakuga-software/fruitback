@@ -933,6 +933,9 @@ export const note_index = pgTable(
     // FRU-700: for a note of a visitor, the digest of the key of the browser that sent it
     // (`visitor-key.ts`), never the key. Empty for every other note, and for a note of before.
     author_visitor: text('author_visitor'),
+    // FRU-702: when the visitor who left the note deleted it. A read of its page no longer shows it;
+    // the row, its stage and the note in its store stay, for the team. Empty for every other note.
+    removed_at: instant('removed_at'),
     place: text('place').notNull(),
     connector_id: text('connector_id'),
     reference: text('reference'),

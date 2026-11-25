@@ -1738,6 +1738,18 @@ Read on drizzle-orm 0.45.4 and drizzle-kit 0.31.11, the versions of the catalogu
 - **The reply names the visitor by the name the note was sent with**, « not verified »
   (`replyAuthorOf`). `NewEdit.author` takes a visitor now; `editText` already wrote one.
 
+- **A visitor deletes through the route of a member's withdrawal** (FRU-702), with `callerOf` and
+  `visitorMay(policy, 'withdraw')`. The store closes the note as for a member: nothing is deleted
+  there. Decision of the orchestrator for FRU-699, 2026-11-25: the ticket is closed as withdrawn in
+  the tracker, not deleted.
+- **The pin of a note a visitor deleted leaves the page, for everybody** (`note_index.removed_at`,
+  `0051_note_index_removed_at`). The route marks the row (`NoteIndex.remove`), and `GET /feedback`
+  drops the notes the index marks (`withoutRemoved`, a read of the primary key). An index that does
+  not answer keeps the pins: a closed pin is shown rather than a read that fails. A member's
+  withdrawal sets no mark: their words say the team sees it closed, and it stays (FRU-605).
+- **Why a column and not the replies.** A read sees the replies only where the site shows them
+  (`showComments`), and a withdrawal does not need them. The mark must hold wherever the read is.
+
 ### The reasons
 
 - **Why the site is in the digest.** `authors` already reads the rows of one site. The site in the

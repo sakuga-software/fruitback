@@ -76,7 +76,7 @@ async function callerOf(
 }
 
 /**
- * The name that the reply of an edit gives its author (FRU-257): a member by their account and their
+ * The name that the reply of an edit or of a withdrawal gives its author (FRU-257): a member by their account and their
  * workspace, read now; a visitor by the name the note was sent with, their word, « not verified ».
  * `undefined`: the account or its membership is gone since the session was read.
  */
@@ -268,7 +268,7 @@ export async function postWithdraw(
   },
   checks: CallerChecks,
 ): Promise<Response> {
-  const { routeFor, sessionWrites, writerIn, hidesTracker } = checks;
+  const { routeFor, hidesTracker } = checks;
   const body = await readBoundedText(request);
   if (body === null) return json(413, { error: 'payload-too-large', maxBytes: MAX_BODY_BYTES }, corsHeaders);
   let payload: unknown;
@@ -291,19 +291,18 @@ export async function postWithdraw(
   try {
     const workspace = route.client?.workspace;
     const { accounts } = context;
-    const session = await sessionWrites(request, config, context.context);
-    if (workspace === undefined || clientId === undefined || accounts === undefined || session === undefined) {
+    if (workspace === undefined || clientId === undefined || accounts === undefined) {
       return json(401, { error: 'identity-required' }, corsHeaders);
     }
-    const account = await writerIn(request, config, context.context, workspace, clientId);
-    if (account === undefined) {
-      const reach = await accounts.reach(workspace, session.subject);
-      const suspended = config.suspendedIn !== undefined && (await config.suspendedIn(workspace));
-
-      return reach === undefined || suspended
-        ? json(401, { error: 'identity-required' }, corsHeaders)
-        : json(403, { error: 'not-allowed' }, corsHeaders);
-    }
+    const caller = await callerOf(
+      request,
+      config,
+      route,
+      { workspace, site: clientId, accounts, context: context.context },
+      checks,
+      'withdraw',
+    );
+    if (!caller.ok) return json(caller.status, { error: caller.error }, corsHeaders);
     const target = route.client;
     if ((target?.destinations?.length ?? 0) > 1) return json(403, { error: 'withdrawals-not-taken' }, corsHeaders);
 
@@ -317,13 +316,16 @@ export async function postWithdraw(
     if (found === undefined) return json(404, { error: 'not-found' }, corsHeaders);
 
     const author = await indexedAuthorOf(context.noteIndex, workspace, clientId, found.note.id);
-    if (author === undefined || author !== account) return json(403, { error: 'not-allowed' }, corsHeaders);
+    if (author === undefined || author !== caller.author) return json(403, { error: 'not-allowed' }, corsHeaders);
     if (!(await takesWithdrawals(store, target))) return json(403, { error: 'withdrawals-not-taken' }, corsHeaders);
     if (!EDITABLE_STAGES.has(found.stage)) return json(409, { error: 'not-open', stage: found.stage }, corsHeaders);
 
-    const [person, memberships] = await Promise.all([accounts.account(account), accounts.memberships(account)]);
-    const membership = memberships.find((each) => each.workspace.id === workspace);
-    if (person === undefined || membership === undefined) return json(401, { error: 'identity-required' }, corsHeaders);
+    const named = await replyAuthorOf(caller, accounts, workspace, found.note);
+    if (named === undefined) return json(401, { error: 'identity-required' }, corsHeaders);
+    // FRU-702: a withdrawal writes a reply, and a visitor's counts with their replies of the minute.
+    if (caller.kind === 'visitor' && !(await checkReplyLimit(kv, context.context.clientIp))) {
+      return json(429, { error: 'rate-limited' }, corsHeaders);
+    }
 
     // One withdrawal at a time on a note: a tracker has no lock, and a double click would write the
     // reply twice. The second is refused while the first is written.
@@ -332,11 +334,7 @@ export async function postWithdraw(
     try {
       const answer = await store.withdraw?.(
         { issue: found.id, clientId },
-        {
-          author: { kind: 'member', name: person.name ?? person.email, workspace: membership.workspace.name },
-          note: found.note,
-          identifier: found.identifier,
-        },
+        { author: named, note: found.note, identifier: found.identifier },
         target,
         route.policy,
       );
@@ -354,6 +352,11 @@ export async function postWithdraw(
           Date.now(),
         ),
       );
+      // FRU-702: a visitor deletes their note: its pin leaves the page, for everybody. A member
+      // withdraws it, and the team sees it closed there (FRU-605).
+      if (caller.kind === 'visitor') {
+        await indexed(context.noteIndex, (index) => index.remove(workspace, clientId, found.note.id, Date.now()));
+      }
 
       return json(
         200,

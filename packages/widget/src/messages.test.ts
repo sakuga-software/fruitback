@@ -976,6 +976,57 @@ describe('every word the widget shows', () => {
     snapshots.push(...shown(host.root));
     byBrowser.destroy();
 
+    // FRU-702: « Delete the note », its question, each failure, then kept; a note in no tracker, and
+    // the lines of a note that only edits or only deletes.
+    const deleteAnswers: ((answer: WithdrawAnswer | WithdrawFailure) => void)[] = [];
+    const deletes = createOverlay({
+      document: page.document,
+      host: host.root,
+      dock: host.dock,
+      translator,
+      byBrowser: () => true,
+      edit: { send: () => new Promise(() => {}) },
+      withdraw: { send: () => new Promise((resolve) => deleteAnswers.push(resolve)) },
+    });
+    const toDelete = noteIssueFixture({
+      stage: 'new',
+      mine: true,
+      editable: true,
+      withdrawable: true,
+      url: 'https://linear.app/acme/issue/ACM-9',
+      note: found.note,
+    });
+    deletes.render([toDelete]);
+    deletes.select(toDelete.note.id);
+    snapshots.push(...shown(host.root));
+    (host.root.querySelector('.fruitback-thread-more') as HTMLButtonElement).click();
+    [...host.root.querySelectorAll<HTMLButtonElement>('.fruitback-thread-more-item')].at(-1)?.click();
+    snapshots.push(...shown(host.root));
+    for (const answer of ['wait', 'retry', 'refused'] as const) {
+      (host.root.querySelector('.fruitback-thread-withdraw-confirm') as HTMLButtonElement).click();
+      snapshots.push(...shown(host.root));
+      deleteAnswers.shift()?.(answer);
+      await settleReply();
+      snapshots.push(...shown(host.root));
+    }
+    (host.root.querySelector('.fruitback-thread-withdraw-confirm') as HTMLButtonElement).click();
+    deleteAnswers.shift()?.({ stage: 'closed' });
+    await settleReply();
+    snapshots.push(...shown(host.root));
+    const ownStore = noteIssueFixture({
+      stage: 'new',
+      mine: true,
+      withdrawable: true,
+      url: 'https://acme.test/FB-1',
+      note: found.note,
+    });
+    deletes.render([ownStore]);
+    deletes.select(ownStore.note.id);
+    (host.root.querySelector('.fruitback-thread-more') as HTMLButtonElement).click();
+    [...host.root.querySelectorAll<HTMLButtonElement>('.fruitback-thread-more-item')].at(-1)?.click();
+    snapshots.push(...shown(host.root));
+    deletes.destroy();
+
     // The copy button, with a clipboard that takes the text and then with one that refuses it.
     const copy = host.root.querySelector('.fruitback-config-copy-button') as HTMLButtonElement;
     const clipboard = { writeText: async (): Promise<void> => {} };

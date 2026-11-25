@@ -111,6 +111,10 @@ export async function aVisitorSite(options: { handle?: Handle; storeOf?: (world:
   const edit = (issue: string, text: unknown, who: Who = {}) =>
     call('POST', `/feedback/${issue}/text?client=${site}`, who, { url: PAGE, text });
 
+  /** `POST /feedback/<issue>/withdraw` of the page (FRU-702). */
+  const withdraw = (issue: string, who: Who = {}) =>
+    call('POST', `/feedback/${issue}/withdraw?client=${site}`, who, { url: PAGE });
+
   /** The team puts a note in a built-in status of the site, as the console does. */
   const moveTo = async (issue: string, stage: string) => {
     const moved = await call(
@@ -125,5 +129,5 @@ export async function aVisitorSite(options: { handle?: Handle; storeOf?: (world:
     assert.equal(moved.status, 200, JSON.stringify(moved.body));
   };
 
-  return { world, store, workspace, site, bobToken, call, send, read, mine, noteOf, edit, moveTo };
+  return { world, store, workspace, site, bobToken, call, send, read, mine, noteOf, edit, withdraw, moveTo };
 }
