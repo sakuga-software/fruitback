@@ -54,15 +54,19 @@ function measure(popup: Page): Promise<Measure> {
     return {
       buttons: visible.map((button) => {
         // The lines of its words only: the dot of the button of the account is a box, not a line.
+        // Counted by run of text (FRU-695): the keys inside « Leave a note » are a smaller size on the
+        // same line, and their box starts lower than the words'.
         const walker = document.createTreeWalker(button, NodeFilter.SHOW_TEXT);
-        const tops = new Set<number>();
+        let lines = 0;
         for (let text = walker.nextNode(); text !== null; text = walker.nextNode()) {
           const range = document.createRange();
           range.selectNodeContents(text);
+          const tops = new Set<number>();
           for (const rect of range.getClientRects()) tops.add(Math.round(rect.top));
+          lines = Math.max(lines, tops.size);
         }
 
-        return { name: button.getAttribute('aria-label') ?? button.textContent ?? '', lines: tops.size };
+        return { name: button.getAttribute('aria-label') ?? button.textContent ?? '', lines };
       }),
       closest,
       // The body is at least 280 px wide plus its padding, so a tab of 280 px always scrolls. What

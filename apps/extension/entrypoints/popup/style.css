@@ -856,6 +856,11 @@ body.popup-page {
   @apply min-w-0 overflow-hidden text-ellipsis whitespace-nowrap;
 }
 
+/* « Sign out » keeps its line: a long name gives way, cut with « … ». */
+.popup .popup-foot-who button.link-button {
+  @apply flex-none whitespace-nowrap;
+}
+
 .popup .popup-foot-button {
   @apply box-border inline-flex h-[28px] flex-none items-center gap-[6px] rounded-control px-[10px] text-[13px] font-medium whitespace-nowrap text-ink-soft no-underline;
 }
