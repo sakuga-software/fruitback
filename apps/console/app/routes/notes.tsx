@@ -38,7 +38,7 @@ import { copyShortcutOf, useTaskCopy } from '../parts/task-copy';
 import { siteOfId } from '../note-id';
 import { SelectionStatus, useSelectionKeys, useTaskSelection } from '../parts/task-selection';
 import { TaskBulkBar, TaskContexts } from '../parts/task-bulk-bar';
-import { viewOf } from '../saved-views';
+import { VIEWS, viewOf } from '../saved-views';
 
 /** FRU-655: the filters on the fields of the tasks Fruitback keeps. */
 const TASK_FILTERS = ['assignee', 'priority', 'label', 'due'] as const;
@@ -132,6 +132,9 @@ export default function Notes() {
   // « Next » or « Previous » (FRU-502).
   const counted = useRef<{ filter: string; total: number; counts: NotesAnswer['counts'] } | undefined>(undefined);
   const paging = useRef(false);
+  // FRU-697: the read asked by a change of the address. Any other read is a read again, after a
+  // write (a status, a task, « Send again ») or « Try again ».
+  const asNew = useRef(false);
   // A select of the board moved a note (FRU-436). If the read after it leaves no note under the
   // filters, the board is gone with the select that had the focus: « Clear the filters » takes it.
   const [movedOut, setMovedOut] = useState(false);
@@ -161,6 +164,8 @@ export default function Notes() {
 
   const read = useCallback(async () => {
     const mine = (asked.current += 1);
+    const again = !asNew.current;
+    asNew.current = false;
     setReading(true);
     const query = new URLSearchParams();
     for (const name of FILTERS) if (filters[name] !== '') query.set(name, filters[name]);
@@ -188,9 +193,12 @@ export default function Notes() {
     const { total, counts } = answer.data;
     if (total !== undefined && counts !== undefined) {
       counted.current = { filter, total, counts };
-      // The filters of a view and no other: the total is the count of that view (FRU-697).
+      // The filters of a view and no other: the total is the count of that view (FRU-697). A read again
+      // of another list follows a write, which can change what a view counts: its count goes, until
+      // the view is read again (raised in review).
       const view = viewOf(filters);
       if (view !== undefined) reportView.current(view.id, total);
+      else if (again) for (const each of VIEWS) reportView.current(each.id, undefined);
     }
     const whole = total !== undefined && counts !== undefined ? { total, counts } : kept;
     if (whole === undefined) return setShown('failed');
@@ -200,7 +208,10 @@ export default function Notes() {
     // `ahead` keeps its state in refs, and `list` is made of the view and the filters.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [base, filters, cursor, view]);
-  useEffect(() => void read(), [read]);
+  useEffect(() => {
+    asNew.current = true;
+    void read();
+  }, [read]);
   // Only the read that follows the move: once it is drawn, a list emptied later takes no focus.
   useEffect(() => {
     if (movedOut && !reading) setMovedOut(false);

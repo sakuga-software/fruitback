@@ -39,6 +39,18 @@ const NOTE = {
   createdAt: '2026-10-13T12:00:00.000Z',
 };
 
+/** A note an address did not take: « Send again » is a write, and the list is read again after it. */
+const LATE = {
+  ...NOTE,
+  id: 'n2',
+  excerpt: 'The menu closes too fast',
+  stage: 'new',
+  status: 'own:new',
+  task: { labels: [] },
+  place: { kind: 'rest', connector: 'c2', label: 'hooks.acme.dev/feedback' },
+  delivery: { id: 'd2', state: 'gave-up' },
+};
+
 type Worker = { asked: { pathname: string; query: string }[]; total: number };
 
 /**
@@ -51,13 +63,19 @@ async function workerWith(page: Page, workspaces?: StubbedWorkspace[], locale: '
     locale,
     ...(workspaces === undefined ? {} : { workspaces }),
     answer: (pathname: string, route: Route) => {
+      if (/^\/console\/workspaces\/w\d\/notes\/n2\/retry$/.test(pathname)) return route.fulfill({ status: 204 });
       if (!/^\/console\/workspaces\/w\d\/notes$/.test(pathname)) return undefined;
       const query = new URL(route.request().url()).searchParams;
       worker.asked.push({ pathname, query: query.toString() });
-      const total = query.get('assignee') === 'me' ? worker.total : 12;
+      const mine = query.get('assignee') === 'me';
+      const total = mine ? worker.total : 12;
 
       return route.fulfill({
-        json: { notes: [NOTE], total, counts: { all: total, byPlace: {}, byStage: { todo: total } } },
+        json: {
+          notes: mine ? [NOTE] : [NOTE, LATE],
+          total,
+          counts: { all: total, byPlace: {}, byStage: { todo: total } },
+        },
       });
     },
   });
@@ -178,6 +196,18 @@ test('the count of a view is the total the notes read for its filter, and the ba
 
   // A read of the view later says the number of now.
   worker.total = 5;
+  await assigned(page).click();
+  await expect(assigned(page)).toHaveAccessibleName('Assigned to me 5');
+
+  // A write on another list can change what the view counts: once the list is read again after it,
+  // the count goes, until the view is read again. The read of the list alone left it (above).
+  await sections(page).getByRole('link', { name: 'Notes' }).click();
+  await expect(page.locator('main').getByText('The menu closes too fast')).toBeVisible();
+  await expect(assigned(page)).toHaveAccessibleName('Assigned to me 5');
+  const reads = worker.asked.length;
+  await page.locator('main').getByRole('button', { name: 'Send again' }).click();
+  await expect.poll(() => worker.asked.length).toBe(reads + 1);
+  await expect(assigned(page)).toHaveAccessibleName('Assigned to me');
   await assigned(page).click();
   await expect(assigned(page)).toHaveAccessibleName('Assigned to me 5');
 

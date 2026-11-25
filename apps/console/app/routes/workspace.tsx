@@ -46,9 +46,10 @@ type WorkspaceContext = {
   failingRead: (count: number) => void;
   /**
    * The Notes screen counted the filter of a view (FRU-697): the count of the view in the bar follows
-   * it, on every screen of this workspace, until a read says another number.
+   * it, on every screen of this workspace, until a read says another number. `undefined`: the count
+   * may be wrong now (a task was written), and the bar shows none.
    */
-  viewCounted: (view: ViewId, count: number) => void;
+  viewCounted: (view: ViewId, count: number | undefined) => void;
 };
 
 type Read = Omit<WorkspaceContext, 'renamed' | 'logoChanged' | 'failingRead' | 'viewCounted'>;
@@ -189,10 +190,13 @@ export default function WorkspaceFrame() {
     failingRead: (count) => setFailing({ workspace: context.workspace.id, count }),
     viewCounted: (view, count) => {
       const workspace = context.workspace.id;
-      setViewCounts((was) => ({
-        workspace,
-        counts: { ...(was?.workspace === workspace ? was.counts : {}), [view]: count },
-      }));
+      setViewCounts((was) => {
+        const counts = { ...(was?.workspace === workspace ? was.counts : {}) };
+        if (count === undefined) delete counts[view];
+        else counts[view] = count;
+
+        return { workspace, counts };
+      });
     },
   };
 
