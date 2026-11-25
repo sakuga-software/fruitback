@@ -1,4 +1,4 @@
-import { type FormEvent, useState } from 'react';
+import { type FormEvent, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { LOGO_TYPES, type Workspace, call, removeWorkspaceLogo, renameWorkspace, setWorkspaceLogo } from '../api';
 import { msg, t } from '../i18n';
@@ -41,6 +41,9 @@ function Settings() {
   const { workspace, renamed } = useWorkspace();
   const [name, setName] = useState(workspace.name);
   const [busy, setBusy] = useState(false);
+  // One rename on its way at a time, whatever the state drawn says yet: two Enter in a row, or Enter
+  // then « Save », send one name (raised in review).
+  const sending = useRef(false);
   const [problem, setProblem] = useState<string | undefined>();
   const [kept, setKept] = useState(false);
   const may = manages(workspace);
@@ -49,12 +52,14 @@ function Settings() {
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (busy) return;
+    if (sending.current) return;
     setProblem(undefined);
     setKept(false);
     if (!changed) return setKept(true);
+    sending.current = true;
     setBusy(true);
     const answer = await renameWorkspace(workspace, name);
+    sending.current = false;
     setBusy(false);
     // A refusal keeps the name as it was typed.
     if (!answer.ok) return setProblem(problemOf(answer, RENAME_PROBLEMS, WORKSPACE_NOT_RENAMED));

@@ -97,6 +97,31 @@ test('the name of the only workspace leads to its settings, which rename it', as
   expect(results.violations.map((violation) => violation.id)).toEqual([]);
 });
 
+test('a name on its way is sent once, whatever is pressed meanwhile (raised in review)', async ({ page }) => {
+  const worker = await workerWith(page, [ACME]);
+  let release = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route('**/console/workspaces/w1', async (route) => {
+    if (route.request().method() !== 'POST') return route.fallback();
+    await held;
+
+    return route.fallback();
+  });
+  await page.goto(`${CONSOLE}/w/w1/settings`);
+  const name = page.getByRole('textbox', { name: 'Workspace name' });
+  await name.fill('Acme Labs');
+  // Two Enter in the same task, before the screen draws « Saving… », then « Save » by script.
+  await name.evaluate((input: HTMLInputElement) => {
+    input.form?.requestSubmit();
+    input.form?.requestSubmit();
+  });
+  await name.press('Enter');
+  await expect(page.getByRole('button', { name: 'Saving…' })).toBeDisabled();
+  release();
+  await expect(page.getByRole('status').filter({ hasText: 'The name is saved.' })).toBeVisible();
+  expect(worker.renames).toEqual([{ name: 'Acme Labs' }]);
+});
+
 test('with several workspaces, their menu ends with « Workspace settings »', async ({ page }) => {
   await workerWith(page, [ACME, LUMEN]);
   await page.goto(`${CONSOLE}/w/w1/sites`);
