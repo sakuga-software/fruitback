@@ -2546,12 +2546,15 @@ them by a key that their browser holds, and by nothing else.
   the author `visitor:<digest>` of this key on this site, a site that takes the notes of anybody, an
   open note, 5 replies a minute. Nothing is deleted in a store: the note is closed with the reply
   « Withdrew the note », Linear moves its issue to a canceled state, and an address gets
-  `note.withdrawn`. The index marks the row (`removed_at`), and `GET /feedback` drops the note for
-  every reader. The team keeps it, closed, in its tracker and in the console. A member's withdrawal
+  `note.withdrawn`. The index marks the row (`removed_at`) before the store withdraws: an index that
+  does not answer is `502` and nothing is withdrawn, and the mark is taken back when the store
+  withdraws nothing. `GET /feedback` drops a marked note for every reader. The team keeps it, closed, in its tracker and in the console. A member's withdrawal
   sets no mark, and its pin stays, closed.
   test:`closes it as withdrawn, says who in a reply, and its pin leaves the page for every reader`,
   test:`refuses another browser, no key, a key of another shape, a member and a token, and changes nothing`,
-  test:`keeps the pin of a note a member withdraws: the team sees it closed (FRU-605)`.
+  test:`keeps the pin of a note a member withdraws: the team sees it closed (FRU-605)`,
+  test:`withdraws nothing when the index does not answer, so a pin never stays after « Deleted »`,
+  test:`takes the mark back when the store withdraws nothing, so the pin stays with its note`.
 - Each guard is taken out of a copy of its module in `visitor-key.test.ts`, `visitor-edit.test.ts`
   and `visitor-delete.test.ts`, and the case that holds it fails.
 - CORS. The header is not safelisted, so `Access-Control-Allow-Headers` lists it. A read of a

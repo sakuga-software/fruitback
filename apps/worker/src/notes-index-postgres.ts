@@ -299,11 +299,11 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
       );
     },
 
-    async remove(workspace, site, note, now) {
+    async remove(workspace, site, note, at) {
       await run((db) =>
         db
           .update(note_index)
-          .set({ removed_at: now })
+          .set({ removed_at: at })
           .where(
             and(eq(note_index.workspace_id, workspace), eq(note_index.site_id, site), eq(note_index.note_id, note)),
           ),

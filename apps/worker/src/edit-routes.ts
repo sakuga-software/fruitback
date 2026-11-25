@@ -234,6 +234,20 @@ export async function postEdit(
   }
 }
 
+/**
+ * Marks a note as deleted by its visitor in the index (FRU-702), before the store withdraws it. An index
+ * that does not answer is a store that does not answer: `502`, and the visitor tries again.
+ */
+async function markRemoved(index: NoteIndex, workspace: string, site: string, note: string, at: number): Promise<void> {
+  try {
+    await index.remove(workspace, site, note, at);
+  } catch (error) {
+    throw new StoreError(
+      `the index of the notes did not answer: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+}
+
 /** `POST /feedback/<id>/withdraw`: the person who left an open note withdraws it (FRU-605). */
 export const WITHDRAW_PATH = /^\/feedback\/([A-Za-z0-9_-]{1,100})\/withdraw$/;
 
@@ -331,13 +345,28 @@ export async function postWithdraw(
     // reply twice. The second is refused while the first is written.
     const lock = `fruitback:withdraw:${clientId}:${found.note.id}`;
     if ((await kv.incr(lock, WITHDRAW_LOCK_MS)) > 1) return json(409, { error: 'withdraw-in-progress' }, corsHeaders);
+    // FRU-702: a visitor deletes their note, and its pin leaves the page for everybody. The row of the
+    // index is marked first: an index that does not answer is `502`, and nothing is withdrawn. The row
+    // is there, or `NoteIndex.authors` would not have named this visitor. The mark is taken back
+    // when the store withdraws nothing. A member withdraws, and the team sees the pin closed (FRU-605).
+    const marks = caller.kind === 'visitor' ? context.noteIndex : undefined;
+    if (marks !== undefined) await markRemoved(marks, workspace, clientId, found.note.id, Date.now());
+    const unmark = (index: NoteIndex) =>
+      indexed(index, (each) => each.remove(workspace, clientId, found.note.id, null));
     try {
-      const answer = await store.withdraw?.(
-        { issue: found.id, clientId },
-        { author: named, note: found.note, identifier: found.identifier },
-        target,
-        route.policy,
-      );
+      let answer: Awaited<ReturnType<NonNullable<NoteStore['withdraw']>>> | undefined;
+      try {
+        answer = await store.withdraw?.(
+          { issue: found.id, clientId },
+          { author: named, note: found.note, identifier: found.identifier },
+          target,
+          route.policy,
+        );
+      } catch (error) {
+        if (marks !== undefined) await unmark(marks);
+        throw error;
+      }
+      if ((answer === undefined || answer === 'not-open') && marks !== undefined) await unmark(marks);
       if (answer === undefined) return json(404, { error: 'not-found' }, corsHeaders);
       // Done or closed by the team between the read above and the write.
       if (answer === 'not-open') return json(409, { error: 'not-open' }, corsHeaders);
@@ -352,11 +381,6 @@ export async function postWithdraw(
           Date.now(),
         ),
       );
-      // FRU-702: a visitor deletes their note: its pin leaves the page, for everybody. A member
-      // withdraws it, and the team sees it closed there (FRU-605).
-      if (caller.kind === 'visitor') {
-        await indexed(context.noteIndex, (index) => index.remove(workspace, clientId, found.note.id, Date.now()));
-      }
 
       return json(
         200,

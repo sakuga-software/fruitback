@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'vitest';
 import { mutatedModule } from './conformance.fixture.ts';
+import type { World } from './console-world.fixture.ts';
+import type { NoteIndex } from './notes-index.ts';
+import { createPostgresNoteStore } from './notes-postgres.ts';
+import { type NoteStore, StoreError } from './store.ts';
 import { createMemoryStore } from './linear-memory.ts';
 import { rowsOf } from './postgres.fixture.ts';
 import { type Handle, KEY_A, KEY_B, aVisitorSite } from './visitor-site.fixture.ts';
@@ -21,6 +25,26 @@ async function aVisitorNote(options: Parameters<typeof aVisitorSite>[0] = {}) {
 
 const indexRow = async (world: Awaited<ReturnType<typeof aVisitorSite>>['world']) =>
   (await rowsOf(world.database, `SELECT note_id, stage, removed_at FROM note_index WHERE note_id = 'vd_1'`))[0];
+
+/** An index that keeps every write but the mark of a deletion, which it refuses. */
+const refusingMarks = (index: NoteIndex): NoteIndex => ({
+  ...index,
+  remove: async () => {
+    throw new Error('the index is down');
+  },
+});
+
+/** The worker's own store, whose withdrawals fail as a store that does not answer. */
+const failingWithdrawals = (world: World): NoteStore => {
+  const store = createPostgresNoteStore(world.database);
+
+  return {
+    ...store,
+    withdraw: async () => {
+      throw new StoreError('the store is down');
+    },
+  };
+};
 
 describe('a visitor deletes their open note (FRU-702)', () => {
   it('closes it as withdrawn, says who in a reply, and its pin leaves the page for every reader', async () => {
@@ -100,6 +124,29 @@ describe('a visitor deletes their open note (FRU-702)', () => {
     assert.deepEqual(answers, [200, 200, 200, 200, 200, 429]);
   });
 
+  it('withdraws nothing when the index does not answer, so a pin never stays after « Deleted »', async () => {
+    const { world, withdraw, read, issue } = await aVisitorNote({ indexOf: refusingMarks });
+
+    const refused = await withdraw(issue, { key: KEY_A });
+
+    assert.equal(refused.status, 502, JSON.stringify(refused.body));
+    assert.deepEqual(
+      (await rowsOf(world.database, 'SELECT stage FROM notes')).map((row) => row.stage),
+      ['new'],
+    );
+    assert.equal((await read()).get('vd_1')?.stage, 'new');
+  });
+
+  it('takes the mark back when the store withdraws nothing, so the pin stays with its note', async () => {
+    const { world, withdraw, read, issue } = await aVisitorNote({ storeOf: failingWithdrawals });
+
+    const failed = await withdraw(issue, { key: KEY_A });
+
+    assert.equal(failed.status, 502, JSON.stringify(failed.body));
+    assert.equal((await indexRow(world))?.removed_at, null);
+    assert.equal((await read()).has('vd_1'), true);
+  });
+
   it('cancels the issue of a tracker, and its pin leaves the page (Linear)', async () => {
     const { withdraw, read, issue } = await aVisitorNote({ storeOf: () => createMemoryStore() });
 
@@ -156,13 +203,36 @@ describe('the guards of the deletion of a visitor, each planted out (FRU-702)', 
     {
       guard: 'a member who withdraws keeps the pin',
       file: 'edit-routes.ts',
-      from: "      if (caller.kind === 'visitor') {\n        await indexed(",
-      to: '      if (true) {\n        await indexed(',
+      from: "const marks = caller.kind === 'visitor' ? context.noteIndex : undefined;",
+      to: 'const marks = context.noteIndex;',
       holds: async ({ send, noteOf, withdraw, read, bobToken }) => {
         const issue = await send(noteOf('vd_bob'), { token: bobToken });
         await withdraw(issue, { token: bobToken });
 
         return (await read()).has('vd_bob');
+      },
+    },
+    {
+      guard: 'an index that does not answer withdraws nothing',
+      file: 'edit-routes.ts',
+      from: 'if (marks !== undefined) await markRemoved(',
+      to: 'if (false) await markRemoved(',
+      holds: async ({ handle }) => {
+        const site = await aVisitorNote({ indexOf: refusingMarks, ...(handle === undefined ? {} : { handle }) });
+
+        return (await site.withdraw(site.issue, { key: KEY_A })).status === 502;
+      },
+    },
+    {
+      guard: 'the mark is taken back when the store withdraws nothing',
+      file: 'edit-routes.ts',
+      from: 'if (marks !== undefined) await unmark(marks);',
+      to: '',
+      holds: async ({ handle }) => {
+        const site = await aVisitorNote({ storeOf: failingWithdrawals, ...(handle === undefined ? {} : { handle }) });
+        await site.withdraw(site.issue, { key: KEY_A });
+
+        return (await indexRow(site.world))?.removed_at === null;
       },
     },
     {
