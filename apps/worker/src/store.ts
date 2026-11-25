@@ -318,7 +318,8 @@ export type ReplyTarget = { issue: string; clientId: string | undefined };
  */
 export type NewEdit = {
   text: string;
-  author: Extract<ReplyAuthor, { kind: 'member' }>;
+  /** A member, or a visitor known by the key of their browser (FRU-701). */
+  author: Extract<ReplyAuthor, { kind: 'member' | 'visitor' }>;
   note: Note;
   identifier: string;
 };

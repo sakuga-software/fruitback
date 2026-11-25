@@ -10,7 +10,7 @@ import { VISITOR_HEADER } from './visitor-key.ts';
 
 /**
  * A site that everyone reads and anyone writes on, its page, and the calls a page and the extension
- * make to it (FRU-700): what the cases of a visitor known by their browser share.
+ * make to it (FRU-700, FRU-701, FRU-702): what the cases of a visitor known by their browser share.
  *
  * Each call goes through `handleRequest`, on PostgreSQL (PGlite), as the `<script>` of a site sends
  * it: an `Origin`, the id of the site, and the key of the browser in `X-Fruitback-Visitor`. From one
@@ -107,6 +107,10 @@ export async function aVisitorSite(options: { handle?: Handle; storeOf?: (world:
   const mine = async (who: Who = {}) =>
     [...(await read(who))].flatMap(([id, issue]) => (issue.mine === true ? [id] : [])).sort();
 
+  /** `POST /feedback/<issue>/text` of the page. */
+  const edit = (issue: string, text: unknown, who: Who = {}) =>
+    call('POST', `/feedback/${issue}/text?client=${site}`, who, { url: PAGE, text });
+
   /** The team puts a note in a built-in status of the site, as the console does. */
   const moveTo = async (issue: string, stage: string) => {
     const moved = await call(
@@ -121,5 +125,5 @@ export async function aVisitorSite(options: { handle?: Handle; storeOf?: (world:
     assert.equal(moved.status, 200, JSON.stringify(moved.body));
   };
 
-  return { world, store, workspace, site, bobToken, call, send, read, mine, noteOf, moveTo };
+  return { world, store, workspace, site, bobToken, call, send, read, mine, noteOf, edit, moveTo };
 }

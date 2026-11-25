@@ -80,3 +80,43 @@ test('a visitor reads their note as theirs, and another browser does not', async
   await mine.close();
   await other.close();
 });
+
+test('a visitor edits the text of their open note, and another browser reads the new text (FRU-701)', async ({
+  browser,
+  baseURL,
+}) => {
+  const mine = await browser.newContext({ baseURL });
+  const other = await browser.newContext({ baseURL });
+  const page = await mine.newPage();
+  const path = `/?widget=off&case=${caseOf('visitor-edit')}`;
+
+  await mount(page, path);
+  await page.getByRole('button', { name: /Leave a note/ }).click();
+  await page.locator('[data-testid="card-latte"] .add').click();
+  await page.getByPlaceholder('What should change?').fill(NOTE);
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
+
+  await mount(page, path);
+  const thread = await openThread(page);
+  await expect(thread.getByText('You can edit it until a member picks it up.')).toBeVisible();
+  await thread.getByRole('button', { name: 'More actions on your note' }).click();
+  await expect(thread.getByRole('menuitem')).toHaveText(['Edit the text', 'Copy link to the note']);
+  await thread.getByRole('menuitem', { name: 'Edit the text' }).click();
+  const field = thread.getByRole('textbox', { name: 'Your note' });
+  await field.fill('Une note modifiée par ce navigateur');
+  await thread.getByRole('button', { name: 'Save' }).click();
+  await expect(thread.getByText('Saved')).toBeVisible();
+  await expect(thread.locator('.fruitback-thread-note')).toHaveText('Une note modifiée par ce navigateur');
+
+  // Another browser reads the new text, and is offered no edit.
+  const elsewhere = await other.newPage();
+  await mount(elsewhere, path);
+  const theirs = await openThread(elsewhere);
+  await expect(theirs.locator('.fruitback-thread-note')).toHaveText('Une note modifiée par ce navigateur');
+  await expect(theirs.getByRole('button', { name: 'More actions on your note' })).toHaveCount(0);
+  await expect(theirs.locator('.fruitback-thread-edit')).toHaveCount(0);
+
+  await mine.close();
+  await other.close();
+});

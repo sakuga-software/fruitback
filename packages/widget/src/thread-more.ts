@@ -47,6 +47,8 @@ export type MoreFooter = {
   said: Map<string, MoreSaid>;
   /** Opens the field of the edit (FRU-475). Left out: the worker does not offer an edit now. */
   edit?: () => void;
+  /** The edit reads « Edit the text », for a visitor known by their browser (FRU-701). */
+  editText?: true;
   /** Asks « Withdraw this note? » in the thread. Left out: the worker does not offer it now. */
   withdraw?: () => void;
   /** Starts the choice of a new element for the note (FRU-605). Left out: not offered now. */
@@ -81,7 +83,10 @@ export function moreMenu(document: Document, issue: NoteIssue, t: Translator, mo
   menu.setAttribute('aria-label', t.text('more.open'));
   menu.hidden = true;
 
-  const item = (key: `more.${'edit' | 'copyLink' | 'move' | 'withdraw'}`, run: () => void): HTMLButtonElement => {
+  const item = (
+    key: `more.${'edit' | 'editText' | 'copyLink' | 'move' | 'withdraw'}`,
+    run: () => void,
+  ): HTMLButtonElement => {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'fruitback-thread-more-item';
@@ -104,7 +109,7 @@ export function moreMenu(document: Document, issue: NoteIssue, t: Translator, mo
 
   const { edit } = more;
   const items = [
-    ...(edit === undefined ? [] : [item('more.edit', edit)]),
+    ...(edit === undefined ? [] : [item(more.editText === true ? 'more.editText' : 'more.edit', edit)]),
     item('more.copyLink', () => {
       const link = noteLink(issue.note.page.url, issue.note.id);
       void clipboardOf(document)

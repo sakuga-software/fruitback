@@ -6,6 +6,7 @@ import {
   type NoteStage,
   type NoteStatus,
   anchorSelectorPath,
+  trackerOf,
 } from '@fruitback/shared';
 import { type Direction, type Translator, createTranslator, languageOf } from './messages.ts';
 import { createIcon } from './icons.ts';
@@ -945,6 +946,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
       ? undefined
       : {
           seam: options.edit,
+          byBrowser: options.byBrowser?.() === true,
           editing,
           texts: editTexts,
           inFlight: editsInFlight,
@@ -1057,7 +1059,11 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
 
     return {
       said: moreSaidOf,
-      ...(move === undefined || issue.editable !== true
+      // FRU-701: the words of the mock-up for a visitor known by their browser.
+      ...(options.byBrowser?.() === true ? { editText: true as const } : {}),
+      // FRU-701: a visitor known by their browser edits the text, and moves nothing: the route of a
+      // move takes a session.
+      ...(move === undefined || issue.editable !== true || options.byBrowser?.() === true
         ? {}
         : {
             move: () => {
@@ -1657,6 +1663,7 @@ function buildThread(
       ...moreSaid(document, issue, t, more),
       ...withdrawBlock(document, issue, t, withdraw),
       byline(document, 'p', 'fruitback-thread-meta', reporter, issue.note.createdAt, t),
+      ...youMay(document, issue, t, byBrowser),
       ...sourceBlock(document, issue, showSelector),
       ...attachmentsLine(document, issue, t),
       // Said out loud rather than hidden. A reader who is told the pin might be on the wrong element
@@ -1687,9 +1694,21 @@ function youChip(document: Document, issue: NoteIssue, t: Translator, byBrowser:
   return [element(document, 'span', 'fruitback-thread-you', t.text('thread.youBrowser'))];
 }
 
+/**
+ * « You can edit it until a member picks it up. » (FRU-701): under a note of a visitor known by their
+ * browser, while the worker offers them an edit.
+ */
+function youMay(document: Document, issue: NoteIssue, t: Translator, byBrowser: boolean): HTMLElement[] {
+  if (!byBrowser || issue.mine !== true || issue.editable !== true || DRAFTS.has(issue)) return [];
+
+  return [element(document, 'p', 'fruitback-thread-you-may', t.text('thread.youMayEdit'))];
+}
+
 /** What the edits of the notes share, by note, as `ReplyFooter` (FRU-475). */
 type EditFooter = {
   seam: EditSeam;
+  /** The reader is a visitor known by their browser (FRU-701): the field says where the new text goes. */
+  byBrowser: boolean;
   editing: Set<string>;
   texts: Map<string, string>;
   inFlight: Set<string>;
@@ -1803,7 +1822,13 @@ function noteText(document: Document, issue: NoteIssue, t: Translator, edit: Edi
         edit.settled(issue, 'edit');
       });
   });
-  form.append(field, element(document, 'div', 'fruitback-thread-edit-actions', [save, cancel]), status);
+  // FRU-701: a visitor is told that the new words reach the tracker too, where the note is in one.
+  const tracker = edit.byBrowser ? trackerOf(issue.url) : undefined;
+  const sentTo =
+    tracker === undefined
+      ? []
+      : [element(document, 'span', 'fruitback-thread-edit-sent', t.text('edit.sentTo', { tracker }))];
+  form.append(field, element(document, 'div', 'fruitback-thread-edit-actions', [...sentTo, save, cancel]), status);
 
   return [form];
 }
