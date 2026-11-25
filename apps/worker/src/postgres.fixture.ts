@@ -343,7 +343,8 @@ const HOLD_SECONDS = 0.3;
  *
  * - `reached` resolves when the first call waits at the gate, in the trigger of the held row. It
  *   holds the rows it locked, and it committed nothing.
- * - `release` opens the gate when `other` waits for a row lock, or when `other` has ended.
+ * - `release` opens the gate when another call waits for the held one (`pg_blocking_pids`): for a
+ *   row that the held call locked. Or when `other` has ended.
  */
 export type Hold = {
   reached(): Promise<void>;
@@ -355,29 +356,25 @@ const GATE_KEY = 719;
 /** How long a hold waits for a state before it gives up. A bound on a bug, never a time that orders. */
 const GATE_PATIENCE_MS = 10_000;
 
-/** The other backends of this database that wait for a lock of one of these kinds. */
-async function waiting(database: Database, events: readonly string[]): Promise<number> {
-  const list = events.map((event) => `'${event}'`).join(', ');
-  const [row] = await rowsOf(
-    database,
-    `SELECT count(*)::int AS n FROM pg_stat_activity
-      WHERE datname = current_database() AND pid <> pg_backend_pid()
-        AND wait_event_type = 'Lock' AND wait_event IN (${list})`,
-  );
-
-  return Number(row?.n ?? 0);
-}
-
-/** Resolves `true` when a backend waits for one of `events`, `false` when `stop` says so first. */
-async function untilWaiting(database: Database, events: readonly string[], stop: () => boolean): Promise<boolean> {
+/**
+ * The first row of `statement`, asked again every 10 ms until there is one. `undefined` when `stop`
+ * says so first. It throws once `GATE_PATIENCE_MS` have passed, with `what` in its message.
+ */
+async function untilRow(
+  database: Database,
+  statement: string,
+  what: string,
+  stop: () => boolean = () => false,
+): Promise<Row | undefined> {
   const giveUp = Date.now() + GATE_PATIENCE_MS;
   while (!stop()) {
-    if ((await waiting(database, events)) > 0) return true;
-    if (Date.now() > giveUp) throw new Error(`no call waited for a lock of ${events.join(' or ')}`);
+    const [row] = await rowsOf(database, statement);
+    if (row !== undefined) return row;
+    if (Date.now() > giveUp) throw new Error(`${what}, after ${GATE_PATIENCE_MS} ms`);
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
 
-  return false;
+  return undefined;
 }
 
 /**
@@ -439,6 +436,8 @@ export async function holdRows(
   // The two connections of the case are open before it starts, so the second call waits for none.
   await Promise.all([rowsOf(database, 'SELECT 1'), rowsOf(database, 'SELECT 1')]);
 
+  // The backend of the call that waits at the gate, once `reached` has seen it.
+  let heldPid: number | undefined;
   const openGate = async () => {
     open();
     const giveUp = Date.now() + GATE_PATIENCE_MS;
@@ -447,7 +446,16 @@ export async function holdRows(
 
   return {
     async reached() {
-      await untilWaiting(database, ['advisory'], () => false);
+      // The call that asks for the lock of the gate, in this database: a key of one `bigint` is
+      // `classid` 0, `objid` the key, `objsubid` 1.
+      const row = await untilRow(
+        database,
+        `SELECT pid FROM pg_locks
+          WHERE locktype = 'advisory' AND NOT granted AND classid = 0 AND objid = ${GATE_KEY} AND objsubid = 1
+            AND database = (SELECT oid FROM pg_database WHERE datname = current_database())`,
+        'no call waited at the gate',
+      );
+      heldPid = Number(row?.pid);
     },
     async release(other) {
       let ended = false;
@@ -456,8 +464,15 @@ export async function holdRows(
         () => (ended = true),
       );
       try {
-        // A row lock: `transactionid` for the first waiter of a row, `tuple` for the ones behind it.
-        await untilWaiting(database, ['transactionid', 'tuple'], () => ended);
+        if (heldPid === undefined) throw new Error('`release` before `reached`: no call is held');
+        // A call that waits for the held one: for a row that it locked, and not for anything else.
+        await untilRow(
+          database,
+          `SELECT pid FROM pg_stat_activity
+            WHERE datname = current_database() AND ${heldPid} = ANY(pg_blocking_pids(pid))`,
+          'no call waited for the held call',
+          () => ended,
+        );
       } finally {
         await openGate();
       }
