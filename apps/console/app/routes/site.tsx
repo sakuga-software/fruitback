@@ -1,83 +1,39 @@
-import { SiteAgent } from '../parts/site-agent';
-import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
-import { useLocation, useNavigate, useParams } from 'react-router';
-import { STAGES } from '../stages';
-import { type Connector, type Destination, type Site, type SiteChoice, call, readSite, siteChoices } from '../api';
-import { Confirmation } from '../confirm';
-import { Domains } from '../domains';
-import { msg, t } from '../i18n';
-import { InstallOptions } from '../install-options';
-import { type Fetched, type Listed, listedOf } from '../listed';
-import { problemOf } from '../problems';
-import { siteLabel, siteName } from '../site-address';
-import { Button, Disclosure, KeyValue, LinkButton, LoadFailed, Problem } from '../ui';
-import { useLocale } from '../use-locale';
+import { useCallback, useEffect, useState } from 'react';
+import { Navigate, useLocation } from 'react-router';
+import { type Connector, type Destination, call } from '../api';
 import { accessOf } from '../access-policy';
-import { SiteTabs } from '../parts/site-tabs';
-import { SitePlaces } from '../parts/site-places';
-import { notesOf } from './sites';
-import { PageHead, useWorkspace } from './workspace';
-import { ReadProblem } from '../read-problem';
-
-const REMOVAL_PROBLEMS: Readonly<Record<string, string>> = {
-  forbidden: msg('Only an owner or an admin of the workspace removes a site.'),
-};
-const SITE_NOT_REMOVED = msg('This site is still here. Try again.');
-
-/** The sections folded under « Advanced » (FRU-538): the page shows first what most people come for. */
-const ADVANCED: readonly string[] = ['statuses', 'agent', 'previews'];
+import { type Listed, listedOf } from '../listed';
+import { useLocale } from '../use-locale';
+import { InstallCard } from '../parts/site-install-card';
+import { PlacesCard, SiteFigures, SiteRows } from '../parts/site-overview';
+import { type SiteTab, siteTabPath } from '../parts/site-tabs';
+import { useSite } from './site-frame';
 
 /**
- * The page of one site (FRU-433, Mathieu): what the grid of the Sites screen unfolded under a card, in
- * one place. Its address and who writes there, how to install Fruitback on it, where its notes go, a
- * link to its statuses, the preview builds, and its removal. The grid draws cards only.
- *
- * « Advanced » folds the statuses, « Start an agent » and the preview builds (FRU-538): the page shows
- * first the notes, the install, and who sees and who writes. A hash of a section inside opens it.
- *
- * The page reads its one site (`GET …/sites/<id>`, FRU-497): the notes of the other sites are not
- * counted for it.
- *
- * `#remove` in the address opens the confirmation: « Remove » in the menu of a card is the first time
- * the removal is asked, and the page asks the second.
+ * The sections the page of a site had before its tabs (FRU-433, FRU-538), and the tab that holds each
+ * now (FRU-689). A link of before, or one kept in a browser, opens its tab; a section inside a tab
+ * keeps its hash, and the tab scrolls to it.
  */
-export default function SitePage() {
+const MOVED: Readonly<Record<string, { tab: SiteTab; hash?: string }>> = {
+  install: { tab: 'install' },
+  destinations: { tab: 'destinations' },
+  advanced: { tab: 'advanced' },
+  statuses: { tab: 'statuses' },
+  agent: { tab: 'advanced', hash: '#agent' },
+  previews: { tab: 'advanced', hash: '#previews' },
+  remove: { tab: 'advanced', hash: '#remove' },
+};
+
+/**
+ * The tab « Overview » of a site (FRU-689), as the mockup « Un site » draws it. On the left, its three
+ * figures, the card « Site » and, for who manages the sites and sees the tracker, where its notes go.
+ * On the right, in a column of 420 px from 1100 px, how to install Fruitback on it, for every role.
+ */
+export default function SiteOverview() {
   useLocale();
-  const { workspace } = useWorkspace();
-  const { site: siteId = '' } = useParams();
-  const { hash, key } = useLocation();
-  const navigate = useNavigate();
+  const { workspace, site, setSite, manages, seesTracker } = useSite();
+  const { hash } = useLocation();
   const base = `/console/workspaces/${workspace.id}`;
-  const manages = workspace.role === 'owner' || workspace.role === 'admin';
-  // The worker says where the notes of a site go to whoever sees the tracker: not to a guest.
-  const seesTracker = workspace.role !== 'guest';
-  // `gone`: the worker answered 404, a site removed or of another workspace. Not a read that failed.
-  const [read, setRead] = useState<Fetched<Site> | 'gone'>('loading');
-
-  const readOne = useCallback(async () => {
-    setRead('loading');
-    const answer = await readSite(workspace.id, siteId);
-    if (!answer.ok) return setRead(answer.status === 404 ? 'gone' : 'failed');
-    // An answer that is no site is no site (FRU-162): the page says it did not load.
-    setRead(typeof answer.data?.id === 'string' && typeof answer.data.origin === 'string' ? answer.data : 'failed');
-  }, [workspace.id, siteId]);
-  useEffect(() => void readOne(), [readOne]);
-
-  // The sites to name in « Previews » (FRU-103): their id and address, and no count (FRU-497).
-  const [choices, setChoices] = useState<Listed<SiteChoice>>('loading');
-  useEffect(() => {
-    if (!manages) return;
-    // Another workspace: its sites are read, and the answer for the one before is dropped.
-    let current = true;
-    setChoices('loading');
-    void siteChoices(workspace.id).then((answer) => {
-      if (current) setChoices(listedOf(answer, (data) => data.sites));
-    });
-
-    return () => {
-      current = false;
-    };
-  }, [manages, workspace.id]);
 
   // The sources of the workspace, for who sets where the notes of the site go (FRU-399).
   const [connectors, setConnectors] = useState<Listed<Connector>>('loading');
@@ -101,317 +57,40 @@ export default function SitePage() {
     };
   }, [manages, seesTracker, readConnectors]);
 
-  const site = typeof read === 'string' ? undefined : read;
-  const gone = read === 'gone';
-  const name = site === undefined ? undefined : siteName(site.origin);
-
-  // An address with a hash goes to its section once the site is drawn: the page is empty before.
-  const wanted = hash.slice(1);
-  const [removing, setRemoving] = useState(wanted === 'remove');
-  useEffect(() => {
-    if (wanted === 'remove') setRemoving(true);
-  }, [wanted, hash]);
-  const [advanced, setAdvanced] = useState(ADVANCED.includes(wanted));
-  // The section to scroll to, a new object for each navigation: it is set in the render that opens « Advanced ».
-  const [target, setTarget] = useState<{ id: string } | undefined>();
-  const drawn = site !== undefined;
-  // `key` is new on each navigation: a link to the hash already in the address opens « Advanced » again.
-  useEffect(() => {
-    if (!drawn || wanted === '') return;
-    if (ADVANCED.includes(wanted)) setAdvanced(true);
-    setTarget({ id: wanted });
-  }, [drawn, wanted, key]);
-  // A folded section has no box: the page scrolls once « Advanced » is drawn open.
-  useEffect(() => {
-    if (target !== undefined) document.getElementById(target.id)?.scrollIntoView({ block: 'start' });
-  }, [target]);
-
   /** The places the worker kept, in place of the ones of the list: no read again. */
   function placed(places: Destination[]) {
-    setRead((current) =>
-      typeof current === 'string'
-        ? current
-        : {
-            ...current,
-            destinations: places,
-            ...(places[0] === undefined ? { destination: undefined } : { destination: places[0] }),
-          },
-    );
+    setSite((current) => ({
+      ...current,
+      destinations: places,
+      ...(places[0] === undefined ? { destination: undefined } : { destination: places[0] }),
+    }));
   }
 
-  const [problem, setProblem] = useState<string | undefined>();
-  const removeButton = useRef<HTMLDivElement>(null);
-  async function remove() {
-    setProblem(undefined);
-    const removed = await call('DELETE', `${base}/sites/${encodeURIComponent(siteId)}`);
-    // A site that is still there says so under the button (FRU-164).
-    if (!removed.ok) return setProblem(problemOf(removed, REMOVAL_PROBLEMS, SITE_NOT_REMOVED));
-    // The grid takes focus on its search: a keyboard does not start again from the top of the page.
-    navigate(`/w/${workspace.id}/sites`, { state: { removed: siteId } });
-  }
-  const keep = () => {
-    setRemoving(false);
-    if (hash === '#remove') navigate({ hash: '' }, { replace: true });
-    // The way back gives focus to the button that asks, which the confirmation replaced.
-    requestAnimationFrame(() => removeButton.current?.querySelector('button')?.focus());
-  };
+  const moved = MOVED[hash.slice(1)];
+  if (moved !== undefined)
+    return <Navigate replace to={`${siteTabPath(workspace.id, site.id, moved.tab)}${moved.hash ?? ''}`} />;
 
-  // The crumbs are in the room above the title (a line of words and 10 px under them): the title of
-  // every page is at the same place (FRU-405).
-  const crumbs = (
-    <nav
-      aria-label={t('Breadcrumb')}
-      className="-mt-[calc(var(--text-small)*var(--text-small--line-height)+10px)] mb-[10px] flex flex-wrap items-center gap-[8px] text-small text-muted"
-    >
-      <LinkButton space="inline" to={`/w/${workspace.id}/sites`}>
-        {t('Sites')}
-      </LinkButton>
-      {site === undefined ? null : (
-        <>
-          <span aria-hidden="true">›</span>
-          <span aria-current="page" className="min-w-0 [overflow-wrap:anywhere]">
-            {name}
-          </span>
-        </>
-      )}
-    </nav>
-  );
-
-  if (site === undefined)
-    return (
-      <>
-        {crumbs}
-        <PageHead title={t('Site')} lead={t('Its address, where its notes go, and how to install Fruitback on it.')} />
-        {read === 'loading' ? <p className="text-small text-muted">{t('Loading…')}</p> : null}
-        {gone ? <p className="text-body text-muted">{t('This site is not in the workspace any more.')}</p> : null}
-        {read === 'failed' ? (
-          <LoadFailed
-            title={t('The site did not load')}
-            detail={
-              <>
-                <ReadProblem /> {t('Your sites and notes are safe.')}
-              </>
-            }
-            retry={t('Try again')}
-            onRetry={() => void readOne()}
-          />
-        ) : null}
-      </>
-    );
-
-  const host = name ?? '';
-  // Who reads, who writes, and the e-mail of FRU-604, as the tab « Access » reads them (FRU-703).
+  // Who writes, and the e-mail of FRU-604, as the tab « Access » reads them (FRU-703).
   const access = accessOf(site);
 
   return (
-    <>
-      {crumbs}
-      {/* The title is where the title of every page is (FRU-405): no icon pushes it. */}
-      <PageHead
-        title={host}
-        lead={t('Its address, where its notes go, and how to install Fruitback on it.')}
-        action={<NotesLink workspace={workspace.id} site={site} />}
-      />
-      <SiteTabs workspace={workspace.id} site={site.id} current="overview" />
-
-      <div className="flex max-w-[760px] flex-col gap-[40px]">
-        <Section id="about" title={t('Site')}>
-          <KeyValue
-            rows={[
-              { term: t('Address'), value: <SiteLink origin={site.origin} /> },
-              {
-                term: t('Who sees the notes'),
-                value:
-                  site.visibility === 'members'
-                    ? t('Members of {workspace}', { workspace: workspace.name })
-                    : t('Everyone who visits'),
-              },
-              {
-                term: t('Who can leave a note'),
-                // FRU-703: `writers` decides on every site; a worker of before sends none (`accessOf`).
-                value: access.writers === 'anyone' ? t('Anyone on the page') : t('Members only'),
-              },
-              // FRU-604: said only where anybody may leave a note, as the switch is shown only there.
-              ...(access.writers === 'anyone'
-                ? [
-                    {
-                      term: t('E-mail when a note is done'),
-                      value: site.notifyDone === true ? t('Offered to visitors') : t('Off'),
-                    },
-                  ]
-                : []),
-              {
-                // How its notes came: on the card until FRU-432, which kept the card to what is read first.
-                term: t('On the page with'),
-                value: site.via === undefined || site.via.length === 0 ? t('None yet') : viaOf(site.via),
-              },
-            ]}
-          />
-          {manages ? (
-            <div>
-              <Button
-                tone="outline"
-                to={`/w/${workspace.id}/sites/${encodeURIComponent(site.id)}/access`}
-                label={t('Change the access of {site}', { site: host })}
-              >
-                {t('Change the access')}
-              </Button>
-            </div>
-          ) : null}
-        </Section>
-
-        <Section id="install" title={t('Install')} label={t('Install on {site}', { site: host })}>
-          <InstallOptions workspace={workspace} site={site} />
-        </Section>
-
+    <div className="grid items-start gap-[16px] min-[1100px]:grid-cols-[minmax(0,1fr)_420px]">
+      <div className="flex min-w-0 flex-col gap-[16px]">
+        <SiteFigures workspace={workspace.id} site={site} seesTracker={seesTracker} />
+        <SiteRows
+          workspace={workspace.id}
+          site={site}
+          manages={manages}
+          writers={access.writers}
+          notifyDone={access.notifyDone}
+        />
         {manages && seesTracker ? (
-          <div id="destinations" className="scroll-mt-[24px]">
-            <SitePlaces
-              base={base}
-              workspaceId={workspace.id}
-              site={site}
-              connectors={connectors}
-              onRetry={() => void readConnectors()}
-              onPlaced={placed}
-            />
-          </div>
-        ) : null}
-
-        {manages ? (
-          <Disclosure
-            id="advanced"
-            title={t('Advanced')}
-            hint={t('Statuses, starting an agent, preview deploys')}
-            open={advanced}
-            onToggle={setAdvanced}
-          >
-            <Section id="statuses" title={t('Statuses')}>
-              <p className="text-small text-muted">
-                {t(
-                  'The name and the colour of each status, and the stage it belongs to. The stage decides the filters and the counts.',
-                )}
-              </p>
-              <div>
-                <Button tone="outline" to={`/w/${workspace.id}/sites/${site.id}/statuses`}>
-                  {t('Edit the statuses')}
-                </Button>
-              </div>
-            </Section>
-            <SiteAgent
-              workspace={workspace}
-              site={site}
-              connectors={connectors}
-              onRetry={() => void readConnectors()}
-            />
-            <div id="previews" className="scroll-mt-[24px] [&>section]:mt-0">
-              <Domains workspace={workspace} sites={choices} />
-            </div>
-          </Disclosure>
-        ) : null}
-
-        {manages ? (
-          <Section id="remove" title={t('Remove this site')}>
-            {removing ? (
-              <Confirmation
-                confirmLabel={t('Remove {site}', { site: host })}
-                consequence={t(
-                  'The widget stops on {site}, and the script pasted there no longer works: adding the site again gives it a new script. The notes that Fruitback keeps for it are deleted. The notes already in a tracker stay there.',
-                  { site: host },
-                )}
-                onConfirm={() => void remove()}
-                onKeep={keep}
-              />
-            ) : (
-              <div ref={removeButton} className="flex flex-col items-start gap-[12px]">
-                <p className="text-small text-muted">
-                  {t('The widget stops on this site, and the notes that Fruitback keeps for it are deleted.')}
-                </p>
-                <Button tone="outline" onClick={() => setRemoving(true)}>
-                  {t('Remove')}
-                </Button>
-              </div>
-            )}
-            {problem === undefined ? null : <Problem>{t(problem)}</Problem>}
-          </Section>
+          <PlacesCard base={base} workspace={workspace.id} site={site} connectors={connectors} onPlaced={placed} />
         ) : null}
       </div>
-    </>
-  );
-}
-
-/**
- * The notes of the site, on the Notes screen with the site chosen (FRU-504): the select of the Notes
- * screen lists every site, and the count is on the card only. No link to a list that is empty.
- */
-function NotesLink({ workspace, site }: { workspace: string; site: Site }) {
-  useLocale();
-  const notes = site.notes;
-  // A worker of before sends no count: the link is there, with no number.
-  const total = notes === undefined ? undefined : STAGES.reduce((sum, stage) => sum + notes[stage], 0);
-  if (total === 0) return null;
-  let words = t('See its notes');
-  if (total === 1) words = t('See its note');
-  else if (total !== undefined) words = t('See its {count} notes', { count: total });
-
-  return (
-    <Button tone="outline" to={notesOf(workspace, site.id)}>
-      {words}
-    </Button>
-  );
-}
-
-/** How the notes of a site came: the script pasted on its pages, the extension, or both. */
-function viaOf(via: readonly ('script' | 'extension')[]): string {
-  if (via.includes('script') && via.includes('extension')) return t('Extension, script');
-
-  return via.includes('extension') ? t('Extension') : t('Script');
-}
-
-/**
- * The address of the site, a link to it in a new tab (FRU-575): the console stays where it is. Only an
- * `http` or `https` origin is a link, to the address it shows; the worker keeps no other.
- */
-function SiteLink({ origin }: { origin: string }) {
-  useLocale();
-  // The link opens the address it shows: the origin as `siteLabel` reads it, never the raw value.
-  const label = siteLabel(origin);
-  if (!/^https?:\/\//.test(label)) return <span className="[overflow-wrap:anywhere]">{label}</span>;
-
-  return (
-    <a
-      href={label}
-      target="_blank"
-      rel="noreferrer"
-      className="[overflow-wrap:anywhere] text-ink underline decoration-1 underline-offset-[3px] hover:text-accent-strong"
-    >
-      {label}
-      <span className="sr-only"> {t('(opens in a new tab)')}</span>
-      <svg aria-hidden="true" viewBox="0 0 24 24" className="ml-[4px] inline-block h-[12px] w-[12px] align-baseline">
-        <path
-          d="M8 16L16 8M9.5 8H16v6.5"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    </a>
-  );
-}
-
-/** A section of the page, reached by its hash, and named by its title or by a longer label. */
-function Section({ id, title, label, children }: { id: string; title: string; label?: string; children: ReactNode }) {
-  return (
-    <section
-      id={id}
-      {...(label === undefined ? { 'aria-labelledby': `${id}-title` } : { 'aria-label': label })}
-      className="flex min-w-0 scroll-mt-[24px] flex-col gap-[12px]"
-    >
-      <h2 id={`${id}-title`} className="text-section font-bold">
-        {title}
-      </h2>
-      {children}
-    </section>
+      <div className="flex min-w-0 flex-col gap-[16px]">
+        <InstallCard workspace={workspace} site={site} />
+      </div>
+    </div>
   );
 }

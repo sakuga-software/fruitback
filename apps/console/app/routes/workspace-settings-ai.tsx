@@ -90,7 +90,7 @@ function AgentsSection({ workspace, may }: { workspace: Workspace; may: boolean 
   );
 }
 
-/** A link to « Start an agent » on the page of each site, `…/sites/<site>#agent`. */
+/** A link to « Start an agent » on the page of each site, `…/sites/<site>/advanced#agent` (FRU-689). */
 function SiteTriggers({ base, sites, onRetry }: { base: string; sites: Listed<SiteChoice>; onRetry: () => void }) {
   useLocale();
   if (sites === 'loading') return <p className="text-small text-muted">{t('Loading…')}</p>;
@@ -119,7 +119,7 @@ function SiteTriggers({ base, sites, onRetry }: { base: string; sites: Listed<Si
     <ul aria-label={t('Start an agent, by site')} className="flex flex-col gap-[6px] text-small">
       {sites.map((site) => (
         <li key={site.id}>
-          <LinkButton space="inline" to={`${base}/sites/${site.id}#agent`}>
+          <LinkButton space="inline" to={`${base}/sites/${site.id}/advanced#agent`}>
             {t('Start an agent on {site}', { site: siteName(site.origin) })}
           </LinkButton>
         </li>

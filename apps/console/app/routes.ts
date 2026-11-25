@@ -27,9 +27,15 @@ export default [
   route('authorize/:request', 'routes/authorize.tsx'),
   layout('routes/workspace.tsx', [
     route('w/:workspace/sites', 'routes/sites.tsx'),
-    route('w/:workspace/sites/:site', 'routes/site.tsx'),
-    route('w/:workspace/sites/:site/access', 'routes/site-access.tsx'),
-    route('w/:workspace/sites/:site/statuses', 'routes/site-statuses.tsx'),
+    // The page of a site (FRU-689): one frame reads the site, and each tab is a route of its own.
+    layout('routes/site-frame.tsx', [
+      route('w/:workspace/sites/:site', 'routes/site.tsx'),
+      route('w/:workspace/sites/:site/install', 'routes/site-install.tsx'),
+      route('w/:workspace/sites/:site/destinations', 'routes/site-destinations.tsx'),
+      route('w/:workspace/sites/:site/statuses', 'routes/site-statuses.tsx'),
+      route('w/:workspace/sites/:site/access', 'routes/site-access.tsx'),
+      route('w/:workspace/sites/:site/advanced', 'routes/site-advanced.tsx'),
+    ]),
     route('w/:workspace/notes', 'routes/notes.tsx'),
     route('w/:workspace/connectors', 'routes/connectors.tsx'),
     route('w/:workspace/members', 'routes/members.tsx'),

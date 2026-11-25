@@ -1,17 +1,13 @@
-import { useCallback, useEffect, useState } from 'react';
-import { useParams } from 'react-router';
+import { useEffect, useState } from 'react';
 import { type Access, accessBody, accessOf, sameAccess } from '../access-policy';
-import { type Site, call, readSite } from '../api';
+import { type Site, call } from '../api';
 import { msg, t } from '../i18n';
-import { type Fetched } from '../listed';
 import { problemOf } from '../problems';
-import { ReadProblem } from '../read-problem';
 import { siteName } from '../site-address';
-import { Button, LinkButton, LoadFailed, Problem } from '../ui';
+import { Button, Problem } from '../ui';
 import { useLocale } from '../use-locale';
 import { AccessLevels, DoneNotice, VisitorPreview, VisitorRecognition, VisitorRights } from '../parts/site-access';
-import { SiteTabs } from '../parts/site-tabs';
-import { PageHead, useWorkspace } from './workspace';
+import { useSite } from './site-frame';
 
 const ACCESS_PROBLEMS: Readonly<Record<string, string>> = {
   forbidden: msg('Only an owner or an admin of the workspace changes who sees the notes.'),
@@ -24,32 +20,24 @@ const ACCESS_NOT_CHANGED = msg('Who sees the notes did not change. Try again.');
  * this page shows them and sends them, with « Save », as one `POST …/sites` of the address of the site
  * (`addSite` of the store keeps its id, its script and its places).
  *
- * An owner or an admin changes it. Any other role reads it, with every control disabled.
+ * An owner or an admin changes it. Any other role reads it, with every control disabled. The frame of
+ * the page (FRU-689) reads the site; « Save » gives it what the worker kept, so « Overview » shows it.
  */
 export default function SiteAccessPage() {
   useLocale();
-  const { workspace } = useWorkspace();
-  const { site: siteId = '' } = useParams();
-  const manages = workspace.role === 'owner' || workspace.role === 'admin';
-  const [read, setRead] = useState<Fetched<Site> | 'gone'>('loading');
+  const { workspace, site, setSite, manages } = useSite();
   // What the tab shows, which « Save » sends. Set again from each site the worker answers.
-  const [draft, setDraft] = useState<Access | undefined>();
+  const [draft, setDraft] = useState<Access>(() => accessOf(site));
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | undefined>();
   const [saved, setSaved] = useState(false);
-
-  const readOne = useCallback(async () => {
-    setRead('loading');
-    const answer = await readSite(workspace.id, siteId);
-    if (!answer.ok) return setRead(answer.status === 404 ? 'gone' : 'failed');
-    if (typeof answer.data?.id !== 'string' || typeof answer.data.origin !== 'string') return setRead('failed');
-    setRead(answer.data);
-    setDraft(accessOf(answer.data));
-  }, [workspace.id, siteId]);
-  useEffect(() => void readOne(), [readOne]);
-
-  const site = typeof read === 'string' ? undefined : read;
-  const host = site === undefined ? '' : siteName(site.origin);
+  const host = siteName(site.origin);
+  // Another site in the same frame (a link from one site to another): the tab shows its access.
+  useEffect(() => {
+    setDraft(accessOf(site));
+    // Only the id: the site kept after « Save » sets the draft there, and nothing else resets it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [site.id]);
 
   function change(next: Access) {
     setSaved(false);
@@ -58,7 +46,7 @@ export default function SiteAccessPage() {
   }
 
   async function save() {
-    if (site === undefined || draft === undefined || busy) return;
+    if (busy) return;
     setProblem(undefined);
     // Nothing changed: nothing is asked of the worker.
     if (sameAccess(draft, accessOf(site))) return setSaved(true);
@@ -74,72 +62,23 @@ export default function SiteAccessPage() {
       return setProblem(ACCESS_NOT_CHANGED);
     }
     const kept = { ...site, ...data };
-    setRead(kept);
+    setSite((current) => ({ ...current, ...data }));
     setDraft(accessOf(kept));
     setSaved(true);
   }
 
-  const crumbs = (
-    <nav
-      aria-label={t('Breadcrumb')}
-      className="-mt-[calc(var(--text-small)*var(--text-small--line-height)+10px)] mb-[10px] flex flex-wrap items-center gap-[8px] text-small text-muted"
-    >
-      <LinkButton space="inline" to={`/w/${workspace.id}/sites`}>
-        {t('Sites')}
-      </LinkButton>
-      {site === undefined ? null : (
-        <>
-          <span aria-hidden="true">›</span>
-          <span aria-current="page" className="min-w-0 [overflow-wrap:anywhere]">
-            {host}
-          </span>
-        </>
-      )}
-    </nav>
-  );
-
-  if (site === undefined || draft === undefined)
-    return (
-      <>
-        {crumbs}
-        <PageHead
-          title={t('Site')}
-          lead={t('Who sees the notes of the site, who leaves them, and what a visitor may do.')}
-        />
-        {read === 'loading' ? <p className="text-small text-muted">{t('Loading…')}</p> : null}
-        {read === 'gone' ? (
-          <p className="text-body text-muted">{t('This site is not in the workspace any more.')}</p>
-        ) : null}
-        {read === 'failed' ? (
-          <LoadFailed
-            title={t('The site did not load')}
-            detail={
-              <>
-                <ReadProblem /> {t('Your sites and notes are safe.')}
-              </>
-            }
-            retry={t('Try again')}
-            onRetry={() => void readOne()}
-          />
-        ) : null}
-      </>
-    );
-
   return (
     <>
-      {crumbs}
-      <PageHead
-        title={host}
-        lead={t('Who sees the notes of the site, who leaves them, and what a visitor may do.')}
-        action={
-          manages ? (
-            <Button disabled={busy} onClick={() => void save()} label={t('Save the access of {site}', { site: host })}>
-              {t('Save')}
-            </Button>
-          ) : undefined
-        }
-      />
-      <SiteTabs workspace={workspace.id} site={site.id} current="access" />
+      <div className="mb-[16px] flex flex-wrap items-center justify-between gap-x-[24px] gap-y-[12px]">
+        <p className="min-w-0 text-small text-muted">
+          {t('Who sees the notes of the site, who leaves them, and what a visitor may do.')}
+        </p>
+        {manages ? (
+          <Button disabled={busy} onClick={() => void save()} label={t('Save the access of {site}', { site: host })}>
+            {t('Save')}
+          </Button>
+        ) : null}
+      </div>
 
       <div className="flex flex-col gap-[8px] empty:hidden [&:not(:empty)]:mb-[16px]">
         {manages ? null : (

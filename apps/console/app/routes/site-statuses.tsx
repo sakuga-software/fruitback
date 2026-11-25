@@ -3,12 +3,11 @@ import { useParams } from 'react-router';
 import { type Connector, type Site, call, placesOf, readSite } from '../api';
 import { t } from '../i18n';
 import { problemOf } from '../problems';
-import { siteLabel } from '../site-address';
 import { OWN, type StatusRow, type TrackerState, listOf } from '../site-statuses';
-import { Button, LinkButton, LoadFailed } from '../ui';
+import { Button, LoadFailed } from '../ui';
 import { useLocale } from '../use-locale';
 import { placeLabel } from '../parts/connector-parts';
-import { PageHead, useWorkspace } from './workspace';
+import { useWorkspace } from './workspace';
 import { ReadProblem } from '../read-problem';
 import { type Fetched } from '../listed';
 import { StatusList, TrackerColours } from '../parts/status-list';
@@ -157,43 +156,19 @@ export default function SiteStatuses() {
     if (manages) void load();
   }, [load, manages]);
 
-  const host = typeof read === 'string' ? undefined : siteLabel(read.site.origin);
-  // The crumbs are in the room above the title (a line of words and 10 px under them, in the 40 px of
-  // the top of the screen): the title of every page is at the same place (FRU-405).
-  const crumbs = (
-    <nav
-      aria-label={t('Breadcrumb')}
-      className="-mt-[calc(var(--text-small)*var(--text-small--line-height)+10px)] mb-[10px] flex flex-wrap items-center gap-[8px] text-small text-muted"
-    >
-      <LinkButton space="inline" to={`/w/${workspace.id}/sites`}>
-        {t('Sites')}
-      </LinkButton>
-      {host === undefined ? null : (
-        <>
-          <span aria-hidden="true">›</span>
-          {/* The site has a page of its own (FRU-433), and the crumbs lead back to it. */}
-          <span className="min-w-0 [overflow-wrap:anywhere]">
-            <LinkButton space="inline" to={`/w/${workspace.id}/sites/${encodeURIComponent(siteId)}`}>
-              {host}
-            </LinkButton>
-          </span>
-        </>
-      )}
-    </nav>
-  );
+  // The frame of the page of a site (FRU-689) draws the crumbs, the title and the tabs: the tab says
+  // what a status is, at the place of the lead of a page.
   const head = (
-    <PageHead
-      title={t('Statuses')}
-      lead={t(
+    <p className="mb-[20px] max-w-[760px] text-small text-muted">
+      {t(
         'The name and the colour of each status, and the stage it belongs to. The stage decides the filters and the counts.',
       )}
-    />
+    </p>
   );
 
   if (!manages)
     return (
       <>
-        {crumbs}
         {head}
         <p className="text-body text-muted">
           {t('Only an owner or an admin of the workspace sets the statuses of a site.')}
@@ -240,7 +215,6 @@ export default function SiteStatuses() {
 
   return (
     <>
-      {crumbs}
       {head}
       {read === 'loading' ? <p className="text-small text-muted">{t('Loading…')}</p> : null}
       {read === 'gone' ? (

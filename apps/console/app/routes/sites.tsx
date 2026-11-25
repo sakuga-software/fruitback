@@ -136,11 +136,11 @@ export default function Sites() {
     setParams(next, { replace: true });
   }, [past, pages, setParams]);
 
-  // A new site opens its page, at how to put Fruitback on it (FRU-433): the table unfolds nothing.
+  // A new site opens its page, at its tab « Install » (FRU-433, FRU-689): the table unfolds nothing.
   const navigate = useNavigate();
   function added(site: Site) {
     setAdding(false);
-    navigate(`/w/${workspace.id}/sites/${site.id}#install`);
+    navigate(`/w/${workspace.id}/sites/${site.id}/install`);
   }
 
   // A site removed on its page comes back here: focus goes to the search, or to the field of the card
@@ -467,7 +467,8 @@ function SiteRow({ workspace, site, manages, seesTracker, span }: SiteRowProps) 
     if (id === 'statuses') navigate(`${page}/statuses`);
     else if (id === 'open') navigate(page);
     else if (id === 'notes') navigate(notesOf(workspace.id, site.id));
-    else navigate(`${page}#${id}`);
+    // « Remove » is in the tab « Advanced » (FRU-689), which asks the second time.
+    else navigate(`${page}/advanced#${id}`);
   };
   // A press on the row opens the page of the site, as a press on its name does. A press on a control
   // is the control's; a press in a menu or a tooltip comes through the tree of React, not of the page;
