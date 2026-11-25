@@ -65,10 +65,10 @@ for (const [width, locale] of [
     expect(first).toEqual({
       top: 40,
       left: 0,
-      'font-size': '28px',
-      'line-height': '32.2px',
+      'font-size': '20px',
+      'line-height': '25px',
       'font-weight': '700',
-      'letter-spacing': '-0.56px',
+      'letter-spacing': '-0.4px',
     });
     for (const path of PAGES.slice(1)) {
       expect.soft(await titleOf(page, path), path).toEqual(first);

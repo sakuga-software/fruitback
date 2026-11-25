@@ -43,45 +43,53 @@
 @import '@heroui/styles/utilities';
 @import '@heroui/styles/variants';
 @import '@fruitback/shared/tailwind/theme.css';
+/* The slate theme of the console alone (FRU-683): it sets tokens of the shared theme again. */
+@import './theme.css';
 
 /*
-  HeroUI takes the theme, it does not set it: its variables get the tokens of design/README.md. It
-  also names --color-accent, --color-muted and --color-surface from these, so a screen that writes
-  bg-accent and a button of HeroUI paint the same red.
+  HeroUI takes the theme, it does not set it: its variables read the tokens of theme.css (FRU-683),
+  so a setting of the appearance that changes a token changes HeroUI too. HeroUI also names
+  --color-accent, --color-muted and --color-surface from these, so a screen that writes bg-accent and
+  a button of HeroUI paint the same red.
 */
 :root {
   color-scheme: light;
-  --background: #ffffff;
-  --foreground: #18181b;
-  --surface: #ffffff;
-  --overlay: #ffffff;
-  /* 5.28:1 on white, 5.05:1 on --color-subtle, 4.80:1 on --color-chip (design/README.md). */
-  --muted: #6b6b74;
-  --default: #f4f4f5;
-  --default-foreground: #18181b;
+  --background: var(--color-page);
+  --foreground: var(--color-ink);
+  --surface: var(--color-page);
+  --overlay: var(--color-page);
+  /* The secondary text: 5.74:1 on white, 5.20:1 on the sidebar, 4.87:1 under the pointer, 4.65:1 on
+     the selection (theme.test.ts). */
+  --muted: #5b6779;
+  --default: var(--color-chip);
+  --default-foreground: var(--color-ink);
   --accent: #dd2c27;
   --accent-foreground: #ffffff;
   /* HeroUI lightens a hovered or pressed button by default: white on that red was 3.9:1 (FRU-163).
      The strong accent of the mockup is darker, and white on it is 6.47:1. */
-  --accent-hover: #b91c1c;
-  --danger: #b91c1c;
+  --accent-hover: var(--color-accent-strong);
+  --danger: var(--color-accent-strong);
   --danger-foreground: #ffffff;
-  --success: #15803d;
+  --success: var(--color-done);
   --success-foreground: #ffffff;
-  --border: #e4e4e7;
-  --separator: #e4e4e7;
-  --focus: #dd2c27;
-  --field-background: #ffffff;
-  --field-foreground: #18181b;
-  /* The mockup writes a placeholder in the muted tone: 5.28:1, where the tone of before was 2.5:1. */
-  --field-placeholder: #6b6b74;
-  /* The border of a control: 3.42:1 on white, over the 3:1 a border needs when it alone says where
+  --border: var(--color-line);
+  --separator: var(--color-line);
+  --focus: var(--accent);
+  --field-background: var(--color-page);
+  --field-foreground: var(--color-ink);
+  /* A placeholder is in the secondary tone: 5.74:1 on white. */
+  --field-placeholder: var(--muted);
+  /* The border of a control: 3.65:1 on white, over the 3:1 a border needs when it alone says where
      a control is (WCAG 1.4.11). */
-  --field-border: #8a8a93;
+  --field-border: var(--color-control);
   --field-border-width: 1px;
-  --radius: 0.5rem;
-  /* HeroUI derives 12 px from --radius. The mockup draws a field at 8 px. */
-  --field-radius: 8px;
+  /*
+    HeroUI derives every radius from --radius and from the scale of Tailwind (a button is
+    rounded-3xl, a menu item rounded-2xl). One radius (FRU-683): theme.css sets each step of the
+    scale to the radius of a control, and the kit gives a modal and an alert theirs by a class.
+  */
+  --radius: var(--radius-control);
+  --field-radius: var(--radius-control);
   /* The mockup draws a field flat. Transparent and not none: the rings of HeroUI are shadows too. */
   --field-shadow: 0 0 0 0 transparent;
 }
@@ -121,7 +129,7 @@ textarea {
   caret-color: var(--color-accent);
 }
 
-/* On the rail, its lighter red takes the place of this one: `[&_:focus-visible]:outline-rail-accent!`. */
+/* The ring of every page, the bar of FRU-684 too: the accent is 3:1 and more on its slate. */
 :focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
@@ -129,7 +137,7 @@ textarea {
 
 /*
   The moves between the screens of a workspace, between workspaces and to the administration
-  (FRU-356). The rail (`[view-transition-name:rail]`) is one block that holds still, and the screen
+  (FRU-356). The bar (`[view-transition-name:rail]`) is one block that holds still, and the screen
   (`screen`) beside it cross-fades: the old one goes in 120 ms, the new one comes in 220 ms from 4 px
   lower. A browser with no view transitions changes the screen at once. With reduced motion nothing
   moves.
@@ -144,25 +152,6 @@ textarea {
 }
 
 ::view-transition-new(rail) {
-  animation: none;
-}
-
-/*
-  The drop of the entry on screen (`rail-drop`) slides from the entry of before to the new one
-  (FRU-413): it is a picture of its own in the move, so the rail that holds still does not hold it.
-  The same drop is on both sides, so it moves and does not fade. One entry of the rail is on screen
-  at a time, so the name is held once.
-*/
-::view-transition-group(rail-drop) {
-  animation-duration: var(--duration-fast);
-  animation-timing-function: var(--ease-settle);
-}
-
-::view-transition-old(rail-drop) {
-  display: none;
-}
-
-::view-transition-new(rail-drop) {
   animation: none;
 }
 

@@ -165,7 +165,7 @@ export function NotesBoard<Note extends BoardNote>({
                 event.preventDefault();
                 void drop(column);
               }}
-              className="box-border flex w-[272px] flex-none flex-col rounded-frame border border-line bg-subtle p-[12px] data-[drop=true]:border-ink data-[drop=true]:bg-chip"
+              className="box-border flex w-[272px] flex-none flex-col rounded-card border border-line bg-subtle p-[12px] data-[drop=true]:border-ink data-[drop=true]:bg-chip"
             >
               <div className="mb-[10px] flex items-center gap-[4px]">
                 <h2
@@ -230,7 +230,7 @@ export function NotesBoard<Note extends BoardNote>({
                         }}
                         data-note={note.id}
                         data-insert={inserted}
-                        className={`box-border rounded-box border border-line bg-page p-[12px] text-small data-[insert=before]:shadow-[0_-3px_0_0_var(--color-ink)] data-[insert=after]:shadow-[0_3px_0_0_var(--color-ink)] ${SELECTED_CARD} ${
+                        className={`box-border rounded-card border border-line bg-page p-[12px] text-small data-[insert=before]:shadow-[0_-3px_0_0_var(--color-ink)] data-[insert=after]:shadow-[0_3px_0_0_var(--color-ink)] ${SELECTED_CARD} ${
                           draggable ? 'cursor-grab active:cursor-grabbing' : ''
                         } ${moving === note.id || dragged?.id === note.id ? 'opacity-60' : ''}`}
                       >

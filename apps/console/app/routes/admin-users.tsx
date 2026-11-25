@@ -77,20 +77,13 @@ type Listed = {
 
 type Status = 'admin' | 'active' | 'invited' | 'suspended';
 
+/** The word and the colour of a status. « Suspended » is the strong red: the accent is under 4.5:1 on the slate tints of a row (FRU-683). */
 const STATUSES = {
   admin: { word: msg('Instance admin'), colour: 'text-ink' },
   active: { word: msg('Active'), colour: 'text-done' },
   invited: { word: msg('Invited'), colour: 'text-muted' },
-  suspended: { word: msg('Suspended'), colour: 'text-accent' },
+  suspended: { word: msg('Suspended'), colour: 'text-accent-strong' },
 } as const satisfies Record<Status, { word: string; colour: string }>;
-
-/**
- * The colour of a status. The red of the mockup is 4.28:1 on the tint of the chosen row
- * (design/simpler-flow/SPEC.md), so the chosen row takes the darker red.
- */
-function colourOf(status: Status, chosen: boolean): string {
-  return status === 'suspended' && chosen ? 'text-accent-strong' : STATUSES[status].colour;
-}
 
 /** An account in no workspace with an invitation that waits is « Invited ». */
 function statusOf(user: AdminUser): Status {
@@ -329,7 +322,7 @@ export default function AdminUsers() {
                           <SignsInWith user={user} />
                         </td>
                         <td>
-                          <span className={`block font-semibold ${colourOf(status, isChosen)}`}>
+                          <span className={`block font-semibold ${STATUSES[status].colour}`}>
                             <StatusWord status={status} />
                           </span>
                           <span className="block text-hint text-muted tabular-nums">

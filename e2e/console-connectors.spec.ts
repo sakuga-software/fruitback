@@ -3,16 +3,17 @@ import { type Page, type Route, expect, test } from '@playwright/test';
 import { WORKER_ORIGIN } from './pin.ts';
 import {
   ACME,
+  BAR_SHIFT,
   type Role,
   box,
   contrast,
   expectBox,
+  fulfillSites,
   painted,
   rgb,
   sideScroll,
   stubWorker,
   styles,
-  fulfillSites,
 } from './console-workspace.ts';
 import { unfolded } from './settled.ts';
 
@@ -27,16 +28,19 @@ import { unfolded } from './settled.ts';
  */
 const CONSOLE = 'http://localhost:5178';
 
-const MUTED = '#6b6b74';
-const LINE = '#e4e4e7';
-const SUBTLE = '#fafafa';
-const CHIP = '#f4f4f5';
+const MUTED = '#5b6779';
+const LINE = '#e3e8ef';
+const SUBTLE = '#f7f9fb';
+const CHIP = '#e8edf3';
+/** Under the pointer, and a chosen row (FRU-683). */
+const HOVER = '#e8edf3';
+const SELECTED = '#e2e8f0';
 const ACCENT = '#dd2c27';
 const ACCENT_STRONG = '#b91c1c';
-const DONE = '#15803d';
+const DONE = '#166534';
 const WHITE = '#ffffff';
 /** The width of a row at 1440 px, inside the border of the list: the whole page, since FRU-403. */
-const ROW_WIDTH = 1093;
+const ROW_WIDTH = 1093 - BAR_SHIFT;
 
 const SETTINGS = { showComments: true, stages: {} };
 const LINEAR = {
@@ -223,13 +227,13 @@ test('the list of the sources and the panel of a Linear are the ones of the mock
   // « Your connectors »: a card for each source, one under the other (FRU-542).
   const title = page.getByRole('heading', { level: 2, name: 'Your connectors', exact: true });
   expect.soft(await styles(title, ['font-size', 'font-weight', 'margin-bottom'])).toEqual({
-    'font-size': '15px',
+    'font-size': '13px',
     'font-weight': '600',
     'margin-bottom': '10px',
   });
   const frame = rows(page).first().locator('xpath=ancestor::li[1]');
   expect.soft(await styles(frame, ['border-top-left-radius', 'border-top-width', 'overflow-x'])).toEqual({
-    'border-top-left-radius': '14px',
+    'border-top-left-radius': '8px',
     'border-top-width': '1px',
     'overflow-x': 'hidden',
   });
@@ -251,7 +255,7 @@ test('the list of the sources and the panel of a Linear are the ones of the mock
     'column-gap': '14px',
     'text-align': 'left',
   });
-  expect.soft(await painted(chosen, 'backgroundColor')).toEqual(rgb(CHIP));
+  expect.soft(await painted(chosen, 'backgroundColor')).toEqual(rgb(SELECTED));
   expect.soft(await painted(resting, 'backgroundColor')).toEqual(rgb(WHITE));
   // The boxes at 1440 px. The rows take the width of the page, where the mockup draws a column for
   // the panel, and the panel opens under its row, inside its card, before the next card (FRU-403,
@@ -261,15 +265,20 @@ test('the list of the sources and the panel of a Linear are the ones of the mock
     for (let at: Element | null = heading; at !== null; at = at.parentElement) at.scrollTop = 0;
     document.scrollingElement?.scrollTo(0, 0);
   });
-  expectBox(await box(title), { x: 297, y: 130, height: 18 }, 2, '« Connected »');
-  expectBox(await box(chosen), { x: 298, y: 159, width: ROW_WIDTH, height: 65 }, 2, 'the first row');
-  expectBox(await box(panel(page)), { x: 298, y: 224, width: ROW_WIDTH }, 2, 'the panel');
+  expectBox(await box(title), { x: 297 + BAR_SHIFT, y: 120, height: 18 }, 2, '« Connected »');
+  expectBox(await box(chosen), { x: 298 + BAR_SHIFT, y: 147, width: ROW_WIDTH, height: 65 }, 2, 'the first row');
+  expectBox(await box(panel(page)), { x: 298 + BAR_SHIFT, y: 211, width: ROW_WIDTH }, 2, 'the panel');
   const under = await box(panel(page));
-  expectBox(await box(resting), { x: 298, y: under.y + under.height + 14, width: ROW_WIDTH }, 2, 'the second row');
+  expectBox(
+    await box(resting),
+    { x: 298 + BAR_SHIFT, y: under.y + under.height + 14, width: ROW_WIDTH },
+    2,
+    'the second row',
+  );
 
   // A hover scrolls the second row into view, below the panel: the boxes are taken before it.
   await resting.hover();
-  expect.soft(await painted(resting, 'backgroundColor')).toEqual(rgb(SUBTLE));
+  expect.soft(await painted(resting, 'backgroundColor')).toEqual(rgb(HOVER));
   await page.mouse.move(700, 880);
 
   // The mark: 34 px inside its border, with the logo of its tracker, 18 px, where the mockup writes a
@@ -280,7 +289,7 @@ test('the list of the sources and the panel of a Linear are the ones of the mock
     width: '34px',
     height: '34px',
     'box-sizing': 'content-box',
-    'border-top-left-radius': '8px',
+    'border-top-left-radius': '6px',
   });
   expect.soft(await painted(mark, 'backgroundColor')).toEqual(rgb(WHITE));
   const logo = mark.locator('svg[data-mark="linear"]');
@@ -290,15 +299,17 @@ test('the list of the sources and the panel of a Linear are the ones of the mock
 
   // The name, how the source is connected with the count of its sites, and its state.
   const name = chosen.getByText('Linear', { exact: true });
-  expect.soft(await styles(name, ['font-size', 'font-weight'])).toEqual({ 'font-size': '15px', 'font-weight': '600' });
+  expect.soft(await styles(name, ['font-size', 'font-weight'])).toEqual({ 'font-size': '13px', 'font-weight': '600' });
   const detail = chosen.getByText('Workspace Acme · 2 sites');
-  expect.soft(await styles(detail, ['font-size'])).toEqual({ 'font-size': '13px' });
+  expect.soft(await styles(detail, ['font-size'])).toEqual({ 'font-size': '12px' });
   expect.soft(await painted(detail, 'color')).toEqual(rgb(MUTED));
   await expect(resting.getByText('hooks.acme.dev/feedback · 1 site')).toBeVisible();
   const state = chosen.getByText('Connected', { exact: true });
-  expect.soft(await styles(state, ['font-size', 'font-weight'])).toEqual({ 'font-size': '13px', 'font-weight': '600' });
+  expect.soft(await styles(state, ['font-size', 'font-weight'])).toEqual({ 'font-size': '12px', 'font-weight': '600' });
   expect.soft(await painted(state, 'color')).toEqual(rgb(DONE));
-  expect.soft(contrast(rgb(DONE), rgb(CHIP)), 'the green on the tint of the chosen row').toBeGreaterThanOrEqual(4.5);
+  expect
+    .soft(contrast(rgb(DONE), rgb(SELECTED)), 'the green on the tint of the chosen row')
+    .toBeGreaterThanOrEqual(4.5);
 
   // The panel: the tint of a panel inside the frame of the list, under the rule of its row. It has
   // no card of its own, and its row shows its name: its title is said to a screen reader only.
@@ -323,7 +334,7 @@ test('the list of the sources and the panel of a Linear are the ones of the mock
   });
   await expect(card.getByText('Connected to the workspace Acme')).toBeVisible();
   const block = card.getByRole('heading', { level: 3, name: 'Sites sending here' });
-  expect.soft(await styles(block, ['font-size', 'font-weight'])).toEqual({ 'font-size': '14px', 'font-weight': '600' });
+  expect.soft(await styles(block, ['font-size', 'font-weight'])).toEqual({ 'font-size': '13px', 'font-weight': '600' });
   expect.soft(await styles(block.locator('xpath=ancestor::section[1]/..'), ['padding', 'row-gap'])).toEqual({
     padding: '20px 22px',
     'row-gap': '24px',
@@ -371,7 +382,7 @@ test('the list of the sources and the panel of a Linear are the ones of the mock
   // The foot: underlined words that disconnect, after a second question.
   const disconnect = card.getByRole('button', { name: 'Disconnect Linear', exact: true });
   expect.soft(await styles(disconnect, ['font-size', 'font-weight', 'text-decoration-line', 'padding-top'])).toEqual({
-    'font-size': '14px',
+    'font-size': '13px',
     'font-weight': '600',
     'text-decoration-line': 'underline',
     'padding-top': '10px',
@@ -390,9 +401,9 @@ test('an address says how many of its notes did not arrive, in a red that reads 
   const address = rows(page).nth(1);
   const state = address.getByText('2 notes did not arrive', { exact: true });
   await expect(state).toBeVisible();
-  expect.soft(await styles(state, ['font-size', 'font-weight'])).toEqual({ 'font-size': '13px', 'font-weight': '600' });
-  // At rest, the accent on white.
-  expect.soft(await painted(state, 'color')).toEqual(rgb(ACCENT));
+  expect.soft(await styles(state, ['font-size', 'font-weight'])).toEqual({ 'font-size': '12px', 'font-weight': '600' });
+  // At rest too, the strong red: the accent is under 4.5:1 on a row under the pointer (FRU-683).
+  expect.soft(await painted(state, 'color')).toEqual(rgb(ACCENT_STRONG));
   expect.soft(contrast(await painted(state, 'color'), rgb(WHITE))).toBeGreaterThanOrEqual(4.5);
   // On the chosen row, the strong accent: the accent is 4.28:1 on the tint.
   await address.click();
@@ -447,7 +458,7 @@ test('a source that its tracker refuses says so in red, on its row and in its pa
   await open(page);
   const row = rows(page).first();
   const state = row.getByText('Needs attention', { exact: true });
-  expect.soft(await painted(state, 'color')).toEqual(rgb(ACCENT));
+  expect.soft(await painted(state, 'color')).toEqual(rgb(ACCENT_STRONG));
   await expect(row.getByText('Connected', { exact: true })).toHaveCount(0);
   await row.click();
   expect.soft(await painted(state, 'color')).toEqual(rgb(ACCENT_STRONG));
@@ -578,13 +589,13 @@ test('« Add a connector » lists what connects, and what does not yet with a bu
   expect
     .soft(await styles(linear, ['height', 'padding-left', 'padding-right', 'border-top-left-radius', 'font-size']))
     .toEqual({
-      height: '40px',
+      height: '28px',
       'padding-left': '16px',
       'padding-right': '16px',
       'border-top-left-radius': '6px',
-      'font-size': '14px',
+      'font-size': '13px',
     });
-  expectBox(await box(linear), { width: 90.9, height: 40 }, 2, '« Connect »');
+  expectBox(await box(linear), { width: 87.3, height: 28 }, 2, '« Connect »');
   // A worker with a Linear application: the key is the other way.
   await expect(page.getByRole('button', { name: 'Use an API key', exact: true })).toBeVisible();
 
@@ -653,7 +664,7 @@ test('« New connector » opens a dialog with the sources as a grid of cards (FR
   expect
     .soft(await styles(card, ['border-top-left-radius', 'border-top-width', 'padding-top', 'padding-left']))
     .toEqual({
-      'border-top-left-radius': '14px',
+      'border-top-left-radius': '8px',
       'border-top-width': '1px',
       'padding-top': '16px',
       'padding-left': '16px',
