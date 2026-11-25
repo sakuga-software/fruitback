@@ -433,16 +433,20 @@ export async function holdRows(
       );
   });
   await gate;
-  // The two connections of the case are open before it starts, so the second call waits for none.
-  await Promise.all([rowsOf(database, 'SELECT 1'), rowsOf(database, 'SELECT 1')]);
-
-  // The backend of the call that waits at the gate, once `reached` has seen it.
-  let heldPid: number | undefined;
   const openGate = async () => {
     open();
     const giveUp = Date.now() + GATE_PATIENCE_MS;
     while (!closed && Date.now() < giveUp) await new Promise((resolve) => setTimeout(resolve, 5));
   };
+  // The two connections of the case are open before it starts, so the second call waits for none.
+  // The caller gets no `close` when this fails: the gate is opened here, or its transaction stays.
+  await Promise.all([rowsOf(database, 'SELECT 1'), rowsOf(database, 'SELECT 1')]).catch(async (error: unknown) => {
+    await openGate();
+    throw error;
+  });
+
+  // The backend of the call that waits at the gate, once `reached` has seen it.
+  let heldPid: number | undefined;
 
   return {
     async reached() {
