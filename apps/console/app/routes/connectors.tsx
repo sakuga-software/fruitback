@@ -896,7 +896,7 @@ function Opened({
       }}
     >
       {/* The part that the move clips while the panel grows. */}
-      <div className="source-panel__body min-h-0 [:not([data-settled])>&]:overflow-hidden motion-reduce:[:not([data-settled])>&]:overflow-visible">
+      <div className="source-panel__body min-h-0 [.source-panel:not([data-settled])>&]:overflow-hidden motion-reduce:[.source-panel:not([data-settled])>&]:overflow-visible">
         {children}
       </div>
     </div>
