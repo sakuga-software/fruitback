@@ -831,7 +831,7 @@ function rowId(connector: string): string {
  * no focus: the one of a source that Linear or GitHub just connected.
  *
  * **It unfolds** (FRU-563): its height grows from nothing and it fades in, 220 ms on the curve of the
- * kit (`.source-panel` in `app.css`). With `prefers-reduced-motion` it is there at once. The page
+ * kit (its keyframes in `app.css`). With `prefers-reduced-motion` it is there at once. The page
  * scrolls again once it has its height: at the start of the move it has none.
  */
 function Opened({
@@ -881,7 +881,7 @@ function Opened({
       aria-label={label}
       tabIndex={-1}
       // Inside the frame of the list, with the rule of the list above it and the tint of a panel.
-      className="source-panel scroll-mt-4 border-t border-line bg-subtle"
+      className="source-panel grid grid-rows-[1fr] animate-[source-panel-open_var(--duration-fast)_var(--ease-settle)_both] motion-reduce:animate-none scroll-mt-4 border-t border-line bg-subtle"
       onAnimationEnd={(event) => {
         // Only the move of the panel itself: one inside it bubbles here too.
         if (event.target !== event.currentTarget) return;
@@ -896,7 +896,9 @@ function Opened({
       }}
     >
       {/* The part that the move clips while the panel grows. */}
-      <div className="source-panel__body">{children}</div>
+      <div className="source-panel__body min-h-0 [:not([data-settled])>&]:overflow-hidden motion-reduce:[:not([data-settled])>&]:overflow-visible">
+        {children}
+      </div>
     </div>
   );
 }
