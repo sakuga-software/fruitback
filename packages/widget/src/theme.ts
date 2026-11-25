@@ -29,15 +29,15 @@ import { NOTE_STAGES, type NoteStage } from '@fruitback/shared';
  * **FRU-233 changed most of them, FRU-292 changed them again, and FRU-334 a third time.** The
  * mock-up of 2026-10-13 had left the warm stone greys for a neutral zinc scale; the mock-up of
  * 2026-10-20 brought the stone greys back. FRU-334 (Mathieu, 2026-10-21) asks for a palette less
- * brown and closer to the console of the Cloud: the greys are the zinc of apps/console/app/app.css
- * again, and the five stages take the colours Mathieu chose: grey for new, a lighter grey for to do,
+ * brown and closer to the console of the Cloud: the greys are the zinc of the console again,
+ * and the five stages take the colours Mathieu chose: grey for new, a lighter grey for to do,
  * mango for in progress, blueberry for done, cherry for closed. The first three are written black,
  * the last two white. The tables of old and new values are in docs/decisions/widget.md. The names
  * of the stages are those words since FRU-355, and they are the contract.
  *
  * **This file is the one source of the statuses.** The extension copies them in
- * apps/extension/entrypoints/popup/style.css and the console in apps/console/app/app.css, because a
- * stylesheet cannot import this module. apps/extension/src/design-tokens.test.ts and
+ * apps/extension/entrypoints/popup/style.css and the console in packages/shared/tailwind/theme.css,
+ * because a stylesheet cannot import this module. apps/extension/src/design-tokens.test.ts and
  * apps/console/app/tokens.test.ts read this file and fail when a copy differs.
  *
  * **One accent everywhere** (FRU-372). The red #dd2c27 is the accent of the widget, of the console
