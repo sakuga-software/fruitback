@@ -270,8 +270,9 @@ test('the rail is as high as the window and stays while the screen scrolls; unde
   page,
 }) => {
   await stubWorker(page);
-  // A window lower than « My account »: the document scrolls.
-  await page.setViewportSize({ width: 1440, height: 600 });
+  // A window lower than « My account »: the document scrolls. At 1000 px its cards are one column
+  // (FRU-692), 882 px high; at 1440 px they are two, and fit in 600 px.
+  await page.setViewportSize({ width: 1000, height: 600 });
   await open(page, 'account');
   const help = rail(page).getByRole('link', { name: 'Help and docs' });
   await expect(help).toBeVisible();
