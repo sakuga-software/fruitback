@@ -4,6 +4,7 @@ import {
   ACME,
   type Box,
   LUMEN,
+  type StubbedWorkspace,
   box,
   contrast,
   painted,
@@ -609,6 +610,61 @@ test('the name of the workspace opens the menu of the workspaces of the person',
   await expect(page.getByRole('menu')).toBeHidden();
   await expect(rail(page).getByRole('button', { name: /^Lumen Studio/ })).toBeVisible();
   await expect(sections(page).locator('[aria-current="page"]')).toHaveText('Sites');
+});
+
+test('each workspace of the menu has its tile before its name: its logo, or its initial (FRU-661)', async ({
+  page,
+}) => {
+  // A PNG of 16 × 16 pixels, orange: the logo of Lumen Studio. Acme has none, so its initial shows.
+  const png = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAFklEQVR4nGN4EctCEmIY1TCqYfhqAADMmEkQa4Cp+AAAAABJRU5ErkJggg==',
+    'base64',
+  );
+  const lumen: StubbedWorkspace & { logo: string } = { ...LUMEN, logo: '/console/workspaces/w2/logo?v=1' };
+  await stubWorker(page, {
+    workspaces: [ACME, lumen],
+    answer: (pathname, route) =>
+      pathname === '/console/workspaces/w2/logo' ? route.fulfill({ body: png, contentType: 'image/png' }) : undefined,
+  });
+  await open(page);
+  await switcher(page).click();
+  const menu = page.getByRole('menu', { name: /Acme/ });
+  const items = menu.getByRole('menuitemradio');
+  await expect(items).toHaveCount(2);
+  // The menu grows in: its boxes are read once it is whole.
+  await expect(page.locator('.kit-menu')).not.toHaveAttribute('data-entering', 'true');
+  await page.waitForTimeout(200);
+
+  // Acme: its initial on the ink tile of the bar, 20 px, before its name. Lumen Studio: its logo.
+  const initial = items.nth(0).locator('.kit-menu__mark span[aria-hidden="true"]');
+  await expect(initial).toHaveText('A');
+  const logo = items.nth(1).locator('.kit-menu__mark img');
+  await expect(logo).toHaveAttribute('alt', '');
+  await expect.poll(() => logo.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBe(16);
+  await expect(items.nth(1).locator('.kit-menu__mark span')).toHaveCount(0);
+  const barTile = switcher(page).locator('span[aria-hidden="true"]').first();
+  expect
+    .soft(await styles(initial, ['width', 'height', 'border-top-left-radius', 'font-size', 'font-weight', 'color']))
+    .toEqual(await styles(barTile, ['width', 'height', 'border-top-left-radius', 'font-size', 'font-weight', 'color']));
+  expect.soft(await painted(initial, 'backgroundColor')).toEqual(rgb(INK));
+  for (const [item, mark] of [
+    [items.nth(0), initial],
+    [items.nth(1), logo],
+  ] as const) {
+    const drawn = await box(mark);
+    const words = await box(item.locator('.kit-menu__words'));
+    expect.soft([drawn.width, drawn.height], 'the tile').toEqual([20, 20]);
+    expect.soft(drawn.x + drawn.width, 'the tile, before the name').toBeLessThanOrEqual(words.x);
+    expect
+      .soft(drawn.y + drawn.height / 2, 'the tile, on the middle of the words')
+      .toBeCloseTo(words.y + words.height / 2, 0);
+  }
+
+  // The tile is a picture: the name of an item stays its name and its role, and nothing else.
+  await expect(items.nth(0)).toHaveAccessibleName('Acme Owner');
+  await expect(items.nth(1)).toHaveAccessibleName('Lumen Studio Member');
+  // « Workspace settings » chooses no workspace, and has no tile.
+  await expect(menu.getByRole('menuitem', { name: 'Workspace settings' }).locator('.kit-menu__mark')).toHaveCount(0);
 });
 
 test('a change of workspace draws the new one at once, and reads nothing of the one before', async ({ page }) => {

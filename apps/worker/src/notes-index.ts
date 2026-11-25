@@ -160,6 +160,14 @@ export type NoteIndex = {
    */
   page(workspace: string, query: NoteQuery): Promise<NotePage>;
   /**
+   * Marks a note of a site as deleted by the visitor who left it, at `at` (FRU-702): a read of its page
+   * no longer shows it, to anybody. `null` takes the mark away, when the store withdrew nothing. The
+   * row stays, with its stage, for the team. A note the index does not hold is left absent.
+   */
+  remove(workspace: string, site: string, note: string, at: number | null): Promise<void>;
+  /** Which of these notes of a site a visitor deleted (FRU-702). */
+  removed(workspace: string, site: string, notes: readonly string[]): Promise<Set<string>>;
+  /**
    * Who left each of these notes of a site: the account, for a note a member left (FRU-294), and
    * `visitor:<digest>` (`visitorAuthor`) for a note of a visitor whose browser sent a key (FRU-700).
    * A note of a visitor with no key, of a token of the site, or of an account that is gone is absent.

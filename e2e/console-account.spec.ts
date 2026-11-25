@@ -287,8 +287,12 @@ test('the screen is the one of the mockup, with what the worker of today does', 
   expect.soft((await box(nav)).width, 'the navigation').toBe(220);
   expect.soft(await styles(nav, ['border-right-width'])).toEqual({ 'border-right-width': '1px' });
   // Its two groups, each named by its title, an icon on each entry. The pages that do not exist yet
-  // have no entry: « Sign-in and addresses », « Appearance » (FRU-694) and « Notifications ».
-  await expect(nav.getByRole('list', { name: 'Account' }).getByRole('link')).toHaveText(['Profile', 'Sessions']);
+  // have no entry: « Sign-in and addresses » and « Notifications ». « Appearance » is FRU-694.
+  await expect(nav.getByRole('list', { name: 'Account' }).getByRole('link')).toHaveText([
+    'Profile',
+    'Sessions',
+    'Appearance',
+  ]);
   await expect(nav.getByRole('list', { name: 'Workspace' }).getByRole('link')).toHaveText([
     'General',
     'AI',

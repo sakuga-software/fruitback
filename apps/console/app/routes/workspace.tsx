@@ -429,7 +429,13 @@ export function Rail({
           if (chosen === SETTINGS) onSettings();
           else if (chosen !== workspace.id) onWorkspace(chosen);
         }}
-        items={workspaces.map((each) => ({ id: each.id, label: each.name, detail: t(ROLE_WORDS[each.role]) }))}
+        // FRU-661: each workspace has its tile before its name, as the name of the bar has.
+        items={workspaces.map((each) => ({
+          id: each.id,
+          label: each.name,
+          detail: t(ROLE_WORDS[each.role]),
+          mark: <WorkspaceMark workspace={each} size={20} />,
+        }))}
         after={[{ id: SETTINGS, label: t('Workspace settings') }]}
       >
         {name}

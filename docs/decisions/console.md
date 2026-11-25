@@ -480,7 +480,9 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   only when the person has several workspaces**: with one it is a link to `/w/<id>/settings`
   (FRU-414), `aria-current` there when the bar has no « Settings », and draws no chevron; with
   several, the menu of the workspaces ends with « Workspace settings », in a group of its own under
-  a rule that chooses nothing (`after` of `Menu`). The screen renames the workspace for an owner or
+  a rule that chooses nothing (`after` of `Menu`). Each workspace of that menu has its tile before
+  its name, as the name of the bar has (FRU-661, `mark` of `MenuItem`): its logo, or its initial; the
+  tile is a picture, so the name of the item stays its name and its role. The screen renames the workspace for an owner or
   an admin (FRU-236), and the bar shows the new name at once; another role reads the name, locked.
   **The logo** (FRU-428): `WorkspaceMark` draws it at 20 px in the bar and 40 px on the settings
   (`object-contain`, the worker resizes nothing), and the initial of the name when there is none or
@@ -510,14 +512,32 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   two links of `SubNav`): a bar of 48 px that says « Settings », a navigation of 220 px with an icon
   on each entry, in two groups, and the page beside it, with a head of its own (`SettingsHead`: a
   title of 20 px, its sentence, its actions at the right). « Account »: Profile (`/account`) and
-  Sessions (`/account/sessions`). « Workspace »: General (`/settings`), AI (`/settings/ai`), Agents
+  Sessions (`/account/sessions`), Appearance (`/account/appearance`). « Workspace »: General (`/settings`), AI (`/settings/ai`), Agents
   (`/settings/agents`, no crumbs any more), and Members and Connectors, which lead to the screens of
   the bar. The addresses did not change, so no redirection. **The navigation shows an entry only for
-  a page that exists**: `ACCOUNT_PAGES` and `WORKSPACE_PAGES` hold « Sign-in and addresses »,
-  « Appearance » (FRU-694) and « Notifications » with `built: false`, and `settings-shell.test.ts`
+  a page that exists**: `ACCOUNT_PAGES` and `WORKSPACE_PAGES` hold « Sign-in and addresses »
+  and « Notifications » with `built: false`, and `settings-shell.test.ts`
   holds `built` to the routes of a build. Under 768 px the navigation is one row above the page,
   which scrolls in its frame. The shell takes back the padding of `Screen` with the same values, so
   its bar and its navigation reach the edges of the column.
+  **Settings › Appearance** (FRU-694, `routes/account-appearance.tsx`, the mockup « Apparence »):
+  a card « Theme », five themes drawn in small (Slate, the default, Snow, Zinc, Midnight, Graphite;
+  no beige), and a card « Customize », one row per setting: the mode (Light, Dark, System), the
+  tint of the sidebar (from the page to ink), the accent (six), the density (rows of 32, 36 or
+  40 px), the radius (0, 4, 6, 8) and the size of the text (12, 13, 14), with « Reset ». **The
+  appearance only sets tokens** (`app/appearance.ts`): it writes the variables of `theme.css` and
+  `app.css` on `<html>`, inline, and adds no style. A theme is light or dark; the mode chooses the
+  light one or the dark one, and « System » follows `prefers-color-scheme` while the page is open.
+  **The sidebar has its own copy of the colours** (`app/sidebar.css`): in `.kit-rail` each token
+  reads `--sidebar-<token>`, which is the token of the page unless a tint sets it, so an ink sidebar
+  on a light page writes its words light and keeps a ring that shows. A red word and a deletion
+  stay red whatever the accent. **Every theme, tint and accent holds AA** (`app/appearance.test.ts`
+  computes each pair: 4.5:1 for a text, 3:1 for the border of a control and the ring). **No flash**:
+  the choice and the variables of its two themes are kept in `localStorage`, and
+  `public/appearance.js`, a script of the page before the bundle, writes them on `<html>` before the
+  first paint; it knows no theme. The mockup keeps the choice with the account: the worker keeps no
+  appearance yet, so this browser keeps it until FRU-716. The density is `--spacing-row`, which the
+  table of the notes reads; a table that is drawn again reads it too.
   `e2e/console-workspace-settings.spec.ts` holds the entry by role, the section, « Save » disabled
   with no change, and the deletion typed in its dialog.
 
@@ -534,7 +554,9 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
 - **The Sites screen is a dense table, one line of 36 px per site** (FRU-688, the mockup of the
   redesign of 2026-11-25, in place of the grid of cards of FRU-408 and FRU-432, `routes/sites.tsx`).
   **The head of the screen** is 48 px, « Sites » and « Add a site » (28 px), as the head of Notes
-  (FRU-686); the sentence under the large title went with it. **The bar under it** is 44 px: the
+  (FRU-686); the sentence under the large title went with it. « Add a site » opens with a plus of
+  14 px, 6 px from its words and 10 px in, as the mockup draws it (FRU-650): `inset` and `gap` of
+  `Button`, and the `add` of `settings-icons.tsx`, the plus of « Add » on the addresses. **The bar under it** is 44 px: the
   search by address (240 px, « / » gives it the focus, `useSlashKey` of `notes-filters.tsx`), then
   **the colours of the statuses** at the right, the drop and the name of each stage (in place of « no
   legend » of FRU-400: the ticket asks for it); under 720 px the colours go, and the name of each bar

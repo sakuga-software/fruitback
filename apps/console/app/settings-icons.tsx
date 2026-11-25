@@ -39,6 +39,11 @@ const PATHS = {
   out: 'M10 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4M14 16l4-4-4-4M18 12H8',
   // Three dots on a line: the menu of a row.
   more: 'M5 12h.01M12 12h.01M19 12h.01',
+  // A sun, a moon: the light and the dark mode of the appearance (FRU-694).
+  sun: 'M12 8a4 4 0 1 0 0 8a4 4 0 1 0 0-8M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4L6 18M18 6l1.4-1.4',
+  moon: 'M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5',
+  // An arrow that turns back: « Reset ».
+  reset: 'M4 12a8 8 0 1 0 2.4-5.7M4 4v4.5h4.5',
   // A bin: a gesture that deletes, in the danger zone (FRU-693).
   trash: 'M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3',
 } as const;

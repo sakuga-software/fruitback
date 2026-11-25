@@ -45,6 +45,8 @@
 @import '@fruitback/shared/tailwind/theme.css';
 /* The slate theme of the console alone (FRU-683): it sets tokens of the shared theme again. */
 @import './theme.css';
+/* The copy of the colours that the sidebar reads (FRU-694). */
+@import './sidebar.css';
 
 /*
   HeroUI takes the theme, it does not set it: its variables read the tokens of theme.css (FRU-683),
@@ -53,7 +55,8 @@
   a button of HeroUI paint the same red.
 */
 :root {
-  color-scheme: light;
+  /* Light, or dark under a dark theme of the appearance (FRU-694), which sets --scheme. */
+  color-scheme: var(--scheme, light);
   --background: var(--color-page);
   --foreground: var(--color-ink);
   --surface: var(--color-page);
