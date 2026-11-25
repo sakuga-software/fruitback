@@ -2774,7 +2774,8 @@ menu says « Leave a note on this page » and hands over to the extension.
 2. **The contract**: `fruitback.screen-note` version 1 in `packages/shared`, its schema, its
    fixture, its Markdown description, and `contract.md`.
 3. **The worker**: `POST /session/screen-notes`, routed by `site`, its picture uploaded as for a web
-   note; the console lists it with the notes of its site.
+   note; the console lists it with the notes of its site. `SECURITY.md` and `docs/privacy.md`
+   change in the same commit: this ticket sends the first note of the Mac.
 4. **The menu bar**: `NSStatusItem`, the global shortcut, the choice of an area, a window or a
    screen (`SCContentSharingPicker`), the capture (`SCScreenshotManager`), macOS 14.
 5. **The panel**: a `WKWebView` with the composer of `packages/widget` through a seam, the
@@ -2784,7 +2785,6 @@ menu says « Leave a note on this page » and hands over to the extension.
 7. **My notes in the menu**: the list, the status, « Looks fixed » and « Still wrong ».
 8. **The download build**: Developer ID, notarisation, and the accessibility context (selected text,
    the address of a browser). Measure first: a sandboxed probe given « Accessibility ».
-9. **Privacy**: `SECURITY.md` and `docs/privacy.md`, with ticket 3.
 
 ## Releasing the extension (FRU-329)
 
