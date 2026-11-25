@@ -33,7 +33,7 @@ export default function WorkspaceSettings() {
   return <Settings key={workspace.id} />;
 }
 
-/** The form of the name: Enter in its field sends it, as « Save » in the head does. */
+/** The form of the name: Enter in its field sends it, and « Save » in the head submits it by its id. */
 const NAME_FORM = 'workspace-name-form';
 
 function Settings() {
@@ -47,8 +47,8 @@ function Settings() {
   // « Save » acts only on a change: the worker trims the name, so the console compares it trimmed.
   const changed = name.trim() !== workspace.name;
 
-  async function submit(event?: FormEvent) {
-    event?.preventDefault();
+  async function submit(event: FormEvent) {
+    event.preventDefault();
     if (busy) return;
     setProblem(undefined);
     setKept(false);
@@ -70,7 +70,7 @@ function Settings() {
         lead={t('Every member of {name} sees these.', { name: workspace.name })}
         action={
           may ? (
-            <Button size="panel" disabled={busy || !changed} onClick={() => void submit()}>
+            <Button size="panel" type="submit" form={NAME_FORM} disabled={busy || !changed}>
               {busy ? t('Saving…') : t('Save')}
             </Button>
           ) : undefined

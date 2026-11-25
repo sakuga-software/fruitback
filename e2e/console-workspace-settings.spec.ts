@@ -65,6 +65,12 @@ test('the name of the only workspace leads to its settings, which rename it', as
   // FRU-693: « Save » is in the head of the page, and does nothing until the name changes.
   const save = page.getByRole('button', { name: 'Save' });
   await expect(save).toBeDisabled();
+  // « Save » stands in the head, out of the form, and submits it as Enter does (raised in review).
+  await expect(save).toHaveAttribute('type', 'submit');
+  expect(
+    await save.evaluate((button: HTMLButtonElement) => button.form?.contains(document.activeElement) ?? false),
+  ).toBe(false);
+  expect(await save.evaluate((button: HTMLButtonElement) => button.form?.querySelector('input')?.value)).toBe('Acme');
   await name.fill('Acme ');
   await expect(save).toBeDisabled();
   // A refusal says why, and keeps what was typed.

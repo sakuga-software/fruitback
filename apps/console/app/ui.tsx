@@ -182,6 +182,8 @@ type ButtonProps = Destination & {
    */
   inset?: 14 | 16 | 18 | 22 | 24 | 26;
   type?: 'button' | 'submit';
+  /** The id of the form a submit button sends, when it stands outside it: « Save » of a head (FRU-693). */
+  form?: string;
   disabled?: boolean;
   onClick?: () => void;
   className?: string;
@@ -228,6 +230,7 @@ export function Button({
   wide = false,
   inset,
   type = 'button',
+  form,
   disabled = false,
   onClick,
   className = '',
@@ -254,6 +257,7 @@ export function Button({
   return (
     <HeroButton
       type={type}
+      {...(form === undefined ? {} : { form })}
       variant={VARIANTS[tone]}
       isDisabled={disabled}
       autoFocus={autoFocus}
