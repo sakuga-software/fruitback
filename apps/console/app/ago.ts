@@ -25,6 +25,24 @@ export function ago(iso: string, now: number = Date.now()): string {
 }
 
 /**
+ * How long ago, in the fewest characters (FRU-685): « 40m », « 3h », « 2d », « 1w », then the day
+ * (« 3 Oct »). The age of a row of the notes, in a column of 48 px; `ago` says it whole beside it to
+ * a screen reader and under the pointer. A moment the browser cannot read is shown as written.
+ */
+export function agoShort(iso: string, now: number = Date.now()): string {
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return iso;
+  const past = Math.max(0, now - at.getTime());
+  if (past < HOUR) return t('{count}m', { count: Math.max(1, Math.floor(past / MINUTE)) });
+  if (past < DAY) return t('{count}h', { count: Math.floor(past / HOUR) });
+  const days = Math.floor(past / DAY);
+  if (days < 7) return t('{count}d', { count: days });
+  if (days < 28) return t('{count}w', { count: Math.floor(days / 7) });
+
+  return dayOf(iso);
+}
+
+/**
  * `ago` in the middle of a sentence (FRU-516): « used just now », « used yesterday », « used on Oct 3 ».
  * `ago` there read « used Just now », and French « utilisée le il y a 2 h ».
  */

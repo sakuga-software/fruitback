@@ -638,7 +638,7 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   French, with axe.
 - **The Notes page lists the index of the notes, never their text** (FRU-245, `routes/notes.tsx`,
   read from the route of FRU-244). A note is its first 64 characters (Q6: all that Fruitback keeps
-  of the text), cut to two lines. **A row is short words beside the note** (FRU-546, 547, 552, 553,
+  of the text), on one line since FRU-685. **A row is short words beside the note** (FRU-546, 547, 552, 553,
   Mathieu on 2026-10-30): « Site » is the domain and its extension (`domainOf`, `fruitback.com` for
   `app.fruitback.com`); « Left by » is the icon of the role and the name cut to its room, both whole
   in a tooltip that the keyboard reaches too; « Went to » is the mark of the place and the reference
@@ -675,17 +675,11 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   until its answer replaces them: only the first read says « Loading… », and nothing a pointer can
   reach moves meanwhile. A workspace with no note says so, a filter that keeps nothing says so with
   « Clear the filters », and a read that failed is the alert of the Sites screen, never « No note
-  yet ». The reference in a tracker is a link at 400, where a link of the kit is at 600 for an
-  action. **Where its frame is narrower than 720 px, a note is a card** (FRU-505, FRU-586): the table
-  scrolled in its frame, and only the text of a note was on a phone, its status, author and day past
-  the edge. `DataTable` with `stack` measures its frame, not the window: the rail and the padding of
-  the screen take a width that a media query does not know. 720 px is what the six columns take with
-  two lines of a note (665 px at the least, measured at 1528 px): a table from a window of about
-  1060 px with the rail, cards under it. **The notes scroll under their filters** (FRU-586, Mathieu
+  yet ». **Where the list is narrow, it drops columns** (FRU-685, in place of the cards of FRU-505 and
+  FRU-586): see the bullet of FRU-685 below. **The notes scroll under their filters** (FRU-586, Mathieu
   on 2026-11-03): the chips, the search and the lists stay at the top of the window in the table and
-  in the board, at every width; in the table, the head of the columns stays under them, and the head
-  of a group under it while a note of that group is on screen (`pinned` of `DataTable`, under
-  `--kit-pinned-top`, the height of the filters). The document scrolls, not the table (FRU-402):
+  in the board, at every width; in the list, the head of a group stays under them while a note of
+  that group is on screen (under `--kit-pinned-top`, the height of the filters). The document scrolls, not the table (FRU-402):
   a frame that scrolls would hold its heads, not the window, so a pinned frame clips and never
   scrolls sideways, which the cards make possible. What takes focus is scrolled to under the heads
   (`scroll-margin-top`), never behind them. `e2e/console-notes-pinned.spec.ts` reads the heads at
@@ -704,6 +698,44 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   a note is on one page and one only). The Notes of the instance keep « Previous » and « Next » only.
   `e2e/console-notes-pages.spec.ts` holds it. `e2e/console-notes.spec.ts` holds the values, every filter, the pages, « Send again », the
   states, the roles, 390 px and axe.
+- **The Notes list is one line of 36 px per note, as Linear draws its issues** (FRU-685, the
+  mockup « Notes après » of 2026-11-25): fourteen notes at 1440 × 900, where the rows of one to three
+  lines showed six (measured with a list of 14). `parts/notes-table.tsx`; `e2e/console-notes.spec.ts` holds the values.
+  - **A line**: the box of the task and the status (the drop, or the select of FRU-551), the text at
+    500 on one line cut with « … » and never underlined (a press opens the panel of FRU-653), the
+    marks of a task after it on the same line, the path of the page, the site (a tile and its host),
+    where the note went, who left it, its age, then the page and the menu, shown under the pointer and
+    the keyboard. A refusal, or « Delete… » asked again, is said under the line: only then is a row
+    taller.
+  - **The status keeps the drop of Fruitback**, the picture of the widget, the extension and the
+    board (FRU-334), and not the circles of Linear that the mockup draws: a status of a team has its
+    colour (FRU-385), and the select of a row draws the drop of each status.
+  - **The round is who left the note**, as the « Left by » it replaces: the initial of a person, a
+    dashed round for a visitor with no account (the people the mockup draws there are the authors of
+    the list before). Who does a task is in its marks, after the text.
+  - **Where it went**: the mark and the reference at 500, the host of an address, the name of a
+    place. A note an address did not take reads « Failed » in red, the sentence of FRU-122 whole
+    under the pointer and to a screen reader, and « Send again » is an arrow of 20 px beside it.
+  - **The age is short**: « 40m », « 3h », « 2d », « 1w », then the day (`agoShort`); `ago` says it
+    whole under the pointer and to a screen reader.
+  - **No head of columns to the eye**: the heads are for a screen reader, and give each column its
+    width (`table-layout: fixed`). « Select every task of this page » went with them: each group
+    selects its own tasks from a box in its head, as Linear does; Cmd or Ctrl and A still selects
+    the page (FRU-656).
+  - **The groups are in the order the worker reads them** (in progress, to do, new, closed, done):
+    the mockup puts « Done » before « Closed », but a group goes on from one page to the next only
+    in the order of `order=status` (FRU-551). Changing it is a change of the worker.
+  - **A group folds from its head**, and stays folded for this person in this browser
+    (`localStorage`, by account and workspace): the worker keeps no setting of a list, and a route
+    for one would be a change of the worker. « + » in the head writes a new task in that status
+    (FRU-657).
+  - **No cell goes on a second line, at any width**: a narrow list drops a column (a container
+    query on the width of the list, not of the window): the path under 960 px, the site under 800,
+    where it went under 600, who left it under 440. A column dropped keeps its place in the table at
+    0 px, so the head of a group still spans the list. The list goes from one edge of the screen to
+    the other.
+  - **j and k** give the focus to the text of the next note and of the one before; Enter opens it.
+    A field, a menu and a dialog keep their keys.
 - **The notes are a table or a board, and the address says which** (FRU-436, decided by Mathieu on
   2026-10-24). « Table » and « Board », two pressed buttons at the right of the head, write
   `?view=board` (the table writes nothing); the filters, the search and the page are the same, and the
