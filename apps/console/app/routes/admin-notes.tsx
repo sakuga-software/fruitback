@@ -6,6 +6,7 @@ import { ago } from '../ago';
 import { msg, t } from '../i18n';
 import { Choice, DataTable, Field, Lead, LinkButton, StatusDot, Title } from '../ui';
 import { useTypedSearch } from '../typed-search';
+import { usePagesAhead } from '../pages-ahead';
 import { useLocale } from '../use-locale';
 import { kindName } from '../parts/connector-parts';
 import { NotePages } from '../parts/note-pages';
@@ -68,6 +69,29 @@ export default function AdminNotes() {
   const counted = useRef<{ filter: string; total: number } | undefined>(undefined);
   const paging = useRef(false);
 
+  /** The page after an answer, by its cursor. */
+  function forward(answer: InstanceNotes) {
+    if (answer.next === undefined) return;
+    paging.current = true;
+    setBefore((pages) => [...pages, cursor]);
+    const next = new URLSearchParams(params);
+    next.set('cursor', answer.next);
+    next.set('from', String(from + answer.notes.length));
+    setParams(next);
+  }
+  // FRU-709: each press goes on from the page asked last, not from the page shown.
+  const list = JSON.stringify(FILTERS.map((name) => filters[name]));
+  const ahead = usePagesAhead({
+    list,
+    cursor,
+    shown,
+    forward,
+    stay: () => {
+      setBefore((pages) => pages.slice(0, -1));
+      setParams(new URLSearchParams(params));
+    },
+  });
+
   const read = useCallback(async () => {
     const mine = (asked.current += 1);
     setReading(true);
@@ -89,13 +113,17 @@ export default function AdminNotes() {
     const total = answer.data.total ?? kept?.total;
     if (total === undefined) return setShown('failed');
     if (answer.data.total !== undefined) counted.current = { filter, total };
-    setShown({ ...answer.data, total });
+    const answered = { ...answer.data, total };
+    ahead.drawn(answered, list, cursor);
+    setShown(answered);
     setWorkspaces((known) => {
       const unknown = notes.filter((note) => known.get(note.workspace.id) !== note.workspace.name);
       if (unknown.length === 0) return known;
 
       return new Map([...known, ...unknown.map((note) => [note.workspace.id, note.workspace.name] as const)]);
     });
+    // `ahead` keeps its state in refs, and `list` is made of the filters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters, cursor]);
   useEffect(() => void read(), [read]);
 
@@ -114,21 +142,19 @@ export default function AdminNotes() {
   }
 
   function page(to: 'next' | 'previous', answer: InstanceNotes) {
+    if (to === 'next') return ahead.next(answer);
+    // The page before the one asked last: the page of the address, when a press of « Next page » waits.
+    if (ahead.back()) return;
     paging.current = true;
     const next = new URLSearchParams(params);
-    if (to === 'next' && answer.next !== undefined) {
-      setBefore((pages) => [...pages, cursor]);
-      next.set('cursor', answer.next);
-      next.set('from', String(from + answer.notes.length));
-    } else {
-      const back = before.at(-1) ?? '';
-      setBefore((pages) => pages.slice(0, -1));
-      if (back === '') next.delete('cursor');
-      else next.set('cursor', back);
-      const at = from - answer.notes.length;
-      if (back === '' || at <= 1) next.delete('from');
-      else next.set('from', String(at));
-    }
+    const back = before.at(-1) ?? '';
+    ahead.to(back);
+    setBefore((pages) => pages.slice(0, -1));
+    if (back === '') next.delete('cursor');
+    else next.set('cursor', back);
+    const at = from - answer.notes.length;
+    if (back === '' || at <= 1) next.delete('from');
+    else next.set('from', String(at));
     setParams(next);
   }
 
