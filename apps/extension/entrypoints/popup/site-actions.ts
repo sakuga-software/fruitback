@@ -73,6 +73,8 @@ export async function pageNotesOf(
 ): Promise<PageNotesRead | undefined> {
   for (let ask = 1; current(); ask += 1) {
     const answer = await askTab(tab, 'notes');
+    // The screen may have gone while the tab answered: no answer for a screen that is not drawn.
+    if (!current()) return undefined;
     if (answer.notes !== undefined) return { notes: answer.notes };
     const reading = answer.reading ?? 'unreached';
     if (ask >= NOTES_ASKS || reading === 'failed' || reading === 'signed-out') return { reading };
