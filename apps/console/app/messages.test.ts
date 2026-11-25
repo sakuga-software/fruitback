@@ -261,10 +261,10 @@ describe('a language the account did not hear', () => {
 
 describe('the controls of a screen (FRU-125)', () => {
   /**
-   * One native control stays: the row of a connector, which opens its panel. It is a whole card that
-   * is pressed, and the kit has no such control.
+   * None stays since FRU-690: the row of a connector was a native button that opened its panel, and
+   * its settings now open from a button of the kit at the end of its row.
    */
-  const NATIVE_ON_PURPOSE = [/^routes\/connectors\.tsx: <button$/];
+  const NATIVE_ON_PURPOSE: readonly RegExp[] = [];
 
   it('come from the kit, which draws them with HeroUI, and not from a native element', () => {
     const native: string[] = [];
@@ -329,7 +329,9 @@ describe('the state of one connector', () => {
   it('is singular in French, and the heading of the list has a key of its own', () => {
     assert.equal(FRENCH['Connected'], 'Connecté');
     const connectors = sources.get('routes/connectors.tsx') ?? '';
-    assert.equal(connectors.match(/t\('Connected'\)/g)?.length, 1);
-    assert.ok(connectors.includes("t('Your connectors')"));
+    // FRU-690: « Connected » is the state of a row or a tile; the heading of the table is its own key.
+    assert.ok((sources.get('parts/connector-health.tsx') ?? '').includes("t('Connected')"));
+    assert.ok((sources.get('parts/connector-catalogue.tsx') ?? '').includes("t('Connected')"));
+    assert.match(connectors, /id=\{CONNECTED_TITLE\}[^]*?\{t\('Your connectors'\)\}/);
   });
 });

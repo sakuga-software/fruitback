@@ -1,26 +1,29 @@
-import { type FormEvent, useState } from 'react';
+import { type FormEvent, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { LOGO_TYPES, type Workspace, call, removeWorkspaceLogo, renameWorkspace, setWorkspaceLogo } from '../api';
 import { msg, t } from '../i18n';
 import { problemOf } from '../problems';
 import { manages } from '../setup-stage';
-import { Button, Field, FilePick, Problem } from '../ui';
+import { SettingsIcon } from '../settings-icons';
+import { Button, Dialog, Field, FilePick, Problem } from '../ui';
 import { useLocale } from '../use-locale';
 import { LOGO_NOT_REMOVED, LOGO_NOT_SAVED, LOGO_PROBLEMS, logoRefusal } from '../workspace-logo';
 import { RENAME_PROBLEMS, WORKSPACE_NOT_RENAMED } from '../parts/setup-account';
+import { Row, SettingsCard } from '../parts/account-rows';
 import { SettingsHead } from './settings-shell';
 import { WorkspaceMark, useWorkspace } from './workspace';
 
 /**
- * The settings of a workspace (FRU-414): « Settings » in the rail for an owner or an admin (FRU-503),
- * and the name of the workspace at the top of the rail for every role. No board draws it: it is the
- * kit, as « My account » lays it out.
+ * The page « General » of the settings of a workspace (FRU-693; before, FRU-414): « Settings » in the
+ * rail for an owner or an admin (FRU-503), and the name of the workspace at the top of the rail for
+ * every role. The mockup « Réglages General » of FRU-693 draws it in the shell of FRU-692.
  *
- * It holds what the worker lets a workspace change today, for an owner or an admin: its name
- * (FRU-236) and its logo (FRU-428). Every member reads both. The owner deletes the workspace at the
- * end (FRU-503). What an agent needs is on the page « AI » of the settings (FRU-544,
- * `workspace-settings-ai.tsx`). It is the page « General » of the shell of the settings (FRU-692),
- * which FRU-693 draws again.
+ * Two cards. « Identity »: the logo (FRU-428), the name (FRU-236) and the address of the workspace
+ * in the console. Every member reads them; an owner or an admin changes the logo and the name. The
+ * name leaves by « Save » in the head, which stays disabled while the name is the one kept, or by
+ * Enter in its field. The logo leaves as soon as it is chosen, as before. « Danger zone », for the
+ * owner alone: the deletion of the workspace (FRU-503), confirmed in a dialog by typing its name.
+ * What an agent needs is on the page « AI » (FRU-544, `workspace-settings-ai.tsx`).
  */
 export default function WorkspaceSettings() {
   const { workspace } = useWorkspace();
@@ -30,23 +33,33 @@ export default function WorkspaceSettings() {
   return <Settings key={workspace.id} />;
 }
 
+/** The form of the name: Enter in its field sends it, and « Save » in the head submits it by its id. */
+const NAME_FORM = 'workspace-name-form';
+
 function Settings() {
   useLocale();
   const { workspace, renamed } = useWorkspace();
   const [name, setName] = useState(workspace.name);
   const [busy, setBusy] = useState(false);
+  // One rename on its way at a time, whatever the state drawn says yet: two Enter in a row, or Enter
+  // then « Save », send one name (raised in review).
+  const sending = useRef(false);
   const [problem, setProblem] = useState<string | undefined>();
   const [kept, setKept] = useState(false);
   const may = manages(workspace);
+  // « Save » acts only on a change: the worker trims the name, so the console compares it trimmed.
+  const changed = name.trim() !== workspace.name;
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (busy) return;
+    if (sending.current) return;
     setProblem(undefined);
     setKept(false);
-    if (name.trim() === workspace.name) return setKept(true);
+    if (!changed) return setKept(true);
+    sending.current = true;
     setBusy(true);
     const answer = await renameWorkspace(workspace, name);
+    sending.current = false;
     setBusy(false);
     // A refusal keeps the name as it was typed.
     if (!answer.ok) return setProblem(problemOf(answer, RENAME_PROBLEMS, WORKSPACE_NOT_RENAMED));
@@ -59,116 +72,153 @@ function Settings() {
     <>
       <SettingsHead
         title={t('General')}
-        lead={t('Settings that every member of {name} sees.', { name: workspace.name })}
-      />
-      <section aria-labelledby="workspace-name-title" className="flex max-w-[640px] flex-col gap-[14px]">
-        <h2 id="workspace-name-title" className="text-section font-bold">
-          {t('Name')}
-        </h2>
-        {may ? (
-          <form noValidate onSubmit={(event) => void submit(event)} className="flex flex-wrap items-end gap-[10px]">
-            <div className="min-w-0 flex-[999_1_260px]">
-              <Field
-                label={t('Workspace name')}
-                value={name}
-                maxLength={80}
-                onChange={(event) => {
-                  setName(event.target.value);
-                  setKept(false);
-                }}
-              />
-            </div>
-            <Button type="submit" tone="outline" size="page" disabled={busy}>
+        lead={t('Every member of {name} sees these.', { name: workspace.name })}
+        action={
+          may ? (
+            <Button size="panel" type="submit" form={NAME_FORM} disabled={busy || !changed}>
               {busy ? t('Saving…') : t('Save')}
             </Button>
-          </form>
-        ) : (
-          <Field
-            label={t('Workspace name')}
-            value={workspace.name}
-            locked
-            hint={t('Only an owner or an admin of the workspace renames it.')}
-          />
-        )}
-        {problem === undefined ? null : <Problem>{t(problem)}</Problem>}
-        <p role="status" className="text-small text-muted">
-          {kept ? t('The name is saved.') : ''}
-        </p>
-      </section>
-      <LogoSection workspace={workspace} may={may} />
-      {workspace.role === 'owner' ? <DeleteSection workspace={workspace} /> : null}
+          ) : undefined
+        }
+      />
+      <div className="flex max-w-[880px] flex-col gap-[16px]">
+        <IdentityCard
+          workspace={workspace}
+          may={may}
+          name={name}
+          onName={(typed) => {
+            setName(typed);
+            setKept(false);
+          }}
+          onSubmit={(event) => void submit(event)}
+          problem={problem}
+          kept={kept}
+        />
+        {workspace.role === 'owner' ? <DangerZone workspace={workspace} /> : null}
+      </div>
     </>
   );
 }
 
-const DELETION_PROBLEMS: Readonly<Record<string, string>> = {
-  forbidden: msg('Only the owner of the workspace deletes it.'),
-};
-const WORKSPACE_NOT_DELETED = msg('The workspace was not deleted. Try again.');
+/** The classes of a box of 320 px at the end of a row, which takes the whole row under 640 px. */
+const ROW_BOX = 'w-full min-w-0 min-[640px]:w-[320px] min-[640px]:flex-none';
 
 /**
- * The deletion of the workspace (FRU-503), last on its settings, for its owner alone. It was at the
- * foot of « My account », the page of the person. The call, `DELETE /console/workspaces/<id>`, and
- * the rule of the worker, the owner alone, are those of before. A second press deletes.
+ * « Identity »: the logo, the name and the address of the workspace, one row each, the box of each at
+ * the end of its row, 320 px wide (the mockup). Under 640 px the box goes under the words.
  */
-function DeleteSection({ workspace }: { workspace: Workspace }) {
+function IdentityCard({
+  workspace,
+  may,
+  name,
+  onName,
+  onSubmit,
+  problem,
+  kept,
+}: {
+  workspace: Workspace;
+  may: boolean;
+  name: string;
+  onName: (name: string) => void;
+  onSubmit: (event: FormEvent) => void;
+  problem: string | undefined;
+  kept: boolean;
+}) {
   useLocale();
-  const navigate = useNavigate();
-  const [confirming, setConfirming] = useState(false);
-  const [undeleted, setUndeleted] = useState<string | undefined>();
-
-  async function destroy() {
-    setUndeleted(undefined);
-    const deleted = await call('DELETE', `/console/workspaces/${workspace.id}`);
-    if (deleted.ok) return navigate('/', { replace: true });
-    // The workspace is still there: say so beside the button (FRU-164).
-    setUndeleted(problemOf(deleted, DELETION_PROBLEMS, WORKSPACE_NOT_DELETED));
-  }
+  const logo = useLogo(workspace);
+  // The address of the workspace in this console. The worker keeps no other name for it.
+  const host = typeof window === 'undefined' ? '' : window.location.host;
 
   return (
-    <section
-      aria-labelledby="delete-title"
-      className="mt-[40px] flex max-w-[640px] flex-col gap-[12px] border-t border-line pt-[24px]"
-    >
-      <h2 id="delete-title" className="text-section font-bold">
-        {t('Delete the workspace')}
-      </h2>
-      <p className="text-small text-muted">
-        {t('Sites, members and pin positions go. Items already in your trackers stay there.')}
-      </p>
-      {undeleted === undefined ? null : <Problem>{t(undeleted)}</Problem>}
-      <div>
-        {confirming ? (
-          <span className="flex flex-wrap gap-[8px]">
-            <Button tone="quiet" autoFocus onClick={() => setConfirming(false)}>
-              {t('Keep it')}
-            </Button>
-            <Button tone="danger" onClick={() => void destroy()}>
-              {t('Delete {workspace}', { workspace: workspace.name })}
-            </Button>
+    <SettingsCard id="identity-title" icon="general" title={t('Identity')} busy={logo.busy !== undefined}>
+      <ul className="flex flex-col">
+        <Row
+          icon={<WorkspaceMark workspace={workspace} size={40} />}
+          title={t('Logo')}
+          detail={
+            may
+              ? t('PNG, JPEG or WebP, up to 512 KB. Shown beside the workspace name.')
+              : t('Only an owner or an admin of the workspace changes its logo.')
+          }
+          under={logo.under}
+        >
+          {may ? logo.actions : null}
+        </Row>
+        <li className="kit-settings-row border-t border-line px-[16px]">
+          <form
+            id={NAME_FORM}
+            noValidate
+            onSubmit={onSubmit}
+            className="flex min-h-[56px] flex-wrap items-center gap-x-[12px] gap-y-[8px] py-[10px]"
+          >
+            <RowWords
+              title={t('Workspace name')}
+              detail={may ? undefined : t('Only an owner or an admin of the workspace renames it.')}
+            />
+            <div className={ROW_BOX}>
+              <Field
+                label={t('Workspace name')}
+                labelHidden
+                value={may ? name : workspace.name}
+                maxLength={80}
+                locked={!may}
+                onChange={(event) => onName(event.target.value)}
+              />
+            </div>
+          </form>
+          {/* Under the words of the row, as the words start after the mark of 40 px of « Logo ». */}
+          {problem === undefined ? null : (
+            <div className="pb-[12px] min-[640px]:ps-[52px]">
+              <Problem>{t(problem)}</Problem>
+            </div>
+          )}
+          <p role="status" className={kept ? 'pb-[12px] text-hint text-muted min-[640px]:ps-[52px]' : 'sr-only'}>
+            {kept ? t('The name is saved.') : ''}
+          </p>
+        </li>
+        <li className="kit-settings-row flex min-h-[56px] flex-wrap items-center gap-x-[12px] gap-y-[8px] border-t border-line px-[16px] py-[10px]">
+          <RowWords title={t('Workspace URL')} />
+          <span
+            className={`${ROW_BOX} flex min-h-control-lg items-center rounded-control border border-line px-[10px] py-[4px] text-small [overflow-wrap:anywhere]`}
+          >
+            <span>
+              <span className="text-muted">{`${host}/w/`}</span>
+              {workspace.id}
+            </span>
           </span>
-        ) : (
-          <Button tone="outline" inset={16} onClick={() => setConfirming(true)}>
-            {t('Delete workspace')}
-          </Button>
-        )}
-      </div>
-    </section>
+        </li>
+      </ul>
+    </SettingsCard>
   );
 }
 
 /**
- * The logo of the workspace (FRU-428): the mark of the rail, larger. An owner or an admin sends one,
- * replaces it and removes it; the rail shows the change at once. Without one, the initial shows.
+ * The words at the start of a row whose box is a field: its name, and the line under it. They start
+ * where the words of the row « Logo » start, after its mark of 40 px (the mockup).
  */
-function LogoSection({ workspace, may }: { workspace: Workspace; may: boolean }) {
-  useLocale();
+function RowWords({ title, detail }: { title: string; detail?: string | undefined }) {
+  return (
+    <span className="flex min-w-0 flex-[1_1_200px] flex-col gap-[4px] min-[640px]:ps-[52px]">
+      <span aria-hidden="true" className="text-small leading-auto font-semibold">
+        {title}
+      </span>
+      {detail === undefined ? null : <span className="text-hint text-muted">{detail}</span>}
+    </span>
+  );
+}
+
+/**
+ * The logo of the workspace (FRU-428), a row of « Identity »: the mark of the rail, larger. An owner
+ * or an admin sends one, replaces it and removes it; the rail shows the change at once. Without one,
+ * the initial shows.
+ */
+function useLogo(workspace: Workspace) {
   const { logoChanged } = useWorkspace();
   const [busy, setBusy] = useState<'sending' | 'removing' | undefined>();
   const [problem, setProblem] = useState<string | undefined>();
   const [done, setDone] = useState<string | undefined>();
   const has = typeof workspace.logo === 'string';
-  let pickWords = has ? t('Replace the logo') : t('Upload a logo');
+  let pickWords = has ? t('Replace') : t('Upload');
   if (busy === 'sending') pickWords = t('Uploading…');
 
   async function chosen(file: File) {
@@ -197,39 +247,131 @@ function LogoSection({ workspace, may }: { workspace: Workspace; may: boolean })
     setDone(msg('The logo is removed.'));
   }
 
-  return (
-    <section
-      aria-labelledby="workspace-logo-title"
-      aria-busy={busy !== undefined}
-      className="flex max-w-[640px] flex-col gap-[14px] pt-[32px]"
-    >
-      <h2 id="workspace-logo-title" className="text-section font-bold">
-        {t('Logo')}
-      </h2>
-      <div className="flex flex-wrap items-center gap-[16px]">
-        <WorkspaceMark workspace={workspace} size={64} />
-        {may ? (
-          <div className="flex flex-wrap gap-[10px]">
-            <FilePick accept={LOGO_TYPES.join(',')} disabled={busy !== undefined} onFile={(file) => void chosen(file)}>
-              {pickWords}
-            </FilePick>
-            {has ? (
-              <Button tone="outline" size="page" disabled={busy !== undefined} onClick={() => void remove()}>
-                {busy === 'removing' ? t('Removing…') : t('Remove the logo')}
-              </Button>
-            ) : null}
-          </div>
-        ) : null}
-      </div>
-      <p className="text-small text-muted">
-        {may
-          ? t('PNG, JPEG or WebP, up to 512 KB. It shows beside the name of the workspace, in the rail.')
-          : t('Only an owner or an admin of the workspace changes its logo.')}
-      </p>
+  const actions = (
+    <span className="flex flex-wrap gap-[8px]">
+      {has ? (
+        <Button
+          tone="outline"
+          size="small"
+          disabled={busy !== undefined}
+          label={t('Remove the logo')}
+          onClick={() => void remove()}
+        >
+          {busy === 'removing' ? t('Removing…') : t('Remove')}
+        </Button>
+      ) : null}
+      <FilePick
+        accept={LOGO_TYPES.join(',')}
+        size="small"
+        disabled={busy !== undefined}
+        {...(busy === 'sending' ? {} : { label: has ? t('Replace the logo') : t('Upload a logo') })}
+        onFile={(file) => void chosen(file)}
+      >
+        {pickWords}
+      </FilePick>
+    </span>
+  );
+  const under = (
+    <>
       {problem === undefined ? null : <Problem>{t(problem)}</Problem>}
-      <p role="status" className="text-small text-muted">
+      <p role="status" className={done === undefined ? 'sr-only' : 'text-hint text-muted'}>
         {done === undefined ? '' : t(done)}
       </p>
-    </section>
+    </>
+  );
+
+  return { busy, actions, under };
+}
+
+const DELETION_PROBLEMS: Readonly<Record<string, string>> = {
+  forbidden: msg('Only the owner of the workspace deletes it.'),
+};
+const WORKSPACE_NOT_DELETED = msg('The workspace was not deleted. Try again.');
+
+/**
+ * « Danger zone » (FRU-693), last on the page, for the owner alone: the deletion of the workspace
+ * (FRU-503). « Delete… » opens a dialog that says what goes, and deletes only once the name of the
+ * workspace is typed in it. The call, `DELETE /console/workspaces/<id>`, and the rule of the worker,
+ * the owner alone (`delete-workspace`), are those of before.
+ */
+function DangerZone({ workspace }: { workspace: Workspace }) {
+  useLocale();
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const [typed, setTyped] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [undeleted, setUndeleted] = useState<string | undefined>();
+  // The name as the rail shows it, typed again: the case counts, the spaces around do not.
+  const named = typed.trim() === workspace.name;
+
+  function close() {
+    // A deletion on its way ends in the dialog: a refusal is said there, a success leaves the page.
+    if (deleting) return;
+    setOpen(false);
+    setTyped('');
+    setUndeleted(undefined);
+  }
+
+  async function destroy(event: FormEvent) {
+    event.preventDefault();
+    if (!named || deleting) return;
+    setUndeleted(undefined);
+    setDeleting(true);
+    const deleted = await call('DELETE', `/console/workspaces/${workspace.id}`);
+    setDeleting(false);
+    if (deleted.ok) return navigate('/', { replace: true });
+    // The workspace is still there: say so in the dialog, which stays open (FRU-164).
+    setUndeleted(problemOf(deleted, DELETION_PROBLEMS, WORKSPACE_NOT_DELETED));
+  }
+
+  return (
+    <SettingsCard id="danger-title" title={t('Danger zone')} danger>
+      <ul className="flex flex-col">
+        <Row
+          icon={
+            <span className="inline-flex flex-none text-accent-strong">
+              <SettingsIcon name="trash" />
+            </span>
+          }
+          title={t('Delete the workspace')}
+          detail={t('Sites, members and pin positions go. Items in your trackers stay there.')}
+        >
+          <Button tone="danger-outline" size="small" label={t('Delete the workspace')} onClick={() => setOpen(true)}>
+            {t('Delete…')}
+          </Button>
+        </Row>
+      </ul>
+      <Dialog
+        open={open}
+        onClose={close}
+        locked={deleting}
+        title={t('Delete {workspace}?', { workspace: workspace.name })}
+        closeLabel={t('Close')}
+        size="sm"
+      >
+        <form noValidate onSubmit={(event) => void destroy(event)} className="flex flex-col gap-[12px]">
+          <p className="text-small text-muted">
+            {t(
+              'Its sites, its members and the positions of its pins go, for every member, and cannot come back. Items already in your trackers stay there.',
+            )}
+          </p>
+          <Field
+            label={t('Type {workspace} to confirm', { workspace: workspace.name })}
+            value={typed}
+            autoComplete="off"
+            onChange={(event) => setTyped(event.target.value)}
+          />
+          {undeleted === undefined ? null : <Problem>{t(undeleted)}</Problem>}
+          <div className="flex flex-wrap justify-end gap-[8px]">
+            <Button tone="outline" size="small" disabled={deleting} onClick={close}>
+              {t('Keep it')}
+            </Button>
+            <Button tone="danger" type="submit" disabled={!named || deleting}>
+              {deleting ? t('Deleting…') : t('Delete {workspace}', { workspace: workspace.name })}
+            </Button>
+          </div>
+        </form>
+      </Dialog>
+    </SettingsCard>
   );
 }

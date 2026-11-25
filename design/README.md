@@ -137,6 +137,7 @@ token on `<html>` and the console follows at once.
 | `page`, `surface`, `sidebar`, `subtle`                          | `#ffffff`, `#ffffff`, `#f1f4f8`, `#f7f9fb`                       | the page, a card, the sidebar, a panel or the band of a group    |
 | `hover`, `selected`, `chip`                                     | `#e8edf3`, `#e2e8f0`, `#e8edf3`                                  | under the pointer, chosen, the fill of a chip                    |
 | `line`, `control`                                               | `#e3e8ef`, `#7b8797`                                             | a rule or a frame, the border of a field and of a control        |
+| `danger-line`                                                   | `#f1c2c0`                                                        | the border of the danger zone of the settings (FRU-693)          |
 | `accent`, `accent-strong`                                       | `#dd2c27`, `#b91c1c`                                             | the main button, the focus ring, an alert; under the pointer     |
 | `done`                                                          | `#166534`                                                        | « Connected », « Active », a step done                           |
 | `status-new`, `-todo`, `-progress`, `-done`, `-closed`, `-edge` | `#bec2c8`, `#d9dbdf`, `#f3bb3d`, `#5560c4`, `#a52a3a`, `#8a8a93` | the status of a note (FRU-334), and the edge of its drop         |

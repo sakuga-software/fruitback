@@ -108,7 +108,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Vous êtes peut-être encore connecté : Fruitback n’a pas confirmé la déconnexion de tous les navigateurs. Réessayez.',
   Profile: 'Profil',
   'Email link': 'Lien par e-mail',
-  'After the beta': 'Après la bêta',
   Language: 'Langue',
   'Your account did not take this language yet. It is kept in this browser, and sent again the next time you open the console.':
     'Votre compte n’a pas encore pris cette langue. Elle est gardée dans ce navigateur, et renvoyée la prochaine fois que vous ouvrez la console.',
@@ -287,10 +286,9 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'A workspace': 'Un espace de travail',
   '1 kept note': '1 note gardée',
   '{count} kept notes': '{count} notes gardées',
-  'Sites, members and pin positions go. Items already in your trackers stay there.':
-    'Les sites, les membres et la position des repères disparaissent. Les éléments déjà dans vos outils de suivi y restent.',
+  'Sites, members and pin positions go. Items in your trackers stay there.':
+    'Les sites, les membres et la position des repères disparaissent. Les éléments dans vos outils de suivi y restent.',
   'Keep it': 'Le garder',
-  'Delete workspace': 'Supprimer l’espace de travail',
   'Delete {workspace}': 'Supprimer {workspace}',
 
   'An issue per note, in one repository. The files of a note do not go: GitHub takes none by its API.':
@@ -299,7 +297,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'GitHub Issues': 'GitHub Issues',
   'Installed on {account}': 'Installée sur {account}',
   'Going to GitHub…': 'Direction GitHub…',
-  'Not on this Fruitback': 'Absent de ce Fruitback',
   'The operator of this Fruitback has not set up the GitHub App.':
     'L’opérateur de ce Fruitback n’a pas configuré l’application GitHub.',
   'GitHub was not connected yet: an owner of the organisation must approve the App. After the approval, connect GitHub again.':
@@ -627,9 +624,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Connect a tracker once. Every site of {workspace} can then send its notes there.':
     'Connectez un outil de suivi une fois. Chaque site de {workspace} peut alors y envoyer ses notes.',
   'No tracker yet. The notes stay in Fruitback.': 'Pas encore d’outil de suivi. Les notes restent dans Fruitback.',
-  '1 note did not arrive': '1 note n’est pas arrivée',
-  '{count} notes did not arrive': '{count} notes ne sont pas arrivées',
-  'An issue in a Jira Cloud project.': 'Un ticket dans un projet Jira Cloud.',
   'An issue in a project, cloud or self-managed.': 'Un ticket dans un projet, cloud ou auto-hébergé.',
   'A card in the list you choose.': 'Une carte dans la liste que vous choisissez.',
   'A row in a database.': 'Une ligne dans une base de données.',
@@ -1169,6 +1163,17 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Workspace settings': 'Réglages de l’espace de travail',
   'Settings that every member of {name} sees.': 'Les réglages que voit chaque membre de {name}.',
   'The name is saved.': 'Le nom est enregistré.',
+  // The page « General » of the settings, FRU-693.
+  'Every member of {name} sees these.': 'Chaque membre de {name} les voit.',
+  Identity: 'Identité',
+  'Workspace URL': 'Adresse de l’espace de travail',
+  'Danger zone': 'Zone de danger',
+  'Delete {workspace}?': 'Supprimer {workspace} ?',
+  'Its sites, its members and the positions of its pins go, for every member, and cannot come back. Items already in your trackers stay there.':
+    'Ses sites, ses membres et la position de ses repères disparaissent pour chaque membre, sans retour possible. Les éléments déjà dans vos outils de suivi y restent.',
+  'Deleting…': 'Suppression…',
+  Upload: 'Envoyer',
+  Replace: 'Remplacer',
   // The pages of the settings, FRU-544.
   General: 'Général',
   AI: 'IA',
@@ -1181,8 +1186,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Removing…': 'Retrait…',
   'The logo is saved.': 'Le logo est enregistré.',
   'The logo is removed.': 'Le logo est retiré.',
-  'PNG, JPEG or WebP, up to 512 KB. It shows beside the name of the workspace, in the rail.':
-    'PNG, JPEG ou WebP, 512 Ko au plus. Il s’affiche à côté du nom de l’espace de travail, dans la barre latérale.',
+  'PNG, JPEG or WebP, up to 512 KB. Shown beside the workspace name.':
+    'PNG, JPEG ou WebP, 512 Ko au plus. Affiché à côté du nom de l’espace de travail.',
   'Only an owner or an admin of the workspace changes its logo.':
     'Seul un propriétaire ou un admin de l’espace de travail change son logo.',
   'Choose a PNG, JPEG or WebP image. SVG is not accepted.':
@@ -1715,8 +1720,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Votre agent ouvre une pull request à relire, et ne pousse jamais sur une branche qui déploie : le guide dit comment.',
   'Start an agent on a note': 'Lancer un agent sur une note',
   'Saved.': 'Enregistré.',
-  '1 call of an agent did not arrive': '1 appel d’un agent n’est pas arrivé',
-  '{count} calls of an agent did not arrive': '{count} appels d’un agent ne sont pas arrivés',
   'The addresses of the workspace did not load.': 'Les adresses de l’espace de travail ne se sont pas chargées.',
 
   // The guide of the extension, under step 3 of the setup (FRU-486). The names of the controls of the
@@ -1945,6 +1948,40 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'The notes did not load, and nothing was copied. Try again.':
     'Les notes ne se sont pas chargées, et rien n’a été copié. Réessayez.',
 
+  // FRU-690: the health table and the catalogue of the Connectors screen.
+  'An issue in a team': 'Un ticket dans une équipe',
+  'An issue in a project': 'Un ticket dans un projet',
+  'An issue in a repository': 'Un ticket dans un dépôt',
+  'A task in a project': 'Une tâche dans un projet',
+  'A task in a list': 'Une tâche dans une liste',
+  'A card on a board': 'Une carte sur un tableau',
+  'A row in a database': 'Une ligne dans une base de données',
+  'A message in a channel': 'Un message dans un canal',
+  Webhook: 'Webhook',
+  'Tells any address when a note arrives': 'Prévient une adresse quand une note arrive',
+  'A POST to your endpoint': 'Un POST vers votre adresse',
+  'A routine of your team starts': 'Une routine de votre équipe démarre',
+  'All kinds': 'Tous',
+  Trackers: 'Outils de suivi',
+  Developers: 'Développeurs',
+  'The health of some connectors did not load.': 'L’état de certains connecteurs ne s’est pas chargé.',
+  Connector: 'Connecteur',
+  'Used by': 'Utilisé par',
+  'Retry {name}': 'Réessayer {name}',
+  'Retrying…': 'Nouvel essai…',
+  '{count} new attempts were not started. Try again.': '{count} nouveaux essais n’ont pas démarré. Réessayez.',
+  Retry: 'Réessayer',
+  'Settings of {name}': 'Réglages de {name}',
+  'Search trackers and tools': 'Chercher un outil',
+  'Kind of connector': 'Type de connecteur',
+  'No connector matches « {search} ».': 'Aucun connecteur ne correspond à « {search} ».',
+  'Not read': 'Non lu',
+  Healthy: 'En bonne santé',
+  '1 call not delivered': '1 appel non livré',
+  '{count} calls not delivered': '{count} appels non livrés',
+  Soon: 'Bientôt',
+  'Connect another {source}': 'Connecter un autre {source}',
+  'Other ways to connect {source}': 'Autres façons de connecter {source}',
   ...JIRA,
   ...GITLAB,
   ...SLACK,

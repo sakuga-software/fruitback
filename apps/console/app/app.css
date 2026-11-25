@@ -199,11 +199,3 @@ textarea {
     box-shadow: 0 0 0 7px color-mix(in srgb, var(--accent) 0%, transparent);
   }
 }
-
-/* The panel of a connector unfolds under its row (FRU-563): its row of the grid grows from 0fr to 1fr. */
-@keyframes source-panel-open {
-  from {
-    grid-template-rows: 0fr;
-    opacity: 0;
-  }
-}
