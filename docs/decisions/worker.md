@@ -1039,6 +1039,9 @@ better-auth: it holds the session of the extension, and it stays.
   command ends ten seconds after its answer.
 - **A race is planted with `outcomeOnChangedStore`**, which makes the two calls overlap. Do not write
   a control that waits for the scheduler: see below.
+- **A case that starts its second call while the first one is held orders them with a `Hold`**
+  (`holdRows`, or `cases: { gated }`), never with a time. `reached` waits until the first call
+  waits at the gate, and `release` opens it once the second call waits for the held one.
 
 ### The reasons, and the measurements
 
@@ -1060,6 +1063,14 @@ better-auth: it holds the session of the extension, and it stays.
   trigger, inside the transaction, and opens two connections before the case. That failure was not
   reproduced on a developer machine (25 runs of 25, then 12 of 12 with the server at half a CPU):
   the cause is read from the code, and CI is what says the fix holds.
+- **A time is not an order (FRU-719).** The cases of FRU-149, FRU-238 and FRU-249 started the second
+  call 100 ms after the first, and the trigger held the first for 0.3 s. The control of FRU-149 then
+  passed on the store that loses the race, in CI (run 45688980102): the first call had committed
+  before the second one read. Measured on a server of the CI image, with the event loop of the test
+  stopped after the 100 ms: no failure in 15 runs up to 150 ms, then 5 failures in 20 runs from 200
+  to 400 ms. With the gate: 35 runs of 35 from 0 to 400 ms, and 50 runs of 50 of the three suites.
+  The gate is an advisory lock that a transaction of the test holds; the trigger waits for it, and
+  `pg_locks` and `pg_blocking_pids` say who waits for whom. On PGlite there is one connection, so there is no gate.
 - **No code and no token is in a row.** test:`holds no code and no token in clear, in any row of any
   table` reads every table of the schema after a code was spent, a session refreshed and one logged
   out. test:`finds a token that a row holds in clear` is its control.

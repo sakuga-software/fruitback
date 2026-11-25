@@ -24,6 +24,7 @@ import {
   NO_REAL_POSTGRES,
   createPgliteDatabase,
   createRealDatabase,
+  holdRows,
   migrationsThrough,
   outcomeOnChangedStore,
   ownDatabase,
@@ -510,6 +511,7 @@ describe(
   () => {
     async function endsTheSuccessor(create: (database: Database) => ConnectStore): Promise<string | undefined> {
       const database = await createRealDatabase();
+      let hold: Awaited<ReturnType<typeof holdRows>> | undefined;
       try {
         const connect = create(database);
         const sessions = createPostgresSessionStore(database);
@@ -532,17 +534,7 @@ describe(
           expiresAt: now + 60_000,
           open: async () => ({}),
         });
-        await rowsOf(
-          database,
-          `CREATE FUNCTION hold_the_row() RETURNS trigger LANGUAGE plpgsql
-           AS $$ BEGIN PERFORM pg_sleep(0.3); RETURN NEW; END $$`,
-        );
-        await rowsOf(
-          database,
-          `CREATE TRIGGER hold_the_row BEFORE INSERT ON sessions FOR EACH ROW
-           WHEN (NEW.predecessor_hash IS NOT NULL) EXECUTE FUNCTION hold_the_row()`,
-        );
-        await Promise.all([rowsOf(database, 'SELECT 1'), rowsOf(database, 'SELECT 1')]);
+        hold = await holdRows(database, { table: 'sessions', when: 'NEW.predecessor_hash IS NOT NULL' });
 
         const rotating = sessions.rotateSession({
           tokenHash: 'digest-of-the-token',
@@ -550,14 +542,19 @@ describe(
           now: now + 1,
           graceMs: 60_000,
         });
-        await new Promise((resolve) => setTimeout(resolve, 100));
-        assert.equal(await connect.endBrowser('acc_alice', 'connection-of-alice', now + 2), true);
+        // The refresh holds its chain, and its successor waits at the gate: the end starts then. The
+        // refresh goes on once the end waits for the chain (FRU-719: not after a time).
+        await hold.reached();
+        const ending = connect.endBrowser('acc_alice', 'connection-of-alice', now + 2);
+        await hold.release(ending);
+        assert.equal(await ending, true);
         assert.equal((await rotating).outcome, 'rotated', 'the refresh did not run first');
 
         const live = await rowsOf(database, 'SELECT token_hash FROM sessions WHERE revoked_at IS NULL');
 
         return live.map((row) => String(row.token_hash)).join(',') || undefined;
       } finally {
+        await hold?.close();
         await database.close();
       }
     }

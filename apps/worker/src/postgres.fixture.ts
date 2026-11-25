@@ -333,6 +333,159 @@ export function onDatabase<Store>(
 const HOLD_SECONDS = 0.3;
 
 /**
+ * Where a case on two connections makes the first call wait, and lets it go (FRU-719).
+ *
+ * A time is not an order. The cases of FRU-149, FRU-238 and FRU-249 started the second call 100 ms
+ * after the first and held the first for `HOLD_SECONDS`. The second call must start its statements
+ * inside that window. On a CI worker whose event loop stopped for 200 ms or more, the first call
+ * committed first, and the control of FRU-149 passed on the store that loses the race (run
+ * 45688980102). A hold waits for a state of the server, and not for a time:
+ *
+ * - `reached` resolves when the first call waits at the gate, in the trigger of the held row. It
+ *   holds the rows it locked, and it committed nothing.
+ * - `release` opens the gate when another call waits for the held one (`pg_blocking_pids`): for a
+ *   row that the held call locked. Or when `other` has ended.
+ */
+export type Hold = {
+  reached(): Promise<void>;
+  release(other: Promise<unknown>): Promise<void>;
+};
+
+/** The key of the advisory lock that the gate holds. The trigger waits for it. */
+const GATE_KEY = 719;
+/** How long a hold waits for a state before it gives up. A bound on a bug, never a time that orders. */
+const GATE_PATIENCE_MS = 10_000;
+
+/**
+ * The first row of `statement`, asked again every 10 ms until there is one. `undefined` when `stop`
+ * says so first. It throws once `GATE_PATIENCE_MS` have passed, with `what` in its message.
+ */
+async function untilRow(
+  database: Database,
+  statement: string,
+  what: string,
+  stop: () => boolean = () => false,
+): Promise<Row | undefined> {
+  const giveUp = Date.now() + GATE_PATIENCE_MS;
+  while (!stop()) {
+    const [row] = await rowsOf(database, statement);
+    if (row !== undefined) return row;
+    if (Date.now() > giveUp) throw new Error(`${what}, after ${GATE_PATIENCE_MS} ms`);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+
+  return undefined;
+}
+
+/**
+ * A gate on each new row of `held` (FRU-719): see `Hold`. `close` opens it, for a case that ended
+ * before it did.
+ *
+ * PGlite has one connection. A transaction that held the gate there would hold every call back, and
+ * no second call can run inside the first one. There the trigger is not made: `reached` lets the
+ * first call take the one connection, and `release` does nothing.
+ */
+export async function holdRows(
+  database: Database,
+  held: { table: string; when?: string },
+): Promise<Hold & { close(): Promise<void> }> {
+  const [{ version } = {}] = await rowsOf(database, 'SELECT version() AS version');
+  if (String(version).includes('PGlite')) {
+    return {
+      reached: () => new Promise((resolve) => setTimeout(resolve, 0)),
+      release: async () => {},
+      close: async () => {},
+    };
+  }
+
+  await rowsOf(
+    database,
+    `CREATE FUNCTION hold_the_row() RETURNS trigger LANGUAGE plpgsql
+       AS $$ BEGIN PERFORM pg_advisory_xact_lock_shared(${GATE_KEY}); RETURN NEW; END $$`,
+  );
+  await rowsOf(
+    database,
+    `CREATE TRIGGER hold_the_row BEFORE INSERT ON ${held.table} FOR EACH ROW
+       ${held.when === undefined ? '' : `WHEN (${held.when})`} EXECUTE FUNCTION hold_the_row()`,
+  );
+
+  // The gate is a transaction on a connection of its own, which holds the lock until it is opened.
+  let open = (): void => {};
+  const opening = new Promise<void>((resolve) => {
+    open = resolve;
+  });
+  let closed = false;
+  const gate = new Promise<void>((locked, failed) => {
+    database
+      .transaction(async (tx) => {
+        await tx.execute(sql.raw(`SELECT pg_advisory_xact_lock(${GATE_KEY})`));
+        locked();
+        await opening;
+      })
+      .then(
+        () => {
+          closed = true;
+        },
+        (error: unknown) => {
+          closed = true;
+          failed(error);
+        },
+      );
+  });
+  await gate;
+  const openGate = async () => {
+    open();
+    const giveUp = Date.now() + GATE_PATIENCE_MS;
+    while (!closed && Date.now() < giveUp) await new Promise((resolve) => setTimeout(resolve, 5));
+  };
+  // The two connections of the case are open before it starts, so the second call waits for none.
+  // The caller gets no `close` when this fails: the gate is opened here, or its transaction stays.
+  await Promise.all([rowsOf(database, 'SELECT 1'), rowsOf(database, 'SELECT 1')]).catch(async (error: unknown) => {
+    await openGate();
+    throw error;
+  });
+
+  // The backend of the call that waits at the gate, once `reached` has seen it.
+  let heldPid: number | undefined;
+
+  return {
+    async reached() {
+      // The call that asks for the lock of the gate, in this database: a key of one `bigint` is
+      // `classid` 0, `objid` the key, `objsubid` 1.
+      const row = await untilRow(
+        database,
+        `SELECT pid FROM pg_locks
+          WHERE locktype = 'advisory' AND NOT granted AND classid = 0 AND objid = ${GATE_KEY} AND objsubid = 1
+            AND database = (SELECT oid FROM pg_database WHERE datname = current_database())`,
+        'no call waited at the gate',
+      );
+      heldPid = Number(row?.pid);
+    },
+    async release(other) {
+      let ended = false;
+      void other.then(
+        () => (ended = true),
+        () => (ended = true),
+      );
+      try {
+        if (heldPid === undefined) throw new Error('`release` before `reached`: no call is held');
+        // A call that waits for the held one: for a row that it locked, and not for anything else.
+        await untilRow(
+          database,
+          `SELECT pid FROM pg_stat_activity
+            WHERE datname = current_database() AND ${heldPid} = ANY(pg_blocking_pids(pid))`,
+          'no call waited for the held call',
+          () => ended,
+        );
+      } finally {
+        await openGate();
+      }
+    },
+    close: openGate,
+  };
+}
+
+/**
  * What a case answers on a store with one change, on this database: `'passed'`, or its failure.
  *
  * **A race that is left to chance is a control that fails one run in a few.** Two calls overlap only
@@ -343,12 +496,15 @@ const HOLD_SECONDS = 0.3;
  * - a trigger holds each new row of `held` for `HOLD_SECONDS` before it is written, inside the
  *   transaction, so the first call has not committed when the second one reads;
  * - the two connections are open before the case starts, so the second call does not wait for one.
+ *
+ * A case that orders its two calls itself gets a `Hold` instead (`gated`): the row waits at a gate
+ * until the case opens it, and not for a time. See `Hold`.
  */
 export async function outcomeOnChangedStore<Store>(input: {
   /** The file of the store, and the function of it that builds one. */
   file: string;
   factory: string;
-  cases: Cases<Store>;
+  cases: Cases<Store> | { gated: (hold: Hold) => Cases<Store> };
   /** The name of the case to run. */
   name: string;
   change: { after?: string; from: string; to: string };
@@ -358,28 +514,36 @@ export async function outcomeOnChangedStore<Store>(input: {
   const mutant = await mutatedModule(input.file, input.change);
   const opened = await input.open();
   const create = mutant.module[input.factory] as (database: Database) => Store;
+  let hold: (Hold & { close(): Promise<void> }) | undefined;
   try {
-    const runCase = collect(input.cases).get(input.name);
-    assert.ok(runCase !== undefined, 'the case is gone');
-
     await migrated(opened);
-    await rowsOf(
-      opened,
-      `CREATE FUNCTION hold_the_row() RETURNS trigger LANGUAGE plpgsql
-         AS $$ BEGIN PERFORM pg_sleep(${HOLD_SECONDS}); RETURN NEW; END $$`,
-    );
-    await rowsOf(
-      opened,
-      `CREATE TRIGGER hold_the_row BEFORE INSERT ON ${input.held.table} FOR EACH ROW
-         ${input.held.when === undefined ? '' : `WHEN (${input.held.when})`} EXECUTE FUNCTION hold_the_row()`,
-    );
-    await Promise.all([rowsOf(opened, 'SELECT 1'), rowsOf(opened, 'SELECT 1')]);
+    let cases: Cases<Store>;
+    if (typeof input.cases === 'function') {
+      cases = input.cases;
+      await rowsOf(
+        opened,
+        `CREATE FUNCTION hold_the_row() RETURNS trigger LANGUAGE plpgsql
+           AS $$ BEGIN PERFORM pg_sleep(${HOLD_SECONDS}); RETURN NEW; END $$`,
+      );
+      await rowsOf(
+        opened,
+        `CREATE TRIGGER hold_the_row BEFORE INSERT ON ${input.held.table} FOR EACH ROW
+           ${input.held.when === undefined ? '' : `WHEN (${input.held.when})`} EXECUTE FUNCTION hold_the_row()`,
+      );
+      await Promise.all([rowsOf(opened, 'SELECT 1'), rowsOf(opened, 'SELECT 1')]);
+    } else {
+      hold = await holdRows(opened, input.held);
+      cases = input.cases.gated(hold);
+    }
+    const runCase = collect(cases).get(input.name);
+    assert.ok(runCase !== undefined, 'the case is gone');
 
     return await runCase(create(opened)).then(
       () => 'passed',
       (error: unknown) => error,
     );
   } finally {
+    await hold?.close();
     await opened.close();
     mutant.remove();
   }
