@@ -1,5 +1,5 @@
 /**
- * The icons of the entries of the rails (FRU-477, FRU-476). They are drawn as every other icon of the
+ * The icons of the bar (FRU-477, FRU-476, FRU-684). They are drawn as every other icon of the
  * console is: inline, on a grid of 24, a stroke of 2 in `currentColor` with round ends. No icon set,
  * no request. An icon is `aria-hidden` and takes no focus: the words of the entry name it.
  */
@@ -28,22 +28,39 @@ const PATHS = {
   workspaces: 'M4 4h6v6H4zM14 4h6v6h-6zM14 14h6v6h-6zM4 14h6v6H4z',
   // An arrow to the start of the line: back to the workspaces of the person (FRU-476).
   back: 'M19 12H5M11 6l-6 6 6 6',
+  // FRU-684, the head and the foot of the bar, as the mockup draws them.
+  // A magnifier: the search of the notes.
+  search: 'M11 4a7 7 0 1 0 0 14a7 7 0 1 0 0-14M20 20l-3.5-3.5',
+  // A chevron down: the name of the workspace opens a menu.
+  chevron: 'M6 9l6 6 6-6',
+  // Two chevrons, up and down: the menu of the person opens above or below.
+  upDown: 'M8 9l4-4 4 4M8 15l4 4 4-4',
+  // A spark: what is new in Fruitback.
+  news: 'M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z',
+  // A piece of a puzzle: the browser extension.
+  extension:
+    'M10 4a2 2 0 1 1 4 0v1h4a1 1 0 0 1 1 1v4h-1a2 2 0 1 0 0 4h1v4a1 1 0 0 1-1 1h-4v-1a2 2 0 1 0-4 0v1H6a1 1 0 0 1-1-1v-4h1a2 2 0 1 0 0-4H5V6a1 1 0 0 1 1-1z',
+  // A question in a circle: the help and the documentation.
+  help: 'M12 21a9 9 0 1 0 0-18a9 9 0 1 0 0 18M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14M12 17h.01',
+  // Three lines: the bar folded under 1024 px opens.
+  menu: 'M4 7h16M4 12h16M4 17h16',
 } as const;
 
 export type RailIconName = keyof typeof PATHS;
 
 /**
- * An icon of an entry of the rail: 18 px, in the colour of the words beside it. `back` points to the
- * start of the line, so it turns in a page written from right to left.
+ * An icon of the bar: 16 px beside the words of an entry (FRU-684), 14 px on a button of the head, in
+ * the colour of the words beside it. `back` points to the start of the line, so it turns in a page
+ * written from right to left.
  */
-export function RailIcon({ name }: { name: RailIconName }) {
+export function RailIcon({ name, small = false }: { name: RailIconName; small?: boolean }) {
   return (
     <svg
       aria-hidden="true"
       focusable="false"
       viewBox="0 0 24 24"
       data-rail-icon={name}
-      className={`size-[18px] flex-none ${name === 'back' ? 'rtl:-scale-x-100' : ''}`}
+      className={`${small ? 'size-[14px]' : 'size-[16px]'} flex-none ${name === 'back' ? 'rtl:-scale-x-100' : ''}`}
     >
       <path
         d={PATHS[name]}

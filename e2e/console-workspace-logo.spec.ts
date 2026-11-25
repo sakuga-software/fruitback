@@ -78,7 +78,7 @@ test('an owner sends a logo, the rail shows it at once, then replaces it and rem
   const logo = page.getByRole('region', { name: 'Logo' });
   // No logo: the initial, in the rail and on the screen.
   await expect(rail(page).locator('img')).toHaveCount(0);
-  await expect(rail(page).getByRole('link', { name: /^Acme Cloud workspace/ })).toContainText('A');
+  await expect(rail(page).getByRole('link', { name: /^Acme Workspace settings/ })).toContainText('A');
   await expect(logo.getByRole('button', { name: 'Remove the logo' })).toHaveCount(0);
 
   let release = () => {};
@@ -100,12 +100,13 @@ test('an owner sends a logo, the rail shows it at once, then replaces it and rem
     )
     .toBe(16);
   const box = await rail(page).locator('img').boundingBox();
-  expect([box?.width, box?.height]).toEqual([32, 32]);
+  // The tile of the compact bar (FRU-684).
+  expect([box?.width, box?.height]).toEqual([20, 20]);
   // The rail keeps it on the next screen.
   await rail(page).getByRole('link', { name: 'Sites', exact: true }).click();
   await expect(rail(page).locator('img')).toHaveAttribute('src', /\?v=2$/);
   await rail(page)
-    .getByRole('link', { name: /^Acme Cloud workspace/ })
+    .getByRole('link', { name: /^Acme Workspace settings/ })
     .click();
 
   await expect(logo.getByRole('button', { name: 'Replace the logo' })).toBeVisible();

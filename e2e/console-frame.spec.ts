@@ -2,10 +2,10 @@ import AxeBuilder from '@axe-core/playwright';
 import { type Locator, type Page, expect, test } from '@playwright/test';
 import {
   ACME,
+  type Box,
   LUMEN,
   box,
   contrast,
-  expectBox,
   painted,
   rgb,
   sideScroll,
@@ -14,12 +14,14 @@ import {
 } from './console-workspace.ts';
 
 /**
- * The frame of a workspace (FRU-234), measured in a browser against the mockup of 2026-10-13: the
- * dark rail, the workspace and its menu, the sections, and the room it gives a screen.
+ * The frame of a workspace (FRU-234) with the compact bar of FRU-684, measured in a browser against
+ * option A of its mockup (« Barre latérale (3 options) », attached to the ticket): the workspace and
+ * the search, the sections, the fixed foot, and the room it gives a screen. Under 1024 px the bar is
+ * folded above the screen.
  *
- * The values are read in the code of the mockup (`09-console-sites.html`, `<aside class="rail">`),
- * and the boxes in its render at 1440 px and at 390 px. A box is compared where the font is the one
- * of the mockup, on macOS; the computed styles are read everywhere. The worker is answered by stubs.
+ * The values are read in the code of the mockup. The heights of the bar are fixed (28 px an entry,
+ * 40 px the head and the person), so its boxes are compared with every font. The worker is answered
+ * by stubs.
  */
 const CONSOLE = 'http://localhost:5178';
 /**
@@ -28,173 +30,181 @@ const CONSOLE = 'http://localhost:5178';
  */
 const KIT = 'http://localhost:5179';
 
-const RAIL = '#18181b';
-const RAIL_ACTIVE = '#27272a';
-const RAIL_TEXT = '#d4d4d8';
-const RAIL_MUTED = '#a1a1aa';
-const RAIL_ACCENT = '#ec5b57';
-const WHITE = '#ffffff';
+/** The colours of the mockup of FRU-684. */
+const BAR = '#f1f4f8';
+const LINE = '#e3e8ef';
+const ACTIVE = '#e2e8f0';
+/** An entry under the pointer: `hover` of the slate theme (FRU-683), a step lighter than the one on screen. */
+const HOVER = '#e8edf3';
 const INK = '#0f172a';
+const ENTRY_TEXT = '#334155';
+const SECONDARY = '#5b6779';
+/** `accent-strong`: the mockup draws #b42320, a step from the red of the console that the bar names by its token. */
+const ALERT = '#b91c1c';
+const WHITE = '#ffffff';
+
+const SECTIONS = ['Notes', 'Sites', 'Connectors', 'Members', 'Settings'];
 
 const rail = (page: Page) => page.locator('aside.kit-rail');
 const sections = (page: Page) => page.getByRole('navigation', { name: 'Workspace' });
-const switcher = (page: Page) => rail(page).getByRole('button', { name: /Acme/ });
+const switcher = (page: Page) => rail(page).getByRole('button', { name: /^Acme/ });
+const person = (page: Page) => rail(page).getByRole('button', { name: /@/ });
+const toggle = (page: Page) => rail(page).getByRole('button', { name: 'Menu' });
 
 async function open(page: Page, screen = 'sites', workspace = 'w1'): Promise<void> {
   await page.goto(`${CONSOLE}/w/${workspace}/${screen}`);
   await expect(page.locator('main h1')).toBeVisible();
 }
 
-/**
- * The rail with every section, « Notes » on screen: a page of the development server. The five of the
- * mockup, and « Settings » before « My account » (FRU-503), which no board draws.
- */
-/** What the icon of an entry adds to its width (FRU-477): 18 px, and the gap of 10 px after it. */
-const ICON = 28;
-
+/** The bar with every section, « Notes » on screen, and the counts of the mockup: a page of the development server. */
 async function openProbe(page: Page): Promise<void> {
-  // The rail asks the worker which browsers of the extension are connected (FRU-441): with no worker,
-  // the console says it cannot reach it, above the rail.
+  // The bar asks the worker which browsers of the extension are connected (FRU-441): with no worker,
+  // the console says it cannot reach it, above the bar.
   await stubWorker(page);
   await page.goto(`${KIT}/kit/frame`);
   await expect(sections(page)).toBeVisible();
 }
 
-test('at 1440 px the rail has the values of the mockup', async ({ page }) => {
+/** Each side of a box, within 1 px: the bar has fixed heights, so no font moves them. */
+function expectAt(found: Box, expected: Partial<Box>, name: string): void {
+  for (const [side, value] of Object.entries(expected) as [keyof Box, number][]) {
+    expect
+      .soft(Math.abs(found[side] - value), `${name}: ${side} is ${found[side]}, expected ${value}`)
+      .toBeLessThanOrEqual(1);
+  }
+}
+
+test('at 1440 px the bar has the values of the mockup', async ({ page }) => {
   await stubWorker(page);
   await open(page);
 
+  // 232 px, the tint of the bar, a rule on its right. No dark rail.
   expect
-    .soft(await styles(rail(page), ['flex-grow', 'flex-shrink', 'flex-basis', 'padding', 'row-gap', 'flex-direction']))
+    .soft(
+      await styles(rail(page), ['width', 'padding-top', 'border-right-width', 'border-right-style', 'flex-direction']),
+    )
     .toEqual({
-      'flex-grow': '1',
-      'flex-shrink': '1',
-      'flex-basis': '248px',
-      padding: '16px 12px',
-      'row-gap': '20px',
+      width: '232px',
+      'padding-top': '4px',
+      'border-right-width': '1px',
+      'border-right-style': 'solid',
       'flex-direction': 'column',
     });
-  expect.soft(await painted(rail(page), 'backgroundColor')).toEqual(rgb(RAIL));
-  expect.soft(await painted(rail(page), 'color')).toEqual(rgb(WHITE));
+  expect.soft(await painted(rail(page), 'backgroundColor')).toEqual(rgb(BAR));
+  expect.soft(await painted(rail(page), 'borderRightColor')).toEqual(rgb(LINE));
 
-  // The workspace: a button that opens a menu.
+  // The workspace: a tile, the name, a chevron, and a button that opens a menu.
   const name = switcher(page);
-  // React Aria writes `true`, which ARIA reads as `menu`.
   await expect(name).toHaveAttribute('aria-haspopup', /^(menu|true)$/);
-  expect.soft(await styles(name, ['padding', 'border-top-left-radius', 'column-gap', 'text-align'])).toEqual({
-    padding: '8px',
-    'border-top-left-radius': '8px',
-    'column-gap': '10px',
-    'text-align': 'left',
-  });
-  const initial = name.locator('span[aria-hidden="true"]').first();
-  await expect(initial).toHaveText('A');
   expect
-    .soft(await styles(initial, ['width', 'height', 'border-top-left-radius', 'font-size', 'font-weight']))
+    .soft(
+      await styles(name, [
+        'height',
+        'padding-left',
+        'border-top-left-radius',
+        'column-gap',
+        'font-size',
+        'font-weight',
+      ]),
+    )
     .toEqual({
-      width: '32px',
       height: '32px',
+      'padding-left': '6px',
       'border-top-left-radius': '6px',
+      'column-gap': '8px',
       'font-size': '13px',
-      'font-weight': '700',
+      'font-weight': '600',
     });
-  expect.soft(await painted(initial, 'backgroundColor')).toEqual(rgb(WHITE));
-  expect.soft(await painted(initial, 'color')).toEqual(rgb(INK));
-  expect.soft(await styles(name.getByText('Acme', { exact: true }), ['font-size', 'font-weight'])).toEqual({
-    'font-size': '13px',
-    'font-weight': '600',
+  const tile = name.locator('span[aria-hidden="true"]').first();
+  await expect(tile).toHaveText('A');
+  expect.soft(await styles(tile, ['width', 'height', 'border-top-left-radius', 'font-size', 'font-weight'])).toEqual({
+    width: '20px',
+    height: '20px',
+    'border-top-left-radius': '4px',
+    'font-size': '11px',
+    'font-weight': '700',
   });
-  const detail = name.getByText('Cloud workspace', { exact: true });
-  expect.soft(await styles(detail, ['font-size'])).toEqual({ 'font-size': '11px' });
-  expect.soft(await painted(detail, 'color')).toEqual(rgb(RAIL_MUTED));
-  const chevrons = name.locator('svg');
-  expect.soft(await styles(chevrons, ['width', 'height'])).toEqual({ width: '16px', height: '16px' });
-  expect.soft(await painted(chevrons, 'color')).toEqual(rgb(RAIL_MUTED));
+  expect.soft(await painted(tile, 'backgroundColor')).toEqual(rgb(INK));
+  expect.soft(await painted(tile, 'color')).toEqual(rgb(WHITE));
+  const chevron = name.locator('svg[data-rail-icon="chevron"]');
+  expect.soft(await styles(chevron, ['width', 'height'])).toEqual({ width: '14px', height: '14px' });
+  expect.soft(await painted(chevron, 'color')).toEqual(rgb(SECONDARY));
 
-  // The sections: the one on screen, and the others.
-  expect
-    .soft(await styles(sections(page), ['flex-direction', 'row-gap']))
-    .toEqual({ 'flex-direction': 'column', 'row-gap': '2px' });
-  const entry = [
-    'min-height',
-    'border-top-left-radius',
-    'font-size',
-    'font-weight',
-    'column-gap',
-    'padding',
-    'white-space',
-  ];
+  // The search, beside it: 28 px.
+  const search = rail(page).getByRole('link', { name: 'Search notes' });
+  expect.soft(await styles(search, ['width', 'height', 'border-top-left-radius'])).toEqual({
+    width: '28px',
+    height: '28px',
+    'border-top-left-radius': '6px',
+  });
+
+  // The sections: 28 px, 8 px in, the icon 16 px, the one on screen tinted and in 600.
+  const entry = ['height', 'padding-left', 'padding-right', 'border-top-left-radius', 'column-gap', 'font-size'];
   const active = sections(page).getByRole('link', { name: 'Sites' });
-  expect.soft(await styles(active, entry)).toEqual({
-    'min-height': '40px',
-    'border-top-left-radius': '8px',
+  expect.soft(await styles(active, [...entry, 'font-weight'])).toEqual({
+    height: '28px',
+    'padding-left': '8px',
+    'padding-right': '8px',
+    'border-top-left-radius': '6px',
+    'column-gap': '8px',
     'font-size': '13px',
     'font-weight': '600',
-    'column-gap': '10px',
-    padding: '0px 12px',
-    'white-space': 'nowrap',
   });
-  expect.soft(await painted(active, 'backgroundColor')).toEqual(rgb(RAIL_ACTIVE));
-  expect.soft(await painted(active, 'color')).toEqual(rgb(WHITE));
-  const drop = active.locator('span[aria-hidden="true"]');
-  expect.soft(await styles(drop, ['width', 'height'])).toEqual({ width: '9px', height: '9px' });
-  expect.soft(await painted(drop, 'backgroundColor')).toEqual(rgb(RAIL_ACCENT));
-
+  expect.soft(await painted(active, 'backgroundColor')).toEqual(rgb(ACTIVE));
+  expect.soft(await painted(active, 'color')).toEqual(rgb(INK));
   const resting = sections(page).getByRole('link', { name: 'Members' });
-  expect.soft(await styles(resting, entry)).toEqual({
-    'min-height': '40px',
-    'border-top-left-radius': '8px',
-    'font-size': '13px',
-    'font-weight': '400',
-    'column-gap': '10px',
-    padding: '0px 12px 0px 31px',
-    'white-space': 'nowrap',
-  });
-  expect.soft(await painted(resting, 'color')).toEqual(rgb(RAIL_TEXT));
-  await expect(resting.locator('span[aria-hidden="true"]')).toHaveCount(0);
-
-  // Each section has its icon (FRU-477): 18 px, in the colour of its words, after the drop of the one
-  // on screen, so the icons stay in one column. A picture only: the words name the entry.
-  await expect(sections(page).locator('a > svg[aria-hidden="true"]')).toHaveCount(6);
+  expect.soft(await styles(resting, [...entry, 'font-weight'])).toMatchObject({ height: '28px', 'font-weight': '500' });
+  expect.soft(await painted(resting, 'color')).toEqual(rgb(ENTRY_TEXT));
+  // No drop on the entry on screen any more (FRU-413 is gone with the dark rail).
+  await expect(active.locator('span[aria-hidden="true"]')).toHaveCount(0);
+  await expect(sections(page).locator('a svg[data-rail-icon]')).toHaveCount(SECTIONS.length);
   const icon = resting.locator('svg');
   await expect(icon).toHaveAttribute('data-rail-icon', 'members');
-  expect.soft(await styles(icon, ['width', 'height'])).toEqual({ width: '18px', height: '18px' });
-  expect.soft(await painted(icon, 'color')).toEqual(rgb(RAIL_TEXT));
-  expect.soft(await painted(active.locator('svg'), 'color')).toEqual(rgb(WHITE));
-  const iconX = async (link: Locator) => (await box(link.locator('svg'))).x;
-  expect.soft(await iconX(active)).toBeCloseTo(await iconX(resting), 0);
+  expect.soft(await styles(icon, ['width', 'height'])).toEqual({ width: '16px', height: '16px' });
+  expect.soft(await painted(icon, 'color')).toEqual(rgb(SECONDARY));
 
-  // The foot: the way to the documentation, and the logo.
+  // The boxes of the mockup: the head is 40 px under 4 px, the entries start at 48 and are 29 px apart.
+  const bar = await box(rail(page));
+  expectAt(bar, { x: 0, y: 0, width: 232, height: 900 }, 'the bar');
+  expectAt(await box(name), { x: 6, y: 8, height: 32 }, 'the workspace');
+  expectAt(await box(search), { x: 198, y: 10, width: 28, height: 28 }, 'the search');
+  for (const [index, label] of SECTIONS.entries()) {
+    expectAt(
+      await box(sections(page).getByRole('link', { name: label, exact: true })),
+      { x: 6, y: 48 + 29 * index, width: 220, height: 28 },
+      label,
+    );
+  }
+
+  // The fixed foot, from the bottom of the bar: the person (40 px, 8 px above the bottom), a rule,
+  // « Help and docs », the extension and « What's new », 29 px apart.
+  expectAt(await box(person(page)), { x: 6, y: 900 - 8 - 40, width: 220, height: 40 }, 'the person');
   const help = rail(page).getByRole('link', { name: 'Help and docs' });
-  await expect(help).toHaveAttribute('href', 'https://fruitback.com');
-  expect.soft(await styles(help, ['font-size', 'text-decoration-line'])).toEqual({
-    'font-size': '13px',
-    'text-decoration-line': 'underline',
+  expectAt(await box(help), { x: 6, y: 900 - 8 - 40 - 1 - 13 - 1 - 28, height: 28 }, 'the help');
+  const extension = rail(page).getByRole('link', { name: 'Install the extension (beta)' });
+  expectAt(await box(extension), { y: 900 - 8 - 40 - 1 - 13 - 1 - 28 - 29, height: 28 }, 'the extension');
+  const news = rail(page).getByRole('link', { name: /^What's new/ });
+  expectAt(await box(news), { y: 900 - 8 - 40 - 1 - 13 - 1 - 28 - 58, height: 28 }, 'What’s new');
+  const rule = rail(page).locator('hr');
+  expect.soft(await styles(rule, ['height', 'margin-top', 'margin-bottom'])).toEqual({
+    height: '1px',
+    'margin-top': '6px',
+    'margin-bottom': '6px',
   });
-  expect.soft(await painted(help, 'color')).toEqual(rgb(RAIL_TEXT));
-  const foot = help.locator('..');
-  expect
-    .soft(await styles(foot, ['padding', 'row-gap', 'margin-top']))
-    .toMatchObject({ padding: '8px', 'row-gap': '14px' });
-  // FRU-573: the logo leads to the site of Fruitback, in another tab.
-  const home = rail(page).getByRole('link', { name: 'Fruitback, its site, in a new tab', exact: true });
-  await expect(home).toHaveAttribute('href', 'https://fruitback.com');
-  await expect(home).toHaveAttribute('target', '_blank');
-  await expect(home).toHaveAttribute('rel', 'noreferrer');
-  const logo = home.getByRole('img', { name: 'Fruitback' });
-  expectBox(await box(logo), { x: 20, y: 860, width: 82, height: 16 }, 2, 'the logo');
-  expect.soft(await painted(logo.locator('path').first(), 'fill')).toEqual(rgb(WHITE));
-  expect.soft(await painted(logo.locator('path').last(), 'fill')).toEqual(rgb(RAIL_ACCENT));
+  expect.soft(await painted(rule, 'backgroundColor')).toEqual(rgb(LINE));
 
-  // The boxes of the mockup, at 2 px.
-  expectBox(await box(rail(page)), { x: 0, y: 0, width: 248.5, height: 900 }, 2, 'the rail');
-  expectBox(await box(name), { x: 12, y: 16, width: 224.5, height: 49 }, 2, 'the workspace');
-  expectBox(await box(chevrons), { x: 213, y: 33, width: 16, height: 16 }, 2, 'the chevrons');
-  expectBox(await box(active), { x: 12, y: 85, width: 224.5, height: 40 }, 2, 'the section on screen');
-  expectBox(await box(help), { x: 20, y: 829, height: 17 }, 2, 'the way to the documentation');
+  // The person: the initial on a disc of 24 px, the name in 600 and the address in the secondary text.
+  const initial = person(page).locator('span[aria-hidden="true"]').first();
+  expect.soft(await styles(initial, ['width', 'height'])).toEqual({ width: '24px', height: '24px' });
+  // A disc: `rounded-full` computes to a radius far over half its side.
+  expect
+    .soft(Number.parseFloat((await styles(initial, ['border-top-left-radius']))['border-top-left-radius'] ?? '0'))
+    .toBeGreaterThanOrEqual(12);
+  await expect(person(page)).toContainText('Ana');
+  expect.soft(await painted(person(page).getByText('ana@acme.dev'), 'color')).toEqual(rgb(SECONDARY));
 });
 
-test('the room of a screen is as wide as the column beside the rail, with the padding of the mockup (FRU-398)', async ({
+test('the room of a screen is as wide as the column beside the bar, with the padding of the mockup (FRU-398)', async ({
   page,
 }) => {
   await stubWorker(page);
@@ -204,7 +214,6 @@ test('the room of a screen is as wide as the column beside the rail, with the pa
     expect
       .soft(await styles(main, ['max-width', 'padding-top', 'padding-bottom', 'padding-left', 'padding-right']), screen)
       .toEqual({
-        // The mockup capped each screen (820 to 1240 px), and left an empty band at the right.
         'max-width': 'none',
         'padding-top': '40px',
         'padding-bottom': '72px',
@@ -212,11 +221,11 @@ test('the room of a screen is as wide as the column beside the rail, with the pa
         'padding-left': '48px',
         'padding-right': '48px',
       });
-    // The room ends at the right edge of the window: all of what the rail leaves (1191.5 px).
+    // The room ends at the right edge of the window: all of what the bar leaves (1208 px).
     const room = await box(main);
     expect.soft(Math.abs(room.x + room.width - 1440), `the right edge of the room of ${screen}`).toBeLessThanOrEqual(1);
-    expectBox(room, { x: 248.5, y: 0, width: 1191.5 }, 2, `the room of ${screen}`);
-    expectBox(await box(page.locator('main h1')), { x: 296.5, y: 40, height: 25 }, 2, `the title of ${screen}`);
+    expectAt(room, { x: 232, y: 0, width: 1208 }, `the room of ${screen}`);
+    expectAt(await box(page.locator('main h1')), { x: 280, y: 40 }, `the title of ${screen}`);
   }
   const content = page.locator('main').locator('..');
   expect.soft(await styles(content, ['flex-grow', 'flex-shrink', 'flex-basis', 'min-width'])).toEqual({
@@ -228,11 +237,12 @@ test('the room of a screen is as wide as the column beside the rail, with the pa
 });
 
 /**
- * FRU-564: the room of a screen fills the height of the window, also when what it shows is short
- * (Mathieu's note on the Connectors screen). Under 888 px it starts under the rail, which keeps its
- * own height.
+ * FRU-564: the room of a screen fills the height of the window, also when what it shows is short.
+ * Under 1024 px it starts under the folded bar, which keeps its own height.
  */
-test('the room of a screen fills the height of the window, under the rail on a phone (FRU-564)', async ({ page }) => {
+test('the room of a screen fills the height of the window, under the folded bar on a phone (FRU-564)', async ({
+  page,
+}) => {
   await stubWorker(page);
   await page.setViewportSize({ width: 1440, height: 900 });
   for (const screen of ['connectors', 'sites']) {
@@ -250,44 +260,32 @@ test('the room of a screen fills the height of the window, under the rail on a p
   await open(page, 'connectors');
   const top = await box(rail(page));
   const room = await box(page.locator('main'));
-  expect.soft(room.y, 'the room starts under the rail').toBeCloseTo(top.y + top.height, 0);
+  expect.soft(room.y, 'the room starts under the bar').toBeCloseTo(top.y + top.height, 0);
   expect.soft(room.y + room.height, 'the bottom of the room at 390 px').toBeGreaterThanOrEqual(844 - 1);
-  // The rail keeps its own height: it takes none of what the screen leaves.
-  const natural = await rail(page).evaluate((element) => {
-    const copy = element.cloneNode(true) as HTMLElement;
-    copy.style.position = 'absolute';
-    copy.style.width = `${element.getBoundingClientRect().width}px`;
-    document.body.append(copy);
-    const height = copy.getBoundingClientRect().height;
-    copy.remove();
-    return height;
-  });
-  expect.soft(top.height).toBeCloseTo(natural, 0);
+  // The folded bar is its head alone: 4 px, 40 px, and its rule.
+  expectAt(top, { x: 0, y: 0, width: 390, height: 45 }, 'the folded bar');
   expect.soft(await sideScroll(page)).toBe(0);
 });
 
-test('the rail is as high as the window and stays while the screen scrolls; under 888 px it scrolls away (FRU-402)', async ({
+test('the bar is as high as the window and stays while the screen scrolls; under 1024 px it scrolls away (FRU-402)', async ({
   page,
 }) => {
   await stubWorker(page);
   // A window lower than « My account »: the document scrolls.
-  await page.setViewportSize({ width: 1440, height: 600 });
+  await page.setViewportSize({ width: 1440, height: 400 });
   await open(page, 'account');
-  const help = rail(page).getByRole('link', { name: 'Help and docs' });
-  await expect(help).toBeVisible();
-  expect.soft(await page.evaluate(() => document.documentElement.scrollHeight)).toBeGreaterThan(600 + 200);
+  expect.soft(await page.evaluate(() => document.documentElement.scrollHeight)).toBeGreaterThan(400 + 200);
 
   await page.evaluate(() => window.scrollTo(0, 200));
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(200);
-  const held = await box(rail(page));
-  expect.soft(held, 'the rail after a scroll of 200 px').toMatchObject({ x: 0, y: 0, height: 600 });
-  // The screen moved, and the foot of the rail is still at the bottom of the window.
+  expect.soft(await box(rail(page)), 'the bar after a scroll of 200 px').toMatchObject({ x: 0, y: 0, height: 400 });
+  // The screen moved, and the person is still at the bottom of the window.
   expect.soft((await box(page.locator('main'))).y).toBe(-200);
-  expect.soft((await box(help)).y).toBeGreaterThan(600 - 80);
-  expect.soft((await box(help)).y + (await box(help)).height).toBeLessThanOrEqual(600);
+  const foot = await box(person(page));
+  expect.soft(foot.y + foot.height).toBeCloseTo(400 - 8, 0);
   expect.soft(await sideScroll(page)).toBe(0);
 
-  // Above the screen, on a phone, the rail is part of the page: it scrolls away with it.
+  // Above the screen, on a phone, the bar is part of the page: it scrolls away with it.
   await page.setViewportSize({ width: 390, height: 844 });
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.evaluate(() => window.scrollTo(0, 150));
@@ -297,122 +295,153 @@ test('the rail is as high as the window and stays while the screen scrolls; unde
   expect.soft(await sideScroll(page)).toBe(0);
 });
 
-test('one section, and one alone, is the section on screen', async ({ page }) => {
+test('one section, and one alone, is the section on screen, and « My account » is none', async ({ page }) => {
   await stubWorker(page);
-  const names = {
-    sites: 'Sites',
-    notes: 'Notes',
-    connectors: 'Connectors',
-    members: 'Members',
-    settings: 'Settings',
-    account: 'My account',
-  };
-  for (const [screen, name] of Object.entries(names)) {
+  for (const [index, screen] of ['notes', 'sites', 'connectors', 'members', 'settings'].entries()) {
     await open(page, screen);
     const current = sections(page).locator('[aria-current="page"]');
     await expect(current, screen).toHaveCount(1);
-    await expect(current, screen).toHaveText(name);
+    await expect(current, screen).toHaveText(SECTIONS[index] as string);
   }
-  // The sections, in the order of the mockup (« Notes » has its screen since FRU-245), and « Settings »
-  // for an owner (FRU-503).
-  await expect(sections(page).getByRole('link')).toHaveText(Object.values(names));
+  await expect(sections(page).getByRole('link')).toHaveText(SECTIONS);
+  // « My account » left the sections (FRU-684): the menu of the person leads to it.
+  await open(page, 'account');
+  await expect(sections(page).locator('[aria-current="page"]')).toHaveCount(0);
+  await expect(rail(page).getByRole('link', { name: 'My account' })).toHaveCount(0);
 });
 
-test('the sections are in the order of the mockup, and « Notes » can be the one on screen', async ({ page }) => {
+test('the counts are at the right of the entries, and the failed sends of the connectors are red', async ({ page }) => {
   await openProbe(page);
   const links = sections(page).getByRole('link');
-  await expect(links).toHaveText(['Sites', 'Notes', 'Connectors', 'Members', 'Settings', 'My account']);
-  const current = sections(page).locator('[aria-current="page"]');
-  await expect(current).toHaveCount(1);
-  await expect(current).toHaveText('Notes');
-  expect.soft(await painted(current, 'backgroundColor')).toEqual(rgb(RAIL_ACTIVE));
-
-  // The boxes of the entries, 42 px apart as the mockup draws its five.
-  for (const [index, name] of ['Sites', 'Notes', 'Connectors', 'Members', 'Settings', 'My account'].entries()) {
-    expectBox(await box(links.nth(index)), { x: 12, y: 85 + 42 * index, width: 224.5, height: 40 }, 2, name);
+  // A screen reader hears the count with its entry.
+  for (const [index, name] of ['Notes 12', 'Sites 4', 'Connectors failed sends: 2', 'Members', 'Settings'].entries()) {
+    await expect(links.nth(index)).toHaveAccessibleName(name);
   }
-  expectBox(await box(sections(page)), { x: 12, y: 85, width: 224.5, height: 250 }, 2, 'the sections');
+  await expect(links.nth(0)).toHaveAttribute('aria-current', 'page');
+
+  const count = links.nth(1).locator('span').last();
+  expect.soft(await styles(count, ['font-size', 'font-weight'])).toEqual({ 'font-size': '12px', 'font-weight': '500' });
+  expect.soft(await painted(count, 'color')).toEqual(rgb(SECONDARY));
+  // At the right edge of the entry, 8 px in.
+  const entry = await box(links.nth(1));
+  const right = await box(count);
+  expect.soft(entry.x + entry.width - (right.x + right.width)).toBeCloseTo(8, 0);
+
+  const failing = links.nth(2).locator('[data-failing]');
+  expect
+    .soft(await styles(failing, ['font-size', 'font-weight']))
+    .toEqual({ 'font-size': '12px', 'font-weight': '600' });
+  expect.soft(await painted(failing, 'color')).toEqual(rgb(ALERT));
+  const dot = failing.locator('span[aria-hidden="true"]');
+  expect.soft(await styles(dot, ['width', 'height'])).toEqual({ width: '6px', height: '6px' });
+  expect.soft(await painted(dot, 'backgroundColor')).toEqual(rgb('#dd2c27'));
+  // The control: an entry with no count has nothing at its right.
+  await expect(links.nth(3).locator('[data-failing]')).toHaveCount(0);
+  await expect(links.nth(3).locator('span')).toHaveCount(2);
 });
 
-test('a section under the pointer, and a control with focus, read on the rail', async ({ page }) => {
+test('a section under the pointer takes the hover, and the keyboard walks the bar with a visible ring', async ({
+  page,
+}) => {
   await stubWorker(page);
   await open(page);
   const resting = sections(page).getByRole('link', { name: 'Members' });
   await resting.hover();
-  expect.soft(await painted(resting, 'backgroundColor')).toEqual(rgb(RAIL_ACTIVE));
-  expect.soft(await painted(resting, 'color')).toEqual(rgb(WHITE));
+  expect.soft(await painted(resting, 'backgroundColor')).toEqual(rgb(HOVER));
   await page.mouse.move(700, 500);
 
-  // The keyboard enters the rail by the workspace, then walks the sections in their order. Nothing
-  // was pressed on the page, so the first Tab is the first control of the page.
+  // The keyboard enters the bar by the workspace and the search, walks the sections in their order,
+  // then the foot. Nothing was pressed on the page, so the first Tab is the first control of the page.
   const order = [
     switcher(page),
-    ...['Sites', 'Notes', 'Connectors', 'Members', 'Settings', 'My account'].map((name) =>
-      sections(page).getByRole('link', { name, exact: true }),
-    ),
+    rail(page).getByRole('link', { name: 'Search notes' }),
+    ...SECTIONS.map((name) => sections(page).getByRole('link', { name, exact: true })),
+    rail(page).getByRole('link', { name: /^What's new/ }),
     rail(page).getByRole('link', { name: 'Install the extension (beta)' }),
     rail(page).getByRole('link', { name: 'Help and docs' }),
+    person(page),
   ];
+  const ring = rgb('#dd2c27');
   for (const [index, control] of order.entries()) {
     await page.keyboard.press('Tab');
     await expect(control, `stop ${index + 1} of the keyboard`).toBeFocused();
-    const ring = await styles(control, ['outline-style', 'outline-width', 'outline-offset']);
     expect
-      .soft(ring, `the ring of stop ${index + 1}`)
+      .soft(
+        await styles(control, ['outline-style', 'outline-width', 'outline-offset']),
+        `the ring of stop ${index + 1}`,
+      )
       .toEqual({ 'outline-style': 'solid', 'outline-width': '2px', 'outline-offset': '2px' });
-    expect.soft(await painted(control, 'outlineColor'), `the ring of stop ${index + 1}`).toEqual(rgb(RAIL_ACCENT));
+    expect.soft(await painted(control, 'outlineColor'), `the ring of stop ${index + 1}`).toEqual(ring);
   }
-  // WCAG 1.4.11: the ring against the rail, and against the section on screen it is around.
-  expect(contrast(rgb(RAIL_ACCENT), rgb(RAIL))).toBeGreaterThanOrEqual(3);
-  expect(contrast(rgb(RAIL_ACCENT), rgb(RAIL_ACTIVE))).toBeGreaterThanOrEqual(3);
+  // WCAG 1.4.11: the ring against the bar, and against the section on screen it can be around.
+  expect(contrast(ring, rgb(BAR))).toBeGreaterThanOrEqual(3);
+  expect(contrast(ring, rgb(ACTIVE))).toBeGreaterThanOrEqual(3);
 });
 
-test('every text of the rail is at 4.5:1 on what is behind it', async ({ page }) => {
-  await stubWorker(page);
-  await open(page);
+test('every text of the bar is at 4.5:1 on what is behind it', async ({ page }) => {
+  await openProbe(page);
   const pairs: [string, Locator, string][] = [
-    ['the name of the workspace', switcher(page).getByText('Acme', { exact: true }), RAIL],
-    ['« Cloud workspace »', switcher(page).getByText('Cloud workspace'), RAIL],
-    ['the section on screen', sections(page).getByRole('link', { name: 'Sites' }), RAIL_ACTIVE],
-    ['a section', sections(page).getByRole('link', { name: 'Members' }), RAIL],
-    ['the way to the documentation', rail(page).getByRole('link', { name: 'Help and docs' }), RAIL],
-    ['the way to the extension', rail(page).getByRole('link', { name: 'Install the extension (beta)' }), RAIL],
+    ['the name of the workspace', switcher(page).getByText('Acme', { exact: true }), BAR],
+    ['the section on screen', sections(page).getByRole('link', { name: /^Notes/ }), ACTIVE],
+    [
+      'its count',
+      sections(page)
+        .getByRole('link', { name: /^Notes/ })
+        .locator('span')
+        .last(),
+      ACTIVE,
+    ],
+    ['a section', sections(page).getByRole('link', { name: 'Members' }), BAR],
+    [
+      'a count',
+      sections(page)
+        .getByRole('link', { name: /^Sites/ })
+        .locator('span')
+        .last(),
+      BAR,
+    ],
+    ['the failed sends', sections(page).locator('[data-failing]'), BAR],
+    ['the way to the documentation', rail(page).getByRole('link', { name: 'Help and docs' }), BAR],
+    ['the address of the person', person(page).getByText('ana@acme.dev'), BAR],
   ];
   for (const [name, text, behind] of pairs) {
     expect.soft(contrast(await painted(text, 'color'), rgb(behind)), name).toBeGreaterThanOrEqual(4.5);
   }
-  // Under the pointer a section is white on the tint of the section on screen.
+  // Under the pointer a section is on the hover.
   const hovered = sections(page).getByRole('link', { name: 'Members' });
   await hovered.hover();
   expect(contrast(await painted(hovered, 'color'), await painted(hovered, 'backgroundColor'))).toBeGreaterThanOrEqual(
     4.5,
   );
-  const help = rail(page).getByRole('link', { name: 'Help and docs' });
-  await help.hover();
-  expect(contrast(await painted(help, 'color'), rgb(RAIL))).toBeGreaterThanOrEqual(4.5);
 });
 
-test('the foot of the rail leads to the extension, then to the documentation, each in another tab (FRU-406)', async ({
+test('the foot: « What’s new », the extension, the help, then the person, the links in another tab', async ({
   page,
 }) => {
   await stubWorker(page, { locale: 'fr' });
   await open(page);
+  const foot = rail(page).locator('nav ~ div').last();
+  await expect(foot.getByRole('link')).toHaveText([
+    /^Nouveautés/,
+    'Installer l’extension (bêta)',
+    'Aide et documentation',
+  ]);
+  for (const link of await foot.getByRole('link').all()) {
+    await expect(link).toHaveAttribute('target', '_blank');
+    await expect(link).toHaveAttribute('rel', 'noreferrer');
+  }
   // Chromium goes to the Chrome Web Store; Firefox keeps the guide (extension-store.test.ts).
-  const extension = rail(page).getByRole('link', { name: 'Installer l’extension (bêta)' });
-  await expect(extension).toHaveAttribute(
+  await expect(rail(page).getByRole('link', { name: 'Installer l’extension (bêta)' })).toHaveAttribute(
     'href',
     'https://chromewebstore.google.com/detail/fruitback/jjjemdloknmggncbickofjgbodplekoa',
   );
-  await expect(extension).toHaveAttribute('target', '_blank');
-  const help = rail(page).getByRole('link', { name: 'Aide et documentation' });
-  // Both in the foot, the extension first, and the foot is still at the bottom of the window.
-  const foot = rail(page).locator('> div').last();
-  // FRU-573: then the logo, which leads to the site of Fruitback; its words are those of its image.
-  await expect(foot.getByRole('link')).toHaveText(['Installer l’extension (bêta)', 'Aide et documentation', '']);
-  await expect(foot.getByRole('link').last()).toHaveAccessibleName('Fruitback, son site, dans un nouvel onglet');
-  expect((await box(extension)).y).toBeLessThan((await box(help)).y);
-  expect.soft((await box(help)).y).toBeGreaterThan(900 - 80);
-  // The administration has it too, above its guide.
+  await expect(rail(page).getByRole('link', { name: 'Aide et documentation' })).toHaveAttribute(
+    'href',
+    'https://fruitback.com',
+  );
+  await expect(person(page)).toBeVisible();
+
+  // The administration has the same foot, with its guide in place of the help.
   await stubWorker(page, {
     locale: 'fr',
     answer: (pathname, route) =>
@@ -428,12 +457,104 @@ test('the foot of the rail leads to the extension, then to the documentation, ea
   });
   await page.goto(`${CONSOLE}/admin`);
   await expect(page.locator('main h1')).toBeVisible();
-  await expect(rail(page).locator('> div').last().getByRole('link')).toHaveText([
+  await expect(rail(page).locator('nav ~ div').last().getByRole('link')).toHaveText([
+    /^Nouveautés/,
     'Installer l’extension (bêta)',
     'Guide d’auto-hébergement',
-    // FRU-573: the logo, whose words are those of its image.
-    '',
   ]);
+});
+
+test('« What’s new » leads to the releases, with a dot until it is opened with this version', async ({
+  page,
+  context,
+}) => {
+  await stubWorker(page);
+  // The releases are not opened for real: the new tab is answered here.
+  await context.route('https://github.com/**', (route) => route.fulfill({ body: 'Releases' }));
+  await open(page);
+  const news = rail(page).getByRole('link', { name: /^What's new/ });
+  await expect(news).toHaveAttribute('href', 'https://github.com/sakuga-software/fruitback/releases');
+  await expect(news).toHaveAccessibleName("What's new (new release)");
+  const dot = news.locator('[data-news]');
+  expect.soft(await styles(dot, ['width', 'height'])).toEqual({ width: '6px', height: '6px' });
+  expect.soft(await painted(dot, 'backgroundColor')).toEqual(rgb('#dd2c27'));
+
+  const opened = context.waitForEvent('page');
+  await news.click();
+  await (await opened).close();
+  await expect(dot).toHaveCount(0);
+  await expect(news).toHaveAccessibleName("What's new");
+  // The browser keeps it: the next page has no dot either.
+  await open(page, 'members');
+  await expect(rail(page).locator('[data-news]')).toHaveCount(0);
+  // The control: another version seen has the dot again.
+  await page.evaluate(() => localStorage.setItem('fruitback:whats-new-seen', '0.0.1'));
+  await page.reload();
+  await expect(rail(page).locator('[data-news]')).toHaveCount(1);
+});
+
+test('the menu of the person opens « My account » and signs out', async ({ page }) => {
+  let signedOut = 0;
+  await stubWorker(page, {
+    answer: (pathname, route) => {
+      if (pathname !== '/console/auth/sign-out') return undefined;
+      signedOut += 1;
+
+      return route.fulfill({ json: { ok: true } });
+    },
+  });
+  await open(page);
+  await person(page).focus();
+  await page.keyboard.press('Enter');
+  const menu = page.getByRole('menu');
+  await expect(menu.getByRole('menuitem')).toHaveText(['My account', 'Sign out']);
+  // Escape closes it, and focus is back on the person.
+  await page.keyboard.press('Escape');
+  await expect(menu).toBeHidden();
+  await expect(person(page)).toBeFocused();
+
+  await person(page).click();
+  await menu.getByRole('menuitem', { name: 'My account' }).click();
+  await expect(page).toHaveURL(`${CONSOLE}/w/w1/account`);
+  await expect(page.locator('main h1')).toHaveText('My account');
+
+  await person(page).click();
+  await menu.getByRole('menuitem', { name: 'Sign out' }).click();
+  await expect(page).toHaveURL(/\/setup$/);
+  expect(signedOut).toBe(1);
+});
+
+test('the search of the bar opens the notes with their search field in focus', async ({ page }) => {
+  // One note: the notes draw their filters, and the field is among them.
+  const note = {
+    id: 'n1',
+    excerpt: 'The button is cut on a phone',
+    page: { url: 'https://acme.dev/pricing', host: 'acme.dev', path: '/pricing' },
+    site: { id: 's1' },
+    stage: 'new',
+    author: { kind: 'anonymous' },
+    createdAt: '2026-10-13T12:00:00.000Z',
+  };
+  await stubWorker(page, {
+    answer: (pathname, route) =>
+      pathname === '/console/workspaces/w1/notes'
+        ? route.fulfill({ json: { notes: [note], total: 1, counts: { all: 1 } } })
+        : undefined,
+  });
+  await open(page);
+  await rail(page).getByRole('link', { name: 'Search notes' }).click();
+  await expect(page).toHaveURL(`${CONSOLE}/w/w1/notes`);
+  const field = page.locator('main').getByRole('searchbox', { name: 'Search notes' });
+  await expect(field).toBeFocused();
+  // A second press, from the notes, focuses it again.
+  await sections(page).getByRole('link', { name: 'Notes' }).focus();
+  await rail(page).getByRole('link', { name: 'Search notes' }).click();
+  await expect(field).toBeFocused();
+  // The control: the entry « Notes » opens them with no focus in the field.
+  await open(page, 'sites');
+  await sections(page).getByRole('link', { name: 'Notes' }).click();
+  await expect(page.locator('main h1')).toBeVisible();
+  await expect(page.locator('main').getByRole('searchbox', { name: 'Search notes' })).not.toBeFocused();
 });
 
 test('the name of the workspace opens the menu of the workspaces of the person', async ({ page }) => {
@@ -454,16 +575,8 @@ test('the name of the workspace opens the menu of the workspaces of the person',
   await expect(items.nth(1)).toContainText('Member');
   await expect(items.nth(1)).toHaveAttribute('aria-checked', 'false');
 
-  // The menu is the surface of a page, on the rail too: its words are at 4.5:1 on it.
-  const popover = page.locator('.kit-menu');
-  expect.soft(await painted(popover, 'backgroundColor')).toEqual(rgb(WHITE));
-  expect
-    .soft(contrast(await painted(items.nth(1).getByText('Lumen Studio'), 'color'), rgb(WHITE)))
-    .toBeGreaterThanOrEqual(4.5);
-  expect
-    .soft(contrast(await painted(items.nth(1).getByText('Member'), 'color'), rgb(WHITE)))
-    .toBeGreaterThanOrEqual(4.5);
   // The menu fades in: axe reads a contrast on words that are half there as too low.
+  const popover = page.locator('.kit-menu');
   await expect(popover).not.toHaveAttribute('data-entering', 'true');
   await page.waitForTimeout(200);
   const results = await new AxeBuilder({ page }).include('.kit-menu').analyze();
@@ -485,7 +598,7 @@ test('the name of the workspace opens the menu of the workspaces of the person',
   await menu.getByRole('menuitemradio', { name: /Lumen Studio/ }).click();
   await expect(page).toHaveURL(`${CONSOLE}/w/w2/sites`);
   await expect(page.getByRole('menu')).toBeHidden();
-  await expect(rail(page).getByRole('button', { name: /Lumen Studio/ })).toBeVisible();
+  await expect(rail(page).getByRole('button', { name: /^Lumen Studio/ })).toBeVisible();
   await expect(sections(page).locator('[aria-current="page"]')).toHaveText('Sites');
 });
 
@@ -516,14 +629,14 @@ test('a change of workspace draws the new one at once, and reads nothing of the 
   await expect(page).toHaveURL(`${CONSOLE}/w/w2/sites`);
 
   // The worker has not answered yet: the frame draws the new workspace from the last answer of the
-  // tab (FRU-356), with its rail, and the screen is of the new workspace.
-  await expect(rail(page).getByRole('button', { name: /Lumen Studio/ })).toBeVisible();
+  // tab (FRU-356), with its bar, and the screen is of the new workspace.
+  await expect(rail(page).getByRole('button', { name: /^Lumen Studio/ })).toBeVisible();
   await expect(page.locator('main h1')).toBeVisible();
   // Nothing was read in the workspace of before under the address of the new one.
   expect(asked.filter((pathname) => pathname.includes('/workspaces/w1/'))).toEqual([]);
 
   release();
-  await expect(rail(page).getByRole('button', { name: /Lumen Studio/ })).toBeVisible();
+  await expect(rail(page).getByRole('button', { name: /^Lumen Studio/ })).toBeVisible();
   expect(asked.filter((pathname) => pathname.includes('/workspaces/w1/'))).toEqual([]);
   // The control: the screen of the new workspace reads its own lists. Its title can come before the
   // request, so the request is waited for (FRU-268: one run of four workers was faster than it).
@@ -531,20 +644,21 @@ test('a change of workspace draws the new one at once, and reads nothing of the 
   expect(asked.filter((pathname) => pathname.includes('/workspaces/w1/'))).toEqual([]);
 });
 
-test('a person with one workspace has its name, and no menu', async ({ page }) => {
+test('a person with one workspace has its name, and no menu of the workspaces', async ({ page }) => {
   await stubWorker(page, { workspaces: [ACME] });
   await open(page);
-  await expect(rail(page).getByText('Acme', { exact: true })).toBeVisible();
-  await expect(rail(page).getByText('Cloud workspace')).toBeVisible();
-  // No button, so nothing that promises a menu: neither the attribute nor the chevrons.
-  await expect(rail(page).getByRole('button')).toHaveCount(0);
-  await expect(rail(page).locator('[aria-haspopup]')).toHaveCount(0);
+  const head = rail(page).locator('> div').first();
+  await expect(head.getByText('Acme', { exact: true })).toBeVisible();
+  // No button, so nothing that promises a menu: neither the attribute nor the chevron.
+  await expect(head.getByRole('button')).toHaveCount(0);
+  await expect(head.locator('[aria-haspopup]')).toHaveCount(0);
+  await expect(head.locator('svg[data-rail-icon="chevron"]')).toHaveCount(0);
   // The control: with two workspaces the same reading finds the button.
   await page.unrouteAll();
   await stubWorker(page, { workspaces: [ACME, LUMEN] });
   await open(page);
-  await expect(rail(page).getByRole('button')).toHaveCount(1);
-  await expect(rail(page).locator('[aria-haspopup]')).toHaveCount(1);
+  await expect(head.getByRole('button')).toHaveCount(1);
+  await expect(head.locator('[aria-haspopup]')).toHaveCount(1);
 });
 
 test('a workspace the person is not in opens their own', async ({ page }) => {
@@ -554,113 +668,72 @@ test('a workspace the person is not in opens their own', async ({ page }) => {
   await expect(page.locator('main h1')).toBeVisible();
 });
 
-for (const locale of ['en', 'fr'] as const) {
-  test(`at 390 px the sections are one row that scrolls in the rail, in ${locale}`, async ({ page }) => {
-    await page.setViewportSize({ width: 390, height: 844 });
-    await stubWorker(page, { locale });
+for (const width of [1023, 390]) {
+  test(`under 1024 px the bar is folded above the screen, and unfolds by its button, at ${width} px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await stubWorker(page);
     await open(page);
-    const nav = page.getByRole('navigation');
-    const last = nav.getByRole('link').last();
-
-    // The page does not scroll sideways: the mockup does, its document is 547 px wide.
-    expect(await sideScroll(page)).toBe(0);
-    expect(await styles(nav, ['flex-direction', 'overflow-x'])).toEqual({
-      'flex-direction': 'row',
-      'overflow-x': 'auto',
-    });
-    // The row is wider than the rail, so it is the row that scrolls. The control of « 0 » above.
-    expect(await nav.evaluate((row) => row.scrollWidth - row.clientWidth)).toBeGreaterThan(0);
-    // The foot is not shown, as in the mockup.
-    await expect(rail(page).getByRole('img', { name: 'Fruitback' })).toBeHidden();
-
-    // The end of the row that hides a section fades, and the start does not.
-    await expect(nav).toHaveAttribute('data-more-end', 'true');
-    await expect(nav).toHaveAttribute('data-more-start', 'false');
-    expect((await styles(nav, ['mask-image']))['mask-image']).toContain('linear-gradient');
-
-    // The keyboard reaches the last section, and the row scrolls to show it whole.
-    await last.focus();
-    const edge = async (link: Locator) => {
-      const found = await box(link);
-
-      return { start: found.x, end: found.x + found.width };
-    };
-    await expect.poll(async () => (await edge(last)).end).toBeLessThanOrEqual(390);
-    await expect(nav).toHaveAttribute('data-more-start', 'true');
-    await expect(nav).toHaveAttribute('data-more-end', 'false');
+    // Folded: the head, the search and the button; the sections and the foot are hidden.
+    await expect(switcher(page)).toBeVisible();
+    await expect(rail(page).getByRole('link', { name: 'Search notes' })).toBeVisible();
+    await expect(toggle(page)).toHaveAttribute('aria-expanded', 'false');
+    await expect(sections(page)).toBeHidden();
+    await expect(person(page)).toBeHidden();
+    expectAt(await box(rail(page)), { x: 0, y: 0, width, height: 45 }, 'the folded bar');
     expect(await sideScroll(page)).toBe(0);
 
-    // A screen opened by its address shows its own section in the row.
-    await open(page, 'account');
-    const current = nav.locator('[aria-current="page"]');
-    await expect.poll(async () => (await edge(current)).end).toBeLessThanOrEqual(390);
-    expect((await edge(current)).start).toBeGreaterThanOrEqual(0);
+    // The button unfolds them under the head, as wide as the window.
+    await toggle(page).focus();
+    await page.keyboard.press('Enter');
+    await expect(toggle(page)).toHaveAttribute('aria-expanded', 'true');
+    const panel = await toggle(page).getAttribute('aria-controls');
+    expect(panel).not.toBeNull();
+    await expect(page.locator(`[id="${panel}"]`)).toBeVisible();
+    await expect(sections(page).getByRole('link')).toHaveText(SECTIONS);
+    await expect(person(page)).toBeVisible();
+    expectAt(
+      await box(sections(page).getByRole('link', { name: 'Notes' })),
+      { x: 6, width: width - 12, height: 28 },
+      'Notes',
+    );
     expect(await sideScroll(page)).toBe(0);
+    const results = await new AxeBuilder({ page }).include('aside.kit-rail').analyze();
+    expect(results.violations.map((violation) => `${violation.id}: ${violation.nodes[0]?.target.join(' ')}`)).toEqual(
+      [],
+    );
+
+    // Tab goes on from the button into the sections; Escape folds the bar and gives focus back.
+    await page.keyboard.press('Tab');
+    await expect(sections(page).getByRole('link', { name: 'Notes' })).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(toggle(page)).toHaveAttribute('aria-expanded', 'false');
+    await expect(toggle(page)).toBeFocused();
+    await expect(sections(page)).toBeHidden();
+
+    // A section chosen opens its screen, and folds the bar over it.
+    await toggle(page).click();
+    await sections(page).getByRole('link', { name: 'Members' }).click();
+    await expect(page).toHaveURL(`${CONSOLE}/w/w1/members`);
+    await expect(sections(page)).toBeHidden();
+    await expect(toggle(page)).toHaveAttribute('aria-expanded', 'false');
   });
 }
 
-test('at 390 px the row of sections is where the mockup draws it', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
+test('at 1024 px the bar is beside the screen, with no button to unfold it', async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 768 });
   await stubWorker(page);
   await open(page);
-  // The render of the mockup at 390 px: the rail is 141 px high, and its row starts at 12, 85. Each
-  // entry is wider than the mockup by its icon and the gap after it (FRU-477): the mockup draws none.
-  // The words are in Inter at 13 px since FRU-683, so the entries are narrower than the mockup's.
-  expectBox(await box(rail(page)), { x: 0, y: 0, width: 390, height: 141 }, 4, 'the rail');
-  expectBox(await box(switcher(page)), { x: 12, y: 16, height: 49 }, 4, 'the workspace');
-  expectBox(
-    await box(sections(page).getByRole('link', { name: 'Sites' })),
-    { x: 12, y: 85, width: 74.2 + ICON, height: 40 },
-    4,
-    '« Sites »',
-  );
-  expectBox(await box(page.locator('main')), { x: 0, y: 141, width: 390 }, 4, 'the room of the screen');
-  expectBox(await box(page.locator('main h1')), { x: 16, y: 181, height: 25 }, 4, 'the title');
-
-  // The first four sections of the mockup are where it draws them. « Settings » (FRU-503), which it does
-  // not draw, comes next, then « My account », each 2 px after the one before, on the same line.
-  await openProbe(page);
-  const mockup = [
-    { x: 12, width: 73.1 + ICON },
-    { x: 87.1 + ICON, width: 83.6 + ICON },
-    { x: 169.2 + 2 * ICON, width: 114.3 + ICON },
-    { x: 285.5 + 3 * ICON, width: 101 + ICON },
-  ];
-  const links = sections(page).getByRole('link');
-  for (const [index, entry] of mockup.entries()) {
-    expectBox(await box(links.nth(index)), { ...entry, y: 85, height: 40 }, 4, `entry ${index + 1}`);
-  }
-  for (const index of [4, 5]) {
-    const before = await box(links.nth(index - 1));
-    const entry = await box(links.nth(index));
-    expectBox(entry, { x: before.x + before.width + 2, y: 85, height: 40 }, 1, `entry ${index + 1}`);
-  }
+  await expect(toggle(page)).toBeHidden();
+  await expect(sections(page)).toBeVisible();
+  expectAt(await box(rail(page)), { x: 0, y: 0, width: 232, height: 768 }, 'the bar');
+  expectAt(await box(page.locator('main')), { x: 232, width: 1024 - 232 }, 'the room');
   expect(await sideScroll(page)).toBe(0);
 });
 
-test('at 390 px a short screen leaves the rail at its own height', async ({ page }) => {
-  // A window higher than the screen it shows, as a short screen is on a phone.
-  await page.setViewportSize({ width: 390, height: 1800 });
-  await stubWorker(page);
-  await open(page);
-  const main = await box(page.locator('main'));
-  // FRU-564: the room of the screen takes the rest of the window, and the rail does not.
-  expect(main.y + main.height).toBeCloseTo(1800, 0);
-  // The mockup gives the rest of the window to the rail: 286 px of rail at 390 px. Here the rail is
-  // its own height, whatever the font, and the screen starts right under it.
-  const above = await box(rail(page));
-  expect(above.height).toBeLessThan(200);
-  expect(main.y).toBe(above.y + above.height);
-  expectBox(await box(rail(page)), { x: 0, y: 0, width: 390, height: 141 }, 4, 'the rail');
-  expectBox(await box(page.locator('main h1')), { x: 16, y: 181 }, 4, 'the title');
-
-  // At 1440 px the rail is beside the screen, and as high as the window.
-  await page.setViewportSize({ width: 1440, height: 900 });
-  expectBox(await box(rail(page)), { x: 0, y: 0, width: 248.5, height: 900 }, 2, 'the rail at 1440 px');
-});
-
 for (const width of [1440, 390]) {
-  test(`axe finds nothing in the rail at ${width} px`, async ({ page }) => {
+  test(`axe finds nothing in the bar at ${width} px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     await stubWorker(page);
     await open(page);
@@ -668,12 +741,12 @@ for (const width of [1440, 390]) {
     expect(results.violations.map((violation) => `${violation.id}: ${violation.nodes[0]?.target.join(' ')}`)).toEqual(
       [],
     );
-    // The control: axe read the rail.
+    // The control: axe read the bar.
     expect(results.passes.length).toBeGreaterThan(5);
   });
 }
 
-test('what the root says above a screen stays above the rail, and reads', async ({ page }) => {
+test('what the root says above a screen stays above the bar, and reads', async ({ page }) => {
   // A worker that stops answering after the screen is drawn.
   let down = false;
   await stubWorker(page, {

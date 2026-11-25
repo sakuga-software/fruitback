@@ -129,7 +129,7 @@ textarea {
   caret-color: var(--color-accent);
 }
 
-/* On the rail, its lighter red takes the place of this one: `[&_:focus-visible]:outline-rail-accent!`. */
+/* The ring of every page, the bar of FRU-684 too: the accent is 3:1 and more on its slate. */
 :focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
@@ -137,7 +137,7 @@ textarea {
 
 /*
   The moves between the screens of a workspace, between workspaces and to the administration
-  (FRU-356). The rail (`[view-transition-name:rail]`) is one block that holds still, and the screen
+  (FRU-356). The bar (`[view-transition-name:rail]`) is one block that holds still, and the screen
   (`screen`) beside it cross-fades: the old one goes in 120 ms, the new one comes in 220 ms from 4 px
   lower. A browser with no view transitions changes the screen at once. With reduced motion nothing
   moves.
@@ -152,25 +152,6 @@ textarea {
 }
 
 ::view-transition-new(rail) {
-  animation: none;
-}
-
-/*
-  The drop of the entry on screen (`rail-drop`) slides from the entry of before to the new one
-  (FRU-413): it is a picture of its own in the move, so the rail that holds still does not hold it.
-  The same drop is on both sides, so it moves and does not fade. One entry of the rail is on screen
-  at a time, so the name is held once.
-*/
-::view-transition-group(rail-drop) {
-  animation-duration: var(--duration-fast);
-  animation-timing-function: var(--ease-settle);
-}
-
-::view-transition-old(rail-drop) {
-  display: none;
-}
-
-::view-transition-new(rail-drop) {
   animation: none;
 }
 
