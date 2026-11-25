@@ -380,6 +380,7 @@ export function UnderRow({
   onKeep,
   problem,
   said,
+  values = {},
 }: {
   span: number;
   asked: Asked | undefined;
@@ -387,6 +388,8 @@ export function UnderRow({
   problem: string | undefined;
   /** A sentence that is no refusal: « The link is copied. » */
   said?: string | undefined;
+  /** The values of the sentence, as `t` fills them: the link a refused copy gives by hand. */
+  values?: Readonly<Record<string, string>> | undefined;
 }) {
   useLocale();
   if (asked === undefined && problem === undefined && said === undefined) return null;
@@ -403,7 +406,7 @@ export function UnderRow({
               onKeep={onKeep}
             />
           )}
-          {problem === undefined ? null : <Problem>{t(problem)}</Problem>}
+          {problem === undefined ? null : <Problem>{t(problem, values)}</Problem>}
           {said === undefined ? null : (
             <p role="status" className="text-hint text-muted">
               {t(said)}

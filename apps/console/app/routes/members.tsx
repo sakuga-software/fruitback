@@ -157,7 +157,7 @@ export default function Members() {
   const [inviting, setInviting] = useState(false);
   const [sentTo, setSentTo] = useState<readonly { email: string; message: Message }[]>([]);
   // What a row says under its line: why its gesture did not go through, or that its link is copied.
-  const [stuck, setStuck] = useState<{ row: string; problem?: string; said?: string } | undefined>();
+  const [stuck, setStuck] = useState<Stuck>();
   const asking = useAsking();
   const base = `${ORGANIZATION}`;
   const query = `organizationId=${encodeURIComponent(workspace.id)}`;
@@ -347,7 +347,7 @@ export default function Members() {
     setStuck(
       taken
         ? { row: invitation.id, said: COPIED }
-        : { row: invitation.id, problem: t(NOT_COPIED, { link: invitationLink() }) },
+        : { row: invitation.id, problem: NOT_COPIED, values: { link: invitationLink() } },
     );
   }
 
@@ -518,7 +518,12 @@ export default function Members() {
 }
 
 type Asking = ReturnType<typeof useAsking>;
-type Stuck = { row: string; problem?: string; said?: string } | undefined;
+/**
+ * What a row says under its line: why its gesture did not go through, or that its link is copied. The
+ * sentences are kept in English with their values, and translated where they are shown, so they follow
+ * a change of language.
+ */
+type Stuck = { row: string; problem?: string; said?: string; values?: Readonly<Record<string, string>> } | undefined;
 
 /** The tab « Members »: a row of 36 px per person, and under a row what it asks or why it failed. */
 function MemberRows({
@@ -666,7 +671,14 @@ function MemberRow({
           />
         ) : null}
       </tr>
-      <UnderRow span={span} asked={asked} onKeep={asking.keep} problem={stuck?.problem} said={stuck?.said} />
+      <UnderRow
+        span={span}
+        asked={asked}
+        onKeep={asking.keep}
+        problem={stuck?.problem}
+        said={stuck?.said}
+        values={stuck?.values}
+      />
     </>
   );
 }
@@ -782,7 +794,14 @@ function InvitationRow({
           }}
         />
       </tr>
-      <UnderRow span={span} asked={asked} onKeep={asking.keep} problem={stuck?.problem} said={stuck?.said} />
+      <UnderRow
+        span={span}
+        asked={asked}
+        onKeep={asking.keep}
+        problem={stuck?.problem}
+        said={stuck?.said}
+        values={stuck?.values}
+      />
     </>
   );
 }
