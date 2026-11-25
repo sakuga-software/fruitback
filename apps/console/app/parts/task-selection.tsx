@@ -154,6 +154,13 @@ export function useSelectionKeys(selection: TaskSelection): void {
 }
 
 /**
+ * Out of a selection, the box of a row or a card shows under the pointer, under the keyboard, and
+ * always on a touch screen. Once a task is selected, every box shows.
+ */
+const REVEAL =
+  'kit-select-reveal [[data-selecting=false]_&]:opacity-0 [[data-selecting=false]_:is(tr,li):hover_&]:opacity-100 [[data-selecting=false]_&:focus-within]:opacity-100 pointer-coarse:[[data-selecting=false]_&]:opacity-100';
+
+/**
  * The box of a row or a card (FRU-656), named after the text of its note. A note that cannot be
  * selected has none; in the table it keeps the room of one (`room`), so every text starts at one edge.
  */
@@ -170,11 +177,13 @@ export function SelectTask({
   const selection = useContext(TaskSelectionContext);
   if (selection === undefined) return null;
   if (!selection.canSelect(note))
-    return room ? <span aria-hidden="true" className={`kit-select-room ${className}`} /> : null;
+    return room ? (
+      <span aria-hidden="true" className={`kit-select-room inline-block flex-none w-[28px] ${className}`} />
+    ) : null;
 
   return (
     <SelectBox
-      className={`kit-select-reveal ${className}`}
+      className={`${REVEAL} ${className}`}
       label={t('Select: {note}', { note: excerptOf(note.excerpt) })}
       checked={selection.has(note.id)}
       onToggle={(checked, range) => selection.toggle(note, checked, range)}

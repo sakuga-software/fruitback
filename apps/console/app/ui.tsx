@@ -1277,7 +1277,12 @@ export function Initial({
   pending?: boolean;
 }) {
   return (
-    <span className="kit-avatar" data-size={size} data-pending={pending} aria-hidden="true">
+    <span
+      className={`kit-avatar flex flex-none items-center justify-center box-border ${size === 'small' ? 'size-[28px]' : 'size-[32px]'} border border-line rounded-[999px] ${pending ? 'bg-surface text-muted' : 'bg-avatar text-surface'} text-(length:--text-hint) font-bold leading-auto`}
+      data-size={size}
+      data-pending={pending}
+      aria-hidden="true"
+    >
       {name.trim().charAt(0).toUpperCase() || '?'}
     </span>
   );
@@ -1291,6 +1296,15 @@ const STATUS_COLOURS = {
   done: 'bg-status-done',
   closed: 'bg-status-closed',
 } as const satisfies Record<Stage, string>;
+
+/** The drop of a pin: the shape of a status, of the entry of the rail, of a success. */
+const DROP = 'kit-drop inline-block flex-none rounded-[50%_50%_50%_0] [transform:rotate(-90deg)]';
+const DROP_SIZE = { 9: 'size-[9px]', 10: 'size-[10px]', 11: 'size-[11px]' } as const;
+
+/** A drop of a colour a screen gives: the one of « done » on the rail, the entry on screen. */
+export function Drop({ size = 9, className = '' }: { size?: 9 | 10 | 11; className?: string }) {
+  return <span aria-hidden="true" className={`${DROP} ${DROP_SIZE[size]} ${className}`} data-size={size} />;
+}
 
 /**
  * The drop of a status. It is a picture for the eye only: the word of the status is always written
@@ -1312,7 +1326,8 @@ export function StatusDot({
   return (
     <span
       aria-hidden="true"
-      className={`kit-drop ${STATUS_COLOURS[status]}`}
+      // The edge, as in the widget and the extension: three statuses are light greys and a mango (FRU-334).
+      className={`${DROP} ${DROP_SIZE[size]} [box-shadow:0_0_0_1px_var(--color-status-edge)] ${STATUS_COLOURS[status]}`}
       data-size={size}
       data-status={status}
       {...(color === undefined ? {} : { style: { background: color } })}
@@ -1329,12 +1344,26 @@ type StatusBarProps = {
   width?: 'table' | 'short' | 'full';
 };
 
-/** The statuses of the notes of a site, as one bar. */
+const STATUS_BAR_WIDTH = { table: 'w-[128px]', short: 'w-[96px] bg-chip', full: 'w-full' } as const;
+
+/**
+ * The statuses of the notes of a site, as one bar. Each segment has the edge of a status: the light
+ * ones are under 3:1 on white (FRU-334).
+ */
 export function StatusBar({ counts, label, width = 'table' }: StatusBarProps) {
   return (
-    <span role="img" aria-label={label} className="kit-status-bar" data-width={width}>
+    <span
+      role="img"
+      aria-label={label}
+      className={`kit-status-bar flex flex-none gap-[2px] h-[8px] overflow-hidden rounded-[999px] ${STATUS_BAR_WIDTH[width]}`}
+      data-width={width}
+    >
       {STAGES.filter((status) => counts[status] > 0).map((status) => (
-        <span key={status} className={STATUS_COLOURS[status]} style={{ flexGrow: counts[status], flexBasis: 0 }} />
+        <span
+          key={status}
+          className={`${STATUS_COLOURS[status]} [box-shadow:inset_0_0_0_1px_var(--color-status-edge)] first:rounded-[999px_0_0_999px] last:rounded-[0_999px_999px_0] only:rounded-[999px]`}
+          style={{ flexGrow: counts[status], flexBasis: 0 }}
+        />
       ))}
     </span>
   );
@@ -1404,8 +1433,54 @@ type DataTableProps = {
 };
 
 /**
+ * What the frame of a table draws in the rows a screen writes: the screen owns its cells, so these are
+ * variants of the frame. A head is one line (FRU-401). The cells at the ends are 20 px from the frame.
+ * A row whose panel is open (`data-chosen`), or that is selected, keeps its tint under the pointer.
+ */
+const TABLE_CELLS = [
+  '[&_th]:px-[16px] [&_th]:py-[12px] [&_th]:[border-bottom:1px_solid_var(--color-line)] [&_th]:text-muted [&_th]:text-(length:--text-hint) [&_th]:font-semibold [&_th]:text-left [&_th]:whitespace-nowrap',
+  '[&_td]:px-[16px] [&_td]:[border-bottom:1px_solid_var(--color-line)]',
+  '[&_:is(th,td):first-child]:pl-[20px] [&_:is(th,td):last-child]:pr-[20px]',
+  '[&_tbody_tr[data-chosen=true]]:bg-chip [&_tr[data-selected=true]>td]:bg-chip',
+  '[&_[data-align=end]]:text-right',
+  // The head of a group of rows (FRU-551): a band of the subtle tint, the words of the group in ink.
+  '[&_.kit-table-group_th]:py-[8px] [&_.kit-table-group_th]:bg-subtle [&_.kit-table-group_th]:text-ink [&_.kit-table-group_th]:text-(length:--text-small)',
+].join(' ');
+
+/**
+ * A stacked table (FRU-505, FRU-586): one card per row where the frame is narrower than the table.
+ * `DataTable` writes `data-stacked`. The heads stay for a screen reader; the head of a group is the
+ * words above its cards, and its row is no box.
+ */
+const TABLE_STACKED = [
+  '[&[data-stacked=true]_:is(table,tbody,tr,td)]:block [&[data-stacked=true]_:is(table,tbody,tr,td)]:min-w-0',
+  '[&[data-stacked=true]_:is(thead,th)]:absolute [&[data-stacked=true]_:is(thead,th)]:p-0 [&[data-stacked=true]_:is(thead,th)]:w-px [&[data-stacked=true]_:is(thead,th)]:h-px [&[data-stacked=true]_:is(thead,th)]:overflow-hidden [&[data-stacked=true]_:is(thead,th)]:[clip-path:inset(50%)] [&[data-stacked=true]_:is(thead,th)]:whitespace-nowrap',
+  '[&[data-stacked=true]_tr]:flex [&[data-stacked=true]_tr]:flex-col [&[data-stacked=true]_tr]:gap-[8px] [&[data-stacked=true]_tr]:px-[20px] [&[data-stacked=true]_tr]:py-[14px] [&[data-stacked=true]_tr]:[border-bottom:1px_solid_var(--color-line)]',
+  '[&[data-stacked=true]_td]:max-w-none [&[data-stacked=true]_td]:p-0 [&[data-stacked=true]_td]:[border-bottom:0]',
+  '[&[data-stacked=true]_:is(th,td):is(:first-child,:last-child)]:max-w-none [&[data-stacked=true]_:is(th,td):is(:first-child,:last-child)]:p-0 [&[data-stacked=true]_:is(th,td):is(:first-child,:last-child)]:[border-bottom:0]',
+  '[&[data-stacked=true]_td[data-align=end]]:text-left',
+  '[&[data-stacked=true]_.kit-table-group]:contents',
+  '[&[data-stacked=true]_tr.kit-table-group_th]:block [&[data-stacked=true]_tr.kit-table-group_th]:w-auto [&[data-stacked=true]_tr.kit-table-group_th]:h-auto [&[data-stacked=true]_tr.kit-table-group_th]:p-[8px_20px] [&[data-stacked=true]_tr.kit-table-group_th]:[border-bottom:1px_solid_var(--color-line)] [&[data-stacked=true]_tr.kit-table-group_th]:overflow-visible [&[data-stacked=true]_tr.kit-table-group_th]:[clip-path:none]',
+].join(' ');
+
+/**
+ * Pinned heads (FRU-586): the head of the columns stays under what the screen pins at the top of the
+ * window (`--kit-pinned-top`), and the head of a group under it while the group is on screen. The
+ * frame clips and does not scroll: a frame that scrolls would hold its heads, not the window. The
+ * borders are the cells' own (`separate`): a collapsed border stays in the table when its cell moves.
+ * What takes focus is scrolled to under the pinned heads, never behind them (WCAG 2.4.11).
+ */
+const TABLE_PINNED = [
+  '[&:not([data-stacked=true])_thead_th]:sticky [&:not([data-stacked=true])_thead_th]:top-[var(--kit-pinned-top,0px)] [&:not([data-stacked=true])_thead_th]:z-2 [&:not([data-stacked=true])_thead_th]:bg-page',
+  '[&_tr.kit-table-group_th]:sticky [&_tr.kit-table-group_th]:top-[calc(var(--kit-pinned-top,0px)+var(--kit-table-head,0px))] [&_tr.kit-table-group_th]:z-1',
+  '[&_:is(a,button,input,select,textarea,[tabindex])]:scroll-mt-[calc(var(--kit-pinned-top,0px)+var(--kit-table-head,0px)+48px)]',
+].join(' ');
+
+/**
  * A table in its frame. A table wider than the screen scrolls in the frame, and the page does not.
- * The frame takes focus, so a keyboard can scroll it (WCAG 2.1.1).
+ * The frame takes focus, so a keyboard can scroll it (WCAG 2.1.1). It holds what is positioned in
+ * it: the label of a field that only a screen reader reads is absolute, and out of a frame with no
+ * position it widened the page past the screen (FRU-505).
  */
 export function DataTable({
   label,
@@ -1447,13 +1522,27 @@ export function DataTable({
       role="region"
       aria-label={label}
       tabIndex={0}
-      className="kit-table"
+      className={[
+        'kit-table relative border border-line rounded-frame [scrollbar-width:thin] [scrollbar-color:var(--field-border)_transparent]',
+        stack && pinned ? `overflow-clip ${TABLE_PINNED}` : 'overflow-x-auto',
+        TABLE_CELLS,
+        dense ? '[&_td]:py-[12px]' : '[&_td]:py-[14px]',
+        // The head of a group opens nothing: its tint stays under the pointer.
+        hover ? '[&_tbody_tr:hover:not([data-chosen=true],.kit-table-group)]:bg-subtle' : '',
+        TABLE_STACKED,
+        stack && pinned ? '' : '[&[data-stacked=true]_tr.kit-table-group_th]:static',
+      ].join(' ')}
       data-dense={dense}
       data-hover={hover}
       data-stack={stack}
       data-pinned={stack && pinned}
     >
-      <table style={stack ? undefined : { minWidth }}>{children}</table>
+      <table
+        className={`w-full text-table ${stack && pinned ? 'border-separate border-spacing-0' : 'border-collapse'}`}
+        style={stack ? undefined : { minWidth }}
+      >
+        {children}
+      </table>
     </div>
   );
 }
@@ -1608,18 +1697,37 @@ export function SidePanel({
       {...(label === undefined ? { 'aria-labelledby': id } : { 'aria-label': label })}
       {...(panelRef === undefined ? {} : { tabIndex: -1 })}
       {...(onKeyDown === undefined ? {} : { onKeyDown })}
-      className={`kit-panel ${className}`}
+      className={`kit-panel min-w-0 max-w-full ${flush ? 'border-0 border-none border-current rounded-none bg-transparent' : 'border border-line rounded-frame bg-subtle'} ${className}`}
       data-spacing={spacing}
       {...(flush ? { 'data-flush': '' } : {})}
     >
-      <div className="kit-panel__head">
-        <h2 id={id} className="kit-panel__title">
+      <div
+        className={`kit-panel__head ${flush ? 'pt-[16px] px-[22px] pb-0 [border-bottom:0]' : 'py-[20px] px-[22px] [border-bottom:1px_solid_var(--color-line)]'}`}
+      >
+        <h2
+          id={id}
+          className={`kit-panel__title text-section font-bold ${flush ? 'absolute w-px h-px overflow-hidden [clip-path:inset(50%)] whitespace-nowrap' : ''}`}
+        >
           {title}
         </h2>
-        {detail === undefined ? null : <p className="kit-panel__detail">{detail}</p>}
+        {detail === undefined ? null : (
+          <p
+            className={`kit-panel__detail ${flush ? 'mt-0' : 'mt-[2px]'} text-muted text-(length:--text-hint) leading-auto`}
+          >
+            {detail}
+          </p>
+        )}
       </div>
-      <div className="kit-panel__body">{children}</div>
-      {foot === undefined ? null : <div className="kit-panel__foot">{foot}</div>}
+      <div
+        className={`kit-panel__body flex flex-col ${spacing === 'tight' ? 'gap-[22px]' : 'gap-[24px]'} py-[20px] px-[22px]`}
+      >
+        {children}
+      </div>
+      {foot === undefined ? null : (
+        <div className="kit-panel__foot flex flex-wrap items-center justify-between gap-x-[16px] gap-y-[8px] py-[14px] px-[22px] [border-top:1px_solid_var(--color-line)] text-(length:--text-hint)">
+          {foot}
+        </div>
+      )}
     </aside>
   );
 }
@@ -1630,9 +1738,11 @@ export function SidePanel({
  */
 export function VerifyWord({ word, children }: { word: string; children: ReactNode }) {
   return (
-    <div className="kit-verify">
-      <span className="kit-verify__ask">{children}</span>
-      <span className="kit-verify__word">{word}</span>
+    <div className="kit-verify flex flex-wrap items-center justify-between gap-[16px] py-[18px] px-[20px] rounded-box bg-ink text-page">
+      <span className="kit-verify__ask max-w-[220px] text-rail-text text-(length:--text-small) leading-[1.45]">
+        {children}
+      </span>
+      <span className="kit-verify__word font-mono text-[22px] font-bold tracking-[0.08em]">{word}</span>
     </div>
   );
 }
@@ -1640,11 +1750,14 @@ export function VerifyWord({ word, children }: { word: string; children: ReactNo
 /** A list of a name and its value: « Signed in as », « Role », « Site ». */
 export function KeyValue({ rows }: { rows: readonly { term: string; value: ReactNode }[] }) {
   return (
-    <dl className="kit-key-value">
+    <dl className="kit-key-value [border-top:1px_solid_var(--color-line)] text-(length:--text-body) leading-auto">
       {rows.map((row) => (
-        <div key={row.term}>
-          <dt>{row.term}</dt>
-          <dd>{row.value}</dd>
+        <div
+          key={row.term}
+          className="flex justify-between gap-[16px] py-[12px] [border-bottom:1px_solid_var(--color-line)]"
+        >
+          <dt className="text-muted">{row.term}</dt>
+          <dd className="min-w-0 m-0 font-semibold text-right [overflow-wrap:anywhere]">{row.value}</dd>
         </div>
       ))}
     </dl>
@@ -1661,8 +1774,11 @@ export function SuccessMark({ size = 'page' }: { size?: 'page' | 'inline' }) {
   if (size === 'inline') return <StatusDot status="done" size={10} />;
 
   return (
-    <span aria-hidden="true" className="kit-drop kit-success">
-      <svg viewBox="0 0 24 24">
+    <span
+      aria-hidden="true"
+      className="kit-drop kit-success flex flex-none items-center justify-center size-[40px] rounded-[50%_50%_50%_0] [transform:rotate(-90deg)] bg-done [box-shadow:var(--shadow-pin)]"
+    >
+      <svg viewBox="0 0 24 24" className="size-[18px] [transform:rotate(90deg)]">
         <path
           d="M5 12.5l4.5 4.5L19 7.5"
           fill="none"
@@ -1680,7 +1796,10 @@ export function SuccessMark({ size = 'page' }: { size?: 'page' | 'inline' }) {
 /** The title of a page: its one `h1`. « setup » is the larger one of the setup. */
 export function Title({ size = 'page', children }: { size?: 'page' | 'setup'; children: ReactNode }) {
   return (
-    <h1 className="kit-title" data-size={size}>
+    <h1
+      className={`kit-title ${size === 'setup' ? 'text-title-setup text-balance' : 'text-title'} font-bold tracking-title`}
+      data-size={size}
+    >
       {children}
     </h1>
   );
@@ -1688,7 +1807,7 @@ export function Title({ size = 'page', children }: { size?: 'page' | 'setup'; ch
 
 /** The sentence under a title. */
 export function Lead({ children, className = '' }: { children: ReactNode; className?: string }) {
-  return <p className={`kit-lead ${className}`}>{children}</p>;
+  return <p className={`kit-lead text-lead text-muted ${className}`}>{children}</p>;
 }
 
 /** The head of a page of a workspace: its title, what the page is for, and the action of the page. */
@@ -1705,7 +1824,9 @@ export function PageHead({
   className?: string;
 }) {
   return (
-    <header className={`kit-page-head ${className}`}>
+    <header
+      className={`kit-page-head flex flex-wrap items-end justify-between gap-x-[24px] gap-y-[16px] [&_.kit-title]:mb-[6px] ${className}`}
+    >
       <div className="min-w-0">
         <Title>{title}</Title>
         <Lead>{lead}</Lead>
@@ -1729,11 +1850,16 @@ export function SubNav({
   entries: readonly { to: string; label: string; current: boolean }[];
 }) {
   return (
-    <nav aria-label={label} className="kit-subnav">
-      <ul>
+    <nav aria-label={label} className="kit-subnav -mt-[12px] mx-0 mb-[28px] overflow-x-auto [scrollbar-width:none]">
+      <ul className="flex gap-[24px] min-w-max [border-bottom:1px_solid_var(--color-line)]">
         {entries.map((entry) => (
           <li key={entry.to}>
-            <Link to={entry.to} {...(entry.current ? { 'aria-current': 'page' as const } : {})}>
+            {/* 44 px high, the target of a finger. The focus ring is inside: the row scrolls in its frame. */}
+            <Link
+              to={entry.to}
+              {...(entry.current ? { 'aria-current': 'page' as const } : {})}
+              className={`inline-flex items-center h-control -mb-px text-(length:--text-small) font-semibold [text-decoration:none] focus-visible:outline-offset-[-2px]! ${entry.current ? '[border-bottom:2px_solid_var(--color-ink)] text-ink' : '[border-bottom:2px_solid_transparent] text-muted [&:hover]:text-ink'}`}
+            >
               {entry.label}
             </Link>
           </li>
@@ -1742,6 +1868,10 @@ export function SubNav({
     </nav>
   );
 }
+
+/** The setup: two columns that wrap, laid out by the screen. */
+const ENTRY_FULL =
+  'flex-wrap items-start justify-start gap-[56px] box-border w-full max-w-[1280px] my-0 mx-auto pt-[48px] px-[clamp(16px,4vw,32px)] pb-[72px]';
 
 /** The site of the product: where the logo of a page outside a workspace leads. */
 const SITE = 'https://fruitback.com';
@@ -1760,17 +1890,29 @@ type EntryPageProps = {
  */
 export function EntryPage({ width = 'narrow', aside, children }: EntryPageProps) {
   return (
-    <div className="kit-entry">
-      <header className="kit-entry__header">
-        <div>
-          <a href={SITE} className="kit-entry__logo">
+    <div className="kit-entry flex flex-col min-h-screen">
+      <header className="kit-entry__header [border-bottom:1px_solid_var(--color-line)]">
+        {/* As the mockup writes it: the padding is outside the 1280 px, so the logo is at 80 px at 1440. */}
+        <div className="flex flex-wrap items-center justify-between gap-x-[24px] gap-y-[8px] box-content max-w-[1280px] min-h-[64px] my-0 mx-auto py-0 px-[clamp(16px,4vw,32px)] text-muted text-(length:--text-small) leading-auto">
+          <a href={SITE} className="kit-entry__logo flex py-[8px]">
             <Logo />
           </a>
           {aside ?? null}
         </div>
       </header>
-      <main className="kit-entry__main" data-width={width}>
-        {width === 'full' ? children : <div className="kit-entry__column">{children}</div>}
+      <main
+        className={`kit-entry__main flex flex-auto ${width === 'full' ? ENTRY_FULL : 'justify-center pt-[clamp(48px,10vh,112px)] px-[16px] pb-[64px]'}`}
+        data-width={width}
+      >
+        {width === 'full' ? (
+          children
+        ) : (
+          <div
+            className={`kit-entry__column flex flex-col w-full ${width === 'wide' ? 'max-w-[440px]' : 'max-w-[400px]'}`}
+          >
+            {children}
+          </div>
+        )}
       </main>
     </div>
   );
@@ -1779,7 +1921,10 @@ export function EntryPage({ width = 'narrow', aside, children }: EntryPageProps)
 /** A rule with a word in its middle: « or », between two ways to do one thing. A picture only. */
 export function Divider({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (
-    <div aria-hidden="true" className={`kit-divider ${className}`}>
+    <div
+      aria-hidden="true"
+      className={`kit-divider flex items-center gap-[12px] text-muted text-(length:--text-hint) leading-auto before:flex-1 before:h-px before:bg-line before:content-[''] after:flex-1 after:h-px after:bg-line after:content-[''] ${className}`}
+    >
       {children}
     </div>
   );
@@ -2102,7 +2247,7 @@ export type StepState = 'current' | 'pending' | 'done';
 
 /** The steps of a path, in order: an `<ol>` of `Step`. */
 export function Steps({ children }: { children: ReactNode }) {
-  return <ol className="kit-steps">{children}</ol>;
+  return <ol className="kit-steps p-0 list-none">{children}</ol>;
 }
 
 type StepProps = {
@@ -2115,14 +2260,28 @@ type StepProps = {
   children?: ReactNode;
 };
 
+/** The drop of a step: ink with its number, hollow when it is to come, green with a check when done. */
+const STEP_MARK = {
+  current:
+    'flex flex-none items-center justify-center box-border size-[26px] rounded-[50%_50%_50%_0] [transform:rotate(-90deg)] bg-ink text-surface text-(length:--text-tiny) font-bold leading-none',
+  pending:
+    'flex flex-none items-center justify-center box-border size-[26px] rounded-[50%_50%_50%_0] [transform:rotate(-90deg)] [border:1.5px_solid_var(--field-border)] bg-surface text-muted text-(length:--text-tiny) font-bold leading-none',
+  done: 'flex flex-none items-center justify-center box-border size-[26px] rounded-[50%_50%_50%_0] [transform:rotate(-90deg)] bg-done text-surface text-(length:--text-tiny) font-bold leading-none',
+} as const satisfies Record<StepState, string>;
+
 /** One step: its drop, the line down to the next one, its title and what the step holds. */
 export function Step({ state, number, title, currentPrefix, children }: StepProps) {
   return (
-    <li className="kit-step" data-state={state} {...(state === 'current' ? { 'aria-current': 'step' as const } : {})}>
-      <div className="kit-step__rail">
-        <span aria-hidden="true" className="kit-drop kit-step__mark">
+    <li
+      className="kit-step group/step grid grid-cols-[32px_minmax(0,1fr)] gap-x-[16px]"
+      data-state={state}
+      {...(state === 'current' ? { 'aria-current': 'step' as const } : {})}
+    >
+      <div className="kit-step__rail flex flex-col items-center gap-[8px] pt-px">
+        {/* The drop is turned by a quarter: what it holds is turned back. */}
+        <span aria-hidden="true" className={`kit-drop kit-step__mark ${STEP_MARK[state]}`}>
           {state === 'done' ? (
-            <svg viewBox="0 0 24 24">
+            <svg viewBox="0 0 24 24" className="size-[13px] [transform:rotate(90deg)]">
               <path
                 d="M5 12.5l4.5 4.5L19 7.5"
                 fill="none"
@@ -2133,13 +2292,16 @@ export function Step({ state, number, title, currentPrefix, children }: StepProp
               />
             </svg>
           ) : (
-            <span>{number}</span>
+            <span className="[transform:rotate(90deg)]">{number}</span>
           )}
         </span>
-        <span aria-hidden="true" className="kit-step__line" />
+        <span
+          aria-hidden="true"
+          className="kit-step__line flex-auto w-[2px] min-h-[24px] rounded-[2px] bg-line group-last/step:hidden"
+        />
       </div>
-      <div className="kit-step__body">
-        <h2 className="kit-step__title">
+      <div className="kit-step__body min-w-0 pb-[32px] group-last/step:pb-0">
+        <h2 className={`kit-step__title text-step font-semibold ${state === 'pending' ? 'text-muted' : ''}`}>
           {state === 'current' ? <span className="sr-only">{currentPrefix} </span> : null}
           {title}
         </h2>
@@ -2160,7 +2322,10 @@ export function Callout({
   children: ReactNode;
 }) {
   return (
-    <div {...(status ? { role: 'status' as const } : {})} className={`kit-callout ${className}`}>
+    <div
+      {...(status ? { role: 'status' as const } : {})}
+      className={`kit-callout flex flex-col gap-[10px] min-w-0 [overflow-wrap:anywhere] py-[18px] px-[20px] border border-line rounded-box bg-subtle ${className}`}
+    >
       {children}
     </div>
   );
@@ -2188,9 +2353,19 @@ export function Disclosure({
   children: ReactNode;
 }) {
   return (
-    <details id={id} open={open} onToggle={(event) => onToggle(event.currentTarget.open)} className="kit-disclosure">
-      <summary className="kit-disclosure__summary">
-        <svg aria-hidden="true" viewBox="0 0 24 24" className="kit-disclosure__chevron">
+    <details
+      id={id}
+      open={open}
+      onToggle={(event) => onToggle(event.currentTarget.open)}
+      className="kit-disclosure [border-top:1px_solid_var(--color-line)] [border-bottom:1px_solid_var(--color-line)]"
+    >
+      {/* The whole line is the target, 44 px at the least. The chevron turns. */}
+      <summary className="kit-disclosure__summary flex items-center gap-[10px] min-h-control py-[14px] cursor-pointer list-none list-outside [&::-webkit-details-marker]:hidden">
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 24 24"
+          className="kit-disclosure__chevron flex-none size-[20px] text-muted [transition:transform_var(--duration-fast)_var(--ease-settle)] [details[open]_&]:[transform:rotate(90deg)] [summary:hover_&]:text-ink motion-reduce:[transition:none]"
+        >
           <path
             d="M9 6l6 6-6 6"
             fill="none"
@@ -2205,7 +2380,7 @@ export function Disclosure({
           {hint === undefined ? null : <span className="text-small text-muted">{hint}</span>}
         </span>
       </summary>
-      <div className="kit-disclosure__body">{children}</div>
+      <div className="kit-disclosure__body flex flex-col gap-[40px] pt-[16px] px-0 pb-[32px]">{children}</div>
     </details>
   );
 }
@@ -2231,9 +2406,12 @@ export function OptionCard({
   const body = useId();
 
   return (
-    <div className="kit-option" data-folded={fold !== undefined && !fold.open ? '' : undefined}>
+    <div
+      className="kit-option flex flex-col gap-[8px] min-w-0 p-[18px] border border-line rounded-box"
+      data-folded={fold !== undefined && !fold.open ? '' : undefined}
+    >
       <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-        <h3 className="kit-option__title">{title}</h3>
+        <h3 className="kit-option__title text-(length:--text-body) font-semibold leading-auto">{title}</h3>
         {badge === undefined ? null : <Chip tone="accent">{badge}</Chip>}
         {fold === undefined ? null : (
           <HeroButton
@@ -2267,7 +2445,10 @@ export function OptionCard({
  */
 export function AutoGrid({ min = 180, children }: { min?: 180 | 230; children: ReactNode }) {
   return (
-    <div className="kit-auto-grid" data-min={min}>
+    <div
+      className={`kit-auto-grid grid ${min === 230 ? 'grid-cols-[repeat(auto-fit,minmax(min(230px,100%),1fr))] gap-[12px]' : 'grid-cols-[repeat(auto-fit,minmax(min(180px,100%),1fr))] gap-[10px]'}`}
+      data-min={min}
+    >
       {children}
     </div>
   );
@@ -2276,7 +2457,12 @@ export function AutoGrid({ min = 180, children }: { min?: 180 | 230; children: R
 /** Code to copy, as it is typed. Its box takes focus, so a keyboard scrolls a long line. */
 export function Snippet({ label, className = '', children }: { label: string; className?: string; children: string }) {
   return (
-    <pre role="region" aria-label={label} tabIndex={0} className={`kit-snippet ${className}`}>
+    <pre
+      role="region"
+      aria-label={label}
+      tabIndex={0}
+      className={`kit-snippet overflow-x-auto whitespace-pre-wrap break-all py-[10px] px-[12px] border border-line rounded-button bg-subtle text-ink font-mono text-(length:--text-tiny) leading-[1.55] ${className}`}
+    >
       {children}
     </pre>
   );
@@ -2293,39 +2479,51 @@ type BrowserFrameProps = {
   children?: ReactNode;
 };
 
+const BROWSER_DOTS = 'kit-browser__dots flex flex-none gap-[6px] w-[42px]';
+const BROWSER_DOT = 'size-[10px] rounded-[50%] bg-line';
+
 /** The window of a browser, drawn around the preview of a site. */
 export function BrowserFrame({ address, empty, caption, children }: BrowserFrameProps) {
   return (
     <>
-      <div className="kit-browser">
-        <div className="kit-browser__bar">
-          <span aria-hidden="true" className="kit-browser__dots">
-            <span />
-            <span />
-            <span />
+      <div className="kit-browser overflow-hidden border border-line rounded-frame bg-surface [box-shadow:var(--shadow-frame)]">
+        {/* 44 px over its rule, as the mockup writes it. */}
+        <div className="kit-browser__bar flex items-center gap-[12px] box-content h-[44px] py-0 px-[16px] [border-bottom:1px_solid_var(--color-line)] bg-subtle">
+          <span aria-hidden="true" className={BROWSER_DOTS}>
+            <span className={BROWSER_DOT} />
+            <span className={BROWSER_DOT} />
+            <span className={BROWSER_DOT} />
           </span>
-          <span className="kit-browser__address">
-            <span>{address}</span>
+          <span className="kit-browser__address flex flex-1 justify-center min-w-0">
+            <span className="overflow-hidden py-[4px] px-[16px] border border-line rounded-[999px] bg-surface text-muted text-(length:--text-hint) leading-auto text-ellipsis whitespace-nowrap">
+              {address}
+            </span>
           </span>
-          <span aria-hidden="true" className="kit-browser__dots" />
+          <span aria-hidden="true" className={BROWSER_DOTS} />
         </div>
-        <div className="kit-browser__page">
+        {/* On a phone the frame comes under the steps: with no site yet, a short frame says enough. */}
+        <div
+          className={`kit-browser__page relative h-[620px] overflow-hidden ${empty === undefined ? '' : 'max-sm:h-[280px]'}`}
+        >
           {empty === undefined ? (
             children
           ) : (
-            <div className="kit-browser__empty">
-              <svg aria-hidden="true" viewBox="16 6 96 116">
+            <div className="kit-browser__empty flex flex-col items-center justify-center gap-[18px] box-border h-full p-[24px] bg-subtle text-muted text-body text-center">
+              <svg aria-hidden="true" viewBox="16 6 96 116" className="w-[56px] h-[68px] fill-line">
                 <path
                   d="M 64 121.9 L 30.1 87.9 A 48 48 0 1 1 97.9 87.9 Z M 64 37 A 17 17 0 1 0 64 71 A 17 17 0 1 0 64 37 Z"
                   fillRule="evenodd"
                 />
               </svg>
-              <p>{empty}</p>
+              {/* No sentence: the drop alone, for a page that has nothing to say yet. */}
+              <p className="max-w-[280px] empty:hidden">{empty}</p>
             </div>
           )}
         </div>
       </div>
-      {caption === undefined ? null : <p className="kit-browser__caption">{caption}</p>}
+      {caption === undefined ? null : (
+        <p className="kit-browser__caption mt-[12px] mx-[4px] mb-0 text-muted text-hint">{caption}</p>
+      )}
     </>
   );
 }

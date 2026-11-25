@@ -15,7 +15,7 @@ import { adoptLanguage, msg, t } from '../i18n';
 import { extensionInstallFor } from '../extension-store';
 import { useConnectedExtension } from '../extension-connected';
 import { BY_SIGN_IN, CONNECT_PAGE } from '../install-options';
-import { PageHead as KitPageHead, Logo, Menu } from '../ui';
+import { Drop, PageHead as KitPageHead, Logo, Menu } from '../ui';
 import { ReleaseBanner } from '../release-banner';
 import { RailIcon, type RailIconName } from '../rail-icons';
 import { manages } from '../setup-stage';
@@ -333,7 +333,7 @@ export function RailFrame({
             >
               <p className="flex min-w-0 flex-col gap-[2px] text-small leading-auto">
                 <span className="flex items-center gap-[8px] whitespace-nowrap text-on-ink">
-                  <span aria-hidden="true" className="kit-drop flex-none bg-status-done" data-size="9" />
+                  <Drop className="bg-status-done" />
                   {link.status}
                 </span>
                 {link.detail === undefined ? null : (
@@ -597,9 +597,7 @@ export function RailNav({ label, entries }: { label: string; entries: readonly R
             }`}
           >
             {/* The drop of the entry on screen slides to the next one in a move (FRU-413): `kit-rail-drop`. */}
-            {active ? (
-              <span aria-hidden="true" className="kit-drop kit-rail-drop bg-rail-accent" data-size="9" />
-            ) : null}
+            {active ? <Drop className="kit-rail-drop bg-rail-accent" /> : null}
             {/* After the drop, so the icons of the entries stay in one column (FRU-477). */}
             {entry.icon === undefined ? null : <RailIcon name={entry.icon} />}
             {entry.label}

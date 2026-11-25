@@ -6,6 +6,10 @@ import { Problem, StatusDot } from '../ui';
 import { useLocale } from '../use-locale';
 import { STAGE_NAMES } from '../stages';
 
+/** A selected card (FRU-656) takes the border of ink, over the line of a drop. */
+const SELECTED_CARD =
+  '[[data-selecting]_&:has(>[data-selected=true])]:border-ink [[data-selecting]_&:has(>[data-selected=true])]:[box-shadow:inset_0_0_0_1px_var(--color-ink)]';
+
 /**
  * The board of the notes (FRU-436): a column per status of the site in view, or per stage, beside
  * the table of the same notes (`board-columns.ts` decides the columns). The filters, the page and the
@@ -211,7 +215,7 @@ export function NotesBoard<Note extends BoardNote>({
                         }}
                         data-note={note.id}
                         data-insert={inserted}
-                        className={`box-border rounded-box border border-line bg-page p-[12px] text-small data-[insert=before]:shadow-[0_-3px_0_0_var(--color-ink)] data-[insert=after]:shadow-[0_3px_0_0_var(--color-ink)] ${
+                        className={`box-border rounded-box border border-line bg-page p-[12px] text-small data-[insert=before]:shadow-[0_-3px_0_0_var(--color-ink)] data-[insert=after]:shadow-[0_3px_0_0_var(--color-ink)] ${SELECTED_CARD} ${
                           draggable ? 'cursor-grab active:cursor-grabbing' : ''
                         } ${moving === note.id || dragged?.id === note.id ? 'opacity-60' : ''}`}
                       >

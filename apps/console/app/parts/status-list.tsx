@@ -414,10 +414,18 @@ export function TrackerColours({
 export function StatusMark({ name, style }: { name: string; style: ReturnType<typeof coloursOf>['style'] }) {
   return (
     <span className="flex min-w-0 items-center gap-[14px]">
-      <span aria-hidden="true" className="kit-pin" style={style}>
-        <span>3</span>
+      {/* The drop of 28 px with its white ring and its edge: the edge keeps a light colour visible on white (FRU-334). */}
+      <span
+        aria-hidden="true"
+        className="kit-pin grid flex-none place-items-center size-[28px] border-2 border-page rounded-[50%_50%_50%_0] [box-shadow:0_0_0_1px_var(--color-status-edge)] text-(length:--text-tiny) font-bold leading-none [transform:rotate(-45deg)]"
+        style={style}
+      >
+        <span className="[transform:rotate(45deg)]">3</span>
       </span>
-      <span className="kit-status-chip [overflow-wrap:anywhere]" style={style}>
+      <span
+        className="kit-status-chip inline-block max-w-full py-[2px] px-[9px] rounded-[12px] [box-shadow:0_0_0_1px_var(--color-status-edge)] text-(length:--text-hint) font-semibold leading-[1.45] [overflow-wrap:anywhere]"
+        style={style}
+      >
         {name}
       </span>
     </span>
