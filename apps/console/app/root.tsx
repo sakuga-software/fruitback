@@ -196,7 +196,7 @@ function Unreachable() {
       className="flex flex-wrap items-center justify-center gap-3 border-b border-rail-active bg-ink px-4 py-2 text-sm text-on-ink"
     >
       <span>{t('Fruitback cannot reach its server. Check your connection.')}</span>
-      <Button tone="outline" onClick={() => window.location.reload()}>
+      <Button tone="on-ink" onClick={() => window.location.reload()}>
         {t('Try again')}
       </Button>
     </div>
@@ -233,15 +233,10 @@ function SignedOut() {
           ? t('You are still signed out. Sign in in the other tab, then continue.')
           : t('Your session ended. Sign in again in another tab: what you wrote here stays.')}
       </span>
-      <a
-        href="/sign-in"
-        target="_blank"
-        rel="noopener"
-        className="rounded-control border border-on-ink px-3 py-1 font-semibold hover:bg-on-ink/10"
-      >
+      <Button tone="on-ink" href="/sign-in" newTab>
         {t('Sign in')}
-      </a>
-      <Button tone="outline" onClick={() => void resume()}>
+      </Button>
+      <Button tone="on-ink" onClick={() => void resume()}>
         {t('Continue')}
       </Button>
     </div>
