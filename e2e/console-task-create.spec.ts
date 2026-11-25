@@ -125,7 +125,7 @@ test('« New task » takes a title, then the task is in the list with no page, a
   await p.goto(`${CONSOLE}/w/w1/notes`);
   await expect(p.locator('tr', { hasText: 'The price' })).toBeVisible();
 
-  await p.getByRole('button', { name: /New task/ }).click();
+  await p.getByRole('button', { name: 'New task', exact: true }).click();
   const dialog = p.getByRole('dialog', { name: 'New task' });
   await expect(dialog).toBeVisible();
   await expect(dialog.getByLabel('Title')).toBeFocused();
@@ -200,14 +200,14 @@ test('the key C opens « New task », but not in a field; the head of a column o
 test('« + » in the head of a group of the list gives its status (FRU-685)', async ({ page: p }) => {
   const sent = await worker(p);
   await p.goto(`${CONSOLE}/w/w1/notes`);
-  const head = p.locator('tbody[data-group="todo"] .kit-table-group');
+  const head = p.locator('tbody[data-group="new"] .kit-table-group');
   await expect(head).toBeVisible();
-  await head.getByRole('button', { name: 'New task in To do' }).click();
+  await head.getByRole('button', { name: 'New task in New' }).click();
   const dialog = p.getByRole('dialog', { name: 'New task' });
-  await expect(dialog.getByRole('button', { name: /Status/ })).toContainText('To do');
+  await expect(dialog.getByRole('button', { name: /Status/ })).toContainText('New');
   await dialog.getByLabel('Title').fill('Call the printer');
   await dialog.getByLabel('Title').press('Enter');
-  await expect.poll(() => sent.at(-1)?.body).toEqual({ site: 's1', title: 'Call the printer', status: 'own:todo' });
+  await expect.poll(() => sent.at(-1)?.body).toEqual({ site: 's1', title: 'Call the printer', status: 'own:new' });
 });
 
 test('a refusal keeps what was typed, and the dialog fits a phone', async ({ page: p }) => {
@@ -216,7 +216,7 @@ test('a refusal keeps what was typed, and the dialog fits a phone', async ({ pag
   await p.goto(`${CONSOLE}/w/w1/notes`);
   await expect(p.getByText('The price of the yearly plan')).toBeVisible();
 
-  await p.getByRole('button', { name: /New task/ }).click();
+  await p.getByRole('button', { name: 'New task', exact: true }).click();
   const dialog = p.getByRole('dialog', { name: 'New task' });
   await dialog.getByLabel('Title').fill('Check the invoices');
   await dialog.getByLabel('Text').fill('All of May.');
@@ -236,7 +236,7 @@ test('a refusal keeps what was typed, and the dialog fits a phone', async ({ pag
 
   // Closed, then opened again: the draft is still there.
   await p.keyboard.press('Escape');
-  await p.getByRole('button', { name: /New task/ }).click();
+  await p.getByRole('button', { name: 'New task', exact: true }).click();
   await expect(p.getByRole('dialog', { name: 'New task' }).getByLabel('Text')).toHaveValue('All of May.');
 });
 

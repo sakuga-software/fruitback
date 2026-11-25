@@ -727,7 +727,8 @@ test('a group folds from its head, and stays folded for this person after a relo
   await workerWith(page);
   await open(page);
   const group = table(page).locator('tbody[data-group="new"]');
-  const fold = group.locator('.kit-table-group').getByRole('button', { name: /^New/ });
+  // The head of the group folds it: the button that says whether it is open (not « + »).
+  const fold = group.locator('.kit-table-group [aria-expanded]');
   await expect(fold).toHaveAttribute('aria-expanded', 'true');
   const before = await group.locator('tr[data-note]').count();
   expect(before).toBeGreaterThan(0);
@@ -762,6 +763,7 @@ test('j and k walk the notes, Enter opens the one with the focus, and a field ke
   const id = await rows(page).nth(1).getAttribute('data-note');
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL(new RegExp(`[?&]task=${id}(&|$)`));
+  await expect(page.getByRole('dialog')).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page).not.toHaveURL(/task=/);
 

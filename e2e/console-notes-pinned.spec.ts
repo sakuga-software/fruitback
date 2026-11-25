@@ -126,7 +126,8 @@ function pinned(page: Page) {
 /** At each depth of the list: the filters at the top, and the head of the group of the first note under them. */
 async function expectPinnedDown(page: Page): Promise<void> {
   const height = await page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight);
-  expect(height, 'the list is longer than the window').toBeGreaterThan(2000);
+  // FRU-685: a line of 36 px; 50 notes still take more than a window.
+  expect(height, 'the list is longer than the window').toBeGreaterThan(1000);
   const seen = new Set<string>();
   for (let y = 400; y < height - 200; y += 30) {
     await scrollTo(page, y);
