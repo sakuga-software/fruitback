@@ -195,15 +195,15 @@ for (const [error, sentence] of [
     await open(page);
 
     const select = row(page, 'The headline').getByRole('button', { name: /Status of this note/ });
-    const frame = page.locator('.kit-table');
+    const frame = page.locator('.kit-notes-list');
     const scrolls = () => frame.evaluate((element) => element.scrollWidth - element.clientWidth);
     expect(await scrolls()).toBe(0);
     await select.click();
     await page.getByRole('option', { name: 'Shipped', exact: true }).click();
 
     // FRU-551: the select is the drop of the status, before the note; the sentence is said under the
-    // note, and wraps there: the table does not grow past its frame.
-    await expect(row(page, 'The headline').locator('td').first().getByRole('alert')).toHaveText(sentence);
+    // note, and wraps there: the list does not grow past its frame. FRU-685: the note is the second cell.
+    await expect(row(page, 'The headline').locator('td').nth(1).getByRole('alert')).toHaveText(sentence);
     expect(await scrolls()).toBe(0);
     // What the person chose stays chosen: nothing is undone behind their back.
     await expect(select).toContainText('Shipped');

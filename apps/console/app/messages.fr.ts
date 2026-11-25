@@ -916,6 +916,11 @@ export const FRENCH: Readonly<Record<string, string>> = {
   '{count} h ago': 'il y a {count} h',
   Yesterday: 'Hier',
   '{count} days ago': 'il y a {count} jours',
+  // The age of a row of the notes, short (FRU-685).
+  '{count}m': '{count} min',
+  '{count}h': '{count} h',
+  '{count}d': '{count} j',
+  '{count}w': '{count} sem.',
   // Sites, second time (FRU-270).
   'On the page with': 'Sur la page avec',
   'Last note': 'Dernière note',
@@ -1021,6 +1026,11 @@ export const FRENCH: Readonly<Record<string, string>> = {
   // FRU-656: several tasks at once.
   'Select: {note}': 'Sélectionner : {note}',
   'Select every task of this page': 'Sélectionner toutes les tâches de cette page',
+  // The list of the notes, a line per note (FRU-685).
+  'Select every task of {status}': 'Sélectionner toutes les tâches de {status}',
+  Fruitback: 'Fruitback',
+  Failed: 'Échec',
+  Actions: 'Actions',
   '1 note selected': '1 note sélectionnée',
   '{count} notes selected': '{count} notes sélectionnées',
   'Select the {count} of this page': 'Sélectionner les {count} de cette page',
