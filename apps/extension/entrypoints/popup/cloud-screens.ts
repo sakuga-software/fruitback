@@ -400,8 +400,8 @@ export async function siteOfWorkspaceOn(
   const notesSection = screen.querySelector<HTMLElement>('.page-notes');
   if (notesSection !== null) {
     const drawnNow = draws.drawn;
-    void pageNotesOf(tab).then((read) => {
-      if (drawnNow !== draws.drawn) return;
+    void pageNotesOf(tab, () => drawnNow === draws.drawn).then((read) => {
+      if (read === undefined || drawnNow !== draws.drawn) return;
       showPageNotes(notesSection, read, {
         onOpenPanel: openPanel,
         // A note opens on the page, its pin and its thread, and the popup goes.

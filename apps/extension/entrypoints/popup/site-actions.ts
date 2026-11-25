@@ -63,16 +63,23 @@ const NOTES_ASK_MS = 600;
 
 /**
  * The notes of the tab, for « On this page » (FRU-695): `notes` of the side panel (FRU-299). A widget
- * still reading is asked again a few times, then the popup says why it has none. Never rejects.
+ * still reading is asked again a few times, then the popup says why it has none. `current` says the
+ * screen that asked is still the one drawn: once another is, nothing more is asked (review of #952).
+ * Never rejects; `undefined` when the screen went away.
  */
-export async function pageNotesOf(tab: PopupTab | undefined): Promise<PageNotesRead> {
-  for (let ask = 1; ; ask += 1) {
+export async function pageNotesOf(
+  tab: PopupTab | undefined,
+  current: () => boolean,
+): Promise<PageNotesRead | undefined> {
+  for (let ask = 1; current(); ask += 1) {
     const answer = await askTab(tab, 'notes');
     if (answer.notes !== undefined) return { notes: answer.notes };
     const reading = answer.reading ?? 'unreached';
     if (ask >= NOTES_ASKS || reading === 'failed' || reading === 'signed-out') return { reading };
     await new Promise((resolve) => setTimeout(resolve, NOTES_ASK_MS));
   }
+
+  return undefined;
 }
 
 /** How long a tab gets to start its scripts before a second ask: the popup can open as it loads. */

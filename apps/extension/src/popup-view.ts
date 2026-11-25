@@ -829,8 +829,10 @@ function workspaceChip(document: Document, name: string): HTMLElement {
   return chip;
 }
 
+/** The initial of a workspace, drawn by the sheet: the name of the chip is the name of the workspace alone. */
 function workspaceTile(document: Document, name: string): HTMLElement {
-  const tile = make(document, 'span', 'popup-workspace-tile', initialOf(name));
+  const tile = make(document, 'span', 'popup-workspace-tile');
+  tile.dataset.initial = initialOf(name);
   tile.setAttribute('aria-hidden', 'true');
 
   return tile;

@@ -558,6 +558,10 @@ body.popup-page {
   @apply flex size-[14px] flex-none items-center justify-center rounded-[4px] bg-text text-[8px] font-bold text-surface;
 }
 
+.popup .popup-workspace-tile::before {
+  content: attr(data-initial);
+}
+
 .popup .popup-workspace-name {
   @apply min-w-0 overflow-hidden text-ellipsis whitespace-nowrap;
 }
@@ -740,8 +744,9 @@ body.popup-page {
   @apply size-[14px];
 }
 
+/* The keys in the colour of the words: the 0.85 of the mock-up takes white on the accent under 4.5:1. */
 .popup .leave-keys {
-  @apply ms-[6px] text-[11px] font-medium opacity-85;
+  @apply ms-[6px] text-[11px] font-medium;
 }
 
 /*

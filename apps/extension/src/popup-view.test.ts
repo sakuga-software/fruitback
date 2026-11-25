@@ -835,7 +835,8 @@ describe('3 · a site on (FRU-298, FRU-599, FRU-695)', () => {
       [...(screen.querySelector('.popup-head')?.children ?? [])].map((child) => child.getAttribute('class')),
       ['kit-mark', 'kit-brand', 'popup-workspace', 'kit-avatar'],
     );
-    assert.equal(screen.querySelector('.popup-workspace')?.textContent, 'AAcme');
+    assert.equal(screen.querySelector('.popup-workspace')?.textContent, 'Acme');
+    assert.equal(screen.querySelector('.popup-workspace-tile')?.getAttribute('data-initial'), 'A');
     assert.equal(screen.querySelector('h1')?.textContent, 'staging.acme.dev');
     assert.equal(screen.querySelector('.kit-site-state')?.textContent, 'On · Acme · 7 open notes');
     assert.equal(screen.querySelector('.site-on-dot')?.getAttribute('aria-label'), 'Fruitback is on for this site');
@@ -985,7 +986,7 @@ describe('3 · a site on (FRU-298, FRU-599, FRU-695)', () => {
     const chip = screen.querySelector<HTMLButtonElement>('.popup-head button.popup-workspace') as HTMLButtonElement;
     assert.equal(chip.getAttribute('aria-label'), 'Workspace Acme');
     assert.equal(chip.getAttribute('aria-haspopup'), 'menu');
-    assert.equal(chip.textContent, 'AAcme');
+    assert.equal(chip.textContent, 'Acme');
     assert.deepEqual(menuEntries(screen, '.popup-head'), ['Acme', 'Globex']);
     chip.click();
     screen.querySelector<HTMLButtonElement>('.popup-head [data-menu-item="ws_globex"]')?.click();

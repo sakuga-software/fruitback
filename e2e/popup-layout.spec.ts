@@ -151,9 +151,9 @@ for (const language of ['en', 'fr'] as const) {
     await expect(offered.getByRole('button', { name: /^(Account and settings|Compte et réglages)$/ })).toHaveText('Q');
     // The person of the pairing stays, with its log out.
     await expect(offered.getByText(/^(Connected as|Connecté en tant que) /)).toBeVisible();
-    await expect(offered.locator('.page-notes-said')).toHaveText(
-      /^(No notes on this page yet|Aucune note sur cette page)/,
-    );
+    // The worker of this spec is a route that lists the site, and the widget reads no note of it:
+    // « On this page » says why, never « Reading… » for ever.
+    await expect(offered.locator('.page-notes-said')).not.toHaveText(/^(Reading|Lecture)/);
     await expectLaidOut(offered, 'site turned on', 6);
     await expectNothingCut(offered, 'site turned on', language);
 

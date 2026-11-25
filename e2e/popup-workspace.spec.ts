@@ -145,8 +145,8 @@ test('2 then 3: a site of the workspace turns on in one click, then the switch, 
   await expect(line).toHaveText(/^New, Planté depuis un site du workspace(now|\d+m)$/);
   await expect(popup.locator('.page-notes-count')).toHaveText('1');
   // The boxes of the mock-up of 2026-11-25 (popup-mockup.html of FRU-695, measured in a browser): the
-  // head of 48, the card, « Sent to » left out (the worker of a pairing names no place), « Leave a
-  // note » of 40, the line of a note of 34, the foot of 44 at the bottom of 580.
+  // head of 48, the card, « Leave a note » of 40, the line of a note of 34, the foot of 44 at the
+  // bottom of 580.
   expectNear(await boxOf(popup.locator('.popup-head')), { x: 0, y: 0, width: 380, height: 48 }, 'head');
   expectNear(await boxOf(popup.locator('.site-card')), { x: 12, y: 60, width: 356 }, 'card');
   expectNear(await boxOf(popup.getByRole('switch', { name: SITE_SWITCH })), { width: 36, height: 22 }, 'switch');
@@ -172,11 +172,11 @@ test('2 then 3: a site of the workspace turns on in one click, then the switch, 
       .map((node) => node.textContent),
   );
   expect(wrapped).toEqual([]);
-  // The keyboard: the account, the switch, « Leave a note », « Open sidebar », the note, then the foot:
+  // The keyboard: the account, the switch, « Sent to », « Leave a note », « Open sidebar », the note, then the foot:
   // the person's « Sign out », the guide and the menu of the site (FRU-695).
   await popup.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
   const stops: string[] = [];
-  for (let index = 0; index < 8; index += 1) {
+  for (let index = 0; index < 9; index += 1) {
     await popup.keyboard.press('Tab');
     stops.push(
       await popup.evaluate(() => {
@@ -192,6 +192,8 @@ test('2 then 3: a site of the workspace turns on in one click, then the switch, 
   expect(stops).toEqual([
     'Account and settings',
     'Fruitback on this site',
+    // The worker of the suite names the place, and a pairing may not change it: the screen locked.
+    'Where notes go',
     'Leave a note',
     'Open sidebar',
     'Planté depuis un site du workspace',
