@@ -403,7 +403,7 @@ export function SitePlaces({
       {places.length === 0 ? null : (
         <ol
           aria-label={t('Destinations of {site}', { site: host })}
-          className="flex flex-col rounded-frame border border-line bg-surface"
+          className="flex flex-col rounded-card border border-line bg-surface"
         >
           {places.map((each, index) => {
             const rest = places.filter((_, position) => position !== index);
@@ -431,7 +431,10 @@ export function SitePlaces({
                   )}
                   <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{nameOf(each)}</span>
                   {each.attention === undefined ? null : (
-                    <span className="flex-none text-hint leading-auto font-semibold text-accent" data-place-attention>
+                    <span
+                      className="flex-none text-hint leading-auto font-semibold text-accent-strong"
+                      data-place-attention
+                    >
                       {t('Needs attention')}
                     </span>
                   )}

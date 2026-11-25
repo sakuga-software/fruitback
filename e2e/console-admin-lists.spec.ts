@@ -29,13 +29,14 @@ import {
 const CONSOLE = 'http://localhost:5178';
 const DAY = 24 * 60 * 60_000;
 
-const CHIP = '#f4f4f5';
-const SUBTLE = '#fafafa';
-const INK = '#18181b';
-const INK_SOFT = '#52525b';
-const MUTED = '#6b6b74';
-const DONE = '#15803d';
-const ACCENT = '#dd2c27';
+const CHIP = '#e8edf3';
+/** A chosen row (FRU-683). */
+const SELECTED = '#e2e8f0';
+const SUBTLE = '#f7f9fb';
+const INK = '#0f172a';
+const INK_SOFT = '#334155';
+const MUTED = '#5b6779';
+const DONE = '#166534';
 const ACCENT_STRONG = '#b91c1c';
 
 /**
@@ -516,7 +517,7 @@ async function expectLayout(page: Page, search: string, table: string, minWidth:
   });
   expect.soft(await styles(parts.field, ['flex'])).toEqual({ flex: '999 1 260px' });
   expect.soft(await styles(parts.list, ['flex'])).toEqual({ flex: '1 1 200px' });
-  expect.soft((await page.getByRole('searchbox', { name: search }).boundingBox())?.height).toBe(40);
+  expect.soft((await page.getByRole('searchbox', { name: search }).boundingBox())?.height).toBe(28);
   const frame = page.getByRole('region', { name: table });
   expect.soft(await styles(frame.locator('..'), ['flex'])).toEqual({ flex: '999 1 560px' });
   expect.soft(await styles(frame.locator('../..'), ['column-gap'])).toEqual({ 'column-gap': '28px' });
@@ -528,7 +529,7 @@ async function expectLayout(page: Page, search: string, table: string, minWidth:
 async function expectPanel(page: Page): Promise<void> {
   expect.soft(await styles(panel(page), ['flex', 'border-top-left-radius'])).toEqual({
     flex: '1 1 340px',
-    'border-top-left-radius': '14px',
+    'border-top-left-radius': '8px',
   });
   expect.soft(await painted(panel(page), 'backgroundColor')).toEqual(rgb(SUBTLE));
   const body = panel(page).locator('.kit-panel__body');
@@ -610,8 +611,8 @@ test('Workspaces: the table, the panel of a row, and the values of the mockup', 
   expect.soft([barBox?.width, barBox?.height]).toEqual([96, 8]);
   expect.soft(await painted(bars.first(), 'backgroundColor')).toEqual(rgb(CHIP));
   const alert = rows(page).nth(1).getByText('2 notes not delivered');
-  expect.soft(await painted(alert, 'color')).toEqual(rgb(ACCENT));
-  expect.soft(await styles(alert, ['font-size', 'font-weight'])).toEqual({ 'font-size': '13px', 'font-weight': '600' });
+  expect.soft(await painted(alert, 'color')).toEqual(rgb(ACCENT_STRONG));
+  expect.soft(await styles(alert, ['font-size', 'font-weight'])).toEqual({ 'font-size': '12px', 'font-weight': '600' });
   await expectLayout(page, 'Search workspaces', 'Workspaces of the instance', '680px');
   await expect(panel(page)).toHaveCount(0);
   await expect(main(page)).toContainText(
@@ -630,7 +631,7 @@ test('Workspaces: the table, the panel of a row, and the values of the mockup', 
   await expect(link).toHaveAttribute('aria-controls', 'admin-panel');
   const chosen = rows(page).nth(1);
   // The pointer is still on the row: the tint of the chosen row stays.
-  expect.soft(await painted(chosen, 'backgroundColor')).toEqual(rgb(CHIP));
+  expect.soft(await painted(chosen, 'backgroundColor')).toEqual(rgb(SELECTED));
   const red = chosen.getByText('2 notes not delivered');
   expect.soft(await painted(red, 'color')).toEqual(rgb(ACCENT_STRONG));
   expect(contrast(await painted(red, 'color'), await painted(chosen, 'backgroundColor'))).toBeGreaterThanOrEqual(4.5);
@@ -828,9 +829,9 @@ test('Users: the table, the panel of a person, and the values of the mockup', as
   await expect(panel(page)).toBeFocused();
   await expect(panel(page)).toHaveAccessibleName('Tom Marchal');
   await expect(link).toHaveAttribute('aria-current', 'true');
-  expect.soft(await painted(rows(page).nth(1), 'backgroundColor')).toEqual(rgb(CHIP));
+  expect.soft(await painted(rows(page).nth(1), 'backgroundColor')).toEqual(rgb(SELECTED));
   // On the chosen row, the green of « Active » stays over 4.5:1.
-  expect(contrast(await painted(status(1), 'color'), rgb(CHIP))).toBeGreaterThanOrEqual(4.5);
+  expect(contrast(await painted(status(1), 'color'), rgb(SELECTED))).toBeGreaterThanOrEqual(4.5);
   await expect(panel(page)).toContainText('tom@acme.dev');
   await expect(panel(page).getByRole('heading', { level: 3 })).toHaveText(['Workspaces', 'Sign-in']);
   await expect(panel(page).getByRole('listitem')).toHaveText([
@@ -1337,8 +1338,8 @@ test('Users: a suspended person reads « Suspended », in the row and in the pan
   await visit(page, '/admin/users', 'Users');
 
   await expect(statusOf(page, 4)).toHaveText('Suspended');
-  // The red of the mockup on a row that is not chosen, in its weight.
-  expect.soft(await painted(statusOf(page, 4), 'color')).toEqual(rgb(ACCENT));
+  // The strong red of the kit on a row (FRU-683: the red of the mockup is 4.46:1 on the subtle tint), in its weight.
+  expect.soft(await painted(statusOf(page, 4), 'color')).toEqual(rgb(ACCENT_STRONG));
   expect.soft(await styles(statusOf(page, 4), ['font-weight'])).toEqual({ 'font-weight': '600' });
   expect(contrast(await painted(statusOf(page, 4), 'color'), rgb('#ffffff'))).toBeGreaterThanOrEqual(4.5);
   expect(contrast(await painted(statusOf(page, 4), 'color'), rgb(SUBTLE))).toBeGreaterThanOrEqual(4.5);
@@ -1348,7 +1349,7 @@ test('Users: a suspended person reads « Suspended », in the row and in the pan
   await expect(panel(page)).toBeFocused();
   // On the chosen row, the red of the mockup is 4.28:1: the row takes the darker red of the kit.
   expect.soft(await painted(statusOf(page, 4), 'color')).toEqual(rgb(ACCENT_STRONG));
-  expect(contrast(await painted(statusOf(page, 4), 'color'), rgb(CHIP))).toBeGreaterThanOrEqual(4.5);
+  expect(contrast(await painted(statusOf(page, 4), 'color'), rgb(SELECTED))).toBeGreaterThanOrEqual(4.5);
 
   const notice = panel(page).getByRole('status');
   await expect(notice).toHaveText('SuspendedHugo Petit cannot sign in, and every session they had ended.');
@@ -2162,7 +2163,7 @@ test('Workspaces: a suspended workspace says so in its row, in its panel and on 
 
   const marker = nameCell(page, 'Lumen').locator('span').last();
   await expect(marker).toHaveText(`Suspended since ${SUSPENDED_DAY}`);
-  expect.soft(await painted(marker, 'color')).toEqual(rgb(ACCENT));
+  expect.soft(await painted(marker, 'color')).toEqual(rgb(ACCENT_STRONG));
   expect(contrast(await painted(marker, 'color'), rgb('#ffffff'))).toBeGreaterThanOrEqual(4.5);
   // An active workspace says nothing of a suspension.
   await expect(nameCell(page, 'Acme support')).not.toContainText('Suspended');
@@ -2171,7 +2172,7 @@ test('Workspaces: a suspended workspace says so in its row, in its panel and on 
   await expect(panel(page)).toHaveAccessibleName('Lumen');
   // On the chosen row, the red is the strong one of the kit, as for a person (FRU-281).
   expect.soft(await painted(marker, 'color')).toEqual(rgb(ACCENT_STRONG));
-  expect(contrast(await painted(marker, 'color'), rgb(CHIP))).toBeGreaterThanOrEqual(4.5);
+  expect(contrast(await painted(marker, 'color'), rgb(SELECTED))).toBeGreaterThanOrEqual(4.5);
   const notice = panel(page).getByRole('status').first();
   await expect(notice).toHaveText(
     `SuspendedSince ${SUSPENDED_DAY}. Its sites answer as unknown, and nothing in it changes. Its members still read it.Reason: Unpaid invoice of September`,

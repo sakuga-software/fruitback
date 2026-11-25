@@ -20,7 +20,7 @@ const CONSOLE = 'http://localhost:5178';
  */
 const KIT = 'http://localhost:5179';
 /** `--muted` in app.css: the colour of a hint, which a problem must not have. */
-const MUTED = [107, 107, 116];
+const MUTED = [91, 103, 121];
 
 async function openSites(page: Page): Promise<void> {
   const me = {
@@ -173,16 +173,16 @@ test('the wide buttons and the fields have the shape and the border of the board
     expect.soft(contrast(button.border, white), name).toBeGreaterThanOrEqual(3);
   }
 
+  // One radius since FRU-683: a field is a control.
   const field = await boxOf(page.getByRole('textbox', { name: 'Work email' }));
-  expect.soft(Number.parseFloat(field.radius)).toBeGreaterThanOrEqual(8);
-  expect.soft(Number.parseFloat(field.radius)).toBeLessThanOrEqual(10);
+  expect.soft(field.radius).toBe('6px');
   expect.soft(contrast(field.border, white)).toBeGreaterThanOrEqual(3);
   // Flat: no shadow, or one that paints nothing.
   expect.soft(field.shadow).toMatch(/^none$|^(rgba\(0, 0, 0, 0\) 0px 0px 0px 0px(, )?)+$/);
 
-  // The action of the step keeps the pill: its shape is what tells it from the controls.
+  // The action of the step has the radius of a control too (FRU-683): its red tells it from them.
   const action = await boxOf(page.getByRole('button', { name: 'Email me a link' }));
-  expect.soft(Number.parseFloat(action.radius)).toBeGreaterThanOrEqual(20);
+  expect.soft(action.radius).toBe('6px');
 });
 
 test('a required field has no mark the board does not draw, and stays required (FRU-168)', async ({ page }) => {
@@ -200,20 +200,22 @@ test('a required field has no mark the board does not draw, and stays required (
 });
 
 /**
- * The values of the mockup of 2026-10-13, read in its code (FRU-232). A colour is written as the
- * browser answers it.
+ * The values of the slate theme (FRU-683), on the shapes of the mockup of 2026-10-13 (FRU-232). A
+ * colour is written as the browser answers it.
  */
-const INK = 'rgb(24, 24, 27)';
-const INK_SOFT = 'rgb(82, 82, 91)';
-const MUTED_TONE = 'rgb(107, 107, 116)';
+const INK = 'rgb(15, 23, 42)';
+const INK_SOFT = 'rgb(51, 65, 85)';
+const MUTED_TONE = 'rgb(91, 103, 121)';
 const WHITE = 'rgb(255, 255, 255)';
-const SUBTLE = 'rgb(250, 250, 250)';
-const CHIP = 'rgb(244, 244, 245)';
-const LINE = 'rgb(228, 228, 231)';
-const CONTROL = 'rgb(138, 138, 147)';
+const SUBTLE = 'rgb(247, 249, 251)';
+const CHIP = 'rgb(232, 237, 243)';
+/** Under the pointer (FRU-683). */
+const HOVER = 'rgb(232, 237, 243)';
+const LINE = 'rgb(227, 232, 239)';
+const CONTROL = 'rgb(123, 135, 151)';
 const ACCENT = 'rgb(221, 44, 39)';
 const ACCENT_STRONG = 'rgb(185, 28, 28)';
-const DONE = 'rgb(21, 128, 61)';
+const DONE = 'rgb(22, 101, 52)';
 /** The five statuses of the widget, chosen by Mathieu (FRU-334), and the edge of their drop. */
 const STATUS_COLOURS = [
   'rgb(190, 194, 200)',
@@ -267,7 +269,7 @@ test('a read that failed has a title, a sentence and one « Try again », in the
     paddingLeft: '32px',
     borderTopWidth: '1px',
     borderTopColor: CONTROL,
-    borderTopLeftRadius: '14px',
+    borderTopLeftRadius: '8px',
   });
   await expectStyle(failed.locator('p'), 'sentence', { color: MUTED_TONE });
 });
@@ -277,23 +279,23 @@ test('the buttons have the measures of the mockup (FRU-232)', async ({ page }) =
   const buttons = page.locator('[data-kit="buttons"]');
   const button = (name: string) => buttons.getByRole('button', { name, exact: true });
 
-  // `.b-accent`: the pill of the action of a step.
+  // `.b-accent`: the action of a step, of the one radius of a control since FRU-683.
   await expectStyle(button('Email me a link'), 'primary', {
-    height: '44px',
+    height: '32px',
     paddingLeft: '22px',
     paddingRight: '22px',
     borderTopWidth: '0px',
-    borderTopLeftRadius: '999px',
+    borderTopLeftRadius: '6px',
     backgroundColor: ACCENT,
     color: WHITE,
-    fontSize: '14px',
+    fontSize: '13px',
     fontWeight: '600',
-    // -0.006em of 14 px.
-    letterSpacing: '-0.084px',
+    // -0.006em of 13 px.
+    letterSpacing: '-0.078px',
   });
   await expectStyle(button('Primary disabled'), 'primary, disabled', { opacity: '0.5', cursor: 'not-allowed' });
 
-  // `.b-wide`: the rectangle of a control, at its three heights.
+  // `.b-wide`: the rectangle of a control, at its three heights: 32, 28 and 24 px (FRU-683).
   const outline = {
     borderTopWidth: '1px',
     borderTopColor: CONTROL,
@@ -304,50 +306,50 @@ test('the buttons have the measures of the mockup (FRU-232)', async ({ page }) =
   };
   await expectStyle(button('Try again'), 'outline, page', {
     ...outline,
-    height: '44px',
+    height: '32px',
     paddingLeft: '18px',
-    fontSize: '14px',
+    fontSize: '13px',
   });
   await expectStyle(button('Connect'), 'outline, panel', {
     ...outline,
-    height: '40px',
+    height: '28px',
     paddingLeft: '16px',
-    fontSize: '14px',
+    fontSize: '13px',
   });
   await expectStyle(button('Send again'), 'outline, small', {
     ...outline,
-    height: '32px',
+    height: '24px',
     paddingLeft: '10px',
-    fontSize: '13px',
+    fontSize: '12px',
   });
   await expectStyle(button('Outline disabled'), 'outline, disabled', { opacity: '0.5', cursor: 'not-allowed' });
-  // The padding the mockup writes on one button: 16 px on « Send again », which is 157.5 px wide there.
+  // The padding the mockup writes on one button: 16 px on « Send again », 148.3 px wide in Inter.
   await expectStyle(button('Send again in 0:41'), 'outline, with its own padding', {
-    height: '44px',
+    height: '32px',
     paddingLeft: '16px',
     paddingRight: '16px',
   });
-  // The width of a text is of its font. The mockup is measured in the system font of macOS, and the
-  // CI draws the system font of Linux: there the padding is measured, and the width is not.
+  // The width of a text is of its font, and of how a system draws it: measured on macOS, where the
+  // padding alone is measured on Linux.
   if (process.platform === 'darwin') {
     expect
       .soft((await button('Send again in 0:41').boundingBox())!.width, 'the width of « Send again »')
-      .toBeCloseTo(157.5, 0);
+      .toBeCloseTo(148.3, 0);
   }
   // A link drawn as a control has the same box.
   await expectStyle(buttons.getByRole('link', { name: 'Continue in this tab' }), 'outline, link', {
     ...outline,
-    height: '44px',
+    height: '32px',
     paddingLeft: '18px',
     textDecorationLine: 'none',
   });
   await expectStyle(page.locator('[data-kit="wide"]').getByRole('button', { name: 'Continue with Google' }), 'wide', {
     ...outline,
-    height: '44px',
+    height: '38px',
     width: '400px',
   });
 
-  // A button over its column keeps 44 px with a short name, and grows with a long one: its words
+  // A button over its column keeps 38 px with a short name, and grows with a long one: its words
   // wrap in it, and nothing goes out of the column.
   const long = page
     .locator('[data-kit="wide"]')
@@ -360,7 +362,7 @@ test('the buttons have the measures of the mockup (FRU-232)', async ({ page }) =
   // `.b-link`: underlined words, and a target of 33 px at the least (A23 of the mockup's inventory).
   const link = {
     color: INK,
-    fontSize: '14px',
+    fontSize: '13px',
     fontWeight: '600',
     textDecorationLine: 'underline',
     textUnderlineOffset: '3px',
@@ -377,19 +379,19 @@ test('the buttons have the measures of the mockup (FRU-232)', async ({ page }) =
   const target = await button('Use another address').boundingBox();
   expect.soft(target!.height, 'the target of a link').toBeGreaterThanOrEqual(24);
 
-  // The tones of before the mockup stay as HeroUI draws them: a pill, in semibold.
+  // The tones of before the mockup, in semibold, take the one radius of a control (FRU-683).
   for (const name of ['Quiet', 'Danger']) {
     const before = await styleOf(button(name), ['borderTopLeftRadius', 'fontWeight']);
-    expect.soft(Number.parseFloat(String(before.borderTopLeftRadius)), `${name}: a pill`).toBeGreaterThanOrEqual(18);
+    expect.soft(before.borderTopLeftRadius, `${name}: the radius of a control`).toBe('6px');
     expect.soft(before.fontWeight, `${name}: weight`).toBe('600');
   }
 
-  // `.b-ghost`: a picture of 36 px.
+  // `.b-ghost`: a picture of 28 px.
   const icon = button('More for staging.acme.dev');
   await expectStyle(icon, 'icon', {
-    width: '36px',
-    height: '36px',
-    borderTopLeftRadius: '8px',
+    width: '28px',
+    height: '28px',
+    borderTopLeftRadius: '6px',
     color: MUTED_TONE,
     backgroundColor: 'rgba(0, 0, 0, 0)',
   });
@@ -452,7 +454,7 @@ test('the fields, the lists and the radio cards have the measures of the mockup 
   const box = {
     borderTopWidth: '1px',
     borderTopColor: CONTROL,
-    borderTopLeftRadius: '8px',
+    borderTopLeftRadius: '6px',
     backgroundColor: WHITE,
     color: INK,
     fontWeight: '400',
@@ -461,9 +463,9 @@ test('the fields, the lists and the radio cards have the measures of the mockup 
   const email = fields.getByRole('textbox', { name: 'Work email' });
   await expectStyle(email, 'field', {
     ...box,
-    height: '44px',
+    height: '32px',
     paddingLeft: '14px',
-    fontSize: '15px',
+    fontSize: '13px',
     caretColor: ACCENT,
     boxShadow: 'none',
   });
@@ -477,8 +479,8 @@ test('the fields, the lists and the radio cards have the measures of the mockup 
   });
   await expectStyle(fields.getByText('Your workspace takes the name of your domain.'), 'hint', {
     color: MUTED_TONE,
-    fontSize: '13px',
-    lineHeight: '19.5px',
+    fontSize: '12px',
+    lineHeight: '17.4px',
   });
   // The label, the control and the hint are 6 px apart.
   const gaps = await fields
@@ -497,13 +499,13 @@ test('the fields, the lists and the radio cards have the measures of the mockup 
 
   await expectStyle(fields.getByRole('textbox', { name: 'Search' }), 'field, compact', {
     ...box,
-    height: '40px',
+    height: '28px',
     paddingLeft: '12px',
-    fontSize: '14px',
+    fontSize: '13px',
   });
   const locked = fields.getByRole('textbox', { name: 'Instance address' });
   await expectStyle(locked, 'field, locked', {
-    height: '44px',
+    height: '32px',
     borderTopColor: LINE,
     backgroundColor: SUBTLE,
     color: INK_SOFT,
@@ -512,19 +514,19 @@ test('the fields, the lists and the radio cards have the measures of the mockup 
 
   await expectStyle(fields.getByRole('button', { name: /^Guest, one site Role|^Role/ }), 'list', {
     ...box,
-    height: '44px',
+    height: '32px',
     paddingLeft: '12px',
-    fontSize: '15px',
+    fontSize: '13px',
   });
   await expectStyle(fields.getByRole('button', { name: /Compact role/ }), 'list, compact', {
     ...box,
-    height: '40px',
-    fontSize: '14px',
+    height: '28px',
+    fontSize: '13px',
   });
 
   // FRU-569: the padding of a card is the padding of its label, which fills the card so that a press
   // anywhere on it chooses it. The frame is the card's.
-  const card = { borderTopWidth: '1px', borderTopLeftRadius: '10px' };
+  const card = { borderTopWidth: '1px', borderTopLeftRadius: '8px' };
   const inside = { paddingTop: '14px', paddingLeft: '16px' };
   await expectStyle(fields.locator('.kit-pick__card', { hasText: 'Members of Acme' }), 'radio card, chosen', {
     ...card,
@@ -546,7 +548,7 @@ test('the fields, the lists and the radio cards have the measures of the mockup 
     backgroundColor: INK,
   });
   // The question is 8 px over the first card, the cards are 8 px apart, and a card is 90 px high
-  // with a detail of two lines on the mockup: here one line, 70.5 px.
+  // with a detail of two lines on the mockup: here one line, 68.4 px in the text of 13 px (FRU-683).
   const [question, first, second] = await Promise.all(
     ['.kit-pick > .label', '.kit-pick__card >> nth=0', '.kit-pick__card >> nth=1'].map(
       async (selector) => (await fields.locator(selector).boundingBox())!,
@@ -554,7 +556,7 @@ test('the fields, the lists and the radio cards have the measures of the mockup 
   );
   expect.soft(first!.y - (question!.y + question!.height), 'the question over the cards').toBe(8);
   expect.soft(second!.y - (first!.y + first!.height), 'between two cards').toBe(8);
-  expect.soft(first!.height, 'a card with a detail of one line').toBe(70.5);
+  expect.soft(first!.height, 'a card with a detail of one line').toBeCloseTo(68.4, 0);
   // The words of a card start 30 px after its radio starts, the title and the detail alike.
   const starts = await fields
     .locator('.kit-pick__card')
@@ -650,12 +652,12 @@ test('a fold opens with a keyboard, is a 44 px line between two rules, and turns
   await expectStyle(summary, 'line of a fold', { cursor: 'pointer', listStyleType: 'none' });
   expect((await summary.boundingBox())!.height).toBeGreaterThanOrEqual(44);
   await expectStyle(summary.getByText('Advanced', { exact: true }), 'title of a fold', {
-    fontSize: '18px',
+    fontSize: '15px',
     fontWeight: '700',
     color: INK,
   });
   await expectStyle(summary.getByText('Statuses, starting an agent, preview deploys'), 'hint of a fold', {
-    fontSize: '14px',
+    fontSize: '13px',
     color: MUTED_TONE,
   });
   const chevron = summary.locator('svg');
@@ -743,11 +745,11 @@ test('a filter is a pressed button, with the three looks of the mockup (FRU-232)
   const filters = page.getByRole('group', { name: 'Filters' });
   const chip = (name: RegExp) => filters.getByRole('button', { name });
   const shape = {
-    height: '36px',
+    height: '24px',
     paddingLeft: '14px',
     borderTopWidth: '1px',
-    borderTopLeftRadius: '999px',
-    fontSize: '13px',
+    borderTopLeftRadius: '6px',
+    fontSize: '12px',
     fontWeight: '600',
   };
 
@@ -764,7 +766,7 @@ test('a filter is a pressed button, with the three looks of the mockup (FRU-232)
   });
   await expect(chip(/^New/)).toHaveAttribute('aria-pressed', 'false');
   await expectStyle(chip(/^New/), 'chip', { ...shape, backgroundColor: WHITE, borderTopColor: CONTROL, color: INK });
-  await expectStyle(chip(/^Not delivered/), 'chip, alert', { ...shape, backgroundColor: WHITE, color: ACCENT });
+  await expectStyle(chip(/^Not delivered/), 'chip, alert', { ...shape, backgroundColor: WHITE, color: ACCENT_STRONG });
 
   await chip(/^New/).hover();
   await expectStyle(chip(/^New/), 'chip, under the pointer', { borderTopColor: INK, backgroundColor: WHITE });
@@ -780,12 +782,12 @@ test('a table, a panel and a list of values have the frame of the mockup (FRU-23
   await expectStyle(table, 'table', {
     borderTopWidth: '1px',
     borderTopColor: LINE,
-    borderTopLeftRadius: '14px',
+    borderTopLeftRadius: '8px',
     overflowX: 'auto',
   });
   await expectStyle(table.locator('th').first(), 'heading', {
     color: MUTED_TONE,
-    fontSize: '13px',
+    fontSize: '12px',
     fontWeight: '600',
     paddingTop: '12px',
     paddingLeft: '20px',
@@ -795,16 +797,16 @@ test('a table, a panel and a list of values have the frame of the mockup (FRU-23
   await expectStyle(table.locator('th').nth(1), 'heading, inside', { paddingLeft: '16px', paddingRight: '16px' });
   await expectStyle(table.locator('th').last(), 'heading, last', { paddingRight: '20px', textAlign: 'right' });
   await expectStyle(table.locator('td').first(), 'cell', {
-    fontSize: '14px',
-    // 1.45 of 14 px.
-    lineHeight: '20.3px',
+    fontSize: '13px',
+    // 1.4 of 13 px.
+    lineHeight: '18.2px',
     paddingTop: '12px',
     paddingLeft: '20px',
     borderBottomWidth: '1px',
     borderBottomColor: LINE,
   });
   await table.locator('tbody tr').first().hover();
-  await expectStyle(table.locator('tbody tr').first(), 'row, under the pointer', { backgroundColor: SUBTLE });
+  await expectStyle(table.locator('tbody tr').first(), 'row, under the pointer', { backgroundColor: HOVER });
   await page.mouse.move(0, 0);
   // A table wider than its frame scrolls in it, and a keyboard reaches the frame.
   await page.setViewportSize({ width: 390, height: 844 });
@@ -817,9 +819,9 @@ test('a table, a panel and a list of values have the frame of the mockup (FRU-23
   await expectStyle(table.locator('.kit-avatar').first(), 'avatar', {
     width: '32px',
     height: '32px',
-    backgroundColor: 'rgb(63, 63, 70)',
+    backgroundColor: 'rgb(51, 65, 85)',
     color: WHITE,
-    fontSize: '13px',
+    fontSize: '12px',
     fontWeight: '700',
   });
   await expectStyle(table.locator('.kit-avatar[data-pending="true"]'), 'avatar, invited', {
@@ -833,7 +835,7 @@ test('a table, a panel and a list of values have the frame of the mockup (FRU-23
     backgroundColor: SUBTLE,
     borderTopWidth: '1px',
     borderTopColor: LINE,
-    borderTopLeftRadius: '14px',
+    borderTopLeftRadius: '8px',
   });
   await expectStyle(panel.locator('.kit-panel__head'), 'panel, head', {
     paddingTop: '20px',
@@ -841,7 +843,7 @@ test('a table, a panel and a list of values have the frame of the mockup (FRU-23
     borderBottomColor: LINE,
   });
   await expectStyle(panel.getByRole('heading', { name: 'Linear' }), 'panel, title', {
-    fontSize: '18px',
+    fontSize: '15px',
     fontWeight: '700',
   });
   await expectStyle(panel.locator('.kit-panel__body'), 'panel, body', {
@@ -856,7 +858,7 @@ test('a table, a panel and a list of values have the frame of the mockup (FRU-23
   });
 
   const values = page.locator('.kit-key-value');
-  await expectStyle(values, 'values', { borderTopWidth: '1px', borderTopColor: LINE, fontSize: '15px' });
+  await expectStyle(values, 'values', { borderTopWidth: '1px', borderTopColor: LINE, fontSize: '13px' });
   await expectStyle(values.locator('div').first(), 'value, row', {
     paddingTop: '12px',
     paddingBottom: '12px',
@@ -872,22 +874,22 @@ test('the head of a page has the type of the mockup (FRU-232)', async ({ page })
 
   await expectStyle(page.getByRole('heading', { name: 'Kit', exact: true }), 'title', {
     ...title,
-    fontSize: '28px',
+    fontSize: '20px',
     // 1.15 of 28 px, and -0.02em.
-    lineHeight: '32.2px',
-    letterSpacing: '-0.56px',
+    lineHeight: '25px',
+    letterSpacing: '-0.4px',
     marginBottom: '6px',
   });
   await expectStyle(page.getByText('Every component of the console, once.'), 'lead', {
     color: MUTED_TONE,
-    fontSize: '16px',
-    lineHeight: '24px',
+    fontSize: '14px',
+    lineHeight: '21px',
   });
   await expectStyle(page.getByRole('heading', { name: 'Set up Fruitback' }), 'title of the setup', {
     ...title,
-    fontSize: '30px',
-    lineHeight: '34.5px',
-    letterSpacing: '-0.6px',
+    fontSize: '24px',
+    lineHeight: '28.8px',
+    letterSpacing: '-0.48px',
   });
   await expectStyle(page.locator('body'), 'page', { backgroundColor: WHITE, color: INK });
 });
@@ -929,7 +931,7 @@ test("the logo and the frame of a page outside a workspace are the mockup's (FRU
   await expectStyle(page.locator('.kit-lead'), 'lead, placed by the screen', { marginBottom: '28px' });
   await expectStyle(page.locator('.kit-divider'), 'divider', {
     color: MUTED_TONE,
-    fontSize: '13px',
+    fontSize: '12px',
     columnGap: '12px',
   });
   await expect(page.locator('.kit-divider')).toHaveAttribute('aria-hidden', 'true');
@@ -951,9 +953,9 @@ test('a menu opens from its button, a keyboard walks it, and Escape gives focus 
   // A button that is a picture: the box of the « … » of a row of the mockup, named for a screen reader.
   const more = menus.getByRole('button', { name: 'More for staging.acme.dev' });
   await expectStyle(more, 'the button of a menu', {
-    height: '36px',
-    width: '36px',
-    borderTopLeftRadius: '8px',
+    height: '28px',
+    width: '28px',
+    borderTopLeftRadius: '6px',
     color: MUTED_TONE,
   });
   await expect(more).toHaveAttribute('aria-haspopup', /^(menu|true)$/);
@@ -973,11 +975,11 @@ test('a menu opens from its button, a keyboard walks it, and Escape gives focus 
     backgroundColor: WHITE,
     borderTopWidth: '1px',
     borderTopColor: LINE,
-    borderTopLeftRadius: '10px',
+    borderTopLeftRadius: '6px',
     color: INK,
   });
   const install = menu.getByRole('menuitem', { name: 'Install' });
-  await expectStyle(install, 'item', { minHeight: '40px', borderTopLeftRadius: '6px', fontSize: '14px' });
+  await expectStyle(install, 'item', { minHeight: '28px', borderTopLeftRadius: '6px', fontSize: '13px' });
   // An item that takes something away is the strong accent: 6.47:1 on white, 5.89:1 on the tint of an item.
   const remove = menu.getByRole('menuitem', { name: 'Remove' });
   await expectStyle(remove, 'item that removes', { color: ACCENT_STRONG });
@@ -1026,7 +1028,7 @@ test('a menu opens from its button, a keyboard walks it, and Escape gives focus 
   await expect(radios.nth(1)).toHaveAttribute('aria-checked', 'false');
   await expect(radios.nth(1)).toContainText('Lumen Studio');
   // The second line of an item is its description, in the muted tone: 5.28:1 on white.
-  await expectStyle(radios.nth(1).getByText('Member'), 'detail of an item', { color: MUTED_TONE, fontSize: '13px' });
+  await expectStyle(radios.nth(1).getByText('Member'), 'detail of an item', { color: MUTED_TONE, fontSize: '12px' });
   // The menu of a button of the rail is a page all the same: its ring is the one of a page.
   await radios.nth(1).hover();
   await expectStyle(radios.nth(1), 'item under the pointer', { backgroundColor: CHIP });
@@ -1051,7 +1053,7 @@ test("the steps, a callout, the option cards and the drawn browser are the mocku
     ...mark,
     backgroundColor: INK,
     color: WHITE,
-    fontSize: '12px',
+    fontSize: '11px',
     fontWeight: '700',
   });
   await expectStyle(step('Put it on the site').locator('.kit-step__mark'), 'mark, to come', {
@@ -1066,8 +1068,8 @@ test("the steps, a callout, the option cards and the drawn browser are the mocku
   await expectStyle(step('Your account').locator('.kit-step__line'), 'line', { width: '2px', backgroundColor: LINE });
   await expectStyle(step('Your account').locator('.kit-step__body'), 'body', { paddingBottom: '32px' });
   await expectStyle(step('Your site').getByRole('heading'), 'title', {
-    fontSize: '17px',
-    lineHeight: '26px',
+    fontSize: '14px',
+    lineHeight: '20px',
     fontWeight: '600',
     color: INK,
   });
@@ -1079,16 +1081,16 @@ test("the steps, a callout, the option cards and the drawn browser are the mocku
   await expect(steps.getByRole('heading', { name: 'Current step: Your site' })).toBeVisible();
   await expect(step('Your site')).toHaveAttribute('aria-current', 'step');
   await expect(steps.getByRole('heading', { name: 'Your account', exact: true })).toBeVisible();
-  // « Rename » keeps the height of its line (22.5 px), and its target is 33 px high.
+  // « Rename » keeps the height of its line (19.5 px), and its target is 33 px high.
   const line = await step('Your account').locator('p').boundingBox();
-  expect.soft(line!.height, 'the line of « Rename »').toBeCloseTo(22.5, 0);
+  expect.soft(line!.height, 'the line of « Rename »').toBeCloseTo(19.5, 0);
   expect.soft((await steps.getByRole('button', { name: 'Rename' }).boundingBox())!.height).toBeGreaterThanOrEqual(24);
 
   await expectStyle(steps.getByRole('status'), 'callout', {
     paddingTop: '18px',
     paddingLeft: '20px',
     borderTopColor: LINE,
-    borderTopLeftRadius: '10px',
+    borderTopLeftRadius: '8px',
     backgroundColor: SUBTLE,
     rowGap: '10px',
   });
@@ -1097,11 +1099,11 @@ test("the steps, a callout, the option cards and the drawn browser are the mocku
   await expectStyle(options.locator('.kit-option').first(), 'option', {
     paddingTop: '18px',
     borderTopColor: LINE,
-    borderTopLeftRadius: '10px',
+    borderTopLeftRadius: '8px',
     rowGap: '8px',
   });
   await expectStyle(options.getByRole('heading', { name: 'Browser extension' }), 'option, title', {
-    fontSize: '15px',
+    fontSize: '13px',
     fontWeight: '600',
   });
   // Two cards of 230 px at the least in 520 px, 12 px apart; two buttons 10 px apart.
@@ -1109,9 +1111,9 @@ test("the steps, a callout, the option cards and the drawn browser are the mocku
   await expectStyle(options.locator('.kit-auto-grid').last(), 'grid of buttons', { columnGap: '10px' });
   const snippet = options.getByRole('region', { name: 'The script tag of staging.acme.dev' });
   await expectStyle(snippet, 'snippet', {
-    fontSize: '12px',
-    // 1.55 of 12 px.
-    lineHeight: '18.6px',
+    fontSize: '11px',
+    // 1.55 of 11 px.
+    lineHeight: '17.05px',
     backgroundColor: SUBTLE,
     borderTopColor: LINE,
     borderTopLeftRadius: '6px',
@@ -1123,20 +1125,20 @@ test("the steps, a callout, the option cards and the drawn browser are the mocku
   const browser = page.locator('[data-kit="browser"]');
   await expectStyle(browser.locator('.kit-browser'), 'browser', {
     borderTopColor: LINE,
-    borderTopLeftRadius: '14px',
-    boxShadow: 'rgba(24, 24, 27, 0.08) 0px 10px 30px 0px',
+    borderTopLeftRadius: '8px',
+    boxShadow: 'rgba(15, 23, 42, 0.08) 0px 10px 30px 0px',
   });
   // 44 px and the rule under it.
   await expectStyle(browser.locator('.kit-browser__bar'), 'bar', { height: '45px', backgroundColor: SUBTLE });
   await expectStyle(browser.locator('.kit-browser__page'), 'page', { height: '620px' });
   await expectStyle(browser.locator('.kit-browser__empty svg'), 'drop', { width: '56px', height: '68px', fill: LINE });
   await expectStyle(browser.getByText('your site', { exact: true }), 'address', {
-    fontSize: '13px',
+    fontSize: '12px',
     color: MUTED_TONE,
     borderTopLeftRadius: '999px',
   });
   await expectStyle(browser.locator('.kit-browser__caption'), 'caption', {
-    fontSize: '13px',
+    fontSize: '12px',
     color: MUTED_TONE,
     marginTop: '12px',
   });
@@ -1208,14 +1210,14 @@ function pairs(page: Page): Promise<{ text: string; ratio: number }[]> {
 test('a list of a status, a button with a longer name and a named panel (FRU-232)', async ({ page }) => {
   await openKit(page);
 
-  // The list of « Status of the pins »: 38 px, the drop 12 px in, the word 30 px in.
+  // The list of « Status of the pins »: 28 px, the drop 12 px in, the word 30 px in.
   const row = page.locator('[data-kit="status-choice"]');
   const list = row.getByRole('button', { name: /Status for In Review/ });
   await expectStyle(list, 'list of a status', {
-    height: '38px',
+    height: '28px',
     borderTopColor: CONTROL,
-    borderTopLeftRadius: '8px',
-    fontSize: '14px',
+    borderTopLeftRadius: '6px',
+    fontSize: '13px',
   });
   const drop = list.locator('.kit-drop');
   await expectStyle(drop, 'drop', { width: '9px', height: '9px', backgroundColor: STATUS_COLOURS[2] });
@@ -1247,10 +1249,10 @@ test('a list of a status, a button with a longer name and a named panel (FRU-232
   await expect(panel).not.toHaveAttribute('aria-labelledby');
   await expect(panel.getByRole('heading', { name: 'Linear' })).toHaveAttribute('id', 'kit-panel-title');
 
-  // A link in a row takes the line of the table: 20.3 px and its 8 px each way, the 36.3 px of the mockup.
+  // A link in a row takes the line of the table: 18.2 px and its 8 px each way, 34.2 px (FRU-683).
   const link = page.getByRole('region', { name: 'Members' }).getByRole('button', { name: 'Resend' });
-  await expectStyle(link, 'link in a row', { lineHeight: '20.3px', paddingTop: '8px' });
-  expect.soft((await link.boundingBox())?.height, 'link in a row, height').toBeCloseTo(36.3, 1);
+  await expectStyle(link, 'link in a row', { lineHeight: '18.2px', paddingTop: '8px' });
+  expect.soft((await link.boundingBox())?.height, 'link in a row, height').toBeCloseTo(34.2, 1);
 });
 
 test('every text of the kit is 4.5:1 on what is behind it, and axe finds nothing (FRU-232)', async ({ page }) => {

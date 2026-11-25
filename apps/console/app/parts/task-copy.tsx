@@ -250,7 +250,7 @@ export function useTaskCopy({
         said === undefined
           ? 'sr-only'
           : // The pill lets the pointer through: a button under it stays pressable while it shows.
-            'pointer-events-none fixed bottom-[24px] left-1/2 z-50 max-w-[calc(100vw-32px)] -translate-x-1/2 rounded-full bg-ink px-[16px] py-[8px] text-small text-page shadow-lg'
+            'pointer-events-none fixed bottom-[24px] left-1/2 z-50 max-w-[calc(100vw-32px)] -translate-x-1/2 rounded-card bg-ink px-[16px] py-[8px] text-small text-page shadow-lg'
       }
     >
       {said ?? ''}
