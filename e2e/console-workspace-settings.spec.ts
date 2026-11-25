@@ -284,16 +284,25 @@ test('the owner alone deletes the workspace, in a dialog, once its name is typed
   await expect(dialog).toBeHidden();
   expect(worker.deleted).toEqual([]);
 
-  // A refusal of the worker is said in the dialog, which stays open with the name typed.
+  // A refusal of the worker is said in the dialog, which stays open with the name typed. While the
+  // deletion is on its way, Escape and « Keep it » do not close the dialog its answer ends in.
+  let answer = () => {};
+  const answered = new Promise<void>((resolve) => (answer = resolve));
   await page.unroute('**/console/workspaces/w1');
-  await page.route('**/console/workspaces/w1', (route) =>
-    route.request().method() === 'DELETE'
-      ? route.fulfill({ status: 403, json: { error: 'forbidden', role: 'admin' } })
-      : route.fallback(),
-  );
+  await page.route('**/console/workspaces/w1', async (route) => {
+    if (route.request().method() !== 'DELETE') return route.fallback();
+    await answered;
+
+    return route.fulfill({ status: 403, json: { error: 'forbidden', role: 'admin' } });
+  });
   await open.click();
   await typed.fill(' Acme ');
   await confirm.click();
+  await expect(dialog.getByRole('button', { name: 'Deleting…' })).toBeDisabled();
+  await expect(dialog.getByRole('button', { name: 'Keep it', exact: true })).toBeDisabled();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeVisible();
+  answer();
   await expect(dialog.getByRole('alert')).toHaveText('Only the owner of the workspace deletes it.');
   await expect(typed).toHaveValue(' Acme ');
   await page.unroute('**/console/workspaces/w1');

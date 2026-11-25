@@ -300,6 +300,8 @@ function DangerZone({ workspace }: { workspace: Workspace }) {
   const named = typed.trim() === workspace.name;
 
   function close() {
+    // A deletion on its way ends in the dialog: a refusal is said there, a success leaves the page.
+    if (deleting) return;
     setOpen(false);
     setTyped('');
     setUndeleted(undefined);
@@ -337,6 +339,7 @@ function DangerZone({ workspace }: { workspace: Workspace }) {
       <Dialog
         open={open}
         onClose={close}
+        locked={deleting}
         title={t('Delete {workspace}?', { workspace: workspace.name })}
         closeLabel={t('Close')}
         size="sm"
@@ -355,7 +358,7 @@ function DangerZone({ workspace }: { workspace: Workspace }) {
           />
           {undeleted === undefined ? null : <Problem>{t(undeleted)}</Problem>}
           <div className="flex flex-wrap justify-end gap-[8px]">
-            <Button tone="outline" size="small" onClick={close}>
+            <Button tone="outline" size="small" disabled={deleting} onClick={close}>
               {t('Keep it')}
             </Button>
             <Button tone="danger" type="submit" disabled={!named || deleting}>
