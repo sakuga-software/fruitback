@@ -7,11 +7,11 @@ body.side-panel-page {
   margin: 0;
   /* The 14 px of the body of the popup put every block 14 px further in (FRU-533). */
   padding: 0;
-  background: var(--surface);
-  color: var(--text);
-  font: 14px/1.5 var(--font-sans);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: 14px/1.5 var(--font-ui);
   scrollbar-width: thin;
-  scrollbar-color: var(--line-soft) transparent;
+  scrollbar-color: var(--color-line-soft) transparent;
 }
 
 .side-panel {
@@ -59,11 +59,11 @@ button.panel-close {
   border: 0;
   border-radius: var(--radius-action);
   background: transparent;
-  color: var(--subtle);
+  color: var(--color-ink-soft);
 }
 
 button.panel-close:hover {
-  background: var(--surface-sunken);
+  background: var(--color-surface-sunken);
 }
 
 .panel-cross {
@@ -84,7 +84,7 @@ button.panel-close:hover {
 }
 
 .panel-state-text {
-  color: var(--subtle);
+  color: var(--color-ink-soft);
 }
 
 /* « Open Fruitback » (FRU-532): the main button, on the whole width, under the sentence. */
@@ -109,7 +109,7 @@ button.panel-close:hover {
   flex-direction: column;
   gap: 4px;
   padding: 0 var(--panel-gutter) 12px;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--color-line);
 }
 
 .panel-action .kit-primary {
@@ -122,7 +122,7 @@ button.panel-close:hover {
 }
 
 .panel-hint {
-  color: var(--subtle);
+  color: var(--color-ink-soft);
   font-size: 12px;
   text-align: center;
 }
@@ -168,8 +168,8 @@ button.panel-close:hover {
 }
 
 .panel-row[data-open='true'] {
-  background: var(--surface-raised);
-  box-shadow: inset 0 0 0 1px var(--line);
+  background: var(--color-surface-raised);
+  box-shadow: inset 0 0 0 1px var(--color-line);
 }
 
 button.panel-row-head {
@@ -223,12 +223,12 @@ button.panel-row-head {
 }
 
 .panel-row-meta {
-  color: var(--subtle);
+  color: var(--color-ink-soft);
   font-size: 12px;
 }
 
 .panel-row-stage {
-  color: var(--text);
+  color: var(--color-text);
   font-weight: 650;
 }
 
@@ -254,7 +254,7 @@ button.panel-row-head {
   flex-direction: column;
   padding: 8px 10px;
   border-radius: var(--radius-field);
-  background: var(--surface-sunken);
+  background: var(--color-surface-sunken);
 }
 
 .panel-reply-meta {
@@ -281,7 +281,7 @@ button.panel-link {
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--accent);
+  color: var(--color-accent);
   font: inherit;
   font-size: 13px;
   font-weight: 600;
@@ -299,10 +299,10 @@ button.panel-link {
   box-sizing: border-box;
   width: 100%;
   padding: 8px 10px;
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--color-line-strong);
   border-radius: var(--radius-control);
-  background: var(--surface);
-  color: var(--text);
+  background: var(--color-surface);
+  color: var(--color-text);
   font: inherit;
   resize: vertical;
 }
@@ -319,8 +319,8 @@ button.panel-send {
   padding: 0 14px;
   border: 0;
   border-radius: var(--radius-pill);
-  background: var(--accent);
-  color: var(--on-accent);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
   font: inherit;
   font-weight: 600;
 }
@@ -330,7 +330,7 @@ button.panel-send:disabled {
 }
 
 .panel-reply-problem {
-  color: var(--alert-text);
+  color: var(--color-alert-text);
   font-size: 13px;
 }
 
@@ -338,7 +338,7 @@ button.panel-send:disabled {
 .panel-reading,
 .panel-none {
   padding: 16px var(--panel-gutter);
-  color: var(--subtle);
+  color: var(--color-ink-soft);
 }
 
 .panel-failed {
@@ -363,7 +363,7 @@ button.panel-send:disabled {
   box-sizing: border-box;
   width: 34px;
   height: 34px;
-  border: 2px dashed var(--line-control);
+  border: 2px dashed var(--color-line-control);
   border-radius: 50% 50% 50% 0;
   transform: rotate(-45deg);
 }
@@ -375,7 +375,7 @@ button.panel-send:disabled {
 
 .panel-empty-text {
   max-width: 280px;
-  color: var(--subtle);
+  color: var(--color-ink-soft);
 }
 
 /* The foot: « Show pins on the page » while the search is open, then the site and « Settings ». */
@@ -386,9 +386,9 @@ button.panel-send:disabled {
   flex-direction: column;
   gap: 8px;
   padding: 10px var(--panel-gutter);
-  border-top: 1px solid var(--line);
-  background: var(--surface);
-  color: var(--subtle);
+  border-top: 1px solid var(--color-line);
+  background: var(--color-surface);
+  color: var(--color-ink-soft);
   font-size: 13px;
 }
 
@@ -423,7 +423,7 @@ button.panel-send:disabled {
 }
 
 .ready-text {
-  color: var(--subtle);
+  color: var(--color-ink-soft);
   font-size: 13px;
 }
 
@@ -438,7 +438,7 @@ button.panel-send:disabled {
   flex-direction: column;
   gap: 10px;
   padding: 12px 0 14px;
-  border-top: 1px solid var(--ready-divider);
+  border-top: 1px solid var(--color-ready-divider);
 }
 
 .ready-item:first-child {
@@ -464,7 +464,7 @@ button.panel-send:disabled {
 }
 
 .ready-meta {
-  color: var(--subtle);
+  color: var(--color-ink-soft);
   font-size: 12px;
 }
 
@@ -483,19 +483,19 @@ button.panel-send:disabled {
   height: 44px;
   padding: 0 10px;
   border-radius: var(--radius-action);
-  background: var(--surface);
+  background: var(--color-surface);
   font: inherit;
   font-weight: 650;
 }
 
 button.ready-fixed {
-  border: 1px solid var(--success-line);
-  color: var(--success);
+  border: 1px solid var(--color-success-line);
+  color: var(--color-success);
 }
 
 button.ready-wrong {
-  border: 1px solid var(--line-control);
-  color: var(--text);
+  border: 1px solid var(--color-line-control);
+  color: var(--color-text);
 }
 
 .ready-actions button:disabled {
@@ -509,7 +509,7 @@ button.ready-wrong {
 
 .ready-problem {
   padding-left: 36px;
-  color: var(--alert-text);
+  color: var(--color-alert-text);
   font-size: 13px;
 }
 
@@ -527,12 +527,12 @@ button.panel-search {
   border: 0;
   border-radius: var(--radius-action);
   background: transparent;
-  color: var(--subtle);
+  color: var(--color-ink-soft);
 }
 
 button.panel-search:hover,
 button.panel-search[aria-expanded='true'] {
-  background: var(--surface-sunken);
+  background: var(--color-surface-sunken);
 }
 
 .panel-glass {
@@ -545,7 +545,7 @@ button.panel-search[aria-expanded='true'] {
   flex-direction: column;
   gap: 10px;
   padding: 0 var(--panel-gutter) 12px;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--color-line);
 }
 
 .search-scope.kit-tabs button.kit-tab {
@@ -564,7 +564,7 @@ button.panel-search[aria-expanded='true'] {
   left: 10px;
   width: 15px;
   height: 15px;
-  color: var(--muted);
+  color: var(--color-muted);
   transform: translateY(-50%);
   pointer-events: none;
 }
@@ -574,20 +574,20 @@ input.search-input {
   width: 100%;
   height: 34px;
   padding: 0 10px 0 32px;
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--color-line-strong);
   border-radius: var(--radius-control);
-  background: var(--surface);
-  color: var(--text);
+  background: var(--color-surface);
+  color: var(--color-text);
   font: inherit;
   font-size: 13px;
 }
 
 input.search-input::placeholder {
-  color: var(--muted);
+  color: var(--color-muted);
 }
 
 .search-hint {
-  color: var(--muted);
+  color: var(--color-muted);
   font-size: 12px;
 }
 
@@ -603,18 +603,18 @@ button.search-chip {
   gap: 6px;
   height: 28px;
   padding: 0 10px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--color-line);
   border-radius: var(--radius-pill);
-  background: var(--surface);
-  color: var(--text);
+  background: var(--color-surface);
+  color: var(--color-text);
   font: inherit;
   font-size: 12px;
   font-weight: 600;
 }
 
 button.search-chip[aria-pressed='true'] {
-  border-color: var(--text);
-  background: var(--surface-sunken);
+  border-color: var(--color-text);
+  background: var(--color-surface-sunken);
 }
 
 button.search-chip .kit-drop[data-size='mark'] {
@@ -623,7 +623,7 @@ button.search-chip .kit-drop[data-size='mark'] {
 }
 
 .search-chip-count {
-  color: var(--muted);
+  color: var(--color-muted);
   font-weight: 500;
 }
 
@@ -636,28 +636,28 @@ button.search-chip .kit-drop[data-size='mark'] {
 
 .kit-drop[data-hollow='true'] {
   border-color: currentColor;
-  background: var(--surface);
-  box-shadow: 0 0 0 1px var(--stage-edge);
+  background: var(--color-surface);
+  box-shadow: 0 0 0 1px var(--color-status-edge);
 }
 
 .kit-drop[data-hollow='true'][data-stage='new'] {
-  color: var(--stage-new);
+  color: var(--color-status-new);
 }
 
 .kit-drop[data-hollow='true'][data-stage='todo'] {
-  color: var(--stage-todo);
+  color: var(--color-status-todo);
 }
 
 .kit-drop[data-hollow='true'][data-stage='progress'] {
-  color: var(--stage-progress);
+  color: var(--color-status-progress);
 }
 
 .kit-drop[data-hollow='true'][data-stage='done'] {
-  color: var(--stage-done);
+  color: var(--color-status-done);
 }
 
 .kit-drop[data-hollow='true'][data-stage='closed'] {
-  color: var(--stage-closed);
+  color: var(--color-status-closed);
 }
 
 .site-row-links {
@@ -672,7 +672,7 @@ button.search-chip .kit-drop[data-size='mark'] {
   align-items: center;
   /* A target of 24 px at least (WCAG 2.5.8). */
   min-height: 24px;
-  color: var(--accent);
+  color: var(--color-accent);
   font-size: 13px;
   font-weight: 600;
   text-underline-offset: 3px;
@@ -697,7 +697,7 @@ button.site-row-ref {
 }
 
 .site-more-count {
-  color: var(--muted);
+  color: var(--color-muted);
   font-size: 12px;
 }
 
@@ -707,7 +707,7 @@ button.site-row-ref {
   flex-direction: column;
   gap: 8px;
   padding: 14px var(--panel-gutter) 18px;
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--color-line);
 }
 
 .search-detached-title {
@@ -716,7 +716,7 @@ button.site-row-ref {
   gap: 8px;
   margin: 0;
   /* The words in the muted text: the grey of a note with no place is 3.67:1 on the dark surface. */
-  color: var(--muted);
+  color: var(--color-muted);
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.04em;
@@ -727,7 +727,7 @@ button.site-row-ref {
   box-sizing: border-box;
   width: 14px;
   height: 14px;
-  border: 1.5px dashed var(--unplaced);
+  border: 1.5px dashed var(--color-unplaced);
   border-radius: 50% 50% 50% 0;
   transform: rotate(-45deg);
 }
@@ -743,9 +743,9 @@ button.site-row-ref {
 
 .search-detached-card {
   padding: 10px 12px;
-  border: 1px dashed var(--unplaced);
+  border: 1px dashed var(--color-unplaced);
   border-radius: var(--radius-action);
-  background: var(--surface-warm);
+  background: var(--color-surface-warm);
 }
 
 .search-detached-note {
@@ -753,7 +753,7 @@ button.site-row-ref {
 }
 
 .search-detached-meta {
-  color: var(--subtle);
+  color: var(--color-ink-soft);
   font-size: 12px;
 }
 
@@ -763,7 +763,7 @@ button.site-row-ref {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  color: var(--muted);
+  color: var(--color-muted);
   font-size: 12px;
 }
 

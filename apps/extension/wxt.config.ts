@@ -1,4 +1,5 @@
 import { fileURLToPath } from 'node:url';
+import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'wxt';
 import { ICON_SIZES, iconPath } from './src/icon-sizes.ts';
 import { DATA_COLLECTION_PERMISSIONS, FIREFOX_MIN_VERSION } from './src/data-collection.ts';
@@ -60,7 +61,8 @@ export default defineConfig({
   manifestVersion: 3,
   // FRU-389: zod with no `Function` constructor, which the validator of AMO calls eval. See
   // `src/no-eval.ts`. The build only: the tests run zod as it is.
-  vite: () => ({ plugins: [noEval()] }),
+  // FRU-679: Tailwind reads the sheets of the pages, on the theme of `src/theme.css`.
+  vite: () => ({ plugins: [noEval(), tailwindcss()] }),
   zip: {
     // The name of the archive a store takes. Without it wxt builds one from the package name, and
     // `@fruitback/extension` becomes `fruitbackextension-0.1.0-chrome.zip` (FRU-77).
