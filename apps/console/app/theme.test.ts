@@ -117,7 +117,8 @@ describe('the slate theme of the console (FRU-683)', () => {
 
   it('keeps every text 4.5:1 on the page, the sidebar, the hover and the selection (WCAG AA)', () => {
     const grounds = ['--color-page', '--color-sidebar', '--color-subtle', '--color-hover', '--color-selected'];
-    const texts = ['--color-ink', '--color-ink-soft', '--muted', '--color-accent-strong'];
+    // A red word is accent-strong: the accent is 3.82:1 on the selection, and fills a button.
+    const texts = ['--color-ink', '--color-ink-soft', '--muted', '--color-accent-strong', '--color-done'];
     const ratios = texts.flatMap((text) =>
       grounds.map((ground) => [`${text} on ${ground}`, contrast(token(text), token(ground))] as const),
     );
@@ -149,7 +150,7 @@ describe('the slate theme of the console (FRU-683)', () => {
     }
   });
 
-  it('writes no radius in a screen or the kit: each names control, card, modal, inner, drop or full', () => {
+  it('writes no radius in a screen or the kit: each names a token of theme.css', () => {
     const found = (sources: Map<string, string>) =>
       [...sources].flatMap(([name, source]) =>
         (source.match(WRITTEN_RADIUS) ?? []).map((value) => `${name}: ${value}`),

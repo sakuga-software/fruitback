@@ -431,7 +431,10 @@ export function SitePlaces({
                   )}
                   <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{nameOf(each)}</span>
                   {each.attention === undefined ? null : (
-                    <span className="flex-none text-hint leading-auto font-semibold text-accent" data-place-attention>
+                    <span
+                      className="flex-none text-hint leading-auto font-semibold text-accent-strong"
+                      data-place-attention
+                    >
                       {t('Needs attention')}
                     </span>
                   )}

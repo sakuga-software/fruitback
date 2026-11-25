@@ -32,6 +32,11 @@
   --color-line: #e3e8ef;
   /* The border of a field and of a control: 3.65:1 on white, 3.31:1 on the sidebar (WCAG 1.4.11). */
   --color-control: #7b8797;
+  /*
+    « Connected », a step that is done, « Active » in a row. The green of before (#15803d) was 4.07:1
+    on the selection: this one is 5.78:1 there, 7.13:1 on white, and white on it is 7.13:1.
+  */
+  --color-done: #166534;
   /* The round initial of a person: white on it is 10.35:1. */
   --color-avatar: #334155;
 
@@ -74,12 +79,14 @@
   --radius-modal: 10px;
   /* What sits inside a control or is smaller than one: a box to tick, a swatch, a tile, a key. */
   --radius-inner: 4px;
+  /* A pill: a switch, an avatar, a bar. A shape, not a radius: a setting of the radius leaves it. */
+  --radius-pill: 999px;
   /* The drop of Fruitback: a shape, not a radius. A setting of the radius leaves it. */
   --radius-drop: 50% 50% 50% 0;
   /*
     The scale of Tailwind, that HeroUI applies (a button is rounded-3xl, a menu item rounded-2xl, a
-    checkbox rounded-md): each step is the radius of a control. app.css gives a card and a modal of
-    HeroUI theirs. A screen names control, card or modal, never a step of this scale.
+    checkbox rounded-md): each step is the radius of a control. The kit gives a modal and an alert
+    of HeroUI theirs by a class. A screen names a token above, never a step of this scale.
   */
   --radius-xs: var(--radius-control);
   --radius-sm: var(--radius-control);

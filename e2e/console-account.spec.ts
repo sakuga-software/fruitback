@@ -35,8 +35,8 @@ import {
  */
 const CONSOLE = 'http://localhost:5178';
 
-const MUTED = '#6b6b74';
-const LINE = '#e4e4e7';
+const MUTED = '#5b6779';
+const LINE = '#e3e8ef';
 const WHITE = '#ffffff';
 
 const SESSIONS = [
@@ -273,8 +273,8 @@ test('the screen is the one of the mockup, with what the worker of today does', 
     'row-gap': '40px',
   });
   const title = page.getByRole('heading', { level: 2, name: 'Profile' });
-  expect.soft(await styles(title, ['font-size', 'font-weight'])).toEqual({ 'font-size': '18px', 'font-weight': '700' });
-  expectBox(await box(title), { x: 297, y: 142, height: 21 }, 2, '« Profile »');
+  expect.soft(await styles(title, ['font-size', 'font-weight'])).toEqual({ 'font-size': '15px', 'font-weight': '700' });
+  expectBox(await box(title), { x: 297, y: 132, height: 21 }, 2, '« Profile »');
 
   // The profile: the name, which the person changes (FRU-249), and the language.
   const profile = section(page, 'Profile');
@@ -286,10 +286,10 @@ test('the screen is the one of the mockup, with what the worker of today does', 
   // The screen is as wide as its column (FRU-398): 1095.5 px at 1440 px, where the mockup capped it
   // at 724 px (820 px less its sides). The two fields share that width, so each is 540.7 px wide,
   // and not the 355 px of the mockup.
-  expectBox(await box(name), { x: 297, y: 199, width: 540.7, height: 44 }, 2, 'the name');
+  expectBox(await box(name), { x: 297, y: 189, width: 540.7, height: 32 }, 2, 'the name');
   const language = profile.getByRole('button', { name: /Language/ });
   await expect(language).toContainText('English');
-  expectBox(await box(language), { x: 851.3, y: 199, width: 540.7, height: 44 }, 2, 'the language');
+  expectBox(await box(language), { x: 851.3, y: 189, width: 540.7, height: 32 }, 2, 'the language');
   // No font sizes these boxes: they are measured on every system, where `expectBox` measures only
   // in the font of the mockup. The two fields fill the section, 14 px apart.
   const fields = { name: await box(name), language: await box(language), profile: await box(profile) };
@@ -315,8 +315,8 @@ test('the screen is the one of the mockup, with what the worker of today does', 
   const signIn = section(page, 'How you sign in');
   const help = signIn.getByText('Any of these opens the same account, in the console and in the extension.');
   expect.soft(await styles(help, ['font-size', 'line-height', 'margin-bottom'])).toEqual({
-    'font-size': '14px',
-    'line-height': '21px',
+    'font-size': '13px',
+    'line-height': '18.85px',
     'margin-bottom': '12px',
   });
   expect.soft(await painted(help, 'color')).toEqual(rgb(MUTED));
@@ -325,7 +325,8 @@ test('the screen is the one of the mockup, with what the worker of today does', 
   // The addresses (FRU-450) are between the two, with the gap of a section under them.
   await expect(section(page, 'Addresses').getByRole('listitem')).toHaveCount(3);
   const addresses = (await box(section(page, 'Addresses'))).height + 40;
-  const lines = (await box(signIn.getByRole('heading', { level: 2 }))).y - 283 - addresses;
+  // 283 px on the mockup, less the 36 px that the controls and the type of FRU-683 take off above.
+  const lines = (await box(signIn.getByRole('heading', { level: 2 }))).y - 247 - addresses;
   if (MOCKUP_FONT) expect.soft(lines, 'the lines under the two fields').toBeGreaterThan(20);
   if (MOCKUP_FONT) expect.soft(lines, 'the lines under the two fields').toBeLessThan(60);
   // What is under the addresses is lower by them.
@@ -334,7 +335,7 @@ test('the screen is the one of the mockup, with what the worker of today does', 
   await expect(ways).toHaveCount(3);
   expect.soft(await styles(ways.first().locator('..'), ['border-top-width', 'font-size'])).toEqual({
     'border-top-width': '1px',
-    'font-size': '15px',
+    'font-size': '13px',
   });
   expect.soft(await painted(ways.first().locator('..'), 'borderTopColor')).toEqual(rgb(LINE));
   expect
@@ -363,12 +364,12 @@ test('the screen is the one of the mockup, with what the worker of today does', 
   await expect(ways.nth(0)).toContainText('Email link');
   await expect(ways.nth(0)).toContainText('ana@acme.dev');
   const state = ways.nth(0).getByText('Always on', { exact: true });
-  expect.soft(await styles(state, ['font-size'])).toEqual({ 'font-size': '14px' });
+  expect.soft(await styles(state, ['font-size'])).toEqual({ 'font-size': '13px' });
   expect.soft(await painted(state, 'color')).toEqual(rgb(MUTED));
   const way = ways.nth(1).getByText('GitHub', { exact: true });
   expect.soft(await styles(way, ['font-weight'])).toEqual({ 'font-weight': '600' });
   const detail = ways.nth(1).getByText('Linked', { exact: true });
-  expect.soft(await styles(detail, ['font-size'])).toEqual({ 'font-size': '13px' });
+  expect.soft(await styles(detail, ['font-size'])).toEqual({ 'font-size': '12px' });
   expect.soft(await painted(detail, 'color')).toEqual(rgb(MUTED));
   // A linked provider is unlinked; one that is not is linked, by a form that the worker answers
   // (FRU-415: a `POST`, which no other page of the site can send with the `Origin` of the console).
@@ -383,10 +384,10 @@ test('the screen is the one of the mockup, with what the worker of today does', 
   expect
     .soft(await styles(link, ['height', 'padding-left', 'border-top-left-radius', 'font-size', 'font-weight']))
     .toEqual({
-      height: '40px',
+      height: '28px',
       'padding-left': '16px',
       'border-top-left-radius': '6px',
-      'font-size': '14px',
+      'font-size': '13px',
       'font-weight': '600',
     });
   // The worker keeps no login of GitHub: « Linked », and not « Linked as ».
@@ -396,7 +397,7 @@ test('the screen is the one of the mockup, with what the worker of today does', 
   const where = section(page, 'Where you are signed in');
   expectBox(
     await box(where.getByRole('heading', { level: 2 })),
-    { x: 297, y: 601 + under, height: 21 },
+    { x: 297, y: 598.8 + under, height: 21 },
     2,
     '« Where you are signed in »',
   );
@@ -413,16 +414,16 @@ test('the screen is the one of the mockup, with what the worker of today does', 
   await expect(where.getByText(/Extension|Firefox|Chrome|macOS/)).toHaveCount(0);
   const disconnect = browsers.nth(1).getByRole('button', { name: 'Disconnect', exact: true });
   expect.soft(await styles(disconnect, ['font-size', 'font-weight', 'text-decoration-line', 'padding-top'])).toEqual({
-    'font-size': '14px',
+    'font-size': '13px',
     'font-weight': '600',
     'text-decoration-line': 'underline',
     'padding-top': '10px',
   });
   // At the right of the screen, as wide as its column (FRU-398): 371.5 px to the right of the mockup.
-  expectBox(await box(disconnect), { x: 1315.5, y: 751 + under, width: 76.2, height: 37 }, 2, '« Disconnect »');
+  expectBox(await box(disconnect), { x: 1320.8, y: 746.7 + under, width: 71.2, height: 37 }, 2, '« Disconnect »');
   expectBox(
     await box(browsers.nth(2).getByRole('button')),
-    { x: 1315.5, y: 824 + under },
+    { x: 1320.8, y: 819.7 + under },
     2,
     'the second « Disconnect »',
   );
@@ -443,19 +444,24 @@ test('the screen is the one of the mockup, with what the worker of today does', 
   expect
     .soft(await styles(signOut, ['height', 'padding-left', 'border-top-left-radius', 'font-size', 'font-weight']))
     .toEqual({
-      height: '44px',
+      height: '32px',
       'padding-left': '18px',
       'border-top-left-radius': '6px',
-      'font-size': '14px',
+      'font-size': '13px',
       'font-weight': '600',
     });
-  expectBox(await box(signOut), { x: 297, y: 919 + under, width: 93.7, height: 44 }, 2, '« Sign out »');
+  expectBox(await box(signOut), { x: 297, y: 919 + under, width: 89.7, height: 32 }, 2, '« Sign out »');
   const everywhere = out.getByRole('button', { name: 'Sign out everywhere', exact: true });
   expect.soft(await styles(everywhere, ['text-decoration-line', 'padding-top'])).toEqual({
     'text-decoration-line': 'underline',
     'padding-top': '12px',
   });
-  expectBox(await box(everywhere), { x: 410, y: 921 + under, width: 138.3, height: 41 }, 2, '« Sign out everywhere »');
+  expectBox(
+    await box(everywhere),
+    { x: 406.2, y: 914.7 + under, width: 129.6, height: 41 },
+    2,
+    '« Sign out everywhere »',
+  );
 
   // Every text at 4.5:1 on the page.
   for (const text of [help, state, detail, browsers.nth(1).getByText(/Signed in/)]) {
@@ -1207,7 +1213,7 @@ test('the browsers of the extension are rows of the list, as the mockup draws th
   expect.soft(await styles(browsers.nth(3).getByText('Extension · Chrome on macOS'), ['font-weight'])).toEqual({
     'font-weight': '600',
   });
-  expect.soft(await styles(browsers.nth(3).getByText(/^Connected/), ['font-size'])).toEqual({ 'font-size': '13px' });
+  expect.soft(await styles(browsers.nth(3).getByText(/^Connected/), ['font-size'])).toEqual({ 'font-size': '12px' });
   await expectNoViolation(page, 'the browsers of the extension');
 });
 
