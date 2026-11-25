@@ -2577,7 +2577,12 @@ when one answers. Node prints a warning about the type of `e2e/bench.ts`, and ru
   `openPanelForTab`), and « Open notes in the sidebar » is not drawn in the preferences.
 - **The manifest tells Safari its minimum, 16.4** (`browser_specific_settings.safari`, set by the hook
   `build:manifestGenerated` from `src/browser-family.ts`), and not the keys of Firefox. The app asks
-  for macOS 11, the oldest macOS Safari 16.4 came out for.
+  for macOS 12: Safari 16.4 came out for macOS 11 too, but Xcode 27.2 builds for 12.0 at the least,
+  and App Store Connect takes a build of the current Xcode only.
+- **The background sets and clears its alarms through `promisedAlarms`** (`src/alarms.ts`), never
+  `browser.alarms` directly. In Safari `alarms.create` answers `undefined`, not a promise: a `.catch`
+  chained on it threw at the start of the background, Safari loaded no background, and the popup
+  waited for an answer that never came. `alarms.test.ts` holds the background to it.
 - **The words that name a browser follow the build** (`src/browser-family.ts`): the shortcut row says
   « Change it in Safari Settings, Extensions. » (Safari has no `commands.openShortcutSettings` and no
   page an extension may open), the popup names « Safari Settings, Extensions » for another copy, and
@@ -2609,7 +2614,8 @@ which lists the keys of the manifest Safari does not know. Safari 26.5.2 is on t
 | `runtime.getContexts`                                           | No.                                                                                                                                                                                                                              | Already optional (`openPopup` of the background asks without it).                                                           |
 | `action.openPopup`                                              | 16.                                                                                                                                                                                                                              | Unchanged.                                                                                                                  |
 | `storage.sync`                                                  | 14, but Safari does not sync it: it acts as `storage.local`.                                                                                                                                                                     | « Keep my rules in the account of this browser » is not drawn on Safari: it would promise a copy that never leaves the Mac. |
-| `alarms`, `storage.local`, `tabs`, `windows`, `i18n`            | 14.                                                                                                                                                                                                                              | Unchanged.                                                                                                                  |
+| `alarms`                                                        | 14. `alarms.create` answers `undefined`, not a promise (measured in Safari 26 on 2026-11-24).                                                                                                                                    | Every call goes through `promisedAlarms`.                                                                                   |
+| `storage.local`, `tabs`, `windows`, `i18n`                      | 14.                                                                                                                                                                                                                              | Unchanged.                                                                                                                  |
 
 ### What was measured, and what was not (2026-10-28)
 
@@ -2625,6 +2631,20 @@ which lists the keys of the manifest Safari does not know. Safari 26.5.2 is on t
   quits; this Mac has no signing identity. Playwright's WebKit loads no extension, and `safaridriver`
   was not tried. So nothing above that says « Safari does » was seen in Safari: the table is what
   `browser-compat-data` says.
+
+### What was measured in Safari (2026-11-24)
+
+Xcode 27.2, Safari 26, the Cloud build (`WXT_FRUITBACK_CLOUD`), unsigned, with « Allow unsigned
+extensions ».
+
+- **The converter of Xcode 27.2 writes `project.xcproj`**, a JSON, where Xcode 26.6 wrote
+  `project.pbxproj`. It makes the same three mistakes; `fixXcodeProject` corrects both forms, and
+  `projectFileOf` finds the one that is there. `xcodebuild` builds the app, version 0.7.0, macOS 12.
+- **The sign-in to the Cloud works**: the console approves, and the popup claims the session.
+- **« Turn on » loaded forever** before `promisedAlarms`: the background did not start (above).
+  After it, a site turns on and takes notes.
+- **Not measured yet**: Safari's own prompt for the access to a site (the site was allowed in Safari
+  Settings first), a capture with `activeTab` alone, and whether Safari ignores `excludeMatches`.
 
 ### Signing and publishing: the steps for the owner of the Apple account
 
