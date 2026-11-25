@@ -396,8 +396,8 @@ test('an address says how many of its notes did not arrive, in a red that reads 
   const state = address.getByText('2 notes did not arrive', { exact: true });
   await expect(state).toBeVisible();
   expect.soft(await styles(state, ['font-size', 'font-weight'])).toEqual({ 'font-size': '12px', 'font-weight': '600' });
-  // At rest, the accent on white.
-  expect.soft(await painted(state, 'color')).toEqual(rgb(ACCENT));
+  // At rest too, the strong red: the accent is under 4.5:1 on a row under the pointer (FRU-683).
+  expect.soft(await painted(state, 'color')).toEqual(rgb(ACCENT_STRONG));
   expect.soft(contrast(await painted(state, 'color'), rgb(WHITE))).toBeGreaterThanOrEqual(4.5);
   // On the chosen row, the strong accent: the accent is 4.28:1 on the tint.
   await address.click();
@@ -452,7 +452,7 @@ test('a source that its tracker refuses says so in red, on its row and in its pa
   await open(page);
   const row = rows(page).first();
   const state = row.getByText('Needs attention', { exact: true });
-  expect.soft(await painted(state, 'color')).toEqual(rgb(ACCENT));
+  expect.soft(await painted(state, 'color')).toEqual(rgb(ACCENT_STRONG));
   await expect(row.getByText('Connected', { exact: true })).toHaveCount(0);
   await row.click();
   expect.soft(await painted(state, 'color')).toEqual(rgb(ACCENT_STRONG));
