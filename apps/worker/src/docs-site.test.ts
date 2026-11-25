@@ -255,6 +255,19 @@ function sourceOf(page: string): string | undefined {
   return undefined;
 }
 
+/**
+ * A colour token of a built sheet of the site, as `#rrggbb` (FRU-681). `apps/site` builds the sheet with
+ * Tailwind and commits it: the tokens are in its theme layer, minified, so `#fff` and `#ffffffcc` are
+ * read too. A colour with an alpha is not a colour of text: it reads as none.
+ */
+function token(css: string, name: string): string | undefined {
+  const value = new RegExp(`--color-${name}:\\s*(#[0-9a-f]+)[;}]`).exec(css)?.[1];
+  if (value === undefined) return undefined;
+  if (value.length === 4) return `#${[...value.slice(1)].map((digit) => digit + digit).join('')}`;
+
+  return value.length === 7 ? value : undefined;
+}
+
 /** The relative luminance of a `#rrggbb` colour, as WCAG 2 defines it. */
 function luminance(hex: string): number {
   const [r, g, b] = [1, 3, 5].map((at) => {
@@ -313,16 +326,16 @@ describe('the guides (FRU-417)', () => {
 
   it('keeps every text of the code blocks at 4.5:1 on their surface', () => {
     const css = readFileSync(new URL('assets/docs.css', DOCS), 'utf8');
-    const surface = /--code-surface: (#[0-9a-f]{6});/.exec(css)?.[1];
-    assert.ok(surface !== undefined, 'docs.css names no --code-surface');
-    const text = /--code-text: (#[0-9a-f]{6});/.exec(css)?.[1];
-    const palette = [...css.matchAll(/\.highlight [^{]*\{\s*color: (#[0-9a-f]{6});/g)].map(
-      (match) => match[1] as string,
+    const surface = token(css, 'docs-code-surface');
+    assert.ok(surface !== undefined, 'docs.css names no --color-docs-code-surface');
+    const text = token(css, 'docs-code-text');
+    const palette = [...css.matchAll(/\.highlight [^{]*\{\s*color:\s*var\(--color-([a-z-]+)\)/g)].map((match) =>
+      token(css, match[1] as string),
     );
     assert.ok(palette.length >= 6, `only ${palette.length} colours of the code found — the walk stopped matching`);
 
     assert.deepEqual(
-      [text ?? 'none', ...palette].filter((colour) => colour === 'none' || contrast(colour, surface ?? '') < 4.5),
+      [text, ...palette].filter((colour) => colour === undefined || contrast(colour, surface ?? '') < 4.5),
       [],
       'these colours of the code fall under 4.5:1 on the surface of a code block',
     );
@@ -331,26 +344,36 @@ describe('the guides (FRU-417)', () => {
   it('scrolls and goes from page to page with a transition, and with none for less motion (FRU-440)', () => {
     for (const sheet of ['assets/docs.css', 'assets/landing.css']) {
       const css = readFileSync(new URL(sheet, DOCS), 'utf8');
-      const [always, reduced = ''] = css.split('@media (prefers-reduced-motion: reduce)');
-      assert.match(always ?? '', /html \{[^}]*scroll-behavior: smooth;/, `${sheet}: no smooth scroll`);
-      assert.match(always ?? '', /@view-transition \{\s*navigation: auto;/, `${sheet}: no transition between pages`);
-      assert.match(reduced, /scroll-behavior: auto;/, `${sheet}: the scroll stays smooth for less motion`);
-      assert.match(reduced, /@view-transition \{\s*navigation: none;/, `${sheet}: the pages fade for less motion`);
+      const [always, reduced = ''] = css.split(/@media \(prefers-reduced-motion:\s*reduce\)/);
+      assert.match(always ?? '', /html\s*\{[^}]*scroll-behavior:\s*smooth[;}]/, `${sheet}: no smooth scroll`);
+      assert.match(
+        always ?? '',
+        /@view-transition\s*\{\s*navigation:\s*auto[;}\s]/,
+        `${sheet}: no transition between pages`,
+      );
+      assert.match(reduced, /scroll-behavior:\s*auto[;}]/, `${sheet}: the scroll stays smooth for less motion`);
+      assert.match(
+        reduced,
+        /@view-transition\s*\{\s*navigation:\s*none[;}\s]/,
+        `${sheet}: the pages fade for less motion`,
+      );
     }
   });
 
   it('keeps the text of the pages at 4.5:1 on the page and on a card', () => {
     const css = readFileSync(new URL('assets/docs.css', DOCS), 'utf8');
-    const token = (name: string) => new RegExp(`--${name}: (#[0-9a-f]{6});`).exec(css)?.[1] ?? 'none';
-    const pairs = ['ink', 'body', 'muted', 'link'].flatMap((text) =>
-      ['page', 'surface', 'inset', 'chip'].map((ground) => [text, ground] as const),
+    const texts = { ink: 'site-ink', body: 'site-body', muted: 'docs-muted', link: 'accent-strong' };
+    const grounds = { page: 'docs-page', surface: 'site-surface', inset: 'docs-inset', chip: 'site-chip' };
+    const pairs = Object.values(texts).flatMap((text) =>
+      Object.values(grounds).map((ground) => [text, ground] as const),
     );
 
     assert.deepEqual(
-      pairs.filter(
-        ([text, ground]) =>
-          token(text) === 'none' || token(ground) === 'none' || contrast(token(text), token(ground)) < 4.5,
-      ),
+      pairs.filter(([text, ground]) => {
+        const [one, other] = [token(css, text), token(css, ground)];
+
+        return one === undefined || other === undefined || contrast(one, other) < 4.5;
+      }),
       [],
       'these text colours fall under 4.5:1',
     );

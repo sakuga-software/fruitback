@@ -110,6 +110,13 @@ How this repository is formatted, tested and documented, and which test holds ea
   `docs.yml` with a `#` is a part of a page, and `docs-site.test.ts` checks that each one names a
   heading of its guide, with the id GitHub Pages gives it. Keep a heading that the console or the
   extension links to (`reviewing.html#1-install-it`, `#3-pair-in-team-mode`): its id is its address.
+  **Its two sheets are built, then committed** (FRU-681): `docs/assets/landing.css` and `docs.css`
+  are the minified output of the CLI of Tailwind, from `apps/site/src/*.css` on the shared theme and
+  the tokens of the site (`apps/site/src/theme.css`). GitHub Pages builds `docs/` with no workflow of
+  ours, so the built file is what it serves: edit the source, run `pnpm --filter @fruitback/site css`,
+  and commit both. `apps/site/css.test.ts` fails on a sheet that is not what its source builds, and on
+  a colour written in a source. There is no preflight: the pages were drawn on the defaults of the
+  browser, and the markdown of a guide gets no class.
   **A guide split in pages keeps its addresses** (FRU-427): the pages it gave go in a folder of its
   name (`self-hosting/reverse-proxy.md`), each heading keeps its text and so its id, and
   `docs/_data/moved.yml` lists each id that left the old page with its new address. The layout leaves
