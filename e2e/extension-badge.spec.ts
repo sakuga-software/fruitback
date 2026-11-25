@@ -40,13 +40,22 @@ test('the icon shows the notes to check of the site of the tab, in the blue of d
   test.slow();
   let toCheck = 2;
   const asked: string[] = [];
+  /** The counts this route gave for the site, in the order it gave them. */
+  const answered: number[] = [];
   await extension.context.route(sessionSitesOf(AUTHENTICATED_WORKER_ORIGIN), async (route) => {
     asked.push(route.request().url());
     const response = await route.fetch();
     const body = (await response.json()) as { sites?: { origin: string; toCheck?: number }[] };
-    for (const site of body.sites ?? []) if (site.origin === PLAYGROUND_ORIGIN) site.toCheck = toCheck;
+    const count = toCheck;
+    let forTheSite = false;
+    for (const site of body.sites ?? []) {
+      if (site.origin !== PLAYGROUND_ORIGIN) continue;
+      site.toCheck = count;
+      forTheSite = true;
+    }
 
-    return route.fulfill({ response, json: body });
+    await route.fulfill({ response, json: body });
+    if (forTheSite) answered.push(count);
   });
   await paired(extension);
   const page = await extension.context.newPage();
@@ -69,8 +78,15 @@ test('the icon shows the notes to check of the site of the tab, in the blue of d
   expect((await badgeOf(extension, PLAYGROUND_ORIGIN))?.text).toBe('2');
 
   // Every note checked: the next load of the page empties the badge, and never says « 0 ».
+  // FRU-713. Chrome clears the badge of a tab when the tab loads a page, so an empty badge right after
+  // the reload is not the answer yet. The spec waits for the worker to have given « 0 » for the site,
+  // and the context closes only once no route is still running: a `route.fetch` that the closing
+  // context cuts fails with « Request context disposed ».
   toCheck = 0;
+  const before = answered.length;
   await page.bringToFront();
   await page.reload();
+  await expect.poll(() => answered.slice(before).includes(0), { timeout: 20_000 }).toBe(true);
   await expect.poll(async () => (await badgeOf(extension, PLAYGROUND_ORIGIN))?.text, { timeout: 20_000 }).toBe('');
+  await extension.context.unrouteAll({ behavior: 'wait' });
 });
