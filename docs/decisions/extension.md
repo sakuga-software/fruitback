@@ -2784,7 +2784,8 @@ menu says « Leave a note on this page » and hands over to the extension.
    sentences of a refusal.
 7. **My notes in the menu**: the list, the status, « Looks fixed » and « Still wrong ».
 8. **The download build**: Developer ID, notarisation, and the accessibility context (selected text,
-   the address of a browser). Measure first: a sandboxed probe given « Accessibility ».
+   the address of a browser). Measure first: a sandboxed probe given « Accessibility ». These two
+   fields leave the Mac for the first time: `SECURITY.md` and `docs/privacy.md` change in the same commit.
 
 ## Releasing the extension (FRU-329)
 
