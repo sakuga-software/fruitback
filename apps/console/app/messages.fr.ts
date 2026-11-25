@@ -287,10 +287,9 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'A workspace': 'Un espace de travail',
   '1 kept note': '1 note gardée',
   '{count} kept notes': '{count} notes gardées',
-  'Sites, members and pin positions go. Items already in your trackers stay there.':
-    'Les sites, les membres et la position des repères disparaissent. Les éléments déjà dans vos outils de suivi y restent.',
+  'Sites, members and pin positions go. Items in your trackers stay there.':
+    'Les sites, les membres et la position des repères disparaissent. Les éléments dans vos outils de suivi y restent.',
   'Keep it': 'Le garder',
-  'Delete workspace': 'Supprimer l’espace de travail',
   'Delete {workspace}': 'Supprimer {workspace}',
 
   'An issue per note, in one repository. The files of a note do not go: GitHub takes none by its API.':
@@ -1201,6 +1200,17 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Workspace settings': 'Réglages de l’espace de travail',
   'Settings that every member of {name} sees.': 'Les réglages que voit chaque membre de {name}.',
   'The name is saved.': 'Le nom est enregistré.',
+  // The page « General » of the settings, FRU-693.
+  'Every member of {name} sees these.': 'Chaque membre de {name} les voit.',
+  Identity: 'Identité',
+  'Workspace URL': 'Adresse de l’espace de travail',
+  'Danger zone': 'Zone de danger',
+  'Delete {workspace}?': 'Supprimer {workspace} ?',
+  'Its sites, its members and the positions of its pins go, for every member, and cannot come back. Items already in your trackers stay there.':
+    'Ses sites, ses membres et la position de ses repères disparaissent pour chaque membre, sans retour possible. Les éléments déjà dans vos outils de suivi y restent.',
+  'Deleting…': 'Suppression…',
+  Upload: 'Envoyer',
+  Replace: 'Remplacer',
   // The pages of the settings, FRU-544.
   General: 'Général',
   AI: 'IA',
@@ -1213,8 +1223,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Removing…': 'Retrait…',
   'The logo is saved.': 'Le logo est enregistré.',
   'The logo is removed.': 'Le logo est retiré.',
-  'PNG, JPEG or WebP, up to 512 KB. It shows beside the name of the workspace, in the rail.':
-    'PNG, JPEG ou WebP, 512 Ko au plus. Il s’affiche à côté du nom de l’espace de travail, dans la barre latérale.',
+  'PNG, JPEG or WebP, up to 512 KB. Shown beside the workspace name.':
+    'PNG, JPEG ou WebP, 512 Ko au plus. Affiché à côté du nom de l’espace de travail.',
   'Only an owner or an admin of the workspace changes its logo.':
     'Seul un propriétaire ou un admin de l’espace de travail change son logo.',
   'Choose a PNG, JPEG or WebP image. SVG is not accepted.':
