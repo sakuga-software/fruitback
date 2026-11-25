@@ -1,6 +1,11 @@
 /*
   The sheet of the popup, which every page of the extension loads first: it brings the theme
   (src/theme.css), so the tokens and their dark scheme are defined once for every page.
+
+  Tailwind writes the rules (@apply, FRU-679), in no cascade layer, as src/kit.css does and for the
+  same reasons, given in its header. A declaration that no utility writes the same stays CSS where
+  it was: a `font` or `transition` shorthand, `border: 0`, `background: none`, a `box-shadow`, a
+  `transform`, the customizable select of Chromium (`appearance`, `::picker`, `anchor-size()`).
 */
 @import '../../src/theme.css';
 
@@ -9,8 +14,7 @@
 }
 
 ::selection {
-  background: var(--color-selection);
-  color: var(--color-text);
+  @apply bg-selection text-text;
 }
 
 /*
@@ -19,21 +23,17 @@
   A label never breaks inside its words: a button (below), a switch, a tab and a key stay on one line.
 */
 body {
-  overflow-wrap: anywhere;
+  @apply wrap-anywhere;
 }
 
 [role='switch'],
 [role='tab'],
 kbd {
-  white-space: nowrap;
+  @apply whitespace-nowrap;
 }
 
 body {
-  margin: 0;
-  min-width: 280px;
-  padding: 14px;
-  background: var(--color-surface);
-  color: var(--color-text);
+  @apply m-0 min-w-[280px] p-[14px] bg-surface text-text;
   font:
     13px/1.5 system-ui,
     -apple-system,
@@ -42,146 +42,109 @@ body {
 }
 
 h1 {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 0 0 2px;
-  font-size: 13px;
-  font-weight: 600;
+  @apply flex items-center gap-[6px] mt-0 mx-0 mb-[2px] text-[13px] font-semibold;
 }
 
 /* The drop of the mark beside the name, in the accent of the light scheme in both schemes, as the mock-up of 2026-10-20 draws it. */
 h1::before {
   content: '';
-  flex: none;
-  width: 14px;
-  height: 14px;
+  @apply flex-none w-[14px] h-[14px];
   background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 128 128'%3E%3Cpath d='M 64 121.9 L 30.1 87.9 A 48 48 0 1 1 97.9 87.9 Z' fill='%23dd2c27'/%3E%3C/svg%3E")
     center / contain no-repeat;
 }
 
 .origin {
-  margin: 0 0 12px;
-  color: var(--color-muted);
-  overflow-wrap: anywhere;
+  @apply mt-0 mx-0 mb-[12px] text-muted wrap-anywhere;
 }
 
 .row {
-  display: flex;
+  @apply flex;
   /* The buttons go under the words when the row has no room for both: French is a third longer, and
      the popup starts at 280px (FRU-169). */
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px 12px;
-  padding-top: 10px;
-  border-top: 1px solid var(--color-line);
+  @apply flex-wrap items-center justify-between gap-y-[8px] gap-x-[12px] pt-[10px] border-t border-t-line;
 }
 
 /* The words give way, not the button beside them: a name can be an address of 40 characters. */
 .row > .state {
-  flex: 1 1 7rem;
-  min-width: 0;
-  overflow-wrap: anywhere;
+  @apply flex-[1_1_7rem] min-w-0 wrap-anywhere;
 }
 
 /* Two buttons that touch read as one control, and one of them turns the site off. */
 .actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  @apply flex flex-wrap gap-[8px];
 }
 
 /* A button of the popup itself, under what the screen says: the same space above it. */
 #app > button,
 #app > .actions {
-  margin-top: 8px;
+  @apply mt-[8px];
 }
 
 label {
-  display: block;
-  margin-bottom: 8px;
+  @apply block mb-[8px];
 }
 
 select,
 input[type='text'] {
-  box-sizing: border-box;
-  width: 100%;
-  margin-top: 3px;
-  padding: 6px 10px;
+  @apply box-border w-full mt-[3px] py-[6px] px-[10px];
   /* The edge of a field needs 3:1 on the surface (WCAG 1.4.11): the strong line, as in the widget. */
-  border: 1px solid var(--color-line-strong);
-  border-radius: var(--radius-field);
-  background: var(--color-surface);
-  color: inherit;
+  @apply border border-line-strong rounded-field bg-surface text-inherit;
   font: inherit;
 }
 
 /* An action is a pill, as on the boards. */
 button {
-  padding: 6px 14px;
+  @apply py-[6px] px-[14px];
   border: 0;
-  border-radius: var(--radius-pill);
-  background: var(--color-accent);
-  color: var(--color-on-accent);
+  @apply rounded-pill bg-accent text-on-accent;
   font: inherit;
-  font-weight: 600;
+  @apply font-semibold;
   /* A button stays on one line. */
-  white-space: nowrap;
-  cursor: pointer;
+  @apply whitespace-nowrap cursor-pointer;
 }
 
 /* A pill of several lines would be a lozenge: a long label takes the corner of a field. */
 button.long {
-  border-radius: var(--radius-field);
-  white-space: normal;
-  text-align: start;
+  @apply rounded-field whitespace-normal text-start;
 }
 
 .state {
-  margin: 0;
-  color: var(--color-muted);
+  @apply m-0 text-muted;
 }
 
 /* FRU-289: the e-mail of a session with no name, under « Paired », in the secondary text. */
 .identity-email {
-  font-size: 12px;
-  overflow-wrap: anywhere;
+  @apply text-[12px] wrap-anywhere;
 }
 
 .problem {
-  margin: 8px 0 0;
-  color: var(--color-accent);
+  @apply mt-[8px] mx-0 mb-0 text-accent;
 }
 
 .destination-saved:empty {
-  display: none;
+  @apply hidden;
 }
 
 .destination-saved {
-  margin: 8px 0 0;
+  @apply mt-[8px] mx-0 mb-0;
 }
 
 /* The pairing block sits under the site row, which already draws the separator above it. */
 .session label {
-  margin-top: 10px;
+  @apply mt-[10px];
 }
 
 /* The second button in a row, which must not read as the one somebody came here to press. */
 button.secondary {
-  background: transparent;
-  color: var(--color-muted);
+  @apply bg-transparent text-muted;
   box-shadow: inset 0 0 0 1px var(--color-line);
 }
 
 /* The one thing to do about a problem, beside the words that state it (FRU-90). */
 button.remedy {
-  margin-inline-start: 4px;
-  padding: 2px 10px;
-  background: transparent;
-  color: inherit;
+  @apply ms-[4px] py-[2px] px-[10px] bg-transparent text-inherit;
   box-shadow: inset 0 0 0 1px currentColor;
-  font-weight: 600;
+  @apply font-semibold;
 }
 
 /*
@@ -190,48 +153,29 @@ button.remedy {
   to the next. Everything is under `.popup`: the options page loads this file and draws none of it.
 */
 body.popup-page {
-  min-width: 0;
-  padding: 0;
-  -webkit-font-smoothing: antialiased;
+  @apply min-w-0 p-0 antialiased;
 }
 
 .popup {
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  width: 380px;
-  min-height: 580px;
-  font-size: 14px;
-  line-height: 1.5;
+  @apply box-border flex flex-col w-[380px] min-h-[580px] text-[14px] leading-[1.5];
 }
 
 .popup-body {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  gap: 14px;
-  padding: 20px 16px 16px;
+  @apply flex flex-auto flex-col gap-[14px] pt-[20px] px-[16px] pb-[16px];
 }
 
 .popup-body > p,
 .popup-body > h1 {
-  margin: 0;
+  @apply m-0;
 }
 
 .popup .host {
-  color: var(--color-muted);
-  overflow-wrap: anywhere;
+  @apply text-muted wrap-anywhere;
 }
 
 /* The title of a screen. No pin before it: the logo of the head is the mark. */
 .popup h1 {
-  display: block;
-  margin: 0;
-  font-size: 18px;
-  line-height: 1.3;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  overflow-wrap: anywhere;
+  @apply block m-0 text-[18px] leading-[1.3] font-bold tracking-[-0.01em] wrap-anywhere;
 }
 
 .popup h1::before {
@@ -239,43 +183,35 @@ body.popup-page {
 }
 
 .popup .lead {
-  font-size: 14px;
-  line-height: 1.5;
-  color: var(--color-muted);
+  @apply text-[14px] leading-[1.5] text-muted;
 }
 
 /* The one thing a screen is for: the main button of the kit, 6 px under what the screen says. */
 .popup .popup-body > .action {
-  margin-top: 6px;
+  @apply mt-[6px];
 }
 
 /* A link that does something here rather than going somewhere: a button that reads as a link. */
 .popup button.link-button,
 .welcome button.link-button {
-  padding: 0;
-  border-radius: 0;
+  @apply p-0 rounded-none;
   background: none;
-  color: var(--color-text);
-  font-weight: 600;
-  text-decoration: underline;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 3px;
-  white-space: normal;
+  @apply text-text font-semibold underline decoration-[1px] underline-offset-[3px] whitespace-normal;
 }
 
 .popup-body > button.link-button {
-  align-self: flex-start;
+  @apply self-start;
 }
 
 /* In a sentence, as the link of the mock-up: the box of its text, not of a line. */
 .popup-foot button.link-button {
-  line-height: 16px;
+  @apply leading-[16px];
 }
 
 .popup button.link-button:hover,
 .welcome button.link-button:hover,
 .popup-foot a:hover {
-  color: var(--color-accent);
+  @apply text-accent;
 }
 
 /* The word the console shows too: big, spaced, and in a face where 0 and O differ. */
@@ -286,13 +222,11 @@ body.popup-page {
     SFMono-Regular,
     Menlo,
     monospace;
-  letter-spacing: 0.08em;
+  @apply tracking-[0.08em];
 }
 
 .popup-foot {
-  padding: 14px 16px;
-  border-top: 1px solid var(--color-line);
-  color: var(--color-muted);
+  @apply py-[14px] px-[16px] border-t border-t-line text-muted;
 }
 
 /*
@@ -300,128 +234,85 @@ body.popup-page {
   ways to sign in, and the line for an invitation at the foot of the body.
 */
 .popup-screen-1 .popup-body {
-  gap: 24px;
-  padding: 32px 24px 24px;
+  @apply gap-[24px] pt-[32px] px-[24px] pb-[24px];
 }
 
 .popup-screen-1 .popup-foot {
-  padding: 14px 24px;
-  font-size: 13px;
+  @apply py-[14px] px-[24px] text-[13px];
 }
 
 .popup-screen-1 h1 {
-  font-size: 22px;
-  line-height: 1.2;
-  letter-spacing: -0.015em;
-  text-wrap: balance;
+  @apply text-[22px] leading-[1.2] tracking-[-0.015em] text-balance;
 }
 
 .popup .intro {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  @apply flex flex-col gap-[8px];
 }
 
 .popup .intro .lead {
-  margin: 0;
-  color: var(--color-ink-soft);
+  @apply m-0 text-ink-soft;
 }
 
 /* The steps of a page of the browser (FRU-526): what to do, one line each, the keys in the text. */
 .popup .not-web-steps {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin: 0;
-  padding-inline-start: 20px;
-  font-size: 14px;
-  line-height: 1.45;
+  @apply flex flex-col gap-[10px] m-0 ps-[20px] text-[14px] leading-[1.45];
 }
 
 .popup .not-web-steps .kit-keys {
-  white-space: nowrap;
+  @apply whitespace-nowrap;
 }
 
 .popup .methods {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  @apply flex flex-col gap-[10px];
 }
 
 .popup .method-row,
 .welcome .method-row {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  @apply grid grid-cols-[repeat(2,minmax(0,1fr))] gap-[10px];
 }
 
 .popup .invited {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-top: auto;
-  color: var(--color-ink-soft);
-  font-size: 13px;
+  @apply flex flex-col gap-[4px] mt-auto text-ink-soft text-[13px];
 }
 
 /* The foot of screen 1 leads to the page of the extension: a link in the accent. */
 .popup-screen-1 .popup-foot button.link-button {
-  color: var(--color-accent);
-  font-weight: 400;
+  @apply text-accent font-normal;
 }
 
 /* 4 · A problem, with its fix (FRU-297): 24 px around, 22 between the blocks. */
 .popup-screen-4 .popup-body {
-  gap: 22px;
-  padding: 24px;
+  @apply gap-[22px] p-[24px];
 }
 
 .popup-screen-4 .action-block {
-  gap: 10px;
+  @apply gap-[10px];
 }
 
 .popup-foot-account {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 16px;
+  @apply flex justify-between gap-[12px] py-[12px] px-[16px];
 }
 
 /* « Log out » of a pairing, beside a long name (FRU-319): the name gives way, the link keeps one line. */
 .popup-foot-account button.link-button {
-  flex: none;
-  min-height: 24px;
-  white-space: nowrap;
+  @apply flex-none min-h-[24px] whitespace-nowrap;
 }
 
 .popup-foot .who {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  @apply min-w-0 overflow-hidden text-ellipsis whitespace-nowrap;
 }
 
 .popup-foot a {
-  color: var(--color-text);
-  font-weight: 600;
-  white-space: nowrap;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 3px;
+  @apply text-text font-semibold whitespace-nowrap decoration-[1px] underline-offset-[3px];
 }
 
 /* The action, at the foot of the body: the screen reads top down, and the button waits at the end. */
 .popup .action-block {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: auto;
+  @apply flex flex-col gap-[8px] mt-auto;
 }
 
 .popup .action-block .note {
-  margin: 0;
-  font-size: 12px;
-  color: var(--color-muted);
-  text-align: center;
+  @apply m-0 text-[12px] text-muted text-center;
 }
 
 /*
@@ -429,27 +320,19 @@ body.popup-page {
   the terms of the kit, and « Turn on » with its line at the foot.
 */
 .popup-screen-2 .popup-body {
-  gap: 22px;
-  padding: 24px;
+  @apply gap-[22px] p-[24px];
 }
 
 .popup-screen-2 h1 {
-  font-size: 22px;
-  line-height: 1.2;
-  letter-spacing: -0.015em;
-  text-wrap: balance;
+  @apply text-[22px] leading-[1.2] tracking-[-0.015em] text-balance;
 }
 
 .popup-screen-2 .action-block .note {
-  font-size: 13px;
-  color: var(--color-ink-soft);
+  @apply text-[13px] text-ink-soft;
 }
 
 :is(.popup-screen-2, .popup-site-on) .kit-dl select {
-  height: 34px;
-  margin: 2px 0 0;
-  padding: 0 10px;
-  font-size: 14px;
+  @apply h-[34px] mt-[2px] mx-0 mb-0 py-0 px-[10px] text-[14px];
 }
 
 /*
@@ -465,27 +348,20 @@ body.popup-page {
   }
 
   :is(.popup-screen-2, .popup-site-on) .kit-dl select {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 0 12px 0 10px;
+    @apply flex items-center gap-[8px] pt-0 pr-[12px] pb-0 pl-[10px];
     transition:
       border-color 0.15s,
       box-shadow 0.15s;
   }
 
   :is(.popup-screen-2, .popup-site-on) .kit-dl select:hover:not(:disabled) {
-    border-color: var(--color-ink);
+    @apply border-ink;
   }
 
   /* The arrow: a chevron drawn by two borders, at the right edge, never over the words. */
   :is(.popup-screen-2, .popup-site-on) .kit-dl select::picker-icon {
     content: '';
-    flex: none;
-    box-sizing: border-box;
-    width: 7px;
-    height: 7px;
-    margin: -3px 2px 0 auto;
+    @apply flex-none box-border w-[7px] h-[7px] mt-[-3px] mr-[2px] mb-0 ml-auto;
     border: solid currentColor;
     border-width: 0 1.5px 1.5px 0;
     rotate: 45deg;
@@ -495,46 +371,33 @@ body.popup-page {
   }
 
   :is(.popup-screen-2, .popup-site-on) .kit-dl select:open::picker-icon {
-    margin-top: 3px;
+    @apply mt-[3px];
     rotate: 225deg;
   }
 
   /* The field shows the option chosen: its mark and its words, cut with « … » when they are long. */
   :is(.popup-screen-2, .popup-site-on) .kit-dl select > button {
     all: unset;
-    display: flex;
-    flex: 1;
-    align-items: center;
-    min-width: 0;
+    @apply flex flex-1 items-center min-w-0;
   }
 
   :is(.popup-screen-2, .popup-site-on) .kit-dl selectedcontent,
   :is(.popup-screen-2, .popup-site-on) .kit-dl select option {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-width: 0;
+    @apply flex items-center gap-[8px] min-w-0;
   }
 
   :is(.popup-screen-2, .popup-site-on) .kit-dl .choice-label {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    @apply overflow-hidden text-ellipsis whitespace-nowrap;
   }
 
   /* The menu opens under the field, fading and sliding 4 px. */
   /* As wide as its field, under it: a long name is cut, never out of the popup. */
   :is(.popup-screen-2, .popup-site-on) .kit-dl select::picker(select) {
-    box-sizing: border-box;
+    @apply box-border;
     width: anchor-size(width);
-    max-height: 260px;
-    margin-top: 4px;
-    padding: 4px;
-    border: 1px solid var(--color-line-strong);
-    border-radius: var(--radius-field);
-    background: var(--color-surface);
+    @apply max-h-[260px] mt-[4px] p-[4px] border border-line-strong rounded-field bg-surface;
     box-shadow: var(--shadow-popup);
-    opacity: 0;
+    @apply opacity-0;
     translate: 0 -4px;
     transition:
       opacity 0.15s ease,
@@ -544,72 +407,61 @@ body.popup-page {
   }
 
   :is(.popup-screen-2, .popup-site-on) .kit-dl select:open::picker(select) {
-    opacity: 1;
+    @apply opacity-100;
     translate: 0 0;
   }
 
   @starting-style {
     :is(.popup-screen-2, .popup-site-on) .kit-dl select:open::picker(select) {
-      opacity: 0;
+      @apply opacity-0;
       translate: 0 -4px;
     }
   }
 
   :is(.popup-screen-2, .popup-site-on) .kit-dl select option {
-    padding: 8px 10px;
+    @apply py-[8px] px-[10px];
     border-radius: calc(var(--radius-field) - 2px);
   }
 
   :is(.popup-screen-2, .popup-site-on) .kit-dl select option:hover,
   :is(.popup-screen-2, .popup-site-on) .kit-dl select option:focus-visible {
-    background: var(--color-line-row);
+    @apply bg-line-row;
   }
 
   :is(.popup-screen-2, .popup-site-on) .kit-dl select option::checkmark {
-    order: 1;
-    margin-left: auto;
+    @apply order-1 ml-auto;
   }
 }
 
 /* A line of the lists that has nothing to choose yet, or any more. */
 :is(.popup-screen-2, .popup-site-on) .kit-dl-entry[hidden] {
-  display: none;
+  @apply hidden;
 }
 
 /* « Notes go to » (FRU-530): the mark of the provider, then the place, on one line. */
 .popup .destination-value {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  font-weight: 600;
+  @apply flex items-center gap-[8px] min-w-0 font-semibold;
 }
 
 .popup .destination-place {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  @apply overflow-hidden text-ellipsis whitespace-nowrap;
 }
 
 .popup .site-destination:empty {
-  display: none;
+  @apply hidden;
 }
 
 /* FRU-633: the tracker of the place refuses the connection. In the accent, as a problem. */
 .popup .site-refused {
-  margin-top: 8px;
-  color: var(--color-accent-strong);
-  font-size: 12px;
-  line-height: 1.4;
+  @apply mt-[8px] text-accent-strong text-[12px] leading-[1.4];
 }
 
 .popup .site-refused p {
-  margin: 0;
+  @apply m-0;
 }
 
 .popup .site-refused .site-refused-who {
-  margin-top: 4px;
-  color: var(--color-muted);
+  @apply mt-[4px] text-muted;
 }
 
 /*
@@ -623,20 +475,18 @@ body.popup-page {
     translate 0.18s ease;
 
   @starting-style {
-    opacity: 0;
+    @apply opacity-0;
     translate: 0 -4px;
   }
 }
 
 .source-mark {
-  flex: none;
-  width: 14px;
-  height: 14px;
+  @apply flex-none w-[14px] h-[14px];
 }
 
 /* The drop of « Fruitback (no tracker) » in the red of the mark. */
 .source-mark[data-kind='fruitback'] {
-  color: var(--color-accent);
+  @apply text-accent;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -654,339 +504,212 @@ body.popup-page {
   with what waits. The popup is as high as what it holds: no frame half empty.
 */
 .popup.popup-site-on {
-  min-height: 0;
+  @apply min-h-0;
 }
 
 .popup-screen-3 .popup-body {
-  gap: 16px;
-  padding: 18px 20px 20px;
+  @apply gap-[16px] pt-[18px] px-[20px] pb-[20px];
 }
 
 .popup .site-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+  @apply flex items-center gap-[12px];
 }
 
 .popup .site-row .kit-site {
-  flex: 1 1 auto;
-  min-width: 0;
+  @apply flex-auto min-w-0;
 }
 
 .popup .popup-icon {
-  width: 18px;
-  height: 18px;
+  @apply w-[18px] h-[18px];
 }
 
 /* The site is on: a mark of the size of « ⋯ », in the green of a site that works. */
 .popup .site-on-mark {
-  flex: none;
-  box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border: 1px solid var(--color-success-line);
-  border-radius: var(--radius-action);
-  color: var(--color-success);
+  @apply flex-none box-border flex items-center justify-center w-[32px] h-[32px] border border-success-line rounded-action text-success;
 }
 
 /* The menu « ⋯ » of the kit (FRU-599): over the screen, under its button, at the end of the line. */
 .popup .kit-menu {
-  position: relative;
-  flex: none;
+  @apply relative flex-none;
 }
 
 .popup .kit-menu-trigger {
-  box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  min-height: 32px;
-  height: 32px;
-  padding: 0;
-  border-radius: var(--radius-action);
+  @apply box-border flex items-center justify-center w-[32px] min-h-[32px] h-[32px] p-0 rounded-action;
 }
 
 .popup .kit-menu-list {
-  position: absolute;
-  z-index: 2;
-  top: calc(100% + 6px);
-  right: 0;
-  display: flex;
-  flex-direction: column;
-  width: 260px;
-  padding: 6px;
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-card);
-  background: var(--color-surface);
+  @apply absolute z-2 top-[calc(100%+6px)] right-0 flex flex-col w-[260px] p-[6px] border border-line rounded-card bg-surface;
   box-shadow: var(--shadow-popup);
 }
 
 .popup .kit-menu-list[hidden] {
-  display: none;
+  @apply hidden;
 }
 
 .popup .kit-menu-item {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-height: 44px;
-  padding: 8px 10px;
+  @apply flex flex-col gap-[2px] min-h-[44px] py-[8px] px-[10px];
   border: none;
-  border-radius: var(--radius-field);
+  @apply rounded-field;
   background: none;
-  color: var(--color-text);
+  @apply text-text;
   font: inherit;
-  text-align: left;
-  cursor: pointer;
+  @apply text-left cursor-pointer;
 }
 
 .popup .kit-menu-item[hidden] {
-  display: none;
+  @apply hidden;
 }
 
 .popup .kit-menu-item:hover,
 .popup .kit-menu-item:focus-visible {
-  background: var(--color-surface-sunken);
+  @apply bg-surface-sunken;
 }
 
 .popup .kit-menu-label {
-  font-size: 14px;
-  font-weight: 600;
+  @apply text-[14px] font-semibold;
 }
 
 .popup .kit-menu-detail {
-  color: var(--color-muted);
-  font-size: 12px;
-  line-height: 1.4;
+  @apply text-muted text-[12px] leading-[1.4];
 }
 
 /* « Sent to »: the mark, the provider and its place on one line, cut with « … », and the pencil. */
 .popup .site-destination:not(:empty) {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 44px;
-  box-sizing: border-box;
-  padding: 6px 6px 6px 12px;
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-action);
-  background: var(--color-surface-raised);
+  @apply flex items-center gap-[8px] min-h-[44px] box-border pt-[6px] pr-[6px] pb-[6px] pl-[12px] border border-line rounded-action bg-surface-raised;
 }
 
 .popup .site-destination:has(> .kit-dl) {
-  display: block;
-  padding: 0;
+  @apply block p-0;
   border: none;
   background: none;
 }
 
 .popup .site-destination:empty {
-  display: none;
+  @apply hidden;
 }
 
 .popup .destination-label {
-  flex: none;
-  color: var(--color-muted);
-  font-size: 12px;
+  @apply flex-none text-muted text-[12px];
 }
 
 .popup .site-destination .destination-place {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  font-size: 13px;
-  font-weight: 600;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  @apply flex-auto min-w-0 overflow-hidden text-[13px] font-semibold whitespace-nowrap text-ellipsis;
 }
 
 .popup .destination-change {
-  flex: none;
-  box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  min-height: 32px;
-  height: 32px;
-  margin-left: auto;
-  padding: 0;
-  border-radius: var(--radius-field);
+  @apply flex-none box-border flex items-center justify-center w-[32px] min-h-[32px] h-[32px] ml-auto p-0 rounded-field;
 }
 
 .popup .hidden-line {
-  margin: 0;
-  font-size: 14px;
-  color: var(--color-muted);
+  @apply m-0 text-[14px] text-muted;
 }
 
 /* Under the row of a rule, apart from its buttons. */
 .popup .row + .hidden-line {
-  margin-top: 12px;
+  @apply mt-[12px];
 }
 
 .popup .leave-block {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  @apply flex flex-col gap-[8px];
 }
 
 /* The side panel, and what waits in it: a row of the height of a target, the counts under its name. */
 .popup .panel-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  min-height: 60px;
-  padding: 12px 14px;
-  border: 1px solid var(--color-line-control);
-  border-radius: var(--radius-card);
-  background: var(--color-surface);
-  color: var(--color-text);
+  @apply flex items-center gap-[12px] w-full min-h-[60px] py-[12px] px-[14px] border border-line-control rounded-card bg-surface text-text;
   font: inherit;
-  text-align: left;
-  cursor: pointer;
+  @apply text-left cursor-pointer;
 }
 
 .popup .panel-row:hover:not(:disabled) {
-  border-color: var(--color-ink);
+  @apply border-ink;
 }
 
 .popup .panel-row:disabled {
-  opacity: 0.5;
-  cursor: default;
+  @apply opacity-50 cursor-default;
 }
 
 .popup .panel-row-tile {
-  flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: var(--radius-action);
-  background: var(--color-surface-sunken);
+  @apply flex-none flex items-center justify-center w-[36px] h-[36px] rounded-action bg-surface-sunken;
 }
 
 .popup .panel-row-tile .popup-icon {
-  width: 22px;
-  height: 22px;
+  @apply w-[22px] h-[22px];
 }
 
 .popup .panel-row-words {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
+  @apply flex flex-auto flex-col gap-[2px] min-w-0;
 }
 
 .popup .panel-row-title {
-  font-size: 14px;
-  font-weight: 650;
+  @apply text-[14px] font-[650];
 }
 
 .popup .panel-counts {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--color-muted);
-  font-size: 12px;
+  @apply flex items-center gap-[6px] text-muted text-[12px];
 }
 
 .popup .panel-counts:empty {
-  display: none;
+  @apply hidden;
 }
 
 .popup .panel-counts-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: var(--radius-pill);
-  background: var(--color-status-done);
+  @apply w-[7px] h-[7px] rounded-pill bg-status-done;
 }
 
 .popup .panel-row-caret {
-  flex: none;
-  color: var(--color-muted);
+  @apply flex-none text-muted;
 }
 
 /* The square of « Hide Fruitback on this page » of the screen of a rule (FRU-590). */
 .popup .icon-button {
-  flex: none;
-  padding: 0 12px;
+  @apply flex-none py-0 px-[12px];
 }
 
 /* The host as the title of screen 3: the size of the host of the kit, not of a title. */
 .popup h1.kit-site-host {
-  font-size: 15px;
-  font-weight: 650;
-  line-height: 1.4;
+  @apply text-[15px] font-[650] leading-[1.4];
   letter-spacing: 0;
 }
 
 /* 12 px under the button, as the mock-up has it: 20 of the column less 12. */
 .popup .shortcut-line {
-  margin: 0;
-  color: var(--color-ink-soft);
-  font-size: 13px;
-  text-align: center;
+  @apply m-0 text-ink-soft text-[13px] text-center;
 }
 
 .popup .action-block .kit-secondary {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
+  @apply inline-flex items-center justify-center gap-[8px];
 }
 
 .popup .panel-icon {
-  width: 20px;
-  height: 20px;
+  @apply w-[20px] h-[20px];
 }
 
 /* A line that says nothing takes no gap of the column: the boxes stay where the mock-up has them. */
 .popup-body > .problem:empty,
 .popup .action-block > .problem:empty {
-  display: none;
+  @apply hidden;
 }
 
 /* The form of a rule (the fields, asked for). */
 .popup .site-form {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  gap: 16px;
+  @apply flex flex-auto flex-col gap-[16px];
 }
 
 .popup .site-form > p {
-  margin: 0;
+  @apply m-0;
 }
 
 .popup label.field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin: 0;
-  font-size: 13px;
-  font-weight: 600;
+  @apply flex flex-col gap-[6px] m-0 text-[13px] font-semibold;
 }
 
 .popup label.field select {
-  height: 40px;
-  margin: 0;
-  padding: 0 12px;
-  font-size: 14px;
-  font-weight: 400;
+  @apply h-[40px] m-0 py-0 px-[12px] text-[14px] font-normal;
 }
 
 /* FRU-519: the line of a new release, above the foot. */
 .popup > .kit-update {
-  padding: 0 16px;
-  border-top: 1px solid var(--color-line);
+  @apply py-0 px-[16px] border-t border-t-line;
 }
 
 /*
@@ -994,243 +717,144 @@ body.popup-page {
   to screen 3; a card for each source, the lists of the card chosen under its name; « Save » last.
 */
 .popup.popup-destination {
-  min-height: 0;
+  @apply min-h-0;
 }
 
 .popup .destination-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  @apply flex items-center gap-[8px];
 }
 
 .popup .destination-back {
-  box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  min-height: 32px;
-  height: 32px;
-  padding: 0;
-  border-color: transparent;
-  border-radius: var(--radius-field);
+  @apply box-border flex items-center justify-center w-[32px] min-h-[32px] h-[32px] p-0 border-transparent rounded-field;
 }
 
 .popup .destination-title {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 700;
+  @apply m-0 text-[15px] font-bold;
 }
 
 .popup-destination .popup-body {
-  gap: 10px;
-  padding: 16px 20px;
+  @apply gap-[10px] py-[16px] px-[20px];
 }
 
 .popup .destination-intro {
-  margin: 0;
-  color: var(--color-ink-soft);
-  font-size: 12px;
+  @apply m-0 text-ink-soft text-[12px];
 }
 
 .popup .destination-intro strong {
-  color: var(--color-text);
-  font-weight: 600;
+  @apply text-text font-semibold;
 }
 
 .popup .destination-cards {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  @apply flex flex-col gap-[10px];
 }
 
 .popup .destination-card {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 12px;
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-action);
-  background: var(--color-surface);
-  cursor: pointer;
+  @apply flex flex-col gap-[10px] p-[12px] border border-line rounded-action bg-surface cursor-pointer;
 }
 
 .popup .destination-card.is-chosen {
-  border: 1.5px solid var(--color-accent);
-  background: var(--color-alert-surface);
+  @apply border-[1.5px] border-accent bg-alert-surface;
 }
 
 .popup .destination-card:has(input:focus-visible) {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
+  @apply outline-2 outline-accent;
+  @apply outline-offset-[2px];
 }
 
 .popup .destination-card-line {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+  @apply flex items-center gap-[10px];
 }
 
 .popup .destination-card-tile {
-  flex: none;
-  box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-control);
-  background: var(--color-surface-sunken);
+  @apply flex-none box-border flex items-center justify-center w-[24px] h-[24px] border border-line rounded-control bg-surface-sunken;
 }
 
 .popup .destination-card-tile .source-mark {
-  width: 14px;
-  height: 14px;
+  @apply w-[14px] h-[14px];
 }
 
 .popup .destination-card-words {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
+  @apply flex flex-auto flex-col gap-[2px] min-w-0;
 }
 
 .popup .destination-card-name {
-  font-size: 14px;
-  font-weight: 650;
+  @apply text-[14px] font-[650];
 }
 
 .popup .destination-card-detail {
-  overflow: hidden;
-  color: var(--color-ink-soft);
-  font-size: 12px;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  @apply overflow-hidden text-ink-soft text-[12px] whitespace-nowrap text-ellipsis;
 }
 
 .popup .destination-radio {
-  flex: none;
-  width: 18px;
-  height: 18px;
-  margin: 0;
-  accent-color: var(--color-accent);
+  @apply flex-none w-[18px] h-[18px] m-0;
+  @apply accent-accent;
 }
 
 .popup .destination-lists {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  padding-left: 34px;
+  @apply grid grid-cols-[repeat(2,minmax(0,1fr))] gap-[8px] pl-[34px];
 }
 
 .popup .destination-lists[hidden],
 .popup .destination-field[hidden] {
-  display: none;
+  @apply hidden;
 }
 
 .popup .destination-field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-  color: var(--color-ink-soft);
-  font-size: 12px;
-  font-weight: 600;
+  @apply flex flex-col gap-[4px] min-w-0 text-ink-soft text-[12px] font-semibold;
 }
 
 .popup .destination-field select {
-  box-sizing: border-box;
-  width: 100%;
-  height: 38px;
-  padding: 0 10px;
-  border: 1px solid var(--color-line-strong);
-  border-radius: var(--radius-field);
-  background: var(--color-surface);
-  color: var(--color-text);
+  @apply box-border w-full h-[38px] py-0 px-[10px] border border-line-strong rounded-field bg-surface text-text;
   font: 600 13px / 1 var(--font-ui);
 }
 
 .popup .destination-connect {
-  align-self: flex-start;
-  font-size: 12px;
+  @apply self-start text-[12px];
 }
 
 .popup .destination-foot {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin: 4px -20px -16px;
-  padding: 12px 20px 16px;
-  border-top: 1px solid var(--color-line);
+  @apply flex flex-col gap-[10px] mt-[4px] mx-[-20px] mb-[-16px] pt-[12px] px-[20px] pb-[16px] border-t border-t-line;
 }
 
 .popup .destination-kept {
-  margin: 0;
-  color: var(--color-ink-soft);
-  font-size: 12px;
+  @apply m-0 text-ink-soft text-[12px];
 }
 
 .popup .destination-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
+  @apply flex justify-end gap-[8px];
 }
 
 .popup .destination-locked {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px;
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-action);
-  background: var(--color-surface-raised);
+  @apply flex items-center gap-[10px] p-[12px] border border-line rounded-action bg-surface-raised;
 }
 
 .popup .destination-lock {
-  flex: none;
-  color: var(--color-muted);
+  @apply flex-none text-muted;
 }
 
 .popup .destination-why,
 .popup .destination-copied {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.5;
+  @apply m-0 text-[13px] leading-[1.5];
 }
 
 .popup .destination-copied:empty {
-  display: none;
+  @apply hidden;
 }
 
 /* The confirmation of a change, on screen 3: it leaves after its time, the bar shows what is left. */
 .popup .change-notice {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  overflow: hidden;
-  padding: 10px 12px;
-  border-radius: var(--radius-action);
+  @apply relative flex items-center gap-[8px] overflow-hidden py-[10px] px-[12px] rounded-action;
   background: color-mix(in srgb, var(--color-success) 12%, var(--color-surface));
-  color: var(--color-success);
-  font-size: 13px;
-  font-weight: 600;
+  @apply text-success text-[13px] font-semibold;
   transition:
     opacity 200ms ease,
     max-height 200ms ease,
     padding 200ms ease;
-  max-height: 80px;
+  @apply max-h-[80px];
 }
 
 .popup .change-notice-time {
-  position: absolute;
-  left: 0;
-  bottom: 0;
-  height: 3px;
-  width: 100%;
-  background: var(--color-success-line);
+  @apply absolute left-0 bottom-0 h-[3px] w-full bg-success-line;
   transform-origin: left;
   animation: change-notice-time linear forwards;
 }
@@ -1240,10 +864,7 @@ body.popup-page {
 }
 
 .popup .change-notice.is-leaving {
-  max-height: 0;
-  padding-top: 0;
-  padding-bottom: 0;
-  opacity: 0;
+  @apply max-h-0 pt-0 pb-0 opacity-0;
 }
 
 @keyframes change-notice-time {
@@ -1266,40 +887,28 @@ body.popup-page {
 
 /* P2 of FRU-598: what the defaults of « Turn on » do, in a card, with the link that changes them. */
 .popup .turn-on-summary {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  padding: 12px 14px 0;
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-action);
+  @apply flex flex-col items-start gap-[2px] pt-[12px] px-[14px] pb-0 border border-line rounded-action;
 }
 
 /* One line for each fact, the term before its value, with no rule between them. */
 .popup .turn-on-summary .kit-dl {
-  align-self: stretch;
-  gap: 6px;
+  @apply self-stretch gap-[6px];
   border: 0;
 }
 
 .popup .turn-on-summary .kit-dl-entry {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  column-gap: 6px;
-  padding: 0;
+  @apply flex flex-wrap items-center gap-x-[6px] p-0;
   border: 0;
-  font-size: 13px;
+  @apply text-[13px];
 }
 
 .popup .turn-on-summary .kit-dl-entry > dd {
-  font-weight: 600;
+  @apply font-semibold;
 }
 
 /* The word of the link lines up with the facts: the 8 px of its target go out of the card. */
 .popup .turn-on-summary .kit-text {
-  margin-inline-start: -8px;
-  font-size: 13px;
+  @apply ms-[-8px] text-[13px];
 }
 
 /* The workspace of a site of no workspace: a field of its own, before the card. */
@@ -1308,40 +917,26 @@ body.popup-page {
 }
 
 .popup .turn-on-workspace .kit-dl-entry {
-  padding: 0;
+  @apply p-0;
 }
 
 /* P2 of FRU-598: the message for an admin, to read and to copy. */
 .popup .admin-message {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin: 0;
-  color: var(--color-muted);
-  font-size: 12px;
+  @apply flex flex-col gap-[6px] m-0 text-muted text-[12px];
 }
 
 .popup .admin-message textarea {
-  box-sizing: border-box;
-  width: 100%;
-  padding: 10px 12px;
+  @apply box-border w-full py-[10px] px-[12px];
   /* The edge of a field needs 3:1 on the surface (WCAG 1.4.11). */
-  border: 1px solid var(--color-line-strong);
-  border-radius: var(--radius-field);
-  background: var(--color-surface);
-  color: var(--color-text);
+  @apply border border-line-strong rounded-field bg-surface text-text;
   font: inherit;
-  font-size: 13px;
-  line-height: 1.45;
-  resize: none;
+  @apply text-[13px] leading-[1.45] resize-none;
 }
 
 .popup .admin-copied {
-  margin: 0;
-  font-size: 13px;
-  text-align: center;
+  @apply m-0 text-[13px] text-center;
 }
 
 .popup .admin-copied:empty {
-  display: none;
+  @apply hidden;
 }
