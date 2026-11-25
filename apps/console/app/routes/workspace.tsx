@@ -212,9 +212,9 @@ export default function WorkspaceFrame() {
  */
 export function Frame({ rail, children }: { rail: ReactNode; children?: ReactNode }) {
   return (
-    <div className="flex min-h-screen bg-page text-ink max-[1023px]:flex-col">
+    <div className="flex min-h-screen bg-page text-ink max-[1024px]:flex-col">
       {rail}
-      <div className="flex min-w-0 flex-[999_1_640px] flex-col max-[1023px]:flex-[1_0_auto]">{children}</div>
+      <div className="flex min-w-0 flex-[999_1_640px] flex-col max-[1024px]:flex-[1_0_auto]">{children}</div>
     </div>
   );
 }
@@ -300,8 +300,10 @@ const SETTINGS = 'workspace settings';
  * words. Under the pointer an entry takes `hover`, a step lighter than the entry on screen.
  */
 const ENTRY =
-  'flex h-control-md min-w-0 items-center gap-[8px] rounded-control px-[8px] text-label leading-none font-medium whitespace-nowrap text-ink-soft hover:bg-hover hover:text-ink';
-/** The entry on screen: the tint, and its words in 600. */
+  'flex h-control-md min-w-0 items-center gap-[8px] rounded-control px-[8px] text-label leading-none whitespace-nowrap';
+/** An entry at rest. */
+const ENTRY_REST = 'font-medium text-ink-soft hover:bg-hover hover:text-ink';
+/** The entry on screen: the tint, and its words in ink and 600. */
 const ENTRY_CURRENT = 'bg-selected font-semibold text-ink';
 /** The icon of an entry, in the secondary text of the bar. */
 const ENTRY_ICON = 'inline-flex flex-none text-muted';
@@ -350,7 +352,7 @@ export function RailFrame({
         setOpen(false);
         event.currentTarget.querySelector<HTMLElement>(`[aria-controls="${CSS.escape(panel)}"]`)?.focus();
       }}
-      className="kit-rail group/rail [view-transition-name:rail] box-border flex min-w-0 flex-col border-line bg-sidebar pt-[4px] text-ink max-[1023px]:flex-none max-[1023px]:border-b min-[1024px]:sticky min-[1024px]:top-0 min-[1024px]:h-dvh min-[1024px]:w-[232px] min-[1024px]:flex-none min-[1024px]:overflow-y-auto min-[1024px]:border-r"
+      className="kit-rail group/rail [view-transition-name:rail] box-border flex min-w-0 flex-col border-line bg-sidebar pt-[4px] text-ink max-[1024px]:flex-none max-[1024px]:border-b min-[1024px]:sticky min-[1024px]:top-0 min-[1024px]:h-dvh min-[1024px]:w-[232px] min-[1024px]:flex-none min-[1024px]:overflow-y-auto min-[1024px]:border-r"
     >
       <div className="flex h-[40px] flex-none items-center gap-[8px] px-[6px]">
         {head}
@@ -369,7 +371,7 @@ export function RailFrame({
       </div>
       <div
         id={panel}
-        className="flex flex-1 flex-col max-[1023px]:hidden max-[1023px]:group-data-[open=true]/rail:flex"
+        className="flex flex-1 flex-col max-[1024px]:hidden max-[1024px]:group-data-[open=true]/rail:flex"
       >
         {children}
         <div className="mt-auto flex flex-col gap-px px-[6px] pt-[6px] pb-[8px]">{foot}</div>
@@ -526,7 +528,7 @@ function FootLink({
   'href' | 'children' | 'className' | 'target' | 'rel'
 >) {
   return (
-    <a href={href} target="_blank" rel="noreferrer" className={ENTRY} {...rest}>
+    <a href={href} target="_blank" rel="noreferrer" className={`${ENTRY} ${ENTRY_REST}`} {...rest}>
       {icon}
       {children}
     </a>
@@ -590,7 +592,7 @@ function WhatsNew() {
       <span className="min-w-0 truncate">{t("What's new")}</span>
       {news ? (
         <>
-          <span className="sr-only">, {t('new release')}</span>
+          <span className="sr-only">{t('(new release)')}</span>
           <span aria-hidden="true" data-news="" className="ms-auto size-[6px] flex-none rounded-full bg-accent" />
         </>
       ) : null}
@@ -632,14 +634,18 @@ function ExtensionEntry() {
     );
 
   return (
-    <FootLink href={BY_SIGN_IN ? CONNECT_PAGE : install} icon={icon} data-rail-extension="">
+    <FootLink
+      href={BY_SIGN_IN ? CONNECT_PAGE : install}
+      icon={icon}
+      data-rail-extension=""
+      // The name says what the dot shows and where the link leads; it starts with the visible words.
+      aria-label={t('Extension connected in {browser}. Connect another browser', { browser: connected.browser })}
+    >
       <span className="min-w-0 flex-none">{t('Extension')}</span>
-      <span className="sr-only">, {t('connected in')}</span>
       {/* A long name ends with « … »; the whole of it is in the title. */}
       <span title={connected.browser} className="ms-auto min-w-0 truncate text-hint text-muted">
         {connected.browser}
       </span>
-      <span className="sr-only">. {t('Connect another browser')}</span>
     </FootLink>
   );
 }
@@ -714,18 +720,13 @@ function EntryCount({ count, alert }: { count: number | undefined; alert: number
         className="ms-auto inline-flex flex-none items-center gap-[4px] text-hint leading-none font-semibold text-accent-strong tabular-nums"
       >
         <span aria-hidden="true" className="size-[6px] rounded-full bg-accent" />
-        <span className="sr-only">, {t('failed sends:')} </span>
+        <span className="sr-only">{t('failed sends:')}</span>
         {alert}
       </span>
     );
   if (count === undefined) return null;
 
-  return (
-    <span className={COUNT}>
-      <span className="sr-only">, </span>
-      {count}
-    </span>
-  );
+  return <span className={COUNT}>{count}</span>;
 }
 
 /**
@@ -745,7 +746,7 @@ export function RailNav({ label, entries }: { label: string; entries: readonly R
           // A move between screens and frames cross-fades the screen, the bar held (FRU-356).
           viewTransition
           {...(entry.current ? { 'aria-current': 'page' as const } : {})}
-          className={`${ENTRY} ${entry.current ? ENTRY_CURRENT : ''}`}
+          className={`${ENTRY} ${entry.current ? ENTRY_CURRENT : ENTRY_REST}`}
         >
           {entry.icon === undefined ? null : (
             <span className={`${ENTRY_ICON} ${entry.current ? 'text-ink-soft' : ''}`}>

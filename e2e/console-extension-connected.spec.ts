@@ -72,8 +72,8 @@ test.describe('the rail', () => {
       const entry = rail.locator('[data-rail-extension]');
       await expect(entry).toHaveAccessibleName(
         locale === 'fr'
-          ? `Extension, connectée dans ${browsers[0].browser}. Connecter un autre navigateur`
-          : `Extension, connected in ${browsers[0].browser}. Connect another browser`,
+          ? `Extension connectée dans ${browsers[0].browser}. Connecter un autre navigateur`
+          : `Extension connected in ${browsers[0].browser}. Connect another browser`,
       );
       const browser = rail.getByTitle(browsers[0].browser);
       await expect(browser).toBeVisible();
@@ -107,7 +107,9 @@ test.describe('the rail', () => {
         colour: style.backgroundColor,
       };
     });
-    expect(look).toMatchObject({ width: '7px', height: '7px', radius: '50%' });
+    expect(look).toMatchObject({ width: '7px', height: '7px' });
+    // A disc: `rounded-full` computes to a radius far over half its side.
+    expect(Number.parseFloat(look.radius)).toBeGreaterThanOrEqual(3.5);
     expect(look.colour).not.toBe('rgba(0, 0, 0, 0)');
     // The control: with no browser connected, the entry installs it, with no dot.
     await page.unrouteAll();

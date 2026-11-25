@@ -645,8 +645,9 @@ export const FRENCH: Readonly<Record<string, string>> = {
   // The compact bar of FRU-684: its button under 1024 px, its foot, and the words a screen reader hears.
   Menu: 'Menu',
   "What's new": 'Nouveautés',
-  'new release': 'nouvelle version',
-  'connected in': 'connectée dans',
+  '(new release)': '(nouvelle version)',
+  'Extension connected in {browser}. Connect another browser':
+    'Extension connectée dans {browser}. Connecter un autre navigateur',
   'failed sends:': 'envois en échec :',
 
   New: 'Nouveau',
