@@ -77,7 +77,7 @@ describe('the navigation of the settings (FRU-692)', () => {
 
     assert.deepEqual(dead(pages(shell), built), []);
     // The control: an entry shown with no route is found, and so is a route with no entry shown.
-    assert.deepEqual(dead([{ path: 'account/appearance', built: true }], built), ['account/appearance']);
+    assert.deepEqual(dead([{ path: 'account/notifications', built: true }], built), ['account/notifications']);
     assert.deepEqual(dead([{ path: 'account', built: false }], built), ['account']);
   });
 
@@ -88,6 +88,7 @@ describe('the navigation of the settings (FRU-692)', () => {
     assert.deepEqual(inShell, [
       'w/:workspace/account',
       'w/:workspace/account/sessions',
+      'w/:workspace/account/appearance',
       'w/:workspace/settings',
       'w/:workspace/settings/ai',
       'w/:workspace/settings/agents',

@@ -36,7 +36,7 @@ export const ACCOUNT_PAGES: readonly SettingsPage[] = [
   { path: 'account', label: msg('Profile'), icon: 'profile', built: true },
   { path: 'account/sign-in', label: msg('Sign-in and addresses'), icon: 'key', built: false },
   { path: 'account/sessions', label: msg('Sessions'), icon: 'screen', built: true },
-  { path: 'account/appearance', label: msg('Appearance'), icon: 'appearance', built: false },
+  { path: 'account/appearance', label: msg('Appearance'), icon: 'appearance', built: true },
   { path: 'account/notifications', label: msg('Notifications'), icon: 'bell', built: false },
 ];
 

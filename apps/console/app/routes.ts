@@ -37,6 +37,7 @@ export default [
     layout('routes/settings-shell.tsx', [
       route('w/:workspace/account', 'routes/account.tsx'),
       route('w/:workspace/account/sessions', 'routes/account-sessions.tsx'),
+      route('w/:workspace/account/appearance', 'routes/account-appearance.tsx'),
       route('w/:workspace/settings', 'routes/workspace-settings.tsx'),
       route('w/:workspace/settings/ai', 'routes/workspace-settings-ai.tsx'),
       route('w/:workspace/settings/agents', 'routes/agents.tsx'),
