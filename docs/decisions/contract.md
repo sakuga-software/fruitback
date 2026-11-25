@@ -47,6 +47,11 @@ first publish made it expensive.
   « Copy as text » and the tool `notes_as_text` of the worker write it. The contract holds the
   format and no word: the caller gives `FeedbackWords`, in its language. `placement` is absent where
   the caller has no page to find a note on, and the text then says nothing of it.
+- **The text of the tasks written by hand is `tasksText`** (FRU-658), in the format of
+  `feedbackText`: a heading the caller gives, then each task with its number, its status, who wrote
+  it, and its title and text quoted, then its replies. The console's « Copy as Markdown » and
+  `notes_as_text` of a whole site write it after the notes of the pages. `FeedbackWords.status` takes
+  a task too: a method of the type, so a caller of before still compiles.
 - **An issue says `checked: { by, at }` and `mine: true`** (FRU-294): `checked` on a done note whose
   newest verdict in its replies is « looks fixed », `mine` to the reader who left the note. Both
   optional, both read-envelope fields: `NOTE_VERSION` does not move.
@@ -66,6 +71,13 @@ first publish made it expensive.
   read-envelope field: `NOTE_VERSION` does not move.
 - **An issue says `editable: true`** (FRU-475) to the reader who may edit its text now: their own
   note, open (`new`, `todo`, `progress` since FRU-605), on a site whose store takes an edit. Optional, a read-envelope field: `NOTE_VERSION` does not move.
+- **A task written by hand is `fruitback.task` at version 1, and no note** (FRU-657, decided on
+  2026-11-24). It has an `id`, a `createdAt`, a one-line `title` of 1 to 200 characters, and an
+  optional `text`, `client` and `reporter`: no page, no viewport, no anchor. `parseNote` answers
+  `not-found` for it, as for any other kind, so no reader of a note (the widget, the extension, a
+  connector, a webhook, a reader of before) meets a note without its place, and **`NOTE_VERSION`
+  does not move**. A read gives it as `TaskIssue`: the envelope of a note, with `task` in place of
+  `note`; `isTaskIssue` tells them apart.
 
 ### The reasons, and the history
 
@@ -149,3 +161,9 @@ first publish made it expensive.
 - The fallback for an unrecognised state stays in `shared` on purpose. A connector spelling
   `'new'` itself is how the next one comes to disagree, and an unknown state must colour the pin
   rather than hide someone's note.
+- **Why a kind, and not a note with an optional page** (FRU-657). Making `page`, `viewport` and
+  `anchor` optional would have changed `noteSchema` for every reader: a widget of before reads
+  `note.anchor.selector` on each issue, and a newer `NOTE_VERSION` would have made it refuse every
+  new note. The rows of `notes` were the only thing the two shapes had to share, and a payload of
+  another kind already reads as no note there. The title is a field of its own because a task is
+  named by a person; a note is named by its first words (`buildIssueTitle`).

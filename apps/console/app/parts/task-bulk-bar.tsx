@@ -112,6 +112,27 @@ export function TaskBulkBar() {
             </span>
           </span>
         )}
+        {/* FRU-658: a copy of every selected note, those this person may not change too. */}
+        {seam.copy === undefined ? null : (
+          <BranchMenu
+            branch={{
+              id: 'copy',
+              label: t('Copy'),
+              items: [
+                { id: 'link', label: t('Copy the link'), closes: true },
+                ...(notes.some((note) => note.ref !== undefined)
+                  ? [{ id: 'id', label: t('Copy the ID'), closes: true }]
+                  : []),
+                { id: 'markdown', label: t('Copy as Markdown'), closes: true },
+              ],
+              onAction: (key) => {
+                if (key === 'link') seam.copy?.link(notes);
+                if (key === 'id') seam.copy?.identifier(notes);
+                if (key === 'markdown') seam.copy?.markdown(notes);
+              },
+            }}
+          />
+        )}
         <span className="ml-auto">
           <IconButton label={t('Clear the selection')} onClick={() => selection.clear()}>
             <NoteIcon name="close" />

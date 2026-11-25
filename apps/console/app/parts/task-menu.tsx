@@ -8,6 +8,7 @@ import { Confirmation } from '../confirm';
 import { SERVER_CAUSE, UNREACHABLE_CAUSE } from '../problems';
 import { isReachable } from '../transport';
 import { type IndexedNote, type TaskFields } from './notes-model';
+import type { TaskCopy } from './task-copy';
 import { TaskSelectionContext, isEditable } from './task-selection';
 
 export type TaskLabel = { id: string; name: string; color: string };
@@ -263,6 +264,8 @@ export type TaskMenuSeam = {
   actionsOfAll: (notes: readonly IndexedNote[]) => TaskActions;
   /** FRU-653: opens the page of a task, from its text. Absent: the text opens nothing. */
   openTask?: (note: IndexedNote) => void;
+  /** FRU-658: the link, the ID and the Markdown of a task. Absent: the menu offers no copy. */
+  copy?: TaskCopy;
 };
 
 /** The text of a note in a row or a card: a link to the page of its task, when there is one (FRU-653). */
@@ -329,6 +332,9 @@ export function useTaskMenu(note: IndexedNote): {
   // A selection where this person may change nothing: the menu of the note alone.
   const several = group.length > 0;
   const targets = several ? group : [note];
+  // FRU-658: a copy takes every note of the selection, those this person may not change too.
+  const copied =
+    selection !== undefined && selection.has(note.id) && selection.notes.length > 1 ? selection.notes : [note];
   const given = several ? seam.actionsOfAll(group) : seam.actionsOf(note);
   // The dialog of a new label opens over the screen: the menu closes first, or it would stay above it.
   const actions = {
@@ -360,11 +366,23 @@ export function useTaskMenu(note: IndexedNote): {
           ...(!several && editable && actions.moveUp !== undefined ? [{ id: 'up', label: t('Move up') }] : []),
           ...(!several && editable && actions.moveDown !== undefined ? [{ id: 'down', label: t('Move down') }] : []),
           ...(changes ? [{ id: 'archive', label: archived ? t('Bring back') : t('Archive') }] : []),
-          ...(several ? [] : [{ id: 'copy', label: t('Copy the link to the note') }]),
+          // FRU-658: the link in the console, the ID and the Markdown, of the note or of the selection.
+          ...(seam.copy === undefined
+            ? []
+            : [
+                { id: 'copy-link', label: t('Copy the link') },
+                ...(copied.some((each) => each.ref !== undefined) ? [{ id: 'copy-id', label: t('Copy the ID') }] : []),
+                { id: 'copy-markdown', label: t('Copy as Markdown') },
+              ]),
+          // FRU-657: a task written by hand has no page for a link to open.
+          ...(several || note.page.url === '' ? [] : [{ id: 'copy', label: t('Copy the link to its page') }]),
           ...(changes ? [{ id: 'delete', label: t('Delete…'), danger: true }] : []),
         ]}
         onAction={(id) => {
           if (id === 'copy') actions.copyLink?.();
+          if (id === 'copy-link') seam.copy?.link(copied);
+          if (id === 'copy-id') seam.copy?.identifier(copied);
+          if (id === 'copy-markdown') seam.copy?.markdown(copied);
           if (id === 'up' && actions.moveUp !== undefined) settle(actions.moveUp());
           if (id === 'down' && actions.moveDown !== undefined) settle(actions.moveDown());
           if (id === 'archive') settle(actions.archive(!archived));

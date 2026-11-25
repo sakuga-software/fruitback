@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router';
 import { type Stage } from '../stages';
 import { type Connector, type SiteChoice, call, siteChoices } from '../api';
 import { type Fetched, type Listed, listedOf } from '../listed';
-import { LinkButton, PageHead } from '../ui';
+import { Button, LinkButton, PageHead } from '../ui';
 import { useWorkspace } from './workspace';
 import { t } from '../i18n';
 import { problemOf } from '../problems';
@@ -31,6 +31,9 @@ import { NoteCard } from '../parts/note-card';
 import { dayFromToday } from '../parts/task-menu';
 import { TASK_NOT_SAVED, TASK_PROBLEMS, useTaskSeam } from '../parts/task-seam';
 import { TaskPanel } from '../parts/task-panel';
+import { isNewTaskKey, useTaskCreate } from '../parts/task-create';
+import { copyShortcutOf, useTaskCopy } from '../parts/task-copy';
+import { siteOfId } from '../note-id';
 import { SelectionStatus, useSelectionKeys, useTaskSelection } from '../parts/task-selection';
 import { TaskBulkBar, TaskContexts } from '../parts/task-bulk-bar';
 
@@ -300,9 +303,82 @@ export default function Notes() {
     setParams(next);
   };
 
+  // FRU-657: « New task », at the head of the list and of each column of the board, and the key « C ».
+  const create = useTaskCreate({
+    base,
+    sites: typeof sites === 'object' ? sites : [],
+    siteInView,
+    statusesOf: (site) => (typeof shown === 'object' ? shown.statuses?.[site] : undefined),
+    people: tasks.seam.people,
+    labels: tasks.seam.labels,
+    onCreated: (id) => {
+      void read();
+      const next = new URLSearchParams(latest.current);
+      next.set('task', id);
+      latest.current = next;
+      setParams(next);
+    },
+  });
+  const openCreate = create.open;
+
+  // FRU-658: the link, the ID and the Markdown of a task, from its menu, its panel and the keyboard.
+  const taskCopy = useTaskCopy({
+    base,
+    workspace: workspace.id,
+    statusesOf: (site) => (typeof shown === 'object' ? shown.statuses?.[site] : undefined),
+  });
+  const copyRef = useRef<{ copy: typeof taskCopy.copy; noteOf: (id: string) => IndexedNote | undefined }>(undefined);
+  copyRef.current = {
+    copy: taskCopy.copy,
+    noteOf: (id) => (typeof shown === 'object' ? shown.notes.find((note) => note.id === id) : undefined),
+  };
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const kind = copyShortcutOf(event);
+      const current = copyRef.current;
+      if (kind === undefined || current === undefined) return;
+      // The row or the card that holds the focus, else the task of the panel. The address is read as
+      // it is now: a panel closed a moment ago is out of it already, whatever React drew.
+      const focused = document.activeElement?.closest<HTMLElement>('[data-note]')?.dataset.note;
+      const id = focused ?? new URLSearchParams(window.location.search).get('task') ?? undefined;
+      if (id === undefined) return;
+      const note = current.noteOf(id) ?? { id, site: { id: siteOfId(id) }, unlisted: true as const };
+      event.preventDefault();
+      if (kind === 'link') current.copy.link([note]);
+      else current.copy.identifier([note]);
+    };
+    document.addEventListener('keydown', onKey);
+
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (!isNewTaskKey(event)) return;
+      event.preventDefault();
+      openCreate();
+    };
+    document.addEventListener('keydown', onKey);
+
+    return () => document.removeEventListener('keydown', onKey);
+  }, [openCreate]);
+  const newTask = (
+    <Button tone="outline" onClick={() => create.open()} disabled={typeof sites !== 'object' || sites.length === 0}>
+      {t('New task')}
+      {/* The key, in a box of its own: the glyph alone was cut by the end of the button. */}
+      <kbd
+        className="ml-[8px] inline-flex h-[20px] min-w-[20px] flex-none items-center justify-center rounded-[4px] border border-line px-[4px] font-sans text-hint leading-none font-semibold text-muted"
+        aria-hidden="true"
+      >
+        C
+      </kbd>
+    </Button>
+  );
+
   return (
-    <TaskContexts seam={{ ...tasks.seam, openTask }} selection={selection}>
+    <TaskContexts seam={{ ...tasks.seam, openTask, copy: taskCopy.copy }} selection={selection}>
+      {taskCopy.status}
       {tasks.dialog}
+      {create.dialog}
       <SelectionStatus />
       <TaskPanel
         id={opened}
@@ -314,7 +390,12 @@ export default function Notes() {
         title={t('Notes')}
         lead={t('Every note left on the sites of {workspace}, and where it went.', { workspace: workspace.name })}
         className="mb-[24px]"
-        {...(listed ? { action: <ViewChoice view={view} onChoose={show} /> } : {})}
+        action={
+          <div className="flex flex-wrap items-center gap-[12px]">
+            {listed ? <ViewChoice view={view} onChoose={show} /> : null}
+            {newTask}
+          </div>
+        }
       />
 
       {shown === 'loading' ? <p className="text-small text-muted">{t('Loading…')}</p> : null}
@@ -379,6 +460,12 @@ export default function Notes() {
               {view === 'board' ? (
                 <NotesBoard
                   columns={columns}
+                  onAdd={(column) =>
+                    create.open({
+                      ...(siteInView === undefined ? {} : { site: siteInView }),
+                      status: column.status?.key ?? `own:${column.stage}`,
+                    })
+                  }
                   reorder={async (note, before, after) => {
                     if (note.task === undefined || note.canSetStatus !== true) return undefined;
                     const answer = await call('POST', `${base}/notes/${encodeURIComponent(note.id)}/task`, {
