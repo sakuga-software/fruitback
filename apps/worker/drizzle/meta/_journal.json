@@ -355,15 +355,22 @@
     {
       "idx": 50,
       "version": "7",
-      "when": 1795612647906,
-      "tag": "0050_sites_visitor_rights",
+      "when": 1795612640265,
+      "tag": "0050_note_index_author_visitor",
       "breakpoints": true
     },
     {
       "idx": 51,
       "version": "7",
-      "when": 1795612648760,
-      "tag": "0051_sites_visitor_rights_default",
+      "when": 1795624138735,
+      "tag": "0051_sites_visitor_rights",
+      "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1795624139262,
+      "tag": "0052_sites_visitor_rights_default",
       "breakpoints": true
     }
   ]

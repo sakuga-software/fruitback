@@ -1180,7 +1180,7 @@ the page with no session answer `401` and write nothing
 (test:`reads the notes, is told a note would be refused, and leaves none, by a note or by a batch`,
 test:`refuses a reply from the page with no session on a site « Read only », and takes it when the check is out (FRU-703)`).
 A member still writes there with their session
-(test:`takes the note of a member, sent by the relay with their session`). The migration `0050`
+(test:`takes the note of a member, sent by the relay with their session`). The migration `0051`
 gives « Anyone on the page » to every site that everyone read, which took a note from anybody
 whatever the field said, so no site of before changes
 (test:`changes nothing a site of before does, and gives a site made after the defaults of the mockup`).
@@ -1200,9 +1200,10 @@ them, and a member or a guest is refused with nothing changed
 not one of the two is refused (test:`refuses a value that is not a right, and changes nothing`),
 and a row that holds another one gives the visitor nothing. The routes are given the two values only
 where a visitor writes; absent is `never`. A new site takes `while-open`, the mockup's default, and
-`0050` gives `never` to every site of before, so no site changes. The routes that check them for a
-visitor are not there yet: until then a visitor can change and take back nothing, whatever
-the site says.
+`0051` gives `never` to every site of before, so no site changes. The edit of a visitor, below,
+reads `visitorEdit`: with `never`, it answers `403 not-allowed` and the read offers no edit
+(test:`refuses a visitor where the tab « Access » says « Never », offers no edit, and follows it back (FRU-703)`).
+No route lets a visitor take back a note yet, whatever `visitorDelete` says.
 
 With `FRUITBACK_DATABASE_URL` the same accounts are in a PostgreSQL database, in place
 of that file, and the worker refuses to start with both. The database holds what the file holds:
@@ -2521,6 +2522,57 @@ the database for a site with no destination.
 - How much. 1 to 2 000 characters, refused beyond and never cut. 5 replies a minute with no
   session from one address, counted apart from the requests and in the same database; a member is
   not counted. test:`takes 5 replies with no session from one address in a minute, and a member's after them`.
+
+### A visitor known by the key of their browser (FRU-700)
+
+A visitor with no account is told which notes are theirs: « You · this browser ». The worker knows
+them by a key that their browser holds, and by nothing else.
+
+- What the key is. 32 random bytes that the widget makes at the first note a visitor sends with no
+  account, keeps in the `localStorage` of the page under the id of the site, and sends in the
+  header `X-Fruitback-Visitor` with each call. **It is not a proof of who somebody is**: any script of
+  the page reads it, and whoever holds it is taken for this browser. A widget that a site mounts with
+  an identity token, or that the extension carries, makes none.
+- What the worker keeps. A SHA-256 digest of the key and of the site, in `note_index.author_visitor`,
+  for a note of a visitor only. Never the key. The same key gives another digest on another site, so
+  a digest read from the database opens nothing elsewhere.
+  test:`keeps a digest that names the site, never the key`.
+- What it opens. Only the notes that this browser left on this site, while they are open (`new`,
+  `todo`, `progress`): the mark `mine` on them in `GET /feedback`, and the edit of their text
+  (below). A note done asks its author for a verdict, which takes a session, so it is nobody's on a
+  browser.
+  test:`marks a note of this browser as nobody's once the team marked it done or closed: a verdict takes a session`.
+  No withdrawal yet: `withdrawable` stays for a session.
+  test:`offers a visitor an edit and no withdrawal yet, on a note that is mine (FRU-701)`.
+- The edit of a visitor. `POST /feedback/<id>/text` takes the key of the browser in place
+  of a session, on the route of a member's edit (`callerOf` of `edit-routes.ts`), with every guard of
+  that route:
+  - the author the index keeps must be `visitor:<digest>` of this key on this site, else `403
+    not-allowed`; a member of the team is refused too;
+  - no key, or a key of another shape, is `401 identity-required`; a request with a token is never
+    read as a visitor, so a session that ended is told so;
+  - the site must let its visitors edit, « While open » in the tab « Access » (`visitorEdit`, read by
+    `visitorMay`; only a site that takes the notes of anybody has it), else `403 not-allowed`;
+  - the note must be open, read in the store for the request and again under the lock of the row,
+    else `409 not-open`;
+  - an edit writes a reply, so it counts with the replies of a visitor: 5 a minute from one address,
+    then `429`.
+    The reply names the visitor by the name the note was sent with, « not verified ». In Linear the
+    new text goes in that reply, as for a member. test:`refuses another browser, no key, a key of another shape, and a member, and writes nothing`,
+    test:`refuses once the team took the note on, done or closed, and offers no edit then`,
+    test:`refuses a visitor on a site that no longer takes the notes of anybody`,
+    test:`counts the edits of a visitor with their replies: 5 a minute from one address`.
+- What it does not. A key that is absent, or not of the shape the widget makes, is no key: no digest
+  is kept with the note, and a read gets no `mine`. A note of another browser is never `mine`.
+  test:`marks the notes of this browser as mine, and those of no other browser`,
+  test:`keeps no digest for a note sent with no key, nor with a key of another shape`.
+- A member is not changed. A session of the workspace wins over a key sent with it, and a note that
+  a session or a token signs keeps no digest.
+  test:`changes nothing for a member: their notes are theirs by their account, whatever key comes with it`.
+- Each guard is taken out of a copy of its module in `visitor-key.test.ts` and `visitor-edit.test.ts`,
+  and the case that holds it fails.
+- CORS. The header is not safelisted, so `Access-Control-Allow-Headers` lists it. A read of a
+  visitor who sent a note is then preflighted, as a read with a token is.
 
 ### « Looks fixed » and « Still wrong », from the extension (FRU-294)
 

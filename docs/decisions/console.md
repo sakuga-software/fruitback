@@ -694,7 +694,7 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   mockup « Notes après » of 2026-11-25): fourteen notes at 1440 × 900, where the rows of one to three
   lines showed six (measured with a list of 14). `parts/notes-table.tsx`; `e2e/console-notes.spec.ts` holds the values.
   - **A line**: the box of the task and the status (the drop, or the select of FRU-551), the text at
-    500 on one line cut with « … » and never underlined (a press opens the panel of FRU-653), the
+    500 on one line cut with « … » and never underlined (a press opens the panel of FRU-653 and FRU-687), the
     marks of a task after it on the same line, the path of the page, the site (a tile and its host),
     where the note went, who left it, its age, then the page and the menu, shown under the pointer and
     the keyboard. A refusal, or « Delete… » asked again, is said under the line: only then is a row
@@ -1303,16 +1303,29 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
 
 ### The rules, in short
 
-- **A panel over the list, at the right edge** (option A of the board of 2026-11-22): `Drawer` of the
-  kit, on the drawer of HeroUI, 560 px wide and the whole width at 390 px. The text of a note in a
-  row or on a card opens it (« Open the note »), and its address is `?task=<id>`: a link opens it,
-  and Escape, its close button or a press outside close it.
-- **It reads the note whole** (`GET …/notes/<note>`): the text, the page and its link, the element,
-  the component, the file, the size of the screen, and the replies. A task Fruitback keeps, that
-  this person may change, shows its fields as controls that save at once, as the menu does, the day
-  as a field of the calendar of the browser. Any other note shows them disabled, or not at all.
-- **Not here yet**: to write a reply, to edit the text, the files of a note. The console has no route
-  to write a reply, and a note Fruitback keeps keeps no file.
+- **A panel beside the list, 440 px at the right edge** (FRU-687, the mockup « Détail d'une note » of
+  2026-11-25, in place of the drawer of 560 px over the list of FRU-653). Not modal (`role=dialog`,
+  `aria-modal=false`): the list stays in view and drops the columns it has no room for (its
+  container query), the row of the note is marked as a selected one, and a press on another note
+  opens it in the same panel. From 1024 px the screen keeps the room of the panel; under it the panel
+  takes the whole width. The text of a note opens it, and its address is `?task=<id>`: a link opens
+  it. Escape (from a field of the panel too) and its close button close it, and the focus goes back
+  to the row of the note; the arrows up and down, and the chevrons of its head, open the note above
+  and under it in the list.
+- **Its order**: a head of 44 px (the mark of the place and the reference, the issue in a new tab,
+  the chevrons, a menu with the three copies of FRU-658, Close); the title at 18 px and the rest of
+  the text; the fields as lines of 32 px (Status, Sent to, Assignee, Priority, Due day, Left by,
+  Page), the labels under them; the page in a picture (the capture with the element framed when the
+  note has one that loads, else a frame that says there is none, with the address, never the
+  selector), and « Open on the page »; the replies, under their initials, with « Synced with
+  <place> » for a tracker; and **« Technical details » folded at the end**: the element, the
+  component, the file, the screen and the browser (`browser-name.ts`), its summary the screen and the
+  browser. So no selector is a press away from the list.
+- **It reads the note whole** (`GET …/notes/<note>`). A task Fruitback keeps, that this person may
+  change, shows its fields as controls that save at once, as the menu does, the day as a field of
+  the calendar of the browser. Any other note shows them disabled, or not at all.
+- **Not here yet**: to write a reply (FRU-712: the field of the mockup needs a route of the worker,
+  which a screen PR does not add), to edit the text, the files of a note.
 
 ## Several tasks at once (FRU-656)
 

@@ -1,5 +1,5 @@
 {
-  "id": "6620c3e3-3a87-4aa3-b893-0bea7a8b73c7",
+  "id": "492ddbf3-3931-4603-8298-5f54df49ccec",
   "prevId": "71d0464d-4aa3-4197-9796-e556a8f309c0",
   "version": "7",
   "dialect": "postgresql",
@@ -1867,6 +1867,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "author_visitor": {
+          "name": "author_visitor",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "place": {
           "name": "place",
           "type": "text",
@@ -3306,20 +3312,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": false
-        },
-        "visitor_edit": {
-          "name": "visitor_edit",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'never'"
-        },
-        "visitor_delete": {
-          "name": "visitor_delete",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'never'"
         }
       },
       "indexes": {

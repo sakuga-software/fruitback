@@ -390,6 +390,7 @@ the first read of its page, with what that read says.
 | `channel`                    | `script` or `extension`: whether a session of an extension signed the note. Empty for a note from before the index.                                             |
 | `author_kind`                | `visitor`, `site` (a token the site signed), `member` (a session of the workspace) or `verified` (a note from before the index whose reporter was verified).    |
 | `author_account_id`          | The account of a member who left the note. Empty for everyone else, and emptied when the account is removed.                                                    |
+| `author_visitor`             | For a note of a visitor, a SHA-256 digest of the key of their browser and of the site. Never the key. Empty for everyone else, and for a note sent with no key. |
 | `place`, `connector_id`      | Where the note went: the worker's own store, or a connector of the workspace.                                                                                   |
 | `reference`, `reference_url` | What the store calls the note (`ACM-151`, `FB-12`) and its address there.                                                                                       |
 | `created_at`                 | When the worker took the note.                                                                                                                                  |
@@ -538,6 +539,13 @@ Since 0.2.0 an account also holds the language its person reads, taken from the 
   « Remember me in this browser »**. For a member of a team who chose where a note goes, the identifier of that place: an opaque
   value, with no name of the tracker. No e-mail, no note. In private mode the extension writes `fruitback:config:extension` into the site's
   storage, so a site can see that a reviewer used the extension on it.
+- `localStorage`, under `fruitback:visitor:<site>`: the key of this browser for this site,
+  32 random bytes. The widget makes it at the first note a visitor sends with no account, and sends
+  it with each call to the worker, which keeps only a digest of it in the index. It names nobody:
+  it only lets the worker tell this browser's notes from the others, to mark them « You ». It stays
+  until the site or the visitor clears the storage of the site. Any script of the page can read it,
+  and whoever has it is taken for this browser. A widget that a site mounts with an identity token,
+  or that the extension carries, makes none.
 - `localStorage`, under `fruitback:notify-ask`: the answer to « Want to know when it's fixed? »,
   `yes`, or `no` and its day. Never the address. After « Notify me » the widget asks no more in
   this browser on this site; after « No thanks » it asks again after 30 days.

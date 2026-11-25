@@ -113,7 +113,7 @@ export const sites = pgTable(
     // FRU-604: a visitor is offered one e-mail when their note is done. Off by default (decision of
     // Mathieu, 2026-11-06), and of no effect on a site whose notes come from its members only.
     notify_done: boolean('notify_done').notNull().default(false),
-    // FRU-703: what a visitor may do to a note of their own. `0050` adds the columns with `never`, the
+    // FRU-703: what a visitor may do to a note of their own. `0051` adds the columns with `never`, the
     // value of every site that exists then (no site changes), and makes `while-open` the default of
     // the next one, as the mockup does. `addSite` writes the value in any case.
     visitor_edit: text('visitor_edit').notNull().default('while-open'),
@@ -935,6 +935,9 @@ export const note_index = pgTable(
     channel: text('channel'),
     author_kind: text('author_kind').notNull(),
     author_account_id: text('author_account_id'),
+    // FRU-700: for a note of a visitor, the digest of the key of the browser that sent it
+    // (`visitor-key.ts`), never the key. Empty for every other note, and for a note of before.
+    author_visitor: text('author_visitor'),
     place: text('place').notNull(),
     connector_id: text('connector_id'),
     reference: text('reference'),

@@ -1697,6 +1697,55 @@ Read on drizzle-orm 0.45.4 and drizzle-kit 0.31.11, the versions of the catalogu
   A secret for each site, or the end of that way of working: FRU-184 asks, and nothing here
   changes it. `docs/modes.md` says what holds today.
 
+## A visitor known by the key of their browser (FRU-700)
+
+### The rules, in short
+
+- **A key of the browser, made by the widget, and a digest of it in the index.** The widget sends the
+  key in `X-Fruitback-Visitor` (`visitor-key.ts`). `visitorDigestOf` turns it into a SHA-256 of the
+  site and the key, which `record` writes in `note_index.author_visitor` for a note of a visitor only
+  (`authorOf`). The key itself is kept nowhere on the worker. Decision of the orchestrator for
+  FRU-699, 2026-11-25: the key by default, a confirmed address later (FRU-705).
+- **`NoteIndex.authors` names a visitor `visitor:<digest>`** (`visitorAuthor`), beside the account
+  of a member. So the routes that compare an author with the reader compare one string, whoever
+  wrote the note: one path, not a second one for visitors.
+- **`notesOfReader` asks `readerOf`**: the account of a session of the workspace, or else the digest
+  of the key for this site. A session wins over a key sent with it. It answers `by: 'account'` or
+  `by: 'browser'`, and the read offers an edit or a withdrawal to an account only until FRU-701 and
+  FRU-702.
+- **A visitor's note is `mine` while it is open** (`EDITABLE_STAGES`). `mine` on a note done asks its
+  author for a verdict (`checkOffered`, and the tab « To check » of the list), and the route of a
+  verdict takes a session (FRU-294): a visitor would be asked for what the worker refuses.
+- **Only `app.ts` imports `visitorDigestOf`**, and hands it to the routes as `visitorOf` of
+  `CallerChecks`. A copy of `visitor-key.ts` with a guard taken out then reaches every route, and
+  `visitor-key.test.ts` plants each guard out that way.
+- **A key of another shape is no key**: exactly 43 characters of base64url, what the widget makes.
+- **`0050_note_index_author_visitor` adds a column that may be empty.** No row moves: a note of
+  before has no digest, and is nobody's on a browser.
+
+- **A visitor edits through the route of a member's edit** (FRU-701). `callerOf` of `edit-routes.ts`
+  answers who writes: a session, as before, or with no token the key of the browser, as
+  `visitor:<digest>`. The route then compares it with `NoteIndex.authors` as it compares an account,
+  reads the stage in the store and again under the lock of the row, and calls the same
+  `NoteStore.edit`. No second path of a write.
+- **`visitorMay(policy, action)` is the one place that says what a visitor may do** (`visitor-key.ts`,
+  `CallerChecks.visitorMay`). Today: the default of the mock-ups, on a site whose `write` is
+  `public`; the stage is the route's. FRU-703 turns it into a setting of each site
+  (`visitorEdit`, `visitorDelete`), and only this function reads it.
+- **A request with a token is never read as a visitor**: a session that ended is told `401`, and is
+  not taken for the browser it came from.
+- **An edit of a visitor counts with their replies** (`checkReplyLimit`): it writes a reply.
+- **The reply names the visitor by the name the note was sent with**, « not verified »
+  (`replyAuthorOf`). `NewEdit.author` takes a visitor now; `editText` already wrote one.
+
+### The reasons
+
+- **Why the site is in the digest.** `authors` already reads the rows of one site. The site in the
+  digest is a second wall: a digest read from the database, or a key copied from another site,
+  opens nothing elsewhere. It is held by a unit case, since the first wall holds every route.
+- **Why no salt of the worker.** The key has 256 random bits: no list of guesses reaches it, and
+  a secret of the worker would make the digests change with it.
+
 ## Who can leave a note (FRU-330)
 
 ### The rules, in short
@@ -1704,7 +1753,7 @@ Read on drizzle-orm 0.45.4 and drizzle-kit 0.31.11, the versions of the catalogu
 - **`writers` of a site: `members` (« Members only ») or `anyone` (« Anyone on the page »).** The
   decision of Mathieu of 2026-10-20 on FRU-286: a setting, closed by default. `clientOf` turns
   `members` into `write: 'authenticated'` on every site since FRU-703: a site that everyone reads
-  and its members write is « Read only ». `0050` gave `anyone` to every site that everyone read,
+  and its members write is « Read only ». `0051` gave `anyone` to every site that everyone read,
   which took a note from anybody then, and a caller that names no `writers` gets `defaultWriters` of the visibility it asks when that
   visibility is new: `addSite` of a new site, `addSite` and `setSiteVisibility` of a site whose
   visibility changes. The extension sends the visibility alone, and « Everyone who visits » still
@@ -1741,17 +1790,18 @@ site opened to anyone, a site closed again when a caller names no `writers`, and
 
 - **`visitor_edit` and `visitor_delete` of `sites`: `never` or `while-open`**, what a visitor with
   no account may do to a note of their own. No value reaches a note that is done or closed (the
-  decision for FRU-699): the mockup's « Allowed » is not offered. `0050` adds them with `never`, the value of
-  every site that exists then (a visitor could do neither); `0051` makes `while-open`, the default of
-  the mockup, the default of a new site. Both are generated; `0050` adds one statement by hand, the
+  decision for FRU-699): the mockup's « Allowed » is not offered. `0051` adds them with `never`, the value of
+  every site that exists then (a visitor could do neither); `0052` makes `while-open`, the default of
+  the mockup, the default of a new site. Both are generated; `0051` adds one statement by hand, the
   `UPDATE` of `writers` above.
 - **`addSite` keeps them on a site added again when the caller names neither**, as `writers`.
 - **`clientOf` gives them to the routes (`visitorEdit`, `visitorDelete` of the client) only where
   `writers` is `anyone`**; absent is `never`. A row with another value gives `never`.
 - **The console changes them through `POST …/sites`, for `manage-sites` only.** A value that is not
   one of the two answers `400` (`invalid-visitor-edit`, `invalid-visitor-delete`).
-- **The routes that read them come with FRU-701 and FRU-702**: until then no route lets a visitor
-  change or take back a note. `site-access.test.ts`, `sites-visitor-rights-migration.test.ts` and
+- **`visitorMay` of `visitor-key.ts` reads them for the routes**: the edit of a visitor (FRU-701)
+  reads `visitorEdit` of the client, and the withdrawal (FRU-702) will read `visitorDelete`. Only
+  `while-open` lets a visitor act; absent (a site of members, a client of `FRUITBACK_CLIENTS`) is no. `site-access.test.ts`, `sites-visitor-rights-migration.test.ts` and
   the account suite hold the rest; the guard of `manage-sites` and the change of `clientOf` were each
   taken out by hand on 2026-11-25, and the case that holds them failed.
 

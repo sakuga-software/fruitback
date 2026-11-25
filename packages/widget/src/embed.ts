@@ -23,6 +23,7 @@ import { type CapturedPlace, captureNote, capturePlace } from './capture.ts';
 import { captureAnchor } from './anchor.ts';
 import { resolveAnchor } from './resolve.ts';
 import { type TypingPlace, createTypingStore } from './typing.ts';
+import { type VisitorKey, createVisitorKey } from './visitor-key.ts';
 import { type WidgetConfig, createConfigStore } from './config.ts';
 import { type FeedbackPlacement, feedbackAsText, placementOf } from './export.ts';
 import { type ListState, type ReadState, type Sidebar, type SidebarEntry, createSidebar } from './sidebar.ts';
@@ -130,6 +131,11 @@ export type FruitbackOptions = {
 export type MountOptions = Omit<FruitbackOptions, 'endpoint' | 'clientId' | 'notes'> & {
   endpoint: string;
   clientId: string;
+  /**
+   * The key of this browser for the site (FRU-700), that `init` gives a mount whose host neither
+   * names the reporter nor carries the calls. Never an option of the host.
+   */
+  visitor?: VisitorKey;
 };
 
 type WidgetOptions = {
@@ -519,6 +525,11 @@ export function init(given: FruitbackOptions): Fruitback {
   }
 
   const view = document.defaultView ?? globalThis.window;
+  // FRU-700: the key of this browser, for a visitor the worker cannot name another way. A host that
+  // mints a token names the reporter, and a transport of a host carries its own identity.
+  if (options.identityToken === undefined && options.transport === undefined) {
+    options.visitor = createVisitorKey(storageOf(view), options.clientId);
+  }
   const translator = createTranslator({
     locale: options.locale,
     messages: options.messages,
@@ -641,6 +652,8 @@ export function init(given: FruitbackOptions): Fruitback {
     shouldShow: (issue) => isDraft(issue) || !config.get().hiddenStages.includes(issue.stage),
     isDraft,
     statusOf: statusFor,
+    // FRU-700: a reader the worker knows by the key of this browser, not by a session or a token.
+    byBrowser: () => options.visitor !== undefined && !readerIdentity.identified,
     // The page changed under the pins: the list says what each one resolved to now.
     onResolve: () => sidebar.refresh(),
     // A thread opened or closed: the list marks the note that is open. It builds no row again, or
@@ -1762,6 +1775,8 @@ export async function plant({
     method: 'POST',
     contentType: 'application/json',
     body: JSON.stringify(built),
+    // FRU-700: the key of this browser, made now at the first note, so that the worker knows it.
+    asAuthor: true,
   });
 
   if (!response.ok) {
@@ -2234,6 +2249,7 @@ export async function sendDrafts({
         method: 'POST',
         contentType: 'application/json',
         body: offer === undefined ? JSON.stringify(first.note) : batchBody(request),
+        asAuthor: true,
       });
     } catch {
       return { kept, failure: 'retry', issues };

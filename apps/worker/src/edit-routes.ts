@@ -1,4 +1,5 @@
 import { json } from './http.ts';
+import { readBearerToken } from './identity.ts';
 import { NOTE_MAX_LENGTH, noteAnchorSchema, noteViewportSchema } from '@fruitback/shared';
 import type { AccountStore } from './accounts.ts';
 import { MAX_BODY_BYTES, readBoundedText } from './bounded-body.ts';
@@ -6,12 +7,99 @@ import { normalizeClientId } from './clients.ts';
 import { type Kv, KvError } from './kv.ts';
 import { canonicalizeRequestedPage, indexed, invalidatePages, placeOf, routingFailure } from './note-helpers.ts';
 import type { NoteIndex } from './notes-index.ts';
+import { checkReplyLimit } from './rate-limit.ts';
 import { indexedAuthorOf } from './reply-routes.ts';
+import type { ClientResolution } from './clients.ts';
 import type { CallerChecks, RequestContext, Served } from './request-context.ts';
-import { EDITABLE_STAGES, type NoteStore, StoreError, findNote, takesEdits, takesWithdrawals } from './store.ts';
+import {
+  EDITABLE_STAGES,
+  type NewEdit,
+  type NoteStore,
+  StoreError,
+  findNote,
+  takesEdits,
+  takesWithdrawals,
+} from './store.ts';
+import { type VisitorAction, visitorAuthor } from './visitor-key.ts';
 
 /** `POST /feedback/<id>/text`: the text of a note, edited by the person who left it (FRU-475, FRU-605). */
 export const EDIT_PATH = /^\/feedback\/([A-Za-z0-9_-]{1,100})\/text$/;
+
+/**
+ * Who writes on a note of their own, by this request (FRU-605, FRU-701), as `NoteIndex.authors`
+ * names an author:
+ *
+ * - **A member**: a session of the extension, read again in the store as for every write, of a
+ *   person who writes in the workspace now (`writerIn`). Their account.
+ * - **A visitor known by their browser** (FRU-701): no token, and the key of the browser in
+ *   `X-Fruitback-Visitor`, on a site whose visitors may do `action` (`visitorMay`). `visitor:<digest>`.
+ *   A request with a token is never read as a visitor: a token that no longer writes is a session
+ *   that ended, and is told so.
+ *
+ * Anybody else: `401 identity-required`, or `403 not-allowed` for a person or a visitor this site does
+ * not let write.
+ */
+type Caller =
+  | { ok: true; kind: 'member'; author: string }
+  | { ok: true; kind: 'visitor'; author: string }
+  | { ok: false; status: 401 | 403; error: 'identity-required' | 'not-allowed' };
+
+async function callerOf(
+  request: Request,
+  config: Served,
+  route: Extract<ClientResolution, { ok: true }>,
+  where: { workspace: string; site: string; accounts: AccountStore; context: RequestContext },
+  checks: CallerChecks,
+  action: VisitorAction,
+): Promise<Caller> {
+  const { workspace, site, accounts, context } = where;
+  const session = await checks.sessionWrites(request, config, context);
+  if (session === undefined) {
+    const token = readBearerToken(request.headers.get('Authorization'));
+    const digest = token === undefined ? checks.visitorOf(request, site) : undefined;
+    if (digest === undefined) return { ok: false, status: 401, error: 'identity-required' };
+    if (!checks.visitorMay(route.client, action)) return { ok: false, status: 403, error: 'not-allowed' };
+
+    return { ok: true, kind: 'visitor', author: visitorAuthor(digest) };
+  }
+  const account = await checks.writerIn(request, config, context, workspace, site);
+  if (account === undefined) {
+    const reach = await accounts.reach(workspace, session.subject);
+    const suspended = config.suspendedIn !== undefined && (await config.suspendedIn(workspace));
+
+    return reach === undefined || suspended
+      ? { ok: false, status: 401, error: 'identity-required' }
+      : { ok: false, status: 403, error: 'not-allowed' };
+  }
+
+  return { ok: true, kind: 'member', author: account };
+}
+
+/**
+ * The name that the reply of an edit gives its author (FRU-257): a member by their account and their
+ * workspace, read now; a visitor by the name the note was sent with, their word, « not verified ».
+ * `undefined`: the account or its membership is gone since the session was read.
+ */
+async function replyAuthorOf(
+  caller: Extract<Caller, { ok: true }>,
+  accounts: AccountStore,
+  workspace: string,
+  note: { reporter?: { name?: string } },
+): Promise<NewEdit['author'] | undefined> {
+  if (caller.kind === 'visitor') {
+    const name = note.reporter?.name;
+
+    return name === undefined ? { kind: 'visitor' } : { kind: 'visitor', name };
+  }
+  const [person, memberships] = await Promise.all([
+    accounts.account(caller.author),
+    accounts.memberships(caller.author),
+  ]);
+  const membership = memberships.find((each) => each.workspace.id === workspace);
+  if (person === undefined || membership === undefined) return undefined;
+
+  return { kind: 'member', name: person.name ?? person.email, workspace: membership.workspace.name };
+}
 
 /**
  * `POST /feedback/<id>/text?client=<site>` with `{ url, text }` (FRU-475).
@@ -19,10 +107,11 @@ export const EDIT_PATH = /^\/feedback\/([A-Za-z0-9_-]{1,100})\/text$/;
  * Replaces the text of a note, and writes a reply under it that says it was edited. The decisions of
  * the ticket, the simplest and the safest:
  *
- * - **Who.** The person who left the note, and nobody else: a session of the extension, read again
- *   in the store as for every write, whose account the index keeps as the author. A role that
- *   manages the sites does not rewrite the words of somebody else. A visitor and a token of a site
- *   are nobody the worker can name: `401`.
+ * - **Who.** The person who left the note, and nobody else (`callerOf`): a session of the extension,
+ *   read again in the store as for every write, whose account the index keeps as the author, or a
+ *   visitor known by the key of their browser, whose digest the index keeps (FRU-701), on a site
+ *   that lets its visitors edit. A role that manages the sites does not rewrite the words of somebody
+ *   else. A token of a site, and a visitor with no key, are nobody the worker can name: `401`.
  * - **Until when.** While the note is open: `new`, `todo` or `progress` (FRU-605). A note done waits
  *   for the verdict of its author, and a closed note says nothing more. Read in the store, and again
  *   under the lock of the row in the worker's own store (`409 not-open`).
@@ -47,7 +136,7 @@ export async function postEdit(
   },
   checks: CallerChecks,
 ): Promise<Response> {
-  const { routeFor, sessionWrites, writerIn, hidesTracker } = checks;
+  const { routeFor, hidesTracker } = checks;
   const body = await readBoundedText(request);
   if (body === null) return json(413, { error: 'payload-too-large', maxBytes: MAX_BODY_BYTES }, corsHeaders);
   let payload: unknown;
@@ -75,19 +164,18 @@ export async function postEdit(
   try {
     const workspace = route.client?.workspace;
     const { accounts } = context;
-    const session = await sessionWrites(request, config, context.context);
-    if (workspace === undefined || clientId === undefined || accounts === undefined || session === undefined) {
+    if (workspace === undefined || clientId === undefined || accounts === undefined) {
       return json(401, { error: 'identity-required' }, corsHeaders);
     }
-    const account = await writerIn(request, config, context.context, workspace, clientId);
-    if (account === undefined) {
-      const reach = await accounts.reach(workspace, session.subject);
-      const suspended = config.suspendedIn !== undefined && (await config.suspendedIn(workspace));
-
-      return reach === undefined || suspended
-        ? json(401, { error: 'identity-required' }, corsHeaders)
-        : json(403, { error: 'not-allowed' }, corsHeaders);
-    }
+    const caller = await callerOf(
+      request,
+      config,
+      route,
+      { workspace, site: clientId, accounts, context: context.context },
+      checks,
+      'edit',
+    );
+    if (!caller.ok) return json(caller.status, { error: caller.error }, corsHeaders);
     // One place only: a site that sends to several reads each note in each of them, and only the
     // worker's own store edits one.
     const target = route.client;
@@ -105,19 +193,22 @@ export async function postEdit(
     if (found === undefined) return json(404, { error: 'not-found' }, corsHeaders);
 
     const author = await indexedAuthorOf(context.noteIndex, workspace, clientId, found.note.id);
-    if (author === undefined || author !== account) return json(403, { error: 'not-allowed' }, corsHeaders);
+    if (author === undefined || author !== caller.author) return json(403, { error: 'not-allowed' }, corsHeaders);
     if (!(await takesEdits(store, target, route.policy))) return json(403, { error: 'edits-not-taken' }, corsHeaders);
     if (!EDITABLE_STAGES.has(found.stage)) return json(409, { error: 'not-open', stage: found.stage }, corsHeaders);
 
-    const [person, memberships] = await Promise.all([accounts.account(account), accounts.memberships(account)]);
-    const membership = memberships.find((each) => each.workspace.id === workspace);
-    if (person === undefined || membership === undefined) return json(401, { error: 'identity-required' }, corsHeaders);
+    const named = await replyAuthorOf(caller, accounts, workspace, found.note);
+    if (named === undefined) return json(401, { error: 'identity-required' }, corsHeaders);
+    // FRU-701: an edit writes a reply, and a visitor's counts with their replies of the minute.
+    if (caller.kind === 'visitor' && !(await checkReplyLimit(kv, context.context.clientIp))) {
+      return json(429, { error: 'rate-limited' }, corsHeaders);
+    }
 
     const answer = await store.edit?.(
       { issue: found.id, clientId },
       {
         text,
-        author: { kind: 'member', name: person.name ?? person.email, workspace: membership.workspace.name },
+        author: named,
         note: found.note,
         identifier: found.identifier,
       },

@@ -1,3 +1,4 @@
+import AxeBuilder from '@axe-core/playwright';
 import { type Page, type Route, expect, test } from '@playwright/test';
 import { noteFixture } from '../packages/shared/src/note.fixture.ts';
 import { ACME, sideScroll, stubWorker } from './console-workspace.ts';
@@ -154,6 +155,9 @@ test('the text of a note opens its page: its text, its element and its replies, 
   await expect(panel.locator('[data-task-reference]')).toHaveText('FB-12');
   await expect(panel.locator('[data-task-text]')).toContainText('The monthly plan is fine.');
   await expect(panel.locator('[data-task-replies]')).toContainText('We see it too.');
+  // FRU-687: the element is in « Technical details », folded: never a press away from the list.
+  await expect(panel.getByText(NOTE.anchor.selector)).toBeHidden();
+  await panel.getByText('Technical details').click();
   await expect(panel.getByText(NOTE.anchor.selector)).toBeVisible();
 
   // A field saves at once, as the menu does.
@@ -187,6 +191,72 @@ test('a panel opened on another note shows nothing of the one before while it re
   await expect(p.getByRole('dialog').getByText('Loading…')).toBeVisible();
   await expect(p.getByRole('dialog').locator('[data-task-text], [data-task-fields]')).toHaveCount(0);
   await expect(p.getByRole('dialog').locator('[data-task-text]')).toContainText('recieve');
+});
+
+test('the panel is beside the list: the arrows change the note, Escape gives the focus back to its row (FRU-687)', async ({
+  page: p,
+}) => {
+  await worker(p);
+  await p.goto(`${CONSOLE}/w/w1/notes`);
+  const row = (text: string) => p.locator('tr[data-note]', { hasText: text });
+  await row('The price')
+    .getByRole('button', { name: /The price of the yearly plan/ })
+    .click();
+  const panel = p.getByRole('dialog', { name: /The price of the yearly plan/ });
+  await expect(panel).toBeVisible();
+  // 440 px at the right edge, not modal: the list stays in view and its row is marked.
+  const box = await panel.boundingBox();
+  expect.soft(Math.round(box?.width ?? 0)).toBe(440);
+  expect.soft(Math.round((box?.x ?? 0) + (box?.width ?? 0))).toBe(1440);
+  await expect(panel).toHaveAttribute('aria-modal', 'false');
+  await expect(row('The price')).toHaveAttribute('data-open', 'true');
+  const list = await p.getByRole('region', { name: 'Notes' }).boundingBox();
+  expect.soft(Math.round((list?.x ?? 0) + (list?.width ?? 0))).toBeLessThanOrEqual(1000);
+  // The columns of the site and the path go: the list is narrower.
+  await expect(row('The price').getByText('staging.acme.dev')).toBeHidden();
+  // A capture the note does not have: the frame says so, and opens the page.
+  await expect(panel.locator('[data-task-preview="none"]')).toContainText('No capture of this page.');
+  await expect(panel.getByRole('link', { name: 'Open on the page' })).toHaveAttribute(
+    'href',
+    'https://staging.acme.dev/pricing#fruitback-note=sd_1',
+  );
+
+  // Nothing of the panel or the list beside it fails axe.
+  await p.waitForTimeout(250);
+  const axe = await new AxeBuilder({ page: p }).include('main').include('[data-task-panel]').analyze();
+  expect
+    .soft(axe.violations.map((violation) => `${violation.id}: ${violation.nodes[0]?.target.join(' ')}`))
+    .toEqual([]);
+
+  // A closed list of the panel keeps the arrows: they open it, and the note stays. React Aria stops
+  // the key before the panel reads it (raised in review, measured).
+  const priority = panel.getByRole('button', { name: /Priority/ });
+  await priority.focus();
+  await p.keyboard.press('ArrowDown');
+  await expect(p.getByRole('listbox')).toBeVisible();
+  await expect(p).toHaveURL(/task=n1/);
+  await p.keyboard.press('Escape');
+  await expect(p.getByRole('listbox')).toHaveCount(0);
+  await expect(panel).toBeVisible();
+  await panel.evaluate((element) => (element as HTMLElement).focus());
+
+  // The arrow up goes to the note above it in the list: « In progress » is before « New ».
+  await p.keyboard.press('ArrowUp');
+  await expect(p).toHaveURL(/task=n2/);
+  await expect(p.getByRole('dialog', { name: /The returns policy/ })).toBeVisible();
+  await expect(row('The returns policy')).toHaveAttribute('data-open', 'true');
+  await expect(p.getByRole('dialog').getByRole('button', { name: 'Previous note' })).toBeDisabled();
+  await p.keyboard.press('ArrowDown');
+  await expect(p).toHaveURL(/task=n1/);
+  // A press in the list opens another note in the same panel.
+  await row('The returns policy')
+    .getByRole('button', { name: /The returns policy/ })
+    .click();
+  await expect(p).toHaveURL(/task=n2/);
+
+  await p.keyboard.press('Escape');
+  await expect(p.getByRole('dialog')).toHaveCount(0);
+  await expect(row('The returns policy').locator('[data-note-title]')).toBeFocused();
 });
 
 test('a link with the task opens it, a note of a tracker shows no field, and the panel fits a phone', async ({
