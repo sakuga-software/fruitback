@@ -1,5 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
 import { LAYERS, buildSheet, moduleOf, offences, propertiesOnEveryElement, themeReference } from '../build-styles.ts';
 import { TAILWIND_STYLES } from './tailwind-sheet.ts';
@@ -16,6 +17,19 @@ describe('the Tailwind sheet of the widget', () => {
     const built = await buildSheet();
 
     assert.equal(TAILWIND_STYLES, built, 'src/tailwind-sheet.ts is stale or edited: run pnpm styles:build');
+  });
+
+  it('builds with one exact version of Tailwind, so a new one changes the sheet only on purpose', () => {
+    // A range would let a bump of the lockfile rewrite the minified sheet with no change of source,
+    // and the test above would fail on a pull request that touches no style (review of #926).
+    const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as {
+      devDependencies: Record<string, string>;
+    };
+    const tailwind = ['tailwindcss', '@tailwindcss/node', '@tailwindcss/oxide'];
+    const ranges = tailwind.filter((name) => !/^\d+\.\d+\.\d+$/.test(manifest.devDependencies[name] ?? ''));
+
+    assert.deepEqual(ranges, [], 'pin these devDependencies to an exact version');
+    assert.equal(new Set(tailwind.map((name) => manifest.devDependencies[name])).size, 1, 'one version for all three');
   });
 
   it('writes the CSS of the sheet unchanged into the module, backslashes too', async () => {
