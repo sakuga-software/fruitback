@@ -20,6 +20,21 @@ describe('the stylesheets of fruitback.com (FRU-681)', () => {
     });
   }
 
+  it('pins Tailwind to the one version the built sheets name', () => {
+    // A range would let a refresh of the lockfile change the output with no source changed.
+    const { devDependencies } = JSON.parse(readFileSync(new URL('package.json', import.meta.url), 'utf8')) as {
+      devDependencies: Record<string, string>;
+    };
+    const pins = [devDependencies['tailwindcss'], devDependencies['@tailwindcss/cli']];
+    assert.ok(
+      pins.every((pin) => pin !== undefined && /^\d+\.\d+\.\d+$/.test(pin)),
+      `not exact: ${pins.join(', ')}`,
+    );
+    assert.equal(pins[0], pins[1], 'the CLI and tailwindcss are not the same version');
+    for (const sheet of SHEETS)
+      assert.ok(readFileSync(output(sheet), 'utf8').includes(`tailwindcss v${pins[0]} `), sheet);
+  });
+
   /** A colour written as a value: `#rgb`, `#rrggbb`, `rgb(…)`, `hsl(…)`, `oklch(…)`, outside a comment. */
   const VALUE = /#[0-9a-f]{3,8}\b|\b(?:rgba?|hsla?|oklch|oklab)\(/gi;
 
