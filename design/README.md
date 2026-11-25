@@ -129,7 +129,9 @@ for the console, and the extension, the widget and the docs keep the shared valu
 that HeroUI reads (`muted`, `surface`, `accent`, `field-radius`) stay in `app.css`, and read the
 tokens. **Each token is a CSS variable on `:root`** (`@theme static` writes all of them, used or
 not), and each utility reads it through `var()`: a setting of the appearance (FRU-694) sets a
-token on `<html>` and the console follows at once.
+token on `<html>` and the console follows at once. The five themes of the appearance (Slate,
+Snow, Zinc, Midnight, Graphite), the tints of the sidebar and the six accents are in
+`apps/console/app/appearance.ts`, where `appearance.test.ts` computes the contrast of each pair.
 
 | Token                                                           | Value                                                            | What it is for                                                   |
 | --------------------------------------------------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------- |
@@ -138,6 +140,7 @@ token on `<html>` and the console follows at once.
 | `hover`, `selected`, `chip`                                     | `#e8edf3`, `#e2e8f0`, `#e8edf3`                                  | under the pointer, chosen, the fill of a chip                    |
 | `line`, `control`                                               | `#e3e8ef`, `#7b8797`                                             | a rule or a frame, the border of a field and of a control        |
 | `danger-line`                                                   | `#f1c2c0`                                                        | the border of the danger zone of the settings (FRU-693)          |
+| `spacing-row`, `shadow-segment`                                 | `36px`, see `theme.css`                                          | a row of a list or a table (the density); a segment chosen       |
 | `accent`, `accent-strong`                                       | `#dd2c27`, `#b91c1c`                                             | the main button, the focus ring, an alert; under the pointer     |
 | `done`                                                          | `#166534`                                                        | « Connected », « Active », a step done                           |
 | `status-new`, `-todo`, `-progress`, `-done`, `-closed`, `-edge` | `#bec2c8`, `#d9dbdf`, `#f3bb3d`, `#5560c4`, `#a52a3a`, `#8a8a93` | the status of a note (FRU-334), and the edge of its drop         |

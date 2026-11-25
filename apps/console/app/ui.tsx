@@ -1261,6 +1261,144 @@ function checkboxClasses({ list = false, bare = false }: { list?: boolean; bare?
   };
 }
 
+/** The ring of a choice that has focus, on the label that takes the press: its input is hidden. */
+const CHOICE_FOCUS =
+  'data-[focus-visible=true]:[outline:2px_solid_var(--color-accent)] data-[focus-visible=true]:outline-offset-2';
+
+type GroupProps<Value extends string> = {
+  /** The name of the group for a screen reader: the row of the card says it on screen. */
+  label: string;
+  value: Value;
+  onChange: (value: Value) => void;
+};
+
+/**
+ * One choice among a few, as the segments of one control (FRU-694): « Light, Dark, System »,
+ * « Compact, Default, Comfortable », « 0, 4, 6, 8 ». Radios of HeroUI: the arrows move the choice,
+ * and a screen reader hears a group of radios. The segment chosen is the page on the chip.
+ */
+export function Segments<Value extends string>({
+  label,
+  value,
+  onChange,
+  options,
+}: GroupProps<Value> & { options: readonly { value: Value; label: string; icon?: ReactNode }[] }) {
+  return (
+    <RadioGroup
+      value={value}
+      orientation="horizontal"
+      onChange={(chosen) => onChange(chosen as Value)}
+      className="kit-segments inline-flex flex-row flex-wrap gap-[2px] rounded-control bg-chip p-[2px]"
+    >
+      <Label className="sr-only">{label}</Label>
+      {options.map((option) => (
+        <Radio
+          key={option.value}
+          value={option.value}
+          className={`kit-segments__item group/segment m-0 rounded-inner cursor-pointer data-selected:bg-page data-selected:shadow-segment ${CHOICE_FOCUS}`}
+        >
+          <Radio.Content className="inline-flex h-control-sm items-center gap-[6px] px-[8px] text-(length:--text-hint) leading-none font-medium text-muted group-data-selected/segment:text-ink">
+            {option.icon ?? null}
+            <Label className="cursor-pointer text-[inherit] font-[inherit] text-(length:--text-hint) leading-none">
+              {option.label}
+            </Label>
+          </Radio.Content>
+        </Radio>
+      ))}
+    </RadioGroup>
+  );
+}
+
+/**
+ * One colour among a few, as squares of 24 px (FRU-694): the tint of the sidebar, the accent. Each
+ * square is a radio named by its words; the one chosen has a ring of ink around it.
+ */
+export function ColourPick<Value extends string>({
+  label,
+  value,
+  onChange,
+  options,
+}: GroupProps<Value> & { options: readonly { value: Value; label: string; colour: string }[] }) {
+  return (
+    <RadioGroup
+      value={value}
+      orientation="horizontal"
+      onChange={(chosen) => onChange(chosen as Value)}
+      className="kit-colours inline-flex flex-row flex-wrap gap-[10px]"
+    >
+      <Label className="sr-only">{label}</Label>
+      {options.map((option) => (
+        <Radio
+          key={option.value}
+          value={option.value}
+          aria-label={option.label}
+          className={`kit-colours__item group/colour m-0 rounded-control cursor-pointer data-selected:[box-shadow:0_0_0_2px_var(--color-page),0_0_0_4px_var(--color-ink)] ${CHOICE_FOCUS}`}
+        >
+          <Radio.Content className="block">
+            <span
+              aria-hidden="true"
+              className="block size-[24px] rounded-control border border-control/40"
+              style={{ background: option.colour }}
+            />
+          </Radio.Content>
+        </Radio>
+      ))}
+    </RadioGroup>
+  );
+}
+
+/**
+ * One choice among a few, each a picture with its words under it (FRU-694): the themes. The one
+ * chosen has a ring of ink and a check before its words.
+ */
+export function PicturePick<Value extends string>({
+  label,
+  value,
+  onChange,
+  options,
+}: GroupProps<Value> & { options: readonly { value: Value; label: string; picture: ReactNode }[] }) {
+  return (
+    <RadioGroup
+      value={value}
+      orientation="horizontal"
+      onChange={(chosen) => onChange(chosen as Value)}
+      className="kit-pictures grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-[14px]"
+    >
+      <Label className="sr-only">{label}</Label>
+      {options.map((option) => (
+        <Radio
+          key={option.value}
+          value={option.value}
+          className={`kit-pictures__item group/picture m-0 w-full min-w-0 rounded-card cursor-pointer ${CHOICE_FOCUS}`}
+        >
+          <Radio.Content className="flex w-full min-w-0 flex-col gap-[8px]">
+            <span className="block w-full overflow-hidden rounded-card border border-line group-data-selected/picture:[box-shadow:0_0_0_2px_var(--color-ink)]">
+              {option.picture}
+            </span>
+            <span className="inline-flex min-w-0 items-center gap-[6px] text-small leading-auto font-medium text-ink">
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 24 24"
+                className="hidden size-[14px] flex-none group-data-selected/picture:inline"
+              >
+                <path
+                  d="M5 12.5l4.5 4.5L19 7.5"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              <Label className="cursor-pointer truncate text-[inherit] font-[inherit]">{option.label}</Label>
+            </span>
+          </Radio.Content>
+        </Radio>
+      ))}
+    </RadioGroup>
+  );
+}
+
 /** A colour drawn as a square, with the edge of a status: 18 px, or 10 px (« small »). */
 export function Swatch({
   colour,
@@ -2279,6 +2417,7 @@ function itemClasses(danger: boolean): string {
   return `min-h-control-md rounded-control text-(length:--text-small) leading-(--text-small--line-height) transform-none [transition:none] data-[hovered=true]:bg-hover data-[focused=true]:bg-hover data-[focus-visible=true]:[outline:2px_solid_var(--color-accent)] data-[focus-visible=true]:outline-offset-[-2px]! data-[focus-visible=true]:[box-shadow:none] ${danger ? 'text-accent-strong' : ''}`;
 }
 const MENU_WORDS = 'kit-menu__words flex min-w-0 flex-col';
+const MENU_MARK = 'kit-menu__mark inline-flex flex-none';
 const MENU_LABEL = 'text-inherit font-semibold';
 const MENU_DETAIL = 'text-(length:--text-hint) leading-(--text-hint--line-height) text-muted';
 
@@ -2290,6 +2429,8 @@ export type MenuItem = {
   /** The item takes something away: « Remove ». */
   danger?: boolean;
   disabled?: boolean;
+  /** A picture before the words, decorative: the tile of a workspace in the menu of the workspaces (FRU-661). */
+  mark?: ReactNode;
 };
 
 type MenuProps = {
@@ -2583,6 +2724,7 @@ function menuItem(item: MenuItem, checkable: boolean) {
       className={itemClasses(item.danger === true)}
     >
       {checkable ? <Dropdown.ItemIndicator /> : null}
+      {item.mark === undefined ? null : <span className={MENU_MARK}>{item.mark}</span>}
       <span className={MENU_WORDS}>
         <Label className={MENU_LABEL}>{item.label}</Label>
         {item.detail === undefined ? null : <Description className={MENU_DETAIL}>{item.detail}</Description>}

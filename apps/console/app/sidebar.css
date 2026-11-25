@@ -1,0 +1,51 @@
+/*
+  The sidebar has its own copy of the colours (FRU-694). Each token below is, in the sidebar, its
+  variable --sidebar-<name>, which is the token of the page unless a tint of the appearance sets it:
+  an ink sidebar on a light page writes its words light, and its ring stays visible on it. The
+  appearance sets variables only (app/appearance.ts, SIDEBAR_KEYS); appearance.test.ts holds the two
+  lists together. Its own file: the guards of the tokens read app.css and theme.css for the value
+  of a token, and a copy is no value.
+*/
+:root {
+  --sidebar-color-ink: var(--color-ink);
+  --sidebar-color-ink-soft: var(--color-ink-soft);
+  --sidebar-muted: var(--muted);
+  --sidebar-color-page: var(--color-page);
+  --sidebar-color-subtle: var(--color-subtle);
+  --sidebar-color-hover: var(--color-hover);
+  --sidebar-color-selected: var(--color-selected);
+  --sidebar-color-chip: var(--color-chip);
+  --sidebar-color-line: var(--color-line);
+  --sidebar-color-control: var(--color-control);
+  --sidebar-color-done: var(--color-done);
+  --sidebar-color-avatar: var(--color-avatar);
+  --sidebar-color-on-ink: var(--color-on-ink);
+  --sidebar-color-accent-strong: var(--color-accent-strong);
+  --sidebar-accent: var(--accent);
+  --sidebar-color-accent: var(--accent);
+  --sidebar-focus: var(--accent);
+  --sidebar-accent-foreground: var(--accent-foreground);
+  --sidebar-accent-hover: var(--accent-hover);
+}
+
+.kit-rail {
+  --color-ink: var(--sidebar-color-ink);
+  --color-ink-soft: var(--sidebar-color-ink-soft);
+  --muted: var(--sidebar-muted);
+  --color-page: var(--sidebar-color-page);
+  --color-subtle: var(--sidebar-color-subtle);
+  --color-hover: var(--sidebar-color-hover);
+  --color-selected: var(--sidebar-color-selected);
+  --color-chip: var(--sidebar-color-chip);
+  --color-line: var(--sidebar-color-line);
+  --color-control: var(--sidebar-color-control);
+  --color-done: var(--sidebar-color-done);
+  --color-avatar: var(--sidebar-color-avatar);
+  --color-on-ink: var(--sidebar-color-on-ink);
+  --color-accent-strong: var(--sidebar-color-accent-strong);
+  --accent: var(--sidebar-accent);
+  --color-accent: var(--sidebar-color-accent);
+  --focus: var(--sidebar-focus);
+  --accent-foreground: var(--sidebar-accent-foreground);
+  --accent-hover: var(--sidebar-accent-hover);
+}

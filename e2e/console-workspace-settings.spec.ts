@@ -199,7 +199,11 @@ test('the settings are pages of the shell, beside the pages of the person (FRU-6
   await workerWith(page, [ACME]);
   await page.goto(`${CONSOLE}/w/w1/settings`);
   const nav = page.getByRole('main').getByRole('navigation', { name: 'Settings', exact: true });
-  await expect(nav.getByRole('list', { name: 'Account' }).getByRole('link')).toHaveText(['Profile', 'Sessions']);
+  await expect(nav.getByRole('list', { name: 'Account' }).getByRole('link')).toHaveText([
+    'Profile',
+    'Sessions',
+    'Appearance',
+  ]);
   const pages = nav.getByRole('list', { name: 'Workspace' }).getByRole('link');
   await expect(pages).toHaveText(['General', 'AI', 'Agents', 'Members', 'Connectors']);
   await expect(pages.first()).toHaveAttribute('aria-current', 'page');
