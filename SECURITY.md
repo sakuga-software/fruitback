@@ -2544,7 +2544,7 @@ them by a key that their browser holds, and by nothing else.
 - The deletion of a visitor. `POST /feedback/<id>/withdraw` takes the key of the browser in place of
   a session, on the route of a member's withdrawal (`callerOf`), with the guards of the edit above:
   the author `visitor:<digest>` of this key on this site, a site that takes the notes of anybody, an
-  open note, 5 replies a minute. **Nothing is deleted in a store**: the note is closed with the reply
+  open note, 5 replies a minute. Nothing is deleted in a store: the note is closed with the reply
   « Withdrew the note », Linear moves its issue to a canceled state, and an address gets
   `note.withdrawn`. The index marks the row (`removed_at`), and `GET /feedback` drops the note for
   every reader. The team keeps it, closed, in its tracker and in the console. A member's withdrawal
