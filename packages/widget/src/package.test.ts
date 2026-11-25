@@ -140,12 +140,13 @@ describe('the script-tag build', () => {
     const sizes = `${gzipped} B gzipped, ${brotli} B brotli, from ${size} B raw`;
 
     // Not a style rule: a feedback widget that costs its host half a megabyte is one they remove.
-    // FRU-680 measured 135 609 B gzipped and 113 722 B brotli before Tailwind, and projects about
-    // 138 000 and 119 000 once every sheet is Tailwind: the ceiling leaves room for that and for the
-    // features of the same weeks, and no more (docs/decisions/widget.md, « Tailwind in the Shadow
-    // root »). A server sends brotli when the browser takes it, gzip otherwise: both are held.
-    assert.ok(gzipped < 150_000, sizes);
-    assert.ok(brotli < 130_000, sizes);
+    // FRU-680 measured 135 609 B gzipped and 113 722 B brotli before Tailwind, and projects 155 000 to
+    // 167 000 and 132 000 to 139 000 once every sheet is Tailwind, from the cost measured on its first
+    // two sheets. The ceiling holds that, and stays under the old tripwire of 200 000 gzipped
+    // (docs/decisions/widget.md, « Tailwind in the Shadow root »). A server sends brotli when the
+    // browser takes it, gzip otherwise: both are held.
+    assert.ok(gzipped < 175_000, sizes);
+    assert.ok(brotli < 150_000, sizes);
   });
 
   it('carries the English messages of zod and no other locale', async () => {
