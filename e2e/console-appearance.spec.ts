@@ -117,7 +117,13 @@ test('the page shows the kept choice from its first render, so a press builds on
         if (!seen.includes(label.textContent ?? '')) seen.push(label.textContent ?? '');
     }).observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ['data-selected'] });
   });
-  await page.goto(APPEARANCE);
+  // By the navigation of the shell, as a person comes: a move between screens renders in a transition.
+  await page.goto(`${CONSOLE}/w/w1/account`);
+  await page
+    .getByRole('main')
+    .getByRole('navigation', { name: 'Settings' })
+    .getByRole('link', { name: 'Appearance' })
+    .click();
   await expect(page.getByRole('radiogroup', { name: 'Theme' }).getByRole('radio', { name: 'Graphite' })).toBeChecked();
   expect(await page.evaluate(() => (window as unknown as { seen: string[] }).seen)).toEqual(['Graphite']);
   // A press keeps the rest of the choice.
