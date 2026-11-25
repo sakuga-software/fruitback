@@ -512,14 +512,32 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   two links of `SubNav`): a bar of 48 px that says « Settings », a navigation of 220 px with an icon
   on each entry, in two groups, and the page beside it, with a head of its own (`SettingsHead`: a
   title of 20 px, its sentence, its actions at the right). « Account »: Profile (`/account`) and
-  Sessions (`/account/sessions`). « Workspace »: General (`/settings`), AI (`/settings/ai`), Agents
+  Sessions (`/account/sessions`), Appearance (`/account/appearance`). « Workspace »: General (`/settings`), AI (`/settings/ai`), Agents
   (`/settings/agents`, no crumbs any more), and Members and Connectors, which lead to the screens of
   the bar. The addresses did not change, so no redirection. **The navigation shows an entry only for
-  a page that exists**: `ACCOUNT_PAGES` and `WORKSPACE_PAGES` hold « Sign-in and addresses »,
-  « Appearance » (FRU-694) and « Notifications » with `built: false`, and `settings-shell.test.ts`
+  a page that exists**: `ACCOUNT_PAGES` and `WORKSPACE_PAGES` hold « Sign-in and addresses »
+  and « Notifications » with `built: false`, and `settings-shell.test.ts`
   holds `built` to the routes of a build. Under 768 px the navigation is one row above the page,
   which scrolls in its frame. The shell takes back the padding of `Screen` with the same values, so
   its bar and its navigation reach the edges of the column.
+  **Settings › Appearance** (FRU-694, `routes/account-appearance.tsx`, the mockup « Apparence »):
+  a card « Theme », five themes drawn in small (Slate, the default, Snow, Zinc, Midnight, Graphite;
+  no beige), and a card « Customize », one row per setting: the mode (Light, Dark, System), the
+  tint of the sidebar (from the page to ink), the accent (six), the density (rows of 32, 36 or
+  40 px), the radius (0, 4, 6, 8) and the size of the text (12, 13, 14), with « Reset ». **The
+  appearance only sets tokens** (`app/appearance.ts`): it writes the variables of `theme.css` and
+  `app.css` on `<html>`, inline, and adds no style. A theme is light or dark; the mode chooses the
+  light one or the dark one, and « System » follows `prefers-color-scheme` while the page is open.
+  **The sidebar has its own copy of the colours** (`app/sidebar.css`): in `.kit-rail` each token
+  reads `--sidebar-<token>`, which is the token of the page unless a tint sets it, so an ink sidebar
+  on a light page writes its words light and keeps a ring that shows. A red word and a deletion
+  stay red whatever the accent. **Every theme, tint and accent holds AA** (`app/appearance.test.ts`
+  computes each pair: 4.5:1 for a text, 3:1 for the border of a control and the ring). **No flash**:
+  the choice and the variables of its two themes are kept in `localStorage`, and
+  `public/appearance.js`, a script of the page before the bundle, writes them on `<html>` before the
+  first paint; it knows no theme. The mockup keeps the choice with the account: the worker keeps no
+  appearance yet, so this browser keeps it until FRU-716. The density is `--spacing-row`, which the
+  table of the notes reads; a table that is drawn again reads it too.
   `e2e/console-workspace-settings.spec.ts` holds the entry by role, the section, « Save » disabled
   with no change, and the deletion typed in its dialog.
 
