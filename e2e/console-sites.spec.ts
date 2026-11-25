@@ -221,6 +221,31 @@ test('the list is a table, one line of 36 px per site, named by its address and 
   const drawnAdd = await box(add);
   expect.soft(drawnAdd.height, '« Add a site »').toBe(28);
   expect.soft(frame.x + frame.width - (drawnAdd.x + drawnAdd.width), 'from the right edge').toBeCloseTo(16, 0);
+  // FRU-650: a plus of 14 px before the words, 6 px from them, 10 px in, as the mockup of FRU-688 draws it.
+  const plus = add.locator('svg');
+  await expect(plus).toHaveCount(1);
+  await expect(plus).toHaveAttribute('aria-hidden', 'true');
+  await expect(plus.locator('path')).toHaveAttribute('d', 'M12 5v14M5 12h14');
+  const drawnPlus = await box(plus);
+  expect.soft([drawnPlus.width, drawnPlus.height], 'the plus').toEqual([14, 14]);
+  expect.soft(drawnPlus.x - drawnAdd.x, 'the plus, from the start of the button').toBeCloseTo(10, 0);
+  expect.soft(drawnPlus.y + drawnPlus.height / 2, 'the plus, on the middle').toBeCloseTo(drawnAdd.y + 14, 0);
+  // The words start 6 px after the plus: HeroUI's margins around an icon of a button are not drawn.
+  const words = await add.evaluate((button) => {
+    const range = document.createRange();
+    range.selectNodeContents(button);
+    range.setStartAfter(button.querySelector('svg')!);
+
+    return range.getBoundingClientRect().x;
+  });
+  expect.soft(words - (drawnPlus.x + drawnPlus.width), 'from the plus to the words').toBeCloseTo(6, 0);
+  expect.soft(await styles(add, ['column-gap', 'padding-left', 'padding-right'])).toEqual({
+    'column-gap': '6px',
+    'padding-left': '10px',
+    'padding-right': '10px',
+  });
+  // Drawn in the colour of the words: white on the accent.
+  expect.soft(await painted(plus, 'color')).toEqual(rgb(WHITE));
   // The sentence under the title went with the large title.
   await expect(page.getByText('Where Acme collects notes, and where they stand.')).toHaveCount(0);
 
