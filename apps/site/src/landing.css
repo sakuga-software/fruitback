@@ -1,0 +1,1107 @@
+/*
+  The landing of fruitback.com (docs/_layouts/landing.html), after the mock-up « Fruitback — landing V2 »
+  of FRU-387, in Tailwind on the tokens of src/theme.css (FRU-681). build.ts writes docs/assets/landing.css
+  from this file. The five stage colours are the widget's own (--fruitback-stage-* in
+  packages/widget/src/theme.ts, the status-* tokens of the shared theme), so a drop here is the colour a
+  pin takes on the page.
+
+  A rule takes utilities with @apply. A declaration is written out only where no utility computes the
+  same value; its comment says why.
+
+  The page has no preflight of Tailwind: it was drawn on the defaults of the browser, and keeps them.
+
+  Text wraps the way the console and the extension do (widget.md, FRU-350): content wraps anywhere, so a
+  selector or an address stays in its box; a button or a label never breaks inside its words.
+*/
+@layer theme, base, components, utilities;
+@import 'tailwindcss/theme.css' layer(theme);
+@import '@fruitback/shared/tailwind/theme.css' layer(theme);
+@import './theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities) source(none);
+
+:root {
+  @apply scheme-light;
+}
+
+* {
+  @apply box-border;
+}
+
+html {
+  @apply scroll-pt-20 scroll-smooth;
+}
+
+/* The guides fade in from the landing, as they do from one another (FRU-440). */
+@view-transition {
+  navigation: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    @apply scroll-auto;
+  }
+
+  @view-transition {
+    navigation: none;
+  }
+}
+
+/*
+  -webkit-font-smoothing is written out: the antialiased of Tailwind also sets -moz-osx-font-smoothing,
+  which would change the text in Firefox on macOS.
+*/
+body {
+  @apply m-0 bg-landing-page font-landing text-[16px]/[1.55] text-site-ink wrap-anywhere;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  @apply text-inherit;
+}
+
+:focus-visible {
+  @apply outline-2 outline-site-accent outline-offset-2;
+}
+
+img {
+  @apply block max-w-full h-auto;
+}
+
+code,
+pre {
+  @apply font-mono;
+}
+
+code {
+  @apply text-[0.9em];
+}
+
+button,
+summary,
+.button,
+.pill,
+.chip,
+kbd {
+  @apply whitespace-nowrap;
+}
+
+.wrap {
+  @apply w-full max-w-312 my-0 mx-auto py-0 px-6;
+}
+
+.narrow {
+  @apply max-w-227;
+}
+
+/* The glyphs are drawn: a check, a cross and the drop, in currentColor (icons.md: no emoji). */
+.glyph {
+  @apply flex-none w-4 h-4;
+}
+
+/* The head. */
+.top {
+  @apply sticky top-0 z-10 bg-landing-head backdrop-blur-[8px] border-b border-b-site-line;
+}
+
+.top-row {
+  @apply flex items-center gap-7 min-h-16.5;
+}
+
+.brand {
+  @apply inline-flex flex-none no-underline;
+}
+
+.brand img {
+  @apply w-29.5;
+}
+
+.top-nav {
+  @apply flex gap-5.5 flex-1;
+}
+
+.top-nav a,
+.top-link {
+  @apply text-site-body text-[14px] font-medium no-underline whitespace-nowrap;
+}
+
+.top-nav a:hover,
+.top-link:hover {
+  @apply text-site-ink underline;
+}
+
+.top-end {
+  @apply flex items-center gap-5 ml-auto;
+}
+
+.top-link {
+  @apply text-site-ink font-semibold;
+}
+
+@media (max-width: 880px) {
+  .top-nav {
+    @apply hidden;
+  }
+}
+
+@media (max-width: 420px) {
+  .top-row {
+    @apply gap-3;
+  }
+
+  .top-end {
+    @apply gap-3;
+  }
+
+  .brand img {
+    @apply w-24;
+  }
+
+  .top .button-small {
+    @apply py-0 px-3;
+  }
+}
+
+@media (max-width: 359px) {
+  .top-link {
+    @apply hidden;
+  }
+}
+
+/* Buttons: the accent, an outline, the night, and white on the red band. */
+.button {
+  @apply inline-flex items-center justify-center gap-2 min-h-12 py-0 px-6 border border-site-accent rounded-full bg-site-accent text-on-ink text-[16px] font-semibold no-underline;
+}
+
+.button:hover {
+  @apply bg-accent-strong border-accent-strong;
+}
+
+.button-outline {
+  @apply border-site-edge bg-transparent text-site-ink;
+}
+
+.button-outline:hover {
+  @apply bg-site-chip border-site-edge;
+}
+
+.button-night {
+  @apply border-site-ink bg-site-ink;
+}
+
+.button-night:hover {
+  @apply border-site-body bg-site-body;
+}
+
+.button-small {
+  @apply min-h-9.5 py-0 px-4 text-[14px];
+}
+
+.button-block {
+  @apply flex w-full;
+}
+
+.actions {
+  @apply flex flex-wrap items-center gap-3;
+}
+
+/* The hero. */
+.hero {
+  @apply relative pt-20 px-0 pb-16 text-center;
+}
+
+.hero .actions {
+  @apply justify-center;
+}
+
+/*
+  The address goes to the setup of the console, which adds the site once the person is signed in
+  (FRU-635). It is a plain GET form: the page needs no script.
+*/
+.try {
+  @apply flex items-center gap-2 w-full max-w-140 my-0 mx-auto p-1.5 box-border border border-site-edge rounded-full bg-site-surface;
+}
+
+.try:has(input:focus-visible) {
+  @apply outline-2 outline-site-accent outline-offset-2;
+}
+
+.try-field {
+  @apply flex flex-1 items-center gap-2 min-w-0 pl-3.5 text-landing-muted cursor-text;
+}
+
+.try-field input {
+  /* The whole font of the page, before its size: a field has a font of its own. */
+  font: inherit;
+  @apply flex-1 min-w-0 min-h-11 p-0 border-0 bg-transparent text-[16px] text-site-ink;
+}
+
+.try-field input:focus {
+  @apply outline-none;
+}
+
+.try-field input::placeholder {
+  @apply text-landing-muted;
+}
+
+.try .button {
+  @apply min-h-11;
+}
+
+.try-other {
+  @apply m-0 mt-4 text-site-body text-[14px];
+}
+
+.try-other a {
+  @apply text-accent-strong font-semibold;
+}
+
+@media (max-width: 520px) {
+  .try {
+    @apply flex-col items-stretch rounded-[24px];
+  }
+
+  .try-field {
+    @apply py-0 px-2.5;
+  }
+}
+
+.badge {
+  @apply inline-flex items-center gap-2 m-0 mb-7 py-1.25 px-3.25 border border-site-line rounded-full bg-site-surface text-[13px] font-semibold text-site-body;
+}
+
+.badge::before {
+  @apply content-[''] w-2 h-2 rounded-[50%] bg-landing-ok;
+}
+
+h1 {
+  @apply max-w-240 mt-0 mx-auto mb-7 text-[clamp(40px,6.4vw,84px)] leading-none font-[750] tracking-[-0.045em] wrap-normal;
+}
+
+.tagline {
+  @apply m-0 mb-8 text-[clamp(20px,2vw,24px)] font-semibold tracking-[-0.02em];
+}
+
+.fine {
+  @apply mt-7 mx-auto mb-0 max-w-155 text-landing-muted text-[14px];
+}
+
+.stage-wrap {
+  @apply relative mt-12 text-left;
+}
+
+.hero-pin {
+  @apply absolute -top-62.5 right-0 w-52.5 pointer-events-none drop-shadow-landing-pin;
+}
+
+@media (max-width: 1180px) {
+  .hero-pin {
+    @apply hidden;
+  }
+}
+
+/* The page in a browser frame, with its pins and one open note. */
+.browser {
+  @apply relative m-0 border border-site-line rounded-[16px] bg-landing-stone overflow-hidden shadow-landing-frame;
+}
+
+.browser-bar {
+  @apply flex items-center gap-4 h-11 py-0 px-4 bg-landing-bar border-b border-b-site-line;
+}
+
+.lights {
+  @apply inline-flex flex-none gap-1.5;
+}
+
+.lights i {
+  @apply w-2.5 h-2.5 rounded-[50%] bg-landing-night-muted;
+}
+
+.url {
+  @apply flex-[0_1_220px] my-0 mx-auto py-0.75 px-3 border border-site-line rounded-[6px] bg-site-surface text-[12px] text-site-body text-center overflow-hidden text-ellipsis whitespace-nowrap;
+}
+
+.browser-page {
+  @apply relative pt-10 px-12 pb-33;
+}
+
+.demo-head {
+  @apply flex items-center justify-between gap-4 m-0 mb-8 text-[14px];
+}
+
+.demo-head b {
+  @apply text-[22px] tracking-[-0.03em];
+}
+
+.demo-head span {
+  @apply flex gap-5;
+}
+
+.demo-title {
+  @apply m-0 mb-7 text-[clamp(28px,3.4vw,42px)] font-extrabold tracking-[-0.04em];
+}
+
+.demo-cards {
+  @apply grid grid-cols-3 gap-4.5;
+}
+
+.demo-card {
+  @apply relative flex flex-col items-start gap-2 p-5.5 rounded-[14px] bg-site-surface;
+}
+
+.demo-card b {
+  @apply text-[17px];
+}
+
+.demo-card strong {
+  @apply text-[28px] font-extrabold tracking-[-0.03em];
+}
+
+.demo-card small {
+  @apply text-site-body text-[14px];
+}
+
+.demo-add {
+  @apply mt-2 py-2 px-4.5 rounded-full bg-landing-demo-green text-on-ink text-[14px] font-semibold;
+}
+
+/* The button the open note is about: faint on purpose, with its text still at 4.5:1 for axe. */
+.demo-faint {
+  @apply bg-landing-demo-faint text-site-ink;
+}
+
+/* A pin: the drop with its number, white edge, in the colour of its stage. */
+.pin {
+  @apply absolute grid place-items-center w-6.5 h-6.5 border-2 border-on-ink rounded-[50%_50%_50%_0] -rotate-45 shadow-landing-pin text-[11px] font-bold text-ink;
+}
+
+.pin i {
+  @apply rotate-45 not-italic;
+}
+
+.pin-done {
+  @apply text-on-ink;
+}
+
+.pin-a {
+  @apply left-4 top-16;
+}
+
+.pin-b {
+  @apply left-3.5 bottom-11;
+}
+
+.pin-c {
+  @apply right-5 top-7.5;
+}
+
+.demo-note {
+  @apply absolute left-1/2 bottom-5 w-[min(290px,_calc(100%_-_32px))] -translate-x-1/2 py-3 px-3.5 rounded-[12px] bg-site-surface shadow-landing-note text-[14px] leading-[1.45];
+}
+
+.demo-note p {
+  @apply m-0 mb-2;
+}
+
+.demo-note-head {
+  @apply flex items-center gap-2 text-[13px] font-semibold;
+}
+
+.demo-note-head em {
+  @apply ml-auto not-italic font-medium text-landing-muted whitespace-nowrap;
+}
+
+.demo-note code {
+  @apply block py-1.5 px-2 border border-site-line rounded-[6px] text-[11px] text-landing-muted;
+}
+
+.demo-note-meta {
+  @apply text-landing-muted text-[12px];
+}
+
+.demo-launch {
+  @apply absolute right-5 bottom-5 inline-flex items-center gap-1.5 py-2 px-3.5 rounded-full bg-site-accent text-on-ink text-[13px] font-semibold whitespace-nowrap;
+}
+
+@media (max-width: 760px) {
+  .browser-page {
+    @apply pt-6 px-4.5 pb-75;
+  }
+
+  .demo-head span,
+  .demo-card small {
+    @apply hidden;
+  }
+
+  .demo-cards {
+    @apply grid-cols-1 gap-3;
+  }
+
+  .demo-card {
+    @apply pt-4 pr-4 pb-4 pl-13;
+  }
+
+  .pin-a,
+  .pin-b,
+  .pin-c {
+    @apply left-3.5 right-auto top-4.5 bottom-auto;
+  }
+
+  .demo-note {
+    @apply bottom-19;
+  }
+}
+
+/* « Lands in »: the destinations a site can pick, as chips. */
+.lands {
+  @apply flex flex-wrap items-center justify-center gap-2.5 m-0 mt-7 p-0 list-none text-[14px];
+}
+
+.lands-label {
+  @apply text-landing-muted;
+}
+
+.chip {
+  @apply inline-flex items-center h-9 py-0 px-3.5 border border-site-line rounded-full bg-site-surface font-semibold;
+}
+
+/* The drops of the five statuses. */
+.drop {
+  @apply inline-block flex-none w-3 h-3 rounded-[50%_50%_50%_0] -rotate-45;
+}
+
+.stage-new {
+  @apply bg-status-new;
+}
+
+.stage-todo {
+  @apply bg-status-todo;
+}
+
+.stage-progress {
+  @apply bg-status-progress;
+}
+
+.stage-done {
+  @apply bg-status-done;
+}
+
+.stage-closed {
+  @apply bg-status-closed;
+}
+
+/* The sections. */
+.section {
+  @apply py-26 px-0 border-t border-t-site-line;
+}
+
+.section-warm {
+  @apply bg-landing-warm;
+}
+
+.kicker {
+  @apply m-0 mb-3 text-accent-strong text-[14px] font-semibold;
+}
+
+h2 {
+  @apply m-0 mb-6 text-[26px] font-bold tracking-[-0.02em];
+}
+
+h2.big {
+  @apply max-w-190 mb-9 text-[clamp(30px,3.6vw,44px)] leading-[1.08] font-[750] tracking-[-0.03em] wrap-normal;
+}
+
+.center {
+  @apply text-center;
+}
+
+h2.big.center {
+  @apply ml-auto mr-auto;
+}
+
+.sub {
+  @apply max-w-175 -mt-4 mx-0 mb-10 text-[17px] text-site-body;
+}
+
+.more {
+  @apply m-0 mt-7 font-semibold;
+}
+
+h3 {
+  @apply m-0 mb-2 text-[18px] leading-[1.3] tracking-[-0.01em];
+}
+
+.card {
+  @apply p-6 border border-site-line rounded-[16px] bg-site-surface;
+}
+
+.card p {
+  @apply m-0 text-site-body;
+}
+
+/* Lists with a check or a cross in front. */
+.ticks {
+  @apply grid gap-3 m-0 p-0 list-none;
+}
+
+.ticks li {
+  @apply flex items-start gap-3;
+}
+
+.ticks .glyph {
+  @apply mt-1 text-landing-ok;
+}
+
+.ticks-cross .glyph {
+  @apply text-landing-muted;
+}
+
+/* Without, and with. */
+.compare {
+  @apply grid grid-cols-2 gap-4;
+}
+
+.compare .card {
+  @apply py-8 px-7;
+}
+
+.compare-with {
+  @apply border-site-ink bg-site-ink text-landing-on-night;
+}
+
+.compare-with .glyph {
+  @apply text-landing-on-night-ok;
+}
+
+.label {
+  @apply m-0 mb-4.5 text-[13px] font-bold tracking-[0.08em] uppercase text-landing-muted;
+}
+
+.compare-with .label {
+  @apply text-landing-on-night-accent;
+}
+
+@media (max-width: 860px) {
+  .compare {
+    @apply grid-cols-1;
+  }
+}
+
+/* How it works: three pictures, then the five statuses. */
+.steps {
+  @apply grid grid-cols-3 gap-5 m-0 mb-20 p-0 list-none;
+}
+
+.steps img {
+  @apply w-full mb-5 border border-site-line rounded-[16px] bg-landing-picture shadow-landing-frame;
+}
+
+.step-number {
+  @apply m-0 mb-3 text-landing-muted text-[14px] font-semibold;
+}
+
+.steps h3 {
+  @apply text-[21px];
+}
+
+.steps p:not(.step-number) {
+  @apply m-0 text-site-body;
+}
+
+@media (max-width: 860px) {
+  .steps {
+    @apply grid-cols-1 gap-10;
+  }
+}
+
+.statuses {
+  @apply grid grid-cols-[minmax(0,1fr)_300px] items-center gap-5;
+}
+
+.statuses img {
+  @apply rounded-[18px];
+}
+
+.stages {
+  @apply grid gap-2.5 m-0 p-0 list-none;
+}
+
+.stages li {
+  @apply grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 py-3 px-4.5 border border-site-line rounded-[12px] bg-landing-page;
+}
+
+.stages .drop {
+  @apply row-[span_2] w-5 h-5 shadow-landing-drop;
+}
+
+.stages b {
+  @apply text-[16px];
+}
+
+.stages small {
+  @apply text-landing-muted text-[13px];
+}
+
+.stages-note {
+  @apply col-span-full m-0 mt-2 text-landing-muted text-[14px];
+}
+
+@media (max-width: 860px) {
+  .statuses {
+    @apply grid-cols-1;
+  }
+}
+
+/* The product: the popup, and six cards. */
+.product {
+  @apply grid grid-cols-[300px_minmax(0,1fr)] gap-6;
+  /* items-start is flex-start. */
+  align-items: start;
+}
+
+.product > img {
+  @apply rounded-[20px] shadow-landing-popup;
+}
+
+.features {
+  @apply grid grid-cols-3 gap-4;
+}
+
+@media (max-width: 1080px) {
+  .product {
+    @apply grid-cols-1;
+  }
+
+  .product > img {
+    @apply w-[min(320px,_100%)];
+  }
+
+  .features {
+    @apply grid-cols-2;
+  }
+}
+
+@media (max-width: 640px) {
+  .features {
+    @apply grid-cols-1;
+  }
+}
+
+/* Who it is for: three cases, each with its setup. */
+.cases {
+  @apply grid grid-cols-3 gap-4;
+}
+
+.case {
+  @apply flex flex-col gap-5;
+}
+
+.case > p {
+  @apply m-0;
+}
+
+.case .chip {
+  @apply self-start border-site-ink bg-site-ink text-on-ink text-[13px] h-8;
+}
+
+.setup {
+  @apply m-0 mt-auto p-3.5 rounded-[14px] bg-landing-stone;
+}
+
+.setup p {
+  @apply m-0 mb-2.5 text-landing-muted text-[13px] font-semibold;
+}
+
+.setup dl {
+  @apply grid gap-2 m-0;
+}
+
+.setup dl div {
+  @apply flex justify-between gap-4 py-2.5 px-3 rounded-[10px] bg-site-surface text-[14px];
+}
+
+.setup dt {
+  @apply flex-none text-landing-muted;
+}
+
+.setup dd {
+  @apply m-0 font-semibold text-right;
+}
+
+@media (max-width: 1000px) {
+  .cases {
+    @apply grid-cols-1;
+  }
+}
+
+/* Connectors. */
+.sources {
+  @apply grid grid-cols-4 gap-3 m-0 mb-4 p-0 list-none;
+}
+
+.source {
+  @apply flex items-start gap-3.5 p-4.5 border border-site-line rounded-[14px] bg-site-surface;
+}
+
+.source-mark {
+  @apply grid flex-none place-items-center w-9.5 h-9.5 rounded-[10px] bg-site-chip font-mono text-[13px]/none font-bold;
+}
+
+.source b {
+  @apply block text-[16px];
+}
+
+.source small {
+  @apply text-landing-muted text-[14px];
+}
+
+.source-soon {
+  @apply border-dashed bg-transparent;
+}
+
+@media (max-width: 1000px) {
+  .sources {
+    @apply grid-cols-2;
+  }
+}
+
+@media (max-width: 560px) {
+  .sources {
+    @apply grid-cols-1;
+  }
+}
+
+.sources-note {
+  @apply m-0 mb-10 text-landing-muted text-[14px];
+}
+
+.pair {
+  @apply grid grid-cols-2 gap-4;
+}
+
+@media (max-width: 960px) {
+  .pair {
+    @apply grid-cols-1;
+  }
+}
+
+.card > p + * {
+  @apply mt-4;
+}
+
+.mapping {
+  @apply grid gap-2.5 m-0 p-0 list-none;
+}
+
+.mapping li {
+  @apply grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 text-[14px];
+}
+
+.mapping span {
+  @apply flex items-center gap-2.5 min-h-9.5 py-1.5 px-3 border border-site-line rounded-[8px];
+}
+
+.mapping span:last-child {
+  @apply border-site-edge;
+}
+
+.mapping .arrow {
+  @apply text-landing-muted;
+}
+
+.card-night {
+  @apply border-site-ink bg-site-ink text-landing-on-night;
+}
+
+.card-night p {
+  @apply text-landing-night-muted;
+}
+
+.card-night pre {
+  @apply m-0 mt-4 overflow-x-auto text-[13px] leading-[1.6] whitespace-pre wrap-normal;
+}
+
+/* Pricing. */
+.plans {
+  @apply grid grid-cols-2 gap-4 max-w-275 my-0 mx-auto;
+}
+
+.plan {
+  @apply flex flex-col gap-5 py-8 px-7.5;
+}
+
+.plan-main {
+  @apply border-site-ink bg-landing-page;
+}
+
+.plan-head {
+  @apply flex items-center justify-between gap-3;
+}
+
+.plan-head h3 {
+  @apply m-0 text-[24px] tracking-[-0.03em];
+}
+
+.tag {
+  @apply py-0.75 px-2.5 rounded-full bg-site-chip text-[13px] font-semibold whitespace-nowrap;
+}
+
+.tag-night {
+  @apply bg-site-ink text-on-ink;
+}
+
+.price {
+  @apply m-0 text-landing-muted;
+}
+
+.price strong {
+  @apply mr-2 text-site-ink text-[40px] tracking-[-0.04em];
+}
+
+@media (max-width: 860px) {
+  .plans {
+    @apply grid-cols-1;
+  }
+}
+
+.oneliner {
+  @apply flex items-center gap-6 max-w-275 mt-9 mx-auto mb-0 py-5 px-6 rounded-[14px] bg-site-ink text-landing-on-night;
+}
+
+.oneliner p {
+  @apply flex-none m-0 text-landing-night-muted text-[14px];
+}
+
+.oneliner pre {
+  @apply min-w-0 m-0 overflow-x-auto text-[13px] leading-[1.7] whitespace-pre wrap-normal;
+}
+
+.oneliner .prompt {
+  @apply text-landing-night-faint select-none;
+}
+
+@media (max-width: 860px) {
+  .oneliner {
+    @apply flex-col items-stretch gap-3;
+  }
+}
+
+.plans-note {
+  @apply max-w-205 mt-7 mx-auto mb-0 text-landing-muted text-[15px] text-center;
+}
+
+/* Care: four columns. */
+.care {
+  @apply grid grid-cols-4 gap-8;
+}
+
+.care h3 {
+  @apply text-[16px];
+}
+
+.care p {
+  @apply m-0 text-site-body text-[15px];
+}
+
+@media (max-width: 960px) {
+  .care {
+    @apply grid-cols-2;
+  }
+}
+
+@media (max-width: 560px) {
+  .care {
+    @apply grid-cols-1;
+  }
+}
+
+/* Questions: native details, so it needs no script. */
+.faq {
+  @apply border-t border-t-site-line;
+}
+
+.faq details {
+  @apply border-b border-b-site-line;
+}
+
+.faq summary {
+  @apply flex items-center justify-between gap-4 py-6 px-0 text-[18px] font-semibold cursor-pointer whitespace-normal;
+  /* list-none sets the type alone: a summary also has its marker inside. */
+  list-style: none;
+}
+
+.faq summary::-webkit-details-marker {
+  @apply hidden;
+}
+
+.faq summary::after {
+  @apply content-['+'] flex-none text-landing-muted text-[22px] font-normal;
+}
+
+.faq details[open] summary::after {
+  /* A minus sign, U+2212. */
+  content: '\2212';
+}
+
+.faq details p {
+  @apply -mt-2 mx-0 mb-6 text-site-body;
+}
+
+/* The guides, from index.md. */
+.guides table {
+  @apply w-full border-collapse;
+}
+
+.guides thead {
+  @apply hidden;
+}
+
+.guides td {
+  @apply py-3.5 px-0 border-t border-t-site-line align-top;
+}
+
+.guides td:first-child {
+  @apply w-[34%] pr-6 font-semibold;
+}
+
+.guides td:last-child {
+  @apply text-site-body;
+}
+
+.guides p {
+  @apply max-w-190 text-site-body;
+}
+
+@media (max-width: 640px) {
+  .guides tr,
+  .guides td {
+    @apply block w-auto;
+  }
+
+  .guides td:first-child {
+    @apply w-auto pb-0.5;
+  }
+
+  .guides td:last-child {
+    @apply pt-0 border-t-0;
+  }
+}
+
+/* The red band. */
+.cta {
+  @apply text-on-ink;
+  /* The picture under its fade, on tokens: one shorthand, as no utility layers both. */
+  background:
+    linear-gradient(90deg, var(--color-landing-cta-clear) 38%, var(--color-landing-cta-shade) 100%),
+    var(--color-landing-cta) url('landing-cta.webp') left center / cover no-repeat;
+}
+
+.cta-grid {
+  @apply grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] pt-28 pb-28;
+}
+
+.cta-text {
+  @apply col-2;
+}
+
+.cta h2 {
+  @apply m-0 mb-8 text-[clamp(30px,3.6vw,44px)] leading-[1.08] font-[750] tracking-[-0.03em] wrap-normal;
+}
+
+.cta .button {
+  @apply border-on-ink bg-site-surface text-site-ink;
+}
+
+.cta .button svg {
+  @apply text-site-accent;
+}
+
+.cta .button:hover {
+  @apply bg-site-chip;
+}
+
+.cta .button-outline {
+  @apply border-landing-cta-edge bg-transparent text-on-ink;
+}
+
+.cta .button-outline:hover {
+  @apply bg-landing-cta-hover;
+}
+
+.cta :focus-visible {
+  @apply outline-on-ink;
+}
+
+@media (max-width: 760px) {
+  .cta {
+    background:
+      linear-gradient(180deg, var(--color-landing-cta-clear) 30%, var(--color-landing-cta-shade-small) 60%),
+      var(--color-landing-cta) url('landing-cta.webp') 24% top / auto 260px no-repeat;
+  }
+
+  .cta-grid {
+    @apply grid-cols-1 pt-60 pb-12;
+  }
+
+  .cta-text {
+    @apply col-1;
+  }
+}
+
+/* The foot. */
+.foot {
+  @apply pt-14 px-0 pb-8 text-[14px];
+}
+
+.foot-row {
+  @apply flex flex-wrap justify-between gap-10;
+}
+
+.foot-brand img {
+  @apply w-25.75 mb-3;
+}
+
+.foot-brand p {
+  @apply max-w-70 m-0 text-landing-muted;
+}
+
+.foot-cols {
+  @apply flex flex-wrap gap-16;
+}
+
+.foot-cols p {
+  @apply m-0 mb-3 font-bold;
+}
+
+.foot-cols ul {
+  @apply grid gap-2 m-0 p-0 list-none;
+}
+
+.foot-cols a {
+  @apply text-site-body no-underline;
+}
+
+.foot-cols a:hover {
+  @apply text-site-ink underline;
+}
+
+.foot-meta {
+  @apply flex flex-wrap justify-between gap-3 mt-10 pt-5 border-t border-t-site-line text-landing-muted text-[13px];
+}
+
+.foot-meta p {
+  @apply m-0;
+}
+
+@media (max-width: 560px) {
+  .section {
+    @apply py-18 px-0;
+  }
+
+  .hero {
+    @apply pt-14;
+  }
+
+  .foot-cols {
+    @apply gap-10;
+  }
+}
