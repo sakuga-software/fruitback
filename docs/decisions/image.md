@@ -70,6 +70,13 @@ immutable.
   not stop on a command that `!` inverts: `! grep -q unsafe-inline` left the step green with
   `unsafe-inline` in the policy of the console. A check of an absence is written
   `if grep …; then exit 1; fi`, and `workflows.test.ts` fails on the other form.
+- **No step pipes into a quiet grep** (FRU-713). `grep -q` exits at its first match, the command that
+  writes to it can then get SIGPIPE, and `set -o pipefail` fails the line although the match was
+  found: `curl … | tr -d '\r' | grep -qi '^cache-control: no-store$'` failed once with « tr: write
+  error: Broken pipe ». The `tr` of `ubuntu-26.04` (uutils) writes each read at once, where GNU `tr`
+  wrote its output in one go, so the window opened with that image. Keep the output in a variable,
+  then test it: `headers=$(curl … | tr -d '\r')`, then `grep -qi '…' <<<"$headers"`.
+  `workflows.test.ts` fails on the piped form.
 - **`persist-credentials: false` on every checkout** — `actions/checkout` otherwise writes the token
   into `.git/config`, where any later step reads it.
 - **Only the `publish` job holds the write permissions** (FRU-70). The workflow grants
