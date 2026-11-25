@@ -564,7 +564,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Notes go to': 'Les notes vont vers',
   'A site with no tracker keeps its notes in Fruitback.': 'Un site sans outil de suivi garde ses notes dans Fruitback.',
   'Connect a tracker': 'Connecter un outil de suivi',
-  'Fruitback, its site, in a new tab': 'Fruitback, son site, dans un nouvel onglet',
   'Add site': 'Ajouter le site',
   'Who sees the notes?': 'Qui voit les notes ?',
   'Who can leave a note?': 'Qui peut laisser une note ?',
@@ -645,9 +644,15 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Fruitback n’a pas pu lire les états de Linear. Les statuts que vous avez réglés ne sont pas perdus.',
   'Its sites keep their notes in the workspace again. The issues already in Linear stay there.':
     'Ses sites gardent de nouveau leurs notes dans l’espace de travail. Les tickets déjà dans Linear y restent.',
-  'Cloud workspace': 'Espace de travail Cloud',
   Notes: 'Notes',
   'Help and docs': 'Aide et documentation',
+  // The compact bar of FRU-684: its button under 1024 px, its foot, and the words a screen reader hears.
+  Menu: 'Menu',
+  "What's new": 'Nouveautés',
+  '(new release)': '(nouvelle version)',
+  'Extension connected in {browser}. Connect another browser':
+    'Extension connectée dans {browser}. Connecter un autre navigateur',
+  'failed sends:': 'envois en échec :',
 
   New: 'Nouveau',
   'To do': 'À faire',
@@ -819,7 +824,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Install the extension (beta)': 'Installer l’extension (bêta)',
   // The extension is already connected to the account (FRU-441).
   'Extension connected · {browser}': 'Extension connectée · {browser}',
-  'Extension connected': 'Extension connectée',
   // The extension of this browser, connected in place by the console of the Cloud (FRU-487).
   'Extension connected in this browser': 'Extension connectée dans ce navigateur',
   'Approved. The extension finishes connecting within a minute, or press again to finish now.':

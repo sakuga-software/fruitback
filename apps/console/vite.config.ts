@@ -1,12 +1,17 @@
 import { reactRouter } from '@react-router/dev/vite';
 import tailwindcss from '@tailwindcss/vite';
+import { readFileSync } from 'node:fs';
 import { defineConfig } from 'vite';
+
+/** The version of the console: « What's new » has a dot until it is opened with it (FRU-684, `whats-new.ts`). */
+const { version } = JSON.parse(readFileSync(new URL('package.json', import.meta.url), 'utf8')) as { version: string };
 
 /** 5178, beside the playground's 5177. The worker the console calls is `VITE_FRUITBACK_API`. */
 export default defineConfig({
   server: { port: 5178, strictPort: true },
   preview: { port: 5178, strictPort: true },
   plugins: [tailwindcss(), reactRouter()],
+  define: { __FRUITBACK_CONSOLE_VERSION__: JSON.stringify(version) },
   // `@fruitback/shared` is a package of the workspace, so Vite serves its sources and finds `zod`, which
   // it imports, only when a screen that reads it is first opened (the statuses of a site, FRU-371). It
   // then bundles `zod` and reloads every page it serves, the others too: in CI, where four workers share

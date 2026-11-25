@@ -391,6 +391,9 @@ type IconButtonProps = {
   size?: 'chip' | 'small';
   /** The button opens a menu. */
   menu?: boolean;
+  /** The button shows and hides the element `controls` (FRU-684): whether it is shown. */
+  expanded?: boolean;
+  controls?: string;
   /** The picture: an `svg` with `aria-hidden`. */
   children: ReactNode;
 };
@@ -408,6 +411,8 @@ export function IconButton({
   disabled = false,
   size = 'chip',
   menu = false,
+  expanded,
+  controls,
   children,
 }: IconButtonProps) {
   return (
@@ -418,6 +423,8 @@ export function IconButton({
       isDisabled={disabled}
       aria-label={label}
       {...(menu ? { 'aria-haspopup': 'menu' as const } : {})}
+      {...(expanded === undefined ? {} : { 'aria-expanded': expanded })}
+      {...(controls === undefined ? {} : { 'aria-controls': controls })}
       {...(onClick === undefined ? {} : { onPress: onClick })}
       className={`${ICON_BUTTON} ${ICON_BUTTON_SIZE[size]}`}
       data-size={size}

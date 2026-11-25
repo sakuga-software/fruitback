@@ -9,7 +9,18 @@ import {
   finished,
   served,
 } from './cloud-worker.ts';
-import { ACME, type Role, box, contrast, painted, rgb, sideScroll, stubWorker, styles } from './console-workspace.ts';
+import {
+  ACME,
+  type Role,
+  box,
+  contrast,
+  openMyAccount,
+  painted,
+  rgb,
+  sideScroll,
+  stubWorker,
+  styles,
+} from './console-workspace.ts';
 
 /**
  * My account (FRU-248), the page « Profile » of the shell of the settings (FRU-692), measured in a
@@ -721,13 +732,15 @@ test.describe('the browsers of a person, on a worker with accounts', () => {
 
   /**
    * A page of the settings of the person in the workspace on screen: « Profile » (`account`) or
-   * « Sessions » (`account/sessions`). The address names the workspace.
+   * « Sessions » (`account/sessions`), reached as a person reaches them.
    */
   async function settingsOf(page: Page, path: 'account' | 'account/sessions'): Promise<void> {
-    const workspace = /\/w\/(ws_[0-9a-f]{20})\//.exec(page.url())?.[1];
-    expect(workspace, page.url()).toBeDefined();
-    await page.goto(`${WORKER_CONSOLE}/w/${workspace as string}/${path}`);
-    await expect(page.locator('main h1')).toBeVisible();
+    // My account is in the menu of the person, at the foot of the bar (FRU-684).
+    await openMyAccount(page);
+    await expect(page.locator('main h1')).toHaveText('Profile');
+    if (path === 'account') return;
+    await page.getByRole('main').getByRole('navigation').getByRole('link', { name: 'Sessions' }).click();
+    await expect(page.locator('main h1')).toHaveText('Sessions');
   }
 
   /** The next call of a browser: it adds a site, and the screen keeps what was typed. */

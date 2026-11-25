@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 /**
- * The sections of the rail of a workspace (FRU-234).
+ * The sections of the bar of a workspace (FRU-234, FRU-684).
  *
- * The rail lists the sections in the order of the mockup of 2026-10-13, and shows an entry only for
- * a screen that exists: `built` in `SECTIONS`. The console has no DOM under `node --test`, so the
+ * The bar lists the sections in the order of the mockup of FRU-684, and shows an entry only for a
+ * screen that exists: `built` in `SECTIONS`. « My account » is in the menu of the person (`ACCOUNT`). The console has no DOM under `node --test`, so the
  * guard reads the sources, like `messages.test.ts`; `e2e/console-frame.spec.ts` reads the browser.
  */
 const APP = new URL('./', import.meta.url);
@@ -37,11 +37,11 @@ function sections(source: string): { path: string; label: string; built: boolean
   );
 }
 
-describe('the sections of the rail (FRU-234)', () => {
-  it('are the five of the mockup, in its order, with « Settings » before « My account » (FRU-503)', () => {
+describe('the sections of the bar (FRU-234, FRU-684)', () => {
+  it('are the five of the mockup of FRU-684, in its order, with « Settings » last (FRU-503)', () => {
     assert.deepEqual(
       sections(frame).map(({ label }) => label),
-      ['Sites', 'Notes', 'Connectors', 'Members', 'Settings', 'My account'],
+      ['Notes', 'Sites', 'Connectors', 'Members', 'Settings'],
     );
   });
 
@@ -56,14 +56,19 @@ describe('the sections of the rail (FRU-234)', () => {
     // The control: an entry that is shown with no route is found, and so is a route with no entry.
     assert.deepEqual(dead([{ path: 'reports', built: true }], built), ['reports']);
     assert.deepEqual(dead([{ path: 'sites', built: false }], built), ['sites']);
-    // Every screen of a workspace is a section: a route the rail does not know has no entry. The
-    // settings are one since FRU-503, and the name of the workspace still leads to them (FRU-414).
+    // Every screen of a workspace is a section, or « My account », which the menu of the person opens
+    // (FRU-684): a route the bar does not know has no way in. The settings are a section since
+    // FRU-503, and the name of the workspace still leads to them (FRU-414).
     const screens = built.filter((path) => path.startsWith('w/:workspace/')).map((path) => path.split('/')[2]);
     assert.ok(frame.includes('/settings`'), 'the name of the workspace leads to the settings');
+    const account = /export const ACCOUNT = '([a-z]+)';/.exec(frame)?.[1];
+    assert.equal(account, 'account');
+    assert.ok(frame.includes('/${ACCOUNT}`'), 'the menu of the person leads to « My account »');
     assert.deepEqual(
-      screens.filter((path) => !sections(frame).some((section) => section.path === path)),
+      screens.filter((path) => path !== account && !sections(frame).some((section) => section.path === path)),
       [],
     );
+    assert.ok(screens.includes('account'), 'the control: « My account » is a screen of a build');
     assert.ok(screens.length >= 4, built.join(', '));
   });
 

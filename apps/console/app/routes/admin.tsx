@@ -1,16 +1,17 @@
 import { useEffect, useState } from 'react';
 import { Outlet, useLocation, useNavigate, useOutletContext } from 'react-router';
-import { API, type Me, callUntilAnswered, knownMe, saveLanguage } from '../api';
+import { API, type Account, type Me, callUntilAnswered, knownMe, saveLanguage } from '../api';
 import { adoptLanguage, msg, t } from '../i18n';
 import { instanceOf } from '../instance';
-import { type RailIconName } from '../rail-icons';
+import { RailIcon, type RailIconName } from '../rail-icons';
 import { ReleaseBanner } from '../release-banner';
 import { useLocale } from '../use-locale';
-import { Frame, RAIL_HEAD, RailFrame, RailNav, Screen, useExtensionLink } from './workspace';
+import { ACCOUNT, Frame, RAIL_HEAD, RailFoot, RailFrame, RailNav, Screen } from './workspace';
 
 /**
  * The frame of the administration of the instance, as screens 17 to 20 of the mockup of 2026-10-13
- * draw it (FRU-262): the dark rail with the instance and its screens, and the screen beside it.
+ * draw it (FRU-262): the bar with the instance and its screens, and the screen beside it. The bar is
+ * the compact one of FRU-684, as for a workspace.
  *
  * Only the administrator of the instance (`instanceAdmin` of `/console/me`, FRU-261) sees it. Any
  * other account goes to the front door, as for a page that does not exist. The worker answers `404`
@@ -24,7 +25,7 @@ export function useAdmin(): AdminContext {
 }
 
 /**
- * The screens of the administration, in the order of the mockup. The rail shows an entry only for a
+ * The screens of the administration, in the order of the mockup. The bar shows an entry only for a
  * screen that exists. `layout` is a whole class name, so Tailwind finds it. It sets no width: a
  * screen is as wide as its column (FRU-398).
  */
@@ -64,7 +65,9 @@ export default function AdminFrame() {
   const current = SCREENS.find((screen) => screen.path === pathname);
 
   return (
-    <Frame rail={<AdminRail current={current?.path} back={context.me.workspaces[0]?.id} />}>
+    <Frame
+      rail={<AdminRail current={current?.path} back={context.me.workspaces[0]?.id} account={context.me.account} />}
+    >
       {/* The screen « Instance » says the release itself. */}
       <ReleaseBanner show={pathname !== '/admin'} />
       <Screen className={current?.layout ?? ''}>
@@ -75,38 +78,50 @@ export default function AdminFrame() {
 }
 
 /**
- * The rail of the instance: its host and what it is, the screens of the administration, the way back
- * to the workspaces of the person, and the guide of a server.
+ * The bar of the instance: its host and what it is, the screens of the administration, the way back
+ * to the workspaces of the person, and a foot with the guide of a server in place of the help.
  */
-function AdminRail({ current, back }: { current: string | undefined; back: string | undefined }) {
+function AdminRail({
+  current,
+  back,
+  account,
+}: {
+  current: string | undefined;
+  back: string | undefined;
+  account: Account;
+}) {
   useLocale();
   const instance = instanceOf(API);
+  // The host, and what it is: the words of the tile are read, the tile is not.
   const head = (
-    <div className={RAIL_HEAD}>
+    <div className={`${RAIL_HEAD} hover:bg-transparent`}>
       <span
         aria-hidden="true"
-        className="box-border flex h-[32px] w-[32px] flex-none items-center justify-center rounded-control border border-ink-soft"
+        className="flex h-[20px] w-[20px] flex-none items-center justify-center rounded-inner bg-ink text-on-ink"
       >
-        <svg viewBox="16 6 96 116" className="h-[16px] w-[13px] fill-rail-accent">
-          <path
-            fillRule="evenodd"
-            d="M 64 121.9 L 30.1 87.9 A 48 48 0 1 1 97.9 87.9 Z M 64 37 A 17 17 0 1 0 64 71 A 17 17 0 1 0 64 37 Z"
-          />
-        </svg>
+        <RailIcon name="instance" small />
       </span>
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-body leading-auto font-semibold">{instance.host}</span>
-        <span className="block text-tiny text-rail-muted">
+      <span className="min-w-0 flex-1 truncate">
+        {instance.host}
+        <span className="sr-only">, </span>
+        <span className="ms-[6px] text-hint font-medium text-muted">
           {instance.cloud ? t('Fruitback Cloud') : t('Self-hosted instance')}
         </span>
       </span>
     </div>
   );
 
-  const extension = useExtensionLink();
-
   return (
-    <RailFrame head={head} foot={[extension, { href: GUIDE, label: t('Self-hosting guide') }]}>
+    <RailFrame
+      head={head}
+      foot={
+        <RailFoot
+          help={{ href: GUIDE, label: t('Self-hosting guide') }}
+          account={account}
+          {...(back === undefined ? {} : { accountPage: `/w/${back}/${ACCOUNT}` })}
+        />
+      }
+    >
       <RailNav
         label={t('Instance')}
         entries={[

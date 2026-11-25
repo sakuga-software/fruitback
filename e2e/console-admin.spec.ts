@@ -218,7 +218,7 @@ test('an administrator sees the frame and the instance, with the values of the m
   // Straight to the first workspace, not through the front door (FRU-356).
   await expect(nav.getByRole('link', { name: 'My workspaces' })).toHaveAttribute('href', '/w/w1/sites');
   // Each screen has its icon, and the way back an arrow to the start of the line (FRU-476, FRU-477).
-  await expect(nav.locator('a > svg[aria-hidden="true"]')).toHaveCount(5);
+  await expect(nav.locator('a svg[aria-hidden="true"]')).toHaveCount(5);
   await expect(nav.getByRole('link', { name: 'My workspaces' }).locator('svg')).toHaveAttribute(
     'data-rail-icon',
     'back',

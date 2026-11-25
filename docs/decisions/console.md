@@ -179,9 +179,10 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
 - **Nothing offers to install or to connect the extension once a browser of the account is
   connected** (FRU-441, decided by Mathieu on 2026-10-24). `useConnectedExtension`
   (`extension-connected.ts`) reads `GET /console/me/browsers` once, and again when the tab is shown
-  again. With at least one browser, the foot of both rails, the card « Browser extension » of step 3
-  of the setup and « You are in » say « Extension connected · Chrome on macOS » (the browser used
-  last), and « Connect another browser » is a quiet link: no « Install the extension », no « Connect
+  again. With at least one browser, the foot of both bars has « Extension » with a green dot and the
+  browser used last at its right, and leads to connect another one (FRU-684); the card « Browser
+  extension » of step 3 of the setup and « You are in » say « Extension connected · Chrome on macOS »,
+  and « Connect another browser » is a quiet link: no « Install the extension », no « Connect
   this browser ». The card is not hidden: another computer, or a colleague, still needs a way in. A
   list that could not be read, or is empty, shows the offers of before. **`/connect`, opened in a
   browser that is already connected, says so** (« This browser is already connected ») and leads to
@@ -420,80 +421,92 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   of workspace draws the new one from it, never the one before. « My workspaces » leads to the first
   workspace itself. Rail entries and the change of workspace use view transitions: the rail holds
   still, the screen cross-fades (120 ms out, 220 ms in from 4 px lower), nothing moves with
-  `prefers-reduced-motion`. **The drop of the entry on screen slides to the new entry** (FRU-413):
-  it is a picture of its own in the move (`view-transition-name: rail-drop`), 220 ms on the curve
-  of the kit, and is at its place at once with reduced motion. `e2e/console-rail-drop.spec.ts` reads
-  its animation during a move. No colour transition on the rail: `e2e/console-frame.spec.ts` reads the
-  colours of a hovered entry and would read them halfway. `e2e/console-moves.spec.ts` reads every
-  frame of a move, with a control. **The room of a screen fills the height of the window** (FRU-564):
-  the column beside the rail is a flex column and `Screen` grows in it; under 888 px the frame is a
-  column too, the rail at its own height and the screen under it. `e2e/console-frame.spec.ts` holds
-  both widths.
-- **The frame of a workspace is the rail of the mockup** (FRU-234, `routes/workspace.tsx`): the
-  workspace, its sections as links with `aria-current="page"` on the one on screen, and the way to
-  the documentation. **The rail shows a section only when its screen exists**: `SECTIONS` lists the
-  five of the mockup in its order, with « Settings » before « My account » (FRU-503), each with
-  `built`, and
-  `frame.test.ts` holds `built` to the routes of a build, so no entry leads nowhere. **Each entry of
-  both rails has an icon** (FRU-477, Mathieu; no board draws them): `rail-icons.tsx` draws them as
-  every icon of the console is drawn, inline on a grid of 24, a stroke of 2 in `currentColor`, no
-  icon set and no request; 18 px, `aria-hidden`, after the drop of the entry on screen so they stay in
-  one column. « My workspaces » of the rail of the instance has an arrow to the start of the line
-  (FRU-476): it leaves the administration. « Notes » is
-  there with `built: false`; `/kit/frame`, a page of the development server, mounts the rail with
-  the five. **The name of the workspace opens a menu only when the person has several workspaces**:
-  with one it is no button, and draws no chevrons. **The name of the workspace leads to its settings**
-  (FRU-414, `routes/workspace-settings.tsx`, asked by Mathieu; no board draws it): with one workspace
-  the name is a link to `/w/<id>/settings`, `aria-current` there when the rail has no « Settings »; with several, the menu of the
-  workspaces ends with « Workspace settings », in a group of its own under a rule that chooses nothing
-  (`after` of `Menu`). The screen renames the workspace for an owner or an admin (FRU-236), and the
-  rail shows the new name at once; another role reads the name, locked. **The logo** (FRU-428):
-  `WorkspaceMark` draws it at 32 px in the rail and 64 px on the settings (`object-contain`, the
-  worker resizes nothing), and the initial of the name when there is none or it does not load. An
-  owner or an admin sends it (`FilePick` of the kit), replaces it and removes it in one press, with
-  no confirmation: it is sent again as easily. The console refuses a type that is not PNG, JPEG or
-  WebP, and a file over 512 KB, before it sends anything (`workspace-logo.ts`), and says each
-  refusal of the worker. `e2e/console-workspace-logo.spec.ts` holds it. **The settings are « Settings »
-  in the rail, under « Members », for an owner or an admin** (FRU-503, `sectionsFor`): the rare tasks
-  that matter, rename, the logo, the agent keys and the deletion, were behind the name of the
-  workspace alone. A member and a guest have no entry and read the settings from the name. On the
-  settings the entry is the one on screen, and the name is not a second one. **The settings hold
-  the deletion of the workspace**, last, for the owner alone, under a rule: it was at the foot of
-  « My account », the page of the person. The call (`DELETE /console/workspaces/<id>`) and the rule
-  of the worker are those of before, and a second press deletes. « My account » keeps what is about
-  the person. **The section « Agents » shows the whole way of an agent** (FRU-503): its key, an
-  address that receives (Connectors), then the trigger of each site, a link to `#agent` on the page
-  of the site; anybody but an owner or an admin reads one sentence, and the page asks nothing.
-  **The settings are pages of a shell** (FRU-692, `routes/settings-shell.tsx`; before, FRU-544 put
-  « General » and « AI » in two links of `SubNav`): a bar of 48 px that says « Settings », a
-  navigation of 220 px with an icon on each entry, in two groups, and the page beside it, with a head
-  of its own (`SettingsHead`: a title of 20 px, its sentence, its actions at the right). « Account »:
-  Profile (`/account`) and Sessions (`/account/sessions`). « Workspace »: General (`/settings`), AI
-  (`/settings/ai`), Agents (`/settings/agents`, no crumbs any more), and Members and Connectors, which
-  lead to the screens of the rail. The addresses did not change, so no redirection. **The navigation
-  shows an entry only for a page that exists**: `ACCOUNT_PAGES` and `WORKSPACE_PAGES` hold « Sign-in
-  and addresses », « Appearance » (FRU-694) and « Notifications » with `built: false`, and
-  `settings-shell.test.ts` holds `built` to the routes of a build. Under 768 px the navigation is one
-  row above the page, which scrolls in its frame. The shell takes back the padding of `Screen` with
-  the same values, so its bar and its navigation reach the edges of the column.
-  `e2e/console-workspace-settings.spec.ts` holds the entry by role, the section and the deletion. **At 900 px and under the sections are one row
-  that scrolls in the rail, and the page never scrolls sideways**: the mockup does at 390 px (its
-  document is 547 px wide). An edge of the row that hides a section fades, and the section on
-  screen or with focus is scrolled into view: measured in Chromium, focus alone does not scroll a
-  row to a link that is half hidden. `e2e/console-frame.spec.ts` reads the values and the boxes of
-  the mockup, at 1440 and 390 px, the menu, the keyboard and axe. **Not copied from the mockup**:
-  a link of the rail under the pointer is white, where the mockup turns every link `#b91c1c`
-  (2.6:1 on the rail); « Help and docs » opens in another tab, so a screen keeps what is typed in it.
-- **The rail is as high as the window, and only the screen scrolls** (FRU-402, FRU-398). `Frame`
-  of `routes/workspace.tsx` is the frame of a workspace and of the instance: from 888 px the rail is
-  `sticky` at the top and `h-dvh`, so its foot stays at the bottom of the window, and a window lower
-  than the rail scrolls the rail itself. **The document scrolls, not the column**: a column that
+  `prefers-reduced-motion`. The drop of the entry on screen that slid to the new entry (FRU-413) went
+  with the dark rail (FRU-684): the entry on screen is a tint, which does not move. No colour
+  transition on the bar: `e2e/console-frame.spec.ts` reads the colours of a hovered entry and would
+  read them halfway. `e2e/console-moves.spec.ts` reads every frame of a move, with a control. **The
+  room of a screen fills the height of the window** (FRU-564): the column beside the bar is a flex
+  column and `Screen` grows in it; under 1024 px the frame is a column too, the folded bar at its own
+  height and the screen under it. `e2e/console-frame.spec.ts` holds both widths.
+- **The frame of a workspace is the compact bar of FRU-684** (option A of its mockup, « Barre
+  latérale (3 options) », attached to the ticket; `routes/workspace.tsx`), in place of the dark rail
+  of FRU-234. **The rules, in short:**
+  - 232 px wide, on `sidebar`, a rule of `line` on its right. The head is 40 px: the workspace (a
+    tile of 20 px, its name, a chevron) and the search. The entries are 28 px, 8 px in, an icon of
+    16 px, one under the other with 1 px between; the one on screen has `aria-current="page"`, the
+    tint `selected` and its words in 600; under the pointer an entry takes `hover`.
+  - **The sections are Notes, Sites, Connectors, Members, Settings**, in that order. « My account »
+    is no section: **the menu of the person**, at the bottom of the foot, opens it, with « Sign
+    out ». `SECTIONS` lists them with `built`, and `frame.test.ts` holds `built` to the routes of a
+    build, and « My account » (`ACCOUNT`) to the menu, so no entry leads nowhere and every screen has
+    a way in.
+  - **The counts at the right of the entries are props of the bar** (`counts`, `failing`): a red dot
+    and the number on « Connectors » when sends failed. No read gives them yet: counting the notes of
+    every site on every screen was taken away for its cost (FRU-497), and a summary of the worker is
+    FRU-711. With no count the entry shows none. `/kit/frame`, a page of the development
+    server, mounts the bar with the counts of the mockup.
+  - **The fixed foot**: « What's new » (the releases on GitHub, with a dot until this browser opened
+    it with this version of the console, `whats-new.ts`), the extension (« Install the extension
+    (beta) », or « Extension » with a green dot and the browser connected), « Help and docs », a
+    rule, and the person (initial, name, address). Each link that leaves the console opens in
+    another tab, so a screen keeps what is typed in it. The bar of the instance has the same foot,
+    with « Self-hosting guide » in place of the help.
+  - **The search of the head opens Notes with « Search notes » in focus** (`state.search` of the
+    move, read by `NotesFilters`): no screen searches the whole workspace.
+  - **Under 1024 px the bar is folded** above the screen: its head, and « Menu » (`aria-expanded`,
+    `aria-controls`), which unfolds the entries and the foot under it. Escape folds it and gives
+    focus back to the button, and a move to another screen folds it. The page never scrolls
+    sideways.
+  - The focus ring is the one of the page: the red of the accent is at 3:1 and more on the bar and on
+    the tint of the entry on screen.
+  - `e2e/console-frame.spec.ts` reads the values and the boxes of the mockup at 1440 px, the counts,
+    the foot, the menus, the keyboard, axe, and the folded bar at 1023 and 390 px.
+
+  What stays of FRU-234 and after: **each entry has an icon** (FRU-477, `rail-icons.tsx`), inline on
+  a grid of 24, a stroke of 2 in `currentColor`, `aria-hidden`; « My workspaces » of the bar of the
+  instance has an arrow to the start of the line (FRU-476). **The name of the workspace opens a menu
+  only when the person has several workspaces**: with one it is a link to `/w/<id>/settings`
+  (FRU-414), `aria-current` there when the bar has no « Settings », and draws no chevron; with
+  several, the menu of the workspaces ends with « Workspace settings », in a group of its own under
+  a rule that chooses nothing (`after` of `Menu`). The screen renames the workspace for an owner or
+  an admin (FRU-236), and the bar shows the new name at once; another role reads the name, locked.
+  **The logo** (FRU-428): `WorkspaceMark` draws it at 20 px in the bar and 64 px on the settings
+  (`object-contain`, the worker resizes nothing), and the initial of the name when there is none or
+  it does not load. An owner or an admin sends it (`FilePick` of the kit), replaces it and removes it
+  in one press, with no confirmation: it is sent again as easily. The console refuses a type that is
+  not PNG, JPEG or WebP, and a file over 512 KB, before it sends anything (`workspace-logo.ts`), and
+  says each refusal of the worker. `e2e/console-workspace-logo.spec.ts` holds it. **The settings are
+  « Settings » in the bar, last, for an owner or an admin** (FRU-503, `sectionsFor`): a member and a
+  guest have no entry and read the settings from the name. On the settings the entry is the one on
+  screen, and the name is not a second one. **The settings hold the deletion of the workspace**,
+  last, for the owner alone, under a rule. « My account » keeps what is about the person. **The
+  section « Agents » shows the whole way of an agent** (FRU-503): its key, an address that receives
+  (Connectors), then the trigger of each site, a link to `#agent` on the page of the site; anybody
+  but an owner or an admin reads one sentence, and the page asks nothing. **The settings are pages
+  of a shell** (FRU-692, `routes/settings-shell.tsx`; before, FRU-544 put « General » and « AI » in
+  two links of `SubNav`): a bar of 48 px that says « Settings », a navigation of 220 px with an icon
+  on each entry, in two groups, and the page beside it, with a head of its own (`SettingsHead`: a
+  title of 20 px, its sentence, its actions at the right). « Account »: Profile (`/account`) and
+  Sessions (`/account/sessions`). « Workspace »: General (`/settings`), AI (`/settings/ai`), Agents
+  (`/settings/agents`, no crumbs any more), and Members and Connectors, which lead to the screens of
+  the bar. The addresses did not change, so no redirection. **The navigation shows an entry only for
+  a page that exists**: `ACCOUNT_PAGES` and `WORKSPACE_PAGES` hold « Sign-in and addresses »,
+  « Appearance » (FRU-694) and « Notifications » with `built: false`, and `settings-shell.test.ts`
+  holds `built` to the routes of a build. Under 768 px the navigation is one row above the page,
+  which scrolls in its frame. The shell takes back the padding of `Screen` with the same values, so
+  its bar and its navigation reach the edges of the column.
+  `e2e/console-workspace-settings.spec.ts` holds the entry by role, the section and the deletion.
+
+- **The bar is as high as the window, and only the screen scrolls** (FRU-402, FRU-398). `Frame`
+  of `routes/workspace.tsx` is the frame of a workspace and of the instance: from 1024 px the bar
+  is `sticky` at the top and `h-dvh`, so its foot stays at the bottom of the window, and a window
+  lower than the bar scrolls the bar itself. **The document scrolls, not the column**: a column that
   scrolls takes the keys of the keyboard only once it has focus, and `scrollIntoView` and the specs
-  read the document. Under 888 px the rail is above the screen and scrolls away with it. **A screen
-  is as wide as its column** (`Screen`): the mockup capped each one, from 820 to 1240 px, which left
-  an empty band at the right of a wide window, and Mathieu asked for the whole width on 2026-10-23.
-  `e2e/console-frame.spec.ts` holds the rail after a scroll at 1440 px and at 390 px, and the right
-  edge of each screen.
+  read the document. Under 1024 px the folded bar is above the screen and scrolls away with it. **A
+  screen is as wide as its column** (`Screen`): the mockup capped each one, from 820 to 1240 px,
+  which left an empty band at the right of a wide window, and Mathieu asked for the whole width on
+  2026-10-23. `e2e/console-frame.spec.ts` holds the bar after a scroll at 1440 px and at 390 px,
+  and the right edge of each screen.
 - **The Sites screen is a grid of cards** (FRU-408, Mathieu, in place of the table of six columns
   of the mockup of FRU-243 and FRU-270, `routes/sites.tsx`). **A card is read from the top, in
   three parts** (FRU-432, Mathieu): the icon and the name of the site (`siteName`, 17 px, the largest
