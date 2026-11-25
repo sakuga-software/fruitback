@@ -2588,15 +2588,16 @@ type BrowserFrameProps = {
   empty?: string;
   /** Under the frame: what the page is. */
   caption?: ReactNode;
-  /** The page, 620 px high. */
+  /** The page, 620 px high, or 280 px (`short`). */
   children?: ReactNode;
+  short?: boolean;
 };
 
 const BROWSER_DOTS = 'kit-browser__dots flex flex-none gap-[6px] w-[42px]';
 const BROWSER_DOT = 'size-[10px] rounded-[50%] bg-line';
 
 /** The window of a browser, drawn around the preview of a site. */
-export function BrowserFrame({ address, empty, caption, children }: BrowserFrameProps) {
+export function BrowserFrame({ address, empty, caption, children, short = false }: BrowserFrameProps) {
   return (
     <>
       <div className="kit-browser overflow-hidden border border-line rounded-frame bg-surface [box-shadow:var(--shadow-frame)]">
@@ -2616,7 +2617,7 @@ export function BrowserFrame({ address, empty, caption, children }: BrowserFrame
         </div>
         {/* On a phone the frame comes under the steps: with no site yet, a short frame says enough. */}
         <div
-          className={`kit-browser__page relative h-[620px] overflow-hidden ${empty === undefined ? '' : 'max-sm:h-[280px]'}`}
+          className={`kit-browser__page relative overflow-hidden ${short ? 'h-[280px]' : `h-[620px] ${empty === undefined ? '' : 'max-sm:h-[280px]'}`}`}
         >
           {empty === undefined ? (
             children
