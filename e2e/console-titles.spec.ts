@@ -13,7 +13,7 @@ import { ACME, box, sideScroll, stubWorker, styles } from './console-workspace.t
 const CONSOLE = 'http://localhost:5178';
 
 const PAGES = [
-  '/w/w1/sites',
+  // FRU-688: Sites has the head of 48 px of the redesign, as Notes: console-sites.spec.ts measures it.
   '/w/w1/sites/s1',
   '/w/w1/sites/s1/statuses',
   // FRU-686: Notes has the head of 48 px of its mockup, « Notes » at 14 px beside its tabs:

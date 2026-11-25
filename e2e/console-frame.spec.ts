@@ -225,11 +225,11 @@ test('the room of a screen is as wide as the column beside the bar, with the pad
     const room = await box(main);
     expect.soft(Math.abs(room.x + room.width - 1440), `the right edge of the room of ${screen}`).toBeLessThanOrEqual(1);
     expectAt(room, { x: 232, y: 0, width: 1208 }, `the room of ${screen}`);
-    // FRU-686: the title of Notes is in its head of 48 px, from the edge of the room: 20 px in.
+    // FRU-686: the title of Notes is in its head of 48 px, from the edge of the room: 20 px in. So is
+    // the title of Sites since FRU-688, and of Members since FRU-691.
     // My account is a page of the shell of the settings (FRU-692): its title is under the bar of the
     // shell, after its navigation. `console-account.spec.ts` holds it.
-    // FRU-691: Members has the same head.
-    if (screen === 'notes' || screen === 'members')
+    if (screen === 'notes' || screen === 'sites' || screen === 'members')
       expectAt(await box(page.locator('main h1')), { x: 252, y: 14 }, `the title of ${screen}`);
     else if (screen !== 'account')
       expectAt(await box(page.locator('main h1')), { x: 280, y: 40 }, `the title of ${screen}`);

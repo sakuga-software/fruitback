@@ -73,18 +73,17 @@ test('at 390 px, the title follows the sections, and a long host is cut inside t
   await stubWorker(page, 'fr');
   await open(page, 'sites');
 
-  // The sections are in the rail (FRU-234), and the title is under the rail at the padding of the
-  // mockup, 40 px: no more, so nothing takes room between the two.
+  // The sections are in the rail (FRU-234), and the title is under the rail, in the head of the screen
+  // (FRU-688): no more than 40 px, so nothing takes room between the two.
   const rail = await page.locator('aside.kit-rail').boundingBox();
   const title = await page.locator('main h1').boundingBox();
   expect(title!.y - (rail!.y + rail!.height)).toBeLessThanOrEqual(40);
   expect(title!.y - (rail!.y + rail!.height)).toBeGreaterThan(0);
 
-  const host = page.getByRole('heading', { level: 2, name: LONG_HOST, exact: true });
-  await expect(host).toBeVisible();
   // FRU-585: cut with « … » on one line, whole to a screen reader and in a tooltip (console-sites.spec.ts),
   // and nothing past the right edge of the screen.
-  const link = host.getByRole('link');
+  const link = page.getByRole('link', { name: LONG_HOST, exact: true });
+  await expect(link).toBeVisible();
   expect(await link.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
   expect(await link.evaluate((element) => getComputedStyle(element).textOverflow)).toBe('ellipsis');
   const box = await link.boundingBox();

@@ -582,8 +582,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Only the owner of the workspace deletes it.': 'Seul le propriétaire de l’espace de travail le supprime.',
   'The workspace was not deleted. Try again.': 'L’espace de travail n’a pas été supprimé. Réessayez.',
   'Remove {site}': 'Retirer {site}',
-  'Where {workspace} collects notes, and where they stand.':
-    'Là où {workspace} recueille des notes, et où elles en sont.',
   'Add a site': 'Ajouter un site',
   'Preview of {site}': 'Aperçu de {site}',
   'The sites did not load': 'Les sites ne se sont pas chargés',
@@ -594,8 +592,11 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'An owner or an admin of {workspace} adds its first site.':
     'Un propriétaire ou un admin de {workspace} ajoute son premier site.',
   'Notes go to': 'Les notes vont vers',
-  'A site with no tracker keeps its notes in Fruitback.': 'Un site sans outil de suivi garde ses notes dans Fruitback.',
   'Connect a tracker': 'Connecter un outil de suivi',
+  '{site} keeps its notes in Fruitback.': '{site} garde ses notes dans Fruitback.',
+  '{count} sites keep their notes in Fruitback.': '{count} sites gardent leurs notes dans Fruitback.',
+  '1 not delivered yet: see the notes of {site}': '1 pas encore livrée : voir les notes de {site}',
+  '{count} not delivered yet: see the notes of {site}': '{count} pas encore livrées : voir les notes de {site}',
   'Add site': 'Ajouter le site',
   'Who sees the notes?': 'Qui voit les notes ?',
   'Who can leave a note?': 'Qui peut laisser une note ?',
@@ -614,8 +615,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'A tracker': 'Un outil de suivi',
   'Team {team}': 'Équipe {team}',
   'Kept in Fruitback': 'Gardées dans Fruitback',
-  'No tracker yet': 'Pas encore d’outil de suivi',
-  '{place} and {count} more': '{place} et {count} de plus',
   'More for {site}': 'Plus pour {site}',
   Settings: 'Réglages',
   '1 new': '1 nouvelle',
@@ -1185,7 +1184,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Pas encore de note. Les notes s’affichent ici dès que quelqu’un en laisse une sur un site de {workspace}.',
   'No note matches.': 'Aucune note ne correspond.',
   'Clear the filters': 'Effacer les filtres',
-  'see where every note went': 'voir où est partie chaque note',
   // Connect this browser (FRU-240).
   'This browser is not connected': 'Ce navigateur n’est pas connecté',
   'The extension stays signed out. To connect it later, open its popup and sign in from there.':

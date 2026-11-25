@@ -172,7 +172,7 @@ test('a proof that is lost says so, in French, and offers no site', async ({ pag
 test('a member who is no admin has no way to the domain section', async ({ page }) => {
   await stubWorker(page, 'en', { role: 'member' });
   await open(page);
-  await expect(page.getByRole('heading', { name: 'acme.dev', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'acme.dev', exact: true })).toBeVisible();
 
   // The menu of a site has « Open its page » and « See the notes » for a member (FRU-504), and the
   // page of the site no proof of a domain.
