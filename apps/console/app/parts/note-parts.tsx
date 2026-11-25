@@ -253,6 +253,7 @@ export function PlaceCell({
   address,
   delivery,
   sending,
+  refused,
   onSend,
 }: {
   place: NotePlace;
@@ -261,6 +262,8 @@ export function PlaceCell({
   address: string | undefined;
   delivery: 'waiting' | 'gave-up' | undefined;
   sending: boolean;
+  /** Why the last « Send again » was refused, in English (the key of `t`): said under the pointer too. */
+  refused?: string | undefined;
   /** « Send again »: none for whoever does not manage the connectors. */
   onSend: (() => void) | undefined;
 }) {
@@ -285,6 +288,8 @@ export function PlaceCell({
   const name = source === undefined ? t(KINDS[place.kind].name) : connectorName(source);
   if (delivery !== undefined) {
     const words = t(NOT_DELIVERED[delivery]);
+    // A « Send again » refused: its reason is under the line, and under the pointer here (raised in review).
+    const tip = refused === undefined ? words : `${words} ${t(refused)}`;
 
     return (
       <span className="flex min-w-0 items-center gap-[6px]" data-place={place.kind} data-delivery={delivery}>
@@ -296,7 +301,7 @@ export function PlaceCell({
         <span
           aria-hidden="true"
           className={`truncate font-medium ${sending ? 'text-muted' : 'text-accent-strong'}`}
-          title={words}
+          title={tip}
         >
           {sending ? t('Sending…') : t('Failed')}
         </span>
