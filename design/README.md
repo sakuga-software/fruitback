@@ -138,7 +138,7 @@ token on `<html>` and the console follows at once.
 | `hover`, `selected`, `chip`                                     | `#e8edf3`, `#e2e8f0`, `#e8edf3`                                  | under the pointer, chosen, the fill of a chip                    |
 | `line`, `control`                                               | `#e3e8ef`, `#7b8797`                                             | a rule or a frame, the border of a field and of a control        |
 | `accent`, `accent-strong`                                       | `#dd2c27`, `#b91c1c`                                             | the main button, the focus ring, an alert; under the pointer     |
-| `done`                                                          | `#15803d`                                                        | « Connected », a step that is done                               |
+| `done`                                                          | `#166534`                                                        | « Connected », « Active », a step done                           |
 | `status-new`, `-todo`, `-progress`, `-done`, `-closed`, `-edge` | `#bec2c8`, `#d9dbdf`, `#f3bb3d`, `#5560c4`, `#a52a3a`, `#8a8a93` | the status of a note (FRU-334), and the edge of its drop         |
 | `rail`, `rail-active`, `rail-text`, `rail-muted`, `rail-accent` | `#18181b`, `#27272a`, `#d4d4d8`, `#a1a1aa`, `#ec5b57`            | the dark rail, until the sidebar of FRU-684 replaces it          |
 | `on-ink`                                                        | `#ffffff`                                                        | what is written on ink: the rail, a banner, a success drop       |
@@ -148,7 +148,7 @@ token on `<html>` and the console follows at once.
 | `text-body`, `-small`, `-table`, `-hint`, `-label`, `-tiny`     | `13px/1.5`, `13px/1.45`, `13px/1.4`, `12px/1.45`, `13px`, `11px` | text: 13 px is the base                                          |
 | `h-control-sm`, `-md`, `-lg`                                    | `24px`, `28px`, `32px`                                           | a chip or a small icon; a button or a field; a control of a page |
 | `rounded-control`, `-card`, `-modal`                            | `6px`, `8px`, `10px`                                             | a button, a field, a select, a search, a chip, a menu; a card    |
-| `rounded-inner`, `-drop`, `-full`                               | `4px`, `50% 50% 50% 0`, a pill                                   | a box to tick or a swatch; the drop of Fruitback; a switch       |
+| `rounded-inner`, `-pill`, `-drop`                               | `4px`, `999px`, `50% 50% 50% 0`                                  | a box to tick or a swatch; a switch or an avatar; the drop       |
 | `shadow-frame`, `-pin`, `-thumb`                                | see `theme.css`                                                  | the preview, a drop, the thumb of a switch                       |
 | `ease-settle`, `--duration-fast`                                | `cubic-bezier(.16, 1, .3, 1)`, `220ms`                           | the one movement of the console: a switch                        |
 | Font                                                            | Inter (`@fontsource-variable/inter`, served by the console)      | weights 400, 600 and 700 only                                    |
@@ -156,16 +156,22 @@ token on `<html>` and the console follows at once.
 **HeroUI takes the radius of a control.** It derives every radius from the scale of Tailwind
 (a button is `rounded-3xl`, a menu item `rounded-2xl`, a box to tick `rounded-md`): `theme.css` sets
 each step of that scale to `--radius-control`, and `app.css` gives a modal `--radius-modal` and an
-alert `--radius-card`. A screen names `control`, `card`, `modal`, `inner`, `drop`, `full` or
-`none`, never a step of the scale nor a value.
+alert `--radius-card`. A screen names `control`, `card`, `modal`, `inner`, `pill`, `drop`,
+`full` or `none`, never a step of the scale nor a value.
 
 **Measured** (`app/theme.test.ts` computes each pair): the secondary text `#5b6779` is 5.74:1 on
 the page, 5.20:1 on the sidebar, 5.44:1 on `subtle`, 4.87:1 under the pointer and 4.65:1 on the
 selection: AA everywhere, and under the 4.79:1 the ticket wrote only on the selection. Ink is
 17.85:1 to 14.48:1, `ink-soft` 10.35:1 to 8.40:1, `accent-strong` 6.47:1 to 5.25:1 on the same
-grounds; white on the accent 4.70:1, on an avatar 10.35:1. The border of a control `#7b8797` is
+grounds, and `done` 7.13:1 to 5.78:1; white on the accent 4.70:1, on an avatar 10.35:1. The border of a control `#7b8797` is
 3.65:1 on white and 3.31:1 on the sidebar, over the 3:1 of WCAG 1.4.11. The faint grey `#8592a3` of
 the mockup of the notes is 3.16:1 on white: the console does not write a text in it.
+
+**A red word is `accent-strong`, and `done` is darker.** On the slate tints the accent is under
+4.5:1 (4.46:1 on `subtle`, 4.00:1 under the pointer, 3.82:1 on the selection), and the green of
+before was 4.07:1 on the selection. A word in red in a row or on a tint (« Suspended », « Not
+delivered yet », an urgent priority) is `text-accent-strong`; the accent fills the main button,
+the focus ring and an alert on white.
 
 ### The values of 2026-10-13, before the slate theme
 

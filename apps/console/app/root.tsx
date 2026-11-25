@@ -11,13 +11,26 @@ import { Button, Field } from './ui';
 const PRODUCT = 'Fruitback';
 
 /**
+ * The rule of the text (FRU-350), the same as the widget's and the extension's. Content wraps
+ * anywhere, so a host, an address or a long word never runs past its box. A label never breaks inside
+ * its words: `button { white-space: nowrap }` in `app.css` keeps a button, a switch, a tab and a key
+ * on one line.
+ */
+const PAGE = '[overflow-wrap:anywhere] bg-page text-ink font-sans [-webkit-font-smoothing:antialiased]';
+/**
+ * Inter at 13 px is the text of the console (FRU-683). On the body, not on <html>: the root keeps
+ * the 16 px of the browser, which a `rem` of Tailwind and of HeroUI measures from.
+ */
+const BODY = `${PAGE} text-body`;
+
+/**
  * WARNING: no `t` here. This is rendered once in English when the console is built, and again in the
  * browser. `t` reads the language of the browser, so a sentence here would not match the page that
  * was built. `messages.test.ts` fails on a `t` in this function or in `HydrateFallback`.
  */
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" className={PAGE}>
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -28,7 +41,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <Meta />
         <Links />
       </head>
-      <body>
+      <body className={BODY}>
         {children}
         <ScrollRestoration />
         <Scripts />

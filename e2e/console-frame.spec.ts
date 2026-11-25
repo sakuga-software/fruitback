@@ -34,7 +34,7 @@ const RAIL_TEXT = '#d4d4d8';
 const RAIL_MUTED = '#a1a1aa';
 const RAIL_ACCENT = '#ec5b57';
 const WHITE = '#ffffff';
-const INK = '#18181b';
+const INK = '#0f172a';
 
 const rail = (page: Page) => page.locator('aside.kit-rail');
 const sections = (page: Page) => page.getByRole('navigation', { name: 'Workspace' });
@@ -83,7 +83,7 @@ test('at 1440 px the rail has the values of the mockup', async ({ page }) => {
   await expect(name).toHaveAttribute('aria-haspopup', /^(menu|true)$/);
   expect.soft(await styles(name, ['padding', 'border-top-left-radius', 'column-gap', 'text-align'])).toEqual({
     padding: '8px',
-    'border-top-left-radius': '10px',
+    'border-top-left-radius': '8px',
     'column-gap': '10px',
     'text-align': 'left',
   });
@@ -94,18 +94,18 @@ test('at 1440 px the rail has the values of the mockup', async ({ page }) => {
     .toEqual({
       width: '32px',
       height: '32px',
-      'border-top-left-radius': '8px',
-      'font-size': '14px',
+      'border-top-left-radius': '6px',
+      'font-size': '13px',
       'font-weight': '700',
     });
   expect.soft(await painted(initial, 'backgroundColor')).toEqual(rgb(WHITE));
   expect.soft(await painted(initial, 'color')).toEqual(rgb(INK));
   expect.soft(await styles(name.getByText('Acme', { exact: true }), ['font-size', 'font-weight'])).toEqual({
-    'font-size': '15px',
+    'font-size': '13px',
     'font-weight': '600',
   });
   const detail = name.getByText('Cloud workspace', { exact: true });
-  expect.soft(await styles(detail, ['font-size'])).toEqual({ 'font-size': '12px' });
+  expect.soft(await styles(detail, ['font-size'])).toEqual({ 'font-size': '11px' });
   expect.soft(await painted(detail, 'color')).toEqual(rgb(RAIL_MUTED));
   const chevrons = name.locator('svg');
   expect.soft(await styles(chevrons, ['width', 'height'])).toEqual({ width: '16px', height: '16px' });
@@ -127,8 +127,8 @@ test('at 1440 px the rail has the values of the mockup', async ({ page }) => {
   const active = sections(page).getByRole('link', { name: 'Sites' });
   expect.soft(await styles(active, entry)).toEqual({
     'min-height': '40px',
-    'border-top-left-radius': '10px',
-    'font-size': '15px',
+    'border-top-left-radius': '8px',
+    'font-size': '13px',
     'font-weight': '600',
     'column-gap': '10px',
     padding: '0px 12px',
@@ -143,8 +143,8 @@ test('at 1440 px the rail has the values of the mockup', async ({ page }) => {
   const resting = sections(page).getByRole('link', { name: 'Members' });
   expect.soft(await styles(resting, entry)).toEqual({
     'min-height': '40px',
-    'border-top-left-radius': '10px',
-    'font-size': '15px',
+    'border-top-left-radius': '8px',
+    'font-size': '13px',
     'font-weight': '400',
     'column-gap': '10px',
     padding: '0px 12px 0px 31px',
@@ -168,7 +168,7 @@ test('at 1440 px the rail has the values of the mockup', async ({ page }) => {
   const help = rail(page).getByRole('link', { name: 'Help and docs' });
   await expect(help).toHaveAttribute('href', 'https://fruitback.com');
   expect.soft(await styles(help, ['font-size', 'text-decoration-line'])).toEqual({
-    'font-size': '14px',
+    'font-size': '13px',
     'text-decoration-line': 'underline',
   });
   expect.soft(await painted(help, 'color')).toEqual(rgb(RAIL_TEXT));
@@ -216,7 +216,7 @@ test('the room of a screen is as wide as the column beside the rail, with the pa
     const room = await box(main);
     expect.soft(Math.abs(room.x + room.width - 1440), `the right edge of the room of ${screen}`).toBeLessThanOrEqual(1);
     expectBox(room, { x: 248.5, y: 0, width: 1191.5 }, 2, `the room of ${screen}`);
-    expectBox(await box(page.locator('main h1')), { x: 296.5, y: 40, height: 32.2 }, 2, `the title of ${screen}`);
+    expectBox(await box(page.locator('main h1')), { x: 296.5, y: 40, height: 25 }, 2, `the title of ${screen}`);
   }
   const content = page.locator('main').locator('..');
   expect.soft(await styles(content, ['flex-grow', 'flex-shrink', 'flex-basis', 'min-width'])).toEqual({
@@ -605,25 +605,26 @@ test('at 390 px the row of sections is where the mockup draws it', async ({ page
   await open(page);
   // The render of the mockup at 390 px: the rail is 141 px high, and its row starts at 12, 85. Each
   // entry is wider than the mockup by its icon and the gap after it (FRU-477): the mockup draws none.
+  // The words are in Inter at 13 px since FRU-683, so the entries are narrower than the mockup's.
   expectBox(await box(rail(page)), { x: 0, y: 0, width: 390, height: 141 }, 4, 'the rail');
   expectBox(await box(switcher(page)), { x: 12, y: 16, height: 49 }, 4, 'the workspace');
   expectBox(
     await box(sections(page).getByRole('link', { name: 'Sites' })),
-    { x: 12, y: 85, width: 78.9 + ICON, height: 40 },
+    { x: 12, y: 85, width: 74.2 + ICON, height: 40 },
     4,
     '« Sites »',
   );
   expectBox(await box(page.locator('main')), { x: 0, y: 141, width: 390 }, 4, 'the room of the screen');
-  expectBox(await box(page.locator('main h1')), { x: 16, y: 181, height: 32.2 }, 4, 'the title');
+  expectBox(await box(page.locator('main h1')), { x: 16, y: 181, height: 25 }, 4, 'the title');
 
   // The first four sections of the mockup are where it draws them. « Settings » (FRU-503), which it does
   // not draw, comes next, then « My account », each 2 px after the one before, on the same line.
   await openProbe(page);
   const mockup = [
-    { x: 12, width: 78.9 + ICON },
-    { x: 92.9 + ICON, width: 83.6 + ICON },
-    { x: 178.5 + 2 * ICON, width: 122.5 + ICON },
-    { x: 303 + 3 * ICON, width: 107.3 + ICON },
+    { x: 12, width: 73.1 + ICON },
+    { x: 87.1 + ICON, width: 83.6 + ICON },
+    { x: 169.2 + 2 * ICON, width: 114.3 + ICON },
+    { x: 285.5 + 3 * ICON, width: 101 + ICON },
   ];
   const links = sections(page).getByRole('link');
   for (const [index, entry] of mockup.entries()) {
