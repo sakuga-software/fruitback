@@ -116,11 +116,11 @@ for (const colorScheme of ['light', 'dark'] as const) {
       stage: stages[1],
     });
 
-    // The thread names the status, beside a drop of its colour.
+    // The thread names the status, beside the round of its stage in its colour (FRU-696).
     await pin(page, NOTES.pale.note).getByRole('button').click();
     const thread = page.locator('[data-fruitback-thread]');
     await expect(thread.locator('.fruitback-thread-state')).toHaveText(NOTES.pale.name);
-    await expect(thread.locator('.fruitback-thread-drop')).toHaveCSS('background-color', 'rgb(254, 249, 195)');
+    await expect(thread.locator('.fruitback-thread-ring')).toHaveCSS('color', 'rgb(254, 249, 195)');
     await page.waitForTimeout(400);
     await page.keyboard.press('Escape');
 

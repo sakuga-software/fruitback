@@ -242,7 +242,8 @@ export const FRENCH: Catalog = {
   'thread.orphan': 'Élément introuvable. La position est approximative.',
   'thread.uncertain':
     'Élément retrouvé par sa position, pas par son identité. La page a peut-être changé sous le repère.',
-  'thread.link': '{identifier} →',
+  'thread.link': '{identifier}, dans un nouvel onglet',
+  'thread.technical': 'Détails techniques',
   'thread.attachments': { one: '{count} pièce jointe', other: '{count} pièces jointes' },
   'thread.attachmentsIn': 'dans {identifier}',
 
