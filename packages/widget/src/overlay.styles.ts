@@ -298,6 +298,11 @@ export const STYLES = `
   gap: 7px;
   flex: 1 1 auto;
   min-width: 0;
+  /*
+    As tall as the cross is drawn, as the heading: when the heading wraps (FRU-700: the chip of a
+    visitor, the way out), its first line stays centred on the cross.
+  */
+  min-height: 28px;
   font-weight: 600;
   font-size: 13px;
   letter-spacing: -0.006em;
