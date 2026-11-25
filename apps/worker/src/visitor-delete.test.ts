@@ -105,6 +105,21 @@ describe('a visitor deletes their open note (FRU-702)', () => {
     assert.equal((await indexRow(world))?.removed_at, null);
   });
 
+  it('refuses a visitor where the tab « Access » says « Never », offers no deletion, and follows it back (FRU-703)', async () => {
+    const { world, site, withdraw, read, issue } = await aVisitorNote();
+    await rowsOf(world.database, `UPDATE sites SET visitor_delete = 'never' WHERE id = '${site}'`);
+
+    const refused = await withdraw(issue, { key: KEY_A });
+    assert.equal(refused.status, 403, JSON.stringify(refused.body));
+    assert.deepEqual(refused.body, { error: 'not-allowed' });
+    assert.equal((await read({ key: KEY_A })).get('vd_1')?.withdrawable, undefined);
+    assert.equal((await indexRow(world))?.removed_at, null);
+
+    // « While open » again: the same browser deletes it.
+    await rowsOf(world.database, `UPDATE sites SET visitor_delete = 'while-open' WHERE id = '${site}'`);
+    assert.equal((await withdraw(issue, { key: KEY_A })).status, 200);
+  });
+
   it('keeps the pin of a note a member withdraws: the team sees it closed (FRU-605)', async () => {
     const { send, noteOf, withdraw, read, bobToken } = await aVisitorSite();
     const issue = await send(noteOf('vd_bob'), { token: bobToken });
@@ -178,13 +193,24 @@ describe('the guards of the deletion of a visitor, each planted out (FRU-702)', 
     {
       guard: 'a site that does not take the notes of anybody lets no visitor delete',
       file: 'visitor-key.ts',
-      from: "return policy.write === 'public';",
+      from: "return (action === 'edit' ? client?.visitorEdit : client?.visitorDelete) === 'while-open';",
       to: 'return true;',
       holds: async ({ world, site, withdraw, issue }) => {
         await rowsOf(
           world.database,
           `UPDATE sites SET visibility = 'members', writers = 'members' WHERE id = '${site}'`,
         );
+
+        return (await withdraw(issue, { key: KEY_A })).status === 403;
+      },
+    },
+    {
+      guard: 'a site whose visitors may not delete lets no visitor delete (FRU-703)',
+      file: 'visitor-key.ts',
+      from: "=== 'while-open';",
+      to: '!== undefined;',
+      holds: async ({ world, site, withdraw, issue }) => {
+        await rowsOf(world.database, `UPDATE sites SET visitor_delete = 'never' WHERE id = '${site}'`);
 
         return (await withdraw(issue, { key: KEY_A })).status === 403;
       },

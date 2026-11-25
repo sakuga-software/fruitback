@@ -57,7 +57,7 @@ site: it was the setting of a worker with no database, and that worker no longer
 A site that only members read takes a note from its members only, unless its « Who can leave a
 note » says « Anyone on the page ». A new site says « Members only », and a site made before 0.3.0
 says « Anyone on the page ». The paragraph that starts « The visibility of a site decides who reads
-it », further down, gives the tests.
+it », further down, gives the tests. That field decides on a site that everyone reads too: « Read only » is read by anyone and written by its members only.
 
 A link that opens a note on its page, `<page>#fruitback-note=<id>`, opens nothing to somebody who
 cannot already read that page: the widget opens the note among those `GET /feedback` answered to
@@ -1148,10 +1148,10 @@ test:`keeps the name the visitor typed, and never says the worker verified it`. 
 and plants none`. As above, `Origin` binds a claim to a site and authenticates nobody: a request
 that is not from a browser sends the one it wants, or none.
 
-The visibility of a site decides who reads it; on a site that its members read, « Who can leave a
-note » decides who writes on it (decided on 2026-10-20). On a
+The visibility of a site decides who reads it; « Who can leave a note » decides who writes on it
+(decided on 2026-10-20 for a site that its members read, and on 2026-11-25 for every site). On a
 site read by `members`, a read with no session answers `401`
-(test:`reads no note: the worker asks for a session, and says so`). Such a site has one of two values:
+(test:`reads no note: the worker asks for a session, and says so`). A site has one of two values:
 
 - « Members only » (`writers: members`), the default of every new site. A note, a batch of notes
   and a reply from the page answer `401` with no session, with the body of a refused read
@@ -1174,9 +1174,37 @@ site read by `members`, a read with no session answers `401`
   The migration `0021` gave this value to every site made before 0.3.0, which is what the worker
   did for them then (test:`gives « anyone » to every site of before, and « members » to a site made after`).
 
-The field decides nothing on a site that everyone reads: it takes a note from anybody
-(test:`leaves a note: the field decides nothing on a site that everyone reads`). A console that does
-not send the field changes no site: a site that is added again keeps the value it had.
+On a site that everyone reads, « Members only » is the level « Read only » of the tab « Access »:
+the read answers anyone, with `canWrite: false`, and a note, a batch and a reply from
+the page with no session answer `401` and write nothing
+(test:`reads the notes, is told a note would be refused, and leaves none, by a note or by a batch`,
+test:`refuses a reply from the page with no session on a site « Read only », and takes it when the check is out (FRU-703)`).
+A member still writes there with their session
+(test:`takes the note of a member, sent by the relay with their session`). The migration `0052`
+gives « Anyone on the page » to every site that everyone read, which took a note from anybody
+whatever the field said, so no site of before changes
+(test:`changes nothing a site of before does, and gives a site made after the defaults of the mockup`).
+A caller that names no `writers` (the extension) and opens a site to everyone, new or not, opens it
+to anybody, as « Everyone who visits » always did; one that closes it to members closes the writes
+too, and one that asks the same visibility again changes nothing
+(test:`opens a new site that everyone reads to anybody when the console names nobody, as such a site always was`,
+test:`opens a site to anybody when a caller of before opens it to everyone, and closes it when it closes it (FRU-703)`).
+A site added again with the visibility it has keeps who writes there.
+
+What a visitor with no account may do to a note of their own is a setting of the site too:
+`visitorEdit` and `visitorDelete`, each `never` or `while-open`: no value lets a visitor act on
+a note that is done or closed, nor on the note of somebody else. The console
+shows and sends them; only a role that changes a site (an owner or an admin, `manage-sites`) changes
+them, and a member or a guest is refused with nothing changed
+(test:`refuses a member and a guest, who do not change a site, and changes nothing`). A value that is
+not one of the two is refused (test:`refuses a value that is not a right, and changes nothing`),
+and a row that holds another one gives the visitor nothing. The routes are given the two values only
+where a visitor writes; absent is `never`. A new site takes `while-open`, the mockup's default, and
+`0052` gives `never` to every site of before, so no site changes. The edit of a visitor, below,
+reads `visitorEdit`: with `never`, it answers `403 not-allowed` and the read offers no edit
+(test:`refuses a visitor where the tab « Access » says « Never », offers no edit, and follows it back (FRU-703)`).
+The deletion of a visitor, below, reads `visitorDelete` the same way
+(test:`refuses a visitor where the tab « Access » says « Never », offers no deletion, and follows it back (FRU-703)`).
 
 With `FRUITBACK_DATABASE_URL` the same accounts are in a PostgreSQL database, in place
 of that file, and the worker refuses to start with both. The database holds what the file holds:
@@ -2523,8 +2551,8 @@ them by a key that their browser holds, and by nothing else.
     not-allowed`; a member of the team is refused too;
   - no key, or a key of another shape, is `401 identity-required`; a request with a token is never
     read as a visitor, so a session that ended is told so;
-  - the site must take the notes of anybody (`visitorMay`, the default of the mock-ups until the tab Access
-    makes it a setting), else `403 not-allowed`;
+  - the site must let its visitors edit, « While open » in the tab « Access » (`visitorEdit`, read by
+    `visitorMay`; only a site that takes the notes of anybody has it), else `403 not-allowed`;
   - the note must be open, read in the store for the request and again under the lock of the row,
     else `409 not-open`;
   - an edit writes a reply, so it counts with the replies of a visitor: 5 a minute from one address,
@@ -2543,8 +2571,8 @@ them by a key that their browser holds, and by nothing else.
   test:`changes nothing for a member: their notes are theirs by their account, whatever key comes with it`.
 - The deletion of a visitor. `POST /feedback/<id>/withdraw` takes the key of the browser in place of
   a session, on the route of a member's withdrawal (`callerOf`), with the guards of the edit above:
-  the author `visitor:<digest>` of this key on this site, a site that takes the notes of anybody, an
-  open note, 5 replies a minute. Nothing is deleted in a store: the note is closed with the reply
+  the author `visitor:<digest>` of this key on this site, a site whose visitors may delete (« While
+  open » for `visitorDelete` in the tab « Access »), an open note, 5 replies a minute. Nothing is deleted in a store: the note is closed with the reply
   « Withdrew the note », Linear moves its issue to a canceled state, and an address gets
   `note.withdrawn`. The index marks the row (`removed_at`) before the store withdraws: an index that
   does not answer is `502` and nothing is withdrawn, and the mark is taken back when the store

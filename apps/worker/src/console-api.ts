@@ -30,6 +30,8 @@ import {
   type Site,
   VISIBILITIES,
   WRITERS,
+  VISITOR_RIGHTS,
+  type VisitorRight,
   type Workspace,
   type Visibility,
   type Writers,
@@ -198,6 +200,10 @@ function writersOf(value: unknown): Writers | undefined {
   return isOneOf(value, WRITERS) ? value : undefined;
 }
 
+function visitorRightOf(value: unknown): VisitorRight | undefined {
+  return isOneOf(value, VISITOR_RIGHTS) ? value : undefined;
+}
+
 /** The fields of a site the console shows, and the client id a script tag names. */
 type SiteView = {
   id: string;
@@ -206,6 +212,9 @@ type SiteView = {
   writers: Writers;
   /** FRU-604: the switch « Offer visitors an e-mail when their note is done », as it is stored. */
   notifyDone: boolean;
+  /** FRU-703: what a visitor may do to a note of their own, as it is stored. */
+  visitorEdit: VisitorRight;
+  visitorDelete: VisitorRight;
   destination?: Destination;
   destinations?: Destination[];
 };
@@ -225,6 +234,8 @@ function siteView(site: Site, seesTracker: boolean): SiteView {
     visibility: site.visibility,
     writers: site.writers,
     notifyDone: site.notifyDone,
+    visitorEdit: site.visitorEdit,
+    visitorDelete: site.visitorDelete,
     ...(seesTracker && first !== undefined ? { destination: first, destinations: site.destinations } : {}),
   };
 }
@@ -847,12 +858,23 @@ export async function handleConsoleApi(
     if (notifyDone !== undefined && typeof notifyDone !== 'boolean') {
       return json(400, { error: 'invalid-notify-done' }, headers);
     }
+    // FRU-703: absent, a new site takes the default of the mockup and a site that exists keeps what it had.
+    const visitorEdit = body?.visitorEdit === undefined ? undefined : visitorRightOf(body.visitorEdit);
+    if (body?.visitorEdit !== undefined && visitorEdit === undefined) {
+      return json(400, { error: 'invalid-visitor-edit' }, headers);
+    }
+    const visitorDelete = body?.visitorDelete === undefined ? undefined : visitorRightOf(body.visitorDelete);
+    if (body?.visitorDelete !== undefined && visitorDelete === undefined) {
+      return json(400, { error: 'invalid-visitor-delete' }, headers);
+    }
 
     const site = await context.accounts.addSite(workspaceId as string, {
       origin,
       visibility,
       ...(writers === undefined ? {} : { writers }),
       ...(notifyDone === undefined ? {} : { notifyDone }),
+      ...(visitorEdit === undefined ? {} : { visitorEdit }),
+      ...(visitorDelete === undefined ? {} : { visitorDelete }),
     });
 
     // A new site, as the list answers it (FRU-237): no note yet, and nothing waiting.

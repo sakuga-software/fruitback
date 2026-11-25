@@ -218,7 +218,10 @@ export type CallerChecks = {
    * Whether a visitor known by their browser may edit or withdraw a note of theirs on a site of this
    * policy (FRU-701, FRU-702): `visitorMay` of `visitor-key.ts`.
    */
-  visitorMay: (policy: Pick<ClientPolicy, 'write'>, action: VisitorAction) => boolean;
+  visitorMay: (
+    client: Pick<ClientConfig, 'visitorEdit' | 'visitorDelete'> | undefined,
+    action: VisitorAction,
+  ) => boolean;
   /** Whether the caller is a person who may see the tracker of this client: `seesTracker` of `app.ts`. */
   seesTracker: (request: Request, config: Served, policy: ClientPolicy) => Promise<boolean>;
   /** Whether the worker would sign a note of this caller with an identity it verified: `signsNotes` of `app.ts`. */

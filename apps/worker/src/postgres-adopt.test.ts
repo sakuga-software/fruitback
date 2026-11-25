@@ -183,6 +183,9 @@ for (const { label, open, skip } of DATABASES) {
           writers: 'anyone',
           // FRU-604: a site of before offers no e-mail of a note done.
           notifyDone: false,
+          // FRU-703: a visitor of a site of before changes and takes back nothing, as before.
+          visitorEdit: 'never',
+          visitorDelete: 'never',
           destinations: [{ connector: 'con_linear', teamId: 'team-design', label: 'Linear · Design' }],
         },
       ]);
