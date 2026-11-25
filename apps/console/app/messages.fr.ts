@@ -936,6 +936,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   All: 'Toutes',
   'In Fruitback': 'Dans Fruitback',
   'A connector that was removed': 'Un connecteur retiré',
+  'A connector': 'Un connecteur',
   'Search notes': 'Chercher dans les notes',
   Status: 'Statut',
   'Any status': 'Tous les statuts',

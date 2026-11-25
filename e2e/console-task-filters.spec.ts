@@ -9,7 +9,11 @@ const CONSOLE = 'http://localhost:5178';
 const SITES = [{ id: 's1', origin: 'https://staging.acme.dev', visibility: 'members' }];
 const AT = '2026-11-20T10:00:00.000Z';
 
-async function worker(p: Page, kept: boolean): Promise<URLSearchParams[]> {
+/** FRU-682: how many reads of the members and of the labels the worker refuses first. */
+type Refused = { members?: number; labels?: number };
+
+async function worker(p: Page, kept: boolean, refused: Refused = {}): Promise<URLSearchParams[]> {
+  const refuse = { members: refused.members ?? 0, labels: refused.labels ?? 0 };
   const asked: URLSearchParams[] = [];
   const note = {
     id: 'n1',
@@ -33,6 +37,12 @@ async function worker(p: Page, kept: boolean): Promise<URLSearchParams[]> {
         return route.fulfill({ json: { notes: [note], total: 1, counts: { all: 1 } } });
       }
       if (pathname.endsWith('/list-members')) {
+        if (refuse.members > 0) {
+          refuse.members -= 1;
+
+          return route.fulfill({ status: 500, json: { error: 'unknown' } });
+        }
+
         return route.fulfill({
           json: {
             members: [
@@ -48,6 +58,12 @@ async function worker(p: Page, kept: boolean): Promise<URLSearchParams[]> {
         });
       }
       if (pathname === '/console/workspaces/w1/labels') {
+        if (refuse.labels > 0) {
+          refuse.labels -= 1;
+
+          return route.fulfill({ status: 500, json: { error: 'unknown' } });
+        }
+
         return route.fulfill({ json: { labels: [{ id: 'l1', name: 'Bug', color: '#dc2626' }] } });
       }
 
@@ -94,6 +110,36 @@ test('each filter on the tasks writes the address and asks the worker, and they 
   // A reload keeps them: they are in the address, and each has its chip (FRU-686).
   await p.reload();
   await expect(chips(p)).toHaveText(['AssigneeBen Martin', 'PriorityHigh', 'LabelBug', 'Due dayOverdue']);
+});
+
+test('members and labels that did not load are said in their filters, and « Try again » reads them (FRU-682)', async ({
+  page: p,
+}) => {
+  await worker(p, true, { members: 1, labels: 1 });
+  await p.goto(`${CONSOLE}/w/w1/notes`);
+  await expect(p.getByText('The headline runs')).toBeVisible();
+
+  await p.getByRole('button', { name: 'Filter', exact: true }).click();
+  await p.getByRole('menuitem', { name: 'Assignee', exact: true }).click();
+  const members = p.getByRole('menuitemradio', { name: /The members did not load\./ });
+  await expect(members).toBeDisabled();
+  await expect(members).toContainText('Fruitback hit an error.');
+  // The choices that need no member stay.
+  await expect(p.getByRole('menuitemradio', { name: 'Assigned to nobody', exact: true })).toBeVisible();
+  await p.getByRole('menuitemradio', { name: 'Try again', exact: true }).click();
+  await expect(p).not.toHaveURL(/assignee=/);
+  await choose(p, 'Assignee', 'Ben Martin');
+  await expect(p).toHaveURL(/assignee=a2/);
+
+  await p.getByRole('button', { name: 'Filter', exact: true }).click();
+  await p.getByRole('menuitem', { name: 'Label', exact: true }).click();
+  const labels = p.getByRole('menuitemradio', { name: /The labels did not load\./ });
+  await expect(labels).toBeDisabled();
+  await expect(p.getByRole('menuitemradio', { name: 'Any label', exact: true })).toBeVisible();
+  await p.getByRole('menuitemradio', { name: 'Try again', exact: true }).click();
+  await expect(p).not.toHaveURL(/label=/);
+  await choose(p, 'Label', 'Bug');
+  await expect(p).toHaveURL(/label=l1/);
 });
 
 test('a list with no task Fruitback keeps offers no filter of the tasks', async ({ page: p }) => {

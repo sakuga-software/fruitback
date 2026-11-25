@@ -3,7 +3,7 @@ import { useLocation } from 'react-router';
 import { STAGES, STAGE_NAMES } from '../stages';
 import { type Connector, type SiteChoice } from '../api';
 import { type Listed } from '../listed';
-import { Field, FilterTag, LinkButton, Mark, Menu, MenuTree, type TreeBranch, ViewTab } from '../ui';
+import { Field, FilterTag, LinkButton, Mark, Menu, MenuTree, type TreeBranch, type TreeItem, ViewTab } from '../ui';
 import { ConnectorMark } from '../connector-marks';
 import { KINDS } from './connector-parts';
 import { msg, t } from '../i18n';
@@ -11,6 +11,9 @@ import { useLocale } from '../use-locale';
 import { siteLabel } from '../site-address';
 import { type Filter, type NotesAnswer, type View } from './notes-model';
 import { ownsKeys } from './task-selection';
+import { type TaskMenuSeam } from './task-menu';
+import { SERVER_CAUSE, UNREACHABLE_CAUSE } from '../problems';
+import { isReachable } from '../transport';
 
 /** The list and its head go from one edge of the screen to the other (FRU-685, FRU-686). */
 const BLEED = '-mx-[clamp(16px,4vw,48px)]';
@@ -77,35 +80,39 @@ export function Places({
   onChoose,
 }: {
   counts: NotesAnswer['counts'];
-  connectors: readonly Connector[];
+  /** FRU-682: not read yet, or failed: the screen says the failure above the tabs. */
+  connectors: Listed<Connector>;
   chosen: string;
   onChoose: (place: string) => void;
 }) {
   useLocale();
+  const read = typeof connectors === 'string' ? undefined : connectors;
+  const listed = read ?? [];
   // A place is named by the name its workspace gave it (FRU-404), else by its kind, and by the label
   // of the worker when two connectors with no name are of the same kind.
   const nameOf = (id: string): string => {
     if (id === 'fruitback') return t('In Fruitback');
-    const connector = connectors.find((each) => each.id === id);
-    if (connector === undefined) return t('A connector that was removed');
+    const connector = listed.find((each) => each.id === id);
+    // FRU-682: a connector the screen could not read is not « removed ».
+    if (connector === undefined) return read === undefined ? t('A connector') : t('A connector that was removed');
     if (connector.name !== undefined) return connector.name;
-    const twins = connectors.filter((each) => each.kind === connector.kind).length > 1;
+    const twins = listed.filter((each) => each.kind === connector.kind).length > 1;
 
     return twins ? connector.label : t(KINDS[connector.kind].name);
   };
   const markOf = (id: string): ReactNode => {
     if (id === 'fruitback') return <Mark size={14} />;
-    const connector = connectors.find((each) => each.id === id);
+    const connector = listed.find((each) => each.id === id);
 
     return connector === undefined ? null : <ConnectorMark kind={connector.kind} />;
   };
   // In the order of the sources of the workspace, then Fruitback, then a source that is gone: the
   // order of the answer is no order a person can learn.
   const rank = (id: string) => {
-    const at = connectors.findIndex((each) => each.id === id);
+    const at = listed.findIndex((each) => each.id === id);
     if (at >= 0) return at;
 
-    return id === 'fruitback' ? connectors.length : connectors.length + 1;
+    return id === 'fruitback' ? listed.length : listed.length + 1;
   };
   const places = Object.entries(counts.byPlace ?? {})
     .filter(([, count]) => count > 0)
@@ -144,7 +151,40 @@ const PRIORITY = {
 const DUE = { overdue: msg('Overdue'), week: msg('Due this week'), none: msg('No due day') } as const;
 
 type People = readonly { id: string; name: string }[];
-type Tasks = { people: People; labels: readonly { id: string; name: string }[] };
+/**
+ * The people and the labels of the filters on the tasks, from the seam of the tasks. FRU-682: a read
+ * that failed says so in its submenu, with « Try again », as the menu of a task does (FRU-673, FRU-675).
+ */
+type Tasks = Pick<TaskMenuSeam, 'peopleRead' | 'readPeople' | 'labelsRead' | 'readLabels'> & {
+  people: People;
+  labels: readonly { id: string; name: string }[];
+};
+
+const PEOPLE_LOADING = 'people-loading';
+const PEOPLE_FAILED = 'people-failed';
+const LABELS_LOADING = 'labels-loading';
+const LABELS_FAILED = 'labels-failed';
+const TRY_AGAIN = 'try-again';
+
+/**
+ * The items under the fixed choices of a filter that reads its values: the values once they are read,
+ * « Loading… » before, and what did not load with « Try again » when the read failed.
+ */
+function readItems(
+  read: Tasks['peopleRead'],
+  values: readonly { id: string; label: string }[],
+  failed: { id: string; label: string },
+  loading: string,
+): TreeItem[] {
+  if (read === 'loading') return [{ id: loading, label: t('Loading…'), disabled: true }];
+  if (read === 'failed')
+    return [
+      { ...failed, detail: t(isReachable() ? SERVER_CAUSE : UNREACHABLE_CAUSE), disabled: true },
+      { id: TRY_AGAIN, label: t('Try again') },
+    ];
+
+  return [...values];
+}
 
 /** A filter that is on, as its chip says it: the fields it clears when its cross is pressed. */
 type On = { key: string; field: string; value: string; off: Partial<Record<Filter, string>> };
@@ -280,9 +320,17 @@ function branchesOf(
         { id: 'anyone', label: t('Anyone assigned') },
         { id: 'me', label: t('Assigned to me') },
         { id: 'none', label: t('Assigned to nobody') },
-        ...tasks.people.map((person) => ({ id: person.id, label: person.name })),
+        ...readItems(
+          tasks.peopleRead,
+          tasks.people.map((person) => ({ id: person.id, label: person.name })),
+          { id: PEOPLE_FAILED, label: t('The members did not load.') },
+          PEOPLE_LOADING,
+        ),
       ],
-      onAction: (assignee) => onFilter({ assignee: assignee === 'anyone' ? '' : assignee }),
+      onAction: (assignee) => {
+        if (assignee === TRY_AGAIN) return tasks.readPeople();
+        onFilter({ assignee: assignee === 'anyone' ? '' : assignee });
+      },
     },
     {
       id: 'priority',
@@ -302,9 +350,17 @@ function branchesOf(
       checked: [filters.label === '' ? 'any' : filters.label],
       items: [
         { id: 'any', label: t('Any label') },
-        ...tasks.labels.map((label) => ({ id: label.id, label: label.name })),
+        ...readItems(
+          tasks.labelsRead,
+          tasks.labels.map((label) => ({ id: label.id, label: label.name })),
+          { id: LABELS_FAILED, label: t('The labels did not load.') },
+          LABELS_LOADING,
+        ),
       ],
-      onAction: (label) => onFilter({ label: label === 'any' ? '' : label }),
+      onAction: (label) => {
+        if (label === TRY_AGAIN) return tasks.readLabels();
+        onFilter({ label: label === 'any' ? '' : label });
+      },
     },
     {
       id: 'due',

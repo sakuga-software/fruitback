@@ -196,6 +196,8 @@ type Worker = {
   retry: 'ok' | 'refused' | 'waits';
   /** The sources of the workspace, which may have a name (FRU-404). */
   connectors: unknown[];
+  /** FRU-682: `fails` refuses the read of the sources. */
+  connectorsRead: 'ok' | 'fails';
 };
 
 async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' = 'en'): Promise<Worker> {
@@ -208,14 +210,16 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
     release: () => release(),
     retry: 'ok',
     connectors: CONNECTORS,
+    connectorsRead: 'ok',
   };
   const delivered = new Set<string>();
   const answer = (pathname: string, route: Route) => {
     const request = route.request();
     if (pathname === '/console/workspaces/w1/connectors') {
-      return role === 'guest'
-        ? route.fulfill({ status: 403, json: { error: 'forbidden' } })
-        : route.fulfill({ json: { connectors: worker.connectors, available: true } });
+      if (role === 'guest') return route.fulfill({ status: 403, json: { error: 'forbidden' } });
+      if (worker.connectorsRead === 'fails') return route.fulfill({ status: 500, json: { error: 'unknown' } });
+
+      return route.fulfill({ json: { connectors: worker.connectors, available: true } });
     }
     const retry = /^\/console\/workspaces\/w1\/notes\/(\w+)\/retry$/.exec(pathname);
     if (retry !== null) {
@@ -1040,4 +1044,26 @@ test('a source its workspace named is called by its name, on its chip and in its
   await expect(rows(page).getByText('Linear', { exact: true })).toHaveCount(0);
   // A source with no name keeps the name of its kind.
   await expect(rows(page).getByText('REST API', { exact: true }).first()).toBeVisible();
+});
+
+test('sources that did not load are said above the list, no chip calls them removed, and « Try again » reads them (FRU-682)', async ({
+  page,
+}) => {
+  const worker = await workerWith(page);
+  worker.connectorsRead = 'fails';
+  await open(page);
+  const failed = page.locator('[data-connectors-failed]');
+  await expect(failed.getByRole('alert')).toHaveText(
+    'The connectors of this workspace did not load. Fruitback hit an error.',
+  );
+  // The notes still read, and their places are counted, but not named as sources that are gone.
+  await expect(rows(page)).toHaveCount(8);
+  // With no source read, Fruitback comes first: the order of the sources is not known.
+  await expect(chips(page)).toHaveText(['All10', 'In Fruitback1', 'A connector3', 'A connector6']);
+  await expect(page.getByText('A connector that was removed')).toHaveCount(0);
+
+  worker.connectorsRead = 'ok';
+  await failed.getByRole('button', { name: 'Try again' }).click();
+  await expect(chips(page)).toHaveText(['All10', 'Linear6', 'REST API3', 'In Fruitback1']);
+  await expect(failed).toHaveCount(0);
 });
