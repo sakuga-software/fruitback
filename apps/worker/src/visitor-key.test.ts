@@ -79,6 +79,16 @@ describe('a visitor known by the key of their browser (FRU-700)', () => {
     assert.equal(pin?.withdrawable, undefined);
   });
 
+  it("marks a note of this browser as nobody's once the team marked it done or closed: a verdict takes a session", async () => {
+    for (const stage of ['done', 'closed']) {
+      const { send, mine, moveTo, noteOf } = await aSite();
+      const issue = await send(noteOf('vk_a'), { key: KEY_A });
+      await moveTo(issue, stage);
+
+      assert.deepEqual(await mine({ key: KEY_A }), [], stage);
+    }
+  });
+
   it('changes nothing for a member: their notes are theirs by their account, whatever key comes with it', async () => {
     const { world, bobToken, send, mine, noteOf } = await aSite();
     // The member sends with a key too: their note is theirs by their account, and keeps no digest.
@@ -139,6 +149,17 @@ describe('the guards of the key of a browser, each planted out (FRU-700)', () =>
         await send(noteOf('vk_bad'), { key: 'not-a-key' });
 
         return (await mine({ key: 'not-a-key' })).length === 0;
+      },
+    },
+    {
+      guard: "a note done is not a visitor's",
+      file: 'app.ts',
+      from: "reader.by === 'account' || open.has(note)",
+      to: 'true',
+      holds: async ({ send, mine, moveTo, noteOf }) => {
+        await moveTo(await send(noteOf('vk_a'), { key: KEY_A }), 'done');
+
+        return (await mine({ key: KEY_A })).length === 0;
       },
     },
     {

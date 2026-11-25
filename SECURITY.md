@@ -2510,9 +2510,31 @@ them by a key that their browser holds, and by nothing else.
   for a note of a visitor only. Never the key. The same key gives another digest on another site, so
   a digest read from the database opens nothing elsewhere.
   test:`keeps a digest that names the site, never the key`.
-- What it opens. Only the notes that this browser left on this site, and today only the mark
-  `mine` on them in `GET /feedback`. No edit and no withdrawal (`editable` and `withdrawable` stay
-  for a session). test:`offers a visitor no edit and no withdrawal yet, on a note that is mine`.
+- What it opens. Only the notes that this browser left on this site, while they are open (`new`,
+  `todo`, `progress`): the mark `mine` on them in `GET /feedback`, and the edit of their text
+  (below). A note done asks its author for a verdict, which takes a session, so it is nobody's on a
+  browser.
+  test:`marks a note of this browser as nobody's once the team marked it done or closed: a verdict takes a session`.
+  No withdrawal yet: `withdrawable` stays for a session.
+  test:`offers a visitor an edit and no withdrawal yet, on a note that is mine (FRU-701)`.
+- The edit of a visitor (FRU-701). `POST /feedback/<id>/text` takes the key of the browser in place
+  of a session, on the route of a member's edit (`callerOf` of `edit-routes.ts`), with every guard of
+  that route:
+  - the author the index keeps must be `visitor:<digest>` of this key on this site, else `403
+    not-allowed`; a member of the team is refused too;
+  - no key, or a key of another shape, is `401 identity-required`; a request with a token is never
+    read as a visitor, so a session that ended is told so;
+  - the site must take the notes of anybody (`visitorMay`, the default of the mock-ups until FRU-703
+    makes it a setting), else `403 not-allowed`;
+  - the note must be open, read in the store for the request and again under the lock of the row,
+    else `409 not-open`;
+  - an edit writes a reply, so it counts with the replies of a visitor: 5 a minute from one address,
+    then `429`.
+    The reply names the visitor by the name the note was sent with, « not verified ». In Linear the
+    new text goes in that reply, as for a member. test:`refuses another browser, no key, a key of another shape, and a member, and writes nothing`,
+    test:`refuses once the team took the note on, done or closed, and offers no edit then`,
+    test:`refuses a visitor on a site that no longer takes the notes of anybody`,
+    test:`counts the edits of a visitor with their replies: 5 a minute from one address`.
 - What it does not. A key that is absent, or not of the shape the widget makes, is no key: no digest
   is kept with the note, and a read gets no `mine`. A note of another browser is never `mine`.
   test:`marks the notes of this browser as mine, and those of no other browser`,
@@ -2520,8 +2542,8 @@ them by a key that their browser holds, and by nothing else.
 - A member is not changed. A session of the workspace wins over a key sent with it, and a note that
   a session or a token signs keeps no digest.
   test:`changes nothing for a member: their notes are theirs by their account, whatever key comes with it`.
-- Each guard is taken out of a copy of its module in `visitor-key.test.ts`, and the case that holds
-  it fails.
+- Each guard is taken out of a copy of its module in `visitor-key.test.ts` and `visitor-edit.test.ts`,
+  and the case that holds it fails.
 - CORS. The header is not safelisted, so `Access-Control-Allow-Headers` lists it. A read of a
   visitor who sent a note is then preflighted, as a read with a token is.
 

@@ -17,7 +17,7 @@ import { createConnectorStores, createRoutedStore } from './connectors.ts';
 import { type GithubApp, githubAppFor } from './github-connector.ts';
 import { DELIVERY_HEADER, LOOP_STATUS } from './rest-connector.ts';
 import { type WorkerConfig, type WorkerEnv, hasAccounts, hasSessions, readAllowedOrigins, readConfig } from './env.ts';
-import { type ReplyAuthor, type NoteStore, StoreError } from './store.ts';
+import { EDITABLE_STAGES, type ReplyAuthor, type NoteStore, StoreError } from './store.ts';
 import { watchedStore } from './connector-health.ts';
 import { type CorsDecision, diagnosticCorsHeaders, isExtensionOrigin, openCors, resolveCors } from './cors.ts';
 import { PAIR_PATH } from './pair-page.ts';
@@ -154,7 +154,8 @@ async function readerOf(
  * and how the worker knows the reader (`by`): a session of the workspace of the site, whose account
  * the index keeps as their author, or the key of a visitor's browser, whose digest it keeps (FRU-700).
  * Empty for anybody else, and for a worker with no index. An index that does not answer costs
- * `mine`, never the read.
+ * `mine`, never the read. A visitor's notes count while they are open only: a note done asks its
+ * author for a verdict, which takes a session.
  */
 async function notesOfReader(
   request: Request,
@@ -177,8 +178,15 @@ async function notesOfReader(
       issues.map((issue) => issue.note.id),
     );
 
+    // A visitor's note is theirs while it is open (FRU-700): `mine` on a note done asks its author for
+    // a verdict, and a verdict takes a session (FRU-294).
+    const open = new Set(issues.flatMap((issue) => (EDITABLE_STAGES.has(issue.stage) ? [issue.note.id] : [])));
+    const counts = (note: string) => reader.by === 'account' || open.has(note);
+
     return {
-      notes: new Set([...authors].flatMap(([note, author]) => (author === reader.author ? [note] : []))),
+      notes: new Set(
+        [...authors].flatMap(([note, author]) => (author === reader.author && counts(note) ? [note] : [])),
+      ),
       by: reader.by,
     };
   } catch (error) {

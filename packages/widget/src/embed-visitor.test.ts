@@ -95,14 +95,6 @@ describe('a visitor known by the key of their browser, through init (FRU-700)', 
     assert.equal((await threadOf(mounted(), {})).querySelector('.fruitback-thread-you'), null);
   });
 
-  it('offers a visitor known by their browser no verdict on a note done, which takes a session', async () => {
-    pageFetch(readOf(aNote({ mine: true, stage: 'done', stateName: 'Done' })));
-    const root = await threadOf(mounted(), {});
-
-    assert.equal(root.querySelector('.fruitback-thread-check'), null);
-    assert.notEqual(root.querySelector('.fruitback-thread-you'), null);
-  });
-
   it('makes no key, and sends none, for a mount whose host names the reporter or carries the calls', async () => {
     const page = mounted();
     const sent: TransportRequest[] = [];
