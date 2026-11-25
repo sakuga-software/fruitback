@@ -198,6 +198,39 @@ test('the count of the bar stays on another screen, and goes with a change of wo
   await expect(failing(page)).toHaveText('failed sends:1');
 });
 
+test('a « Retry » that the worker refuses in part says so until the next read', async ({ page }) => {
+  const worker = await workerWith(page);
+  await open(page);
+  const address = rows(page).nth(1);
+  // The first send goes again, the second is refused: the screen says it, and reads the health again.
+  worker.refusesRetry = ['d2'];
+  worker.late = LATE.slice(1);
+  await address.getByRole('button', { name: 'Retry REST API', exact: true }).click();
+  const refusal = page.locator('main').getByRole('alert');
+  await expect(refusal).toHaveText('The new attempt was not started. Try again.');
+  await expect(address.locator('[data-pill]')).toHaveText('1 note not delivered');
+  await expect(failing(page)).toHaveText('failed sends:1');
+  // The next read says the health as it is now, and the refusal of before goes.
+  worker.refusesRetry = [];
+  worker.late = [];
+  await address.getByRole('button', { name: 'Retry REST API', exact: true }).click();
+  await expect(address.locator('[data-pill]')).toHaveText('Healthy');
+  await expect(refusal).toHaveCount(0);
+});
+
+test('a read of the sends that fails keeps the count of the bar, and gives no smaller one', async ({ page }) => {
+  const worker = await workerWith(page);
+  await open(page);
+  await expect(failing(page)).toHaveText('failed sends:2');
+  // The settings of the address read the list again (« Try now »), and the read of the health fails.
+  await openSettings(page, 'REST API');
+  worker.late = undefined;
+  await panel(page).getByRole('button', { name: 'Try now' }).first().click();
+  await page.keyboard.press('Escape');
+  await expect(rows(page).nth(1).locator('[data-pill]')).toHaveText('Not read');
+  await expect(failing(page)).toHaveText('failed sends:2');
+});
+
 test('the sends of an address that were not read are « Not read », and the screen says so', async ({ page }) => {
   const worker = await workerWith(page);
   worker.late = undefined;

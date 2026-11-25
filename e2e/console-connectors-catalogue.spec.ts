@@ -149,8 +149,16 @@ test('an address connected from its tile shows its secret once, then its setting
   await expect(page.locator('[data-secret]')).toHaveText('made-by-fruitback-0123456789');
   await expect(rows(page)).toHaveCount(3);
   await expect(page.getByRole('dialog')).toHaveCount(0);
+  // A search or a group that does not hold the tile keeps it while its form is open: the secret is
+  // shown once (raised in review).
+  await search(page).fill('linear');
+  await catalogue(page).getByRole('button', { name: 'Agents', exact: true }).click();
+  await expect(page.locator('[data-secret]')).toHaveText('made-by-fruitback-0123456789');
+  await expect(tiles(page)).toHaveCount(1);
   await page.getByRole('button', { name: 'I kept it', exact: true }).click();
   await expect(page.locator('[data-secret]')).toHaveCount(0);
+  // The form closed, so the search and the group hold their tiles again.
+  await expect(tiles(page)).toHaveCount(0);
   // Its settings open, and the secret is gone from the screen.
   await expect(panel(page)).toHaveAttribute('aria-label', /hooks\.client\.fr\/notes/);
   await expect(page.getByText('made-by-fruitback-0123456789')).toHaveCount(0);

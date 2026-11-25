@@ -68,6 +68,8 @@ export type Worker = {
   refuses?: string;
   /** What the worker answers to a name (FRU-404). */
   refusesName?: string;
+  /** The sends whose new attempt the worker refuses (FRU-690, « Retry »). */
+  refusesRetry?: readonly string[];
   sent: { pathname: string; body: unknown }[];
 };
 
@@ -84,6 +86,8 @@ export async function workerWith(
     if (!pathname.startsWith('/console/workspaces/w1/')) return undefined;
     if (request.method() !== 'GET') {
       worker.sent.push({ pathname, body: request.postDataJSON() });
+      const retried = /\/deliveries\/(\w+)\/retry$/.exec(pathname)?.[1];
+      if (retried !== undefined && worker.refusesRetry?.includes(retried)) return json({ error: 'unknown' }, 500);
       // FRU-633: the consent at Linear is skipped. The browser comes back as the worker sends it back.
       if (pathname.endsWith('/connectors/c1/reconnect')) {
         worker.connectors = worker.connectors.map((each) => ((each as { id: string }).id === 'c1' ? LINEAR : each));

@@ -156,6 +156,8 @@ export default function Connectors() {
   reportFailing.current = failingRead;
 
   const load = useCallback(async () => {
+    // A refusal of « Retry » is said until the next read, which says the health as it is now.
+    setRetryProblem(undefined);
     const [listed, placed] = await Promise.all([
       call<{
         connectors: Connector[];
@@ -198,8 +200,10 @@ export default function Connectors() {
       const found = counts.filter((count) => count !== undefined);
       setLate(Object.fromEntries(found));
       setHealthUnread(found.length < counts.length);
-      // The red count of « Connectors » in the bar: every send that waits, as it was read.
-      reportFailing.current(found.reduce((sum, [, each]) => sum + each.notes + each.calls, 0));
+      // The red count of « Connectors » in the bar: every send that waits, once every list was read. A
+      // list that was not read gives no new count: the bar keeps the one it had, never a smaller one.
+      if (found.length === counts.length)
+        reportFailing.current(found.reduce((sum, [, each]) => sum + each.notes + each.calls, 0));
     }
 
     return { found: listed.ok ? listed.data.connectors : [], adds: listed.ok && listed.data.available };
@@ -272,18 +276,19 @@ export default function Connectors() {
   /** « Retry » of a row: each send that waits is asked again, then the health is read again. */
   async function retry(connector: Connector, ids: readonly string[]) {
     setRetrying(connector.id);
-    setRetryProblem(undefined);
     const asked = await Promise.all(
       ids.map((id) => call('POST', `${base}/connectors/${connector.id}/deliveries/${id}/retry`)),
     );
-    const refused = asked.find((each) => !each.ok);
-    if (refused !== undefined && !refused.ok) {
+    // The health is read again first: the read clears a refusal of before, and this one stays after it.
+    await load();
+    const refused = asked.filter((each) => !each.ok);
+    const first = refused[0];
+    if (first !== undefined && !first.ok) {
       setRetryProblem({
         connector: connector.id,
-        problem: writeProblemOf(refused, msg('The new attempt was not started. Try again.')),
+        problem: writeProblemOf(first, msg('The new attempt was not started. Try again.')),
       });
     }
-    await load();
     setRetrying(undefined);
   }
 

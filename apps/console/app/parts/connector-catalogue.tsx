@@ -126,13 +126,16 @@ export function Catalogue({
   const [typed, setTyped] = useState('');
   const [group, setGroup] = useState<Group | 'all'>('all');
   const cannot = !manages || !available;
+  // The tile whose form is open stays, whatever the search and the group: its form can hold the
+  // secret of an address, shown once (raised in review).
   const shownEntries = CATALOGUE.filter(
     (entry) =>
-      (group === 'all' || entry.group === group) &&
-      (typed.trim() === '' ||
-        [t(entry.name), t(entry.short), detailOf(entry.kind)].some((words) =>
-          folded(words).includes(folded(typed.trim())),
-        )),
+      entry.kind === adding ||
+      ((group === 'all' || entry.group === group) &&
+        (typed.trim() === '' ||
+          [t(entry.name), t(entry.short), detailOf(entry.kind)].some((words) =>
+            folded(words).includes(folded(typed.trim())),
+          ))),
   );
 
   return (
