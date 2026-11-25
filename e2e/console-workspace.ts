@@ -107,6 +107,13 @@ export async function openMyAccount(page: Page): Promise<void> {
   await page.getByRole('menuitem', { name: 'My account' }).click();
 }
 
+/**
+ * Where the compact bar of FRU-684 puts a screen at 1440 px, against the mockups of 2026-10-13 that
+ * the specs of the screens measure: its rail was 248.5 px and the bar is 232 px, so a screen starts
+ * 16.5 px further left and is 16.5 px wider. A box of a screen adds it to the x of the mockup.
+ */
+export const BAR_SHIFT = 232 - 248.5;
+
 /** How far the document scrolls sideways. A screen that fits: 0. */
 export const sideScroll = (page: Page): Promise<number> =>
   page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);

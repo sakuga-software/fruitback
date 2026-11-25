@@ -2,16 +2,17 @@ import AxeBuilder from '@axe-core/playwright';
 import { type Locator, type Page, type Route, expect, test } from '@playwright/test';
 import {
   ACME,
+  BAR_SHIFT,
   type Role,
   box,
   contrast,
   expectBox,
+  fulfillSites,
   painted,
   rgb,
   sideScroll,
   stubWorker,
   styles,
-  fulfillSites,
 } from './console-workspace.ts';
 
 /**
@@ -216,7 +217,7 @@ test('the list is a grid of cards, each named by its address and its icon (FRU-4
   await expect(page.getByRole('list', { name: 'Statuses' })).toHaveCount(0);
 
   // The search, then the grid: a card for each site, three side by side in the column.
-  expectBox(await box(search(page)), { x: 298, y: 120, height: 28 }, 2, 'the search');
+  expectBox(await box(search(page)), { x: 298 + BAR_SHIFT, y: 120, height: 28 }, 2, 'the search');
   const cards = grid(page).locator('li[data-site]');
   await expect(cards).toHaveCount(4);
   const columns = await grid(page).evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(' '));
@@ -802,13 +803,13 @@ test('a workspace with no site shows the card of the mockup, and its form adds t
     });
   expect.soft(await painted(empty, 'backgroundColor')).toEqual(rgb(SUBTLE));
   expect.soft(await painted(empty, 'borderTopColor')).toEqual(rgb(LINE));
-  expectBox(await box(empty), { x: 297, y: 120, width: 754 }, 2, 'the card');
+  expectBox(await box(empty), { x: 297 + BAR_SHIFT, y: 120, width: 754 }, 2, 'the card');
 
   const drop = empty.locator('svg').first();
-  expectBox(await box(drop), { x: 354, y: 169, width: 40, height: 48 }, 2, 'the drop');
+  expectBox(await box(drop), { x: 354 + BAR_SHIFT, y: 169, width: 40, height: 48 }, 2, 'the drop');
   expect.soft(await painted(drop, 'fill')).toEqual(rgb(ACCENT));
   const title = empty.getByRole('heading', { level: 2, name: 'No site yet' });
-  expectBox(await box(title), { x: 354, y: 231, height: 26 }, 2, 'the title of the card');
+  expectBox(await box(title), { x: 354 + BAR_SHIFT, y: 231, height: 26 }, 2, 'the title of the card');
   expect.soft(await styles(title, ['font-size', 'font-weight'])).toEqual({ 'font-size': '20px', 'font-weight': '700' });
   const text = empty.getByText(
     "Paste the address of a site you review. Staging, a preview build or a client's live site: any page of it will do.",
@@ -820,9 +821,9 @@ test('a workspace with no site shows the card of the mockup, and its form adds t
 
   const field = empty.getByRole('textbox', { name: 'Site address' });
   await expect(field).toHaveAttribute('placeholder', 'staging.acme.dev');
-  expectBox(await box(field), { x: 354, y: 353.3, width: 535.2, height: 32 }, 2, 'the field');
+  expectBox(await box(field), { x: 354 + BAR_SHIFT, y: 353.3, width: 535.2, height: 32 }, 2, 'the field');
   const submit = empty.getByRole('button', { name: 'Add site', exact: true });
-  expectBox(await box(submit), { x: 898.7, y: 353.3, width: 94.8, height: 32 }, 2, '« Add site »');
+  expectBox(await box(submit), { x: 898.7 + BAR_SHIFT, y: 353.3, width: 94.8, height: 32 }, 2, '« Add site »');
   // The head has no « Add a site »: the card is the way to add one.
   await expect(page.getByRole('button', { name: 'Add a site', exact: true })).toHaveCount(0);
   await expect(grid(page)).toHaveCount(0);
@@ -886,12 +887,12 @@ test('a read that failed is the alert of the mockup, and never « No site yet »
       'max-width': '760px',
     });
   expect.soft(await painted(alert, 'borderTopColor')).toEqual(rgb(CONTROL));
-  expectBox(await box(alert), { x: 297, y: 120, width: 826, height: 98.5 }, 2, 'the alert');
+  expectBox(await box(alert), { x: 297 + BAR_SHIFT, y: 120, width: 826, height: 98.5 }, 2, 'the alert');
   const title = alert.getByRole('heading', { level: 2 });
   expect.soft(await styles(title, ['font-size', 'font-weight'])).toEqual({ 'font-size': '14px', 'font-weight': '600' });
-  expectBox(await box(title), { x: 330, y: 149, height: 17 }, 2, 'the title of the alert');
+  expectBox(await box(title), { x: 330 + BAR_SHIFT, y: 149, height: 17 }, 2, 'the title of the alert');
   const again = alert.getByRole('button', { name: 'Try again', exact: true });
-  expectBox(await box(again), { x: 993, y: 153.2, width: 96.6, height: 32 }, 2, '« Try again »');
+  expectBox(await box(again), { x: 993 + BAR_SHIFT, y: 153.2, width: 96.6, height: 32 }, 2, '« Try again »');
   expect.soft(await styles(again, ['border-top-left-radius'])).toEqual({ 'border-top-left-radius': '6px' });
 
   // Neither the card of a workspace with no site, nor a way to add one on a list nobody read.

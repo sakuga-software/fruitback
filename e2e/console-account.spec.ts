@@ -11,6 +11,7 @@ import {
 } from './cloud-worker.ts';
 import {
   ACME,
+  BAR_SHIFT,
   MOCKUP_FONT,
   type Role,
   box,
@@ -275,7 +276,7 @@ test('the screen is the one of the mockup, with what the worker of today does', 
   });
   const title = page.getByRole('heading', { level: 2, name: 'Profile' });
   expect.soft(await styles(title, ['font-size', 'font-weight'])).toEqual({ 'font-size': '15px', 'font-weight': '700' });
-  expectBox(await box(title), { x: 297, y: 132, height: 21 }, 2, '« Profile »');
+  expectBox(await box(title), { x: 297 + BAR_SHIFT, y: 132, height: 21 }, 2, '« Profile »');
 
   // The profile: the name, which the person changes (FRU-249), and the language.
   const profile = section(page, 'Profile');
@@ -287,10 +288,15 @@ test('the screen is the one of the mockup, with what the worker of today does', 
   // The screen is as wide as its column (FRU-398): 1095.5 px at 1440 px, where the mockup capped it
   // at 724 px (820 px less its sides). The two fields share that width, so each is 540.7 px wide,
   // and not the 355 px of the mockup.
-  expectBox(await box(name), { x: 297, y: 189, width: 540.7, height: 32 }, 2, 'the name');
+  expectBox(await box(name), { x: 297 + BAR_SHIFT, y: 189, width: 540.7 - BAR_SHIFT / 2, height: 32 }, 2, 'the name');
   const language = profile.getByRole('button', { name: /Language/ });
   await expect(language).toContainText('English');
-  expectBox(await box(language), { x: 851.3, y: 189, width: 540.7, height: 32 }, 2, 'the language');
+  expectBox(
+    await box(language),
+    { x: 851.3 + BAR_SHIFT / 2, y: 189, width: 540.7 - BAR_SHIFT / 2, height: 32 },
+    2,
+    'the language',
+  );
   // No font sizes these boxes: they are measured on every system, where `expectBox` measures only
   // in the font of the mockup. The two fields fill the section, 14 px apart.
   const fields = { name: await box(name), language: await box(language), profile: await box(profile) };
@@ -398,7 +404,7 @@ test('the screen is the one of the mockup, with what the worker of today does', 
   const where = section(page, 'Where you are signed in');
   expectBox(
     await box(where.getByRole('heading', { level: 2 })),
-    { x: 297, y: 598.8 + under, height: 21 },
+    { x: 297 + BAR_SHIFT, y: 598.8 + under, height: 21 },
     2,
     '« Where you are signed in »',
   );
@@ -451,7 +457,7 @@ test('the screen is the one of the mockup, with what the worker of today does', 
       'font-size': '13px',
       'font-weight': '600',
     });
-  expectBox(await box(signOut), { x: 297, y: 919 + under, width: 89.7, height: 32 }, 2, '« Sign out »');
+  expectBox(await box(signOut), { x: 297 + BAR_SHIFT, y: 919 + under, width: 89.7, height: 32 }, 2, '« Sign out »');
   const everywhere = out.getByRole('button', { name: 'Sign out everywhere', exact: true });
   expect.soft(await styles(everywhere, ['text-decoration-line', 'padding-top'])).toEqual({
     'text-decoration-line': 'underline',
@@ -459,7 +465,7 @@ test('the screen is the one of the mockup, with what the worker of today does', 
   });
   expectBox(
     await box(everywhere),
-    { x: 406.2, y: 914.7 + under, width: 129.6, height: 41 },
+    { x: 406.2 + BAR_SHIFT, y: 914.7 + under, width: 129.6, height: 41 },
     2,
     '« Sign out everywhere »',
   );

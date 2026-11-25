@@ -3,16 +3,17 @@ import { type Page, type Route, expect, test } from '@playwright/test';
 import { WORKER_ORIGIN } from './pin.ts';
 import {
   ACME,
+  BAR_SHIFT,
   type Role,
   box,
   contrast,
   expectBox,
+  fulfillSites,
   painted,
   rgb,
   sideScroll,
   stubWorker,
   styles,
-  fulfillSites,
 } from './console-workspace.ts';
 import { unfolded } from './settled.ts';
 
@@ -39,7 +40,7 @@ const ACCENT_STRONG = '#b91c1c';
 const DONE = '#166534';
 const WHITE = '#ffffff';
 /** The width of a row at 1440 px, inside the border of the list: the whole page, since FRU-403. */
-const ROW_WIDTH = 1093;
+const ROW_WIDTH = 1093 - BAR_SHIFT;
 
 const SETTINGS = { showComments: true, stages: {} };
 const LINEAR = {
@@ -264,11 +265,16 @@ test('the list of the sources and the panel of a Linear are the ones of the mock
     for (let at: Element | null = heading; at !== null; at = at.parentElement) at.scrollTop = 0;
     document.scrollingElement?.scrollTo(0, 0);
   });
-  expectBox(await box(title), { x: 297, y: 120, height: 18 }, 2, '« Connected »');
-  expectBox(await box(chosen), { x: 298, y: 147, width: ROW_WIDTH, height: 65 }, 2, 'the first row');
-  expectBox(await box(panel(page)), { x: 298, y: 211, width: ROW_WIDTH }, 2, 'the panel');
+  expectBox(await box(title), { x: 297 + BAR_SHIFT, y: 120, height: 18 }, 2, '« Connected »');
+  expectBox(await box(chosen), { x: 298 + BAR_SHIFT, y: 147, width: ROW_WIDTH, height: 65 }, 2, 'the first row');
+  expectBox(await box(panel(page)), { x: 298 + BAR_SHIFT, y: 211, width: ROW_WIDTH }, 2, 'the panel');
   const under = await box(panel(page));
-  expectBox(await box(resting), { x: 298, y: under.y + under.height + 14, width: ROW_WIDTH }, 2, 'the second row');
+  expectBox(
+    await box(resting),
+    { x: 298 + BAR_SHIFT, y: under.y + under.height + 14, width: ROW_WIDTH },
+    2,
+    'the second row',
+  );
 
   // A hover scrolls the second row into view, below the panel: the boxes are taken before it.
   await resting.hover();

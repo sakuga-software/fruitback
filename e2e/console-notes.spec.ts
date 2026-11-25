@@ -3,6 +3,7 @@ import { type Page, type Route, expect, test } from '@playwright/test';
 import { WORKER_ORIGIN } from './pin.ts';
 import {
   ACME,
+  BAR_SHIFT,
   type Role,
   box,
   expectBox,
@@ -347,7 +348,7 @@ test('the page is the one of the mockup: chips, filters, the table and its pages
   const all = chip(page, /^All/);
   await expect(all).toHaveAttribute('aria-pressed', 'true');
   await expect(chip(page, /^Linear/)).toHaveAttribute('aria-pressed', 'false');
-  expectBox(await box(all), { x: 297, y: 116, height: 24 }, 2, '« All »');
+  expectBox(await box(all), { x: 297 + BAR_SHIFT, y: 116, height: 24 }, 2, '« All »');
   expect
     .soft(
       await styles(all, ['height', 'padding-left', 'border-top-left-radius', 'font-size', 'font-weight', 'column-gap']),
@@ -381,7 +382,7 @@ test('the page is the one of the mockup: chips, filters, the table and its pages
     });
 
   // The filters: a search and two lists, 40 px, their names for a screen reader only.
-  expectBox(await box(search(page)), { x: 297, y: 154, height: 28 }, 2, 'the search');
+  expectBox(await box(search(page)), { x: 297 + BAR_SHIFT, y: 154, height: 28 }, 2, 'the search');
   // What the index searches: not the author, which the mockup says.
   await expect(search(page)).toHaveAttribute('placeholder', 'Search the text, the page or the reference');
   const site = page
@@ -409,7 +410,7 @@ test('the page is the one of the mockup: chips, filters, the table and its pages
   await expect(headers).toHaveText(['Note', 'Site', 'Left by', 'Went to', 'When', 'Page']);
   await expect(table(page)).toHaveAttribute('data-stacked', 'false');
   expect.soft(await styles(table(page).locator('table'), ['font-size'])).toEqual({ 'font-size': '13px' });
-  expectBox(await box(table(page).locator('table')), { x: 298, y: 199 }, 2, 'the table');
+  expectBox(await box(table(page).locator('table')), { x: 298 + BAR_SHIFT, y: 199 }, 2, 'the table');
   expect.soft(await styles(headers.nth(4), ['text-align'])).toEqual({ 'text-align': 'right' });
 
   // A note: its 64 characters on two lines at most, and nothing else (FRU-546).
