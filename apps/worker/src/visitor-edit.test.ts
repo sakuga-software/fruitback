@@ -105,6 +105,10 @@ describe('a visitor edits the text of their open note (FRU-701)', () => {
 /**
  * Each guard of FRU-701, taken out of a copy of its module: the case that holds it sees the change.
  * The real module is the control of each one, in the same world.
+ *
+ * The open stage is held twice, as for a member (FRU-475): by the route, and by the store under the
+ * lock of the row. Taken out of the route alone, the store still answers `409 not-open`: the case
+ * `refuses once the team took the note on` holds the two together, and `edit-route.test.ts` each one.
  */
 describe('the guards of the edit of a visitor, each planted out (FRU-701)', () => {
   type Check = (site: Awaited<ReturnType<typeof aVisitorNote>>) => Promise<boolean>;
@@ -125,20 +129,6 @@ describe('the guards of the edit of a visitor, each planted out (FRU-701)', () =
         const keyless = await send(noteOf('ve_none'));
 
         return (await edit(keyless, 'Nobody', {})).status === 401;
-      },
-    },
-    {
-      guard: 'a note the team took on is not edited',
-      file: 'edit-routes.ts',
-      from: `    if (!EDITABLE_STAGES.has(found.stage)) return json(409, { error: 'not-open', stage: found.stage }, corsHeaders);
-
-    const named = await replyAuthorOf(`,
-      to: `
-    const named = await replyAuthorOf(`,
-      holds: async ({ edit, moveTo, issue }) => {
-        await moveTo(issue, 'closed');
-
-        return (await edit(issue, 'Too late', { key: KEY_A })).status === 409;
       },
     },
     {

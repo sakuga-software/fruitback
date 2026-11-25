@@ -961,8 +961,16 @@ describe('every word the widget shows', () => {
       byBrowser: () => true,
       edit: { send: () => new Promise(() => {}) },
     });
-    byBrowser.render([found]);
-    byBrowser.select(found.note.id);
+    // A note of its own, still open: the flows above withdrew `found`.
+    const ofThisBrowser = noteIssueFixture({
+      stage: 'new',
+      mine: true,
+      editable: true,
+      url: 'https://linear.app/acme/issue/ACM-9',
+      note: found.note,
+    });
+    byBrowser.render([ofThisBrowser]);
+    byBrowser.select(ofThisBrowser.note.id);
     snapshots.push(...shown(host.root));
     (host.root.querySelector('.fruitback-thread-edit') as HTMLButtonElement).click();
     snapshots.push(...shown(host.root));

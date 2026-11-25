@@ -2517,14 +2517,14 @@ them by a key that their browser holds, and by nothing else.
   test:`marks a note of this browser as nobody's once the team marked it done or closed: a verdict takes a session`.
   No withdrawal yet: `withdrawable` stays for a session.
   test:`offers a visitor an edit and no withdrawal yet, on a note that is mine (FRU-701)`.
-- The edit of a visitor (FRU-701). `POST /feedback/<id>/text` takes the key of the browser in place
+- The edit of a visitor. `POST /feedback/<id>/text` takes the key of the browser in place
   of a session, on the route of a member's edit (`callerOf` of `edit-routes.ts`), with every guard of
   that route:
   - the author the index keeps must be `visitor:<digest>` of this key on this site, else `403
     not-allowed`; a member of the team is refused too;
   - no key, or a key of another shape, is `401 identity-required`; a request with a token is never
     read as a visitor, so a session that ended is told so;
-  - the site must take the notes of anybody (`visitorMay`, the default of the mock-ups until FRU-703
+  - the site must take the notes of anybody (`visitorMay`, the default of the mock-ups until the tab Access
     makes it a setting), else `403 not-allowed`;
   - the note must be open, read in the store for the request and again under the lock of the row,
     else `409 not-open`;
