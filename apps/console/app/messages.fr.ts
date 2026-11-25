@@ -646,7 +646,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Delivered: 'Livrées',
   '{share} %': '{share} %',
   'Nothing waiting to be sent': 'Rien en attente d’envoi',
-  'No tracker for this site': 'Aucun tracker pour ce site',
+  'No tracker for this site': 'Aucun outil de suivi pour ce site',
   'No note yet': 'Aucune note pour l’instant',
   'Change who sees the notes of {site}': 'Modifier qui voit les notes de {site}',
   'Change who can leave a note on {site}': 'Modifier qui peut laisser une note sur {site}',
