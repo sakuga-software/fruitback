@@ -200,7 +200,7 @@ test('the settings lead an owner to the keys, listed with their last use, their 
   await expect(list(page).getByRole('listitem')).toHaveCount(3);
   const ci = row(page, 'Claude on CI');
   await expect(ci).toContainText('shop.acme.dev');
-  await expect(ci).toContainText('Read, reply and set a status');
+  await expect(ci).toContainText('Read, reply and change the tasks');
   await expect(ci).toContainText('Notes of known people only');
   await expect(ci).toContainText('12 min ago');
   const triage = row(page, 'Nightly triage');
@@ -238,8 +238,8 @@ test('a key is made, shown once with the line for Claude Code, copied, then gone
   await expect(docs).not.toBeChecked();
   await form.getByText('docs.acme.dev', { exact: true }).click();
   await expect(docs).toBeChecked();
-  await form.getByText('Read, reply and set a status', { exact: true }).click();
-  await expect(form.getByRole('radio', { name: 'Read, reply and set a status' })).toBeChecked();
+  await form.getByText('Read, reply and change the tasks', { exact: true }).click();
+  await expect(form.getByRole('radio', { name: 'Read, reply and change the tasks' })).toBeChecked();
   await form.getByRole('textbox', { name: 'Expires after (days)' }).fill('30');
   await expect(form).toContainText('Expires on');
   // On by default, and turned off here, knowing it.

@@ -107,7 +107,7 @@ const KEYS = () => [
 ];
 
 const rights = (k) =>
-  `${k.write ? t('Read, reply and set a status', 'Lire, répondre et changer un statut') : t('Read the notes', 'Lire les notes')}<small>${
+  `${k.write ? t('Read, reply and change the tasks', 'Lire, répondre et changer les tâches') : t('Read the notes', 'Lire les notes')}<small>${
     k.verifiedOnly
       ? t('Notes of known people only', 'Notes de personnes connues seulement')
       : t('Every note, a visitor’s too', 'Toutes les notes, celles des visiteurs aussi')
@@ -200,7 +200,7 @@ function form({ error = false } = {}) {
     <fieldset class="field">
       <legend>${t('What the agent can do', 'Ce que l’agent peut faire')}</legend>
       <label class="radio"><input type="radio" name="r"><span><b>${t('Read the notes', 'Lire les notes')}</b><small>${t('Their text, page, element, component, file and line, picture, replies and status.', 'Leur texte, page, élément, composant, fichier et ligne, capture, réponses et statut.')}</small></span></label>
-      <label class="radio"><input type="radio" name="r" checked><span><b>${t('Read, reply and set a status', 'Lire, répondre et changer un statut')}</b><small>${t('A reply says it is from an agent. A status is set only on a note that Fruitback keeps.', 'Une réponse dit qu’elle vient d’un agent. Un statut ne change que sur une note que garde Fruitback.')}</small></span></label>
+      <label class="radio"><input type="radio" name="r" checked><span><b>${t('Read, reply and change the tasks', 'Lire, répondre et changer les tâches')}</b><small>${t('A reply says it is from an agent. A status is set only on a note that Fruitback keeps.', 'Une réponse dit qu’elle vient d’un agent. Un statut ne change que sur une note que garde Fruitback.')}</small></span></label>
     </fieldset>
     <div class="field days">
       <label for="kd">${t('Lives for, in days', 'Durée, en jours')}</label>

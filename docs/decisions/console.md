@@ -1287,3 +1287,23 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
 - **Said to a screen reader**: a line of status, always in the page, says the count of the selection
   and the end of a change (« 3 notes changed. »). A selection emptied with the focus in the bar gives
   the focus to the list. `e2e/console-task-bulk.spec.ts` holds it, at 1440 px and at 390 px in French.
+
+## A task written by hand (FRU-657)
+
+### The rules, in short
+
+- **« New task » is at the head of the list, beside the view, and at the head of each column of the
+  board**, as a « + » named « New task in <column> ». The key « C » opens it too, as in Linear: alone,
+  out of a field, and when no dialog, menu or list is open. The button writes the key beside its
+  words, so the key is found.
+- **A dialog of the kit** (`Dialog`, `md`): the title first and required, a text of several lines
+  (`TextBox`, the text area of HeroUI), the site when the workspace has more than one, then the
+  status, the assignee, the priority and the day, and the labels. The site is the one of the filter,
+  or the only one; a column gives its status. No board in `design/`: the dialog is made of controls of
+  the kit, in the order of the panel of a task.
+- **What is typed stays until the task is written.** A refusal is said in the dialog over the
+  buttons, and Escape or « Cancel » keep the draft for the next « New task ». Once written, the list
+  is read again and the task opens in its panel (`?task=<id>`).
+- **A task has no page**: its row and its card draw no link to a page, its menu no « Copy the link to
+  the note », and its panel says « Written by hand: no page and no pin. » in place of the page and the
+  element.

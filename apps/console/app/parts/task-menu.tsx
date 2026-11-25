@@ -360,7 +360,8 @@ export function useTaskMenu(note: IndexedNote): {
           ...(!several && editable && actions.moveUp !== undefined ? [{ id: 'up', label: t('Move up') }] : []),
           ...(!several && editable && actions.moveDown !== undefined ? [{ id: 'down', label: t('Move down') }] : []),
           ...(changes ? [{ id: 'archive', label: archived ? t('Bring back') : t('Archive') }] : []),
-          ...(several ? [] : [{ id: 'copy', label: t('Copy the link to the note') }]),
+          // FRU-657: a task written by hand has no page for a link to open.
+          ...(several || note.page.url === '' ? [] : [{ id: 'copy', label: t('Copy the link to the note') }]),
           ...(changes ? [{ id: 'delete', label: t('Delete…'), danger: true }] : []),
         ]}
         onAction={(id) => {

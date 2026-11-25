@@ -9,6 +9,8 @@ import type { NoteAuthor } from './parts/notes-model';
 const PATHS = {
   // A box with an arrow out of it: the page opens in a new tab.
   open: 'M14 4h6v6M20 4l-9 9M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4',
+  // A plus: a new task, at the head of a column of the board (FRU-657).
+  add: 'M12 5v14M5 12h14',
   // One person in a circle: the person who reads the list.
   you: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M12 7.5a3 3 0 1 0 0 6a3 3 0 1 0 0-6M6.7 18.4a6 6 0 0 1 10.6 0',
   // A crown.
@@ -28,7 +30,7 @@ const PATHS = {
   anonymous: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.4M12 17h.01',
   // A cross: what is chosen is let go (FRU-656).
   close: 'M6 6l12 12M18 6L6 18',
-} as const satisfies Record<NoteAuthor['kind'] | 'open' | 'close', string>;
+} as const satisfies Record<NoteAuthor['kind'] | 'open' | 'add' | 'close', string>;
 
 type NoteIconName = keyof typeof PATHS;
 
