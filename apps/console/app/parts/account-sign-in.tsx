@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { type ComponentType, useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import {
   LINKABLE,
@@ -15,10 +15,14 @@ import {
 } from '../api';
 import { msg, t } from '../i18n';
 import { problemOf } from '../problems';
+import { Confirmation } from '../confirm';
+import { GitHubMark, GoogleMark } from '../provider-icons';
 import { Button, Problem } from '../ui';
 import { useLocale } from '../use-locale';
-import { PROVIDER_NAMES, Row, SectionHelp, SectionTitle } from './account-rows';
-import { Disconnect as AsksTwice } from './connector-parts';
+import { PROVIDER_NAMES, Row, RowIcon, RowMark, SettingsCard } from './account-rows';
+
+/** The mark of each provider, in the box of the icon of its row. */
+const PROVIDER_MARKS: Readonly<Record<Linkable, ComponentType>> = { github: GitHubMark, google: GoogleMark };
 
 /** `asking`: the worker has not answered yet. `silent`: it did not say, and nothing is in flight. */
 type Asked = SignInMethods | 'asking' | 'silent';
@@ -108,8 +112,9 @@ const UNLINK_PROBLEMS: Readonly<Record<string, string>> = {
 const NOT_UNLINKED = msg('{provider} is still linked. Try again.');
 
 /**
- * How the person signs in (FRU-249): the email link, and each provider, linked or not. A link comes
- * back from its provider into the address of this page (FRU-415, FRU-416).
+ * How the person signs in (FRU-249), a card of the profile (FRU-692): the email link, and each
+ * provider, linked or not. A link comes back from its provider into the address of this page
+ * (FRU-415, FRU-416). « Unlink » asks twice, under its row.
  */
 export function SignInSection({ workspace, primary }: { workspace: string; primary: string }) {
   useLocale();
@@ -174,6 +179,8 @@ export function SignInSection({ workspace, primary }: { workspace: string; prima
     await readMethods();
   }
   const [unlinkStuck, setUnlinkStuck] = useState<{ provider: Linkable; problem: string } | undefined>();
+  // The provider whose « Unlink » was pressed: its row asks the second time.
+  const [unlinking, setUnlinking] = useState<Linkable | undefined>();
 
   async function unlink(provider: Linkable) {
     setUnlinkStuck(undefined);
@@ -181,80 +188,115 @@ export function SignInSection({ workspace, primary }: { workspace: string; prima
     const gone = await unlinkProvider(provider);
     if (!gone.ok && gone.status !== 404) {
       // Own keys only (`problemOf`): a code named `constructor` must not find a method of `Object`.
+      // The second time stays: the person tries again in one press.
       setUnlinkStuck({ provider, problem: problemOf(gone, UNLINK_PROBLEMS, NOT_UNLINKED) });
+    } else {
+      setUnlinking(undefined);
     }
     await readMethods();
   }
 
+  // What the way back of a link says, above the rows.
+  const said =
+    isLinkable(linked) ||
+    linkError !== null ||
+    cancelled !== undefined ||
+    question === 'reading' ||
+    typeof question === 'object';
+
   return (
-    <section aria-labelledby="signin-title">
-      <SectionTitle id="signin-title">{t('How you sign in')}</SectionTitle>
-      <SectionHelp>{t('Any of these opens the same account, in the console and in the extension.')}</SectionHelp>
-      {isLinkable(linked) ? (
-        <p role="status" className="mb-[12px] text-small text-muted">
-          {t('{provider} is linked to your account.', { provider: PROVIDER_NAMES[linked] })}
-        </p>
-      ) : null}
-      {linkError === null ? null : (
-        <div className="mb-[12px]">
-          <Problem>{linkProblem(linkError.code, linkError.provider, primary)}</Problem>
+    <SettingsCard id="signin-title" icon="key" title={t('How you sign in')}>
+      {said ? (
+        <div className="flex flex-col gap-[12px] px-[16px] pb-[12px]">
+          {isLinkable(linked) ? (
+            <p role="status" className="text-hint text-muted">
+              {t('{provider} is linked to your account.', { provider: PROVIDER_NAMES[linked] })}
+            </p>
+          ) : null}
+          {linkError === null ? null : <Problem>{linkProblem(linkError.code, linkError.provider, primary)}</Problem>}
+          {cancelled === undefined ? null : (
+            <p role="status" className="text-hint text-muted">
+              {t('{provider} was not linked.', { provider: PROVIDER_NAMES[cancelled] })}
+            </p>
+          )}
+          {question === 'reading' ? <p className="text-hint text-muted">{t('Checking…')}</p> : null}
+          {typeof question === 'object' ? (
+            <LinkQuestion
+              provider={PROVIDER_NAMES[question.provider]}
+              email={question.email}
+              account={primary}
+              answering={answering}
+              onAnswer={(yes) => void answerLink(yes)}
+            />
+          ) : null}
         </div>
-      )}
-      {cancelled === undefined ? null : (
-        <p role="status" className="mb-[12px] text-small text-muted">
-          {t('{provider} was not linked.', { provider: PROVIDER_NAMES[cancelled] })}
-        </p>
-      )}
-      {question === 'reading' ? <p className="mb-[12px] text-small text-muted">{t('Checking…')}</p> : null}
-      {typeof question === 'object' ? (
-        <LinkQuestion
-          provider={PROVIDER_NAMES[question.provider]}
-          email={question.email}
-          account={primary}
-          answering={answering}
-          onAnswer={(yes) => void answerLink(yes)}
-        />
       ) : null}
       {/* The three rows are drawn before the worker answers, so nothing under them moves when it does. */}
-      <ul className="border-t border-line text-body">
-        <Row title={t('Email link')} detail={primary}>
-          <span className="text-small leading-auto text-muted">
+      <ul>
+        <Row icon={<RowMark name="mail" />} title={t('Email link')} detail={primary}>
+          <span className="text-hint text-muted">
             {typeof providers === 'object' && !providers.email ? t('Not sent by this Fruitback') : t('Always on')}
           </span>
         </Row>
         {LINKABLE.map((provider) => {
           const known = typeof providers === 'object' ? providers[provider] : undefined;
           const named = PROVIDER_NAMES[provider];
-
-          return (
-            <Row
-              key={provider}
-              title={named}
-              detail={t(providerWord(providers, provider))}
-              under={
-                unlinkStuck?.provider === provider ? (
-                  <Problem>{t(unlinkStuck.problem, { provider: named })}</Problem>
-                ) : undefined
-              }
-            >
-              {known?.linked === true ? (
-                <AsksTwice
-                  space="normal"
-                  label={t('Unlink')}
+          const Mark = PROVIDER_MARKS[provider];
+          const stuck =
+            unlinkStuck?.provider === provider ? (
+              <Problem>{t(unlinkStuck.problem, { provider: named })}</Problem>
+            ) : null;
+          const under =
+            unlinking === provider ? (
+              <div className="flex flex-col gap-[8px]">
+                <Confirmation
                   confirmLabel={t('Unlink {provider}', { provider: named })}
                   keepLabel={t('Keep it')}
                   consequence={t('You no longer sign in with {provider}. Your account and its notes stay.', {
                     provider: named,
                   })}
                   onConfirm={() => void unlink(provider)}
+                  onKeep={() => {
+                    setUnlinkStuck(undefined);
+                    setUnlinking(undefined);
+                  }}
                 />
+                {stuck}
+              </div>
+            ) : (
+              (stuck ?? undefined)
+            );
+
+          return (
+            <Row
+              key={provider}
+              icon={
+                <RowIcon>
+                  <Mark />
+                </RowIcon>
+              }
+              title={named}
+              detail={t(providerWord(providers, provider))}
+              {...(under === undefined ? {} : { under })}
+            >
+              {known?.linked === true && unlinking !== provider ? (
+                <Button
+                  tone="outline"
+                  size="small"
+                  label={t('Unlink {provider}', { provider: named })}
+                  onClick={() => {
+                    setUnlinkStuck(undefined);
+                    setUnlinking(provider);
+                  }}
+                >
+                  {t('Unlink')}
+                </Button>
               ) : null}
               {known?.linked === false ? (
-                // An outlined button of 40 px, as the mockup draws it, that leads to the worker. A
-                // form: the worker starts a link on a `POST` of the console only (FRU-415).
+                // A form: the worker starts a link on a `POST` of the console only (FRU-415).
                 <form method="post" action={linkAddress(provider, workspace)}>
-                  <Button tone="outline" type="submit">
-                    {t('Link {provider}', { provider: named })}
+                  <Button tone="outline" size="small" type="submit" label={t('Link {provider}', { provider: named })}>
+                    {t('Link')}
                   </Button>
                 </form>
               ) : null}
@@ -262,7 +304,7 @@ export function SignInSection({ workspace, primary }: { workspace: string; prima
           );
         })}
       </ul>
-    </section>
+    </SettingsCard>
   );
 }
 
@@ -290,7 +332,7 @@ function LinkQuestion({
   return (
     <section
       aria-labelledby="link-question"
-      className="mb-[12px] rounded-card border border-line p-[16px] [overflow-wrap:anywhere]"
+      className="rounded-card border border-line p-[16px] [overflow-wrap:anywhere]"
     >
       <p id="link-question" className="text-body leading-auto font-semibold">
         {t('Link the {provider} account {email} to your Fruitback account?', { provider, email })}

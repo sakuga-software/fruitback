@@ -6,6 +6,9 @@ import { ACME, box, sideScroll, stubWorker, styles } from './console-workspace.t
  * (FRU-405): 40 px under the top of the screen, at the left of its padding, 28 px. The statuses of a
  * site drew their crumbs above the title, which put it 31 px lower than on every other page. The
  * worker is answered by stubs; the sample data is of nobody.
+ *
+ * The pages of the shell of the settings (FRU-692: My account, the settings of the workspace) have
+ * their own head, a title of 20 px under the bar of the shell: `console-account.spec.ts` holds it.
  */
 const CONSOLE = 'http://localhost:5178';
 
@@ -17,7 +20,6 @@ const PAGES = [
   // console-notes.spec.ts measures it.
   '/w/w1/connectors',
   '/w/w1/members',
-  '/w/w1/account',
   '/admin',
   '/admin/workspaces',
   '/admin/users',

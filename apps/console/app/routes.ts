@@ -32,10 +32,14 @@ export default [
     route('w/:workspace/notes', 'routes/notes.tsx'),
     route('w/:workspace/connectors', 'routes/connectors.tsx'),
     route('w/:workspace/members', 'routes/members.tsx'),
-    route('w/:workspace/account', 'routes/account.tsx'),
-    route('w/:workspace/settings', 'routes/workspace-settings.tsx'),
-    route('w/:workspace/settings/ai', 'routes/workspace-settings-ai.tsx'),
-    route('w/:workspace/settings/agents', 'routes/agents.tsx'),
+    // The shell of the settings (FRU-692): the pages of the person, then the ones of the workspace.
+    layout('routes/settings-shell.tsx', [
+      route('w/:workspace/account', 'routes/account.tsx'),
+      route('w/:workspace/account/sessions', 'routes/account-sessions.tsx'),
+      route('w/:workspace/settings', 'routes/workspace-settings.tsx'),
+      route('w/:workspace/settings/ai', 'routes/workspace-settings-ai.tsx'),
+      route('w/:workspace/settings/agents', 'routes/agents.tsx'),
+    ]),
   ]),
   layout('routes/admin.tsx', [
     route('admin', 'routes/admin-instance.tsx'),

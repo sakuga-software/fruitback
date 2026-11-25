@@ -1,59 +1,118 @@
 import type { ReactNode } from 'react';
 import type { Linkable } from '../api';
+import { SettingsIcon, type SettingsIconName } from '../settings-icons';
 
-/** What the sections of My account share (FRU-614): the names of the providers, a title, a row. */
+/**
+ * What the cards of the settings share (FRU-614, FRU-692): the names of the providers, a card with
+ * its head, a row with its icon, and the room of a row while a list is read.
+ */
 
 export const PROVIDER_NAMES: Readonly<Record<Linkable, string>> = { github: 'GitHub', google: 'Google' };
 
-/** The title of a section: the section is named by it. */
-export function SectionTitle({ id, children }: { id: string; children: string }) {
+/**
+ * A card of the settings: a head with an icon, the title that names the card, and the actions of the
+ * card at the right (« Add », « See all »). Its rows come under it.
+ */
+export function SettingsCard({
+  id,
+  icon,
+  title,
+  actions,
+  children,
+}: {
+  /** The id of the title: the card is a region named by it. */
+  id: string;
+  icon: SettingsIconName;
+  title: string;
+  actions?: ReactNode;
+  children: ReactNode;
+}) {
   return (
-    <h2 id={id} className="text-section font-bold">
+    <section
+      aria-labelledby={id}
+      className="kit-settings-card overflow-hidden rounded-card border border-line bg-surface"
+    >
+      <div className="flex min-h-[44px] items-center gap-[8px] px-[16px]">
+        <span className="inline-flex text-muted">
+          <SettingsIcon name={icon} />
+        </span>
+        <h2 id={id} className="min-w-0 text-small leading-auto font-semibold">
+          {title}
+        </h2>
+        {actions === undefined ? null : <span className="ms-auto flex items-center gap-[8px]">{actions}</span>}
+      </div>
       {children}
-    </h2>
+    </section>
   );
 }
 
-/** What a section is for, under its title. */
-export function SectionHelp({ children }: { children: string }) {
-  return <p className="mt-[4px] mb-[12px] text-small text-muted">{children}</p>;
+/** The box of the icon of a row: 24 px, its icon 14 px, a mark of a provider in its own colours. */
+export function RowIcon({ children }: { children: ReactNode }) {
+  return (
+    <span className="inline-flex size-[24px] flex-none items-center justify-center rounded-control border border-line text-muted [&_svg]:size-[14px]!">
+      {children}
+    </span>
+  );
+}
+
+/** The icon of a row, drawn by `settings-icons.tsx`. */
+export function RowMark({ name }: { name: SettingsIconName }) {
+  return (
+    <RowIcon>
+      <SettingsIcon name={name} size={14} />
+    </RowIcon>
+  );
 }
 
 /**
- * The box of a list of one row, where there is no list yet: its two rules, and the height of a row.
+ * The room of one row, where there is no list yet, and of a line that says what is missing.
  *
- * WARNING: the list of the browsers arrives after the screen is drawn, and « Sign out » is under it.
- * While the list is read, and when it could not be, its place is the one of the row of this browser,
- * which every list has. So the buttons do not move under a press: a press that starts before a
- * button moves and ends after is lost. `e2e/console-account.spec.ts` holds the list back to see it.
- * A second browser still adds its row under the first.
+ * WARNING: a list arrives after the screen is drawn. While it is read, and when it could not be, its
+ * place is the one of a row, which every list has: the cards under it move by one row less.
  */
-export const ONE_ROW = 'box-content flex min-h-[56px] flex-wrap items-center border-y border-line py-[8px]';
+export const ONE_ROW = 'flex min-h-[52px] flex-wrap items-center gap-[12px] border-t border-line px-[16px] py-[8px]';
 
 /**
- * A row of a list of the account: a name, a line under it, and at its end a state or one action. The
- * mockup sizes it by its content: 56 px at the least inside its padding.
+ * A row of a card: its icon, a name, a line under it, and at its end a state or its actions. Every
+ * row has an icon (FRU-692). The words wrap: an address is never cut.
  */
 export function Row({
+  icon,
   title,
   detail,
   under,
   children,
 }: {
+  icon: ReactNode;
   title: string;
   detail: string;
-  /** Under the row: why its action did not go through. */
+  /** Under the row: why its action did not go through, or the second time of an action that asks twice. */
   under?: ReactNode;
   children?: ReactNode;
 }) {
   return (
-    <li className="box-content flex min-h-[56px] flex-wrap items-center gap-x-[16px] gap-y-[4px] border-b border-line py-[8px]">
-      <span className="min-w-0 flex-[1_1_200px]">
-        <span className="block leading-auto font-semibold">{title}</span>
-        <span className="block text-hint leading-auto text-muted [overflow-wrap:anywhere]">{detail}</span>
-      </span>
-      {children ?? null}
-      {under === undefined ? null : <div className="w-full">{under}</div>}
+    <li className="kit-settings-row border-t border-line px-[16px]">
+      <div className="flex min-h-[52px] items-center gap-[12px] py-[8px]">
+        {icon}
+        <span className="flex min-w-0 flex-1 flex-col gap-[4px]">
+          <span className="text-small leading-auto font-semibold [overflow-wrap:anywhere]">{title}</span>
+          <span className="text-hint text-muted [overflow-wrap:anywhere]">{detail}</span>
+        </span>
+        {children ?? null}
+      </div>
+      {under === undefined ? null : <div className="pb-[12px]">{under}</div>}
     </li>
+  );
+}
+
+/** A line at the foot of a card, under its rows: what happened, or what this Fruitback cannot do. */
+export function CardNote({ children, status = false }: { children: ReactNode; status?: boolean }) {
+  return (
+    <p
+      {...(status ? { role: 'status' } : {})}
+      className="border-t border-line px-[16px] py-[12px] text-hint text-muted [overflow-wrap:anywhere]"
+    >
+      {children}
+    </p>
   );
 }

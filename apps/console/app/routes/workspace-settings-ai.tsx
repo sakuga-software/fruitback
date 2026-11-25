@@ -7,13 +7,14 @@ import { manages } from '../setup-stage';
 import { siteName } from '../site-address';
 import { Button, LinkButton } from '../ui';
 import { useLocale } from '../use-locale';
-import { PageHead, useWorkspace } from './workspace';
-import { SettingsNav } from './workspace-settings';
+import { SettingsHead } from './settings-shell';
+import { useWorkspace } from './workspace';
 
 /**
  * The page « AI » of the settings of a workspace (FRU-544, asked by Mathieu): what an agent needs,
  * apart from the name, the logo and the deletion. The section « Agents » was the third of the
- * settings (FRU-503); it is the same section, on a page of its own, reached from `SettingsNav`.
+ * settings (FRU-503); it is the same section, on a page of its own, an entry of the navigation of the
+ * settings (FRU-692).
  */
 export default function WorkspaceSettingsAi() {
   useLocale();
@@ -21,11 +22,7 @@ export default function WorkspaceSettingsAi() {
 
   return (
     <>
-      <PageHead
-        title={t('Workspace settings')}
-        lead={t('Settings that every member of {name} sees.', { name: workspace.name })}
-      />
-      <SettingsNav workspace={workspace} current="ai" />
+      <SettingsHead title={t('AI')} lead={t('Settings that every member of {name} sees.', { name: workspace.name })} />
       {/* A move to another workspace mounts the section again: its sites are read for that one. */}
       <AgentsSection key={workspace.id} workspace={workspace} may={manages(workspace)} />
     </>
