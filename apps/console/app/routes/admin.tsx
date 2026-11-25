@@ -85,7 +85,7 @@ function AdminRail({ current, back }: { current: string | undefined; back: strin
     <div className={RAIL_HEAD}>
       <span
         aria-hidden="true"
-        className="box-border flex h-[32px] w-[32px] flex-none items-center justify-center rounded-field border border-ink-soft"
+        className="box-border flex h-[32px] w-[32px] flex-none items-center justify-center rounded-control border border-ink-soft"
       >
         <svg viewBox="16 6 96 116" className="h-[16px] w-[13px] fill-rail-accent">
           <path

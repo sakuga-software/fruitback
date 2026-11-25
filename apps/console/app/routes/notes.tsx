@@ -383,7 +383,7 @@ export default function Notes() {
       {t('New task')}
       {/* The key, in a box of its own: the glyph alone was cut by the end of the button. */}
       <kbd
-        className="ml-[8px] inline-flex h-[20px] min-w-[20px] flex-none items-center justify-center rounded-[4px] border border-line px-[4px] font-sans text-hint leading-none font-semibold text-muted"
+        className="ml-[8px] inline-flex h-[20px] min-w-[20px] flex-none items-center justify-center rounded-inner border border-line px-[4px] font-sans text-hint leading-none font-semibold text-muted"
         aria-hidden="true"
       >
         C

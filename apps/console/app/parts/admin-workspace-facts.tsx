@@ -94,17 +94,15 @@ function troubleOf(workspace: AdminWorkspace): string | undefined {
 }
 
 /**
- * The trouble of a row. On the chosen row the red is the strong accent: the accent is 4.28:1 on
- * the tint of the row.
+ * The trouble of a row, in the strong red: the accent is under 4.5:1 on the slate tints of a row
+ * (FRU-683).
  */
-export function Alert({ workspace, chosen }: { workspace: AdminWorkspace; chosen: boolean }) {
+export function Alert({ workspace }: { workspace: AdminWorkspace }) {
   useLocale();
   const words = troubleOf(workspace);
   if (words === undefined) return null;
 
-  return (
-    <span className={`block text-hint font-semibold ${chosen ? 'text-accent-strong' : 'text-accent'}`}>{words}</span>
-  );
+  return <span className="block text-hint font-semibold text-accent-strong">{words}</span>;
 }
 
 /** The three fields of a suspension taken out, so that the state of an answer replaces them all. */

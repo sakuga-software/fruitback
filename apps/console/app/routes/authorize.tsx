@@ -230,7 +230,7 @@ function Ask({ request, asked, onLeaving, onGone, onSignedOut }: AskProps) {
       <div className="mb-2.5">
         <Title>{t('Connect an agent')}</Title>
       </div>
-      <div className="mb-[14px] flex flex-col gap-[2px] rounded-box border border-line bg-subtle px-[16px] py-[14px]">
+      <div className="mb-[14px] flex flex-col gap-[2px] rounded-card border border-line bg-subtle px-[16px] py-[14px]">
         <span data-client-host className="text-section font-bold [overflow-wrap:anywhere]">
           {host}
         </span>
@@ -326,7 +326,7 @@ function Ask({ request, asked, onLeaving, onGone, onSignedOut }: AskProps) {
                 : { error: errors.days })}
             />
           </div>
-          <div className="rounded-box border border-line px-[16px] py-[12px]">
+          <div className="rounded-card border border-line px-[16px] py-[12px]">
             <Toggle
               strong
               label={t('Only the notes of known people')}

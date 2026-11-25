@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 
 /**
- * The tokens of the console (FRU-232).
+ * The tokens of the console (FRU-232), slate since FRU-683.
  *
  * `app.css` names each value of the mockup of 2026-10-13 once. A screen writes the name of a token
  * and never a value: a change of the palette is then a change of one file. The console has no DOM
@@ -14,6 +14,8 @@ const APP = new URL('./', import.meta.url);
 const css = readFileSync(new URL('app.css', APP), 'utf8');
 /** The Tailwind theme the console shares with the extension, the widget and the docs (FRU-677). */
 const theme = readFileSync(new URL('../../../packages/shared/tailwind/theme.css', import.meta.url), 'utf8');
+/** The slate theme of the console alone (FRU-683), which sets tokens of the shared theme again. */
+const own = readFileSync(new URL('theme.css', APP), 'utf8');
 
 /** Every source of the console that draws something: the screens, their parts, the kit. */
 function drawn(): Map<string, string> {
@@ -26,11 +28,16 @@ function drawn(): Map<string, string> {
   return new Map(names.map((name) => [name, readFileSync(new URL(name, APP), 'utf8')]));
 }
 
-/** The value of a custom property of `app.css` or of the shared theme. */
+/**
+ * The value of a custom property, as the console reads it: its own theme, then `app.css`, then the
+ * shared theme. A var() is read in turn.
+ */
 function token(name: string): string | undefined {
   const declared = new RegExp(`^\\s*${name}:\\s*([^;]+);`, 'm');
+  const value = declared.exec(own)?.[1] ?? declared.exec(css)?.[1] ?? declared.exec(theme)?.[1];
+  const reference = value === undefined ? undefined : /^var\((--[\w-]+)\)$/.exec(value)?.[1];
 
-  return declared.exec(css)?.[1] ?? declared.exec(theme)?.[1];
+  return reference === undefined ? value : token(reference);
 }
 
 /** The palette of before the mockup: the warm greys, the green of the first boards. */
@@ -43,29 +50,29 @@ describe('the tokens of the console (FRU-232)', () => {
   it('has the values of the mockup', () => {
     const expected: Record<string, string> = {
       '--background': '#ffffff',
-      '--foreground': '#18181b',
-      '--muted': '#6b6b74',
-      '--default': '#f4f4f5',
+      '--foreground': '#0f172a',
+      '--muted': '#5b6779',
+      '--default': '#e8edf3',
       '--accent': '#dd2c27',
       '--accent-hover': '#b91c1c',
-      '--success': '#15803d',
-      '--border': '#e4e4e7',
-      '--separator': '#e4e4e7',
+      '--success': '#166534',
+      '--border': '#e3e8ef',
+      '--separator': '#e3e8ef',
       '--focus': '#dd2c27',
-      '--field-foreground': '#18181b',
-      '--field-placeholder': '#6b6b74',
-      '--field-border': '#8a8a93',
-      '--field-radius': '8px',
-      '--color-ink': '#18181b',
-      '--color-ink-soft': '#52525b',
-      '--color-line': '#e4e4e7',
-      '--color-control': '#8a8a93',
+      '--field-foreground': '#0f172a',
+      '--field-placeholder': '#5b6779',
+      '--field-border': '#7b8797',
+      '--field-radius': '6px',
+      '--color-ink': '#0f172a',
+      '--color-ink-soft': '#334155',
+      '--color-line': '#e3e8ef',
+      '--color-control': '#7b8797',
       '--color-page': '#ffffff',
-      '--color-subtle': '#fafafa',
-      '--color-chip': '#f4f4f5',
+      '--color-subtle': '#f7f9fb',
+      '--color-chip': '#e8edf3',
       '--color-accent-strong': '#b91c1c',
-      '--color-done': '#15803d',
-      '--color-avatar': '#3f3f46',
+      '--color-done': '#166534',
+      '--color-avatar': '#334155',
       '--color-rail': '#18181b',
       '--color-rail-active': '#27272a',
       '--color-rail-text': '#d4d4d8',
@@ -82,15 +89,14 @@ describe('the tokens of the console (FRU-232)', () => {
       '--color-status-done': '#5560c4',
       '--color-status-closed': '#a52a3a',
       '--color-status-edge': '#8a8a93',
-      '--shadow-frame': '0 10px 30px rgba(24, 24, 27, 0.08)',
+      '--shadow-frame': '0 10px 30px rgba(15, 23, 42, 0.08)',
       '--ease-settle': 'cubic-bezier(0.16, 1, 0.3, 1)',
       '--duration-fast': '220ms',
-      '--spacing-control': '44px',
-      '--spacing-control-panel': '40px',
-      '--spacing-control-chip': '36px',
-      '--spacing-control-small': '32px',
-      '--text-title': '28px',
-      '--text-lead': '16px',
+      '--spacing-control-lg': '32px',
+      '--spacing-control-md': '28px',
+      '--spacing-control-sm': '24px',
+      '--text-title': '20px',
+      '--text-lead': '14px',
     };
     const read = Object.fromEntries(Object.keys(expected).map((name) => [name, token(name)]));
 
@@ -120,7 +126,7 @@ describe('the tokens of the console (FRU-232)', () => {
   });
 
   it('holds no colour of the palette of before, in any file of the console', () => {
-    const files = new Map([...drawn(), ['app.css', css], ['shared/tailwind/theme.css', theme]]);
+    const files = new Map([...drawn(), ['app.css', css], ['theme.css', own], ['shared/tailwind/theme.css', theme]]);
     const found = (sources: Map<string, string>) =>
       [...sources].flatMap(([name, source]) =>
         BEFORE.filter((colour) => source.toLowerCase().includes(colour)).map((colour) => `${name}: ${colour}`),

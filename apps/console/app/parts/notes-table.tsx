@@ -120,7 +120,7 @@ export function NoteRow({
             <span className="flex flex-wrap items-center gap-x-[12px] gap-y-[4px] text-hint">
               {/* The worker stopped trying (FRU-122): « Send again » still sends it, and the words say why
                 it will not arrive by itself. */}
-              <span className="font-semibold text-accent">
+              <span className="font-semibold text-accent-strong">
                 {note.delivery.state === 'gave-up'
                   ? t('Not delivered: Fruitback stopped trying')
                   : t('Not delivered yet')}

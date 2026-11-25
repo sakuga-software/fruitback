@@ -173,7 +173,7 @@ function Refused({
       {/* The icon comes from the site, in the browser of the person, as the frame would. */}
       <SiteIcon
         origin={origin}
-        className="site-preview__icon size-[40px] rounded-box object-contain"
+        className="site-preview__icon size-[40px] rounded-card object-contain"
         letterClassName="site-preview__letter grid place-items-center border border-line bg-surface text-ink font-bold"
       />
       <p className="site-preview__host max-w-full text-ink font-semibold [overflow-wrap:anywhere]">{host}</p>

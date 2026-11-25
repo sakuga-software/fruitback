@@ -61,7 +61,7 @@ export function SourceMark({ kind }: { kind: MarkedKind | LaterKind }) {
   return (
     <span
       aria-hidden="true"
-      className="box-content flex h-[34px] w-[34px] flex-none items-center justify-center rounded-field border border-line bg-surface text-ink"
+      className="box-content flex h-[34px] w-[34px] flex-none items-center justify-center rounded-control border border-line bg-surface text-ink"
     >
       <ConnectorMark kind={kind} size={18} />
     </span>

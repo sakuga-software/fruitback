@@ -289,7 +289,7 @@ function KeyForm({
   return (
     <section
       aria-labelledby="new-key-title"
-      className="mb-[24px] max-w-[760px] rounded-frame border border-line p-[clamp(16px,3vw,28px)]"
+      className="mb-[24px] max-w-[760px] rounded-card border border-line p-[clamp(16px,3vw,28px)]"
     >
       <h2 id="new-key-title" className="mb-[16px] text-section font-bold">
         {t('New agent key')}
@@ -359,7 +359,7 @@ function KeyForm({
               : { error: errors.days })}
           />
         </div>
-        <div className="max-w-[640px] rounded-box border border-line px-[16px] py-[12px]">
+        <div className="max-w-[640px] rounded-card border border-line px-[16px] py-[12px]">
           <Toggle
             strong
             label={t('Only the notes of known people')}
@@ -397,7 +397,7 @@ function ShownOnce({ made, onKept }: { made: Made; onKept: () => void }) {
   return (
     <section
       aria-labelledby="key-made-title"
-      className="mb-[24px] flex max-w-[760px] flex-col gap-[10px] rounded-frame border border-line p-[clamp(16px,3vw,28px)]"
+      className="mb-[24px] flex max-w-[760px] flex-col gap-[10px] rounded-card border border-line p-[clamp(16px,3vw,28px)]"
     >
       <h2 id="key-made-title" ref={title} tabIndex={-1} className="text-section font-bold">
         {t('« {name} » is created', { name: made.key.name })}
@@ -408,7 +408,7 @@ function ShownOnce({ made, onKept }: { made: Made; onKept: () => void }) {
       <div className="flex flex-wrap items-center gap-[10px]">
         <code
           data-secret
-          className="min-w-0 flex-[1_1_320px] rounded-button bg-chip px-[14px] py-[12px] font-mono text-tiny break-all"
+          className="min-w-0 flex-[1_1_320px] rounded-control bg-chip px-[14px] py-[12px] font-mono text-tiny break-all"
         >
           {made.secret}
         </code>
@@ -459,7 +459,7 @@ function KeyList({
 
   if (keys.length === 0)
     return busy ? null : (
-      <div className="max-w-[760px] rounded-frame border border-dashed border-control bg-subtle px-[32px] py-[40px]">
+      <div className="max-w-[760px] rounded-card border border-dashed border-control bg-subtle px-[32px] py-[40px]">
         <h2 className="mb-[6px] text-section font-bold">{t('No agent key yet')}</h2>
         <p className="mb-[18px] text-body text-muted">
           {t(
@@ -493,7 +493,7 @@ function KeyList({
           </p>
         </Callout>
       )}
-      <ul aria-label={t('Agent keys')} className="overflow-hidden rounded-frame border border-line">
+      <ul aria-label={t('Agent keys')} className="overflow-hidden rounded-card border border-line">
         {keys.map((key) => (
           <KeyRow key={key.id} agentKey={key} now={now} onRevoked={() => onRevoked(key)} />
         ))}
@@ -535,7 +535,7 @@ function KeyRow({ agentKey: key, now, onRevoked }: { agentKey: AgentKey; now: nu
           <h2 className="text-body font-bold [overflow-wrap:anywhere]">{key.name}</h2>
           {/* A connection of OAuth (FRU-467): the host its codes went to, the name a person approved. */}
           {key.client ? (
-            <span className="mt-[2px] inline-block rounded-full bg-chip px-[8px] py-[2px] text-hint font-semibold text-ink-soft">
+            <span className="mt-[2px] inline-block rounded-control bg-chip px-[8px] py-[2px] text-hint font-semibold text-ink-soft">
               {t('OAuth · {host}', { host: key.client.host })}
             </span>
           ) : null}
@@ -584,7 +584,7 @@ function KeyRow({ agentKey: key, now, onRevoked }: { agentKey: AgentKey; now: nu
               ) : null}
               {end.state === 'ended' ? (
                 <>
-                  <span className="rounded-full bg-chip px-[8px] py-[2px] text-hint font-semibold text-ink-soft">
+                  <span className="rounded-control bg-chip px-[8px] py-[2px] text-hint font-semibold text-ink-soft">
                     {t('Ended')}
                   </span>
                   <span className="block text-hint text-muted">{t('On {day}', { day: dayOf(key.expiresAt) })}</span>
@@ -659,7 +659,7 @@ function Writes({ id, agentKey: key }: { id: string; agentKey: AgentKey }) {
       id={id}
       role="region"
       aria-label={t('Writes of {name}', { name: key.name })}
-      className="mt-[12px] rounded-box border border-line bg-subtle px-[18px] py-[16px]"
+      className="mt-[12px] rounded-card border border-line bg-subtle px-[18px] py-[16px]"
     >
       <h3 className="mb-[8px] text-body font-bold">{t('What this key wrote')}</h3>
       {writes === 'loading' ? <p className="text-small text-muted">{t('Loading…')}</p> : null}
