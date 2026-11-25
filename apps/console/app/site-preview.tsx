@@ -64,7 +64,8 @@ function useScale(): [RefObject<HTMLDivElement | null>, number] {
   return [box, scale];
 }
 
-export function SitePreview({ origin }: { origin: string }) {
+/** `short`: the frame of 280 px of a dialog (FRU-558), where the form under it stays in view. */
+export function SitePreview({ origin, short = false }: { origin: string; short?: boolean }) {
   useLocale();
   const known = refusalOf(origin, window.location.origin);
   const [asked, setAsked] = useState(() => askedBefore(origin));
@@ -102,7 +103,7 @@ export function SitePreview({ origin }: { origin: string }) {
         title={t('{site}, live', { site: host })}
         sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
         referrerPolicy="no-referrer"
-        className="site-preview__frame"
+        className="site-preview__frame block w-full h-full border-0 border-none border-current bg-surface"
         style={
           scale === 1
             ? undefined
@@ -133,8 +134,8 @@ export function SitePreview({ origin }: { origin: string }) {
   }
 
   return (
-    <BrowserFrame address={label} caption={caption}>
-      <div ref={box} className="site-preview">
+    <BrowserFrame address={label} caption={caption} short={short}>
+      <div ref={box} className="site-preview h-full overflow-hidden bg-surface">
         {page}
       </div>
     </BrowserFrame>
@@ -168,11 +169,15 @@ function Refused({
 }) {
   useLocale();
   return (
-    <div className="site-preview__refused">
+    <div className="site-preview__refused flex flex-col items-center justify-center gap-[12px] box-border h-full p-[24px] bg-subtle text-muted text-body text-center">
       {/* The icon comes from the site, in the browser of the person, as the frame would. */}
-      <SiteIcon origin={origin} className="site-preview__icon" letterClassName="site-preview__letter" />
-      <p className="site-preview__host">{host}</p>
-      <p className="site-preview__why">{t(WHY[refusal])}</p>
+      <SiteIcon
+        origin={origin}
+        className="site-preview__icon size-[40px] rounded-box object-contain"
+        letterClassName="site-preview__letter grid place-items-center border border-line bg-surface text-ink font-bold"
+      />
+      <p className="site-preview__host max-w-full text-ink font-semibold [overflow-wrap:anywhere]">{host}</p>
+      <p className="site-preview__why max-w-[360px]">{t(WHY[refusal])}</p>
       <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
         <LinkButton space="flush" href={origin} newTab>
           {t('Open {site} in a new tab', { site: host })}
