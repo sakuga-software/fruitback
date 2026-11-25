@@ -1,5 +1,5 @@
 import { expect } from '@playwright/test';
-import { openBareSite, openPopup, test } from './extension.ts';
+import { OPEN_SIDEBAR, openBareSite, openPopup, test } from './extension.ts';
 import { AUTHENTICATED_WORKER_ORIGIN } from './worker-sessions.ts';
 import {
   paired,
@@ -47,9 +47,7 @@ test('« Search and options »: the search, « Whole site » over three pages, t
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(2);
 
   const again = await openPopup(extension, page);
-  await again
-    .getByRole('button', { name: /^(Show all notes in a sidebar|Voir toutes les notes dans un panneau)/ })
-    .click();
+  await again.getByRole('button', { name: OPEN_SIDEBAR }).click();
   await expect.poll(async () => (await panelRows(page).catch(() => ({ tabs: [], rows: [] }))).rows.length).toBe(2);
 
   // The magnifier opens the options; the search filters the notes of the page.
@@ -164,9 +162,7 @@ test('« Show on the page » of a row of the whole site: another page opens in a
   await page.bringToFront();
 
   const again = await openPopup(extension, page);
-  await again
-    .getByRole('button', { name: /^(Show all notes in a sidebar|Voir toutes les notes dans un panneau)/ })
-    .click();
+  await again.getByRole('button', { name: OPEN_SIDEBAR }).click();
   await expect.poll(async () => (await panelRows(page).catch(() => ({ rows: [] }))).rows.length).toBeGreaterThan(0);
   expect(await clickPanel(page, 'button.panel-search')).toBe(true);
   expect(await clickPanel(page, '.search-scope [role="tab"][data-tab="site"]')).toBe(true);
@@ -217,9 +213,7 @@ test('a new search during « Show more » draws no page of the words of before (
   await popup.getByRole('button', { name: /^(Turn on|Activer)$/ }).click();
   await expect(page.locator('[data-fruitback-host-launch]')).toBeVisible();
   const again = await openPopup(extension, page);
-  await again
-    .getByRole('button', { name: /^(Show all notes in a sidebar|Voir toutes les notes dans un panneau)/ })
-    .click();
+  await again.getByRole('button', { name: OPEN_SIDEBAR }).click();
   await expect
     .poll(() => inPanel<boolean>(page, `document.querySelector('button.panel-search') !== null`).catch(() => false))
     .toBe(true);
@@ -333,9 +327,7 @@ test('with seven statuses, the filter keeps its five stages, and the search find
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(7);
 
   const again = await openPopup(extension, page);
-  await again
-    .getByRole('button', { name: /^(Show all notes in a sidebar|Voir toutes les notes dans un panneau)/ })
-    .click();
+  await again.getByRole('button', { name: OPEN_SIDEBAR }).click();
   await expect
     .poll(async () => (await panelRows(page).catch(() => ({ tabs: [], rows: [] }))).rows.length)
     .toBeGreaterThan(0);

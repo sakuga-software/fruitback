@@ -14,6 +14,7 @@ import {
 import { STAGE_FILTERS, type SearchState } from '../src/search-options.ts';
 import { type PanelNotes, type PanelOptions, type PanelState, panelPage } from '../src/side-panel.ts';
 import { updateLine } from '../src/kit.ts';
+import { showPageNotes } from '../src/popup-notes.ts';
 import { intoPopup } from '../src/update-notice.ts';
 import { type WelcomeSignIn, welcomeScreen } from '../src/welcome.ts';
 
@@ -31,6 +32,33 @@ export type GalleryState = { id: string; title: string; build: (document: Docume
 const nothing = () => undefined;
 const account: Account = { name: 'Ana Duval', email: 'ana@acme.dev', console: 'https://app.fruitback.com' };
 const SITE = 'https://staging.acme.dev';
+
+/** The notes of the page of the mock-up of 2026-11-25 (FRU-695), as the widget of the tab answers them. */
+const minutesAgo = (minutes: number): string => new Date(Date.now() - minutes * 60_000).toISOString();
+const pageNote = (id: string, stage: PanelNote['stage'], note: string, minutes: number): PanelNote => ({
+  id,
+  stage,
+  note,
+  createdAt: minutesAgo(minutes),
+  updatedAt: minutesAgo(minutes),
+  replies: [],
+  canReply: true,
+  placement: 'found',
+});
+const PAGE_NOTES: PanelNote[] = [
+  pageNote('g1', 'progress', 'The button is hard to read on the green.', 2 * 1_440),
+  pageNote('g2', 'new', 'The order form rejects postcodes with a space.', 40),
+  pageNote('g3', 'todo', 'The returns policy says "recieve".', 180),
+  pageNote('g4', 'done', 'The chat bubble covers the send button.', 1_440),
+];
+
+/** Screen 3 with « On this page » read, as the popup fills it once the widget answers. */
+function withPageNotes(screen: HTMLElement, notes: PanelNote[]): HTMLElement {
+  const section = screen.querySelector<HTMLElement>('.page-notes');
+  if (section !== null) showPageNotes(section, { notes }, { onOpen: nothing, onOpenPanel: nothing });
+
+  return screen;
+}
 
 function popupStates(): GalleryState[] {
   const base = { onSettings: nothing };
@@ -175,12 +203,15 @@ function popupStates(): GalleryState[] {
       id: 'site-on',
       title: 'Site on · with what waits',
       build: (d) =>
-        siteOn(d, {
-          ...on,
-          on: true,
-          visibility: { shown: true, onChange: nothing },
-          facts: { destination: 'Linear · Acme web', toCheck: 2, open: 7 },
-        }),
+        withPageNotes(
+          siteOn(d, {
+            ...on,
+            on: true,
+            visibility: { shown: true, onChange: nothing },
+            facts: { destination: 'Linear · Acme web', toCheck: 2, open: 7 },
+          }),
+          PAGE_NOTES,
+        ),
     },
     {
       id: 'site-on-change',
@@ -212,7 +243,11 @@ function popupStates(): GalleryState[] {
     {
       id: 'site-on-quiet',
       title: 'Site on · nothing open',
-      build: (d) => siteOn(d, { ...on, on: true, visibility: { shown: true, onChange: nothing }, facts: { open: 0 } }),
+      build: (d) =>
+        withPageNotes(
+          siteOn(d, { ...on, on: true, visibility: { shown: true, onChange: nothing }, facts: { open: 0 } }),
+          [],
+        ),
     },
     {
       id: 'site-on-reading',

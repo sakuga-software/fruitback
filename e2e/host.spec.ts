@@ -271,7 +271,9 @@ test('the pins live in the Shadow root now, and still land on their elements', a
   ).toBe(1);
 });
 
-test('a note, its byline and its warning are three lines, not one paragraph', async ({ page }) => {
+test('a note and its byline are two lines, not one paragraph: the byline above the note (FRU-696)', async ({
+  page,
+}) => {
   // `all: initial` resets `display` too, so every block element in the Shadow root is inline until
   // the stylesheet says otherwise — and the note ran into its own byline. The margins were there and
   // did nothing. Asserted on layout rather than on the rule, because the rule is not the promise.
@@ -287,9 +289,10 @@ test('a note, its byline and its warning are three lines, not one paragraph', as
     const note = rect('.fruitback-thread-note');
     const meta = rect('.fruitback-thread-meta');
 
-    return note === undefined || meta === undefined ? null : { noteBottom: note.bottom, metaTop: meta.top };
+    return note === undefined || meta === undefined ? null : { noteTop: note.top, metaBottom: meta.bottom };
   });
 
   expect(lines, 'the thread should show a note and a byline').not.toBeNull();
-  expect(lines!.metaTop, 'the byline starts below the note, not beside it').toBeGreaterThanOrEqual(lines!.noteBottom);
+  // The head of the message, then its text under it, as in a conversation.
+  expect(lines!.noteTop, 'the note starts below its byline, not beside it').toBeGreaterThanOrEqual(lines!.metaBottom);
 });

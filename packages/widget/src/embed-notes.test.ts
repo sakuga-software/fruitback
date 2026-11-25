@@ -238,25 +238,30 @@ describe('the notes of the page for a list outside it (FRU-299)', () => {
     assert.equal(hidden(), false);
   });
 
-  it('hides the selector in a thread by default, shows it with the option of init, and with showSelectors (FRU-349)', async () => {
+  it('folds the selector under « Technical details » by default, and opens it with the option of init and with showSelectors (FRU-349, FRU-696)', async () => {
     const selectorOf = async (options: { showSelectors?: boolean }) => {
       const page = mounted();
       const widget = widgetOn(page, { transport: worker({}).transport, ...options });
       await widget.refresh();
       widget.focusNote('note-1');
-      const text = () => shadowOf(page).querySelector('.fruitback-thread-selector')?.textContent ?? null;
+      const fold = () => shadowOf(page).querySelector<HTMLDetailsElement>('details.fruitback-thread-tech');
+      const text = () => fold()?.querySelector('.fruitback-thread-selector')?.textContent ?? null;
 
-      return { widget, text };
+      return { widget, fold, text };
     };
 
+    // Folded, and still in the thread: a keyboard opens it from its summary.
     const hidden = await selectorOf({});
-    assert.equal(hidden.text(), null);
-    hidden.widget.showSelectors(true);
     assert.equal(hidden.text(), ANCHOR.selector);
+    assert.equal(hidden.fold()?.open, false);
+    assert.equal(hidden.fold()?.querySelector('summary')?.textContent, 'Technical details');
+    hidden.widget.showSelectors(true);
+    assert.equal(hidden.fold()?.open, true);
     hidden.widget.showSelectors(false);
-    assert.equal(hidden.text(), null);
+    assert.equal(hidden.fold()?.open, false);
 
     const shown = await selectorOf({ showSelectors: true });
+    assert.equal(shown.fold()?.open, true);
     assert.equal(shown.text(), ANCHOR.selector);
   });
 

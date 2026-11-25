@@ -174,9 +174,15 @@ describe('who is asked for a verdict (FRU-603)', () => {
     const group = view.fixed()?.parentElement;
     assert.equal(group?.getAttribute('role'), 'group');
     assert.equal(group?.getAttribute('aria-labelledby'), view.block()?.querySelector('p')?.id);
-    // In the order of the ticket: the line of who marked it done, the replies, then the question.
+    // In the order of the ticket: the line of who marked it done, the replies, the technical details
+    // folded under them (FRU-696), then the question.
     const order = [...(view.thread()?.children ?? [])].map((child) => child.className);
-    assert.deepEqual(order.slice(-3), ['fruitback-thread-done', 'fruitback-thread-answers', 'fruitback-thread-check']);
+    assert.deepEqual(order.slice(-4), [
+      'fruitback-thread-done',
+      'fruitback-thread-answers',
+      'fruitback-thread-tech',
+      'fruitback-thread-check',
+    ]);
     assert.equal(view.replyForm(), null);
   });
 

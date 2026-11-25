@@ -49,13 +49,22 @@ export type IconName =
   | 'paperclip'
   | 'image'
   | 'stackPlus'
-  | 'more';
+  | 'more'
+  | 'external'
+  | 'caret'
+  | 'code'
+  | 'github'
+  | 'linear';
 
 /**
  * The drop of the mark, as the mock-up of 2026-10-13 draws it on the launch button (FRU-252): a
  * circle and a point, taller than wide, on its own grid. Not the pin: a pin is a rotated corner.
  */
 const MARK = 'M 64 121.9 L 30.1 87.9 A 48 48 0 1 1 97.9 87.9 Z';
+
+/** The logo of Linear, from simple-icons 15.0.0 (icons/linear.svg, CC0-1.0). */
+const LINEAR_MARK =
+  'M2.886 4.18A11.982 11.982 0 0 1 11.99 0C18.624 0 24 5.376 24 12.009c0 3.64-1.62 6.903-4.18 9.105L2.887 4.18ZM1.817 5.626l16.556 16.556c-.524.33-1.075.62-1.65.866L.951 7.277c.247-.575.537-1.126.866-1.65ZM.322 9.163l14.515 14.515c-.71.172-1.443.282-2.195.322L0 11.358a12 12 0 0 1 .322-2.195Zm-.17 4.862 9.823 9.824a12.02 12.02 0 0 1-9.824-9.824Z';
 
 /** The pin's silhouette, rotated so the sharp corner points down. */
 const DROP = 'M8.00 14.51 L4.75 11.25 A4.6 4.6 0 0 1 4.75 4.75 A4.6 4.6 0 0 1 11.25 4.75 A4.6 4.6 0 0 1 11.25 11.25 Z';
@@ -75,6 +84,16 @@ const ICONS: Record<IconName, IconShape> = {
   stackPlus: ICON_DATA.stackPlus,
   // « ⋯ », the menu of the author in a thread (FRU-605): an action, so from the set.
   more: ICON_DATA.more,
+  // The head and the fold of a thread (FRU-696): the ticket opens in another tab, and « Technical
+  // details » folds and unfolds. From the set.
+  external: ICON_DATA.external,
+  caret: ICON_DATA.caret,
+  code: ICON_DATA.code,
+  // The tracker of the ticket in the head of a thread (FRU-696). GitHub from the set; Linear has no
+  // mark in Phosphor, so its logo is the one of simple-icons 15.0.0 (icons/linear.svg, CC0-1.0), as
+  // the extension and the console draw it.
+  github: ICON_DATA.github,
+  linear: { viewBox: '0 0 24 24', paths: [{ fill: 'currentColor', d: LINEAR_MARK }] },
   drop: { viewBox: '0 0 16 16', paths: [{ fill: 'currentColor', d: DROP }] },
   mark: { viewBox: '16 6 96 116', paths: [{ fill: 'currentColor', d: MARK }] },
   // The mark in a dashed outline, for the notes that could not be placed (FRU-259): the stroke and

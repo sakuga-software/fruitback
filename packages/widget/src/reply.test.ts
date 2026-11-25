@@ -143,7 +143,7 @@ describe('the field to reply to a note (FRU-257)', () => {
     assert.deepEqual(thread.replies(), ['Same on the phone.']);
     assert.match(
       page.document.querySelector('.fruitback-thread-reply-who')?.textContent ?? '',
-      /^Bob · not verified · /,
+      /^Bob · not verified \S/,
     );
     assert.deepEqual(
       sent.map((each) => each.body),
@@ -186,11 +186,13 @@ describe('the field to reply to a note (FRU-257)', () => {
     assert.equal(sent.length, 1);
   });
 
-  it('is a field of two lines, the one of the side panel too (FRU-606)', () => {
+  it('is a field of one line, as the mock-up of 2026-11-25 draws it, in a row with « Send » (FRU-696)', () => {
     const page = mounted();
     const thread = open(page, anIssue(), answered().seam);
 
-    assert.equal(thread.field()?.getAttribute('rows'), '2');
+    assert.equal(thread.field()?.getAttribute('rows'), '1');
+    assert.equal(thread.field()?.parentElement?.className, 'fruitback-thread-reply-row');
+    assert.equal(thread.field()?.nextElementSibling?.className, 'fruitback-thread-reply-send');
   });
 
   it('keeps the text a person typed when the thread is built again under it', () => {
@@ -231,9 +233,9 @@ describe('the field to reply to a note (FRU-257)', () => {
     const bodies = [...page.document.querySelectorAll('.fruitback-thread-reply-body')].map(
       (each) => each.textContent ?? '',
     );
-    assert.match(who[0] ?? '', /^Ana Martin · member of Acme · /);
+    assert.match(who[0] ?? '', /^Ana Martin · member of Acme \S/);
     assert.equal(bodies[0], 'On it.\n\nTomorrow.');
-    assert.match(who[1] ?? '', /^Linear user · /);
+    assert.match(who[1] ?? '', /^Linear user \S/);
     assert.equal(bodies[1], '**Ana Martin** via Fruitback · member of Acme\nNo quote.');
   });
 
@@ -253,8 +255,8 @@ describe('the field to reply to a note (FRU-257)', () => {
     const who = [...page.document.querySelectorAll('.fruitback-thread-reply-who')].map(
       (each) => each.textContent ?? '',
     );
-    assert.match(who[0] ?? '', /^Claude on CI · Agent · /);
-    assert.match(who[1] ?? '', /^Ana Martin · member of Acme · /);
+    assert.match(who[0] ?? '', /^Claude on CI · Agent \S/);
+    assert.match(who[1] ?? '', /^Ana Martin · member of Acme \S/);
     assert.doesNotMatch(who[1] ?? '', /Agent/);
   });
 
