@@ -129,6 +129,10 @@ test('the author chooses the status of a note kept in Fruitback, among the shown
   // rename is named by its stage.
   const select = row(page, 'The headline').getByRole('button', { name: /Status of this note/ });
   await expect(select).toContainText('New');
+  // A closed list keeps j to choose an option: j and k of the list leave it alone (FRU-685).
+  await select.focus();
+  await page.keyboard.press('j');
+  await expect(select).toBeFocused();
   await select.click();
   // The hidden status is not offered; the renamed built-in one is offered by its name.
   await expect(page.getByRole('option')).toHaveText(['Waiting', 'New', 'To do', 'In progress', 'Shipped', 'Closed']);

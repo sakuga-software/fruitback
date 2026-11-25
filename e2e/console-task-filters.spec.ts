@@ -58,21 +58,25 @@ async function worker(p: Page, kept: boolean): Promise<URLSearchParams[]> {
   return asked;
 }
 
-async function pick(p: Page, button: RegExp, option: string): Promise<void> {
-  await p.getByRole('button', { name: button }).click();
-  await p.getByRole('option', { name: option, exact: true }).click();
+/** FRU-686: a filter is chosen from « Filter »: its field, then its value. */
+async function choose(page: Page, field: string, value: string): Promise<void> {
+  await page.getByRole('button', { name: 'Filter', exact: true }).click();
+  await page.getByRole('menuitem', { name: field, exact: true }).click();
+  await page.getByRole('menuitemradio', { name: value, exact: true }).click();
 }
+/** The chips of the filters that are on (FRU-686). */
+const chips = (p: Page) => p.getByRole('group', { name: 'Filters on' }).locator('.kit-filter-tag');
 
 test('each filter on the tasks writes the address and asks the worker, and they combine', async ({ page: p }) => {
   const asked = await worker(p, true);
   await p.goto(`${CONSOLE}/w/w1/notes`);
-  await expect(p.locator('[data-task-filters]')).toBeVisible();
+  await expect(p.getByText('The headline runs')).toBeVisible();
 
-  await pick(p, /Anyone assigned/, 'Ben Martin');
+  await choose(p, 'Assignee', 'Ben Martin');
   await expect(p).toHaveURL(/assignee=a2/);
-  await pick(p, /Any priority/, 'High');
-  await pick(p, /Any label/, 'Bug');
-  await pick(p, /Any due day/, 'Overdue');
+  await choose(p, 'Priority', 'High');
+  await choose(p, 'Label', 'Bug');
+  await choose(p, 'Due day', 'Overdue');
   await expect(p).toHaveURL(/due=overdue/);
   // The read of the last filter is asked after the address changes.
   await expect.poll(() => asked.at(-1)?.get('due')).toBe('overdue');
@@ -87,17 +91,18 @@ test('each filter on the tasks writes the address and asks the worker, and they 
   // The day of the person, which the worker cannot know.
   expect(last.get('today')).toMatch(/^\d{4}-\d{2}-\d{2}$/);
 
-  // A reload keeps them: they are in the address.
+  // A reload keeps them: they are in the address, and each has its chip (FRU-686).
   await p.reload();
-  await expect(p.getByRole('button', { name: /Overdue/ })).toBeVisible();
-  await expect(p.getByRole('button', { name: /Ben Martin/ })).toBeVisible();
+  await expect(chips(p)).toHaveText(['AssigneeBen Martin', 'PriorityHigh', 'LabelBug', 'Due dayOverdue']);
 });
 
-test('a list with no task Fruitback keeps draws no row of task filters', async ({ page: p }) => {
+test('a list with no task Fruitback keeps offers no filter of the tasks', async ({ page: p }) => {
   await worker(p, false);
   await p.goto(`${CONSOLE}/w/w1/notes`);
   await expect(p.getByText('The headline runs')).toBeVisible();
-  await expect(p.locator('[data-task-filters]')).toHaveCount(0);
+  await p.getByRole('button', { name: 'Filter', exact: true }).click();
+  await expect(p.getByRole('menuitem', { name: 'Status', exact: true })).toBeVisible();
+  await expect(p.getByRole('menuitem', { name: 'Assignee', exact: true })).toHaveCount(0);
 });
 
 test('« Unresolved » of the status asks the worker for the notes not done nor closed, and « Any status » for every note again (FRU-667)', async ({
@@ -107,24 +112,24 @@ test('« Unresolved » of the status asks the worker for the notes not done nor 
   await p.goto(`${CONSOLE}/w/w1/notes`);
   await expect(p.getByText('The headline runs')).toBeVisible();
 
-  await pick(p, /Any status/, 'Unresolved');
+  await choose(p, 'Status', 'Unresolved');
   await expect(p).toHaveURL(/unresolved=1/);
   await expect.poll(() => asked.at(-1)?.get('unresolved')).toBe('1');
   expect(asked.at(-1)?.get('stage')).toBeNull();
   // A reload keeps it: it is in the address.
   await p.reload();
-  await expect(p.getByRole('button', { name: /Unresolved/ })).toBeVisible();
+  await expect(chips(p)).toHaveText(['StatusUnresolved']);
 
   // A stage takes its place: the worker gets one of the two, never both.
-  await pick(p, /Unresolved/, 'Done');
+  await choose(p, 'Status', 'Done');
   await expect.poll(() => asked.at(-1)?.get('stage')).toBe('done');
   expect(asked.at(-1)?.get('unresolved')).toBeNull();
   await expect(p).not.toHaveURL(/unresolved=/);
 
   // The other direction: « Any status » reads every note again.
-  await pick(p, /Done/, 'Unresolved');
+  await choose(p, 'Status', 'Unresolved');
   await expect.poll(() => asked.at(-1)?.get('unresolved')).toBe('1');
-  await pick(p, /Unresolved/, 'Any status');
+  await choose(p, 'Status', 'Any status');
   await expect.poll(() => asked.at(-1)?.has('unresolved')).toBe(false);
   await expect(p).not.toHaveURL(/unresolved=/);
 });

@@ -366,13 +366,7 @@ export function NotesTable({
   return (
     // The list goes from one edge of the screen to the other, as the mockup draws it.
     <div aria-busy={reading} className="@container -mx-[clamp(16px,4vw,48px)]">
-      <div
-        ref={list}
-        role="region"
-        aria-label={t('Notes')}
-        tabIndex={-1}
-        className="kit-notes-list border-t border-line outline-none"
-      >
+      <div ref={list} role="region" aria-label={t('Notes')} tabIndex={-1} className="kit-notes-list outline-none">
         <table
           className={[
             'w-full table-fixed border-separate border-spacing-0 text-table',

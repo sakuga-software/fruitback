@@ -338,7 +338,8 @@ test('a new label keeps the labels the screen has while they are read again (FRU
   // showed nothing meanwhile: the labels went back to « loading ».
   await worker(p, { labelsSlow: 1500 });
   await p.goto(`${CONSOLE}/w/w1/notes?label=l1`);
-  const filter = p.getByRole('button', { name: 'Bug Label' });
+  // FRU-686: the filter is a chip of the bar, its value the name of the label.
+  const filter = p.getByRole('group', { name: 'Filters on' }).locator('.kit-filter-tag', { hasText: 'Bug' });
   await expect(filter).toBeVisible();
   await row(p, 'The headline').getByText('The headline').click({ button: 'right' });
   await p.getByRole('menuitem', { name: 'Labels' }).hover();
