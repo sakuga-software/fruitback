@@ -31,6 +31,16 @@ const SHEETS = [
     file: fileURLToPath(new URL('../entrypoints/options/style.css', import.meta.url)),
     least: 100,
   },
+  {
+    name: 'sidepanel/style.css',
+    file: fileURLToPath(new URL('../entrypoints/sidepanel/style.css', import.meta.url)),
+    least: 100,
+  },
+  {
+    name: 'welcome/style.css',
+    file: fileURLToPath(new URL('../entrypoints/welcome/style.css', import.meta.url)),
+    least: 15,
+  },
 ];
 
 /** What Tailwind writes for a sheet, or for the text of a sheet placed at `file`. */
