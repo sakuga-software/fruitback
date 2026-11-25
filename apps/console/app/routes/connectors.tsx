@@ -659,7 +659,7 @@ export default function Connectors() {
                 const chosen = connector.id === selected;
 
                 return (
-                  <li key={connector.id} className="overflow-hidden rounded-frame border border-line bg-surface">
+                  <li key={connector.id} className="overflow-hidden rounded-card border border-line bg-surface">
                     <button
                       type="button"
                       aria-expanded={chosen}
@@ -672,7 +672,7 @@ export default function Connectors() {
                       }}
                       // Under 640 px the state goes under the address, in line with it (FRU-321).
                       className={`flex w-full cursor-pointer flex-wrap items-center gap-x-[14px] gap-y-[4px] px-[18px] py-[14px] text-left -outline-offset-2 sm:flex-nowrap ${
-                        chosen ? 'bg-chip' : 'hover:bg-subtle'
+                        chosen ? 'bg-selected' : 'hover:bg-hover'
                       }`}
                     >
                       <SourceMark kind={connector.kind} />
@@ -744,7 +744,7 @@ function Source({
 }) {
   return (
     <li
-      className={`flex min-w-0 flex-col gap-[14px] rounded-frame border border-line bg-surface p-[16px] ${
+      className={`flex min-w-0 flex-col gap-[14px] rounded-card border border-line bg-surface p-[16px] ${
         wide ? 'col-span-full' : ''
       }`}
       data-source={name}

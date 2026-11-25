@@ -176,7 +176,7 @@ export default function Sites() {
       ) : null}
 
       {typeof read !== 'string' && !listed ? (
-        <div className="box-content flex max-w-[640px] flex-col items-start gap-[14px] rounded-frame border border-line bg-subtle px-[clamp(20px,5vw,56px)] py-[48px]">
+        <div className="box-content flex max-w-[640px] flex-col items-start gap-[14px] rounded-card border border-line bg-subtle px-[clamp(20px,5vw,56px)] py-[48px]">
           <svg aria-hidden="true" viewBox="16 6 96 116" className="h-[48px] w-[40px] fill-accent">
             <path
               fillRule="evenodd"
@@ -489,7 +489,7 @@ function GoesTo({ site }: { site: Site }) {
               target="_blank"
               rel="noreferrer"
               aria-label={t('{place}, at Linear, in a new tab', { place: where })}
-              className="min-w-0 truncate rounded-[2px] text-hint leading-[inherit] text-muted underline decoration-1 underline-offset-[3px] hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              className="min-w-0 truncate rounded-inner text-hint leading-[inherit] text-muted underline decoration-1 underline-offset-[3px] hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             >
               {where}
             </a>
@@ -539,12 +539,12 @@ function SiteCard({ workspace, site, manages, seesTracker }: SiteCardProps) {
   return (
     <li
       data-site={site.id}
-      className="flex min-w-0 flex-col gap-[14px] rounded-frame border border-line bg-surface px-[20px] pt-[16px] pb-[14px]"
+      className="flex min-w-0 flex-col gap-[14px] rounded-card border border-line bg-surface px-[20px] pt-[16px] pb-[14px]"
     >
       <div className="flex items-center gap-[12px]">
         <SiteIcon
           origin={site.origin}
-          className="size-[28px] flex-none rounded-button object-contain"
+          className="size-[28px] flex-none rounded-control object-contain"
           letterClassName="grid place-items-center border border-line bg-subtle text-hint font-bold text-ink"
         />
         {/* FRU-585: the host is on one line, cut with « … », and whole in a tooltip when it is cut. */}
@@ -552,7 +552,7 @@ function SiteCard({ workspace, site, manages, seesTracker }: SiteCardProps) {
           <CutLink
             to={page}
             className="text-[17px] leading-[1.35] font-semibold"
-            linkClassName="rounded-[2px] text-ink hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            linkClassName="rounded-inner text-ink hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           >
             {name}
           </CutLink>
@@ -733,7 +733,7 @@ function Counts({ site, name, notes: newNotes }: { site: Site; name: string; not
               ? t('See the new note of {site}', { site: name })
               : t('See the {count} new notes of {site}', { count: notes.new, site: name })
           }
-          className="rounded-[2px] text-hint font-semibold text-accent-strong underline-offset-[3px] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          className="rounded-inner text-hint font-semibold text-accent-strong underline-offset-[3px] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
         >
           {notes.new === 1 ? t('1 new') : t('{count} new', { count: notes.new })}
         </Link>

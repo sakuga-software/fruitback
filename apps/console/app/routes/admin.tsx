@@ -97,14 +97,14 @@ function AdminRail({
     <div className={`${RAIL_HEAD} hover:bg-transparent`}>
       <span
         aria-hidden="true"
-        className="flex h-[20px] w-[20px] flex-none items-center justify-center rounded-[4px] bg-ink text-on-ink"
+        className="flex h-[20px] w-[20px] flex-none items-center justify-center rounded-inner bg-ink text-on-ink"
       >
         <RailIcon name="instance" small />
       </span>
       <span className="min-w-0 flex-1 truncate">
         {instance.host}
         <span className="sr-only">, </span>
-        <span className="ms-[6px] text-tiny font-medium text-muted">
+        <span className="ms-[6px] text-hint font-medium text-muted">
           {instance.cloud ? t('Fruitback Cloud') : t('Self-hosted instance')}
         </span>
       </span>

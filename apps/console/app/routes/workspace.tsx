@@ -300,17 +300,17 @@ const SETTINGS = 'workspace settings';
  * words. Under the pointer an entry takes the tint of the entry on screen.
  */
 const ENTRY =
-  'flex h-control-sm min-w-0 items-center gap-[8px] rounded-control px-[8px] text-label leading-none font-medium whitespace-nowrap text-ink-soft hover:bg-bar-active hover:text-ink';
+  'flex h-control-md min-w-0 items-center gap-[8px] rounded-control px-[8px] text-label leading-none font-medium whitespace-nowrap text-ink-soft hover:bg-hover hover:text-ink';
 /** The entry on screen: the tint, and its words in 600. */
-const ENTRY_CURRENT = 'bg-bar-active font-semibold text-ink';
+const ENTRY_CURRENT = 'bg-selected font-semibold text-ink';
 /** The icon of an entry, in the secondary text of the bar. */
 const ENTRY_ICON = 'inline-flex flex-none text-muted';
 /** A count at the right of an entry. */
-const COUNT = 'ms-auto flex-none text-tiny leading-none font-medium text-muted tabular-nums';
+const COUNT = 'ms-auto flex-none text-hint leading-none font-medium text-muted tabular-nums';
 
 /** The classes of the box at the top of the bar: what the bar is of. */
 export const RAIL_HEAD =
-  'flex h-control-md min-w-0 flex-1 items-center gap-[8px] rounded-control px-[6px] text-left text-label leading-none font-semibold text-ink hover:bg-bar-active';
+  'flex h-control-lg min-w-0 flex-1 items-center gap-[8px] rounded-control px-[6px] text-left text-label leading-none font-semibold text-ink hover:bg-hover';
 
 /**
  * The bar of the mockup (FRU-684, option A), for a workspace or for the instance (FRU-262): what it
@@ -350,7 +350,7 @@ export function RailFrame({
         setOpen(false);
         event.currentTarget.querySelector<HTMLElement>(`[aria-controls="${CSS.escape(panel)}"]`)?.focus();
       }}
-      className="kit-rail group/rail [view-transition-name:rail] box-border flex min-w-0 flex-col border-line bg-bar pt-[4px] text-ink max-[1023px]:flex-none max-[1023px]:border-b min-[1024px]:sticky min-[1024px]:top-0 min-[1024px]:h-dvh min-[1024px]:w-[232px] min-[1024px]:flex-none min-[1024px]:overflow-y-auto min-[1024px]:border-r"
+      className="kit-rail group/rail [view-transition-name:rail] box-border flex min-w-0 flex-col border-line bg-sidebar pt-[4px] text-ink max-[1023px]:flex-none max-[1023px]:border-b min-[1024px]:sticky min-[1024px]:top-0 min-[1024px]:h-dvh min-[1024px]:w-[232px] min-[1024px]:flex-none min-[1024px]:overflow-y-auto min-[1024px]:border-r"
     >
       <div className="flex h-[40px] flex-none items-center gap-[8px] px-[6px]">
         {head}
@@ -426,7 +426,7 @@ export function Rail({
         to={`/w/${workspace.id}/settings`}
         viewTransition
         {...(settings ? { 'aria-current': 'page' as const } : {})}
-        className={`${RAIL_HEAD} ${settings ? 'bg-bar-active' : ''}`}
+        className={`${RAIL_HEAD} ${settings ? 'bg-selected' : ''}`}
       >
         {name}
         <span className="sr-only"> {t('Workspace settings')}</span>
@@ -439,7 +439,7 @@ export function Rail({
       state={{ search: true }}
       viewTransition
       aria-label={t('Search notes')}
-      className="inline-flex h-control-sm w-control-sm flex-none items-center justify-center rounded-control text-ink-soft hover:bg-bar-active"
+      className="inline-flex h-control-md w-control-md flex-none items-center justify-center rounded-control text-ink-soft hover:bg-hover"
     >
       <RailIcon name="search" small />
     </Link>
@@ -489,7 +489,7 @@ export function WorkspaceMark({ workspace, size = 20 }: { workspace: Workspace; 
   const [broken, setBroken] = useState<string | undefined>();
   // The 64 px of the settings are drawn as before FRU-684; the 20 px tile of the bar is ink.
   const box =
-    size === 64 ? 'h-[64px] w-[64px] rounded-field text-section' : 'h-[20px] w-[20px] rounded-[4px] text-[11px]';
+    size === 64 ? 'h-[64px] w-[64px] rounded-control text-section' : 'h-[20px] w-[20px] rounded-inner text-tiny';
   if (source !== undefined && source !== broken)
     return (
       <img
@@ -619,7 +619,7 @@ function ExtensionEntry() {
         <span
           aria-hidden="true"
           data-connected=""
-          className="absolute -right-[2px] -bottom-[2px] box-border size-[7px] rounded-full border-[1.5px] border-bar bg-done"
+          className="absolute -right-[2px] -bottom-[2px] box-border size-[7px] rounded-full border-[1.5px] border-sidebar bg-done"
         />
       )}
     </span>
@@ -636,7 +636,7 @@ function ExtensionEntry() {
       <span className="min-w-0 flex-none">{t('Extension')}</span>
       <span className="sr-only">, {t('connected in')}</span>
       {/* A long name ends with « … »; the whole of it is in the title. */}
-      <span title={connected.browser} className="ms-auto min-w-0 truncate text-tiny text-muted">
+      <span title={connected.browser} className="ms-auto min-w-0 truncate text-hint text-muted">
         {connected.browser}
       </span>
       <span className="sr-only">. {t('Connect another browser')}</span>
@@ -669,7 +669,7 @@ function PersonMenu({ account, accountPage }: { account: Account; accountPage?: 
   return (
     <>
       <Menu
-        triggerClassName="flex h-[40px] w-full min-w-0 items-center gap-[8px] rounded-control px-[8px] text-left hover:bg-bar-active"
+        triggerClassName="flex h-[40px] w-full min-w-0 items-center gap-[8px] rounded-control px-[8px] text-left hover:bg-hover"
         items={[
           ...(accountPage === undefined ? [] : [{ id: ACCOUNT_ITEM, label: t('My account') }]),
           { id: SIGN_OUT_ITEM, label: t('Sign out') },
@@ -681,14 +681,14 @@ function PersonMenu({ account, accountPage }: { account: Account; accountPage?: 
       >
         <span
           aria-hidden="true"
-          className="flex size-[24px] flex-none items-center justify-center rounded-full bg-avatar text-[11px] leading-none font-semibold text-on-ink"
+          className="flex size-[24px] flex-none items-center justify-center rounded-full bg-avatar text-tiny leading-none font-semibold text-on-ink"
         >
           {name.charAt(0).toUpperCase()}
         </span>
         <span className="flex min-w-0 flex-1 flex-col gap-[2px]">
           <span className="truncate text-label leading-[1.1] font-semibold text-ink">{name}</span>
           {name === account.email ? null : (
-            <span className="truncate text-tiny leading-[1.1] text-muted">{account.email}</span>
+            <span className="truncate text-hint leading-[1.1] text-muted">{account.email}</span>
           )}
         </span>
         <span className="inline-flex flex-none text-muted">
@@ -696,7 +696,7 @@ function PersonMenu({ account, accountPage }: { account: Account; accountPage?: 
         </span>
       </Menu>
       {stillIn ? (
-        <p role="alert" className="px-[8px] pt-[4px] text-tiny text-accent-strong">
+        <p role="alert" className="px-[8px] pt-[4px] text-hint text-accent-strong">
           {t('You are still signed in: Fruitback did not confirm the sign-out. Try again.')}
         </p>
       ) : null}
@@ -711,7 +711,7 @@ function EntryCount({ count, alert }: { count: number | undefined; alert: number
     return (
       <span
         data-failing=""
-        className="ms-auto inline-flex flex-none items-center gap-[4px] text-tiny leading-none font-semibold text-accent-strong tabular-nums"
+        className="ms-auto inline-flex flex-none items-center gap-[4px] text-hint leading-none font-semibold text-accent-strong tabular-nums"
       >
         <span aria-hidden="true" className="size-[6px] rounded-full bg-accent" />
         <span className="sr-only">, {t('failed sends:')} </span>
