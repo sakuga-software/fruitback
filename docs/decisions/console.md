@@ -69,20 +69,15 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   before the first list is kept would start from the list of before and take the first change away,
   so the controls of the list are disabled while it is written. `e2e/console-site-places.spec.ts`
   holds a write open and tries the second gesture.
-  **The panel of a source is an accordion under its row, at every width** (FRU-161, FRU-403), where
-  the board draws a column beside the list: the row is a button with `aria-expanded`, names the panel
-  in `aria-controls`, and the page scrolls as far as the panel needs. The panel is a `SidePanel` with
-  `flush`: no card of its own inside the frame of the list, and its title said to a screen reader
-  only, as the row above shows the name. `e2e/console-source-panel.spec.ts` measures it at 390, 768
-  and 1440 px.
-  **A panel that a person opens takes focus** (FRU-197): it is a region named after its source, focus
-  goes to it when a press of its row opened it, and Escape closes it and gives focus back to the
-  row. A panel that appears by itself takes none: the one of a source just connected. The same spec
-  holds both. **Not measured: what VoiceOver and NVDA say**; the spec reads the role, the name
-  and where focus is. **The panel unfolds** (FRU-563): its height grows from nothing and it fades
-  in, 220 ms on the curve of the kit, clipped only while it moves; the page scrolls to it again once
-  it has its height. With `prefers-reduced-motion` it is there at once. `e2e/console-connectors.spec.ts`
-  reads its heights frame by frame.
+  **The settings of a connector open in a dialog, at every width** (FRU-690), where they were an
+  accordion under its row (FRU-161, FRU-403, FRU-563). « … » at the end of the row opens them, and a
+  press on the row too; the dialog is named after the connector, holds a region named after its kind
+  and its account (`#source-panel`), keeps focus inside, and Escape or « Close » give focus back to
+  « … ». A part of the settings that takes its own Escape (« Rename », `Confirmation`) stops it, and
+  the dialog stays. Settings that open by themselves (a connector just added, a way back from Linear,
+  GitHub or a plugin, `?connector=`) open the same dialog. `e2e/console-source-panel.spec.ts` holds
+  it at 390, 768 and 1440 px. **Not measured: what VoiceOver and NVDA say**; the spec reads the
+  role, the name and where focus is.
   **The console decides nothing about a domain** (FRU-103). The Sites screen shows, to an owner or an
   admin, the domains of the workspace (`domains.tsx`), in a section of the page of a site (FRU-433,
   `…/sites/<site>#previews`): the `TXT` record to write, « Check the DNS »,
@@ -441,9 +436,10 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
     build, and « My account » (`ACCOUNT`) to the menu, so no entry leads nowhere and every screen has
     a way in.
   - **The counts at the right of the entries are props of the bar** (`counts`, `failing`): a red dot
-    and the number on « Connectors » when sends failed. No read gives them yet: counting the notes of
-    every site on every screen was taken away for its cost (FRU-497), and a summary of the worker is
-    FRU-711. With no count the entry shows none. `/kit/frame`, a page of the development
+    and the number on « Connectors » when sends failed. The Connectors screen gives the second one
+    when it reads the health of its connectors (FRU-690). No read gives the others yet: counting the
+    notes of every site on every screen was taken away for its cost (FRU-497), and a summary of the
+    worker is FRU-711. With no count the entry shows none. `/kit/frame`, a page of the development
     server, mounts the bar with the counts of the mockup.
   - **The fixed foot**: « What's new » (the releases on GitHub, with a dot until this browser opened
     it with this version of the console, `whats-new.ts`), the extension (« Install the extension
@@ -806,56 +802,68 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   absolutely in a card, the hidden select of HeroUI, does not widen the page). « Send again » stays
   in the table. `e2e/console-notes-board.spec.ts` holds the view in the address, the columns, the
   filters, the drag, the refusal, the keyboard, the stages, 1440 and 390 px, axe and French.
-- **The Connectors screen is the one of the mockup, with the sources that exist** (FRU-246):
-  `routes/connectors.tsx` (the list and « Add a connector »), `connector-add.tsx` (the two forms),
-  `connector-linear.tsx` and `connector-rest.tsx` (the panels), `connector-parts.tsx` (what they
-  share). **A source that does not exist connects nothing**: Jira, GitLab, Trello,
-  Notion and Webhook are listed with the sentence of the mockup and a disabled « After the beta »,
-  where the mockup draws « Connect ». **With no connector added, the screen is « Add a connector »**,
-  its eight connectors and « No tracker yet. The notes stay in Fruitback. » (FRU-542, Mathieu). **With
-  one, it is « Your connectors », a card for each connector, one under the other, and « New connector » at the
-  top right** opens « Add a connector » in a `Dialog` (FRU-562), its sources a grid of cards (three
-  in a row at 1440 px, one at 390 px), with their buttons at the foot of each card. Escape or
-  « Close » give focus back to « New connector ». **A form open in it locks it**: no Escape and no
-  close button, as the list of before hid « Close » while a form was open, since the secret of an
-  address is shown there once and a key being typed would go with the dialog; the card of the form
-  takes the whole row. A form started on the page, before any source, stays on the page when its
-  source arrives. `?new` in the address opens the dialog (« Connect a tracker » of the Sites screen
-  links there), and leaves the address; it opens nothing for a person who cannot add a source.
-  With no source, the same grid is on the page. Linear and an address stay in it: a
-  workspace can connect a second one. The cards are not a grid: the panel of a connector opens inside
-  its card (FRU-403), and a panel between two rows of cards reads as a stray card (FRU-433). The list
-  stays open while a form in it is open (the secret of an address is shown there once, after it is
-  connected), and a way back from Linear or GitHub that went wrong opens it, since its sentence is
-  under its connector. A person who cannot add a connector (a member, a worker that cannot keep a key) gets no
-  « New connector »: it would open buttons that do nothing. **Each connector has the logo of its tracker**
-  (FRU-543, `connector-marks.tsx`: simple-icons, CC0, and the GitHub mark of `provider-icons.tsx`),
-  18 px in the white box of 34 px where the mockup writes a letter, in the colour of the text: no logo
-  is louder than the state of its row. **« Add a connector » waits for the list to be read**
-  (FRU-271; after a read that failed there is « Try again » and no source to add): the list arrives above it and its buttons went down by the height of the
-  list (45 px for one source, 110 for two, measured), so a press that started before and ended
-  after was lost; and the same read says what « Connect Linear » does, the consent at Linear or a
-  key. **A row says « Connected », « Needs attention »,
-  or how many notes did not reach an address**; the count is read with the list, and an address
-  whose count was not read says « Connected » and no number. On the chosen row the red is the
-  strong accent: the accent is 4.28:1 on its tint. **The panel keeps what the mockup does not
-  draw**: « Sites sending here », the sites that send there and their places in it, read only, with
-  a link to the Sites screen, where a site chooses them (FRU-399), and for an owner or an admin of a
-  Linear, « Statuses » on the row of each site, to its statuses page (FRU-478: it was a block of its
-  own, « Status of the pins », which listed the same sites a second time); the notes that did not arrive;
-  « Use an API key ». It does not show « Attach a picture of the element » (FRU-198), a count of
-  notes by site nor « Last issue created » (FRU-237). **The drop of a status is beside its list**,
-  where the
-  mockup draws it inside: the list of the kit has no place for it. « Connect » is written seven
-  times, so each button also holds the name of its source for a screen reader.
-  `e2e/console-connectors.spec.ts` holds the values, the states, the roles, 390 px and axe.
-  **A source can have a name** (FRU-404): several sources can reach one tracker, so an owner or an
-  admin names one at the top of its panel (`connector-name.tsx`, « Rename » in place, as for a
-  workspace), and an empty name gives it back the name of its kind. `connectorName` of
-  `connector-parts.tsx` is how every screen names a source: its row, where the kind then goes first
-  on the line under it, the chips and the places of Notes, and the lists of a site's statuses
-  (`placeLabel`: « Clients · Design » for « Linear · Design »). A worker of before sends no `name`,
-  and every source is named by its kind, as before.
+- **The Connectors screen is a table of health and a catalogue** (FRU-690, the mockup « Maquette HTML
+  · Connecteurs » attached to the ticket): `routes/connectors.tsx` (the table, the catalogue, the
+  dialog of the settings), `connector-add.tsx` (the forms), `connector-linear.tsx`,
+  `connector-rest.tsx` and the others (the settings), `connector-parts.tsx` (what they share),
+  `connector-logos.tsx` (the logos). **The rules, in short:**
+  - **« Your connectors » is a table** (`DataTable`, a card for each row under 680 px): the
+    connector with its logo and its name (FRU-404), its account (one line, cut at its end, the whole
+    in its tooltip, FRU-321), « Used by » (the sites that send there, from the read of the sites;
+    none for a routine), its health, and at its end « Retry » and « … ».
+  - **The health says only what the worker says** (FRU-714 asks for the rest): « Needs attention »
+    when the tracker refuses the connector (FRU-102) or a place of a site (FRU-640); « N notes not
+    delivered » and « N calls not delivered » for a connector that receives (an address, a routine,
+    a plugin with `receives`, Slack), from `GET …/connectors/<id>/deliveries`; « Healthy » when that
+    list was read and is empty; « Connected » for a tracker, whose deliveries no route reports yet;
+    « Not read » when the list of an address was not read, with a line above the table and « Try
+    again ». **Never « Healthy » for what was not read.** A red word is `accent-strong`, on a tint of
+    the accent; a green one is `done`, on a tint of `done`. **No « Last delivery », and no count of
+    notes in « Used by »**: no route gives them (FRU-714).
+  - **« Retry »** is on a row whose sends wait, for an owner or an admin: it asks each of them again
+    (`POST …/deliveries/<id>/retry`, the route of « Try now » in the settings), then reads the health
+    again. **The red count of « Connectors » in the bar** is the sum of the sends that wait, as this
+    screen last read them (`failingRead` of the frame); on another screen it stays until a read says
+    another number, and before any read the bar counts nothing (FRU-711).
+  - **« Add a connector » is a catalogue on the page, under the table**, with or without a
+    connector: a search (`folded`: no case, no accent) and the groups All kinds, Trackers, Agents
+    and Developers. Its tiles are 64 px, four in a row at 1440 px, one at 390 px: the logo in a box
+    of 36 px, the name, one line of what a note becomes there (cut at its end; the long sentence is
+    its tooltip), and its state: « Connected » (with a « + » that connects another one: a workspace
+    can connect a second Linear or a second address), « Connect », « Soon » (no connector of this
+    kind on this worker), or « Not set up » (the worker has the kind, and its operator did not set
+    it up: the line then says so). The routine says « New » beside its name. Where a tracker
+    connects two ways (the consent, a key or a token), « Connect » is the consent and a menu beside
+    it offers the other. **The form of a source opens in its tile, which then takes the whole row**,
+    and so does the sentence of a way back that went wrong (`LINEAR_RETURNS`, `GITHUB_RETURNS`,
+    `PLUGIN_RETURNS`). A source added opens its settings; an address whose secret Fruitback made
+    shows it in its tile once, and its settings open after « I kept it ».
+  - **The catalogue waits for the list to be read** (FRU-271): only that read says what « Connect
+    Linear » does, the consent at Linear or a key. After a read that failed there is « Try again »
+    and no tile. A person who cannot add a connector (a member, a worker that cannot keep a key)
+    reads the catalogue with no button, and a line above it says why; « New connector », which
+    leads to the search of the catalogue, is not there for them, and `?new` (« Connect a tracker » of
+    the Sites screen) puts focus in the search only for a person who can add one.
+  - **The logos are SVG files the console serves itself** (`public/logos/<kind>.svg`, `img-src
+    'self'`, no request to a third party): simple-icons 15.0.0 (CC0-1.0) for the trackers, in the
+    colour simple-icons gives each brand, the icons `webhook` and `terminal` of Lucide (ISC), and
+    the braces of an address drawn for Fruitback. Each file names its source and its licence in a
+    comment; `connector-logos.test.ts` holds one file for each kind, nothing in them that reaches
+    another address, and the comment. A logo is decorative: the name beside it says the kind.
+    Elsewhere (Notes, the places of a site) a source keeps its mark of `connector-marks.tsx`, in the
+    colour of the text.
+  - **The settings keep what they held**: « Sites sending here », the sites that send there and their
+    places, read only, with a link to the Sites screen (FRU-399) and « Statuses » on the row of each
+    site of a Linear (FRU-478); the notes that did not arrive; « Use an API key ». « Connect » is
+    written many times, so each button also holds the name of its source for a screen reader.
+    `e2e/console-connectors-table.spec.ts` and `console-connectors-catalogue.spec.ts` hold the values, the states, the roles, 390 px and axe.
+    **A source can have a name** (FRU-404): several sources can reach one tracker, so an owner or an
+    admin names one at the top of its panel (`connector-name.tsx`, « Rename » in place, as for a
+    workspace), and an empty name gives it back the name of its kind. `connectorName` of
+    `connector-parts.tsx` is how every screen names a source: its row, where the kind then goes first
+    on the line under it, the chips and the places of Notes, and the lists of a site's statuses
+    (`placeLabel`: « Clients · Design » for « Linear · Design »). A worker of before sends no `name`,
+    and every source is named by its kind, as before.
 - **A place that the tracker refuses says « Needs attention »** (FRU-640): the worker keeps
   `attention` on the destination when a note did not reach its place, and clears it when a note
   arrives. The row of the place in « Where the notes go » says « Needs attention » and, under it,
@@ -863,12 +871,12 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   the site in the Sites list says it too, to whoever sees the tracker. A worker of before sends no
   `attention`, and the row reads as it did.
 - **GitHub connects with its App, where the worker has one** (FRU-361, routes of FRU-359 and
-  FRU-360): `connectors.tsx` (the card), `connector-github.tsx` (the panel). The card « GitHub
-  Issues » is always in « Add a connector », between Linear and the REST API. With `githubApp: true`,
+  FRU-360): `connectors.tsx` (the tile), `connector-github.tsx` (the settings). The tile « GitHub
+  Issues » is always in « Add a connector », after Jira (FRU-690). With `githubApp: true`,
   « Connect » asks `POST …/connectors/github/start` and goes to the `url` it answers, as « Connect
-  Linear » does with OAuth. Without it, a disabled « Not on this Fruitback » and a line that names
-  the operator: there is no other way to connect GitHub. **Each word of the way back has its
-  sentence under the card** (`GITHUB_RETURNS`), and leaves the address after it is read;
+  Linear » does with OAuth. Without it, « Not set up » and a line that names the
+  operator: there is no other way to connect GitHub. **Each word of the way back has its
+  sentence under the tile** (`GITHUB_RETURNS`), and leaves the address after it is read;
   `connected` opens the panel of the last GitHub connector, not of the last row, because an
   installation again keeps its connector. **An installation from github.com comes back with no
   `state`**: the worker sends it to `/?github=unstarted`, and the front door forwards the word to

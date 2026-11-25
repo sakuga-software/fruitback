@@ -77,11 +77,14 @@ const screens = [
       page.getByRole('button', { name: WORDS[locale].disconnect, exact: true }).click(),
     askWithKeys: (page: Page) => page.keyboard.press('Enter'),
     second: (locale: Locale) => (locale === 'en' ? 'Disconnect Key of Ana' : 'Déconnecter Clé de Ana'),
-    // The panel of the source opens from its row. It unfolds in 220 ms and clips its body until then
-    // (FRU-563). The layout box of « Disconnect » is already there, so Playwright finds it visible and
-    // stable, but the press lands on the card under the clipped edge and asks nothing.
+    // The settings of the connector open in a dialog from its row (FRU-690). The dialog zooms in: a
+    // press before the end can land beside « Disconnect ».
     open: async (page: Page) => {
-      await page.locator('button[id^="source-row-"]').first().click();
+      await page
+        .locator('tbody tr[data-connector]')
+        .first()
+        .getByRole('button', { name: /^(Settings of|Réglages de) / })
+        .click();
       await unfolded(page);
     },
     deletes: '/console/workspaces/w1/connectors/c1',
