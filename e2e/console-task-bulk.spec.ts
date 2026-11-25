@@ -215,7 +215,7 @@ test('a right click on a selected task opens the menu of the whole selection', a
   await press(p, 'The logo');
 
   await row(p, 'The logo').getByText('The logo').click({ button: 'right' });
-  await expect(p.getByRole('menuitem', { name: 'Copy the link to the note' })).toHaveCount(0);
+  await expect(p.getByRole('menuitem', { name: 'Copy the link to its page' })).toHaveCount(0);
   await p.getByRole('menuitem', { name: 'Status' }).hover();
   await p.getByRole('menuitemradio', { name: 'In progress' }).click();
   expect(sent).toEqual([
@@ -225,7 +225,7 @@ test('a right click on a selected task opens the menu of the whole selection', a
 
   // A task out of the selection keeps the menu of its own.
   await row(p, 'The footer').getByText('The footer').click({ button: 'right' });
-  await expect(p.getByRole('menuitem', { name: 'Copy the link to the note' })).toBeVisible();
+  await expect(p.getByRole('menuitem', { name: 'Copy the link to its page' })).toBeVisible();
 });
 
 test('on the board, a card is selected by its box, and a refusal is said in the bar', async ({ page: p }) => {

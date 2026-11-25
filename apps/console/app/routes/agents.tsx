@@ -335,7 +335,7 @@ function KeyForm({
             },
             {
               value: 'write',
-              label: t('Read, reply and set a status'),
+              label: t('Read, reply and change the tasks'),
               detail: t('A reply says it is from an agent. A status is set only on a note that Fruitback keeps.'),
             },
           ]}
@@ -559,7 +559,7 @@ function KeyRow({ agentKey: key, now, onRevoked }: { agentKey: AgentKey; now: nu
           <div className="flex min-w-0 gap-[8px]">
             <dt className={label}>{t('Can')}</dt>
             <dd>
-              {key.rights === 'write' ? t('Read, reply and set a status') : t('Read the notes')}
+              {key.rights === 'write' ? t('Read, reply and change the tasks') : t('Read the notes')}
               <span className="block text-hint text-muted">
                 {key.verifiedOnly ? t('Notes of known people only') : t('Every note, a visitor’s too')}
               </span>
@@ -645,6 +645,7 @@ function Writes({ id, agentKey: key }: { id: string; agentKey: AgentKey }) {
   };
   const what = (write: AgentWrite) => {
     if (write.action === 'reply') return t('Replied to a note');
+    if (write.action === 'task') return t('Changed the fields of a task');
     const status = statusKey(write.status);
 
     return t('Set the status to « {status} »', {

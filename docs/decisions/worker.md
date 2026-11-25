@@ -5070,3 +5070,56 @@ Before FRU-660 an address took no reply, because nobody of the team would read i
 received the note once, and nothing after. It now receives `note.replied`, and the thread of the
 pin is read from the worker, so the reason is gone. Proposed on 2026-11-24 in FRU-660, in place of
 the rule of FRU-257 for an address; it waits for the explicit agreement of Mathieu.
+
+## The tools of a task in `/mcp` (FRU-659)
+
+### The rules, in short
+
+- **`list_notes` and `get_note` give the fields of a task in `task`**, as the list of the console
+  does: `list_notes` from the rows of the index it reads (`kept.task`), `get_note` from `taskOf` of
+  the index, the same read (`keptOf`) for one note. The place in its column is left out: only the
+  board reads it. A note in a tracker has no `task`.
+- **`list_notes` takes the filters of the console** (FRU-655) through `queryOf`: `assignee` (an id or
+  `none`), `priority` (one or `none`), `label`, `due` with `today`, and `archived`. A key is no
+  account, so `assignee: 'me'` is refused. With no `today`, the day of UTC: an agent has no browser.
+- **`task_choices` gives the ids**: the labels of the workspace (`labels`), and its members who are
+  not guests (`membersOf`, `MAX_TASK_MEMBERS`, as the menu of the console reads them), an id and a
+  name, or the address of a member with no name, as the menu shows it. A grant whose role does not `read-members` gets no member.
+- **`update_task` writes as the console and `set_note_status` do.** It reads every field with
+  `readTaskChange`, and the status with the reads of `set_note_status`, before any write. The fields
+  go through `setTaskFields`, with the member of the key (`grant.account`) and `manages: true`: a key that writes has a member with
+  `manage-sites` (FRU-461). Its transaction refuses a member or a label of elsewhere, and writes
+  nothing then. The status goes through `store.setStatus` and the index after; a status that fails
+  then answers « The fields were saved; the status was not. », so that the agent sends the status
+  again and not the fields. Each part is one row of
+  `agent_writes` (`task`, `status`), and one charge of the limit for the call.
+- **The tools of a task follow the module** (FRU-651): with `FRUITBACK_TASKS=off`, `task_choices`,
+  `set_note_status` and `update_task` are not listed and `tools/call` refuses them. `set_note_status`
+  could only answer `statuses-not-taken` there. `TOOLS_VERSION` is `2`.
+- **`create_task` comes with FRU-657**, the creation of a task by hand: a pull request of its own, on
+  top of that one.
+
+## A task written by hand (FRU-657)
+
+### The rules, in short
+
+- **`POST …/notes` writes a task**: `{ site, title, text?, status?, assignee?, priority?, dueOn?,
+  labels? }`, `201 { id, identifier, stage }`. `createTask` of the store of the accounts writes it in
+  one transaction: the row of `notes`, its status, its fields, its labels and its row of the index.
+  `readNewTask` of `task-fields.ts` reads the body; `/mcp` takes the same two (FRU-659).
+- **The site is required.** The index, the statuses, the rights of a guest and the removal of a site
+  are all by site: a task with no site needs them by workspace, which is a ticket of its own.
+- **The task is kept by the worker, whatever the destination of its site**: place `fruitback`,
+  reference `FB-<n>`. It never goes to a connector, so no `note.*` event of a REST address carries
+  it. The routes of a task kept by the worker (status, fields, archive, deletion) take it as they
+  take a note, with the rights of the status: its author is the account of the session.
+- **It has no page: `page_url` is `NO_PAGE`, the empty string**, in `notes` and in the index. No
+  canonical address is empty, so no read of a page asks for it, and no migration was needed.
+  **Every reader that goes from the index to a page checks it first**: a read of no page would ask a
+  tracker for every issue of its team. `readNote` of `app.ts`, `get_note`, `reply_to_note`,
+  `set_note_status` and the page reads of `list_notes` and `notes_as_text` do. The list of the
+  extension asks the index for the notes of a page only (`onPages`).
+- **`readTask` reads it**, from its row, by the index: `{ task }` on `GET …/notes/<note>` and on
+  `get_note`, where a note of a page is `{ note }`.
+- **A task put in To do at its creation starts the agent of its site** (`moved-to-todo`), as a move
+  of a person there does.

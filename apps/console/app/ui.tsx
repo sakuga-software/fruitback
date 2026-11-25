@@ -18,6 +18,7 @@ import {
   RadioGroup,
   Select,
   Switch,
+  TextArea,
   TextField,
   Tooltip,
 } from '@heroui/react';
@@ -802,6 +803,41 @@ export function Field({
       </div>
       {hint === undefined ? null : <Description className={FIELD_HINT}>{hint}</Description>}
       {error === undefined ? null : <FieldError className={FIELD_ERROR}>{error}</FieldError>}
+    </TextField>
+  );
+}
+
+/**
+ * A text of several lines (FRU-657), as `Field` with the text area of HeroUI: its label, its box, and
+ * the hint it is described by. The box grows with the person's text up to `rows` lines, then scrolls.
+ */
+export function TextBox({
+  label,
+  hint,
+  value,
+  onChange,
+  maxLength,
+  rows = 4,
+}: {
+  label: string;
+  hint?: string;
+  value: string;
+  onChange: (value: string) => void;
+  maxLength?: number;
+  rows?: number;
+}) {
+  return (
+    <TextField fullWidth className={FIELD} data-multiline="true">
+      <Label className={`${FIELD_LABEL} after:content-none`}>{label}</Label>
+      {/* The border and the type of a field, with no fixed height. */}
+      <TextArea
+        className={`box-border min-h-[calc(var(--spacing-control)*2)] px-[14px] py-[10px] border rounded-(--field-radius) [box-shadow:none] ${CONTROL_COLOURS} text-(length:--text-body) leading-(--text-body--line-height) resize-y`}
+        value={value}
+        rows={rows}
+        {...(maxLength === undefined ? {} : { maxLength })}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      {hint === undefined ? null : <Description className={FIELD_HINT}>{hint}</Description>}
     </TextField>
   );
 }

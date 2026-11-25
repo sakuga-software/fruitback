@@ -1,106 +1,74 @@
 /*
   The page of the extension (FRU-301), as the mock-up of 2026-10-20 draws it: a menu and a column of
   sections on the raised surface. The two go one under the other when the window is narrow. Every
-  colour is a token of popup/style.css, which this page loads first, with the kit.
+  colour is a token of src/theme.css, which popup/style.css brings to this page first, with the kit.
+
+  Tailwind writes the rules (@apply, FRU-679) on the theme, read with @reference, which writes
+  nothing: the variables are those of popup/style.css. The rules stay in no cascade layer, as the
+  kit's do; what no utility writes the same stays CSS (see the header of src/kit.css).
 */
+@reference '../../src/theme.css';
 body {
-  min-width: 0;
-  padding: 0;
-  background: var(--color-surface-raised);
+  @apply min-w-0 p-0 bg-surface-raised;
 }
 
 .page {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
+  @apply flex flex-wrap items-start;
   /* Wrapped, the content starts under the menu, not halfway down the window (FRU-591). */
   align-content: flex-start;
-  min-height: 100vh;
+  @apply min-h-[100vh];
 }
 
 /* The menu: the drop, the name and the version, the sections, a rule, the two guides. */
 .page-menu {
-  box-sizing: border-box;
-  display: flex;
-  flex: 1 1 220px;
-  flex-direction: column;
-  gap: 4px;
-  max-width: 260px;
-  padding: 24px 16px;
+  @apply box-border flex flex-[1_1_220px] flex-col gap-[4px] max-w-[260px] py-[24px] px-[16px];
 }
 
 .page-brand {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 10px 20px;
+  @apply flex items-center gap-[8px] pt-0 px-[10px] pb-[20px];
 }
 
 /* FRU-519: the line of a new release, under the version. */
 .page-menu > .kit-update {
-  margin-top: -16px;
-  padding: 0 10px 8px;
+  @apply mt-[-16px] pt-0 px-[10px] pb-[8px];
 }
 
 .page-brand .kit-mark {
-  width: 18px;
-  height: 18px;
+  @apply w-[18px] h-[18px];
 }
 
 .page-name {
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  @apply text-[15px] font-bold tracking-[-0.01em];
 }
 
 .page-version {
-  padding: 0 7px;
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-pill);
-  color: var(--color-muted);
-  font-size: 11px;
+  @apply py-0 px-[7px] border border-line rounded-pill text-muted text-[11px];
 }
 
 .page-entry {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 36px;
-  padding: 0 10px;
-  border-radius: var(--radius-field);
-  color: var(--color-ink-soft);
-  text-decoration: none;
+  @apply flex items-center justify-between h-[36px] py-0 px-[10px] rounded-field text-ink-soft no-underline;
 }
 
 .page-entry[aria-current='page'] {
-  background: var(--color-surface);
+  @apply bg-surface;
   box-shadow: 0 0 0 1px var(--color-line);
-  color: var(--color-text);
-  font-weight: 600;
+  @apply text-text font-semibold;
 }
 
 .page-count {
-  color: var(--color-muted);
-  font-weight: 500;
+  @apply text-muted font-medium;
 }
 
 .page-rule {
-  height: 1px;
-  margin: 14px 10px;
-  background: var(--color-line);
+  @apply h-[1px] my-[14px] mx-[10px] bg-line;
 }
 
 .page-guide {
-  display: flex;
-  align-items: center;
-  height: 32px;
-  padding: 0 10px;
-  color: var(--color-muted);
-  text-decoration: none;
+  @apply flex items-center h-[32px] py-0 px-[10px] text-muted no-underline;
 }
 
 .page-guide:hover {
-  color: var(--color-accent);
+  @apply text-accent;
 }
 
 /*
@@ -110,45 +78,33 @@ body {
 */
 @media (max-width: 779px) {
   .page-menu {
-    flex: 1 1 100%;
+    @apply flex-[1_1_100%];
     flex-flow: row wrap;
-    align-items: center;
+    @apply items-center;
     max-width: none;
-    padding: 16px 16px 12px;
-    border-bottom: 1px solid var(--color-line);
+    @apply pt-[16px] px-[16px] pb-[12px] border-b border-b-line;
   }
 
   .page-brand {
-    box-sizing: border-box;
-    flex: 1 0 100%;
-    padding: 0 10px 8px;
+    @apply box-border flex-[1_0_100%] pt-0 px-[10px] pb-[8px];
   }
 
   .page-menu > .kit-update {
-    box-sizing: border-box;
-    flex: 1 0 100%;
-    margin-top: -4px;
+    @apply box-border flex-[1_0_100%] mt-[-4px];
   }
 
   .page-entry {
-    gap: 8px;
+    @apply gap-[8px];
   }
 
   .page-rule {
-    display: none;
+    @apply hidden;
   }
 }
 
 /* The column of the sections. */
 .page-content {
-  box-sizing: border-box;
-  display: flex;
-  flex: 999 1 560px;
-  flex-direction: column;
-  gap: 40px;
-  min-width: 0;
-  max-width: 1180px;
-  padding: 28px 32px 64px;
+  @apply box-border flex flex-[999_1_560px] flex-col gap-[40px] min-w-0 max-w-[1180px] pt-[28px] px-[32px] pb-[64px];
 }
 
 /*
@@ -156,53 +112,37 @@ body {
   what somebody typed in them stays, and only the section of the page is shown.
 */
 .page-content > [hidden] {
-  display: none;
+  @apply hidden;
 }
 
 .page-section {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+  @apply flex flex-col gap-[16px];
 }
 
 .page-section h2 {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  @apply m-0 text-[15px] font-bold tracking-[-0.01em];
 }
 
 .page-section h3 {
-  margin: 0;
-  font-size: 14px;
+  @apply m-0 text-[14px];
 }
 
 .page-section p {
-  margin: 0;
+  @apply m-0;
 }
 
 /* « Sites »: the title and what a rule is, then the filter and « Add a site ». */
 .sites-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 16px;
+  @apply flex flex-wrap items-end justify-between gap-[16px];
 }
 
 .sites-words {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  @apply flex flex-col gap-[4px];
 }
 
 .sites-words h1,
 .page-section > h1 {
-  margin: 0;
-  font-size: 24px;
-  line-height: 1.2;
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  @apply m-0 text-[24px] leading-[1.2] font-bold tracking-[-0.02em];
 }
 
 /* The title of the page has no drop before it: the menu carries the mark. */
@@ -212,106 +152,74 @@ body {
 }
 
 .sites-intro {
-  max-width: 560px;
-  color: var(--color-muted);
+  @apply max-w-[560px] text-muted;
 }
 
 .sites-tools {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  @apply flex flex-wrap gap-[8px];
 }
 
 .sites-filter {
-  margin: 0;
+  @apply m-0;
 }
 
 .sites-filter input {
-  box-sizing: border-box;
-  width: 220px;
-  height: 36px;
-  margin: 0;
-  padding: 0 10px;
-  border: 1px solid var(--color-line-strong);
-  border-radius: var(--radius-field);
-  background: var(--color-surface);
-  color: var(--color-text);
+  @apply box-border w-[220px] h-[36px] m-0 py-0 px-[10px] border border-line-strong rounded-field bg-surface text-text;
   font: inherit;
 }
 
 button.page-primary {
-  height: 36px;
-  padding: 0 14px;
+  @apply h-[36px] py-0 px-[14px];
   border: 0;
-  border-radius: var(--radius-field);
-  background: var(--color-accent);
-  color: var(--color-on-accent);
-  font-weight: 600;
+  @apply rounded-field bg-accent text-on-accent font-semibold;
 }
 
 button.page-primary:hover {
-  background: var(--color-accent-strong);
+  @apply bg-accent-strong;
 }
 
 /* The table and the panel side by side, the panel under the table when the window is narrow. */
 .sites-body {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 16px;
+  @apply flex flex-wrap items-start gap-[16px];
 }
 
 .sites-table-slot {
-  flex: 999 1 560px;
-  min-width: 0;
+  @apply flex-[999_1_560px] min-w-0;
 }
 
 .sites-panel-slot {
-  flex: 1 1 300px;
-  min-width: 0;
-  max-width: 380px;
+  @apply flex-[1_1_300px] min-w-0 max-w-[380px];
 }
 
 .sites-panel-slot:empty {
-  display: none;
+  @apply hidden;
 }
 
 .sites-table {
-  overflow-x: auto;
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-card);
-  background: var(--color-surface);
+  @apply overflow-x-auto border border-line rounded-card bg-surface;
 }
 
 .sites-table table {
-  width: 100%;
-  min-width: 640px;
+  @apply w-full min-w-[640px];
   border-collapse: collapse;
 }
 
 .sites-table th {
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--color-line);
-  color: var(--color-muted);
-  font-size: 12px;
-  font-weight: 500;
-  text-align: left;
+  @apply py-[10px] px-[12px] border-b border-b-line text-muted text-[12px] font-medium text-left;
 }
 
 .sites-table td {
-  padding: 12px;
-  border-bottom: 1px solid var(--color-line-row);
+  @apply p-[12px] border-b border-b-line-row;
 }
 
 .sites-table th:first-child,
 .sites-table td:first-child {
-  padding-left: 16px;
+  @apply pl-[16px];
 }
 
 .sites-table th:last-child,
 .sites-table td:last-child {
-  padding-right: 16px;
-  text-align: right;
+  @apply pr-[16px] text-right;
 }
 
 .sites-table tr:last-child td {
@@ -319,7 +227,7 @@ button.page-primary:hover {
 }
 
 .rule-row[aria-selected='true'] td {
-  background: var(--color-surface-sunken);
+  @apply bg-surface-sunken;
 }
 
 .rule-row[aria-selected='true'] td:first-child {
@@ -329,196 +237,138 @@ button.page-primary:hover {
 /* The site of a row is the button that opens it. */
 button.rule-open {
   all: unset;
-  display: flex;
-  flex-direction: column;
-  cursor: pointer;
+  @apply flex flex-col cursor-pointer;
 }
 
 button.rule-open:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
+  @apply outline-2 outline-accent;
+  @apply outline-offset-[2px];
 }
 
 .rule-pattern {
-  font-weight: 600;
-  overflow-wrap: anywhere;
+  @apply font-semibold wrap-anywhere;
 }
 
 .rule-scope {
-  color: var(--color-muted);
-  font-size: 12px;
+  @apply text-muted text-[12px];
 }
 
 .mode-pill {
-  display: inline-block;
-  padding: 1px 8px;
-  border-radius: var(--radius-pill);
-  background: var(--color-surface-sunken);
-  font-size: 12px;
-  font-weight: 600;
+  @apply inline-block py-[1px] px-[8px] rounded-pill bg-surface-sunken text-[12px] font-semibold;
 }
 
 .rule-worker {
-  color: var(--color-ink-soft);
+  @apply text-ink-soft;
 }
 
 .access-granted {
-  color: var(--color-success);
-  font-weight: 600;
+  @apply text-success font-semibold;
 }
 
 .access-none {
-  color: var(--color-accent);
-  font-weight: 600;
+  @apply text-accent font-semibold;
 }
 
 .access-off {
-  color: var(--color-muted);
+  @apply text-muted;
 }
 
 /* The panel of a rule. */
 .rule-panel {
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-card);
-  background: var(--color-surface);
+  @apply flex flex-col border border-line rounded-card bg-surface;
 }
 
 .panel-top {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 16px 16px 12px;
-  border-bottom: 1px solid var(--color-line);
+  @apply flex flex-col gap-[4px] pt-[16px] px-[16px] pb-[12px] border-b border-b-line;
 }
 
 .panel-pattern {
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  @apply text-[15px] font-bold tracking-[-0.01em];
   word-break: break-all;
 }
 
 .panel-label,
 .panel-scope,
 .panel-hint {
-  color: var(--color-muted);
-  font-size: 12px;
+  @apply text-muted text-[12px];
 }
 
 .panel-body {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding: 16px;
+  @apply flex flex-col gap-[14px] p-[16px];
 }
 
 .panel-body h2 {
-  margin: 0;
-  font-size: 15px;
+  @apply m-0 text-[15px];
 }
 
 .panel-field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin: 0;
+  @apply flex flex-col gap-[4px] m-0;
 }
 
 /* A field the mode does not use is hidden, whatever its display. */
 .panel-field[hidden] {
-  display: none;
+  @apply hidden;
 }
 
 .panel-field input,
 .add-panel input[type='text'],
 .add-panel select {
-  box-sizing: border-box;
-  height: 36px;
-  margin: 0;
-  padding: 0 10px;
-  border: 1px solid var(--color-line-strong);
-  border-radius: var(--radius-field);
-  background: var(--color-surface);
-  color: var(--color-text);
+  @apply box-border h-[36px] m-0 py-0 px-[10px] border border-line-strong rounded-field bg-surface text-text;
   font: inherit;
 }
 
 .panel-state {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 10px 12px;
-  border-radius: var(--radius-field);
-  background: var(--color-surface-sunken);
+  @apply flex flex-col gap-[6px] py-[10px] px-[12px] rounded-field bg-surface-sunken;
 }
 
 .panel-state[data-state='no-access'] {
-  background: var(--color-alert-surface);
+  @apply bg-alert-surface;
 }
 
 .panel-state-title {
-  font-weight: 600;
+  @apply font-semibold;
 }
 
 /* The title of a problem, as in an alert of the kit: the red accent is 4.30:1 on its tint (FRU-372). */
 .panel-state[data-state='no-access'] .panel-state-title {
-  color: var(--color-alert-text);
+  @apply text-alert-text;
 }
 
 .panel-state-text {
-  color: var(--color-alert-body);
-  font-size: 12px;
+  @apply text-alert-body text-[12px];
 }
 
 .panel-state button.page-primary {
-  align-self: flex-start;
-  height: 32px;
-  padding: 0 12px;
+  @apply self-start h-[32px] py-0 px-[12px];
 }
 
 .panel-foot {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 12px 16px 16px;
-  border-top: 1px solid var(--color-line);
+  @apply flex justify-between gap-[8px] pt-[12px] px-[16px] pb-[16px] border-t border-t-line;
 }
 
 button.panel-remove {
-  height: 34px;
-  padding: 0;
+  @apply h-[34px] p-0;
   border: 0;
-  border-radius: 0;
-  background: transparent;
-  color: var(--color-muted);
-  font-weight: 600;
+  @apply rounded-none bg-transparent text-muted font-semibold;
 }
 
 button.panel-remove:hover {
-  color: var(--color-accent);
+  @apply text-accent;
 }
 
 button.panel-save {
-  height: 34px;
-  padding: 0 14px;
+  @apply h-[34px] py-0 px-[14px];
   border: 0;
-  border-radius: var(--radius-field);
+  @apply rounded-field;
   /* The ink of the mock-up: the text, with the surface on it, in both schemes. */
-  background: var(--color-text);
-  color: var(--color-surface);
-  font-weight: 600;
+  @apply bg-text text-surface font-semibold;
 }
 
 /* The one thing to do about a problem, beside the words that state it (FRU-90). */
 button.remedy {
-  margin-inline-start: 4px;
-  padding: 2px 10px;
-  background: transparent;
-  color: inherit;
+  @apply ms-[4px] py-[2px] px-[10px] bg-transparent text-inherit;
   box-shadow: inset 0 0 0 1px currentColor;
-  font-weight: 600;
+  @apply font-semibold;
 }
 
 /*
@@ -527,299 +377,199 @@ button.remedy {
   card shows the focus ring of the input, and a dashed line that turns accent when a file is over it.
 */
 .share-intro {
-  max-width: 620px;
-  color: var(--color-muted);
+  @apply max-w-[620px] text-muted;
 }
 
 .share-cards {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
+  @apply flex flex-wrap gap-[12px];
 }
 
 .share-card {
-  box-sizing: border-box;
-  display: flex;
-  flex: 1 1 280px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin: 0;
-  padding: 16px;
-  border-radius: var(--radius-card);
+  @apply box-border flex flex-[1_1_280px] items-center justify-between gap-[12px] m-0 p-[16px] rounded-card;
 }
 
 .share-export {
-  border: 1px solid var(--color-line);
-  background: var(--color-surface);
+  @apply border border-line bg-surface;
 }
 
 .share-import {
-  position: relative;
-  border: 1.5px dashed var(--color-line-soft);
-  cursor: pointer;
+  @apply relative border-[1.5px] border-dashed border-line-soft cursor-pointer;
 }
 
 .share-import.dragging {
-  border-color: var(--color-accent);
-  background: var(--color-surface);
+  @apply border-accent bg-surface;
 }
 
 .share-import:has(.share-input:focus-visible) {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
+  @apply outline-2 outline-accent;
+  @apply outline-offset-[2px];
 }
 
 .share-words {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
+  @apply flex flex-col min-w-0;
 }
 
 .share-title {
-  font-weight: 600;
+  @apply font-semibold;
 }
 
 .share-hint {
-  color: var(--color-muted);
-  font-size: 12px;
-  overflow-wrap: anywhere;
+  @apply text-muted text-[12px] wrap-anywhere;
 }
 
 .share-button {
-  box-sizing: border-box;
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  height: 34px;
-  padding: 0 12px;
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-field);
-  background: var(--color-surface);
-  color: var(--color-text);
+  @apply box-border inline-flex flex-none items-center h-[34px] py-0 px-[12px] border border-line rounded-field bg-surface text-text;
   font: inherit;
-  font-weight: 600;
+  @apply font-semibold;
 }
 
 button.share-button:disabled {
-  color: var(--color-muted);
+  @apply text-muted;
 }
 
 .share-choose {
-  border-color: transparent;
-  background: var(--color-surface-sunken);
+  @apply border-transparent bg-surface-sunken;
 }
 
 /* Out of sight, still in the tab order and read by a screen reader: the picker opens from it. */
 .share-input {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
+  @apply absolute w-[1px] h-[1px] overflow-hidden;
   clip-path: inset(50%);
-  white-space: nowrap;
+  @apply whitespace-nowrap;
 }
 
 .share-result:empty {
-  display: none;
+  @apply hidden;
 }
 
 /* « Servers and sessions » (FRU-302): one card for each worker, in a grid. */
 .workers-intro {
-  max-width: 620px;
-  color: var(--color-muted);
+  @apply max-w-[620px] text-muted;
 }
 
 .workers-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 12px;
+  @apply grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-[12px];
 }
 
 .worker-card {
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 14px 16px;
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-card);
-  background: var(--color-surface);
+  @apply box-border flex flex-col gap-[10px] py-[14px] px-[16px] border border-line rounded-card bg-surface;
 }
 
 .worker-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  @apply flex items-center gap-[8px];
 }
 
 .worker-dot {
-  flex: none;
-  width: 8px;
-  height: 8px;
-  border-radius: var(--radius-pill);
-  background: var(--color-line-control);
+  @apply flex-none w-[8px] h-[8px] rounded-pill bg-line-control;
 }
 
 .worker-dot[data-on='true'] {
-  background: var(--color-success-line);
+  @apply bg-success-line;
 }
 
 .worker-host {
-  flex: 1;
-  min-width: 0;
-  font-weight: 600;
-  overflow-wrap: anywhere;
+  @apply flex-1 min-w-0 font-semibold wrap-anywhere;
 }
 
 .worker-sites,
 .worker-hint {
-  color: var(--color-muted);
-  font-size: 12px;
+  @apply text-muted text-[12px];
 }
 
 .worker-card p {
-  margin: 0;
+  @apply m-0;
 }
 
 .worker-who strong {
-  font-weight: 650;
+  @apply font-[650];
 }
 
 button.worker-button {
-  align-self: flex-start;
-  height: 32px;
-  padding: 0 12px;
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-field);
-  background: var(--color-surface);
-  color: var(--color-text);
+  @apply self-start h-[32px] py-0 px-[12px] border border-line rounded-field bg-surface text-text;
   font: inherit;
-  font-weight: 600;
+  @apply font-semibold;
 }
 
 .worker-pair {
-  display: flex;
-  gap: 8px;
+  @apply flex gap-[8px];
 }
 
 .worker-code {
-  box-sizing: border-box;
-  flex: 1;
-  min-width: 0;
-  height: 32px;
-  margin: 0;
-  padding: 0 10px;
-  border: 1px solid var(--color-line-strong);
-  border-radius: var(--radius-field);
-  background: var(--color-surface);
-  color: var(--color-text);
+  @apply box-border flex-1 min-w-0 h-[32px] m-0 py-0 px-[10px] border border-line-strong rounded-field bg-surface text-text;
   font: inherit;
-  letter-spacing: 0.04em;
+  @apply tracking-[0.04em];
 }
 
 button.worker-pair-button {
-  height: 32px;
-  padding: 0 12px;
+  @apply h-[32px] py-0 px-[12px];
   border: 0;
-  border-radius: var(--radius-field);
-  background: var(--color-accent);
-  color: var(--color-on-accent);
+  @apply rounded-field bg-accent text-on-accent;
   font: inherit;
-  font-weight: 600;
+  @apply font-semibold;
 }
 
 button.worker-pair-button:disabled {
-  opacity: 0.6;
+  @apply opacity-60;
 }
 
 .worker-said:empty {
-  display: none;
+  @apply hidden;
 }
 
 .worker-said {
-  color: var(--color-accent);
-  font-size: 13px;
+  @apply text-accent text-[13px];
 }
 
 /* « Preferences » (FRU-302): one card, a row for each choice. */
 .pref-card {
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-card);
-  background: var(--color-surface);
+  @apply border border-line rounded-card bg-surface;
 }
 
 .pref-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 14px 16px;
+  @apply flex flex-wrap items-center justify-between gap-[12px] py-[14px] px-[16px];
 }
 
 .pref-row + .pref-row {
-  border-top: 1px solid var(--color-line-row);
+  @apply border-t border-t-line-row;
 }
 
 .pref-words {
-  display: flex;
-  flex: 1 1 260px;
-  flex-direction: column;
-  min-width: 0;
+  @apply flex flex-[1_1_260px] flex-col min-w-0;
 }
 
 .pref-title {
-  font-weight: 600;
+  @apply font-semibold;
 }
 
 .pref-help {
-  color: var(--color-muted);
-  font-size: 12px;
+  @apply text-muted text-[12px];
 }
 
 .pref-name,
 .pref-select {
-  box-sizing: border-box;
-  width: 200px;
-  height: 34px;
-  margin: 0;
-  padding: 0 10px;
-  border: 1px solid var(--color-line-strong);
-  border-radius: var(--radius-field);
-  background: var(--color-surface);
-  color: var(--color-text);
+  @apply box-border w-[200px] h-[34px] m-0 py-0 px-[10px] border border-line-strong rounded-field bg-surface text-text;
   font: inherit;
 }
 
 .pref-shortcut {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+  @apply flex items-center gap-[10px];
 }
 
 button.pref-link {
-  min-height: 24px;
-  padding: 0;
+  @apply min-h-[24px] p-0;
   border: 0;
-  background: transparent;
-  color: var(--color-accent);
+  @apply bg-transparent text-accent;
   font: inherit;
-  font-weight: 600;
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  @apply font-semibold underline underline-offset-[3px];
 }
 
 /* A preference whose write failed: the control is back, and the card says so. */
 .pref-problem {
-  margin: 0;
-  padding: 10px 16px;
-  color: var(--color-alert-text);
-  font-size: 13px;
+  @apply m-0 py-[10px] px-[16px] text-alert-text text-[13px];
 }
 
 .pref-problem:empty {
-  display: none;
+  @apply hidden;
 }
 
 /*
@@ -828,116 +578,85 @@ button.pref-link {
   writes, as the popup and the side panel do: no colour chosen is the accent, in both schemes.
 */
 .appearance-intro {
-  max-width: 620px;
-  color: var(--color-muted);
+  @apply max-w-[620px] text-muted;
 }
 
 .appearance-presets {
-  margin: 0;
-  padding: 14px 16px;
+  @apply m-0 py-[14px] px-[16px];
   border: 0;
 }
 
 .appearance-presets legend {
   float: left;
-  width: 100%;
-  margin-bottom: 10px;
-  padding: 0;
+  @apply w-full mb-[10px] p-0;
 }
 
 .appearance-swatches {
-  display: flex;
+  @apply flex;
   clear: both;
-  flex-wrap: wrap;
-  gap: 8px;
+  @apply flex-wrap gap-[8px];
 }
 
 .appearance-swatch {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 44px;
-  padding: 0 14px 0 10px;
-  border: 1px solid var(--color-line-control);
-  border-radius: var(--radius-pill);
-  cursor: pointer;
+  @apply flex items-center gap-[8px] min-h-[44px] pt-0 pr-[14px] pb-0 pl-[10px] border border-line-control rounded-pill cursor-pointer;
 }
 
 .appearance-swatch:has(input:checked) {
-  border-color: var(--color-text);
+  @apply border-text;
   box-shadow: 0 0 0 1px var(--color-text);
-  font-weight: 600;
+  @apply font-semibold;
 }
 
 .appearance-swatch input {
-  margin: 0;
-  accent-color: var(--color-text);
+  @apply m-0;
+  @apply accent-text;
 }
 
 .appearance-chip {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
+  @apply w-[18px] h-[18px] rounded-[50%];
   box-shadow: inset 0 0 0 1px var(--color-line-strong);
 }
 
 .appearance-own {
-  border-top: 1px solid var(--color-line-row);
+  @apply border-t border-t-line-row;
 }
 
 .appearance-said {
-  flex: 1 0 100%;
-  margin: 0;
-  color: var(--color-muted);
-  font-size: 13px;
+  @apply flex-[1_0_100%] m-0 text-muted text-[13px];
 }
 
 .appearance-said:empty {
-  display: none;
+  @apply hidden;
 }
 
 .appearance-said[data-refused='true'] {
-  color: var(--color-alert-text);
+  @apply text-alert-text;
 }
 
 .appearance-foot {
-  border-top: 1px solid var(--color-line-row);
+  @apply border-t border-t-line-row;
 }
 
 .appearance-preview {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
+  @apply flex flex-wrap items-center gap-[12px];
 }
 
 .appearance-leave,
 .appearance-send {
-  display: inline-flex;
-  align-items: center;
+  @apply inline-flex items-center;
   background: var(--action, var(--color-accent));
   color: var(--on-action, var(--color-on-accent));
-  font-weight: 650;
-  white-space: nowrap;
+  @apply font-[650] whitespace-nowrap;
 }
 
 /* « Leave a note » of the popup, at its height. */
 .appearance-leave {
-  gap: 10px;
-  height: 56px;
-  padding: 0 20px;
-  border-radius: var(--radius-card);
-  font-size: 16px;
+  @apply gap-[10px] h-[56px] py-0 px-[20px] rounded-card text-[16px];
 }
 
 /* « Send » of the composer: a pill of 13 px. */
 .appearance-send {
-  gap: 6px;
-  height: 30px;
-  padding: 0 14px 0 12px;
-  border-radius: var(--radius-pill);
-  font-size: 13px;
-  font-weight: 600;
+  @apply gap-[6px] h-[30px] pt-0 pr-[14px] pb-0 pl-[12px] rounded-pill text-[13px] font-semibold;
 }
 
 .appearance-preview .appearance-mark {
@@ -945,11 +664,9 @@ button.pref-link {
 }
 
 .appearance-leave .appearance-mark {
-  width: 18px;
-  height: 18px;
+  @apply w-[18px] h-[18px];
 }
 
 .appearance-send .appearance-mark {
-  width: 12px;
-  height: 12px;
+  @apply w-[12px] h-[12px];
 }

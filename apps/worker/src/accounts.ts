@@ -1,10 +1,10 @@
 import { isOneOf } from './one-of.ts';
 import { createHash } from 'node:crypto';
 import type { SiteStatus } from './site-statuses.ts';
-import { NOTE_STAGES, type NoteStage } from '@fruitback/shared';
+import { NOTE_STAGES, type NoteStage, type TaskIssue } from '@fruitback/shared';
 import type { ClientMap } from './clients.ts';
 import { PLUGIN_KINDS } from './trackers/kinds.ts';
-import type { TaskChange, TaskLabel, TasksChange } from './task-fields.ts';
+import type { NewTask, TaskChange, TaskLabel, TasksChange } from './task-fields.ts';
 
 /**
  * People, teams and the sites a team reviews (FRU-96).
@@ -196,7 +196,7 @@ export const MAX_OAUTH_CLIENTS = 1000;
 
 /**
  * An agent key of a workspace (FRU-461), as the store reads it: never the key, which the worker does
- * not keep. `write`: the key may reply and set a status, beside the reads. `agent-keys.ts` says what
+ * not keep. `write`: the key may reply, set a status and change a task, beside the reads. `agent-keys.ts` says what
  * a key reaches.
  */
 export type AgentKey = {
@@ -256,7 +256,8 @@ export type AgentWrite = {
   keyName: string;
   site: string;
   note: string;
-  action: 'reply' | 'status';
+  /** FRU-659: `task`, the fields of a task (`update_task`). */
+  action: 'reply' | 'status' | 'task';
   status?: string;
   at: number;
 };
@@ -869,6 +870,38 @@ export type AccountStore = {
     note: string,
     who: { account: string; manages: boolean },
   ): Promise<{ deleted: true; page: string } | { deleted: false; reason: 'not-found' | 'not-kept' | 'not-allowed' }>;
+  /**
+   * Writes a task by hand (FRU-657): a `fruitback.task` with no page and no pin, kept by the worker
+   * in the site `site`, whatever the destination of the site. In one transaction, with the site held:
+   * the row of `notes`, its status, its fields, its labels and its row of the index, which names
+   * `who.account` as its author. The rights are the route's: whoever reads the notes of the site.
+   *
+   * - `not-found`: no such site in this workspace.
+   * - `unknown-status`: no such status for this site; `status-hidden`: it is hidden.
+   * - `not-member`: the assignee is not a member of the workspace.
+   * - `unknown-label`: a label is not one of the workspace.
+   *
+   * `note`: the id of the task in its site, which `noteIdOf(site, note)` makes the id of the console
+   * and of `/mcp`. `identifier`: `FB-<n>`. `stage`: the stage of its status.
+   */
+  createTask(
+    workspace: string,
+    site: string,
+    task: NewTask,
+    who: { account: string },
+  ): Promise<
+    | { created: true; note: string; identifier: string; stage: NoteStage }
+    | {
+        created: false;
+        reason: 'not-found' | 'unknown-status' | 'status-hidden' | 'not-member' | 'unknown-label';
+      }
+  >;
+  /**
+   * One task written by hand (FRU-657), as a read gives it, with its newest replies. `undefined`: no
+   * such task in this site of this workspace, or the note there is a note of a page, which its page
+   * reads. `who`: the reader, whose own task says `mine`.
+   */
+  readTask(workspace: string, site: string, note: string, who?: { account: string }): Promise<TaskIssue | undefined>;
   /**
    * Changes several tasks the worker keeps at once (FRU-656), in one transaction: every task is
    * checked as `setNoteStatus` and `setTaskFields` check one, with the same rights, and one refusal

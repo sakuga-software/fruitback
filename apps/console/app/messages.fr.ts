@@ -1002,7 +1002,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'No due day': 'Aucune échéance',
   Labels: 'Labels',
   'Actions of this note': 'Actions de cette note',
-  'Copy the link to the note': 'Copier le lien de la note',
   'Only the person who left this note, or an owner or an admin, changes it.':
     'Seule la personne qui a laissé cette note, ou un propriétaire ou un admin, peut la modifier.',
   'This label was removed since the list was read. Reload the page.':
@@ -1571,7 +1570,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Read the notes': 'Lire les notes',
   'Their text, page, element, component, file and line, picture, replies and status.':
     'Leur texte, page, élément, composant, fichier et ligne, capture, réponses et statut.',
-  'Read, reply and set a status': 'Lire, répondre et changer un statut',
+  'Read, reply and change the tasks': 'Lire, répondre et changer les tâches',
   'A reply says it is from an agent. A status is set only on a note that Fruitback keeps.':
     'Une réponse dit qu’elle vient d’un agent. Un statut ne change que sur une note que garde Fruitback.',
   'Expires after (days)': 'Expire après (jours)',
@@ -1621,6 +1620,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'An agent that uses this key is refused from its next request, and the key never works again. What it wrote stays in the threads of the notes.':
     'Un agent qui utilise cette clé est refusé dès sa prochaine requête, et la clé ne fonctionne plus jamais. Ce qu’elle a écrit reste dans les fils des notes.',
   'Replied to a note': 'A répondu à une note',
+  'Changed the fields of a task': 'A changé les champs d’une tâche',
   'Set the status to « {status} »': 'A passé le statut à « {status} »',
   'Writes of {name}': 'Écritures de {name}',
   'What this key wrote': 'Ce que cette clé a écrit',
@@ -1862,6 +1862,58 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Its sites keep their notes in the workspace again. The issues already in {source} stay there.':
     'Ses sites gardent de nouveau leurs notes dans l’espace de travail. Les tickets déjà dans {source} y restent.',
   'This console does not know this connector yet.': 'Cette console ne connaît pas encore ce connecteur.',
+
+  // FRU-657: a task written by hand.
+  'New task': 'Nouvelle tâche',
+  'New task in {column}': 'Nouvelle tâche dans {column}',
+  'This server keeps no task: write the task in the tracker of the site.':
+    'Ce serveur ne garde aucune tâche : écrivez la tâche dans l’outil de suivi du site.',
+  'This site is no longer here. Reload the page.': 'Ce site n’est plus là. Rechargez la page.',
+  'This status was removed since the list was read. Create the task again: it takes the first status of its site.':
+    'Ce statut a été retiré depuis la lecture de la liste. Créez la tâche de nouveau : elle prend le premier statut de son site.',
+  'This status is hidden on its site. Create the task again: it takes the first status of its site.':
+    'Ce statut est masqué sur son site. Créez la tâche de nouveau : elle prend le premier statut de son site.',
+  'The task was not created. Try again.': 'La tâche n’a pas été créée. Réessayez.',
+  Title: 'Titre',
+  'Give the task a title.': 'Donnez un titre à la tâche.',
+  'Optional. What to do, for a person or an agent.': 'Facultatif. Ce qu’il faut faire, pour une personne ou un agent.',
+  'A task has no page and no pin. It is kept in Fruitback.':
+    'Une tâche n’a ni page ni repère. Elle est gardée dans Fruitback.',
+  'Create the task': 'Créer la tâche',
+  'No text.': 'Aucun texte.',
+  'Written by hand: no page and no pin.': 'Écrite à la main : ni page ni repère.',
+
+  // FRU-658: copy a task.
+  'Copy the link to its page': 'Copier le lien vers sa page',
+  'Copy the ID': 'Copier l’identifiant',
+  'Copy as Markdown': 'Copier en Markdown',
+  'Link copied.': 'Lien copié.',
+  '{count} links copied.': '{count} liens copiés.',
+  'No ID to copy: these notes have no reference here.':
+    'Aucun identifiant à copier : ces notes n’ont pas de référence ici.',
+  '{id} copied.': '{id} copié.',
+  '{count} IDs copied.': '{count} identifiants copiés.',
+  'Copied as Markdown.': 'Copié en Markdown.',
+  '{count} notes copied as Markdown.': '{count} notes copiées en Markdown.',
+  '{copied} of {count} notes copied as Markdown: the others did not load.':
+    '{copied} notes sur {count} copiées en Markdown : les autres ne se sont pas chargées.',
+  'The browser did not let Fruitback copy. Allow the clipboard for this page, then try again.':
+    'Le navigateur n’a pas laissé Fruitback copier. Autorisez le presse-papiers pour cette page, puis réessayez.',
+  'Notes on {url}': 'Notes sur {url}',
+  'No note on this page.': 'Aucune note sur cette page.',
+  'Element: {element}': 'Élément : {element}',
+  'Component: {component}': 'Composant : {component}',
+  'By: {name}': 'Par : {name}',
+  'Written: {date}': 'Écrite le : {date}',
+  'Position: approximate, found by its place on the page': 'Position : approximative, trouvée par sa place sur la page',
+  'Position: element not found on this page': 'Position : élément introuvable sur cette page',
+  'Picture: {url}': 'Capture : {url}',
+  'No note.': 'Aucune note.',
+  Team: 'Équipe',
+  'Reply from {author}': 'Réponse de {author}',
+  'Tasks with no page': 'Tâches sans page',
+  'The notes did not load, and nothing was copied. Try again.':
+    'Les notes ne se sont pas chargées, et rien n’a été copié. Réessayez.',
 
   ...JIRA,
   ...GITLAB,
