@@ -2,18 +2,19 @@ import AxeBuilder from '@axe-core/playwright';
 import { type Locator, type Page, type Route, expect, test } from '@playwright/test';
 import {
   ACME,
+  BAR_SHIFT,
+  NO_PASSWORD_MANAGER,
   type Role,
   box,
   contrast,
-  NO_PASSWORD_MANAGER,
   expectBox,
   fillMarks,
+  fulfillSites,
   painted,
   rgb,
   sideScroll,
   stubWorker,
   styles,
-  fulfillSites,
 } from './console-workspace.ts';
 
 /**
@@ -275,7 +276,7 @@ test('the list is the table of the mockup, with what the worker of today says of
   await expect(page.locator('main h1')).toHaveText('Members');
   await expect(page.getByText('Who sees and leaves notes, and who changes the workspace.')).toBeVisible();
   expect.soft(await styles(page.locator('main header'), ['margin-bottom'])).toEqual({ 'margin-bottom': '24px' });
-  expectBox(await box(page.locator('main h1')), { x: 296.5, y: 40, height: 25 }, 2, 'the title');
+  expectBox(await box(page.locator('main h1')), { x: 296.5 + BAR_SHIFT, y: 40, height: 25 }, 2, 'the title');
 
   // Four columns, each a column header. « Last seen » waits for a decision: the day somebody joined.
   const headers = table(page).locator('thead th');
@@ -334,7 +335,7 @@ test('the list is the table of the mockup, with what the worker of today says of
   // The screen is as wide as its column (FRU-398): 71.5 px wider than the 1120 px of the mockup.
   expectBox(
     await box(table(page)),
-    { x: 296.5, y: 194 + LISTS - FORM, width: 1095.5, height: MEMBERS_FRAME },
+    { x: 296.5 + BAR_SHIFT, y: 194 + LISTS - FORM, width: 1095.5 - BAR_SHIFT, height: MEMBERS_FRAME },
     2,
     'the frame of the table',
   );
@@ -342,7 +343,7 @@ test('the list is the table of the mockup, with what the worker of today says of
   // A row of the mockup is 64 px: two lines of 14 px and 13 px at 1.45, and 12 px above and under.
   expectBox(
     await box(row(page, 'Tom')),
-    { x: 297.5, y: 296.3 + LISTS - FORM, width: 1093.5, height: 60 },
+    { x: 297.5 + BAR_SHIFT, y: 296.3 + LISTS - FORM, width: 1093.5 - BAR_SHIFT, height: 60 },
     2,
     'the second row',
   );
@@ -362,7 +363,7 @@ test('the list is the table of the mockup, with what the worker of today says of
   expect.soft(await painted(chip, 'color')).toEqual(rgb(WHITE));
   expectBox(
     await box(chip),
-    { x: 317.5, y: 310.3 + LISTS - FORM, width: 32, height: 32 },
+    { x: 317.5 + BAR_SHIFT, y: 310.3 + LISTS - FORM, width: 32, height: 32 },
     2,
     'the chip of the second row',
   );
@@ -370,7 +371,12 @@ test('the list is the table of the mockup, with what the worker of today says of
   const name = tom.nth(0).getByText('Tom', { exact: true });
   expect.soft(await styles(name, ['font-weight', 'font-size'])).toEqual({ 'font-weight': '600', 'font-size': '13px' });
   expect.soft(await painted(name, 'color')).toEqual(rgb(INK));
-  expectBox(await box(name), { x: 361.5, y: 308.8 + LISTS - FORM, height: 18.2 }, 2, 'the name of the second row');
+  expectBox(
+    await box(name),
+    { x: 361.5 + BAR_SHIFT, y: 308.8 + LISTS - FORM, height: 18.2 },
+    2,
+    'the name of the second row',
+  );
   const address = tom.nth(0).getByText('tom@acme.dev', { exact: true });
   expect.soft(await styles(address, ['font-size', 'line-height'])).toEqual({
     'font-size': '12px',
