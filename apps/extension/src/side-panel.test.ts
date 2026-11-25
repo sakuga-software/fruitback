@@ -1,8 +1,9 @@
-import { afterEach, describe, it, mock } from 'node:test';
+import { afterEach, before, describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { Window as HappyDomWindow } from 'happy-dom';
+import { compile } from '@tailwindcss/node';
 import { setLanguage } from './i18n.ts';
 import type { PanelNote } from './protocol.ts';
 import {
@@ -1092,14 +1093,33 @@ describe('the pins a panel hid come back when it goes (FRU-307, review of #419)'
   });
 });
 
+/**
+ * The sheet of the panel as Tailwind writes it (FRU-679): its rules are `@apply`, so the guards below
+ * read the declarations of the built sheet, which are those the browser takes.
+ */
+async function builtPanelSheet(): Promise<string> {
+  const file = fileURLToPath(new URL('../entrypoints/sidepanel/style.css', import.meta.url));
+  const compiler = await compile(readFileSync(file, 'utf8'), {
+    base: fileURLToPath(new URL('../entrypoints/sidepanel/', import.meta.url)),
+    from: file,
+    onDependency: () => {},
+  });
+
+  return compiler.build([]);
+}
+
 describe('the margins of the panel (FRU-533)', () => {
-  const sheet = readFileSync(fileURLToPath(new URL('../entrypoints/sidepanel/style.css', import.meta.url)), 'utf8');
+  let sheet = '';
+  before(async () => {
+    sheet = await builtPanelSheet();
+  });
   /** The declarations of the rule whose selector is `selector`, alone on its line. */
   const rule = (selector: string): string =>
     new RegExp(`\\n${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} \\{([^}]*)\\}`).exec(sheet)?.[1] ?? '';
 
   it('takes off the padding of the body of the popup, whose sheet the panel links first', () => {
-    assert.match(rule('body.side-panel-page'), /\bpadding: 0;/);
+    // Tailwind writes `p-0` as `padding: 0px`.
+    assert.match(rule('body.side-panel-page'), /\bpadding: 0(px)?;/);
   });
 
   it('declares the gutter once, at 12 px', () => {
@@ -1125,14 +1145,22 @@ describe('the margins of the panel (FRU-533)', () => {
     ]) {
       const declarations = rule(selector);
       assert.notEqual(declarations, '', `no rule for ${selector}: this guard reads nothing`);
-      assert.match(declarations, /(padding|margin):[^;]*var\(--panel-gutter\)/, `${selector} has a margin of its own`);
+      assert.match(
+        declarations,
+        /(padding|margin)[a-z-]*:[^;]*var\(--panel-gutter\)/,
+        `${selector} has a margin of its own`,
+      );
     }
   });
 
   it('keeps no side margin of 18 or 20 px, the margins of before', () => {
-    // The side values of a shorthand: the second, and the fourth when there is one.
-    const sides = [...sheet.matchAll(/\b(?:padding|margin):\s*([^;]+);/g)].flatMap((match) => {
-      const values = (match[1] ?? '').trim().split(/\s+(?![^(]*\))/);
+    // The side values of a shorthand: the second, and the fourth when there is one. Tailwind also
+    // writes a side as its own property (`padding-inline`, `padding-left`…): each value is a side.
+    const sides = [
+      ...sheet.matchAll(/\b(?:padding|margin)(-inline-start|-inline-end|-inline|-left|-right)?:\s*([^;]+);/g),
+    ].flatMap((match) => {
+      const values = (match[2] ?? '').trim().split(/\s+(?![^(]*\))/);
+      if (match[1] !== undefined) return values;
 
       return values.length === 1 ? values : [values[1], values[3] ?? values[1]];
     });
@@ -1145,7 +1173,10 @@ describe('the margins of the panel (FRU-533)', () => {
 });
 
 describe('one line for each note (FRU-534)', () => {
-  const sheet = readFileSync(fileURLToPath(new URL('../entrypoints/sidepanel/style.css', import.meta.url)), 'utf8');
+  let sheet = '';
+  before(async () => {
+    sheet = await builtPanelSheet();
+  });
 
   it('cuts the words of a note to one line, with « … », in each list of the panel', () => {
     const rule = /\.panel-row-note,\s*\.ready-note,\s*\.search-detached-note \{([^}]*)\}/.exec(sheet)?.[1] ?? '';

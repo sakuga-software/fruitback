@@ -1,30 +1,23 @@
 /*
   The page that opens at install (FRU-318): one column on the raised surface, in the tokens of
   popup/style.css and the kit, which this page loads first.
+
+  Tailwind writes the rules (@apply, FRU-679) on the theme, read with @reference, which writes
+  nothing: the variables are those of popup/style.css. The rules stay in no cascade layer, as the
+  kit's do; what no utility writes the same stays CSS (see the header of src/kit.css).
 */
+@reference '../../src/theme.css';
+
 body {
-  min-width: 0;
-  margin: 0;
-  background: var(--color-surface-raised);
-  color: var(--color-text);
+  @apply min-w-0 m-0 bg-surface-raised text-text;
 }
 
 .welcome {
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  max-width: 520px;
-  margin: 0 auto;
-  padding: 32px 20px;
+  @apply box-border flex flex-col gap-[16px] max-w-[520px] my-0 mx-auto py-[32px] px-[20px];
 }
 
 .welcome h1 {
-  display: block;
-  margin: 8px 0 0;
-  font-size: 22px;
-  font-weight: 700;
-  line-height: 1.3;
+  @apply block mt-[8px] mx-0 mb-0 text-[22px] font-bold leading-[1.3];
 }
 
 /* The drop of the popup's title is beside the name in the head already. */
@@ -33,16 +26,11 @@ body {
 }
 
 .welcome .lead {
-  margin: 0;
-  color: var(--color-ink-soft);
+  @apply m-0 text-ink-soft;
 }
 
 .welcome-steps {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin: 0;
-  padding-left: 22px;
+  @apply flex flex-col gap-[12px] m-0 pl-[22px];
 }
 
 .welcome-steps li {
@@ -51,104 +39,78 @@ body {
 }
 
 .welcome-steps li > * {
-  display: block;
+  @apply block;
 }
 
 .welcome-steps li > span {
-  margin-top: 2px;
+  @apply mt-[2px];
 }
 
 .welcome-steps span,
 .welcome-invited {
-  margin: 0;
-  color: var(--color-ink-soft);
+  @apply m-0 text-ink-soft;
 }
 
 .welcome-hint {
-  margin: 0;
-  color: var(--color-text);
+  @apply m-0 text-text;
 }
 
 .welcome-hint:empty {
-  display: none;
+  @apply hidden;
 }
 
 /* The sign-in of the page (FRU-482): the ways of the popup, and the word to check. */
 .welcome-sign-in {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+  @apply flex flex-col gap-[12px];
 }
 
 .welcome-sign-in > .word {
-  margin: 0;
+  @apply m-0;
 }
 
 .welcome-sign-in > button.link-button {
-  align-self: flex-start;
+  @apply self-start;
 }
 
 .welcome-sign-in h2 {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 600;
+  @apply m-0 text-[16px] font-semibold;
 }
 
 .welcome-done {
-  margin: 0;
-  font-weight: 600;
+  @apply m-0 font-semibold;
 }
 
 /* The sites to turn on (FRU-483): one button each, as the popup lists its lines. */
 .welcome-sites {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+  @apply flex flex-col gap-[8px] m-0 p-0 list-none;
 }
 
 .welcome-sites button {
-  width: 100%;
+  @apply w-full;
 }
 
 .welcome-sign-in .problem {
-  margin: 0;
+  @apply m-0;
 }
 
 /* The pin, a tip under the sign-in (FRU-484): what helps later, said after what is done now. */
 .welcome-tip {
-  margin: 0;
-  padding-top: 12px;
-  border-top: 1px solid var(--color-line);
-  color: var(--color-ink-soft);
-  font-size: 13px;
+  @apply m-0 pt-[12px] border-t border-t-line text-ink-soft text-[13px];
 }
 
 /* The demonstration (FRU-531): 16/9 at the width of the column, its poster until it plays. */
 .welcome-demo {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin: 0;
+  @apply flex flex-col gap-[6px] m-0;
 }
 
 .welcome-demo video {
-  display: block;
-  width: 100%;
-  height: auto;
-  aspect-ratio: 16 / 9;
-  border: 1px solid var(--color-line);
-  border-radius: 8px;
-  background: var(--color-surface);
+  @apply block w-full h-auto aspect-[16/9] border border-line rounded-[8px] bg-surface;
 }
 
 .welcome-demo figcaption {
-  color: var(--color-ink-soft);
-  font-size: 13px;
+  @apply text-ink-soft text-[13px];
 }
 
 .welcome-demo-length {
-  font-variant-numeric: tabular-nums;
+  @apply tabular-nums;
 }
