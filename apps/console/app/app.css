@@ -84,9 +84,9 @@
   --field-border: var(--color-control);
   --field-border-width: 1px;
   /*
-    HeroUI derives every radius from --radius (rounded-md is 0.75 of it, rounded-3xl 3 times it). One
-    radius (FRU-683): the scale of Tailwind that HeroUI reads is the radius of a control, and the
-    rules under this block give a card and a modal theirs.
+    HeroUI derives every radius from --radius and from the scale of Tailwind (a button is
+    rounded-3xl, a menu item rounded-2xl). One radius (FRU-683): theme.css sets each step of the
+    scale to the radius of a control, and the kit gives a modal and an alert theirs by a class.
   */
   --radius: var(--radius-control);
   --field-radius: var(--radius-control);
@@ -95,35 +95,18 @@
 }
 
 /*
-  The surfaces of HeroUI that are not a control (FRU-683): a modal takes the radius of a modal, an
-  alert the radius of a card. Their own rules read rounded-3xl, which is a control here. A drawer of
-  the console opens from a side, where HeroUI draws it square.
+  What stays here is what no class can carry (FRU-678). The kit and the screens draw with Tailwind
+  classes, in their components: see the head of `ui.tsx`.
+
+  - The rules of every element of every page: the one line of a button, the selection, the
+    placeholder, the caret, the focus ring. They are in no layer, so they win over HeroUI, which is
+    in the layer `components`, and over a utility too. As classes they would lose to the utilities
+    of the screens, which are drawn with them winning: `focus:outline-none` on a heading of
+    `connectors.tsx` and `-outline-offset-2` on its rows lose to the focus ring today. A class of
+    the kit that must beat them carries `!`.
+  - The pseudo-elements of a view transition, which are of the document and of no element.
+  - The keyframes, which a class names.
 */
-.modal__dialog:not(.modal__dialog--full) {
-  border-radius: var(--radius-modal);
-}
-
-.alert {
-  border-radius: var(--radius-card);
-}
-
-html,
-body {
-  /*
-    The rule of the text (FRU-350), the same as the widget's and the extension's. Content wraps
-    anywhere, so a host, an address or a long word never runs past its box. A label never breaks
-    inside its words: the rule under this one keeps a button, a switch, a tab and a key on one line.
-  */
-  overflow-wrap: anywhere;
-  background: var(--color-page);
-  color: var(--color-ink);
-  font-family: var(--font-sans);
-  /* Inter at 13 px is the text of the console (FRU-683). */
-  font-size: var(--text-body);
-  line-height: var(--text-body--line-height);
-  -webkit-font-smoothing: antialiased;
-}
-
 button,
 [role='switch'],
 [role='tab'],
@@ -146,6 +129,7 @@ textarea {
   caret-color: var(--color-accent);
 }
 
+/* The ring of every page, the bar of FRU-684 too: the accent is 3:1 and more on its slate. */
 :focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
@@ -153,14 +137,11 @@ textarea {
 
 /*
   The moves between the screens of a workspace, between workspaces and to the administration
-  (FRU-356). The bar is one block that holds still, and the screen beside it cross-fades: the old
-  one goes in 120 ms, the new one comes in 220 ms from 4 px lower. A browser with no view transitions
-  changes the screen at once. With reduced motion nothing moves.
+  (FRU-356). The bar (`[view-transition-name:rail]`) is one block that holds still, and the screen
+  (`screen`) beside it cross-fades: the old one goes in 120 ms, the new one comes in 220 ms from 4 px
+  lower. A browser with no view transitions changes the screen at once. With reduced motion nothing
+  moves.
 */
-.kit-screen {
-  view-transition-name: screen;
-}
-
 ::view-transition-group(rail) {
   animation: none;
 }
@@ -208,74 +189,7 @@ textarea {
   }
 }
 
-/* The site itself in the frame of the setup (FRU-354), or its address when it cannot show. */
-.site-preview {
-  height: 100%;
-  overflow: hidden;
-  background: var(--surface);
-}
-
-.site-preview__frame {
-  display: block;
-  width: 100%;
-  height: 100%;
-  border: 0;
-  background: var(--surface);
-}
-
-.site-preview__refused {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  box-sizing: border-box;
-  height: 100%;
-  padding: 24px;
-  background: var(--color-subtle);
-  color: var(--muted);
-  font-size: var(--text-body);
-  line-height: var(--text-body--line-height);
-  text-align: center;
-}
-
-.site-preview__icon {
-  width: 40px;
-  height: 40px;
-  border-radius: var(--radius-card);
-  object-fit: contain;
-}
-
-.site-preview__letter {
-  display: grid;
-  place-items: center;
-  border: 1px solid var(--color-line);
-  background: var(--surface);
-  color: var(--color-ink);
-  font-weight: 700;
-}
-
-.site-preview__host {
-  max-width: 100%;
-  color: var(--color-ink);
-  font-weight: 600;
-  overflow-wrap: anywhere;
-}
-
-.site-preview__why {
-  max-width: 360px;
-}
-
-/* The setup waits for the first note (FRU-242): the drop of the logo beats while the page reads the site again. */
-.setup-waiting {
-  width: 8px;
-  height: 8px;
-  margin-top: calc((var(--text-small--line-height) * 1em - 8px) / 2);
-  border-radius: 50%;
-  background: var(--accent);
-  animation: setup-waiting 1.6s cubic-bezier(0.16, 1, 0.3, 1) infinite;
-}
-
+/* The setup waits for the first note (FRU-242): the drop of the logo beats (`parts/setup-install.tsx`). */
 @keyframes setup-waiting {
   0% {
     box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent);
@@ -286,66 +200,10 @@ textarea {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .setup-waiting {
-    animation: none;
-  }
-}
-
-/* FRU-558: the dialog that adds a site. Its preview is shorter than the one of the setup: the form stays in view. */
-.add-site-dialog .kit-browser__page {
-  height: 280px;
-}
-
-.add-site-dialog__icon {
-  width: 24px;
-  height: 24px;
-  flex: none;
-  border-radius: var(--radius-card);
-  object-fit: contain;
-}
-
-.add-site-dialog__letter {
-  display: grid;
-  place-items: center;
-  border: 1px solid var(--color-line);
-  background: var(--surface);
-  color: var(--color-ink);
-  font-size: 13px;
-  font-weight: 700;
-}
-
-/*
-  FRU-563: the panel of a connector unfolds under its row. Its row of the grid grows from 0fr to 1fr,
-  and its body is clipped while it does. At once with reduced motion.
-*/
-.source-panel {
-  display: grid;
-  grid-template-rows: 1fr;
-  animation: source-panel-open var(--duration-fast) var(--ease-settle) both;
-}
-
-.source-panel__body {
-  min-height: 0;
-}
-
-.source-panel:not([data-settled]) > .source-panel__body {
-  overflow: hidden;
-}
-
+/* The panel of a connector unfolds under its row (FRU-563): its row of the grid grows from 0fr to 1fr. */
 @keyframes source-panel-open {
   from {
     grid-template-rows: 0fr;
     opacity: 0;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .source-panel {
-    animation: none;
-  }
-
-  .source-panel:not([data-settled]) > .source-panel__body {
-    overflow: visible;
   }
 }

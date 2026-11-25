@@ -106,7 +106,7 @@ export function NoteCard({
             late={note.delivery !== undefined}
           />
           {note.delivery === undefined ? null : (
-            <span className="font-semibold text-accent">
+            <span className="font-semibold text-accent-strong">
               {note.delivery.state === 'gave-up'
                 ? t('Not delivered: Fruitback stopped trying')
                 : t('Not delivered yet')}

@@ -21,7 +21,7 @@ const REASON = 'Unpaid invoice of September';
 const SUSPENDED = { ...ACME, suspended: true, suspendedAt: SUSPENDED_AT, reason: REASON };
 
 const ACCENT_STRONG = '#b91c1c';
-const SUBTLE = '#fafafa';
+const SUBTLE = '#f7f9fb';
 
 const LEAD =
   'An administrator of this instance suspended it. You can still read it, but nothing in it can change, and its sites take no notes. To restore it, contact the administrator of this instance.';

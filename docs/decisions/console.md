@@ -360,16 +360,27 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   native control in a screen. **A button takes no `title`**: a tooltip does not open on a disabled
   control, so the reason is written beside it. The overlays of React Aria position with inline
   styles, which the console's CSP allows (`style-src 'unsafe-inline'`); its scripts stay hashed.
-- **The values are the mockup's of 2026-10-13, named once** (FRU-232, on the palette:
-  read as Mathieu's answer by the orchestrator on 2026-10-13, and he may come back on it).
-  `design/README.md` has the table. **A screen writes the name of a token and never a value**:
-  `tokens.test.ts` fails on a colour written in a screen or in the kit, and on a colour of the
-  palette of before anywhere in the console. A token that a screen needs and that is not there is
-  added in a pull request of the kit, not in the screen. **The Tailwind theme is shared**
-  (FRU-677): `packages/shared/tailwind/theme.css`, one plain `@theme` block that the console, the
-  extension, the widget and the docs import, every size in px; `app.css` imports it after HeroUI and
-  keeps the variables of HeroUI. `shared-theme.test.ts` builds it without the preflight and holds
-  its utilities to `var(--color-…)`, so the dark block of a surface repaints them.
+- **The values are the slate theme's (FRU-683, 2026-11-25), named once**, on the shapes of the
+  mockup of 2026-10-13 (FRU-232). `design/README.md` has the table. **A screen writes the name of a
+  token and never a value**: `tokens.test.ts` fails on a colour written in a screen or in the kit,
+  and on a colour of the palette of before anywhere in the console; `theme.test.ts` fails on a
+  radius written as a value or as a step of Tailwind's scale, and on a height of a control of
+  before. A token that a screen needs and that is not there is added in a pull request of the kit,
+  not in the screen. **The Tailwind theme is shared** (FRU-677): `packages/shared/tailwind/theme.css`,
+  one plain `@theme` block that the console, the extension, the widget and the docs import, every
+  size in px. **The console's own tokens are in `app/theme.css`** (`@theme static`), which `app.css`
+  imports after the shared theme: it sets the slate values again for the console alone, so the
+  extension, the widget and the docs do not change. Each token is a CSS variable on `:root`, which
+  a setting of the appearance (FRU-694) changes at once. `app.css` keeps the variables of HeroUI,
+  which read the tokens. `shared-theme.test.ts` builds the shared theme without the preflight and
+  holds its utilities to `var(--color-…)`, so the dark block of a surface repaints them.
+- **One radius, three heights, Inter at 13 px** (FRU-683). A button, a field, a select, a search,
+  a chip and a menu are `rounded-control` (6 px), a card `rounded-card` (8 px), a modal
+  `rounded-modal` (10 px); HeroUI's scale (`rounded-md` to `rounded-4xl`) is the radius of a
+  control. A control is `h-control-sm` (24 px), `-md` (28 px) or `-lg` (32 px). The text is Inter
+  (`@fontsource-variable/inter`, served by the console, so the CSP does not change) at 13 px on the
+  body; the root keeps 16 px, which a `rem` of Tailwind and of HeroUI measures from. A red word is
+  `text-accent-strong`: the accent is under 4.5:1 on the slate tints.
 - **HeroUI takes the theme, and the kit takes the shapes.** `app.css` gives the variables of HeroUI
   the tokens, so a button of HeroUI and `bg-accent` paint the same red. HeroUI writes its
   components in the cascade layer `components`; the rules of the kit (`.kit-*`) are in no layer, so
@@ -378,14 +389,14 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   under a press, tints a hovered field and draws an alert as a white card with muted text. The kit
   gives each of these the value of the mockup, which changes a colour at once and moves nothing.
 - **The kit, component by component** (`ui.tsx`):
-  `Button` (`tone="primary"`: the pill of the action of a step, 44 px; `tone="outline"`: the
-  rectangle of a control, 6 px, at 44, 40 or 32 px with `size`; `to` or `href` makes it a link of
+  `Button` (`tone="primary"`: the action of a step, 32 px; `tone="outline"`: the
+  rectangle of a control, at 32, 28 or 24 px with `size`; `to` or `href` makes it a link of
   the same box; `label` gives a longer name to a screen reader, « Connect Jira » over « Connect »,
   and starts with the words shown), `WideButton` (an outlined button over its column), `LinkButton` (underlined words;
   its padding is its target, 33 px at the least, where the mockup draws « Rename » at 21 px; in a row of a table it takes the line of the table),
-  `IconButton` (36 px, named by `label`), `Field` and `Choice` (44 px, `compact` 40 px, `locked` for
+  `IconButton` (28 px, named by `label`), `Field` and `Choice` (32 px, `compact` 28 px, `locked` for
   a value set elsewhere; the value of a `Choice` in the type of its button, so its words sit on the
-  baseline of a field beside it (FRU-412: HeroUI writes it at 14 px on a line of 20); `status` on a `Choice` draws the drop of the chosen status in a list of 38 px), `Pick` (radio cards), `Toggle`, `FilterChip` (`aria-pressed`), `StatusDot`
+  baseline of a field beside it (FRU-412: HeroUI writes it at 14 px on a line of 20); `status` on a `Choice` draws the drop of the chosen status in a list of 28 px), `Pick` (radio cards), `Toggle`, `FilterChip` (`aria-pressed`), `StatusDot`
   and `StatusBar`, `DataTable` (`stack`: under 640 px one card per row, its cells one under the other, FRU-505), `SidePanel` (named by its title, or by `label`; `panelId` for `aria-controls`; `flush` for an accordion under its row), `KeyValue`, `SuccessMark`, `Title`, `Lead`, `PageHead`,
   `Initial`, `Card`, `Chip`, `Disclosure` (sections folded under one line, a `<details>`: Enter and Space open it, a screen reader hears it expanded or collapsed, and its line is 44 px between two rules, FRU-538), `Problem`, `LoadFailed` (a read that failed: a title, a sentence that nothing is lost, and one « Try again », FRU-508), `Logo` (the name as outlines, in tokens: `logo.tsx`), `EntryPage`
   (the header and the column of a page outside a workspace; `/kit/entry` mounts it), `Divider`, `Menu`

@@ -81,7 +81,7 @@ const STATUSES = {
   admin: { word: msg('Instance admin'), colour: 'text-ink' },
   active: { word: msg('Active'), colour: 'text-done' },
   invited: { word: msg('Invited'), colour: 'text-muted' },
-  suspended: { word: msg('Suspended'), colour: 'text-accent' },
+  suspended: { word: msg('Suspended'), colour: 'text-accent-strong' },
 } as const satisfies Record<Status, { word: string; colour: string }>;
 
 /**

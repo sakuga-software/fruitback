@@ -209,7 +209,7 @@ function Health({ facts }: { facts: InstanceFacts }) {
   );
 }
 
-const TONES = { done: 'text-done', alert: 'text-accent' } as const;
+const TONES = { done: 'text-done', alert: 'text-accent-strong' } as const;
 
 /** What the mail of the instance did last. */
 function mailDetail(provider: string | undefined, lastSentAt: string | null, now: number): string {

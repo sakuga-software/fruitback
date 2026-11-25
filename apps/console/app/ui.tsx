@@ -1232,7 +1232,7 @@ export function Toggle({ label, hint, strong = false, value, onChange, disabled 
         className={`flex w-full flex-row-reverse items-center justify-between gap-4 ${disabled ? 'opacity-100 cursor-not-allowed' : ''}`}
       >
         {/* Ink when it is on, as the mockup draws it: the accent is the red of an alert. One movement of 220 ms. */}
-        <Switch.Control className="relative w-[40px] h-[24px] overflow-visible rounded-full bg-field-border [box-shadow:none] [transition:background-color_200ms] group-data-[selected=true]/toggle:bg-ink group-data-[disabled=true]/toggle:opacity-50 motion-reduce:[transition:none]">
+        <Switch.Control className="relative w-[40px] h-[24px] overflow-visible rounded-pill bg-field-border [box-shadow:none] [transition:background-color_200ms] group-data-[selected=true]/toggle:bg-ink group-data-[disabled=true]/toggle:opacity-50 motion-reduce:[transition:none]">
           <Switch.Thumb className="absolute top-[3px] left-[3px] size-[18px] m-0 rounded-full bg-surface [box-shadow:var(--shadow-thumb)] opacity-100 [transition:transform_var(--duration-fast)_var(--ease-settle)] group-data-[selected=true]/toggle:[transform:translateX(16px)] motion-reduce:[transition:none]" />
         </Switch.Control>
         <span className="min-w-0">
@@ -1326,7 +1326,7 @@ export function Initial({
 }) {
   return (
     <span
-      className={`kit-avatar flex flex-none items-center justify-center box-border ${size === 'small' ? 'size-[28px]' : 'size-[32px]'} border border-line rounded-full ${pending ? 'bg-surface text-muted' : 'bg-avatar text-surface'} text-(length:--text-hint) font-bold leading-auto`}
+      className={`kit-avatar flex flex-none items-center justify-center box-border ${size === 'small' ? 'size-[28px]' : 'size-[32px]'} border border-line rounded-pill ${pending ? 'bg-surface text-muted' : 'bg-avatar text-surface'} text-(length:--text-hint) font-bold leading-auto`}
       data-size={size}
       data-pending={pending}
       aria-hidden="true"
@@ -1403,13 +1403,13 @@ export function StatusBar({ counts, label, width = 'table' }: StatusBarProps) {
     <span
       role="img"
       aria-label={label}
-      className={`kit-status-bar flex flex-none gap-[2px] h-[8px] overflow-hidden rounded-full ${STATUS_BAR_WIDTH[width]}`}
+      className={`kit-status-bar flex flex-none gap-[2px] h-[8px] overflow-hidden rounded-pill ${STATUS_BAR_WIDTH[width]}`}
       data-width={width}
     >
       {STAGES.filter((status) => counts[status] > 0).map((status) => (
         <span
           key={status}
-          className={`${STATUS_COLOURS[status]} [box-shadow:inset_0_0_0_1px_var(--color-status-edge)] first:rounded-l-full last:rounded-r-full only:rounded-full`}
+          className={`${STATUS_COLOURS[status]} [box-shadow:inset_0_0_0_1px_var(--color-status-edge)] first:rounded-l-pill last:rounded-r-pill only:rounded-full`}
           style={{ flexGrow: counts[status], flexBasis: 0 }}
         />
       ))}
@@ -1662,7 +1662,7 @@ export function Dialog({
       }}
     >
       <Modal.Container size={size} scroll="inside">
-        <Modal.Dialog className={`kit-dialog ${className}`}>
+        <Modal.Dialog className={`kit-dialog rounded-modal ${className}`}>
           {locked ? null : <Modal.CloseTrigger aria-label={closeLabel} />}
           <Modal.Header>
             <Modal.Heading className="kit-dialog__title">{title}</Modal.Heading>
@@ -1985,7 +1985,7 @@ export function Divider({ children, className = '' }: { children: ReactNode; cla
  */
 const MENU_TRIGGER = 'kit-menu-trigger cursor-pointer transform-none [transition:none]';
 const MENU =
-  'kit-menu min-w-[220px] border border-line rounded-card bg-surface text-ink [box-shadow:var(--shadow-frame)]';
+  'kit-menu min-w-[220px] border border-line rounded-control bg-surface text-ink [box-shadow:var(--shadow-frame)]';
 /**
  * An item: tinted under the pointer and under the keyboard, and the ring of a page inside it, so the
  * menu does not clip it. The strong accent of an item that takes something away is 5.89:1 on the
@@ -2523,15 +2523,16 @@ type BrowserFrameProps = {
   empty?: string;
   /** Under the frame: what the page is. */
   caption?: ReactNode;
-  /** The page, 620 px high. */
+  /** The page, 620 px high, or 280 px (`short`). */
   children?: ReactNode;
+  short?: boolean;
 };
 
 const BROWSER_DOTS = 'kit-browser__dots flex flex-none gap-[6px] w-[42px]';
 const BROWSER_DOT = 'size-[10px] rounded-full bg-line';
 
 /** The window of a browser, drawn around the preview of a site. */
-export function BrowserFrame({ address, empty, caption, children }: BrowserFrameProps) {
+export function BrowserFrame({ address, empty, caption, children, short = false }: BrowserFrameProps) {
   return (
     <>
       <div className="kit-browser overflow-hidden border border-line rounded-card bg-surface [box-shadow:var(--shadow-frame)]">
@@ -2543,7 +2544,7 @@ export function BrowserFrame({ address, empty, caption, children }: BrowserFrame
             <span className={BROWSER_DOT} />
           </span>
           <span className="kit-browser__address flex flex-1 justify-center min-w-0">
-            <span className="overflow-hidden py-[4px] px-[16px] border border-line rounded-full bg-surface text-muted text-(length:--text-hint) leading-auto text-ellipsis whitespace-nowrap">
+            <span className="overflow-hidden py-[4px] px-[16px] border border-line rounded-pill bg-surface text-muted text-(length:--text-hint) leading-auto text-ellipsis whitespace-nowrap">
               {address}
             </span>
           </span>
@@ -2551,7 +2552,7 @@ export function BrowserFrame({ address, empty, caption, children }: BrowserFrame
         </div>
         {/* On a phone the frame comes under the steps: with no site yet, a short frame says enough. */}
         <div
-          className={`kit-browser__page relative h-[620px] overflow-hidden ${empty === undefined ? '' : 'max-sm:h-[280px]'}`}
+          className={`kit-browser__page relative overflow-hidden ${short ? 'h-[280px]' : `h-[620px] ${empty === undefined ? '' : 'max-sm:h-[280px]'}`}`}
         >
           {empty === undefined ? (
             children

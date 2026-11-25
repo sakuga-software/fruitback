@@ -27,10 +27,10 @@ import {
  */
 const CONSOLE = 'http://localhost:5178';
 
-const INK = '#18181b';
-const MUTED = '#6b6b74';
-const CONTROL = '#8a8a93';
-const ACCENT = '#dd2c27';
+const INK = '#0f172a';
+const MUTED = '#5b6779';
+const CONTROL = '#7b8797';
+const ACCENT_STRONG = '#b91c1c';
 const WHITE = '#ffffff';
 const RAIL_TEXT = '#d4d4d8';
 
@@ -347,16 +347,16 @@ test('the page is the one of the mockup: chips, filters, the table and its pages
   const all = chip(page, /^All/);
   await expect(all).toHaveAttribute('aria-pressed', 'true');
   await expect(chip(page, /^Linear/)).toHaveAttribute('aria-pressed', 'false');
-  expectBox(await box(all), { x: 297, y: 126, height: 36 }, 2, '« All »');
+  expectBox(await box(all), { x: 297, y: 116, height: 24 }, 2, '« All »');
   expect
     .soft(
       await styles(all, ['height', 'padding-left', 'border-top-left-radius', 'font-size', 'font-weight', 'column-gap']),
     )
     .toEqual({
-      height: '36px',
+      height: '24px',
       'padding-left': '14px',
-      'border-top-left-radius': '999px',
-      'font-size': '13px',
+      'border-top-left-radius': '6px',
+      'font-size': '12px',
       'font-weight': '600',
       'column-gap': '8px',
     });
@@ -381,7 +381,7 @@ test('the page is the one of the mockup: chips, filters, the table and its pages
     });
 
   // The filters: a search and two lists, 40 px, their names for a screen reader only.
-  expectBox(await box(search(page)), { x: 297, y: 176, height: 40 }, 2, 'the search');
+  expectBox(await box(search(page)), { x: 297, y: 154, height: 28 }, 2, 'the search');
   // What the index searches: not the author, which the mockup says.
   await expect(search(page)).toHaveAttribute('placeholder', 'Search the text, the page or the reference');
   const site = page
@@ -389,18 +389,18 @@ test('the page is the one of the mockup: chips, filters, the table and its pages
     .or(page.getByRole('button', { name: /^Every site/ }))
     .first();
   await expect(site).toBeVisible();
-  expect.soft((await box(site)).height).toBe(40);
+  expect.soft((await box(site)).height).toBe(28);
 
   // « Only my notes »: a box of 16 px, its words at 14 px 8 px after it, on a line of 40 px.
   const mine = page.getByRole('checkbox', { name: 'Only my notes' });
   await expect(mine).not.toBeChecked();
   const tick = await box(page.locator('.kit-checkbox .checkbox__control'));
   expect.soft({ width: tick.width, height: tick.height }).toEqual({ width: 16, height: 16 });
-  expectBox(await box(page.locator('.kit-checkbox')), { x: 1276, y: 176, height: 40 }, 2, '« Only my notes »');
+  expectBox(await box(page.locator('.kit-checkbox')), { x: 1280, y: 154, height: 28 }, 2, '« Only my notes »');
   expect.soft(await styles(page.locator('.kit-checkbox .checkbox__content'), ['column-gap'])).toEqual({
     'column-gap': '8px',
   });
-  expect.soft(await styles(page.locator('.kit-checkbox .label'), ['font-size'])).toEqual({ 'font-size': '14px' });
+  expect.soft(await styles(page.locator('.kit-checkbox .label'), ['font-size'])).toEqual({ 'font-size': '13px' });
 
   // The table, where its frame holds 720 px (FRU-586; cards under it), and its six columns (FRU-551: no
   // column « Status », the rows are in its groups). The last one is the link to the page (FRU-546): its
@@ -408,8 +408,8 @@ test('the page is the one of the mockup: chips, filters, the table and its pages
   const headers = table(page).locator('thead th');
   await expect(headers).toHaveText(['Note', 'Site', 'Left by', 'Went to', 'When', 'Page']);
   await expect(table(page)).toHaveAttribute('data-stacked', 'false');
-  expect.soft(await styles(table(page).locator('table'), ['font-size'])).toEqual({ 'font-size': '14px' });
-  expectBox(await box(table(page).locator('table')), { x: 298, y: 233 }, 2, 'the table');
+  expect.soft(await styles(table(page).locator('table'), ['font-size'])).toEqual({ 'font-size': '13px' });
+  expectBox(await box(table(page).locator('table')), { x: 298, y: 199 }, 2, 'the table');
   expect.soft(await styles(headers.nth(4), ['text-align'])).toEqual({ 'text-align': 'right' });
 
   // A note: its 64 characters on two lines at most, and nothing else (FRU-546).
@@ -479,7 +479,7 @@ test('the page is the one of the mockup: chips, filters, the table and its pages
   const ref = went.getByRole('link', { name: 'ACM-151' });
   await expect(ref).toHaveAttribute('href', 'https://linear.app/acme/issue/ACM-151');
   expect.soft(await styles(ref, ['font-size', 'font-weight', 'column-gap'])).toEqual({
-    'font-size': '13px',
+    'font-size': '12px',
     'font-weight': '400',
     'column-gap': '4px',
   });
@@ -511,16 +511,17 @@ test('the page is the one of the mockup: chips, filters, the table and its pages
   // Not delivered: the words in the accent, and « Send again » at 32 px.
   const late = row(page, 'The order form').locator('td').nth(3);
   const words = late.getByText('Not delivered yet', { exact: true });
-  expect.soft(await styles(words, ['font-size', 'font-weight'])).toEqual({ 'font-size': '13px', 'font-weight': '600' });
-  expect.soft(await painted(words, 'color')).toEqual(rgb(ACCENT));
+  expect.soft(await styles(words, ['font-size', 'font-weight'])).toEqual({ 'font-size': '12px', 'font-weight': '600' });
+  // A red word is the strong red (FRU-683): the red of the mockup is 4.00:1 on a row under the pointer.
+  expect.soft(await painted(words, 'color')).toEqual(rgb(ACCENT_STRONG));
   const again = late.getByRole('button', { name: 'Send again' });
   expect
     .soft(await styles(again, ['height', 'padding-left', 'border-top-left-radius', 'font-size', 'font-weight']))
     .toEqual({
-      height: '32px',
+      height: '24px',
       'padding-left': '10px',
       'border-top-left-radius': '6px',
-      'font-size': '13px',
+      'font-size': '12px',
       'font-weight': '600',
     });
 
@@ -541,13 +542,13 @@ test('the page is the one of the mockup: chips, filters, the table and its pages
   const previous = pages(page).getByRole('button', { name: 'Previous page' });
   await expect(previous).toBeDisabled();
   expect.soft(await styles(previous, ['width', 'height', 'border-top-left-radius'])).toEqual({
-    width: '32px',
-    height: '32px',
-    'border-top-left-radius': '8px',
+    width: '24px',
+    height: '24px',
+    'border-top-left-radius': '6px',
   });
   expect
     .soft(await styles(pages(page), ['margin-top', 'font-size']))
-    .toEqual({ 'margin-top': '16px', 'font-size': '14px' });
+    .toEqual({ 'margin-top': '16px', 'font-size': '13px' });
   expect.soft(await painted(pages(page), 'color')).toEqual(rgb(MUTED));
 
   // The heads of the groups: a worker that does not count each stage gets no number, as the notes
@@ -748,7 +749,7 @@ test('a delivery the worker gave up says so, and « Send again » still sends it
   const given = row(page, 'The contact form');
   await expect(given.locator('td').nth(3)).toHaveText('REST APINot delivered: Fruitback stopped tryingSend again');
   const words = given.getByText('Not delivered: Fruitback stopped trying', { exact: true });
-  expect.soft(await painted(words, 'color')).toEqual(rgb(ACCENT));
+  expect.soft(await painted(words, 'color')).toEqual(rgb(ACCENT_STRONG));
   // One that the worker still tries says « yet ».
   await pages(page).getByRole('button', { name: 'Previous page' }).click();
   await expect(row(page, 'The order form').getByText('Not delivered yet', { exact: true })).toBeVisible();

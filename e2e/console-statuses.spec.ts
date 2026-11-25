@@ -162,7 +162,7 @@ test('lists the five built-in statuses and the ones of the team, with stage, col
     .evaluateAll((items) => items.map((each) => each.getAttribute('data-status-key')));
   expect(keys).toEqual(['new', 'todo', 'progress', 'done', 'closed', 'waiting', 'legal']);
 
-  // A built-in: its word, « Built in », the colour of its stage, the text computed (9.90:1 on new).
+  // A built-in: its word, « Built in », the colour of its stage, the text computed (9.98:1 on new, in the ink of FRU-683).
   // FRU-504: the contrast is a word, « Readable »; the ratio is in its tooltip and for a screen reader.
   // « Colour of the stage » is said once under the list, and in each row for a screen reader only.
   await expect(item(page, 'new')).toContainText('Built in');
@@ -175,16 +175,16 @@ test('lists the five built-in statuses and the ones of the team, with stage, col
   await expect(legend).toHaveCount(1);
   await expect(legend).toBeVisible();
   expect(await item(page, 'new').locator('.kit-pin').textContent()).toBe('3');
-  const newText = item(page, 'new').getByTitle('Contrast 9.90:1, text colour Auto');
+  const newText = item(page, 'new').getByTitle('Contrast 9.98:1, text colour Auto');
   await expect(newText).toContainText('Readable');
-  await expect(newText.locator('.sr-only')).toHaveText(', Contrast 9.90:1, text colour Auto');
+  await expect(newText.locator('.sr-only')).toHaveText(', Contrast 9.98:1, text colour Auto');
   await expect(item(page, 'new').getByRole('button', { name: 'Reset New' })).toHaveCount(0);
   // A built-in that changed can be reset, never deleted; a status of the team is deleted, never reset.
   await expect(item(page, 'closed').getByRole('button', { name: 'Reset Won’t fix' })).toBeVisible();
   await expect(item(page, 'closed').getByRole('button', { name: /^Delete/ })).toHaveCount(0);
   await expect(item(page, 'waiting')).toContainText('Added by your team');
   await expect(item(page, 'waiting')).toContainText('#7dd3fc');
-  await expect(item(page, 'waiting').getByTitle('Contrast 10.63:1, text colour Auto')).toContainText('Readable');
+  await expect(item(page, 'waiting').getByTitle('Contrast 10.71:1, text colour Auto')).toContainText('Readable');
   await expect(item(page, 'waiting').getByRole('button', { name: 'Delete Waiting for client' })).toBeVisible();
   // #8b5cf6 takes black, the last step of readableTextColor: 4.96:1.
   await expect(item(page, 'legal').getByTitle('Contrast 4.96:1, text colour Auto')).toContainText('Readable');
@@ -205,7 +205,7 @@ test('an edit shows the contrast, refuses a text under 4.5:1 without sending it,
   await item(page, 'waiting').getByRole('button', { name: 'Edit Waiting for client' }).click();
   const editor = page.getByRole('region', { name: 'Edit Waiting for client' });
   await expect(editor.getByRole('heading', { name: 'Edit Waiting for client' })).toBeFocused();
-  await expect(editor.getByRole('status')).toHaveText('Text on this colour: 10.63:1. It reads well.');
+  await expect(editor.getByRole('status')).toHaveText('Text on this colour: 10.71:1. It reads well.');
 
   const colour = editor.getByRole('textbox', { name: 'Hex code of the colour' });
   await colour.fill('#0ea5e9');
@@ -619,7 +619,7 @@ test('at 390 px in French: one card per status, no sideways scroll, and the word
       'Chaque repère montre à quoi ressemble une note de ce statut sur la page. Le 3 est un numéro d’exemple.',
     ),
   ).toBeVisible();
-  await expect(item(page, 'waiting').getByTitle('Contraste 10,63:1, couleur du texte Auto')).toContainText('Lisible');
+  await expect(item(page, 'waiting').getByTitle('Contraste 10,71:1, couleur du texte Auto')).toContainText('Lisible');
   expect(await sideScroll(page)).toBe(0);
   await expectNoViolation(page, 'the list at 390 px');
 

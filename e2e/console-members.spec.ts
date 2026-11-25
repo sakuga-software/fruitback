@@ -30,12 +30,12 @@ import {
  */
 const CONSOLE = 'http://localhost:5178';
 
-const INK = '#18181b';
-const MUTED = '#6b6b74';
-const LINE = '#e4e4e7';
-const CONTROL = '#8a8a93';
-const SUBTLE = '#fafafa';
-const AVATAR = '#3f3f46';
+const INK = '#0f172a';
+const MUTED = '#5b6779';
+const LINE = '#e3e8ef';
+const CONTROL = '#7b8797';
+const SUBTLE = '#f7f9fb';
+const AVATAR = '#334155';
 const ACCENT = '#dd2c27';
 const ACCENT_STRONG = '#b91c1c';
 const WHITE = '#ffffff';
@@ -260,7 +260,7 @@ const CELL = ['padding-top', 'padding-right', 'padding-bottom', 'padding-left'];
  */
 const LISTS = 93;
 /** The table of the mockup holds Paul's invitation too: the members alone are one row shorter. */
-const MEMBERS_FRAME = 302.4;
+const MEMBERS_FRAME = 283.7;
 /**
  * The form of the mockup is above the table, 66 px high and 24 px above it: it is in a dialog
  * (FRU-565), so a box under it is compared this much higher than the mockup draws it.
@@ -275,7 +275,7 @@ test('the list is the table of the mockup, with what the worker of today says of
   await expect(page.locator('main h1')).toHaveText('Members');
   await expect(page.getByText('Who sees and leaves notes, and who changes the workspace.')).toBeVisible();
   expect.soft(await styles(page.locator('main header'), ['margin-bottom'])).toEqual({ 'margin-bottom': '24px' });
-  expectBox(await box(page.locator('main h1')), { x: 296.5, y: 40, height: 32.2 }, 2, 'the title');
+  expectBox(await box(page.locator('main h1')), { x: 296.5, y: 40, height: 25 }, 2, 'the title');
 
   // Four columns, each a column header. « Last seen » waits for a decision: the day somebody joined.
   const headers = table(page).locator('thead th');
@@ -285,14 +285,14 @@ test('the list is the table of the mockup, with what the worker of today says of
 
   // The frame and the cells, as the mockup writes them.
   expect.soft(await styles(table(page), ['border-top-left-radius', 'border-top-width', 'overflow-x'])).toEqual({
-    'border-top-left-radius': '14px',
+    'border-top-left-radius': '8px',
     'border-top-width': '1px',
     'overflow-x': 'auto',
   });
   expect.soft(await painted(table(page), 'borderTopColor')).toEqual(rgb(LINE));
   expect.soft(await styles(table(page).locator('table'), ['font-size', 'line-height', 'min-width'])).toEqual({
-    'font-size': '14px',
-    'line-height': '20.3px',
+    'font-size': '13px',
+    'line-height': '18.2px',
     'min-width': '760px',
   });
   expect.soft(await styles(headers.nth(0), [...CELL, 'font-size', 'font-weight', 'text-align'])).toEqual({
@@ -300,7 +300,7 @@ test('the list is the table of the mockup, with what the worker of today says of
     'padding-right': '16px',
     'padding-bottom': '12px',
     'padding-left': '20px',
-    'font-size': '13px',
+    'font-size': '12px',
     'font-weight': '600',
     'text-align': 'left',
   });
@@ -334,15 +334,15 @@ test('the list is the table of the mockup, with what the worker of today says of
   // The screen is as wide as its column (FRU-398): 71.5 px wider than the 1120 px of the mockup.
   expectBox(
     await box(table(page)),
-    { x: 296.5, y: 216.2 + LISTS - FORM, width: 1095.5, height: MEMBERS_FRAME },
+    { x: 296.5, y: 194 + LISTS - FORM, width: 1095.5, height: MEMBERS_FRAME },
     2,
     'the frame of the table',
   );
-  expectBox(await box(table(page).locator('thead tr')), { height: 43.3 }, 2, 'the header row');
+  expectBox(await box(table(page).locator('thead tr')), { height: 41.3 }, 2, 'the header row');
   // A row of the mockup is 64 px: two lines of 14 px and 13 px at 1.45, and 12 px above and under.
   expectBox(
     await box(row(page, 'Tom')),
-    { x: 297.5, y: 324.7 + LISTS - FORM, width: 1093.5, height: 64.1 },
+    { x: 297.5, y: 296.3 + LISTS - FORM, width: 1093.5, height: 60 },
     2,
     'the second row',
   );
@@ -355,26 +355,26 @@ test('the list is the table of the mockup, with what the worker of today says of
     width: '32px',
     height: '32px',
     'border-top-left-radius': '999px',
-    'font-size': '13px',
+    'font-size': '12px',
     'font-weight': '700',
   });
   expect.soft(await painted(chip, 'backgroundColor')).toEqual(rgb(AVATAR));
   expect.soft(await painted(chip, 'color')).toEqual(rgb(WHITE));
   expectBox(
     await box(chip),
-    { x: 317.5, y: 340.7 + LISTS - FORM, width: 32, height: 32 },
+    { x: 317.5, y: 310.3 + LISTS - FORM, width: 32, height: 32 },
     2,
     'the chip of the second row',
   );
   expect.soft(await styles(tom.nth(0).locator('> span'), ['column-gap'])).toEqual({ 'column-gap': '12px' });
   const name = tom.nth(0).getByText('Tom', { exact: true });
-  expect.soft(await styles(name, ['font-weight', 'font-size'])).toEqual({ 'font-weight': '600', 'font-size': '14px' });
+  expect.soft(await styles(name, ['font-weight', 'font-size'])).toEqual({ 'font-weight': '600', 'font-size': '13px' });
   expect.soft(await painted(name, 'color')).toEqual(rgb(INK));
-  expectBox(await box(name), { x: 361.5, y: 337.1 + LISTS - FORM, height: 20.3 }, 2, 'the name of the second row');
+  expectBox(await box(name), { x: 361.5, y: 308.8 + LISTS - FORM, height: 18.2 }, 2, 'the name of the second row');
   const address = tom.nth(0).getByText('tom@acme.dev', { exact: true });
   expect.soft(await styles(address, ['font-size', 'line-height'])).toEqual({
-    'font-size': '13px',
-    'line-height': '18.85px',
+    'font-size': '12px',
+    'line-height': '16.8px',
   });
   expect.soft(await painted(address, 'color')).toEqual(rgb(MUTED));
 
@@ -401,7 +401,7 @@ test('the list is the table of the mockup, with what the worker of today says of
   const resend = paul.nth(3).getByRole('button', { name: 'Resend', exact: true });
   const cancel = paul.nth(3).getByRole('button', { name: 'Cancel', exact: true });
   expect.soft(await styles(resend, ['font-size', 'font-weight', 'text-decoration-line', 'padding-top'])).toEqual({
-    'font-size': '14px',
+    'font-size': '13px',
     'font-weight': '600',
     'text-decoration-line': 'underline',
     'padding-top': '8px',
@@ -410,8 +410,8 @@ test('the list is the table of the mockup, with what the worker of today says of
   // The link of the kit is 33 px high where the mockup has 36.3: its line is `normal`, not 1.45.
   // The invitation is in the list under the members (FRU-496): 203.9 px lower than the mockup, less
   // the form that is in a dialog.
-  expectBox(await box(resend), { x: 1258.5, y: 531 + 203.9 - FORM, width: 50.2 }, 2, '« Resend »');
-  expectBox(await box(cancel), { x: 1324.7, y: 531 + 203.9 - FORM, width: 46.3 }, 2, '« Cancel »');
+  expectBox(await box(resend), { x: 1264.4, y: 487 + 203.9 - FORM, width: 46.9 }, 2, '« Resend »');
+  expectBox(await box(cancel), { x: 1327.3, y: 487 + 203.9 - FORM, width: 43.7 }, 2, '« Cancel »');
   await resend.hover();
   expect.soft(await painted(resend, 'color')).toEqual(rgb(ACCENT_STRONG));
   await page.mouse.move(700, 800);
@@ -433,7 +433,7 @@ test('« Invite » opens the form in a dialog: a form with a name, and each fiel
   await expect(opener(page)).toBeVisible();
   expect
     .soft(await styles(opener(page), ['height', 'border-top-left-radius', 'font-size']))
-    .toEqual({ height: '44px', 'border-top-left-radius': '999px', 'font-size': '14px' });
+    .toEqual({ height: '32px', 'border-top-left-radius': '6px', 'font-size': '13px' });
   expect.soft(await painted(opener(page), 'backgroundColor')).toEqual(rgb(ACCENT));
   const head = await box(page.locator('main header'));
   const button = await box(opener(page));
@@ -462,7 +462,7 @@ test('« Invite » opens the form in a dialog: a form with a name, and each fiel
     expect.soft((await box(label)).y + (await box(label)).height, word).toBeLessThanOrEqual((await box(control)).y);
     expect
       .soft(await styles(control, ['height', 'border-top-left-radius', 'border-top-width', 'font-size']), word)
-      .toEqual({ height: '44px', 'border-top-left-radius': '8px', 'border-top-width': '1px', 'font-size': '15px' });
+      .toEqual({ height: '32px', 'border-top-left-radius': '6px', 'border-top-width': '1px', 'font-size': '13px' });
     expect.soft(await painted(control, 'borderTopColor'), word).toEqual(rgb(CONTROL));
     // The input draws its border inside the box of its field: 2 px at the most between them.
     expect.soft(Math.abs((await box(control)).width - (await box(form(page))).width), word).toBeLessThanOrEqual(3);
@@ -476,11 +476,11 @@ test('« Invite » opens the form in a dialog: a form with a name, and each fiel
       await styles(invite(page), ['height', 'padding-left', 'padding-right', 'border-top-left-radius', 'font-size']),
     )
     .toEqual({
-      height: '44px',
+      height: '32px',
       'padding-left': '24px',
       'padding-right': '24px',
-      'border-top-left-radius': '999px',
-      'font-size': '14px',
+      'border-top-left-radius': '6px',
+      'font-size': '13px',
     });
   expect.soft(await painted(invite(page), 'backgroundColor')).toEqual(rgb(ACCENT));
   await expect(form(page).getByRole('button', { name: 'Cancel', exact: true })).toBeVisible();
@@ -657,7 +657,7 @@ test('an invitation that was kept gives its link, whatever became of its message
   expect((await box(notice)).y).toBeGreaterThanOrEqual(head.y + head.height);
   expect((await box(notice)).y + (await box(notice)).height).toBeLessThanOrEqual((await box(table(page))).y);
   expect.soft(await painted(notice, 'backgroundColor')).toEqual(rgb(SUBTLE));
-  expect.soft(await styles(notice, ['border-top-left-radius'])).toEqual({ 'border-top-left-radius': '14px' });
+  expect.soft(await styles(notice, ['border-top-left-radius'])).toEqual({ 'border-top-left-radius': '8px' });
   for (const text of await notice.locator('p').all())
     expect.soft(contrast(await painted(text, 'color'), rgb(SUBTLE))).toBeGreaterThanOrEqual(4.5);
   await expectNoViolation(page, 'the block of an invitation that was kept');
@@ -941,7 +941,7 @@ test('a read that failed says so with « Try again », and is never a table with
     .toEqual({
       'padding-top': '28px',
       'padding-left': '32px',
-      'border-top-left-radius': '14px',
+      'border-top-left-radius': '8px',
       'border-top-width': '1px',
     });
   expect.soft(await painted(frame, 'borderTopColor')).toEqual(rgb(CONTROL));
@@ -1143,19 +1143,19 @@ test('at 390 px « Invite » is under the lead, the dialog fits, and the table i
   // « Invite » (its list « Site », 76 px, and its other fields): what was under it is that much higher.
   const top = (await box(page.locator('main'))).y;
   const less = 182;
-  expectBox(await box(page.locator('main h1')), { x: 16, y: top + 40, width: 358, height: 32.2 }, 4, 'the title');
-  expectBox(await box(opener(page)), { x: 16, y: top + 142.2, height: 44 }, 4, '« Invite »');
+  expectBox(await box(page.locator('main h1')), { x: 16, y: top + 40, width: 358, height: 25 }, 4, 'the title');
+  expectBox(await box(opener(page)), { x: 16, y: top + 129, height: 32 }, 4, '« Invite »');
   expectBox(
     await box(table(page)),
-    { x: 16, y: top + 392.2 - less + LISTS, width: 358, height: MEMBERS_FRAME },
+    { x: 16, y: top + 355 - less + LISTS, width: 358, height: MEMBERS_FRAME },
     4,
     'the frame',
   );
   expectBox(await box(table(page).locator('table')), { x: 17, width: 760 }, 4, 'the table');
-  expectBox(await box(row(page, 'Tom')), { x: 17, y: top + 500.7 - less + LISTS, height: 64.1 }, 4, 'the second row');
+  expectBox(await box(row(page, 'Tom')), { x: 17, y: top + 457.3 - less + LISTS, height: 60 }, 4, 'the second row');
   expectBox(
     await box(row(page, 'Tom').locator('.kit-avatar')),
-    { x: 37, y: top + 516.7 - less + LISTS, width: 32, height: 32 },
+    { x: 37, y: top + 471.3 - less + LISTS, width: 32, height: 32 },
     4,
     'the chip of the second row',
   );
@@ -1341,7 +1341,7 @@ test('the words of « Email » and « Role » sit at one height in their control
   const field = await type(email(page), email(page));
   const chosen = await type(roles(page).locator('.select__value'), roles(page));
   expect(chosen).toEqual(field);
-  expect(field.fontSize).toBe('15px');
+  expect(field.fontSize).toBe('13px');
   // The value takes the size of its button, so a compact list keeps its own.
   const button = await roles(page).evaluate((element) => getComputedStyle(element).fontSize);
   expect(chosen.fontSize).toBe(button);

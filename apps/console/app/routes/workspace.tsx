@@ -226,7 +226,9 @@ export function Frame({ rail, children }: { rail: ReactNode; children?: ReactNod
  */
 export function Screen({ className = '', children }: { className?: string; children: ReactNode }) {
   return (
-    <main className={`kit-screen box-border flex-1 px-[clamp(16px,4vw,48px)] pt-[40px] pb-[72px] ${className}`}>
+    <main
+      className={`kit-screen [view-transition-name:screen] box-border flex-1 px-[clamp(16px,4vw,48px)] pt-[40px] pb-[72px] ${className}`}
+    >
       {children}
     </main>
   );
@@ -687,7 +689,7 @@ function PersonMenu({ account, accountPage }: { account: Account; accountPage?: 
       >
         <span
           aria-hidden="true"
-          className="flex size-[24px] flex-none items-center justify-center rounded-full bg-avatar text-tiny leading-none font-semibold text-on-ink"
+          className="flex size-[24px] flex-none items-center justify-center rounded-pill bg-avatar text-tiny leading-none font-semibold text-on-ink"
         >
           {name.charAt(0).toUpperCase()}
         </span>
