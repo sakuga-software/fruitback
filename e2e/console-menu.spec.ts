@@ -65,5 +65,9 @@ test('the menu of the name of a workspace still starts at the left edge of its b
   const menu = await opened(button);
 
   expect.soft(menu.y).toBeGreaterThanOrEqual(trigger.y + trigger.height);
-  expect.soft(Math.abs(menu.x - trigger.x)).toBeLessThanOrEqual(2);
+  // The compact bar puts the button 6 px from the window (FRU-684): the menu keeps the 12 px that
+  // React Aria leaves at the edge of the window, so it starts there, a few pixels in.
+  expect.soft(trigger.x).toBeLessThan(12);
+  expect.soft(menu.x - Math.max(trigger.x, 12)).toBeGreaterThanOrEqual(-1);
+  expect.soft(menu.x - Math.max(trigger.x, 12)).toBeLessThanOrEqual(2);
 });

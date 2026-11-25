@@ -1,4 +1,5 @@
 import { type ReactNode, type RefObject, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useLocation } from 'react-router';
 import { STAGES, STAGE_NAMES } from '../stages';
 import { type Connector, type SiteChoice } from '../api';
 import { type Listed } from '../listed';
@@ -372,6 +373,12 @@ export function NotesToolbar({
   const [open, setOpen] = useState(false);
   const search = useRef<HTMLInputElement>(null);
   useSlashKey(search);
+  // FRU-684: the search of the bar opens the notes with `search` in the state of the move, and the
+  // field takes focus. Each move has its key, so a second press focuses it again.
+  const { key, state } = useLocation();
+  useEffect(() => {
+    if ((state as { search?: unknown } | null)?.search === true) search.current?.focus();
+  }, [key, state]);
   const on = filtersOn(filters, sites, tasks);
   const clear = () => {
     const off: Partial<Record<Filter, string>> = {};

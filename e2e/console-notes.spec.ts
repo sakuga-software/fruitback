@@ -3,6 +3,7 @@ import { type Page, type Route, expect, test } from '@playwright/test';
 import { WORKER_ORIGIN } from './pin.ts';
 import {
   ACME,
+  BAR_SHIFT,
   type Role,
   box,
   expectBox,
@@ -338,16 +339,21 @@ test('the page is the one of the mockup: chips, filters, the table and its pages
   await open(page);
   await expect(rows(page)).toHaveCount(8);
 
-  // The rail has its entry, on screen, between « Sites » and « Connectors ».
+  // The bar has its entry, on screen, first (FRU-684).
   const rail = page.getByRole('navigation', { name: 'Workspace' }).getByRole('link');
-  await expect(rail).toHaveText(['Sites', 'Notes', 'Connectors', 'Members', 'Settings', 'My account']);
-  await expect(rail.nth(1)).toHaveAttribute('aria-current', 'page');
+  await expect(rail).toHaveText(['Notes', 'Sites', 'Connectors', 'Members', 'Settings']);
+  await expect(rail.nth(0)).toHaveAttribute('aria-current', 'page');
 
   // The head (FRU-686): 48 px from one edge of the screen to the other, « Notes », the tabs, then
   // « New task ». No lead under the title: the mockup draws none.
   await expect(page.locator('main h1')).toHaveText('Notes');
   await expect(page.getByText('Every note left on the sites of Acme, and where it went.')).toHaveCount(0);
-  expectBox(await box(page.locator('main header').first()), { x: 248, y: 0, width: 1192, height: 48 }, 2, 'the head');
+  expectBox(
+    await box(page.locator('main header').first()),
+    { x: 248 + BAR_SHIFT, y: 0, width: 1192 - BAR_SHIFT, height: 48 },
+    2,
+    'the head',
+  );
   expect.soft(await styles(page.locator('main h1'), ['font-size', 'font-weight'])).toEqual({
     'font-size': '14px',
     'font-weight': '600',
@@ -392,7 +398,7 @@ test('the page is the one of the mockup: chips, filters, the table and its pages
     'font-size': '13px',
     'table-layout': 'fixed',
   });
-  expectBox(await box(table(page)), { x: 248, width: 1192 }, 2, 'the list, edge to edge');
+  expectBox(await box(table(page)), { x: 248 + BAR_SHIFT, width: 1192 - BAR_SHIFT }, 2, 'the list, edge to edge');
   for (const height of await rows(page).evaluateAll((all) => all.map((one) => one.getBoundingClientRect().height)))
     expect.soft(height).toBe(36);
   expect.soft((await box(table(page).locator('.kit-table-group th').first())).height).toBe(32);
