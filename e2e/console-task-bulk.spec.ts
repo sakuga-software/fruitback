@@ -189,7 +189,10 @@ test('Cmd or Ctrl and A selects the page; a task that is not yours is said; Dele
   await row(p, 'The headline').locator('td').nth(2).click();
   await p.keyboard.press('ControlOrMeta+a');
   await expect(bar(p)).toContainText('4 notes selected');
-  await expect(p.getByRole('checkbox', { name: 'Select every task of this page' })).toBeChecked();
+  // FRU-685: the list has no head of columns; the box of each group says its tasks are all selected.
+  const groups = p.getByRole('checkbox', { name: /^Select every task of / });
+  expect(await groups.count()).toBeGreaterThan(0);
+  for (const group of await groups.all()) await expect(group).toBeChecked();
   await expect(bar(p)).toContainText('1 of them is not yours to change: it stays as it is.');
 
   await bar(p).getByRole('button', { name: 'Delete…' }).click();

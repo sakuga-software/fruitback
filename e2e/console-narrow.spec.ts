@@ -264,7 +264,7 @@ for (const width of [390, 320]) {
   });
 }
 
-test('at 390 px a note is a card: its status, its author and its day are on the screen', async ({ page }) => {
+test('at 390 px a note is one line: its status, its text, its day and its menu are on the screen', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await stubScreens(page, { sites: SITES_OF_MANY, answer: answerLong });
   await page.goto(`${CONSOLE}/w/w1/notes`);
@@ -272,14 +272,22 @@ test('at 390 px a note is a card: its status, its author and its day are on the 
   const first = page.locator('tbody tr:not(.kit-table-group)').first();
   const status = first.getByRole('button', { name: /Status of this note/ });
   await expect(status).toBeVisible();
-  for (const part of [status, first.getByText('Ana Lucía Fernández-Morales'), first.locator('td').last()]) {
+  // FRU-685: no card. The columns with no room go (the author among them); what stays fits the screen.
+  for (const part of [
+    status,
+    first.locator('[data-note-title]'),
+    first.locator('td').nth(6),
+    first.locator('td').last(),
+  ]) {
     const found = await part.boundingBox();
     expect.soft(found!.x, 'starts on the screen').toBeGreaterThanOrEqual(0);
     expect.soft(found!.x + found!.width, 'ends on the screen').toBeLessThanOrEqual(390);
   }
-  // From 640 px it is the table again, which scrolls in its frame.
+  expect.soft((await first.boundingBox())!.height).toBe(36);
+  await expect(first.getByText('Ana Lucía Fernández-Morales')).toBeHidden();
+  // Wide, the author is back in its column.
   await page.setViewportSize({ width: 1440, height: 900 });
-  await expect(page.locator('thead th').first()).toBeVisible();
+  await expect(first.locator('td').nth(5).locator('.kit-tip-trigger')).toBeVisible();
   expect(await first.evaluate((row) => getComputedStyle(row).display)).toBe('table-row');
 });
 
