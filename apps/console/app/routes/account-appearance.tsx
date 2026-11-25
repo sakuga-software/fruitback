@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import {
   ACCENTS,
   ACCENT_IDS,
@@ -76,6 +76,7 @@ export default function AccountAppearance() {
   // What this browser keeps, read before the first render: a choice pressed at once builds on it, and
   // never on the default (raised in review). The console renders in a browser only (`ssr: false`).
   const [appearance, setAppearance] = useState<Appearance>(() => keptAppearance(storage()));
+  const latest = useRef(appearance);
   const [systemDark, setSystemDark] = useState(systemIsDark);
   // Under « System », the theme drawn as chosen follows the system while the page is open.
   useEffect(() => {
@@ -89,7 +90,9 @@ export default function AccountAppearance() {
   // A choice made in another tab is the one this page builds on next (raised in review).
   useEffect(() => {
     const other = (event: StorageEvent) => {
-      if (event.key === STORAGE_KEY || event.key === null) setAppearance(keptAppearance(storage()));
+      if (event.key !== STORAGE_KEY && event.key !== null) return;
+      latest.current = keptAppearance(storage());
+      setAppearance(latest.current);
     };
     window.addEventListener('storage', other);
 
@@ -97,11 +100,16 @@ export default function AccountAppearance() {
   }, []);
 
   const choose = (next: Appearance) => {
+    latest.current = next;
     setAppearance(next);
     applyAppearance(next, document.documentElement, storage(), systemIsDark());
   };
+  // A press builds on the last choice known, made here or in another tab, and not on the state drawn,
+  // which renders a moment later: the order of the events of a change elsewhere never loses it
+  // (raised in review).
+  const current = () => latest.current;
   const set = <Key extends keyof Appearance>(key: Key, value: Appearance[Key]) =>
-    choose({ ...appearance, [key]: value });
+    choose({ ...current(), [key]: value });
   const shown = presetOf(appearance, systemDark);
   const scheme = PRESETS[shown].scheme;
 
@@ -114,7 +122,7 @@ export default function AccountAppearance() {
             <PicturePick
               label={t('Theme')}
               value={shown}
-              onChange={(preset) => choose(choosePreset(appearance, preset, systemIsDark()))}
+              onChange={(preset) => choose(choosePreset(current(), preset, systemIsDark()))}
               options={PRESET_IDS.map((preset) => ({
                 value: preset,
                 label: t(PRESET_NAMES[preset]),
