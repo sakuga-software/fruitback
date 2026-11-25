@@ -10,11 +10,6 @@ import { Button, Field } from './ui';
 const PRODUCT = 'Fruitback';
 
 /**
- * WARNING: no `t` here. This is rendered once in English when the console is built, and again in the
- * browser. `t` reads the language of the browser, so a sentence here would not match the page that
- * was built. `messages.test.ts` fails on a `t` in this function or in `HydrateFallback`.
- */
-/**
  * The rule of the text (FRU-350), the same as the widget's and the extension's. Content wraps
  * anywhere, so a host, an address or a long word never runs past its box. A label never breaks inside
  * its words: `button { white-space: nowrap }` in `app.css` keeps a button, a switch, a tab and a key
@@ -22,6 +17,11 @@ const PRODUCT = 'Fruitback';
  */
 const PAGE = '[overflow-wrap:anywhere] bg-page text-ink font-sans [-webkit-font-smoothing:antialiased]';
 
+/**
+ * WARNING: no `t` here. This is rendered once in English when the console is built, and again in the
+ * browser. `t` reads the language of the browser, so a sentence here would not match the page that
+ * was built. `messages.test.ts` fails on a `t` in this function or in `HydrateFallback`.
+ */
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={PAGE}>
