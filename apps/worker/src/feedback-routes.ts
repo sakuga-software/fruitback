@@ -143,11 +143,11 @@ export async function getFeedback(
     // place whose store takes an edit. The route decides again; this only says where to offer it.
     // FRU-701: a visitor known by their browser too, where the site lets its visitors edit.
     const byAccount = own.size > 0 && reader.by === 'account';
-    const mayEdit = byAccount || (own.size > 0 && checks.visitorMay(route.policy, 'edit'));
+    const mayEdit = byAccount || (own.size > 0 && checks.visitorMay(route.client, 'edit'));
     const editsHere = mayEdit && places.length < 2 && (await takesEdits(store, route.client, route.policy));
     // FRU-605: and withdraw it, where the store takes a withdrawal. The route decides again. FRU-702: a
     // visitor known by their browser too, where the site lets its visitors delete.
-    const mayWithdraw = byAccount || (own.size > 0 && checks.visitorMay(route.policy, 'withdraw'));
+    const mayWithdraw = byAccount || (own.size > 0 && checks.visitorMay(route.client, 'withdraw'));
     const withdrawalsHere = mayWithdraw && places.length < 2 && (await takesWithdrawals(store, route.client));
     // FRU-618: the notes an agent works on, and for a member of the team the address of its session.
     const agents = await agentsOf(

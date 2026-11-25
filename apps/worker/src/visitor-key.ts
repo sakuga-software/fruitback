@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { ClientPolicy } from './clients.ts';
+import type { ClientConfig } from './clients.ts';
 
 /**
  * The key of a browser (FRU-700): how the worker knows a visitor with no account as the author of
@@ -47,13 +47,18 @@ export function visitorAuthor(digest: string): string {
 export type VisitorAction = 'edit' | 'withdraw';
 
 /**
- * Whether a visitor known by their browser may `action` a note of theirs on a site of this policy
- * (FRU-701, FRU-702). The default of the mock-ups, decided for FRU-699: on a site that takes the
- * notes of anybody, while the note is open (the routes read the stage, `EDITABLE_STAGES`). The tab
- * « Access » of the console makes it a setting of each site (FRU-703).
+ * Whether a visitor known by their browser may `action` a note of theirs on this site (FRU-701,
+ * FRU-702): the setting of the site in the tab « Access » of the console (FRU-703), `visitorEdit`
+ * for an edit and `visitorDelete` for a withdrawal. `while-open` lets them, while the note is open
+ * (the routes read the stage, `EDITABLE_STAGES`); `never`, or nothing, does not. `clientOf` gives the
+ * two only to a site that takes the notes of anybody, so a site of members, a client of
+ * `FRUITBACK_CLIENTS` and a site that closed its notes let no visitor do anything.
  *
  * Only `app.ts` imports it, as `visitorDigestOf`: the routes call it as `visitorMay` of `CallerChecks`.
  */
-export function visitorMay(policy: Pick<ClientPolicy, 'write'>, _action: VisitorAction): boolean {
-  return policy.write === 'public';
+export function visitorMay(
+  client: Pick<ClientConfig, 'visitorEdit' | 'visitorDelete'> | undefined,
+  action: VisitorAction,
+): boolean {
+  return (action === 'edit' ? client?.visitorEdit : client?.visitorDelete) === 'while-open';
 }

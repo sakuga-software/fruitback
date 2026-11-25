@@ -80,6 +80,21 @@ describe('a visitor edits the text of their open note (FRU-701)', () => {
     assert.deepEqual(await textsOf(world), ['The button is too small.']);
   });
 
+  it('refuses a visitor where the tab « Access » says « Never », offers no edit, and follows it back (FRU-703)', async () => {
+    const { world, site, edit, read, issue } = await aVisitorNote();
+    await rowsOf(world.database, `UPDATE sites SET visitor_edit = 'never' WHERE id = '${site}'`);
+
+    const refused = await edit(issue, 'Not on this site', { key: KEY_A });
+    assert.equal(refused.status, 403, JSON.stringify(refused.body));
+    assert.deepEqual(refused.body, { error: 'not-allowed' });
+    assert.equal((await read({ key: KEY_A })).get('ve_1')?.editable, undefined);
+    assert.deepEqual(await textsOf(world), ['The button is too small.']);
+
+    // « While open » again: the same browser edits.
+    await rowsOf(world.database, `UPDATE sites SET visitor_edit = 'while-open' WHERE id = '${site}'`);
+    assert.equal((await edit(issue, 'Back to while open', { key: KEY_A })).status, 200);
+  });
+
   it('counts the edits of a visitor with their replies: 5 a minute from one address', async () => {
     const { edit, issue } = await aVisitorNote();
     const answers = [];
@@ -136,7 +151,7 @@ describe('the guards of the edit of a visitor, each planted out (FRU-701)', () =
     {
       guard: 'a site that does not take the notes of anybody lets no visitor edit',
       file: 'visitor-key.ts',
-      from: "return policy.write === 'public';",
+      from: "return (action === 'edit' ? client?.visitorEdit : client?.visitorDelete) === 'while-open';",
       to: 'return true;',
       holds: async ({ world, site, edit, issue }) => {
         await rowsOf(
@@ -145,6 +160,17 @@ describe('the guards of the edit of a visitor, each planted out (FRU-701)', () =
         );
 
         return (await edit(issue, 'Closed now', { key: KEY_A })).status === 403;
+      },
+    },
+    {
+      guard: 'a site whose visitors may not edit lets no visitor edit (FRU-703)',
+      file: 'visitor-key.ts',
+      from: "=== 'while-open';",
+      to: '!== undefined;',
+      holds: async ({ world, site, edit, issue }) => {
+        await rowsOf(world.database, `UPDATE sites SET visitor_edit = 'never' WHERE id = '${site}'`);
+
+        return (await edit(issue, 'Not on this site', { key: KEY_A })).status === 403;
       },
     },
     {

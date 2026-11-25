@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { isExtensionOrigin } from './cors.ts';
+import type { VisitorRight } from './accounts.ts';
 import { CLIENT_MAP_EMPTY, CLIENT_MAP_NOT_JSON, READ_CHOSEN_IN_CONSOLE_NOTICE, publicReadNotice } from './messages.ts';
 
 /**
@@ -139,6 +140,13 @@ export type ClientConfig = z.infer<typeof clientSchema> & {
    * a site of a workspace says it. Absent: no question, no token, no route, no message.
    */
   notifyDone?: true;
+  /**
+   * FRU-703: whether a visitor changes the text of a note of their own (`VisitorRight` of the
+   * accounts). Only a site of a workspace where anybody writes says it. Absent: `never`.
+   */
+  visitorEdit?: VisitorRight;
+  /** FRU-703: whether a visitor takes back a note of their own. Absent: `never`. */
+  visitorDelete?: VisitorRight;
 };
 export type ClientMap = Record<string, ClientConfig>;
 

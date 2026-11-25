@@ -69,18 +69,36 @@ describe('the words people paste', () => {
   });
 
   it('turns a site into a client of its workspace, read by members or by everyone', () => {
-    const site = { id: 'site_1', workspaceId: 'ws_1', origin: 'https://acme.dev', destinations: [], notifyDone: false };
+    const site = {
+      id: 'site_1',
+      workspaceId: 'ws_1',
+      origin: 'https://acme.dev',
+      destinations: [],
+      notifyDone: false,
+      visitorEdit: 'never' as const,
+      visitorDelete: 'never' as const,
+    };
     assert.deepEqual(clientOf({ ...site, visibility: 'members', writers: 'anyone' }), {
       workspace: 'ws_1',
       origins: ['https://acme.dev'],
       read: 'authenticated',
       write: 'public',
+      visitorEdit: 'never',
+      visitorDelete: 'never',
     });
     assert.equal(clientOf({ ...site, visibility: 'everyone', writers: 'anyone' }).read, 'public');
   });
 
-  it('closes the writes of a site only where its members read it and its notes are « Members only » (FRU-330)', () => {
-    const site = { id: 'site_1', workspaceId: 'ws_1', origin: 'https://acme.dev', destinations: [], notifyDone: false };
+  it('closes the writes of a site whose notes are « Members only », whoever reads it (FRU-330, FRU-703)', () => {
+    const site = {
+      id: 'site_1',
+      workspaceId: 'ws_1',
+      origin: 'https://acme.dev',
+      destinations: [],
+      notifyDone: false,
+      visitorEdit: 'never' as const,
+      visitorDelete: 'never' as const,
+    };
     const table = (['members', 'everyone'] as const).flatMap((visibility) =>
       (['members', 'anyone'] as const).map((writers) => [
         visibility,
@@ -92,10 +110,27 @@ describe('the words people paste', () => {
     assert.deepEqual(table, [
       ['members', 'members', 'authenticated'],
       ['members', 'anyone', 'public'],
-      // A site that everyone reads takes a note from anybody, whatever the field says.
-      ['everyone', 'members', 'public'],
+      // FRU-703: « Read only », everyone reads and only a member writes.
+      ['everyone', 'members', 'authenticated'],
       ['everyone', 'anyone', 'public'],
     ]);
+  });
+
+  it('gives the routes what a visitor may do to a note of their own, only where a visitor writes (FRU-703)', () => {
+    const site = {
+      id: 'site_1',
+      workspaceId: 'ws_1',
+      origin: 'https://acme.dev',
+      destinations: [],
+      notifyDone: false,
+      visibility: 'everyone' as const,
+    };
+    const open = clientOf({ ...site, writers: 'anyone', visitorEdit: 'while-open', visitorDelete: 'never' });
+    assert.equal(open.visitorEdit, 'while-open');
+    assert.equal(open.visitorDelete, 'never');
+    const closed = clientOf({ ...site, writers: 'members', visitorEdit: 'while-open', visitorDelete: 'while-open' });
+    assert.equal('visitorEdit' in closed, false);
+    assert.equal('visitorDelete' in closed, false);
   });
 });
 

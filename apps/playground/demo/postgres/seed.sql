@@ -14,6 +14,6 @@ INSERT INTO organization (id, name, slug, "createdAt")
 VALUES ('ws_demo', 'Demonstration', 'ws_demo', now())
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO sites (id, workspace_id, origin, visibility, created_at)
-VALUES ('playground', 'ws_demo', :'origin', 'everyone', (extract(epoch FROM now()) * 1000)::bigint)
+INSERT INTO sites (id, workspace_id, origin, visibility, writers, created_at)
+VALUES ('playground', 'ws_demo', :'origin', 'everyone', 'anyone', (extract(epoch FROM now()) * 1000)::bigint)
 ON CONFLICT (id) DO NOTHING;
