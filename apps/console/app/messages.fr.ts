@@ -644,7 +644,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Edit the text of their own notes': 'Modifier le texte de ses propres notes',
   'Delete their own notes': 'Supprimer ses propres notes',
   'Change the status': 'Changer le statut',
-  'See the tracker and assignee': 'Voir le tracker et l’assigné',
+  'See the tracker and assignee': 'Voir l’outil de suivi et l’assigné',
   Never: 'Jamais',
   'While open': 'Tant qu’ouverte',
   Allowed: 'Autorisé',
@@ -655,7 +655,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Une clé gardée dans le navigateur. Perdue s’il l’efface ou change d’appareil.',
   'A confirmed e-mail': 'Un e-mail confirmé',
   'A link by e-mail before the first edit. Works on any device.':
-    'Un lien par e-mail avant la première modification. Marche sur tout appareil.',
+    'Un lien par e-mail avant la première modification. Fonctionne sur tout appareil.',
   'Signed by your site': 'Signé par votre site',
   'Your backend signs who the visitor is. For logged-in users of your app.':
     'Votre serveur signe qui est le visiteur. Pour les personnes connectées à votre application.',
