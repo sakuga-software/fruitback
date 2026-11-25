@@ -274,7 +274,7 @@ export function statusDrop(document: Document, options: DropOptions): HTMLElemen
  */
 export function stageRing(document: Document, stage: Stage, paint?: { fill: string }): SVGSVGElement {
   const ring = createStageRing(document, stage, 'kit-stage-ring');
-  ring.style.color = ringColor(stage, paint?.fill, `var(--stage-${stage})`, 'var(--subtle)');
+  ring.style.color = ringColor(stage, paint?.fill, `var(--color-status-${stage})`, 'var(--color-ink-soft)');
 
   return ring;
 }

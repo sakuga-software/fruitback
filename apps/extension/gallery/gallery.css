@@ -6,33 +6,33 @@ body.gallery-all {
   min-width: 0;
   margin: 0;
   padding: 0;
-  background: var(--surface-sunken, #f4f4f5);
+  background: var(--color-surface-sunken, #f4f4f5);
 }
 
 .gallery-frame {
   overflow: hidden;
   border-radius: 12px;
   box-shadow:
-    0 0 0 1px var(--line-soft, rgb(0 0 0 / 8%)),
+    0 0 0 1px var(--color-line-soft, rgb(0 0 0 / 8%)),
     0 8px 24px rgb(0 0 0 / 8%);
 }
 
 .gallery-frame-popup {
   width: 380px;
-  background: var(--surface);
+  background: var(--color-surface);
 }
 
 .gallery-frame-welcome {
   width: 900px;
   min-height: 700px;
-  background: var(--surface-raised);
+  background: var(--color-surface-raised);
 }
 
 .gallery-frame-panel {
   width: 400px;
   height: 900px;
   overflow-y: auto;
-  background: var(--surface);
+  background: var(--color-surface);
 }
 
 /* The panel fills its window: here its window is the frame. */

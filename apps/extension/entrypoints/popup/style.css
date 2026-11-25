@@ -1,150 +1,16 @@
 /*
-  The tokens of the extension. The greys, the statuses, the shadows and the radii are those of the
-  widget (packages/widget/src/theme.ts), which are the zinc of the console since FRU-334, and so is
-  the accent since FRU-372: the red #dd2c27 of the console and of the widget, one accent everywhere.
-  A stylesheet of an extension page cannot import the widget, so the shared values are copied here,
-  and src/design-tokens.test.ts compares each one with the widget and measures each pair of text and
-  background. The options page loads this file first.
+  The sheet of the popup, which every page of the extension loads first: it brings the theme
+  (src/theme.css), so the tokens and their dark scheme are defined once for every page.
 */
+@import '../../src/theme.css';
+
 :root {
   color-scheme: light dark;
-  --surface: #fff;
-  /* A quiet block, and the background of the page of the extension. */
-  --surface-raised: #fafafa;
-  --surface-sunken: #f4f4f5;
-  /* A mono block, and the row that is open. A cream until FRU-334, the raised grey now. */
-  --surface-warm: #fafafa;
-  --text: #18181b;
-  /* The muted text of the console: 5.28:1 on the surface, 4.80:1 on the sunken surface. */
-  --muted: #6b6b74;
-  /* The secondary text of the extension. */
-  --subtle: #52525b;
-  --line: #e4e4e7;
-  /* The rule between the rows of a table. */
-  --line-row: #f4f4f5;
-  /* The edge of a field: the field border of the console, 3.42:1 on the surface. */
-  --line-strong: #8a8a93;
-  /*
-    The edge of a secondary button and of a key. 2.56:1 on the surface: the label of the button says
-    what it is, so the edge is not the only cue. A field takes --line-strong.
-  */
-  --line-control: #a1a1aa;
-  /* The search field of the page, and a switch that is off. */
-  --line-soft: #d4d4d8;
-  /* The red of the console and of the widget (FRU-372): white on it 4.70:1, on the strong one 6.47:1. */
-  --accent: #dd2c27;
-  --accent-strong: #b91c1c;
-  --on-accent: #fff;
-  --chip: #3f3f46;
-  --on-chip: #fff;
-  /* The capture capsule and the Save button. */
-  --ink: #18181b;
-  --on-ink-muted: #d4d4d8;
-  --success: #15803d;
-  /* The edge of « Looks fixed », and the dot that says a session is attached: 3.30:1 on the surface. */
-  --success-line: #16a34a;
-  /*
-    A problem and its remedy: the tint of the accent, kept because it says a problem in the colour
-    of the extension (FRU-334 moves the row that is chosen to --surface-sunken).
-  */
-  --alert-surface: #fef2f2;
-  --alert-line: #fca5a5;
-  --alert-text: #b91c1c;
-  /* The line between two notes of « To check » (FRU-300, FRU-606). */
-  --ready-divider: #e4e4e7;
-  --selection: #fecaca;
-  /* The tile of a site that is on. */
-  --tile-on: #2f4f3a;
-  --on-tile: #fff;
-  /* The dot of the account, and the tile of a site nobody added (FRU-293). */
-  --avatar-surface: #e4e4e7;
-  --on-avatar: #3f3f46;
-  /* The words of a problem, under its title. */
-  --alert-body: #3f3f46;
-  /* The ring of a drop, and the number on done and closed: white. */
-  --on-stage: #fff;
-  /* The number on new, to do and in progress, the three light fills (FRU-334): black. */
-  --on-stage-new: #18181b;
-  --on-stage-todo: #18181b;
-  --on-stage-progress: #18181b;
-  /* The edge of every drop: 3.42:1 on white, 5.18:1 on the dark surface (FRU-334). */
-  --stage-edge: #8a8a93;
-  /* A note whose element is gone: a neutral grey, no longer the brown of « closed » (FRU-334). */
-  --unplaced: #71717a;
-  /* The knob of a switch, on the accent and on the grey of off. */
-  --knob: #fff;
-  /* The five statuses of a note, as the widget draws them on the page (FRU-334). */
-  --stage-new: #bec2c8;
-  --stage-todo: #d9dbdf;
-  --stage-progress: #f3bb3d;
-  --stage-done: #5560c4;
-  --stage-closed: #a52a3a;
-  /* The tab that is chosen; the popup; the side panel. */
-  --shadow-xs: 0 1px 3px rgba(24, 24, 27, 0.15);
-  --shadow-popup: 0 8px 28px rgba(24, 24, 27, 0.14);
-  --shadow-panel: -8px 0 24px rgba(24, 24, 27, 0.06);
-  /* The drop of a status in a list, and the knob of the switch of a table. */
-  --shadow-drop: 0 2px 6px rgba(24, 24, 27, 0.22);
-  --shadow-knob: 0 1px 2px rgba(0, 0, 0, 0.2);
-  --radius-control: 6px;
-  --radius-field: 8px;
-  /* A main action and a tile. */
-  --radius-action: 10px;
-  /* The high action, an alert, a card of the page. */
-  --radius-card: 12px;
-  --radius-panel: 14px;
-  --radius-pill: 999px;
-  --font-sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
-}
-
-/*
-  No mock-up draws a dark scheme. This one is derived: the zinc scale of the widget from its other
-  end (900, 800, 700), and the dark accent of the widget (FRU-372): a red lighter than the accent,
-  under dark text, every pair measured by the test. The brown fills of before (#431407, #2a1d14) are
-  the greys of the scale now (FRU-334): a problem keeps its line and its title in the red.
-*/
-@media (prefers-color-scheme: dark) {
-  :root {
-    --surface: #18181b;
-    --surface-raised: #27272a;
-    --surface-sunken: #2e2e33;
-    --surface-warm: #1f1f23;
-    --text: #f4f4f5;
-    --muted: #a1a1aa;
-    --subtle: #d4d4d8;
-    --line: #3f3f46;
-    --line-row: #27272a;
-    --line-strong: #8a8a93;
-    --line-control: #71717a;
-    --line-soft: #52525b;
-    /*
-      No red holds white text at 4.5:1 and is also readable as a link on a dark surface: #dd2c27 is
-      3.44:1 on #18181b. The dark accent of the widget, a lighter fill with dark text on it.
-    */
-    --accent: #ec6a65;
-    --accent-strong: #f08a85;
-    --on-accent: #18181b;
-    --chip: #52525b;
-    --success: #4ade80;
-    --success-line: #4ade80;
-    --alert-surface: #27272a;
-    --alert-line: #991b1b;
-    --alert-text: #f08a85;
-    --ready-divider: #3f3f46;
-    --selection: #7f1d1d;
-    --avatar-surface: #3f3f46;
-    --on-avatar: #f4f4f5;
-    --alert-body: #d4d4d8;
-    --shadow-xs: 0 1px 3px rgba(0, 0, 0, 0.5);
-    --shadow-popup: 0 8px 28px rgba(0, 0, 0, 0.5);
-    --shadow-panel: -8px 0 24px rgba(0, 0, 0, 0.4);
-  }
 }
 
 ::selection {
-  background: var(--selection);
-  color: var(--text);
+  background: var(--color-selection);
+  color: var(--color-text);
 }
 
 /*
@@ -166,8 +32,8 @@ body {
   margin: 0;
   min-width: 280px;
   padding: 14px;
-  background: var(--surface);
-  color: var(--text);
+  background: var(--color-surface);
+  color: var(--color-text);
   font:
     13px/1.5 system-ui,
     -apple-system,
@@ -196,7 +62,7 @@ h1::before {
 
 .origin {
   margin: 0 0 12px;
-  color: var(--muted);
+  color: var(--color-muted);
   overflow-wrap: anywhere;
 }
 
@@ -209,7 +75,7 @@ h1::before {
   justify-content: space-between;
   gap: 8px 12px;
   padding-top: 10px;
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--color-line);
 }
 
 /* The words give way, not the button beside them: a name can be an address of 40 characters. */
@@ -244,9 +110,9 @@ input[type='text'] {
   margin-top: 3px;
   padding: 6px 10px;
   /* The edge of a field needs 3:1 on the surface (WCAG 1.4.11): the strong line, as in the widget. */
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--color-line-strong);
   border-radius: var(--radius-field);
-  background: var(--surface);
+  background: var(--color-surface);
   color: inherit;
   font: inherit;
 }
@@ -256,8 +122,8 @@ button {
   padding: 6px 14px;
   border: 0;
   border-radius: var(--radius-pill);
-  background: var(--accent);
-  color: var(--on-accent);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
   font: inherit;
   font-weight: 600;
   /* A button stays on one line. */
@@ -274,7 +140,7 @@ button.long {
 
 .state {
   margin: 0;
-  color: var(--muted);
+  color: var(--color-muted);
 }
 
 /* FRU-289: the e-mail of a session with no name, under « Paired », in the secondary text. */
@@ -285,7 +151,7 @@ button.long {
 
 .problem {
   margin: 8px 0 0;
-  color: var(--accent);
+  color: var(--color-accent);
 }
 
 .destination-saved:empty {
@@ -304,8 +170,8 @@ button.long {
 /* The second button in a row, which must not read as the one somebody came here to press. */
 button.secondary {
   background: transparent;
-  color: var(--muted);
-  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--color-muted);
+  box-shadow: inset 0 0 0 1px var(--color-line);
 }
 
 /* The one thing to do about a problem, beside the words that state it (FRU-90). */
@@ -353,7 +219,7 @@ body.popup-page {
 }
 
 .popup .host {
-  color: var(--muted);
+  color: var(--color-muted);
   overflow-wrap: anywhere;
 }
 
@@ -375,7 +241,7 @@ body.popup-page {
 .popup .lead {
   font-size: 14px;
   line-height: 1.5;
-  color: var(--muted);
+  color: var(--color-muted);
 }
 
 /* The one thing a screen is for: the main button of the kit, 6 px under what the screen says. */
@@ -389,7 +255,7 @@ body.popup-page {
   padding: 0;
   border-radius: 0;
   background: none;
-  color: var(--text);
+  color: var(--color-text);
   font-weight: 600;
   text-decoration: underline;
   text-decoration-thickness: 1px;
@@ -409,7 +275,7 @@ body.popup-page {
 .popup button.link-button:hover,
 .welcome button.link-button:hover,
 .popup-foot a:hover {
-  color: var(--accent);
+  color: var(--color-accent);
 }
 
 /* The word the console shows too: big, spaced, and in a face where 0 and O differ. */
@@ -425,8 +291,8 @@ body.popup-page {
 
 .popup-foot {
   padding: 14px 16px;
-  border-top: 1px solid var(--line);
-  color: var(--muted);
+  border-top: 1px solid var(--color-line);
+  color: var(--color-muted);
 }
 
 /*
@@ -458,7 +324,7 @@ body.popup-page {
 
 .popup .intro .lead {
   margin: 0;
-  color: var(--subtle);
+  color: var(--color-ink-soft);
 }
 
 /* The steps of a page of the browser (FRU-526): what to do, one line each, the keys in the text. */
@@ -494,13 +360,13 @@ body.popup-page {
   flex-direction: column;
   gap: 4px;
   margin-top: auto;
-  color: var(--subtle);
+  color: var(--color-ink-soft);
   font-size: 13px;
 }
 
 /* The foot of screen 1 leads to the page of the extension: a link in the accent. */
 .popup-screen-1 .popup-foot button.link-button {
-  color: var(--accent);
+  color: var(--color-accent);
   font-weight: 400;
 }
 
@@ -536,7 +402,7 @@ body.popup-page {
 }
 
 .popup-foot a {
-  color: var(--text);
+  color: var(--color-text);
   font-weight: 600;
   white-space: nowrap;
   text-decoration-thickness: 1px;
@@ -554,7 +420,7 @@ body.popup-page {
 .popup .action-block .note {
   margin: 0;
   font-size: 12px;
-  color: var(--muted);
+  color: var(--color-muted);
   text-align: center;
 }
 
@@ -576,7 +442,7 @@ body.popup-page {
 
 .popup-screen-2 .action-block .note {
   font-size: 13px;
-  color: var(--subtle);
+  color: var(--color-ink-soft);
 }
 
 :is(.popup-screen-2, .popup-site-on) .kit-dl select {
@@ -609,7 +475,7 @@ body.popup-page {
   }
 
   :is(.popup-screen-2, .popup-site-on) .kit-dl select:hover:not(:disabled) {
-    border-color: var(--ink);
+    border-color: var(--color-ink);
   }
 
   /* The arrow: a chevron drawn by two borders, at the right edge, never over the words. */
@@ -664,9 +530,9 @@ body.popup-page {
     max-height: 260px;
     margin-top: 4px;
     padding: 4px;
-    border: 1px solid var(--line-strong);
+    border: 1px solid var(--color-line-strong);
     border-radius: var(--radius-field);
-    background: var(--surface);
+    background: var(--color-surface);
     box-shadow: var(--shadow-popup);
     opacity: 0;
     translate: 0 -4px;
@@ -696,7 +562,7 @@ body.popup-page {
 
   :is(.popup-screen-2, .popup-site-on) .kit-dl select option:hover,
   :is(.popup-screen-2, .popup-site-on) .kit-dl select option:focus-visible {
-    background: var(--line-row);
+    background: var(--color-line-row);
   }
 
   :is(.popup-screen-2, .popup-site-on) .kit-dl select option::checkmark {
@@ -732,7 +598,7 @@ body.popup-page {
 /* FRU-633: the tracker of the place refuses the connection. In the accent, as a problem. */
 .popup .site-refused {
   margin-top: 8px;
-  color: var(--accent-strong);
+  color: var(--color-accent-strong);
   font-size: 12px;
   line-height: 1.4;
 }
@@ -743,7 +609,7 @@ body.popup-page {
 
 .popup .site-refused .site-refused-who {
   margin-top: 4px;
-  color: var(--muted);
+  color: var(--color-muted);
 }
 
 /*
@@ -770,7 +636,7 @@ body.popup-page {
 
 /* The drop of « Fruitback (no tracker) » in the red of the mark. */
 .source-mark[data-kind='fruitback'] {
-  color: var(--accent);
+  color: var(--color-accent);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -821,9 +687,9 @@ body.popup-page {
   justify-content: center;
   width: 32px;
   height: 32px;
-  border: 1px solid var(--success-line);
+  border: 1px solid var(--color-success-line);
   border-radius: var(--radius-action);
-  color: var(--success);
+  color: var(--color-success);
 }
 
 /* The menu « ⋯ » of the kit (FRU-599): over the screen, under its button, at the end of the line. */
@@ -853,9 +719,9 @@ body.popup-page {
   flex-direction: column;
   width: 260px;
   padding: 6px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--color-line);
   border-radius: var(--radius-card);
-  background: var(--surface);
+  background: var(--color-surface);
   box-shadow: var(--shadow-popup);
 }
 
@@ -872,7 +738,7 @@ body.popup-page {
   border: none;
   border-radius: var(--radius-field);
   background: none;
-  color: var(--text);
+  color: var(--color-text);
   font: inherit;
   text-align: left;
   cursor: pointer;
@@ -884,7 +750,7 @@ body.popup-page {
 
 .popup .kit-menu-item:hover,
 .popup .kit-menu-item:focus-visible {
-  background: var(--surface-sunken);
+  background: var(--color-surface-sunken);
 }
 
 .popup .kit-menu-label {
@@ -893,7 +759,7 @@ body.popup-page {
 }
 
 .popup .kit-menu-detail {
-  color: var(--muted);
+  color: var(--color-muted);
   font-size: 12px;
   line-height: 1.4;
 }
@@ -906,9 +772,9 @@ body.popup-page {
   min-height: 44px;
   box-sizing: border-box;
   padding: 6px 6px 6px 12px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--color-line);
   border-radius: var(--radius-action);
-  background: var(--surface-raised);
+  background: var(--color-surface-raised);
 }
 
 .popup .site-destination:has(> .kit-dl) {
@@ -924,7 +790,7 @@ body.popup-page {
 
 .popup .destination-label {
   flex: none;
-  color: var(--muted);
+  color: var(--color-muted);
   font-size: 12px;
 }
 
@@ -955,7 +821,7 @@ body.popup-page {
 .popup .hidden-line {
   margin: 0;
   font-size: 14px;
-  color: var(--muted);
+  color: var(--color-muted);
 }
 
 /* Under the row of a rule, apart from its buttons. */
@@ -977,17 +843,17 @@ body.popup-page {
   width: 100%;
   min-height: 60px;
   padding: 12px 14px;
-  border: 1px solid var(--line-control);
+  border: 1px solid var(--color-line-control);
   border-radius: var(--radius-card);
-  background: var(--surface);
-  color: var(--text);
+  background: var(--color-surface);
+  color: var(--color-text);
   font: inherit;
   text-align: left;
   cursor: pointer;
 }
 
 .popup .panel-row:hover:not(:disabled) {
-  border-color: var(--ink);
+  border-color: var(--color-ink);
 }
 
 .popup .panel-row:disabled {
@@ -1003,7 +869,7 @@ body.popup-page {
   width: 36px;
   height: 36px;
   border-radius: var(--radius-action);
-  background: var(--surface-sunken);
+  background: var(--color-surface-sunken);
 }
 
 .popup .panel-row-tile .popup-icon {
@@ -1028,7 +894,7 @@ body.popup-page {
   display: flex;
   align-items: center;
   gap: 6px;
-  color: var(--muted);
+  color: var(--color-muted);
   font-size: 12px;
 }
 
@@ -1040,12 +906,12 @@ body.popup-page {
   width: 7px;
   height: 7px;
   border-radius: var(--radius-pill);
-  background: var(--stage-done);
+  background: var(--color-status-done);
 }
 
 .popup .panel-row-caret {
   flex: none;
-  color: var(--muted);
+  color: var(--color-muted);
 }
 
 /* The square of « Hide Fruitback on this page » of the screen of a rule (FRU-590). */
@@ -1065,7 +931,7 @@ body.popup-page {
 /* 12 px under the button, as the mock-up has it: 20 of the column less 12. */
 .popup .shortcut-line {
   margin: 0;
-  color: var(--subtle);
+  color: var(--color-ink-soft);
   font-size: 13px;
   text-align: center;
 }
@@ -1120,7 +986,7 @@ body.popup-page {
 /* FRU-519: the line of a new release, above the foot. */
 .popup > .kit-update {
   padding: 0 16px;
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--color-line);
 }
 
 /*
@@ -1163,12 +1029,12 @@ body.popup-page {
 
 .popup .destination-intro {
   margin: 0;
-  color: var(--subtle);
+  color: var(--color-ink-soft);
   font-size: 12px;
 }
 
 .popup .destination-intro strong {
-  color: var(--text);
+  color: var(--color-text);
   font-weight: 600;
 }
 
@@ -1183,19 +1049,19 @@ body.popup-page {
   flex-direction: column;
   gap: 10px;
   padding: 12px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--color-line);
   border-radius: var(--radius-action);
-  background: var(--surface);
+  background: var(--color-surface);
   cursor: pointer;
 }
 
 .popup .destination-card.is-chosen {
-  border: 1.5px solid var(--accent);
-  background: var(--alert-surface);
+  border: 1.5px solid var(--color-accent);
+  background: var(--color-alert-surface);
 }
 
 .popup .destination-card:has(input:focus-visible) {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--color-accent);
   outline-offset: 2px;
 }
 
@@ -1213,9 +1079,9 @@ body.popup-page {
   justify-content: center;
   width: 24px;
   height: 24px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--color-line);
   border-radius: var(--radius-control);
-  background: var(--surface-sunken);
+  background: var(--color-surface-sunken);
 }
 
 .popup .destination-card-tile .source-mark {
@@ -1238,7 +1104,7 @@ body.popup-page {
 
 .popup .destination-card-detail {
   overflow: hidden;
-  color: var(--subtle);
+  color: var(--color-ink-soft);
   font-size: 12px;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -1249,7 +1115,7 @@ body.popup-page {
   width: 18px;
   height: 18px;
   margin: 0;
-  accent-color: var(--accent);
+  accent-color: var(--color-accent);
 }
 
 .popup .destination-lists {
@@ -1269,7 +1135,7 @@ body.popup-page {
   flex-direction: column;
   gap: 4px;
   min-width: 0;
-  color: var(--subtle);
+  color: var(--color-ink-soft);
   font-size: 12px;
   font-weight: 600;
 }
@@ -1279,11 +1145,11 @@ body.popup-page {
   width: 100%;
   height: 38px;
   padding: 0 10px;
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--color-line-strong);
   border-radius: var(--radius-field);
-  background: var(--surface);
-  color: var(--text);
-  font: 600 13px / 1 var(--font-sans);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: 600 13px / 1 var(--font-ui);
 }
 
 .popup .destination-connect {
@@ -1297,12 +1163,12 @@ body.popup-page {
   gap: 10px;
   margin: 4px -20px -16px;
   padding: 12px 20px 16px;
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--color-line);
 }
 
 .popup .destination-kept {
   margin: 0;
-  color: var(--subtle);
+  color: var(--color-ink-soft);
   font-size: 12px;
 }
 
@@ -1317,14 +1183,14 @@ body.popup-page {
   align-items: center;
   gap: 10px;
   padding: 12px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--color-line);
   border-radius: var(--radius-action);
-  background: var(--surface-raised);
+  background: var(--color-surface-raised);
 }
 
 .popup .destination-lock {
   flex: none;
-  color: var(--muted);
+  color: var(--color-muted);
 }
 
 .popup .destination-why,
@@ -1347,8 +1213,8 @@ body.popup-page {
   overflow: hidden;
   padding: 10px 12px;
   border-radius: var(--radius-action);
-  background: color-mix(in srgb, var(--success) 12%, var(--surface));
-  color: var(--success);
+  background: color-mix(in srgb, var(--color-success) 12%, var(--color-surface));
+  color: var(--color-success);
   font-size: 13px;
   font-weight: 600;
   transition:
@@ -1364,7 +1230,7 @@ body.popup-page {
   bottom: 0;
   height: 3px;
   width: 100%;
-  background: var(--success-line);
+  background: var(--color-success-line);
   transform-origin: left;
   animation: change-notice-time linear forwards;
 }
@@ -1405,7 +1271,7 @@ body.popup-page {
   align-items: flex-start;
   gap: 2px;
   padding: 12px 14px 0;
-  border: 1px solid var(--line);
+  border: 1px solid var(--color-line);
   border-radius: var(--radius-action);
 }
 
@@ -1451,7 +1317,7 @@ body.popup-page {
   flex-direction: column;
   gap: 6px;
   margin: 0;
-  color: var(--muted);
+  color: var(--color-muted);
   font-size: 12px;
 }
 
@@ -1460,10 +1326,10 @@ body.popup-page {
   width: 100%;
   padding: 10px 12px;
   /* The edge of a field needs 3:1 on the surface (WCAG 1.4.11). */
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--color-line-strong);
   border-radius: var(--radius-field);
-  background: var(--surface);
-  color: var(--text);
+  background: var(--color-surface);
+  color: var(--color-text);
   font: inherit;
   font-size: 13px;
   line-height: 1.45;

@@ -107,7 +107,11 @@ describe('the badge of a tab', () => {
   });
 
   it('is the colour of done in the popup', () => {
-    const style = readFileSync(new URL('../entrypoints/popup/style.css', import.meta.url), 'utf8');
-    assert.ok(style.includes(`--stage-done: ${BADGE_COLOR};`));
+    // The status of done comes from the shared theme, which src/theme.css imports (FRU-679).
+    const theme = readFileSync(new URL('./theme.css', import.meta.url), 'utf8');
+    const shared = readFileSync(new URL('../../../packages/shared/tailwind/theme.css', import.meta.url), 'utf8');
+    assert.match(theme, /@import '@fruitback\/shared\/tailwind\/theme\.css'/);
+    assert.doesNotMatch(theme, /--color-status-done:/);
+    assert.ok(shared.includes(`--color-status-done: ${BADGE_COLOR};`));
   });
 });

@@ -485,9 +485,10 @@ describe('a list to choose from (FRU-535)', () => {
 
   it('lies over what follows it, in its sheet', () => {
     const sheet = readFileSync(new URL('./kit.css', import.meta.url), 'utf8');
+    // Tailwind writes the rules (FRU-679): `absolute` is `position: absolute`, `z-10` a z-index.
     const rule = /\n\.kit-select-list \{([^}]*)\}/.exec(sheet)?.[1] ?? '';
-    assert.match(rule, /position: absolute/);
-    assert.match(rule, /z-index: \d+/);
-    assert.match(/\n\.kit-select \{([^}]*)\}/.exec(sheet)?.[1] ?? '', /position: relative/);
+    assert.match(rule, /@apply [^;]*\babsolute\b/);
+    assert.match(rule, /@apply [^;]*\bz-\d+\b/);
+    assert.match(/\n\.kit-select \{([^}]*)\}/.exec(sheet)?.[1] ?? '', /@apply [^;]*\brelative\b/);
   });
 });
