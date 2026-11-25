@@ -2,7 +2,7 @@ import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router';
 import { type Connector, type Delivery, type Site, call, placesOf } from '../api';
 import { type Listed, known, listedOf } from '../listed';
-import { Button, Dialog, LinkButton, Problem } from '../ui';
+import { Button, DataTable, Dialog, Field, IconButton, Menu, Problem, ViewTab, folded } from '../ui';
 import { PageHead, useWorkspace } from './workspace';
 import { msg, t } from '../i18n';
 import { WORKSPACE_SUSPENDED, problemOf, writeProblemOf } from '../problems';
@@ -11,41 +11,83 @@ import { AddLinear, AddRest, AddRoutine } from '../parts/connector-add';
 import { GithubPanel } from '../parts/connector-github';
 import { LinearPanel } from '../parts/connector-linear';
 import { ConnectorName } from '../parts/connector-name';
-import {
-  KEY_PROBLEMS,
-  KINDS,
-  type PanelProps,
-  SourceMark,
-  connectorName,
-  siteCount,
-  sourceLine,
-} from '../parts/connector-parts';
+import { KEY_PROBLEMS, KINDS, type PanelProps, connectorName, siteCount, sourceLine } from '../parts/connector-parts';
 import { RestPanel } from '../parts/connector-rest';
 import { AddPlugin, PLUGIN_RETURNS, PluginPanel, leaveForPlugin, pluginSentence } from '../parts/connector-plugin';
 import { trackerOf } from '../trackers/index.ts';
-import { PLUGIN_KINDS, type PluginKind } from '../trackers/plugin.ts';
+import { PLUGIN_KINDS, type PluginKind, isPluginKind } from '../trackers/plugin.ts';
 import { RoutinePanel } from '../parts/connector-routine';
 import { NoCodeRecipes } from '../parts/agent-recipes';
-import type { LaterKind, MarkedKind } from '../connector-marks';
+import { ConnectorLogo } from '../connector-logos';
+import type { LogoKind } from '../connector-logo-kinds.ts';
+import { NoteIcon } from '../note-icons';
 import { ReadProblem } from '../read-problem';
 
 /**
- * The sources of a workspace, as screen 11 of the mockup of 2026-10-13 draws them (FRU-246): the
- * sources that are connected, the ones to add, and the panel of the source that is chosen. The panel
- * opens under its row at every width, as an accordion (FRU-403), where the mockup draws a column.
+ * The connectors of a workspace (FRU-690): a table of the connectors that are connected, with the
+ * health of each one, and the catalogue of what can be added, as tiles with the logo of each tracker.
+ * The settings of a connector open in a dialog (FRU-690), where they were an accordion under its row
+ * (FRU-403).
  *
  * Linear connects with OAuth or an API key (FRU-121, FRU-134), GitHub with its App where the worker
- * has one (FRU-361), and an address of the workspace's own receives each note (FRU-132). The other
- * sources are listed where the mockup puts them, and say that they are not there yet: no button
- * connects what does not exist.
+ * has one (FRU-361), an address of the workspace's own receives each note (FRU-132), and the plugins
+ * of the worker connect as they say (FRU-621). The other trackers of the catalogue say « Soon »: no
+ * button connects what does not exist.
  */
-const LATER = [
-  { kind: 'jira', name: 'Jira', detail: msg('An issue in a Jira Cloud project.') },
-  { kind: 'gitlab', name: 'GitLab', detail: msg('An issue in a project, cloud or self-managed.') },
-  { kind: 'trello', name: 'Trello', detail: msg('A card in the list you choose.') },
-  { kind: 'notion', name: 'Notion', detail: msg('A row in a database.') },
-  { kind: 'webhook', name: 'Webhook', detail: msg('Tells Slack or any address when a note arrives.') },
-] as const;
+
+/** A group of the catalogue: the segment above the tiles (FRU-690). */
+type Group = 'trackers' | 'agents' | 'developers';
+
+/** What a tile of the catalogue says before it is connected: what a note becomes there, in one line. */
+type Entry = { kind: LogoKind; name: string; short: string; group: Group; fresh?: true };
+
+/**
+ * The catalogue, in the order of the mockup of FRU-690. `name` is the name of the kind where it can
+ * be connected, so a tile and a row say the same; `short` is the one line of the tile, and the long
+ * sentence of the kind is its tooltip.
+ */
+const CATALOGUE: readonly Entry[] = [
+  { kind: 'linear', name: KINDS.linear.name, short: msg('An issue in a team'), group: 'trackers' },
+  { kind: 'jira', name: KINDS.jira.name, short: msg('An issue in a project'), group: 'trackers' },
+  { kind: 'github', name: KINDS.github.name, short: msg('An issue in a repository'), group: 'trackers' },
+  { kind: 'gitlab', name: KINDS.gitlab.name, short: msg('An issue in a project'), group: 'trackers' },
+  { kind: 'asana', name: KINDS.asana.name, short: msg('A task in a project'), group: 'trackers' },
+  { kind: 'clickup', name: KINDS.clickup.name, short: msg('A task in a list'), group: 'trackers' },
+  { kind: 'trello', name: 'Trello', short: msg('A card on a board'), group: 'trackers' },
+  { kind: 'notion', name: 'Notion', short: msg('A row in a database'), group: 'trackers' },
+  { kind: 'slack', name: KINDS.slack.name, short: msg('A message in a channel'), group: 'trackers' },
+  { kind: 'webhook', name: msg('Webhook'), short: msg('Tells any address when a note arrives'), group: 'developers' },
+  { kind: 'rest', name: KINDS.rest.name, short: msg('A POST to your endpoint'), group: 'developers' },
+  {
+    kind: 'claude-routine',
+    name: KINDS['claude-routine'].name,
+    short: msg('A routine of your team starts'),
+    group: 'agents',
+    fresh: true,
+  },
+];
+
+/** The long sentence of a kind that this console connects, for the tooltip of its tile. */
+const DETAILS: Readonly<Partial<Record<LogoKind, string>>> = {
+  linear: msg('An issue per note, in the team you choose.'),
+  // FRU-331: the API of an issue of GitHub takes no file, so the files of a note do not go there.
+  github: msg('An issue per note, in one repository. The files of a note do not go: GitHub takes none by its API.'),
+  rest: msg('POST each note to your own endpoint, with an address of one hour for each of its files.'),
+  'claude-routine': msg(
+    'Starts a routine of your team when the trigger of a site calls it. The routine reads the notes through the MCP server.',
+  ),
+  trello: msg('A card in the list you choose.'),
+  notion: msg('A row in a database.'),
+  webhook: msg('Tells Slack or any address when a note arrives.'),
+};
+
+/** The segment of the catalogue: every tile, or one group. */
+const GROUPS: readonly { id: Group | 'all'; label: string }[] = [
+  { id: 'all', label: msg('All kinds') },
+  { id: 'trackers', label: msg('Trackers') },
+  { id: 'agents', label: msg('Agents') },
+  { id: 'developers', label: msg('Developers') },
+];
 
 /** What the way back from Linear says, as the worker words it in the address (FRU-134). */
 const LINEAR_RETURNS: Record<string, string> = {
@@ -110,15 +152,31 @@ function pluginReturn(search: URLSearchParams): { kind: PluginKind; word: string
   return undefined;
 }
 
+/**
+ * Whether a connector receives each note, and so has a list of the sends that wait: an address, a
+ * routine (FRU-594), and a plugin that keeps nothing (FRU-624, Slack). A tracker has none.
+ */
+function receives(connector: Connector): boolean {
+  if (connector.kind === 'rest' || connector.kind === 'claude-routine') return true;
+
+  return isPluginKind(connector.kind) && trackerOf(connector.kind)?.receives === true;
+}
+
 /** The id of the title of the open panel. */
 const PANEL_TITLE = 'source-panel-title';
 
 /** The id of the title « Your connectors ». */
 const CONNECTED_TITLE = 'connected-title';
 
+/** The id of the title « Add a connector ». */
+const ADD_TITLE = 'add-title';
+
+/** What did not reach a connector that receives: notes, and calls of a trigger of a site (FRU-468). */
+type Late = { notes: number; calls: number; ids: readonly string[] };
+
 export default function Connectors() {
   useLocale();
-  const { workspace } = useWorkspace();
+  const { workspace, failingRead } = useWorkspace();
   const base = `/console/workspaces/${workspace.id}`;
   const manages = workspace.role === 'owner' || workspace.role === 'admin';
   const [connectors, setConnectors] = useState<Connector[] | undefined>();
@@ -142,31 +200,32 @@ export default function Connectors() {
   const [leavingFor, setLeavingFor] = useState<PluginKind | undefined>();
   const [toGithub, setToGithub] = useState(false);
   const [sites, setSites] = useState<Listed<Site>>('loading');
-  // How many notes did not reach each address. An address that is not in it was not read: no list
-  // is not an empty list, so its row then says « Connected » and no number.
+  // What did not reach each connector that receives. One that is not in it was not read: no list is not
+  // an empty list, so its health then says that it was not read, never « Healthy ».
   const [late, setLate] = useState<Readonly<Record<string, Late>>>({});
   // A read that failed is not an empty list (FRU-162): no « 0 site », and a way to read again.
   const [unread, setUnread] = useState(false);
+  // A list of the sends that wait was not read for some connector (FRU-690): said with « Try again ».
+  const [healthUnread, setHealthUnread] = useState(false);
+  // The connector whose settings are open, in their dialog (FRU-690).
   const [selected, setSelected] = useState<string | undefined>();
   // FRU-633: the word of the way back from a new consent for one connector, for its panel, once.
   const [back, setBack] = useState<{ connector: string; word: string } | undefined>();
-  // Whether the panel that is about to appear was opened by a press of its row: see `Opened`.
-  const opening = useRef(false);
-  // The form that is open, and where (FRU-562): on the page when no source was connected as it opened.
-  // It stays there when its source arrives in the list: in the dialog it would mount again, and lose
-  // its secret. One state, so the place never outlives its form.
-  const [form, setForm] = useState<{ kind: Connector['kind']; onPage: boolean } | undefined>();
-  const adding = form?.kind;
-  // FRU-542, FRU-562: whether « New connector » opened the dialog of the sources to add. A way back from
-  // Linear or GitHub that went wrong opens it: its sentence is under the source, in that dialog. So does
-  // `?new` in the address (« Connect a tracker » of the Sites screen), once the read says that this
-  // person can add a source.
-  const [catalogue, setCatalogue] = useState(
-    problem !== undefined || githubProblem !== undefined || pluginProblem !== undefined,
-  );
-  // An address connected from the list, whose secret is still on the screen (see `AddRest`).
-  const restAdded = useRef(false);
-  const toPanel = useRef(false);
+  // The form of a source that is open, in its tile of the catalogue, which then takes the whole row.
+  const [adding, setAdding] = useState<Connector['kind'] | undefined>();
+  // An address connected from its form, whose secret is still on the screen (see `AddRest`).
+  const restAdded = useRef<string | undefined>(undefined);
+  // The search and the segment of the catalogue (FRU-690).
+  const [typed, setTyped] = useState('');
+  const [group, setGroup] = useState<Group | 'all'>('all');
+  const searchField = useRef<HTMLInputElement>(null);
+  // « Retry » of a row: the connector whose sends are asked again, and a refusal of it.
+  const [retrying, setRetrying] = useState<string | undefined>();
+  const [retryProblem, setRetryProblem] = useState<{ connector: string; problem: string } | undefined>();
+  // The bar of the frame counts the sends that wait (FRU-690). A ref: a new function each render of the
+  // frame must not read the list again.
+  const reportFailing = useRef(failingRead);
+  reportFailing.current = failingRead;
 
   const load = useCallback(async () => {
     const [listed, placed] = await Promise.all([
@@ -193,25 +252,26 @@ export default function Connectors() {
     const read = listedOf(placed, (data) => data.sites);
     setSites((current) => (read === 'failed' && typeof current !== 'string' ? current : read));
 
-    // The notes that did not reach an address, for its row. A read that fails says nothing here: the
-    // panel of the address says that it could not read them.
+    // The sends that wait, for the health of each connector that receives. A read that fails is said
+    // above the table, and its row says that its health was not read.
     if (listed.ok) {
-      // FRU-594: a routine has calls that wait too, and no note.
-      const addresses = listed.data.connectors.filter(
-        (connector) => connector.kind === 'rest' || connector.kind === 'claude-routine',
-      );
       const counts = await Promise.all(
-        addresses.map(async (connector) => {
+        listed.data.connectors.filter(receives).map(async (connector) => {
           const read = await call<{ deliveries: Delivery[] }>('GET', `${base}/connectors/${connector.id}/deliveries`);
 
           if (!read.ok || !Array.isArray(read.data?.deliveries)) return undefined;
           // FRU-468: a call of a trigger of a site is counted apart from a note.
           const calls = read.data.deliveries.filter((delivery) => delivery.event === 'agent.requested').length;
+          const ids = read.data.deliveries.map((delivery) => delivery.id);
 
-          return [connector.id, { notes: read.data.deliveries.length - calls, calls }] as const;
+          return [connector.id, { notes: ids.length - calls, calls, ids }] as const;
         }),
       );
-      setLate(Object.fromEntries(counts.filter((count) => count !== undefined)));
+      const found = counts.filter((count) => count !== undefined);
+      setLate(Object.fromEntries(found));
+      setHealthUnread(found.length < counts.length);
+      // The red count of « Connectors » in the bar: every send that waits, as it was read.
+      reportFailing.current(found.reduce((sum, [, each]) => sum + each.notes + each.calls, 0));
     }
 
     return { found: listed.ok ? listed.data.connectors : [], adds: listed.ok && listed.data.available };
@@ -221,12 +281,12 @@ export default function Connectors() {
 
   useEffect(() => {
     void load().then(({ found, adds }) => {
-      // Back from Linear or GitHub with a new connector: its panel opens, and the word leaves the address.
+      // Back from Linear or GitHub with a new connector: its settings open, and the word leaves the address.
       const linear = search.get('linear');
       const github = search.get('github');
       const plugin = pluginReturn(search);
       const asked = search.get('new') !== null;
-      // FRU-633: the panel of one connector opens, from a new consent or from a link of the extension.
+      // FRU-633: the settings of one connector open, from a new consent or from a link of the extension.
       const opened = search.get('connector');
       if (linear === null && github === null && plugin === undefined && !asked && opened === null) return;
       if (opened !== null && found.some((each) => each.id === opened)) {
@@ -234,9 +294,9 @@ export default function Connectors() {
         if (linear !== null) setBack({ connector: opened, word: linear });
       }
       if (plugin?.word === 'connected') setSelected(found.filter((each) => each.kind === plugin.kind).at(-1)?.id);
-      // `?new` opens nothing for a person who cannot add a source: no dialog of disabled buttons, now
-      // or after a later read.
-      if (asked && manages && adds) setCatalogue(true);
+      // `?new` (« Connect a tracker » of the Sites screen) leads to the search of the catalogue, for a
+      // person who can add a source.
+      if (asked && manages && adds) toCatalogue();
       if (linear === 'connected') setSelected(found.at(-1)?.id);
       // An installation again keeps its connector, which is then not the last of the list.
       if (github === 'connected') setSelected(found.filter((each) => each.kind === 'github').at(-1)?.id);
@@ -244,6 +304,17 @@ export default function Connectors() {
     });
     // Once, when the screen opens: the word in the address is read one time.
   }, [load]);
+
+  /** The search of the catalogue takes focus, and the page shows it. */
+  function toCatalogue() {
+    // After the paint: the catalogue appears with the list that was just read.
+    window.requestAnimationFrame(() => {
+      const field = searchField.current;
+      if (field === null) return;
+      field.focus({ preventScroll: true });
+      document.getElementById(ADD_TITLE)?.scrollIntoView({ block: 'start' });
+    });
+  }
 
   /** The worker says where to go, and the browser goes there: the consent is at Linear. */
   async function connectLinear() {
@@ -270,328 +341,145 @@ export default function Connectors() {
     );
   }
 
+  /** « Retry » of a row: each send that waits is asked again, then the health is read again. */
+  async function retry(connector: Connector, ids: readonly string[]) {
+    setRetrying(connector.id);
+    setRetryProblem(undefined);
+    const asked = await Promise.all(
+      ids.map((id) => call('POST', `${base}/connectors/${connector.id}/deliveries/${id}/retry`)),
+    );
+    const refused = asked.find((each) => !each.ok);
+    if (refused !== undefined && !refused.ok) {
+      setRetryProblem({
+        connector: connector.id,
+        problem: writeProblemOf(refused, msg('The new attempt was not started. Try again.')),
+      });
+    }
+    await load();
+    setRetrying(undefined);
+  }
+
   const open = connectors?.find((connector) => connector.id === selected);
   const placed = known(sites);
-  /** « · 3 sites », only from a list that was read. */
-  // FRU-594: no site sends its notes to a routine, so its row counts none.
-  const countOf = (connector: Connector): string =>
-    placed === undefined || connector.kind === 'claude-routine'
-      ? ''
-      : ` · ${siteCount(placed.filter((site) => placesOf(site).some((place) => place.connector === connector.id)).length)}`;
+  /** The sites that send to a connector, from a list that was read. */
+  const sitesOf = (connector: Connector): readonly Site[] | undefined =>
+    placed?.filter((site) => placesOf(site).some((place) => place.connector === connector.id));
 
   const Panel = open === undefined ? undefined : PANELS[open.kind];
-  const panel =
-    open === undefined || Panel === undefined ? null : (
-      <Opened
-        key={open.id}
-        label={`${connectorName(open)} · ${sourceLine(open)}`}
-        takesFocus={opening}
-        onClose={() => {
-          setSelected(undefined);
-          // The keyboard goes back where it came from: the row of the source.
-          document.getElementById(rowId(open.id))?.focus();
-        }}
-      >
-        <ConnectorName base={base} connector={open} manages={manages} onRenamed={reload} />
-        <Panel
-          id={PANEL_TITLE}
-          base={base}
-          connector={open}
-          connectors={connectors ?? []}
-          sites={sites}
-          manages={manages}
-          onChanged={reload}
-          onRemoved={() => {
-            setSelected(undefined);
-            void load();
-          }}
-          {...(back?.connector === open.id ? { back: back.word } : {})}
-        />
-      </Opened>
-    );
-
   const cannot = !manages || !available;
   // WARNING: « Add a connector » waits for the list to be read. The list arrives above it, and its
-  // buttons went down by the height of the list (45 px for one source, 110 for two, measured): a
-  // press that starts before a button moves and ends after is lost. And only a list that was read
-  // says what « Connect Linear » does, the consent at Linear or a key: after a read that failed
-  // the screen does not know, so it offers « Try again » and no source to add.
+  // buttons went down by the height of the list: a press that starts before a button moves and ends
+  // after is lost. And only a list that was read says what « Connect Linear » does, the consent at
+  // Linear or a key: after a read that failed the screen does not know, so it offers « Try again »
+  // and no source to add.
   const answered = connectors !== undefined;
   const connected = connectors !== undefined && connectors.length > 0;
-  // FRU-542: with no source, the screen is the list of the sources to add. With one, it is the
-  // sources that are connected, and « New connector » opens the list above them. A form open in the
-  // list keeps it open: the secret of an address is shown there once, after the address is connected.
-  //
-  // FRU-562: with a source, the list is a grid of cards in a dialog. A form that started on the page,
-  // before any source, stays there until it ends.
-  const formOnPage = form?.onPage === true;
-  const onPage = answered && (!connected || formOnPage);
-  // A form open in the dialog keeps it, whatever a read since says: the secret of an address is shown
-  // there once.
-  const inDialog = connected && !formOnPage && (catalogue || adding !== undefined);
-  const listed = onPage || inDialog;
-  // A person who cannot connect a source is not offered a button that opens disabled ones.
-  const offersNew = connected && !cannot;
-  /** Opens the form of a source, where the list of the sources is now. */
-  const startAdding = (kind: Connector['kind']) => {
-    setForm({ kind, onPage: !connected });
+
+  /** A form ended: with a new source, its settings open, and the list is read again. */
+  const added = (connector: Connector | undefined) => {
+    setAdding(undefined);
+    if (connector === undefined) return;
+    setSelected(connector.id);
+    void load();
   };
-  const sourcesToAdd = (
-    <>
-      {manages ? null : <p className="mb-[10px] text-hint text-muted">{t('An owner or an admin adds a connector')}</p>}
-      {available ? null : (
-        <p className="mb-[10px] text-hint text-muted">{t(KEY_PROBLEMS['connectors-unavailable'] ?? '')}</p>
-      )}
-      {/* FRU-562: a grid of cards. The card whose form is open takes the whole row. */}
-      <ul className="grid grid-flow-row-dense grid-cols-[repeat(auto-fill,minmax(min(100%,220px),1fr))] gap-[12px]">
-        <Source
-          kind="linear"
-          wide={adding === 'linear'}
-          name={t(KINDS.linear.name)}
-          detail={t('An issue per note, in the team you choose.')}
-        >
-          {adding === 'linear' ? null : (
-            <span className="flex flex-wrap items-center gap-x-[16px]">
-              {oauth ? (
-                <LinkButton disabled={cannot} onClick={() => startAdding('linear')}>
-                  {t('Use an API key')}
-                </LinkButton>
-              ) : null}
-              <Button
-                tone="outline"
-                inset={16}
-                disabled={cannot || leaving}
-                onClick={() => (oauth ? void connectLinear() : startAdding('linear'))}
-              >
-                {leaving ? t('Going to Linear…') : <Connect name={t(KINDS.linear.name)} />}
-              </Button>
-            </span>
-          )}
-          {adding === 'linear' ? (
-            <Under>
-              <AddLinear
-                base={base}
-                onDone={(connector) => {
-                  setForm(undefined);
-                  if (connector !== undefined) {
-                    setCatalogue(false);
-                    // The list goes with the form that had focus: the panel of the new source takes it.
-                    opening.current = true;
-                    setSelected(connector.id);
-                    void load();
-                  }
-                }}
-              />
-            </Under>
-          ) : null}
-          {problem === undefined ? null : (
-            <Under>
-              <Problem>{t(problem)}</Problem>
-            </Under>
-          )}
-        </Source>
-        {/* FRU-331: the API of an issue of GitHub takes no file, so the files of a note do not go there. */}
-        <Source
-          kind="github"
-          name={t(KINDS.github.name)}
-          detail={t(
-            'An issue per note, in one repository. The files of a note do not go: GitHub takes none by its API.',
-          )}
-        >
-          {githubApp ? (
-            <Button tone="outline" inset={16} disabled={cannot || toGithub} onClick={() => void connectGithub()}>
-              {toGithub ? t('Going to GitHub…') : <Connect name={t(KINDS.github.name)} />}
-            </Button>
-          ) : (
-            <>
-              {/* A worker with no App connects no GitHub: the button says so, and connects nothing. */}
-              <Button tone="outline" inset={16} disabled>
-                {t('Not on this Fruitback')}
-              </Button>
-              <Under>
-                <p className="text-hint text-muted">
-                  {t('The operator of this Fruitback has not set up the GitHub App.')}
-                </p>
-              </Under>
-            </>
-          )}
-          {githubProblem === undefined ? null : (
-            <Under>
-              <Problem>{t(githubProblem)}</Problem>
-            </Under>
-          )}
-        </Source>
-        <Source
-          kind="rest"
-          wide={adding === 'rest'}
-          name={t(KINDS.rest.name)}
-          detail={t('POST each note to your own endpoint, with an address of one hour for each of its files.')}
-        >
-          {adding === 'rest' ? (
-            <Under>
-              <AddRest
-                base={base}
-                onAdded={(connector) => {
-                  // Its panel opens now, and takes focus only once the secret was kept.
-                  restAdded.current = true;
-                  setSelected(connector.id);
-                  void load();
-                }}
-                onDone={() => {
-                  setForm(undefined);
-                  // « Cancel » closes the form only. « I kept it » closes the list too.
-                  if (!restAdded.current) return;
-                  setCatalogue(false);
-                  toPanel.current = true;
-                }}
-              />
-            </Under>
-          ) : (
-            <Button
-              tone="outline"
-              inset={16}
-              disabled={cannot}
-              onClick={() => {
-                // A new form starts clean: an address whose read failed must not make its « Cancel »
-                // close the list, nor send focus to a panel later.
-                restAdded.current = false;
-                toPanel.current = false;
-                startAdding('rest');
-              }}
-            >
-              <Connect name={t(KINDS.rest.name)} />
-            </Button>
-          )}
-        </Source>
-        {/* FRU-621: the connectors of a plugin that the worker has and this console draws. */}
-        {plugins.flatMap((offer) => {
-          const tracker = trackerOf(offer.kind);
-          if (tracker === undefined) return [];
-          const kind = tracker.kind;
-          const name = t(KINDS[kind].name);
-          const typing = adding === kind;
-          const leavesNow = leavingFor === kind;
-          const said = pluginProblem?.kind === kind ? pluginProblem.problem : undefined;
 
-          return [
-            <Source key={kind} kind={kind} wide={typing} name={name} detail={t(tracker.detail)}>
-              {typing ? null : (
-                <span className="flex flex-wrap items-center gap-x-[16px]">
-                  {offer.oauth && offer.token && tracker.tokenFields !== undefined ? (
-                    <LinkButton disabled={cannot} onClick={() => startAdding(kind)}>
-                      {t('Use a token')}
-                    </LinkButton>
-                  ) : null}
-                  {offer.oauth || (offer.token && tracker.tokenFields !== undefined) ? (
-                    <Button
-                      tone="outline"
-                      inset={16}
-                      disabled={cannot || leavesNow}
-                      onClick={() => {
-                        if (!offer.oauth) return startAdding(kind);
-                        setLeavingFor(kind);
-                        setPluginProblem(undefined);
-                        void leaveForPlugin(base, tracker).then((failed) => {
-                          setLeavingFor(undefined);
-                          if (failed !== undefined) setPluginProblem({ kind, problem: failed });
-                        });
-                      }}
-                    >
-                      {leavesNow ? t('Going to {source}…', { source: name }) : <Connect name={name} />}
-                    </Button>
-                  ) : (
-                    <Button tone="outline" inset={16} disabled>
-                      {t('Not on this Fruitback')}
-                    </Button>
-                  )}
-                </span>
-              )}
-              {typing ? (
-                <Under>
-                  <AddPlugin
-                    base={base}
-                    tracker={tracker}
-                    onDone={(connector) => {
-                      setForm(undefined);
-                      if (connector === undefined) return;
-                      setCatalogue(false);
-                      opening.current = true;
-                      setSelected(connector.id);
-                      void load();
-                    }}
-                  />
-                </Under>
-              ) : null}
-              {offer.oauth || offer.token ? null : (
-                <Under>
-                  <p className="text-hint text-muted">
-                    {t('The operator of this Fruitback has not set up {source}.', { source: name })}
-                  </p>
-                </Under>
-              )}
-              {said === undefined ? null : (
-                <Under>
-                  <Problem>{pluginSentence(said, tracker)}</Problem>
-                </Under>
-              )}
-            </Source>,
-          ];
-        })}
-        {LATER.filter((source) => !plugins.some((offer) => offer.kind === source.kind && trackerOf(offer.kind))).map(
-          (source) => (
-            <Source key={source.name} kind={source.kind} name={source.name} detail={t(source.detail)}>
-              {/* No connector of this kind exists: the button says when, and connects nothing. */}
-              <Button tone="outline" inset={16} disabled>
-                {t('After the beta')}
-              </Button>
-            </Source>
-          ),
-        )}
-        {/* FRU-594: what the trigger of a site calls to start a Claude Code routine. No note goes there.
-            Last: the trackers come first, as the mockup orders them, and their rows do not move. */}
-        <Source
-          kind="claude-routine"
-          wide={adding === 'claude-routine'}
-          name={t(KINDS['claude-routine'].name)}
-          detail={t(
-            'Starts a routine of your team when the trigger of a site calls it. The routine reads the notes through the MCP server.',
-          )}
-        >
-          {adding === 'claude-routine' ? (
-            <Under>
-              <AddRoutine
-                base={base}
-                onDone={(connector) => {
-                  setForm(undefined);
-                  if (connector === undefined) return;
-                  setCatalogue(false);
-                  opening.current = true;
-                  setSelected(connector.id);
-                  void load();
-                }}
-              />
-            </Under>
-          ) : (
-            <Button tone="outline" inset={16} disabled={cannot} onClick={() => startAdding('claude-routine')}>
-              <Connect name={t(KINDS['claude-routine'].name)} />
-            </Button>
-          )}
-        </Source>
-      </ul>
-    </>
+  /** What a tile of the catalogue offers, from what the worker said. */
+  const offerOf = (entry: Entry): Offer => {
+    const kind = entry.kind;
+    if (kind === 'linear')
+      return {
+        state: 'connect',
+        primary: () => (oauth ? void connectLinear() : setAdding('linear')),
+        busy: leaving ? t('Going to Linear…') : undefined,
+        ...(oauth ? { secondary: { label: t('Use an API key'), act: () => setAdding('linear') } } : {}),
+      };
+    if (kind === 'github')
+      return githubApp
+        ? {
+            state: 'connect',
+            primary: () => void connectGithub(),
+            busy: toGithub ? t('Going to GitHub…') : undefined,
+          }
+        : { state: 'unset', why: t('The operator of this Fruitback has not set up the GitHub App.') };
+    if (kind === 'rest') return { state: 'connect', primary: () => setAdding('rest') };
+    if (kind === 'claude-routine') return { state: 'connect', primary: () => setAdding('claude-routine') };
+    if (!isPluginKind(kind)) return { state: 'soon' };
+    const tracker = trackerOf(kind);
+    const offer = plugins.find((each) => each.kind === kind);
+    // A plugin that this worker does not have, or that this console does not draw yet.
+    if (tracker === undefined || offer === undefined) return { state: 'soon' };
+    const name = t(KINDS[kind].name);
+    const byToken = offer.token && tracker.tokenFields !== undefined;
+    if (!offer.oauth && !byToken)
+      return { state: 'unset', why: t('The operator of this Fruitback has not set up {source}.', { source: name }) };
+
+    return {
+      state: 'connect',
+      primary: () => {
+        if (!offer.oauth) return setAdding(kind);
+        setLeavingFor(kind);
+        setPluginProblem(undefined);
+        void leaveForPlugin(base, tracker).then((failed) => {
+          setLeavingFor(undefined);
+          if (failed !== undefined) setPluginProblem({ kind, problem: failed });
+        });
+      },
+      busy: leavingFor === kind ? t('Going to {source}…', { source: name }) : undefined,
+      ...(offer.oauth && byToken ? { secondary: { label: t('Use a token'), act: () => setAdding(kind) } } : {}),
+    };
+  };
+
+  /** The form of a source, in its tile. */
+  const formOf = (kind: LogoKind): ReactNode => {
+    if (kind === 'linear') return <AddLinear key="form" base={base} onDone={added} />;
+    if (kind === 'claude-routine') return <AddRoutine key="form" base={base} onDone={added} />;
+    if (kind === 'rest')
+      return (
+        <AddRest
+          key="form"
+          base={base}
+          // The new address is in the table at once; its secret stays in the form until « I kept it ».
+          onAdded={(connector) => {
+            restAdded.current = connector.id;
+            void load();
+          }}
+          onDone={() => {
+            const id = restAdded.current;
+            restAdded.current = undefined;
+            setAdding(undefined);
+            // « I kept it » opens the settings of the new address; « Cancel » closes the form only.
+            if (id !== undefined) setSelected(id);
+          }}
+        />
+      );
+    const tracker = isPluginKind(kind) ? trackerOf(kind) : undefined;
+
+    return tracker === undefined ? null : <AddPlugin key="form" base={base} tracker={tracker} onDone={added} />;
+  };
+
+  /**
+   * What opens in a tile under its line: the form of its source, or why it did not connect. Nothing
+   * is `[]`: the tile then keeps its one line.
+   */
+  const underOf = (kind: LogoKind): ReactNode[] => {
+    const tracker = isPluginKind(kind) ? trackerOf(kind) : undefined;
+    const form = adding === kind ? formOf(kind) : null;
+    let said: ReactNode = null;
+    if (kind === 'linear' && problem !== undefined) said = t(problem);
+    if (kind === 'github' && githubProblem !== undefined) said = t(githubProblem);
+    if (tracker !== undefined && pluginProblem?.kind === kind) said = pluginSentence(pluginProblem.problem, tracker);
+
+    return [...(form === null ? [] : [form]), ...(said === null ? [] : [<Problem key="problem">{said}</Problem>])];
+  };
+
+  const shownEntries = CATALOGUE.filter(
+    (entry) =>
+      (group === 'all' || entry.group === group) &&
+      (typed.trim() === '' ||
+        [t(entry.name), t(entry.short), detailOf(entry.kind)].some((words) =>
+          folded(words).includes(folded(typed.trim())),
+        )),
   );
-
-  // Once « I kept it » closed the list, focus goes to the panel of the new address: the button had it.
-  // It waits for the list to close and for the panel to be there: the read that brings the new
-  // address can end after « I kept it ».
-  useEffect(() => {
-    if (listed || !toPanel.current) return;
-    const opened = document.getElementById(PANEL);
-    if (opened === null) return;
-    toPanel.current = false;
-    restAdded.current = false;
-    opened.focus({ preventScroll: true });
-  }, [listed, open?.id]);
 
   return (
     <>
@@ -600,29 +488,49 @@ export default function Connectors() {
         lead={t('Connect a tracker once. Every site of {workspace} can then send its notes there.', {
           workspace: workspace.name,
         })}
-        {...(offersNew
+        {...(connected && !cannot
           ? {
-              action: <Button onClick={() => setCatalogue(true)}>{t('New connector')}</Button>,
+              // FRU-690: the catalogue is on the page; « New connector » leads to its search.
+              action: <Button onClick={toCatalogue}>{t('New connector')}</Button>,
             }
           : {})}
       />
-      {/* FRU-562: « New connector » opens the sources to add in a dialog. A form open in it locks it:
-          the secret of an address is shown there once, and a key being typed would go with it. */}
+      {/* FRU-690: the settings of a connector, in a dialog, where they were an accordion under its row. */}
       <Dialog
-        open={inDialog}
-        onClose={() => setCatalogue(false)}
-        title={t('Add a connector')}
+        open={open !== undefined && Panel !== undefined}
+        onClose={() => setSelected(undefined)}
+        title={open === undefined ? '' : connectorName(open)}
         closeLabel={t('Close')}
-        locked={adding !== undefined}
         className="sm:max-w-[760px]"
       >
-        {sourcesToAdd}
+        {open === undefined || Panel === undefined ? null : (
+          <div id={PANEL} role="region" aria-label={`${connectorName(open)} · ${sourceLine(open)}`}>
+            <ConnectorName base={base} connector={open} manages={manages} onRenamed={reload} />
+            <Panel
+              id={PANEL_TITLE}
+              base={base}
+              connector={open}
+              connectors={connectors ?? []}
+              sites={sites}
+              manages={manages}
+              onChanged={reload}
+              onRemoved={() => {
+                setSelected(undefined);
+                void load();
+              }}
+              {...(back?.connector === open.id ? { back: back.word } : {})}
+            />
+          </div>
+        )}
       </Dialog>
       <div className="flex min-w-0 flex-col gap-[32px]">
-        {unread ? (
+        {unread || healthUnread ? (
           <div className="flex flex-wrap items-center gap-[12px]">
             <p role="alert" className="min-w-0 flex-1 text-small text-muted">
-              {t('The connectors and their sites did not load.')} <ReadProblem />
+              {unread
+                ? t('The connectors and their sites did not load.')
+                : t('The health of some connectors did not load.')}{' '}
+              <ReadProblem />
             </p>
             <Button tone="outline" onClick={() => void reload()}>
               {t('Try again')}
@@ -631,76 +539,177 @@ export default function Connectors() {
         ) : null}
         {connectors === undefined && !unread ? <p className="text-small text-muted">{t('Loading…')}</p> : null}
 
-        {onPage ? (
-          <section aria-labelledby="add-title">
-            <h2 id="add-title" className="mb-[10px] text-body leading-auto font-semibold">
-              {t('Add a connector')}
-            </h2>
-            {connected ? null : (
-              <p className="mb-[10px] text-hint text-muted">{t('No tracker yet. The notes stay in Fruitback.')}</p>
-            )}
-            {sourcesToAdd}
-          </section>
-        ) : null}
-
         {connected ? (
           <section aria-labelledby={CONNECTED_TITLE}>
             <h2
               id={CONNECTED_TITLE}
               tabIndex={-1}
-              className="mb-[10px] text-body leading-auto font-semibold focus:outline-none"
+              className="mb-[10px] flex items-center gap-[6px] text-body leading-auto font-semibold focus:outline-none"
             >
               {t('Your connectors')}
+              <span className="font-normal text-muted tabular-nums">{connectors.length}</span>
             </h2>
-            {/* FRU-542: a card for each source, one under the other. Its panel opens inside its card
-                (FRU-403): a panel between two cards of a grid reads as a stray card (FRU-433). */}
-            <ul className="flex flex-col gap-[12px]">
-              {connectors.map((connector) => {
-                const chosen = connector.id === selected;
+            {retryProblem === undefined ? null : (
+              <div className="mb-[10px]">
+                <Problem>{t(retryProblem.problem)}</Problem>
+              </div>
+            )}
+            <DataTable label={t('Your connectors')} minWidth={680} dense hover stack>
+              <thead>
+                <tr>
+                  <th scope="col">{t('Connector')}</th>
+                  <th scope="col">{t('Account')}</th>
+                  <th scope="col">{t('Used by')}</th>
+                  <th scope="col">{t('Health')}</th>
+                  <th scope="col" data-align="end">
+                    <span className="sr-only">{t('Actions')}</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {connectors.map((connector) => {
+                  const name = connectorName(connector);
+                  const waits = late[connector.id];
+                  const using = sitesOf(connector);
+                  const failed = waits !== undefined && waits.notes + waits.calls > 0;
 
-                return (
-                  <li key={connector.id} className="overflow-hidden rounded-card border border-line bg-surface">
-                    <button
-                      type="button"
-                      aria-expanded={chosen}
-                      id={rowId(connector.id)}
-                      aria-controls={chosen ? PANEL : undefined}
-                      onClick={() => {
-                        // A person opened it, so the panel takes focus when it appears (FRU-197).
-                        opening.current = !chosen;
-                        setSelected(chosen ? undefined : connector.id);
+                  return (
+                    <tr
+                      key={connector.id}
+                      data-connector={connector.id}
+                      data-chosen={connector.id === selected}
+                      className="cursor-pointer"
+                      // A press on the row opens its settings, as « … » does: the button is the way of a
+                      // keyboard and of a screen reader, and a press on a button of the row is its own.
+                      onClick={(event) => {
+                        if ((event.target as Element).closest('button, a') !== null) return;
+                        setSelected(connector.id);
                       }}
-                      // Under 640 px the state goes under the address, in line with it (FRU-321).
-                      className={`flex w-full cursor-pointer flex-wrap items-center gap-x-[14px] gap-y-[4px] px-[18px] py-[14px] text-left -outline-offset-2 sm:flex-nowrap ${
-                        chosen ? 'bg-selected' : 'hover:bg-hover'
-                      }`}
                     >
-                      <SourceMark kind={connector.kind} />
-                      <span className="min-w-0 flex-1">
-                        {/* The name its workspace gave it, or its kind (FRU-404). */}
-                        <span className="block truncate text-body leading-auto font-semibold">
-                          {connectorName(connector)}
+                      <td>
+                        <span className="flex min-w-0 items-center gap-[10px]">
+                          <ConnectorLogo kind={connector.kind} size="row" />
+                          {/* The name its workspace gave it, or its kind (FRU-404). */}
+                          <span className="min-w-0 truncate font-semibold">{name}</span>
                         </span>
-                        {/* One line: a long address is cut at its end, and the panel writes it whole (FRU-321). */}
-                        <span className="flex min-w-0 text-hint leading-auto text-muted" title={lineOf(connector)}>
-                          <span className="min-w-0 truncate" data-source-line>
-                            {lineOf(connector)}
-                          </span>
-                          <span className="flex-none whitespace-pre">{countOf(connector)}</span>
+                      </td>
+                      <td className="max-w-[320px]">
+                        {/* One line: a long address is cut at its end, and the settings write it whole (FRU-321). */}
+                        <span className="block truncate text-ink-soft" title={lineOf(connector)} data-source-line>
+                          {lineOf(connector)}
                         </span>
-                      </span>
-                      <span className="flex-none max-sm:basis-full max-sm:pl-[50px]">
-                        <State connector={connector} late={late[connector.id]} />
-                      </span>
-                    </button>
-                    {/* The accordion of the source opens under its row, inside its card (FRU-403). */}
-                    {chosen ? panel : null}
-                  </li>
-                );
-              })}
-            </ul>
+                      </td>
+                      <td className="whitespace-nowrap text-muted">
+                        {/* FRU-594: no site sends its notes to a routine, so its row counts none. */}
+                        {using === undefined || connector.kind === 'claude-routine' ? null : siteCount(using.length)}
+                      </td>
+                      <td>
+                        <Health
+                          connector={connector}
+                          late={waits}
+                          read={!receives(connector) || waits !== undefined}
+                          placeAttention={using?.some((site) =>
+                            placesOf(site).some(
+                              (place) => place.connector === connector.id && place.attention !== undefined,
+                            ),
+                          )}
+                        />
+                      </td>
+                      <td data-align="end">
+                        <span className="inline-flex items-center justify-end gap-[4px]">
+                          {failed && manages ? (
+                            <Button
+                              tone="outline"
+                              size="small"
+                              disabled={retrying === connector.id}
+                              label={t('Retry {name}', { name })}
+                              onClick={() => void retry(connector, waits.ids)}
+                            >
+                              <NoteIcon name="retry" />
+                              {retrying === connector.id ? t('Retrying…') : t('Retry')}
+                            </Button>
+                          ) : null}
+                          <IconButton
+                            size="small"
+                            label={t('Settings of {name}', { name })}
+                            onClick={() => setSelected(connector.id)}
+                          >
+                            <NoteIcon name="more" />
+                          </IconButton>
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </DataTable>
             {/* FRU-595: the recipes start from the issue of a note, so they come with a tracker that makes one. */}
             <NoCodeRecipes kinds={connectors.map((connector) => connector.kind)} />
+          </section>
+        ) : null}
+
+        {answered ? (
+          <section aria-labelledby={ADD_TITLE}>
+            <div className="mb-[10px] flex flex-wrap items-center gap-x-[12px] gap-y-[8px]">
+              <h2 id={ADD_TITLE} className="text-body leading-auto font-semibold">
+                {t('Add a connector')}
+              </h2>
+              <div className="w-[220px] min-w-0 flex-shrink">
+                <Field
+                  label={t('Search trackers and tools')}
+                  labelHidden
+                  compact
+                  type="search"
+                  inputRef={searchField}
+                  placeholder={t('Search trackers and tools')}
+                  value={typed}
+                  onChange={(event) => setTyped(event.target.value)}
+                />
+              </div>
+              <div role="group" aria-label={t('Kind of connector')} className="ml-auto flex flex-wrap gap-[2px]">
+                {GROUPS.map((each) => (
+                  <ViewTab key={each.id} pressed={group === each.id} onChange={() => setGroup(each.id)}>
+                    {t(each.label)}
+                  </ViewTab>
+                ))}
+              </div>
+            </div>
+            {connected ? null : (
+              <p className="mb-[10px] text-hint text-muted">{t('No tracker yet. The notes stay in Fruitback.')}</p>
+            )}
+            {manages ? null : (
+              <p className="mb-[10px] text-hint text-muted">{t('An owner or an admin adds a connector')}</p>
+            )}
+            {available ? null : (
+              <p className="mb-[10px] text-hint text-muted">{t(KEY_PROBLEMS['connectors-unavailable'] ?? '')}</p>
+            )}
+            {shownEntries.length === 0 ? (
+              <p className="text-small text-muted" role="status">
+                {t('No connector matches « {search} ».', { search: typed.trim() })}
+              </p>
+            ) : (
+              // FRU-690: tiles of 64 px, four in a row at 1440 px, one at 390 px. A tile whose form is
+              // open, or that says why it did not connect, takes the whole row.
+              <ul className="grid grid-flow-row-dense grid-cols-[repeat(auto-fill,minmax(min(100%,220px),1fr))] gap-[10px]">
+                {shownEntries.map((entry) => {
+                  const under = underOf(entry.kind);
+                  const isConnected = connectors?.some((connector) => connector.kind === entry.kind) === true;
+
+                  return (
+                    <Tile
+                      key={entry.kind}
+                      entry={entry}
+                      detail={detailOf(entry.kind)}
+                      offer={offerOf(entry)}
+                      connected={isConnected}
+                      cannot={cannot}
+                      typing={adding === entry.kind}
+                      under={under}
+                    />
+                  );
+                })}
+              </ul>
+            )}
           </section>
         ) : null}
       </div>
@@ -708,14 +717,103 @@ export default function Connectors() {
   );
 }
 
-/** The line under the name of a source: its kind first when a name hides it (FRU-404). */
+/** The long sentence of a kind: its own, or the one of its plugin (FRU-621). */
+function detailOf(kind: LogoKind): string {
+  const own = DETAILS[kind];
+  if (own !== undefined) return t(own);
+  const tracker = isPluginKind(kind) ? trackerOf(kind) : undefined;
+
+  return tracker === undefined ? '' : t(tracker.detail);
+}
+
+/** The account of a source, in its row: its kind first when a name hides it (FRU-404). */
 function lineOf(connector: Connector): string {
   return connector.name === undefined
     ? sourceLine(connector)
     : `${t(KINDS[connector.kind].name)} · ${sourceLine(connector)}`;
 }
 
-/** « Connect », with the name of the source for a screen reader: seven buttons would say the same word. */
+/** What a tile offers: a way to connect, a source that is not set up here, or one that comes later. */
+type Offer =
+  | {
+      state: 'connect';
+      primary: () => void;
+      /** The words of the button while the browser leaves for the service. */
+      busy?: string | undefined;
+      /** A second way: an API key or a token where the consent is the first one. */
+      secondary?: { label: string; act: () => void };
+    }
+  | { state: 'unset'; why: string }
+  | { state: 'soon' };
+
+/** The words of a state pill: a dot and a word, in a tint of its colour. */
+function Pill({ tone, children }: { tone: 'done' | 'alert' | 'neutral'; children: ReactNode }) {
+  const colours = {
+    done: 'bg-done/10 text-done',
+    alert: 'bg-accent/10 text-accent-strong',
+    neutral: 'bg-chip text-muted',
+  }[tone];
+  const dot = { done: 'bg-done', alert: 'bg-accent', neutral: 'bg-control' }[tone];
+
+  return (
+    <span
+      className={`inline-flex h-[20px] flex-none items-center gap-[5px] rounded-control px-[7px] text-hint leading-none font-semibold whitespace-nowrap ${colours}`}
+      data-pill={tone}
+    >
+      <span aria-hidden="true" className={`size-[6px] flex-none rounded-pill ${dot}`} />
+      {children}
+    </span>
+  );
+}
+
+/**
+ * The health of a connector, in its row (FRU-690), from what the worker says today:
+ *
+ * - « Needs attention »: its tracker refuses it (FRU-102), or refused a place of a site (FRU-640).
+ * - « N not delivered »: sends that wait, for a connector that receives (an address, a routine, Slack).
+ * - « Healthy »: a connector that receives, whose sends were read, and none waits.
+ * - « Connected »: a tracker. The worker does not say yet whether its notes arrived (FRU-714).
+ * - « Not read »: the sends of a connector that receives were not read. Never « Healthy ».
+ *
+ * The red words are the strong accent: the accent is under 4.5:1 on the tints of a row (FRU-683).
+ */
+function Health({
+  connector,
+  late,
+  read,
+  placeAttention = false,
+}: {
+  connector: Connector;
+  late: Late | undefined;
+  /** Whether the sends of a connector that receives were read. A tracker has none to read. */
+  read: boolean;
+  placeAttention?: boolean | undefined;
+}) {
+  useLocale();
+  if (connector.attention !== undefined || placeAttention) return <Pill tone="alert">{t('Needs attention')}</Pill>;
+  if (!read) return <Pill tone="neutral">{t('Not read')}</Pill>;
+  if (late === undefined) return <Pill tone="done">{t('Connected')}</Pill>;
+  const waiting = late.notes + late.calls;
+  if (waiting === 0) return <Pill tone="done">{t('Healthy')}</Pill>;
+
+  return (
+    <span className="inline-flex flex-wrap gap-[4px]">
+      {late.notes > 0 ? (
+        <Pill tone="alert">
+          {late.notes === 1 ? t('1 note not delivered') : t('{count} notes not delivered', { count: late.notes })}
+        </Pill>
+      ) : null}
+      {/* FRU-468: a call that waits is said too: its agent did not start. */}
+      {late.calls > 0 ? (
+        <Pill tone="alert">
+          {late.calls === 1 ? t('1 call not delivered') : t('{count} calls not delivered', { count: late.calls })}
+        </Pill>
+      ) : null}
+    </span>
+  );
+}
+
+/** « Connect », with the name of the source for a screen reader: twelve buttons would say the same word. */
 function Connect({ name }: { name: string }) {
   useLocale();
 
@@ -727,178 +825,94 @@ function Connect({ name }: { name: string }) {
   );
 }
 
-/** A source to add: its mark, its name, what a note becomes there, and what connects it. */
-function Source({
-  kind,
-  name,
+/**
+ * A tile of the catalogue (FRU-690): the logo in its box of 36 px, the name, one line of what a note
+ * becomes there, cut at its end, and the state at the right: « Connected », « Connect », « Soon »,
+ * or « Not set up ». A tile that is open (its form, a refusal) takes the whole row, and what opened
+ * is under its line.
+ */
+function Tile({
+  entry,
   detail,
-  wide = false,
-  children,
+  offer,
+  connected,
+  cannot,
+  typing,
+  under,
 }: {
-  kind: MarkedKind | LaterKind;
-  name: string;
+  entry: Entry;
   detail: string;
-  /** Its form is open: the card takes the whole row of the grid (FRU-562). */
-  wide?: boolean;
-  children: ReactNode;
+  offer: Offer;
+  connected: boolean;
+  /** The person cannot add a source here: a member, or a worker that cannot keep a key. */
+  cannot: boolean;
+  /** Its form is open. */
+  typing: boolean;
+  /** What opened under its line, or nothing. */
+  under: readonly ReactNode[];
 }) {
+  useLocale();
+  const name = t(entry.name);
+  const wide = under.length > 0;
+  const why = offer.state === 'unset' ? offer.why : undefined;
+
   return (
     <li
-      className={`flex min-w-0 flex-col gap-[14px] rounded-card border border-line bg-surface p-[16px] ${
-        wide ? 'col-span-full' : ''
-      }`}
+      className={`flex min-w-0 flex-col rounded-card border border-line bg-surface px-[14px] ${wide ? 'col-span-full pb-[14px]' : ''}`}
       data-source={name}
+      data-state={connected ? 'connected' : offer.state}
     >
-      <span className="flex items-start gap-[12px]">
-        <SourceMark kind={kind} />
-        <span className="min-w-0 flex-1">
-          <span className="block text-body leading-auto font-semibold">{name}</span>
-          <span className="block text-hint leading-auto text-muted">{detail}</span>
+      <div className="flex h-[62px] min-w-0 items-center gap-[12px]">
+        <ConnectorLogo kind={entry.kind} />
+        <span className="flex min-w-0 flex-1 flex-col gap-[4px]" title={detail === '' ? undefined : detail}>
+          <span className="flex min-w-0 items-center gap-[6px]">
+            <span className="truncate text-body leading-auto font-semibold">{name}</span>
+            {entry.fresh === true && !connected ? <Pill tone="alert">{t('New')}</Pill> : null}
+          </span>
+          {/* One line, cut at its end; the whole sentence is the tooltip. */}
+          <span className="truncate text-hint leading-auto text-muted" data-tile-line>
+            {why ?? t(entry.short)}
+          </span>
         </span>
-      </span>
-      {/* What connects it, at the foot of the card: the buttons of a row of cards line up. */}
-      <div className="mt-auto flex flex-wrap items-center gap-x-[16px] gap-y-[10px]">{children}</div>
+        <span className="flex flex-none items-center gap-[4px]">
+          {connected ? <Pill tone="done">{t('Connected')}</Pill> : null}
+          {offer.state === 'soon' && !connected ? <Pill tone="neutral">{t('Soon')}</Pill> : null}
+          {offer.state === 'unset' && !connected ? <Pill tone="neutral">{t('Not set up')}</Pill> : null}
+          {/* A workspace can connect a second one: another team of Linear, another address. */}
+          {offer.state === 'connect' && !typing && connected ? (
+            <IconButton
+              size="small"
+              label={t('Connect another {source}', { source: name })}
+              disabled={cannot || offer.busy !== undefined}
+              onClick={offer.primary}
+            >
+              <NoteIcon name="add" />
+            </IconButton>
+          ) : null}
+          {offer.state === 'connect' && !typing && !connected ? (
+            <>
+              <Button tone="outline" size="small" disabled={cannot || offer.busy !== undefined} onClick={offer.primary}>
+                {offer.busy ?? <Connect name={name} />}
+              </Button>
+              {offer.secondary === undefined ? null : (
+                <Menu
+                  trigger="icon"
+                  triggerLabel={t('Other ways to connect {source}', { source: name })}
+                  triggerClassName="size-control-sm!"
+                  items={[{ id: 'secondary', label: offer.secondary.label, disabled: cannot }]}
+                  onAction={() => offer.secondary?.act()}
+                >
+                  <NoteIcon name="down" />
+                </Menu>
+              )}
+            </>
+          ) : null}
+        </span>
+      </div>
+      {wide ? <div className="flex w-full flex-col gap-[10px]">{under}</div> : null}
     </li>
   );
 }
 
-/** What opens in the card of a source to add, under its buttons: its form, or why it did not connect. */
-function Under({ children }: { children: ReactNode }) {
-  return <div className="w-full basis-full">{children}</div>;
-}
-
-/** What did not reach an address yet: notes, and calls of a trigger of a site (FRU-468). */
-type Late = { notes: number; calls: number };
-
-/**
- * The state of a source, at the end of its row. A source is « Connected »: the list cannot know that
- * its notes arrive. An address says how many of its notes did not arrive, when the worker said so,
- * and a tracker that refuses the source needs somebody (FRU-102): the panel of the source says what
- * to do.
- *
- * The red is the strong accent: the accent is under 4.5:1 on the slate tints of a row (FRU-683).
- */
-function State({ connector, late }: { connector: Connector; late: Late | undefined }) {
-  useLocale();
-  const alert = 'flex-none text-hint leading-auto font-semibold text-accent-strong';
-  if (connector.attention !== undefined) return <span className={alert}>{t('Needs attention')}</span>;
-  const words = [
-    ...(late !== undefined && late.notes > 0
-      ? [late.notes === 1 ? t('1 note did not arrive') : t('{count} notes did not arrive', { count: late.notes })]
-      : []),
-    // FRU-468: a call that waits is said too, also beside notes that wait: its agent did not start.
-    ...(late !== undefined && late.calls > 0
-      ? [
-          late.calls === 1
-            ? t('1 call of an agent did not arrive')
-            : t('{count} calls of an agent did not arrive', { count: late.calls }),
-        ]
-      : []),
-  ];
-  if (words.length > 0) {
-    return (
-      <span className={`${alert} flex flex-col items-end text-right`}>
-        {words.map((each) => (
-          <span key={each}>{each}</span>
-        ))}
-      </span>
-    );
-  }
-
-  return <span className="flex-none text-hint leading-auto font-semibold text-done">{t('Connected')}</span>;
-}
-
-/** When the panel is settled even if its move sent no end: the move takes 220 ms (FRU-563). */
-const SETTLE_AFTER_MS = 400;
-
-/** The id of the open panel, which its row names in `aria-controls`. */
+/** The id of the open panel. */
 const PANEL = 'source-panel';
-
-/** The id of the row of a source, which takes focus back when its panel closes. */
-function rowId(connector: string): string {
-  return `source-row-${connector}`;
-}
-
-/**
- * The open panel: an accordion under its row, at every width (FRU-161, FRU-403). The page scrolls as
- * little as shows it, or its top when it is taller than the screen. A row at the bottom of the screen
- * would otherwise open a panel nobody sees, and a second touch would close it.
- *
- * **A panel that a person opened takes focus** (FRU-197). The press of a row changes nothing a screen
- * reader says but the state of the button. So the panel is a region with the name of its source, and
- * focus goes to it: a screen reader says the name and reads on from there, and Tab goes to its first
- * control. **Escape closes it and gives focus back to the row.** A panel that appears by itself takes
- * no focus: the one of a source that Linear or GitHub just connected.
- *
- * **It unfolds** (FRU-563): its height grows from nothing and it fades in, 220 ms on the curve of the
- * kit (its keyframes in `app.css`). With `prefers-reduced-motion` it is there at once. The page
- * scrolls again once it has its height: at the start of the move it has none.
- */
-function Opened({
-  label,
-  takesFocus,
-  onClose,
-  children,
-}: {
-  /** The name of the region: the kind of the source, and which one. */
-  label: string;
-  /** Set by the press that opens the panel, and spent by the panel that appears. */
-  takesFocus: { current: boolean };
-  onClose: () => void;
-  children: ReactNode;
-}) {
-  const held = useRef<HTMLDivElement>(null);
-  // Once unfolded, nothing is clipped: a focus ring at the edge of the panel shows whole.
-  const [settled, setSettled] = useState(false);
-
-  useEffect(() => {
-    if (takesFocus.current) {
-      takesFocus.current = false;
-      // The scroll is the one below: a focus that scrolls would put the top of a tall panel off the screen.
-      held.current?.focus({ preventScroll: true });
-    }
-    held.current?.scrollIntoView({ block: 'nearest' });
-  }, [takesFocus]);
-
-  useEffect(() => {
-    const opened = held.current;
-    if (opened === null) return;
-    // No move at all (reduced motion): it is settled from the start, and sends no end.
-    if (getComputedStyle(opened).animationName === 'none') return setSettled(true);
-    // A move that does not end (the panel hidden, the tab in the background) sends no end, and the
-    // panel must not stay clipped (raised in review). Chromium sends no « animationcancel » either
-    // (measured), so a timer settles it after the move of 220 ms in any case.
-    const late = window.setTimeout(() => setSettled(true), SETTLE_AFTER_MS);
-
-    return () => window.clearTimeout(late);
-  }, []);
-
-  return (
-    <div
-      id={PANEL}
-      ref={held}
-      role="region"
-      aria-label={label}
-      tabIndex={-1}
-      // Inside the frame of the list, with the rule of the list above it and the tint of a panel.
-      className="source-panel grid grid-rows-[1fr] animate-[source-panel-open_var(--duration-fast)_var(--ease-settle)_both] motion-reduce:animate-none scroll-mt-4 border-t border-line bg-subtle"
-      onAnimationEnd={(event) => {
-        // Only the move of the panel itself: one inside it bubbles here too.
-        if (event.target !== event.currentTarget) return;
-        setSettled(true);
-        held.current?.scrollIntoView({ block: 'nearest' });
-      }}
-      {...(settled ? { 'data-settled': '' } : {})}
-      onKeyDown={(event) => {
-        // `Confirmation` and an open list take their own Escape, and stop it before it gets here.
-        if (event.key !== 'Escape' || event.defaultPrevented) return;
-        onClose();
-      }}
-    >
-      {/* The part that the move clips while the panel grows. */}
-      <div className="source-panel__body min-h-0 [.source-panel:not([data-settled])>&]:overflow-hidden motion-reduce:[.source-panel:not([data-settled])>&]:overflow-visible">
-        {children}
-      </div>
-    </div>
-  );
-}
