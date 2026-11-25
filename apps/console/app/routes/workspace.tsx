@@ -38,9 +38,14 @@ type WorkspaceContext = {
   renamed: (workspace: Workspace) => void;
   /** The worker kept a new logo, or removed it (FRU-428): the bar shows it at once. */
   logoChanged: (logo: string | null) => void;
+  /**
+   * The Connectors screen read how many sends wait (FRU-690): the red count of « Connectors » in the
+   * bar follows it, on every screen of this workspace, until a read says another number.
+   */
+  failingRead: (count: number) => void;
 };
 
-type Read = Omit<WorkspaceContext, 'renamed' | 'logoChanged'>;
+type Read = Omit<WorkspaceContext, 'renamed' | 'logoChanged' | 'failingRead'>;
 
 export function useWorkspace(): WorkspaceContext {
   return useOutletContext<WorkspaceContext>();
@@ -109,6 +114,12 @@ export default function WorkspaceFrame() {
   const [asked, askAgain] = useState(0);
   // A change of workspace draws the new one from the last answer too, while the worker is asked.
   const context = read?.workspace.id === id ? read : (contextOf(knownMe(), id) ?? read);
+  // FRU-690: the sends that wait, as the Connectors screen last read them in this workspace. No read
+  // gives them on another screen yet (FRU-711): before one, the bar counts nothing.
+  const [failing, setFailing] = useState<{ workspace: string; count: number } | undefined>();
+  // A change of workspace forgets the count: back in the first one, a count read before would be old
+  // (raised in review). The Connectors screen of the workspace reads it again.
+  useEffect(() => setFailing(undefined), [id]);
 
   // No answer is not a signed-out person: the call waits under the banner and asks again.
   useEffect(() => {
@@ -163,6 +174,7 @@ export default function WorkspaceFrame() {
     ...context,
     renamed: (workspace) => changed({ name: workspace.name }),
     logoChanged: (logo) => changed({ logo }),
+    failingRead: (count) => setFailing({ workspace: context.workspace.id, count }),
   };
 
   const sections = sectionsFor(context.workspace);
@@ -183,6 +195,7 @@ export default function WorkspaceFrame() {
           settings={current?.path !== 'settings' && underSettings(pathname, context.workspace.id)}
           admin={context.me.instanceAdmin === true}
           account={context.me.account}
+          {...(failing?.workspace === context.workspace.id ? { failing: failing.count } : {})}
         />
       }
     >

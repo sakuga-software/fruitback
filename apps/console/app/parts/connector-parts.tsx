@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { type Connector, type Destination, type Repository, type Site, placesOf } from '../api';
 import { Confirmation } from '../confirm';
-import { ConnectorMark, type LaterKind, type MarkedKind } from '../connector-marks';
 import { msg, t } from '../i18n';
 import type { Listed } from '../listed';
 import { Chip, LinkButton, Problem } from '../ui';
@@ -16,7 +15,7 @@ import { isPluginKind } from '../trackers/plugin.ts';
  * named and drawn, the words of a source, and the gesture that disconnects one.
  */
 
-/** How each kind of source is named. Its mark is the logo of its tracker (FRU-543, `connector-marks.tsx`). */
+/** How each kind of source is named. Its logo is in `connector-logos.tsx` (FRU-690). */
 export const KINDS = {
   linear: { name: 'Linear' },
   // « REST API » is said « API REST » in French: `msg` marks it for the guard of the words.
@@ -51,22 +50,6 @@ export const KEY_PROBLEMS: Record<string, string> = {
   forbidden: msg('Only an owner or an admin of the workspace adds a connector.'),
   'store-unavailable': msg('Linear did not answer just now. Your key is not kept: try again in a minute.'),
 };
-
-/**
- * The mark of a source: the logo of its tracker, 18 px, in the white box of the mockup, 34 px inside
- * its border (FRU-543: the mockup wrote a letter, « L », « G », « { } »). The same box for a source
- * that is connected and for one to add, so that the names of both lists start on one line.
- */
-export function SourceMark({ kind }: { kind: MarkedKind | LaterKind }) {
-  return (
-    <span
-      aria-hidden="true"
-      className="box-content flex h-[34px] w-[34px] flex-none items-center justify-center rounded-control border border-line bg-surface text-ink"
-    >
-      <ConnectorMark kind={kind} size={18} />
-    </span>
-  );
-}
 
 /** The address a receiving connector sends to, as the worker named it: `REST · hooks.acme.dev`. */
 export function addressOf(connector: Connector): string {

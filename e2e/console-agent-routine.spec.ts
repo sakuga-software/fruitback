@@ -96,7 +96,7 @@ test('a routine is connected with its Fire URL and its token, which the page nev
   const worker = await workerWith(page, { connectors: [HOOK] });
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`${CONSOLE}/w/w1/connectors`);
-  await page.getByRole('button', { name: 'New connector' }).click();
+  // FRU-690: the catalogue is on the page, under the table.
   const card = page.locator('[data-source="Claude Code routine"]');
   await card.getByRole('button', { name: 'Connect Claude Code routine' }).click();
 
@@ -121,10 +121,10 @@ test('the panel of a routine says « Session started » with the link of each se
   await workerWith(page, { refused: true });
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`${CONSOLE}/w/w1/connectors`);
-  const row = page.locator('button[aria-expanded]').filter({ hasText: 'Claude Code routine' });
+  const row = page.locator('tbody tr[data-connector]').filter({ hasText: 'Claude Code routine' });
   await expect(row).toContainText('Trigger trig_01ABCDEFGHJKLMNOPQRSTUVW');
-  await expect(row).toContainText('1 call of an agent did not arrive');
-  await row.click();
+  await expect(row.locator('[data-pill]')).toHaveText('1 call not delivered');
+  await row.getByRole('button', { name: 'Settings of Claude Code routine', exact: true }).click();
   await unfolded(page);
   const session = page.locator('[data-session]');
   await expect(session).toHaveCount(1);
@@ -170,8 +170,8 @@ test('at 390 px in French, the panel says « Session lancée », and nothing scr
   await workerWith(page, { locale: 'fr' });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${CONSOLE}/w/w1/connectors`);
-  await page.locator('button[aria-expanded]').filter({ hasText: 'Routine Claude Code' }).click();
-  // The panel fades in: axe reads its contrast once it is there.
+  await page.getByRole('button', { name: 'Réglages de Routine Claude Code', exact: true }).click();
+  // The dialog zooms in: axe reads its contrast once it is there.
   await unfolded(page);
   await expect(page.locator('[data-session]')).toContainText('Session lancée');
   await expect(page.locator('[data-session]').getByRole('link', { name: 'Ouvrir la session' })).toBeVisible();
