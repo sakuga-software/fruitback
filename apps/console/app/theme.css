@@ -39,6 +39,11 @@
   --color-done: #166534;
   /* The round initial of a person: white on it is 10.35:1. */
   --color-avatar: #334155;
+  /*
+    The border of the danger zone of the settings and of its control (FRU-693): the light red of the
+    mockup. It says nothing alone: the title « Danger zone » and the words of the control do.
+  */
+  --color-danger-line: #f1c2c0;
 
   --font-sans: 'Inter Variable', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
 
