@@ -1,3 +1,4 @@
+import AxeBuilder from '@axe-core/playwright';
 import { type Page, type Route, expect, test } from '@playwright/test';
 import { noteFixture } from '../packages/shared/src/note.fixture.ts';
 import { ACME, sideScroll, stubWorker } from './console-workspace.ts';
@@ -219,6 +220,13 @@ test('the panel is beside the list: the arrows change the note, Escape gives the
     'href',
     'https://staging.acme.dev/pricing#fruitback-note=sd_1',
   );
+
+  // Nothing of the panel or the list beside it fails axe.
+  await p.waitForTimeout(250);
+  const axe = await new AxeBuilder({ page: p }).include('main').include('[data-task-panel]').analyze();
+  expect
+    .soft(axe.violations.map((violation) => `${violation.id}: ${violation.nodes[0]?.target.join(' ')}`))
+    .toEqual([]);
 
   // The arrow up goes to the note above it in the list: « In progress » is before « New ».
   await p.keyboard.press('ArrowUp');
