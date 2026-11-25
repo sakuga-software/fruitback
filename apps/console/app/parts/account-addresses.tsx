@@ -11,10 +11,11 @@ import { msg, t } from '../i18n';
 import type { Fetched } from '../listed';
 import { problemOf } from '../problems';
 import { ReadProblem } from '../read-problem';
-import { Button, Field, LinkButton, Problem } from '../ui';
+import { Confirmation } from '../confirm';
+import { SettingsIcon } from '../settings-icons';
+import { Button, Chip, Dialog, Field, Menu, Problem } from '../ui';
 import { useLocale } from '../use-locale';
-import { ONE_ROW, PROVIDER_NAMES, Row, SectionHelp, SectionTitle } from './account-rows';
-import { Disconnect as AsksTwice } from './connector-parts';
+import { CardNote, ONE_ROW, PROVIDER_NAMES, Row, RowMark, SettingsCard } from './account-rows';
 
 /** Why an address was not sent its link (FRU-450). Whose an address is, the worker does not say. */
 const ADD_PROBLEMS: Readonly<Record<string, string>> = {
@@ -47,8 +48,12 @@ function addressWord(address: AccountEmail): string {
 }
 
 /**
- * The addresses of the account (FRU-450). `onPrimary` hears the primary one each time it is read or
- * chosen: the page shows it in the other sections at once.
+ * The addresses of the account (FRU-450), a card of the profile (FRU-692). `onPrimary` hears the
+ * primary one each time it is read or chosen: the page shows it in the other cards at once.
+ *
+ * The primary address says so. Each other one has a menu: « Make primary », and « Remove » for an
+ * address no provider gives, which asks twice under its row. « Add » opens a dialog that sends the
+ * link that adds an address.
  */
 export function AddressesSection({ workspace, onPrimary }: { workspace: string; onPrimary: (email: string) => void }) {
   useLocale();
@@ -63,13 +68,16 @@ export function AddressesSection({ workspace, onPrimary }: { workspace: string; 
     }
   }, [onPrimary]);
   useEffect(() => void readEmails(), [readEmails]);
-  // What is typed stays in the field when the worker refuses it.
+  // What is typed stays in the field when the worker refuses it, and when the dialog closes.
   const [newEmail, setNewEmail] = useState('');
   const [adding, setAdding] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
   const [addProblem, setAddProblem] = useState<string | undefined>();
   const [sentTo, setSentTo] = useState<string | undefined>();
   const [addressStuck, setAddressStuck] = useState<{ email: string; problem: string } | undefined>();
   const [madePrimary, setMadePrimary] = useState<string | undefined>();
+  // The address whose « Remove » was chosen in its menu: its row asks the second time.
+  const [removing, setRemoving] = useState<string | undefined>();
 
   async function addEmail(event: FormEvent) {
     event.preventDefault();
@@ -82,6 +90,7 @@ export function AddressesSection({ workspace, onPrimary }: { workspace: string; 
     if (!sent.ok) return setAddProblem(problemOf(sent, ADD_PROBLEMS, NOT_SENT));
     setSentTo(sent.data.email);
     setNewEmail('');
+    setAddOpen(false);
   }
 
   async function choosePrimary(email: string) {
@@ -95,6 +104,7 @@ export function AddressesSection({ workspace, onPrimary }: { workspace: string; 
   }
 
   async function removeEmail(email: string) {
+    setRemoving(undefined);
     setAddressStuck(undefined);
     setMadePrimary(undefined);
     const removed = await removeAccountEmail(email);
@@ -104,105 +114,148 @@ export function AddressesSection({ workspace, onPrimary }: { workspace: string; 
     await readEmails();
   }
 
+  /** Under the row of an address: the second time of « Remove », or why its action did not go through. */
+  function rowUnder(email: string) {
+    if (removing === email)
+      return (
+        <Confirmation
+          confirmLabel={t('Remove {email}', { email })}
+          keepLabel={t('Keep it')}
+          consequence={t('A sign-in link sent there no longer opens your account.')}
+          onConfirm={() => void removeEmail(email)}
+          onKeep={() => setRemoving(undefined)}
+        />
+      );
+    if (addressStuck?.email === email) return <Problem>{t(addressStuck.problem)}</Problem>;
+
+    return undefined;
+  }
+
+  const add =
+    typeof emails === 'object' && emails.canAdd ? (
+      <Button
+        tone="outline"
+        size="small"
+        onClick={() => {
+          setAddProblem(undefined);
+          setAddOpen(true);
+        }}
+      >
+        <SettingsIcon name="add" size={14} />
+        {t('Add')}
+      </Button>
+    ) : undefined;
+
   return (
-    <section aria-labelledby="addresses-title">
-      <SectionTitle id="addresses-title">{t('Addresses')}</SectionTitle>
-      <SectionHelp>
-        {t(
-          'A sign-in link sent to any of them opens your account, and their invitations are yours. Your notes and the messages of Fruitback use the primary one.',
-        )}
-      </SectionHelp>
-      {madePrimary === undefined ? null : (
-        <p role="status" className="mb-[12px] text-small text-muted [overflow-wrap:anywhere]">
-          {t('{email} is your primary address now. Fruitback sent a message to both addresses.', {
-            email: madePrimary,
-          })}
-        </p>
-      )}
+    <SettingsCard
+      id="addresses-title"
+      icon="mail"
+      title={t('Addresses')}
+      {...(add === undefined ? {} : { actions: add })}
+    >
       {emails === 'loading' ? (
         <div className={ONE_ROW}>
-          <p className="text-small text-muted">{t('Loading…')}</p>
+          <p className="text-tiny text-muted">{t('Loading…')}</p>
         </div>
       ) : null}
       {emails === 'failed' ? (
-        <div className={`${ONE_ROW} gap-[12px]`}>
-          <p role="alert" className="min-w-0 flex-1 text-small text-muted">
+        <div className={ONE_ROW}>
+          <p role="alert" className="min-w-0 flex-1 text-tiny text-muted">
             {t('The addresses of your account did not load.')} <ReadProblem />
           </p>
-          <Button tone="outline" onClick={() => void readEmails()}>
+          <Button tone="outline" size="small" onClick={() => void readEmails()}>
             {t('Try again')}
           </Button>
         </div>
       ) : null}
       {typeof emails === 'string' ? null : (
         <>
-          <ul className="border-t border-line text-body">
+          <ul>
             {emails.emails.map((address) => (
               <Row
                 key={address.email}
+                icon={<RowMark name="mail" />}
                 title={address.email}
                 detail={addressWord(address)}
-                under={addressStuck?.email === address.email ? <Problem>{t(addressStuck.problem)}</Problem> : undefined}
+                under={rowUnder(address.email)}
               >
-                {address.primary ? null : (
-                  <span className="flex flex-wrap items-center gap-x-[16px] gap-y-[4px]">
-                    <LinkButton space="normal" onClick={() => void choosePrimary(address.email)}>
-                      {t('Make primary')}
-                    </LinkButton>
-                    {address.providers.length === 0 ? (
-                      <AsksTwice
-                        space="normal"
-                        label={t('Remove')}
-                        confirmLabel={t('Remove {email}', { email: address.email })}
-                        keepLabel={t('Keep it')}
-                        consequence={t('A sign-in link sent there no longer opens your account.')}
-                        onConfirm={() => void removeEmail(address.email)}
-                      />
-                    ) : null}
-                  </span>
+                {address.primary ? (
+                  <Chip>{t('Primary')}</Chip>
+                ) : (
+                  <Menu
+                    trigger="icon"
+                    triggerLabel={t('More for {email}', { email: address.email })}
+                    items={[
+                      { id: 'primary', label: t('Make primary') },
+                      ...(address.providers.length === 0 ? [{ id: 'remove', label: t('Remove'), danger: true }] : []),
+                    ]}
+                    onAction={(id) => {
+                      if (id === 'primary') return void choosePrimary(address.email);
+                      setAddressStuck(undefined);
+                      setRemoving(address.email);
+                    }}
+                  >
+                    <SettingsIcon name="more" />
+                  </Menu>
                 )}
               </Row>
             ))}
           </ul>
-          {emails.canAdd ? (
-            <form
-              onSubmit={(event) => void addEmail(event)}
-              aria-label={t('Add an address')}
-              className="mt-[16px] flex flex-wrap items-end gap-[10px]"
-            >
-              <div className="min-w-0 flex-[999_1_260px]">
-                <Field
-                  label={t('Add an address')}
-                  type="email"
-                  autoComplete="email"
-                  placeholder="name@company.com"
-                  value={newEmail}
-                  onChange={(event) => setNewEmail(event.target.value)}
-                />
-              </div>
-              <Button tone="outline" type="submit" disabled={adding || newEmail.trim() === ''}>
-                {t('Send a link')}
-              </Button>
-            </form>
-          ) : (
-            <p className="mt-[12px] text-small text-muted">
-              {t('This Fruitback sends no email: an address is added by a linked provider only.')}
-            </p>
+          {madePrimary === undefined ? null : (
+            <CardNote status>
+              {t('{email} is your primary address now. Fruitback sent a message to both addresses.', {
+                email: madePrimary,
+              })}
+            </CardNote>
           )}
           {sentTo === undefined ? null : (
-            <p role="status" className="mt-[12px] text-small text-muted [overflow-wrap:anywhere]">
+            <CardNote status>
               {t('Fruitback sent a link to {email}. Open it in this browser within a day: the address is added then.', {
                 email: sentTo,
               })}
-            </p>
+            </CardNote>
           )}
-          {addProblem === undefined ? null : (
-            <div className="mt-[12px]">
-              <Problem>{t(addProblem)}</Problem>
-            </div>
+          {emails.canAdd ? null : (
+            <CardNote>{t('This Fruitback sends no email: an address is added by a linked provider only.')}</CardNote>
           )}
         </>
       )}
-    </section>
+      <Dialog
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        title={t('Add an address')}
+        closeLabel={t('Close')}
+        size="sm"
+      >
+        <form
+          onSubmit={(event) => void addEmail(event)}
+          aria-label={t('Add an address')}
+          className="flex flex-col gap-[12px]"
+        >
+          <p className="text-hint text-muted">
+            {t(
+              'A sign-in link sent to any of them opens your account, and their invitations are yours. Your notes and the messages of Fruitback use the primary one.',
+            )}
+          </p>
+          <Field
+            label={t('Address')}
+            type="email"
+            autoComplete="email"
+            placeholder="name@company.com"
+            value={newEmail}
+            onChange={(event) => setNewEmail(event.target.value)}
+          />
+          {addProblem === undefined ? null : <Problem>{t(addProblem)}</Problem>}
+          <div className="flex flex-wrap justify-end gap-[8px]">
+            <Button tone="outline" size="small" onClick={() => setAddOpen(false)}>
+              {t('Cancel')}
+            </Button>
+            <Button size="small" type="submit" disabled={adding || newEmail.trim() === ''}>
+              {t('Send a link')}
+            </Button>
+          </div>
+        </form>
+      </Dialog>
+    </SettingsCard>
   );
 }

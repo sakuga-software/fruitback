@@ -4,29 +4,12 @@ import { LOGO_TYPES, type Workspace, call, removeWorkspaceLogo, renameWorkspace,
 import { msg, t } from '../i18n';
 import { problemOf } from '../problems';
 import { manages } from '../setup-stage';
-import { Button, Field, FilePick, Problem, SubNav } from '../ui';
+import { Button, Field, FilePick, Problem } from '../ui';
 import { useLocale } from '../use-locale';
 import { LOGO_NOT_REMOVED, LOGO_NOT_SAVED, LOGO_PROBLEMS, logoRefusal } from '../workspace-logo';
 import { RENAME_PROBLEMS, WORKSPACE_NOT_RENAMED } from '../parts/setup-account';
-import { PageHead, WorkspaceMark, useWorkspace } from './workspace';
-
-/** The pages of the settings (FRU-544): « General », here, and « AI », what an agent needs. */
-export function SettingsNav({ workspace, current }: { workspace: Workspace; current: 'general' | 'ai' }) {
-  useLocale();
-  const base = `/w/${workspace.id}/settings`;
-
-  return (
-    <SubNav
-      // Not « Workspace settings »: a name that holds « Workspace », the name of the rail, would be
-      // found by a search of that name too.
-      label={t('Pages of the settings')}
-      entries={[
-        { to: base, label: t('General'), current: current === 'general' },
-        { to: `${base}/ai`, label: t('AI'), current: current === 'ai' },
-      ]}
-    />
-  );
-}
+import { SettingsHead } from './settings-shell';
+import { WorkspaceMark, useWorkspace } from './workspace';
 
 /**
  * The settings of a workspace (FRU-414): « Settings » in the rail for an owner or an admin (FRU-503),
@@ -36,7 +19,8 @@ export function SettingsNav({ workspace, current }: { workspace: Workspace; curr
  * It holds what the worker lets a workspace change today, for an owner or an admin: its name
  * (FRU-236) and its logo (FRU-428). Every member reads both. The owner deletes the workspace at the
  * end (FRU-503). What an agent needs is on the page « AI » of the settings (FRU-544,
- * `workspace-settings-ai.tsx`), the second link of `SettingsNav`.
+ * `workspace-settings-ai.tsx`). It is the page « General » of the shell of the settings (FRU-692),
+ * which FRU-693 draws again.
  */
 export default function WorkspaceSettings() {
   const { workspace } = useWorkspace();
@@ -73,11 +57,10 @@ function Settings() {
 
   return (
     <>
-      <PageHead
-        title={t('Workspace settings')}
+      <SettingsHead
+        title={t('General')}
         lead={t('Settings that every member of {name} sees.', { name: workspace.name })}
       />
-      <SettingsNav workspace={workspace} current="general" />
       <section aria-labelledby="workspace-name-title" className="flex max-w-[640px] flex-col gap-[14px]">
         <h2 id="workspace-name-title" className="text-section font-bold">
           {t('Name')}
