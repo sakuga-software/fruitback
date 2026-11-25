@@ -88,6 +88,18 @@ export function sameAccess(draft: Access, stored: Access): boolean {
 }
 
 /**
+ * The draft of the tab « Access » once the frame of the page holds another site (FRU-689): a read
+ * again, « Save », or a link to another site. Another site starts from its own access. The same site
+ * replaces a draft that nobody changed, and keeps one that somebody did: what was chosen and not
+ * saved is never lost under the hand of the person.
+ */
+export function draftAfter(draft: Access, before: Site, site: Site): Access {
+  if (before.id !== site.id || sameAccess(draft, accessOf(before))) return accessOf(site);
+
+  return draft;
+}
+
+/**
  * What the console sends to `POST …/sites` for this access: what the table shows. Where only members
  * write, the table says « Never » for the rights of a visitor, and that is what is stored: a site
  * opened again later does not bring back rights nobody sees. The e-mail is sent where anybody writes

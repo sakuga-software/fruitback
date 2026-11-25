@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { type Access, accessBody, accessOf, sameAccess } from '../access-policy';
+import { useEffect, useRef, useState } from 'react';
+import { type Access, accessBody, accessOf, draftAfter, sameAccess } from '../access-policy';
 import { type Site, call } from '../api';
 import { msg, t } from '../i18n';
 import { problemOf } from '../problems';
@@ -32,14 +32,14 @@ export default function SiteAccessPage() {
   const [problem, setProblem] = useState<string | undefined>();
   const [saved, setSaved] = useState(false);
   const host = siteName(site.origin);
-  // Another site in the frame, or the access of this one changed there (« Save », a read again): the
-  // tab shows what the frame holds. A change of another field of the site leaves the draft as it is.
-  const { visibility, writers, visitorEdit, visitorDelete, notifyDone } = site;
+  // The frame holds another site (a read again, « Save », a link to another site): a draft nobody
+  // changed follows it, and one changed and not saved stays (`draftAfter`).
+  const shown = useRef(site);
   useEffect(() => {
-    setDraft(accessOf(site));
-    // The access of the site and its id: another field of the site does not reset what is chosen.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [site.id, visibility, writers, visitorEdit, visitorDelete, notifyDone]);
+    const before = shown.current;
+    shown.current = site;
+    if (before !== site) setDraft((current) => draftAfter(current, before, site));
+  }, [site]);
 
   function change(next: Access) {
     setSaved(false);
