@@ -161,12 +161,13 @@ function IdentityCard({
               />
             </div>
           </form>
+          {/* Under the words of the row, as the words start after the mark of 40 px of « Logo ». */}
           {problem === undefined ? null : (
-            <div className="pb-[12px]">
+            <div className="pb-[12px] min-[640px]:ps-[52px]">
               <Problem>{t(problem)}</Problem>
             </div>
           )}
-          <p role="status" className={kept ? 'pb-[12px] text-hint text-muted' : 'sr-only'}>
+          <p role="status" className={kept ? 'pb-[12px] text-hint text-muted min-[640px]:ps-[52px]' : 'sr-only'}>
             {kept ? t('The name is saved.') : ''}
           </p>
         </li>
