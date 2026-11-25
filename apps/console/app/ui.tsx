@@ -1655,7 +1655,7 @@ export function Dialog({
       }}
     >
       <Modal.Container size={size} scroll="inside">
-        <Modal.Dialog className={`kit-dialog ${className}`}>
+        <Modal.Dialog className={`kit-dialog rounded-modal ${className}`}>
           {locked ? null : <Modal.CloseTrigger aria-label={closeLabel} />}
           <Modal.Header>
             <Modal.Heading className="kit-dialog__title">{title}</Modal.Heading>
@@ -1978,7 +1978,7 @@ export function Divider({ children, className = '' }: { children: ReactNode; cla
  */
 const MENU_TRIGGER = 'kit-menu-trigger cursor-pointer transform-none [transition:none]';
 const MENU =
-  'kit-menu min-w-[220px] border border-line rounded-card bg-surface text-ink [box-shadow:var(--shadow-frame)]';
+  'kit-menu min-w-[220px] border border-line rounded-control bg-surface text-ink [box-shadow:var(--shadow-frame)]';
 /**
  * An item: tinted under the pointer and under the keyboard, and the ring of a page inside it, so the
  * menu does not clip it. The strong accent of an item that takes something away is 5.89:1 on the
@@ -2516,15 +2516,16 @@ type BrowserFrameProps = {
   empty?: string;
   /** Under the frame: what the page is. */
   caption?: ReactNode;
-  /** The page, 620 px high. */
+  /** The page, 620 px high, or 280 px (`short`). */
   children?: ReactNode;
+  short?: boolean;
 };
 
 const BROWSER_DOTS = 'kit-browser__dots flex flex-none gap-[6px] w-[42px]';
 const BROWSER_DOT = 'size-[10px] rounded-full bg-line';
 
 /** The window of a browser, drawn around the preview of a site. */
-export function BrowserFrame({ address, empty, caption, children }: BrowserFrameProps) {
+export function BrowserFrame({ address, empty, caption, children, short = false }: BrowserFrameProps) {
   return (
     <>
       <div className="kit-browser overflow-hidden border border-line rounded-card bg-surface [box-shadow:var(--shadow-frame)]">
@@ -2544,7 +2545,7 @@ export function BrowserFrame({ address, empty, caption, children }: BrowserFrame
         </div>
         {/* On a phone the frame comes under the steps: with no site yet, a short frame says enough. */}
         <div
-          className={`kit-browser__page relative h-[620px] overflow-hidden ${empty === undefined ? '' : 'max-sm:h-[280px]'}`}
+          className={`kit-browser__page relative overflow-hidden ${short ? 'h-[280px]' : `h-[620px] ${empty === undefined ? '' : 'max-sm:h-[280px]'}`}`}
         >
           {empty === undefined ? (
             children
