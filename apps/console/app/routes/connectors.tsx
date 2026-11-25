@@ -690,7 +690,7 @@ export default function Connectors() {
                         </span>
                       </span>
                       <span className="flex-none max-sm:basis-full max-sm:pl-[50px]">
-                        <State connector={connector} late={late[connector.id]} chosen={chosen} />
+                        <State connector={connector} late={late[connector.id]} />
                       </span>
                     </button>
                     {/* The accordion of the source opens under its row, inside its card (FRU-403). */}
@@ -776,11 +776,11 @@ type Late = { notes: number; calls: number };
  * and a tracker that refuses the source needs somebody (FRU-102): the panel of the source says what
  * to do.
  *
- * On the row that is chosen the red is the strong accent: the accent is 4.28:1 on its tint.
+ * The red is the strong accent: the accent is under 4.5:1 on the slate tints of a row (FRU-683).
  */
-function State({ connector, late, chosen }: { connector: Connector; late: Late | undefined; chosen: boolean }) {
+function State({ connector, late }: { connector: Connector; late: Late | undefined }) {
   useLocale();
-  const alert = `flex-none text-hint leading-auto font-semibold ${chosen ? 'text-accent-strong' : 'text-accent'}`;
+  const alert = 'flex-none text-hint leading-auto font-semibold text-accent-strong';
   if (connector.attention !== undefined) return <span className={alert}>{t('Needs attention')}</span>;
   const words = [
     ...(late !== undefined && late.notes > 0

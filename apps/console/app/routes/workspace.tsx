@@ -570,7 +570,18 @@ export function RailNav({ label, entries }: { label: string; entries: readonly R
   const shown = entries.find((entry) => entry.current)?.to;
   useEffect(() => {
     const link = row.current?.querySelector<HTMLElement>('[aria-current="page"]');
-    if (link !== null && link !== undefined) reveal(link);
+    if (link === null || link === undefined) return;
+    reveal(link);
+    // Inter comes after the first paint (FRU-683): its words are wider, so the section is revealed
+    // again once the fonts are in. Measured at 390 px: without it, « My account » ended 20 px out.
+    let gone = false;
+    void document.fonts?.ready.then(() => {
+      if (!gone) reveal(link);
+    });
+
+    return () => {
+      gone = true;
+    };
   }, [shown]);
 
   return (

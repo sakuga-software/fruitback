@@ -397,7 +397,7 @@ test('the screen is the one of the mockup, with what the worker of today does', 
   const where = section(page, 'Where you are signed in');
   expectBox(
     await box(where.getByRole('heading', { level: 2 })),
-    { x: 297, y: 598.8 + under, height: 21 },
+    { x: 297, y: 562.8 + under, height: 21 },
     2,
     '« Where you are signed in »',
   );
@@ -420,10 +420,10 @@ test('the screen is the one of the mockup, with what the worker of today does', 
     'padding-top': '10px',
   });
   // At the right of the screen, as wide as its column (FRU-398): 371.5 px to the right of the mockup.
-  expectBox(await box(disconnect), { x: 1320.8, y: 746.7 + under, width: 71.2, height: 37 }, 2, '« Disconnect »');
+  expectBox(await box(disconnect), { x: 1320.8, y: 710.7 + under, width: 71.2, height: 37 }, 2, '« Disconnect »');
   expectBox(
     await box(browsers.nth(2).getByRole('button')),
-    { x: 1320.8, y: 819.7 + under },
+    { x: 1320.8, y: 783.7 + under },
     2,
     'the second « Disconnect »',
   );
@@ -450,7 +450,7 @@ test('the screen is the one of the mockup, with what the worker of today does', 
       'font-size': '13px',
       'font-weight': '600',
     });
-  expectBox(await box(signOut), { x: 297, y: 919 + under, width: 89.7, height: 32 }, 2, '« Sign out »');
+  expectBox(await box(signOut), { x: 297, y: 882.7 + under, width: 89.7, height: 32 }, 2, '« Sign out »');
   const everywhere = out.getByRole('button', { name: 'Sign out everywhere', exact: true });
   expect.soft(await styles(everywhere, ['text-decoration-line', 'padding-top'])).toEqual({
     'text-decoration-line': 'underline',
@@ -458,7 +458,7 @@ test('the screen is the one of the mockup, with what the worker of today does', 
   });
   expectBox(
     await box(everywhere),
-    { x: 406.2, y: 914.7 + under, width: 129.6, height: 41 },
+    { x: 406.2, y: 878.7 + under, width: 129.6, height: 41 },
     2,
     '« Sign out everywhere »',
   );
