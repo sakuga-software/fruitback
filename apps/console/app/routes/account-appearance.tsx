@@ -72,12 +72,18 @@ const DENSITY_NAMES: Readonly<Record<Density, string>> = {
  */
 export default function AccountAppearance() {
   useLocale();
-  const [appearance, setAppearance] = useState<Appearance>(DEFAULT_APPEARANCE);
-  const [systemDark, setSystemDark] = useState(false);
-  // What this browser keeps, read once the page is in a browser.
+  // What this browser keeps, read before the first render: a choice pressed at once builds on it, and
+  // never on the default (raised in review). The console renders in a browser only (`ssr: false`).
+  const [appearance, setAppearance] = useState<Appearance>(() => keptAppearance(storage()));
+  const [systemDark, setSystemDark] = useState(systemIsDark);
+  // Under « System », the theme drawn as chosen follows the system while the page is open.
   useEffect(() => {
-    setAppearance(keptAppearance(storage()));
-    setSystemDark(systemIsDark());
+    if (typeof matchMedia !== 'function') return;
+    const media = matchMedia('(prefers-color-scheme: dark)');
+    const changed = () => setSystemDark(media.matches);
+    media.addEventListener('change', changed);
+
+    return () => media.removeEventListener('change', changed);
   }, []);
 
   const choose = (next: Appearance) => {

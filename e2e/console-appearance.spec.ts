@@ -96,6 +96,38 @@ test('a theme, a tint and an accent show at once, and stay at the next visit wit
   ).toBeChecked();
 });
 
+test('the page shows the kept choice from its first render, so a press builds on it (raised in review)', async ({
+  page,
+}) => {
+  await stubWorker(page, { workspaces: [ACME] });
+  await page.addInitScript(() => {
+    if (sessionStorage.getItem('planted') !== null) return;
+    sessionStorage.setItem('planted', '1');
+    localStorage.setItem(
+      'fruitback.appearance',
+      JSON.stringify({ appearance: { mode: 'dark', dark: 'graphite', accent: 'teal' }, light: {}, dark: {} }),
+    );
+  });
+  // Every theme drawn as chosen, from the first render on.
+  await page.addInitScript(() => {
+    const seen: string[] = [];
+    (window as unknown as { seen: string[] }).seen = seen;
+    new MutationObserver(() => {
+      for (const label of document.querySelectorAll('.kit-pictures label[data-selected="true"]'))
+        if (!seen.includes(label.textContent ?? '')) seen.push(label.textContent ?? '');
+    }).observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ['data-selected'] });
+  });
+  await page.goto(APPEARANCE);
+  await expect(page.getByRole('radiogroup', { name: 'Theme' }).getByRole('radio', { name: 'Graphite' })).toBeChecked();
+  expect(await page.evaluate(() => (window as unknown as { seen: string[] }).seen)).toEqual(['Graphite']);
+  // A press keeps the rest of the choice.
+  await choose(page, 'Density', 'Compact');
+  const kept = await page.evaluate(
+    () => JSON.parse(localStorage.getItem('fruitback.appearance') ?? 'null') as { appearance: Record<string, unknown> },
+  );
+  expect(kept.appearance).toMatchObject({ mode: 'dark', dark: 'graphite', accent: 'teal', density: 'compact' });
+});
+
 test('an ink sidebar on a light theme writes its words light, and keeps its ring', async ({ page }) => {
   await stubWorker(page, { workspaces: [ACME] });
   await page.goto(APPEARANCE);
