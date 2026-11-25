@@ -52,15 +52,15 @@
   },
   "devDependencies": {
     "@iconify-json/ph": "^1.2.2",
-    "@tailwindcss/node": "^4.3.3",
-    "@tailwindcss/oxide": "^4.3.3",
+    "@tailwindcss/node": "4.3.3",
+    "@tailwindcss/oxide": "4.3.3",
     "@types/node": "catalog:",
     "esbuild": "catalog:",
     "happy-dom": "catalog:",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
     "react-grab": "catalog:",
-    "tailwindcss": "^4.3.3",
+    "tailwindcss": "4.3.3",
     "typescript": "catalog:"
   },
   "nx": {

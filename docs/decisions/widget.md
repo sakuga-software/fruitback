@@ -588,8 +588,8 @@ and the comparison scripts are in the description of the pull request.
   `@supports`: written the other way, that browser covered the page in ink.
 - **The class of the part comes first, and has no rule**: `fruitback-area-take fruitback:min-h-11 …`.
   Tests, specs and the rules of other modules find the part by it.
-- **The weight has a ceiling**: `fruitback.iife.js` stays under 150 000 B gzipped and 130 000 B with
-  brotli (`package.test.ts`), and the sheet under 64 000 B raw and 14 000 B gzipped
+- **The weight has a ceiling**: `fruitback.iife.js` stays under 175 000 B gzipped and 150 000 B with
+  brotli (`package.test.ts`), and the sheet under 160 000 B raw and 28 000 B gzipped
   (`tailwind-sheet.test.ts`).
 - **One sheet of styles per pull request, stacked**: area (this one), orphans, panel, host, sidebar,
   overlay, composer. Each one keeps the e2e specs green with no change and has a video before and
@@ -659,29 +659,35 @@ the bundle of `main` compared with itself gives 31 pixels, at most 11, at the sa
 
 **The weight.** `fruitback.iife.js`, in bytes, gzip and brotli at the defaults of `node:zlib`:
 
-| Bundle                                 | Raw       | gzip      | brotli    |
-| -------------------------------------- | --------- | --------- | --------- |
-| `main` 381f63bf                        | 479 256   | 135 609   | 113 722   |
-| this prototype: the area in Tailwind   | 484 126   | 136 898   | 114 849   |
-| difference                             | +4 870    | +1 289    | +1 127    |
-| no hand-written sheet at all (a floor) | 386 044   | 119 420   | 103 329   |
-| projected: every sheet in Tailwind     | ≈ 520 000 | ≈ 138 000 | ≈ 119 000 |
+| Bundle                                 | Raw       | gzip              | brotli            |
+| -------------------------------------- | --------- | ----------------- | ----------------- |
+| `main` 381f63bf                        | 479 256   | 135 609           | 113 722           |
+| this prototype: the area in Tailwind   | 484 126   | 136 898           | 114 849           |
+| difference                             | +4 870    | +1 289            | +1 127            |
+| no hand-written sheet at all (a floor) | 386 044   | 119 420           | 103 329           |
+| the area and the detached notes (#931) | 489 845   | 138 178           | 115 853           |
+| projected: every sheet in Tailwind     | ≈ 600 000 | ≈ 155 000–167 000 | ≈ 132 000–139 000 |
 
 The sheet of the prototype is 5 373 B raw, 1 353 B gzipped: 774 B of fixed cost (the values of the
-variables on every element) and 70 rules. The area alone looks expensive because it pays the fixed
-cost, and because its 76 utilities are new words to the compressor.
+variables on every element) and 70 rules. With the detached notes it is 11 801 B raw, 2 471 B
+gzipped.
 
-The projection takes each declaration of the seven hand-written sheets (2 246 of them, 783 distinct
-by variant and value) and writes, as the area did, 1.31 utilities per declaration in the class names
-and one rule per distinct utility, into the bundle with no hand-written sheet. The model gave 489 855,
-135 233 and 116 013; checked on the area, it was short of the real prototype by 13 % gzipped, 28 % raw
-and 20 % with brotli, and the projection above is corrected by those factors, fixed cost included. The
-sheet itself comes out near 49 000 B raw. The hand-written sheets ship their spaces and their long
-selectors, and the class names repeat the same words: that is why gzip hardly moves.
+**The projection, measured on two sheets.** A first model, calibrated on the area alone, gave about
+138 000 B gzipped. The second sheet showed it was too low. The variants of a state and of a corner
+write long selectors (`:host([data-fruitback-position$=-right]) .fruitback\:corner-right\:undocked\:right-4:not([data-fruitback-docked])`
+holds one declaration), and each utility is written again in the class names of the JavaScript.
+Measured, each hand-written declaration costs about 14 B gzipped and 11 B with brotli once it is in
+Tailwind: 16 B and 14 B on the area (58 declarations), 12 B and 9 B on the detached notes (104). The
+2 084 declarations left give the range of the table: the lower end counts on the utilities that the
+next sheets share, the upper end on none.
 
-The ceiling replaces the old tripwire of 200 000 B gzipped: 150 000 B gzipped and 130 000 B with
-brotli leave about 12 000 B over the projection, for the features of the same weeks. A sheet past
-64 000 B raw holds rules nobody writes: a scan of a wrong source, or a theme read whole.
+The ceiling replaces the old tripwire of 200 000 B gzipped: 175 000 B gzipped and 150 000 B with
+brotli hold the upper end of the projection with room for the features of the same weeks, and stay
+under the old tripwire (decision of 2026-11-25). The Tailwind sheet itself is projected near 125 000 B
+raw and 20 000 B gzipped: past 160 000 B raw or 28 000 B gzipped it holds rules nobody writes, a scan
+of a wrong source or a theme read whole. A long combination of states that comes back in several
+parts may become one `@utility` of `tailwind.css`, when a measure shows that it saves bytes and the
+rendering stays the same.
 
 **The shared theme.** `tailwind.css` imports it `theme(inline reference) prefix(fruitback)`:
 `fruitback:min-h-control` is `min-height: 44px` and `fruitback:text-hint` is `font-size: 13px` with
