@@ -47,8 +47,10 @@ function reads(): Reads & { answer: (cursor: string, answer: () => Promise<void>
   };
 }
 
-async function open(page: Page): Promise<Reads> {
+/** `failOnce`: the first read of this cursor answers `503`, as a worker that did not answer. */
+async function open(page: Page, failOnce?: string): Promise<Reads> {
   const read = reads();
+  let failing = failOnce;
   await stubWorker(page, {
     workspaces: [ACME],
     answer: (pathname, route: Route) => {
@@ -58,16 +60,21 @@ async function open(page: Page): Promise<Reads> {
       const start = cursor === '' ? 0 : Number(cursor.split(':')[1]);
       const limit = Number(params.get('limit') ?? 8);
 
-      return read.answer(cursor, () =>
-        route.fulfill({
+      return read.answer(cursor, () => {
+        if (cursor === failing) {
+          failing = undefined;
+          return route.fulfill({ status: 503, json: { error: 'unavailable' } });
+        }
+
+        return route.fulfill({
           json: {
             notes: NOTES.slice(start, start + limit),
             total: NOTES.length,
             counts: { all: NOTES.length, byPlace: { fruitback: NOTES.length }, undelivered: 0 },
             ...(start + limit < NOTES.length ? { next: `all:${start + limit}` } : {}),
           },
-        }),
-      );
+        });
+      });
     },
   });
   await page.goto(`${CONSOLE}/w/w1/notes`);
@@ -154,6 +161,32 @@ test('a number pressed during the read goes to its page, and no press of « Next
   await settled(page);
   await expect(summary(page)).toHaveText('1 to 25 of 263');
   expect(read.cursors).toEqual(['', 'all:25', '']);
+});
+
+test('a read that fails drops the press that waited for it, and « Try again » reads the page asked (review of #937)', async ({
+  page,
+}) => {
+  const read = await open(page, 'all:25');
+  const release = read.hold('all:25');
+  await press(page, 'Next page');
+  await expect.poll(() => read.cursors.at(-1)).toBe('all:25');
+  await press(page, 'Next page');
+  release();
+
+  // The read failed: the screen says so, and offers no page to press.
+  await expect(page.getByText('The notes did not load')).toBeVisible();
+  await expect(pages(page)).toHaveCount(0);
+  await page.getByRole('button', { name: 'Try again' }).click();
+  // The page asked, and only it: the press that waited for the failed read went nowhere.
+  await expect(summary(page)).toHaveText('26 to 50 of 263');
+  await expect(firstRow(page)).toContainText('Note 26 of the list');
+  await settled(page);
+  await expect(summary(page)).toHaveText('26 to 50 of 263');
+  expect(read.cursors).toEqual(['', 'all:25', 'all:25']);
+  // A press after the retry goes on from the page read.
+  await press(page, 'Next page');
+  await expect(summary(page)).toHaveText('51 to 75 of 263');
+  await expect(firstRow(page)).toContainText('Note 51 of the list');
 });
 
 /** A note of the instance, as `adminNoteView` of the worker answers it (FRU-272). */
