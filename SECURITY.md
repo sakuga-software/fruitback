@@ -2162,6 +2162,29 @@ seen » is shown to owners and admins only.
 - The read takes the site with no `Origin`, as a tool of MCP does: the console is no origin of the
   site, and its own rights are checked before the read.
 
+### A task written by hand, in the console (FRU-657)
+
+- `POST /console/workspaces/<id>/notes` writes a task with no page and no pin in a site of the
+  workspace: whoever reads the notes of that site writes there, as they could leave a note on its
+  pages. A guest writes only in a site shared with them, and any other site is `404`, with nothing
+  written. test:`lets a guest write in a site shared with them only`.
+- The worker writes its author from the session: the account in the index, which gives the author
+  the rights of the status, and the name the account has now, marked `verified`, in the task. A
+  body cannot name another author. test:`takes a title alone, and the list shows it with the notes of its site, with no page`.
+- Its status, its assignee and its labels are checked as `POST …/notes/<note>/status` and
+  `POST …/notes/<note>/task` check them, in the same transaction as the task: a status of another
+  site, a hidden one, a person who is not a member or a label of another workspace is `409`, and
+  nothing is written. A title is one line of 1 to 200 characters, a text at most 5,000.
+  test:`refuses a task with no title, an unknown site, status, assignee or label, and every write on a worker that keeps none`.
+- A task is no note of a page. Its own kind, `fruitback.task`, is `not-found` for `parseNote`,
+  and its row has no address: `GET /feedback` never answers it, so no widget draws a pin of it; the
+  list of the extension leaves it out; and no tool of `/mcp` reads a page for it, or replies or sets
+  a status there. `get_note` reads it from the store of the worker, with the rights of the key.
+  test:`shows no pin: no read of a page and no list of the extension holds it`,
+  test:`is read by get_note of /mcp as a task, and left out of the notes that list_notes reads`.
+- On a worker that keeps no task (`FRUITBACK_TASKS=off`) the route is `403 tasks-off`, and a
+  suspended workspace writes nothing: the route is a write of the console, behind its one guard.
+
 ### The image of the console (FRU-222)
 
 The console is static files behind nginx, in an image of its own. **It holds no secret**: nothing

@@ -5098,3 +5098,28 @@ the rule of FRU-257 for an address; it waits for the explicit agreement of Mathi
   could only answer `statuses-not-taken` there. `TOOLS_VERSION` is `2`.
 - **`create_task` comes with FRU-657**, the creation of a task by hand: a pull request of its own, on
   top of that one.
+
+## A task written by hand (FRU-657)
+
+### The rules, in short
+
+- **`POST …/notes` writes a task**: `{ site, title, text?, status?, assignee?, priority?, dueOn?,
+  labels? }`, `201 { id, identifier, stage }`. `createTask` of the store of the accounts writes it in
+  one transaction: the row of `notes`, its status, its fields, its labels and its row of the index.
+  `readNewTask` of `task-fields.ts` reads the body; `/mcp` takes the same two (FRU-659).
+- **The site is required.** The index, the statuses, the rights of a guest and the removal of a site
+  are all by site: a task with no site needs them by workspace, which is a ticket of its own.
+- **The task is kept by the worker, whatever the destination of its site**: place `fruitback`,
+  reference `FB-<n>`. It never goes to a connector, so no `note.*` event of a REST address carries
+  it. The routes of a task kept by the worker (status, fields, archive, deletion) take it as they
+  take a note, with the rights of the status: its author is the account of the session.
+- **It has no page: `page_url` is `NO_PAGE`, the empty string**, in `notes` and in the index. No
+  canonical address is empty, so no read of a page asks for it, and no migration was needed.
+  **Every reader that goes from the index to a page checks it first**: a read of no page would ask a
+  tracker for every issue of its team. `readNote` of `app.ts`, `get_note`, `reply_to_note`,
+  `set_note_status` and the page reads of `list_notes` and `notes_as_text` do. The list of the
+  extension asks the index for the notes of a page only (`onPages`).
+- **`readTask` reads it**, from its row, by the index: `{ task }` on `GET …/notes/<note>` and on
+  `get_note`, where a note of a page is `{ note }`.
+- **A task put in To do at its creation starts the agent of its site** (`moved-to-todo`), as a move
+  of a person there does.

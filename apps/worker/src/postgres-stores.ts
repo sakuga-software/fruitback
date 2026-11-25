@@ -127,6 +127,8 @@ export function accountStoreOn(database: Database): AccountStore {
     setNoteStatus: true,
     setTaskFields: true,
     deleteTask: true,
+    createTask: true,
+    readTask: true,
     changeTasks: true,
     deleteTasks: true,
     labels: true,

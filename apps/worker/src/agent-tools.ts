@@ -1,4 +1,4 @@
-import { type FeedbackWords, type NoteIssue, feedbackText } from '@fruitback/shared';
+import { type FeedbackWords, type NoteIssue, type TaskIssue, feedbackText } from '@fruitback/shared';
 import { type AccountStore, type AgentWrite, can } from './accounts.ts';
 import type { AgentGrant } from './agent-keys.ts';
 import type { ClientConfig, ClientPolicy, ClientResolution } from './clients.ts';
@@ -16,6 +16,7 @@ import {
 } from './note-helpers.ts';
 import { chargeRateLimit } from './rate-limit.ts';
 import { markedAgent } from './reply-text.ts';
+import { NO_PAGE } from './note-rows.ts';
 import { OWN_SOURCE, isBuiltIn } from './site-statuses.ts';
 import type { NoteStage } from '@fruitback/shared';
 import type { ListedNote, NoteIndex } from './notes-index.ts';
@@ -45,8 +46,11 @@ import { TASK_PRIORITIES, type TaskChange, type TaskFields, readTaskChange } fro
 
 export type AgentToolsContext = {
   grant: AgentGrant;
-  /** What the write tools read and write beside the store (FRU-464), and the fields of a task (FRU-659). */
-  accounts: Pick<AccountStore, 'siteStatuses' | 'recordAgentWrite' | 'setTaskFields' | 'labels' | 'membersOf'>;
+  /** What the write tools read and write beside the store (FRU-464), the fields of a task (FRU-659), and a task written by hand (FRU-657). */
+  accounts: Pick<
+    AccountStore,
+    'siteStatuses' | 'recordAgentWrite' | 'setTaskFields' | 'labels' | 'membersOf' | 'readTask'
+  >;
   /** Whether this worker keeps tasks (FRU-651). `off`: no tool of a task is given. */
   tasks: 'on' | 'off';
   /** The longest reply, as `POST /feedback/<id>/replies` takes it. */
@@ -327,13 +331,36 @@ function taskView(task: TaskFields): Omit<TaskFields, 'position'> {
 }
 
 /**
+ * FRU-657: a task written by hand, as `noteView` gives a note: `id` for `get_note`, and its site. Its
+ * `task` is what the person wrote (`fruitback.task`), so its fields are under `fields`.
+ */
+function handwrittenView(
+  site: Site,
+  issue: TaskIssue,
+  seesTracker: boolean,
+  task: TaskFields | undefined,
+): Record<string, unknown> {
+  const { id: issueId, ...rest } = seesTracker ? issue : withoutTracker(issue, issue.task.id);
+
+  return {
+    id: noteIdOf(site.id, issue.task.id),
+    site: site.id,
+    ...(seesTracker ? { issueId } : {}),
+    ...rest,
+    ...(task === undefined ? {} : { fields: taskView(task) }),
+  };
+}
+
+/**
  * The issues of these notes of the index, in their order. Each page is read once, and
  * `PAGE_READS_AT_ONCE` pages at the same time (FRU-539): one page after the other made 50 reads in a
  * row for `list_notes`, and 200 for `notes_as_text`. A note that two pages hold is the one of
  * the last page, as when the pages were read one after the other.
  */
 async function contentOf(site: Site, listed: readonly ListedNote[]): Promise<NoteIssue[]> {
-  const pages = [...new Set(listed.map((note) => note.pageUrl))];
+  // FRU-657: a task written by hand has no page to read; a read of no page would ask a tracker for
+  // every issue of its team. `get_note` reads it.
+  const pages = [...new Set(listed.filter((note) => note.pageUrl !== NO_PAGE).map((note) => note.pageUrl))];
   const byPage: NoteIssue[][] = [];
   let next = 0;
   let failed = false;
@@ -430,6 +457,14 @@ function getNote(context: AgentToolsContext, seesTracker: boolean, args: Record<
     if (key === undefined || site === undefined || context.noteIndex === undefined)
       return { ok: false, error: NO_NOTE };
     const page = await context.noteIndex.pageOfNote(site.workspace, site.id, key.note);
+    // FRU-657: a task written by hand, from the worker's store, as `{ task }`.
+    if (page === NO_PAGE) {
+      const task = await context.accounts.readTask(site.workspace, site.id, key.note);
+      if (task === undefined) return { ok: false, error: NO_NOTE };
+      const fields = await context.noteIndex.taskOf(site.workspace, site.id, key.note);
+
+      return { ok: true, content: { task: handwrittenView(site, task, seesTracker, fields) } };
+    }
     const issue = page === undefined ? undefined : (await site.read(page)).find((each) => each.note.id === key.note);
     if (issue === undefined || !readable(context, site, issue)) return { ok: false, error: NO_NOTE };
     const task = await context.noteIndex.taskOf(site.workspace, site.id, key.note);
@@ -499,7 +534,8 @@ async function writableNote(
   const site = key === undefined ? undefined : await siteOf(context, key.site);
   if (key === undefined || site === undefined || context.noteIndex === undefined) return undefined;
   const page = await context.noteIndex.pageOfNote(site.workspace, site.id, key.note);
-  if (page === undefined) return undefined;
+  // FRU-657: a task written by hand is in no thread of a page, and no tracker holds it.
+  if (page === undefined || page === NO_PAGE) return undefined;
   const places = site.client?.destinations ?? [];
   const targets =
     site.client === undefined || places.length < 2

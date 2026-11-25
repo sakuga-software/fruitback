@@ -31,6 +31,7 @@
 @import '@heroui/styles/components/radio-group.css' layer(components);
 @import '@heroui/styles/components/radio.css' layer(components);
 @import '@heroui/styles/components/textfield.css' layer(components);
+@import '@heroui/styles/components/textarea.css' layer(components);
 @import '@heroui/styles/components/header.css' layer(components);
 @import '@heroui/styles/components/surface.css' layer(components);
 @import '@heroui/styles/components/drawer.css' layer(components);
@@ -584,6 +585,21 @@ textarea {
 
 .kit-field .input {
   padding: 0 14px;
+}
+
+/* FRU-657: a text of several lines takes the border and the type of a field, with no fixed height. */
+.kit-field .textarea {
+  box-sizing: border-box;
+  min-height: calc(var(--spacing-control) * 2);
+  padding: 10px 14px;
+  border: 1px solid var(--field-border);
+  border-radius: var(--field-radius);
+  background: var(--field-background);
+  box-shadow: none;
+  color: var(--field-foreground);
+  font-size: var(--text-body);
+  line-height: var(--text-body--line-height);
+  resize: vertical;
 }
 
 .kit-field .select__trigger {

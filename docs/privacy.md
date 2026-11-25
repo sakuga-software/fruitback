@@ -359,6 +359,13 @@ The table `done_notices` keeps one row for each note that waits:
   fields, and so does an agent key of that site. The assignee is cleared when the account goes. A label goes with its workspace, or when
   a person removes it. The fields go with their note.
 
+- A task written by hand in the console, in the table `notes` with the notes of its site:
+  its title and its text as the person wrote them, in the clear, and its author, the account and the
+  name it had then. Its row of the index keeps the first 64 characters of the title as its excerpt,
+  and the account. It has no page, no element, no picture and no environment of a browser. Every
+  member who reads its site reads it. It goes when a person deletes it, with its site, and with
+  `forget` of the worker by its number or by the name of its author, as a note does.
+
 ### The index of the notes, on a worker with accounts (FRU-237)
 
 A worker with a database keeps **one row for each note it planted for a site of a workspace**,

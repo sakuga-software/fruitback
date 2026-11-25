@@ -8,3 +8,4 @@ export * from './status-paint.ts';
 export * from './i18n-core.ts';
 export * from './external-protocol.ts';
 export * from './note-tabs.ts';
+export * from './task.ts';

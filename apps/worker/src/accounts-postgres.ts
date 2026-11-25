@@ -72,6 +72,7 @@ import {
   last_seen,
   labels,
   note_index,
+  note_comments,
   note_labels,
   notes,
   oauth_clients,
@@ -83,9 +84,27 @@ import {
   workspace_logos,
   workspace_suspensions,
 } from './postgres-schema.ts';
-import { MAX_STATUSES, type NoteStage } from '@fruitback/shared';
+import {
+  DEFAULT_NOTE_STAGE,
+  MAX_STATUSES,
+  type NoteStage,
+  type TaskIssue,
+  createTask as taskOf,
+  parseTask,
+} from '@fruitback/shared';
 import { OWN_SOURCE, type SiteStatus, isBuiltIn } from './site-statuses.ts';
-import { identifierFor, isSameNote, keptRowOf, widgetIdOf } from './note-rows.ts';
+import {
+  COMMENTS_PER_ISSUE,
+  NO_PAGE,
+  identifierFor,
+  isSameNote,
+  keptRowOf,
+  readJson,
+  stageOf,
+  threadsOf,
+  widgetIdOf,
+} from './note-rows.ts';
+import { excerptOf } from './notes-index.ts';
 import { changedTaskFields, ownStatusName } from './note-events.ts';
 import { queueTaskEvents } from './note-events-postgres.ts';
 import { StoreError } from './store.ts';
@@ -2093,6 +2112,168 @@ export function createPostgresAccountStore(database: Database): AccountStore {
         await dropTask(db, workspace, site, noteId, kept.id);
 
         return { deleted: true as const, page: kept.page };
+      });
+    },
+
+    async createTask(workspace, site, input, who) {
+      return transaction(async (db) => {
+        const refused = <R extends string>(reason: R) => ({ created: false as const, reason });
+        // The site, for update: the same lock as a status added, moved or removed (FRU-366).
+        if (!(await siteHeld(db, workspace, site))) return refused('not-found');
+        // A built-in status writes no key, as `setNoteStatus` writes it.
+        let chosen: { key: string | null; stage: NoteStage } = { key: null, stage: DEFAULT_NOTE_STAGE };
+        if (input.status !== undefined) {
+          const [row] = await db
+            .select({ stage: statuses.stage, hidden: statuses.hidden })
+            .from(statuses)
+            .where(and(eq(statuses.site_id, site), eq(statuses.source, OWN_SOURCE), eq(statuses.key, input.status)));
+          if (row?.hidden === true) return refused('status-hidden');
+          if (isBuiltIn(OWN_SOURCE, input.status)) chosen = { key: null, stage: input.status as NoteStage };
+          else if (row !== undefined) chosen = { key: input.status, stage: row.stage as NoteStage };
+          else return refused('unknown-status');
+        }
+        if (input.assignee !== undefined) {
+          const [one] = await db
+            .select({ id: member.id })
+            .from(member)
+            .where(and(eq(member.organizationId, workspace), eq(member.userId, input.assignee)));
+          if (one === undefined) return refused('not-member');
+        }
+        const chosenLabels = [...new Set(input.labels ?? [])].sort();
+        if (chosenLabels.length > 0) {
+          const found = await db
+            .select({ id: labels.id })
+            .from(labels)
+            .where(and(eq(labels.workspace_id, workspace), inArray(labels.id, chosenLabels)));
+          if (found.length !== chosenLabels.length) return refused('unknown-label');
+        }
+        // The name the account has now, as the worker's word: the console session says who writes.
+        const [person] = await db.select({ name: user.name }).from(user).where(eq(user.id, who.account));
+
+        const now = Date.now();
+        const task = taskOf({
+          id: newId('task'),
+          createdAt: new Date(now).toISOString(),
+          title: input.title,
+          ...(input.text === undefined ? {} : { text: input.text }),
+          client: { id: site },
+          reporter: {
+            id: who.account,
+            ...(person === undefined || person.name === '' ? {} : { name: person.name }),
+            verified: true,
+          },
+        });
+        const fields = {
+          assignee_account_id: input.assignee ?? null,
+          priority: input.priority ?? null,
+          due_on: input.dueOn ?? null,
+        };
+        const [row] = await db
+          .insert(notes)
+          .values({
+            client_id: site,
+            // No page: no read of a page finds it, so no pin shows it.
+            page_url: NO_PAGE,
+            stage: chosen.stage,
+            status_key: chosen.key,
+            payload: JSON.stringify(task),
+            created_at: now,
+            updated_at: now,
+            ...fields,
+          })
+          .returning({ id: notes.id });
+        if (row === undefined) throw new StoreError('PostgreSQL kept a task and answered no number for it');
+        if (chosenLabels.length > 0) {
+          await db.insert(note_labels).values(chosenLabels.map((label) => ({ note_id: row.id, label_id: label })));
+        }
+        const identifier = identifierFor(row.id);
+        // Its row of the index, as `record` writes the row of a note a member left in Fruitback, with
+        // the fields of the task that the filters read (FRU-655).
+        await db.insert(note_index).values({
+          site_id: site,
+          note_id: task.id,
+          workspace_id: workspace,
+          page_url: NO_PAGE,
+          excerpt: excerptOf(task.title),
+          stage: chosen.stage,
+          channel: null,
+          author_kind: 'member',
+          author_account_id: who.account,
+          place: 'fruitback',
+          connector_id: null,
+          reference: identifier,
+          reference_url: null,
+          created_at: now,
+          checked_at: now,
+          task_assignee_id: fields.assignee_account_id,
+          task_priority: fields.priority,
+          task_due_on: fields.due_on,
+          task_label_ids: chosenLabels.length === 0 ? null : chosenLabels,
+        });
+
+        return { created: true as const, note: task.id, identifier, stage: chosen.stage };
+      });
+    },
+
+    async readTask(workspace, site, noteId, who) {
+      return run(async (db) => {
+        const [entry] = await db
+          .select({
+            place: note_index.place,
+            connectorKind: connectors.kind,
+            reference: note_index.reference,
+            author: note_index.author_account_id,
+          })
+          .from(note_index)
+          .leftJoin(connectors, eq(connectors.id, note_index.connector_id))
+          .where(
+            and(eq(note_index.workspace_id, workspace), eq(note_index.site_id, site), eq(note_index.note_id, noteId)),
+          );
+        if (entry === undefined) return undefined;
+        const id = keptRowOf(entry.place, entry.connectorKind, entry.reference);
+        if (id === undefined) return undefined;
+        const [kept] = await db
+          .select({ stage: notes.stage, status: notes.status_key, payload: notes.payload, at: notes.updated_at })
+          .from(notes)
+          .where(and(eq(notes.id, id), eq(notes.client_id, site)));
+        if (kept === undefined) return undefined;
+        // A row is parsed, never trusted; a note of a page is not a task, and its page reads it.
+        const parsed = parseTask(readJson(kept.payload));
+        if (!parsed.ok || parsed.task.id !== noteId) return undefined;
+        // The newest replies, handed over oldest first, as a read of a page gives them.
+        const replies = await db
+          .select()
+          .from(note_comments)
+          .where(eq(note_comments.note_id, id))
+          .orderBy(desc(note_comments.created_at), desc(note_comments.id))
+          .limit(COMMENTS_PER_ISSUE);
+        const thread = threadsOf(
+          replies.map((reply) => ({
+            id: reply.id,
+            note_id: reply.note_id,
+            author: reply.author,
+            body: reply.body,
+            createdAt: new Date(reply.created_at).toISOString(),
+          })),
+        );
+        const stage = stageOf(kept.stage);
+        const issue: TaskIssue = {
+          id: String(id),
+          identifier: identifierFor(id),
+          title: parsed.task.title,
+          stage,
+          // Nobody named the states of this store: they are the stages, as `toNoteIssue` says.
+          stateName: '',
+          status: `${OWN_SOURCE}:${kept.status ?? stage}`,
+          updatedAt: new Date(kept.at).toISOString(),
+          comments: thread.get(id) ?? [],
+          ...(who !== undefined && entry.author !== null && entry.author === who.account
+            ? { mine: true as const }
+            : {}),
+          task: parsed.task,
+        };
+
+        return issue;
       });
     },
 
