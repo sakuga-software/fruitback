@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { STAGES, STAGE_NAMES, type Stage } from '../stages';
 import { msg, t } from '../i18n';
 import { MAX_STATUSES, type ScreenStatus, colourOf, reads } from '../site-statuses';
-import { Button, Choice, Field, Problem, Radios } from '../ui';
+import { Button, Choice, Field, Problem, Radios, Swatch } from '../ui';
 import { useLocale } from '../use-locale';
 import { StatusMark } from './status-list';
 import { coloursOf, defaultColourOf, nameHintOf, nameOf, ratioText } from './status-shown';
@@ -180,11 +180,7 @@ export function StatusEditor({ status, adding = false, disabled, onSave, onCance
             />
             {background === 'own' ? (
               <span className="flex items-start gap-[10px] pl-[26px]">
-                <span
-                  aria-hidden="true"
-                  className="kit-swatch mt-[35px]"
-                  style={{ background: drawn.style.background }}
-                />
+                <Swatch colour={drawn.style.background} className="mt-[35px]" />
                 <span className="w-[180px]">
                   <Field
                     code
@@ -215,11 +211,7 @@ export function StatusEditor({ status, adding = false, disabled, onSave, onCance
             />
             {textChoice === 'own' ? (
               <span className="flex items-start gap-[10px] pl-[26px]">
-                <span
-                  aria-hidden="true"
-                  className="kit-swatch mt-[35px]"
-                  style={{ background: textColor ?? undefined }}
-                />
+                <Swatch colour={textColor ?? undefined} className="mt-[35px]" />
                 <span className="w-[180px]">
                   <Field
                     code

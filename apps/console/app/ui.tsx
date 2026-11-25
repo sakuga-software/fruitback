@@ -61,15 +61,78 @@ const VARIANTS = {
 } as const satisfies Record<Tone, string>;
 
 /**
+ * The kit draws with Tailwind (FRU-678). A class of the kit is a utility, so it wins over a rule of
+ * HeroUI, which is in the layer `components`. A screen places a component, and the kit draws it: a
+ * class a screen gives a component sets its place (`mt-5`), never a property the kit sets.
+ *
+ * The `kit-*` names stay on the elements, with no style: the specs and the screens find a component
+ * by them. A class with `!` beats a rule of `app.css` that is in no layer: the space of a button
+ * (`white-space`), and the focus ring.
+ *
+ * `[&:hover]` and not `hover:`: Tailwind keeps `hover:` to a pointer that hovers, and the kit
+ * changes a colour under any `:hover`, as it did.
+ */
+
+/** The pill and the rectangle of the mockup, of every size: what is the same in both. */
+const BUTTON =
+  'kit-button flex-none items-center justify-center gap-[8px] font-semibold no-underline cursor-pointer transform-none [transition:none] disabled:opacity-50 disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:cursor-not-allowed';
+
+/** The action of a step: the one pill of a screen. White on it is 4.70:1, 6.47:1 under the pointer. */
+const PRIMARY =
+  'kit-button--primary rounded-[999px] border-0 border-none border-current bg-accent text-accent-foreground tracking-button [&:hover:not(:disabled,[aria-disabled=true])]:bg-accent-hover data-[hovered=true]:bg-accent-hover data-[pressed=true]:bg-accent-hover';
+
+/** A control of the shape of a field: a provider to sign in with, « Try again », « Connect ». */
+const OUTLINE =
+  'kit-button--outline rounded-button border border-field-border bg-surface text-ink [&:hover:not(:disabled,[aria-disabled=true])]:border-ink [&:hover:not(:disabled,[aria-disabled=true])]:bg-subtle data-[hovered=true]:border-ink data-[hovered=true]:bg-subtle data-[pressed=true]:border-ink data-[pressed=true]:bg-subtle';
+
+/** The padding at each end, by tone and size. */
+const BUTTON_INSET = {
+  primary: { page: 'px-[22px]', panel: 'px-[16px]', small: 'px-[14px]' },
+  outline: { page: 'px-[18px]', panel: 'px-[16px]', small: 'px-[10px]' },
+} as const satisfies Record<'primary' | 'outline', Record<ControlSize, string>>;
+
+/**
+ * The classes of a button of the mockup. Over its column (`wide`), its words can be a name somebody
+ * typed: they take the lines they need, and the button grows, where a button of its own width would
+ * make the page scroll sideways. A wide button of a panel keeps no padding above and under its words.
+ */
+function buttonClasses(tone: 'primary' | 'outline', size: ControlSize, wide: boolean, gap = 'gap-[8px]'): string {
+  const block = wide
+    ? `flex w-full h-auto ${BUTTON_WIDE[size]} text-center whitespace-normal! [overflow-wrap:anywhere]`
+    : `inline-flex ${BUTTON_HEIGHT[size]} py-0 whitespace-nowrap`;
+
+  return [
+    BUTTON.replace('gap-[8px]', gap),
+    tone === 'primary' ? PRIMARY : OUTLINE,
+    BUTTON_INSET[tone][size],
+    block,
+    size === 'small' ? 'text-(length:--text-hint)' : 'text-(length:--text-small)',
+    // After the size: the merge of HeroUI drops a line height that comes before a size.
+    'leading-auto',
+  ].join(' ');
+}
+
+const BUTTON_HEIGHT = {
+  page: 'h-control',
+  panel: 'h-control-panel',
+  small: 'h-control-small',
+} as const satisfies Record<ControlSize, string>;
+
+const BUTTON_WIDE = {
+  page: 'min-h-control py-[10px]',
+  panel: 'min-h-control-panel py-0',
+  small: 'min-h-control-small py-[6px]',
+} as const satisfies Record<ControlSize, string>;
+
+/**
  * The classes of a tone. « primary » and « outline » are the two buttons of the mockup. « quiet » and
  * « danger » are of before it, and stay as HeroUI draws them until their screens are drawn again.
  */
-const TONE_CLASSES = {
-  primary: 'kit-button kit-button--primary',
-  outline: 'kit-button kit-button--outline',
-  danger: 'rounded-full font-semibold',
-  quiet: 'rounded-full font-semibold',
-} as const satisfies Record<Tone, string>;
+function toneClasses(tone: Tone, size: ControlSize, wide: boolean): string {
+  if (tone === 'primary' || tone === 'outline') return buttonClasses(tone, size, wide);
+
+  return 'rounded-full font-semibold';
+}
 
 /** Where a control goes when it is a link: a screen of the console, or an address outside it. */
 type Destination = {
@@ -151,7 +214,7 @@ export function Button({
   controls,
   children,
 }: ButtonProps) {
-  const classes = `${TONE_CLASSES[tone]} ${className}`;
+  const classes = `${toneClasses(tone, size, wide)} ${className}`;
   const data = {
     'data-size': size,
     'data-wide': wide,
@@ -258,6 +321,28 @@ type LinkButtonProps = Destination & {
   children: ReactNode;
 };
 
+/**
+ * A button that reads as a link. Its padding is its target: 37 px at the least (WCAG 2.5.8). Its
+ * words can be a host: they wrap where they must. In a row of a table it takes the line of the table,
+ * so that the row keeps the height of its text.
+ */
+const LINK =
+  'kit-link gap-[6px] h-auto border-0 border-none border-current rounded-none bg-transparent bg-none text-ink font-semibold underline decoration-1 underline-offset-[3px] whitespace-normal! [overflow-wrap:anywhere] cursor-pointer transform-none [transition:none] [&:hover:not(:disabled,[aria-disabled=true])]:text-accent-strong data-[hovered=true]:text-accent-strong data-[pressed=true]:text-accent-strong disabled:opacity-50 disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:cursor-not-allowed';
+
+/** The space of a link: its padding, and how it sits in its line. */
+const LINK_SPACE = {
+  tight:
+    'inline-flex items-center py-[8px] px-0 text-(length:--text-small) leading-auto in-[.kit-table]:leading-[inherit]',
+  flush:
+    'inline-flex items-center py-[8px] px-0 -my-[8px] mx-0 text-(length:--text-small) leading-auto in-[.kit-table]:leading-[inherit]',
+  normal:
+    'inline-flex items-center py-[10px] px-0 text-(length:--text-small) leading-auto in-[.kit-table]:leading-[inherit]',
+  loose:
+    'inline-flex items-center py-[12px] px-0 text-(length:--text-small) leading-auto in-[.kit-table]:leading-[inherit]',
+  // In a sentence: the words of the sentence, and no space of its own.
+  inline: 'inline items-center p-0 [font-size:inherit] leading-[inherit]',
+} as const satisfies Record<NonNullable<LinkButtonProps['space']>, string>;
+
 /** An action or a link that reads as underlined words: « Use another address », « Rename ». */
 export function LinkButton({
   onClick,
@@ -271,7 +356,8 @@ export function LinkButton({
   children,
 }: LinkButtonProps) {
   const data = { 'data-space': space, ...(label === undefined ? {} : { 'aria-label': label }) };
-  if (to !== undefined || href !== undefined) return anchor({ to, href, newTab }, 'kit-link', data, children);
+  const classes = `${LINK} ${LINK_SPACE[space]}`;
+  if (to !== undefined || href !== undefined) return anchor({ to, href, newTab }, classes, data, children);
 
   return (
     <HeroButton
@@ -280,7 +366,7 @@ export function LinkButton({
       isDisabled={disabled}
       autoFocus={autoFocus}
       {...(onClick === undefined ? {} : { onPress: onClick })}
-      className="kit-link"
+      className={classes}
       {...data}
     >
       {children}
@@ -301,6 +387,12 @@ type IconButtonProps = {
   children: ReactNode;
 };
 
+/** A button that is a picture: 36 px, or 32 px (« small »), its picture at 18 px. */
+const ICON_BUTTON =
+  'kit-icon-button inline-flex flex-none items-center justify-center p-0 border-0 border-none border-current rounded-(--field-radius) bg-transparent text-muted cursor-pointer transform-none [transition:none] [&:hover:not(:disabled,[aria-disabled=true])]:bg-chip data-[hovered=true]:bg-chip data-[pressed=true]:bg-chip disabled:opacity-50 disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:cursor-not-allowed [&_svg]:size-[18px] [&_svg]:m-0';
+
+const ICON_BUTTON_SIZE = { chip: 'size-control-chip', small: 'size-control-small' } as const;
+
 /** A button that is a picture, named for a screen reader. */
 export function IconButton({
   label,
@@ -319,13 +411,17 @@ export function IconButton({
       aria-label={label}
       {...(menu ? { 'aria-haspopup': 'menu' as const } : {})}
       {...(onClick === undefined ? {} : { onPress: onClick })}
-      className="kit-icon-button"
+      className={`${ICON_BUTTON} ${ICON_BUTTON_SIZE[size]}`}
       data-size={size}
     >
       {children}
     </HeroButton>
   );
 }
+
+/** As tall as a small icon button, as wide as its number, in the words of the list. */
+const PAGE_NUMBER =
+  'kit-page-number inline-flex flex-none items-center justify-center min-w-control-small h-control-small px-[6px] py-0 border-0 border-none border-current rounded-(--field-radius) text-(length:--text-small) tabular-nums transform-none [transition:none]';
 
 /**
  * The number of a page of a list (FRU-587): a small square button, the page shown in ink. The page
@@ -353,7 +449,7 @@ export function PageNumber({
       onPress={() => {
         if (!current) onClick();
       }}
-      className="kit-page-number"
+      className={`${PAGE_NUMBER} ${current ? 'bg-ink text-surface font-semibold cursor-default' : 'bg-transparent text-muted cursor-pointer [&:hover]:bg-chip [&:hover]:text-ink data-[hovered=true]:bg-chip data-[hovered=true]:text-ink'}`}
     >
       {children}
     </HeroButton>
@@ -378,15 +474,25 @@ type IconLinkProps = {
 export function IconLink({ label, href, tip, children }: IconLinkProps) {
   return (
     <Tooltip delay={300} closeDelay={0}>
-      <HeroLink href={href} target="_blank" rel="noreferrer" aria-label={label} className="kit-icon-link">
+      <HeroLink
+        href={href}
+        target="_blank"
+        rel="noreferrer"
+        aria-label={label}
+        className="kit-icon-link inline-flex flex-none items-center justify-center size-control-small rounded-(--field-radius) text-muted [text-decoration:none] [&:hover]:bg-chip [&:hover]:text-ink data-[hovered=true]:bg-chip data-[hovered=true]:text-ink [&_svg]:size-[16px]"
+      >
         {children}
       </HeroLink>
-      <Tooltip.Content placement="top" className="kit-tip">
+      <Tooltip.Content placement="top" className={TIP}>
         {tip}
       </Tooltip.Content>
     </Tooltip>
   );
 }
+
+/** A tooltip: ink, 12 px, under 360 px; an address breaks anywhere rather than overflow. */
+const TIP =
+  'kit-tip max-w-[min(360px,calc(100vw-32px))] px-[8px] py-[6px] rounded-[6px] bg-ink text-page text-(length:--text-tiny) leading-[1.4] [overflow-wrap:anywhere] [word-break:normal] [box-shadow:none]';
 
 type TipProps = {
   /** What the tooltip shows: the words whole, and what the picture means. */
@@ -406,10 +512,14 @@ type TipProps = {
 export function Tip({ tip, className = '', children }: TipProps) {
   return (
     <Tooltip delay={300} closeDelay={0}>
-      <Tooltip.Trigger role="group" tabIndex={-1} className={`kit-tip-trigger ${className}`}>
+      <Tooltip.Trigger
+        role="group"
+        tabIndex={-1}
+        className={`kit-tip-trigger inline-flex max-w-full min-w-0 items-center gap-[6px] rounded-[4px] cursor-default ${className}`}
+      >
         {children}
       </Tooltip.Trigger>
-      <Tooltip.Content placement="top" className="kit-tip">
+      <Tooltip.Content placement="top" className={TIP}>
         {tip}
       </Tooltip.Content>
     </Tooltip>
@@ -556,7 +666,7 @@ export function CutLink({ to, children, heading: Heading = 'h2', className = '',
           </Link>
         </Heading>
       </Tooltip.Trigger>
-      <Tooltip.Content placement="top" className="kit-tip">
+      <Tooltip.Content placement="top" className={TIP}>
         {children}
       </Tooltip.Content>
     </Tooltip>
@@ -613,6 +723,34 @@ const NO_PASSWORD_MANAGER = {
   'data-bwignore': 'true',
 } as const;
 
+/** A field and a list: the label, the control, the hint, 6 px apart. */
+const FIELD = 'kit-field flex flex-col gap-[6px] min-w-0';
+const FIELD_LABEL = 'text-(length:--text-label) leading-(--text-label--line-height) font-semibold text-ink';
+const FIELD_HINT = 'text-(length:--text-hint) leading-(--text-hint--line-height) text-muted';
+/** A field whose value cannot be kept (FRU-371): the strong red, and the reason under it. */
+const FIELD_ERROR = 'text-(length:--text-hint) leading-(--text-hint--line-height) text-accent-strong';
+
+/** What a text field and the button of a list share: the box of a control, flat. */
+const CONTROL = 'box-border min-h-0 border rounded-(--field-radius) [box-shadow:none] font-normal [transition:none]';
+/** The colours of a control a person can change. */
+const CONTROL_COLOURS = 'border-field-border bg-field text-field-foreground';
+
+/**
+ * The input of a `Field`: 44 px, or 40 px (« compact »). A value set elsewhere (« locked ») reads in
+ * the soft ink on the subtle tint. An invalid one has a thicker edge of the strong red.
+ */
+function inputClasses(compact: boolean, locked: boolean, code: boolean): string {
+  return [
+    CONTROL,
+    compact ? 'h-control-panel px-[12px] text-(length:--text-small)' : 'h-control px-[14px] text-(length:--text-body)',
+    'leading-auto',
+    'py-0',
+    locked ? 'border-line bg-subtle text-ink-soft' : CONTROL_COLOURS,
+    code ? 'font-mono' : '',
+    'aria-invalid:border-accent-strong aria-invalid:[box-shadow:0_0_0_1px_var(--color-accent-strong)] disabled:opacity-50 disabled:cursor-not-allowed',
+  ].join(' ');
+}
+
 /** A text field of HeroUI: its label, its input, and the hint the input is described by. */
 export function Field({
   label,
@@ -635,19 +773,21 @@ export function Field({
       isDisabled={disabled}
       isRequired={required}
       isInvalid={error !== undefined}
-      className="kit-field"
+      className={FIELD}
       data-compact={compact}
       data-locked={locked}
       data-code={code}
     >
-      <Label className={labelHidden ? 'sr-only' : ''}>{label}</Label>
+      {/* No mark on a required field (FRU-168): the mockup draws none. It stays required for the browser. */}
+      <Label className={`${FIELD_LABEL} after:content-none ${labelHidden ? 'sr-only' : ''}`}>{label}</Label>
       {/*
        * A password manager puts its icon next to the input, in its parent. LastPass adds an empty
        * element, and the gap of the field then makes the field 6 px higher (FRU-540). In this block,
        * that element takes no room.
        */}
-      <div className="kit-field__control">
+      <div className="kit-field__control block min-w-0">
         <Input
+          className={inputClasses(compact, locked, code)}
           {...input}
           {...(inputRef === undefined ? {} : { ref: inputRef })}
           {...(code ? { spellCheck: false, autoCapitalize: 'off', autoCorrect: 'off' } : {})}
@@ -655,8 +795,8 @@ export function Field({
           readOnly={readOnly || locked}
         />
       </div>
-      {hint === undefined ? null : <Description>{hint}</Description>}
-      {error === undefined ? null : <FieldError>{error}</FieldError>}
+      {hint === undefined ? null : <Description className={FIELD_HINT}>{hint}</Description>}
+      {error === undefined ? null : <FieldError className={FIELD_ERROR}>{error}</FieldError>}
     </TextField>
   );
 }
@@ -689,18 +829,44 @@ type ChoiceProps = {
   bare?: boolean;
 };
 
+/** The label of an option: cut to the width of the list, no wider than 360 px nor than the screen. */
+const OPTION_LABEL = 'kit-option-label block min-w-0 truncate';
+
+/**
+ * The button of a `Choice`. A compact list is 40 px. A list of statuses is 38 px, its drop 12 px from
+ * the edge (its border counted) and its word 9 px after. A bare one is the drop of its status alone
+ * (FRU-551): 28 px, no border, tinted under the pointer as an icon button.
+ */
+function triggerClasses(compact: boolean, status: boolean, bare: boolean): string {
+  if (bare)
+    return `${CONTROL} items-center justify-center size-[28px] p-0 border-transparent bg-transparent text-field-foreground ${status ? 'gap-[9px]' : ''} ${compact || status ? 'text-(length:--text-small)' : 'text-(length:--text-body)'} leading-auto [&:hover]:bg-chip data-[hovered=true]:bg-chip data-[disabled=true]:opacity-50 data-[disabled=true]:cursor-not-allowed`;
+  const size = status
+    ? 'gap-[9px] h-control-row pl-[11px] pr-[28px] py-0 text-(length:--text-small)'
+    : `${compact ? 'h-control-panel text-(length:--text-small)' : 'h-control text-(length:--text-body)'} pl-[12px] pr-[28px] py-0`;
+
+  return `${CONTROL} ${CONTROL_COLOURS} items-center ${size} leading-auto data-[disabled=true]:opacity-50 data-[disabled=true]:cursor-not-allowed`;
+}
+
+/**
+ * The chosen value takes the type of its button, as a field does (FRU-412), and a long one is cut with
+ * « … » before the chevron (FRU-549). The value of a bare list is said to a screen reader only.
+ */
+const VALUE = 'flex-auto min-w-0 overflow-hidden text-ellipsis whitespace-nowrap [font-size:inherit] leading-auto';
+const BARE_VALUE =
+  'flex-none min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[0px] leading-auto [&>span]:gap-0';
+
 function item(option: Option) {
   // FRU-549: a long label is cut to the width of the list, with « … », and whole under the pointer.
   return (
     <ListBox.Item key={option.value} id={option.value} textValue={option.label}>
       {option.drop === undefined ? (
-        <span className="kit-option-label" title={option.label}>
+        <span className={OPTION_LABEL} title={option.label}>
           {option.label}
         </span>
       ) : (
         <span className="inline-flex min-w-0 items-center gap-[8px]">
           <StatusDot status={option.drop.status} color={option.drop.color} />
-          <span className="kit-option-label" title={option.label}>
+          <span className={OPTION_LABEL} title={option.label}>
             {option.label}
           </span>
         </span>
@@ -731,7 +897,7 @@ export function Choice({
     <Select
       fullWidth={!bare}
       isDisabled={disabled}
-      className="kit-field"
+      className={`${FIELD} ${bare ? 'w-auto' : ''}`}
       data-compact={compact}
       data-bare={bare}
       data-status={status !== undefined}
@@ -740,14 +906,14 @@ export function Choice({
         if (typeof chosen === 'string') onChange(chosen);
       }}
     >
-      <Label className={labelHidden ? 'sr-only' : ''}>{label}</Label>
-      <Select.Trigger>
+      <Label className={`${FIELD_LABEL} after:content-none ${labelHidden ? 'sr-only' : ''}`}>{label}</Label>
+      <Select.Trigger className={triggerClasses(compact, status !== undefined, bare)}>
         {status === undefined || chosen?.drop !== undefined ? null : <StatusDot status={status} />}
-        <Select.Value />
-        <Select.Indicator />
+        <Select.Value className={bare ? BARE_VALUE : VALUE} />
+        <Select.Indicator className={bare ? 'hidden' : ''} />
       </Select.Trigger>
-      {hint === undefined ? null : <Description>{hint}</Description>}
-      <Select.Popover className="kit-select-popover">
+      {hint === undefined ? null : <Description className={FIELD_HINT}>{hint}</Description>}
+      <Select.Popover className="kit-select-popover max-w-[min(360px,calc(100vw-32px))]">
         <ListBox>
           {options.map((each) =>
             'options' in each ? (
@@ -785,16 +951,33 @@ type PickProps<Value extends string> = {
  */
 export function Pick<Value extends string>({ label, value, onChange, options }: PickProps<Value>) {
   return (
-    <RadioGroup value={value} onChange={(chosen) => onChange(chosen as Value)} className="kit-pick">
-      <Label>{label}</Label>
+    <RadioGroup
+      value={value}
+      onChange={(chosen) => onChange(chosen as Value)}
+      className="kit-pick flex flex-col gap-[8px] min-w-0"
+    >
+      {/* The question is 8 px over the first card, as the cards are 8 px apart. */}
+      <Label className={FIELD_LABEL}>{label}</Label>
       {options.map((option) => (
-        <Radio key={option.value} value={option.value} className="kit-pick__card">
-          <Radio.Content>
-            <Radio.Control>
+        <Radio
+          key={option.value}
+          value={option.value}
+          className="kit-pick__card group/pick w-full m-0 border border-line rounded-box cursor-pointer data-selected:border-ink"
+        >
+          {/*
+           * The radio and the label on the first row, the detail under the label. The words start 30 px
+           * after the radio: its 16 px, then 14 px. The row of the radio keeps its 19 px: the 16 px of the
+           * radio and the 3 px the mockup puts over it.
+           */}
+          <Radio.Content className="grid grid-cols-[auto_minmax(0,1fr)] grid-rows-[minmax(19px,auto)] items-center gap-x-[14px] gap-y-[2px] w-full min-h-[19px] px-[16px] py-[14px] rounded-[inherit]">
+            {/* Ink when it is chosen, as the switch: the accent is the red of an alert. */}
+            <Radio.Control className="group-data-selected/pick:bg-ink">
               <Radio.Indicator />
             </Radio.Control>
-            <Label>{option.label}</Label>
-            <Description aria-hidden="true">{option.detail}</Description>
+            <Label className="text-(length:--text-body) font-semibold leading-auto text-ink">{option.label}</Label>
+            <Description aria-hidden="true" className={`[grid-column:2] ${FIELD_HINT}`}>
+              {option.detail}
+            </Description>
           </Radio.Content>
         </Radio>
       ))}
@@ -814,6 +997,9 @@ type RadiosProps<Value extends string> = {
   hint?: string;
 };
 
+/** The words of a radio of a plain list: 15 px on the line of a body text. */
+const RADIO_LABEL = 'text-(length:--text-body) leading-(--text-body--line-height) font-normal text-ink';
+
 /** One choice among a few, as a plain list of radios: « Who can create an account ». */
 export function Radios<Value extends string>({
   label,
@@ -828,27 +1014,27 @@ export function Radios<Value extends string>({
       value={value}
       isDisabled={disabled}
       onChange={(chosen) => onChange?.(chosen as Value)}
-      className="kit-radios"
+      className="kit-radios flex flex-col gap-[8px] min-w-0"
     >
-      <Label>{label}</Label>
+      <Label className="mb-[8px] text-(length:--text-body) font-semibold leading-auto text-ink">{label}</Label>
       {options.map((option) => (
-        <Radio key={option.value} value={option.value} className="kit-radios__item">
-          <Radio.Content>
-            <Radio.Control>
+        <Radio key={option.value} value={option.value} className="kit-radios__item group/radio m-0">
+          <Radio.Content className="gap-[10px]">
+            <Radio.Control className="group-data-selected/radio:bg-ink">
               <Radio.Indicator />
             </Radio.Control>
             {option.swatch === undefined ? (
-              <Label>{option.label}</Label>
+              <Label className={RADIO_LABEL}>{option.label}</Label>
             ) : (
               <span className="inline-flex items-center gap-[8px]">
-                <span aria-hidden="true" className="kit-swatch" style={{ background: option.swatch }} />
-                <Label>{option.label}</Label>
+                <Swatch colour={option.swatch} />
+                <Label className={RADIO_LABEL}>{option.label}</Label>
               </span>
             )}
           </Radio.Content>
         </Radio>
       ))}
-      {hint === undefined ? null : <Description>{hint}</Description>}
+      {hint === undefined ? null : <Description className={FIELD_HINT}>{hint}</Description>}
     </RadioGroup>
   );
 }
@@ -867,6 +1053,46 @@ type ToggleProps = {
 type CheckboxProps = { label: string; checked: boolean; onChange: (checked: boolean) => void };
 
 /**
+ * A box to tick: 16 px, the border of a control, ink when ticked or mixed; its words at 14 px, 8 px
+ * after. The content is the label that takes the press: it holds the box and the words, on a line of
+ * 40 px at the least. In a list (`list`), the box takes the width of the list and its words wrap: a
+ * long site name goes to the next line, and never past the edge of a phone. In the frame of a
+ * `SelectBox` (`bare`), the line is the frame's.
+ */
+function checkboxClasses({ list = false, bare = false }: { list?: boolean; bare?: boolean } = {}) {
+  const width = list ? 'max-w-full min-w-0' : '';
+  const line = bare ? 'min-h-0' : 'min-h-control-panel';
+
+  return {
+    root: `kit-checkbox group/check inline-flex flex-row flex-nowrap items-center ${line} ${width} cursor-pointer`,
+    content: `flex-row flex-nowrap items-center gap-[8px] ${line} ${width} m-0 cursor-pointer`,
+    // HeroUI paints a ticked box with a layer in its accent, over the background: ink here too.
+    control:
+      'size-[16px] border border-field-border rounded-[3px] bg-surface [box-shadow:none] before:bg-ink group-data-[selected=true]/check:border-ink group-data-[selected=true]/check:bg-ink group-data-[selected=true]/check:text-surface group-data-[indeterminate=true]/check:border-ink group-data-[indeterminate=true]/check:bg-ink group-data-[indeterminate=true]/check:text-surface',
+    label: `text-ink text-(length:--text-small) font-normal ${list ? 'whitespace-normal [overflow-wrap:anywhere]' : 'whitespace-nowrap'}`,
+  };
+}
+
+/** A colour drawn as a square, with the edge of a status: 18 px, or 10 px (« small »). */
+export function Swatch({
+  colour,
+  small = false,
+  className = '',
+}: {
+  colour?: string;
+  small?: boolean;
+  className?: string;
+}) {
+  return (
+    <span
+      aria-hidden="true"
+      className={`kit-swatch ${small ? 'kit-swatch-small size-[10px] rounded-[3px]' : 'size-[18px] rounded-[5px]'} inline-block flex-none [box-shadow:0_0_0_1px_var(--color-status-edge)] ${className}`}
+      style={{ background: colour }}
+    />
+  );
+}
+
+/**
  * A box to tick, as the checkbox of HeroUI: the box of 16 px, then its words, on a line of 40 px at
  * the least, so that it stands in a row of filters (« Only my notes »). Ink when it is ticked.
  *
@@ -874,13 +1100,15 @@ type CheckboxProps = { label: string; checked: boolean; onChange: (checked: bool
  * drawn outside it does not tick (FRU-550).
  */
 export function Checkbox({ label, checked, onChange }: CheckboxProps) {
+  const classes = checkboxClasses();
+
   return (
-    <HeroCheckbox isSelected={checked} onChange={onChange} className="kit-checkbox">
-      <HeroCheckbox.Content>
-        <HeroCheckbox.Control>
+    <HeroCheckbox isSelected={checked} onChange={onChange} className={classes.root}>
+      <HeroCheckbox.Content className={classes.content}>
+        <HeroCheckbox.Control className={classes.control}>
           <HeroCheckbox.Indicator />
         </HeroCheckbox.Control>
-        <Label>{label}</Label>
+        <Label className={classes.label}>{label}</Label>
       </HeroCheckbox.Content>
     </HeroCheckbox>
   );
@@ -903,6 +1131,8 @@ type ChecksProps = {
  * `Checkbox` draws it, with its hint, or its error, under the group.
  */
 export function Checks({ label, value, onChange, options, hint, error, groupRef }: ChecksProps) {
+  const classes = checkboxClasses({ list: true });
+
   return (
     <CheckboxGroup
       value={[...value]}
@@ -917,14 +1147,14 @@ export function Checks({ label, value, onChange, options, hint, error, groupRef 
           key={option.value}
           value={option.value}
           isDisabled={option.disabled === true}
-          className="kit-checkbox"
+          className={classes.root}
         >
-          <HeroCheckbox.Content>
-            <HeroCheckbox.Control>
+          <HeroCheckbox.Content className={classes.content}>
+            <HeroCheckbox.Control className={classes.control}>
               <HeroCheckbox.Indicator />
             </HeroCheckbox.Control>
             <span className="flex min-w-0 flex-wrap items-baseline gap-x-[10px]">
-              <Label>{option.label}</Label>
+              <Label className={classes.label}>{option.label}</Label>
               {option.detail === undefined ? null : <span className="text-hint text-muted">{option.detail}</span>}
             </span>
           </HeroCheckbox.Content>
@@ -947,15 +1177,22 @@ export function Toggle({ label, hint, strong = false, value, onChange, disabled 
       isSelected={value}
       isDisabled={disabled}
       onChange={onChange}
-      className={`kit-toggle w-full ${strong ? 'kit-toggle--strong' : ''}`}
+      className={`kit-toggle group/toggle w-full ${strong ? 'kit-toggle--strong' : ''} ${disabled ? 'opacity-100 cursor-not-allowed' : ''}`}
     >
-      <Switch.Content className="flex w-full flex-row-reverse items-center justify-between gap-4">
-        {/* Ink when it is on, as the mockup draws it: the accent is the red of an alert. */}
-        <Switch.Control>
-          <Switch.Thumb />
+      {/* A switch that cannot change: its control is dimmed, and its words stay as they read. */}
+      <Switch.Content
+        className={`flex w-full flex-row-reverse items-center justify-between gap-4 ${disabled ? 'opacity-100 cursor-not-allowed' : ''}`}
+      >
+        {/* Ink when it is on, as the mockup draws it: the accent is the red of an alert. One movement of 220 ms. */}
+        <Switch.Control className="relative w-[40px] h-[24px] overflow-visible rounded-[999px] bg-field-border [box-shadow:none] [transition:background-color_200ms] group-data-[selected=true]/toggle:bg-ink group-data-[disabled=true]/toggle:opacity-50 motion-reduce:[transition:none]">
+          <Switch.Thumb className="absolute top-[3px] left-[3px] size-[18px] m-0 rounded-[50%] bg-surface [box-shadow:var(--shadow-thumb)] opacity-100 [transition:transform_var(--duration-fast)_var(--ease-settle)] group-data-[selected=true]/toggle:[transform:translateX(16px)] motion-reduce:[transition:none]" />
         </Switch.Control>
         <span className="min-w-0">
-          <Label>{label}</Label>
+          <Label
+            className={`text-(length:--text-small) leading-(--text-small--line-height) text-ink ${strong ? 'font-semibold' : 'font-normal'} ${disabled ? 'opacity-100 cursor-not-allowed' : ''}`}
+          >
+            {label}
+          </Label>
           {hint === undefined ? null : <span className="block text-hint text-muted">{hint}</span>}
         </span>
       </Switch.Content>
@@ -974,12 +1211,21 @@ export function Chip({ children, tone = 'neutral' }: { children: ReactNode; tone
   );
 }
 
-/** A problem said where it happened, with what to do about it. */
+/**
+ * A problem said where it happened, with what to do about it (FRU-163). HeroUI draws every alert as
+ * a white card with muted text, and tells its status with an icon and a title that the kit does not
+ * use. So the danger of the theme is on the text and on the border, and the card is tinted with it.
+ * The text on that tint is 5.84:1.
+ */
 export function Problem({ children }: { children: ReactNode }) {
   return (
-    <Alert status="danger" role="alert">
+    <Alert
+      status="danger"
+      role="alert"
+      className="[border:1px_solid_color-mix(in_srgb,var(--danger)_35%,var(--surface))] rounded-box [background:color-mix(in_srgb,var(--danger)_6%,var(--surface))] [box-shadow:none]"
+    >
       <Alert.Content>
-        <Alert.Description>{children}</Alert.Description>
+        <Alert.Description className="text-danger">{children}</Alert.Description>
       </Alert.Content>
     </Alert>
   );
@@ -1104,19 +1350,30 @@ type FilterChipProps = {
   children: ReactNode;
 };
 
-/** A filter that is on or off: a button with `aria-pressed`. */
+/**
+ * A filter that is on or off: a button with `aria-pressed`. Its count is said in a lighter weight. A
+ * filter of a problem is the accent on white, 4.70:1. A filter that is on is ink.
+ */
 export function FilterChip({ pressed, onChange, count, alert = false, children }: FilterChipProps) {
+  const chipColours = pressed
+    ? 'border-ink bg-ink text-surface'
+    : `border-field-border bg-surface ${alert ? 'text-accent' : 'text-ink'} [&:hover]:border-ink data-[hovered=true]:border-ink`;
+  let countColour = alert ? 'text-accent' : 'text-muted';
+  if (pressed) countColour = 'text-rail-text';
+
   return (
     <HeroButton
       type="button"
       variant="outline"
       aria-pressed={pressed}
       onPress={() => onChange(!pressed)}
-      className="kit-chip"
+      className={`kit-chip inline-flex flex-none items-center gap-[8px] h-control-chip px-[14px] py-0 border rounded-[999px] text-(length:--text-hint) font-semibold leading-auto whitespace-nowrap cursor-pointer transform-none [transition:none] ${chipColours}`}
       data-alert={alert}
     >
       {children}
-      {count === undefined ? null : <span className="kit-chip__count">{count}</span>}
+      {count === undefined ? null : (
+        <span className={`kit-chip__count font-normal tabular-nums ${countColour}`}>{count}</span>
+      )}
     </HeroButton>
   );
 }
@@ -1311,13 +1568,18 @@ export function Drawer({
       }}
     >
       <HeroDrawer.Content placement="right" className="kit-drawer">
-        <HeroDrawer.Dialog className="kit-drawer__dialog">
+        {/* HeroUI draws a drawer of 320 px, 85 % of the screen at most: the dialog is what takes its width. */}
+        <HeroDrawer.Dialog className="kit-drawer__dialog w-[min(560px,100vw)] max-w-[100vw] h-full">
           <HeroDrawer.CloseTrigger aria-label={closeLabel} />
           <HeroDrawer.Header>
             {head}
-            <HeroDrawer.Heading className="kit-drawer__title">{title}</HeroDrawer.Heading>
+            <HeroDrawer.Heading className="kit-drawer__title text-(length:--text-conclusion) font-semibold leading-[1.3]">
+              {title}
+            </HeroDrawer.Heading>
           </HeroDrawer.Header>
-          <HeroDrawer.Body className="kit-drawer__body">{children}</HeroDrawer.Body>
+          <HeroDrawer.Body className="kit-drawer__body flex flex-col gap-[24px] overflow-y-auto">
+            {children}
+          </HeroDrawer.Body>
         </HeroDrawer.Dialog>
       </HeroDrawer.Content>
     </HeroDrawer.Backdrop>
@@ -1523,6 +1785,26 @@ export function Divider({ children, className = '' }: { children: ReactNode; cla
   );
 }
 
+/*
+ * A menu. Its button is drawn by the screen or as a button that is a picture; it moves nothing under
+ * a press. The menu is the surface of a page with the frame of a card, wherever its button is: on the
+ * rail too.
+ */
+const MENU_TRIGGER = 'kit-menu-trigger cursor-pointer transform-none [transition:none]';
+const MENU =
+  'kit-menu min-w-[220px] border border-line rounded-box bg-surface text-ink [box-shadow:var(--shadow-frame)]';
+/**
+ * An item: tinted under the pointer and under the keyboard, and the ring of a page inside it, so the
+ * menu does not clip it. The strong accent of an item that takes something away is 5.89:1 on the
+ * tint, where the accent is 4.28:1.
+ */
+function itemClasses(danger: boolean): string {
+  return `min-h-control-panel rounded-button text-(length:--text-small) leading-(--text-small--line-height) transform-none [transition:none] data-[hovered=true]:bg-chip data-[focused=true]:bg-chip data-[focus-visible=true]:[outline:2px_solid_var(--color-accent)] data-[focus-visible=true]:outline-offset-[-2px]! data-[focus-visible=true]:[box-shadow:none] ${danger ? 'text-accent-strong' : ''}`;
+}
+const MENU_WORDS = 'kit-menu__words flex min-w-0 flex-col';
+const MENU_LABEL = 'text-inherit font-semibold';
+const MENU_DETAIL = 'text-(length:--text-hint) leading-(--text-hint--line-height) text-muted';
+
 export type MenuItem = {
   id: string;
   label: string;
@@ -1578,12 +1860,12 @@ export function Menu({
   return (
     <Dropdown>
       <Dropdown.Trigger
-        className={`kit-menu-trigger ${trigger === 'icon' ? 'kit-icon-button' : ''} ${triggerClassName}`}
+        className={`${MENU_TRIGGER} ${trigger === 'icon' ? `${ICON_BUTTON} ${ICON_BUTTON_SIZE.chip}` : ''} ${triggerClassName}`}
         {...(triggerLabel === undefined ? {} : { 'aria-label': triggerLabel })}
       >
         {children}
       </Dropdown.Trigger>
-      <Dropdown.Popover className="kit-menu" placement={trigger === 'icon' ? 'bottom end' : 'bottom start'}>
+      <Dropdown.Popover className={MENU} placement={trigger === 'icon' ? 'bottom end' : 'bottom start'}>
         <Dropdown.Menu
           onAction={(id) => onAction(String(id))}
           disabledKeys={[...items, ...after].filter((item) => item.disabled === true).map((item) => item.id)}
@@ -1596,7 +1878,8 @@ export function Menu({
               <Dropdown.Section aria-label={choiceLabel} {...(chosen === undefined ? {} : choice(chosen))}>
                 {items.map((item) => menuItem(item, chosen !== undefined))}
               </Dropdown.Section>
-              <Dropdown.Section className="kit-menu__after">
+              {/* The items under a choice, which choose nothing (FRU-414): a rule of the menu above them. */}
+              <Dropdown.Section className="kit-menu__after mt-[4px] pt-[4px] border-t border-line">
                 {after.map((item) => menuItem(item, false))}
               </Dropdown.Section>
             </>
@@ -1648,21 +1931,21 @@ export function MenuTree({
 }) {
   return (
     <Dropdown isOpen={open} onOpenChange={onOpenChange}>
-      <Dropdown.Trigger className="kit-menu-trigger kit-icon-button" aria-label={triggerLabel}>
+      <Dropdown.Trigger className={`${MENU_TRIGGER} ${ICON_BUTTON} ${ICON_BUTTON_SIZE.chip}`} aria-label={triggerLabel}>
         {children}
       </Dropdown.Trigger>
-      <Dropdown.Popover className="kit-menu" placement="bottom end">
+      <Dropdown.Popover className={MENU} placement="bottom end">
         <Dropdown.Menu onAction={(id) => onAction(String(id))}>
           {[
             ...branches.map((branch) => (
               <Dropdown.SubmenuTrigger key={branch.id}>
-                <Dropdown.Item id={branch.id} textValue={branch.label}>
-                  <span className="kit-menu__words">
-                    <Label>{branch.label}</Label>
+                <Dropdown.Item id={branch.id} textValue={branch.label} className={itemClasses(false)}>
+                  <span className={MENU_WORDS}>
+                    <Label className={MENU_LABEL}>{branch.label}</Label>
                   </span>
                   <Dropdown.SubmenuIndicator />
                 </Dropdown.Item>
-                <Dropdown.Popover className="kit-menu">{branchMenu(branch)}</Dropdown.Popover>
+                <Dropdown.Popover className={MENU}>{branchMenu(branch)}</Dropdown.Popover>
               </Dropdown.SubmenuTrigger>
             )),
             ...items.map((item) => menuItem(item, false)),
@@ -1685,16 +1968,20 @@ function branchMenu(branch: TreeBranch, onAction: (id: string) => void = branch.
         : { selectionMode: branch.choice, selectedKeys: [...(branch.checked ?? [])] })}
     >
       {branch.items.map((item) => (
-        <Dropdown.Item key={item.id} id={item.id} textValue={item.label} data-danger={item.danger === true}>
+        <Dropdown.Item
+          key={item.id}
+          id={item.id}
+          textValue={item.label}
+          data-danger={item.danger === true}
+          className={itemClasses(item.danger === true)}
+        >
           {branch.choice === undefined ? null : <Dropdown.ItemIndicator />}
-          <span className="kit-menu__words">
+          <span className={MENU_WORDS}>
             <span className="inline-flex items-center gap-[8px]">
-              {item.swatch === undefined ? null : (
-                <span aria-hidden="true" className="kit-swatch kit-swatch-small" style={{ background: item.swatch }} />
-              )}
-              <Label>{item.label}</Label>
+              {item.swatch === undefined ? null : <Swatch colour={item.swatch} small />}
+              <Label className={MENU_LABEL}>{item.label}</Label>
             </span>
-            {item.detail === undefined ? null : <Description>{item.detail}</Description>}
+            {item.detail === undefined ? null : <Description className={MENU_DETAIL}>{item.detail}</Description>}
           </span>
         </Dropdown.Item>
       ))}
@@ -1713,7 +2000,7 @@ export function BranchMenu({ branch, disabled = false }: { branch: TreeBranch; d
   return (
     <Dropdown isOpen={open} onOpenChange={setOpen}>
       <Dropdown.Trigger
-        className="kit-menu-trigger kit-button kit-button--outline kit-branch-trigger"
+        className={`${MENU_TRIGGER} ${buttonClasses('outline', 'small', false, 'gap-[4px]')} kit-branch-trigger`}
         data-size="small"
         isDisabled={disabled}
       >
@@ -1729,7 +2016,7 @@ export function BranchMenu({ branch, disabled = false }: { branch: TreeBranch; d
           />
         </svg>
       </Dropdown.Trigger>
-      <Dropdown.Popover className="kit-menu" placement="top start">
+      <Dropdown.Popover className={MENU} placement="top start">
         {branchMenu(branch, (id) => {
           if (branch.items.some((item) => item.id === id && item.closes === true)) setOpen(false);
           branch.onAction(id);
@@ -1759,21 +2046,26 @@ export function SelectBox({
 }) {
   // The change of HeroUI carries no event: Shift is read from the press or the key that makes it.
   const shift = useRef(false);
+  const box = checkboxClasses({ bare: true });
   const held = (event: { shiftKey: boolean }) => {
     shift.current = event.shiftKey;
   };
 
   return (
-    <span className={`kit-select ${className}`} onPointerDownCapture={held} onKeyDownCapture={held}>
+    <span
+      className={`kit-select inline-flex flex-none items-center justify-center size-[28px] cursor-pointer ${className}`}
+      onPointerDownCapture={held}
+      onKeyDownCapture={held}
+    >
       <HeroCheckbox
         aria-label={label}
         isSelected={checked}
         isIndeterminate={mixed}
         onChange={(next) => onToggle(next, shift.current)}
-        className="kit-checkbox"
+        className={box.root}
       >
-        <HeroCheckbox.Content>
-          <HeroCheckbox.Control>
+        <HeroCheckbox.Content className={box.content}>
+          <HeroCheckbox.Control className={box.control}>
             <HeroCheckbox.Indicator />
           </HeroCheckbox.Control>
         </HeroCheckbox.Content>
@@ -1789,11 +2081,17 @@ function choice(chosen: string) {
 
 function menuItem(item: MenuItem, checkable: boolean) {
   return (
-    <Dropdown.Item key={item.id} id={item.id} textValue={item.label} data-danger={item.danger === true}>
+    <Dropdown.Item
+      key={item.id}
+      id={item.id}
+      textValue={item.label}
+      data-danger={item.danger === true}
+      className={itemClasses(item.danger === true)}
+    >
       {checkable ? <Dropdown.ItemIndicator /> : null}
-      <span className="kit-menu__words">
-        <Label>{item.label}</Label>
-        {item.detail === undefined ? null : <Description>{item.detail}</Description>}
+      <span className={MENU_WORDS}>
+        <Label className={MENU_LABEL}>{item.label}</Label>
+        {item.detail === undefined ? null : <Description className={MENU_DETAIL}>{item.detail}</Description>}
       </span>
     </Dropdown.Item>
   );
@@ -1941,7 +2239,7 @@ export function OptionCard({
           <HeroButton
             type="button"
             variant="ghost"
-            className="kit-link ml-auto"
+            className={`${LINK} ${LINK_SPACE.flush}`}
             data-space="flush"
             aria-expanded={fold.open}
             aria-controls={body}
@@ -2141,8 +2439,9 @@ export function SearchChoice({
   const empty = { value: placeholder, label: nothing ? noMatch : placeholder };
 
   return (
-    <div className="kit-search-choice">
-      <div className="kit-search-choice__search">
+    <div className="kit-search-choice flex flex-col gap-[8px]">
+      {/* The cross is in the field, at its right, while something is typed. */}
+      <div className="kit-search-choice__search relative [&_.kit-icon-button]:absolute [&_.kit-icon-button]:top-[4px] [&_.kit-icon-button]:right-[4px]">
         <Field
           label={searchLabel}
           labelHidden

@@ -644,7 +644,7 @@ function Access({ icon, children }: { icon: keyof typeof ACCESS_PATHS; children:
     <Tip
       tip={children}
       // The colour only: the merge of HeroUI keeps one `text-` class, and the size is on the words.
-      className="h-[24px] rounded-full bg-chip px-[8px] text-ink-soft"
+      className="h-[24px] bg-chip px-[8px] text-ink-soft"
     >
       <svg
         aria-hidden="true"
