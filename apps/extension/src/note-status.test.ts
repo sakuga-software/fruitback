@@ -23,9 +23,15 @@ describe('notePaint', () => {
   });
 
   it('measures on the ink of the kit', () => {
-    const css = readFileSync(fileURLToPath(new URL('../entrypoints/popup/style.css', import.meta.url)), 'utf8');
+    // The ink comes from the shared theme, which src/theme.css imports and does not set again (FRU-679).
+    const theme = readFileSync(fileURLToPath(new URL('./theme.css', import.meta.url)), 'utf8');
+    const shared = readFileSync(
+      fileURLToPath(new URL('../../../packages/shared/tailwind/theme.css', import.meta.url)),
+      'utf8',
+    );
 
-    assert.match(css, new RegExp(`--ink: ${STATUS_INK};`));
+    assert.doesNotMatch(theme, /--color-ink:/);
+    assert.match(shared, new RegExp(`--color-ink: ${STATUS_INK};`));
   });
 });
 

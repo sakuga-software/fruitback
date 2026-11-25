@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { SAFARI_BUNDLE_ID, fixXcodeProject } from './src/safari-xcode.ts';
+import { SAFARI_BUNDLE_ID, fixXcodeProject, projectFileOf } from './src/safari-xcode.ts';
 
 /**
  * The Xcode project that carries the Safari build (FRU-380): `pnpm safari:xcode`, after
@@ -36,6 +36,6 @@ execFileSync(
   { stdio: 'inherit' },
 );
 
-const pbxproj = `${project}/Fruitback/Fruitback.xcodeproj/project.pbxproj`;
-writeFileSync(pbxproj, fixXcodeProject(readFileSync(pbxproj, 'utf8'), SAFARI_BUNDLE_ID, version));
+const file = projectFileOf(`${project}/Fruitback/Fruitback.xcodeproj`, existsSync);
+writeFileSync(file, fixXcodeProject(readFileSync(file, 'utf8'), SAFARI_BUNDLE_ID, version));
 console.log(`${project}/Fruitback/Fruitback.xcodeproj`);

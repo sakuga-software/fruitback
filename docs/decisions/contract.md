@@ -13,6 +13,11 @@ first publish made it expensive.
   the one place they can never be changed or translated downstream. A name or a colour that a team
   chose for its site may travel as **data** in the read envelope (`statuses`): the schema holds the
   field, never a value. See [statuses.md](statuses.md).
+- **The Tailwind theme lives beside the contract, not in it** (FRU-677).
+  `packages/shared/tailwind/theme.css` holds the tokens of `design/README.md` for the console, the
+  extension, the widget and the docs, which all depend on this package already. It is outside
+  `files` and `publishConfig.exports`, so npm never gets it; `apps/console/app/shared-theme.test.ts`
+  fails when it would.
 - **A status belongs to a stage, and the stage wins** (FRU-364). `statuses` and `status` are
   read-envelope fields, so `NOTE_VERSION` does not move. `offeredStatuses` reads the list
   tolerantly and keeps only `#rrggbb` colours; `statusOf` gives an issue its status only when that

@@ -12,10 +12,10 @@ import type { SiteConfig } from './sites.ts';
  *   to check (worker.md, FRU-295). A worker that does not answer leaves the badge empty, never zero.
  * - **Only on a site that is on**, in team mode, with the session of an account: the one count the
  *   worker gives for a person.
- * - **In the blue of « done »**, the colour of the stage on the pins (`--stage-done`), white text.
+ * - **In the blue of « done »**, the colour of the stage on the pins (`--color-status-done`), white text.
  */
 
-/** `--stage-done` of the popup (`entrypoints/popup/style.css`): the badge says « done ». */
+/** `--color-status-done` of the shared theme (`packages/shared/tailwind/theme.css`): the badge says « done ». */
 export const BADGE_COLOR = '#5560c4';
 export const BADGE_TEXT_COLOR = '#ffffff';
 

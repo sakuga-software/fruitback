@@ -21,7 +21,8 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./note.fixture": "./src/note.fixture.ts"
+    "./note.fixture": "./src/note.fixture.ts",
+    "./tailwind/theme.css": "./tailwind/theme.css"
   },
   "publishConfig": {
     "main": "./dist/index.js",

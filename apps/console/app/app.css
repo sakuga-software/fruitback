@@ -42,6 +42,7 @@
 @import '@heroui/styles/themes/default' layer(theme);
 @import '@heroui/styles/utilities';
 @import '@heroui/styles/variants';
+@import '@fruitback/shared/tailwind/theme.css';
 
 /*
   HeroUI takes the theme, it does not set it: its variables get the tokens of design/README.md. It
@@ -83,102 +84,6 @@
   --field-radius: 8px;
   /* The mockup draws a field flat. Transparent and not none: the rings of HeroUI are shadows too. */
   --field-shadow: 0 0 0 0 transparent;
-}
-
-/*
-  The tokens of the mockup of 2026-10-13 (FRU-232), named once here. A screen writes bg-subtle,
-  text-title or h-control, and never a value. design/README.md has the table.
-*/
-@theme {
-  --color-ink: #18181b;
-  --color-ink-soft: #52525b;
-  --color-line: #e4e4e7;
-  --color-control: #8a8a93;
-  --color-page: #ffffff;
-  --color-setup: #ffffff;
-  --color-subtle: #fafafa;
-  --color-chip: #f4f4f5;
-  --color-accent-strong: #b91c1c;
-  --color-done: #15803d;
-  --color-avatar: #3f3f46;
-
-  --color-rail: #18181b;
-  --color-rail-active: #27272a;
-  --color-rail-text: #d4d4d8;
-  --color-rail-muted: #a1a1aa;
-  --color-rail-accent: #ec5b57;
-  /* What is written on ink: the words of the rail and of a banner, the check of a success drop. */
-  --color-on-ink: #ffffff;
-  /* The four colours of Google's « G » (FRU-362). Its sign-in branding guidelines forbid changing
-     them: they paint the mark of « Continue with Google » and nothing else. */
-  --color-google-blue: #4285f4;
-  --color-google-green: #34a853;
-  --color-google-yellow: #fbbc05;
-  --color-google-red: #ea4335;
-
-  /*
-    The five statuses of FRU-334, chosen by Mathieu: the stages of the widget, copied from
-    packages/widget/src/theme.ts, which tokens.test.ts compares. A status is never told by its colour
-    alone: the grey of to do is 1.39:1 on white. Its edge is the edge of a field, 3.42:1.
-  */
-  --color-status-new: #bec2c8;
-  --color-status-todo: #d9dbdf;
-  --color-status-progress: #f3bb3d;
-  --color-status-done: #5560c4;
-  --color-status-closed: #a52a3a;
-  --color-status-edge: #8a8a93;
-
-  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
-
-  /* The scale of the mockup: size, then the line height it writes with it. */
-  --text-title: 28px;
-  --text-title--line-height: 1.15;
-  --text-title-setup: 30px;
-  --text-title-setup--line-height: 1.15;
-  --text-conclusion: 22px;
-  --text-conclusion--line-height: 1.25;
-  --text-section: 18px;
-  --text-section--line-height: normal;
-  --text-step: 17px;
-  --text-step--line-height: 26px;
-  --text-lead: 16px;
-  --text-lead--line-height: 1.5;
-  --text-body: 15px;
-  --text-body--line-height: 1.5;
-  --text-small: 14px;
-  --text-small--line-height: 1.5;
-  --text-table: 14px;
-  --text-table--line-height: 1.45;
-  --text-hint: 13px;
-  --text-hint--line-height: 1.5;
-  --text-label: 13px;
-  --text-label--line-height: normal;
-  --text-tiny: 12px;
-  --text-tiny--line-height: normal;
-  /* The line height of a text the mockup gives none: the one of the font, not the 1.5 of Tailwind. */
-  --leading-auto: normal;
-  --tracking-title: -0.02em;
-  --tracking-conclusion: -0.01em;
-  --tracking-button: -0.006em;
-
-  /* The heights of a control: of a page, of a panel, of a chip, small. */
-  --spacing-control: 44px;
-  --spacing-control-panel: 40px;
-  --spacing-control-row: 38px;
-  --spacing-control-chip: 36px;
-  --spacing-control-small: 32px;
-
-  --radius-button: 6px;
-  --radius-box: 10px;
-  --radius-frame: 14px;
-
-  --shadow-frame: 0 10px 30px rgba(24, 24, 27, 0.08);
-  --shadow-pin: 0 3px 10px rgba(24, 24, 27, 0.28);
-  --shadow-thumb: 0 1px 3px rgba(0, 0, 0, 0.25);
-
-  --ease-settle: cubic-bezier(0.16, 1, 0.3, 1);
-  --duration-fast: 220ms;
 }
 
 html,
