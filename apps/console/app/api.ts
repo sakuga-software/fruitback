@@ -36,7 +36,7 @@ export type Visibility = 'members' | 'everyone';
 /** Who may leave a note on a site that its members read (FRU-330). `members` is « Members only ». */
 export type Writers = 'members' | 'anyone';
 /** What a visitor may do to a note of their own (FRU-703): change its text, or take it back. */
-export type VisitorRight = 'never' | 'while-open' | 'always';
+export type VisitorRight = 'never' | 'while-open';
 /**
  * Where the notes of a site go. Absent: they stay in the workspace. Only a member reads it.
  *

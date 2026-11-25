@@ -218,7 +218,6 @@ export function VisitorRights({
   const rights = [
     { value: 'never', label: t('Never') },
     { value: 'while-open', label: t('While open') },
-    { value: 'always', label: t('Allowed') },
   ] as const;
   const own = (field: 'visitorEdit' | 'visitorDelete', label: string) =>
     // Where only members write, a visitor has no note of their own: the right is not offered.
@@ -382,7 +381,6 @@ export function VisitorRecognition() {
 const EDIT_LINES: Readonly<Record<VisitorRight, string>> = {
   never: msg('Cannot be changed once sent'),
   'while-open': msg('Editable while the note is open'),
-  always: msg('Editable at any time'),
 };
 
 /** A note of the preview, drawn as the widget draws one. */

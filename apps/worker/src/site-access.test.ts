@@ -55,17 +55,20 @@ describe('what a visitor may do on a site, set in the console (FRU-703)', () => 
     const set = await post({
       visibility: 'everyone',
       writers: 'members',
-      visitorEdit: 'always',
-      visitorDelete: 'never',
+      visitorEdit: 'never',
+      visitorDelete: 'while-open',
     });
     assert.equal(set.status, 201, await set.clone().text());
     const answered = (await set.json()) as Record<string, unknown>;
-    assert.deepEqual([answered.writers, answered.visitorEdit, answered.visitorDelete], ['members', 'always', 'never']);
-    assert.deepEqual(await stored(), ['everyone', 'members', 'always', 'never']);
+    assert.deepEqual(
+      [answered.writers, answered.visitorEdit, answered.visitorDelete],
+      ['members', 'never', 'while-open'],
+    );
+    assert.deepEqual(await stored(), ['everyone', 'members', 'never', 'while-open']);
 
     // The extension changes the visibility only: it names neither right, and changes neither.
     assert.equal((await post({ visibility: 'members' })).status, 201);
-    assert.deepEqual(await stored(), ['members', 'members', 'always', 'never']);
+    assert.deepEqual(await stored(), ['members', 'members', 'never', 'while-open']);
   });
 
   it('refuses a value that is not a right, and changes nothing', async () => {
@@ -75,6 +78,8 @@ describe('what a visitor may do on a site, set in the console (FRU-703)', () => 
       ['visitorEdit', 'sometimes', 'invalid-visitor-edit'],
       ['visitorDelete', true, 'invalid-visitor-delete'],
       ['visitorEdit', null, 'invalid-visitor-edit'],
+      // A visitor never acts on a note that is done or closed: « at any time » is no right.
+      ['visitorDelete', 'always', 'invalid-visitor-delete'],
     ] as const) {
       const answer = await callOn(world, 'POST', `/console/workspaces/${workspace}/sites`, {
         token: ana.token,
@@ -94,7 +99,7 @@ describe('what a visitor may do on a site, set in the console (FRU-703)', () => 
       await memberOf(world, workspace, person.id, role);
       const answer = await callOn(world, 'POST', `/console/workspaces/${workspace}/sites`, {
         token: person.token,
-        body: { url: SITE, visibility: 'members', writers: 'members', visitorEdit: 'never', visitorDelete: 'always' },
+        body: { url: SITE, visibility: 'members', writers: 'members', visitorEdit: 'never', visitorDelete: 'never' },
       });
       assert.equal(answer.status, 403, role);
     }

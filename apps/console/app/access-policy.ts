@@ -71,30 +71,38 @@ export function withLevel(access: Access, level: ChosenLevel): Access {
   return { ...access, ...LEVEL_ACCESS[level] };
 }
 
-/** Whether two accesses would be stored the same: the e-mail counts only where anybody writes. */
-export function sameAccess(one: Access, other: Access): boolean {
+/**
+ * Whether the draft holds what is stored: the rights of a visitor count everywhere, as the body sends
+ * them; the e-mail counts only where anybody writes.
+ */
+export function sameAccess(draft: Access, stored: Access): boolean {
+  const sent = accessBody('', draft);
+
   return (
-    one.visibility === other.visibility &&
-    one.writers === other.writers &&
-    (one.writers === 'members' ||
-      (one.visitorEdit === other.visitorEdit &&
-        one.visitorDelete === other.visitorDelete &&
-        one.notifyDone === other.notifyDone))
+    sent.visibility === stored.visibility &&
+    sent.writers === stored.writers &&
+    sent.visitorEdit === stored.visitorEdit &&
+    sent.visitorDelete === stored.visitorDelete &&
+    (draft.writers === 'members' || draft.notifyDone === stored.notifyDone)
   );
 }
 
 /**
- * What the console sends to `POST …/sites` for this access. Where only members write, the rights of a
- * visitor and the e-mail are not sent: the worker keeps them, and they do nothing there.
+ * What the console sends to `POST …/sites` for this access: what the table shows. Where only members
+ * write, the table says « Never » for the rights of a visitor, and that is what is stored: a site
+ * opened again later does not bring back rights nobody sees. The e-mail is sent where anybody writes
+ * only, as FRU-604 did: the worker keeps it, and it does nothing elsewhere.
  */
 export function accessBody(origin: string, access: Access): Record<string, unknown> {
+  const writes = access.writers === 'anyone';
+
   return {
     url: origin,
     visibility: access.visibility,
     writers: access.writers,
-    ...(access.writers === 'anyone'
-      ? { visitorEdit: access.visitorEdit, visitorDelete: access.visitorDelete, notifyDone: access.notifyDone }
-      : {}),
+    visitorEdit: writes ? access.visitorEdit : 'never',
+    visitorDelete: writes ? access.visitorDelete : 'never',
+    ...(writes ? { notifyDone: access.notifyDone } : {}),
   };
 }
 

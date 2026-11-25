@@ -1191,11 +1191,12 @@ A console that does not send the field changes no site: a site that is added aga
 it had.
 
 What a visitor with no account may do to a note of their own is a setting of the site too:
-`visitorEdit` and `visitorDelete`, each `never`, `while-open` or `always`. The console
+`visitorEdit` and `visitorDelete`, each `never` or `while-open`: no value lets a visitor act on
+a note that is done or closed, nor on the note of somebody else. The console
 shows and sends them; only a role that changes a site (an owner or an admin, `manage-sites`) changes
 them, and a member or a guest is refused with nothing changed
 (test:`refuses a member and a guest, who do not change a site, and changes nothing`). A value that is
-not one of the three is refused (test:`refuses a value that is not a right, and changes nothing`),
+not one of the two is refused (test:`refuses a value that is not a right, and changes nothing`),
 and a row that holds another one gives the visitor nothing. The routes are given the two values only
 where a visitor writes; absent is `never`. A new site takes `while-open`, the mockup's default, and
 `0050` gives `never` to every site of before, so no site changes. The routes that check them for a

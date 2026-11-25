@@ -314,12 +314,15 @@ export function defaultWriters(visibility: Visibility): Writers {
  *
  * - `never`: not at all.
  * - `while-open`: while the note is not done nor closed. The default of a new site (the mockup).
- * - `always`: at any time.
+ *
+ * No value lets a visitor act on a note that is done or closed: a visitor acts on their own notes
+ * that are still open, and on nothing else (the decision for FRU-699). The mockup's « Allowed » is
+ * not offered for that reason.
  *
  * Only a note the visitor left counts (FRU-700): the worker checks it, the widget only shows it. Every
  * site of before FRU-703 is `never`: the migration `0050` gives it, so no site changes.
  */
-export const VISITOR_RIGHTS = ['never', 'while-open', 'always'] as const;
+export const VISITOR_RIGHTS = ['never', 'while-open'] as const;
 export type VisitorRight = (typeof VISITOR_RIGHTS)[number];
 
 /** What a new site takes when nobody chose (FRU-703): the level « Contribute » of the mockup. */

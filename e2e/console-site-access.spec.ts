@@ -152,21 +152,15 @@ test('a level fills the table, a cell changed says « Custom », and « Save » 
   await expect(preview.locator('[data-preview-action]')).toHaveCount(2);
   await expect(preview).toContainText('Editable while the note is open');
 
-  // One cell changed: no level is that any more.
-  await rights(page)
-    .getByRole('button', { name: /Edit the text of their own notes/ })
-    .click();
-  await page
-    .getByRole('listbox', { name: 'Edit the text of their own notes' })
-    .getByRole('option', { name: 'Allowed' })
-    .click();
-  await expect(rights(page)).toContainText('Custom');
-  await expect(levels(page).getByRole('radio', { name: 'Contribute' })).not.toBeChecked();
-  await expect(preview).toContainText('Editable at any time');
+  // One cell changed: no level is that any more. « Allowed », at any time, is not offered (FRU-699).
   await rights(page)
     .getByRole('button', { name: /Delete their own notes/ })
     .click();
-  await page.getByRole('listbox', { name: 'Delete their own notes' }).getByRole('option', { name: 'Never' }).click();
+  const deletes = page.getByRole('listbox', { name: 'Delete their own notes' });
+  await expect(deletes.getByRole('option')).toHaveText(['Never', 'While open']);
+  await deletes.getByRole('option', { name: 'Never' }).click();
+  await expect(rights(page)).toContainText('Custom');
+  await expect(levels(page).getByRole('radio', { name: 'Contribute' })).not.toBeChecked();
   await expect(preview.locator('[data-preview-action]')).toHaveCount(1);
 
   await page.getByRole('button', { name: 'Save the access of staging.acme.dev' }).click();
@@ -176,7 +170,7 @@ test('a level fills the table, a cell changed says « Custom », and « Save » 
       url: 'https://staging.acme.dev',
       visibility: 'everyone',
       writers: 'anyone',
-      visitorEdit: 'always',
+      visitorEdit: 'while-open',
       visitorDelete: 'never',
       notifyDone: false,
     },
@@ -187,9 +181,7 @@ test('a level fills the table, a cell changed says « Custom », and « Save » 
   expect(worker.posted).toHaveLength(1);
 });
 
-test('« Read only » and « Closed » send who reads and who writes only, and take away what a visitor does', async ({
-  page,
-}) => {
+test('« Read only » and « Closed » store « Never » for what a visitor does, and send no e-mail', async ({ page }) => {
   const worker = await workerWith(page);
   await page.goto(`${CONSOLE}/w/w1/sites/s2/access`);
   await expect(levels(page).getByRole('radio', { name: 'Contribute' })).toBeChecked();
@@ -212,13 +204,25 @@ test('« Read only » and « Closed » send who reads and who writes only, and t
   await expect(card(page, 'What a visitor sees').getByText('Reply', { exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Save the access of acme.dev' }).click();
   await expect(page.getByRole('status')).toHaveText('Saved. The script on the site stays the same.');
-  expect(worker.posted.at(-1)).toEqual({ url: 'https://acme.dev', visibility: 'everyone', writers: 'members' });
+  expect(worker.posted.at(-1)).toEqual({
+    url: 'https://acme.dev',
+    visibility: 'everyone',
+    writers: 'members',
+    visitorEdit: 'never',
+    visitorDelete: 'never',
+  });
 
   await levels(page).getByText('Closed', { exact: true }).click();
   await expect(card(page, 'What a visitor sees')).toContainText('A visitor sees no note and leaves none.');
   await page.getByRole('button', { name: 'Save the access of acme.dev' }).click();
   await expect(page.getByRole('status')).toHaveText('Saved. The script on the site stays the same.');
-  expect(worker.posted.at(-1)).toEqual({ url: 'https://acme.dev', visibility: 'members', writers: 'members' });
+  expect(worker.posted.at(-1)).toEqual({
+    url: 'https://acme.dev',
+    visibility: 'members',
+    writers: 'members',
+    visitorEdit: 'never',
+    visitorDelete: 'never',
+  });
 });
 
 test('« Offer visitors an e-mail when their note is done » is sent where anybody leaves a note (FRU-604)', async ({

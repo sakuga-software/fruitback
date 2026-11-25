@@ -1737,8 +1737,9 @@ site opened to anyone, a site closed again when a caller names no `writers`, and
 
 ## What a visitor may do on a site (FRU-703)
 
-- **`visitor_edit` and `visitor_delete` of `sites`: `never`, `while-open` or `always`**, what a
-  visitor with no account may do to a note of their own. `0050` adds them with `never`, the value of
+- **`visitor_edit` and `visitor_delete` of `sites`: `never` or `while-open`**, what a visitor with
+  no account may do to a note of their own. No value reaches a note that is done or closed (the
+  decision for FRU-699): the mockup's « Allowed » is not offered. `0050` adds them with `never`, the value of
   every site that exists then (a visitor could do neither); `0051` makes `while-open`, the default of
   the mockup, the default of a new site. Both are generated; `0050` adds one statement by hand, the
   `UPDATE` of `writers` above.
@@ -1746,7 +1747,7 @@ site opened to anyone, a site closed again when a caller names no `writers`, and
 - **`clientOf` gives them to the routes (`visitorEdit`, `visitorDelete` of the client) only where
   `writers` is `anyone`**; absent is `never`. A row with another value gives `never`.
 - **The console changes them through `POST …/sites`, for `manage-sites` only.** A value that is not
-  one of the three answers `400` (`invalid-visitor-edit`, `invalid-visitor-delete`).
+  one of the two answers `400` (`invalid-visitor-edit`, `invalid-visitor-delete`).
 - **The routes that read them come with FRU-701 and FRU-702**: until then no route lets a visitor
   change or take back a note. `site-access.test.ts`, `sites-visitor-rights-migration.test.ts` and
   the account suite hold the rest; the guard of `manage-sites` and the change of `clientOf` were each

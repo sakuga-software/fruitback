@@ -318,19 +318,19 @@ export function accountCases(it: Declare<AccountStore>): void {
     const set = await store.addSite(workspace.id, {
       origin,
       visibility: 'everyone',
-      visitorEdit: 'always',
+      visitorEdit: 'never',
       visitorDelete: 'never',
     });
-    assert.deepEqual([set.visitorEdit, set.visitorDelete], ['always', 'never']);
+    assert.deepEqual([set.visitorEdit, set.visitorDelete], ['never', 'never']);
     // A caller that names neither (a console of before, the extension) changes neither.
     const again = await store.addSite(workspace.id, { origin, visibility: 'everyone' });
-    assert.deepEqual([again.visitorEdit, again.visitorDelete], ['always', 'never']);
+    assert.deepEqual([again.visitorEdit, again.visitorDelete], ['never', 'never']);
     assert.deepEqual(
       (await store.sites(workspace.id)).map((site) => [site.visitorEdit, site.visitorDelete]),
-      [['always', 'never']],
+      [['never', 'never']],
     );
     const client = (await store.clientMap())[made.id];
-    assert.deepEqual([client?.visitorEdit, client?.visitorDelete], ['always', 'never']);
+    assert.deepEqual([client?.visitorEdit, client?.visitorDelete], ['never', 'never']);
     assert.deepEqual(await store.client(made.id), client);
 
     // Where only a member writes, the routes are told nothing: absent is `never`.

@@ -663,7 +663,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'What a visitor sees': 'Ce que voit un visiteur',
   'Cannot be changed once sent': 'Ne se modifie plus une fois envoyée',
   'Editable while the note is open': 'Modifiable tant que la note est ouverte',
-  'Editable at any time': 'Modifiable à tout moment',
   'The order form rejects postcodes with a space.':
     'Le formulaire de commande refuse les codes postaux avec une espace.',
   'Another visitor': 'Un autre visiteur',

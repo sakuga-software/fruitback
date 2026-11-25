@@ -1348,7 +1348,8 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
 - **A list is a setting of the worker, and only that.** `access-policy.ts` holds the four values the
   worker stores: who reads (`visibility`, the list « See notes » of others), who writes (`writers`,
   « Leave a note »), and what a visitor does to a note of their own (`visitorEdit`, `visitorDelete`,
-  Never / While open / Allowed). Every other cell is written in words, from what the worker does:
+  Never / While open). The mockup's « Allowed » is not offered: a visitor acts on their own notes
+  that are still open, and on nothing else (the decision for FRU-699). Every other cell is written in words, from what the worker does:
   « Reply » is allowed where everyone reads and anybody writes, as `replyAuthorFor` decides;
   « See the tracker and assignee » follows « See notes », as the read of a visitor carries the issue
   (the mockup draws « Hidden »: that needs the worker first).
@@ -1356,8 +1357,8 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   Where only members write, the rights of a visitor are not read: no list, « Never », and the level
   is « Closed » or « Read only ».
 - **« Save » sends the whole access in one `POST …/sites`** of the address of the site, as the form
-  of the page did (FRU-504): `writers` always, and the rights and the e-mail only where anybody
-  writes. Nothing changed: nothing is asked. A refusal says its cause and keeps what was chosen.
+  of the page did (FRU-504): who reads, who writes and the rights of a visitor always (« Never »
+  where only members write, as the table shows), and the e-mail only where anybody writes. Nothing changed: nothing is asked. A refusal says its cause and keeps what was chosen.
 - **The e-mail of a note done (FRU-604) is the card « After a note »**, which the mockup does not
   draw, shown where anybody writes.
 - **A role that does not change a site reads the tab with every control disabled**, and no « Save ».

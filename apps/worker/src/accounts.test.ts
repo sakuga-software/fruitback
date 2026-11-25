@@ -125,10 +125,10 @@ describe('the words people paste', () => {
       notifyDone: false,
       visibility: 'everyone' as const,
     };
-    const open = clientOf({ ...site, writers: 'anyone', visitorEdit: 'while-open', visitorDelete: 'always' });
+    const open = clientOf({ ...site, writers: 'anyone', visitorEdit: 'while-open', visitorDelete: 'never' });
     assert.equal(open.visitorEdit, 'while-open');
-    assert.equal(open.visitorDelete, 'always');
-    const closed = clientOf({ ...site, writers: 'members', visitorEdit: 'always', visitorDelete: 'always' });
+    assert.equal(open.visitorDelete, 'never');
+    const closed = clientOf({ ...site, writers: 'members', visitorEdit: 'while-open', visitorDelete: 'while-open' });
     assert.equal('visitorEdit' in closed, false);
     assert.equal('visitorDelete' in closed, false);
   });
