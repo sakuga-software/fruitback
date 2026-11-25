@@ -216,6 +216,21 @@ test('a « Retry » that the worker refuses in part says so until the next read'
   await address.getByRole('button', { name: 'Retry REST API', exact: true }).click();
   await expect(address.locator('[data-pill]')).toHaveText('Healthy');
   await expect(refusal).toHaveCount(0);
+
+  // Two refusals are counted. A send that arrived meanwhile (`not-found`) needs no new attempt, and
+  // is no refusal (raised in review).
+  worker.late = [...LATE, { ...LATE[0], id: 'd3' }];
+  await open(page);
+  worker.refusesRetry = ['d1', 'd2'];
+  worker.arrived = ['d3'];
+  await address.getByRole('button', { name: 'Retry REST API', exact: true }).click();
+  await expect(refusal).toHaveText('2 new attempts were not started. Try again.');
+  worker.refusesRetry = [];
+  worker.late = [{ ...LATE[0], id: 'd3' }];
+  await open(page);
+  await address.getByRole('button', { name: 'Retry REST API', exact: true }).click();
+  await expect(address.locator('[data-pill]')).toHaveText('1 note not delivered');
+  await expect(refusal).toHaveCount(0);
 });
 
 test('a read of the sends that fails keeps the count of the bar, and gives no smaller one', async ({ page }) => {

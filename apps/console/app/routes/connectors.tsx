@@ -149,7 +149,7 @@ export default function Connectors() {
   const searchField = useRef<HTMLInputElement>(null);
   // « Retry » of a row: the connector whose sends are asked again, and a refusal of it.
   const [retrying, setRetrying] = useState<string | undefined>();
-  const [retryProblem, setRetryProblem] = useState<{ connector: string; problem: string } | undefined>();
+  const [retryProblem, setRetryProblem] = useState<{ connector: string; problem: string; count: number } | undefined>();
   // The bar of the frame counts the sends that wait (FRU-690). A ref: a new function each render of the
   // frame must not read the list again.
   const reportFailing = useRef(failingRead);
@@ -281,12 +281,18 @@ export default function Connectors() {
     );
     // The health is read again first: the read clears a refusal of before, and this one stays after it.
     await load();
-    const refused = asked.filter((each) => !each.ok);
+    // A send that arrived meanwhile is gone from the list: the worker answers `not-found`, and that one
+    // needs no new attempt. Every other refusal is counted (raised in review).
+    const refused = asked.flatMap((each) => (each.ok || each.error === 'not-found' ? [] : [each]));
     const first = refused[0];
-    if (first !== undefined && !first.ok) {
+    if (first !== undefined) {
       setRetryProblem({
         connector: connector.id,
-        problem: writeProblemOf(first, msg('The new attempt was not started. Try again.')),
+        problem:
+          refused.length === 1
+            ? writeProblemOf(first, msg('The new attempt was not started. Try again.'))
+            : writeProblemOf(first, msg('{count} new attempts were not started. Try again.')),
+        count: refused.length,
       });
     }
     setRetrying(undefined);
@@ -472,7 +478,7 @@ export default function Connectors() {
             </h2>
             {retryProblem === undefined ? null : (
               <div className="mb-[10px]">
-                <Problem>{t(retryProblem.problem)}</Problem>
+                <Problem>{t(retryProblem.problem, { count: retryProblem.count })}</Problem>
               </div>
             )}
             <ConnectorsTable

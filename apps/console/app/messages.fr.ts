@@ -1959,6 +1959,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Used by': 'Utilisé par',
   'Retry {name}': 'Réessayer {name}',
   'Retrying…': 'Nouvel essai…',
+  '{count} new attempts were not started. Try again.': '{count} nouveaux essais n’ont pas démarré. Réessayez.',
   Retry: 'Réessayer',
   'Settings of {name}': 'Réglages de {name}',
   'Search trackers and tools': 'Chercher un outil',
