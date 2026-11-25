@@ -1,6 +1,7 @@
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { type ComponentProps, type ReactNode, useEffect, useId, useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate, useOutletContext, useParams } from 'react-router';
 import {
+  type Account,
   type Me,
   type Role,
   type Workspace,
@@ -9,31 +10,33 @@ import {
   logoSource,
   onWorkspaceSuspended,
   saveLanguage,
+  signOut,
 } from '../api';
 import { dayOf } from '../ago';
 import { adoptLanguage, msg, t } from '../i18n';
 import { extensionInstallFor } from '../extension-store';
 import { useConnectedExtension } from '../extension-connected';
 import { BY_SIGN_IN, CONNECT_PAGE } from '../install-options';
-import { Drop, PageHead as KitPageHead, Logo, Menu } from '../ui';
+import { IconButton, PageHead as KitPageHead, Menu } from '../ui';
 import { ReleaseBanner } from '../release-banner';
 import { RailIcon, type RailIconName } from '../rail-icons';
 import { manages } from '../setup-stage';
 import { useLocale } from '../use-locale';
 import { underSettings } from '../settings-path';
+import { CONSOLE_VERSION, RELEASES, hasNews, markSeen, seenVersion } from '../whats-new';
 
 /**
- * The frame of a workspace, as the mockup of 2026-10-13 draws it (FRU-234): a dark rail with the
- * workspace and its sections, and the section beside it. Under 888 px the rail is above the section,
- * and at 900 px and under its sections are one row.
+ * The frame of a workspace (FRU-234): the bar with the workspace and its sections, and the section
+ * beside it. The bar is the compact one of FRU-684: from 1024 px it is beside the section, and under
+ * 1024 px it is folded above it.
  */
 
 type WorkspaceContext = {
   me: Me;
   workspace: Workspace;
-  /** The worker renamed the workspace (FRU-414): the rail shows the new name at once. */
+  /** The worker renamed the workspace (FRU-414): the bar shows the new name at once. */
   renamed: (workspace: Workspace) => void;
-  /** The worker kept a new logo, or removed it (FRU-428): the rail shows it at once. */
+  /** The worker kept a new logo, or removed it (FRU-428): the bar shows it at once. */
   logoChanged: (logo: string | null) => void;
 };
 
@@ -43,40 +46,42 @@ export function useWorkspace(): WorkspaceContext {
   return useOutletContext<WorkspaceContext>();
 }
 
-/** A section of a workspace: an entry of the rail. */
+/** A section of a workspace: an entry of the bar. */
 export type Section = { path: string; label: string; built: boolean };
 
 /**
- * The sections, in the order of the mockup. `built` says that the screen exists: the rail shows no
- * entry for a screen that does not, so no entry leads nowhere. `frame.test.ts` holds `built` to the
- * routes of `routes.ts`.
+ * The sections, in the order of the mockup of FRU-684. `built` says that the screen exists: the bar
+ * shows no entry for a screen that does not, so no entry leads nowhere. `frame.test.ts` holds `built`
+ * to the routes of `routes.ts`. « My account » is no section: the menu of the person, at the foot of
+ * the bar, leads to it (`ACCOUNT`).
  */
 export const SECTIONS: readonly Section[] = [
-  { path: 'sites', label: msg('Sites'), built: true },
   { path: 'notes', label: msg('Notes'), built: true },
+  { path: 'sites', label: msg('Sites'), built: true },
   { path: 'connectors', label: msg('Connectors'), built: true },
   { path: 'members', label: msg('Members'), built: true },
   { path: 'settings', label: msg('Settings'), built: true },
-  { path: 'account', label: msg('My account'), built: true },
 ];
 
+/** The screen of the person, which the menu at the foot of the bar opens (FRU-684). */
+export const ACCOUNT = 'account';
+
 /**
- * The settings of the workspace are an entry of the rail for whoever manages it (FRU-503): an owner
+ * The settings of the workspace are an entry of the bar for whoever manages it (FRU-503): an owner
  * or an admin renames it, changes its logo and makes its agent keys there, and the owner deletes it.
- * Another role still reads them from the name of the workspace, at the top of the rail.
+ * Another role still reads them from the name of the workspace, at the top of the bar.
  */
 function sectionsFor(workspace: Workspace): readonly Section[] {
   return SECTIONS.filter((section) => section.built && (section.path !== 'settings' || manages(workspace)));
 }
 
-/** The icon of each section of the rail (FRU-477). */
+/** The icon of each section of the bar (FRU-477). */
 const SECTION_ICONS: Readonly<Record<string, RailIconName>> = {
   sites: 'sites',
   notes: 'notes',
   connectors: 'connectors',
   members: 'members',
   settings: 'settings',
-  account: 'account',
 };
 
 const ROLE_WORDS: Readonly<Record<Role, string>> = {
@@ -177,6 +182,7 @@ export default function WorkspaceFrame() {
           // Every page of the settings is the settings: « General » and « AI » (FRU-544).
           settings={current?.path !== 'settings' && underSettings(pathname, context.workspace.id)}
           admin={context.me.instanceAdmin === true}
+          account={context.me.account}
         />
       }
     >
@@ -190,32 +196,31 @@ export default function WorkspaceFrame() {
 }
 
 /**
- * The frame of a workspace and of the instance: the rail, and the column of the screen beside it.
+ * The frame of a workspace and of the instance: the bar, and the column of the screen beside it.
  *
- * From 888 px (248 + 640) the rail is beside the column, and is as high as the window: it stays in
- * place while the document scrolls the screen (FRU-402). The document scrolls, not the column, so
- * the keys of the keyboard, `scrollIntoView` and the address of an anchor keep their usual scroller.
- * `flex-nowrap` there: with a classic scroll bar the window is wider than the document, and the
- * column would wrap under a rail as high as the window.
+ * From 1024 px the bar is beside the column, 232 px wide (FRU-684), and is as high as the window: it
+ * stays in place while the document scrolls the screen (FRU-402). The document scrolls, not the
+ * column, so the keys of the keyboard, `scrollIntoView` and the address of an anchor keep their usual
+ * scroller. `flex-nowrap` there: with a classic scroll bar the window is wider than the document, and
+ * the column would wrap under a bar as high as the window.
  *
- * Under 888 px the rail is above the column, at its own height, as the mockup draws it at 390 px
- * (286 px of rail on « did not load »).
+ * Under 1024 px the bar is folded above the column, at its own height.
  *
  * **The screen fills the height of the window** (FRU-564): the column is a flex column, and `Screen`
- * takes what is left under the banner of a suspended workspace. Under 888 px the frame is a column
- * too, so the column of the screen takes the height under the rail, and the rail none of it.
+ * takes what is left under the banner of a suspended workspace. Under 1024 px the frame is a column
+ * too, so the column of the screen takes the height under the bar, and the bar none of it.
  */
 export function Frame({ rail, children }: { rail: ReactNode; children?: ReactNode }) {
   return (
-    <div className="flex min-h-screen bg-page text-ink max-[887px]:flex-col">
+    <div className="flex min-h-screen bg-page text-ink max-[1023px]:flex-col">
       {rail}
-      <div className="flex min-w-0 flex-[999_1_640px] flex-col max-[887px]:flex-[1_0_auto]">{children}</div>
+      <div className="flex min-w-0 flex-[999_1_640px] flex-col max-[1023px]:flex-[1_0_auto]">{children}</div>
     </div>
   );
 }
 
 /**
- * The room of a screen: as wide as the column beside the rail (FRU-398), with the padding of the
+ * The room of a screen: as wide as the column beside the bar (FRU-398), with the padding of the
  * mockup. The mockup capped each screen at its own width (820 to 1240 px), which left an empty band
  * at the right of a wide window. `className` adds the layout of a screen, never a width.
  */
@@ -268,102 +273,113 @@ type RailProps = {
   onSettings: () => void;
   /** The settings of the workspace are on screen. */
   settings?: boolean;
-  /** The person administers the instance (FRU-262): the rail leads to the administration. */
+  /** The person administers the instance (FRU-262): the bar leads to the administration. */
   admin?: boolean;
+  /** The person signed in: the menu at the foot of the bar (FRU-684). */
+  account: Account;
+  /**
+   * The counts at the right of the entries, by the `path` of a section (FRU-684). A section with no
+   * count shows none: no read gives them yet, and the bar asks nothing for them.
+   */
+  counts?: Readonly<Partial<Record<string, number>>>;
+  /** How many sends of the connectors failed: a red dot and the number on « Connectors ». */
+  failing?: number;
 };
 
 /**
- * An entry of the rail: where it leads, its words, whether its screen is the one shown, and its icon
- * (FRU-477).
+ * An entry of the bar: where it leads, its words, whether its screen is the one shown, its icon
+ * (FRU-477), and what it counts at its right (FRU-684). `alert` is a count that something failed.
  */
-type RailEntry = { to: string; label: string; current: boolean; icon?: RailIconName };
+type RailEntry = { to: string; label: string; current: boolean; icon?: RailIconName; count?: number; alert?: number };
 
 /** The item of the menu of the workspaces that opens the settings: no workspace id has a space. */
 const SETTINGS = 'workspace settings';
 
-/** The classes of the box at the top of the rail: what the rail is of. */
-export const RAIL_HEAD = 'flex w-full items-center gap-[10px] rounded-box p-[8px] text-left text-on-ink';
+/**
+ * The classes of an entry of the bar (FRU-684): 28 px, 8 px in, the icon 16 px and 8 px from the
+ * words. Under the pointer an entry takes the tint of the entry on screen.
+ */
+const ENTRY =
+  'flex h-control-sm min-w-0 items-center gap-[8px] rounded-control px-[8px] text-label leading-none font-medium whitespace-nowrap text-ink-soft hover:bg-bar-active hover:text-ink';
+/** The entry on screen: the tint, and its words in 600. */
+const ENTRY_CURRENT = 'bg-bar-active font-semibold text-ink';
+/** The icon of an entry, in the secondary text of the bar. */
+const ENTRY_ICON = 'inline-flex flex-none text-muted';
+/** A count at the right of an entry. */
+const COUNT = 'ms-auto flex-none text-tiny leading-none font-medium text-muted tabular-nums';
+
+/** The classes of the box at the top of the bar: what the bar is of. */
+export const RAIL_HEAD =
+  'flex h-control-md min-w-0 flex-1 items-center gap-[8px] rounded-control px-[6px] text-left text-label leading-none font-semibold text-ink hover:bg-bar-active';
 
 /**
- * The dark rail of the mockup, for a workspace or for the instance (FRU-262): what it is of, its
- * entries, what more the frame puts under them, and a foot with the way to the extension (FRU-406)
- * and to the documentation. Each link of the foot opens in another tab.
+ * The bar of the mockup (FRU-684, option A), for a workspace or for the instance (FRU-262): what it
+ * is of and a button beside it, its entries, and a fixed foot. Each link of the foot that leaves the
+ * console opens in another tab.
  *
- * `kit-rail` gives every control in it the focus ring of the rail.
+ * From 1024 px the bar is 232 px wide, beside the screen, as high as the window, and stays in place
+ * while the screen scrolls (FRU-402); a window lower than the bar scrolls the bar itself. Under
+ * 1024 px it is folded above the screen: its head, and a button that unfolds the entries and the foot
+ * under it. A move to another screen folds it again.
  */
 export function RailFrame({
   head,
+  tool,
   children,
   foot,
 }: {
   head: ReactNode;
+  /** A button beside the head: the search of a workspace. */
+  tool?: ReactNode;
   children: ReactNode;
-  foot: readonly RailLink[];
+  foot: ReactNode;
 }) {
   useLocale();
+  const [open, setOpen] = useState(false);
+  const { pathname } = useLocation();
+  // A move folds the bar: the screen the person chose is under it.
+  useEffect(() => setOpen(false), [pathname]);
+  const panel = useId();
 
   return (
-    // From 888 px the rail is beside the screen, as high as the window, and stays in place while the
-    // screen scrolls (FRU-402). A window lower than the rail scrolls the rail itself.
-    <aside className="kit-rail box-border flex min-w-0 flex-[1_1_248px] flex-col max-[887px]:flex-none gap-[20px] bg-rail px-[12px] py-[16px] text-on-ink min-[888px]:sticky min-[888px]:top-0 min-[888px]:h-dvh min-[888px]:overflow-y-auto">
-      {head}
-      {children}
-      <div className="mt-auto flex flex-col gap-[14px] p-[8px] max-[900px]:hidden">
-        {foot.map((link) => {
-          const anchor = (
-            <a
-              key={link.href}
-              href={link.href}
-              target="_blank"
-              rel="noreferrer"
-              className="self-start text-small leading-auto text-rail-text underline decoration-1 underline-offset-[3px] hover:text-on-ink"
-            >
-              {link.label}
-            </a>
-          );
-          if (link.status === undefined) return anchor;
-
-          // The line of the extension and its link read as one entry: 6 px apart. FRU-572: a card on a
-          // tint of the colour of its dot, 8 px further from the next entry than the 14 px of the foot.
-          return (
-            <div
-              key={link.href}
-              data-rail-extension=""
-              className="mb-[8px] flex min-w-0 flex-col gap-[6px] rounded-box border border-status-done/45 bg-status-done/20 px-[10px] py-[10px]"
-            >
-              <p className="flex min-w-0 flex-col gap-[2px] text-small leading-auto">
-                <span className="flex items-center gap-[8px] whitespace-nowrap text-on-ink">
-                  <Drop className="bg-status-done" />
-                  {link.status}
-                </span>
-                {link.detail === undefined ? null : (
-                  // A long name ends with « … »; the whole of it is in the title.
-                  <span title={link.detail} className="truncate pl-[17px] text-rail-text">
-                    {link.detail}
-                  </span>
-                )}
-              </p>
-              {anchor}
-            </div>
-          );
-        })}
-        {/* FRU-573: the logo leads to the site of Fruitback, as « Help and docs » does, in another tab. */}
-        <a
-          href="https://fruitback.com"
-          target="_blank"
-          rel="noreferrer"
-          aria-label={t('Fruitback, its site, in a new tab')}
-          className="self-start rounded-[2px] opacity-100 hover:opacity-80"
-        >
-          <Logo on="rail" />
-        </a>
+    <aside
+      data-open={open}
+      // Escape folds the bar that was unfolded, and gives focus back to its button.
+      onKeyDown={(event) => {
+        if (event.key !== 'Escape' || !open || event.defaultPrevented) return;
+        setOpen(false);
+        event.currentTarget.querySelector<HTMLElement>(`[aria-controls="${CSS.escape(panel)}"]`)?.focus();
+      }}
+      className="kit-rail group/rail [view-transition-name:rail] box-border flex min-w-0 flex-col border-line bg-bar pt-[4px] text-ink max-[1023px]:flex-none max-[1023px]:border-b min-[1024px]:sticky min-[1024px]:top-0 min-[1024px]:h-dvh min-[1024px]:w-[232px] min-[1024px]:flex-none min-[1024px]:overflow-y-auto min-[1024px]:border-r"
+    >
+      <div className="flex h-[40px] flex-none items-center gap-[8px] px-[6px]">
+        {head}
+        {tool}
+        <span className="inline-flex flex-none min-[1024px]:hidden">
+          <IconButton
+            label={t('Menu')}
+            size="small"
+            expanded={open}
+            controls={panel}
+            onClick={() => setOpen((before) => !before)}
+          >
+            <RailIcon name="menu" />
+          </IconButton>
+        </span>
+      </div>
+      <div
+        id={panel}
+        className="flex flex-1 flex-col max-[1023px]:hidden max-[1023px]:group-data-[open=true]/rail:flex"
+      >
+        {children}
+        <div className="mt-auto flex flex-col gap-px px-[6px] pt-[6px] pb-[8px]">{foot}</div>
       </div>
     </aside>
   );
 }
 
 /**
- * The rail of a workspace: the workspace, its sections, and the way to the documentation. The
+ * The bar of a workspace: the workspace and the search of its notes, its sections, and the foot. The
  * sections are links, and the one on screen has `aria-current="page"`.
  */
 export function Rail({
@@ -375,21 +391,21 @@ export function Rail({
   onSettings,
   settings = false,
   admin = false,
+  account,
+  counts = {},
+  failing = 0,
 }: RailProps) {
   useLocale();
   const name = (
     <>
-      <WorkspaceMark workspace={workspace} />
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-body leading-auto font-semibold">{workspace.name}</span>
-        <span className="block text-tiny text-rail-muted">{t('Cloud workspace')}</span>
-      </span>
+      <WorkspaceMark workspace={workspace} size={20} />
+      <span className="min-w-0 truncate">{workspace.name}</span>
     </>
   );
   const head =
     workspaces.length > 1 ? (
       <Menu
-        triggerClassName={`${RAIL_HEAD} hover:bg-rail-active`}
+        triggerClassName={RAIL_HEAD}
         chosen={workspace.id}
         choiceLabel={t('Workspaces')}
         onAction={(chosen) => {
@@ -400,16 +416,9 @@ export function Rail({
         after={[{ id: SETTINGS, label: t('Workspace settings') }]}
       >
         {name}
-        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-[16px] w-[16px] flex-none text-rail-muted">
-          <path
-            d="M8 10l4-4 4 4M8 14l4 4 4-4"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
+        <span className="inline-flex flex-none text-muted">
+          <RailIcon name="chevron" small />
+        </span>
       </Menu>
     ) : (
       // One workspace: its name leads to its settings (FRU-414). A screen reader hears where.
@@ -417,17 +426,37 @@ export function Rail({
         to={`/w/${workspace.id}/settings`}
         viewTransition
         {...(settings ? { 'aria-current': 'page' as const } : {})}
-        className={`${RAIL_HEAD} hover:bg-rail-active ${settings ? 'bg-rail-active' : ''}`}
+        className={`${RAIL_HEAD} ${settings ? 'bg-bar-active' : ''}`}
       >
         {name}
         <span className="sr-only"> {t('Workspace settings')}</span>
       </Link>
     );
-
-  const extension = useExtensionLink();
+  // The search of the bar is the one of the notes (FRU-684): no screen searches the whole workspace.
+  const search = (
+    <Link
+      to={`/w/${workspace.id}/notes`}
+      state={{ search: true }}
+      viewTransition
+      aria-label={t('Search notes')}
+      className="inline-flex h-control-sm w-control-sm flex-none items-center justify-center rounded-control text-ink-soft hover:bg-bar-active"
+    >
+      <RailIcon name="search" small />
+    </Link>
+  );
 
   return (
-    <RailFrame head={head} foot={[extension, { href: 'https://fruitback.com', label: t('Help and docs') }]}>
+    <RailFrame
+      head={head}
+      tool={search}
+      foot={
+        <RailFoot
+          help={{ href: 'https://fruitback.com', label: t('Help and docs') }}
+          account={account}
+          accountPage={`/w/${workspace.id}/${ACCOUNT}`}
+        />
+      }
+    >
       <RailNav
         label={t('Workspace')}
         entries={sections.map((section) => ({
@@ -435,6 +464,8 @@ export function Rail({
           label: t(section.label),
           current: section.path === current,
           ...(SECTION_ICONS[section.path] === undefined ? {} : { icon: SECTION_ICONS[section.path] }),
+          ...(counts[section.path] === undefined ? {} : { count: counts[section.path] }),
+          ...(section.path === 'connectors' && failing > 0 ? { alert: failing } : {}),
         }))}
       />
       {admin ? (
@@ -450,13 +481,15 @@ export function Rail({
 /**
  * The mark of a workspace: its logo (FRU-428), or the initial of its name when it has none, or when
  * its logo does not load. The logo is drawn whole in its square, whatever its pixels: the worker
- * resizes nothing. Decorative: the name is beside it.
+ * resizes nothing. Decorative: the name is beside it. 20 px in the bar (FRU-684), 64 px on the settings.
  */
-export function WorkspaceMark({ workspace, size = 32 }: { workspace: Workspace; size?: 32 | 64 }) {
+export function WorkspaceMark({ workspace, size = 20 }: { workspace: Workspace; size?: 20 | 64 }) {
   const source = logoSource(workspace);
   // The address of the logo that did not load: another address (a new logo) is tried again.
   const [broken, setBroken] = useState<string | undefined>();
-  const box = size === 64 ? 'h-[64px] w-[64px] text-section' : 'h-[32px] w-[32px] text-small';
+  // The 64 px of the settings are drawn as before FRU-684; the 20 px tile of the bar is ink.
+  const box =
+    size === 64 ? 'h-[64px] w-[64px] rounded-field text-section' : 'h-[20px] w-[20px] rounded-[4px] text-[11px]';
   if (source !== undefined && source !== broken)
     return (
       <img
@@ -465,14 +498,14 @@ export function WorkspaceMark({ workspace, size = 32 }: { workspace: Workspace; 
         width={size}
         height={size}
         onError={() => setBroken(source)}
-        className={`${box} flex-none rounded-field bg-page object-contain`}
+        className={`${box} flex-none bg-page object-contain`}
       />
     );
 
   return (
     <span
       aria-hidden="true"
-      className={`${box} flex flex-none items-center justify-center rounded-field bg-page leading-auto font-bold text-ink`}
+      className={`${box} flex flex-none items-center justify-center font-bold ${size === 64 ? 'bg-page leading-auto text-ink' : 'bg-ink leading-none text-on-ink'}`}
     >
       {workspace.name.trim().charAt(0).toUpperCase()}
     </span>
@@ -480,130 +513,249 @@ export function WorkspaceMark({ workspace, size = 32 }: { workspace: Workspace; 
 }
 
 /**
- * A link at the foot of a rail, which opens a new tab. `status`: a line above it, which is no link;
- * `detail` under it, the browser of the extension (FRU-456).
+ * A link of the foot that leaves the console: it opens in another tab, so a screen keeps what is
+ * typed in it.
  */
-type RailLink = { href: string; label: string; status?: string; detail?: string };
-
-/**
- * The way to the browser extension, at the foot of both rails (FRU-406). Chrome and Edge go to the
- * Chrome Web Store, where 0.3.0 is public, and Firefox to addons.mozilla.org (FRU-536). Every other
- * browser goes to the page that installs the archive of the release.
- *
- * With a browser of the extension connected to the account, the rail says so and names it, and the
- * link is « Connect another browser » (FRU-441): `/connect` on Fruitback Cloud, the page that installs
- * it elsewhere, as a self-hosted console connects a browser from a site.
- */
-export function useExtensionLink(): RailLink {
-  const connected = useConnectedExtension();
-  const install = extensionInstallFor(navigator.userAgent);
-  if (connected === undefined) return { href: install, label: t('Install the extension (beta)') };
-
-  return {
-    href: BY_SIGN_IN ? CONNECT_PAGE : install,
-    label: t('Connect another browser'),
-    // Two lines, each on one line (FRU-456): « Extension connected · Chrome on macOS » wrapped in the
-    // rail, between « connected · » and the browser.
-    status: t('Extension connected'),
-    detail: connected.browser,
-  };
-}
-
-/** Whether a row that scrolls holds more before its start and after its end. */
-function useMore(row: { current: HTMLElement | null }): { start: boolean; end: boolean } {
-  const [more, setMore] = useState({ start: false, end: false });
-  useEffect(() => {
-    const element = row.current;
-    if (element === null) return;
-    const read = () => {
-      const start = element.scrollLeft > 1;
-      const end = element.scrollLeft + element.clientWidth < element.scrollWidth - 1;
-      setMore((before) => (before.start === start && before.end === end ? before : { start, end }));
-    };
-    read();
-    element.addEventListener('scroll', read, { passive: true });
-    const resized = new ResizeObserver(read);
-    resized.observe(element);
-
-    return () => {
-      element.removeEventListener('scroll', read);
-      resized.disconnect();
-    };
-  }, [row]);
-
-  return more;
-}
-
-/** The width of the fade at an edge of the row, and a little more: what a section must be clear of. */
-const CLEAR = 44;
-
-/**
- * Scrolls the row of sections so that one of them is whole, and clear of the fade of an edge.
- *
- * WARNING: not `scrollIntoView`. Measured in Chromium: it makes the section the place the next Tab
- * starts from, so the first Tab of a page skipped the workspace and the section on screen.
- */
-function reveal(link: HTMLElement): void {
-  const row = link.parentElement;
-  if (row === null || row.scrollWidth <= row.clientWidth) return;
-  const frame = row.getBoundingClientRect();
-  const box = link.getBoundingClientRect();
-  if (box.left < frame.left + CLEAR) row.scrollLeft -= frame.left + CLEAR - box.left;
-  else if (box.right > frame.right - CLEAR) row.scrollLeft += box.right - (frame.right - CLEAR);
+function FootLink({
+  href,
+  icon,
+  children,
+  ...rest
+}: { href: string; icon: ReactNode; children: ReactNode } & Omit<
+  ComponentProps<'a'>,
+  'href' | 'children' | 'className' | 'target' | 'rel'
+>) {
+  return (
+    <a href={href} target="_blank" rel="noreferrer" className={ENTRY} {...rest}>
+      {icon}
+      {children}
+    </a>
+  );
 }
 
 /**
- * The entries of the rail. At 900 px and under they are one row, which scrolls in the rail when it
- * is wider than the screen: the page never scrolls sideways (the mockup does, at 390 px). An edge of
- * the row that hides a section fades. The section on screen, and the section that takes focus, are
- * scrolled into view, clear of the fade.
- *
- * The row scrolls, so it clips: its padding leaves room for the focus ring of a section, and its
- * negative margin gives the padding back, so a section stays where the mockup draws it.
+ * The fixed foot of the bar (FRU-684): « What's new », the extension, the help, a rule, and the menu
+ * of the person. The foot of the instance has its guide in place of the help.
  */
-export function RailNav({ label, entries }: { label: string; entries: readonly RailEntry[] }) {
-  const row = useRef<HTMLElement>(null);
-  const more = useMore(row);
-  const shown = entries.find((entry) => entry.current)?.to;
-  useEffect(() => {
-    const link = row.current?.querySelector<HTMLElement>('[aria-current="page"]');
-    if (link !== null && link !== undefined) reveal(link);
-  }, [shown]);
+export function RailFoot({
+  help,
+  account,
+  accountPage,
+}: {
+  help: { href: string; label: string };
+  account: Account;
+  /** Where « My account » leads. Absent: the menu has no « My account ». */
+  accountPage?: string;
+}) {
+  useLocale();
 
   return (
-    <nav
-      ref={row}
-      aria-label={label}
-      // Measured in Chromium: focus alone does not scroll the row to a section that is half hidden.
-      onFocus={(event) => reveal(event.target)}
-      data-more-start={more.start}
-      data-more-end={more.end}
-      className="flex min-w-0 flex-col gap-[2px] [--fade-end:0px] [--fade-start:0px] [scrollbar-width:none] max-[900px]:-m-[4px] max-[900px]:flex-row max-[900px]:overflow-x-auto max-[900px]:p-[4px] max-[900px]:[mask-image:linear-gradient(to_right,transparent,black_var(--fade-start),black_calc(100%_-_var(--fade-end)),transparent)] max-[900px]:data-[more-end=true]:[--fade-end:40px] max-[900px]:data-[more-start=true]:[--fade-start:40px]"
-    >
-      {entries.map((entry) => {
-        const active = entry.current;
+    <>
+      <WhatsNew />
+      <ExtensionEntry />
+      <FootLink
+        href={help.href}
+        icon={
+          <span className={ENTRY_ICON}>
+            <RailIcon name="help" />
+          </span>
+        }
+      >
+        <span className="min-w-0 truncate">{help.label}</span>
+      </FootLink>
+      <hr aria-hidden="true" className="mx-[2px] my-[6px] h-px border-0 bg-line" />
+      <PersonMenu account={account} {...(accountPage === undefined ? {} : { accountPage })} />
+    </>
+  );
+}
 
-        return (
-          <Link
-            key={entry.to}
-            to={entry.to}
-            // A move between screens and frames cross-fades the screen, the rail held (FRU-356).
-            viewTransition
-            {...(active ? { 'aria-current': 'page' as const } : {})}
-            className={`flex min-h-[40px] flex-none items-center gap-[10px] rounded-box text-body leading-auto whitespace-nowrap ${
-              active
-                ? 'bg-rail-active px-[12px] font-semibold text-on-ink'
-                : 'pr-[12px] pl-[31px] text-rail-text hover:bg-rail-active hover:text-on-ink'
-            }`}
-          >
-            {/* The drop of the entry on screen slides to the next one in a move (FRU-413): `kit-rail-drop`. */}
-            {active ? <Drop className="kit-rail-drop bg-rail-accent" /> : null}
-            {/* After the drop, so the icons of the entries stay in one column (FRU-477). */}
-            {entry.icon === undefined ? null : <RailIcon name={entry.icon} />}
-            {entry.label}
-          </Link>
-        );
-      })}
+/** « What's new »: the releases of Fruitback, with a dot until this version of the console opened it. */
+function WhatsNew() {
+  useLocale();
+  const [news, setNews] = useState(() => hasNews(CONSOLE_VERSION, seenVersion()));
+
+  return (
+    <FootLink
+      href={RELEASES}
+      icon={
+        <span className={ENTRY_ICON}>
+          <RailIcon name="news" />
+        </span>
+      }
+      onClick={() => {
+        if (CONSOLE_VERSION !== undefined) markSeen(CONSOLE_VERSION);
+        setNews(false);
+      }}
+    >
+      <span className="min-w-0 truncate">{t("What's new")}</span>
+      {news ? (
+        <>
+          <span className="sr-only">, {t('new release')}</span>
+          <span aria-hidden="true" data-news="" className="ms-auto size-[6px] flex-none rounded-full bg-accent" />
+        </>
+      ) : null}
+    </FootLink>
+  );
+}
+
+/**
+ * The browser extension, at the foot of both bars (FRU-406). Chrome and Edge go to the Chrome Web
+ * Store, where 0.3.0 is public, and Firefox to addons.mozilla.org (FRU-536). Every other browser goes
+ * to the page that installs the archive of the release.
+ *
+ * With a browser of the extension connected to the account, the entry has a green dot on its icon and
+ * names that browser at its right, and it leads to connect another one (FRU-441): `/connect` on
+ * Fruitback Cloud, the page that installs it elsewhere, as a self-hosted console connects a browser
+ * from a site.
+ */
+function ExtensionEntry() {
+  useLocale();
+  const connected = useConnectedExtension();
+  const install = extensionInstallFor(navigator.userAgent);
+  const icon = (
+    <span className={`${ENTRY_ICON} relative`}>
+      <RailIcon name="extension" />
+      {connected === undefined ? null : (
+        <span
+          aria-hidden="true"
+          data-connected=""
+          className="absolute -right-[2px] -bottom-[2px] box-border size-[7px] rounded-full border-[1.5px] border-bar bg-done"
+        />
+      )}
+    </span>
+  );
+  if (connected === undefined)
+    return (
+      <FootLink href={install} icon={icon}>
+        <span className="min-w-0 truncate">{t('Install the extension (beta)')}</span>
+      </FootLink>
+    );
+
+  return (
+    <FootLink href={BY_SIGN_IN ? CONNECT_PAGE : install} icon={icon} data-rail-extension="">
+      <span className="min-w-0 flex-none">{t('Extension')}</span>
+      <span className="sr-only">, {t('connected in')}</span>
+      {/* A long name ends with « … »; the whole of it is in the title. */}
+      <span title={connected.browser} className="ms-auto min-w-0 truncate text-tiny text-muted">
+        {connected.browser}
+      </span>
+      <span className="sr-only">. {t('Connect another browser')}</span>
+    </FootLink>
+  );
+}
+
+/** The items of the menu of the person. */
+const ACCOUNT_ITEM = 'account';
+const SIGN_OUT_ITEM = 'sign-out';
+
+/**
+ * The person signed in, at the bottom of the bar (FRU-684): their initial, name and address, and a
+ * menu with « My account » and « Sign out ». « Sign out » says nothing is done before the worker does
+ * (FRU-204): when it does not confirm, the bar says so under the menu.
+ */
+function PersonMenu({ account, accountPage }: { account: Account; accountPage?: string }) {
+  useLocale();
+  const navigate = useNavigate();
+  const [stillIn, setStillIn] = useState(false);
+  const name = account.name?.trim() || account.email;
+
+  async function leave() {
+    setStillIn(false);
+    if (await signOut()) return navigate('/setup', { replace: true });
+    // The worker did not say that the session ended: it can still be good (FRU-204).
+    setStillIn(true);
+  }
+
+  return (
+    <>
+      <Menu
+        triggerClassName="flex h-[40px] w-full min-w-0 items-center gap-[8px] rounded-control px-[8px] text-left hover:bg-bar-active"
+        items={[
+          ...(accountPage === undefined ? [] : [{ id: ACCOUNT_ITEM, label: t('My account') }]),
+          { id: SIGN_OUT_ITEM, label: t('Sign out') },
+        ]}
+        onAction={(id) => {
+          if (id === ACCOUNT_ITEM && accountPage !== undefined) void navigate(accountPage, { viewTransition: true });
+          else if (id === SIGN_OUT_ITEM) void leave();
+        }}
+      >
+        <span
+          aria-hidden="true"
+          className="flex size-[24px] flex-none items-center justify-center rounded-full bg-avatar text-[11px] leading-none font-semibold text-on-ink"
+        >
+          {name.charAt(0).toUpperCase()}
+        </span>
+        <span className="flex min-w-0 flex-1 flex-col gap-[2px]">
+          <span className="truncate text-label leading-[1.1] font-semibold text-ink">{name}</span>
+          {name === account.email ? null : (
+            <span className="truncate text-tiny leading-[1.1] text-muted">{account.email}</span>
+          )}
+        </span>
+        <span className="inline-flex flex-none text-muted">
+          <RailIcon name="upDown" small />
+        </span>
+      </Menu>
+      {stillIn ? (
+        <p role="alert" className="px-[8px] pt-[4px] text-tiny text-accent-strong">
+          {t('You are still signed in: Fruitback did not confirm the sign-out. Try again.')}
+        </p>
+      ) : null}
+    </>
+  );
+}
+
+/** What an entry counts, at its right: a count of what failed is red, after a red dot. */
+function EntryCount({ count, alert }: { count: number | undefined; alert: number | undefined }) {
+  useLocale();
+  if (alert !== undefined)
+    return (
+      <span
+        data-failing=""
+        className="ms-auto inline-flex flex-none items-center gap-[4px] text-tiny leading-none font-semibold text-accent-strong tabular-nums"
+      >
+        <span aria-hidden="true" className="size-[6px] rounded-full bg-accent" />
+        <span className="sr-only">, {t('failed sends:')} </span>
+        {alert}
+      </span>
+    );
+  if (count === undefined) return null;
+
+  return (
+    <span className={COUNT}>
+      <span className="sr-only">, </span>
+      {count}
+    </span>
+  );
+}
+
+/**
+ * The entries of the bar, one under the other. An entry has its icon, its words, and at its right
+ * what it counts (FRU-684); a count of what failed is red, after a red dot. The words of a count are
+ * read with the entry.
+ */
+export function RailNav({ label, entries }: { label: string; entries: readonly RailEntry[] }) {
+  useLocale();
+
+  return (
+    <nav aria-label={label} className="flex min-w-0 flex-col gap-px px-[6px] py-[4px]">
+      {entries.map((entry) => (
+        <Link
+          key={entry.to}
+          to={entry.to}
+          // A move between screens and frames cross-fades the screen, the bar held (FRU-356).
+          viewTransition
+          {...(entry.current ? { 'aria-current': 'page' as const } : {})}
+          className={`${ENTRY} ${entry.current ? ENTRY_CURRENT : ''}`}
+        >
+          {entry.icon === undefined ? null : (
+            <span className={`${ENTRY_ICON} ${entry.current ? 'text-ink-soft' : ''}`}>
+              <RailIcon name={entry.icon} />
+            </span>
+          )}
+          <span className="min-w-0 truncate">{entry.label}</span>
+          <EntryCount count={entry.count} alert={entry.alert} />
+        </Link>
+      ))}
     </nav>
   );
 }

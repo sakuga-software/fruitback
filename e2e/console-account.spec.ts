@@ -16,6 +16,7 @@ import {
   box,
   contrast,
   expectBox,
+  openMyAccount,
   painted,
   rgb,
   sideScroll,
@@ -774,7 +775,7 @@ test.describe('the browsers of a person, on a worker with accounts', () => {
     const session = (await claimed.json()) as { accessToken: string; refreshToken: string };
 
     // My account lists it after the browsers of the console.
-    await first.page.getByRole('link', { name: 'My account' }).click();
+    await openMyAccount(first.page);
     const browsers = first.page.getByRole('region', { name: 'Where you are signed in' }).getByRole('listitem');
     await expect(browsers).toHaveCount(2);
     const extension = browsers.filter({ hasText: 'Extension · Chrome on macOS' });
@@ -823,7 +824,7 @@ test.describe('the browsers of a person, on a worker with accounts', () => {
     session = before.next as typeof session;
 
     // My account lists the browsers of the console only: the extension is no row of it.
-    await first.page.getByRole('link', { name: 'My account' }).click();
+    await openMyAccount(first.page);
     const browsers = first.page.getByRole('region', { name: 'Where you are signed in' }).getByRole('listitem');
     await expect(browsers).toHaveCount(2);
 
@@ -853,7 +854,7 @@ test.describe('the browsers of a person, on a worker with accounts', () => {
     expect(await accepted(second.context)).toBe(200);
 
     // The first browser lists both, itself first, and holds no token of either.
-    await first.page.getByRole('link', { name: 'My account' }).click();
+    await openMyAccount(first.page);
     const browsers = first.page.getByRole('region', { name: 'Where you are signed in' }).getByRole('listitem');
     await expect(browsers).toHaveCount(2);
     // The worker names each browser by its user agent (FRU-249): the Chromium of the test, which
@@ -891,7 +892,7 @@ test.describe('the browsers of a person, on a worker with accounts', () => {
     browser,
   }) => {
     const { page } = await browserOf(browser, 'ana@acme.dev');
-    await page.getByRole('link', { name: 'My account' }).first().click();
+    await openMyAccount(page);
     const addresses = section(page, 'Addresses');
     await expect(addresses.getByRole('listitem')).toHaveCount(1);
 

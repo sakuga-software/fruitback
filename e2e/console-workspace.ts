@@ -98,11 +98,20 @@ export async function stubWorker(page: Page, stub: Stub = {}): Promise<void> {
   });
 }
 
+/**
+ * Opens « My account » from the menu of the person, at the foot of the bar (FRU-684): it is no
+ * section of the bar any more. The button of the person is the one of the bar that names an address.
+ */
+export async function openMyAccount(page: Page): Promise<void> {
+  await page.locator('aside.kit-rail').getByRole('button', { name: /@/ }).click();
+  await page.getByRole('menuitem', { name: 'My account' }).click();
+}
+
 /** How far the document scrolls sideways. A screen that fits: 0. */
 export const sideScroll = (page: Page): Promise<number> =>
   page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
 
-type Painted = 'color' | 'backgroundColor' | 'outlineColor' | 'borderTopColor' | 'fill';
+type Painted = 'color' | 'backgroundColor' | 'outlineColor' | 'borderTopColor' | 'borderRightColor' | 'fill';
 
 /** A computed colour as the browser paints it on white, whatever notation `getComputedStyle` answers in. */
 export function painted(locator: Locator, property: Painted): Promise<number[]> {

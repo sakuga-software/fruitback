@@ -933,7 +933,7 @@ test('the counts come with the list: nothing that a pointer can reach moves when
   await expect(page.locator('main').getByText('Loading…')).toBeVisible();
   const reachable = [
     page.getByRole('link', { name: 'Connectors', exact: true }),
-    page.getByRole('link', { name: 'My account', exact: true }),
+    page.getByRole('link', { name: 'Settings', exact: true }),
     page.locator('main h1'),
   ];
   const before = await Promise.all(reachable.map(box));

@@ -57,7 +57,7 @@ test.describe('the rail', () => {
     await expect(another).toHaveAttribute('target', '_blank');
   });
 
-  test('says it on two lines that do not wrap, the browser cut with « … » when it is long (FRU-456)', async ({
+  test('says it on one entry of the foot, the browser at its right, cut with « … » when it is long (FRU-684)', async ({
     page,
   }) => {
     const LONG = { ...MAC, browser: 'Chrome on macOS Sequoia, the laptop of the studio downstairs' };
@@ -69,46 +69,52 @@ test.describe('the rail', () => {
       await stubWorker(page, { locale, answer: browsersAnswer(browsers) });
       await page.goto(`${CONSOLE}/w/w1/sites`);
       const rail = page.locator('aside.kit-rail');
-      const said = rail.getByText(locale === 'fr' ? 'Extension connectée' : 'Extension connected', { exact: true });
+      const entry = rail.locator('[data-rail-extension]');
+      await expect(entry).toHaveAccessibleName(
+        locale === 'fr'
+          ? `Extension, connectée dans ${browsers[0].browser}. Connecter un autre navigateur`
+          : `Extension, connected in ${browsers[0].browser}. Connect another browser`,
+      );
       const browser = rail.getByTitle(browsers[0].browser);
-      await expect(said).toBeVisible();
       await expect(browser).toBeVisible();
-      // One line each: as high as one line of the rail, and the browser inside the rail.
-      for (const line of [said, browser]) {
-        const box = await line.boundingBox();
-        expect(box?.height, (await line.textContent()) ?? '').toBeLessThan(24);
-      }
+      // One entry of 28 px, the browser on its line and at its right edge.
+      const line = (await entry.boundingBox())!;
+      const right = (await browser.boundingBox())!;
+      expect(line.height).toBe(28);
+      expect(right.y).toBeGreaterThanOrEqual(line.y);
+      expect(right.y + right.height).toBeLessThanOrEqual(line.y + line.height);
+      expect(line.x + line.width - (right.x + right.width)).toBeCloseTo(8, 0);
       const shown = await browser.evaluate((node) => ({ cut: node.scrollWidth > node.clientWidth }));
       expect(shown.cut).toBe(browsers[0] === LONG);
     }
   });
 
-  test('says it in a card on a tint of its dot, further from the links under it (FRU-572)', async ({ page }) => {
+  test('has a green dot on the icon of the extension, and none when no browser is connected (FRU-684)', async ({
+    page,
+  }) => {
     await stubWorker(page, { answer: browsersAnswer([MAC]) });
     await page.goto(`${CONSOLE}/w/w1/sites`);
     const rail = page.locator('aside.kit-rail');
-    const card = rail.locator('[data-rail-extension]');
-    await expect(card).toContainText('Extension connected');
-    await expect(card.getByRole('link', { name: 'Connect another browser' })).toBeVisible();
-    // A background of its own, not the rail's, and a frame with rounded corners.
-    const look = await card.evaluate((element) => {
+    const dot = rail.locator('[data-rail-extension] [data-connected]');
+    await expect(dot).toBeVisible();
+    const look = await dot.evaluate((element) => {
       const style = getComputedStyle(element);
-      const rail = getComputedStyle(element.closest('aside') as Element);
 
       return {
-        background: style.backgroundColor,
-        rail: rail.backgroundColor,
+        width: style.width,
+        height: style.height,
         radius: style.borderTopLeftRadius,
-        bottom: style.marginBottom,
+        colour: style.backgroundColor,
       };
     });
-    expect(look.background).not.toBe('rgba(0, 0, 0, 0)');
-    expect(look.background).not.toBe(look.rail);
-    expect(look.radius).toBe('10px');
-    // 14 px of the foot, and 8 more under the card.
-    const next = rail.getByRole('link', { name: 'Help and docs' });
-    const gap = (await next.boundingBox())!.y - ((await card.boundingBox())!.y + (await card.boundingBox())!.height);
-    expect(gap).toBeCloseTo(22, 0);
+    expect(look).toMatchObject({ width: '7px', height: '7px', radius: '50%' });
+    expect(look.colour).not.toBe('rgba(0, 0, 0, 0)');
+    // The control: with no browser connected, the entry installs it, with no dot.
+    await page.unrouteAll();
+    await stubWorker(page, { answer: browsersAnswer([]) });
+    await page.reload();
+    await expect(rail.getByRole('link', { name: 'Install the extension (beta)' })).toBeVisible();
+    await expect(rail.locator('[data-connected]')).toHaveCount(0);
   });
 
   test('offers to install the extension when no browser is connected', async ({ page }) => {
@@ -116,7 +122,7 @@ test.describe('the rail', () => {
     await page.goto(`${CONSOLE}/w/w1/sites`);
     const rail = page.locator('aside.kit-rail');
     await expect(rail.getByRole('link', { name: 'Install the extension (beta)' })).toBeVisible();
-    await expect(rail.getByText(/Extension connected/)).toHaveCount(0);
+    await expect(rail.locator('[data-rail-extension]')).toHaveCount(0);
   });
 
   test('reads the browsers again when the tab is shown again', async ({ page }) => {

@@ -331,10 +331,10 @@ test('the page is the one of the mockup: chips, filters, the table and its pages
   await open(page);
   await expect(rows(page)).toHaveCount(8);
 
-  // The rail has its entry, on screen, between « Sites » and « Connectors ».
+  // The bar has its entry, on screen, first (FRU-684).
   const rail = page.getByRole('navigation', { name: 'Workspace' }).getByRole('link');
-  await expect(rail).toHaveText(['Sites', 'Notes', 'Connectors', 'Members', 'Settings', 'My account']);
-  await expect(rail.nth(1)).toHaveAttribute('aria-current', 'page');
+  await expect(rail).toHaveText(['Notes', 'Sites', 'Connectors', 'Members', 'Settings']);
+  await expect(rail.nth(0)).toHaveAttribute('aria-current', 'page');
 
   // The head.
   await expect(page.locator('main h1')).toHaveText('Notes');
