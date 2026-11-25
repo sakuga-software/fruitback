@@ -192,10 +192,10 @@ test('the settings lead an owner to the keys, listed with their last use, their 
   await section.getByRole('link', { name: 'Manage the agent keys' }).click();
   await expect(page).toHaveURL(`${CONSOLE}/w/w1/settings/agents`);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Agents');
-  // The crumbs lead back to the settings, and to their page « AI » (FRU-544).
-  const crumbs = page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link');
-  await expect(crumbs).toHaveText(['Workspace settings', 'AI']);
-  await expect(crumbs.last()).toHaveAttribute('href', '/w/w1/settings/ai');
+  // The keys are a page of the shell of the settings (FRU-692): its navigation leads back to « AI ».
+  const nav = page.getByRole('main').getByRole('navigation', { name: 'Settings', exact: true });
+  await expect(nav.getByRole('link', { name: 'Agents' })).toHaveAttribute('aria-current', 'page');
+  await expect(nav.getByRole('link', { name: 'AI', exact: true })).toHaveAttribute('href', '/w/w1/settings/ai');
 
   await expect(list(page).getByRole('listitem')).toHaveCount(3);
   const ci = row(page, 'Claude on CI');

@@ -25,7 +25,8 @@ import { manages } from '../setup-stage';
 import { siteName } from '../site-address';
 import { Button, Callout, Checks, Field, LinkButton, Pick, Problem, Snippet, Toggle } from '../ui';
 import { useLocale } from '../use-locale';
-import { PageHead, useWorkspace } from './workspace';
+import { SettingsHead } from './settings-shell';
+import { useWorkspace } from './workspace';
 import { ReadProblem } from '../read-problem';
 
 /**
@@ -33,7 +34,8 @@ import { ReadProblem } from '../read-problem';
  * the line that connects Claude Code; list the keys with their last use and their end, and a warning
  * 7 days before it; the writes of each key; revoke one. The routes are those of FRU-461 and FRU-464.
  *
- * Reached from the section « Agents » of the page « AI » of the settings (FRU-544), for an owner or an admin: the worker
+ * Reached from the section « Agents » of the page « AI » of the settings (FRU-544), and from the navigation
+ * of the settings (FRU-692), for an owner or an admin: the worker
  * answers `403` to anybody else, so the page asks it nothing for them.
  */
 export default function Agents() {
@@ -90,24 +92,6 @@ function AgentsScreen() {
     newKey.current?.querySelector<HTMLElement>('a, button')?.focus();
   }, [focusNew]);
 
-  const crumbs = (
-    // The crumbs are in the room above the title, as on the page of the statuses (FRU-405).
-    <nav
-      aria-label={t('Breadcrumb')}
-      className="-mt-[31px] mb-[10px] flex flex-wrap items-center gap-[8px] text-small text-muted"
-    >
-      <LinkButton space="inline" to={`/w/${workspace.id}/settings`}>
-        {t('Workspace settings')}
-      </LinkButton>
-      <span aria-hidden="true">›</span>
-      {/* The keys are reached from the page « AI » of the settings (FRU-544). */}
-      <LinkButton space="inline" to={`/w/${workspace.id}/settings/ai`}>
-        {t('AI')}
-      </LinkButton>
-      <span aria-hidden="true">›</span>
-      <span>{t('Agents')}</span>
-    </nav>
-  );
   const lead = t(
     'A key lets an AI agent of your team read the notes of some sites through the MCP server of Fruitback, and reply to them when you allow it. Fruitback calls no model: the agent is yours.',
   );
@@ -115,8 +99,7 @@ function AgentsScreen() {
   if (!may)
     return (
       <>
-        {crumbs}
-        <PageHead title={t('Agents')} lead={lead} />
+        <SettingsHead title={t('Agents')} lead={lead} />
         <p className="text-body text-muted">
           {t('Only an owner or an admin of the workspace manages its agent keys.')}
         </p>
@@ -159,8 +142,7 @@ function AgentsScreen() {
 
   return (
     <>
-      {crumbs}
-      <PageHead title={t('Agents')} lead={lead} action={empty && !busy ? undefined : placed} />
+      <SettingsHead title={t('Agents')} lead={lead} action={empty && !busy ? undefined : placed} />
       <p className="-mt-[16px] mb-[24px] text-small">
         <LinkButton space="inline" href={GUIDE} newTab>
           {t('Connect an AI agent')}
