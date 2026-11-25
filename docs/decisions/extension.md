@@ -327,18 +327,18 @@ it changes who is shown the feedback and never who may fetch it.
   `#ec6a65` under dark text: `#dd2c27` is 3.44:1 as a link on `#18181b`, under the 4.5:1 of text.
   Mathieu chose one accent everywhere on 2026-10-21, after the orange `#c2410c` of FRU-292.
 - **The tokens of the screens to come are declared now**, so that a screen takes a value and never
-  writes one: `--surface-warm`, `--line-row`, `--line-control`, `--line-soft`, `--ink`,
-  `--on-ink-muted`, `--success-line`, the three of an alert, the line of « To check » (two more until FRU-606),
-  `--selection`, `--tile-on`, `--shadow-popup`, `--shadow-panel`, `--radius-card` (12 px),
-  `--radius-panel` (14 px), `--font-sans` and `--font-mono`.
-- **The edge of a field is `--line-strong` (`#8a8a93`, 3.42:1), the field border of the console.**
+  writes one: `--color-surface-warm`, `--color-line-row`, `--color-line-control`, `--color-line-soft`, `--color-ink`,
+  `--color-on-ink-muted`, `--color-success-line`, the three of an alert, the line of « To check » (two more until FRU-606),
+  `--color-selection`, `--color-tile-on`, `--shadow-popup`, `--shadow-panel`, `--radius-card` (12 px),
+  `--radius-panel` (14 px), `--font-ui` (`--font-sans` until FRU-679) and `--font-mono`.
+- **The edge of a field is `--color-line-strong` (`#8a8a93`, 3.42:1), the field border of the console.**
   The lighter `#a1a1aa` is 2.56:1 on white, under the 3:1 a field needs. It stays as
-  `--line-control`, the edge of a secondary button and of a key, whose label says what it is.
+  `--color-line-control`, the edge of a secondary button and of a key, whose label says what it is.
 - **The muted text is `#6b6b74`**, the console's: 5.28:1 on white, 4.80:1 on the sunken surface.
 - **A drop is written black on new, to do and in progress, white on done and closed, and has an
-  edge** (FRU-334): `--on-stage-new`, `--on-stage-todo`, `--on-stage-progress` and
-  `--stage-edge` are copies of the widget, and the edge, 3.42:1 on white, is what draws a light
-  drop. The detached notes of the panel take `--unplaced`, a grey, where they took the brown of
+  edge** (FRU-334): `--color-on-status-new`, `--color-on-status-todo`, `--color-on-status-progress` and
+  `--color-status-edge` are copies of the widget (`--on-stage-*` and `--stage-edge` until FRU-679), and the edge, 3.42:1 on white, is what draws a light
+  drop. The detached notes of the panel take `--color-unplaced`, a grey, where they took the brown of
   « closed ».
 - **Less brown** (FRU-334): the creams of the mono block and of « Ready to check » are the raised
   grey, and the chosen row of the page is on the sunken surface under its bar of the accent. A
@@ -350,14 +350,26 @@ it changes who is shown the feedback and never who may fetch it.
   accent under dark text (`#fb923c`, 7.83:1 with `#18181b` on it). The brown fills of a problem and
   of « Ready to check » are greys of the scale now, under a line and a title in the orange.
   Mathieu validates it on the captures of the PR.
-- **`entrypoints/popup/style.css` holds the tokens, and the options page loads it first.** A
-  stylesheet of an extension page cannot import the widget, so the values are copied.
+- **`src/theme.css` holds the tokens (FRU-679), and every page loads it first** through
+  `entrypoints/popup/style.css`. It is the Tailwind theme of the extension: the shared theme of
+  Fruitback (`packages/shared/tailwind/theme.css`, FRU-677), then the tokens of the extension alone
+  (`--color-surface`, `--color-alert-*`, `--radius-action`…), then its dark scheme, which sets the
+  `--color-*` again. A token that the shared theme names with the same value is the shared one
+  (`line`, `accent-strong`, `ink`, `ink-soft`, the statuses `status-*`). A stylesheet of an
+  extension page cannot import the widget, so the values are copied.
   `src/design-tokens.test.ts` compares each shared one with the widget in both schemes, checks each
   accent against its own value, and measures each pair that the pages paint: 4.5:1 for text, 3:1
   for the edge of a field and a drawing. A grey that differs between the two surfaces fails it.
-- **No rule of either stylesheet writes a colour**: it names a token. The one exception is the drop
-  of the mark, in the accent of the light scheme. test:`writes no colour outside the tokens, but
+- **No rule of a stylesheet writes a colour**: it names a token. The one exception is the drop
+  of the mark, in the accent of the light scheme. test:`writes no colour outside the theme, but
   the drop of the mark`.
+- **Tailwind, with no preflight and no layer for the rules** (FRU-679). `@tailwindcss/vite` builds
+  the sheets, in `wxt.config.ts` and in the gallery. The reset of Tailwind would change every page,
+  so only its theme is imported. A sheet writes its rules with `@apply` on the theme, which it reads
+  with `@reference` (that writes nothing), and keeps each rule out of any cascade layer: the sheets
+  win over each other by their selectors and their order, as before, and a layered rule would lose
+  to every rule in no layer. A measure of one part is written as drawn (`h-[46px]`), never with the
+  spacing of Tailwind, which is in `rem` and would follow the font size of the browser.
 - **An action is a pill**, as on the boards (test:`draws an action as a pill`). A label that may take several lines (`button.long`)
   takes the corner of a field: a pill of two lines is a lozenge.
 - **The drop of the mark is beside the name**, in the accent of the extension in both schemes, as
@@ -382,7 +394,8 @@ did not change: the fields of 760 px and the file input of the browser are as th
 
 - **One source for the parts the popup, the side panel and the page share.** `src/kit.ts` builds
   them, with no `browser`, so `kit.test.ts` reads each on happy-dom; `src/kit.css` gives their
-  measures on the tokens. The popup and the options page link `kit.css` after `popup/style.css`.
+  measures on the tokens, with `@apply` (FRU-679). The popup and the options page link `kit.css`
+  after `popup/style.css`.
 - **The parts, as the mock-up of 2026-10-20 draws them:** the head of a shell (52 px and its rule of 1 px, 53 in all, as the mock-up draws it; the drop and
   « Fruitback », the button of the account of 44 px), the main button (46 px; 56 px with the drop
   for the action of a site; 48 px in the panel), the second button (44 px), the text button
@@ -394,7 +407,7 @@ did not change: the fields of 760 px and the file input of the browser are as th
   the focus ring. The tabs have the keyboard of a tab list: the chosen tab is the one stop, and the
   arrows, Home and End move and choose.
 - **No rule of `kit.css` writes a colour.** test:`writes no colour in its sheet: each one is a token`.
-- **A switch that is off is drawn in `--line-strong` (3.49:1), not in the lighter grey of the
+- **A switch that is off is drawn in `--color-line-strong` (3.49:1), not in the lighter grey of the
   mock-up (1.48:1)**: its track is what says that the control is there (WCAG 1.4.11).
 - **The current popup takes the kit** for its main and second buttons, its switch and the drops of
   the notes of the page. Its screens do not change: the four screens of the mock-up are FRU-297
