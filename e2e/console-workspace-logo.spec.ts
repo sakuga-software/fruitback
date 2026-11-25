@@ -75,7 +75,7 @@ test('an owner sends a logo, the rail shows it at once, then replaces it and rem
   const worker = await workerWith(page, { ...ACME, logo: null });
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`${CONSOLE}/w/w1/settings`);
-  const logo = page.getByRole('region', { name: 'Logo' });
+  const logo = page.getByRole('region', { name: 'Identity' });
   // No logo: the initial, in the rail and on the screen.
   await expect(rail(page).locator('img')).toHaveCount(0);
   await expect(rail(page).getByRole('link', { name: /^Acme Workspace settings/ })).toContainText('A');
@@ -155,7 +155,7 @@ test('an SVG and a file over 512 KB are refused before anything is sent, and a r
 test('a member sees the logo and changes nothing', async ({ page }) => {
   await workerWith(page, { ...ACME, role: 'member', logo: '/console/workspaces/w1/logo?v=1' });
   await page.goto(`${CONSOLE}/w/w1/settings`);
-  const logo = page.getByRole('region', { name: 'Logo' });
+  const logo = page.getByRole('region', { name: 'Identity' });
   await expect(logo.locator('img')).toHaveAttribute('src', /\?v=1$/);
   await expect(rail(page).locator('img')).toHaveAttribute('src', /\?v=1$/);
   await expect(logo.getByRole('button')).toHaveCount(0);
@@ -167,7 +167,7 @@ test('at 390 px in French, with a logo, nothing scrolls sideways', async ({ page
   const worker = await workerWith(page, { ...ACME, logo: '/console/workspaces/w1/logo?v=1' }, 'fr');
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${CONSOLE}/w/w1/settings`);
-  const logo = page.getByRole('region', { name: 'Logo' });
+  const logo = page.getByRole('region', { name: 'Identité' });
   await expect(logo.getByRole('button', { name: 'Remplacer le logo' })).toBeVisible();
   await expect(logo.getByRole('button', { name: 'Retirer le logo' })).toBeVisible();
   await expect(rail(page).locator('img')).toBeVisible();

@@ -18,25 +18,35 @@ export function SettingsCard({
   icon,
   title,
   actions,
+  danger = false,
+  busy = false,
   children,
 }: {
   /** The id of the title: the card is a region named by it. */
   id: string;
-  icon: SettingsIconName;
+  /** No icon on the danger zone: its title, in red, says what it is. */
+  icon?: SettingsIconName;
   title: string;
   actions?: ReactNode;
+  /** The danger zone (FRU-693): a light red border and a red title. */
+  danger?: boolean;
+  /** Something of the card is on its way to the worker. */
+  busy?: boolean;
   children: ReactNode;
 }) {
   return (
     <section
       aria-labelledby={id}
-      className="kit-settings-card overflow-hidden rounded-card border border-line bg-surface"
+      aria-busy={busy}
+      className={`kit-settings-card overflow-hidden rounded-card border bg-surface ${danger ? 'border-danger-line' : 'border-line'}`}
     >
       <div className="flex min-h-[44px] items-center gap-[8px] px-[16px]">
-        <span className="inline-flex text-muted">
-          <SettingsIcon name={icon} />
-        </span>
-        <h2 id={id} className="min-w-0 text-small leading-auto font-semibold">
+        {icon === undefined ? null : (
+          <span className="inline-flex text-muted">
+            <SettingsIcon name={icon} />
+          </span>
+        )}
+        <h2 id={id} className={`min-w-0 text-small leading-auto font-semibold ${danger ? 'text-accent-strong' : ''}`}>
           {title}
         </h2>
         {actions === undefined ? null : <span className="ms-auto flex items-center gap-[8px]">{actions}</span>}
