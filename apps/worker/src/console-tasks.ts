@@ -1,8 +1,11 @@
+import { NOTE_MAX_LENGTH, TASK_TITLE_MAX_LENGTH } from '@fruitback/shared';
+import { requestAgent } from './agent-triggers.ts';
 import { readJsonObject } from './bounded-body.ts';
 import { json } from './http.ts';
 import { invalidatePages, withoutTracker } from './note-helpers.ts';
-import type { NotesContext } from './console-notes.ts';
-import { notesOf, readLabel, readTaskChange, readTasksChange } from './task-fields.ts';
+import { NO_PAGE } from './note-rows.ts';
+import { type NotesContext, noteIdOf } from './console-notes.ts';
+import { notesOf, readLabel, readNewTask, readTaskChange, readTasksChange } from './task-fields.ts';
 import { afterStatusMoved, ownKeyOf } from './console-status.ts';
 import { withoutTrackerStatus } from './site-statuses.ts';
 
@@ -12,6 +15,8 @@ import { withoutTrackerStatus } from './site-statuses.ts';
  * - `POST …/notes/<note>/task`: changes the assignee, the priority, the day, the labels, the place in
  *   its column and the archive, with the rights of the status (the author of the note, or a role that
  *   manages the sites). `DELETE …/notes/<note>/task` deletes it, with the same rights (FRU-665).
+ * - `POST …/notes`: writes a task by hand (FRU-657), with no page and no pin, in a site the caller
+ *   reads. `GET …/notes/<note>` reads it as `{ task }`, where a note of a page is `{ note }`.
  * - `GET …/labels`: the labels of the workspace, for whoever reads its notes.
  * - `POST …/labels`, `POST …/labels/<id>` (a change), `DELETE …/labels/<id>`: for a role that manages the sites.
  *
@@ -31,9 +36,12 @@ export async function handleTasks(
   const task = /^\/notes\/([A-Za-z0-9_-]+)\/task$/.exec(rest);
   const label = /^\/labels\/([A-Za-z0-9_-]+)$/.exec(rest);
   const one = /^\/notes\/([A-Za-z0-9_-]+)$/.exec(rest);
-  if (task === null && label === null && one === null && rest !== '/labels') return undefined;
+  // FRU-657: `POST …/notes` writes a task; `GET …/notes` is the list, in `console-notes.ts`.
+  const create = rest === '/notes' && request.method === 'POST';
+  if (task === null && label === null && one === null && rest !== '/labels' && !create) return undefined;
   const { headers } = context;
   if (!context.allowed('read-feedback')) return json(403, { error: 'forbidden' }, headers);
+  if (create) return createTask(request, context);
 
   // FRU-653: one note, whole, as its page reads it: the page of a task in the console.
   if (one !== null) {
@@ -43,6 +51,19 @@ export async function handleTasks(
     const reach = await context.reach();
     if (reach === undefined || (reach.sites !== 'every' && !reach.sites.includes(note.site))) {
       return json(404, { error: 'not-found' }, headers);
+    }
+    // FRU-657: a task written by hand has no page to read it on: the store of the worker answers it.
+    // The index says which one it is, so a note of a page costs no read of the store more.
+    const written =
+      (await context.noteIndex?.pageOfNote(context.workspace, note.site, note.note)) === NO_PAGE
+        ? await context.accounts.readTask(context.workspace, note.site, note.note, { account: context.account })
+        : undefined;
+    if (written !== undefined) {
+      return json(
+        200,
+        { task: context.allowed('see-tracker') ? written : withoutTracker(written, note.note) },
+        headers,
+      );
     }
     const issue = await context.readNote(context.workspace, note.site, note.note);
     if (issue === undefined) return json(404, { error: 'not-found' }, headers);
@@ -128,6 +149,60 @@ export async function handleTasks(
     { error: changed.reason === 'taken' ? 'label-taken' : 'not-found' },
     headers,
   );
+}
+
+/**
+ * `POST …/notes` (FRU-657): `{ site, title, text?, status?, assignee?, priority?, dueOn?, labels? }`.
+ * Whoever reads the notes of the site writes a task there, as they could leave a note on its pages:
+ * a guest in a site shared with them only. `201 { id, identifier, stage }`, where `id` is the id of the
+ * console and of `/mcp`.
+ */
+async function createTask(request: Request, context: NotesContext): Promise<Response> {
+  const { headers } = context;
+  if (context.tasks === 'off') return json(403, { error: 'tasks-off' }, headers);
+  const body = await readJsonObject(request);
+  const site = body?.site;
+  if (typeof site !== 'string' || !/^[A-Za-z0-9_-]+$/.test(site)) {
+    return json(400, { error: 'invalid-task', field: 'site' }, headers);
+  }
+  const input = readNewTask(body, { title: TASK_TITLE_MAX_LENGTH, text: NOTE_MAX_LENGTH });
+  if ('invalid' in input) return json(400, { error: 'invalid-task', field: input.invalid }, headers);
+  // A guest writes only in the sites shared with them (FRU-250); any other site is none.
+  const reach = await context.reach();
+  if (reach === undefined || (reach.sites !== 'every' && !reach.sites.includes(site))) {
+    return json(404, { error: 'not-found' }, headers);
+  }
+
+  const answer = await context.accounts.createTask(context.workspace, site, input, { account: context.account });
+  if (!answer.created) {
+    switch (answer.reason) {
+      case 'not-found':
+        return json(404, { error: 'not-found' }, headers);
+      case 'status-hidden':
+        return json(409, { error: 'status-hidden' }, headers);
+      case 'unknown-status':
+        return json(409, { error: 'status-changed' }, headers);
+      case 'not-member':
+      case 'unknown-label':
+        return json(409, { error: answer.reason }, headers);
+    }
+  }
+  // FRU-468: a person put the task in To do: the trigger of its site may call, as for a move there.
+  if (answer.stage === 'todo') {
+    await requestAgent(
+      context.accounts,
+      {
+        workspace: context.workspace,
+        site,
+        identifier: answer.identifier,
+        note: answer.note,
+        reason: 'moved-to-todo',
+      },
+      Date.now(),
+    );
+  }
+
+  return json(201, { id: noteIdOf(site, answer.note), identifier: answer.identifier, stage: answer.stage }, headers);
 }
 
 /** Why a change of several tasks was refused (FRU-656), as the route of one task says it. */

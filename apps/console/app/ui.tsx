@@ -18,6 +18,7 @@ import {
   RadioGroup,
   Select,
   Switch,
+  TextArea,
   TextField,
   Tooltip,
 } from '@heroui/react';
@@ -657,6 +658,39 @@ export function Field({
       </div>
       {hint === undefined ? null : <Description>{hint}</Description>}
       {error === undefined ? null : <FieldError>{error}</FieldError>}
+    </TextField>
+  );
+}
+
+/**
+ * A text of several lines (FRU-657), as `Field` with the text area of HeroUI: its label, its box, and
+ * the hint it is described by. The box grows with the person's text up to `rows` lines, then scrolls.
+ */
+export function TextBox({
+  label,
+  hint,
+  value,
+  onChange,
+  maxLength,
+  rows = 4,
+}: {
+  label: string;
+  hint?: string;
+  value: string;
+  onChange: (value: string) => void;
+  maxLength?: number;
+  rows?: number;
+}) {
+  return (
+    <TextField fullWidth className="kit-field" data-multiline="true">
+      <Label>{label}</Label>
+      <TextArea
+        value={value}
+        rows={rows}
+        {...(maxLength === undefined ? {} : { maxLength })}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      {hint === undefined ? null : <Description>{hint}</Description>}
     </TextField>
   );
 }

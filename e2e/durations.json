@@ -61,6 +61,7 @@
   "console-statuses.spec.ts": 38,
   "console-suspended.spec.ts": 17.4,
   "console-table-heads.spec.ts": 6.7,
+  "console-task-create.spec.ts": 12.0,
   "console-task-fields.spec.ts": 1.8,
   "console-task-filters.spec.ts": 3.2,
   "console-task-menu.spec.ts": 10.2,
