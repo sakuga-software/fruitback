@@ -359,12 +359,16 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   native control in a screen. **A button takes no `title`**: a tooltip does not open on a disabled
   control, so the reason is written beside it. The overlays of React Aria position with inline
   styles, which the console's CSP allows (`style-src 'unsafe-inline'`); its scripts stay hashed.
-- **The values are the mockup's of 2026-10-13, named once in `app.css`** (FRU-232, on the palette:
+- **The values are the mockup's of 2026-10-13, named once** (FRU-232, on the palette:
   read as Mathieu's answer by the orchestrator on 2026-10-13, and he may come back on it).
   `design/README.md` has the table. **A screen writes the name of a token and never a value**:
   `tokens.test.ts` fails on a colour written in a screen or in the kit, and on a colour of the
   palette of before anywhere in the console. A token that a screen needs and that is not there is
-  added to `app.css` in a pull request of the kit, not in the screen.
+  added in a pull request of the kit, not in the screen. **The Tailwind theme is shared**
+  (FRU-677): `packages/shared/tailwind/theme.css`, one plain `@theme` block that the console, the
+  extension, the widget and the docs import, every size in px; `app.css` imports it after HeroUI and
+  keeps the variables of HeroUI. `shared-theme.test.ts` builds it without the preflight and holds
+  its utilities to `var(--color-…)`, so the dark block of a surface repaints them.
 - **HeroUI takes the theme, and the kit takes the shapes.** `app.css` gives the variables of HeroUI
   the tokens, so a button of HeroUI and `bg-accent` paint the same red. HeroUI writes its
   components in the cascade layer `components`; the rules of the kit (`.kit-*`) are in no layer, so
