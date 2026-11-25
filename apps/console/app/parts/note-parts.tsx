@@ -292,8 +292,13 @@ export function PlaceCell({
           <ConnectorMark kind={place.kind} />
         </span>
         <span className="sr-only">{name}</span>
-        <span aria-hidden="true" className="truncate font-medium text-accent-strong" title={words}>
-          {t('Failed')}
+        {/* On its way again: the word says so, beside the arrow that is off (review of #942). */}
+        <span
+          aria-hidden="true"
+          className={`truncate font-medium ${sending ? 'text-muted' : 'text-accent-strong'}`}
+          title={words}
+        >
+          {sending ? t('Sending…') : t('Failed')}
         </span>
         <span className="sr-only">{words}</span>
         {onSend === undefined ? null : (

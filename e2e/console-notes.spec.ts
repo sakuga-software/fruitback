@@ -772,6 +772,12 @@ test('j and k walk the notes, Enter opens the one with the focus, and a field ke
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(title(1)).toBeFocused();
 
+  // A closed list keeps j to choose an option: the focus stays on it (review of #942).
+  const status = page.getByRole('button', { name: /Any status/ });
+  await status.focus();
+  await page.keyboard.press('j');
+  await expect(status).toBeFocused();
+
   // In the search, j is a letter.
   await search(page).focus();
   await page.keyboard.press('j');
@@ -826,6 +832,8 @@ test('« Send again » is off while it is on its way', async ({ page }) => {
   const again = row(page, 'The order form').getByRole('button', { name: 'Send again' });
   await again.click();
   await expect(again).toBeDisabled();
+  // The word beside it says it is on its way (review of #942).
+  await expect(row(page, 'The order form').getByText('Sending…', { exact: true })).toBeVisible();
 });
 
 test('a workspace with no note says so, and a read that failed is an alert, never « No note yet »', async ({
