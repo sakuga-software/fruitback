@@ -6,7 +6,7 @@ import { migrationsThrough, rowsOf } from './postgres.fixture.ts';
 import { migrate } from './postgres-migrate.ts';
 
 /**
- * `0051_sites_visitor_rights` and `0052_sites_visitor_rights_default` (FRU-703) on a database that
+ * `0052_sites_visitor_rights` and `0053_sites_visitor_rights_default` (FRU-703) on a database that
  * holds sites already. No site changes what it does:
  *
  * - a visitor could edit and delete nothing before, so every site of before says `never`;
@@ -22,7 +22,7 @@ for (const { label, open, skip } of DATABASES) {
   describe(`what a visitor may do on a site, on ${label} (FRU-703)`, { skip: skip !== false }, () => {
     it('changes nothing a site of before does, and gives a site made after the defaults of the mockup', async () => {
       const database = await opening(open);
-      await migrate(database, migrationsThrough('0050_note_index_author_visitor'));
+      await migrate(database, migrationsThrough('0051_note_index_removed_at'));
       for (const statement of [
         `INSERT INTO organization (id, name, slug, "createdAt") VALUES ('ws_acme', 'Acme', 'ws_acme', now())`,
         `INSERT INTO sites (id, workspace_id, origin, visibility, writers, created_at) VALUES

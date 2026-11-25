@@ -21,3 +21,30 @@ export const INVITED: Readonly<Record<Message, string>> = {
     'Invitation kept for {email}, but no message was sent: too many invitation messages went in a short time. Send them this link:',
   ),
 };
+
+/**
+ * The same, for several addresses invited at once (FRU-691): one sentence for the addresses whose
+ * message became the same, so the block does not say « this link » once an address.
+ */
+export const INVITED_SEVERAL: Readonly<Record<Message, string>> = {
+  sent: msg('Invitations sent to {emails}. You can also send them this link:'),
+  'no-mailer': msg('Invitations kept for {emails}. Send them this link:'),
+  held: msg(
+    'Invitations kept for {emails}, but no message was sent: too many invitation messages went in a short time. Send them this link:',
+  ),
+};
+
+/** The sentences of the block of what was invited: one a kind of message, in the order of the first address. */
+export function invitedSentences(sent: readonly { email: string; message: Message }[]): readonly {
+  message: Message;
+  emails: readonly string[];
+}[] {
+  const groups: { message: Message; emails: string[] }[] = [];
+  for (const each of sent) {
+    const group = groups.find((one) => one.message === each.message);
+    if (group === undefined) groups.push({ message: each.message, emails: [each.email] });
+    else group.emails.push(each.email);
+  }
+
+  return groups;
+}

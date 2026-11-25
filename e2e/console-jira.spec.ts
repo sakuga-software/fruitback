@@ -76,8 +76,8 @@ async function workerWith(page: Page, connectors: unknown[] = [], locale: 'en' |
   return worker;
 }
 
-const catalogue = (page: Page) =>
-  page.getByRole('dialog', { name: 'Add a connector' }).or(page.getByRole('region', { name: 'Add a connector' }));
+/** The catalogue, on the page (FRU-690). */
+const catalogue = (page: Page) => page.getByRole('region', { name: 'Add a connector' });
 const jira = (page: Page) => catalogue(page).locator('[data-source="Jira"]');
 
 async function expectNoViolation(page: Page, name: string): Promise<void> {
@@ -94,15 +94,18 @@ test('the card of Jira connects by consent at Atlassian, and says why it came ba
   const worker = await workerWith(page);
   await page.goto(`${CONSOLE}/w/w1/connectors`);
 
-  // One card of Jira: the one of the plugin, not the one « After the beta ».
+  // One tile of Jira: the one of the plugin, not the one « Soon ».
   await expect(jira(page)).toHaveCount(1);
-  await expect(jira(page).locator('svg[data-mark="jira"]')).toHaveCount(1);
-  await expect(
-    jira(page).getByText('An issue per note, in the Jira Cloud project you choose, with the files of the note.'),
-  ).toBeVisible();
-  await expect(jira(page).getByRole('button', { name: 'After the beta' })).toHaveCount(0);
-  // No token is ever asked: Jira connects by OAuth only.
-  await expect(jira(page).getByRole('button', { name: 'Use a token' })).toHaveCount(0);
+  await expect(jira(page).locator('img[data-logo="jira"]')).toHaveAttribute('src', '/logos/jira.svg');
+  // FRU-690: one line on the tile, and the whole sentence in its tooltip.
+  await expect(jira(page).locator('[data-tile-line]')).toHaveText('An issue in a project');
+  await expect(jira(page).locator('[data-tile-line]').locator('..')).toHaveAttribute(
+    'title',
+    'An issue per note, in the Jira Cloud project you choose, with the files of the note.',
+  );
+  await expect(jira(page).locator('[data-pill]')).toHaveCount(0);
+  // No token is ever asked: Jira connects by OAuth only, and no menu offers another way.
+  await expect(jira(page).getByRole('button', { name: 'Other ways to connect Jira' })).toHaveCount(0);
   await expectNoViolation(page, 'the card of Jira');
 
   // The way to Atlassian: the worker says where, and the person said no there.
@@ -121,8 +124,11 @@ test('a server with no Jira app connects nothing, and says so on the card', asyn
   worker.offer = { kind: 'jira', oauth: false, token: false };
   await page.goto(`${CONSOLE}/w/w1/connectors`);
 
-  await expect(jira(page).getByRole('button', { name: 'Not on this Fruitback' })).toBeDisabled();
-  await expect(jira(page).getByText('The operator of this Fruitback has not set up Jira.')).toBeVisible();
+  await expect(jira(page).locator('[data-pill]')).toHaveText('Not set up');
+  await expect(jira(page).getByRole('button')).toHaveCount(0);
+  await expect(jira(page).locator('[data-tile-line]')).toHaveText(
+    'The operator of this Fruitback has not set up Jira.',
+  );
 });
 
 test('back from Atlassian, the panel of the new Jira opens, and says a refusal with what to do', async ({ page }) => {
@@ -134,7 +140,7 @@ test('back from Atlassian, the panel of the new Jira opens, and says a refusal w
   await expect(panel.getByRole('heading', { name: 'Jira' })).toBeVisible();
   await expect(panel.getByText('Site acme').first()).toBeVisible();
   await expect(panel.getByRole('alert')).toContainText('Jira refuses this connection since');
-  await expect(page.locator('button[id^="source-row-"]')).toContainText('Needs attention');
+  await expect(page.locator('tbody tr[data-connector]')).toContainText('Needs attention');
 });
 
 test('« Add a destination » of a site lists the projects of Jira, and keeps the one chosen', async ({ page }) => {
@@ -157,9 +163,11 @@ test('the card of Jira fits a phone, in French', async ({ page }) => {
   await page.goto(`${CONSOLE}/w/w1/connectors`);
   const card = page.locator('[data-source="Jira"]');
 
-  await expect(
-    card.getByText('Un ticket par note, dans le projet Jira Cloud de votre choix, avec les fichiers de la note.'),
-  ).toBeVisible();
+  await expect(card.locator('[data-tile-line]')).toHaveText('Un ticket dans un projet');
+  await expect(card.locator('[data-tile-line]').locator('..')).toHaveAttribute(
+    'title',
+    'Un ticket par note, dans le projet Jira Cloud de votre choix, avec les fichiers de la note.',
+  );
   await expect(card.getByRole('button', { name: 'Connecter Jira', exact: true })).toBeVisible();
   expect(await sideScroll(page)).toBe(0);
 });

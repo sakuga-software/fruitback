@@ -69,20 +69,15 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   before the first list is kept would start from the list of before and take the first change away,
   so the controls of the list are disabled while it is written. `e2e/console-site-places.spec.ts`
   holds a write open and tries the second gesture.
-  **The panel of a source is an accordion under its row, at every width** (FRU-161, FRU-403), where
-  the board draws a column beside the list: the row is a button with `aria-expanded`, names the panel
-  in `aria-controls`, and the page scrolls as far as the panel needs. The panel is a `SidePanel` with
-  `flush`: no card of its own inside the frame of the list, and its title said to a screen reader
-  only, as the row above shows the name. `e2e/console-source-panel.spec.ts` measures it at 390, 768
-  and 1440 px.
-  **A panel that a person opens takes focus** (FRU-197): it is a region named after its source, focus
-  goes to it when a press of its row opened it, and Escape closes it and gives focus back to the
-  row. A panel that appears by itself takes none: the one of a source just connected. The same spec
-  holds both. **Not measured: what VoiceOver and NVDA say**; the spec reads the role, the name
-  and where focus is. **The panel unfolds** (FRU-563): its height grows from nothing and it fades
-  in, 220 ms on the curve of the kit, clipped only while it moves; the page scrolls to it again once
-  it has its height. With `prefers-reduced-motion` it is there at once. `e2e/console-connectors.spec.ts`
-  reads its heights frame by frame.
+  **The settings of a connector open in a dialog, at every width** (FRU-690), where they were an
+  accordion under its row (FRU-161, FRU-403, FRU-563). « … » at the end of the row opens them, and a
+  press on the row too; the dialog is named after the connector, holds a region named after its kind
+  and its account (`#source-panel`), keeps focus inside, and Escape or « Close » give focus back to
+  « … ». A part of the settings that takes its own Escape (« Rename », `Confirmation`) stops it, and
+  the dialog stays. Settings that open by themselves (a connector just added, a way back from Linear,
+  GitHub or a plugin, `?connector=`) open the same dialog. `e2e/console-source-panel.spec.ts` holds
+  it at 390, 768 and 1440 px. **Not measured: what VoiceOver and NVDA say**; the spec reads the
+  role, the name and where focus is.
   **The console decides nothing about a domain** (FRU-103). The Sites screen shows, to an owner or an
   admin, the domains of the workspace (`domains.tsx`), in a section of the page of a site (FRU-433,
   `…/sites/<site>#previews`): the `TXT` record to write, « Check the DNS »,
@@ -95,44 +90,59 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   through `copyText`, and a copy the browser refuses says so: the text stays on screen to select.
 - **The members and the invitations come from the worker's routes of the organization plugin**
   (FRU-104): `members.tsx` lists the members to whoever may read them, and the invitations that
-  wait to an owner or an admin, with « Resend » and « Cancel ». A guest sees their own row only, as
+  wait to an owner or an admin, who resends, cancels and changes a role there. A guest sees their own row only, as
   the worker answers them nothing more. **The front door looks for an invitation first**
   (`home.tsx`): somebody who signed in from the message of an invitation lands on `/invitations`,
   not on the setup that makes a workspace of their own.
-  **The screen is screen 12 of the mockup of 2026-10-13, with what the worker of today says**
-  (FRU-247): a form named « Invite someone » with each field under its label, and the table of the
-  people (760 px at the least, which scrolls in its frame on a phone). **The form is in a dialog**
-  (FRU-565, Mathieu), where the mockup draws it on one line above the table: « Invite », the action
-  of the head of the page, opens the `Dialog` of the kit, one field a line, focus in « Email ». Escape,
-  « Cancel » and the close button close it, and what is typed stays. A refusal is said under its
-  fields, and the dialog stays open; a sent invitation closes it, and the block of its link is on the
-  page, where « Resend » puts its own.
-  **« Last seen » is for an owner or an admin** (FRU-249, Q7): a day of UTC and
-  never an hour (« Today », « Yesterday », « 3 days ago », then the day; « Not seen yet » for who
-  was not seen since it came), read beside the members: the table does not wait for it, and a day
-  that arrives moves nothing of a row (the room of « Not seen yet » is kept), and the days of a read
-  made before, late, are dropped. Who
-  else reads the screen, or a worker that refuses the days, gets the day somebody joined (« Joined »).
-  **The guest of one site** (FRU-250, Q3): « Guest, one site » is the first role of the form when
-  the workspace has a site, and the list « Site » (the hosts of its sites) shows for that role only;
-  the invitation sends `sites: [id]`, and a « Resend » the sites of the invitation. « Sites » names
-  the site of a guest and of an invitation of a guest, « Every site » for the other roles. **The form
-  opens on « Member »**, where the mockup draws « Guest, one site » chosen: the list of the sites
-  arrives after the screen, and a form that opened on a guest would grow a field under a press, and
-  would send a role nobody chose. A site the worker refuses (removed meanwhile) is said, and the list
-  is read again. **Not copied from the mockup**: « Now » and « 1 h ago » (the worker keeps no hour).
-  **No legend of the roles** under the table (FRU-437, Mathieu), though the mockup draws one: the
-  name of a role says enough, and the legend took room under every table. **Kept, though the mockup
-  draws none of it**: « (you) », « Remove » and « Cancel », which ask twice under their row
-  (`Confirmation`), the day an invitation ends, the block that gives the link of an invitation, and
-  every sentence of a refusal. A worker with no mailer sent nothing, so its rows say « Invitation
-  kept ». What is asked under a row stays in what is seen of a table that scrolls. **A read made
-  again keeps the rows that are shown** (FRU-271): « Loading… » in their place took the table away
-  for the time of the read, so what is under it jumped and no action of a row was there to press.
-  `e2e/console-members.spec.ts` reads the values and the boxes of the mockup at 1440 and 390 px,
-  the keyboard, the contrasts and axe.
-  **Two lists, in pages of 50, and a search** (FRU-496): « Members » and « Pending invitations »,
-  each under its heading with its count, as the mockup draws one table for both. The table stopped
+  **The screen is the mockup « Membres » of the redesign** (FRU-691, `maquette-membres.html` attached
+  to the ticket; before, screen 12 of the mockup of 2026-10-13, FRU-247). **The rules, in short:**
+  - A screen of the bar, at `/w/<id>/members`, not a page of the shell of the settings: the mockup
+    draws it so, and the entry « Members » of the shell leads here.
+  - A head of 48 px from one edge of the screen to the other, « Members » at 14 px and « Invite » at its
+    right (`MembersHead`, as the head of Notes). No sentence under the title.
+  - Two tabs, « Members » and « Invitations », each with its count, and the search at the right (240
+    px, « / » gives it the focus). A tab is a `LineTab` of the kit, a button that says whether it is
+    pressed, as the tabs of Notes. A member and a guest have the tab « Members » alone.
+  - One dense table a tab (`MembersList`), from one edge to the other, heads of 32 px, **rows of 36
+    px, never on two lines**: what is longer is cut with « … ». The columns of the members are
+    Name (the initial of 24 px, the name, « (you) »), Email, Role, Sites (« Every site » with the globe,
+    or the tile and the host of the site of a guest), Last active, Joined and « … »; the ones of the
+    invitations are Email, Role, Sites, Message (« Invitation sent » or « kept »), Invited, Expires and
+    « … ». The table keeps 880 px and scrolls in its frame on a phone.
+  - **The role is a list in its row** for an owner or an admin: « Member » and « Admin », the roles of
+    `update-member-role` less « Owner », and « Guest » kept for a guest. An owner row and one's own row
+    are words: the worker refuses an admin the change of an owner, and a workspace changes its owner
+    from the administration of the instance (FRU-283). A guest made a member or an admin reads every
+    site, so that change asks twice. A refusal is said under the row.
+  - « … » holds « Remove from workspace » for a member, and « Resend invitation », « Copy invite link »
+    (when no message left, FRU-269) and « Cancel invitation » for an invitation. A removal and a
+    cancel ask twice under their row (`Confirmation`), and « Keep it » gives focus back to « … ».
+  - **« Invite people »**, a dialog of 480 px (`Dialog` with `size="form"` and `framed`): « Emails »
+    takes several addresses, cut at a comma, a semicolon, a space or a line (`invite-addresses.ts`);
+    the role as three cards (`RadioCards`), each with what it does; « Sites », every site for a member
+    or an admin, the list of the sites for a guest; in its foot « Copy invite link », « Cancel » and
+    « Send N invites », which counts the valid addresses by the rule of the worker, each once. What is
+    no address is said under the field and stays in it. The invitations go one after the other; the
+    ones the worker refused stay in the field, each said with its cause, and the dialog closes when
+    nothing is left. Focus is kept inside, Escape and the close button close it, and focus goes back
+    to « Invite ».
+  - **Not copied from the mockup**: a colour per person (the initial is on `avatar`, the one token of
+    a person), « Now » and « 2 h ago » (the worker keeps a day, never an hour, FRU-249), a picture in
+    the fields.
+
+  Kept from before: **the form opens on « Member »**, where a guest needs the sites, which arrive after
+  the screen; « Guest » is offered when the workspace has a site (« Add a site first » else), and a
+  site the worker refuses (removed meanwhile) is said, and the list read again. **« Last active » is
+  for an owner or an admin** (FRU-249, Q7): a day of UTC and never an hour (« Today », « Yesterday »,
+  « 3 days ago », then the day; « Not seen yet » for who was not seen since it came), read beside the
+  members: the table does not wait for it, its column is there from the start, and the days of a read
+  made before, late, are dropped. A worker that refuses the days leaves the column empty. The block
+  that gives the link of an invitation is under the tabs, one sentence an address. A worker with no
+  mailer sent nothing, so its rows say « Invitation kept ». **A read made again keeps the rows that
+  are shown** (FRU-271). No legend of the roles (FRU-437). `e2e/console-members.spec.ts` reads the
+  values and the boxes of the mockup at 1440 px, 390 and 320 px, the keyboard, the contrasts and axe.
+  **Two lists, in pages of 50, and a search** (FRU-496): « Members » and « Invitations », each in its
+  tab with its count (FRU-691). The table stopped
   at a hundred members and a hundred invitations and said nothing: a 101ᵗʰ member could not be
   found nor removed. The worker gives the members a page at a time (`limit`, `offset`, `total`) and
   searches them (`q`, the name or the address); it gives every invitation that waits, which the
@@ -141,6 +151,7 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   list longer than a page. The search is not in the address. A member removed is read again with
   its page: the next member moves into it. `e2e/console-members-many.spec.ts` holds it, on a
   workspace of 501 members and 300 invitations.
+
 - **« Connect this browser » of a site leads to the sign-in of the popup, on the Cloud** (FRU-313).
   On a console of Fruitback Cloud (`connectsBySignIn` of `instance.ts`, the host of the worker) the
   button opens `/connect`, a page that says the three steps of the popup: the icon, « Sign in with
@@ -441,9 +452,10 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
     build, and « My account » (`ACCOUNT`) to the menu, so no entry leads nowhere and every screen has
     a way in.
   - **The counts at the right of the entries are props of the bar** (`counts`, `failing`): a red dot
-    and the number on « Connectors » when sends failed. No read gives them yet: counting the notes of
-    every site on every screen was taken away for its cost (FRU-497), and a summary of the worker is
-    FRU-711. With no count the entry shows none. `/kit/frame`, a page of the development
+    and the number on « Connectors » when sends failed. The Connectors screen gives the second one
+    when it reads the health of its connectors (FRU-690). No read gives the others yet: counting the
+    notes of every site on every screen was taken away for its cost (FRU-497), and a summary of the
+    worker is FRU-711. With no count the entry shows none. `/kit/frame`, a page of the development
     server, mounts the bar with the counts of the mockup.
   - **The fixed foot**: « What's new » (the releases on GitHub, with a dot until this browser opened
     it with this version of the console, `whats-new.ts`), the extension (« Install the extension
@@ -470,7 +482,7 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   several, the menu of the workspaces ends with « Workspace settings », in a group of its own under
   a rule that chooses nothing (`after` of `Menu`). The screen renames the workspace for an owner or
   an admin (FRU-236), and the bar shows the new name at once; another role reads the name, locked.
-  **The logo** (FRU-428): `WorkspaceMark` draws it at 20 px in the bar and 64 px on the settings
+  **The logo** (FRU-428): `WorkspaceMark` draws it at 20 px in the bar and 40 px on the settings
   (`object-contain`, the worker resizes nothing), and the initial of the name when there is none or
   it does not load. An owner or an admin sends it (`FilePick` of the kit), replaces it and removes it
   in one press, with no confirmation: it is sent again as easily. The console refuses a type that is
@@ -478,8 +490,19 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   says each refusal of the worker. `e2e/console-workspace-logo.spec.ts` holds it. **The settings are
   « Settings » in the bar, last, for an owner or an admin** (FRU-503, `sectionsFor`): a member and a
   guest have no entry and read the settings from the name. On the settings the entry is the one on
-  screen, and the name is not a second one. **The settings hold the deletion of the workspace**,
-  last, for the owner alone, under a rule. « My account » keeps what is about the person. **The
+  screen, and the name is not a second one. **« General » is two cards** (FRU-693, the mockup
+  « Réglages General »): « Identity », a row each for the logo, the name and the address of the
+  workspace in this console (`<host>/w/<id>`, read only: the worker keeps no other name for it),
+  each box 320 px wide at the end of its row and under the words below 640 px; then **« Danger
+  zone »**, a light red border (`danger-line`), for the owner alone. The name leaves by « Save » in
+  the head of the page, disabled while the name typed, trimmed, is the one kept, or by Enter in its
+  field; the logo leaves as soon as it is chosen, as before. **« Delete… » opens a dialog** that says
+  what goes and deletes only once the name of the workspace is typed in it, case and all (spaces
+  around do not count): `DELETE /console/workspaces/<id>`, which the worker refuses to anybody but
+  the owner (`delete-workspace`). A refusal is said in the dialog, which keeps what was typed; « Keep
+  it » and Escape close it and send nothing. The control of the zone is the tone `danger-outline` of
+  `Button`, and the button of the dialog `danger`: a deletion stays red whatever the accent (FRU-694).
+  « My account » keeps what is about the person. **The
   section « Agents » shows the whole way of an agent** (FRU-503): its key, an address that receives
   (Connectors), then the trigger of each site, a link to `#agent` on the page of the site; anybody
   but an owner or an admin reads one sentence, and the page asks nothing. **The settings are pages
@@ -495,7 +518,8 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   holds `built` to the routes of a build. Under 768 px the navigation is one row above the page,
   which scrolls in its frame. The shell takes back the padding of `Screen` with the same values, so
   its bar and its navigation reach the edges of the column.
-  `e2e/console-workspace-settings.spec.ts` holds the entry by role, the section and the deletion.
+  `e2e/console-workspace-settings.spec.ts` holds the entry by role, the section, « Save » disabled
+  with no change, and the deletion typed in its dialog.
 
 - **The bar is as high as the window, and only the screen scrolls** (FRU-402, FRU-398). `Frame`
   of `routes/workspace.tsx` is the frame of a workspace and of the instance: from 1024 px the bar
@@ -507,70 +531,84 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   which left an empty band at the right of a wide window, and Mathieu asked for the whole width on
   2026-10-23. `e2e/console-frame.spec.ts` holds the bar after a scroll at 1440 px and at 390 px,
   and the right edge of each screen.
-- **The Sites screen is a grid of cards** (FRU-408, Mathieu, in place of the table of six columns
-  of the mockup of FRU-243 and FRU-270, `routes/sites.tsx`). **A card is read from the top, in
-  three parts** (FRU-432, Mathieu): the icon and the name of the site (`siteName`, 17 px, the largest
-  words of the card); then its status, the count of its notes at 20 px, a bar whose name says the
-  counts again, and how many are new in the accent, or « Waiting for the first note », and under it
-  who sees its notes and, when it is the exception, who writes them (FRU-584, Mathieu: out of the head
-  of the card). Who sees them is « Members only » or « Everyone who visits », and names no workspace
-  (FRU-583, Mathieu): the card is in that workspace already. Then a foot
-  under a line, where the notes go at the left, to whoever sees the tracker, after the logo of its
-  tracker (FRU-541, the mark of the Notes table, read from the first word of the label of the
-  worker: « Linear », « GitHub », « REST API »; a word it does not know has its name alone), and the
-  last one at the
-  right (`ago.ts`: « 12 min ago », « Yesterday », then the day). The terms of the foot are for a
-  screen reader: the place and the moment say what they are to the eye. How the notes came (the
-  script or the extension) is on the page of the site. Cards are side by side while each has 280 px, and
-  one under the other on a phone, so nothing scrolls sideways. The counts are the summary of the
-  sites (FRU-237), in the answer that lists them: **nothing of a card comes after the card**, so
+- **The Sites screen is a dense table, one line of 36 px per site** (FRU-688, the mockup of the
+  redesign of 2026-11-25, in place of the grid of cards of FRU-408 and FRU-432, `routes/sites.tsx`).
+  **The head of the screen** is 48 px, « Sites » and « Add a site » (28 px), as the head of Notes
+  (FRU-686); the sentence under the large title went with it. **The bar under it** is 44 px: the
+  search by address (240 px, « / » gives it the focus, `useSlashKey` of `notes-filters.tsx`), then
+  **the colours of the statuses** at the right, the drop and the name of each stage (in place of « no
+  legend » of FRU-400: the ticket asks for it); under 720 px the colours go, and the name of each bar
+  still says its counts. **The table** goes from one edge of the screen to the other, a head of 32 px,
+  then per site: the site (its icon in 20 px, its host, the site itself in a new tab), its notes (a bar
+  whose name says the counts, and how many) or « Waiting for the first note », its new notes (« 3 new »
+  in red after a dot, a link to the Notes screen with the site and « New » chosen, FRU-570), where they
+  go (to whoever sees the tracker), who sees them, the last one, and the menu. **No cell goes on a
+  second line**: what is longer is cut with « … ». **The columns go by the width of the table**, a
+  container query as in the Notes table (FRU-685): who sees the notes under 1100 px, where they go under
+  800, the notes under 600, the last note under 440; at 390 px a row keeps the site, its new notes and
+  its menu, and nothing scrolls sideways. A column that has no room is 0 px wide, its head said to a
+  screen reader only. **A press anywhere on a row opens the page of the site**; the host is the link a
+  keyboard and a screen reader reach, and a press on a control of the row (a link, the menu, a
+  tooltip) is the control's. Cmd or Ctrl and a press open the page in a new tab.
+  **Where the notes go** is the logo of each tracker (FRU-541, the mark of the Notes table, read from
+  the first word of the label of the worker: « Linear », « GitHub », « REST API »; a word it does not
+  know has no mark, and its name before the place), then the places on one line: « Team Acme web » for
+  one place of a Linear, « Acme web, Support » for several. The labels of the worker are whole in a
+  tooltip. The team of one Linear place is a link to its page at Linear (FRU-574). Notes an address did
+  not take yet add **the icon of a retry in red**, a link to the notes of the site, where each one is
+  sent again (`…/notes/<id>/retry`): the worker has no route that sends again every note of a site, and
+  FRU-688 adds none. A site with no tracker says « Kept in Fruitback » after the drop, and **a band in
+  dashes under the table** names the sites of the page that keep their notes in Fruitback, with
+  « Connect a tracker » (the dialog « Add a connector » of the Connectors screen, FRU-571). **Who sees
+  the notes** is « Members only » or « Everyone who visits » after its icon, and names no workspace
+  (FRU-583); where anyone on the page writes a note on a site that its members read (FRU-330), a
+  pencil follows, its words in a tooltip and to a screen reader. **The last note** is short to the eye
+  (`agoShort`: « 2h », « 40m »), whole under the pointer and to a screen reader (`ago`: « 2 h ago »).
+  **A problem of a site is a line of its own under its row**, the only line taller than 36 px: a public
+  repository (FRU-382) and a place that the tracker refuses (FRU-640). The counts are the summary of
+  the sites (FRU-237), in the answer that lists them: **nothing of a row comes after the row**, so
   nothing moves under a press, and a test holds the read to prove it. A value with nothing to say
   draws « · » for the eye and says « None yet » to a screen reader; a worker that sends no summary
-  gets that, and no bar. **No legend of the statuses** (FRU-400, Mathieu): the name of a bar says
-  its counts, and the page of the statuses of a site says what each colour is.
+  gets that, and no bar.
   **The icon of a site is its `/favicon.ico`** (`site-icon.tsx`, shared with the preview of the
   setup), asked by the browser of the person with no referrer, and its first letter when it does
   not load or the site is on `http`: the policy of the image allows `img-src https:` only. No other
   service is asked for it. Measured on 2026-10-23: under Playwright a route never sees a request to
   `/favicon.ico` (Chromium and Chrome), so the specs see the letter, and read the attributes of the
   image when there is one.
-  **The search and the pages are done in the console** (FRU-408): the worker answers every site of
-  a workspace at once and has no search. The search keeps the sites whose name holds what is typed,
-  is written in the address (`q`) 300 ms after the last key (`useTypedSearch`), and goes back to the
-  first page. A page is 12 cards (rows of 1, 2, 3 or 4), with the pages of the
+  **The worker answers the search and the pages** (FRU-497): the search keeps the sites whose address
+  holds what is typed, is written in the address (`q`) 300 ms after the last key (`useTypedSearch`),
+  and goes back to the first page. A page is 25 rows, as a page of the notes, with the pages of the
   Notes page (`NotePages`), and lives in the address (`page`); a page past the last shows the last.
   A search that keeps nothing says so, with « Clear the search ». A new site is the last one: its
-  page is shown, with no search. **This holds while a workspace has a few hundred sites**: past
-  200, the answer of `GET …/sites` is the place for `q` and a cursor, a route of the worker.
-  **The grid unfolds nothing under a card** (FRU-433, Mathieu: a panel over the whole width of the
-  grid, between two rows of cards, read as a stray card). **A site has a page of its own**,
-  `/w/<workspace>/sites/<site>` (`routes/site.tsx`), reached from the name of its card, which is a
-  link, and from its menu: « Settings » and « Install », for every role; « Statuses » and « Remove »,
-  for who manages the sites. « Install » and « Remove » lead to their section of the page
-  (`#install`, `#remove`). A new site opens its page at `#install`. « Remove » asks twice: the menu
-  is the first time, and `Confirmation` (`confirm.tsx`) on the page the second; once the site is
-  gone, the grid comes back with focus on its search, or on the field of the card when it was the
-  last one. **No item changes who sees the notes of a site, nor who writes them**: the worker has
-  no route for it, and a button that does nothing is not drawn; so the form that adds a site asks
-  it, in the card of a workspace with no site too, where the mockup draws the address alone, and the
-  page of the site says them, read only. **A host is on one line, cut with « … »** (FRU-585,
-  Mathieu, in place of the break after its dots of FRU-159): `CutLink` of the kit, whole in the page
-  for a screen reader, and whole in a tooltip **only when it is cut**, measured on the link
+  page is shown, with no search.
+  **The table unfolds nothing under a row** (FRU-433, Mathieu). **A site has a page of its own**,
+  `/w/<workspace>/sites/<site>` (`routes/site.tsx`), reached from its row, its host and its menu:
+  « Open its page » and « See the notes », for every role; « Statuses » and « Remove », for who manages
+  the sites. « Remove » leads to its section of the page (`#remove`). A new site opens its page at
+  `#install`. « Remove » asks twice: the menu is the first time, and `Confirmation` (`confirm.tsx`) on
+  the page the second; once the site is gone, the table comes back with focus on its search, or on
+  the field of the card when it was the last one. **No item changes who sees the notes of a site, nor
+  who writes them** from the table: the form that adds a site asks it, in the card of a workspace with
+  no site too, and the page of the site holds the rest. **A host is on one line, cut with « … »**
+  (FRU-585, Mathieu): `CutLink` of the kit, in a `span` in the head of its row, whole in the page for a
+  screen reader, and whole in a tooltip **only when it is cut**, measured on the link
   (`scrollWidth > clientWidth`, again on a resize and once the fonts load). The tooltip opens under the
   pointer, with the focus of the keyboard (Escape closes it), and on a long press of a finger (500 ms,
   and the `contextmenu` of Android), which then does not follow the link; the next press anywhere
-  closes it. The link clips itself, not its heading, so its focus ring is whole. The card and
-  the alert are sized by their content (`box-content`), as the mockup sizes them: 640 px and 760 px
-  inside their padding. **« Add a site » opens a dialog** (FRU-558, `Dialog` of `ui.tsx` on HeroUI's
-  Modal): named by its title, focus in its field and kept inside, Escape or its close button close
-  it, and focus goes back to the button. A press outside does not: it would hide the form and its
-  refusal. What is typed stays when it closes. Once the
-  field holds an address and nobody typed for 600 ms, the dialog shows the icon and the domain of the
-  site, then its page in the sandboxed frame of the setup (`SitePreview`). The browser of the person
-  asks the site, under the `img-src https:` and `frame-src` the console already has; **the worker
-  fetches no typed address**, and no policy changed. The card of a workspace with no site keeps the
-  form in place. `e2e/console-sites.spec.ts` holds the three states, the counts, the search, the
-  pages, the form and its dialog, the menu, the roles, 390 px and axe.
+  closes it. The card of a workspace with no site and the alert of a read that failed are sized by
+  their content (`box-content`): 640 px and 760 px inside their padding, 24 px under the head.
+  **« Add a site » opens a dialog** (FRU-558, `Dialog` of `ui.tsx` on HeroUI's Modal): named by its
+  title, focus in its field and kept inside, Escape or its close button close it, and focus goes back
+  to the button. A press outside does not: it would hide the form and its refusal. What is typed stays
+  when it closes. Once the field holds an address and nobody typed for 600 ms, the dialog shows the
+  icon and the domain of the site, then its page in the sandboxed frame of the setup (`SitePreview`).
+  The browser of the person asks the site, under the `img-src https:` and `frame-src` the console
+  already has; **the worker fetches no typed address**, and no policy changed. The card of a workspace
+  with no site keeps the form in place. `e2e/console-sites.spec.ts` holds the three states, the head,
+  the bar, the rows of 36 px and their columns, a press on a row, the search, the pages, the form and
+  its dialog, the menu, the roles, 390 px and axe; `e2e/console-table-heads.spec.ts` holds every head
+  and every text of a row on one line, in French, at four widths.
 - **The page of a site** (FRU-433, `routes/site.tsx`) has the crumbs « Sites › site » of the page
   of the statuses, and its title is the name of the site, at the place of every title (FRU-405). Its
   sections, in this order: the site (its address, who sees its notes, who can leave one, read only);
@@ -780,56 +818,68 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   absolutely in a card, the hidden select of HeroUI, does not widen the page). « Send again » stays
   in the table. `e2e/console-notes-board.spec.ts` holds the view in the address, the columns, the
   filters, the drag, the refusal, the keyboard, the stages, 1440 and 390 px, axe and French.
-- **The Connectors screen is the one of the mockup, with the sources that exist** (FRU-246):
-  `routes/connectors.tsx` (the list and « Add a connector »), `connector-add.tsx` (the two forms),
-  `connector-linear.tsx` and `connector-rest.tsx` (the panels), `connector-parts.tsx` (what they
-  share). **A source that does not exist connects nothing**: Jira, GitLab, Trello,
-  Notion and Webhook are listed with the sentence of the mockup and a disabled « After the beta »,
-  where the mockup draws « Connect ». **With no connector added, the screen is « Add a connector »**,
-  its eight connectors and « No tracker yet. The notes stay in Fruitback. » (FRU-542, Mathieu). **With
-  one, it is « Your connectors », a card for each connector, one under the other, and « New connector » at the
-  top right** opens « Add a connector » in a `Dialog` (FRU-562), its sources a grid of cards (three
-  in a row at 1440 px, one at 390 px), with their buttons at the foot of each card. Escape or
-  « Close » give focus back to « New connector ». **A form open in it locks it**: no Escape and no
-  close button, as the list of before hid « Close » while a form was open, since the secret of an
-  address is shown there once and a key being typed would go with the dialog; the card of the form
-  takes the whole row. A form started on the page, before any source, stays on the page when its
-  source arrives. `?new` in the address opens the dialog (« Connect a tracker » of the Sites screen
-  links there), and leaves the address; it opens nothing for a person who cannot add a source.
-  With no source, the same grid is on the page. Linear and an address stay in it: a
-  workspace can connect a second one. The cards are not a grid: the panel of a connector opens inside
-  its card (FRU-403), and a panel between two rows of cards reads as a stray card (FRU-433). The list
-  stays open while a form in it is open (the secret of an address is shown there once, after it is
-  connected), and a way back from Linear or GitHub that went wrong opens it, since its sentence is
-  under its connector. A person who cannot add a connector (a member, a worker that cannot keep a key) gets no
-  « New connector »: it would open buttons that do nothing. **Each connector has the logo of its tracker**
-  (FRU-543, `connector-marks.tsx`: simple-icons, CC0, and the GitHub mark of `provider-icons.tsx`),
-  18 px in the white box of 34 px where the mockup writes a letter, in the colour of the text: no logo
-  is louder than the state of its row. **« Add a connector » waits for the list to be read**
-  (FRU-271; after a read that failed there is « Try again » and no source to add): the list arrives above it and its buttons went down by the height of the
-  list (45 px for one source, 110 for two, measured), so a press that started before and ended
-  after was lost; and the same read says what « Connect Linear » does, the consent at Linear or a
-  key. **A row says « Connected », « Needs attention »,
-  or how many notes did not reach an address**; the count is read with the list, and an address
-  whose count was not read says « Connected » and no number. On the chosen row the red is the
-  strong accent: the accent is 4.28:1 on its tint. **The panel keeps what the mockup does not
-  draw**: « Sites sending here », the sites that send there and their places in it, read only, with
-  a link to the Sites screen, where a site chooses them (FRU-399), and for an owner or an admin of a
-  Linear, « Statuses » on the row of each site, to its statuses page (FRU-478: it was a block of its
-  own, « Status of the pins », which listed the same sites a second time); the notes that did not arrive;
-  « Use an API key ». It does not show « Attach a picture of the element » (FRU-198), a count of
-  notes by site nor « Last issue created » (FRU-237). **The drop of a status is beside its list**,
-  where the
-  mockup draws it inside: the list of the kit has no place for it. « Connect » is written seven
-  times, so each button also holds the name of its source for a screen reader.
-  `e2e/console-connectors.spec.ts` holds the values, the states, the roles, 390 px and axe.
-  **A source can have a name** (FRU-404): several sources can reach one tracker, so an owner or an
-  admin names one at the top of its panel (`connector-name.tsx`, « Rename » in place, as for a
-  workspace), and an empty name gives it back the name of its kind. `connectorName` of
-  `connector-parts.tsx` is how every screen names a source: its row, where the kind then goes first
-  on the line under it, the chips and the places of Notes, and the lists of a site's statuses
-  (`placeLabel`: « Clients · Design » for « Linear · Design »). A worker of before sends no `name`,
-  and every source is named by its kind, as before.
+- **The Connectors screen is a table of health and a catalogue** (FRU-690, the mockup « Maquette HTML
+  · Connecteurs » attached to the ticket): `routes/connectors.tsx` (the table, the catalogue, the
+  dialog of the settings), `connector-add.tsx` (the forms), `connector-linear.tsx`,
+  `connector-rest.tsx` and the others (the settings), `connector-parts.tsx` (what they share),
+  `connector-logos.tsx` (the logos). **The rules, in short:**
+  - **« Your connectors » is a table** (`DataTable`, a card for each row under 680 px): the
+    connector with its logo and its name (FRU-404), its account (one line, cut at its end, the whole
+    in its tooltip, FRU-321), « Used by » (the sites that send there, from the read of the sites;
+    none for a routine), its health, and at its end « Retry » and « … ».
+  - **The health says only what the worker says** (FRU-714 asks for the rest): « Needs attention »
+    when the tracker refuses the connector (FRU-102) or a place of a site (FRU-640); « N notes not
+    delivered » and « N calls not delivered » for a connector that receives (an address, a routine,
+    a plugin with `receives`, Slack), from `GET …/connectors/<id>/deliveries`; « Healthy » when that
+    list was read and is empty; « Connected » for a tracker, whose deliveries no route reports yet;
+    « Not read » when the list of an address was not read, with a line above the table and « Try
+    again ». **Never « Healthy » for what was not read.** A red word is `accent-strong`, on a tint of
+    the accent; a green one is `done`, on a tint of `done`. **No « Last delivery », and no count of
+    notes in « Used by »**: no route gives them (FRU-714).
+  - **« Retry »** is on a row whose sends wait, for an owner or an admin: it asks each of them again
+    (`POST …/deliveries/<id>/retry`, the route of « Try now » in the settings), then reads the health
+    again. **The red count of « Connectors » in the bar** is the sum of the sends that wait, as this
+    screen last read them (`failingRead` of the frame); on another screen it stays until a read says
+    another number, and before any read the bar counts nothing (FRU-711).
+  - **« Add a connector » is a catalogue on the page, under the table**, with or without a
+    connector: a search (`folded`: no case, no accent) and the groups All kinds, Trackers, Agents
+    and Developers. Its tiles are 64 px, four in a row at 1440 px, one at 390 px: the logo in a box
+    of 36 px, the name, one line of what a note becomes there (cut at its end; the long sentence is
+    its tooltip), and its state: « Connected » (with a « + » that connects another one: a workspace
+    can connect a second Linear or a second address), « Connect », « Soon » (no connector of this
+    kind on this worker), or « Not set up » (the worker has the kind, and its operator did not set
+    it up: the line then says so). The routine says « New » beside its name. Where a tracker
+    connects two ways (the consent, a key or a token), « Connect » is the consent and a menu beside
+    it offers the other. **The form of a source opens in its tile, which then takes the whole row**,
+    and so does the sentence of a way back that went wrong (`LINEAR_RETURNS`, `GITHUB_RETURNS`,
+    `PLUGIN_RETURNS`). A source added opens its settings; an address whose secret Fruitback made
+    shows it in its tile once, and its settings open after « I kept it ».
+  - **The catalogue waits for the list to be read** (FRU-271): only that read says what « Connect
+    Linear » does, the consent at Linear or a key. After a read that failed there is « Try again »
+    and no tile. A person who cannot add a connector (a member, a worker that cannot keep a key)
+    reads the catalogue with no button, and a line above it says why; « New connector », which
+    leads to the search of the catalogue, is not there for them, and `?new` (« Connect a tracker » of
+    the Sites screen) puts focus in the search only for a person who can add one.
+  - **The logos are SVG files the console serves itself** (`public/logos/<kind>.svg`, `img-src
+    'self'`, no request to a third party): simple-icons 15.0.0 (CC0-1.0) for the trackers, in the
+    colour simple-icons gives each brand, the icons `webhook` and `terminal` of Lucide (ISC), and
+    the braces of an address drawn for Fruitback. Each file names its source and its licence in a
+    comment; `connector-logos.test.ts` holds one file for each kind, nothing in them that reaches
+    another address, and the comment. A logo is decorative: the name beside it says the kind.
+    Elsewhere (Notes, the places of a site) a source keeps its mark of `connector-marks.tsx`, in the
+    colour of the text.
+  - **The settings keep what they held**: « Sites sending here », the sites that send there and their
+    places, read only, with a link to the Sites screen (FRU-399) and « Statuses » on the row of each
+    site of a Linear (FRU-478); the notes that did not arrive; « Use an API key ». « Connect » is
+    written many times, so each button also holds the name of its source for a screen reader.
+    `e2e/console-connectors-table.spec.ts` and `console-connectors-catalogue.spec.ts` hold the values, the states, the roles, 390 px and axe.
+    **A source can have a name** (FRU-404): several sources can reach one tracker, so an owner or an
+    admin names one at the top of its panel (`connector-name.tsx`, « Rename » in place, as for a
+    workspace), and an empty name gives it back the name of its kind. `connectorName` of
+    `connector-parts.tsx` is how every screen names a source: its row, where the kind then goes first
+    on the line under it, the chips and the places of Notes, and the lists of a site's statuses
+    (`placeLabel`: « Clients · Design » for « Linear · Design »). A worker of before sends no `name`,
+    and every source is named by its kind, as before.
 - **A place that the tracker refuses says « Needs attention »** (FRU-640): the worker keeps
   `attention` on the destination when a note did not reach its place, and clears it when a note
   arrives. The row of the place in « Where the notes go » says « Needs attention » and, under it,
@@ -837,12 +887,12 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   the site in the Sites list says it too, to whoever sees the tracker. A worker of before sends no
   `attention`, and the row reads as it did.
 - **GitHub connects with its App, where the worker has one** (FRU-361, routes of FRU-359 and
-  FRU-360): `connectors.tsx` (the card), `connector-github.tsx` (the panel). The card « GitHub
-  Issues » is always in « Add a connector », between Linear and the REST API. With `githubApp: true`,
+  FRU-360): `connectors.tsx` (the tile), `connector-github.tsx` (the settings). The tile « GitHub
+  Issues » is always in « Add a connector », after Jira (FRU-690). With `githubApp: true`,
   « Connect » asks `POST …/connectors/github/start` and goes to the `url` it answers, as « Connect
-  Linear » does with OAuth. Without it, a disabled « Not on this Fruitback » and a line that names
-  the operator: there is no other way to connect GitHub. **Each word of the way back has its
-  sentence under the card** (`GITHUB_RETURNS`), and leaves the address after it is read;
+  Linear » does with OAuth. Without it, « Not set up » and a line that names the
+  operator: there is no other way to connect GitHub. **Each word of the way back has its
+  sentence under the tile** (`GITHUB_RETURNS`), and leaves the address after it is read;
   `connected` opens the panel of the last GitHub connector, not of the last row, because an
   installation again keeps its connector. **An installation from github.com comes back with no
   `state`**: the worker sends it to `/?github=unstarted`, and the front door forwards the word to

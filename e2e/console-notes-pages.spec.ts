@@ -191,7 +191,8 @@ test('after a Back across a filter, no number reads a cursor of the other list (
 });
 
 test('the pages of the sites offer every number, as the sites are read by their offset', async ({ page }) => {
-  const many = Array.from({ length: 70 }, (_, index) => ({
+  // 25 rows to a page (FRU-688): 150 sites are 6 pages.
+  const many = Array.from({ length: 150 }, (_, index) => ({
     id: `m${index + 1}`,
     origin: `https://site-${index + 1}.acme.dev`,
     visibility: 'members',
@@ -202,10 +203,10 @@ test('the pages of the sites offer every number, as the sites are read by their 
   await stubWorker(page, { workspaces: [ACME], sites: many });
   await page.goto(`${CONSOLE}/w/w1/sites`);
   const name = 'Pages of sites';
-  await expect(summary(page, name)).toHaveText('1 to 12 of 70');
+  await expect(summary(page, name)).toHaveText('1 to 25 of 150');
   await expect.poll(() => offered(page, name)).toEqual(['[1]', '2', '…', '6']);
   await number(page, 6, name).click();
-  await expect(summary(page, name)).toHaveText('61 to 70 of 70');
+  await expect(summary(page, name)).toHaveText('126 to 150 of 150');
   await expect(page).toHaveURL(/[?&]page=6(&|$)/);
   await expect.poll(() => offered(page, name)).toEqual(['1', '…', '5', '[6]']);
 });

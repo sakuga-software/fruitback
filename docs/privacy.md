@@ -391,6 +391,7 @@ the first read of its page, with what that read says.
 | `author_kind`                | `visitor`, `site` (a token the site signed), `member` (a session of the workspace) or `verified` (a note from before the index whose reporter was verified).    |
 | `author_account_id`          | The account of a member who left the note. Empty for everyone else, and emptied when the account is removed.                                                    |
 | `author_visitor`             | For a note of a visitor, a SHA-256 digest of the key of their browser and of the site. Never the key. Empty for everyone else, and for a note sent with no key. |
+| `removed_at`                 | When the visitor who left the note deleted it from the page. The note and its row stay, closed, for the team. Empty for every other note.                       |
 | `place`, `connector_id`      | Where the note went: the worker's own store, or a connector of the workspace.                                                                                   |
 | `reference`, `reference_url` | What the store calls the note (`ACM-151`, `FB-12`) and its address there.                                                                                       |
 | `created_at`                 | When the worker took the note.                                                                                                                                  |

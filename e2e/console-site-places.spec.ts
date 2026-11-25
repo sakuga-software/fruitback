@@ -222,7 +222,8 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
   return worker;
 }
 
-const card = (page: Page) => page.locator('li[data-site]').first();
+/** The row of the site on the Sites screen (FRU-688), with the line of its notices. */
+const card = (page: Page) => page.locator('tbody[data-site]').first();
 const panel = (page: Page) => page.getByRole('region', { name: `Where the notes of ${SITE} go` });
 const add = (page: Page) => panel(page).getByRole('button', { name: new RegExp(`Add a destination for ${SITE}`) });
 /** The list of the projects of the team chosen in the first list (FRU-458). */
@@ -238,8 +239,6 @@ async function openPlaces(page: Page): Promise<void> {
 }
 
 async function expectNoViolation(page: Page, name: string): Promise<void> {
-  // A panel of a source unfolds and fades in (FRU-563): axe reads its contrast once it is there.
-  await expect(page.locator('#source-panel:not([data-settled])')).toHaveCount(0);
   const results = await new AxeBuilder({ page }).include('main').analyze();
   expect
     .soft(
@@ -286,9 +285,9 @@ test('an owner chooses where the notes of a site go, on the page of the site (FR
   expect(worker.sent[1]).toEqual([{ connector: 'c1', teamId: 't1' }, { connector: 'r1' }]);
   await expect(panel(page).getByText('REST API · hooks.acme.dev', { exact: true })).toBeVisible();
 
-  // Back on the grid, the card of the site says where its notes go now.
+  // Back on the table, the row of the site says where its notes go now.
   await page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'Sites' }).click();
-  await expect(card(page).locator('dd').first()).toHaveText('LinearTeam Web and 1 more');
+  await expect(card(page).locator('[data-column="sent"]')).toHaveText('Web, hooks.acme.dev');
 });
 
 test('a place that the tracker refuses says « Needs attention » and what to do, here and on the card of the site (FRU-640)', async ({
@@ -584,7 +583,7 @@ test('the control: with no word of the worker, the card says nothing is public (
   worker.places = [{ connector: 'g1', teamId: 'acme/docs' }];
   await page.goto(`${CONSOLE}/w/w1/sites`);
 
-  await expect(card(page).getByText('GitHub', { exact: true })).toBeVisible();
+  await expect(card(page).locator('[data-column="sent"]')).toHaveText('acme/docs');
   await expect(card(page).getByRole('alert')).toHaveCount(0);
 });
 
@@ -643,7 +642,11 @@ test('the panel of a source lists the sites that send there, and leads to the Si
   const worker = await workerWith(page);
   worker.places = [{ connector: 'c1', teamId: 't1' }];
   await page.goto(`${CONSOLE}/w/w1/connectors`);
-  await page.locator('button[id^="source-row-"]').first().click();
+  await page
+    .locator('tbody tr[data-connector]')
+    .first()
+    .getByRole('button', { name: /^Settings of / })
+    .click();
   await unfolded(page);
   const linear = page.getByRole('region', { name: /^Linear · / });
   await expect(linear.locator(`[data-site="${SITE}"]`)).toContainText('Linear · Web');

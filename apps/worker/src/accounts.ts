@@ -291,7 +291,7 @@ export type Visibility = (typeof VISIBILITIES)[number];
  *   before FRU-330 has this value: the migration `0021` gives it.
  *
  * FRU-703: it decides on every site. A site that everyone reads and `members` write is « Read only ».
- * `0051` gives `anyone` to every site that everyone read, as they took a note from anybody.
+ * `0052` gives `anyone` to every site that everyone read, as they took a note from anybody.
  */
 export const WRITERS = ['members', 'anyone'] as const;
 export type Writers = (typeof WRITERS)[number];
@@ -320,7 +320,7 @@ export function defaultWriters(visibility: Visibility): Writers {
  * not offered for that reason.
  *
  * Only a note the visitor left counts (FRU-700): the worker checks it, the widget only shows it. Every
- * site of before FRU-703 is `never`: the migration `0051` gives it, so no site changes.
+ * site of before FRU-703 is `never`: the migration `0052` gives it, so no site changes.
  */
 export const VISITOR_RIGHTS = ['never', 'while-open'] as const;
 export type VisitorRight = (typeof VISITOR_RIGHTS)[number];

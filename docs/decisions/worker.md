@@ -1571,7 +1571,7 @@ Read on drizzle-orm 0.45.4 and drizzle-kit 0.31.11, the versions of the catalogu
   store of the accounts`, test:`decides a pairing and a session by their instants, on each side of
   2^32`.
 - **better-auth reads no `BIGINT` of its tables on that pool, and a count is one.** Its seven tables
-  have none (test:`knows the fifty-nine BIGINT columns of the worker, and that better-auth has none`).
+  have none (test:`knows the sixty BIGINT columns of the worker, and that better-auth has none`).
   `count(*)` is a `BIGINT` whatever the table: the pool now answers it as a string, and better-auth
   reads it as a number, through its adapter and the layer of FRU-181
   (test:`gives better-auth a count as a string, which better-auth reads as a number`).
@@ -1728,15 +1728,29 @@ Read on drizzle-orm 0.45.4 and drizzle-kit 0.31.11, the versions of the catalogu
   `visitor:<digest>`. The route then compares it with `NoteIndex.authors` as it compares an account,
   reads the stage in the store and again under the lock of the row, and calls the same
   `NoteStore.edit`. No second path of a write.
-- **`visitorMay(policy, action)` is the one place that says what a visitor may do** (`visitor-key.ts`,
-  `CallerChecks.visitorMay`). Today: the default of the mock-ups, on a site whose `write` is
-  `public`; the stage is the route's. FRU-703 turns it into a setting of each site
-  (`visitorEdit`, `visitorDelete`), and only this function reads it.
+- **`visitorMay(client, action)` is the one place that says what a visitor may do** (`visitor-key.ts`,
+  `CallerChecks.visitorMay`): the setting of the site (FRU-703), `visitorEdit` for an edit and
+  `visitorDelete` for a withdrawal, `while-open` or nothing; the stage is the route's.
 - **A request with a token is never read as a visitor**: a session that ended is told `401`, and is
   not taken for the browser it came from.
 - **An edit of a visitor counts with their replies** (`checkReplyLimit`): it writes a reply.
 - **The reply names the visitor by the name the note was sent with**, « not verified »
   (`replyAuthorOf`). `NewEdit.author` takes a visitor now; `editText` already wrote one.
+
+- **A visitor deletes through the route of a member's withdrawal** (FRU-702), with `callerOf` and
+  `visitorMay(client, 'withdraw')`. The store closes the note as for a member: nothing is deleted
+  there. Decision of the orchestrator for FRU-699, 2026-11-25: the ticket is closed as withdrawn in
+  the tracker, not deleted.
+- **The pin of a note a visitor deleted leaves the page, for everybody** (`note_index.removed_at`,
+  `0051_note_index_removed_at`). The route marks the row (`NoteIndex.remove`) **before** the store
+  withdraws, under the lock of the withdrawal: an index that does not answer is `502` with nothing
+  withdrawn, and the mark is taken back (`null`) when the store withdraws nothing (review of the
+  pull request, P1 `#371e6a`). The row is there: `NoteIndex.authors` named the visitor from it.
+  `GET /feedback` drops the notes the index marks (`withoutRemoved`, a read of the primary key). An index that does
+  not answer keeps the pins: a closed pin is shown rather than a read that fails. A member's
+  withdrawal sets no mark: their words say the team sees it closed, and it stays (FRU-605).
+- **Why a column and not the replies.** A read sees the replies only where the site shows them
+  (`showComments`), and a withdrawal does not need them. The mark must hold wherever the read is.
 
 ### The reasons
 
@@ -1753,7 +1767,7 @@ Read on drizzle-orm 0.45.4 and drizzle-kit 0.31.11, the versions of the catalogu
 - **`writers` of a site: `members` (« Members only ») or `anyone` (« Anyone on the page »).** The
   decision of Mathieu of 2026-10-20 on FRU-286: a setting, closed by default. `clientOf` turns
   `members` into `write: 'authenticated'` on every site since FRU-703: a site that everyone reads
-  and its members write is « Read only ». `0051` gave `anyone` to every site that everyone read,
+  and its members write is « Read only ». `0052` gave `anyone` to every site that everyone read,
   which took a note from anybody then, and a caller that names no `writers` gets `defaultWriters` of the visibility it asks when that
   visibility is new: `addSite` of a new site, `addSite` and `setSiteVisibility` of a site whose
   visibility changes. The extension sends the visibility alone, and « Everyone who visits » still
@@ -1790,9 +1804,9 @@ site opened to anyone, a site closed again when a caller names no `writers`, and
 
 - **`visitor_edit` and `visitor_delete` of `sites`: `never` or `while-open`**, what a visitor with
   no account may do to a note of their own. No value reaches a note that is done or closed (the
-  decision for FRU-699): the mockup's « Allowed » is not offered. `0051` adds them with `never`, the value of
-  every site that exists then (a visitor could do neither); `0052` makes `while-open`, the default of
-  the mockup, the default of a new site. Both are generated; `0051` adds one statement by hand, the
+  decision for FRU-699): the mockup's « Allowed » is not offered. `0052` adds them with `never`, the value of
+  every site that exists then (a visitor could do neither); `0053` makes `while-open`, the default of
+  the mockup, the default of a new site. Both are generated; `0052` adds one statement by hand, the
   `UPDATE` of `writers` above.
 - **`addSite` keeps them on a site added again when the caller names neither**, as `writers`.
 - **`clientOf` gives them to the routes (`visitorEdit`, `visitorDelete` of the client) only where
@@ -1800,7 +1814,7 @@ site opened to anyone, a site closed again when a caller names no `writers`, and
 - **The console changes them through `POST …/sites`, for `manage-sites` only.** A value that is not
   one of the two answers `400` (`invalid-visitor-edit`, `invalid-visitor-delete`).
 - **`visitorMay` of `visitor-key.ts` reads them for the routes**: the edit of a visitor (FRU-701)
-  reads `visitorEdit` of the client, and the withdrawal (FRU-702) will read `visitorDelete`. Only
+  reads `visitorEdit` of the client, and the withdrawal (FRU-702) reads `visitorDelete`. Only
   `while-open` lets a visitor act; absent (a site of members, a client of `FRUITBACK_CLIENTS`) is no. `site-access.test.ts`, `sites-visitor-rights-migration.test.ts` and
   the account suite hold the rest; the guard of `manage-sites` and the change of `clientOf` were each
   taken out by hand on 2026-11-25, and the case that holds them failed.
@@ -3317,7 +3331,7 @@ workspace too: the reason is free text, « impayé » for example.
 - **Why a table of its own, and not two columns of `organization`.** The ticket offered columns on
   `organization`. That table is of better-auth, and two tests hold it: `auth-schema.test.ts` compares
   its columns with the ones that better-auth makes, and
-  test:`knows the fifty-nine BIGINT columns of the worker, and that better-auth has none` says that
+  test:`knows the sixty BIGINT columns of the worker, and that better-auth has none` says that
   better-auth reads no `BIGINT`, on a pool with no parser of ours. A `suspended_at` there breaks
   both, or is not a `BIGINT`. A row of the worker keeps the convention, cascades with the workspace,
   and makes « changed » one statement.

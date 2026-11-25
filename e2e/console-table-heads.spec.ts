@@ -4,9 +4,9 @@ import { sideScroll, stubWorker } from './console-workspace.ts';
 /**
  * The heads of a table of the console are one line each (FRU-401): at 1024 and 1280 px « Sur la page
  * avec », « Les notes vont vers » and « Dernière note » broke on two lines in the table of the Sites
- * screen. That screen is a grid of cards since FRU-408, and since FRU-432 the terms of a card are for a
- * screen reader only: what its foot shows is measured there, in French, whose words are the longest,
- * and the rule of the kit on the table that `/kit` mounts. The worker
+ * screen. That screen was a grid of cards from FRU-408, and is a table again since FRU-688, one line
+ * per site: its heads and its rows are measured there, in French, whose words are the longest, and
+ * the rule of the kit on the table that `/kit` mounts. The worker
  * is answered by stubs; the sample data is of nobody.
  */
 const CONSOLE = 'http://localhost:5178';
@@ -59,27 +59,42 @@ function linesOf(page: Page, selector: string): Promise<{ text: string; lines: n
 }
 
 for (const width of [1024, 1280, 1440, 390]) {
-  test(`the foot of a card of sites is one line at ${width} px, in French`, async ({ page }) => {
+  test(`the heads and the rows of the table of sites are one line at ${width} px, in French`, async ({ page }) => {
     await stubWorker(page, { locale: 'fr', sites: SITES });
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`${CONSOLE}/w/w1/sites`);
-    await expect(page.getByRole('list', { name: 'Sites' }).locator('li[data-site]').first()).toBeVisible();
+    const table = page.getByRole('table', { name: 'Sites' });
+    await expect(table.locator('tbody[data-site]').first()).toBeVisible();
 
-    // Since FRU-432 the terms are for a screen reader only: the place and the moment say what they
-    // are to the eye. « Sur la page avec » is on the page of the site.
-    const terms = page.locator('main li[data-site] dt');
-    await expect(terms).toHaveText(['Les notes vont vers', 'Dernière note', 'Les notes vont vers', 'Dernière note']);
-    for (const term of await terms.all()) await expect(term).toHaveClass(/\bsr-only\b/);
-    // What the eye reads in the foot is one line each: the place and its detail, and when the last
-    // note came. The name of a tracker is a row with its mark (FRU-541): its words are read without
-    // the mark, whose box is not a line of text. Since FRU-567 the detail of a place is cut to one
-    // line in a tooltip (`.kit-tip-trigger`), and « No tracker yet » is still a line of its own.
-    const read = await linesOf(
-      page,
-      'main li[data-site] dd > span.block, main li[data-site] dd > .kit-tip-trigger > span, main li[data-site] dd > span.flex > span, main li[data-site] dd.tabular-nums',
+    // FRU-688: the Sites screen is a table again, one line of 36 px per site. Each head shown, and
+    // what each cell shows, is one line; a column that has no room goes, and its head with it.
+    const heads = await linesOf(page, 'main table thead th > span:not(.sr-only)');
+    expect(heads.length).toBeGreaterThanOrEqual(3);
+    expect(heads.filter(({ lines }) => lines !== 1)).toEqual([]);
+    // Each piece of text of a row, alone: a cell holds an icon beside its words, whose box is no line.
+    const words = await table.locator('tbody[data-site] > tr:first-child').evaluateAll((rows) =>
+      rows.flatMap((row) => {
+        const texts = document.createTreeWalker(row, NodeFilter.SHOW_TEXT);
+        const found: { text: string; lines: number }[] = [];
+        for (let node = texts.nextNode(); node !== null; node = texts.nextNode()) {
+          if ((node.textContent ?? '').trim() === '' || node.parentElement?.checkVisibility() !== true) continue;
+          const range = document.createRange();
+          range.selectNodeContents(node);
+          const tops = new Set(
+            [...range.getClientRects()].filter((rect) => rect.width > 1).map((rect) => Math.round(rect.top)),
+          );
+          found.push({ text: node.textContent ?? '', lines: tops.size });
+        }
+
+        return found;
+      }),
     );
-    expect(read.map(({ text }) => text)).toHaveLength(6);
-    expect(read.filter(({ lines }) => lines !== 1)).toEqual([]);
+    expect(words.length).toBeGreaterThanOrEqual(4);
+    expect(words.filter(({ lines }) => lines > 1)).toEqual([]);
+    const heights = await table
+      .locator('tbody[data-site] > tr:first-child')
+      .evaluateAll((rows) => rows.map((row) => row.getBoundingClientRect().height));
+    expect(heights).toEqual([36, 36]);
     expect(await sideScroll(page)).toBe(0);
   });
 }

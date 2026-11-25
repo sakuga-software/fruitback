@@ -157,14 +157,17 @@ export const STYLES = `
   position: absolute;
   /* Above every pin (2147483210), so that the pin of another note never cuts into an open thread. */
   z-index: 2147483230;
-  /* 344 px, and what a narrower window leaves: 8 px on each side, the gap the placement keeps. */
-  width: min(344px, calc(100vw - 16px));
+  /*
+    360 px and the corner of 10 of a modal of the console (FRU-696), and what a narrower window leaves:
+    8 px on each side, the gap the placement keeps.
+  */
+  width: min(360px, calc(100vw - 16px));
   pointer-events: auto;
   border: 1px solid var(--fruitback-color-border);
-  border-radius: var(--fruitback-radius-lg);
+  border-radius: var(--fruitback-radius-md);
   background: var(--fruitback-color-surface);
   color: var(--fruitback-color-text);
-  font: 14px/1.5 var(--fruitback-font-sans);
+  font: 13px/1.4 var(--fruitback-font-sans);
   box-shadow: var(--fruitback-shadow-lg);
   animation: fruitback-thread-in var(--fruitback-duration-fast) var(--fruitback-ease-out);
 }
@@ -231,15 +234,19 @@ export const STYLES = `
 }
 /*
   Two columns (FRU-419): what the head says, and the cross. The cross keeps its column and the top of
-  it, so a long head wraps under the state and never pushes the cross to a line of its own.
+  it, so a long head wraps under the state and never pushes the cross to a line of its own. 40 px on
+  one line (FRU-696): 7 px above and below a control of 26.
 */
 .fruitback-thread-head {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
-  column-gap: 10px;
-  padding-block: 14px 12px;
-  padding-inline: 16px 14px;
+  column-gap: 6px;
+  box-sizing: border-box;
+  min-height: 40px;
+  padding-block: 7px;
+  /* 9 px at the end: the target of the cross reaches 9 px past its drawn square, and stays inside. */
+  padding-inline: 12px 9px;
   border-bottom: 1px solid var(--fruitback-color-border);
 }
 /* With the handle that moves it (FRU-420), first, in a column of its own. */
@@ -287,26 +294,31 @@ export const STYLES = `
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px 10px;
+  gap: 6px;
   min-width: 0;
   /* As tall as the cross is drawn, so that a one-line head centres its state on the cross. */
-  min-height: 28px;
+  min-height: 26px;
 }
+/*
+  The status in a chip of 24 px (FRU-696): the round of its stage and its word, in a line of the edge
+  and the corner of a control. A long word wraps inside it, and the chip grows.
+*/
 .fruitback-thread-stage {
   display: flex;
   align-items: center;
-  gap: 7px;
-  flex: 1 1 auto;
+  gap: 6px;
+  flex: 0 1 auto;
   min-width: 0;
-  /*
-    As tall as the cross is drawn, as the heading: when the heading wraps (FRU-700: the chip of a
-    visitor, the way out), its first line stays centred on the cross.
-  */
-  min-height: 28px;
-  font-weight: 600;
+  box-sizing: border-box;
+  min-height: 24px;
+  padding: 2px 8px 2px 6px;
+  border: 1px solid var(--fruitback-color-border);
+  border-radius: var(--fruitback-radius-sm);
+  font-weight: 500;
   font-size: 13px;
-  letter-spacing: -0.006em;
+  line-height: 18px;
 }
+.fruitback-thread-ring { flex: none; width: 14px; height: 14px; }
 /*
   « You · this browser » (FRU-700): a chip of the sunken surface, after the word of the state, in the
   heading that wraps. Its words wrap too, in a thread narrower than the chip.
@@ -322,7 +334,6 @@ export const STYLES = `
   letter-spacing: 0;
   overflow-wrap: anywhere;
 }
-.fruitback-thread-head[data-fruitback-you] .fruitback-thread-stage { flex-grow: 0; }
 @media (forced-colors: active) {
   .fruitback-thread-you { border: 1px solid CanvasText; }
 }
@@ -339,28 +350,32 @@ export const STYLES = `
 /* anywhere: the store names its states, and a long name must wrap inside the head. */
 .fruitback-thread-state { min-width: 0; overflow-wrap: anywhere; }
 /*
-  The way out to the store (FRU-304): « FRU-128 → » in a chip of the sunken surface, at the end of the
-  head. Its target is 44 px tall: a transparent border around the chip, and the margins give it back.
+  The way out to the ticket (FRU-696): the mark of its tracker, « DEV-004 » and the sign of a new tab,
+  24 px drawn, after the status. Its target is 44 px tall: a transparent border around it, and the
+  margins give it back.
 */
 .fruitback-thread-link {
   flex: none;
   display: inline-flex;
   align-items: center;
-  margin-inline-start: auto;
-  margin-block: -9px;
-  padding: 4px 8px;
-  border: 9px solid transparent;
+  gap: 5px;
+  margin-block: -10px;
+  padding: 3px 6px;
+  border: 10px solid transparent;
   border-inline-width: 0;
-  border-radius: var(--fruitback-radius-sm) / calc(var(--fruitback-radius-sm) + 9px);
-  background: var(--fruitback-color-surface-sunken) padding-box;
+  border-radius: var(--fruitback-radius-sm) / calc(var(--fruitback-radius-sm) + 10px);
+  background: transparent;
   color: var(--fruitback-color-text);
-  font: 600 12px/1.5 var(--fruitback-font-sans);
+  font: 500 13px/18px var(--fruitback-font-sans);
   text-decoration: none;
   white-space: nowrap;
   cursor: pointer;
 }
-.fruitback-thread-link:hover { color: var(--fruitback-color-accent-strong); }
-/* The cross: 28 px drawn, 44 px to press, the margins give the difference back to the head. */
+.fruitback-thread-link:hover { background: var(--fruitback-color-surface-sunken) padding-box; }
+.fruitback-thread-link:focus-visible { outline: 2px solid var(--fruitback-color-accent); outline-offset: -8px; }
+.fruitback-thread-link-mark { width: 13px; height: 13px; }
+.fruitback-thread-link-out { width: 12px; height: 12px; color: var(--fruitback-color-text-muted); }
+/* The cross: 26 px drawn (FRU-696), 44 px to press, the margins give the difference back to the head. */
 .fruitback-thread-close {
   flex: none;
   display: flex;
@@ -368,9 +383,9 @@ export const STYLES = `
   justify-content: center;
   width: 44px;
   height: 44px;
-  margin: -8px;
-  border: 8px solid transparent;
-  border-radius: calc(var(--fruitback-radius-sm) + 8px);
+  margin: -9px;
+  border: 9px solid transparent;
+  border-radius: calc(var(--fruitback-radius-sm) + 9px);
   background: transparent;
   font-size: 14px;
   line-height: 1;
@@ -379,10 +394,10 @@ export const STYLES = `
 }
 .fruitback-thread-close:hover { background: var(--fruitback-color-surface-sunken) padding-box; }
 /*
-  The menu « ⋯ » of the author (FRU-605), before the cross in the same column. Both are 28 px drawn and
-  44 px to press: the gap keeps 12 px between the two drawn squares.
+  The menu « ⋯ » of the author (FRU-605), before the cross in the same column. Both are 26 px drawn and
+  44 px to press (FRU-696): the gap keeps 18 px between the two targets, 0 between the drawn squares.
 */
-.fruitback-thread-tools { display: flex; align-items: center; gap: 12px; }
+.fruitback-thread-tools { display: flex; align-items: center; gap: 18px; }
 .fruitback-thread-more-wrap { position: relative; }
 .fruitback-thread-more {
   display: flex;
@@ -390,9 +405,9 @@ export const STYLES = `
   justify-content: center;
   width: 44px;
   height: 44px;
-  margin: -8px;
-  border: 8px solid transparent;
-  border-radius: calc(var(--fruitback-radius-sm) + 8px);
+  margin: -9px;
+  border: 9px solid transparent;
+  border-radius: calc(var(--fruitback-radius-sm) + 9px);
   background: transparent;
   font-size: 16px;
   line-height: 1;
@@ -442,6 +457,9 @@ export const STYLES = `
 }
 .fruitback-thread-more-item:hover, .fruitback-thread-more-item:focus-visible { background: var(--fruitback-color-surface-sunken); }
 .fruitback-thread-more-item:focus-visible { outline: 2px solid var(--fruitback-color-accent); outline-offset: -2px; }
+/* FRU-702: « Delete the note » of a visitor, in the red of the accent: it takes the pin away. */
+.fruitback-thread-more-item[data-fruitback-danger] { color: var(--fruitback-color-accent-strong); }
+.fruitback-thread-withdraw-detail { margin: 0; font-size: 12px; color: var(--fruitback-color-text-muted); }
 .fruitback-thread-more-said { margin: -6px 0 0; font-size: 12px; color: var(--fruitback-color-text-muted); }
 .fruitback-thread-more-link {
   box-sizing: border-box;
@@ -457,10 +475,15 @@ export const STYLES = `
   .fruitback-thread-close, .fruitback-thread-link, .fruitback-thread-more { border-color: Canvas; }
   .fruitback-thread-more-menu { outline: 1px solid CanvasText; }
 }
-.fruitback-thread-body { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px 4px; }
+/*
+  The conversation (FRU-696): the note, then its replies, each a message of the same shape, the round of
+  who wrote it (22 px), their name and its age, and the text aligned under the name. 12 px around.
+*/
+.fruitback-thread-body { display: flex; flex-direction: column; gap: 12px; padding: 12px 12px 0; }
+.fruitback-thread-message { display: flex; gap: 10px; }
 /* anywhere: an address has no space, and it must wrap inside the thread instead of leaving it (FRU-154). */
-.fruitback-thread-note { margin: 0; font-size: 14px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
-.fruitback-thread-meta { margin: 0; font-size: 12px; color: var(--fruitback-color-text-muted); overflow-wrap: anywhere; }
+.fruitback-thread-note { margin: 0; font-size: 13px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.fruitback-thread-meta { margin: 0; font-size: 12px; line-height: 1.4; color: var(--fruitback-color-text-muted); overflow-wrap: anywhere; }
 /* What the note points at: the selector, then the component and the file, in mono (FRU-304). */
 .fruitback-thread-files { margin: 0; font-size: 12px; color: var(--fruitback-color-text-muted); }
 .fruitback-thread-files a { color: var(--fruitback-color-text); text-underline-offset: 2px; }
@@ -481,19 +504,11 @@ export const STYLES = `
 }
 .fruitback-thread-selector, .fruitback-thread-component { margin: 0; }
 .fruitback-thread-orphan { margin: 0; font-size: 12px; color: var(--fruitback-color-warning); }
-.fruitback-thread-answers { padding: 10px 16px 16px; }
-.fruitback-thread-answers-title {
-  margin: 0 0 10px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--fruitback-color-text-muted);
-}
+.fruitback-thread-answers { padding: 12px 12px 0; }
 .fruitback-thread-replies {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -512,22 +527,51 @@ export const STYLES = `
   inherited from the list. The bullets came back, and only a recording showed it.
 */
 .fruitback-thread-reply { display: flex; gap: 10px; flex: none; list-style: none; }
-/* The initial of who answers, in a round of 24 px. */
+/* The initial of who wrote, in a round of 22 px (FRU-696): white on the chip, as the mock-up draws it. */
 .fruitback-thread-reply-avatar {
   flex: none;
   display: grid;
   place-items: center;
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   border-radius: var(--fruitback-radius-pill);
-  background: var(--fruitback-color-surface-sunken);
-  color: var(--fruitback-color-text-subtle);
-  font: 700 11px/1 var(--fruitback-font-sans);
+  background: var(--fruitback-color-chip);
+  color: var(--fruitback-color-on-chip);
+  font: 600 10px/1 var(--fruitback-font-sans);
 }
-.fruitback-thread-reply-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.fruitback-thread-reply-who { margin: 0; font-size: 11px; color: var(--fruitback-color-text-muted); overflow-wrap: anywhere; }
-.fruitback-thread-reply-name { font-weight: 600; color: var(--fruitback-color-text); }
-.fruitback-thread-reply-body { margin: 0; font-size: 13px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+.fruitback-thread-reply-text { display: flex; flex: 1 1 auto; flex-direction: column; gap: 2px; min-width: 0; }
+.fruitback-thread-reply-who { margin: 0; font-size: 12px; line-height: 1.4; color: var(--fruitback-color-text-muted); overflow-wrap: anywhere; }
+/* Who wrote is what the eye looks for in a conversation: the name is in the ink, the age is not. */
+.fruitback-thread-reply-name { font-size: 13px; font-weight: 600; color: var(--fruitback-color-text); }
+.fruitback-thread-reply-body { margin: 0; font-size: 13px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+/*
+  « Technical details » (FRU-696), folded under the conversation: a summary of 24 px, the caret turned a
+  quarter when open, then the lines of mono. A native fold: its summary takes the keyboard.
+*/
+.fruitback-thread-tech { display: block; margin: 8px 12px 0; }
+.fruitback-thread-tech-summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  min-height: 24px;
+  padding-inline: 2px 6px;
+  border-radius: var(--fruitback-radius-sm);
+  color: var(--fruitback-color-text-muted);
+  font: 500 12px/1 var(--fruitback-font-sans);
+  list-style: none;
+  cursor: pointer;
+}
+.fruitback-thread-tech-summary::-webkit-details-marker { display: none; }
+.fruitback-thread-tech-summary:hover { color: var(--fruitback-color-text); background: var(--fruitback-color-surface-sunken); }
+.fruitback-thread-tech-summary:focus-visible { outline: 2px solid var(--fruitback-color-accent); outline-offset: 1px; }
+.fruitback-thread-tech-summary .fruitback-icon { width: 12px; height: 12px; flex: none; }
+.fruitback-thread-tech-caret { transition: transform var(--fruitback-duration-fast) var(--fruitback-ease-out); }
+.fruitback-thread-tech[open] .fruitback-thread-tech-caret { transform: rotate(90deg); }
+@media (prefers-reduced-motion: reduce) {
+  .fruitback-thread-tech-caret { transition: none; }
+}
+.fruitback-thread-tech .fruitback-thread-source { padding: 6px 0 2px 20px; }
 /* The edit of a note by its author (FRU-475): a quiet word under the text, then the text in a field. */
 .fruitback-thread-edit-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: -6px; }
 .fruitback-thread-edit, .fruitback-thread-edit-cancel {
@@ -589,38 +633,48 @@ export const STYLES = `
   /* « Edit » is one short word (FRU-701: a visitor's note offers it in public mode too): 44 px wide to press. */
   .fruitback-thread-edit { min-width: 44px; text-align: start; }
 }
-/* The foot where a reader replies (FRU-257): the field grows with the text, the button stays at its foot. */
-.fruitback-thread-reply-form {
+/*
+  The foot where a reader replies (FRU-257), on one line (FRU-696): a row of 34 px with the edge of a
+  field, the field, then « Send » of 26 px inside it. The field grows with the text, to four lines; the
+  button stays at its foot.
+*/
+.fruitback-thread-reply-form { display: block; padding: 12px; }
+.fruitback-thread-reply-row {
   display: flex;
-  flex-wrap: wrap;
   align-items: flex-end;
   gap: 8px;
-  padding: 10px 12px 12px 16px;
-  border-top: 1px solid var(--fruitback-color-border);
+  box-sizing: border-box;
+  min-height: 34px;
+  padding: 3px 3px 3px 10px;
+  border: 1px solid var(--fruitback-color-border-strong);
+  border-radius: var(--fruitback-radius-sm);
+  background: var(--fruitback-color-surface);
 }
+.fruitback-thread-reply-row:focus-within { outline: 2px solid var(--fruitback-color-accent); outline-offset: 1px; }
 .fruitback-thread-reply-field {
-  flex: 1 1 160px;
-  /* Two lines and the padding (FRU-606), the field of a reply in the side panel too. */
-  min-height: calc(2lh + 16px);
-  max-height: 120px;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 26px;
+  max-height: calc(4lh + 8px);
+  box-sizing: border-box;
   resize: none;
   field-sizing: content;
-  border: 1px solid var(--fruitback-color-border-strong);
-  border-radius: var(--fruitback-radius-field);
-  padding: 7px 10px;
-  font: 14px/1.4 var(--fruitback-font-sans);
-  background: var(--fruitback-color-surface);
+  border: 0;
+  outline: 0;
+  padding: 4px 0;
+  font: 13px/18px var(--fruitback-font-sans);
+  background: transparent;
   color: inherit;
   caret-color: var(--fruitback-color-accent);
 }
-.fruitback-thread-reply-field:focus-visible { outline: 2px solid var(--fruitback-color-accent); outline-offset: 1px; }
 .fruitback-thread-reply-send {
+  flex: none;
   display: inline-flex;
   align-items: center;
-  height: 36px;
-  padding: 0 16px;
+  height: 26px;
+  padding: 0 10px;
   border: 0;
-  border-radius: var(--fruitback-radius-md);
+  border-radius: var(--fruitback-radius-sm);
   background: var(--fruitback-color-accent);
   color: var(--fruitback-color-on-accent);
   font: 600 13px/1 var(--fruitback-font-sans);
@@ -629,7 +683,7 @@ export const STYLES = `
 }
 .fruitback-thread-reply-send:hover:not([disabled]) { background: var(--fruitback-color-accent-strong); }
 .fruitback-thread-reply-send[disabled] { opacity: 0.55; cursor: default; }
-.fruitback-thread-reply-status { flex-basis: 100%; font-size: 12px; color: var(--fruitback-color-text-muted); }
+.fruitback-thread-reply-status { display: block; margin-top: 6px; font-size: 12px; color: var(--fruitback-color-text-muted); }
 .fruitback-thread-reply-status:empty { display: none; }
 @media (pointer: coarse) {
   .fruitback-thread-reply-field { font-size: 16px; }
@@ -637,9 +691,9 @@ export const STYLES = `
 }
 /* FRU-603: a note the team marked done, and the verdict of its author. Its field and « Send » are the edit's. */
 .fruitback-thread-agent a { color: var(--fruitback-color-text); }
-.fruitback-thread-done, .fruitback-thread-agent { margin: 0; padding: 10px 16px 0; font: 600 12px/1.5 var(--fruitback-font-sans); color: var(--fruitback-color-text-muted); }
+.fruitback-thread-done, .fruitback-thread-agent { margin: 0; padding: 10px 12px 0; font: 600 12px/1.5 var(--fruitback-font-sans); color: var(--fruitback-color-text-muted); }
 .fruitback-thread-agent { padding-bottom: 10px; }
-.fruitback-thread-check { display: flex; flex-direction: column; gap: 10px; padding: 12px 16px 14px; border-top: 1px solid var(--fruitback-color-border); }
+.fruitback-thread-check { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-top: 1px solid var(--fruitback-color-border); }
 .fruitback-thread-check-ask, .fruitback-thread-withdraw-ask { margin: 0; font: 600 13px/1.4 var(--fruitback-font-sans); }
 .fruitback-thread-check-actions, .fruitback-thread-check-form-actions, .fruitback-thread-withdraw-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .fruitback-thread-check-fixed, .fruitback-thread-check-wrong, .fruitback-thread-check-cancel,
@@ -659,7 +713,7 @@ export const STYLES = `
 .fruitback-thread-check button:focus-visible { outline: 2px solid var(--fruitback-color-accent); outline-offset: 2px; }
 .fruitback-thread-check-status, .fruitback-thread-check-said { margin: 0; font-size: 12px; color: var(--fruitback-color-text-muted); }
 .fruitback-thread-check-status:empty { display: none; }
-.fruitback-thread-check-said { padding: 10px 16px 12px; border-top: 1px solid var(--fruitback-color-border); outline: none; }
+.fruitback-thread-check-said { padding: 10px 12px 12px; border-top: 1px solid var(--fruitback-color-border); outline: none; }
 @media (pointer: coarse) {
   .fruitback-thread-check button { min-height: 44px; }
 }

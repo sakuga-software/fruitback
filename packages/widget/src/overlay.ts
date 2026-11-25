@@ -5,7 +5,9 @@ import {
   type NoteIssue,
   type NoteStage,
   type NoteStatus,
+  NOTE_STAGES,
   anchorSelectorPath,
+  type TrackerName,
   trackerOf,
 } from '@fruitback/shared';
 import { type Direction, type Translator, createTranslator, languageOf } from './messages.ts';
@@ -18,6 +20,8 @@ import { createOrphanList, type OrphanList } from './orphans.ts';
 import { type AnchorResolution, followHosts, resolveAnchor } from './resolve.ts';
 import { PREVIEW_STYLES, PREVIEW_WIDTH, buildPreview, previewPlace } from './pin-preview.ts';
 import { besideElement } from './thread-place.ts';
+import { createStageRing, ringColor } from './stage-ring.ts';
+import { stageToken } from './theme.ts';
 import { adoptStyles } from './stylesheet.ts';
 import { firstLine, readDate } from './note-words.ts';
 import { BADGE_HALF, BADGE_RISE, STYLES } from './overlay.styles.ts';
@@ -893,8 +897,52 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     return entry === undefined ? undefined : { id: entry.issue.note.id, inList: false };
   }
 
+  /**
+   * The counts of the page by status, in the dock (FRU-696): the round of each stage that has a pin,
+   * and how many, between the list and the settings. A drawing with a name: « 2 New, 1 In progress ».
+   * No draft: it has no stage yet. Nothing at all when the page has no pin.
+   */
+  const dockCounts = options.dock === undefined ? undefined : document.createElement('span');
+  if (dockCounts !== undefined && options.dock !== undefined) {
+    dockCounts.className = 'fruitback-dock-counts';
+    dockCounts.dataset.fruitbackDockCounts = '';
+    dockCounts.setAttribute('role', 'img');
+    dockCounts.hidden = true;
+    // Before the gear, or the launch button: the chip of the detached notes stays first (FRU-303).
+    const next = options.dock.querySelector('[data-fruitback-host-configure], [data-fruitback-host-launch]');
+    if (next !== null) next.before(dockCounts);
+    else options.dock.append(dockCounts);
+  }
+
+  function countStages(): void {
+    if (dockCounts === undefined) return;
+    const counts = new Map<NoteStage, number>();
+    for (const entry of placed) {
+      if (DRAFTS.has(entry.issue)) continue;
+      counts.set(entry.issue.stage, (counts.get(entry.issue.stage) ?? 0) + 1);
+    }
+    const shown = NOTE_STAGES.filter((stage) => (counts.get(stage) ?? 0) > 0);
+    dockCounts.hidden = shown.length === 0;
+    dockCounts.replaceChildren(
+      ...shown.map((stage) => {
+        const ring = createStageRing(document, stage, 'fruitback-dock-ring');
+        ring.style.color = ringColor(stage, undefined, stageToken(stage), 'var(--fruitback-color-text-muted)');
+
+        const count = element(document, 'span', 'fruitback-dock-count', [ring]);
+        count.append(String(counts.get(stage)));
+
+        return count;
+      }),
+    );
+    dockCounts.setAttribute(
+      'aria-label',
+      shown.map((stage) => `${counts.get(stage)} ${t.text(`stage.${stage}` as const)}`).join(', '),
+    );
+  }
+
   /** A note is detached when nothing identified *or located* its element — resolveAnchor's last word. */
   function listOrphans(): void {
+    countStages();
     // Not a draft (FRU-124): that list names a stage and an identifier, and a draft has neither. It
     // keeps its pin where it was planted, and it is in the group of drafts of the list of notes.
     orphans.update(
@@ -1037,6 +1085,8 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
       ? undefined
       : {
           seam: options.withdraw,
+          // FRU-702: a visitor known by their browser deletes the note, and is told where it goes.
+          ...(options.byBrowser?.() === true ? { deletes: trackerPart(issue.url) } : {}),
           asking: withdrawAsking,
           inFlight: withdrawsInFlight,
           said: withdrawSaid,
@@ -1060,7 +1110,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     return {
       said: moreSaidOf,
       // FRU-701: the words of the mock-up for a visitor known by their browser.
-      ...(options.byBrowser?.() === true ? { editText: true as const } : {}),
+      ...(options.byBrowser?.() === true ? { editText: true as const, deleteText: true as const } : {}),
       // FRU-701: a visitor known by their browser edits the text, and moves nothing: the route of a
       // move takes a session.
       ...(move === undefined || issue.editable !== true || options.byBrowser?.() === true
@@ -1124,6 +1174,10 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
       : '.fruitback-thread-reply-field';
     const caret = typing === undefined ? undefined : ([typing.selectionStart, typing.selectionEnd] as const);
     const onHandle = isElement(active) && active.classList.contains('fruitback-thread-handle');
+    // « Technical details » stays as the person left it (FRU-696), and keeps the focus of its summary.
+    const fold = thread?.querySelector<HTMLDetailsElement>('.fruitback-thread-tech');
+    const foldOpen = fold?.open;
+    const onFold = isElement(active) && active.classList.contains('fruitback-thread-tech-summary');
     thread?.remove();
     thread = buildThread(
       document,
@@ -1139,14 +1193,20 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
       withdrawFor(entry.issue),
       options.byBrowser?.() === true,
     );
+    const rebuilt = thread.querySelector<HTMLDetailsElement>('.fruitback-thread-tech');
+    if (rebuilt !== null && foldOpen !== undefined) rebuilt.open = foldOpen;
     wireThread(thread);
     mountThread(thread, entry);
     const field = thread.querySelector<HTMLTextAreaElement>(typingIn);
     if (caret !== undefined && field !== null) {
       field.focus();
       field.setSelectionRange(caret[0], caret[1]);
-    } else if (focused)
-      thread.querySelector<HTMLElement>(onHandle ? '.fruitback-thread-handle' : '.fruitback-thread-close')?.focus();
+    } else if (focused) {
+      let again = '.fruitback-thread-close';
+      if (onHandle) again = '.fruitback-thread-handle';
+      else if (onFold) again = '.fruitback-thread-tech-summary';
+      thread.querySelector<HTMLElement>(again)?.focus();
+    }
   }
 
   /** On the page beside its pin, or in the panel that asked for it (FRU-312). */
@@ -1313,6 +1373,9 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
       if (on === selectorsShown) return;
       selectorsShown = on;
       const open = placed.find((entry) => entry.pin.dataset.fruitbackOpen === '');
+      // The setting opens or folds « Technical details » of the open thread (FRU-696).
+      const fold = thread?.querySelector<HTMLDetailsElement>('.fruitback-thread-tech');
+      if (fold !== null && fold !== undefined) fold.open = on;
       if (open !== undefined && thread !== null) reopenThread(open);
     },
     select(id, home) {
@@ -1341,6 +1404,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
       closeThread();
       hidePreview();
       orphans.destroy();
+      dockCounts?.remove();
       container.remove();
       style.remove();
       placed = [];
@@ -1489,10 +1553,6 @@ function replies(document: Document, issue: NoteIssue, t: Translator): HTMLEleme
   // No reply yet: no section at all (FRU-419). The field to reply, and its placeholder, say enough.
   if (issue.comments.length === 0) return [];
 
-  // « Replies », above the list (FRU-304). For the eye: the list is named by the same word.
-  const title = element(document, 'p', 'fruitback-thread-answers-title', t.text('thread.replies'));
-  title.setAttribute('aria-hidden', 'true');
-
   const list = document.createElement('ul');
   list.className = 'fruitback-thread-replies';
   // The list scrolls past 180 px, and a region that scrolls must take focus, or a keyboard cannot
@@ -1507,23 +1567,13 @@ function replies(document: Document, issue: NoteIssue, t: Translator): HTMLEleme
     const who = fromPage === undefined ? (comment.author ?? t.text('thread.team')) : fromPage.name;
     // FRU-465: the worker says that an agent wrote it. The word is the reader's, not the line's.
     const qualifier = comment.by === 'agent' ? t.text('thread.agent') : fromPage?.who;
-    // The initial of who answers, in a round of 24 px (FRU-304). A drawing: the name follows it.
+    // The initial of who answers, in a round of 22 px (FRU-696). A drawing: the name follows it.
     const avatar = element(document, 'span', 'fruitback-thread-reply-avatar', initialOf(who));
     avatar.setAttribute('aria-hidden', 'true');
     item.append(
       avatar,
       element(document, 'div', 'fruitback-thread-reply-text', [
-        byline(
-          document,
-          'p',
-          'fruitback-thread-reply-who',
-          who,
-          comment.createdAt,
-          t,
-          // Who answers is what the eye looks for in a conversation: the name is in the ink, the date is not.
-          'fruitback-thread-reply-name',
-          qualifier,
-        ),
+        messageHead(document, 'p', 'fruitback-thread-reply-who', who, comment.createdAt, t, qualifier),
         // `textContent`, never markup: this is Linear's markdown, written by whoever can comment on the
         // issue, rendered inside someone else's page. It is text here and nothing more.
         element(document, 'p', 'fruitback-thread-reply-body', fromPage?.text ?? comment.body),
@@ -1532,7 +1582,7 @@ function replies(document: Document, issue: NoteIssue, t: Translator): HTMLEleme
     list.append(item);
   }
 
-  return [element(document, 'div', 'fruitback-thread-answers', [title, list])];
+  return [element(document, 'div', 'fruitback-thread-answers', [list])];
 }
 
 /** The first letter of a name, as a person reads it, for the round of a reply. */
@@ -1543,15 +1593,17 @@ function initialOf(name: string): string {
 }
 
 /**
- * What the note points at, in lines of mono (FRU-304, FRU-419): the selector the note carries, then
- * the component and the file behind the element when the capture found them (FRU-256), as
- * « <AddToCart> · src/components/Card.tsx:42 ». As text, like everything a note carries.
+ * « Technical details », folded under the conversation (FRU-696): what the note points at, in lines of
+ * mono (FRU-304, FRU-419), the selector the note carries, then the component and the file behind the
+ * element when the capture found them (FRU-256), as « <AddToCart> · src/components/Card.tsx:42 ». As
+ * text, like everything a note carries.
  *
- * Both show only when the host asks for the selectors (FRU-349, FRU-419): a reviewer reads the note,
- * and these lines are for a developer.
+ * A native fold: its summary is a button for a keyboard and a screen reader, and says whether it is
+ * open. It is open when the host shows the selectors (FRU-349): a reviewer reads the note, and these
+ * lines are for a developer, who asked for them.
  */
-function sourceBlock(document: Document, issue: NoteIssue, showSelector: boolean): HTMLElement[] {
-  if (!showSelector) return [];
+function technicalDetails(document: Document, issue: NoteIssue, t: Translator, open: boolean): HTMLElement[] {
+  if (DRAFTS.has(issue)) return [];
   const source = issue.note.source;
   // The hosts first, when the element is in a web component (FRU-580): its selector alone finds nothing.
   const selector = anchorSelectorPath(issue.note.anchor);
@@ -1559,13 +1611,24 @@ function sourceBlock(document: Document, issue: NoteIssue, showSelector: boolean
   const file = source?.file === undefined ? undefined : `${source.file}${line}`;
   const component = source?.component?.trim() ? `<${source.component.trim()}>` : undefined;
   const parts = [component, file].filter((part): part is string => part !== undefined && part.trim() !== '');
+  if (selector.trim() === '' && parts.length === 0) return [];
 
-  return [
+  const fold = document.createElement('details');
+  fold.className = 'fruitback-thread-tech';
+  fold.open = open;
+  const caret = createIcon(document, 'caret');
+  caret.classList.add('fruitback-thread-tech-caret');
+  const summary = element(document, 'summary', 'fruitback-thread-tech-summary', [caret, createIcon(document, 'code')]);
+  summary.append(t.text('thread.technical'));
+  fold.append(
+    summary,
     element(document, 'div', 'fruitback-thread-source', [
-      element(document, 'p', 'fruitback-thread-selector', selector),
+      ...(selector.trim() === '' ? [] : [element(document, 'p', 'fruitback-thread-selector', selector)]),
       ...(parts.length > 0 ? [element(document, 'p', 'fruitback-thread-component', parts.join(' · '))] : []),
     ]),
-  ];
+  );
+
+  return [fold];
 }
 
 /**
@@ -1616,10 +1679,18 @@ function buildThread(
 
   const reporter = issue.note.reporter?.name ?? issue.note.reporter?.email ?? t.text('thread.anonymous');
 
-  // The drop of the pin, small, in front of the word of the state: the colour is never alone.
-  const drop = document.createElement('span');
-  drop.className = 'fruitback-thread-drop';
-  drop.setAttribute('aria-hidden', 'true');
+  // The round of the stage (FRU-696), as the list draws it, in front of the word of the state: the
+  // colour is never alone, and the shape says the stage too.
+  const ring = createStageRing(document, issue.stage, 'fruitback-thread-ring');
+  const paint = statusPaint(issue, STATUSES.get(issue));
+  ring.style.color = DRAFTS.has(issue)
+    ? 'var(--fruitback-color-text-muted)'
+    : ringColor(
+        issue.stage,
+        STATUSES.get(issue)?.color === undefined ? undefined : paint.fill,
+        paint.fill,
+        'var(--fruitback-color-text-muted)',
+      );
 
   // The store's own word for the state. `stateName` is what the store said — Linear's "In Progress",
   // SQLite's own — and the drop beside it carries the stage colour through `--fruitback-pin-color`.
@@ -1636,7 +1707,7 @@ function buildThread(
     // On the page only: a thread in the list of the page has its place in the column (FRU-312).
     ...(movable ? [handleButton(document, t)] : []),
     element(document, 'div', 'fruitback-thread-heading', [
-      element(document, 'span', 'fruitback-thread-stage', [drop, state]),
+      element(document, 'span', 'fruitback-thread-stage', [ring, state]),
       // FRU-700: after the state, in the heading that wraps, so a narrow thread puts it on a line of its own.
       ...youChip(document, issue, t, byBrowser),
       // In the head (FRU-256), where the mock-up draws it: the way out is known before the note is read.
@@ -1656,15 +1727,23 @@ function buildThread(
   // FRU-700: the state keeps its width, so the chip stands right after it. An attribute, as above.
   if (head.querySelector('.fruitback-thread-you') !== null) head.dataset.fruitbackYou = '';
 
+  // The note is the first message of the conversation (FRU-696): the round of who wrote it, their
+  // name and its age, then its text, as each reply under it.
+  const avatar = element(document, 'span', 'fruitback-thread-reply-avatar', initialOf(reporter));
+  avatar.setAttribute('aria-hidden', 'true');
   thread.append(
     head,
     element(document, 'div', 'fruitback-thread-body', [
-      ...noteText(document, issue, t, edit),
+      element(document, 'div', 'fruitback-thread-message', [
+        avatar,
+        element(document, 'div', 'fruitback-thread-reply-text', [
+          messageHead(document, 'p', 'fruitback-thread-meta', reporter, issue.note.createdAt, t),
+          ...noteText(document, issue, t, edit),
+          ...youMay(document, issue, t, byBrowser),
+        ]),
+      ]),
       ...moreSaid(document, issue, t, more),
       ...withdrawBlock(document, issue, t, withdraw),
-      byline(document, 'p', 'fruitback-thread-meta', reporter, issue.note.createdAt, t),
-      ...youMay(document, issue, t, byBrowser),
-      ...sourceBlock(document, issue, showSelector),
       ...attachmentsLine(document, issue, t),
       // Said out loud rather than hidden. A reader who is told the pin might be on the wrong element
       // checks; a reader who is told nothing believes it.
@@ -1673,6 +1752,9 @@ function buildThread(
     ...doneLine(document, issue, t),
     ...agentLine(document, issue, t),
     ...replies(document, issue, t),
+    // Under the conversation, folded (FRU-696): the selector, the component and the file are for a
+    // developer. Open when the host shows the selectors (FRU-349).
+    ...technicalDetails(document, issue, t, showSelector),
     ...(check === undefined ? [] : checkBlock(document, issue, t, check)),
     // The author answers a note marked done by its verdict (FRU-603): « Still wrong » opens the field
     // that says what is missing. A second field to reply under it would be two ways to say one thing.
@@ -1695,13 +1777,25 @@ function youChip(document: Document, issue: NoteIssue, t: Translator, byBrowser:
 }
 
 /**
- * « You can edit it until a member picks it up. » (FRU-701): under a note of a visitor known by their
- * browser, while the worker offers them an edit.
+ * « You can edit or delete it until a member picks it up. » (FRU-701, FRU-702): under a note of a
+ * visitor known by their browser, with what the worker offers them now.
  */
 function youMay(document: Document, issue: NoteIssue, t: Translator, byBrowser: boolean): HTMLElement[] {
-  if (!byBrowser || issue.mine !== true || issue.editable !== true || DRAFTS.has(issue)) return [];
+  if (!byBrowser || issue.mine !== true || DRAFTS.has(issue)) return [];
+  const edits = issue.editable === true;
+  const deletes = issue.withdrawable === true;
+  if (!edits && !deletes) return [];
+  let words: 'thread.youMayEditOrDelete' | 'thread.youMayEdit' | 'thread.youMayDelete' = 'thread.youMayDelete';
+  if (edits) words = deletes ? 'thread.youMayEditOrDelete' : 'thread.youMayEdit';
 
-  return [element(document, 'p', 'fruitback-thread-you-may', t.text('thread.youMayEdit'))];
+  return [element(document, 'p', 'fruitback-thread-you-may', t.text(words))];
+}
+
+/** The tracker of an issue by its address, for the words of a deletion (FRU-702), or nothing. */
+function trackerPart(url: string | undefined): { tracker?: TrackerName } {
+  const tracker = trackerOf(url);
+
+  return tracker === undefined ? {} : { tracker };
 }
 
 /** What the edits of the notes share, by note, as `ReplyFooter` (FRU-475). */
@@ -2207,8 +2301,9 @@ function replyForm(document: Document, issue: NoteIssue, t: Translator, reply: R
   form.className = 'fruitback-thread-reply-form';
   const field = document.createElement('textarea');
   field.className = 'fruitback-thread-reply-field';
-  // Two lines, as everywhere a reader replies (FRU-606): the side panel has the same field.
-  field.rows = 2;
+  // One line, as the mock-up of 2026-11-25 draws it (FRU-696): Shift+Enter still goes to a next line,
+  // and the field grows with what is typed, to four lines, then scrolls.
+  field.rows = 1;
   field.setAttribute('aria-label', t.text('reply.label'));
   const author = issue.note.reporter?.name;
   field.placeholder =
@@ -2265,7 +2360,7 @@ function replyForm(document: Document, issue: NoteIssue, t: Translator, reply: R
       });
   });
 
-  form.append(field, send, status);
+  form.append(element(document, 'div', 'fruitback-thread-reply-row', [field, send]), status);
 
   return form;
 }
@@ -2337,7 +2432,20 @@ function link(document: Document, issue: NoteIssue, t: Translator): HTMLElement[
   anchor.target = '_blank';
   anchor.rel = 'noreferrer noopener';
   // The identifier is the handle a human searches for; where it opens is the link's own business.
-  anchor.textContent = t.text('thread.link', { identifier: issue.identifier });
+  // FRU-696: the mark of the tracker before it when the address names one, the sign of a new tab after.
+  const tracker = trackerOf(issue.url);
+  if (tracker !== undefined) {
+    const mark = createIcon(document, tracker === 'Linear' ? 'linear' : 'github');
+    mark.classList.add('fruitback-thread-link-mark');
+    mark.dataset.tracker = tracker;
+    anchor.append(mark);
+  }
+  anchor.append(element(document, 'span', 'fruitback-thread-link-id', issue.identifier));
+  const out = createIcon(document, 'external');
+  out.classList.add('fruitback-thread-link-out');
+  anchor.append(out);
+  // Its name says the tracker and the new tab: the marks are drawings a screen reader skips.
+  anchor.setAttribute('aria-label', t.text('thread.link', { identifier: issue.identifier }));
 
   return [anchor];
 }
@@ -2367,32 +2475,37 @@ function attachmentsLine(document: Document, issue: NoteIssue, t: Translator): H
 }
 
 /**
- * Who, and when, as a relative date (FRU-38). The absolute date goes in the title, for a reader who
- * needs the day. A date the store wrote in a shape `Date` cannot read is shown as it came.
+ * The head of a message of the thread (FRU-696): the name in the ink, then what the worker knows of
+ * the person after a dot, then the age in the muted ink, as « **Léa** yesterday » or « **Bob** · not verified now ». The absolute date goes in the
+ * title, for a reader who needs the day (FRU-38). A date the store wrote in a shape `Date` cannot read
+ * is shown as it came.
  */
-function byline(
+function messageHead(
   document: Document,
   tag: string,
   className: string,
   who: string,
   written: string,
   t: Translator,
-  nameClass?: string,
   qualifier?: string,
 ): HTMLElement {
   const date = readDate(written);
-  const when = date === undefined ? written : t.relative(date);
-  const node =
-    nameClass === undefined
-      ? element(document, tag, className, `${who} · ${when}`)
-      : element(document, tag, className, [element(document, 'span', nameClass, who)]);
-  if (nameClass !== undefined) node.append(`${qualifier === undefined ? '' : ` · ${qualifier}`} · ${when}`);
-  if (date !== undefined) node.title = t.date(date);
+  const node = element(document, tag, className, [element(document, 'span', 'fruitback-thread-reply-name', who)]);
+  if (qualifier !== undefined)
+    node.append(' · ', element(document, 'span', 'fruitback-thread-reply-who-said', qualifier));
+  const when = element(
+    document,
+    'span',
+    'fruitback-thread-reply-when',
+    date === undefined ? written : t.relative(date),
+  );
+  if (date !== undefined) when.title = t.date(date);
+  node.append(' ', when);
 
   return node;
 }
 
-function element(document: Document, tag: string, className: string, content: string | HTMLElement[]): HTMLElement {
+function element(document: Document, tag: string, className: string, content: string | Element[]): HTMLElement {
   const node = document.createElement(tag);
   node.className = className;
   if (typeof content === 'string') node.textContent = content;

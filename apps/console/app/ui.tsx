@@ -49,7 +49,7 @@ export function Mark({ size = 14 }: { size?: number }) {
   );
 }
 
-type Tone = 'primary' | 'outline' | 'danger' | 'quiet';
+type Tone = 'primary' | 'outline' | 'danger' | 'danger-outline' | 'quiet' | 'ghost';
 /** The height of a control (FRU-683): of a page (32 px), of a panel or a row (28 px), small (24 px). */
 type ControlSize = 'page' | 'panel' | 'small';
 
@@ -58,7 +58,9 @@ const VARIANTS = {
   primary: 'primary',
   outline: 'outline',
   danger: 'danger-soft',
+  'danger-outline': 'outline',
   quiet: 'ghost',
+  ghost: 'ghost',
 } as const satisfies Record<Tone, string>;
 
 /**
@@ -91,25 +93,49 @@ const PRIMARY =
 const OUTLINE =
   'kit-button--outline rounded-control border border-field-border bg-surface text-ink [&:hover:not(:disabled,[aria-disabled=true])]:border-ink [&:hover:not(:disabled,[aria-disabled=true])]:bg-subtle data-[hovered=true]:border-ink data-[hovered=true]:bg-subtle data-[pressed=true]:border-ink data-[pressed=true]:bg-subtle';
 
+/**
+ * A button of the redesign with no frame (FRU-691): its picture and its words in the soft ink, the
+ * hover tint under the pointer. « Copy invite link » in the foot of a dialog.
+ */
+const GHOST =
+  'kit-button--ghost inline-flex flex-none items-center justify-center gap-[6px] px-[10px] py-0 rounded-control border-0 border-none border-current bg-transparent text-ink-soft text-(length:--text-body) leading-auto font-medium whitespace-nowrap cursor-pointer transform-none [transition:none] [&_svg]:size-[14px] [&:hover:not(:disabled,[aria-disabled=true])]:bg-hover data-[hovered=true]:bg-hover data-[pressed=true]:bg-hover disabled:opacity-50 disabled:cursor-not-allowed';
+
+/**
+ * The control that opens a gesture that cannot be undone (FRU-693): « Delete… » in the danger zone of
+ * the settings. The shape of an outlined control, its words in the red of a refusal, its border the
+ * light red of the zone. The red does not follow the accent: a deletion stays red in every theme.
+ */
+const OUTLINE_DANGER =
+  'kit-button--danger-outline rounded-control border border-danger-line bg-surface text-accent-strong [&:hover:not(:disabled,[aria-disabled=true])]:border-accent-strong [&:hover:not(:disabled,[aria-disabled=true])]:bg-subtle data-[hovered=true]:border-accent-strong data-[hovered=true]:bg-subtle data-[pressed=true]:border-accent-strong data-[pressed=true]:bg-subtle';
+
+/** The tones the kit draws in the shapes of the mockup. */
+type ShapedTone = 'primary' | 'outline' | 'danger-outline';
+
 /** The padding at each end, by tone and size. */
 const BUTTON_INSET = {
   primary: { page: 'px-[22px]', panel: 'px-[16px]', small: 'px-[14px]' },
   outline: { page: 'px-[18px]', panel: 'px-[16px]', small: 'px-[10px]' },
-} as const satisfies Record<'primary' | 'outline', Record<ControlSize, string>>;
+  'danger-outline': { page: 'px-[18px]', panel: 'px-[16px]', small: 'px-[10px]' },
+} as const satisfies Record<ShapedTone, Record<ControlSize, string>>;
+
+const SHAPED = { primary: PRIMARY, outline: OUTLINE, 'danger-outline': OUTLINE_DANGER } as const satisfies Record<
+  ShapedTone,
+  string
+>;
 
 /**
  * The classes of a button of the mockup. Over its column (`wide`), its words can be a name somebody
  * typed: they take the lines they need, and the button grows, where a button of its own width would
  * make the page scroll sideways. A wide button of a panel keeps no padding above and under its words.
  */
-function buttonClasses(tone: 'primary' | 'outline', size: ControlSize, wide: boolean, gap = 'gap-[8px]'): string {
+function buttonClasses(tone: ShapedTone, size: ControlSize, wide: boolean, gap = 'gap-[8px]'): string {
   const block = wide
     ? `flex w-full h-auto ${BUTTON_WIDE[size]} text-center whitespace-normal! [overflow-wrap:anywhere]`
     : `inline-flex ${BUTTON_HEIGHT[size]} py-0 whitespace-nowrap`;
 
   return [
     BUTTON.replace('gap-[8px]', gap),
-    tone === 'primary' ? PRIMARY : OUTLINE,
+    SHAPED[tone],
     BUTTON_INSET[tone][size],
     block,
     size === 'small' ? 'text-(length:--text-hint)' : 'text-(length:--text-small)',
@@ -137,7 +163,8 @@ const BUTTON_WIDE = {
  * a column of 320 px.
  */
 function toneClasses(tone: Tone, size: ControlSize, wide: boolean): string {
-  if (tone === 'primary' || tone === 'outline') return buttonClasses(tone, size, wide);
+  if (tone === 'primary' || tone === 'outline' || tone === 'danger-outline') return buttonClasses(tone, size, wide);
+  if (tone === 'ghost') return `${GHOST} ${BUTTON_HEIGHT[size]}`;
 
   return 'rounded-control font-semibold text-(length:--text-small) leading-auto';
 }
@@ -164,6 +191,8 @@ type ButtonProps = Destination & {
    */
   inset?: 14 | 16 | 18 | 22 | 24 | 26;
   type?: 'button' | 'submit';
+  /** The id of the form a submit button sends, when it stands outside it: « Save » of a head (FRU-693). */
+  form?: string;
   disabled?: boolean;
   onClick?: () => void;
   className?: string;
@@ -206,10 +235,11 @@ function anchor({ to, href, newTab = false }: Destination, className: string, da
  */
 export function Button({
   tone = 'primary',
-  size = tone === 'outline' ? 'panel' : 'page',
+  size = tone === 'outline' || tone === 'danger-outline' ? 'panel' : 'page',
   wide = false,
   inset,
   type = 'button',
+  form,
   disabled = false,
   onClick,
   className = '',
@@ -236,6 +266,7 @@ export function Button({
   return (
     <HeroButton
       type={type}
+      {...(form === undefined ? {} : { form })}
       variant={VARIANTS[tone]}
       isDisabled={disabled}
       autoFocus={autoFocus}
@@ -257,12 +288,18 @@ export function FilePick({
   accept,
   disabled = false,
   onFile,
+  size = 'page',
+  label,
   children,
 }: {
   /** The types the picker offers, as `accept` takes them. */
   accept: string;
   disabled?: boolean;
   onFile: (file: File) => void;
+  /** The height of the button: 32 px, or 24 px in a row of a card (FRU-693). */
+  size?: 'page' | 'small';
+  /** The name a screen reader says, as `label` of `Button`: it starts with the words shown. */
+  label?: string;
   children: ReactNode;
 }) {
   const input = useRef<HTMLInputElement>(null);
@@ -280,7 +317,13 @@ export function FilePick({
           if (file !== undefined) onFile(file);
         }}
       />
-      <Button tone="outline" size="page" disabled={disabled} onClick={() => input.current?.click()}>
+      <Button
+        tone="outline"
+        size={size}
+        disabled={disabled}
+        onClick={() => input.current?.click()}
+        {...(label === undefined ? {} : { label })}
+      >
         {children}
       </Button>
     </>
@@ -593,8 +636,11 @@ type CutLinkProps = {
   to: string;
   /** The words of the link. They are in the page whole, so a screen reader says them all. */
   children: string;
-  /** The heading that holds the link. The trigger of the tooltip is a `div`, so it goes around the heading. */
-  heading?: 'h2' | 'h3';
+  /**
+   * The heading that holds the link. The trigger of the tooltip is a `div`, so it goes around the heading.
+   * `span` in a cell of a table, whose head names the row (the Sites table, FRU-688).
+   */
+  heading?: 'h2' | 'h3' | 'span';
   /** The classes of the heading: the size and the weight of the words. */
   className?: string;
   /** The classes of the link: its colour, its hover and its focus ring. */
@@ -1127,6 +1173,53 @@ export function Radios<Value extends string>({
   );
 }
 
+/**
+ * One choice among a few, as cards side by side (FRU-691): the name of each at 600, and what it does
+ * under it. The chosen card has a frame of 2 px in the soft ink. The arrows walk the cards, as a group
+ * of radios. A card that cannot be chosen says why in its second line.
+ */
+export function RadioCards<Value extends string>({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: Value;
+  onChange: (value: Value) => void;
+  options: readonly { value: Value; label: string; detail: string; disabled?: boolean }[];
+}) {
+  return (
+    <RadioGroup
+      value={value}
+      onChange={(chosen) => onChange(chosen as Value)}
+      orientation="horizontal"
+      className="kit-radio-cards flex flex-col gap-[6px] min-w-0"
+    >
+      <Label className={`${FIELD_LABEL} after:content-none`}>{label}</Label>
+      <div className="grid grid-cols-3 gap-[8px]">
+        {options.map((option) => (
+          <Radio
+            key={option.value}
+            value={option.value}
+            isDisabled={option.disabled === true}
+            className="kit-radio-card group/card m-0 flex min-w-0 cursor-pointer flex-col items-stretch rounded-control border border-line bg-surface p-[10px] data-[selected=true]:border-ink-soft data-[selected=true]:[box-shadow:inset_0_0_0_1px_var(--color-ink-soft)] data-[disabled=true]:cursor-not-allowed data-[focus-visible=true]:[outline:2px_solid_var(--color-accent)] data-[focus-visible=true]:outline-offset-2"
+          >
+            <Radio.Content className="flex min-w-0 flex-col items-start gap-[4px]">
+              <Label className="text-(length:--text-body) leading-auto font-semibold text-ink group-data-[disabled=true]/card:text-muted">
+                {option.label}
+              </Label>
+              <Description className="text-(length:--text-hint) leading-(--text-hint--line-height) text-muted">
+                {option.detail}
+              </Description>
+            </Radio.Content>
+          </Radio>
+        ))}
+      </div>
+    </RadioGroup>
+  );
+}
+
 type PickCardsProps<Value extends string> = {
   /** The name of the group, for a screen reader: the card around it says it to the eye. */
   label: string;
@@ -1426,19 +1519,28 @@ export function LoadFailed({
 }
 
 /** A name and its initial, in the round chip of the mockup. `pending`: somebody invited who has not come. */
+const INITIAL_SIZE = {
+  row: 'size-[32px] text-(length:--text-hint) font-bold',
+  small: 'size-[28px] text-(length:--text-hint) font-bold',
+  dense: 'size-[24px] text-(length:--text-tiny) font-semibold',
+} as const;
+
 export function Initial({
   name,
   size = 'row',
   pending = false,
 }: {
   name: string;
-  /** 32 px in a row of a table, 28 px (« small ») beside a sentence. */
-  size?: 'row' | 'small';
+  /**
+   * 32 px in a row of a table, 28 px (« small ») beside a sentence, 24 px (« dense ») in a row of 36 px
+   * (FRU-691), its initial at 11 px.
+   */
+  size?: 'row' | 'small' | 'dense';
   pending?: boolean;
 }) {
   return (
     <span
-      className={`kit-avatar flex flex-none items-center justify-center box-border ${size === 'small' ? 'size-[28px]' : 'size-[32px]'} border border-line rounded-pill ${pending ? 'bg-surface text-muted' : 'bg-avatar text-surface'} text-(length:--text-hint) font-bold leading-auto`}
+      className={`kit-avatar flex flex-none items-center justify-center box-border ${INITIAL_SIZE[size]} border border-line rounded-pill ${pending ? 'bg-surface text-muted' : 'bg-avatar text-surface'} leading-auto`}
       data-size={size}
       data-pending={pending}
       aria-hidden="true"
@@ -1600,6 +1702,42 @@ export function ViewTab({
         <span className="kit-view-tab__count text-(length:--text-hint) font-normal text-muted tabular-nums">
           {count}
         </span>
+      )}
+    </HeroButton>
+  );
+}
+
+/**
+ * A tab of a screen (FRU-691): its words at 500 and its count, on a line of 44 px. The one on screen
+ * is in ink and underlined by 2 px of ink; the others are muted, in ink under the pointer. A tab is a
+ * button that says whether it is pressed, as `ViewTab`: the list under the tabs is the one it chose.
+ */
+export function LineTab({
+  pressed,
+  onPress,
+  count,
+  children,
+}: {
+  pressed: boolean;
+  onPress: () => void;
+  count?: number;
+  children: ReactNode;
+}) {
+  return (
+    <HeroButton
+      type="button"
+      variant="ghost"
+      aria-pressed={pressed}
+      onPress={onPress}
+      className={`kit-line-tab inline-flex flex-none items-center gap-[6px] h-[44px] min-w-0 p-0 border-0 rounded-none bg-transparent text-(length:--text-body) leading-auto font-medium whitespace-nowrap cursor-pointer transform-none [transition:none] data-[hovered=true]:bg-transparent data-[pressed=true]:bg-transparent ${pressed ? 'text-ink [box-shadow:inset_0_-2px_0_var(--color-ink)]' : 'text-muted [&:hover]:text-ink data-[hovered=true]:text-ink'}`}
+    >
+      {children}
+      {/* A space between the words and the count: « Members 4 » is the name of the tab. */}
+      {count === undefined ? null : (
+        <>
+          {' '}
+          <span className="kit-line-tab__count font-normal text-muted tabular-nums">{count}</span>
+        </>
       )}
     </HeroButton>
   );
@@ -1815,6 +1953,7 @@ export function Dialog({
   title,
   closeLabel,
   size = 'lg',
+  framed = false,
   locked = false,
   className = '',
   children,
@@ -1824,12 +1963,20 @@ export function Dialog({
   title: string;
   /** The name of the close button, e.g. « Close ». */
   closeLabel: string;
-  size?: 'sm' | 'md' | 'lg';
+  /** `form`: 480 px, the dialog of a form of the redesign (FRU-691). */
+  size?: 'sm' | 'md' | 'lg' | 'form';
+  /**
+   * The dialog of the redesign (FRU-691): a head of 48 px over a rule, and a body with no padding,
+   * which draws its own and ends with a `DialogFoot`.
+   */
+  framed?: boolean;
   /** No Escape and no close button: the content closes it by its own buttons. */
   locked?: boolean;
   className?: string;
   children: ReactNode;
 }) {
+  const shape = `${size === 'form' ? 'w-[480px] max-w-full' : ''} ${framed ? FRAMED.dialog : ''}`;
+
   return (
     <Modal.Backdrop
       isOpen={open}
@@ -1839,16 +1986,40 @@ export function Dialog({
         if (!next) onClose();
       }}
     >
-      <Modal.Container size={size} scroll="inside">
-        <Modal.Dialog className={`kit-dialog rounded-modal ${className}`}>
-          {locked ? null : <Modal.CloseTrigger aria-label={closeLabel} />}
-          <Modal.Header>
-            <Modal.Heading className="kit-dialog__title">{title}</Modal.Heading>
+      <Modal.Container size={size === 'form' ? 'lg' : size} scroll="inside">
+        <Modal.Dialog className={`kit-dialog rounded-modal ${shape} ${className}`} data-framed={framed}>
+          {locked ? null : <Modal.CloseTrigger aria-label={closeLabel} className={framed ? FRAMED.close : ''} />}
+          <Modal.Header className={framed ? FRAMED.header : ''}>
+            <Modal.Heading className={`kit-dialog__title ${framed ? FRAMED.title : ''}`}>{title}</Modal.Heading>
           </Modal.Header>
-          <Modal.Body>{children}</Modal.Body>
+          <Modal.Body className={framed ? FRAMED.body : ''}>{children}</Modal.Body>
         </Modal.Dialog>
       </Modal.Container>
     </Modal.Backdrop>
+  );
+}
+
+/**
+ * The parts of a framed dialog (FRU-691): no padding of HeroUI; a head of 48 px, its title at 14 px in
+ * ink, over a rule; the close button in it, at its right; a body that draws its own padding.
+ */
+const FRAMED = {
+  dialog: 'p-0 overflow-hidden',
+  header: 'flex flex-row items-center h-[48px] pl-[20px] pr-[52px] border-b border-line',
+  title: 'text-(length:--text-step) leading-auto font-semibold text-ink',
+  close: 'top-[10px] end-[12px] size-control-md',
+  body: 'm-0 mt-0 p-0 text-ink',
+} as const;
+
+/**
+ * The foot of a framed dialog (FRU-691): a band of the subtle tint under a rule, its buttons on one
+ * line. What goes first is at the left; the rest follows `ml-auto` at the right.
+ */
+export function DialogFoot({ children }: { children: ReactNode }) {
+  return (
+    <div className="kit-dialog__foot flex flex-wrap items-center gap-[8px] border-t border-line bg-subtle px-[20px] py-[12px]">
+      {children}
+    </div>
   );
 }
 

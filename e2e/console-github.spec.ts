@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { type Page, type Route, expect, test } from '@playwright/test';
 import { ACME, type Role, sideScroll, stubWorker, fulfillSites } from './console-workspace.ts';
-import { unfolded } from './settled.ts';
+import { settled, unfolded } from './settled.ts';
 
 /**
  * GitHub on the Connectors screen (FRU-361): « Connect » goes to the App by the start of the worker,
@@ -128,12 +128,14 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
 
 const card = (page: Page) => page.locator('[data-source="GitHub Issues"]');
 
-/** FRU-542: with a source connected, « New connector » opens the list where the card of GitHub is. */
+/** FRU-690: the catalogue, with the tile of GitHub, is on the page under the table. */
 async function openCatalogue(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'New connector', exact: true }).click();
   await expect(card(page)).toBeVisible();
 }
-const rows = (page: Page) => page.locator('button[id^="source-row-"]');
+const rows = (page: Page) => page.locator('tbody tr[data-connector]');
+/** The button at the end of the row of GitHub, which opens its settings in a dialog (FRU-690). */
+const settingsOfGithub = (page: Page) =>
+  page.getByRole('button', { name: /^(Settings of|Réglages de) GitHub Issues$/ });
 const panel = (page: Page) => page.getByRole('region', { name: /^GitHub Issues · / });
 
 /**
@@ -149,8 +151,8 @@ async function picture(page: Page, name: string, { fullPage = true } = {}): Prom
 }
 
 async function expectNoViolation(page: Page, name: string): Promise<void> {
-  // A panel of a source unfolds and fades in (FRU-563): axe reads its contrast once it is there.
-  await expect(page.locator('#source-panel:not([data-settled])')).toHaveCount(0);
+  // The dialog of the settings zooms in: axe reads its contrast once it is there.
+  await settled(page);
   const results = await new AxeBuilder({ page }).include('main').analyze();
   expect
     .soft(
@@ -163,16 +165,24 @@ async function expectNoViolation(page: Page, name: string): Promise<void> {
 /** Opens the panel of the GitHub installation, and waits for it by its name. */
 async function openGithub(page: Page): Promise<void> {
   await page.goto(`${CONSOLE}/w/w1/connectors`);
-  await rows(page).nth(1).click();
+  await settingsOfGithub(page).click();
   await unfolded(page);
 }
 
 test('« Connect » of GitHub asks the worker where to go, then goes there', async ({ page }) => {
   const worker = await workerWith(page);
+  // No installation yet: the tile offers « Connect » (FRU-690).
+  worker.connectors = [LINEAR];
   await page.goto(`${CONSOLE}/w/w1/connectors`);
   await openCatalogue(page);
   const connect = card(page).getByRole('button', { name: 'Connect GitHub Issues', exact: true });
-  await expect(card(page).getByText('An issue per note, in one repository.', { exact: false })).toBeVisible();
+  // FRU-690: one line on the tile, and the whole sentence in its tooltip.
+  await expect(card(page).locator('[data-tile-line]')).toHaveText('An issue in a repository');
+  await expect(card(page).locator('[data-tile-line]').locator('..')).toHaveAttribute(
+    'title',
+    /^An issue per note, in one repository\./,
+  );
+  await expect(card(page).locator('img[data-logo="github"]')).toHaveAttribute('src', '/logos/github.svg');
   await picture(page, 'github-card');
   await expectNoViolation(page, 'the card of GitHub');
 
@@ -183,6 +193,8 @@ test('« Connect » of GitHub asks the worker where to go, then goes there', asy
 
 test('a start that the worker refuses says why under the card, and stays', async ({ page }) => {
   const worker = await workerWith(page);
+  // No installation yet: the tile offers « Connect » (FRU-690).
+  worker.connectors = [LINEAR];
   worker.start = { status: 404, body: { error: 'connectors-unavailable' } };
   await page.goto(`${CONSOLE}/w/w1/connectors`);
   await openCatalogue(page);
@@ -195,22 +207,28 @@ test('a start that the worker refuses says why under the card, and stays', async
 
 test('without the App, the card of GitHub says so and connects nothing', async ({ page }) => {
   const worker = await workerWith(page);
+  // No installation yet: the tile offers « Connect » (FRU-690).
+  worker.connectors = [LINEAR];
   worker.githubApp = false;
   await page.goto(`${CONSOLE}/w/w1/connectors`);
   await openCatalogue(page);
-  await expect(card(page).getByRole('button')).toHaveText('Not on this Fruitback');
-  await expect(card(page).getByRole('button')).toBeDisabled();
-  await expect(card(page).getByText('The operator of this Fruitback has not set up the GitHub App.')).toBeVisible();
+  await expect(card(page).locator('[data-pill]')).toHaveText('Not set up');
+  await expect(card(page).getByRole('button')).toHaveCount(0);
+  await expect(card(page).locator('[data-tile-line]')).toHaveText(
+    'The operator of this Fruitback has not set up the GitHub App.',
+  );
   // The control: Linear still connects.
-  await expect(page.getByRole('button', { name: 'Connect Linear', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Connect another Linear', exact: true })).toBeEnabled();
 });
 
-test('a member reads the card of GitHub and cannot press it', async ({ page }) => {
-  // A member sees the list of the sources to add when none is connected (FRU-542).
+test('a member reads the tile of GitHub, and has nothing to press there', async ({ page }) => {
+  // A member reads the catalogue (FRU-690); a line above it says who adds a connector.
   const worker = await workerWith(page, 'member');
   worker.connectors = [];
   await page.goto(`${CONSOLE}/w/w1/connectors`);
-  await expect(card(page).getByRole('button', { name: 'Connect GitHub Issues', exact: true })).toBeDisabled();
+  await expect(card(page)).toBeVisible();
+  await expect(page.getByText('An owner or an admin adds a connector')).toBeVisible();
+  await expect(card(page).getByRole('button')).toHaveCount(0);
 });
 
 const RETURNS = {
@@ -239,17 +257,16 @@ test('each word of the way back from GitHub says what happened, then leaves the 
   }
 });
 
-test('a way back that went wrong opens the list, and its sentence is there again after « Close » (FRU-542)', async ({
+test('a way back that went wrong says its sentence under the tile, which takes the whole row (FRU-690)', async ({
   page,
 }) => {
   await workerWith(page);
   await page.goto(`${CONSOLE}/w/w1/connectors?github=requested`);
   await expect(card(page).getByRole('alert')).toHaveText(RETURNS.requested);
-  await page.getByRole('button', { name: 'Close', exact: true }).click();
-  await expect(card(page)).toHaveCount(0);
-  // Closed is not forgotten: « New connector » shows the same sentence under GitHub.
-  await openCatalogue(page);
-  await expect(card(page).getByRole('alert')).toHaveText(RETURNS.requested);
+  const linear = await page.locator('[data-source="Linear"]').boundingBox();
+  expect((await card(page).boundingBox())!.width).toBeGreaterThan(linear!.width * 3);
+  // A tile with nothing under its line keeps its 64 px.
+  expect(linear!.height).toBe(64);
 });
 
 test('back with « connected », the panel of the GitHub installation opens, even when it is not the last row', async ({
@@ -294,7 +311,8 @@ test('the row of an installation names its account, and one that needs repair li
   await page.goto(`${CONSOLE}/w/w1/connectors`);
   await expect(row).toContainText('GitHub Issues');
   await expect(row).toContainText('Installed on acme');
-  await expect(row).toContainText('Connected');
+  await expect(row.locator('[data-pill]')).toHaveText('Connected');
+  await expect(row.locator('img[data-logo="github"]')).toHaveAttribute('src', '/logos/github.svg');
 
   worker.connectors = [
     LINEAR,
@@ -335,7 +353,7 @@ test('in the panel, once the list names the repository, it wins over an older wo
 
   worker.repositoriesWait = false;
   await page.reload();
-  await rows(page).nth(1).click();
+  await settingsOfGithub(page).click();
   await expect(panel(page)).toBeVisible();
   await expect.poll(() => worker.listed).toBeGreaterThan(1);
   await expect(panel(page).locator('[data-public]')).toHaveCount(0);
@@ -407,12 +425,12 @@ for (const locale of ['en', 'fr'] as const) {
     expect.soft(await sideScroll(page), 'the card').toBe(0);
     await card(page).scrollIntoViewIfNeeded();
     await picture(page, `card-390-${locale}`);
-    // The card is in the dialog of the sources to add (FRU-562): the rows are under it until it closes.
-    await page.keyboard.press('Escape');
-    await expect(card(page)).toHaveCount(0);
-    await rows(page).nth(1).click();
+    // The settings open in a dialog (FRU-690).
+    await settingsOfGithub(page).click();
     await expect(panel(page).locator('[data-public]')).toBeVisible();
-    await page.waitForTimeout(300);
+    await unfolded(page);
+    const dialog = (await page.getByRole('dialog').boundingBox())!;
+    expect.soft(dialog.x + dialog.width, 'the dialog').toBeLessThanOrEqual(390);
     expect.soft(await sideScroll(page), 'the panel').toBe(0);
     await picture(page, `panel-390-${locale}`);
     await expectNoViolation(page, `the panel at 390 px, ${locale}`);

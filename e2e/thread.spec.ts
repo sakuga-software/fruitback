@@ -89,8 +89,8 @@ for (const scheme of ['light', 'dark'] as const) {
     }));
     expect(list.height).toBeLessThanOrEqual(180);
     expect(list.scrolls).toBe(true);
-    // The replies start where the note does: 16 px inside the edge of 1 px of the bubble (FRU-256, FRU-304).
-    expect(list.indent).toBe(17);
+    // The replies start where the note does: 12 px inside the edge of 1 px of the bubble (FRU-696).
+    expect(list.indent).toBe(13);
     // A reply holds the same address, and wraps too.
     expect(await overflowsSideways(page, '.fruitback-thread-replies')).toBe(0);
 
@@ -137,7 +137,9 @@ async function theNoteOfTheMockUp(page: Page): Promise<void> {
   });
 }
 
-test('the bubble hides the CSS selector by default, and shows it when the host asks (FRU-349)', async ({ page }) => {
+test('the bubble folds the CSS selector by default, and opens it when the host asks (FRU-349, FRU-696)', async ({
+  page,
+}) => {
   await theNoteOfTheMockUp(page);
   await mount(page, 'thread-selectors');
   await plant(page, 'The selector is for a developer.');
@@ -146,11 +148,12 @@ test('the bubble hides the CSS selector by default, and shows it when the host a
   await badge.click();
   const thread = page.getByRole('dialog', { name: 'Note 1', exact: true });
   await expect(thread).toBeVisible();
-  // Neither the selector nor the component and the file (FRU-419).
-  await expect(page.locator('.fruitback-thread-component')).toHaveCount(0);
-  await expect(page.locator('.fruitback-thread-selector')).toHaveCount(0);
+  // The selector, the component and the file, folded under « Technical details » (FRU-419, FRU-696).
+  await expect(page.locator('.fruitback-thread-component')).toBeHidden();
+  await expect(page.locator('.fruitback-thread-selector')).toBeHidden();
+  await expect(page.locator('.fruitback-thread-tech-summary')).toHaveText('Technical details');
 
-  // `showSelectors`, as the extension says « Show CSS selectors »: the open thread is drawn again.
+  // `showSelectors`, as the extension says « Show CSS selectors »: the fold of the open thread opens.
   await page.evaluate(() =>
     (globalThis as unknown as { fruitbackWidget: { showSelectors(on: boolean): void } }).fruitbackWidget.showSelectors(
       true,
@@ -163,10 +166,10 @@ test('the bubble hides the CSS selector by default, and shows it when the host a
       false,
     ),
   );
-  await expect(page.locator('.fruitback-thread-selector')).toHaveCount(0);
+  await expect(page.locator('.fruitback-thread-selector')).toBeHidden();
 });
 
-test('the bubble of a note has the measures of the mock-up, and opens under its element (FRU-256, FRU-421)', async ({
+test('the bubble of a note has the measures of the mock-up of 2026-11-25, and opens under its element (FRU-421, FRU-696)', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -197,6 +200,7 @@ test('the bubble of a note has the measures of the mock-up, and opens under its 
         } as Record<string, string | number>;
       }, properties);
 
+  // 360 px, the corner of 10 of a modal of the console, 13 px of text (FRU-696).
   expect(
     await read('.fruitback-thread', [
       'border-radius',
@@ -206,39 +210,48 @@ test('the bubble of a note has the measures of the mock-up, and opens under its 
       'line-height',
     ]),
   ).toMatchObject({
-    width: 344,
-    'border-radius': '14px',
+    width: 360,
+    'border-radius': '10px',
     'border-top-width': '1px',
     'border-top-color': 'rgb(228, 228, 231)',
-    'font-size': '14px',
-    'line-height': '21px',
+    'font-size': '13px',
+    'line-height': '18.2px',
   });
   expect(await page.locator('.fruitback-thread').evaluate((element) => getComputedStyle(element).boxShadow)).toMatch(
     /0px 10px 30px 0px$|^rgba?\(0, 0, 0, 0\.18\) 0px 10px 30px 0px/,
   );
-  // The head: the state behind its drop and the identifier in a chip, then the cross in a column of
-  // its own (FRU-419). The first column wraps a long state onto a line of its own, 6 px above the rest
-  // (FRU-350).
+  // The head of 40 px: the status in a chip and the ticket, then the cross in a column of its own
+  // (FRU-419). The first column wraps a long state onto a line of its own, 6 px above the rest.
+  // 40 px on one line; here the chip of a visitor known by their browser (FRU-700) takes a second line.
   expect(
-    await read('.fruitback-thread-head', ['padding', 'border-bottom-width', 'column-gap', 'display']),
+    await read('.fruitback-thread-head', ['padding', 'border-bottom-width', 'column-gap', 'display', 'min-height']),
   ).toMatchObject({
-    padding: '14px 14px 12px 16px',
+    'min-height': '40px',
+    padding: '7px 9px 7px 12px',
     'border-bottom-width': '1px',
-    'column-gap': '10px',
+    'column-gap': '6px',
     display: 'grid',
   });
   expect(await read('.fruitback-thread-heading', ['column-gap', 'row-gap'])).toMatchObject({
-    'column-gap': '10px',
+    'column-gap': '6px',
     'row-gap': '6px',
   });
-  expect(await read('.fruitback-thread-stage', ['font-size', 'font-weight', 'gap'])).toMatchObject({
+  // The status: a chip of 24 px with the edge and the corner of a control, the round of its stage.
+  expect(
+    await read('.fruitback-thread-stage', ['font-size', 'font-weight', 'gap', 'border-top-width', 'border-radius']),
+  ).toMatchObject({
+    height: 24,
     'font-size': '13px',
-    'font-weight': '600',
-    gap: '7px',
+    'font-weight': '500',
+    gap: '6px',
+    'border-top-width': '1px',
+    'border-radius': '6px',
   });
-  expect(await read('.fruitback-thread-drop', ['background-color'])).toMatchObject({
+  expect(await read('.fruitback-thread-ring', ['color'])).toMatchObject({
+    width: 14,
+    height: 14,
     // The mango of « in progress », the colour its pin has.
-    'background-color': 'rgb(243, 187, 61)',
+    color: 'rgb(243, 187, 61)',
   });
   // The age of the status is in the title of its word, not in the head (FRU-419).
   await expect(page.locator('.fruitback-thread-age')).toHaveCount(0);
@@ -253,44 +266,88 @@ test('the bubble of a note has the measures of the mock-up, and opens under its 
       'padding',
     ]),
   ).toMatchObject({
-    // 44 px to press: a chip of 26 px inside a transparent border of 9 px. The vertical radius counts
-    // that border, so the chip keeps a corner of 6 px (FRU-632).
+    // 44 px to press: 24 px drawn inside a transparent border of 10 px. The vertical radius counts
+    // that border, so the hover keeps a corner of 6 px (FRU-632).
     height: 44,
-    'font-size': '12px',
-    'font-weight': '600',
+    'font-size': '13px',
+    'font-weight': '500',
     'text-decoration-line': 'none',
-    'background-color': 'rgb(244, 244, 245)',
-    'border-top-left-radius': '6px 15px',
-    padding: '4px 8px',
+    'background-color': 'rgba(0, 0, 0, 0)',
+    'border-top-left-radius': '6px 16px',
+    padding: '3px 6px',
   });
-  await expect(thread.getByRole('link')).toHaveText(/^DEV-\d+ →$/);
-  // The cross: 28 px drawn, 44 px to press.
+  // The identifier, the sign of a new tab after it, and its name says the tab (FRU-696).
+  await expect(thread.getByRole('link')).toHaveText(/^DEV-\d+$/);
+  await expect(thread.getByRole('link')).toHaveAccessibleName(/^DEV-\d+, in a new tab$/);
+  await expect(thread.locator('.fruitback-thread-link-out')).toHaveCount(1);
+  // The cross: 26 px drawn, 44 px to press.
   expect(await read('.fruitback-thread-close', ['border-top-width'])).toMatchObject({
     width: 44,
     height: 44,
-    'border-top-width': '8px',
+    'border-top-width': '9px',
   });
+  // The conversation: the note is the first message, 12 px around.
   expect(await read('.fruitback-thread-body', ['padding', 'gap', 'display'])).toMatchObject({
-    padding: '14px 16px 4px',
-    gap: '10px',
+    padding: '12px 12px 0px',
+    gap: '12px',
     display: 'flex',
   });
+  expect(await read('.fruitback-thread-message', ['gap', 'display'])).toMatchObject({ gap: '10px', display: 'flex' });
   expect(await read('.fruitback-thread-meta', ['font-size', 'color'])).toMatchObject({
     'font-size': '12px',
     color: 'rgb(107, 107, 116)',
   });
-  // The lines of mono: the selector the note carries, then the component and the file. No box (FRU-419).
-  const source = await read('.fruitback-thread-source', [
-    'font-family',
-    'padding',
-    'border-top-width',
-    'background-color',
-  ]);
-  expect(source).toMatchObject({
-    padding: '0px',
-    'border-top-width': '0px',
-    'background-color': 'rgba(0, 0, 0, 0)',
+  await expect(page.locator('.fruitback-thread-body .fruitback-thread-reply-name')).toHaveText('Camille Durand');
+  expect(await read('.fruitback-thread-note', ['font-size', 'line-height'])).toMatchObject({
+    'font-size': '13px',
+    'line-height': '19.5px',
   });
+  // The text is aligned under the name, not under the round.
+  const aligned = await page.evaluate(() => {
+    const root = document.querySelector('[data-fruitback-host]')!.shadowRoot!;
+    const left = (selector: string) => root.querySelector(selector)!.getBoundingClientRect().left;
+
+    return (
+      left('.fruitback-thread-body .fruitback-thread-note') -
+      left('.fruitback-thread-body .fruitback-thread-reply-name')
+    );
+  });
+  expect(aligned).toBe(0);
+  // The round of an initial, 22 px, white on the chip.
+  expect(
+    await read('.fruitback-thread-reply-avatar', ['border-top-left-radius', 'background-color', 'color', 'font-size']),
+  ).toMatchObject({
+    width: 22,
+    height: 22,
+    'border-top-left-radius': '999px',
+    'background-color': 'rgb(63, 63, 70)',
+    color: 'rgb(255, 255, 255)',
+    'font-size': '10px',
+  });
+  await expect(page.locator('.fruitback-thread-reply-avatar').first()).toHaveText('C');
+  await expect(page.locator('.fruitback-thread-answers .fruitback-thread-reply-avatar')).toHaveText('L');
+  // No « Replies » title: the replies are messages of the same conversation.
+  await expect(page.locator('.fruitback-thread-answers-title')).toHaveCount(0);
+  expect(await read('.fruitback-thread-answers', ['padding'])).toMatchObject({ padding: '12px 12px 0px' });
+  expect(await read('.fruitback-thread-reply-who', ['font-size'])).toMatchObject({ 'font-size': '12px' });
+  expect(await read('.fruitback-thread-reply-name', ['font-weight', 'font-size', 'color'])).toMatchObject({
+    'font-weight': '600',
+    'font-size': '13px',
+    color: 'rgb(24, 24, 27)',
+  });
+  expect(await read('.fruitback-thread-reply-body', ['font-size', 'line-height'])).toMatchObject({
+    'font-size': '13px',
+    'line-height': '19.5px',
+  });
+  // « Technical details », open here (the host shows the selectors): the lines of mono, no box.
+  await expect(page.locator('details.fruitback-thread-tech')).toHaveAttribute('open');
+  expect(await read('.fruitback-thread-tech-summary', ['font-size', 'color'])).toMatchObject({
+    height: 24,
+    'font-size': '12px',
+    color: 'rgb(107, 107, 116)',
+  });
+  const source = await read('.fruitback-thread-source', ['font-family', 'border-top-width', 'background-color']);
+  expect(source).toMatchObject({ 'border-top-width': '0px', 'background-color': 'rgba(0, 0, 0, 0)' });
   expect(String(source['font-family'])).toMatch(/^ui-monospace/);
   await expect(page.locator('.fruitback-thread-selector')).not.toHaveText('');
   expect(await read('.fruitback-thread-selector', ['font-size', 'color'])).toMatchObject({
@@ -298,38 +355,15 @@ test('the bubble of a note has the measures of the mock-up, and opens under its 
     color: 'rgb(107, 107, 116)',
   });
   await expect(page.locator('.fruitback-thread-component')).toHaveText('<HeroBanner> · src/components/Hero.tsx:42');
-  expect(await read('.fruitback-thread-component', ['font-size', 'color'])).toMatchObject({
-    'font-size': '12px',
-    color: 'rgb(107, 107, 116)',
+  // The reply on one line: a row of 34 px with « Send » of 26 px inside it.
+  expect(await read('.fruitback-thread-reply-row', ['border-top-width', 'border-radius'])).toMatchObject({
+    height: 34,
+    'border-top-width': '1px',
+    'border-radius': '6px',
   });
-  // « Replies », the round of an initial, and the text of the reply.
-  expect(await read('.fruitback-thread-answers', ['padding'])).toMatchObject({ padding: '10px 16px 16px' });
-  expect(
-    await read('.fruitback-thread-answers-title', ['font-size', 'font-weight', 'text-transform', 'color']),
-  ).toMatchObject({
-    'font-size': '11px',
-    'font-weight': '600',
-    'text-transform': 'uppercase',
-    color: 'rgb(107, 107, 116)',
-  });
-  expect(
-    await read('.fruitback-thread-reply-avatar', ['border-top-left-radius', 'background-color', 'font-size']),
-  ).toMatchObject({
-    width: 24,
-    height: 24,
-    'border-top-left-radius': '999px',
-    'background-color': 'rgb(244, 244, 245)',
-    'font-size': '11px',
-  });
-  await expect(page.locator('.fruitback-thread-reply-avatar')).toHaveText('L');
-  expect(await read('.fruitback-thread-reply-who', ['font-size'])).toMatchObject({ 'font-size': '11px' });
-  expect(await read('.fruitback-thread-reply-name', ['font-weight', 'color'])).toMatchObject({
-    'font-weight': '600',
-    color: 'rgb(24, 24, 27)',
-  });
-  expect(await read('.fruitback-thread-reply-body', ['font-size', 'line-height'])).toMatchObject({
-    'font-size': '13px',
-    'line-height': '18.85px',
+  expect(await read('.fruitback-thread-reply-send', ['border-radius'])).toMatchObject({
+    height: 26,
+    'border-radius': '6px',
   });
   // The foot: a field to reply, since FRU-257 decided who may (this worker lets everybody).
   await expect(thread.getByRole('textbox', { name: 'Reply' })).toHaveCount(1);

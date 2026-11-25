@@ -86,16 +86,18 @@ test.describe('an invited reviewer (FRU-104)', () => {
     await owner.goto(CONSOLE);
     await expect(owner).toHaveURL(/\/w\/ws_[0-9a-f]{20}\/sites$/);
     const workspace = /\/w\/(ws_[0-9a-f]{20})\//.exec(owner.url())?.[1] as string;
-    await expect(owner.getByRole('heading', { name: 'staging.acme.dev', exact: true })).toBeVisible();
+    await expect(owner.getByRole('link', { name: 'staging.acme.dev', exact: true })).toBeVisible();
 
     await owner.goto(`${CONSOLE}/w/${workspace}/members`);
     await owner.getByRole('button', { name: 'Invite', exact: true }).click();
-    await owner.getByRole('textbox', { name: 'Email', exact: true }).fill('paul@client.dev');
-    await owner.getByRole('dialog').getByRole('button', { name: 'Invite', exact: true }).click();
+    await owner.getByRole('textbox', { name: 'Emails', exact: true }).fill('paul@client.dev');
+    await owner.getByRole('dialog').getByRole('button', { name: 'Send 1 invite', exact: true }).click();
     const kept = owner.getByRole('status');
     await expect(kept).toContainText('Invitation sent to paul@client.dev.');
     // The link to send by hand is the one of the message: it names no invitation (FRU-107).
     await expect(kept).toContainText(`${CONSOLE}/invitations`);
+    // The invitations are a tab of their own (FRU-691).
+    await owner.getByRole('button', { name: 'Invitations 1', exact: true }).click();
     await expect(owner.getByText('paul@client.dev', { exact: true })).toBeVisible();
     await expect(owner.getByText('Invitation sent', { exact: true })).toBeVisible();
 
@@ -131,7 +133,7 @@ test.describe('an invited reviewer (FRU-104)', () => {
     await expect(paul.getByRole('link', { name: 'Open https://staging.acme.dev' })).toHaveAttribute('href', SITE);
     await paul.getByRole('link', { name: 'Go to the console' }).click();
     await expect(paul).toHaveURL(`${CONSOLE}/w/${workspace}/sites`);
-    await expect(paul.getByRole('heading', { name: 'staging.acme.dev', exact: true })).toBeVisible();
+    await expect(paul.getByRole('link', { name: 'staging.acme.dev', exact: true })).toBeVisible();
 
     // The owner sees Paul as a member, and the invitation is gone.
     await owner.reload();
@@ -212,19 +214,25 @@ test.describe('an invited reviewer (FRU-104)', () => {
 
     await owner.goto(`${CONSOLE}/w/${workspace}/members`);
     await owner.getByRole('button', { name: 'Invite', exact: true }).click();
-    await owner.getByRole('textbox', { name: 'Email', exact: true }).fill('paul@client.dev');
-    await owner.getByRole('dialog').getByRole('button', { name: 'Invite', exact: true }).click();
+    await owner.getByRole('textbox', { name: 'Emails', exact: true }).fill('paul@client.dev');
+    await owner.getByRole('dialog').getByRole('button', { name: 'Send 1 invite', exact: true }).click();
     const notice = owner.getByRole('status');
     await expect(notice).toContainText('Invitation sent to paul@client.dev.');
+    // « Resend invitation » is in the menu of its row, in the tab « Invitations » (FRU-691).
+    await owner.getByRole('button', { name: 'Invitations 1', exact: true }).click();
+    const resend = async () => {
+      await owner.getByRole('button', { name: 'Actions for paul@client.dev' }).click();
+      await owner.getByRole('menuitem', { name: 'Resend invitation' }).click();
+    };
     // Two more messages go: three in the window of this workspace for this address.
     for (const sent of [2, 3]) {
-      await owner.getByRole('button', { name: 'Resend' }).click();
+      await resend();
       await expect.poll(toPaul).toBe(sent);
       await expect(notice).toContainText('Invitation sent to paul@client.dev.');
     }
 
     // The fourth is kept and not sent: the worker answers `mailed: false`, and the console says so.
-    await owner.getByRole('button', { name: 'Resend' }).click();
+    await resend();
     await expect(notice).toContainText('Invitation kept for paul@client.dev, but no message was sent');
     await expect(notice).toContainText(`${CONSOLE}/invitations`);
     await expect(notice.getByRole('button', { name: 'Copy the link' })).toBeVisible();

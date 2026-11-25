@@ -27,6 +27,7 @@ import { openPanelOrPage, panelApis } from '../../src/side-panel.ts';
 import { type Account, keysOfShortcut, showSiteFacts, turnOnScreen, siteOn } from '../../src/popup-view.ts';
 import { hostOf, make } from '../../src/kit.ts';
 import { changeNotice, destinationScreen } from '../../src/destination-screen.ts';
+import { showPageNotes } from '../../src/popup-notes.ts';
 
 import { pairedFoot, pairedRow } from './pairing.ts';
 import {
@@ -35,6 +36,7 @@ import {
   activateOpenTabs,
   askTab,
   otherCopyLine,
+  pageNotesOf,
   turnOn,
   visibility,
 } from './site-actions.ts';
@@ -75,6 +77,18 @@ function consoleConnectors(
 
   return () => {
     void browser.tabs.create({ url: url.toString() });
+    window.close();
+  };
+}
+
+/** The notes of a workspace in the console, where the chip of the head leads (FRU-695). */
+function consoleWorkspace(account: Account | undefined, workspace: string): (() => void) | undefined {
+  if (account?.console === undefined) return undefined;
+  const base = account.console.endsWith('/') ? account.console : `${account.console}/`;
+  const url = new URL(`w/${encodeURIComponent(workspace)}/notes`, base).toString();
+
+  return () => {
+    void browser.tabs.create({ url });
     window.close();
   };
 }
@@ -382,6 +396,22 @@ export async function siteOfWorkspaceOn(
     onSettings: openSettings,
   });
   screen.querySelector('.popup-body')?.append(problem, otherCopyLine(tab, site.enabled));
+  // FRU-695: the notes of the page, as the widget of the tab reads them. Not for a screen gone by then.
+  const notesSection = screen.querySelector<HTMLElement>('.page-notes');
+  if (notesSection !== null) {
+    const drawnNow = draws.drawn;
+    void pageNotesOf(tab, () => drawnNow === draws.drawn).then((read) => {
+      if (read === undefined || drawnNow !== draws.drawn) return;
+      showPageNotes(notesSection, read, {
+        onOpenPanel: openPanel,
+        // A note opens on the page, its pin and its thread, and the popup goes.
+        onOpen: (note) =>
+          void askTab(tab, 'focus-note', { note }).then(({ done }) =>
+            done ? window.close() : showProblem(problem, t(NOT_THERE)),
+          ),
+      });
+    });
+  }
   // FRU-600: « Where notes go » saved, and screen 3 drawn again: it says what changed, once.
   if (changed.text !== undefined) {
     screen.querySelector('.popup-body')?.prepend(changeNotice(document, changed.text));
@@ -498,6 +528,16 @@ export async function siteOfWorkspaceOn(
             ...(toCheck === undefined ? {} : { toCheck }),
             ...(notes === undefined ? {} : { open: notes.new + notes.todo + notes.progress }),
             ...(destination?.refused === true ? { refused: refusedFacts() } : {}),
+            // FRU-695: the chip of the head, a menu of the workspaces of the account, the site's first.
+            ...(listed.workspaces === undefined || consoleWorkspace(account, listed.workspace.id) === undefined
+              ? {}
+              : {
+                  workspaces: [
+                    listed.workspace,
+                    ...listed.workspaces.filter((each) => each.id !== listed.workspace.id),
+                  ].map(({ id, name }) => ({ id, name })),
+                  onWorkspace: (id: string) => consoleWorkspace(account, id)?.(),
+                }),
           },
         );
       });

@@ -187,6 +187,24 @@ li { display: list-item; }
   font: 600 18px/1 var(--fruitback-font-sans);
   cursor: pointer;
 }
+/*
+  The counts of the page by status (FRU-696), between the list and the gear: the round of each stage
+  with a pin, and how many, in 12 px of the muted ink. Not a control: no target, 8 px each side.
+*/
+.fruitback-dock-counts {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding-inline: 6px 8px;
+  color: var(--fruitback-color-text-muted);
+  font: 500 12px/1 var(--fruitback-font-sans);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.fruitback-dock-counts[hidden] { display: none; }
+.fruitback-dock-count { display: inline-flex; align-items: center; gap: 4px; }
+.fruitback-dock-ring { width: 14px; height: 14px; flex: none; }
 /* The gear is drawn 1 px smaller than the list, as in the mock-up. */
 .fruitback-configure { font-size: 17px; }
 .fruitback-configure:hover,

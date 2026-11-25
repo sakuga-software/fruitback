@@ -635,7 +635,7 @@ describe('createOverlay', () => {
     assert.match(thread.textContent ?? '', /Commander/);
   });
 
-  it('lays the bubble out as the mock-up does: a head, the note, and the replies apart (FRU-256, FRU-304)', () => {
+  it('lays the bubble out as the mock-up of 2026-11-25 does: a head, the conversation, then the technical details folded (FRU-696)', () => {
     const page = mountWithCta();
     overlay = createOverlay({ document: page.document });
     overlay.render([
@@ -650,30 +650,49 @@ describe('createOverlay', () => {
 
     const thread = page.document.querySelector('[data-fruitback-thread]') as HTMLElement;
     const classes = (parent: Element) => [...parent.children].map((child) => child.className);
-    assert.deepEqual(classes(thread), ['fruitback-thread-head', 'fruitback-thread-body', 'fruitback-thread-answers']);
-    // The head: two columns, what it says and the cross (FRU-419). The state behind its drop and the
-    // way out share the first; the age of the state is not in the head.
+    assert.deepEqual(classes(thread), [
+      'fruitback-thread-head',
+      'fruitback-thread-body',
+      'fruitback-thread-answers',
+      'fruitback-thread-tech',
+    ]);
+    // The head: two columns, what it says and the cross (FRU-419). The state behind the round of its
+    // stage and the way out share the first; the age of the state is not in the head.
     const head = thread.querySelector('.fruitback-thread-head') as HTMLElement;
     // The handle first, on the page (FRU-420).
     assert.deepEqual(classes(head), ['fruitback-thread-handle', 'fruitback-thread-heading', 'fruitback-thread-close']);
     assert.deepEqual(classes(head.children[1] as HTMLElement), ['fruitback-thread-stage', 'fruitback-thread-link']);
-    assert.equal(head.querySelector('.fruitback-thread-drop')?.getAttribute('aria-hidden'), 'true');
+    const ring = head.querySelector('svg.fruitback-thread-ring');
+    assert.equal(ring?.getAttribute('aria-hidden'), 'true');
+    assert.equal(ring?.getAttribute('data-stage'), 'progress');
     assert.equal(head.querySelector('.fruitback-thread-stage')?.textContent, 'In Progress');
-    // The identifier and an arrow, in a chip: no name of a store the widget does not know.
-    assert.equal(head.querySelector('a')?.textContent, 'SKG-742 →');
-    // No source: it shows with the selectors only (FRU-419).
-    assert.deepEqual(classes(thread.querySelector('.fruitback-thread-body') as HTMLElement), [
-      'fruitback-thread-note',
-      'fruitback-thread-meta',
-    ]);
-    // « Replies » above the list, and the initial of who answered in a round (FRU-304).
+    // The identifier, then the sign of a new tab: no name of a store the widget does not know, and a
+    // name that says the tab (FRU-696). A Linear address has its mark before it.
+    const link = head.querySelector('a') as HTMLAnchorElement;
+    assert.equal(link.textContent, 'SKG-742');
+    assert.equal(link.getAttribute('aria-label'), 'SKG-742, in a new tab');
+    assert.equal(link.querySelector('svg.fruitback-thread-link-mark')?.getAttribute('data-tracker'), 'Linear');
+    assert.ok(link.querySelector('svg.fruitback-thread-link-out') !== null);
+    // The note is the first message: the round of who wrote it, then their name, its age and its text.
+    const body = thread.querySelector('.fruitback-thread-body') as HTMLElement;
+    assert.deepEqual(classes(body), ['fruitback-thread-message']);
+    const message = body.querySelector('.fruitback-thread-message') as HTMLElement;
+    assert.deepEqual(classes(message), ['fruitback-thread-reply-avatar', 'fruitback-thread-reply-text']);
+    assert.deepEqual(classes(message.children[1] as HTMLElement), ['fruitback-thread-meta', 'fruitback-thread-note']);
+    // No « Replies » title any more: the replies are messages of the same conversation (FRU-696).
     const answers = thread.querySelector('.fruitback-thread-answers') as HTMLElement;
-    assert.equal(answers.querySelector('.fruitback-thread-answers-title')?.textContent, 'Replies');
-    assert.equal(thread.querySelector('.fruitback-thread-reply-avatar')?.textContent, 'A');
-    assert.equal(thread.querySelector('.fruitback-thread-reply-avatar')?.getAttribute('aria-hidden'), 'true');
+    assert.equal(answers.querySelector('.fruitback-thread-answers-title'), null);
+    assert.equal(answers.querySelector('ul')?.getAttribute('aria-label'), 'Replies');
+    assert.equal(answers.querySelector('.fruitback-thread-reply-avatar')?.textContent, 'A');
+    assert.equal(answers.querySelector('.fruitback-thread-reply-avatar')?.getAttribute('aria-hidden'), 'true');
     // Who answered is told apart from when: the name has its own element, which the stylesheet inks.
-    assert.equal(thread.querySelector('.fruitback-thread-reply-name')?.textContent, 'Alice');
-    assert.match(thread.querySelector('.fruitback-thread-reply-who')?.textContent ?? '', /^Alice · /);
+    assert.equal(answers.querySelector('.fruitback-thread-reply-name')?.textContent, 'Alice');
+    assert.match(answers.querySelector('.fruitback-thread-reply-who')?.textContent ?? '', /^Alice \S/);
+    assert.ok(answers.querySelector('.fruitback-thread-reply-when')?.hasAttribute('title'));
+    // The selector and the source, folded under the conversation (FRU-696), closed by default.
+    const fold = thread.querySelector('details.fruitback-thread-tech') as HTMLDetailsElement;
+    assert.equal(fold.open, false);
+    assert.equal(fold.querySelector('summary')?.textContent, 'Technical details');
     // FRU-256 builds no way to answer from the page: that waits for a decision (Q9).
     assert.equal(thread.querySelector('form, textarea, input') === null, true);
   });
@@ -712,7 +731,7 @@ describe('createOverlay', () => {
     assert.equal(lineFor({ component: '<img src=x onerror=alert(1)>' }), '<<img src=x onerror=alert(1)>>');
   });
 
-  it('hides the selector and the source by default, and shows both with the selectors (FRU-349, FRU-419)', () => {
+  it('folds the selector and the source by default, and opens them with the selectors (FRU-349, FRU-419, FRU-696)', () => {
     const page = mountWithCta();
     const issue = issueOnCta();
     overlay = createOverlay({ document: page.document });
@@ -720,14 +739,18 @@ describe('createOverlay', () => {
     (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
 
     const thread = () => page.document.querySelector('[data-fruitback-thread]') as HTMLElement;
-    assert.equal(thread().querySelector('.fruitback-thread-source'), null);
-    assert.doesNotMatch(thread().textContent ?? '', /checkout-cta"\]/);
-    assert.doesNotMatch(thread().textContent ?? '', /CheckoutCta|checkout-cta\.tsx/);
-    // The note keeps them: only the thread hides them.
+    const fold = () => thread().querySelector<HTMLDetailsElement>('details.fruitback-thread-tech');
+    // Folded under the conversation: in the thread for a keyboard, out of the eye.
+    assert.equal(fold()?.open, false);
+    assert.ok(fold()?.querySelector('.fruitback-thread-source') !== null);
+    // A summary the keyboard reaches: a native fold.
+    assert.equal(fold()?.firstElementChild?.tagName, 'SUMMARY');
+    // The note keeps them.
     assert.equal(issue.note.anchor.selector, '[data-testid="checkout-cta"]');
     assert.equal(issue.note.source?.component, 'CheckoutCta');
 
     overlay.showSelectors(true);
+    assert.equal(fold()?.open, true);
     assert.equal(thread().querySelector('.fruitback-thread-selector')?.textContent, '[data-testid="checkout-cta"]');
     assert.equal(
       thread().querySelector('.fruitback-thread-source > .fruitback-thread-component')?.textContent,
@@ -759,7 +782,7 @@ describe('createOverlay', () => {
     assert.equal(page.document.querySelector('.fruitback-thread-state')?.hasAttribute('title'), false);
   });
 
-  it('draws no empty box for a note with no source while the selector is hidden (FRU-349)', () => {
+  it('folds the selector alone for a note with no source, with no empty line (FRU-349, FRU-696)', () => {
     const page = mountWithCta();
     const issue = issueOnCta();
     const { source: _dropped, ...note } = issue.note;
@@ -767,10 +790,28 @@ describe('createOverlay', () => {
     overlay.render([{ ...issue, note }]);
     (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
 
-    assert.equal(page.document.querySelector('.fruitback-thread-source'), null);
+    const source = page.document.querySelector('.fruitback-thread-tech .fruitback-thread-source') as HTMLElement;
+    assert.deepEqual(
+      [...source.children].map((child) => child.className),
+      ['fruitback-thread-selector'],
+    );
   });
 
-  it('shows and hides the selector of the open thread, and a reply being typed keeps its text (FRU-349)', () => {
+  it('keeps « Technical details » open, and its focus, when the thread is built again (FRU-696)', () => {
+    const page = mountWithCta();
+    overlay = createOverlay({ document: page.document });
+    overlay.render([issueOnCta()]);
+    (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
+    const fold = () => page.document.querySelector<HTMLDetailsElement>('details.fruitback-thread-tech');
+    (fold() as HTMLDetailsElement).open = true;
+    fold()?.querySelector<HTMLElement>('summary')?.focus();
+
+    overlay.resolve();
+    assert.equal(fold()?.open, true);
+    assert.equal(page.document.activeElement?.tagName, 'SUMMARY');
+  });
+
+  it('opens and folds the selector of the open thread, and a reply being typed keeps its text (FRU-349, FRU-696)', () => {
     const page = mountWithCta();
     overlay = createOverlay({
       document: page.document,
@@ -778,10 +819,10 @@ describe('createOverlay', () => {
     });
     overlay.render([issueOnCta()]);
     (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
-    const selector = () => page.document.querySelector('.fruitback-thread-selector')?.textContent ?? null;
+    const shown = () => page.document.querySelector<HTMLDetailsElement>('details.fruitback-thread-tech')?.open ?? null;
     const field = () => page.document.querySelector<HTMLTextAreaElement>('.fruitback-thread-reply-field');
 
-    assert.equal(selector(), null);
+    assert.equal(shown(), false);
     const typing = field();
     assert.ok(typing !== null, 'the thread has a field to reply');
     typing.value = 'Je regarde';
@@ -789,11 +830,11 @@ describe('createOverlay', () => {
     typing.focus();
 
     overlay.showSelectors(true);
-    assert.equal(selector(), '[data-testid="checkout-cta"]');
+    assert.equal(shown(), true);
     assert.equal(field()?.value, 'Je regarde');
 
     overlay.showSelectors(false);
-    assert.equal(selector(), null);
+    assert.equal(shown(), false);
     assert.equal(field()?.value, 'Je regarde');
   });
 
@@ -1362,7 +1403,7 @@ describe('the team’s replies', () => {
     field.form?.requestSubmit();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    assert.equal(page.document.querySelector('.fruitback-thread-answers-title')?.textContent, 'Replies');
+    assert.equal(page.document.querySelector('.fruitback-thread-answers ul')?.getAttribute('aria-label'), 'Replies');
     assert.equal(page.document.querySelectorAll('.fruitback-thread-reply').length, 1);
   });
 });
@@ -1526,10 +1567,15 @@ describe('the reading direction and the dates (FRU-38)', () => {
     (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
 
     const [first, second] = [...page.document.querySelectorAll('.fruitback-thread-reply-who')] as HTMLElement[];
-    assert.equal(first?.textContent, 'Alice · yesterday');
-    assert.equal(first?.title, new Date('2026-08-01T10:00:00.000Z').toLocaleDateString('en'));
+    // The name, then its age (FRU-696): the day is in the title of the age.
+    assert.equal(first?.textContent, 'Alice yesterday');
+    assert.equal(
+      first?.querySelector<HTMLElement>('.fruitback-thread-reply-when')?.title,
+      new Date('2026-08-01T10:00:00.000Z').toLocaleDateString('en'),
+    );
     // A date the store wrote in a shape Date cannot read is shown as it came, not as "Invalid Date".
-    assert.equal(second?.textContent, 'Bruno · last tuesday');
+    assert.equal(second?.textContent, 'Bruno last tuesday');
+    assert.equal(second?.querySelector<HTMLElement>('.fruitback-thread-reply-when')?.hasAttribute('title'), false);
   });
 });
 
@@ -1961,5 +2007,66 @@ describe('the handle of a bubble (FRU-420)', () => {
     assert.equal(overlay.select(issue.note.id, home), true);
     assert.ok(home.querySelector('[data-fruitback-thread]') !== null);
     assert.equal(home.querySelector('.fruitback-thread-handle'), null);
+  });
+});
+
+describe('the counts of the page by status, in the dock (FRU-696)', () => {
+  let overlay: Overlay | null = null;
+  afterEach(() => {
+    overlay?.destroy();
+    overlay = null;
+  });
+
+  const at = (id: string, stage: NoteIssue['stage']) =>
+    noteIssueFixture({
+      id: `issue_${id}`,
+      identifier: `SKG-${id}`,
+      stage,
+      stateName: '',
+      note: noteFixture({
+        id: `note_${id}`,
+        anchor: {
+          selector: '[data-testid="checkout-cta"]',
+          tag: 'button',
+          text: 'Commander',
+          bounds: { xPct: 10, yPct: 20, wPct: 20, hPct: 4 },
+        },
+      }),
+    });
+
+  it('draws the round and the count of each stage with a pin, between the list and the gear, and none for a draft', () => {
+    const page = mountWithCta();
+    const dock = page.document.createElement('div');
+    dock.innerHTML = '<button data-fruitback-host-list></button><button data-fruitback-host-configure></button>';
+    page.document.body.append(dock);
+    const draft = at('9', 'new');
+    overlay = createOverlay({ document: page.document, dock, isDraft: (issue) => issue === draft });
+    const counts = () => dock.querySelector<HTMLElement>('[data-fruitback-dock-counts]') as HTMLElement;
+
+    // Between the list and the gear, and hidden while the page has no pin.
+    assert.equal(counts().previousElementSibling?.hasAttribute('data-fruitback-host-list'), true);
+    assert.equal(counts().hidden, true);
+
+    overlay.render([at('1', 'progress'), at('2', 'new'), at('3', 'new'), draft]);
+    assert.equal(counts().hidden, false);
+    assert.deepEqual(
+      [...counts().querySelectorAll('.fruitback-dock-count')].map((count) => [
+        count.querySelector('svg')?.getAttribute('data-stage'),
+        count.textContent,
+      ]),
+      [
+        ['new', '2'],
+        ['progress', '1'],
+      ],
+    );
+    // A drawing with a name: the rounds say nothing to a screen reader.
+    assert.equal(counts().getAttribute('role'), 'img');
+    assert.equal(counts().getAttribute('aria-label'), '2 New, 1 In progress');
+
+    overlay.render([]);
+    assert.equal(counts().hidden, true);
+    overlay.destroy();
+    overlay = null;
+    assert.equal(dock.querySelector('[data-fruitback-dock-counts]'), null);
   });
 });

@@ -177,11 +177,11 @@ test('the address counts a call of an agent apart from a note, and its panel nam
     },
   });
   await page.goto(`${CONSOLE}/w/w1/connectors`);
-  const row = page.locator('button[aria-expanded]').filter({ hasText: 'REST API' });
+  const row = page.locator('tbody tr[data-connector]').filter({ hasText: 'REST API' });
   // The control: no note waits, so the row does not say one does.
-  await expect(row).toContainText('1 call of an agent did not arrive');
-  await expect(row).not.toContainText('note did not arrive');
-  await row.click();
+  await expect(row.locator('[data-pill]')).toHaveText('1 call not delivered');
+  await expect(row).not.toContainText('note not delivered');
+  await row.getByRole('button', { name: 'Settings of REST API', exact: true }).click();
   await expect(page.locator('[data-deliveries]')).toContainText('Call of an agent');
   await expect(page.locator('[data-deliveries]')).toContainText('Your receiver answered 401');
 });
@@ -239,7 +239,6 @@ test('an address with notes and a call that wait says both: the agent did not st
     },
   });
   await page.goto(`${CONSOLE}/w/w1/connectors`);
-  const row = page.locator('button[aria-expanded]').filter({ hasText: 'REST API' });
-  await expect(row.getByText('2 notes did not arrive', { exact: true })).toBeVisible();
-  await expect(row.getByText('1 call of an agent did not arrive', { exact: true })).toBeVisible();
+  const row = page.locator('tbody tr[data-connector]').filter({ hasText: 'REST API' });
+  await expect(row.locator('[data-pill]')).toHaveText(['2 notes not delivered', '1 call not delivered']);
 });

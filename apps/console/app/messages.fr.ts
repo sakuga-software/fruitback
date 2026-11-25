@@ -108,7 +108,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Vous êtes peut-être encore connecté : Fruitback n’a pas confirmé la déconnexion de tous les navigateurs. Réessayez.',
   Profile: 'Profil',
   'Email link': 'Lien par e-mail',
-  'After the beta': 'Après la bêta',
   Language: 'Langue',
   'Your account did not take this language yet. It is kept in this browser, and sent again the next time you open the console.':
     'Votre compte n’a pas encore pris cette langue. Elle est gardée dans ce navigateur, et renvoyée la prochaine fois que vous ouvrez la console.',
@@ -287,10 +286,9 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'A workspace': 'Un espace de travail',
   '1 kept note': '1 note gardée',
   '{count} kept notes': '{count} notes gardées',
-  'Sites, members and pin positions go. Items already in your trackers stay there.':
-    'Les sites, les membres et la position des repères disparaissent. Les éléments déjà dans vos outils de suivi y restent.',
+  'Sites, members and pin positions go. Items in your trackers stay there.':
+    'Les sites, les membres et la position des repères disparaissent. Les éléments dans vos outils de suivi y restent.',
   'Keep it': 'Le garder',
-  'Delete workspace': 'Supprimer l’espace de travail',
   'Delete {workspace}': 'Supprimer {workspace}',
 
   'An issue per note, in one repository. The files of a note do not go: GitHub takes none by its API.':
@@ -299,7 +297,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'GitHub Issues': 'GitHub Issues',
   'Installed on {account}': 'Installée sur {account}',
   'Going to GitHub…': 'Direction GitHub…',
-  'Not on this Fruitback': 'Absent de ce Fruitback',
   'The operator of this Fruitback has not set up the GitHub App.':
     'L’opérateur de ce Fruitback n’a pas configuré l’application GitHub.',
   'GitHub was not connected yet: an owner of the organisation must approve the App. After the approval, connect GitHub again.':
@@ -399,8 +396,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Member: 'Membre',
   Guest: 'Invité',
   Members: 'Membres',
-  'Who sees and leaves notes, and who changes the workspace.':
-    'Qui voit et laisse des notes, et qui modifie l’espace de travail.',
   'Invite someone': 'Inviter quelqu’un',
   Email: 'E-mail',
   Invite: 'Inviter',
@@ -414,23 +409,17 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Copy the link': 'Copier le lien',
   'The browser refused the copy. Select the link above and copy it by hand.':
     'Le navigateur a refusé la copie. Sélectionnez le lien ci-dessus et copiez-le à la main.',
-  '{name} (you)': '{name} (vous)',
   'Shared ones': 'Partagés',
   'Remove {name}': 'Retirer {name}',
   '{name} leaves the workspace, and their extension stops reading its sites. Their notes stay.':
     '{name} quitte l’espace de travail, et son extension cesse de lire ses sites. Ses notes restent.',
   'Invitation sent': 'Invitation envoyée',
-  'Until {date}': 'Jusqu’au {date}',
   'Invitation kept': 'Invitation gardée',
-  'Sent {date}': 'Envoyée le {date}',
-  'Pending invitations': 'Invitations en attente',
   'Search members': 'Chercher dans les membres',
   'No invitation matches this search.': 'Aucune invitation ne correspond à cette recherche.',
   'Pages of members': 'Pages de membres',
   'Pages of invitations': 'Pages d’invitations',
-  'Invited on': 'Invitée le',
   Joined: 'Arrivée',
-  Resend: 'Renvoyer',
   'Cancel the invitation of {email}': 'Annuler l’invitation de {email}',
   'The message already sent no longer lets {email} join.':
     'Le message déjà envoyé ne permet plus à {email} de rejoindre l’espace de travail.',
@@ -454,6 +443,46 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Only an owner removes an owner.': 'Seul un propriétaire retire un propriétaire.',
   'Only an owner or an admin of the workspace changes its members.':
     'Seul un propriétaire ou un administrateur de l’espace de travail change ses membres.',
+  // FRU-691: the dense table, the tab « Invitations » and the dialog « Invite people ».
+  '(you)': '(vous)',
+  'Members and invitations': 'Membres et invitations',
+  'Last active': 'Dernière activité',
+  'Role of {name}': 'Rôle de {name}',
+  '{role}, role of {name}': '{role}, rôle de {name}',
+  'Actions for {name}': 'Actions pour {name}',
+  'Actions for {email}': 'Actions pour {email}',
+  'Remove from workspace': 'Retirer de l’espace de travail',
+  'Make {name} an admin': 'Faire de {name} un administrateur',
+  'Make {name} a member': 'Faire de {name} un membre',
+  '{name} reads every site of the workspace, not only the sites shared with them.':
+    '{name} lit tous les sites de l’espace de travail, et plus seulement les sites partagés avec cette personne.',
+  'Only an owner changes the role of an owner.': 'Seul un propriétaire change le rôle d’un propriétaire.',
+  'The last owner of a workspace stays its owner.': 'Le dernier propriétaire d’un espace de travail le reste.',
+  'The role was not changed. Try again.': 'Le rôle n’a pas été changé. Réessayez.',
+  Message: 'Message',
+  Expires: 'Expire le',
+  'Resend invitation': 'Renvoyer l’invitation',
+  'Copy invite link': 'Copier le lien d’invitation',
+  'Cancel invitation': 'Annuler l’invitation',
+  'The link is copied. Send it to them.': 'Le lien est copié. Envoyez-le à la personne.',
+  'No invitation waits.': 'Aucune invitation n’attend.',
+  'Invite people': 'Inviter des personnes',
+  Emails: 'E-mails',
+  'name@company.com, another@company.com': 'nom@entreprise.com, autre@entreprise.com',
+  'Not an address, so not sent: {typed}': 'Pas une adresse, donc pas envoyé : {typed}',
+  'Sites, members, connectors': 'Sites, membres, connecteurs',
+  'Sees and leaves notes': 'Voit et laisse des notes',
+  'Only the site you pick': 'Seulement le site choisi',
+  'Send invites': 'Envoyer les invitations',
+  'Send 1 invite': 'Envoyer 1 invitation',
+  'Send {count} invites': 'Envoyer {count} invitations',
+  'Invitations sent to {emails}. You can also send them this link:':
+    'Invitations envoyées à {emails}. Vous pouvez aussi leur envoyer ce lien :',
+  'Invitations kept for {emails}. Send them this link:': 'Invitations gardées pour {emails}. Envoyez-leur ce lien :',
+  'Invitations kept for {emails}, but no message was sent: too many invitation messages went in a short time. Send them this link:':
+    'Invitations gardées pour {emails}, mais aucun message n’est parti : trop de messages d’invitation sont partis en peu de temps. Envoyez-leur ce lien :',
+  'They open it, sign in with the address that was invited, and join. The link alone opens nothing.':
+    'La personne l’ouvre, se connecte avec l’adresse invitée, et rejoint l’espace de travail. Le lien seul n’ouvre rien.',
 
   Invitations: 'Invitations',
   'This invitation was cancelled, or it ended. Ask for another one.':
@@ -550,8 +579,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Only the owner of the workspace deletes it.': 'Seul le propriétaire de l’espace de travail le supprime.',
   'The workspace was not deleted. Try again.': 'L’espace de travail n’a pas été supprimé. Réessayez.',
   'Remove {site}': 'Retirer {site}',
-  'Where {workspace} collects notes, and where they stand.':
-    'Là où {workspace} recueille des notes, et où elles en sont.',
   'Add a site': 'Ajouter un site',
   'Preview of {site}': 'Aperçu de {site}',
   'The sites did not load': 'Les sites ne se sont pas chargés',
@@ -562,8 +589,11 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'An owner or an admin of {workspace} adds its first site.':
     'Un propriétaire ou un admin de {workspace} ajoute son premier site.',
   'Notes go to': 'Les notes vont vers',
-  'A site with no tracker keeps its notes in Fruitback.': 'Un site sans outil de suivi garde ses notes dans Fruitback.',
   'Connect a tracker': 'Connecter un outil de suivi',
+  '{site} keeps its notes in Fruitback.': '{site} garde ses notes dans Fruitback.',
+  '{count} sites keep their notes in Fruitback.': '{count} sites gardent leurs notes dans Fruitback.',
+  '1 not delivered yet: see the notes of {site}': '1 pas encore livrée : voir les notes de {site}',
+  '{count} not delivered yet: see the notes of {site}': '{count} pas encore livrées : voir les notes de {site}',
   'Add site': 'Ajouter le site',
   'Who sees the notes?': 'Qui voit les notes ?',
   'Who can leave a note?': 'Qui peut laisser une note ?',
@@ -583,8 +613,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'A tracker': 'Un outil de suivi',
   'Team {team}': 'Équipe {team}',
   'Kept in Fruitback': 'Gardées dans Fruitback',
-  'No tracker yet': 'Pas encore d’outil de suivi',
-  '{place} and {count} more': '{place} et {count} de plus',
   'More for {site}': 'Plus pour {site}',
   Settings: 'Réglages',
   '1 new': '1 nouvelle',
@@ -691,9 +719,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Connect a tracker once. Every site of {workspace} can then send its notes there.':
     'Connectez un outil de suivi une fois. Chaque site de {workspace} peut alors y envoyer ses notes.',
   'No tracker yet. The notes stay in Fruitback.': 'Pas encore d’outil de suivi. Les notes restent dans Fruitback.',
-  '1 note did not arrive': '1 note n’est pas arrivée',
-  '{count} notes did not arrive': '{count} notes ne sont pas arrivées',
-  'An issue in a Jira Cloud project.': 'Un ticket dans un projet Jira Cloud.',
   'An issue in a project, cloud or self-managed.': 'Un ticket dans un projet, cloud ou auto-hébergé.',
   'A card in the list you choose.': 'Une carte dans la liste que vous choisissez.',
   'A row in a database.': 'Une ligne dans une base de données.',
@@ -1216,7 +1241,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Pas encore de note. Les notes s’affichent ici dès que quelqu’un en laisse une sur un site de {workspace}.',
   'No note matches.': 'Aucune note ne correspond.',
   'Clear the filters': 'Effacer les filtres',
-  'see where every note went': 'voir où est partie chaque note',
   // Connect this browser (FRU-240).
   'This browser is not connected': 'Ce navigateur n’est pas connecté',
   'The extension stays signed out. To connect it later, open its popup and sign in from there.':
@@ -1234,6 +1258,17 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Workspace settings': 'Réglages de l’espace de travail',
   'Settings that every member of {name} sees.': 'Les réglages que voit chaque membre de {name}.',
   'The name is saved.': 'Le nom est enregistré.',
+  // The page « General » of the settings, FRU-693.
+  'Every member of {name} sees these.': 'Chaque membre de {name} les voit.',
+  Identity: 'Identité',
+  'Workspace URL': 'Adresse de l’espace de travail',
+  'Danger zone': 'Zone de danger',
+  'Delete {workspace}?': 'Supprimer {workspace} ?',
+  'Its sites, its members and the positions of its pins go, for every member, and cannot come back. Items already in your trackers stay there.':
+    'Ses sites, ses membres et la position de ses repères disparaissent pour chaque membre, sans retour possible. Les éléments déjà dans vos outils de suivi y restent.',
+  'Deleting…': 'Suppression…',
+  Upload: 'Envoyer',
+  Replace: 'Remplacer',
   // The pages of the settings, FRU-544.
   General: 'Général',
   AI: 'IA',
@@ -1246,8 +1281,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Removing…': 'Retrait…',
   'The logo is saved.': 'Le logo est enregistré.',
   'The logo is removed.': 'Le logo est retiré.',
-  'PNG, JPEG or WebP, up to 512 KB. It shows beside the name of the workspace, in the rail.':
-    'PNG, JPEG ou WebP, 512 Ko au plus. Il s’affiche à côté du nom de l’espace de travail, dans la barre latérale.',
+  'PNG, JPEG or WebP, up to 512 KB. Shown beside the workspace name.':
+    'PNG, JPEG ou WebP, 512 Ko au plus. Affiché à côté du nom de l’espace de travail.',
   'Only an owner or an admin of the workspace changes its logo.':
     'Seul un propriétaire ou un admin de l’espace de travail change son logo.',
   'Choose a PNG, JPEG or WebP image. SVG is not accepted.':
@@ -1279,7 +1314,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Open it in this browser: this page comes back to the word to check. The link works once, for fifteen minutes.':
     'Ouvrez-le dans ce navigateur : cette page revient au mot à vérifier. Le lien fonctionne une fois, pendant quinze minutes.',
   // Members, « Last seen » (FRU-247, FRU-249).
-  'Last seen': 'Vu pour la dernière fois',
   Today: 'Aujourd’hui',
   'Not seen yet': 'Pas encore vu',
   // My account, FRU-249.
@@ -1342,7 +1376,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'The browser refused the copy. The link is {link}: copy it by hand.':
     'Le navigateur a refusé la copie. Le lien est {link} : copiez-le à la main.',
   // The guest of one site (FRU-250).
-  'Guest, one site': 'Invité, un site',
   'This site is no longer one of the workspace. Choose another one.':
     'Ce site ne fait plus partie de l’espace de travail. Choisissez-en un autre.',
   'Review {site} with {workspace}': 'Relisez {site} avec {workspace}',
@@ -1780,8 +1813,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Votre agent ouvre une pull request à relire, et ne pousse jamais sur une branche qui déploie : le guide dit comment.',
   'Start an agent on a note': 'Lancer un agent sur une note',
   'Saved.': 'Enregistré.',
-  '1 call of an agent did not arrive': '1 appel d’un agent n’est pas arrivé',
-  '{count} calls of an agent did not arrive': '{count} appels d’un agent ne sont pas arrivés',
   'The addresses of the workspace did not load.': 'Les adresses de l’espace de travail ne se sont pas chargées.',
 
   // The guide of the extension, under step 3 of the setup (FRU-486). The names of the controls of the
@@ -2010,6 +2041,40 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'The notes did not load, and nothing was copied. Try again.':
     'Les notes ne se sont pas chargées, et rien n’a été copié. Réessayez.',
 
+  // FRU-690: the health table and the catalogue of the Connectors screen.
+  'An issue in a team': 'Un ticket dans une équipe',
+  'An issue in a project': 'Un ticket dans un projet',
+  'An issue in a repository': 'Un ticket dans un dépôt',
+  'A task in a project': 'Une tâche dans un projet',
+  'A task in a list': 'Une tâche dans une liste',
+  'A card on a board': 'Une carte sur un tableau',
+  'A row in a database': 'Une ligne dans une base de données',
+  'A message in a channel': 'Un message dans un canal',
+  Webhook: 'Webhook',
+  'Tells any address when a note arrives': 'Prévient une adresse quand une note arrive',
+  'A POST to your endpoint': 'Un POST vers votre adresse',
+  'A routine of your team starts': 'Une routine de votre équipe démarre',
+  'All kinds': 'Tous',
+  Trackers: 'Outils de suivi',
+  Developers: 'Développeurs',
+  'The health of some connectors did not load.': 'L’état de certains connecteurs ne s’est pas chargé.',
+  Connector: 'Connecteur',
+  'Used by': 'Utilisé par',
+  'Retry {name}': 'Réessayer {name}',
+  'Retrying…': 'Nouvel essai…',
+  '{count} new attempts were not started. Try again.': '{count} nouveaux essais n’ont pas démarré. Réessayez.',
+  Retry: 'Réessayer',
+  'Settings of {name}': 'Réglages de {name}',
+  'Search trackers and tools': 'Chercher un outil',
+  'Kind of connector': 'Type de connecteur',
+  'No connector matches « {search} ».': 'Aucun connecteur ne correspond à « {search} ».',
+  'Not read': 'Non lu',
+  Healthy: 'En bonne santé',
+  '1 call not delivered': '1 appel non livré',
+  '{count} calls not delivered': '{count} appels non livrés',
+  Soon: 'Bientôt',
+  'Connect another {source}': 'Connecter un autre {source}',
+  'Other ways to connect {source}': 'Autres façons de connecter {source}',
   ...JIRA,
   ...GITLAB,
   ...SLACK,

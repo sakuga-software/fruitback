@@ -312,7 +312,7 @@ for (const locale of ['en', 'fr'] as const) {
   });
 }
 
-test('the card of a « Read only » site on the Sites screen says that only members leave notes (FRU-703)', async ({
+test('the row of a « Read only » site on the Sites screen says that only members leave notes (FRU-703)', async ({
   page,
 }) => {
   await stubWorker(page, {
@@ -323,8 +323,12 @@ test('the card of a « Read only » site on the Sites screen says that only memb
     ],
   });
   await page.goto(`${CONSOLE}/w/w1/sites`);
-  const cardOf = (name: string) =>
-    page.locator('li[data-site]').filter({ has: page.getByRole('heading', { level: 2, name, exact: true }) });
-  await expect(cardOf('docs.acme.dev').getByText('Notes from members only', { exact: true })).toBeVisible();
-  await expect(cardOf('acme.dev').getByText('Notes from members only', { exact: true })).toHaveCount(0);
+  const rowOf = (name: string) =>
+    page
+      .locator('tbody[data-site]')
+      .filter({ has: page.locator('th[scope="row"]').getByRole('link', { name, exact: true }) })
+      .locator('[data-column="who"]');
+  await expect(rowOf('docs.acme.dev').locator('.sr-only').last()).toHaveText('Notes from members only');
+  await expect(rowOf('docs.acme.dev').locator('svg[data-access="members"]')).toBeVisible();
+  await expect(rowOf('acme.dev').getByText('Notes from members only', { exact: true })).toHaveCount(0);
 });

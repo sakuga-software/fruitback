@@ -69,13 +69,17 @@ for (const width of [390, 1440]) {
     const worker = await workerWith(page);
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`${CONSOLE}/w/w1/connectors`);
+    // FRU-690: « New connector » leads to the search of the catalogue, on the page.
     await page.getByRole('button', { name: 'New connector' }).click();
-    const dialog = page.getByRole('dialog', { name: 'Add a connector' });
-    const card = dialog.locator('[data-source="GitLab"]');
-    // One card of GitLab: the one that connects, and no « After the beta » beside it.
+    await page.getByRole('searchbox', { name: 'Search trackers and tools' }).fill('gitlab');
+    const card = page.getByRole('region', { name: 'Add a connector' }).locator('[data-source="GitLab"]');
+    // One tile of GitLab: the one that connects, and no « Soon » beside it.
     await expect(card).toHaveCount(1);
-    await expect(card.locator('svg[data-mark="gitlab"]')).toHaveCount(1);
-    await expect(card.getByText('An issue in a project, cloud or self-managed.', { exact: true })).toBeVisible();
+    await expect(card.locator('img[data-logo="gitlab"]')).toHaveAttribute('src', '/logos/gitlab.svg');
+    await expect(card.locator('[data-tile-line]').locator('..')).toHaveAttribute(
+      'title',
+      'An issue in a project, cloud or self-managed.',
+    );
     await card.getByRole('button', { name: 'Connect GitLab' }).click();
 
     // The address may stay empty for gitlab.com; the token may not.
@@ -107,7 +111,6 @@ for (const width of [390, 1440]) {
 test('an empty address sends none: the worker takes gitlab.com', async ({ page }) => {
   const worker = await workerWith(page);
   await page.goto(`${CONSOLE}/w/w1/connectors`);
-  await page.getByRole('button', { name: 'New connector' }).click();
   const card = page.locator('[data-source="GitLab"]');
   await card.getByRole('button', { name: 'Connect GitLab' }).click();
   await card.getByLabel('Access token').fill(TOKEN);
@@ -120,7 +123,7 @@ test('a token GitLab refuses since a moment says to make a new one, in French to
   const refused = { ...GITLAB, attention: { reason: 'key-refused', since: '2026-11-08T11:00:00.000Z' } };
   await workerWith(page, { connectors: [refused], locale: 'fr' });
   await page.goto(`${CONSOLE}/w/w1/connectors`);
-  await page.locator('button[aria-expanded]').filter({ hasText: 'GitLab' }).click();
+  await page.getByRole('button', { name: 'Réglages de GitLab', exact: true }).click();
   const panel = page.getByRole('region', { name: /GitLab/ });
   await expect(panel).toContainText('GitLab refuse le jeton depuis');
   await expect(panel).toContainText('il a expiré ou a été révoqué');

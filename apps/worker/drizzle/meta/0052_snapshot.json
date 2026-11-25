@@ -1,6 +1,6 @@
 {
-  "id": "5853e8be-5db6-4965-bb9c-be6caecef6c0",
-  "prevId": "3780035c-43b8-4730-9839-e2b09dbdeb32",
+  "id": "b0e39477-2084-4f78-b89c-8d871f538265",
+  "prevId": "80dbe39a-5425-4792-87a5-d86e5038d9ff",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1873,6 +1873,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "removed_at": {
+          "name": "removed_at",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
         "place": {
           "name": "place",
           "type": "text",
@@ -3318,14 +3324,14 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "default": "'while-open'"
+          "default": "'never'"
         },
         "visitor_delete": {
           "name": "visitor_delete",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "default": "'while-open'"
+          "default": "'never'"
         }
       },
       "indexes": {
