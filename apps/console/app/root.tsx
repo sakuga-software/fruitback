@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Links, Meta, Outlet, Scripts, ScrollRestoration } from 'react-router';
 import { type Left, call, checkTab, onLeft, onReachability, onSignedOut } from './api';
+import '@fontsource-variable/inter';
 import './app.css';
 import { ready, t } from './i18n';
 import { useLocale } from './use-locale';
@@ -16,6 +17,11 @@ const PRODUCT = 'Fruitback';
  * on one line.
  */
 const PAGE = '[overflow-wrap:anywhere] bg-page text-ink font-sans [-webkit-font-smoothing:antialiased]';
+/**
+ * Inter at 13 px is the text of the console (FRU-683). On the body, not on <html>: the root keeps
+ * the 16 px of the browser, which a `rem` of Tailwind and of HeroUI measures from.
+ */
+const BODY = `${PAGE} text-body`;
 
 /**
  * WARNING: no `t` here. This is rendered once in English when the console is built, and again in the
@@ -35,7 +41,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <Meta />
         <Links />
       </head>
-      <body className={PAGE}>
+      <body className={BODY}>
         {children}
         <ScrollRestoration />
         <Scripts />
@@ -135,7 +141,7 @@ function Gone({ why, drafts }: { why: Left; drafts: Draft[] }) {
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-setup px-4 py-8">
-      <div role="alert" className="w-full max-w-md rounded-[14px] border border-line bg-surface p-7">
+      <div role="alert" className="w-full max-w-md rounded-card border border-line bg-surface p-7">
         <h1 className="text-lg font-bold">
           {why === 'changed' ? t('Another account is signed in in this browser') : t('You were signed out')}
         </h1>
@@ -226,7 +232,7 @@ function SignedOut() {
         href="/sign-in"
         target="_blank"
         rel="noopener"
-        className="rounded-full border border-on-ink px-3 py-1 font-semibold hover:bg-on-ink/10"
+        className="rounded-control border border-on-ink px-3 py-1 font-semibold hover:bg-on-ink/10"
       >
         {t('Sign in')}
       </a>

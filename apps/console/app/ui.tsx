@@ -50,7 +50,7 @@ export function Mark({ size = 14 }: { size?: number }) {
 }
 
 type Tone = 'primary' | 'outline' | 'danger' | 'quiet';
-/** The height of a control: of a page (44 px), of a panel or a row (40 px), small (32 px). */
+/** The height of a control (FRU-683): of a page (32 px), of a panel or a row (28 px), small (24 px). */
 type ControlSize = 'page' | 'panel' | 'small';
 
 /** The tone of a button, as the variant HeroUI draws it with. */
@@ -85,11 +85,11 @@ const BUTTON =
 
 /** The action of a step: the one pill of a screen. White on it is 4.70:1, 6.47:1 under the pointer. */
 const PRIMARY =
-  'kit-button--primary rounded-[999px] border-0 border-none border-current bg-accent text-accent-foreground tracking-button [&:hover:not(:disabled,[aria-disabled=true])]:bg-accent-hover data-[hovered=true]:bg-accent-hover data-[pressed=true]:bg-accent-hover';
+  'kit-button--primary rounded-control border-0 border-none border-current bg-accent text-accent-foreground tracking-button [&:hover:not(:disabled,[aria-disabled=true])]:bg-accent-hover data-[hovered=true]:bg-accent-hover data-[pressed=true]:bg-accent-hover';
 
 /** A control of the shape of a field: a provider to sign in with, « Try again », « Connect ». */
 const OUTLINE =
-  'kit-button--outline rounded-button border border-field-border bg-surface text-ink [&:hover:not(:disabled,[aria-disabled=true])]:border-ink [&:hover:not(:disabled,[aria-disabled=true])]:bg-subtle data-[hovered=true]:border-ink data-[hovered=true]:bg-subtle data-[pressed=true]:border-ink data-[pressed=true]:bg-subtle';
+  'kit-button--outline rounded-control border border-field-border bg-surface text-ink [&:hover:not(:disabled,[aria-disabled=true])]:border-ink [&:hover:not(:disabled,[aria-disabled=true])]:bg-subtle data-[hovered=true]:border-ink data-[hovered=true]:bg-subtle data-[pressed=true]:border-ink data-[pressed=true]:bg-subtle';
 
 /** The padding at each end, by tone and size. */
 const BUTTON_INSET = {
@@ -119,25 +119,27 @@ function buttonClasses(tone: 'primary' | 'outline', size: ControlSize, wide: boo
 }
 
 const BUTTON_HEIGHT = {
-  page: 'h-control',
-  panel: 'h-control-panel',
-  small: 'h-control-small',
+  page: 'h-control-lg',
+  panel: 'h-control-md',
+  small: 'h-control-sm',
 } as const satisfies Record<ControlSize, string>;
 
 const BUTTON_WIDE = {
-  page: 'min-h-control py-[10px]',
-  panel: 'min-h-control-panel py-0',
-  small: 'min-h-control-small py-[6px]',
+  page: 'min-h-control-lg py-[10px]',
+  panel: 'min-h-control-md py-0',
+  small: 'min-h-control-sm py-[6px]',
 } as const satisfies Record<ControlSize, string>;
 
 /**
  * The classes of a tone. « primary » and « outline » are the two buttons of the mockup. « quiet » and
- * « danger » are of before it, and stay as HeroUI draws them until their screens are drawn again.
+ * « danger » are of before it, and stay as HeroUI draws them until their screens are drawn again,
+ * with the radius and the 13 px of the console (FRU-683): Inter at HeroUI's 14 px ran 11 px out of
+ * a column of 320 px.
  */
 function toneClasses(tone: Tone, size: ControlSize, wide: boolean): string {
   if (tone === 'primary' || tone === 'outline') return buttonClasses(tone, size, wide);
 
-  return 'rounded-full font-semibold';
+  return 'rounded-control font-semibold text-(length:--text-small) leading-auto';
 }
 
 /** Where a control goes when it is a link: a screen of the console, or an address outside it. */
@@ -385,19 +387,22 @@ type IconButtonProps = {
   label: string;
   onClick?: () => void;
   disabled?: boolean;
-  /** 36 px, or 32 px (« small »). */
+  /** 28 px, or 24 px (« small »). */
   size?: 'chip' | 'small';
   /** The button opens a menu. */
   menu?: boolean;
+  /** The button shows and hides the element `controls` (FRU-684): whether it is shown. */
+  expanded?: boolean;
+  controls?: string;
   /** The picture: an `svg` with `aria-hidden`. */
   children: ReactNode;
 };
 
-/** A button that is a picture: 36 px, or 32 px (« small »), its picture at 18 px. */
+/** A button that is a picture: 28 px, or 24 px (« small »), its picture at 18 px. */
 const ICON_BUTTON =
-  'kit-icon-button inline-flex flex-none items-center justify-center p-0 border-0 border-none border-current rounded-(--field-radius) bg-transparent text-muted cursor-pointer transform-none [transition:none] [&:hover:not(:disabled,[aria-disabled=true])]:bg-chip data-[hovered=true]:bg-chip data-[pressed=true]:bg-chip disabled:opacity-50 disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:cursor-not-allowed [&_svg]:size-[18px] [&_svg]:m-0';
+  'kit-icon-button inline-flex flex-none items-center justify-center p-0 border-0 border-none border-current rounded-control bg-transparent text-muted cursor-pointer transform-none [transition:none] [&:hover:not(:disabled,[aria-disabled=true])]:bg-hover data-[hovered=true]:bg-hover data-[pressed=true]:bg-hover disabled:opacity-50 disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:cursor-not-allowed [&_svg]:size-[18px] [&_svg]:m-0';
 
-const ICON_BUTTON_SIZE = { chip: 'size-control-chip', small: 'size-control-small' } as const;
+const ICON_BUTTON_SIZE = { chip: 'size-control-md', small: 'size-control-sm' } as const;
 
 /** A button that is a picture, named for a screen reader. */
 export function IconButton({
@@ -406,6 +411,8 @@ export function IconButton({
   disabled = false,
   size = 'chip',
   menu = false,
+  expanded,
+  controls,
   children,
 }: IconButtonProps) {
   return (
@@ -416,6 +423,8 @@ export function IconButton({
       isDisabled={disabled}
       aria-label={label}
       {...(menu ? { 'aria-haspopup': 'menu' as const } : {})}
+      {...(expanded === undefined ? {} : { 'aria-expanded': expanded })}
+      {...(controls === undefined ? {} : { 'aria-controls': controls })}
       {...(onClick === undefined ? {} : { onPress: onClick })}
       className={`${ICON_BUTTON} ${ICON_BUTTON_SIZE[size]}`}
       data-size={size}
@@ -427,7 +436,7 @@ export function IconButton({
 
 /** As tall as a small icon button, as wide as its number, in the words of the list. */
 const PAGE_NUMBER =
-  'kit-page-number inline-flex flex-none items-center justify-center min-w-control-small h-control-small px-[6px] py-0 border-0 border-none border-current rounded-(--field-radius) text-(length:--text-small) tabular-nums transform-none [transition:none]';
+  'kit-page-number inline-flex flex-none items-center justify-center min-w-control-sm h-control-sm px-[6px] py-0 border-0 border-none border-current rounded-control text-(length:--text-small) tabular-nums transform-none [transition:none]';
 
 /**
  * The number of a page of a list (FRU-587): a small square button, the page shown in ink. The page
@@ -455,7 +464,7 @@ export function PageNumber({
       onPress={() => {
         if (!current) onClick();
       }}
-      className={`${PAGE_NUMBER} ${current ? 'bg-ink text-surface font-semibold cursor-default' : 'bg-transparent text-muted cursor-pointer [&:hover]:bg-chip [&:hover]:text-ink data-[hovered=true]:bg-chip data-[hovered=true]:text-ink'}`}
+      className={`${PAGE_NUMBER} ${current ? 'bg-ink text-surface font-semibold cursor-default' : 'bg-transparent text-muted cursor-pointer [&:hover]:bg-hover [&:hover]:text-ink data-[hovered=true]:bg-hover data-[hovered=true]:text-ink'}`}
     >
       {children}
     </HeroButton>
@@ -485,7 +494,7 @@ export function IconLink({ label, href, tip, children }: IconLinkProps) {
         target="_blank"
         rel="noreferrer"
         aria-label={label}
-        className="kit-icon-link inline-flex flex-none items-center justify-center size-control-small rounded-(--field-radius) text-muted [text-decoration:none] [&:hover]:bg-chip [&:hover]:text-ink data-[hovered=true]:bg-chip data-[hovered=true]:text-ink [&_svg]:size-[16px]"
+        className="kit-icon-link inline-flex flex-none items-center justify-center size-control-sm rounded-control text-muted [text-decoration:none] [&:hover]:bg-hover [&:hover]:text-ink data-[hovered=true]:bg-hover data-[hovered=true]:text-ink [&_svg]:size-[16px]"
       >
         {children}
       </HeroLink>
@@ -498,7 +507,7 @@ export function IconLink({ label, href, tip, children }: IconLinkProps) {
 
 /** A tooltip: ink, 12 px, under 360 px; an address breaks anywhere rather than overflow. */
 const TIP =
-  'kit-tip max-w-[min(360px,calc(100vw-32px))] px-[8px] py-[6px] rounded-[6px] bg-ink text-page text-(length:--text-tiny) leading-[1.4] [overflow-wrap:anywhere] [word-break:normal] [box-shadow:none]';
+  'kit-tip max-w-[min(360px,calc(100vw-32px))] px-[8px] py-[6px] rounded-control bg-ink text-page text-(length:--text-tiny) leading-[1.4] [overflow-wrap:anywhere] [word-break:normal] [box-shadow:none]';
 
 type TipProps = {
   /** What the tooltip shows: the words whole, and what the picture means. */
@@ -521,7 +530,7 @@ export function Tip({ tip, className = '', children }: TipProps) {
       <Tooltip.Trigger
         role="group"
         tabIndex={-1}
-        className={`kit-tip-trigger inline-flex max-w-full min-w-0 items-center gap-[6px] rounded-[4px] cursor-default ${className}`}
+        className={`kit-tip-trigger inline-flex max-w-full min-w-0 items-center gap-[6px] rounded-inner cursor-default ${className}`}
       >
         {children}
       </Tooltip.Trigger>
@@ -702,7 +711,7 @@ type FieldProps = {
   readOnly?: boolean;
   /** A value that is set elsewhere: read-only, and drawn as such. */
   locked?: boolean;
-  /** 40 px and not 44: a field of a panel or of a row of filters. */
+  /** 28 px and not 32: a field of a panel or of a row of filters. */
   compact?: boolean;
   /** Takes focus when it appears: the field a press of « Rename » opens. */
   autoFocus?: boolean;
@@ -737,18 +746,18 @@ const FIELD_HINT = 'text-(length:--text-hint) leading-(--text-hint--line-height)
 const FIELD_ERROR = 'text-(length:--text-hint) leading-(--text-hint--line-height) text-accent-strong';
 
 /** What a text field and the button of a list share: the box of a control, flat. */
-const CONTROL = 'box-border min-h-0 border rounded-(--field-radius) [box-shadow:none] font-normal [transition:none]';
+const CONTROL = 'box-border min-h-0 border rounded-control [box-shadow:none] font-normal [transition:none]';
 /** The colours of a control a person can change. */
 const CONTROL_COLOURS = 'border-field-border bg-field text-field-foreground';
 
 /**
- * The input of a `Field`: 44 px, or 40 px (« compact »). A value set elsewhere (« locked ») reads in
+ * The input of a `Field`: 32 px, or 28 px (« compact »). A value set elsewhere (« locked ») reads in
  * the soft ink on the subtle tint. An invalid one has a thicker edge of the strong red.
  */
 function inputClasses(compact: boolean, locked: boolean, code: boolean): string {
   return [
     CONTROL,
-    compact ? 'h-control-panel px-[12px] text-(length:--text-small)' : 'h-control px-[14px] text-(length:--text-body)',
+    compact ? 'h-control-md px-[12px] text-(length:--text-small)' : 'h-control-lg px-[14px] text-(length:--text-body)',
     'leading-auto',
     'py-0',
     locked ? 'border-line bg-subtle text-ink-soft' : CONTROL_COLOURS,
@@ -831,7 +840,7 @@ export function TextBox({
       <Label className={`${FIELD_LABEL} after:content-none`}>{label}</Label>
       {/* The border and the type of a field, with no fixed height. */}
       <TextArea
-        className={`box-border min-h-[calc(var(--spacing-control)*2)] px-[14px] py-[10px] border rounded-(--field-radius) [box-shadow:none] ${CONTROL_COLOURS} text-(length:--text-body) leading-(--text-body--line-height) resize-y`}
+        className={`box-border min-h-[calc(var(--spacing-control-lg)*2)] px-[14px] py-[10px] border rounded-control [box-shadow:none] ${CONTROL_COLOURS} text-(length:--text-body) leading-(--text-body--line-height) resize-y`}
         value={value}
         rows={rows}
         {...(maxLength === undefined ? {} : { maxLength })}
@@ -856,10 +865,10 @@ type ChoiceProps = {
   onChange: (value: string) => void;
   options: readonly (Option | OptionGroup)[];
   disabled?: boolean;
-  /** 40 px and not 44: a list of a panel or of a row of filters. */
+  /** 28 px and not 32: a list of a panel or of a row of filters. */
   compact?: boolean;
   /**
-   * The list chooses a status: its drop is drawn before the chosen word, and the list is the 38 px
+   * The list chooses a status: its drop is drawn before the chosen word, and the list is the 28 px
    * of a row of « Status of the pins ». The drop is a picture: the word beside it says the status.
    */
   status?: Stage;
@@ -874,16 +883,16 @@ type ChoiceProps = {
 const OPTION_LABEL = 'kit-option-label block min-w-0 truncate';
 
 /**
- * The button of a `Choice`. A compact list is 40 px. A list of statuses is 38 px, its drop 12 px from
+ * The button of a `Choice`. A compact list is 28 px. A list of statuses is 28 px, its drop 12 px from
  * the edge (its border counted) and its word 9 px after. A bare one is the drop of its status alone
  * (FRU-551): 28 px, no border, tinted under the pointer as an icon button.
  */
 function triggerClasses(compact: boolean, status: boolean, bare: boolean): string {
   if (bare)
-    return `${CONTROL} items-center justify-center size-[28px] p-0 border-transparent bg-transparent text-field-foreground ${status ? 'gap-[9px]' : ''} ${compact || status ? 'text-(length:--text-small)' : 'text-(length:--text-body)'} leading-auto [&:hover]:bg-chip data-[hovered=true]:bg-chip data-[disabled=true]:opacity-50 data-[disabled=true]:cursor-not-allowed`;
+    return `${CONTROL} items-center justify-center size-[28px] p-0 border-transparent bg-transparent text-field-foreground ${status ? 'gap-[9px]' : ''} ${compact || status ? 'text-(length:--text-small)' : 'text-(length:--text-body)'} leading-auto [&:hover]:bg-hover data-[hovered=true]:bg-hover data-[disabled=true]:opacity-50 data-[disabled=true]:cursor-not-allowed`;
   const size = status
-    ? 'gap-[9px] h-control-row pl-[11px] pr-[28px] py-0 text-(length:--text-small)'
-    : `${compact ? 'h-control-panel text-(length:--text-small)' : 'h-control text-(length:--text-body)'} pl-[12px] pr-[28px] py-0`;
+    ? 'gap-[9px] h-control-md pl-[11px] pr-[28px] py-0 text-(length:--text-small)'
+    : `${compact ? 'h-control-md text-(length:--text-small)' : 'h-control-lg text-(length:--text-body)'} pl-[12px] pr-[28px] py-0`;
 
   return `${CONTROL} ${CONTROL_COLOURS} items-center ${size} leading-auto data-[disabled=true]:opacity-50 data-[disabled=true]:cursor-not-allowed`;
 }
@@ -973,7 +982,7 @@ export function Choice({
 }
 
 export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
-  return <section className={`rounded-frame border border-line bg-surface ${className}`}>{children}</section>;
+  return <section className={`rounded-card border border-line bg-surface ${className}`}>{children}</section>;
 }
 
 type PickProps<Value extends string> = {
@@ -1003,7 +1012,7 @@ export function Pick<Value extends string>({ label, value, onChange, options }: 
         <Radio
           key={option.value}
           value={option.value}
-          className="kit-pick__card group/pick w-full m-0 border border-line rounded-box cursor-pointer data-selected:border-ink"
+          className="kit-pick__card group/pick w-full m-0 border border-line rounded-card cursor-pointer data-selected:border-ink"
         >
           {/*
            * The radio and the label on the first row, the detail under the label. The words start 30 px
@@ -1102,14 +1111,14 @@ type CheckboxProps = { label: string; checked: boolean; onChange: (checked: bool
  */
 function checkboxClasses({ list = false, bare = false }: { list?: boolean; bare?: boolean } = {}) {
   const width = list ? 'max-w-full min-w-0' : '';
-  const line = bare ? 'min-h-0' : 'min-h-control-panel';
+  const line = bare ? 'min-h-0' : 'min-h-control-md';
 
   return {
     root: `kit-checkbox group/check inline-flex flex-row flex-nowrap items-center ${line} ${width} cursor-pointer`,
     content: `flex-row flex-nowrap items-center gap-[8px] ${line} ${width} m-0 cursor-pointer`,
     // HeroUI paints a ticked box with a layer in its accent, over the background: ink here too.
     control:
-      'size-[16px] border border-field-border rounded-[3px] bg-surface [box-shadow:none] before:bg-ink group-data-[selected=true]/check:border-ink group-data-[selected=true]/check:bg-ink group-data-[selected=true]/check:text-surface group-data-[indeterminate=true]/check:border-ink group-data-[indeterminate=true]/check:bg-ink group-data-[indeterminate=true]/check:text-surface',
+      'size-[16px] border border-field-border rounded-inner bg-surface [box-shadow:none] before:bg-ink group-data-[selected=true]/check:border-ink group-data-[selected=true]/check:bg-ink group-data-[selected=true]/check:text-surface group-data-[indeterminate=true]/check:border-ink group-data-[indeterminate=true]/check:bg-ink group-data-[indeterminate=true]/check:text-surface',
     label: `text-ink text-(length:--text-small) font-normal ${list ? 'whitespace-normal [overflow-wrap:anywhere]' : 'whitespace-nowrap'}`,
   };
 }
@@ -1127,7 +1136,7 @@ export function Swatch({
   return (
     <span
       aria-hidden="true"
-      className={`kit-swatch ${small ? 'kit-swatch-small size-[10px] rounded-[3px]' : 'size-[18px] rounded-[5px]'} inline-block flex-none [box-shadow:0_0_0_1px_var(--color-status-edge)] ${className}`}
+      className={`kit-swatch ${small ? 'kit-swatch-small size-[10px] rounded-inner' : 'size-[18px] rounded-inner'} inline-block flex-none [box-shadow:0_0_0_1px_var(--color-status-edge)] ${className}`}
       style={{ background: colour }}
     />
   );
@@ -1225,8 +1234,8 @@ export function Toggle({ label, hint, strong = false, value, onChange, disabled 
         className={`flex w-full flex-row-reverse items-center justify-between gap-4 ${disabled ? 'opacity-100 cursor-not-allowed' : ''}`}
       >
         {/* Ink when it is on, as the mockup draws it: the accent is the red of an alert. One movement of 220 ms. */}
-        <Switch.Control className="relative w-[40px] h-[24px] overflow-visible rounded-[999px] bg-field-border [box-shadow:none] [transition:background-color_200ms] group-data-[selected=true]/toggle:bg-ink group-data-[disabled=true]/toggle:opacity-50 motion-reduce:[transition:none]">
-          <Switch.Thumb className="absolute top-[3px] left-[3px] size-[18px] m-0 rounded-[50%] bg-surface [box-shadow:var(--shadow-thumb)] opacity-100 [transition:transform_var(--duration-fast)_var(--ease-settle)] group-data-[selected=true]/toggle:[transform:translateX(16px)] motion-reduce:[transition:none]" />
+        <Switch.Control className="relative w-[40px] h-[24px] overflow-visible rounded-pill bg-field-border [box-shadow:none] [transition:background-color_200ms] group-data-[selected=true]/toggle:bg-ink group-data-[disabled=true]/toggle:opacity-50 motion-reduce:[transition:none]">
+          <Switch.Thumb className="absolute top-[3px] left-[3px] size-[18px] m-0 rounded-full bg-surface [box-shadow:var(--shadow-thumb)] opacity-100 [transition:transform_var(--duration-fast)_var(--ease-settle)] group-data-[selected=true]/toggle:[transform:translateX(16px)] motion-reduce:[transition:none]" />
         </Switch.Control>
         <span className="min-w-0">
           <Label
@@ -1263,7 +1272,7 @@ export function Problem({ children }: { children: ReactNode }) {
     <Alert
       status="danger"
       role="alert"
-      className="[border:1px_solid_color-mix(in_srgb,var(--danger)_35%,var(--surface))] rounded-box [background:color-mix(in_srgb,var(--danger)_6%,var(--surface))] [box-shadow:none]"
+      className="[border:1px_solid_color-mix(in_srgb,var(--danger)_35%,var(--surface))] rounded-card [background:color-mix(in_srgb,var(--danger)_6%,var(--surface))] [box-shadow:none]"
     >
       <Alert.Content>
         <Alert.Description className="text-danger">{children}</Alert.Description>
@@ -1293,7 +1302,7 @@ export function LoadFailed({
   return (
     <div
       role="alert"
-      className="box-content flex max-w-[760px] flex-wrap items-center justify-between gap-[16px] rounded-frame border border-control px-[32px] py-[28px]"
+      className="box-content flex max-w-[760px] flex-wrap items-center justify-between gap-[16px] rounded-card border border-control px-[32px] py-[28px]"
     >
       <div>
         <h2 className="mb-[4px] text-step leading-auto font-semibold">{title}</h2>
@@ -1319,7 +1328,7 @@ export function Initial({
 }) {
   return (
     <span
-      className={`kit-avatar flex flex-none items-center justify-center box-border ${size === 'small' ? 'size-[28px]' : 'size-[32px]'} border border-line rounded-[999px] ${pending ? 'bg-surface text-muted' : 'bg-avatar text-surface'} text-(length:--text-hint) font-bold leading-auto`}
+      className={`kit-avatar flex flex-none items-center justify-center box-border ${size === 'small' ? 'size-[28px]' : 'size-[32px]'} border border-line rounded-pill ${pending ? 'bg-surface text-muted' : 'bg-avatar text-surface'} text-(length:--text-hint) font-bold leading-auto`}
       data-size={size}
       data-pending={pending}
       aria-hidden="true"
@@ -1339,7 +1348,7 @@ const STATUS_COLOURS = {
 } as const satisfies Record<Stage, string>;
 
 /** The drop of a pin: the shape of a status, of the entry of the rail, of a success. */
-const DROP = 'kit-drop inline-block flex-none rounded-[50%_50%_50%_0] [transform:rotate(-90deg)]';
+const DROP = 'kit-drop inline-block flex-none rounded-drop [transform:rotate(-90deg)]';
 const DROP_SIZE = { 9: 'size-[9px]', 10: 'size-[10px]', 11: 'size-[11px]' } as const;
 
 /** A drop of a colour a screen gives: the one of « done » on the rail, the entry on screen. */
@@ -1396,13 +1405,13 @@ export function StatusBar({ counts, label, width = 'table' }: StatusBarProps) {
     <span
       role="img"
       aria-label={label}
-      className={`kit-status-bar flex flex-none gap-[2px] h-[8px] overflow-hidden rounded-[999px] ${STATUS_BAR_WIDTH[width]}`}
+      className={`kit-status-bar flex flex-none gap-[2px] h-[8px] overflow-hidden rounded-pill ${STATUS_BAR_WIDTH[width]}`}
       data-width={width}
     >
       {STAGES.filter((status) => counts[status] > 0).map((status) => (
         <span
           key={status}
-          className={`${STATUS_COLOURS[status]} [box-shadow:inset_0_0_0_1px_var(--color-status-edge)] first:rounded-[999px_0_0_999px] last:rounded-[0_999px_999px_0] only:rounded-[999px]`}
+          className={`${STATUS_COLOURS[status]} [box-shadow:inset_0_0_0_1px_var(--color-status-edge)] first:rounded-l-pill last:rounded-r-pill only:rounded-full`}
           style={{ flexGrow: counts[status], flexBasis: 0 }}
         />
       ))}
@@ -1422,13 +1431,14 @@ type FilterChipProps = {
 
 /**
  * A filter that is on or off: a button with `aria-pressed`. Its count is said in a lighter weight. A
- * filter of a problem is the accent on white, 4.70:1. A filter that is on is ink.
+ * filter of a problem is the strong red: 6.47:1 on white, 6.13:1 on the subtle tint, where the
+ * accent is 4.46:1 (FRU-683). A filter that is on is ink.
  */
 export function FilterChip({ pressed, onChange, count, alert = false, children }: FilterChipProps) {
   const chipColours = pressed
     ? 'border-ink bg-ink text-surface'
-    : `border-field-border bg-surface ${alert ? 'text-accent' : 'text-ink'} [&:hover]:border-ink data-[hovered=true]:border-ink`;
-  let countColour = alert ? 'text-accent' : 'text-muted';
+    : `border-field-border bg-surface ${alert ? 'text-accent-strong' : 'text-ink'} [&:hover]:border-ink data-[hovered=true]:border-ink`;
+  let countColour = alert ? 'text-accent-strong' : 'text-muted';
   if (pressed) countColour = 'text-rail-text';
 
   return (
@@ -1437,7 +1447,7 @@ export function FilterChip({ pressed, onChange, count, alert = false, children }
       variant="outline"
       aria-pressed={pressed}
       onPress={() => onChange(!pressed)}
-      className={`kit-chip inline-flex flex-none items-center gap-[8px] h-control-chip px-[14px] py-0 border rounded-[999px] text-(length:--text-hint) font-semibold leading-auto whitespace-nowrap cursor-pointer transform-none [transition:none] ${chipColours}`}
+      className={`kit-chip inline-flex flex-none items-center gap-[8px] h-control-sm px-[14px] py-0 border rounded-control text-(length:--text-hint) font-semibold leading-auto whitespace-nowrap cursor-pointer transform-none [transition:none] ${chipColours}`}
       data-alert={alert}
     >
       {children}
@@ -1482,7 +1492,7 @@ const TABLE_CELLS = [
   '[&_th]:px-[16px] [&_th]:py-[12px] [&_th]:[border-bottom:1px_solid_var(--color-line)] [&_th]:text-muted [&_th]:text-(length:--text-hint) [&_th]:font-semibold [&_th]:text-left [&_th]:whitespace-nowrap',
   '[&_td]:px-[16px] [&_td]:[border-bottom:1px_solid_var(--color-line)]',
   '[&_:is(th,td):first-child]:pl-[20px] [&_:is(th,td):last-child]:pr-[20px]',
-  '[&_tbody_tr[data-chosen=true]]:bg-chip [&_tr[data-selected=true]>td]:bg-chip',
+  '[&_tbody_tr[data-chosen=true]]:bg-selected [&_tr[data-selected=true]>td]:bg-selected',
   '[&_[data-align=end]]:text-right',
   // The head of a group of rows (FRU-551): a band of the subtle tint, the words of the group in ink.
   '[&_.kit-table-group_th]:py-[8px] [&_.kit-table-group_th]:bg-subtle [&_.kit-table-group_th]:text-ink [&_.kit-table-group_th]:text-(length:--text-small)',
@@ -1564,12 +1574,12 @@ export function DataTable({
       aria-label={label}
       tabIndex={0}
       className={[
-        'kit-table relative border border-line rounded-frame [scrollbar-width:thin] [scrollbar-color:var(--field-border)_transparent]',
+        'kit-table relative border border-line rounded-card [scrollbar-width:thin] [scrollbar-color:var(--field-border)_transparent]',
         stack && pinned ? `overflow-clip ${TABLE_PINNED}` : 'overflow-x-auto',
         TABLE_CELLS,
         dense ? '[&_td]:py-[12px]' : '[&_td]:py-[14px]',
         // The head of a group opens nothing: its tint stays under the pointer.
-        hover ? '[&_tbody_tr:hover:not([data-chosen=true],.kit-table-group)]:bg-subtle' : '',
+        hover ? '[&_tbody_tr:hover:not([data-chosen=true],.kit-table-group)]:bg-hover' : '',
         TABLE_STACKED,
         stack && pinned ? '' : '[&[data-stacked=true]_tr.kit-table-group_th]:static',
       ].join(' ')}
@@ -1655,7 +1665,7 @@ export function Dialog({
       }}
     >
       <Modal.Container size={size} scroll="inside">
-        <Modal.Dialog className={`kit-dialog ${className}`}>
+        <Modal.Dialog className={`kit-dialog rounded-modal ${className}`}>
           {locked ? null : <Modal.CloseTrigger aria-label={closeLabel} />}
           <Modal.Header>
             <Modal.Heading className="kit-dialog__title">{title}</Modal.Heading>
@@ -1738,7 +1748,7 @@ export function SidePanel({
       {...(label === undefined ? { 'aria-labelledby': id } : { 'aria-label': label })}
       {...(panelRef === undefined ? {} : { tabIndex: -1 })}
       {...(onKeyDown === undefined ? {} : { onKeyDown })}
-      className={`kit-panel min-w-0 max-w-full ${flush ? '[border:0] rounded-none bg-transparent' : 'border border-line rounded-frame bg-subtle'} ${className}`}
+      className={`kit-panel min-w-0 max-w-full ${flush ? '[border:0] rounded-none bg-transparent' : 'border border-line rounded-card bg-subtle'} ${className}`}
       data-spacing={spacing}
       {...(flush ? { 'data-flush': '' } : {})}
     >
@@ -1779,7 +1789,7 @@ export function SidePanel({
  */
 export function VerifyWord({ word, children }: { word: string; children: ReactNode }) {
   return (
-    <div className="kit-verify flex flex-wrap items-center justify-between gap-[16px] py-[18px] px-[20px] rounded-box bg-ink text-page">
+    <div className="kit-verify flex flex-wrap items-center justify-between gap-[16px] py-[18px] px-[20px] rounded-card bg-ink text-page">
       <span className="kit-verify__ask max-w-[220px] text-rail-text text-(length:--text-small) leading-[1.45]">
         {children}
       </span>
@@ -1817,7 +1827,7 @@ export function SuccessMark({ size = 'page' }: { size?: 'page' | 'inline' }) {
   return (
     <span
       aria-hidden="true"
-      className="kit-drop kit-success flex flex-none items-center justify-center size-[40px] rounded-[50%_50%_50%_0] [transform:rotate(-90deg)] bg-done [box-shadow:var(--shadow-pin)]"
+      className="kit-drop kit-success flex flex-none items-center justify-center size-[40px] rounded-drop [transform:rotate(-90deg)] bg-done [box-shadow:var(--shadow-pin)]"
     >
       <svg viewBox="0 0 24 24" className="size-[18px] [transform:rotate(90deg)]">
         <path
@@ -1895,11 +1905,11 @@ export function SubNav({
       <ul className="flex gap-[24px] min-w-max [border-bottom:1px_solid_var(--color-line)]">
         {entries.map((entry) => (
           <li key={entry.to}>
-            {/* 44 px high, the target of a finger. The focus ring is inside: the row scrolls in its frame. */}
+            {/* 32 px high, a control of a page. The focus ring is inside: the row scrolls in its frame. */}
             <Link
               to={entry.to}
               {...(entry.current ? { 'aria-current': 'page' as const } : {})}
-              className={`inline-flex items-center h-control -mb-px text-(length:--text-small) font-semibold [text-decoration:none] focus-visible:outline-offset-[-2px]! ${entry.current ? '[border-bottom:2px_solid_var(--color-ink)] text-ink' : '[border-bottom:2px_solid_transparent] text-muted [&:hover]:text-ink'}`}
+              className={`inline-flex items-center h-control-lg -mb-px text-(length:--text-small) font-semibold [text-decoration:none] focus-visible:outline-offset-[-2px]! ${entry.current ? '[border-bottom:2px_solid_var(--color-ink)] text-ink' : '[border-bottom:2px_solid_transparent] text-muted [&:hover]:text-ink'}`}
             >
               {entry.label}
             </Link>
@@ -1978,14 +1988,14 @@ export function Divider({ children, className = '' }: { children: ReactNode; cla
  */
 const MENU_TRIGGER = 'kit-menu-trigger cursor-pointer transform-none [transition:none]';
 const MENU =
-  'kit-menu min-w-[220px] border border-line rounded-box bg-surface text-ink [box-shadow:var(--shadow-frame)]';
+  'kit-menu min-w-[220px] border border-line rounded-control bg-surface text-ink [box-shadow:var(--shadow-frame)]';
 /**
  * An item: tinted under the pointer and under the keyboard, and the ring of a page inside it, so the
  * menu does not clip it. The strong accent of an item that takes something away is 5.89:1 on the
  * tint, where the accent is 4.28:1.
  */
 function itemClasses(danger: boolean): string {
-  return `min-h-control-panel rounded-button text-(length:--text-small) leading-(--text-small--line-height) transform-none [transition:none] data-[hovered=true]:bg-chip data-[focused=true]:bg-chip data-[focus-visible=true]:[outline:2px_solid_var(--color-accent)] data-[focus-visible=true]:outline-offset-[-2px]! data-[focus-visible=true]:[box-shadow:none] ${danger ? 'text-accent-strong' : ''}`;
+  return `min-h-control-md rounded-control text-(length:--text-small) leading-(--text-small--line-height) transform-none [transition:none] data-[hovered=true]:bg-hover data-[focused=true]:bg-hover data-[focus-visible=true]:[outline:2px_solid_var(--color-accent)] data-[focus-visible=true]:outline-offset-[-2px]! data-[focus-visible=true]:[box-shadow:none] ${danger ? 'text-accent-strong' : ''}`;
 }
 const MENU_WORDS = 'kit-menu__words flex min-w-0 flex-col';
 const MENU_LABEL = 'text-inherit font-semibold';
@@ -2304,10 +2314,10 @@ type StepProps = {
 /** The drop of a step: ink with its number, hollow when it is to come, green with a check when done. */
 const STEP_MARK = {
   current:
-    'flex flex-none items-center justify-center box-border size-[26px] rounded-[50%_50%_50%_0] [transform:rotate(-90deg)] bg-ink text-surface text-(length:--text-tiny) font-bold leading-none',
+    'flex flex-none items-center justify-center box-border size-[26px] rounded-drop [transform:rotate(-90deg)] bg-ink text-surface text-(length:--text-tiny) font-bold leading-none',
   pending:
-    'flex flex-none items-center justify-center box-border size-[26px] rounded-[50%_50%_50%_0] [transform:rotate(-90deg)] [border:1.5px_solid_var(--field-border)] bg-surface text-muted text-(length:--text-tiny) font-bold leading-none',
-  done: 'flex flex-none items-center justify-center box-border size-[26px] rounded-[50%_50%_50%_0] [transform:rotate(-90deg)] bg-done text-surface text-(length:--text-tiny) font-bold leading-none',
+    'flex flex-none items-center justify-center box-border size-[26px] rounded-drop [transform:rotate(-90deg)] [border:1.5px_solid_var(--field-border)] bg-surface text-muted text-(length:--text-tiny) font-bold leading-none',
+  done: 'flex flex-none items-center justify-center box-border size-[26px] rounded-drop [transform:rotate(-90deg)] bg-done text-surface text-(length:--text-tiny) font-bold leading-none',
 } as const satisfies Record<StepState, string>;
 
 /** One step: its drop, the line down to the next one, its title and what the step holds. */
@@ -2338,7 +2348,7 @@ export function Step({ state, number, title, currentPrefix, children }: StepProp
         </span>
         <span
           aria-hidden="true"
-          className="kit-step__line flex-auto w-[2px] min-h-[24px] rounded-[2px] bg-line group-last/step:hidden"
+          className="kit-step__line flex-auto w-[2px] min-h-[24px] rounded-full bg-line group-last/step:hidden"
         />
       </div>
       <div className="kit-step__body min-w-0 pb-[32px] group-last/step:pb-0">
@@ -2365,7 +2375,7 @@ export function Callout({
   return (
     <div
       {...(status ? { role: 'status' as const } : {})}
-      className={`kit-callout flex flex-col gap-[10px] min-w-0 [overflow-wrap:anywhere] py-[18px] px-[20px] border border-line rounded-box bg-subtle ${className}`}
+      className={`kit-callout flex flex-col gap-[10px] min-w-0 [overflow-wrap:anywhere] py-[18px] px-[20px] border border-line rounded-card bg-subtle ${className}`}
     >
       {children}
     </div>
@@ -2401,7 +2411,7 @@ export function Disclosure({
       className="kit-disclosure [border-top:1px_solid_var(--color-line)] [border-bottom:1px_solid_var(--color-line)]"
     >
       {/* The whole line is the target, 44 px at the least. The chevron turns. */}
-      <summary className="kit-disclosure__summary flex items-center gap-[10px] min-h-control py-[14px] cursor-pointer list-none list-outside [&::-webkit-details-marker]:hidden">
+      <summary className="kit-disclosure__summary flex items-center gap-[10px] min-h-control-lg py-[14px] cursor-pointer list-none list-outside [&::-webkit-details-marker]:hidden">
         <svg
           aria-hidden="true"
           viewBox="0 0 24 24"
@@ -2448,7 +2458,7 @@ export function OptionCard({
 
   return (
     <div
-      className="kit-option flex flex-col gap-[8px] min-w-0 p-[18px] border border-line rounded-box"
+      className="kit-option flex flex-col gap-[8px] min-w-0 p-[18px] border border-line rounded-card"
       data-folded={fold !== undefined && !fold.open ? '' : undefined}
     >
       <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
@@ -2502,7 +2512,7 @@ export function Snippet({ label, className = '', children }: { label: string; cl
       role="region"
       aria-label={label}
       tabIndex={0}
-      className={`kit-snippet overflow-x-auto whitespace-pre-wrap break-all py-[10px] px-[12px] border border-line rounded-button bg-subtle text-ink font-mono text-(length:--text-tiny) leading-[1.55] ${className}`}
+      className={`kit-snippet overflow-x-auto whitespace-pre-wrap break-all py-[10px] px-[12px] border border-line rounded-control bg-subtle text-ink font-mono text-(length:--text-tiny) leading-[1.55] ${className}`}
     >
       {children}
     </pre>
@@ -2522,13 +2532,13 @@ type BrowserFrameProps = {
 };
 
 const BROWSER_DOTS = 'kit-browser__dots flex flex-none gap-[6px] w-[42px]';
-const BROWSER_DOT = 'size-[10px] rounded-[50%] bg-line';
+const BROWSER_DOT = 'size-[10px] rounded-full bg-line';
 
 /** The window of a browser, drawn around the preview of a site. */
 export function BrowserFrame({ address, empty, caption, children, short = false }: BrowserFrameProps) {
   return (
     <>
-      <div className="kit-browser overflow-hidden border border-line rounded-frame bg-surface [box-shadow:var(--shadow-frame)]">
+      <div className="kit-browser overflow-hidden border border-line rounded-card bg-surface [box-shadow:var(--shadow-frame)]">
         {/* 44 px over its rule, as the mockup writes it. */}
         <div className="kit-browser__bar flex items-center gap-[12px] box-content h-[44px] py-0 px-[16px] [border-bottom:1px_solid_var(--color-line)] bg-subtle">
           <span aria-hidden="true" className={BROWSER_DOTS}>
@@ -2537,7 +2547,7 @@ export function BrowserFrame({ address, empty, caption, children, short = false 
             <span className={BROWSER_DOT} />
           </span>
           <span className="kit-browser__address flex flex-1 justify-center min-w-0">
-            <span className="overflow-hidden py-[4px] px-[16px] border border-line rounded-[999px] bg-surface text-muted text-(length:--text-hint) leading-auto text-ellipsis whitespace-nowrap">
+            <span className="overflow-hidden py-[4px] px-[16px] border border-line rounded-pill bg-surface text-muted text-(length:--text-hint) leading-auto text-ellipsis whitespace-nowrap">
               {address}
             </span>
           </span>

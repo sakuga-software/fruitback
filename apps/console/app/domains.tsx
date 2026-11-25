@@ -206,7 +206,7 @@ function DomainRow({
       ) : null}
 
       {proven ? null : (
-        <div className="rounded-md bg-chip px-3 py-3 text-sm">
+        <div className="rounded-card bg-chip px-3 py-3 text-sm">
           <p className="mb-2">{t('Add this TXT record to the DNS of the domain, then check.')}</p>
           <dl className="grid gap-x-3 gap-y-1 sm:grid-cols-[auto_minmax(0,1fr)]">
             <dt className="text-xs text-muted">{t('Name')}</dt>

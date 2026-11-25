@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { type Page, type Route, expect, test } from '@playwright/test';
-import { ACME, LUMEN, contrast, painted, rgb, sideScroll, stubWorker } from './console-workspace.ts';
+import { ACME, LUMEN, contrast, openMyAccount, painted, rgb, sideScroll, stubWorker } from './console-workspace.ts';
 
 /**
  * A suspended workspace, as its members read it (FRU-328): a banner at the top of the console of the
@@ -21,7 +21,7 @@ const REASON = 'Unpaid invoice of September';
 const SUSPENDED = { ...ACME, suspended: true, suspendedAt: SUSPENDED_AT, reason: REASON };
 
 const ACCENT_STRONG = '#b91c1c';
-const SUBTLE = '#fafafa';
+const SUBTLE = '#f7f9fb';
 
 const LEAD =
   'An administrator of this instance suspended it. You can still read it, but nothing in it can change, and its sites take no notes. To restore it, contact the administrator of this instance.';
@@ -77,10 +77,13 @@ test('a member of a suspended workspace reads a banner: since when, and who to a
 
   // Every section of the workspace shows it; the reason shows on none of them.
   for (const section of ['notes', 'connectors', 'members', 'account']) {
-    await page
-      .locator('aside.kit-rail')
-      .getByRole('link', { name: new RegExp(`^${section}$|^my ${section}$`, 'i') })
-      .click();
+    // « My account » is in the menu of the person, at the foot of the bar (FRU-684).
+    if (section === 'account') await openMyAccount(page);
+    else
+      await page
+        .locator('aside.kit-rail')
+        .getByRole('link', { name: new RegExp(`^${section}$`, 'i') })
+        .click();
     await expect(page).toHaveURL(new RegExp(`/w/w1/${section}`));
     await expect(banner(page)).toBeVisible();
     await expect(page.locator('body')).not.toContainText(REASON);

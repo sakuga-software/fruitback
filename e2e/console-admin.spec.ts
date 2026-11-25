@@ -15,11 +15,11 @@ const CONSOLE = 'http://localhost:5178';
 const MINUTE = 60_000;
 const DAY = 24 * 60 * MINUTE;
 
-const LINE = '#e4e4e7';
-const SUBTLE = '#fafafa';
-const INK_SOFT = '#52525b';
-const DONE = '#15803d';
-const ACCENT = '#dd2c27';
+const LINE = '#e3e8ef';
+const SUBTLE = '#f7f9fb';
+const INK_SOFT = '#334155';
+const DONE = '#166534';
+const ACCENT_STRONG = '#b91c1c';
 
 type Facts = Record<string, unknown>;
 
@@ -218,7 +218,7 @@ test('an administrator sees the frame and the instance, with the values of the m
   // Straight to the first workspace, not through the front door (FRU-356).
   await expect(nav.getByRole('link', { name: 'My workspaces' })).toHaveAttribute('href', '/w/w1/sites');
   // Each screen has its icon, and the way back an arrow to the start of the line (FRU-476, FRU-477).
-  await expect(nav.locator('a > svg[aria-hidden="true"]')).toHaveCount(5);
+  await expect(nav.locator('a svg[aria-hidden="true"]')).toHaveCount(5);
   await expect(nav.getByRole('link', { name: 'My workspaces' }).locator('svg')).toHaveAttribute(
     'data-rail-icon',
     'back',
@@ -248,8 +248,8 @@ test('an administrator sees the frame and the instance, with the values of the m
   expect.soft(await painted(worker.value, 'color')).toEqual(rgb(DONE));
   expect
     .soft(await styles(worker.value, ['font-size', 'font-weight']))
-    .toEqual({ 'font-size': '15px', 'font-weight': '600' });
-  expect.soft(await styles(worker.detail, ['font-size'])).toEqual({ 'font-size': '13px' });
+    .toEqual({ 'font-size': '13px', 'font-weight': '600' });
+  expect.soft(await styles(worker.detail, ['font-size'])).toEqual({ 'font-size': '12px' });
   await expect(fact(page, 'Database').value).toHaveText('PostgreSQL');
   await expect(fact(page, 'Database').detail).toHaveText('Not reported');
   await expect(fact(page, 'Mail').value).toHaveText('Scaleway TEM');
@@ -257,7 +257,8 @@ test('an administrator sees the frame and the instance, with the values of the m
   const connectors = fact(page, 'Connectors');
   await expect(connectors.value).toHaveText('1 needs a look');
   await expect(connectors.detail).toHaveText('REST API, Acme support');
-  expect.soft(await painted(connectors.value, 'color')).toEqual(rgb(ACCENT));
+  // A red word is the strong red (FRU-683): the red of the mockup is under 4.5:1 on a tint.
+  expect.soft(await painted(connectors.value, 'color')).toEqual(rgb(ACCENT_STRONG));
 
   // Sign-in: each way, and the variable that sets it.
   const signIn = page.getByRole('region', { name: 'Sign-in' });
@@ -292,7 +293,7 @@ test('an administrator sees the frame and the instance, with the values of the m
       'border-top-width': '1px',
       'border-top-style': 'solid',
       'border-top-left-radius': '6px',
-      'font-size': '12px',
+      'font-size': '11px',
     });
   expect.soft(await painted(code, 'borderTopColor')).toEqual(rgb(LINE));
   expect.soft(await painted(code, 'backgroundColor')).toEqual(rgb(SUBTLE));

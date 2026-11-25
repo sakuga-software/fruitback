@@ -197,7 +197,7 @@ export function SiteAgent({
       ) : null}
       {read !== 'loading' && read !== 'failed' && receivers.length > 0 ? (
         <>
-          <div className="max-w-[640px] rounded-box border border-line px-[16px] py-[12px]">
+          <div className="max-w-[640px] rounded-card border border-line px-[16px] py-[12px]">
             <Toggle
               strong
               label={t('Start an agent when a note arrives')}
