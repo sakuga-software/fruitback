@@ -907,9 +907,10 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     dockCounts.dataset.fruitbackDockCounts = '';
     dockCounts.setAttribute('role', 'img');
     dockCounts.hidden = true;
-    const list = options.dock.querySelector('[data-fruitback-host-list]');
-    if (list !== null) list.after(dockCounts);
-    else options.dock.prepend(dockCounts);
+    // Before the gear, or the launch button: the chip of the detached notes stays first (FRU-303).
+    const next = options.dock.querySelector('[data-fruitback-host-configure], [data-fruitback-host-launch]');
+    if (next !== null) next.before(dockCounts);
+    else options.dock.append(dockCounts);
   }
 
   function countStages(): void {

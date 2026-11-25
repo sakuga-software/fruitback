@@ -245,7 +245,8 @@ export const STYLES = `
   box-sizing: border-box;
   min-height: 40px;
   padding-block: 7px;
-  padding-inline: 12px 8px;
+  /* 9 px at the end: the target of the cross reaches 9 px past its drawn square, and stays inside. */
+  padding-inline: 12px 9px;
   border-bottom: 1px solid var(--fruitback-color-border);
 }
 /* With the handle that moves it (FRU-420), first, in a column of its own. */

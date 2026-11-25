@@ -87,8 +87,8 @@ test('the bubble says « Agent » beside the name of the key, and not beside a m
   const replies = page.getByRole('list', { name: 'Replies' }).locator('.fruitback-thread-reply-who');
   await expect(replies).toHaveCount(2);
   // The name of the key, and the word of the reader: never the member who made the key.
-  await expect(replies.nth(0)).toHaveText(/^Dev agent · Agent · /);
+  await expect(replies.nth(0)).toHaveText(/^Dev agent · Agent \S/);
   // The member is named by their account, the owner of the workspace of the worker of development.
-  await expect(replies.nth(1)).toHaveText(/^Dev · member of Playground · /);
+  await expect(replies.nth(1)).toHaveText(/^Dev · member of Playground \S/);
   await expect(replies.nth(1)).not.toHaveText(/Agent/);
 });

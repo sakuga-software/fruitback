@@ -89,9 +89,10 @@ const boxes = (page: Page) =>
     return {
       stateTop: state.top,
       stateMiddle: state.top + state.height / 2,
-      closeTop: close.top + 8,
+      // The cross is drawn inside a transparent border of 9 px (FRU-696).
+      closeTop: close.top + 9,
       closeMiddle: close.top + close.height / 2,
-      closeRight: close.right - 8,
+      closeRight: close.right - 9,
       headRight: head.right,
     };
   });
@@ -113,14 +114,16 @@ for (const width of [1280, 390] as const) {
     await plant(page, 'La croix passe à la ligne.');
 
     const thread = await openNote(page, 'La croix passe');
-    await expect(thread.getByRole('link')).toHaveText(/^DEV-\d+ →$/);
+    // The ticket: its identifier, and a name that says the new tab (FRU-696).
+    await expect(thread.getByRole('link')).toHaveText(/^DEV-\d+$/);
+    await expect(thread.getByRole('link')).toHaveAccessibleName(/^DEV-\d+, dans un nouvel onglet$/);
     await expect(thread.locator('.fruitback-thread-state')).toHaveText('In Progress');
 
     // On the first line, at the right: the cross is centred on the line of the state.
     const box = await boxes(page);
     expect(Math.abs(box.closeMiddle - box.stateMiddle)).toBeLessThanOrEqual(2);
     expect(Math.abs(box.closeTop - box.stateTop)).toBeLessThanOrEqual(5);
-    expect(box.headRight - box.closeRight).toBeCloseTo(14, 0);
+    expect(box.headRight - box.closeRight).toBeCloseTo(9, 0);
 
     // The age of the status is in the title of its word, and no longer in the head.
     const changed = STATUS_CHANGED_AT.toLocaleDateString('fr-FR');
@@ -129,7 +132,7 @@ for (const width of [1280, 390] as const) {
       `In Progress depuis le ${changed}`,
     );
     await expect(thread.locator('.fruitback-thread-head')).not.toContainText('il y a');
-    // The age of the note stays under the note.
+    // The age of the note stays with the note, in the head of its message.
     await expect(thread.locator('.fruitback-thread-meta')).toContainText('il y a');
 
     expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBe(
@@ -156,7 +159,7 @@ test('in French, a long status wraps in its column and the cross keeps the top o
   await expect(state).toHaveText('En attente de la validation du client sur la préproduction');
 });
 
-test('in French, no « Réponses » over nothing, and the title and the list from the first reply on (FRU-419)', async ({
+test('in French, no « Réponses » over nothing, and the list from the first reply on, with no title (FRU-419, FRU-696)', async ({
   page,
 }) => {
   const read: Read = { stateName: 'In Progress', replies: 0 };
@@ -176,11 +179,11 @@ test('in French, no « Réponses » over nothing, and the title and the list fro
   await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
   await mount(page, 'thread-head-replies');
   thread = await openNote(page, 'Personne n’a encore');
-  await expect(thread.locator('.fruitback-thread-answers-title')).toHaveText('Réponses');
+  await expect(thread.locator('.fruitback-thread-answers-title')).toHaveCount(0);
   await expect(thread.getByRole('list', { name: 'Réponses' }).getByRole('listitem')).toHaveCount(1);
 });
 
-test('in French, neither the selector nor the source without showSelectors, and both with it (FRU-349, FRU-419)', async ({
+test('in French, the selector and the source folded without showSelectors, and open with it (FRU-349, FRU-419, FRU-696)', async ({
   page,
 }) => {
   await rewriteReads(page, { stateName: 'In Progress', replies: 0 });
@@ -188,9 +191,16 @@ test('in French, neither the selector nor the source without showSelectors, and 
   await plant(page, 'La source est pour un développeur.');
 
   const thread = await openNote(page, 'La source est');
-  await expect(thread.locator('.fruitback-thread-source')).toHaveCount(0);
-  await expect(thread).not.toContainText('HeroBanner');
-  await expect(thread).not.toContainText('card-espresso');
+  // Folded under « Détails techniques »: out of the eye, one key away.
+  await expect(thread.locator('details.fruitback-thread-tech')).not.toHaveAttribute('open');
+  await expect(thread.locator('.fruitback-thread-source')).toBeHidden();
+  const summary = thread.locator('.fruitback-thread-tech-summary');
+  await expect(summary).toHaveText('Détails techniques');
+  await summary.focus();
+  await page.keyboard.press('Enter');
+  await expect(thread.locator('details.fruitback-thread-tech')).toHaveAttribute('open');
+  await page.keyboard.press('Enter');
+  await expect(thread.locator('details.fruitback-thread-tech')).not.toHaveAttribute('open');
 
   await page.evaluate(() =>
     (globalThis as unknown as { fruitbackWidget: { showSelectors(on: boolean): void } }).fruitbackWidget.showSelectors(
