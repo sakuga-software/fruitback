@@ -18,6 +18,8 @@ import {
   type Role,
   type Site,
   VISIBILITIES,
+  VISITOR_RIGHTS,
+  type VisitorRight,
   type Visibility,
   WRITERS,
   type Workspace,
@@ -71,6 +73,9 @@ export function siteOf(row: Record<string, unknown>, destinations: Destination[]
 
   // FRU-604: anything but `true` is off, the default: a site offers no e-mail it did not say it offers.
   const notifyDone = row.notify_done === true;
+  // FRU-703: a value that is not one of the three gives nothing to a visitor, as for `writers`.
+  const visitorEdit: VisitorRight = isOneOf(row.visitor_edit, VISITOR_RIGHTS) ? row.visitor_edit : 'never';
+  const visitorDelete: VisitorRight = isOneOf(row.visitor_delete, VISITOR_RIGHTS) ? row.visitor_delete : 'never';
 
   return {
     id: row.id,
@@ -79,6 +84,8 @@ export function siteOf(row: Record<string, unknown>, destinations: Destination[]
     visibility,
     writers,
     notifyDone,
+    visitorEdit,
+    visitorDelete,
     destinations,
   };
 }

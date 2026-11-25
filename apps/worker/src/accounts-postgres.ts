@@ -45,7 +45,8 @@ import {
   type OAuthClient,
   type Reach,
   DEFAULT_CONNECTOR_SETTINGS,
-  DEFAULT_WRITERS,
+  DEFAULT_VISITOR_RIGHT,
+  defaultWriters,
   offersDoneNotice,
   type SharedSite,
   type Site,
@@ -165,6 +166,8 @@ const SITE_WITH_DESTINATION = {
   visibility: sites.visibility,
   writers: sites.writers,
   notify_done: sites.notify_done,
+  visitor_edit: sites.visitor_edit,
+  visitor_delete: sites.visitor_delete,
   connector_id: site_destinations.connector_id,
   team_id: site_destinations.team_id,
   project_id: site_destinations.project_id,
@@ -1671,10 +1674,11 @@ export function createPostgresAccountStore(database: Database): AccountStore {
       );
     },
 
-    async addSite(workspace, { origin, visibility, writers, notifyDone }) {
+    async addSite(workspace, { origin, visibility, writers, notifyDone, visitorEdit, visitorDelete }) {
       // Adding the same address twice is the same site, with the visibility asked for last. It keeps
       // the destinations it had, so the statement that writes it reads them too. It keeps who writes
-      // there too, unless the caller says (FRU-330): a console of before closes nothing.
+      // there too, unless the caller says (FRU-330): a console of before closes nothing. The same for
+      // what a visitor may do to their own note (FRU-703).
       const rows = await run((db) => {
         const site = db.$with('site').as(
           db
@@ -1684,9 +1688,11 @@ export function createPostgresAccountStore(database: Database): AccountStore {
               workspace_id: workspace,
               origin,
               visibility,
-              writers: writers ?? DEFAULT_WRITERS,
+              writers: writers ?? defaultWriters(visibility),
               // FRU-604: off unless the caller says, for a new site and for one that exists alike.
               notify_done: notifyDone ?? false,
+              visitor_edit: visitorEdit ?? DEFAULT_VISITOR_RIGHT,
+              visitor_delete: visitorDelete ?? DEFAULT_VISITOR_RIGHT,
               created_at: Date.now(),
             })
             .onConflictDoUpdate({
@@ -1695,6 +1701,8 @@ export function createPostgresAccountStore(database: Database): AccountStore {
                 visibility: sql`excluded.visibility`,
                 ...(writers === undefined ? {} : { writers }),
                 ...(notifyDone === undefined ? {} : { notify_done: notifyDone }),
+                ...(visitorEdit === undefined ? {} : { visitor_edit: visitorEdit }),
+                ...(visitorDelete === undefined ? {} : { visitor_delete: visitorDelete }),
               },
             })
             .returning({
@@ -1704,6 +1712,8 @@ export function createPostgresAccountStore(database: Database): AccountStore {
               visibility: sites.visibility,
               writers: sites.writers,
               notify_done: sites.notify_done,
+              visitor_edit: sites.visitor_edit,
+              visitor_delete: sites.visitor_delete,
             }),
         );
 
@@ -1716,6 +1726,8 @@ export function createPostgresAccountStore(database: Database): AccountStore {
             visibility: site.visibility,
             writers: site.writers,
             notify_done: site.notify_done,
+            visitor_edit: site.visitor_edit,
+            visitor_delete: site.visitor_delete,
             connector_id: site_destinations.connector_id,
             team_id: site_destinations.team_id,
             project_id: site_destinations.project_id,

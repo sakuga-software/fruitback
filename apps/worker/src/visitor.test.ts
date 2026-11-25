@@ -188,13 +188,38 @@ describe('a visitor with no account, on a site that everyone reads (FRU-224)', (
   });
 });
 
-describe('a visitor with no account, on a site that everyone reads and whose notes are « Members only » (FRU-330)', () => {
-  it('leaves a note: the field decides nothing on a site that everyone reads', async () => {
-    const { world, visitor } = await workerWithASite('everyone', 'members');
+describe('a visitor with no account, on a site that everyone reads and whose notes are « Members only », « Read only » (FRU-703)', () => {
+  it('reads the notes, is told a note would be refused, and leaves none, by a note or by a batch', async () => {
+    const { world, site, visitor } = await workerWithASite('everyone', 'members');
 
     const read = await visitor.read(SITE);
-    assert.equal(read.status, 200);
-    assert.equal(((await read.json()) as { canWrite?: unknown }).canWrite, undefined);
+    assert.equal(read.status, 200, await read.clone().text());
+    assert.equal(((await read.json()) as { canWrite?: unknown }).canWrite, false);
+    for (const body of [noteFor(site), [noteFor(site), noteFor(site, { id: 'sd_visitor_2' })]]) {
+      const sent = await visitor.send(SITE, body);
+      assert.equal(sent.status, 401, await sent.clone().text());
+      assert.equal(((await sent.json()) as { error: string }).error, 'identity-required');
+    }
+    const reply = await callOn(world, 'POST', `/feedback/sd_visitor/replies?client=${site}`, {
+      origin: SITE,
+      body: { url: PAGE, body: 'Same here.', name: 'Bob' },
+    });
+    assert.equal(reply.status, 401);
+    assert.equal(await rowsIn(world), 0);
+  });
+
+  it('takes the note of a member, sent by the relay with their session', async () => {
+    const { world, admin, workspace, site, visitor } = await workerWithASite('everyone', 'members');
+    const session = await sessionOf(world, admin.id, workspace);
+
+    const sent = await visitor.send(SITE, noteFor(site), session);
+    assert.equal(sent.status, 201, await sent.clone().text());
+    assert.equal(await rowsIn(world), 1);
+  });
+
+  it('opens a new site that everyone reads to anybody when the console names nobody, as such a site always was', async () => {
+    const { world, visitor } = await workerWithASite('everyone');
+
     assert.equal((await visitor.send(SITE)).status, 201);
     assert.equal(await rowsIn(world), 1);
   });
@@ -426,6 +451,36 @@ describe('the guards of « Members only », each planted out (FRU-330)', () => {
       }
     });
   }
+
+  it('refuses a reply from the page with no session on a site « Read only », and takes it when the check is out (FRU-703)', async () => {
+    const replyOn = async (handle: Handle): Promise<number> => {
+      const { world, site, store } = await workerWithASite('everyone', 'members');
+      const answer = await handle(
+        new Request(`${WORKER}/feedback/sd_visitor/replies?client=${site}`, {
+          method: 'POST',
+          headers: { Origin: SITE, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: PAGE, body: 'Same here.', name: 'Bob' }),
+        }),
+        world.env,
+        { clientIp: '198.18.1.1', ...world.context, store },
+      );
+
+      return answer.status;
+    };
+    const { handleRequest: real } = await import('./app.ts');
+    assert.equal(await replyOn(real), 401, 'the control: the real module refuses it');
+
+    const mutant = await mutatedModule('app.ts', {
+      from: "if (policy.read !== 'public' || policy.write === 'authenticated') {",
+      to: "if (policy.read !== 'public') {",
+    });
+    try {
+      // Past the guard, the reply looks for its note: not the refusal of a write any more.
+      assert.notEqual(await replyOn(mutant.module.handleRequest as Handle), 401);
+    } finally {
+      mutant.remove();
+    }
+  });
 
   it('takes no token that a site signs as a session, and sees it taken when the check is out', async () => {
     const policy: ClientPolicy = {

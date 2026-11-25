@@ -113,6 +113,11 @@ export const sites = pgTable(
     // FRU-604: a visitor is offered one e-mail when their note is done. Off by default (decision of
     // Mathieu, 2026-11-06), and of no effect on a site whose notes come from its members only.
     notify_done: boolean('notify_done').notNull().default(false),
+    // FRU-703: what a visitor may do to a note of their own. `0050` adds the columns with `never`, the
+    // value of every site that exists then (no site changes), and makes `while-open` the default of
+    // the next one, as the mockup does. `addSite` writes the value in any case.
+    visitor_edit: text('visitor_edit').notNull().default('while-open'),
+    visitor_delete: text('visitor_delete').notNull().default('while-open'),
   },
   (table) => [
     foreignKey({

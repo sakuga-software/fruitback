@@ -738,7 +738,10 @@ async function replyAuthorFor(
 ): Promise<{ ok: true; author: ReplyAuthor; account: boolean } | { ok: false; status: number; reason: string }> {
   const token = readBearerToken(request.headers.get('Authorization'));
   if (token === undefined) {
-    if (policy.read !== 'public') return { ok: false, status: 401, reason: 'identity-required' };
+    // FRU-703: « Read only » is read by everyone and written by its members, so the write is asked too.
+    if (policy.read !== 'public' || policy.write === 'authenticated') {
+      return { ok: false, status: 401, reason: 'identity-required' };
+    }
 
     return { ok: true, author: { kind: 'visitor', ...(typed === undefined ? {} : { name: typed }) }, account: false };
   }

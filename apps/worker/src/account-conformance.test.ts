@@ -288,14 +288,14 @@ const VIOLATIONS: Violation<AccountStore>[] = [
   {
     breaks: 'makes a new site « Members only » when nobody chose, and keeps who writes on a site added again (FRU-330)',
     by: 'opens a new site to anyone',
-    replace: { from: 'writers: writers ?? DEFAULT_WRITERS,', to: "writers: writers ?? 'anyone'," },
+    replace: { from: 'writers: writers ?? defaultWriters(visibility),', to: "writers: writers ?? 'anyone'," },
   },
   {
     breaks: 'makes a new site « Members only » when nobody chose, and keeps who writes on a site added again (FRU-330)',
     by: 'closes a site again when a caller names no `writers`',
     replace: {
       from: '...(writers === undefined ? {} : { writers }),',
-      to: 'writers: writers ?? DEFAULT_WRITERS,',
+      to: "writers: writers ?? 'members',",
     },
   },
   {
@@ -304,6 +304,35 @@ const VIOLATIONS: Violation<AccountStore>[] = [
     replace: {
       from: '...(writers === undefined ? {} : { writers }),',
       to: '',
+    },
+  },
+  {
+    breaks: 'opens a new site that everyone reads to anybody when nobody chose who writes (FRU-703)',
+    by: 'closes a new site that everyone reads',
+    replace: { from: 'writers: writers ?? defaultWriters(visibility),', to: "writers: writers ?? 'members'," },
+  },
+  {
+    breaks:
+      'gives a new site what the mockup gives a visitor, keeps it on a site added again, and serves it where a visitor writes (FRU-703)',
+    by: 'gives a new site nothing',
+    replace: {
+      from: 'visitor_edit: visitorEdit ?? DEFAULT_VISITOR_RIGHT,',
+      to: "visitor_edit: visitorEdit ?? 'never',",
+    },
+  },
+  {
+    breaks:
+      'gives a new site what the mockup gives a visitor, keeps it on a site added again, and serves it where a visitor writes (FRU-703)',
+    by: 'never changes what a visitor may delete on a site that exists',
+    replace: { from: '...(visitorDelete === undefined ? {} : { visitor_delete: visitorDelete }),', to: '' },
+  },
+  {
+    breaks:
+      'gives a new site what the mockup gives a visitor, keeps it on a site added again, and serves it where a visitor writes (FRU-703)',
+    by: 'takes back what a visitor may edit when a caller names nothing',
+    replace: {
+      from: '...(visitorEdit === undefined ? {} : { visitor_edit: visitorEdit }),',
+      to: 'visitor_edit: visitorEdit ?? DEFAULT_VISITOR_RIGHT,',
     },
   },
   {
