@@ -10,7 +10,7 @@ import {
   sendsMail,
   siteChoices,
 } from '../api';
-import { INVITED, type Message, messageOf } from '../invitation-message';
+import { INVITED, INVITED_SEVERAL, type Message, invitedSentences, messageOf } from '../invitation-message';
 import { type Listed, edited, listedOf } from '../listed';
 import { copyText, problemOf } from '../problems';
 import { Button, LinkButton, LoadFailed, folded } from '../ui';
@@ -802,8 +802,12 @@ function Invited({ sent }: { sent: readonly { email: string; message: Message }[
 
   return (
     <div role="status" className="mt-[16px] rounded-card border border-line bg-subtle px-[20px] py-[16px] text-small">
-      {sent.map((each) => (
-        <p key={each.email}>{t(INVITED[each.message], { email: each.email })}</p>
+      {invitedSentences(sent).map(({ message, emails }) => (
+        <p key={message}>
+          {emails.length === 1
+            ? t(INVITED[message], { email: emails[0]! })
+            : t(INVITED_SEVERAL[message], { emails: emails.join(', ') })}
+        </p>
       ))}
       <p className="mt-[10px] rounded-control border border-line bg-surface px-[12px] py-[8px] font-mono text-hint break-all">
         {link}

@@ -545,8 +545,10 @@ test('« Invite » opens « Invite people »: 480 px, three cards of a role, and
     ]);
   await expect(emails(page)).toHaveValue('tom@acme');
   await expect(dialog(page)).toBeVisible();
-  await expect(page.getByRole('status')).toContainText('Invitation sent to zoe@client.fr.');
-  await expect(page.getByRole('status')).toContainText('Invitation sent to lou@client.fr.');
+  // One sentence for the addresses whose message went, then the link once.
+  await expect(page.getByRole('status')).toContainText(
+    'Invitations sent to zoe@client.fr, lou@client.fr. You can also send them this link:',
+  );
   await expect(page.getByRole('status')).toContainText(
     'They open it, sign in with the address that was invited, and join.',
   );

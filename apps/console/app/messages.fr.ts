@@ -479,6 +479,11 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Send invites': 'Envoyer les invitations',
   'Send 1 invite': 'Envoyer 1 invitation',
   'Send {count} invites': 'Envoyer {count} invitations',
+  'Invitations sent to {emails}. You can also send them this link:':
+    'Invitations envoyées à {emails}. Vous pouvez aussi leur envoyer ce lien :',
+  'Invitations kept for {emails}. Send them this link:': 'Invitations gardées pour {emails}. Envoyez-leur ce lien :',
+  'Invitations kept for {emails}, but no message was sent: too many invitation messages went in a short time. Send them this link:':
+    'Invitations gardées pour {emails}, mais aucun message n’est parti : trop de messages d’invitation sont partis en peu de temps. Envoyez-leur ce lien :',
   'They open it, sign in with the address that was invited, and join. The link alone opens nothing.':
     'La personne l’ouvre, se connecte avec l’adresse invitée, et rejoint l’espace de travail. Le lien seul n’ouvre rien.',
 
