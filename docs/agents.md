@@ -53,6 +53,7 @@ on the pricing page. » It has these tools:
 | `set_note_status({ id, status })`                                                        | write | A status of the site (`own:<key>`), for a note that Fruitback keeps. A note in a tracker takes its tracker's status.                                |
 | `task_choices({})`                                                                       | read  | The labels of the workspace, and the members a task can be given to, with their ids.                                                                |
 | `update_task({ id, status?, assignee?, priority?, dueOn?, labels? })`                    | write | The status, the assignee, the priority, the due day and the labels of a task that Fruitback keeps.                                                  |
+| `create_task({ site, title, text?, status?, assignee?, priority?, dueOn?, labels? })`    | write | A task with no page and no pin, as « New task » of the console writes it, with its fields.                                                          |
 
 A key writes 30 times a minute at most.
 
@@ -83,8 +84,24 @@ is not of the workspace. The fields are written first, then the status: if the s
 the answer says that the fields were saved and the status was not, so send the status again. A person sees the change at once
 in the console, and the log of the key shows it.
 
-On a worker that keeps no task (`FRUITBACK_TASKS=off`), `task_choices`, `set_note_status` and
-`update_task` are not listed, and `list_notes` and `get_note` still give the fields of the tasks kept
+`create_task` writes a task with no page and no pin in a site of the key, as « New task » of the
+console does: a `title` (one line, 200 characters at most), and if you like a `text`, a `status`
+(`own:<key>`; `own:new` when you give none), an `assignee`, a `priority`, a `dueOn` and `labels`,
+with the ids of `task_choices`. It refuses an argument it does not take, a site that is not of the
+key, a status the site does not have or hides, and a member or a label that is not of the workspace,
+and then writes nothing. Otherwise it writes the whole task at once, and answers what it wrote: its
+`id` (for `get_note`, `update_task` and `set_note_status`), its `identifier` (`FB-<n>`), its
+`status` and `stage`, and its fields with the ids you sent. If the store of the notes did not answer,
+the task may have been written: look for it with `notes_as_text` before you write it again. The task
+is written in the name of the member who made the key, and the log of the key says « Wrote a task ».
+A task that an agent puts in To do starts no agent: an agent cannot start itself.
+
+`update_task` and `set_note_status` change a task written by hand as they change a note that
+Fruitback keeps. `get_note` reads it as `{ task }`, and `notes_as_text` of a whole site lists it under
+« Tasks with no page »; `list_notes` lists the notes of the pages only.
+
+On a worker that keeps no task (`FRUITBACK_TASKS=off`), `task_choices`, `set_note_status`,
+`update_task` and `create_task` are not listed, and `list_notes` and `get_note` still give the fields of the tasks kept
 before.
 
 ## Connect claude.ai, or another app, with OAuth

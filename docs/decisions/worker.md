@@ -5095,9 +5095,20 @@ the rule of FRU-257 for an address; it waits for the explicit agreement of Mathi
   `agent_writes` (`task`, `status`), and one charge of the limit for the call.
 - **The tools of a task follow the module** (FRU-651): with `FRUITBACK_TASKS=off`, `task_choices`,
   `set_note_status` and `update_task` are not listed and `tools/call` refuses them. `set_note_status`
-  could only answer `statuses-not-taken` there. `TOOLS_VERSION` is `2`.
-- **`create_task` comes with FRU-657**, the creation of a task by hand: a pull request of its own, on
-  top of that one.
+  could only answer `statuses-not-taken` there. `TOOLS_VERSION` is `3` since `create_task`.
+- **`create_task` writes a task by hand (FRU-657) as the console does**: `readNewTask`, then
+  `createTask` of the accounts, with the member of the key as its author. Before them, an argument it
+  does not take is refused, not dropped: an agent that sends `due` for `dueOn` would read a task with
+  no day as written. The transaction refuses a status, a member or a label of elsewhere, and writes
+  nothing then, so there is no partial write: no error is answered once the task is written, and a
+  `StoreError` of the write says that the task may have been written. One charge of the limit, one row
+  of `agent_writes` (`create`, with its status). It calls no trigger: an agent cannot start itself
+  (FRU-468), where « New task » in To do does.
+- **`update_task` and `set_note_status` take a task written by hand**: its page is `NO_PAGE`, so no
+  store of the notes holds it; `setTaskFields` then `setNoteStatus` of the accounts write it, with
+  the member of the key and `manages: true`, in the order and with the answers of a note.
+  `list_notes` still lists the notes of the pages only: a task in it would need a shape of its own
+  beside a note, which is a change of the contract of its own.
 
 ## A task written by hand (FRU-657)
 
