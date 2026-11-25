@@ -1184,11 +1184,12 @@ A member still writes there with their session
 gives « Anyone on the page » to every site that everyone read, which took a note from anybody
 whatever the field said, so no site of before changes
 (test:`changes nothing a site of before does, and gives a site made after the defaults of the mockup`).
-A caller that names no `writers` for a new site that everyone reads (the extension) opens it to
-anybody, as such a site always was
-(test:`opens a new site that everyone reads to anybody when the console names nobody, as such a site always was`).
-A console that does not send the field changes no site: a site that is added again keeps the value
-it had.
+A caller that names no `writers` (the extension) and opens a site to everyone, new or not, opens it
+to anybody, as « Everyone who visits » always did; one that closes it to members closes the writes
+too, and one that asks the same visibility again changes nothing
+(test:`opens a new site that everyone reads to anybody when the console names nobody, as such a site always was`,
+test:`opens a site to anybody when a caller of before opens it to everyone, and closes it when it closes it (FRU-703)`).
+A site added again with the visibility it has keeps who writes there.
 
 What a visitor with no account may do to a note of their own is a setting of the site too:
 `visitorEdit` and `visitorDelete`, each `never` or `while-open`: no value lets a visitor act on

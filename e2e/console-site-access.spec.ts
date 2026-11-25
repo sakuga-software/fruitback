@@ -286,3 +286,20 @@ for (const locale of ['en', 'fr'] as const) {
     await expectNoViolation(page, `the tab « Access » at 390 px, ${locale}`);
   });
 }
+
+test('the card of a « Read only » site on the Sites screen says that only members leave notes (FRU-703)', async ({
+  page,
+}) => {
+  await stubWorker(page, {
+    workspaces: [ACME],
+    sites: [
+      { id: 's1', origin: 'https://docs.acme.dev', visibility: 'everyone', writers: 'members' },
+      { id: 's2', origin: 'https://acme.dev', visibility: 'everyone', writers: 'anyone' },
+    ],
+  });
+  await page.goto(`${CONSOLE}/w/w1/sites`);
+  const cardOf = (name: string) =>
+    page.locator('li[data-site]').filter({ has: page.getByRole('heading', { level: 2, name, exact: true }) });
+  await expect(cardOf('docs.acme.dev').getByText('Notes from members only', { exact: true })).toBeVisible();
+  await expect(cardOf('acme.dev').getByText('Notes from members only', { exact: true })).toHaveCount(0);
+});

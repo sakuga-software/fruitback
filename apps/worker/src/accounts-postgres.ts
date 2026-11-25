@@ -50,6 +50,7 @@ import {
   offersDoneNotice,
   type SharedSite,
   type Site,
+  type Visibility,
   type WorkspaceSuspension,
   clientOf,
   normalizeEmail,
@@ -157,6 +158,17 @@ function suspensionOf(row: { since: number | null; reason: string | null }): Wor
   if (row.since === null) return undefined;
 
   return { since: row.since, ...(row.reason === null || row.reason === '' ? {} : { reason: row.reason }) };
+}
+
+/**
+ * Who writes on a site after a caller that names no `writers` asks for `visibility` (FRU-703): what
+ * the site had when the visibility does not change, and `defaultWriters` of the new one when it does.
+ * The extension sends the visibility alone, and « Everyone who visits » opened a site to anybody's
+ * notes before `writers` decided on such a site: it still does. `excluded.visibility` is not read
+ * here: in an `UPDATE` and in `ON CONFLICT DO UPDATE` alike, `sites.visibility` is the value before.
+ */
+function writersWhenTheVisibilityChanges(visibility: Visibility) {
+  return sql`CASE WHEN ${sites.visibility} = ${visibility} THEN ${sites.writers} ELSE ${defaultWriters(visibility)} END`;
 }
 
 const SITE_WITH_DESTINATION = {
@@ -1699,7 +1711,9 @@ export function createPostgresAccountStore(database: Database): AccountStore {
               target: [sites.workspace_id, sites.origin],
               set: {
                 visibility: sql`excluded.visibility`,
-                ...(writers === undefined ? {} : { writers }),
+                // FRU-703: a caller that names no `writers` (the extension) and changes who reads gets
+                // who writes on a new site of that visibility, as `everyone` meant « anybody writes ».
+                writers: writers ?? writersWhenTheVisibilityChanges(visibility),
                 ...(notifyDone === undefined ? {} : { notify_done: notifyDone }),
                 ...(visitorEdit === undefined ? {} : { visitor_edit: visitorEdit }),
                 ...(visitorDelete === undefined ? {} : { visitor_delete: visitorDelete }),
@@ -1846,7 +1860,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
       const rows = await run((db) =>
         db
           .update(sites)
-          .set({ visibility })
+          .set({ visibility, writers: writersWhenTheVisibilityChanges(visibility) })
           .where(and(eq(sites.workspace_id, workspace), eq(sites.id, site)))
           .returning({ id: sites.id }),
       );

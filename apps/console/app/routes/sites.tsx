@@ -582,6 +582,13 @@ function SiteCard({ workspace, site, manages, seesTracker }: SiteCardProps) {
             <Access icon="anyone">{t('Notes from anyone on the page')}</Access>
           </>
         ) : null}
+        {/* FRU-703: « Read only », the other exception: everyone reads, and only members write. */}
+        {site.visibility === 'everyone' && site.writers === 'members' ? (
+          <>
+            <span className="sr-only">, </span>
+            <Access icon="members">{t('Notes from members only')}</Access>
+          </>
+        ) : null}
       </div>
       {/* The foot of the card (FRU-432): where the notes go at the left, the last one at the right. The
           terms are for a screen reader: the place and the moment say what they are to the eye. How the

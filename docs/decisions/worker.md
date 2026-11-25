@@ -1705,8 +1705,10 @@ Read on drizzle-orm 0.45.4 and drizzle-kit 0.31.11, the versions of the catalogu
   decision of Mathieu of 2026-10-20 on FRU-286: a setting, closed by default. `clientOf` turns
   `members` into `write: 'authenticated'` on every site since FRU-703: a site that everyone reads
   and its members write is « Read only ». `0050` gave `anyone` to every site that everyone read,
-  which took a note from anybody then, and `addSite` gives `anyone` to a new site that everyone
-  reads when the caller names no `writers` (`defaultWriters`). A reply with no token asks for the
+  which took a note from anybody then, and a caller that names no `writers` gets `defaultWriters` of the visibility it asks when that
+  visibility is new: `addSite` of a new site, `addSite` and `setSiteVisibility` of a site whose
+  visibility changes. The extension sends the visibility alone, and « Everyone who visits » still
+  opens a site to anybody's notes. A reply with no token asks for the
   write too (`replyAuthorFor`).
 - **A new site is `members`, by the store and by the column.** `0021_sites_writers` adds the column
   with `anyone`, the value of every site that exists then: they took a note from anybody, and a

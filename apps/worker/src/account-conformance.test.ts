@@ -294,7 +294,7 @@ const VIOLATIONS: Violation<AccountStore>[] = [
     breaks: 'makes a new site « Members only » when nobody chose, and keeps who writes on a site added again (FRU-330)',
     by: 'closes a site again when a caller names no `writers`',
     replace: {
-      from: '...(writers === undefined ? {} : { writers }),',
+      from: 'writers: writers ?? writersWhenTheVisibilityChanges(visibility),',
       to: "writers: writers ?? 'members',",
     },
   },
@@ -302,9 +302,15 @@ const VIOLATIONS: Violation<AccountStore>[] = [
     breaks: 'makes a new site « Members only » when nobody chose, and keeps who writes on a site added again (FRU-330)',
     by: 'never changes who writes on a site that exists',
     replace: {
-      from: '...(writers === undefined ? {} : { writers }),',
+      from: 'writers: writers ?? writersWhenTheVisibilityChanges(visibility),',
       to: '',
     },
+  },
+  {
+    breaks:
+      'opens a site to anybody when a caller of before opens it to everyone, and closes it when it closes it (FRU-703)',
+    by: 'keeps who writes when the visibility changes',
+    replace: { from: 'ELSE ${defaultWriters(visibility)} END', to: 'ELSE ${sites.writers} END' },
   },
   {
     breaks: 'opens a new site that everyone reads to anybody when nobody chose who writes (FRU-703)',

@@ -571,6 +571,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'A visitor leaves a note and cannot read it back. Your members find it.':
     'Un visiteur laisse une note et ne peut pas la relire. Vos membres la trouvent.',
   'Notes from anyone on the page': 'Notes de toute personne sur la page',
+  'Notes from members only': 'Notes des membres uniquement',
   'Members of {workspace}': 'Les membres de {workspace}',
   "Visitors of the site see nothing. Right for staging and for a client's site.":
     'Les visiteurs du site ne voient rien. Convient à un staging et au site d’un client.',
