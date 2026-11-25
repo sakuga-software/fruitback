@@ -595,13 +595,7 @@ function KeyRow({ agentKey: key, now, onRevoked }: { agentKey: AgentKey; now: nu
           </div>
         </dl>
         <div className="flex flex-wrap items-center gap-[6px] xl:justify-end">
-          <Button
-            tone="outline"
-            expanded={open}
-            {...(open ? { controls: panel } : {})}
-            className={open ? 'bg-chip' : ''}
-            onClick={() => setOpen(!open)}
-          >
+          <Button tone="outline" expanded={open} {...(open ? { controls: panel } : {})} onClick={() => setOpen(!open)}>
             {t('Writes')}
           </Button>
           <Confirm
@@ -652,6 +646,7 @@ function Writes({ id, agentKey: key }: { id: string; agentKey: AgentKey }) {
   const what = (write: AgentWrite) => {
     if (write.action === 'reply') return t('Replied to a note');
     if (write.action === 'task') return t('Changed the fields of a task');
+    if (write.action === 'create') return t('Wrote a task');
     const status = statusKey(write.status);
 
     return t('Set the status to « {status} »', {

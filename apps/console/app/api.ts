@@ -1351,8 +1351,8 @@ export const DEFAULT_AGENT_KEY_DAYS = 90;
 export type AgentWrite = {
   site: string;
   note: string;
-  /** FRU-659: `task`, the fields of a task that `update_task` changed. */
-  action: 'reply' | 'status' | 'task';
+  /** FRU-659: `task`, the fields of a task that `update_task` changed; `create`, a task that `create_task` wrote. */
+  action: 'reply' | 'status' | 'task' | 'create';
   status?: string;
   at: string;
 };

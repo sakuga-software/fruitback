@@ -121,7 +121,9 @@ An agent also reads the fields of a task that Fruitback keeps: the name of the m
 is assigned to, its priority, its day and its labels. A key whose member reads the members of the
 workspace reads the names of its members who are not guests, to choose an assignee, and the
 address of a member who gave no name, as the console shows it. A key that writes changes these fields, as a person of the team does in the console, and
-each change is in the log of the key.
+each change is in the log of the key. It also writes a task with no page (`create_task`): its title,
+its text and its fields, as « New task » of the console writes them, with the member who made the key
+as its author. Each task it writes is in the log of the key.
 
 ### Who can read a note back
 
@@ -359,9 +361,10 @@ The table `done_notices` keeps one row for each note that waits:
   fields, and so does an agent key of that site. The assignee is cleared when the account goes. A label goes with its workspace, or when
   a person removes it. The fields go with their note.
 
-- A task written by hand in the console, in the table `notes` with the notes of its site:
-  its title and its text as the person wrote them, in the clear, and its author, the account and the
-  name it had then. Its row of the index keeps the first 64 characters of the title as its excerpt,
+- A task written by hand in the console, or by an agent key that writes (`create_task` of `/mcp`), in
+  the table `notes` with the notes of its site: its title and its text as the person or the agent
+  wrote them, in the clear, and its author, the account and the name it had then (for an agent, the
+  member who made the key). Its row of the index keeps the first 64 characters of the title as its excerpt,
   and the account. It has no page, no element, no picture and no environment of a browser. Every
   member who reads its site reads it. It goes when a person deletes it, with its site, and with
   `forget` of the worker by its number or by the name of its author, as a note does.
