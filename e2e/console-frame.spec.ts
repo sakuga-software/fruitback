@@ -225,7 +225,9 @@ test('the room of a screen is as wide as the column beside the bar, with the pad
     const room = await box(main);
     expect.soft(Math.abs(room.x + room.width - 1440), `the right edge of the room of ${screen}`).toBeLessThanOrEqual(1);
     expectAt(room, { x: 232, y: 0, width: 1208 }, `the room of ${screen}`);
-    expectAt(await box(page.locator('main h1')), { x: 280, y: 40 }, `the title of ${screen}`);
+    // My account is a page of the shell of the settings (FRU-692): its title is under the bar of the
+    // shell, after its navigation. `console-account.spec.ts` holds it.
+    if (screen !== 'account') expectAt(await box(page.locator('main h1')), { x: 280, y: 40 }, `the title of ${screen}`);
   }
   const content = page.locator('main').locator('..');
   expect.soft(await styles(content, ['flex-grow', 'flex-shrink', 'flex-basis', 'min-width'])).toEqual({
@@ -271,8 +273,9 @@ test('the bar is as high as the window and stays while the screen scrolls; under
   page,
 }) => {
   await stubWorker(page);
-  // A window lower than « My account »: the document scrolls.
-  await page.setViewportSize({ width: 1440, height: 400 });
+  // A window lower than « My account »: the document scrolls. At 1100 px its cards are one column
+  // (FRU-692), about 860 px high; at 1440 px they are two, and 537 px high with these stubs.
+  await page.setViewportSize({ width: 1100, height: 400 });
   await open(page, 'account');
   expect.soft(await page.evaluate(() => document.documentElement.scrollHeight)).toBeGreaterThan(400 + 200);
 
@@ -516,7 +519,8 @@ test('the menu of the person opens « My account » and signs out', async ({ pag
   await person(page).click();
   await menu.getByRole('menuitem', { name: 'My account' }).click();
   await expect(page).toHaveURL(`${CONSOLE}/w/w1/account`);
-  await expect(page.locator('main h1')).toHaveText('My account');
+  // The page « Profile » of the shell of the settings (FRU-692).
+  await expect(page.locator('main h1')).toHaveText('Profile');
 
   await person(page).click();
   await menu.getByRole('menuitem', { name: 'Sign out' }).click();
