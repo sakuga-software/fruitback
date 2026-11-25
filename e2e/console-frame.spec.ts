@@ -781,3 +781,62 @@ test('what the root says above a screen stays above the bar, and reads', async (
     contrast(await painted(banner.locator('span'), 'color'), await painted(banner, 'backgroundColor')),
   ).toBeGreaterThanOrEqual(4.5);
 });
+
+/**
+ * FRU-698: a control of a banner on ink is drawn on the ink: no fill, its words and its border in
+ * `on-ink`. Before, « Try again » and « Continue » were the white field-shaped buttons of a page.
+ */
+async function expectOnInk(control: Locator, banner: Locator): Promise<void> {
+  const name = (await control.textContent()) ?? '';
+  expect
+    .soft(await styles(control, ['background-color', 'color', 'border-top-color', 'border-top-width']), name)
+    .toEqual({
+      'background-color': 'rgba(0, 0, 0, 0)',
+      color: 'rgb(255, 255, 255)',
+      'border-top-color': 'rgb(255, 255, 255)',
+      'border-top-width': '1px',
+    });
+  expect
+    .soft(contrast(await painted(control, 'color'), await painted(banner, 'backgroundColor')), name)
+    .toBeGreaterThanOrEqual(4.5);
+}
+
+test('the controls of the banners on ink have no fill, and their words and border are on-ink (FRU-698)', async ({
+  page,
+}) => {
+  // A worker that stops answering, then one that answers that the session ended.
+  let worker: 'up' | 'down' | 'signed-out' = 'up';
+  await stubWorker(page, {
+    answer: (pathname, route) => {
+      if (worker === 'up' || pathname === '/console/me') return undefined;
+      if (worker === 'down') return route.abort();
+
+      return route.fulfill({ status: 401, json: { error: 'unauthenticated' } });
+    },
+  });
+  await open(page);
+  const add = page.getByRole('button', { name: 'Add a site' });
+  await expect(add).toBeVisible();
+  await add.click();
+  await page.getByRole('textbox', { name: 'Site address' }).fill('https://staging.acme.dev');
+
+  worker = 'down';
+  await page.getByRole('button', { name: 'Add site' }).click();
+  const unreachable = page.getByRole('alert').filter({ hasText: 'Fruitback cannot reach its server' });
+  await expect(unreachable).toBeVisible();
+  // The control: the banner is ink.
+  expect(await painted(unreachable, 'backgroundColor')).toEqual(rgb(INK));
+  await expectOnInk(unreachable.getByRole('button', { name: 'Try again' }), unreachable);
+
+  worker = 'signed-out';
+  await page.getByRole('button', { name: 'Add site' }).click();
+  const ended = page.getByRole('alert').filter({ hasText: 'Your session ended' });
+  await expect(ended).toBeVisible();
+  const signIn = ended.getByRole('link', { name: 'Sign in', exact: true });
+  const resume = ended.getByRole('button', { name: 'Continue', exact: true });
+  await expectOnInk(signIn, ended);
+  await expectOnInk(resume, ended);
+  // « Sign in » opens in another tab, and is as tall as « Continue » beside it.
+  await expect(signIn).toHaveAttribute('target', '_blank');
+  expect((await box(signIn)).height).toBe((await box(resume)).height);
+});
