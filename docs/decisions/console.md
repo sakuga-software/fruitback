@@ -667,8 +667,8 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   `e2e/console-notes-pages.spec.ts` holds it. `e2e/console-notes.spec.ts` holds the values, every filter, the pages, « Send again », the
   states, the roles, 390 px and axe.
 - **The Notes list is one line of 36 px per note, as Linear draws its issues** (FRU-685, the
-  mockup « Notes après » of 2026-11-25): twelve notes at 1440 × 900, where the rows of two lines
-  showed five. `parts/notes-table.tsx`; `e2e/console-notes.spec.ts` holds the values.
+  mockup « Notes après » of 2026-11-25): fourteen notes at 1440 × 900, where the rows of one to three
+  lines showed six (measured with a list of 14). `parts/notes-table.tsx`; `e2e/console-notes.spec.ts` holds the values.
   - **A line**: the box of the task and the status (the drop, or the select of FRU-551), the text at
     500 on one line cut with « … » and never underlined (a press opens the panel of FRU-653), the
     marks of a task after it on the same line, the path of the page, the site (a tile and its host),

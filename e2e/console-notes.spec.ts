@@ -31,6 +31,8 @@ const INK = '#18181b';
 const MUTED = '#6b6b74';
 const CONTROL = '#8a8a93';
 const ACCENT_STRONG = '#b91c1c';
+/** `--muted` of the slate theme (FRU-683), which the list of FRU-685 is drawn in. */
+const SLATE_MUTED = '#5b6779';
 const WHITE = '#ffffff';
 const RAIL_TEXT = '#d4d4d8';
 
@@ -434,10 +436,10 @@ test('the page is the one of the mockup: chips, filters, the table and its pages
     });
   // Its page: the path, muted. Its site: the tile and the host (FRU-685, in place of the domain of FRU-547).
   await expect(first.locator('td').nth(2)).toHaveText('/');
-  expect.soft(await painted(first.locator('td').nth(2).locator('span').last(), 'color')).toEqual(rgb(MUTED));
+  expect.soft(await painted(first.locator('td').nth(2).locator('span').last(), 'color')).toEqual(rgb(SLATE_MUTED));
   await expect(row(page, 'returns policy').locator('td').nth(2)).toHaveText('/help/returns');
   await expect(first.locator('td').nth(3)).toHaveText('Sstaging.acme.dev');
-  await expect(row(page, 'cream').locator('td').nth(3)).toHaveText('Aacme.dev');
+  await expect(row(page, 'returns policy').locator('td').nth(3)).toHaveText('Aacme.dev');
   // The way to see it on its page: an icon in the last column, the address in its tooltip (FRU-546).
   const show = first.getByRole('link', { name: 'Show on the page' });
   await expect(first.locator('td').last().getByRole('link')).toHaveCount(1);
@@ -532,7 +534,7 @@ test('the page is the one of the mockup: chips, filters, the table and its pages
   await expect(when).toHaveText('1h1 h ago');
   await expect(when.locator('[aria-hidden="true"]')).toHaveAttribute('title', '1 h ago');
   await expect(row(page, 'The mug').locator('td').nth(6)).toHaveText('6d6 days ago');
-  expect.soft(await painted(when.locator('span').first(), 'color')).toEqual(rgb(MUTED));
+  expect.soft(await painted(when.locator('span').first(), 'color')).toEqual(rgb(SLATE_MUTED));
   expect.soft(await styles(when.locator('span').first(), ['font-variant-numeric', 'font-size'])).toEqual({
     'font-variant-numeric': 'tabular-nums',
     'font-size': '12px',
@@ -727,7 +729,8 @@ test('a group folds from its head, and stays folded for this person after a relo
   await workerWith(page);
   await open(page);
   const group = table(page).locator('tbody[data-group="new"]');
-  const fold = group.locator('.kit-table-group').getByRole('button', { name: /^New/ });
+  // The head of the group folds it: the button that says whether it is open (not « + »).
+  const fold = group.locator('.kit-table-group [aria-expanded]');
   await expect(fold).toHaveAttribute('aria-expanded', 'true');
   const before = await group.locator('tr[data-note]').count();
   expect(before).toBeGreaterThan(0);
@@ -762,8 +765,18 @@ test('j and k walk the notes, Enter opens the one with the focus, and a field ke
   const id = await rows(page).nth(1).getAttribute('data-note');
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL(new RegExp(`[?&]task=${id}(&|$)`));
+  await expect(page.getByRole('dialog')).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page).not.toHaveURL(/task=/);
+  // Closed, the panel gives the focus back to the note it showed.
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(title(1)).toBeFocused();
+
+  // A closed list keeps j to choose an option: the focus stays on it (raised in review, FRU-685).
+  const status = page.getByRole('button', { name: /Any status/ });
+  await status.focus();
+  await page.keyboard.press('j');
+  await expect(status).toBeFocused();
 
   // In the search, j is a letter.
   await search(page).focus();
@@ -819,6 +832,8 @@ test('« Send again » is off while it is on its way', async ({ page }) => {
   const again = row(page, 'The order form').getByRole('button', { name: 'Send again' });
   await again.click();
   await expect(again).toBeDisabled();
+  // The word beside it says it is on its way (raised in review, FRU-685).
+  await expect(row(page, 'The order form').getByText('Sending…', { exact: true })).toBeVisible();
 });
 
 test('a workspace with no note says so, and a read that failed is an alert, never « No note yet »', async ({

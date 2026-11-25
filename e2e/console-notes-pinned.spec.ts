@@ -7,7 +7,7 @@ import { ACME, sideScroll, stubWorker } from './console-workspace.ts';
  * screen. FRU-685: the list has no head of columns to the eye, and no cards; a narrow list takes
  * columns out. Measured at 1440, 1280, 1024 and 390 px, and in the board.
  *
- * The worker is answered by stubs: one page of 50 notes in five groups, as `order=status` reads them.
+ * The worker is answered by stubs: one page of 100 notes in five groups, as `order=status` reads them.
  */
 const CONSOLE = 'http://localhost:5178';
 
@@ -18,11 +18,11 @@ const SITES = [
 const CONNECTORS = [{ id: 'c1', kind: 'linear', label: 'Acme', createdAt: '2026-10-01T08:00:00.000Z' }];
 /** The groups in the order of the table (FRU-551), and the notes of each. */
 const GROUPS = [
-  ['progress', 6],
-  ['todo', 9],
-  ['new', 12],
-  ['closed', 3],
-  ['done', 20],
+  ['progress', 12],
+  ['todo', 18],
+  ['new', 24],
+  ['closed', 6],
+  ['done', 40],
 ] as const;
 
 const NOTES = GROUPS.flatMap(([stage, count], group) =>
