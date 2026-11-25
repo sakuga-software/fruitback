@@ -516,6 +516,33 @@ describe('the GitHub workflows', () => {
     );
   });
 
+  /**
+   * A quiet grep reads no pipe (FRU-713). `grep -q` exits at its first match, so the command that
+   * writes to it can get SIGPIPE, and `pipefail` then fails the line although the match was found.
+   * It is a race: `curl … | tr -d '\r' | grep -qi '^cache-control: no-store$'` failed once with
+   * « tr: write error: Broken pipe ». The form that cannot race keeps the output in a variable, then
+   * tests it: `headers=$(curl … | tr -d '\r')`, then `grep -qi '…' <<<"$headers"`.
+   */
+  it('pipe nothing into a quiet grep: under `pipefail` its early exit fails the line', () => {
+    const quiet = /^.*\|\s*grep\b[^|\n]*\s(?:-[A-Za-z]*q[A-Za-z]*|--quiet|--silent)(?=\s).*$/gm;
+    // The controls: the forms that were there are found, and the form that replaced them is not.
+    for (const line of [
+      "curl -s -D - -o /dev/null http://127.0.0.1:8082/config.js | tr -d '\\r' | grep -qi '^cache-control: no-store$'",
+      'echo "$version" | grep -Eq \'^[0-9a-f]{12}$\'',
+      "if docker logs worker 2>&1 | grep -E -q 'ready'; then break; fi",
+      'echo "$said" | grep --quiet \'FRUITBACK_API\'',
+    ]) {
+      assert.deepEqual(`          ${line}\n`.match(quiet)?.length, 1, line);
+    }
+    assert.equal('          grep -qi \'^cache-control: no-store$\' <<<"$headers"\n'.match(quiet), null);
+    assert.equal("          policy 8082 | tee /tmp/acme\n          grep -q 'sha256-' /tmp/acme\n".match(quiet), null);
+
+    assert.deepEqual(
+      workflows().flatMap(({ file, source }) => (source.match(quiet) ?? []).map((line) => `${file}: ${line.trim()}`)),
+      [],
+    );
+  });
+
   it('publish nothing from a commit that did not pass CI', () => {
     const files = workflows();
     const writers = files.flatMap(({ source }) => [...source.matchAll(/^ {6}\w[\w-]*: write$/gm)]);
