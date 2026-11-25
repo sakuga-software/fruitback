@@ -514,7 +514,8 @@ export function applyAppearance(
 ): boolean {
   for (const name of writtenNames()) root.style.removeProperty(name);
   const preset = presetOf(appearance, systemDark);
-  let kept = storage !== undefined;
+  // With no storage, the default is still what the next visit shows: nothing was lost.
+  let kept = storage !== undefined || isDefault(appearance);
   try {
     if (isDefault(appearance)) storage?.removeItem(STORAGE_KEY);
     else {

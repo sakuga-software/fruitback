@@ -172,6 +172,19 @@ test('a browser that refuses to keep the choice shows it in this tab, and says s
   await expect(page.getByRole('alert')).toHaveText(
     'This browser does not keep your choice: it shows in this tab only, until you close it.',
   );
+  // « Reset » with no storage: Slate is what the next visit shows, so there is nothing to say (raised in review).
+  await page.addInitScript(() => {
+    Object.defineProperty(window, 'localStorage', {
+      get() {
+        throw new DOMException('The operation is insecure.', 'SecurityError');
+      },
+    });
+  });
+  await page.reload();
+  await choose(page, 'Theme', 'Midnight');
+  await expect(page.getByRole('alert')).toHaveCount(1);
+  await page.getByRole('button', { name: 'Reset the appearance' }).click();
+  await expect(page.getByRole('alert')).toHaveCount(0);
 });
 
 test('an ink sidebar on a light theme writes its words light, and keeps its ring', async ({ page }) => {

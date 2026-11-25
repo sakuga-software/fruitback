@@ -246,6 +246,8 @@ describe('the appearance of the console (FRU-694)', () => {
     assert.equal(style.get('--spacing-row'), '32px');
     assert.equal(applyAppearance(chosen, root, undefined, false), false);
     assert.equal(applyAppearance(chosen, root, storage, false), true);
+    // « Reset » with no storage: the default is what the next visit shows, so nothing is lost.
+    assert.equal(applyAppearance(DEFAULT_APPEARANCE, root, undefined, false), true);
   });
 
   it('reads back only known values, and a storage that throws as no choice', () => {
