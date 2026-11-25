@@ -507,6 +507,11 @@ what it writes each time.
   address of the server. `FRUITBACK_NO_UPDATE_CHECK=1` stops it. The worker keeps the answer in its
   memory, and nowhere else. The browser of the administrator keeps the version of a banner that they
   dismissed, in `localStorage`, and nothing else of it.
+- The browser of a person keeps the appearance they chose in Settings › Appearance (FRU-694), in
+  `localStorage` under `fruitback.appearance`: the theme, the mode, the tint of the sidebar, the
+  accent, the density, the radius, the size of the text, and the values of the tokens they give.
+  Nothing of it leaves the browser, and the worker keeps no appearance until FRU-716 keeps it with
+  the account. « Reset » erases it.
 
 ### What the extension declares to Firefox (FRU-333)
 

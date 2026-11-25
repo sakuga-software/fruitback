@@ -47,8 +47,11 @@ const GONE = {
   actions: '',
 } as const;
 
-/** A cell of a row: one line of 36 px, its border counted. What is longer is cut with « … ». */
-const LINE = 'flex h-[35px] min-w-0 items-center';
+/**
+ * A cell of a row: one line of `--spacing-row` (36 px, the density of FRU-694), its border counted.
+ * What is longer is cut with « … ».
+ */
+const LINE = 'flex h-[calc(var(--spacing-row)-1px)] min-w-0 items-center';
 
 /**
  * The actions of a row (the page, the menu): shown under the pointer and the keyboard, on a touch
