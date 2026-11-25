@@ -121,8 +121,8 @@ describe('the guards of the key of a browser, each planted out (FRU-700)', () =>
     {
       guard: 'the note of another browser is not mine',
       file: 'app.ts',
-      from: '(author === reader.author ? [note] : [])',
-      to: '[note]',
+      from: 'author === reader.author && counts(note)',
+      to: 'counts(note)',
       holds: async ({ send, mine, noteOf }) => {
         await send(noteOf('vk_a'), { key: KEY_A });
 
