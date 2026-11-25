@@ -58,10 +58,14 @@ const PARTS = [
 
 type Measure = Record<string, string>;
 
-/** The box and the type of each part that is on the page now. */
+/**
+ * The box and the type of each part that is on the page now, once its animations end: the composer
+ * grows in from a smaller scale (FRU-471), and a box read during it depends on the time of the read.
+ */
 async function measure(page: Page, selectors: readonly string[]): Promise<Record<string, Measure>> {
-  return page.evaluate((selectors) => {
+  return page.evaluate(async (selectors) => {
     const root = document.querySelector('[data-fruitback-host]')?.shadowRoot;
+    await Promise.all((root?.getAnimations() ?? []).map((animation) => animation.finished));
     const out: Record<string, Record<string, string>> = {};
     for (const selector of selectors) {
       const element = root?.querySelector(selector);
