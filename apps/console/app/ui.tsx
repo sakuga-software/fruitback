@@ -69,6 +69,11 @@ const VARIANTS = {
  * by them. A class with `!` beats a rule of `app.css` that is in no layer: the space of a button
  * (`white-space`), and the focus ring.
  *
+ * WARNING: HeroUI merges the `className` of its components with tailwind-merge, which reads
+ * `text-small` and `text-ink` as two colours and keeps the last one. On a component of HeroUI, a size
+ * is written `text-(length:--text-small)` with its line height after it: a size drops a line height
+ * written before it.
+ *
  * `[&:hover]` and not `hover:`: Tailwind keeps `hover:` to a pointer that hovers, and the kit
  * changes a colour under any `:hover`, as it did.
  */
