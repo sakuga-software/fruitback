@@ -1108,14 +1108,16 @@ test('« Add a site » opens a dialog, Escape closes it, and a refusal keeps wha
   await expect(form).toHaveCount(0);
   expect(worker.sent.length).toBe(before);
 
-  // Added: the page of the site opens, at how to put Fruitback on it (FRU-433).
+  // Added: the page of the site opens, at how to put Fruitback on it (FRU-433), its tab « Install »
+  // (FRU-689); « Overview » says who sees its notes.
   worker.refuses = undefined;
   await page.getByRole('button', { name: 'Add a site', exact: true }).click();
   await form.getByRole('textbox', { name: 'Site address' }).fill('docs.acme.dev');
   await form.getByRole('button', { name: 'Add site', exact: true }).click();
   await expect(page.getByRole('region', { name: 'Install on docs.acme.dev' })).toBeVisible();
-  await expect(page.getByText('Members of Acme', { exact: true })).toBeVisible();
   await expect(form).toHaveCount(0);
+  await page.getByRole('navigation', { name: 'Sections of the site' }).getByRole('link', { name: 'Overview' }).click();
+  await expect(page.getByRole('region', { name: 'Site', exact: true }).getByText('Members only')).toHaveCount(2);
   expect(worker.sent.at(-1)).toEqual({
     method: 'POST',
     pathname: '/console/workspaces/w1/sites',

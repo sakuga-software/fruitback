@@ -387,7 +387,11 @@ test('a link of the settings leads to the statuses of its site (FRU-368)', async
   await openSettings(page, 'Linear');
   await panel(page).getByRole('link', { name: 'Statuses of https://staging.acme.dev' }).click();
   await expect(page).toHaveURL(/\/w\/w1\/sites\/s1\/statuses$/);
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Statuses');
+  // FRU-689: the statuses are a tab of the page of the site, whose title is the site.
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('staging.acme.dev');
+  await expect(
+    page.getByRole('navigation', { name: 'Sections of the site' }).getByRole('link', { name: 'Statuses' }),
+  ).toHaveAttribute('aria-current', 'page');
 });
 
 test('a long address keeps one line in its row, cut at its end (FRU-321)', async ({ page }) => {

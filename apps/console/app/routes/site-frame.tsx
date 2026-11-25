@@ -117,7 +117,7 @@ export default function SiteFrame() {
       </header>
 
       {site === undefined ? (
-        <div className="mt-[24px]">
+        <div className={`${BLEED} px-[20px] pt-[24px]`}>
           {read === 'loading' ? <p className="text-small text-muted">{t('Loading…')}</p> : null}
           {read === 'gone' ? (
             <p className="text-body text-muted">{t('This site is not in the workspace any more.')}</p>
@@ -145,7 +145,8 @@ export default function SiteFrame() {
             seesTracker={seesTracker}
             className={BLEED}
           />
-          <div className="pt-[20px]">
+          {/* The tab is 20 px from the edges of the screen, under the words of the first tab, as the mockup. */}
+          <div className={`${BLEED} px-[20px] pt-[20px]`}>
             <Outlet context={{ ...context, site, setSite, manages, seesTracker } satisfies SiteContext} />
           </div>
         </>

@@ -174,7 +174,7 @@ test('an owner reads the overview of a site: its head, its tabs, its figures, it
   // Where the notes go: the logo, the name and « Default » of each place, a menu, and « Add ».
   const places = page.getByRole('region', { name: 'Where the notes go' });
   await expect(places.locator('[data-place]')).toHaveText(['Linear · WebDefault', 'Linear · Support']);
-  await expect(places.locator('[data-place]').first().locator('svg')).toBeVisible();
+  await expect(places.locator('[data-place]').first().locator('svg').first()).toBeVisible();
   await expect(places.getByRole('link', { name: 'Add a destination for staging.acme.dev' })).toHaveAttribute(
     'href',
     '/w/w1/sites/s1/destinations',
@@ -195,7 +195,12 @@ test('an owner reads the overview of a site: its head, its tabs, its figures, it
   await expectNoViolation(page, 'the overview of a site');
 
   // « Extension »: the way of the browser, in the same card.
-  await install(page).getByRole('radio', { name: 'Extension' }).check();
+  // A press on the label of the segment, which holds the hidden radio, as a person does.
+  await install(page)
+    .locator('label')
+    .filter({ has: page.getByRole('radio', { name: 'Extension', exact: true }) })
+    .click();
+  await expect(install(page).getByRole('radio', { name: 'Extension' })).toBeChecked();
   await expect(install(page).getByRole('button', { name: 'Connect this browser' })).toBeVisible();
   await expect(install(page).locator('[data-install-seen]')).toHaveText(
     /^Notes came through the extension\. The last note of the site came /,

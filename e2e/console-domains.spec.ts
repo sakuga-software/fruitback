@@ -179,7 +179,8 @@ test('a member who is no admin has no way to the domain section', async ({ page 
   await page.getByRole('button', { name: 'More for acme.dev' }).click();
   await expect(page.getByRole('menuitem')).toHaveText(['Open its page', 'See the notes']);
   await page.keyboard.press('Escape');
+  // FRU-689: the address of the section opens the tab « Advanced », which a member reads as one sentence.
   await page.goto(`${CONSOLE}/w/w1/sites/s1#previews`);
-  await expect(page.getByRole('region', { name: 'Install on acme.dev' })).toBeVisible();
+  await expect(page.locator('main')).toContainText('Only an owner or an admin of the workspace sets these for a site.');
   await expect(page.getByRole('region', { name: 'Preview deploys' })).toHaveCount(0);
 });
