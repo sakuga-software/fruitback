@@ -225,12 +225,19 @@ test('each tab is in the address: a press, a reload and the way back keep it, wi
   await expect(page).toHaveURL(`${CONSOLE}/w/w1/sites/s1/destinations`);
   await expect(page.getByRole('region', { name: 'Where the notes of staging.acme.dev go' })).toBeVisible();
 
+  // « Statuses » takes the places of the site from the frame too (review of #965): no second read.
+  await tabs(page).getByRole('link', { name: 'Statuses' }).click();
+  await expect(page).toHaveURL(`${CONSOLE}/w/w1/sites/s1/statuses`);
+  await expect(page.locator('main')).toContainText('The name and the colour of each status');
+
   await tabs(page).getByRole('link', { name: 'Advanced' }).click();
   await expect(page).toHaveURL(`${CONSOLE}/w/w1/sites/s1/advanced`);
   await expect(page.locator('main h2:visible')).toHaveText(['Start an agent', 'Preview deploys', 'Remove this site']);
   // A move between tabs asks the worker nothing of the site: the frame read it once.
   expect(worker.reads).toBe(reads);
 
+  await page.goBack();
+  await expect(page).toHaveURL(`${CONSOLE}/w/w1/sites/s1/statuses`);
   await page.goBack();
   await expect(page).toHaveURL(`${CONSOLE}/w/w1/sites/s1/destinations`);
   await expect(tabs(page).getByRole('link', { name: 'Destinations' })).toHaveAttribute('aria-current', 'page');

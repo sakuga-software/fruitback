@@ -32,12 +32,14 @@ export default function SiteAccessPage() {
   const [problem, setProblem] = useState<string | undefined>();
   const [saved, setSaved] = useState(false);
   const host = siteName(site.origin);
-  // Another site in the same frame (a link from one site to another): the tab shows its access.
+  // Another site in the frame, or the access of this one changed there (« Save », a read again): the
+  // tab shows what the frame holds. A change of another field of the site leaves the draft as it is.
+  const { visibility, writers, visitorEdit, visitorDelete, notifyDone } = site;
   useEffect(() => {
     setDraft(accessOf(site));
-    // Only the id: the site kept after « Save » sets the draft there, and nothing else resets it.
+    // The access of the site and its id: another field of the site does not reset what is chosen.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [site.id]);
+  }, [site.id, visibility, writers, visitorEdit, visitorDelete, notifyDone]);
 
   function change(next: Access) {
     setSaved(false);

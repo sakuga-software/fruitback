@@ -1,13 +1,12 @@
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
-import { useParams } from 'react-router';
-import { type Connector, type Site, call, placesOf, readSite } from '../api';
+import { type Connector, type Site, call, placesOf } from '../api';
 import { t } from '../i18n';
 import { problemOf } from '../problems';
 import { OWN, type StatusRow, type TrackerState, listOf } from '../site-statuses';
 import { Button, LoadFailed } from '../ui';
 import { useLocale } from '../use-locale';
 import { placeLabel } from '../parts/connector-parts';
-import { useWorkspace } from './workspace';
+import { useSite } from './site-frame';
 import { ReadProblem } from '../read-problem';
 import { type Fetched } from '../listed';
 import { StatusList, TrackerColours } from '../parts/status-list';
@@ -32,7 +31,6 @@ type TrackerList = { connector: string; teamId?: string; label?: string; states?
 
 /** What the page read: the site, the sources of the workspace, the rows of the site, and its trackers. */
 type Loaded = {
-  site: Site;
   connectors: readonly Connector[];
   rows: readonly StatusRow[];
   /**
@@ -98,8 +96,10 @@ function sectionsOf(site: Site, connectors: readonly Connector[]): Section[] {
 
 export default function SiteStatuses() {
   useLocale();
-  const { workspace } = useWorkspace();
-  const { site: siteId = '' } = useParams();
+  // The frame of the page (FRU-689) read the site, and keeps it as the other tabs change it: its places
+  // are the sections of this tab, with no second read of the site.
+  const { workspace, site } = useSite();
+  const siteId = site.id;
   const base = `/console/workspaces/${workspace.id}`;
   const manages = workspace.role === 'owner' || workspace.role === 'admin';
   const [read, setRead] = useState<Fetched<Loaded> | 'gone'>('loading');
@@ -124,9 +124,7 @@ export default function SiteStatuses() {
   const load = useCallback(async () => {
     // A read again keeps the rows on the screen until its answer replaces them (FRU-271).
     setRead((current) => (typeof current === 'string' ? 'loading' : current));
-    // The one site (FRU-497): the notes of the other sites are not counted for it.
-    const [one, connectors, statuses, tracker] = await Promise.all([
-      readSite(workspace.id, siteId),
+    const [connectors, statuses, tracker] = await Promise.all([
       call<{ connectors: Connector[] }>('GET', `${base}/connectors`),
       call<{ statuses: StatusRow[]; notes?: Record<string, number> }>(
         'GET',
@@ -138,19 +136,16 @@ export default function SiteStatuses() {
         `${base}/sites/${encodeURIComponent(siteId)}/statuses/tracker`,
       ),
     ]);
-    const site = one.ok && typeof one.data?.origin === 'string' ? one.data : undefined;
-    if ((!one.ok && one.status === 404) || (!statuses.ok && statuses.status === 404)) return setRead('gone');
+    if (!statuses.ok && statuses.status === 404) return setRead('gone');
     // An answer with no list is no list (FRU-162): the page says it did not load.
-    if (site === undefined || !connectors.ok || !statuses.ok || !Array.isArray(statuses.data?.statuses))
-      return setRead('failed');
+    if (!connectors.ok || !statuses.ok || !Array.isArray(statuses.data?.statuses)) return setRead('failed');
     setRead({
-      site,
       connectors: connectors.data.connectors,
       rows: statuses.data.statuses,
       notes: notesOf(statuses.data.notes),
       tracker: tracker.ok && Array.isArray(tracker.data?.trackers) ? tracker.data : 'failed',
     });
-  }, [base, siteId, workspace.id]);
+  }, [base, siteId]);
 
   useEffect(() => {
     if (manages) void load();
@@ -177,7 +172,7 @@ export default function SiteStatuses() {
     );
 
   const tracker = typeof read === 'string' || read.tracker === 'failed' ? undefined : read.tracker;
-  const sections = typeof read === 'string' ? [] : sectionsOf(read.site, read.connectors);
+  const sections = typeof read === 'string' ? [] : sectionsOf(site, read.connectors);
   // The switch is the site's (FRU-368): drawn once, above the first list of Linear that was read, or
   // above the first Linear section when none was, so it can always be turned off (lite reviews of
   // pull request 495).
