@@ -238,7 +238,8 @@ const PAGES: readonly (readonly [string, string | undefined])[] = [
   ['/w/w1/sites/s1/statuses', "Waiting for the client's legal team to approve the new wording 0"],
   ['/w/w1/notes', LONG_TEXT.slice(0, 40)],
   ['/w/w1/connectors', undefined],
-  ['/w/w1/members', 'invited.person.0@client-of-acme.dev'],
+  // FRU-691: the invitations are a tab of their own, read below.
+  ['/w/w1/members', 'person.with.a.long.name.0@client-of-acme.dev'],
   ['/w/w1/account', undefined],
   ['/w/w1/account/sessions', undefined],
   ['/w/w1/settings', undefined],
@@ -260,6 +261,11 @@ for (const width of [390, 320]) {
       await expect(page.locator('main h1').first()).toBeVisible();
       if (shown !== undefined) await expect(page.getByText(shown).first()).toBeAttached();
       expect.soft(await sideScroll(page), `${path} scrolls sideways`).toBe(0);
+      if (path === '/w/w1/members') {
+        await page.getByRole('button', { name: /^Invitations/ }).click();
+        await expect(page.getByText('invited.person.0@client-of-acme.dev')).toBeAttached();
+        expect.soft(await sideScroll(page), 'the invitations scroll sideways').toBe(0);
+      }
     }
   });
 }
@@ -295,15 +301,25 @@ test('at 390 px a role reads on one line', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await stubScreens(page, { sites: SITES_OF_MANY, answer: answerLong });
   await page.goto(`${CONSOLE}/w/w1/members`);
-  const role = page.locator('tbody tr').nth(1).locator('td').nth(1);
+  // FRU-691: the role is the third column, after the address.
+  const role = page.locator('tbody tr').nth(1).locator('td').nth(2);
   await expect(role).toHaveText('Member');
+  // The lines of its words: the role is a list of its row for an owner (FRU-691), whose chevron is no
+  // word and sits at another height than them.
   const lines = await role.evaluate((cell) => {
-    const range = document.createRange();
-    range.selectNodeContents(cell);
+    const tops = new Set<number>();
+    const walker = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      for (const rect of range.getClientRects()) tops.add(Math.round(rect.top));
+    }
 
-    return new Set([...range.getClientRects()].map((rect) => Math.round(rect.top))).size;
+    return tops.size;
   });
   expect(lines).toBe(1);
+  // The control: the cell is one line of 36 px.
+  expect((await role.boundingBox())!.height).toBeLessThanOrEqual(36);
 });
 
 // The setup on a narrow screen (FRU-160) is measured with the setup, in `console-setup.spec.ts`.
