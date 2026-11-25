@@ -560,7 +560,8 @@ for (const locale of ['en', 'fr'] as const) {
     await page.setViewportSize({ width: 390, height: 844 });
     await stubWorker(page, { locale });
     await open(page);
-    const nav = page.getByRole('navigation');
+    // The rail's: My account has the navigation of the settings too (FRU-692).
+    const nav = rail(page).getByRole('navigation');
     const last = nav.getByRole('link').last();
 
     // The page does not scroll sideways: the mockup does, its document is 547 px wide.
