@@ -89,26 +89,15 @@
   What stays here is what no class can carry (FRU-678). The kit and the screens draw with Tailwind
   classes, in their components: see the head of `ui.tsx`.
 
-  - The rules of the elements of every page: the text, the selection, the placeholder, the caret,
-    the focus ring. They are in no layer, so they win over HeroUI, which is in the layer
-    `components`, and over a utility too: a class that must beat them carries `!`.
+  - The rules of every element of every page: the one line of a button, the selection, the
+    placeholder, the caret, the focus ring. They are in no layer, so they win over HeroUI, which is
+    in the layer `components`, and over a utility too. As classes they would lose to the utilities
+    of the screens, which are drawn with them winning: `focus:outline-none` on a heading of
+    `connectors.tsx` and `-outline-offset-2` on its rows lose to the focus ring today. A class of
+    the kit that must beat them carries `!`.
   - The pseudo-elements of a view transition, which are of the document and of no element.
   - The keyframes, which a class names.
 */
-html,
-body {
-  /*
-    The rule of the text (FRU-350), the same as the widget's and the extension's. Content wraps
-    anywhere, so a host, an address or a long word never runs past its box. A label never breaks
-    inside its words: the rule under this one keeps a button, a switch, a tab and a key on one line.
-  */
-  overflow-wrap: anywhere;
-  background: var(--color-page);
-  color: var(--color-ink);
-  font-family: var(--font-sans);
-  -webkit-font-smoothing: antialiased;
-}
-
 button,
 [role='switch'],
 [role='tab'],
