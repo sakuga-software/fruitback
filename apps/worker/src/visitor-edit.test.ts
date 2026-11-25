@@ -112,10 +112,12 @@ describe('a visitor edits the text of their open note (FRU-701)', () => {
  */
 describe('the guards of the edit of a visitor, each planted out (FRU-701)', () => {
   type Check = (site: Awaited<ReturnType<typeof aVisitorNote>>) => Promise<boolean>;
-  const PLANTS: readonly { guard: string; file: string; from: string; to: string; holds: Check }[] = [
+  const EDIT = 'export async function postEdit(';
+  const PLANTS: readonly { guard: string; file: string; after?: string; from: string; to: string; holds: Check }[] = [
     {
       guard: 'another browser does not edit the note',
       file: 'edit-routes.ts',
+      after: EDIT,
       from: 'if (author === undefined || author !== caller.author) return json(403',
       to: 'if (author === undefined) return json(403',
       holds: async ({ edit, issue }) => (await edit(issue, 'Not theirs', { key: KEY_B })).status === 403,
@@ -156,6 +158,7 @@ describe('the guards of the edit of a visitor, each planted out (FRU-701)', () =
     {
       guard: 'the edits of a visitor are counted',
       file: 'edit-routes.ts',
+      after: EDIT,
       from: "if (caller.kind === 'visitor' && !(await checkReplyLimit(kv, context.context.clientIp))) {",
       to: 'if (false) {',
       holds: async ({ edit, issue }) => {
@@ -171,7 +174,11 @@ describe('the guards of the edit of a visitor, each planted out (FRU-701)', () =
     it(`sees « ${plant.guard} » go when it is taken out`, async () => {
       assert.equal(await plant.holds(await aVisitorNote()), true, 'the control: the real module holds the guard');
 
-      const mutant = await mutatedModule(plant.file, { from: plant.from, to: plant.to });
+      const mutant = await mutatedModule(plant.file, {
+        ...(plant.after === undefined ? {} : { after: plant.after }),
+        from: plant.from,
+        to: plant.to,
+      });
       try {
         const handle = mutant.module.handleRequest as Handle;
         assert.equal(await plant.holds(await aVisitorNote({ handle })), false, plant.guard);
