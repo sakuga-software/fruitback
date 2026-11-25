@@ -218,31 +218,33 @@ test('the notes of the instance: a press of « Next page » during the read goes
     answer: (pathname, route) => {
       if (pathname === '/console/me') return route.fulfill({ json: me });
       if (pathname !== '/console/admin/notes') return undefined;
-      // One note a page, three pages: the cursor `p<n>` is the page `n`.
+      // Two notes a page, three pages, the last with one note (FRU-710): the cursor `p<n>` is the page `n`.
       const cursor = new URL(route.request().url()).searchParams.get('cursor') ?? '';
       const at = cursor === '' ? 1 : Number(cursor.slice(1));
+      const notes = (at < 3 ? [2 * at - 1, 2 * at] : [5]).map(instanceNote);
 
       return read.answer(cursor, () =>
-        route.fulfill({
-          json: { notes: [instanceNote(at)], total: 3, ...(at < 3 ? { next: `p${at + 1}` } : {}), searched: [] },
-        }),
+        route.fulfill({ json: { notes, total: 5, ...(at < 3 ? { next: `p${at + 1}` } : {}), searched: [] } }),
       );
     },
   });
   await page.goto(`${CONSOLE}/admin/notes`);
   const main = page.locator('main');
-  await expect(main.getByText('1 to 1 of 3')).toBeVisible();
+  await expect(main.getByText('1 to 2 of 5')).toBeVisible();
   const release = read.hold('p2');
   await main.getByRole('button', { name: 'Next page' }).click();
   await expect.poll(() => read.cursors.at(-1)).toBe('p2');
   await main.getByRole('button', { name: 'Next page' }).click();
   release();
 
-  await expect(main.getByText('3 to 3 of 3')).toBeVisible();
-  await expect(main.getByRole('table')).toContainText('Note 3 of the instance');
+  await expect(main.getByText('5 to 5 of 5')).toBeVisible();
+  await expect(main.getByRole('table')).toContainText('Note 5 of the instance');
   expect(read.cursors).toEqual(['', 'p2', 'p3']);
-  // « Previous page » goes back by the cursors walked through.
+  // « Previous page » goes back by the cursors walked through, each with the range it was shown with:
+  // the last page holds fewer notes than the others (FRU-710).
   await main.getByRole('button', { name: 'Previous page' }).click();
-  await expect(main.getByText('2 to 2 of 3')).toBeVisible();
-  await expect(main.getByRole('table')).toContainText('Note 2 of the instance');
+  await expect(main.getByText('3 to 4 of 5')).toBeVisible();
+  await expect(main.getByRole('table')).toContainText('Note 3 of the instance');
+  await main.getByRole('button', { name: 'Previous page' }).click();
+  await expect(main.getByText('1 to 2 of 5')).toBeVisible();
 });
