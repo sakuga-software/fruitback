@@ -2,6 +2,7 @@ import { language, t } from './i18n.ts';
 import {
   alertBox,
   button,
+  initialOf,
   definitions,
   dropMark,
   head,
@@ -17,11 +18,13 @@ import {
   secondaryButton,
   siteLine,
   textButton,
+  toggle,
 } from './kit.ts';
 import type { DestinationKind, PlaceIds, Source, SourceOffer } from './cloud.ts';
 import { type Help, howItWorks, whoCanAdd } from './guide.ts';
+import { pageNotes } from './popup-notes.ts';
 import { option, placeChoice, shownChoice, sourceMark } from './place-choice.ts';
-import { CARET, DOTS, EYE, EYE_SLASH, ON, PANEL, PENCIL, drawIcon } from './popup-icons.ts';
+import { CARET_DOWN, EYE, EYE_SLASH, HELP, OUT, SLIDERS, drawIcon } from './popup-icons.ts';
 
 /**
  * The screens of the popup. The shell and the screens 1 and 4 are those of the mock-up of 2026-10-20
@@ -47,6 +50,8 @@ export type ShellOptions = {
   accountButton?: boolean;
   /** The screen of the mock-up the shell holds, for its measures. */
   screen?: 1 | 2 | 3 | 4;
+  /** What the head names after the mark: the workspace of a site (FRU-695). */
+  context?: HTMLElement;
 };
 
 /** Every screen of the popup, in its shell. */
@@ -64,6 +69,7 @@ export function shell(document: Document, options: ShellOptions, ...body: Node[]
         },
   );
   top.classList.add('popup-head');
+  if (options.context !== undefined) top.querySelector('.kit-brand')?.after(options.context);
 
   const main = make(document, 'div', 'popup-body');
   main.append(...body);
@@ -701,26 +707,33 @@ export type SiteFacts = {
    * reconnect it: at the tracker itself when `direct`, else in the console. Absent: the line says who can.
    */
   refused?: { reconnect?: () => void; direct?: boolean };
+  /**
+   * The workspaces of the account, for the chip of the head (FRU-695), and the one of the site first.
+   * With `onWorkspace`, the chip opens a menu of them, and each opens in the console.
+   */
+  workspaces?: { id: string; name: string }[];
+  /** Opens a workspace in the console. Absent: the console is not known, and the chip is a name. */
+  onWorkspace?: (id: string) => void;
 };
 
 export type SiteOnOptions = {
   origin: string;
   workspace: string;
   on: boolean;
-  /** The keys of « Leave a note », as the browser has them. None: no line. */
+  /** The keys of « Leave a note », as the browser has them. None: no keys in the button. */
   shortcut?: string[];
   facts?: SiteFacts;
   account?: Account;
-  /** The foot, in place of the one of an account: a session of a pairing and its log out (FRU-319). */
+  /** Who a session of a pairing is, and its « Sign out » (FRU-319): the start of the foot. */
   foot?: HTMLElement;
   onToggle: (on: boolean) => void;
   /**
    * « Hide Fruitback on this page » (FRU-444, FRU-590), for a site that is on. Absent: shown, and no
-   * button. Hidden, « Leave a note » and the side panel stay, turned off: the page has no widget.
+   * entry. Hidden, « Leave a note » and the side panel stay, turned off: the page has no widget.
    */
   visibility?: Visibility;
   onLeaveFeedback: () => void;
-  /** Opens the side panel: « Show all notes in a sidebar », and a click on a line. */
+  /** Opens the side panel: « Open sidebar », and « {n} more in the sidebar ». */
   onOpenPanel: () => void;
   onSettings: () => void;
 };
@@ -742,9 +755,16 @@ function hostAsTitle(site: HTMLElement): HTMLElement {
   return site;
 }
 
-/** The state line of a site: « On · Acme ». Where its notes go has its own line (FRU-530). */
-function onState(workspace: string, on: boolean): string {
-  return on ? t('On · {workspace}', { workspace }) : t('Off · {workspace}', { workspace });
+/** The state line of a site: « On · Acme », then its open notes once the worker says them (FRU-695). */
+function onState(workspace: string, on: boolean, open?: number): string {
+  const state = on ? t('On · {workspace}', { workspace }) : t('Off · {workspace}', { workspace });
+  if (!on || open === undefined) return state;
+  const count =
+    open === 0
+      ? t('No open note')
+      : plural(open, t('1 open note'), t('{count} open notes', { count: shortCount(open) }));
+
+  return `${state} · ${count}`;
 }
 
 /** Whether the widget shows on this origin (FRU-444), and how to change it. */
@@ -766,19 +786,13 @@ export function visibilityButton(document: Document, options: Visibility): HTMLB
   return node;
 }
 
-/** The event that « Change where notes go » of the menu sends to the screen (FRU-599). */
-const CHANGE_DESTINATION = 'fruitback-change-destination';
-
-/** What « Change where notes go » opens, for each screen: one at a time, the last facts' own. */
-const destinationOpeners = new WeakMap<Element, () => void>();
-
 const iconOf = drawIcon;
 
 /**
- * The menu « ⋯ » of a site (FRU-599): what was a second switch, a turn off and « Change ». Each entry
- * says what it keeps. « Change where notes go » waits for the worker (`showSiteFacts`).
+ * The menu of a site (FRU-599), in the foot since FRU-695: the widget hidden or shown here, and every
+ * setting of the site. The switch of the card turns the site off; « Sent to » changes where notes go.
  */
-function siteMenu(document: Document, options: SiteOnOptions, row: HTMLElement): HTMLElement {
+function siteMenu(document: Document, options: SiteOnOptions): HTMLElement {
   const items: MenuItem[] = [];
   if (options.on && options.visibility !== undefined) {
     const { shown, onChange } = options.visibility;
@@ -798,58 +812,146 @@ function siteMenu(document: Document, options: SiteOnOptions, row: HTMLElement):
           },
     );
   }
-  if (options.on) {
-    items.push(
-      {
-        id: 'stop',
-        label: t('Stop reviewing this site'),
-        detail: t('Fruitback goes off here. Your notes are kept.'),
-        onSelect: () => options.onToggle(false),
-      },
-      {
-        id: 'destination',
-        label: t('Change where notes go'),
-        hidden: true,
-        // The event of the window of the screen: an event of another realm is refused.
-        onSelect: () => {
-          const view = row.ownerDocument.defaultView;
-          if (view !== null) row.dispatchEvent(new view.Event(CHANGE_DESTINATION));
-        },
-      },
-    );
-  }
   items.push({ id: 'settings', label: t('All settings for this site'), onSelect: options.onSettings });
 
-  return menuButton(document, { label: t('More for this site'), icon: iconOf(document, DOTS), items }).root;
+  return menuButton(document, { label: t('More for this site'), icon: iconOf(document, SLIDERS), items }).root;
 }
 
 /**
- * 3 · Site on (FRU-298, FRU-599): a launcher. The site and its state, its menu « ⋯ », where the notes
- * go, « Leave a note », and the side panel with what waits. Off, « Turn on » in place of the rest.
+ * The chip of the workspace in the head (FRU-695): its initial and its name. Once the worker lists the
+ * workspaces of the account and the console is known, it opens a menu of them, each in the console:
+ * the popup is about the site of the tab, whose workspace is fixed, so a choice here goes there.
+ */
+function workspaceChip(document: Document, name: string): HTMLElement {
+  const chip = make(document, 'span', 'popup-workspace');
+  chip.append(workspaceTile(document, name), make(document, 'span', 'popup-workspace-name', name));
+
+  return chip;
+}
+
+/** The initial of a workspace, drawn by the sheet: the name of the chip is the name of the workspace alone. */
+function workspaceTile(document: Document, name: string): HTMLElement {
+  const tile = make(document, 'span', 'popup-workspace-tile');
+  tile.dataset.initial = initialOf(name);
+  tile.setAttribute('aria-hidden', 'true');
+
+  return tile;
+}
+
+/** The chip as a menu of the workspaces, the one of the site first. */
+function showWorkspaces(screen: HTMLElement, workspace: string, facts: SiteFacts): void {
+  const chip = screen.querySelector('.popup-workspace');
+  const listed = facts.workspaces;
+  const opens = facts.onWorkspace;
+  if (chip === null || listed === undefined || listed.length === 0 || opens === undefined) return;
+  const document = screen.ownerDocument;
+  const face = make(document, 'span', 'popup-workspace-face');
+  face.append(
+    workspaceTile(document, workspace),
+    make(document, 'span', 'popup-workspace-name', workspace),
+    iconOf(document, CARET_DOWN, 'popup-workspace-caret'),
+  );
+  const menu = menuButton(document, {
+    label: t('Workspace {workspace}', { workspace }),
+    icon: face,
+    items: listed.map((each) => ({
+      id: each.id,
+      label: each.name,
+      detail: t('Open in the console'),
+      onSelect: () => opens(each.id),
+    })),
+  });
+  menu.root.classList.add('popup-workspace-menu');
+  // A name the person reads: the name of the trigger holds the words it shows (axe `label-content-name-mismatch`).
+  menu.trigger.classList.add('popup-workspace');
+  chip.replaceWith(menu.root);
+}
+
+/** « Leave a note » of screen 3 (FRU-695): 40 px, the drop, and the keys inside it. */
+function leaveButton(document: Document, options: SiteOnOptions, hidden: boolean): HTMLButtonElement {
+  const note = primaryButton(document, t('Leave a note'), options.onLeaveFeedback, { size: 'tall' });
+  // FRU-601: in the colour of « Appearance ».
+  note.classList.add('kit-note', 'leave-note');
+  // Hidden, the page has no widget to take a note or to fill the panel.
+  note.disabled = hidden;
+  const keyNames = hidden ? [] : (options.shortcut ?? []);
+  if (keyNames.length > 0) {
+    // The keys are said by `aria-keyshortcuts`: the name of the button stays « Leave a note ».
+    const shown = make(document, 'span', 'leave-keys', keyNames.join(' '));
+    shown.setAttribute('aria-hidden', 'true');
+    note.append(shown);
+    note.setAttribute('aria-keyshortcuts', keyNames.join('+'));
+  }
+
+  return note;
+}
+
+/** The foot of screen 3 (FRU-695): « Console » or the person of a pairing, then the guide and the menu. */
+function siteFoot(document: Document, options: SiteOnOptions): HTMLElement {
+  const foot = make(document, 'div', 'popup-foot');
+  foot.classList.add('popup-foot-bar');
+  const start = make(document, 'div', 'popup-foot-start');
+  if (options.foot !== undefined) {
+    options.foot.classList.remove('popup-foot', 'popup-foot-account');
+    options.foot.classList.add('popup-foot-who');
+    start.append(options.foot);
+  } else if (options.account?.console !== undefined) {
+    const link = make(document, 'a', 'popup-foot-button');
+    link.href = options.account.console;
+    link.target = '_blank';
+    link.rel = 'noreferrer';
+    link.append(iconOf(document, OUT), document.createTextNode(t('Console')));
+    start.append(link);
+  }
+  const guide = howItWorks();
+  const help = make(document, 'a', 'popup-foot-button');
+  help.classList.add('popup-foot-icon');
+  help.href = guide.href;
+  help.target = '_blank';
+  help.rel = 'noreferrer';
+  help.setAttribute('aria-label', guide.label);
+  help.title = guide.label;
+  help.append(iconOf(document, HELP));
+  foot.append(start, help, siteMenu(document, options));
+
+  return foot;
+}
+
+/**
+ * 3 · Site on (FRU-298, FRU-599, FRU-695), as the mock-up of 2026-11-25 draws it: the workspace in the
+ * head; the site in a card with its state and its switch; « Sent to »; « Leave a note » with its keys;
+ * the notes of the page, one line each; the foot with « Console », the guide and the menu of the site.
+ * Off, the card and « Turn on ».
  */
 export function siteOn(document: Document, options: SiteOnOptions): HTMLElement {
   const host = hostOf(options.origin);
-  const row = make(document, 'div', 'site-row');
-  row.append(
-    hostAsTitle(
-      siteLine(document, {
-        host,
-        state: onState(options.workspace, options.on),
-        on: options.on,
-      }),
-    ),
-  );
+  const card = make(document, 'div', 'site-card');
+  const site = hostAsTitle(siteLine(document, { host, state: onState(options.workspace, options.on), on: options.on }));
+  // The dot of the state: green and named while the site is on, a grey drawing when it is off.
+  const dot = make(document, 'span', 'site-on-dot');
   if (options.on) {
-    const on = make(document, 'span', 'site-on-mark');
-    on.setAttribute('role', 'img');
-    on.setAttribute('aria-label', t('Fruitback is on for this site'));
-    on.title = t('On for this site');
-    on.append(iconOf(document, ON));
-    row.append(on);
+    dot.setAttribute('role', 'img');
+    dot.setAttribute('aria-label', t('Fruitback is on for this site'));
+  } else {
+    dot.setAttribute('aria-hidden', 'true');
   }
-  row.append(siteMenu(document, options, row));
+  const line = site.querySelector('.kit-site-state');
+  if (line !== null) {
+    const state = make(document, 'span', 'site-state-line');
+    line.before(state);
+    state.append(dot, line);
+  }
+  card.append(
+    site,
+    toggle(document, {
+      checked: options.on,
+      label: t('Fruitback on this site'),
+      size: 'table',
+      onChange: options.onToggle,
+    }),
+  );
 
-  const body: Node[] = [row];
+  const body: Node[] = [card];
   if (!options.on) {
     body.push(primaryButton(document, t('Turn on'), () => options.onToggle(true)));
   } else {
@@ -858,34 +960,8 @@ export function siteOn(document: Document, options: SiteOnOptions): HTMLElement 
     body.push(make(document, 'div', 'site-destination'));
     const leave = make(document, 'div', 'leave-block');
     if (hidden) leave.append(make(document, 'p', 'hidden-line', t('Fruitback is hidden on this page.')));
-    const note = primaryButton(document, t('Leave a note'), options.onLeaveFeedback, { size: 'tall' });
-    // FRU-601: in the colour of « Appearance ».
-    note.classList.add('kit-note');
-    // Hidden, the page has no widget to take a note or to fill the panel.
-    note.disabled = hidden;
-    leave.append(note);
-    const keyNames = hidden ? [] : (options.shortcut ?? []);
-    if (keyNames.length > 0) {
-      const [before, after] = t('or press {keys} on the page').split('{keys}');
-      const line = make(document, 'p', 'shortcut-line');
-      line.append(before ?? '', keys(document, keyNames), after ?? '');
-      leave.append(line);
-    }
-    // The side panel, and what waits in it (FRU-599): the popup says how many, the panel checks them.
-    const panel = button(document, 'panel-row', '', options.onOpenPanel);
-    panel.disabled = hidden;
-    const tile = make(document, 'span', 'panel-row-tile');
-    tile.append(iconOf(document, PANEL));
-    const words = make(document, 'span', 'panel-row-words');
-    // Its name is what it shows, the counts included (axe `label-content-name-mismatch`).
-    words.append(
-      make(document, 'span', 'panel-row-title', t('Show all notes in a sidebar')),
-      make(document, 'span', 'panel-counts'),
-    );
-    const caret = iconOf(document, CARET);
-    caret.classList.add('panel-row-caret');
-    panel.append(tile, words, caret);
-    body.push(leave, panel);
+    leave.append(leaveButton(document, options, hidden));
+    body.push(leave);
   }
 
   const root = shell(
@@ -893,12 +969,19 @@ export function siteOn(document: Document, options: SiteOnOptions): HTMLElement 
     {
       onSettings: options.onSettings,
       screen: 3,
+      context: workspaceChip(document, options.workspace),
       ...(options.account === undefined ? {} : { account: options.account }),
-      ...(options.foot === undefined ? {} : { foot: options.foot }),
+      foot: siteFoot(document, options),
     },
     ...body,
   );
   root.classList.add('popup-site-on');
+  // The notes of the page, out of the column of the body: across the popup, as the mock-up has them.
+  if (options.on && options.visibility?.shown !== false) {
+    root.querySelector('.popup-body')?.after(pageNotes(document, { onOpenPanel: options.onOpenPanel }));
+  } else {
+    root.dataset.state = options.on ? 'hidden' : 'off';
+  }
   if (options.facts !== undefined) showSiteFacts(root, options, options.facts);
 
   return root;
@@ -906,8 +989,8 @@ export function siteOn(document: Document, options: SiteOnOptions): HTMLElement 
 
 /**
  * What the worker says of the site, added to a screen 3 already drawn: the popup does not wait for
- * the worker before it shows « Leave a note ». The state line names the tracker; where the notes go
- * gets its line; the side panel says the open notes and the fixes to check (FRU-599).
+ * the worker before it shows « Leave a note ». The state line says the open notes; where the notes go
+ * gets its field; « On this page » says the fixes to check (FRU-695); the chip lists the workspaces.
  */
 export function showSiteFacts(
   screen: HTMLElement,
@@ -916,60 +999,43 @@ export function showSiteFacts(
 ): void {
   const document = screen.ownerDocument;
   const state = screen.querySelector('.kit-site-state');
-  if (state !== null) state.textContent = onState(options.workspace, options.on);
+  if (state !== null) state.textContent = onState(options.workspace, options.on, facts.open);
+  showWorkspaces(screen, options.workspace, facts);
   const where = screen.querySelector<HTMLElement>('.site-destination');
-  // Facts read again can take a right away: the entry of the menu waits again (review of #828).
-  forgetDestinationChange(screen);
-  // A role that may change the place gets the line even when the worker named none: « Not known », and
-  // the pencil to set it (review of #736).
+  // A role that may change the place gets the field even when the worker named none: « Not known », and
+  // the chevron to set it (review of #736).
   const label = facts.destination ?? (facts.change === undefined ? undefined : t('Not known'));
-  if (facts.change === undefined && facts.locked !== undefined && facts.destination !== undefined) {
-    const entry = screen.querySelector<HTMLButtonElement>('[data-menu-item="destination"]');
-    const row = screen.querySelector('.site-row');
-    if (entry !== null && row !== null) {
-      entry.hidden = false;
-      entry.querySelector('.kit-menu-label')!.textContent = t('Where notes go');
-      destinationOpeners.set(row, facts.locked);
-      row.addEventListener(CHANGE_DESTINATION, facts.locked);
+  if (where !== null) {
+    if (label === undefined) where.replaceChildren();
+    else {
+      showDestination(
+        where,
+        label,
+        facts.change,
+        facts.change === undefined ? facts.locked : undefined,
+        facts.destination === undefined ? undefined : facts.destinationKind,
+      );
     }
-  }
-  if (where !== null && label !== undefined) {
-    showDestination(
-      screen,
-      where,
-      label,
-      facts.change,
-      facts.destination === undefined ? undefined : facts.destinationKind,
-    );
   }
   screen.querySelector('.site-refused')?.remove();
   if (where !== null && facts.refused !== undefined && facts.destination !== undefined) {
     where.after(refusedLine(document, facts.destination, facts.destinationKind, facts.refused));
   }
-  const counts = screen.querySelector('.panel-counts');
-  if (counts === null) return;
-  const parts: Node[] = [];
-  if (facts.open !== undefined) {
-    parts.push(
-      document.createTextNode(
-        facts.open === 0
-          ? t('No open note')
-          : plural(facts.open, t('1 open note'), t('{count} open notes', { count: shortCount(facts.open) })),
-      ),
-    );
+  const check = screen.querySelector('.page-notes-check');
+  if (check === null) return;
+  if (facts.toCheck === undefined || facts.toCheck === 0) {
+    check.replaceChildren();
+
+    return;
   }
-  if (facts.toCheck !== undefined && facts.toCheck > 0) {
-    if (parts.length > 0) parts.push(document.createTextNode(' · '));
-    const dot = make(document, 'span', 'panel-counts-dot');
-    dot.setAttribute('aria-hidden', 'true');
-    parts.push(
-      dot,
-      document.createTextNode(
-        plural(facts.toCheck, t('1 to check'), t('{count} to check', { count: String(facts.toCheck) })),
-      ),
-    );
-  }
-  counts.replaceChildren(...parts);
+  const dot = make(document, 'span', 'page-notes-check-dot');
+  dot.setAttribute('aria-hidden', 'true');
+  check.replaceChildren(
+    dot,
+    document.createTextNode(
+      plural(facts.toCheck, t('1 to check'), t('{count} to check', { count: String(facts.toCheck) })),
+    ),
+  );
 }
 
 /**
@@ -1012,38 +1078,23 @@ function refusedLine(
   return line;
 }
 
-/** « Change where notes go » of the menu hidden, and the opener of facts of before taken off. */
-function forgetDestinationChange(screen: HTMLElement): void {
-  const entry = screen.querySelector<HTMLButtonElement>('[data-menu-item="destination"]');
-  if (entry !== null) {
-    entry.hidden = true;
-    const words = entry.querySelector('.kit-menu-label');
-    if (words !== null) words.textContent = t('Change where notes go');
-  }
-  const row = screen.querySelector('.site-row');
-  const before = row === null ? undefined : destinationOpeners.get(row);
-  if (row !== null && before !== undefined) {
-    row.removeEventListener(CHANGE_DESTINATION, before);
-    destinationOpeners.delete(row);
-  }
-}
-
 /** « 99+ » above 99: a count of open notes on one line (P7 of FRU-598). */
 function shortCount(count: number): string {
   return count > 99 ? '99+' : String(count);
 }
 
 /**
- * « Sent to » of a site that is on (FRU-530, FRU-599): the mark of the provider, the provider, its
- * team and its project, and a pencil for a role that may change it. The pencil, and « Change where
- * notes go » of the menu, open the lists of « Turn on » in place of the line. A change the worker
- * refuses puts the lists back.
+ * « Sent to » of a site that is on (FRU-530, FRU-599, FRU-695): a field of 32 px with the mark of the
+ * provider, the provider, its team and its project cut with « … », and a chevron. For a role that may
+ * change it, the chevron opens « Where notes go » (or the lists of « Turn on » in place of the field);
+ * for another, it opens the screen locked. The whole field is its target. A change the worker refuses
+ * puts the lists back.
  */
 function showDestination(
-  screen: HTMLElement,
   line: HTMLElement,
   label: string,
   change: DestinationChange | undefined,
+  locked: (() => void) | undefined,
   kind: DestinationKind | undefined,
 ): void {
   const document = line.ownerDocument;
@@ -1071,38 +1122,18 @@ function showDestination(
     mark = dropMark(document, 'source-mark');
     mark.dataset.kind = 'fruitback';
   } else if (shown !== undefined) mark = sourceMark(document, shown);
-  const words = make(
-    document,
-    'span',
-    'destination-place',
-    [provider, ...place.split(' · ')].filter(Boolean).join(' / '),
-  );
+  const words = make(document, 'span', 'destination-place', [provider, place].filter(Boolean).join(' · '));
   words.title = words.textContent ?? '';
   const sent = make(document, 'span', 'destination-label', t('Sent to'));
   line.replaceChildren(sent, ...(mark === undefined ? [] : [mark]), words);
-  if (change !== undefined) {
-    const pencil = button(document, 'kit-secondary', '', open);
-    pencil.classList.add('destination-change');
-    pencil.setAttribute('aria-label', t('Change where notes go'));
-    pencil.title = t('Change where notes go');
-    pencil.append(iconOf(document, PENCIL));
-    line.append(pencil);
-    const menuEntry = screen.querySelector<HTMLButtonElement>('[data-menu-item="destination"]');
-    if (menuEntry) {
-      menuEntry.hidden = false;
-      const now = make(document, 'span', 'kit-menu-detail', t('Now: {place}', { place: words.textContent ?? '' }));
-      menuEntry.querySelector('.kit-menu-detail')?.remove();
-      menuEntry.append(now);
-    }
-    const row = screen.querySelector('.site-row');
-    if (row) {
-      // `showSiteFacts` can run again on the same screen: the listener of before goes first.
-      const before = destinationOpeners.get(row);
-      if (before !== undefined) row.removeEventListener(CHANGE_DESTINATION, before);
-      destinationOpeners.set(row, open);
-      row.addEventListener(CHANGE_DESTINATION, open);
-    }
-  }
+  const opens = change === undefined ? locked : open;
+  if (opens === undefined) return;
+  const name = change === undefined ? t('Where notes go') : t('Change where notes go');
+  const chevron = button(document, 'destination-change', '', opens);
+  chevron.setAttribute('aria-label', name);
+  chevron.title = name;
+  chevron.append(iconOf(document, CARET_DOWN));
+  line.append(chevron);
 }
 
 /** One or many, by the rules of the language of the popup: « 1 fix », « 2 fixes ». */
