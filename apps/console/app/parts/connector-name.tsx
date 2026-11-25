@@ -70,8 +70,7 @@ export function ConnectorName({
         onSubmit={(event) => void submit(event)}
         onKeyDown={(event) => {
           if (event.key !== 'Escape') return;
-          // `Opened` already ignores an Escape that is prevented; stopping it too keeps any other
-          // handler above from reading it.
+          // The dialog of the settings (FRU-690) would close on it too: it is stopped here.
           event.preventDefault();
           event.stopPropagation();
           setName(connector.name ?? '');

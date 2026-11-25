@@ -239,8 +239,6 @@ async function openPlaces(page: Page): Promise<void> {
 }
 
 async function expectNoViolation(page: Page, name: string): Promise<void> {
-  // A panel of a source unfolds and fades in (FRU-563): axe reads its contrast once it is there.
-  await expect(page.locator('#source-panel:not([data-settled])')).toHaveCount(0);
   const results = await new AxeBuilder({ page }).include('main').analyze();
   expect
     .soft(
@@ -644,7 +642,11 @@ test('the panel of a source lists the sites that send there, and leads to the Si
   const worker = await workerWith(page);
   worker.places = [{ connector: 'c1', teamId: 't1' }];
   await page.goto(`${CONSOLE}/w/w1/connectors`);
-  await page.locator('button[id^="source-row-"]').first().click();
+  await page
+    .locator('tbody tr[data-connector]')
+    .first()
+    .getByRole('button', { name: /^Settings of / })
+    .click();
   await unfolded(page);
   const linear = page.getByRole('region', { name: /^Linear · / });
   await expect(linear.locator(`[data-site="${SITE}"]`)).toContainText('Linear · Web');

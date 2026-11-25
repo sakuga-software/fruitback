@@ -39,6 +39,8 @@ const PATHS = {
   out: 'M10 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4M14 16l4-4-4-4M18 12H8',
   // Three dots on a line: the menu of a row.
   more: 'M5 12h.01M12 12h.01M19 12h.01',
+  // A bin: a gesture that deletes, in the danger zone (FRU-693).
+  trash: 'M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3',
 } as const;
 
 export type SettingsIconName = keyof typeof PATHS;

@@ -85,8 +85,8 @@ async function workerWith(page: Page, connectors: unknown[] = [], locale: 'en' |
   return worker;
 }
 
-const catalogue = (page: Page) =>
-  page.getByRole('dialog', { name: 'Add a connector' }).or(page.getByRole('region', { name: 'Add a connector' }));
+/** The catalogue, on the page (FRU-690). */
+const catalogue = (page: Page) => page.getByRole('region', { name: 'Add a connector' });
 const card = (page: Page) => catalogue(page).locator('[data-source="ClickUp"]');
 
 async function expectNoViolation(page: Page, name: string): Promise<void> {
@@ -104,12 +104,17 @@ test('the card of ClickUp connects by consent, and says why it came back with no
   await page.goto(`${CONSOLE}/w/w1/connectors`);
 
   await expect(card(page)).toHaveCount(1);
-  await expect(card(page).locator('svg[data-mark="clickup"]')).toHaveCount(1);
-  await expect(
-    card(page).getByText('A task per note, in the ClickUp list you choose, with the files of the note.'),
-  ).toBeVisible();
-  // The consent first; the token is the other way.
-  await expect(card(page).getByRole('button', { name: 'Use a token' })).toBeVisible();
+  await expect(card(page).locator('img[data-logo="clickup"]')).toHaveAttribute('src', '/logos/clickup.svg');
+  // FRU-690: one line on the tile, and the whole sentence in its tooltip.
+  await expect(card(page).locator('[data-tile-line]')).toHaveText('A task in a list');
+  await expect(card(page).locator('[data-tile-line]').locator('..')).toHaveAttribute(
+    'title',
+    'A task per note, in the ClickUp list you choose, with the files of the note.',
+  );
+  // The consent first; the token is the other way, in the menu beside « Connect » (FRU-690).
+  await card(page).getByRole('button', { name: 'Other ways to connect ClickUp' }).click();
+  await expect(page.getByRole('menuitem', { name: 'Use a token' })).toBeVisible();
+  await page.keyboard.press('Escape');
   await expectNoViolation(page, 'the card of ClickUp');
 
   await card(page).getByRole('button', { name: 'Connect ClickUp', exact: true }).click();
@@ -168,10 +173,12 @@ test('the card of ClickUp fits a phone, in French', async ({ page }) => {
   await page.goto(`${CONSOLE}/w/w1/connectors`);
   const french = page.locator('[data-source="ClickUp"]');
 
-  await expect(
-    french.getByText('Une tâche par note, dans la liste ClickUp de votre choix, avec les fichiers de la note.'),
-  ).toBeVisible();
+  await expect(french.locator('[data-tile-line]')).toHaveText('Une tâche dans une liste');
+  await expect(french.locator('[data-tile-line]').locator('..')).toHaveAttribute(
+    'title',
+    'Une tâche par note, dans la liste ClickUp de votre choix, avec les fichiers de la note.',
+  );
   await expect(french.getByRole('button', { name: 'Connecter ClickUp', exact: true })).toBeVisible();
-  await expect(french.getByRole('button', { name: 'Utiliser un jeton' })).toBeVisible();
+  await expect(french.getByRole('button', { name: 'Autres façons de connecter ClickUp' })).toBeVisible();
   expect(await sideScroll(page)).toBe(0);
 });

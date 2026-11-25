@@ -6,12 +6,6 @@ import { readFileSync } from 'node:fs';
 const source = readFileSync(new URL('connector-marks.tsx', import.meta.url), 'utf8');
 // The column « Went to » of the Notes screen: its `Place` is a part of the screen (FRU-614).
 const notes = readFileSync(new URL('parts/note-parts.tsx', import.meta.url), 'utf8');
-const connectors = readFileSync(new URL('routes/connectors.tsx', import.meta.url), 'utf8');
-const parts = readFileSync(new URL('parts/connector-parts.tsx', import.meta.url), 'utf8');
-
-/** The kinds that have a mark: the keys of `MARKS`. */
-// A key may be quoted: 'claude-routine' (FRU-594).
-const marked = new Set([...source.matchAll(/^ {2}'?([\w-]+)'?: \{/gm)].map((match) => match[1]));
 
 /** What would load a mark from elsewhere: an image, a `use` of another file, a font, a `src`. */
 const FETCHES = /<(?:image|img|use|link)\b|\b(?:src|href|xlinkHref)=/;
@@ -39,28 +33,5 @@ describe('the marks of the sources (FRU-435)', () => {
       /<ConnectorMark kind=\{place\.kind\} \/>\s*\{after === null \? \(\s*<span className="font-semibold">\{name\}<\/span>/,
     );
     assert.match(notes, /<span className="sr-only">\{name\}<\/span>\s*\{after\}/);
-  });
-
-  it('has one for each source of the Connectors screen, connected or to add (FRU-543)', () => {
-    // The sources to add that do not exist yet, and the four that do.
-    const later = [...connectors.matchAll(/\{ kind: '(\w+)', name: '/g)].map((match) => match[1]);
-    assert.deepEqual(later, ['jira', 'gitlab', 'trello', 'notion', 'webhook']);
-    for (const kind of [...later, 'linear', 'github', 'rest', 'claude-routine'])
-      assert.ok(marked.has(kind), `a mark for ${kind}`);
-    // The control: a kind with no mark is found.
-    assert.equal(marked.has('asana'), false);
-  });
-
-  it('is drawn before the name of every source of the Connectors screen (FRU-543)', () => {
-    // Every source to add and every connected one names its kind to the box of the mark.
-    const sources = connectors.match(/<Source\b[^>]*>/gs) ?? [];
-    // Linear, GitHub, an address, a Claude Code routine (FRU-594), the sources of later, and the
-    // card of each connector of a plugin (FRU-621).
-    assert.equal(sources.length, 6);
-    for (const each of sources) assert.match(each, /\bkind=\{?["'\w.]/);
-    assert.match(connectors, /<SourceMark kind=\{connector\.kind\} \/>/);
-    // The box draws the mark, and no letter any more (the « L », « G », « { } » of the mockup).
-    assert.match(parts, /<ConnectorMark kind=\{kind\} size=\{18\} \/>/);
-    assert.doesNotMatch(parts, /mark: '/);
   });
 });

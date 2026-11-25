@@ -24,12 +24,12 @@ export async function settled(surface: Page): Promise<void> {
 }
 
 /**
- * Waits until the panel of a source has unfolded (FRU-563). The panel grows in 220 ms, and its body
- * is clipped until `data-settled`. The boxes of its controls are in their last place from the first
- * frame, so Playwright finds a control visible and stable while the panel still clips it, and its
- * click can go to what is under it (#878). Boxes measured before the end are not the last ones either.
- * Call it after the press that opens the panel, before a click in it or a measure of it.
+ * Waits until the settings of a connector are open in their dialog (FRU-690), and the dialog has
+ * ended its zoom (HeroUI's Modal). Playwright finds a control stable while the dialog still grows, and
+ * boxes measured before the end are not the last ones. Call it after the press that opens the
+ * settings, before a click in them or a measure of them.
  */
 export async function unfolded(page: Page): Promise<void> {
-  await expect(page.locator('#source-panel')).toHaveAttribute('data-settled', '');
+  await expect(page.locator('#source-panel')).toBeVisible();
+  await settled(page);
 }
