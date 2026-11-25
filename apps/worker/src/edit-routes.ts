@@ -76,7 +76,7 @@ async function callerOf(
 }
 
 /**
- * The name that the reply of an edit gives its author (FRU-257): a member by their account and their
+ * The name that the reply of an edit or of a withdrawal gives its author (FRU-257): a member by their account and their
  * workspace, read now; a visitor by the name the note was sent with, their word, « not verified ».
  * `undefined`: the account or its membership is gone since the session was read.
  */
@@ -234,6 +234,20 @@ export async function postEdit(
   }
 }
 
+/**
+ * Marks a note as deleted by its visitor in the index (FRU-702), before the store withdraws it. An index
+ * that does not answer is a store that does not answer: `502`, and the visitor tries again.
+ */
+async function markRemoved(index: NoteIndex, workspace: string, site: string, note: string, at: number): Promise<void> {
+  try {
+    await index.remove(workspace, site, note, at);
+  } catch (error) {
+    throw new StoreError(
+      `the index of the notes did not answer: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+}
+
 /** `POST /feedback/<id>/withdraw`: the person who left an open note withdraws it (FRU-605). */
 export const WITHDRAW_PATH = /^\/feedback\/([A-Za-z0-9_-]{1,100})\/withdraw$/;
 
@@ -268,7 +282,7 @@ export async function postWithdraw(
   },
   checks: CallerChecks,
 ): Promise<Response> {
-  const { routeFor, sessionWrites, writerIn, hidesTracker } = checks;
+  const { routeFor, hidesTracker } = checks;
   const body = await readBoundedText(request);
   if (body === null) return json(413, { error: 'payload-too-large', maxBytes: MAX_BODY_BYTES }, corsHeaders);
   let payload: unknown;
@@ -291,19 +305,18 @@ export async function postWithdraw(
   try {
     const workspace = route.client?.workspace;
     const { accounts } = context;
-    const session = await sessionWrites(request, config, context.context);
-    if (workspace === undefined || clientId === undefined || accounts === undefined || session === undefined) {
+    if (workspace === undefined || clientId === undefined || accounts === undefined) {
       return json(401, { error: 'identity-required' }, corsHeaders);
     }
-    const account = await writerIn(request, config, context.context, workspace, clientId);
-    if (account === undefined) {
-      const reach = await accounts.reach(workspace, session.subject);
-      const suspended = config.suspendedIn !== undefined && (await config.suspendedIn(workspace));
-
-      return reach === undefined || suspended
-        ? json(401, { error: 'identity-required' }, corsHeaders)
-        : json(403, { error: 'not-allowed' }, corsHeaders);
-    }
+    const caller = await callerOf(
+      request,
+      config,
+      route,
+      { workspace, site: clientId, accounts, context: context.context },
+      checks,
+      'withdraw',
+    );
+    if (!caller.ok) return json(caller.status, { error: caller.error }, corsHeaders);
     const target = route.client;
     if ((target?.destinations?.length ?? 0) > 1) return json(403, { error: 'withdrawals-not-taken' }, corsHeaders);
 
@@ -317,29 +330,43 @@ export async function postWithdraw(
     if (found === undefined) return json(404, { error: 'not-found' }, corsHeaders);
 
     const author = await indexedAuthorOf(context.noteIndex, workspace, clientId, found.note.id);
-    if (author === undefined || author !== account) return json(403, { error: 'not-allowed' }, corsHeaders);
+    if (author === undefined || author !== caller.author) return json(403, { error: 'not-allowed' }, corsHeaders);
     if (!(await takesWithdrawals(store, target))) return json(403, { error: 'withdrawals-not-taken' }, corsHeaders);
     if (!EDITABLE_STAGES.has(found.stage)) return json(409, { error: 'not-open', stage: found.stage }, corsHeaders);
 
-    const [person, memberships] = await Promise.all([accounts.account(account), accounts.memberships(account)]);
-    const membership = memberships.find((each) => each.workspace.id === workspace);
-    if (person === undefined || membership === undefined) return json(401, { error: 'identity-required' }, corsHeaders);
+    const named = await replyAuthorOf(caller, accounts, workspace, found.note);
+    if (named === undefined) return json(401, { error: 'identity-required' }, corsHeaders);
+    // FRU-702: a withdrawal writes a reply, and a visitor's counts with their replies of the minute.
+    if (caller.kind === 'visitor' && !(await checkReplyLimit(kv, context.context.clientIp))) {
+      return json(429, { error: 'rate-limited' }, corsHeaders);
+    }
 
     // One withdrawal at a time on a note: a tracker has no lock, and a double click would write the
     // reply twice. The second is refused while the first is written.
     const lock = `fruitback:withdraw:${clientId}:${found.note.id}`;
     if ((await kv.incr(lock, WITHDRAW_LOCK_MS)) > 1) return json(409, { error: 'withdraw-in-progress' }, corsHeaders);
+    // FRU-702: a visitor deletes their note, and its pin leaves the page for everybody. The row of the
+    // index is marked first: an index that does not answer is `502`, and nothing is withdrawn. The row
+    // is there, or `NoteIndex.authors` would not have named this visitor. The mark is taken back
+    // when the store withdraws nothing. A member withdraws, and the team sees the pin closed (FRU-605).
+    const marks = caller.kind === 'visitor' ? context.noteIndex : undefined;
+    if (marks !== undefined) await markRemoved(marks, workspace, clientId, found.note.id, Date.now());
+    const unmark = (index: NoteIndex) =>
+      indexed(index, (each) => each.remove(workspace, clientId, found.note.id, null));
     try {
-      const answer = await store.withdraw?.(
-        { issue: found.id, clientId },
-        {
-          author: { kind: 'member', name: person.name ?? person.email, workspace: membership.workspace.name },
-          note: found.note,
-          identifier: found.identifier,
-        },
-        target,
-        route.policy,
-      );
+      let answer: Awaited<ReturnType<NonNullable<NoteStore['withdraw']>>> | undefined;
+      try {
+        answer = await store.withdraw?.(
+          { issue: found.id, clientId },
+          { author: named, note: found.note, identifier: found.identifier },
+          target,
+          route.policy,
+        );
+      } catch (error) {
+        if (marks !== undefined) await unmark(marks);
+        throw error;
+      }
+      if ((answer === undefined || answer === 'not-open') && marks !== undefined) await unmark(marks);
       if (answer === undefined) return json(404, { error: 'not-found' }, corsHeaders);
       // Done or closed by the team between the read above and the write.
       if (answer === 'not-open') return json(409, { error: 'not-open' }, corsHeaders);

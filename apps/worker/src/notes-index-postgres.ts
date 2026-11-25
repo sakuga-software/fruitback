@@ -299,6 +299,36 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
       );
     },
 
+    async remove(workspace, site, note, at) {
+      await run((db) =>
+        db
+          .update(note_index)
+          .set({ removed_at: at })
+          .where(
+            and(eq(note_index.workspace_id, workspace), eq(note_index.site_id, site), eq(note_index.note_id, note)),
+          ),
+      );
+    },
+
+    async removed(workspace, site, ids) {
+      if (ids.length === 0) return new Set();
+      const rows = await run((db) =>
+        db
+          .select({ note: note_index.note_id })
+          .from(note_index)
+          .where(
+            and(
+              eq(note_index.workspace_id, workspace),
+              eq(note_index.site_id, site),
+              isNotNull(note_index.removed_at),
+              inArray(note_index.note_id, [...new Set(ids)]),
+            ),
+          ),
+      );
+
+      return new Set(rows.map((row) => row.note));
+    },
+
     async authors(workspace, site, ids) {
       if (ids.length === 0) return new Map();
       const rows = await run((db) =>
