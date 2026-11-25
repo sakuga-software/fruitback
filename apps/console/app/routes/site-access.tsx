@@ -63,17 +63,17 @@ export default function SiteAccessPage() {
     // Nothing changed: nothing is asked of the worker.
     if (sameAccess(draft, accessOf(site))) return setSaved(true);
     setBusy(true);
-    const answer = await call<Site>(
-      'POST',
-      `/console/workspaces/${workspace.id}/sites`,
-      accessBody(site.origin, draft),
-    );
+    const body = accessBody(site.origin, draft);
+    const answer = await call<Site>('POST', `/console/workspaces/${workspace.id}/sites`, body);
     setBusy(false);
-    // Another id would be another site: this one was not changed. What was chosen stays on screen.
-    if (!answer.ok || answer.data?.id !== site.id) {
-      return setProblem(answer.ok ? ACCESS_NOT_CHANGED : problemOf(answer, ACCESS_PROBLEMS, ACCESS_NOT_CHANGED));
+    if (!answer.ok) return setProblem(problemOf(answer, ACCESS_PROBLEMS, ACCESS_NOT_CHANGED));
+    // Another id would be another site, and an answer without the rights that were sent is a worker that
+    // did not keep them (one of before FRU-703): this access was not saved. What was chosen stays on screen.
+    const data = answer.data;
+    if (data?.id !== site.id || data.visitorEdit !== body.visitorEdit || data.visitorDelete !== body.visitorDelete) {
+      return setProblem(ACCESS_NOT_CHANGED);
     }
-    const kept = { ...site, ...answer.data };
+    const kept = { ...site, ...data };
     setRead(kept);
     setDraft(accessOf(kept));
     setSaved(true);

@@ -25,7 +25,7 @@ const SITES = [
   },
 ];
 
-type Worker = { posted: Record<string, unknown>[]; refuses?: string; answersAnother?: boolean };
+type Worker = { posted: Record<string, unknown>[]; refuses?: string; answersAnother?: boolean; ofBefore?: boolean };
 
 async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' = 'en'): Promise<Worker> {
   const worker: Worker = { posted: [] };
@@ -39,6 +39,12 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
       const site = SITES.find((each) => each.origin === body.url);
       // Another site than the one of the page: this one was not changed.
       if (worker.answersAnother === true) return json({ ...site, ...body, id: 'another', origin: body.url }, 201);
+      // A worker of before FRU-703 keeps no right of a visitor, and answers none.
+      if (worker.ofBefore === true) {
+        const { visitorEdit: _edit, visitorDelete: _delete, ...kept } = { ...site, ...body };
+
+        return json({ ...kept, id: site?.id ?? 'new', origin: body.url }, 201);
+      }
 
       return json({ ...site, ...body, id: site?.id ?? 'new', origin: body.url }, 201);
     }
@@ -265,6 +271,14 @@ test('a refusal says why and keeps what was chosen, and a member reads the tab w
   await page.getByRole('button', { name: 'Save the access of staging.acme.dev' }).click();
   await expect(page.locator('main')).toContainText('Who sees the notes did not change. Try again.');
   await expect(levels(page).getByRole('radio', { name: 'Read only' })).toBeChecked();
+  await expect(page.getByRole('status')).toHaveCount(0);
+  // A worker that answers the site without the rights it was sent did not keep them: said the same way.
+  worker.answersAnother = false;
+  worker.ofBefore = true;
+  await levels(page).getByText('Contribute', { exact: true }).click();
+  await page.getByRole('button', { name: 'Save the access of staging.acme.dev' }).click();
+  await expect(page.locator('main')).toContainText('Who sees the notes did not change. Try again.');
+  await expect(levels(page).getByRole('radio', { name: 'Contribute' })).toBeChecked();
   await expect(page.getByRole('status')).toHaveCount(0);
 
   await page.unrouteAll({ behavior: 'ignoreErrors' });
