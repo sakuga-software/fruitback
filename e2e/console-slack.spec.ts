@@ -88,10 +88,9 @@ for (const width of [390, 1440]) {
     const worker = await workerWith(page);
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`${CONSOLE}/w/w1/connectors`);
-    await page.getByRole('button', { name: 'New connector' }).click();
-    const card = page.getByRole('dialog', { name: 'Add a connector' }).locator('[data-source="Slack"]');
+    const card = page.getByRole('region', { name: 'Add a connector' }).locator('[data-source="Slack"]');
     await expect(card).toHaveCount(1);
-    await expect(card.locator('svg[data-mark="slack"]')).toHaveCount(1);
+    await expect(card.locator('img[data-logo="slack"]')).toHaveAttribute('src', '/logos/slack.svg');
     await card.getByRole('button', { name: 'Connect Slack' }).click();
 
     // Verified notes are the default.
@@ -125,7 +124,7 @@ test('a webhook Slack refuses since a moment says to make a new one, in French t
   const refused = { ...SLACK, attention: { reason: 'key-refused', since: '2026-11-08T11:00:00.000Z' } };
   await workerWith(page, { connectors: [refused], locale: 'fr' });
   await page.goto(`${CONSOLE}/w/w1/connectors`);
-  await page.locator('button[aria-expanded]').filter({ hasText: 'Slack' }).click();
+  await page.getByRole('button', { name: 'Réglages de Slack', exact: true }).click();
   const panel = page.getByRole('region', { name: /Slack/ });
   await expect(panel).toContainText('Slack refuse le webhook depuis');
   await expect(panel).toContainText('Créez un nouveau webhook');
