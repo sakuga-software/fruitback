@@ -14,11 +14,13 @@ import {
   lte,
   max,
   min,
+  ne,
   notInArray,
   or,
   sql,
 } from 'drizzle-orm';
 import { member, user } from './auth-schema.ts';
+import { NO_PAGE } from './note-rows.ts';
 import {
   type AuthorKind,
   type ForgetIndex,
@@ -459,6 +461,23 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
 
       return rows[0]?.page;
     },
+
+    async taskOf(workspace, site, note) {
+      return run(async (db) => {
+        const rows = await db
+          .select({ row: note_index, connector: { kind: connectors.kind } })
+          .from(note_index)
+          .leftJoin(connectors, eq(connectors.id, note_index.connector_id))
+          .where(
+            and(eq(note_index.workspace_id, workspace), eq(note_index.site_id, site), eq(note_index.note_id, note)),
+          )
+          .limit(1);
+        const [first] = rows;
+        if (first === undefined) return undefined;
+
+        return (await keptOf(db, rows)).get(keyOfNoteId(first.row))?.task;
+      });
+    },
   };
 
   return index;
@@ -641,6 +660,7 @@ function filtered(workspace: string, query: NoteQuery) {
     query.unresolved === true ? notInArray(note_index.stage, [...RESOLVED_STAGES]) : undefined,
     query.author === undefined ? undefined : eq(note_index.author_account_id, query.author),
     query.since === undefined ? undefined : gte(note_index.created_at, query.since),
+    query.onPages === true ? ne(note_index.page_url, NO_PAGE) : undefined,
     // FRU-665: an archived task is out of the list, unless the list asks for the archived ones.
     query.archived === true ? isNotNull(note_index.archived_at) : isNull(note_index.archived_at),
     ...taskFilters(query),

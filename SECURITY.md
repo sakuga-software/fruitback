@@ -2162,6 +2162,29 @@ seen » is shown to owners and admins only.
 - The read takes the site with no `Origin`, as a tool of MCP does: the console is no origin of the
   site, and its own rights are checked before the read.
 
+### A task written by hand, in the console (FRU-657)
+
+- `POST /console/workspaces/<id>/notes` writes a task with no page and no pin in a site of the
+  workspace: whoever reads the notes of that site writes there, as they could leave a note on its
+  pages. A guest writes only in a site shared with them, and any other site is `404`, with nothing
+  written. test:`lets a guest write in a site shared with them only`.
+- The worker writes its author from the session: the account in the index, which gives the author
+  the rights of the status, and the name the account has now, marked `verified`, in the task. A
+  body cannot name another author. test:`takes a title alone, and the list shows it with the notes of its site, with no page`.
+- Its status, its assignee and its labels are checked as `POST …/notes/<note>/status` and
+  `POST …/notes/<note>/task` check them, in the same transaction as the task: a status of another
+  site, a hidden one, a person who is not a member or a label of another workspace is `409`, and
+  nothing is written. A title is one line of 1 to 200 characters, a text at most 5,000.
+  test:`refuses a task with no title, an unknown site, status, assignee or label, and every write on a worker that keeps none`.
+- A task is no note of a page. Its own kind, `fruitback.task`, is `not-found` for `parseNote`,
+  and its row has no address: `GET /feedback` never answers it, so no widget draws a pin of it; the
+  list of the extension leaves it out; and no tool of `/mcp` reads a page for it, or replies or sets
+  a status there. `get_note` reads it from the store of the worker, with the rights of the key.
+  test:`shows no pin: no read of a page and no list of the extension holds it`,
+  test:`is read by get_note of /mcp as a task, and left out of the notes that list_notes reads`.
+- On a worker that keeps no task (`FRUITBACK_TASKS=off`) the route is `403 tasks-off`, and a
+  suspended workspace writes nothing: the route is a write of the console, behind its one guard.
+
 ### The image of the console (FRU-222)
 
 The console is static files behind nginx, in an image of its own. **It holds no secret**: nothing
@@ -2880,7 +2903,8 @@ offers no OAuth.
 
 [docs/agents.md](docs/agents.md) is the guide for a team. An agent reads the notes of the sites of its
 agent key through `POST /mcp`, the Streamable
-HTTP transport of MCP. Three tools, all reads: `list_notes`, `get_note`, `notes_as_text`.
+HTTP transport of MCP. Its reads: `list_notes`, `get_note`, `notes_as_text`, and `task_choices`
+where the worker keeps tasks.
 
 - No valid key, no route. No key, a key of another shape, a revoked or expired key, a key whose
   member left or was suspended, and a key of a suspended workspace: `401` with
@@ -2909,9 +2933,10 @@ HTTP transport of MCP. Three tools, all reads: `list_notes`, `get_note`, `notes_
 - What a read costs a store: each page of the answer is one read of the page, through the read
   cache of `GET /feedback`. The rate limit per address applies.
 - A key writes only with the right `write`, and while its member may manage the sites:
-  `reply_to_note` and `set_note_status`. A key `read`, or a key whose member no longer has
+  `reply_to_note`, `set_note_status` and `update_task`. A key `read`, or a key whose member no longer has
   `manage-sites`, is not given them, and `tools/call` refuses them (`-32602`).
-  test:`gives a key read no write tool, and refuses both when it calls them`.
+  test:`gives a key read no write tool, and refuses both when it calls them`,
+  test:`gives a key read the fields of a task and the filters of the console, and no write of a task`.
 - A reply of an agent says that it is one, and never names the member who made the key: its
   first line is `**<name of the key>** via Fruitback · agent`, and a read gives it `by: 'agent'`. A
   person who types that line in a reply of the page does not pass for an agent: what a person typed is
@@ -2919,6 +2944,24 @@ HTTP transport of MCP. Three tools, all reads: `list_notes`, `get_note`, `notes_
   as for a verdict. test:`never reads a reply that a person typed as a reply of an agent`.
 - A status is set only on a note that the worker keeps; a note in a tracker answers
   `statuses-not-taken`.
+- `update_task` changes the status, the assignee, the priority, the due day and the labels
+  of a task the worker keeps, with the right of a role that manages the sites, as the console's
+  `POST …/notes/<note>/task`: the member of a key that writes has it. It reaches only a note the key
+  reads (its sites, `verifiedOnly`). The assignee is a member of the workspace and each label a label
+  of the workspace; another one is refused and nothing is written, the status included. A note in a
+  tracker answers `fields-not-taken` or `statuses-not-taken`, and nothing is written. Each change is
+  one write of the limit, and goes in the log of its key (`task`, and `status` for its status).
+  test:`changes the status and every field of a task, which the console reads, and logs both writes`,
+  test:`changes the task of somebody else with the right of a role that manages the sites`,
+  test:`refuses an update that is not one, and writes nothing of a refused one`,
+  test:`refuses the fields and the status of a note in a tracker`.
+- `task_choices` gives the labels of the workspace to every key, and its members who are not guests
+  to a key whose member reads the members, never to a key of a guest: an id and a name, or the
+  address of a member who gave no name, as the menu of the console shows them.
+  test:`lists the labels and the members a task can be given to, never a guest`.
+- On a worker that keeps no task (`FRUITBACK_TASKS=off`), no key is given `task_choices`,
+  `set_note_status` or `update_task`, and `tools/call` refuses them (`-32602`).
+  test:`gives no tool of a task on a worker that keeps none, and refuses each when called`.
 - Each key writes 30 times a minute at most, and each write is in the log of its key: the
   owner and the admins read it at `GET /console/workspaces/<id>/agent-keys/<key>/writes`, the
   newest 100. The log of a revoked key stays until its workspace goes.

@@ -291,6 +291,7 @@ describe('what an agent key reaches, read at each request (FRU-461)', () => {
       key: key.id,
       name: 'CI',
       workspace: id,
+      account: people.owner.id,
       role: 'owner',
       sites: [shop],
       write: true,

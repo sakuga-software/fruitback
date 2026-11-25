@@ -2,7 +2,8 @@ import { type DragEvent, type ReactNode, useEffect, useId, useRef, useState } fr
 import { type BoardColumn, type BoardNote, takesNotes } from '../board-columns';
 import { t } from '../i18n';
 import { statusName } from '../note-status';
-import { Problem, StatusDot } from '../ui';
+import { IconButton, Problem, StatusDot } from '../ui';
+import { NoteIcon } from '../note-icons';
 import { useLocale } from '../use-locale';
 import { STAGE_NAMES } from '../stages';
 
@@ -29,6 +30,7 @@ export function NotesBoard<Note extends BoardNote>({
   movable,
   move,
   reorder,
+  onAdd,
 }: {
   columns: readonly BoardColumn<Note>[];
   /** A read is on its way: the board stays as it is until its answer. */
@@ -46,6 +48,8 @@ export function NotesBoard<Note extends BoardNote>({
    * the board does not order its columns. Answers the sentence of a refusal, or `undefined`.
    */
   reorder?: (note: Note, before: Note | undefined, after: Note | undefined) => Promise<string | undefined>;
+  /** FRU-657: « New task » at the head of each column, in its status. Absent: no button. */
+  onAdd?: (column: BoardColumn<Note>) => void;
 }) {
   useLocale();
   const id = useId();
@@ -163,21 +167,32 @@ export function NotesBoard<Note extends BoardNote>({
               }}
               className="box-border flex w-[272px] flex-none flex-col rounded-frame border border-line bg-subtle p-[12px] data-[drop=true]:border-ink data-[drop=true]:bg-chip"
             >
-              <h2
-                id={heading}
-                className="mb-[10px] flex items-center gap-[8px] px-[4px] text-small leading-auto font-semibold"
-              >
-                <StatusDot
-                  status={column.stage}
-                  size={10}
-                  {...(column.status?.color === undefined ? {} : { color: column.status.color })}
-                />
-                <span className="min-w-0 flex-1 truncate">{name(column)}</span>
-                <span className="font-normal text-muted tabular-nums">
-                  <span className="sr-only">{t('Notes in this column:')} </span>
-                  {column.notes.length}
-                </span>
-              </h2>
+              <div className="mb-[10px] flex items-center gap-[4px]">
+                <h2
+                  id={heading}
+                  className="flex min-w-0 flex-1 items-center gap-[8px] px-[4px] text-small leading-auto font-semibold"
+                >
+                  <StatusDot
+                    status={column.stage}
+                    size={10}
+                    {...(column.status?.color === undefined ? {} : { color: column.status.color })}
+                  />
+                  <span className="min-w-0 flex-1 truncate">{name(column)}</span>
+                  <span className="font-normal text-muted tabular-nums">
+                    <span className="sr-only">{t('Notes in this column:')} </span>
+                    {column.notes.length}
+                  </span>
+                </h2>
+                {onAdd === undefined || (column.status !== undefined && !takesNotes(column)) ? null : (
+                  <IconButton
+                    size="small"
+                    label={t('New task in {column}', { column: name(column) })}
+                    onClick={() => onAdd(column)}
+                  >
+                    <NoteIcon name="add" />
+                  </IconButton>
+                )}
+              </div>
               {column.notes.length === 0 ? (
                 <p className="px-[4px] py-[8px] text-hint text-muted">{t('No note here.')}</p>
               ) : (

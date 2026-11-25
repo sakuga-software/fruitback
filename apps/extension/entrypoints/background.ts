@@ -45,6 +45,7 @@ import {
   setPanelOnClick,
 } from '../src/side-panel.ts';
 import { tabCommand } from '../src/tab-command.ts';
+import { promisedAlarms } from '../src/alarms.ts';
 import { WELCOME_PATH, opensWelcome } from '../src/welcome-install.ts';
 import { type ExternalAnswer, acceptedExternal, cloudConsole, createExternalConsole } from '../src/external-console.ts';
 import { browserFamily } from '../src/browser-family.ts';
@@ -145,6 +146,7 @@ export default defineBackground(() => {
    * Serialised and fully guarded for the same two reasons `sync` is: three event sources call it,
    * and every caller is fire-and-forget, so an error nobody logs here is logged nowhere.
    */
+  const alarms = promisedAlarms(browser.alarms);
   const sessions = createBrowserSessions();
   const refreshSessions = serialize(async (): Promise<void> => {
     try {
@@ -152,13 +154,13 @@ export default defineBackground(() => {
 
       const due = await sessions.dueAt();
       if (due === undefined) {
-        await browser.alarms.clear(SESSION_ALARM);
+        await alarms.clear(SESSION_ALARM);
 
         return;
       }
 
-      // Awaited: it answers a promise, so a rejection would escape the guard below. Raised in review.
-      await browser.alarms.create(SESSION_ALARM, { when: Math.max(due, Date.now() + MIN_ALARM_DELAY_MS) });
+      // Awaited: a rejection would escape the guard below. Raised in review.
+      await alarms.set(SESSION_ALARM, { when: Math.max(due, Date.now() + MIN_ALARM_DELAY_MS) });
     } catch (error) {
       console.error('[fruitback] could not refresh the extension session', error);
     }
@@ -200,7 +202,7 @@ export default defineBackground(() => {
     try {
       // Kept: how it ended is for the popup to say.
       const state = await pollConnect(connect, { keep: true });
-      if (state !== 'waiting' && state !== 'unavailable') await browser.alarms.clear(CONNECT_ALARM);
+      if (state !== 'waiting' && state !== 'unavailable') await alarms.clear(CONNECT_ALARM);
     } catch (error) {
       console.error('[fruitback] could not claim the sign-in', error);
     }
@@ -472,8 +474,8 @@ export default defineBackground(() => {
     if (change.url !== undefined || change.status === 'complete') void badge(tab);
   });
   browser.windows.onFocusChanged.addListener(badgeActiveTab);
-  void browser.alarms
-    .create(BADGE_ALARM, { periodInMinutes: BADGE_REFRESH_MINUTES })
+  void alarms
+    .set(BADGE_ALARM, { periodInMinutes: BADGE_REFRESH_MINUTES })
     .catch((error: unknown) => console.error('[fruitback] could not set the alarm of the badge', error));
   // The local area only, by its own event: the listener of every area below stays the one that reads
   // the sessions (`session-previews.test.ts`).
@@ -529,8 +531,8 @@ export default defineBackground(() => {
       const waiting = changes[PENDING_CONNECT_KEY].newValue !== undefined;
       void (
         waiting
-          ? browser.alarms.create(CONNECT_ALARM, { delayInMinutes: MIN_ALARM_DELAY_MS / 60_000, periodInMinutes: 1 })
-          : browser.alarms.clear(CONNECT_ALARM)
+          ? alarms.set(CONNECT_ALARM, { delayInMinutes: MIN_ALARM_DELAY_MS / 60_000, periodInMinutes: 1 })
+          : alarms.clear(CONNECT_ALARM)
       ).catch((error: unknown) => console.error('[fruitback] could not set the alarm of the sign-in', error));
     }
     if (area !== 'local') return;
@@ -585,8 +587,8 @@ export default defineBackground(() => {
     );
   });
   // Created at each start of the service worker: `create` replaces the alarm of the same name.
-  void browser.alarms
-    .create(PREVIEWS_ALARM, { periodInMinutes: PREVIEWS_REFRESH_MS / 60_000 })
+  void alarms
+    .set(PREVIEWS_ALARM, { periodInMinutes: PREVIEWS_REFRESH_MS / 60_000 })
     .catch((error: unknown) => console.error('[fruitback] could not set the alarm of the previews', error));
 
   void sync();

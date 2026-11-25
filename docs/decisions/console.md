@@ -1287,3 +1287,47 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
 - **Said to a screen reader**: a line of status, always in the page, says the count of the selection
   and the end of a change (« 3 notes changed. »). A selection emptied with the focus in the bar gives
   the focus to the list. `e2e/console-task-bulk.spec.ts` holds it, at 1440 px and at 390 px in French.
+
+## A task written by hand (FRU-657)
+
+### The rules, in short
+
+- **« New task » is at the head of the list, beside the view, and at the head of each column of the
+  board**, as a « + » named « New task in <column> ». The key « C » opens it too, as in Linear: alone,
+  out of a field, and when no dialog, menu or list is open. The button writes the key beside its
+  words, so the key is found.
+- **A dialog of the kit** (`Dialog`, `md`): the title first and required, a text of several lines
+  (`TextBox`, the text area of HeroUI), the site when the workspace has more than one, then the
+  status, the assignee, the priority and the day, and the labels. The site is the one of the filter,
+  or the only one; a column gives its status. No board in `design/`: the dialog is made of controls of
+  the kit, in the order of the panel of a task.
+- **What is typed stays until the task is written.** A refusal is said in the dialog over the
+  buttons, and Escape or « Cancel » keep the draft for the next « New task ». Once written, the list
+  is read again and the task opens in its panel (`?task=<id>`).
+- **A task has no page**: its row and its card draw no link to a page, its menu no « Copy the link to
+  the note », and its panel says « Written by hand: no page and no pin. » in place of the page and the
+  element.
+
+## Copy a task (FRU-658)
+
+### The rules, in short
+
+- **Three copies, for a note of a page and a task written by hand alike**: the link of the note in the
+  console (`/w/<workspace>/notes?task=<id>`, which opens its panel), its ID (`FB-12`, or the
+  reference of its tracker), and the note as Markdown for an agent, in the format of `notes_as_text`
+  (`feedbackText`, `tasksText`). The Markdown reads the note whole (`GET …/notes/<note>`): the list
+  keeps 64 characters of it.
+- **From the menu of a task** (« Copy the link », « Copy the ID », « Copy as Markdown »; « Copy the
+  link to its page » for a note of a page), **from its panel** (three buttons under its reference),
+  and **from the keyboard**: Cmd or Ctrl, Shift and C for the link, Cmd or Ctrl, Shift and the full
+  stop for the ID, on the row or the card that holds the focus, else on the task of the panel. The
+  keys are read by their place (`code`), and never in a field.
+- **No ID for a guest**: the list gives a guest no reference, so the menu offers none, and the panel
+  offers one only when its read names a reference.
+- **A status line says what was copied**, for a person and a screen reader (`role="status"`), and
+  says it when the browser refused the clipboard. The Markdown is written as a `ClipboardItem` of the
+  read still on its way, so that Safari, which wants the write in the gesture, takes it.
+- **From a selection** (FRU-656): the menu « Copy » of its bar, and the copy items of the menu of a
+  selected task, copy every selected note in the order of the screen, those this person may not
+  change too: the links and the IDs one per line, the Markdown grouped by page, then the tasks
+  written by hand.

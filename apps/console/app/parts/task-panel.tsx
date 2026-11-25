@@ -1,4 +1,4 @@
-import { type NoteIssue, anchorSelectorPath } from '@fruitback/shared';
+import { type NoteIssue, type TaskIssue, anchorSelectorPath } from '@fruitback/shared';
 import { useContext, useEffect, useState } from 'react';
 import { call } from '../api';
 import { ago } from '../ago';
@@ -11,6 +11,7 @@ import { ReadProblem } from '../read-problem';
 import { useLocale } from '../use-locale';
 import { type IndexedNote } from './notes-model';
 import { TaskMenuContext } from './task-menu';
+import { siteOfId } from '../note-id';
 
 const NONE = 'none';
 const stageName = (stage: Stage) => t(STAGE_NAMES[stage]);
@@ -36,7 +37,7 @@ export function TaskPanel({
   useLocale();
   const seam = useContext(TaskMenuContext);
   // Each answer names the note it is of: a panel opened on another note shows no answer of the one before.
-  const [answer, setAnswer] = useState<{ of: string; value: NoteIssue | 'failed' | 'gone' } | undefined>();
+  const [answer, setAnswer] = useState<{ of: string; value: NoteIssue | TaskIssue | 'failed' | 'gone' } | undefined>();
   const [problem, setProblem] = useState<string | undefined>();
   // « Try again » asks again: the read follows this count, as it follows the note.
   const [attempt, setAttempt] = useState(0);
@@ -46,11 +47,14 @@ export function TaskPanel({
     let current = true;
     setAnswer(undefined);
     setProblem(undefined);
-    void call<{ note: NoteIssue }>('GET', `${base}/notes/${encodeURIComponent(id)}`).then((got) => {
-      if (!current) return;
-      if (got.ok) setAnswer({ of: id, value: got.data.note });
-      else setAnswer({ of: id, value: got.status === 404 ? 'gone' : 'failed' });
-    });
+    // FRU-657: a task written by hand reads as `{ task }`, a note of a page as `{ note }`.
+    void call<{ note: NoteIssue } | { task: TaskIssue }>('GET', `${base}/notes/${encodeURIComponent(id)}`).then(
+      (got) => {
+        if (!current) return;
+        if (got.ok) setAnswer({ of: id, value: 'task' in got.data ? got.data.task : got.data.note });
+        else setAnswer({ of: id, value: got.status === 404 ? 'gone' : 'failed' });
+      },
+    );
 
     return () => {
       current = false;
@@ -58,8 +62,21 @@ export function TaskPanel({
   }, [id, base, attempt]);
 
   const read = answer !== undefined && answer.of === id ? answer.value : 'loading';
-  const issue = typeof read === 'object' ? read : undefined;
-  const title = issue?.note.text.split('\n')[0] ?? listed?.excerpt ?? t('Note');
+  const written = typeof read === 'object' && 'task' in read ? read : undefined;
+  const issue = typeof read === 'object' && 'note' in read ? read : undefined;
+  const replies = (written ?? issue)?.comments;
+  const title = written?.task.title ?? issue?.note.text.split('\n')[0] ?? listed?.excerpt ?? t('Note');
+  // FRU-658: what « Copy » names. The reference of the list, else the one the read gives, when it is a
+  // reference (`FB-12`) and not the id a guest reads in its place.
+  const reference = listed?.ref ?? (written ?? issue)?.identifier;
+  const copied =
+    id === undefined
+      ? undefined
+      : {
+          id,
+          site: listed?.site ?? { id: siteOfId(id) },
+          ...(reference !== undefined && /^[A-Z][A-Z0-9]*-\d+$/u.test(reference) ? { ref: reference } : {}),
+        };
 
   return (
     <Drawer
@@ -68,10 +85,27 @@ export function TaskPanel({
       title={title}
       closeLabel={t('Close')}
       head={
-        issue === undefined ? null : (
-          <p className="text-hint text-muted tabular-nums" data-task-reference="">
-            {issue.identifier}
-          </p>
+        (written ?? issue) === undefined ? null : (
+          <div className="flex flex-col gap-[8px]">
+            <p className="text-hint text-muted tabular-nums" data-task-reference="">
+              {(written ?? issue)?.identifier}
+            </p>
+            {seam?.copy === undefined || copied === undefined ? null : (
+              <div className="flex flex-wrap gap-[8px]" data-task-copy="">
+                <Button tone="outline" size="small" onClick={() => seam.copy?.link([copied])}>
+                  {t('Copy the link')}
+                </Button>
+                {copied.ref === undefined ? null : (
+                  <Button tone="outline" size="small" onClick={() => seam.copy?.identifier([copied])}>
+                    {t('Copy the ID')}
+                  </Button>
+                )}
+                <Button tone="outline" size="small" onClick={() => seam.copy?.markdown([copied])}>
+                  {t('Copy as Markdown')}
+                </Button>
+              </div>
+            )}
+          </div>
         )
       }
     >
@@ -85,6 +119,23 @@ export function TaskPanel({
           onRetry={() => setAttempt((count) => count + 1)}
         />
       ) : null}
+      {written === undefined ? null : (
+        <>
+          {written.task.text === undefined ? (
+            <p className="text-body text-muted" data-task-text="">
+              {t('No text.')}
+            </p>
+          ) : (
+            <p className="text-body text-ink whitespace-pre-wrap [overflow-wrap:anywhere]" data-task-text="">
+              {written.task.text}
+            </p>
+          )}
+          {listed === undefined || seam === undefined ? null : <TaskFieldsForm note={listed} onProblem={setProblem} />}
+          {problem === undefined ? null : <Problem>{t(problem)}</Problem>}
+          <p className="text-small text-muted">{t('Written by hand: no page and no pin.')}</p>
+          <Replies comments={replies} />
+        </>
+      )}
       {issue === undefined ? null : (
         <>
           <p className="text-body text-ink whitespace-pre-wrap [overflow-wrap:anywhere]" data-task-text="">
@@ -130,28 +181,37 @@ export function TaskPanel({
               ]}
             />
           </section>
-          <section className="flex flex-col gap-[12px]" data-task-replies="">
-            <h3 className="text-small font-semibold">
-              {t('Replies')} <span className="font-normal text-muted">{issue.comments?.length ?? 0}</span>
-            </h3>
-            {(issue.comments ?? []).length === 0 ? (
-              <p className="text-small text-muted">{t('No reply yet.')}</p>
-            ) : (
-              <ul className="flex flex-col gap-[12px]">
-                {(issue.comments ?? []).map((comment) => (
-                  <li key={comment.id} className="flex flex-col gap-[2px]">
-                    <span className="text-hint text-muted">
-                      {comment.author ?? t('Somebody of the workspace')} · {ago(comment.createdAt)}
-                    </span>
-                    <span className="text-small whitespace-pre-wrap [overflow-wrap:anywhere]">{comment.body}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
+          <Replies comments={replies} />
         </>
       )}
     </Drawer>
+  );
+}
+
+/** The replies of a note or a task, oldest first. */
+function Replies({ comments }: { comments: NoteIssue['comments'] }) {
+  useLocale();
+
+  return (
+    <section className="flex flex-col gap-[12px]" data-task-replies="">
+      <h3 className="text-small font-semibold">
+        {t('Replies')} <span className="font-normal text-muted">{comments?.length ?? 0}</span>
+      </h3>
+      {(comments ?? []).length === 0 ? (
+        <p className="text-small text-muted">{t('No reply yet.')}</p>
+      ) : (
+        <ul className="flex flex-col gap-[12px]">
+          {(comments ?? []).map((comment) => (
+            <li key={comment.id} className="flex flex-col gap-[2px]">
+              <span className="text-hint text-muted">
+                {comment.author ?? t('Somebody of the workspace')} · {ago(comment.createdAt)}
+              </span>
+              <span className="text-small whitespace-pre-wrap [overflow-wrap:anywhere]">{comment.body}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 

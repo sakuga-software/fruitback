@@ -14,7 +14,8 @@
     "src/markdown-description.ts",
     "src/note-tabs.ts",
     "src/note.ts",
-    "src/status-paint.ts"
+    "src/status-paint.ts",
+    "src/task.ts"
   ],
   "inPlace": true,
   "coverageAnalysis": "perTest",
