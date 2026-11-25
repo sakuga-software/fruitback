@@ -193,6 +193,9 @@ describe('a change of language', () => {
   });
 });
 
+/** A setter whose argument holds `name: t(` before its call ends: a sentence translated in an object. */
+const IN_AN_OBJECT = /\bset[A-Z]\w*\((?:[^;()]|\([^;()]*\))*?\b\w+:\s*t\(/g;
+
 describe('a sentence kept in the state of a screen', () => {
   it('is kept in English and translated where it is shown, so it follows a change of language', () => {
     const translatedTooEarly: string[] = [];
@@ -201,9 +204,17 @@ describe('a sentence kept in the state of a screen', () => {
       for (const match of source.matchAll(/\b(?:set[A-Z]\w*|useState(?:<[^>]*>)?)\(\s*(?:\(\) => )?t\(/g)) {
         translatedTooEarly.push(`${name}: ${match[0]}`);
       }
+      // `setStuck({ problem: t(…) })` freezes them too, inside an object (FRU-691).
+      for (const match of source.matchAll(IN_AN_OBJECT)) translatedTooEarly.push(`${name}: ${match[0]}`);
     }
 
     assert.deepEqual(translatedTooEarly, []);
+    // The control: a sentence translated in an object handed to a setter is found, and one kept in
+    // English with its values is not.
+    const planted =
+      'setStuck(taken ? { row: id, said: COPIED } : { row: invitation.id, problem: t(NOT_COPIED, { link }) });';
+    assert.equal([...planted.matchAll(IN_AN_OBJECT)].length, 1);
+    assert.equal([...'setStuck({ row: id, problem: NOT_COPIED, values: { link } });'.matchAll(IN_AN_OBJECT)].length, 0);
   });
 });
 

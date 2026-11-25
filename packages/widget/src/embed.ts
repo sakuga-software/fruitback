@@ -642,6 +642,8 @@ export function init(given: FruitbackOptions): Fruitback {
   const statusFor = (issue: NoteIssue): NoteStatus | undefined =>
     isDraft(issue) ? undefined : statusOf(issue, readStatuses);
 
+  /** The notes a visitor known by their browser deleted (FRU-702), whose pin goes at the next read. */
+  const deleted = new Set<string>();
   const overlay: Overlay = createOverlay({
     document,
     translator,
@@ -662,6 +664,12 @@ export function init(given: FruitbackOptions): Fruitback {
       sidebar.mark();
       const open = overlay.openId();
       if (open !== undefined) tellNotes({ kind: 'open', id: open });
+      // FRU-702: the thread of a note its visitor deleted closed: a read takes its pin away, as the
+      // worker no longer gives it. Not before, so the thread can say it went.
+      if (open === undefined && deleted.size > 0) {
+        deleted.clear();
+        void read();
+      }
     },
     ...(options.replies === false
       ? {}
@@ -697,6 +705,8 @@ export function init(given: FruitbackOptions): Fruitback {
       send: async (issue: NoteIssue) => {
         const answer = await sendWithdraw(options, view, issue);
         if (typeof answer === 'string') return answer;
+        // FRU-702: a visitor known by their browser deleted it: its pin goes when its thread closes.
+        if (options.visitor !== undefined && !readerIdentity.identified) deleted.add(issue.note.id);
         sidebar.refresh();
         tellNotes({ kind: 'list' });
 

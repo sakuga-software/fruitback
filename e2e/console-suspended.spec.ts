@@ -184,12 +184,12 @@ test('an invitation that the organization plugin refuses while suspended says so
   });
   await open(page, 'members');
   await page.locator('main header').getByRole('button', { name: 'Invite', exact: true }).click();
-  const form = page.getByRole('form', { name: 'Invite someone' });
-  await form.getByRole('textbox', { name: 'Email' }).fill('dana@acme.dev');
-  await form.getByRole('button', { name: 'Invite', exact: true }).click();
+  const form = page.getByRole('form', { name: 'Invite people' });
+  await form.getByRole('textbox', { name: 'Emails' }).fill('dana@acme.dev');
+  await form.getByRole('button', { name: 'Send 1 invite', exact: true }).click();
   // The sentence is under the fields of the dialog (FRU-565), where the form says its refusals.
   await expect(form.getByRole('alert').filter({ hasText: REFUSED })).toHaveText(REFUSED);
-  await expect(form.getByRole('textbox', { name: 'Email' })).toHaveValue('dana@acme.dev');
+  await expect(form.getByRole('textbox', { name: 'Emails' })).toHaveValue('dana@acme.dev');
   // The banner is behind the dialog: it is read once the dialog is closed.
   await page.keyboard.press('Escape');
   await expect(banner(page)).toHaveText(`This workspace has been suspended since ${DAY}.${LEAD}`);

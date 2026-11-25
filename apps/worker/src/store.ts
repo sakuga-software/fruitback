@@ -337,7 +337,12 @@ export type NewMove = {
  * A withdrawal of a note by its author (FRU-605). `note` and `identifier`: the note as the route read
  * it, which an address names in `note.withdrawn`.
  */
-export type NewWithdrawal = { author: Extract<ReplyAuthor, { kind: 'member' }>; note: Note; identifier: string };
+export type NewWithdrawal = {
+  /** A member, or a visitor known by the key of their browser (FRU-702). */
+  author: Extract<ReplyAuthor, { kind: 'member' | 'visitor' }>;
+  note: Note;
+  identifier: string;
+};
 
 /**
  * The stages where the author edits a note (FRU-605): open, before the team marks it done. A note

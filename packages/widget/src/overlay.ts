@@ -7,6 +7,7 @@ import {
   type NoteStatus,
   NOTE_STAGES,
   anchorSelectorPath,
+  type TrackerName,
   trackerOf,
 } from '@fruitback/shared';
 import { type Direction, type Translator, createTranslator, languageOf } from './messages.ts';
@@ -1084,6 +1085,8 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
       ? undefined
       : {
           seam: options.withdraw,
+          // FRU-702: a visitor known by their browser deletes the note, and is told where it goes.
+          ...(options.byBrowser?.() === true ? { deletes: trackerPart(issue.url) } : {}),
           asking: withdrawAsking,
           inFlight: withdrawsInFlight,
           said: withdrawSaid,
@@ -1107,7 +1110,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     return {
       said: moreSaidOf,
       // FRU-701: the words of the mock-up for a visitor known by their browser.
-      ...(options.byBrowser?.() === true ? { editText: true as const } : {}),
+      ...(options.byBrowser?.() === true ? { editText: true as const, deleteText: true as const } : {}),
       // FRU-701: a visitor known by their browser edits the text, and moves nothing: the route of a
       // move takes a session.
       ...(move === undefined || issue.editable !== true || options.byBrowser?.() === true
@@ -1774,13 +1777,25 @@ function youChip(document: Document, issue: NoteIssue, t: Translator, byBrowser:
 }
 
 /**
- * « You can edit it until a member picks it up. » (FRU-701): under a note of a visitor known by their
- * browser, while the worker offers them an edit.
+ * « You can edit or delete it until a member picks it up. » (FRU-701, FRU-702): under a note of a
+ * visitor known by their browser, with what the worker offers them now.
  */
 function youMay(document: Document, issue: NoteIssue, t: Translator, byBrowser: boolean): HTMLElement[] {
-  if (!byBrowser || issue.mine !== true || issue.editable !== true || DRAFTS.has(issue)) return [];
+  if (!byBrowser || issue.mine !== true || DRAFTS.has(issue)) return [];
+  const edits = issue.editable === true;
+  const deletes = issue.withdrawable === true;
+  if (!edits && !deletes) return [];
+  let words: 'thread.youMayEditOrDelete' | 'thread.youMayEdit' | 'thread.youMayDelete' = 'thread.youMayDelete';
+  if (edits) words = deletes ? 'thread.youMayEditOrDelete' : 'thread.youMayEdit';
 
-  return [element(document, 'p', 'fruitback-thread-you-may', t.text('thread.youMayEdit'))];
+  return [element(document, 'p', 'fruitback-thread-you-may', t.text(words))];
+}
+
+/** The tracker of an issue by its address, for the words of a deletion (FRU-702), or nothing. */
+function trackerPart(url: string | undefined): { tracker?: TrackerName } {
+  const tracker = trackerOf(url);
+
+  return tracker === undefined ? {} : { tracker };
 }
 
 /** What the edits of the notes share, by note, as `ReplyFooter` (FRU-475). */
