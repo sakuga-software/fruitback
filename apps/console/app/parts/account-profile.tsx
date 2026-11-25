@@ -60,7 +60,7 @@ export function ProfileSection({ me, primary }: { me: Me; primary: string }) {
       <div className="flex items-center gap-[16px] px-[16px] pt-[4px] pb-[18px]">
         <span
           aria-hidden="true"
-          className="kit-profile-avatar inline-flex size-[56px] flex-none items-center justify-center rounded-full bg-avatar text-[26px] leading-none font-semibold text-on-ink"
+          className="kit-profile-avatar inline-flex size-[56px] flex-none items-center justify-center rounded-pill bg-avatar text-[26px] leading-none font-semibold text-on-ink"
         >
           {shown.trim().charAt(0).toUpperCase() || '?'}
         </span>

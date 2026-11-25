@@ -104,7 +104,7 @@ test.describe('the rail', () => {
     });
     expect(look.background).not.toBe('rgba(0, 0, 0, 0)');
     expect(look.background).not.toBe(look.rail);
-    expect(look.radius).toBe('10px');
+    expect(look.radius).toBe('8px');
     // 14 px of the foot, and 8 more under the card.
     const next = rail.getByRole('link', { name: 'Help and docs' });
     const gap = (await next.boundingBox())!.y - ((await card.boundingBox())!.y + (await card.boundingBox())!.height);

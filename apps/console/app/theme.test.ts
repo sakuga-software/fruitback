@@ -17,12 +17,16 @@ const theme = readFileSync(new URL('theme.css', APP), 'utf8');
 const app = readFileSync(new URL('app.css', APP), 'utf8');
 const shared = readFileSync(new URL('packages/shared/tailwind/theme.css', ROOT), 'utf8');
 
-/** Every source of the console that draws something: the screens, their parts, the kit. */
+/**
+ * Every source of the console that draws a control: the screens, their parts, the kit. Not
+ * `preview-scene.tsx`: it is a picture of an example shop with the widget on it, drawn with the
+ * shop's corners and the widget's, which a setting of the console does not change.
+ */
 function drawn(): Map<string, string> {
   const names = [
     ...readdirSync(new URL('routes/', APP)).map((name) => `routes/${name}`),
     ...readdirSync(new URL('parts/', APP)).map((name) => `parts/${name}`),
-    ...readdirSync(APP).filter((name) => name.endsWith('.tsx')),
+    ...readdirSync(APP).filter((name) => name.endsWith('.tsx') && name !== 'preview-scene.tsx'),
   ];
 
   return new Map(names.map((name) => [name, readFileSync(new URL(name, APP), 'utf8')]));
@@ -113,7 +117,8 @@ describe('the slate theme of the console (FRU-683)', () => {
 
   it('keeps every text 4.5:1 on the page, the sidebar, the hover and the selection (WCAG AA)', () => {
     const grounds = ['--color-page', '--color-sidebar', '--color-subtle', '--color-hover', '--color-selected'];
-    const texts = ['--color-ink', '--color-ink-soft', '--muted', '--color-accent-strong'];
+    // A red word is accent-strong: the accent is 3.82:1 on the selection, and fills a button.
+    const texts = ['--color-ink', '--color-ink-soft', '--muted', '--color-accent-strong', '--color-done'];
     const ratios = texts.flatMap((text) =>
       grounds.map((ground) => [`${text} on ${ground}`, contrast(token(text), token(ground))] as const),
     );
@@ -145,7 +150,7 @@ describe('the slate theme of the console (FRU-683)', () => {
     }
   });
 
-  it('writes no radius in a screen or the kit: each names control, card, modal, inner, drop or full', () => {
+  it('writes no radius in a screen or the kit: each names a token of theme.css', () => {
     const found = (sources: Map<string, string>) =>
       [...sources].flatMap(([name, source]) =>
         (source.match(WRITTEN_RADIUS) ?? []).map((value) => `${name}: ${value}`),
@@ -175,14 +180,13 @@ describe('the slate theme of the console (FRU-683)', () => {
     assert.ok(drawn().size > 12, `only ${drawn().size} files were read`);
   });
 
-  it('writes no radius in px in app.css: a rule names a token', () => {
-    const written = [...app.matchAll(/border-radius:\s*([^;]+);/g)].map((match) => match[1]);
+  it('gives a modal and an alert of HeroUI their radius, where HeroUI reads a control', () => {
+    const kit = readFileSync(new URL('ui.tsx', APP), 'utf8');
 
-    assert.deepEqual(
-      written.filter((value) => !/^var\(--radius-[\w-]+\)$|^50%$/.test(value ?? '')),
-      [],
-    );
-    assert.ok(written.length >= 3, `only ${written.length} radii were read`);
+    assert.match(kit, /<Modal\.Dialog className=\{`kit-dialog rounded-modal /);
+    assert.match(kit, /<Alert\s[^>]*className="[^"]*\brounded-card\b/);
+    // app.css writes no radius: a component carries its classes (FRU-678).
+    assert.doesNotMatch(app.replace(/\/\*[\s\S]*?\*\//g, ''), /border-radius/);
   });
 
   it('gives a control one of three heights: 24, 28 or 32 px', () => {

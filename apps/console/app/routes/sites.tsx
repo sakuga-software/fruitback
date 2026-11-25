@@ -411,12 +411,12 @@ function TypedSite({ url }: { url: string }) {
         <SiteIcon
           key={origin}
           origin={origin}
-          className="add-site-dialog__icon"
-          letterClassName="add-site-dialog__letter"
+          className="add-site-dialog__icon size-[24px] flex-none rounded-inner object-contain"
+          letterClassName="add-site-dialog__letter grid place-items-center border border-line bg-surface text-ink text-[13px] font-bold"
         />
         <span className="min-w-0 [overflow-wrap:anywhere]">{host}</span>
       </p>
-      <SitePreview key={origin} origin={origin} />
+      <SitePreview key={origin} origin={origin} short />
     </section>
   );
 }
