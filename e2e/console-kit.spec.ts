@@ -215,7 +215,7 @@ const LINE = 'rgb(227, 232, 239)';
 const CONTROL = 'rgb(123, 135, 151)';
 const ACCENT = 'rgb(221, 44, 39)';
 const ACCENT_STRONG = 'rgb(185, 28, 28)';
-const DONE = 'rgb(21, 128, 61)';
+const DONE = 'rgb(22, 101, 52)';
 /** The five statuses of the widget, chosen by Mathieu (FRU-334), and the edge of their drop. */
 const STATUS_COLOURS = [
   'rgb(190, 194, 200)',
@@ -766,7 +766,7 @@ test('a filter is a pressed button, with the three looks of the mockup (FRU-232)
   });
   await expect(chip(/^New/)).toHaveAttribute('aria-pressed', 'false');
   await expectStyle(chip(/^New/), 'chip', { ...shape, backgroundColor: WHITE, borderTopColor: CONTROL, color: INK });
-  await expectStyle(chip(/^Not delivered/), 'chip, alert', { ...shape, backgroundColor: WHITE, color: ACCENT });
+  await expectStyle(chip(/^Not delivered/), 'chip, alert', { ...shape, backgroundColor: WHITE, color: ACCENT_STRONG });
 
   await chip(/^New/).hover();
   await expectStyle(chip(/^New/), 'chip, under the pointer', { borderTopColor: INK, backgroundColor: WHITE });

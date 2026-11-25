@@ -37,7 +37,6 @@ const INK = '#0f172a';
 const INK_SOFT = '#334155';
 const MUTED = '#5b6779';
 const DONE = '#166534';
-const ACCENT = '#dd2c27';
 const ACCENT_STRONG = '#b91c1c';
 
 /**
@@ -612,7 +611,7 @@ test('Workspaces: the table, the panel of a row, and the values of the mockup', 
   expect.soft([barBox?.width, barBox?.height]).toEqual([96, 8]);
   expect.soft(await painted(bars.first(), 'backgroundColor')).toEqual(rgb(CHIP));
   const alert = rows(page).nth(1).getByText('2 notes not delivered');
-  expect.soft(await painted(alert, 'color')).toEqual(rgb(ACCENT));
+  expect.soft(await painted(alert, 'color')).toEqual(rgb(ACCENT_STRONG));
   expect.soft(await styles(alert, ['font-size', 'font-weight'])).toEqual({ 'font-size': '12px', 'font-weight': '600' });
   await expectLayout(page, 'Search workspaces', 'Workspaces of the instance', '680px');
   await expect(panel(page)).toHaveCount(0);
@@ -2164,7 +2163,7 @@ test('Workspaces: a suspended workspace says so in its row, in its panel and on 
 
   const marker = nameCell(page, 'Lumen').locator('span').last();
   await expect(marker).toHaveText(`Suspended since ${SUSPENDED_DAY}`);
-  expect.soft(await painted(marker, 'color')).toEqual(rgb(ACCENT));
+  expect.soft(await painted(marker, 'color')).toEqual(rgb(ACCENT_STRONG));
   expect(contrast(await painted(marker, 'color'), rgb('#ffffff'))).toBeGreaterThanOrEqual(4.5);
   // An active workspace says nothing of a suspension.
   await expect(nameCell(page, 'Acme support')).not.toContainText('Suspended');

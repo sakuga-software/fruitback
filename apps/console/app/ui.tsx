@@ -132,12 +132,14 @@ const BUTTON_WIDE = {
 
 /**
  * The classes of a tone. « primary » and « outline » are the two buttons of the mockup. « quiet » and
- * « danger » are of before it, and stay as HeroUI draws them until their screens are drawn again.
+ * « danger » are of before it, and stay as HeroUI draws them until their screens are drawn again,
+ * with the radius and the 13 px of the console (FRU-683): Inter at HeroUI's 14 px ran 11 px out of
+ * a column of 320 px.
  */
 function toneClasses(tone: Tone, size: ControlSize, wide: boolean): string {
   if (tone === 'primary' || tone === 'outline') return buttonClasses(tone, size, wide);
 
-  return 'rounded-control font-semibold';
+  return 'rounded-control font-semibold text-(length:--text-small) leading-auto';
 }
 
 /** Where a control goes when it is a link: a screen of the console, or an address outside it. */
@@ -1429,13 +1431,14 @@ type FilterChipProps = {
 
 /**
  * A filter that is on or off: a button with `aria-pressed`. Its count is said in a lighter weight. A
- * filter of a problem is the accent on white, 4.70:1. A filter that is on is ink.
+ * filter of a problem is the strong red: 6.47:1 on white, 6.13:1 on the subtle tint, where the
+ * accent is 4.46:1 (FRU-683). A filter that is on is ink.
  */
 export function FilterChip({ pressed, onChange, count, alert = false, children }: FilterChipProps) {
   const chipColours = pressed
     ? 'border-ink bg-ink text-surface'
-    : `border-field-border bg-surface ${alert ? 'text-accent' : 'text-ink'} [&:hover]:border-ink data-[hovered=true]:border-ink`;
-  let countColour = alert ? 'text-accent' : 'text-muted';
+    : `border-field-border bg-surface ${alert ? 'text-accent-strong' : 'text-ink'} [&:hover]:border-ink data-[hovered=true]:border-ink`;
+  let countColour = alert ? 'text-accent-strong' : 'text-muted';
   if (pressed) countColour = 'text-rail-text';
 
   return (
