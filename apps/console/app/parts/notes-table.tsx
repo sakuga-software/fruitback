@@ -174,6 +174,7 @@ export function NoteRow({
                 address={note.url}
                 delivery={note.delivery?.state}
                 sending={sending}
+                refused={refused}
                 onSend={manages ? () => void send() : undefined}
               />
             )}

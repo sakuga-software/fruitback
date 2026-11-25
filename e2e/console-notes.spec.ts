@@ -794,6 +794,14 @@ test('« Send again » waits, then the row loses its alert; a refusal says so on
   worker.retry = 'refused';
   await again.click();
   await expect(late.getByRole('alert')).toHaveText('Fruitback hit an error. Try again in a moment.');
+  // FRU-685: only a row that says a refusal is taller than its line, and the reason is under the
+  // pointer on « Failed » too (raised in review).
+  expect((await late.boundingBox())!.height).toBeGreaterThan(36);
+  await expect(late.getByText('Failed', { exact: true })).toHaveAttribute(
+    'title',
+    'Not delivered yet Fruitback hit an error. Try again in a moment.',
+  );
+  expect((await row(page, 'The headline runs').boundingBox())!.height).toBe(36);
   await expect(late.getByText('Not delivered yet')).toBeVisible();
 
   worker.retry = 'ok';
