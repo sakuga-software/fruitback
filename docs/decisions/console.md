@@ -432,7 +432,7 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   - **The counts at the right of the entries are props of the bar** (`counts`, `failing`): a red dot
     and the number on « Connectors » when sends failed. No read gives them yet: counting the notes of
     every site on every screen was taken away for its cost (FRU-497), and a summary of the worker is
-    a ticket of its own. With no count the entry shows none. `/kit/frame`, a page of the development
+    FRU-711. With no count the entry shows none. `/kit/frame`, a page of the development
     server, mounts the bar with the counts of the mockup.
   - **The fixed foot**: « What's new » (the releases on GitHub, with a dot until this browser opened
     it with this version of the console, `whats-new.ts`), the extension (« Install the extension
