@@ -3,6 +3,9 @@ packages:
   - packages/*
 
 allowBuilds:
+  # The CLI of Tailwind in apps/site watches files with it only under --watch, from the prebuilt
+  # package of each platform: its own script, a build from source, is never needed (FRU-681).
+  '@parcel/watcher': false
   esbuild: true
   nx: true
   workerd: true
