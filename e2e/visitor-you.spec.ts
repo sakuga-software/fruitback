@@ -99,9 +99,9 @@ test('a visitor edits the text of their open note, and another browser reads the
 
   await mount(page, path);
   const thread = await openThread(page);
-  await expect(thread.getByText('You can edit it until a member picks it up.')).toBeVisible();
+  await expect(thread.getByText('You can edit or delete it until a member picks it up.')).toBeVisible();
   await thread.getByRole('button', { name: 'More actions on your note' }).click();
-  await expect(thread.getByRole('menuitem')).toHaveText(['Edit the text', 'Copy link to the note']);
+  await expect(thread.getByRole('menuitem')).toHaveText(['Edit the text', 'Copy link to the note', 'Delete the note']);
   await thread.getByRole('menuitem', { name: 'Edit the text' }).click();
   const field = thread.getByRole('textbox', { name: 'Your note' });
   await field.fill('Une note modifiée par ce navigateur');
@@ -116,6 +116,49 @@ test('a visitor edits the text of their open note, and another browser reads the
   await expect(theirs.locator('.fruitback-thread-note')).toHaveText('Une note modifiée par ce navigateur');
   await expect(theirs.getByRole('button', { name: 'More actions on your note' })).toHaveCount(0);
   await expect(theirs.locator('.fruitback-thread-edit')).toHaveCount(0);
+
+  await mine.close();
+  await other.close();
+});
+
+test('a visitor deletes their open note after a confirmation, and its pin leaves the page for everyone (FRU-702)', async ({
+  browser,
+  baseURL,
+}) => {
+  const mine = await browser.newContext({ baseURL });
+  const other = await browser.newContext({ baseURL });
+  const page = await mine.newPage();
+  const path = `/?widget=off&case=${caseOf('visitor-delete')}`;
+
+  await mount(page, path);
+  await page.getByRole('button', { name: /Leave a note/ }).click();
+  await page.locator('[data-testid="card-latte"] .add').click();
+  await page.getByPlaceholder('What should change?').fill(NOTE);
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
+  // The control: another browser reads the pin before the deletion.
+  const elsewhere = await other.newPage();
+  await mount(elsewhere, path);
+  await expect(elsewhere.locator('[data-fruitback-pin]')).toHaveCount(1);
+
+  await mount(page, path);
+  const thread = await openThread(page);
+  await expect(thread.getByText('You can edit or delete it until a member picks it up.')).toBeVisible();
+  await thread.getByRole('button', { name: 'More actions on your note' }).click();
+  await thread.getByRole('menuitem', { name: 'Delete the note' }).click();
+  await expect(thread.getByText('Delete your note?')).toBeVisible();
+  await thread.getByRole('button', { name: 'Delete', exact: true }).click();
+  await expect(thread.getByText('Deleted. The pin goes away when you close this note.')).toBeVisible();
+  await thread.getByRole('button', { name: 'Close the note' }).click();
+  await expect(page.locator('[data-fruitback-pin]')).toHaveCount(0);
+
+  // The read of the other browser answered, with no note: an absence after a read, not before it.
+  const answered = elsewhere.waitForResponse(
+    (response) => response.url().startsWith(`${WORKER_ORIGIN}/feedback?`) && response.request().method() === 'GET',
+  );
+  await mount(elsewhere, path);
+  expect(((await (await answered).json()) as { issues: unknown[] }).issues).toEqual([]);
+  await expect(elsewhere.locator('[data-fruitback-pin]')).toHaveCount(0);
 
   await mine.close();
   await other.close();

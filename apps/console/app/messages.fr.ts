@@ -396,8 +396,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Member: 'Membre',
   Guest: 'Invité',
   Members: 'Membres',
-  'Who sees and leaves notes, and who changes the workspace.':
-    'Qui voit et laisse des notes, et qui modifie l’espace de travail.',
   'Invite someone': 'Inviter quelqu’un',
   Email: 'E-mail',
   Invite: 'Inviter',
@@ -411,23 +409,17 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Copy the link': 'Copier le lien',
   'The browser refused the copy. Select the link above and copy it by hand.':
     'Le navigateur a refusé la copie. Sélectionnez le lien ci-dessus et copiez-le à la main.',
-  '{name} (you)': '{name} (vous)',
   'Shared ones': 'Partagés',
   'Remove {name}': 'Retirer {name}',
   '{name} leaves the workspace, and their extension stops reading its sites. Their notes stay.':
     '{name} quitte l’espace de travail, et son extension cesse de lire ses sites. Ses notes restent.',
   'Invitation sent': 'Invitation envoyée',
-  'Until {date}': 'Jusqu’au {date}',
   'Invitation kept': 'Invitation gardée',
-  'Sent {date}': 'Envoyée le {date}',
-  'Pending invitations': 'Invitations en attente',
   'Search members': 'Chercher dans les membres',
   'No invitation matches this search.': 'Aucune invitation ne correspond à cette recherche.',
   'Pages of members': 'Pages de membres',
   'Pages of invitations': 'Pages d’invitations',
-  'Invited on': 'Invitée le',
   Joined: 'Arrivée',
-  Resend: 'Renvoyer',
   'Cancel the invitation of {email}': 'Annuler l’invitation de {email}',
   'The message already sent no longer lets {email} join.':
     'Le message déjà envoyé ne permet plus à {email} de rejoindre l’espace de travail.',
@@ -451,6 +443,46 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Only an owner removes an owner.': 'Seul un propriétaire retire un propriétaire.',
   'Only an owner or an admin of the workspace changes its members.':
     'Seul un propriétaire ou un administrateur de l’espace de travail change ses membres.',
+  // FRU-691: the dense table, the tab « Invitations » and the dialog « Invite people ».
+  '(you)': '(vous)',
+  'Members and invitations': 'Membres et invitations',
+  'Last active': 'Dernière activité',
+  'Role of {name}': 'Rôle de {name}',
+  '{role}, role of {name}': '{role}, rôle de {name}',
+  'Actions for {name}': 'Actions pour {name}',
+  'Actions for {email}': 'Actions pour {email}',
+  'Remove from workspace': 'Retirer de l’espace de travail',
+  'Make {name} an admin': 'Faire de {name} un administrateur',
+  'Make {name} a member': 'Faire de {name} un membre',
+  '{name} reads every site of the workspace, not only the sites shared with them.':
+    '{name} lit tous les sites de l’espace de travail, et plus seulement les sites partagés avec cette personne.',
+  'Only an owner changes the role of an owner.': 'Seul un propriétaire change le rôle d’un propriétaire.',
+  'The last owner of a workspace stays its owner.': 'Le dernier propriétaire d’un espace de travail le reste.',
+  'The role was not changed. Try again.': 'Le rôle n’a pas été changé. Réessayez.',
+  Message: 'Message',
+  Expires: 'Expire le',
+  'Resend invitation': 'Renvoyer l’invitation',
+  'Copy invite link': 'Copier le lien d’invitation',
+  'Cancel invitation': 'Annuler l’invitation',
+  'The link is copied. Send it to them.': 'Le lien est copié. Envoyez-le à la personne.',
+  'No invitation waits.': 'Aucune invitation n’attend.',
+  'Invite people': 'Inviter des personnes',
+  Emails: 'E-mails',
+  'name@company.com, another@company.com': 'nom@entreprise.com, autre@entreprise.com',
+  'Not an address, so not sent: {typed}': 'Pas une adresse, donc pas envoyé : {typed}',
+  'Sites, members, connectors': 'Sites, membres, connecteurs',
+  'Sees and leaves notes': 'Voit et laisse des notes',
+  'Only the site you pick': 'Seulement le site choisi',
+  'Send invites': 'Envoyer les invitations',
+  'Send 1 invite': 'Envoyer 1 invitation',
+  'Send {count} invites': 'Envoyer {count} invitations',
+  'Invitations sent to {emails}. You can also send them this link:':
+    'Invitations envoyées à {emails}. Vous pouvez aussi leur envoyer ce lien :',
+  'Invitations kept for {emails}. Send them this link:': 'Invitations gardées pour {emails}. Envoyez-leur ce lien :',
+  'Invitations kept for {emails}, but no message was sent: too many invitation messages went in a short time. Send them this link:':
+    'Invitations gardées pour {emails}, mais aucun message n’est parti : trop de messages d’invitation sont partis en peu de temps. Envoyez-leur ce lien :',
+  'They open it, sign in with the address that was invited, and join. The link alone opens nothing.':
+    'La personne l’ouvre, se connecte avec l’adresse invitée, et rejoint l’espace de travail. Le lien seul n’ouvre rien.',
 
   Invitations: 'Invitations',
   'This invitation was cancelled, or it ended. Ask for another one.':
@@ -1220,7 +1252,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Open it in this browser: this page comes back to the word to check. The link works once, for fifteen minutes.':
     'Ouvrez-le dans ce navigateur : cette page revient au mot à vérifier. Le lien fonctionne une fois, pendant quinze minutes.',
   // Members, « Last seen » (FRU-247, FRU-249).
-  'Last seen': 'Vu pour la dernière fois',
   Today: 'Aujourd’hui',
   'Not seen yet': 'Pas encore vu',
   // My account, FRU-249.
@@ -1283,7 +1314,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'The browser refused the copy. The link is {link}: copy it by hand.':
     'Le navigateur a refusé la copie. Le lien est {link} : copiez-le à la main.',
   // The guest of one site (FRU-250).
-  'Guest, one site': 'Invité, un site',
   'This site is no longer one of the workspace. Choose another one.':
     'Ce site ne fait plus partie de l’espace de travail. Choisissez-en un autre.',
   'Review {site} with {workspace}': 'Relisez {site} avec {workspace}',

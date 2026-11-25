@@ -233,7 +233,7 @@ function NoteTitle({ note, children }: { note: IndexedNote; children: string }) 
 }
 
 /** The tile of a site: the first letter of its host, as the icon of a site with none (FRU-354). */
-function SiteTile({ host }: { host: string }) {
+export function SiteTile({ host }: { host: string }) {
   return (
     <span
       aria-hidden="true"

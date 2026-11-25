@@ -125,6 +125,50 @@ describe('a visitor known by the key of their browser, through init (FRU-700)', 
     assert.equal(root.querySelector('.fruitback-thread-edit-sent'), null);
   });
 
+  it('deletes a note of a visitor after « Delete your note? », and reads the page again when its thread closes (FRU-702)', async () => {
+    const page = mounted();
+    page.view.localStorage.setItem(`${VISITOR_KEY_PREFIX}site_acme`, 'K'.repeat(43));
+    const note = aNote({ mine: true, editable: true, withdrawable: true, url: 'https://linear.app/acme/issue/ACM-7' });
+    const calls: string[] = [];
+    mock.method(globalThis, 'fetch', async (url: string, init?: RequestInit) => {
+      calls.push(`${init?.method ?? 'GET'} ${new URL(url).pathname}`);
+      if (init?.method === 'POST') return new Response(JSON.stringify({ stage: 'closed' }), { status: 200 });
+
+      return new Response(readOf(calls.length > 2 ? aNote({ id: 'issue_8' }) : note), { status: 200 });
+    });
+    const root = await threadOf(page, {});
+
+    const items = [...root.querySelectorAll<HTMLButtonElement>('.fruitback-thread-more-item')];
+    assert.deepEqual(
+      items.map((item) => item.textContent),
+      ['Edit the text', 'Copy link to the note', 'Delete the note'],
+    );
+    assert.equal(items.at(-1)?.dataset.fruitbackDanger, '');
+    assert.equal(
+      root.querySelector('.fruitback-thread-you-may')?.textContent,
+      'You can edit or delete it until a member picks it up.',
+    );
+    items.at(-1)?.click();
+    assert.equal(root.querySelector('.fruitback-thread-withdraw-ask')?.textContent, 'Delete your note?');
+    assert.equal(
+      root.querySelector('.fruitback-thread-withdraw-detail')?.textContent,
+      'The pin goes away for everyone. The issue in Linear is closed as withdrawn.',
+    );
+    (root.querySelector('.fruitback-thread-withdraw-confirm') as HTMLButtonElement).click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(
+      root.querySelector('.fruitback-thread-withdraw-said')?.textContent,
+      'Deleted. The pin goes away when you close this note.',
+    );
+    const before = calls.length;
+    (root.querySelector('.fruitback-thread-close') as HTMLButtonElement).click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.deepEqual(calls.slice(before), ['GET /feedback']);
+    assert.ok(calls.includes('POST /feedback/issue_7/withdraw'), JSON.stringify(calls));
+  });
+
   it('makes no key, and sends none, for a mount whose host names the reporter or carries the calls', async () => {
     const page = mounted();
     const sent: TransportRequest[] = [];

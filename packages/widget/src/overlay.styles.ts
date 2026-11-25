@@ -457,6 +457,9 @@ export const STYLES = `
 }
 .fruitback-thread-more-item:hover, .fruitback-thread-more-item:focus-visible { background: var(--fruitback-color-surface-sunken); }
 .fruitback-thread-more-item:focus-visible { outline: 2px solid var(--fruitback-color-accent); outline-offset: -2px; }
+/* FRU-702: « Delete the note » of a visitor, in the red of the accent: it takes the pin away. */
+.fruitback-thread-more-item[data-fruitback-danger] { color: var(--fruitback-color-accent-strong); }
+.fruitback-thread-withdraw-detail { margin: 0; font-size: 12px; color: var(--fruitback-color-text-muted); }
 .fruitback-thread-more-said { margin: -6px 0 0; font-size: 12px; color: var(--fruitback-color-text-muted); }
 .fruitback-thread-more-link {
   box-sizing: border-box;

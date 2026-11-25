@@ -274,6 +274,8 @@ export function postgresNoteIndex(url: string, schema: string): NoteIndex {
     page: true,
     deliveryOf: true,
     authors: true,
+    remove: true,
+    removed: true,
     toCheck: true,
     pageOfNote: true,
     taskOf: true,
