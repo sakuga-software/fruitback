@@ -86,7 +86,7 @@ test.describe('an invited reviewer (FRU-104)', () => {
     await owner.goto(CONSOLE);
     await expect(owner).toHaveURL(/\/w\/ws_[0-9a-f]{20}\/sites$/);
     const workspace = /\/w\/(ws_[0-9a-f]{20})\//.exec(owner.url())?.[1] as string;
-    await expect(owner.getByRole('heading', { name: 'staging.acme.dev', exact: true })).toBeVisible();
+    await expect(owner.getByRole('link', { name: 'staging.acme.dev', exact: true })).toBeVisible();
 
     await owner.goto(`${CONSOLE}/w/${workspace}/members`);
     await owner.getByRole('button', { name: 'Invite', exact: true }).click();
@@ -131,7 +131,7 @@ test.describe('an invited reviewer (FRU-104)', () => {
     await expect(paul.getByRole('link', { name: 'Open https://staging.acme.dev' })).toHaveAttribute('href', SITE);
     await paul.getByRole('link', { name: 'Go to the console' }).click();
     await expect(paul).toHaveURL(`${CONSOLE}/w/${workspace}/sites`);
-    await expect(paul.getByRole('heading', { name: 'staging.acme.dev', exact: true })).toBeVisible();
+    await expect(paul.getByRole('link', { name: 'staging.acme.dev', exact: true })).toBeVisible();
 
     // The owner sees Paul as a member, and the invitation is gone.
     await owner.reload();

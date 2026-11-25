@@ -627,8 +627,11 @@ type CutLinkProps = {
   to: string;
   /** The words of the link. They are in the page whole, so a screen reader says them all. */
   children: string;
-  /** The heading that holds the link. The trigger of the tooltip is a `div`, so it goes around the heading. */
-  heading?: 'h2' | 'h3';
+  /**
+   * The heading that holds the link. The trigger of the tooltip is a `div`, so it goes around the heading.
+   * `span` in a cell of a table, whose head names the row (the Sites table, FRU-688).
+   */
+  heading?: 'h2' | 'h3' | 'span';
   /** The classes of the heading: the size and the weight of the words. */
   className?: string;
   /** The classes of the link: its colour, its hover and its focus ring. */
