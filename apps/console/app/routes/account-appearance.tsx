@@ -14,6 +14,7 @@ import {
   type PresetId,
   RADII,
   ROW_HEIGHTS,
+  STORAGE_KEY,
   type Radius,
   TINTS,
   type Tint,
@@ -84,6 +85,15 @@ export default function AccountAppearance() {
     media.addEventListener('change', changed);
 
     return () => media.removeEventListener('change', changed);
+  }, []);
+  // A choice made in another tab is the one this page builds on next (raised in review).
+  useEffect(() => {
+    const other = (event: StorageEvent) => {
+      if (event.key === STORAGE_KEY || event.key === null) setAppearance(keptAppearance(storage()));
+    };
+    window.addEventListener('storage', other);
+
+    return () => window.removeEventListener('storage', other);
   }, []);
 
   const choose = (next: Appearance) => {

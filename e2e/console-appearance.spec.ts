@@ -134,6 +134,28 @@ test('the page shows the kept choice from its first render, so a press builds on
   expect(kept.appearance).toMatchObject({ mode: 'dark', dark: 'graphite', accent: 'teal', density: 'compact' });
 });
 
+test('a choice made in another tab shows here, and the next press builds on it (raised in review)', async ({
+  page,
+  context,
+}) => {
+  await stubWorker(page, { workspaces: [ACME] });
+  await page.goto(APPEARANCE);
+  const other = await context.newPage();
+  await stubWorker(other, { workspaces: [ACME] });
+  await other.goto(APPEARANCE);
+  await choose(other, 'Theme', 'Midnight');
+  // This tab follows: the page, and the choice it draws.
+  await expect.poll(() => painted(page.locator('body'), 'backgroundColor')).toEqual(rgb('#111a2e'));
+  await expect(page.getByRole('radiogroup', { name: 'Theme' }).getByRole('radio', { name: 'Midnight' })).toBeChecked();
+  // A press here keeps the theme chosen there.
+  await choose(page, 'Accent', 'Teal');
+  const kept = await page.evaluate(
+    () => JSON.parse(localStorage.getItem('fruitback.appearance') ?? 'null') as { appearance: Record<string, unknown> },
+  );
+  expect(kept.appearance).toMatchObject({ mode: 'dark', dark: 'midnight', accent: 'teal' });
+  await other.close();
+});
+
 test('an ink sidebar on a light theme writes its words light, and keeps its ring', async ({ page }) => {
   await stubWorker(page, { workspaces: [ACME] });
   await page.goto(APPEARANCE);
