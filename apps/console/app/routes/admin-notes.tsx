@@ -59,7 +59,8 @@ export default function AdminNotes() {
   // A read again keeps the rows on the screen until its answer comes: only the first read says « Loading… ».
   const [shown, setShown] = useState<Fetched<InstanceNotes>>('loading');
   const [reading, setReading] = useState(false);
-  const [before, setBefore] = useState<string[]>([]);
+  // The pages before the address, each by its cursor and the number of its first note (FRU-710).
+  const [before, setBefore] = useState<{ cursor: string; from: number }[]>([]);
   // The workspaces that the answers named. A read of `/console/admin/workspaces` would leave a trace
   // in every workspace of the instance, so the filter lists only the workspaces that this screen saw.
   const [workspaces, setWorkspaces] = useState<ReadonlyMap<string, string>>(new Map());
@@ -73,7 +74,7 @@ export default function AdminNotes() {
   function forward(answer: InstanceNotes) {
     if (answer.next === undefined) return;
     paging.current = true;
-    setBefore((pages) => [...pages, cursor]);
+    setBefore((pages) => [...pages, { cursor, from }]);
     const next = new URLSearchParams(params);
     next.set('cursor', answer.next);
     next.set('from', String(from + answer.notes.length));
@@ -147,12 +148,13 @@ export default function AdminNotes() {
     if (ahead.back()) return;
     paging.current = true;
     const next = new URLSearchParams(params);
-    const back = before.at(-1) ?? '';
+    const { cursor: back, from: at } = before.at(-1) ?? { cursor: '', from: 1 };
     ahead.to(back);
     setBefore((pages) => pages.slice(0, -1));
     if (back === '') next.delete('cursor');
     else next.set('cursor', back);
-    const at = from - answer.notes.length;
+    // FRU-710: the number the page was shown with. Never `from` less the notes of this page: the last
+    // page holds fewer than the others.
     if (back === '' || at <= 1) next.delete('from');
     else next.set('from', String(at));
     setParams(next);
