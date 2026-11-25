@@ -106,7 +106,9 @@ test('the numbers go to the pages around, by the cursors the screen knows', asyn
   // Back to the fourth page by its number: the cursor it was read with, and the counts kept (FRU-502).
   await number(page, 4).click();
   await expect(summary(page)).toHaveText('76 to 100 of 263');
-  expect(asked.at(-1)).toEqual({ limit: '25', cursor: 'all:75', counts: 'none' });
+  // FRU-719: « 76 to 100 » is also the address of page 4 over the answer of page 5, before page 4 is
+  // read. The read is waited for, not taken from the screen.
+  await expect.poll(() => asked.at(-1)).toEqual({ limit: '25', cursor: 'all:75', counts: 'none' });
   await expect.poll(() => offered(page)).toEqual(['1', '2', '3', '[4]', '5', '…']);
 
   // The first page: no cursor in the address.
