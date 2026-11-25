@@ -768,6 +768,9 @@ test('j and k walk the notes, Enter opens the one with the focus, and a field ke
   await expect(page.getByRole('dialog')).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page).not.toHaveURL(/task=/);
+  // Closed, the panel gives the focus back to the note it showed.
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(title(1)).toBeFocused();
 
   // In the search, j is a letter.
   await search(page).focus();
