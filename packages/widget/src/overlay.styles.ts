@@ -589,6 +589,8 @@ export const STYLES = `
 @media (pointer: coarse) {
   .fruitback-thread-edit-field { font-size: 16px; }
   .fruitback-thread-edit-save, .fruitback-thread-edit, .fruitback-thread-edit-cancel { min-height: 44px; }
+  /* « Edit » is one short word (FRU-701: a visitor's note offers it in public mode too): 44 px wide to press. */
+  .fruitback-thread-edit { min-width: 44px; text-align: start; }
 }
 /* The foot where a reader replies (FRU-257): the field grows with the text, the button stays at its foot. */
 .fruitback-thread-reply-form {
