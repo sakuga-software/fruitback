@@ -1,19 +1,8 @@
 import { SiteAgent } from '../parts/site-agent';
-import { type FormEvent, type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router';
 import { STAGES } from '../stages';
-import {
-  type Connector,
-  type Destination,
-  type Site,
-  type SiteChoice,
-  type Visibility,
-  type Workspace,
-  type Writers,
-  call,
-  readSite,
-  siteChoices,
-} from '../api';
+import { type Connector, type Destination, type Site, type SiteChoice, call, readSite, siteChoices } from '../api';
 import { Confirmation } from '../confirm';
 import { Domains } from '../domains';
 import { msg, t } from '../i18n';
@@ -21,9 +10,10 @@ import { InstallOptions } from '../install-options';
 import { type Fetched, type Listed, listedOf } from '../listed';
 import { problemOf } from '../problems';
 import { siteLabel, siteName } from '../site-address';
-import { Button, Disclosure, KeyValue, LinkButton, LoadFailed, Pick, Problem, Toggle } from '../ui';
+import { Button, Disclosure, KeyValue, LinkButton, LoadFailed, Problem } from '../ui';
 import { useLocale } from '../use-locale';
-import { WritersPick } from '../writers-pick';
+import { accessOf } from '../access-policy';
+import { SiteTabs } from '../parts/site-tabs';
 import { SitePlaces } from '../parts/site-places';
 import { notesOf } from './sites';
 import { PageHead, useWorkspace } from './workspace';
@@ -33,18 +23,6 @@ const REMOVAL_PROBLEMS: Readonly<Record<string, string>> = {
   forbidden: msg('Only an owner or an admin of the workspace removes a site.'),
 };
 const SITE_NOT_REMOVED = msg('This site is still here. Try again.');
-const ACCESS_PROBLEMS: Readonly<Record<string, string>> = {
-  forbidden: msg('Only an owner or an admin of the workspace changes who sees the notes.'),
-};
-const ACCESS_NOT_CHANGED = msg('Who sees the notes did not change. Try again.');
-
-/** Who sees the notes of a site, who leaves them, and whether a visitor is offered an e-mail (FRU-604). */
-type Access = { visibility: Visibility; writers?: Writers; notifyDone?: boolean };
-
-/** Whether anybody may leave a note on a site set so: the one case where the e-mail of FRU-604 counts. */
-function anyoneWrites(visibility: Visibility, writers: Writers): boolean {
-  return visibility === 'everyone' || writers === 'anyone';
-}
 
 /** The sections folded under « Advanced » (FRU-538): the page shows first what most people come for. */
 const ADVANCED: readonly string[] = ['statuses', 'agent', 'previews'];
@@ -161,20 +139,6 @@ export default function SitePage() {
     );
   }
 
-  /** Who sees the notes and who writes, as the worker answered them: no read again. */
-  function changed(answered: Access) {
-    setRead((current) =>
-      typeof current === 'string'
-        ? current
-        : {
-            ...current,
-            visibility: answered.visibility,
-            ...(answered.writers === undefined ? {} : { writers: answered.writers }),
-            ...(answered.notifyDone === undefined ? {} : { notifyDone: answered.notifyDone }),
-          },
-    );
-  }
-
   const [problem, setProblem] = useState<string | undefined>();
   const removeButton = useRef<HTMLDivElement>(null);
   async function remove() {
@@ -234,6 +198,8 @@ export default function SitePage() {
     );
 
   const host = name ?? '';
+  // Who reads, who writes, and the e-mail of FRU-604, as the tab « Access » reads them (FRU-703).
+  const access = accessOf(site);
 
   return (
     <>
@@ -244,6 +210,7 @@ export default function SitePage() {
         lead={t('Its address, where its notes go, and how to install Fruitback on it.')}
         action={<NotesLink workspace={workspace.id} site={site} />}
       />
+      <SiteTabs workspace={workspace.id} site={site.id} current="overview" />
 
       <div className="flex max-w-[760px] flex-col gap-[40px]">
         <Section id="about" title={t('Site')}>
@@ -259,15 +226,11 @@ export default function SitePage() {
               },
               {
                 term: t('Who can leave a note'),
-                // A site that everyone reads takes a note from anybody (FRU-330); a worker of before
-                // sends no `writers`, and its sites are « Members only ».
-                value:
-                  site.visibility === 'everyone' || site.writers === 'anyone'
-                    ? t('Anyone on the page')
-                    : t('Members only'),
+                // FRU-703: `writers` decides on every site; a worker of before sends none (`accessOf`).
+                value: access.writers === 'anyone' ? t('Anyone on the page') : t('Members only'),
               },
               // FRU-604: said only where anybody may leave a note, as the switch is shown only there.
-              ...(anyoneWrites(site.visibility, site.writers ?? 'anyone')
+              ...(access.writers === 'anyone'
                 ? [
                     {
                       term: t('E-mail when a note is done'),
@@ -282,7 +245,17 @@ export default function SitePage() {
               },
             ]}
           />
-          {manages ? <AccessForm workspace={workspace} site={site} base={base} onChanged={changed} /> : null}
+          {manages ? (
+            <div>
+              <Button
+                tone="outline"
+                to={`/w/${workspace.id}/sites/${encodeURIComponent(site.id)}/access`}
+                label={t('Change the access of {site}', { site: host })}
+              >
+                {t('Change the access')}
+              </Button>
+            </div>
+          ) : null}
         </Section>
 
         <Section id="install" title={t('Install')} label={t('Install on {site}', { site: host })}>
@@ -438,161 +411,5 @@ function Section({ id, title, label, children }: { id: string; title: string; la
       </h2>
       {children}
     </section>
-  );
-}
-
-/**
- * Who sees the notes of a site and who leaves them (FRU-504), changed on its page as the popup of the
- * extension changes them (FRU-453).
- *
- * `POST …/sites` with the address of a site that exists changes that site: the same id, the same
- * script, the places it had (`addSite` of the store). So no route of the worker is new, and the
- * answer is checked to be the same site.
- */
-function AccessForm({
-  workspace,
-  site,
-  base,
-  onChanged,
-}: {
-  workspace: Workspace;
-  site: Site;
-  base: string;
-  onChanged: (answered: Access) => void;
-}) {
-  useLocale();
-  const [open, setOpen] = useState(false);
-  const [visibility, setVisibility] = useState<Visibility>(site.visibility);
-  // A site of a worker of before has no `writers`: it takes a note from anybody (FRU-330).
-  const [writers, setWriters] = useState<Writers>(site.writers ?? 'anyone');
-  const [notifyDone, setNotifyDone] = useState(site.notifyDone === true);
-  const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<string | undefined>();
-  const [saved, setSaved] = useState(false);
-  const change = useRef<HTMLDivElement>(null);
-  // The way back gives focus to « Change », which the form replaced. The focus is given after the
-  // commit that draws « Change » again, not in a frame (FRU-631). After a save, the form closes after
-  // an `await`: React commits in a task of its scheduler, and a frame can run before it. « Change »
-  // was then not in the page yet, and the focus fell to the body when the form went.
-  const [focusChange, setFocusChange] = useState(false);
-  const back = () => setFocusChange(true);
-  useLayoutEffect(() => {
-    if (!focusChange) return;
-    setFocusChange(false);
-    change.current?.querySelector('button')?.focus();
-  }, [focusChange]);
-
-  function start() {
-    setVisibility(site.visibility);
-    setWriters(site.writers ?? 'anyone');
-    setNotifyDone(site.notifyDone === true);
-    setProblem(undefined);
-    setSaved(false);
-    setOpen(true);
-  }
-  function close() {
-    setOpen(false);
-    back();
-  }
-
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    setProblem(undefined);
-    // FRU-604: the switch is sent where it is shown, where anybody may leave a note. Hidden, it is not
-    // sent: the worker keeps it, and it does nothing there.
-    const shown = anyoneWrites(visibility, writers);
-    // Nothing changed: nothing is asked of the worker.
-    if (
-      visibility === site.visibility &&
-      (visibility !== 'members' || writers === (site.writers ?? 'anyone')) &&
-      (!shown || notifyDone === (site.notifyDone === true))
-    ) {
-      return close();
-    }
-    setBusy(true);
-    const answer = await call<Site>('POST', `${base}/sites`, {
-      url: site.origin,
-      visibility,
-      ...(visibility === 'members' ? { writers } : {}),
-      ...(shown ? { notifyDone } : {}),
-    });
-    setBusy(false);
-    // Another id would be another site: this one was not changed.
-    if (!answer.ok || answer.data?.id !== site.id) {
-      return setProblem(answer.ok ? ACCESS_NOT_CHANGED : problemOf(answer, ACCESS_PROBLEMS, ACCESS_NOT_CHANGED));
-    }
-    onChanged({
-      visibility: answer.data.visibility,
-      ...(answer.data.writers === undefined ? {} : { writers: answer.data.writers }),
-      ...(answer.data.notifyDone === undefined ? {} : { notifyDone: answer.data.notifyDone }),
-    });
-    setSaved(true);
-    close();
-  }
-
-  if (!open)
-    return (
-      <div ref={change} className="flex flex-wrap items-center gap-x-[16px] gap-y-[8px]">
-        <Button
-          tone="outline"
-          label={t('Change who sees the notes of {site}', { site: siteName(site.origin) })}
-          onClick={start}
-        >
-          {t('Change')}
-        </Button>
-        {saved ? (
-          <p role="status" className="text-small text-muted">
-            {t('Saved. The script on the site stays the same.')}
-          </p>
-        ) : null}
-      </div>
-    );
-
-  return (
-    <form
-      noValidate
-      aria-label={t('Who sees the notes of {site}', { site: siteName(site.origin) })}
-      onSubmit={(event) => void submit(event)}
-      className="flex flex-col gap-[20px]"
-    >
-      <Pick
-        label={t('Who sees the notes?')}
-        value={visibility}
-        onChange={setVisibility}
-        options={[
-          {
-            value: 'members',
-            label: t('Members of {workspace}', { workspace: workspace.name }),
-            detail: t("Visitors of the site see nothing. Right for staging and for a client's site."),
-          },
-          {
-            value: 'everyone',
-            label: t('Everyone who visits'),
-            detail: t('A public way to report a problem on a live site.'),
-          },
-        ]}
-      />
-      <WritersPick visibility={visibility} value={writers} onChange={setWriters} />
-      {/* FRU-604: only where anybody may leave a note; with notes of members only it does nothing. */}
-      {anyoneWrites(visibility, writers) ? (
-        <Toggle
-          label={t('Offer visitors an e-mail when their note is done')}
-          hint={t(
-            'After a note, a visitor may give an address. Fruitback writes to it once, when the note is done, then deletes it.',
-          )}
-          value={notifyDone}
-          onChange={setNotifyDone}
-        />
-      ) : null}
-      {problem === undefined ? null : <Problem>{t(problem)}</Problem>}
-      <div className="flex flex-wrap items-center gap-x-[20px] gap-y-[10px]">
-        <Button type="submit" disabled={busy}>
-          {t('Save')}
-        </Button>
-        <LinkButton space="loose" onClick={close}>
-          {t('Cancel')}
-        </LinkButton>
-      </div>
-    </form>
   );
 }

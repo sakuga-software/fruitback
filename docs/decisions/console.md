@@ -55,8 +55,8 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   (FRU-162): `listed.ts` gives a read `loading`, `failed` or the list, only a list shows the empty
   state or a count, and a failed read says so with « Try again ».
   **« Who can leave a note? » is asked for a site that its members read, and only there** (FRU-330):
-  `writers-pick.tsx`, in the form of the Sites screen and of the page of a site. Not in the setup any
-  more (FRU-610, below). « Members only » is chosen
+  `writers-pick.tsx`, in the form of the Sites screen. Not in the setup any more (FRU-610, below). The
+  page of a site sets it in its tab « Access » since FRU-703, below. « Members only » is chosen
   for a new site, and its detail says that private mode carries no session. The form sends `writers`
   only with `visibility: 'members'`. A row and the summary of the setup say the exception, « Notes
   from anyone on the page », and nothing for « Members only » or for a worker of before.
@@ -1331,3 +1331,34 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   selected task, copy every selected note in the order of the screen, those this person may not
   change too: the links and the IDs one per line, the Markdown grouped by page, then the tasks
   written by hand.
+
+## The tab « Access » of a site (FRU-703)
+
+### The rules, in short
+
+- **The page of a site has two tabs, « Overview » and « Access »** (`parts/site-tabs.tsx`, the
+  `SubNav` of the kit), until FRU-689 gives the page its own tabs. « Overview » is what the page
+  showed; its form « Change » of who sees the notes went to the tab, and a link « Change the access »
+  leads there for an owner or an admin. The route is `…/sites/<site>/access`.
+- **The tab follows the mockup « Onglet Access »** of FRU-699: « Public access » (four levels),
+  « What a visitor can do » (a table of seven actions in two columns), « How a visitor is
+  recognised », and « What a visitor sees » on the right from 1100 px. **Left out**: the card
+  « Safeguards » (FRU-704). **Drawn and not chosen**: the level « Collaborate » (FRU-707), and the
+  e-mail and the signed token among the ways to recognise a visitor (FRU-705, FRU-706).
+- **A list is a setting of the worker, and only that.** `access-policy.ts` holds the four values the
+  worker stores: who reads (`visibility`, the list « See notes » of others), who writes (`writers`,
+  « Leave a note »), and what a visitor does to a note of their own (`visitorEdit`, `visitorDelete`,
+  Never / While open / Allowed). Every other cell is written in words, from what the worker does:
+  « Reply » is allowed where everyone reads and anybody writes, as `replyAuthorFor` decides;
+  « See the tracker and assignee » follows « See notes », as the read of a visitor carries the issue
+  (the mockup draws « Hidden »: that needs the worker first).
+- **A level fills the table, and a table that is no level says « Custom »** and checks no card.
+  Where only members write, the rights of a visitor are not read: no list, « Never », and the level
+  is « Closed » or « Read only ».
+- **« Save » sends the whole access in one `POST …/sites`** of the address of the site, as the form
+  of the page did (FRU-504): `writers` always, and the rights and the e-mail only where anybody
+  writes. Nothing changed: nothing is asked. A refusal says its cause and keeps what was chosen.
+- **The e-mail of a note done (FRU-604) is the card « After a note »**, which the mockup does not
+  draw, shown where anybody writes.
+- **A role that does not change a site reads the tab with every control disabled**, and no « Save ».
+- `e2e/console-site-access.spec.ts` holds it; `access-policy.test.ts` holds the table.

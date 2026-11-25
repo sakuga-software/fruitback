@@ -147,7 +147,7 @@ test('an owner reads everything of a site on its page, under the crumbs « Sites
   await expect(page.getByRole('region', { name: 'Preview deploys' })).toBeHidden();
   await expect(page.getByRole('link', { name: 'Edit the statuses' })).toBeHidden();
 
-  // Its address, who sees its notes and who writes them. « Change » opens them (FRU-504).
+  // Its address, who sees its notes and who writes them. The tab « Access » changes them (FRU-703).
   const about = page.getByRole('region', { name: 'Site', exact: true });
   await expect(about.locator('dd')).toHaveText([
     'https://staging.acme.dev (opens in a new tab)',
@@ -164,7 +164,12 @@ test('an owner reads everything of a site on its page, under the crumbs « Sites
   await expect(address).toHaveAttribute('rel', 'noreferrer');
   await expect(about.getByRole('textbox')).toHaveCount(0);
   await expect(about.getByRole('radio')).toHaveCount(0);
-  await expect(about.getByRole('button', { name: 'Change who sees the notes of staging.acme.dev' })).toBeVisible();
+  await expect(about.getByRole('link', { name: 'Change the access of staging.acme.dev' })).toHaveAttribute(
+    'href',
+    '/w/w1/sites/s1/access',
+  );
+  const tabs = page.getByRole('navigation', { name: 'Sections of the site' });
+  await expect(tabs.getByRole('link', { name: 'Overview' })).toHaveAttribute('aria-current', 'page');
   await expect(about).not.toContainText('are set when the site is added');
 
   await expect(page.getByRole('region', { name: 'Install on staging.acme.dev' })).toBeVisible();
@@ -228,136 +233,13 @@ test('the address of the site opens the site in a new tab, and the console stays
   await expect(page).toHaveURL(`${CONSOLE}/w/w1/sites/s1`);
 });
 
-test('an owner changes who sees the notes and who writes on the page, and the site keeps its id (FRU-504)', async ({
-  page,
-}) => {
-  const worker = await workerWith(page);
-  await page.goto(`${CONSOLE}/w/w1/sites/s1`);
-  const about = page.getByRole('region', { name: 'Site', exact: true });
-  // The first read of the list has landed: the page is drawn.
-  await expect(about.locator('dd').first()).toHaveText('https://staging.acme.dev (opens in a new tab)');
-  const reads = worker.reads;
-
-  // Cancel changes nothing, asks nothing, and gives the focus back to « Change ».
-  await about.getByRole('button', { name: 'Change who sees the notes of staging.acme.dev' }).click();
-  const form = about.getByRole('form', { name: 'Who sees the notes of staging.acme.dev' });
-  await expect(form.getByRole('radio', { name: /Members of Acme/ })).toBeChecked();
-  await expect(form.getByRole('radio', { name: /Anyone on the page/ })).toBeChecked();
-  await expectNoViolation(page, 'the form of who sees the notes');
-  await form.getByRole('button', { name: 'Cancel' }).click();
-  await expect(about.getByRole('button', { name: 'Change who sees the notes of staging.acme.dev' })).toBeFocused();
-  expect(worker.posted).toEqual([]);
-
-  // Members only: the add of the address that exists, with who writes.
-  await about.getByRole('button', { name: 'Change who sees the notes of staging.acme.dev' }).click();
-  await form.getByText('Members only', { exact: true }).click();
-  await form.getByRole('button', { name: 'Save' }).click();
-  await expect(about.getByRole('status')).toHaveText('Saved. The script on the site stays the same.');
-  expect(worker.posted).toEqual([{ url: 'https://staging.acme.dev', visibility: 'members', writers: 'members' }]);
-  await expect(about.locator('dd')).toHaveText([
-    'https://staging.acme.dev (opens in a new tab)',
-    'Members of Acme',
-    'Members only',
-    'Extension, script',
-  ]);
-
-  // Everyone who visits: no `writers`, a site that everyone reads takes a note from anybody.
-  await about.getByRole('button', { name: 'Change who sees the notes of staging.acme.dev' }).click();
-  await form.getByText('Everyone who visits', { exact: true }).click();
-  await expect(form.getByRole('radiogroup', { name: 'Who can leave a note?' })).toHaveCount(0);
-  await form.getByRole('button', { name: 'Save' }).click();
-  // FRU-604: anybody may leave a note there, so the switch of the e-mail is shown, and sent off.
-  expect(worker.posted.at(-1)).toEqual({ url: 'https://staging.acme.dev', visibility: 'everyone', notifyDone: false });
-  await expect(about.locator('dd').nth(1)).toHaveText('Everyone who visits');
-  await expect(about.locator('dd').nth(2)).toHaveText('Anyone on the page');
-  // The worker kept the site: the page did not read the list again, and the script is the same.
-  expect(worker.reads).toBe(reads);
-  await expect(page.locator('pre')).toContainText('s1');
-});
-
-test('who sees the notes saved while React commits after the next frame: the focus is back on « Change » (FRU-631)', async ({
-  page,
-}) => {
-  // A loaded runner, made sure: React's scheduler posts its renders on a MessageChannel, and here
-  // each post runs 100 ms late, so a frame always comes before the commit that closes the form.
-  // A focus given in a frame then found no « Change » yet, and fell to the body when « Save » went.
-  await page.addInitScript(() => {
-    const post = MessagePort.prototype.postMessage;
-    MessagePort.prototype.postMessage = function (this: MessagePort, ...args: Parameters<typeof post>) {
-      setTimeout(() => post.apply(this, args), 100);
-    } as typeof post;
-  });
-  await workerWith(page);
-  await page.goto(`${CONSOLE}/w/w1/sites/s1`);
-  const about = page.getByRole('region', { name: 'Site', exact: true });
-  const change = about.getByRole('button', { name: 'Change who sees the notes of staging.acme.dev' });
-  await change.click();
-  const form = about.getByRole('form', { name: 'Who sees the notes of staging.acme.dev' });
-  await form.getByText('Members only', { exact: true }).click();
-  await form.getByRole('button', { name: 'Save' }).click();
-  await expect(about.getByRole('status')).toHaveText('Saved. The script on the site stays the same.');
-  await expect(change).toBeFocused();
-});
-
-test('« Offer visitors an e-mail when their note is done » is offered only where anybody leaves a note (FRU-604)', async ({
-  page,
-}) => {
-  const worker = await workerWith(page);
-  await page.goto(`${CONSOLE}/w/w1/sites/s1`);
-  const about = page.getByRole('region', { name: 'Site', exact: true });
-  const form = about.getByRole('form', { name: 'Who sees the notes of staging.acme.dev' });
-  const offer = form.getByRole('switch', { name: /Offer visitors an e-mail when their note is done/ });
-  // Members read it and anybody writes: the switch is there, off, and the summary says so.
-  await expect(about.getByRole('term').filter({ hasText: 'E-mail when a note is done' })).toHaveCount(1);
-  await about.getByRole('button', { name: 'Change who sees the notes of staging.acme.dev' }).click();
-  await expect(offer).not.toBeChecked();
-  // Members only: no note of a visitor, so no switch. The control: back to « Anyone », it is there again.
-  await form.getByText('Members only', { exact: true }).click();
-  await expect(offer).toHaveCount(0);
-  await form.getByText('Anyone on the page', { exact: true }).click();
-  await expect(offer).toHaveCount(1);
-  await expectNoViolation(page, 'the form with the switch of the e-mail');
-
-  // On: sent with the rest, and the summary says it is offered.
-  await form.getByText('Offer visitors an e-mail when their note is done', { exact: true }).click();
-  await expect(offer).toBeChecked();
-  await form.getByRole('button', { name: 'Save' }).click();
-  await expect(about.getByRole('status')).toHaveText('Saved. The script on the site stays the same.');
-  expect(worker.posted.at(-1)).toEqual({
-    url: 'https://staging.acme.dev',
-    visibility: 'members',
-    writers: 'anyone',
-    notifyDone: true,
-  });
-  await expect(about.locator('dd').nth(3)).toHaveText('Offered to visitors');
-
-  // Members only: the switch is hidden and not sent, and the summary no longer speaks of it.
-  await about.getByRole('button', { name: 'Change who sees the notes of staging.acme.dev' }).click();
-  await form.getByText('Members only', { exact: true }).click();
-  await form.getByRole('button', { name: 'Save' }).click();
-  expect(worker.posted.at(-1)).toEqual({ url: 'https://staging.acme.dev', visibility: 'members', writers: 'members' });
-  await expect(about.getByRole('term').filter({ hasText: 'E-mail when a note is done' })).toHaveCount(0);
-});
-
-test('a refusal keeps the form open and says why, and a member has nothing to change', async ({ page }) => {
-  const worker = await workerWith(page, 'admin');
-  worker.refuses = 'forbidden';
-  await page.goto(`${CONSOLE}/w/w1/sites/s1`);
-  const about = page.getByRole('region', { name: 'Site', exact: true });
-  await about.getByRole('button', { name: 'Change who sees the notes of staging.acme.dev' }).click();
-  const form = about.getByRole('form', { name: 'Who sees the notes of staging.acme.dev' });
-  await form.getByText('Everyone who visits', { exact: true }).click();
-  await form.getByRole('button', { name: 'Save' }).click();
-  await expect(form).toContainText('Only an owner or an admin of the workspace changes who sees the notes.');
-  await expect(about.locator('dd').nth(1)).toHaveText('Members of Acme');
-
-  await page.unrouteAll({ behavior: 'ignoreErrors' });
+test('a member reads who sees the notes and who writes, with nothing to change (FRU-703)', async ({ page }) => {
   await workerWith(page, 'member');
   await page.goto(`${CONSOLE}/w/w1/sites/s1`);
   await expect(page.getByRole('region', { name: 'Site', exact: true }).locator('dd').nth(1)).toHaveText(
     'Members of Acme',
   );
-  await expect(page.getByRole('button', { name: /Change who sees the notes/ })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: /Change the access/ })).toHaveCount(0);
 });
 
 test('the head leads to the notes of the site, says how many, and says nothing of none (FRU-504)', async ({ page }) => {

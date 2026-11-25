@@ -1080,6 +1080,78 @@ export function Radios<Value extends string>({
   );
 }
 
+type PickCardsProps<Value extends string> = {
+  /** The name of the group, for a screen reader: the card around it says it to the eye. */
+  label: string;
+  value: Value;
+  onChange: (value: Value) => void;
+  options: readonly { value: Value; label: string; detail: string; icon?: ReactNode; disabled?: boolean }[];
+  /** `grid`: cards side by side while each has 150 px, as the levels of a site. `rows`: one row each. */
+  layout?: 'grid' | 'rows';
+  /** The choice is made elsewhere: the group shows it, and takes no press. */
+  disabled?: boolean;
+};
+
+/**
+ * One choice among a few, with an icon, a title and a line each, the radio at the end (FRU-703): the
+ * levels of access of a site, side by side, and the ways to recognise a visitor, one under the other.
+ * An option can be drawn and not chosen (`disabled`): a level that comes later. A value that is no
+ * option checks no card: the table of a site that is no level.
+ */
+export function PickCards<Value extends string>({
+  label,
+  value,
+  onChange,
+  options,
+  layout = 'grid',
+  disabled = false,
+}: PickCardsProps<Value>) {
+  const grid = layout === 'grid';
+  // A card has its own frame; a row has a rule above it, but the first.
+  const frame = (index: number) => {
+    if (grid) {
+      return 'rounded-box border border-line data-selected:border-ink data-selected:[box-shadow:0_0_0_1px_var(--color-ink)]';
+    }
+
+    return index > 0 ? 'border-t border-line' : '';
+  };
+
+  return (
+    <RadioGroup
+      aria-label={label}
+      value={value}
+      isDisabled={disabled}
+      onChange={(chosen) => onChange(chosen as Value)}
+      className={`kit-pick-cards min-w-0 ${grid ? 'grid grid-cols-[repeat(auto-fit,minmax(min(150px,100%),1fr))] gap-[10px]' : 'flex flex-col gap-0'}`}
+      data-layout={layout}
+    >
+      {options.map((option, index) => (
+        <Radio
+          key={option.value}
+          value={option.value}
+          isDisabled={disabled || option.disabled === true}
+          className={`kit-pick-cards__item group/cards m-0 w-full min-w-0 cursor-pointer data-disabled:cursor-not-allowed ${frame(index)}`}
+        >
+          <Radio.Content
+            className={`grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-[10px] gap-y-[2px] ${grid ? 'px-[12px] py-[10px]' : 'px-[16px] py-[10px]'}`}
+          >
+            <span className="flex min-w-0 items-center gap-[8px] text-ink group-data-disabled/cards:text-muted">
+              {option.icon ?? null}
+              <Label className="min-w-0 text-(length:--text-small) font-semibold leading-auto text-ink group-data-disabled/cards:text-muted">
+                {option.label}
+              </Label>
+            </span>
+            <Radio.Control className="group-data-selected/cards:bg-ink">
+              <Radio.Indicator />
+            </Radio.Control>
+            <Description className={`[grid-column:1/-1] ${FIELD_HINT}`}>{option.detail}</Description>
+          </Radio.Content>
+        </Radio>
+      ))}
+    </RadioGroup>
+  );
+}
+
 type ToggleProps = {
   label: string;
   /** A line under the label. */

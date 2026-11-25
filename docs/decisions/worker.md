@@ -1702,9 +1702,12 @@ Read on drizzle-orm 0.45.4 and drizzle-kit 0.31.11, the versions of the catalogu
 ### The rules, in short
 
 - **`writers` of a site: `members` (« Members only ») or `anyone` (« Anyone on the page »).** The
-  decision of Mathieu of 2026-10-20 on FRU-286: a setting, closed by default. `clientOf` turns it
-  into `write: 'authenticated'` only for a site that `members` read; a site that everyone reads takes
-  a note from anybody, whatever the field says.
+  decision of Mathieu of 2026-10-20 on FRU-286: a setting, closed by default. `clientOf` turns
+  `members` into `write: 'authenticated'` on every site since FRU-703: a site that everyone reads
+  and its members write is « Read only ». `0050` gave `anyone` to every site that everyone read,
+  which took a note from anybody then, and `addSite` gives `anyone` to a new site that everyone
+  reads when the caller names no `writers` (`defaultWriters`). A reply with no token asks for the
+  write too (`replyAuthorFor`).
 - **A new site is `members`, by the store and by the column.** `0021_sites_writers` adds the column
   with `anyone`, the value of every site that exists then: they took a note from anybody, and a
   migration does not close them in silence. `0022_sites_writers_default` makes `members` the default
@@ -1731,6 +1734,23 @@ and the case that holds it fails: the refusal of a note with no session, `canWri
 site opened to anyone, a site closed again when a caller names no `writers`, and a site whose
 `writers` never change. By hand, on 2026-10-21: `clientOf` without the visibility fails the table of
 `accounts.test.ts` and four cases of `visitor.test.ts`.
+
+## What a visitor may do on a site (FRU-703)
+
+- **`visitor_edit` and `visitor_delete` of `sites`: `never`, `while-open` or `always`**, what a
+  visitor with no account may do to a note of their own. `0050` adds them with `never`, the value of
+  every site that exists then (a visitor could do neither); `0051` makes `while-open`, the default of
+  the mockup, the default of a new site. Both are generated; `0050` adds one statement by hand, the
+  `UPDATE` of `writers` above.
+- **`addSite` keeps them on a site added again when the caller names neither**, as `writers`.
+- **`clientOf` gives them to the routes (`visitorEdit`, `visitorDelete` of the client) only where
+  `writers` is `anyone`**; absent is `never`. A row with another value gives `never`.
+- **The console changes them through `POST …/sites`, for `manage-sites` only.** A value that is not
+  one of the three answers `400` (`invalid-visitor-edit`, `invalid-visitor-delete`).
+- **The routes that read them come with FRU-701 and FRU-702**: until then no route lets a visitor
+  change or take back a note. `site-access.test.ts`, `sites-visitor-rights-migration.test.ts` and
+  the account suite hold the rest; the guard of `manage-sites` and the change of `clientOf` were each
+  taken out by hand on 2026-11-25, and the case that holds them failed.
 
 ## The notes in PostgreSQL (FRU-218)
 
