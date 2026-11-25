@@ -397,7 +397,8 @@ function SitesTable({
               <th
                 key={column}
                 scope="col"
-                className={`h-[32px] border-b border-line p-0 text-left text-hint font-medium whitespace-nowrap text-muted ${COLUMNS[column]} ${GONE[column]}`}
+                // A head of a column that has no room is said to a screen reader only: a head is never empty.
+                className={`h-[32px] border-b border-line p-0 text-left text-hint font-medium whitespace-nowrap text-muted ${COLUMNS[column]} ${GONE[column].replace(':hidden', ':sr-only')}`}
               >
                 {column === 'menu' ? (
                   <span className="sr-only">{t('Actions')}</span>
@@ -481,7 +482,7 @@ function SiteRow({ workspace, site, manages, seesTracker, span }: SiteRowProps) 
   return (
     <tbody data-site={site.id}>
       <tr onClick={open} className="cursor-pointer hover:bg-hover">
-        <th scope="row" className={`${CELL} ${GONE.site}`}>
+        <th scope="row" data-column="site" className={`${CELL} ${GONE.site}`}>
           <span className={`${LINE} gap-[10px] pr-[12px] pl-[20px]`}>
             <SiteIcon
               origin={site.origin}
@@ -511,29 +512,29 @@ function SiteRow({ workspace, site, manages, seesTracker, span }: SiteRowProps) 
             </a>
           </span>
         </th>
-        <td className={`${CELL} ${GONE.notes}`}>
+        <td data-column="notes" className={`${CELL} ${GONE.notes}`}>
           <span className={`${LINE} gap-[8px] px-[12px]`}>
             <Counts site={site} />
           </span>
         </td>
-        <td className={`${CELL} ${GONE.open}`}>
+        <td data-column="open" className={`${CELL} ${GONE.open}`}>
           <span className={`${LINE} px-[12px]`}>
             <Fresh site={site} name={name} to={notesOf(workspace.id, site.id, 'new')} />
           </span>
         </td>
         {seesTracker ? (
-          <td className={`${CELL} ${GONE.sent}`}>
+          <td data-column="sent" className={`${CELL} ${GONE.sent}`}>
             <span className={`${LINE} gap-[6px] px-[12px] text-ink-soft`}>
               <SentTo site={site} name={name} notes={notesOf(workspace.id, site.id)} />
             </span>
           </td>
         ) : null}
-        <td className={`${CELL} ${GONE.who}`}>
+        <td data-column="who" className={`${CELL} ${GONE.who}`}>
           <span className={`${LINE} gap-[6px] px-[12px] text-ink-soft`}>
             <Who site={site} />
           </span>
         </td>
-        <td className={`${CELL} ${GONE.last}`}>
+        <td data-column="last" className={`${CELL} ${GONE.last}`}>
           <span className={`${LINE} justify-end px-[12px] text-muted tabular-nums`}>
             {site.lastNoteAt === undefined ? (
               <None />
@@ -547,7 +548,7 @@ function SiteRow({ workspace, site, manages, seesTracker, span }: SiteRowProps) 
             )}
           </span>
         </td>
-        <td className={`${CELL} ${GONE.menu}`}>
+        <td data-column="menu" className={`${CELL} ${GONE.menu}`}>
           <span className={`${LINE} justify-end pr-[12px]`}>
             <Menu trigger="icon" triggerLabel={t('More for {site}', { site: name })} items={items} onAction={go}>
               <svg aria-hidden="true" viewBox="0 0 24 24">
@@ -846,7 +847,11 @@ function SentTo({ site, name, notes }: { site: Site; name: string; notes: string
       {late === 0 ? null : (
         <Link
           to={notes}
-          aria-label={`${lateWords}: ${t('See the notes of {site}', { site: name })}`}
+          aria-label={
+            late === 1
+              ? t('1 not delivered yet: see the notes of {site}', { site: name })
+              : t('{count} not delivered yet: see the notes of {site}', { count: late, site: name })
+          }
           title={lateWords}
           className="inline-flex size-control-sm flex-none items-center justify-center rounded-control text-accent-strong hover:bg-chip focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent [&_svg]:size-[14px]"
         >
