@@ -247,6 +247,35 @@ test('« Next » keeps the total of the filter, and the worker reads the page al
   );
 });
 
+test('« Previous » from the last page, which holds fewer notes, says the range of the page before (FRU-710)', async ({
+  page,
+}) => {
+  // Seven notes, three a page: the last page holds one.
+  const seven = Array.from({ length: 7 }, (_, at) => ({ ...KEPT, id: `s9:n${at + 1}` }));
+  const pages: Record<string, Notes> = {
+    '': { notes: seven.slice(0, 3), total: 7, next: 'p2' },
+    p2: { notes: seven.slice(3, 6), total: 7, next: 'p3' },
+    p3: { notes: seven.slice(6), total: 7 },
+  };
+  await stub(page, { notes: (query) => pages[query.get('cursor') ?? ''] ?? 404 });
+  await open(page);
+  const pager = main(page).getByRole('navigation', { name: 'Pages of notes' });
+  await expect(pager).toContainText('1 to 3 of 7');
+  await pager.getByRole('button', { name: 'Next page' }).click();
+  await expect(pager).toContainText('4 to 6 of 7');
+  await pager.getByRole('button', { name: 'Next page' }).click();
+  await expect(pager).toContainText('7 to 7 of 7');
+  await expect(rows(page)).toHaveCount(2);
+  await pager.getByRole('button', { name: 'Previous page' }).click();
+  await expect(pager).toContainText('4 to 6 of 7');
+  await expect(rows(page)).toHaveCount(4);
+  await pager.getByRole('button', { name: 'Previous page' }).click();
+  await expect(pager).toContainText('1 to 3 of 7');
+  // And forward again, from the first page.
+  await pager.getByRole('button', { name: 'Next page' }).click();
+  await expect(pager).toContainText('4 to 6 of 7');
+});
+
 test('an account that is not the administrator is sent to the front door, and reads no note', async ({ page }) => {
   const sent = watched(page);
   await stub(page, { admin: false });
