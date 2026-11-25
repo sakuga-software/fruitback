@@ -39,7 +39,7 @@ export function TaskMarks({
       data-task-marks=""
     >
       {priority === undefined ? null : (
-        <span className={priority === 'urgent' ? 'font-semibold text-accent' : undefined}>
+        <span className={priority === 'urgent' ? 'font-semibold text-accent-strong' : undefined}>
           {PRIORITY_WORDS[priority]()}
         </span>
       )}

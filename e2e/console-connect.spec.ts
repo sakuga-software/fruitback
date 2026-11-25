@@ -182,8 +182,8 @@ test.describe('Connect this browser (FRU-240)', () => {
     ).toEqual(['22px', '700', '1.76px']);
     expect(
       contrast(await painted(word, 'color'), await painted(page.locator('.kit-verify'), 'backgroundColor')),
-    ).toBeCloseTo(17.72, 1);
-    expect(await painted(page.locator('.kit-verify'), 'backgroundColor')).toEqual(rgb('#18181b'));
+    ).toBeCloseTo(17.85, 1);
+    expect(await painted(page.locator('.kit-verify'), 'backgroundColor')).toEqual(rgb('#0f172a'));
     await expectNear(page, 'main h1', { x: 500, width: 440 }, 'title');
     await expectNear(page, '.kit-verify', { x: 500, width: 440 }, 'the word');
     await expectNoViolation(page, 'ask');

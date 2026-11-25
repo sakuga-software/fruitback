@@ -27,12 +27,10 @@ import {
  */
 const CONSOLE = 'http://localhost:5178';
 
-const INK = '#18181b';
-const MUTED = '#6b6b74';
-const CONTROL = '#8a8a93';
+const INK = '#0f172a';
+const MUTED = '#5b6779';
+const CONTROL = '#7b8797';
 const ACCENT_STRONG = '#b91c1c';
-/** `--muted` of the slate theme (FRU-683), which the list of FRU-685 is drawn in. */
-const SLATE_MUTED = '#5b6779';
 const WHITE = '#ffffff';
 const RAIL_TEXT = '#d4d4d8';
 
@@ -349,16 +347,16 @@ test('the page is the one of the mockup: chips, filters, the table and its pages
   const all = chip(page, /^All/);
   await expect(all).toHaveAttribute('aria-pressed', 'true');
   await expect(chip(page, /^Linear/)).toHaveAttribute('aria-pressed', 'false');
-  expectBox(await box(all), { x: 297, y: 126, height: 36 }, 2, '« All »');
+  expectBox(await box(all), { x: 297, y: 116, height: 24 }, 2, '« All »');
   expect
     .soft(
       await styles(all, ['height', 'padding-left', 'border-top-left-radius', 'font-size', 'font-weight', 'column-gap']),
     )
     .toEqual({
-      height: '36px',
+      height: '24px',
       'padding-left': '14px',
-      'border-top-left-radius': '999px',
-      'font-size': '13px',
+      'border-top-left-radius': '6px',
+      'font-size': '12px',
       'font-weight': '600',
       'column-gap': '8px',
     });
@@ -383,7 +381,7 @@ test('the page is the one of the mockup: chips, filters, the table and its pages
     });
 
   // The filters: a search and two lists, 40 px, their names for a screen reader only.
-  expectBox(await box(search(page)), { x: 297, y: 176, height: 40 }, 2, 'the search');
+  expectBox(await box(search(page)), { x: 297, y: 154, height: 28 }, 2, 'the search');
   // What the index searches: not the author, which the mockup says.
   await expect(search(page)).toHaveAttribute('placeholder', 'Search the text, the page or the reference');
   const site = page
@@ -391,18 +389,18 @@ test('the page is the one of the mockup: chips, filters, the table and its pages
     .or(page.getByRole('button', { name: /^Every site/ }))
     .first();
   await expect(site).toBeVisible();
-  expect.soft((await box(site)).height).toBe(40);
+  expect.soft((await box(site)).height).toBe(28);
 
   // « Only my notes »: a box of 16 px, its words at 14 px 8 px after it, on a line of 40 px.
   const mine = page.getByRole('checkbox', { name: 'Only my notes' });
   await expect(mine).not.toBeChecked();
   const tick = await box(page.locator('.kit-checkbox .checkbox__control'));
   expect.soft({ width: tick.width, height: tick.height }).toEqual({ width: 16, height: 16 });
-  expectBox(await box(page.locator('.kit-checkbox')), { x: 1276, y: 176, height: 40 }, 2, '« Only my notes »');
+  expectBox(await box(page.locator('.kit-checkbox')), { x: 1280, y: 154, height: 28 }, 2, '« Only my notes »');
   expect.soft(await styles(page.locator('.kit-checkbox .checkbox__content'), ['column-gap'])).toEqual({
     'column-gap': '8px',
   });
-  expect.soft(await styles(page.locator('.kit-checkbox .label'), ['font-size'])).toEqual({ 'font-size': '14px' });
+  expect.soft(await styles(page.locator('.kit-checkbox .label'), ['font-size'])).toEqual({ 'font-size': '13px' });
 
   // FRU-685: the list goes from one edge of the screen to the other, a line of 36 px per note under
   // the head of its group, 32 px. The heads of the columns are for a screen reader only: the mockup
@@ -436,7 +434,7 @@ test('the page is the one of the mockup: chips, filters, the table and its pages
     });
   // Its page: the path, muted. Its site: the tile and the host (FRU-685, in place of the domain of FRU-547).
   await expect(first.locator('td').nth(2)).toHaveText('/');
-  expect.soft(await painted(first.locator('td').nth(2).locator('span').last(), 'color')).toEqual(rgb(SLATE_MUTED));
+  expect.soft(await painted(first.locator('td').nth(2).locator('span').last(), 'color')).toEqual(rgb(MUTED));
   await expect(row(page, 'returns policy').locator('td').nth(2)).toHaveText('/help/returns');
   await expect(first.locator('td').nth(3)).toHaveText('Sstaging.acme.dev');
   await expect(row(page, 'returns policy').locator('td').nth(3)).toHaveText('Aacme.dev');
@@ -534,7 +532,7 @@ test('the page is the one of the mockup: chips, filters, the table and its pages
   await expect(when).toHaveText('1h1 h ago');
   await expect(when.locator('[aria-hidden="true"]')).toHaveAttribute('title', '1 h ago');
   await expect(row(page, 'The mug').locator('td').nth(6)).toHaveText('6d6 days ago');
-  expect.soft(await painted(when.locator('span').first(), 'color')).toEqual(rgb(SLATE_MUTED));
+  expect.soft(await painted(when.locator('span').first(), 'color')).toEqual(rgb(MUTED));
   expect.soft(await styles(when.locator('span').first(), ['font-variant-numeric', 'font-size'])).toEqual({
     'font-variant-numeric': 'tabular-nums',
     'font-size': '12px',
@@ -546,13 +544,13 @@ test('the page is the one of the mockup: chips, filters, the table and its pages
   const previous = pages(page).getByRole('button', { name: 'Previous page' });
   await expect(previous).toBeDisabled();
   expect.soft(await styles(previous, ['width', 'height', 'border-top-left-radius'])).toEqual({
-    width: '32px',
-    height: '32px',
-    'border-top-left-radius': '8px',
+    width: '24px',
+    height: '24px',
+    'border-top-left-radius': '6px',
   });
   expect
     .soft(await styles(pages(page), ['margin-top', 'font-size']))
-    .toEqual({ 'margin-top': '16px', 'font-size': '14px' });
+    .toEqual({ 'margin-top': '16px', 'font-size': '13px' });
   expect.soft(await painted(pages(page), 'color')).toEqual(rgb(MUTED));
 
   // The heads of the groups: a worker that does not count each stage gets no number, as the notes

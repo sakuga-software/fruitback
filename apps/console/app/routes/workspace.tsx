@@ -221,7 +221,9 @@ export function Frame({ rail, children }: { rail: ReactNode; children?: ReactNod
  */
 export function Screen({ className = '', children }: { className?: string; children: ReactNode }) {
   return (
-    <main className={`kit-screen box-border flex-1 px-[clamp(16px,4vw,48px)] pt-[40px] pb-[72px] ${className}`}>
+    <main
+      className={`kit-screen [view-transition-name:screen] box-border flex-1 px-[clamp(16px,4vw,48px)] pt-[40px] pb-[72px] ${className}`}
+    >
       {children}
     </main>
   );
@@ -289,7 +291,8 @@ export const RAIL_HEAD = 'flex w-full items-center gap-[10px] rounded-card p-[8p
  * entries, what more the frame puts under them, and a foot with the way to the extension (FRU-406)
  * and to the documentation. Each link of the foot opens in another tab.
  *
- * `kit-rail` gives every control in it the focus ring of the rail.
+ * Every control in it has the focus ring of the rail, its lighter red: 5.23:1 there, where the red of
+ * the page is 3.9:1. The rail is the picture that holds still in a move (`rail`, FRU-356).
  */
 export function RailFrame({
   head,
@@ -305,7 +308,7 @@ export function RailFrame({
   return (
     // From 888 px the rail is beside the screen, as high as the window, and stays in place while the
     // screen scrolls (FRU-402). A window lower than the rail scrolls the rail itself.
-    <aside className="kit-rail box-border flex min-w-0 flex-[1_1_248px] flex-col max-[887px]:flex-none gap-[20px] bg-rail px-[12px] py-[16px] text-on-ink min-[888px]:sticky min-[888px]:top-0 min-[888px]:h-dvh min-[888px]:overflow-y-auto">
+    <aside className="kit-rail [view-transition-name:rail] [&_:focus-visible]:outline-rail-accent! box-border flex min-w-0 flex-[1_1_248px] flex-col max-[887px]:flex-none gap-[20px] bg-rail px-[12px] py-[16px] text-on-ink min-[888px]:sticky min-[888px]:top-0 min-[888px]:h-dvh min-[888px]:overflow-y-auto">
       {head}
       {children}
       <div className="mt-auto flex flex-col gap-[14px] p-[8px] max-[900px]:hidden">
@@ -567,7 +570,18 @@ export function RailNav({ label, entries }: { label: string; entries: readonly R
   const shown = entries.find((entry) => entry.current)?.to;
   useEffect(() => {
     const link = row.current?.querySelector<HTMLElement>('[aria-current="page"]');
-    if (link !== null && link !== undefined) reveal(link);
+    if (link === null || link === undefined) return;
+    reveal(link);
+    // Inter comes after the first paint (FRU-683): its words are wider, so the section is revealed
+    // again once the fonts are in. Measured at 390 px: without it, « My account » ended 20 px out.
+    let gone = false;
+    void document.fonts?.ready.then(() => {
+      if (!gone) reveal(link);
+    });
+
+    return () => {
+      gone = true;
+    };
   }, [shown]);
 
   return (
@@ -596,8 +610,8 @@ export function RailNav({ label, entries }: { label: string; entries: readonly R
                 : 'pr-[12px] pl-[31px] text-rail-text hover:bg-rail-active hover:text-on-ink'
             }`}
           >
-            {/* The drop of the entry on screen slides to the next one in a move (FRU-413): `kit-rail-drop`. */}
-            {active ? <Drop className="kit-rail-drop bg-rail-accent" /> : null}
+            {/* The drop of the entry on screen slides to the next one in a move (FRU-413): `rail-drop`. */}
+            {active ? <Drop className="kit-rail-drop [view-transition-name:rail-drop] bg-rail-accent" /> : null}
             {/* After the drop, so the icons of the entries stay in one column (FRU-477). */}
             {entry.icon === undefined ? null : <RailIcon name={entry.icon} />}
             {entry.label}

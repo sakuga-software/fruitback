@@ -690,7 +690,7 @@ export default function Connectors() {
                         </span>
                       </span>
                       <span className="flex-none max-sm:basis-full max-sm:pl-[50px]">
-                        <State connector={connector} late={late[connector.id]} chosen={chosen} />
+                        <State connector={connector} late={late[connector.id]} />
                       </span>
                     </button>
                     {/* The accordion of the source opens under its row, inside its card (FRU-403). */}
@@ -776,11 +776,11 @@ type Late = { notes: number; calls: number };
  * and a tracker that refuses the source needs somebody (FRU-102): the panel of the source says what
  * to do.
  *
- * On the row that is chosen the red is the strong accent: the accent is 4.28:1 on its tint.
+ * The red is the strong accent: the accent is under 4.5:1 on the slate tints of a row (FRU-683).
  */
-function State({ connector, late, chosen }: { connector: Connector; late: Late | undefined; chosen: boolean }) {
+function State({ connector, late }: { connector: Connector; late: Late | undefined }) {
   useLocale();
-  const alert = `flex-none text-hint leading-auto font-semibold ${chosen ? 'text-accent-strong' : 'text-accent'}`;
+  const alert = 'flex-none text-hint leading-auto font-semibold text-accent-strong';
   if (connector.attention !== undefined) return <span className={alert}>{t('Needs attention')}</span>;
   const words = [
     ...(late !== undefined && late.notes > 0
@@ -831,7 +831,7 @@ function rowId(connector: string): string {
  * no focus: the one of a source that Linear or GitHub just connected.
  *
  * **It unfolds** (FRU-563): its height grows from nothing and it fades in, 220 ms on the curve of the
- * kit (`.source-panel` in `app.css`). With `prefers-reduced-motion` it is there at once. The page
+ * kit (its keyframes in `app.css`). With `prefers-reduced-motion` it is there at once. The page
  * scrolls again once it has its height: at the start of the move it has none.
  */
 function Opened({
@@ -881,7 +881,7 @@ function Opened({
       aria-label={label}
       tabIndex={-1}
       // Inside the frame of the list, with the rule of the list above it and the tint of a panel.
-      className="source-panel scroll-mt-4 border-t border-line bg-subtle"
+      className="source-panel grid grid-rows-[1fr] animate-[source-panel-open_var(--duration-fast)_var(--ease-settle)_both] motion-reduce:animate-none scroll-mt-4 border-t border-line bg-subtle"
       onAnimationEnd={(event) => {
         // Only the move of the panel itself: one inside it bubbles here too.
         if (event.target !== event.currentTarget) return;
@@ -896,7 +896,9 @@ function Opened({
       }}
     >
       {/* The part that the move clips while the panel grows. */}
-      <div className="source-panel__body">{children}</div>
+      <div className="source-panel__body min-h-0 [.source-panel:not([data-settled])>&]:overflow-hidden motion-reduce:[.source-panel:not([data-settled])>&]:overflow-visible">
+        {children}
+      </div>
     </div>
   );
 }

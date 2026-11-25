@@ -26,12 +26,12 @@ import {
  */
 const CONSOLE = 'http://localhost:5178';
 
-const INK = '#18181b';
-const MUTED = '#6b6b74';
-const LINE = '#e4e4e7';
-const CONTROL = '#8a8a93';
-const SUBTLE = '#fafafa';
-const CHIP = '#f4f4f5';
+const INK = '#0f172a';
+const MUTED = '#5b6779';
+const LINE = '#e3e8ef';
+const CONTROL = '#7b8797';
+const SUBTLE = '#f7f9fb';
+const CHIP = '#e8edf3';
 const ACCENT = '#dd2c27';
 const WHITE = '#ffffff';
 
@@ -209,14 +209,14 @@ test('the list is a grid of cards, each named by its address and its icon (FRU-4
   await expect(page.getByText('Where Acme collects notes, and where they stand.')).toBeVisible();
   const add = page.getByRole('button', { name: 'Add a site', exact: true });
   // The screen is as wide as its column (FRU-398): 71.5 px wider than the 1120 px of the mockup.
-  expectBox(await box(add), { x: 1282, y: 58, width: 110, height: 44 }, 2, '« Add a site »');
+  expectBox(await box(add), { x: 1286.6, y: 58, width: 105.4, height: 32 }, 2, '« Add a site »');
   expect.soft(await styles(page.locator('main header'), ['margin-bottom'])).toEqual({ 'margin-bottom': '28px' });
   // No legend of the statuses (FRU-400): a bar says its counts in its own name, and the page of the
   // statuses of a site says what each colour is.
   await expect(page.getByRole('list', { name: 'Statuses' })).toHaveCount(0);
 
   // The search, then the grid: a card for each site, three side by side in the column.
-  expectBox(await box(search(page)), { x: 298, y: 130, height: 40 }, 2, 'the search');
+  expectBox(await box(search(page)), { x: 298, y: 120, height: 28 }, 2, 'the search');
   const cards = grid(page).locator('li[data-site]');
   await expect(cards).toHaveCount(4);
   const columns = await grid(page).evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(' '));
@@ -234,7 +234,7 @@ test('the list is a grid of cards, each named by its address and its icon (FRU-4
 
   const first = card(page, 'staging.acme.dev');
   expect.soft(await styles(first, ['border-top-left-radius', 'border-top-width'])).toEqual({
-    'border-top-left-radius': '14px',
+    'border-top-left-radius': '8px',
     'border-top-width': '1px',
   });
   expect.soft(await painted(first, 'borderTopColor')).toEqual(rgb(LINE));
@@ -246,7 +246,7 @@ test('the list is a grid of cards, each named by its address and its icon (FRU-4
   expect.soft(await styles(name, ['font-weight', 'font-size'])).toEqual({ 'font-weight': '600', 'font-size': '17px' });
   expect.soft(await painted(name, 'color')).toEqual(rgb(INK));
   const audience = first.getByText('Members only', { exact: true });
-  expect.soft(await styles(audience, ['font-size'])).toEqual({ 'font-size': '13px' });
+  expect.soft(await styles(audience, ['font-size'])).toEqual({ 'font-size': '12px' });
   // FRU-566: who reads is a chip with its icon, on the grey of a chip, at 4.5:1 at the least.
   const chip = first.getByRole('group').filter({ hasText: 'Members only' });
   expect.soft(await painted(chip, 'backgroundColor')).toEqual(rgb(CHIP));
@@ -299,7 +299,7 @@ test('the list is a grid of cards, each named by its address and its icon (FRU-4
     .toBeGreaterThanOrEqual(4.5);
   await expect(card(page, 'acme.dev').getByText('6 new', { exact: true })).toBeVisible();
   const waiting = card(page, 'preview.lumen.studio').getByText('Waiting for the first note', { exact: true });
-  expect.soft(await styles(waiting, ['font-size'])).toEqual({ 'font-size': '13px' });
+  expect.soft(await styles(waiting, ['font-size'])).toEqual({ 'font-size': '12px' });
   expect.soft(await painted(waiting, 'color')).toEqual(rgb(MUTED));
 
   // The foot of the card (FRU-432): where the notes go, and the last note at the right. Their terms
@@ -334,14 +334,14 @@ test('the list is a grid of cards, each named by its address and its icon (FRU-4
   await expect(address).toHaveAttribute('viewBox', '0 0 16 16');
   await expect(value(lumen, 'Notes go to').locator('svg')).toHaveCount(0);
 
-  // The button of a card: 36 px, named after its site, in the top right corner, and it opens a menu.
+  // The button of a card: 28 px (FRU-683), named after its site, in the top right corner, and it opens a menu.
   const button = more(page, 'staging.acme.dev');
   const corner = await box(button);
   const around = await box(first);
-  expect.soft({ width: corner.width, height: corner.height }).toEqual({ width: 36, height: 36 });
+  expect.soft({ width: corner.width, height: corner.height }).toEqual({ width: 28, height: 28 });
   expect.soft(around.x + around.width - (corner.x + corner.width), 'from the right of the card').toBeLessThan(16);
-  expect.soft(corner.y - around.y, 'from the top of the card').toBeLessThan(16);
-  expect.soft(await styles(button, ['border-top-left-radius'])).toEqual({ 'border-top-left-radius': '8px' });
+  expect.soft(corner.y - around.y, 'from the top of the card').toBeLessThan(20);
+  expect.soft(await styles(button, ['border-top-left-radius'])).toEqual({ 'border-top-left-radius': '6px' });
   expect.soft(await painted(button, 'color')).toEqual(rgb(MUTED));
   await expect(button).toHaveAttribute('aria-haspopup', /^(menu|true)$/);
   await button.hover();
@@ -351,8 +351,8 @@ test('the list is a grid of cards, each named by its address and its icon (FRU-4
   // Under the grid: what a site with no tracker does, and the way to connect one.
   const foot = page.getByText('A site with no tracker keeps its notes in Fruitback.');
   expect.soft(await styles(foot, ['font-size', 'line-height', 'margin-top'])).toEqual({
-    'font-size': '13px',
-    'line-height': '19.5px',
+    'font-size': '12px',
+    'line-height': '17.4px',
     'margin-top': '14px',
   });
   expect.soft(await painted(foot, 'color')).toEqual(rgb(MUTED));
@@ -795,34 +795,34 @@ test('a workspace with no site shows the card of the mockup, and its form adds t
       'padding-top': '48px',
       // clamp(20px, 5vw, 56px) at 1440 px.
       'padding-left': '56px',
-      'border-top-left-radius': '14px',
+      'border-top-left-radius': '8px',
       'row-gap': '14px',
       'max-width': '640px',
       'box-sizing': 'content-box',
     });
   expect.soft(await painted(empty, 'backgroundColor')).toEqual(rgb(SUBTLE));
   expect.soft(await painted(empty, 'borderTopColor')).toEqual(rgb(LINE));
-  expectBox(await box(empty), { x: 297, y: 130, width: 754 }, 2, 'the card');
+  expectBox(await box(empty), { x: 297, y: 120, width: 754 }, 2, 'the card');
 
   const drop = empty.locator('svg').first();
-  expectBox(await box(drop), { x: 354, y: 179, width: 40, height: 48 }, 2, 'the drop');
+  expectBox(await box(drop), { x: 354, y: 169, width: 40, height: 48 }, 2, 'the drop');
   expect.soft(await painted(drop, 'fill')).toEqual(rgb(ACCENT));
   const title = empty.getByRole('heading', { level: 2, name: 'No site yet' });
-  expectBox(await box(title), { x: 354, y: 241, height: 26 }, 2, 'the title of the card');
+  expectBox(await box(title), { x: 354, y: 231, height: 26 }, 2, 'the title of the card');
   expect.soft(await styles(title, ['font-size', 'font-weight'])).toEqual({ 'font-size': '20px', 'font-weight': '700' });
   const text = empty.getByText(
     "Paste the address of a site you review. Staging, a preview build or a client's live site: any page of it will do.",
   );
   expect
     .soft(await styles(text, ['font-size', 'line-height']))
-    .toEqual({ 'font-size': '15px', 'line-height': '23.25px' });
+    .toEqual({ 'font-size': '13px', 'line-height': '20.15px' });
   expect.soft(await painted(text, 'color')).toEqual(rgb(MUTED));
 
   const field = empty.getByRole('textbox', { name: 'Site address' });
   await expect(field).toHaveAttribute('placeholder', 'staging.acme.dev');
-  expectBox(await box(field), { x: 354, y: 370, width: 530.7, height: 44 }, 2, 'the field');
+  expectBox(await box(field), { x: 354, y: 353.3, width: 535.2, height: 32 }, 2, 'the field');
   const submit = empty.getByRole('button', { name: 'Add site', exact: true });
-  expectBox(await box(submit), { x: 894, y: 370, width: 99.3, height: 44 }, 2, '« Add site »');
+  expectBox(await box(submit), { x: 898.7, y: 353.3, width: 94.8, height: 32 }, 2, '« Add site »');
   // The head has no « Add a site »: the card is the way to add one.
   await expect(page.getByRole('button', { name: 'Add a site', exact: true })).toHaveCount(0);
   await expect(grid(page)).toHaveCount(0);
@@ -881,17 +881,17 @@ test('a read that failed is the alert of the mockup, and never « No site yet »
     .toEqual({
       'padding-top': '28px',
       'padding-left': '32px',
-      'border-top-left-radius': '14px',
+      'border-top-left-radius': '8px',
       'border-top-width': '1px',
       'max-width': '760px',
     });
   expect.soft(await painted(alert, 'borderTopColor')).toEqual(rgb(CONTROL));
-  expectBox(await box(alert), { x: 297, y: 130, width: 826, height: 104.5 }, 2, 'the alert');
+  expectBox(await box(alert), { x: 297, y: 120, width: 826, height: 98.5 }, 2, 'the alert');
   const title = alert.getByRole('heading', { level: 2 });
-  expect.soft(await styles(title, ['font-size', 'font-weight'])).toEqual({ 'font-size': '17px', 'font-weight': '600' });
-  expectBox(await box(title), { x: 330, y: 159, height: 20 }, 2, 'the title of the alert');
+  expect.soft(await styles(title, ['font-size', 'font-weight'])).toEqual({ 'font-size': '14px', 'font-weight': '600' });
+  expectBox(await box(title), { x: 330, y: 149, height: 17 }, 2, 'the title of the alert');
   const again = alert.getByRole('button', { name: 'Try again', exact: true });
-  expectBox(await box(again), { x: 989, y: 160, width: 100.1, height: 44 }, 2, '« Try again »');
+  expectBox(await box(again), { x: 993, y: 153.2, width: 96.6, height: 32 }, 2, '« Try again »');
   expect.soft(await styles(again, ['border-top-left-radius'])).toEqual({ 'border-top-left-radius': '6px' });
 
   // Neither the card of a workspace with no site, nor a way to add one on a list nobody read.
@@ -950,7 +950,7 @@ test('the counts come with the list: nothing that a pointer can reach moves when
   expect(await Promise.all(reachable.map(box))).toEqual(before);
   expectBox(
     await box(page.getByRole('button', { name: 'Add a site', exact: true })),
-    { x: 1282, y: 58 },
+    { x: 1286.6, y: 58 },
     2,
     '« Add a site »',
   );
@@ -1370,18 +1370,18 @@ test('at 390 px the card and the alert are where the mockup draws them', async (
   // the frame does not copy: the boxes are compared from the top of the screen under the rail.
   const top = (await box(page.locator('main'))).y;
   const empty = page.locator('main > div').filter({ hasText: 'No site yet' });
-  expectBox(await box(empty), { x: 16, y: top + 154.2, width: 358 }, 4, 'the card');
-  expectBox(await box(empty.locator('svg').first()), { x: 37, y: top + 203.2, width: 40, height: 48 }, 4, 'the drop');
-  expectBox(await box(empty.getByRole('heading', { level: 2 })), { x: 37, y: top + 265.2, height: 26 }, 4, 'the title');
+  expectBox(await box(empty), { x: 16, y: top + 120, width: 358 }, 4, 'the card');
+  expectBox(await box(empty.locator('svg').first()), { x: 37, y: top + 169, width: 40, height: 48 }, 4, 'the drop');
+  expectBox(await box(empty.getByRole('heading', { level: 2 })), { x: 37, y: top + 231, height: 26 }, 4, 'the title');
   expectBox(
     await box(empty.getByRole('textbox', { name: 'Site address' })),
-    { x: 37, y: top + 417, width: 316, height: 44 },
+    { x: 37, y: top + 373.4, width: 316, height: 32 },
     4,
     'the field',
   );
   expectBox(
     await box(empty.getByRole('button', { name: 'Add site' })),
-    { x: 37, y: top + 471, width: 99.3, height: 44 },
+    { x: 37, y: top + 415.4, width: 94.8, height: 32 },
     4,
     '« Add site »',
   );
@@ -1394,16 +1394,16 @@ test('at 390 px the card and the alert are where the mockup draws them', async (
   await open(page);
   const alert = page.getByRole('alert');
   const under = (await box(page.locator('main'))).y;
-  expectBox(await box(alert), { x: 16, y: under + 154.2, width: 358, height: 187 }, 4, 'the alert');
+  expectBox(await box(alert), { x: 16, y: under + 120, width: 358, height: 166 }, 4, 'the alert');
   expectBox(
     await box(alert.getByRole('heading', { level: 2 })),
-    { x: 49, y: under + 183.2, height: 20 },
+    { x: 49, y: under + 149, height: 20 },
     4,
     'the title of the alert',
   );
   expectBox(
     await box(alert.getByRole('button', { name: 'Try again' })),
-    { x: 49, y: under + 268.2, width: 100.1, height: 44 },
+    { x: 49, y: under + 225, width: 100.1, height: 32 },
     4,
     '« Try again »',
   );
