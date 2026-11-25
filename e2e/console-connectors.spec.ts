@@ -3,11 +3,9 @@ import { type Page, type Route, expect, test } from '@playwright/test';
 import { WORKER_ORIGIN } from './pin.ts';
 import {
   ACME,
-  BAR_SHIFT,
   type Role,
   box,
   contrast,
-  expectBox,
   fulfillSites,
   painted,
   rgb,
@@ -15,32 +13,25 @@ import {
   stubWorker,
   styles,
 } from './console-workspace.ts';
-import { unfolded } from './settled.ts';
+import { settled, unfolded } from './settled.ts';
 
 /**
- * The Connectors screen (FRU-246), measured in a browser against screen 11 of the mockup of
- * 2026-10-13: the sources that are connected, the ones to add, and the panel of a source.
- *
- * The values are read in the code of the mockup (`11-console-connectors.html`), and the boxes in its
- * render at 1440 px (a box is compared where the font is the one of the mockup). Where a panel opens
- * and what takes focus is in `console-source-panel.spec.ts`; the writes of a panel are in
- * `console-destinations.spec.ts`. The worker is answered by stubs.
+ * The Connectors screen (FRU-690): the table of the connectors with the health of each one, the
+ * catalogue of what can be added with the logo of each tracker, and the settings of a connector in a
+ * dialog. The values are those of the mockup of FRU-690 (« Maquette HTML · Connecteurs »), on the
+ * tokens of the console. The writes of the settings are in `console-destinations.spec.ts`. The
+ * worker is answered by stubs.
  */
 const CONSOLE = 'http://localhost:5178';
 
 const MUTED = '#5b6779';
 const LINE = '#e3e8ef';
-const SUBTLE = '#f7f9fb';
 const CHIP = '#e8edf3';
-/** Under the pointer, and a chosen row (FRU-683). */
+/** Under the pointer (FRU-683). */
 const HOVER = '#e8edf3';
-const SELECTED = '#e2e8f0';
 const ACCENT = '#dd2c27';
 const ACCENT_STRONG = '#b91c1c';
 const DONE = '#166534';
-const WHITE = '#ffffff';
-/** The width of a row at 1440 px, inside the border of the list: the whole page, since FRU-403. */
-const ROW_WIDTH = 1093 - BAR_SHIFT;
 
 const SETTINGS = { showComments: true, stages: {} };
 const LINEAR = {
@@ -179,25 +170,48 @@ async function open(page: Page): Promise<void> {
   await expect(page.locator('main h1')).toBeVisible();
 }
 
-const rows = (page: Page) => page.locator('button[id^="source-row-"]');
+/** The rows of the table of the connectors (FRU-690). */
+const rows = (page: Page) => page.locator('tbody tr[data-connector]');
+/** The button at the end of a row that opens the settings of its connector. */
+const settingsOf = (page: Page, name: string) => page.getByRole('button', { name: `Settings of ${name}`, exact: true });
 const panel = (page: Page) => page.locator('#source-panel');
-/** The sources to add: on the page with no source, in a dialog with one (FRU-562). */
-const catalogue = (page: Page) =>
-  page.getByRole('dialog', { name: 'Add a connector' }).or(page.getByRole('region', { name: 'Add a connector' }));
-const sources = (page: Page) => catalogue(page).getByRole('listitem');
+/** The catalogue, on the page under the table (FRU-690). */
+const catalogue = (page: Page) => page.getByRole('region', { name: 'Add a connector' });
+const tiles = (page: Page) => catalogue(page).getByRole('listitem');
+const tile = (page: Page, name: string) => catalogue(page).locator(`[data-source="${name}"]`);
+const search = (page: Page) => page.getByRole('searchbox', { name: 'Search trackers and tools' });
+/** The count of the sends that wait, on « Connectors » in the bar (FRU-684, FRU-690). */
+const failing = (page: Page) =>
+  page
+    .locator('aside')
+    .getByRole('link', { name: /^Connectors/ })
+    .locator('[data-failing]');
 
-/** FRU-542, FRU-562: with a source connected, « New connector » opens the dialog of the sources to add. */
-async function openCatalogue(page: Page, name = 'New connector'): Promise<void> {
-  await page.getByRole('button', { name, exact: true }).click();
-  await expect(sources(page)).toHaveCount(9);
-  // The dialog zooms in (HeroUI's Modal): its boxes are measured once it is at its size.
-  await page.evaluate(() => Promise.all(document.getAnimations().map((animation) => animation.finished)));
+/** The tiles of the catalogue, in the order of the mockup of FRU-690. */
+const CATALOGUE = [
+  ['Linear', 'linear'],
+  ['Jira', 'jira'],
+  ['GitHub Issues', 'github'],
+  ['GitLab', 'gitlab'],
+  ['Asana', 'asana'],
+  ['ClickUp', 'clickup'],
+  ['Trello', 'trello'],
+  ['Notion', 'notion'],
+  ['Slack', 'slack'],
+  ['Webhook', 'webhook'],
+  ['REST API', 'rest'],
+  ['Claude Code routine', 'claude-routine'],
+] as const;
+
+/** Opens the settings of a connector from its row, and waits for the dialog. */
+async function openSettings(page: Page, name: string): Promise<void> {
+  await settingsOf(page, name).click();
+  await unfolded(page);
 }
 
-async function expectNoViolation(page: Page, name: string): Promise<void> {
-  // A panel of a source unfolds and fades in (FRU-563): axe reads its contrast once it is there.
-  await expect(page.locator('#source-panel:not([data-settled])')).toHaveCount(0);
-  const results = await new AxeBuilder({ page }).include('main').analyze();
+async function expectNoViolation(page: Page, name: string, scope = 'main'): Promise<void> {
+  await settled(page);
+  const results = await new AxeBuilder({ page }).include(scope).analyze();
   expect
     .soft(
       results.violations.map((violation) => `${violation.id}: ${violation.nodes[0]?.target.join(' ')}`),
@@ -206,302 +220,238 @@ async function expectNoViolation(page: Page, name: string): Promise<void> {
     .toEqual([]);
 }
 
-test('the list of the sources and the panel of a Linear are the ones of the mockup', async ({ page }) => {
+test('the table of the connectors, and the settings of a Linear in their dialog', async ({ page }) => {
   await workerWith(page);
   await open(page);
   await expect(
     page.getByText('Connect a tracker once. Every site of Acme can then send its notes there.'),
   ).toBeVisible();
+
+  // « Your connectors » and how many.
+  const title = page.getByRole('heading', { level: 2, name: /^Your connectors/ });
+  await expect(title).toHaveText('Your connectors2');
+  expect.soft(await styles(title, ['font-size', 'font-weight'])).toEqual({ 'font-size': '13px', 'font-weight': '600' });
+
+  // A table: the connector with its logo, its account, the sites that use it, its health.
+  await expect(page.locator('.kit-table thead th')).toHaveText([
+    'Connector',
+    'Account',
+    'Used by',
+    'Health',
+    'Actions',
+  ]);
   await expect(rows(page)).toHaveCount(2);
-  await rows(page).first().click();
-  await unfolded(page);
+  const linear = rows(page).first();
+  await expect(linear.locator('td')).toHaveText(['Linear', 'Workspace Acme', '2 sites', 'Connected', '']);
+  await expect(rows(page).nth(1).locator('td').nth(1)).toHaveText('hooks.acme.dev/feedback');
 
-  // One column (FRU-403): the panel opens under its row, where the mockup draws a column beside the list.
-  const list = page.locator('main > div').last();
-  expect.soft(await styles(list, ['display', 'flex-direction', 'row-gap'])).toEqual({
-    display: 'flex',
-    'flex-direction': 'column',
-    'row-gap': '32px',
-  });
-
-  // « Your connectors »: a card for each source, one under the other (FRU-542).
-  const title = page.getByRole('heading', { level: 2, name: 'Your connectors', exact: true });
-  expect.soft(await styles(title, ['font-size', 'font-weight', 'margin-bottom'])).toEqual({
-    'font-size': '13px',
-    'font-weight': '600',
-    'margin-bottom': '10px',
-  });
-  const frame = rows(page).first().locator('xpath=ancestor::li[1]');
-  expect.soft(await styles(frame, ['border-top-left-radius', 'border-top-width', 'overflow-x'])).toEqual({
-    'border-top-left-radius': '8px',
-    'border-top-width': '1px',
-    'overflow-x': 'hidden',
-  });
-  expect.soft(await painted(frame, 'borderTopColor')).toEqual(rgb(LINE));
-  expect.soft(await styles(frame.locator('..'), ['display', 'flex-direction', 'row-gap'])).toEqual({
-    display: 'flex',
-    'flex-direction': 'column',
-    'row-gap': '12px',
-  });
-  // No list of the sources to add while one is connected: « New connector » opens it.
-  await expect(sources(page)).toHaveCount(0);
-  await expect(page.getByRole('dialog')).toHaveCount(0);
-  const chosen = rows(page).first();
-  const resting = rows(page).nth(1);
-  await expect(chosen).toHaveAttribute('aria-expanded', 'true');
-  await expect(page.locator('button[id^="source-row-"][aria-expanded="true"]')).toHaveCount(1);
-  expect.soft(await styles(chosen, ['padding', 'column-gap', 'text-align'])).toEqual({
-    padding: '14px 18px',
-    'column-gap': '14px',
-    'text-align': 'left',
-  });
-  expect.soft(await painted(chosen, 'backgroundColor')).toEqual(rgb(SELECTED));
-  expect.soft(await painted(resting, 'backgroundColor')).toEqual(rgb(WHITE));
-  // The boxes at 1440 px. The rows take the width of the page, where the mockup draws a column for
-  // the panel, and the panel opens under its row, inside its card, before the next card (FRU-403,
-  // FRU-542): the border of the card, 12 px, and the border of the next card.
-  // The panel scrolled the screen as far as it needs: the boxes are taken from the top of the screen.
-  await title.evaluate((heading) => {
-    for (let at: Element | null = heading; at !== null; at = at.parentElement) at.scrollTop = 0;
-    document.scrollingElement?.scrollTo(0, 0);
-  });
-  expectBox(await box(title), { x: 297 + BAR_SHIFT, y: 120, height: 18 }, 2, '« Connected »');
-  expectBox(await box(chosen), { x: 298 + BAR_SHIFT, y: 147, width: ROW_WIDTH, height: 65 }, 2, 'the first row');
-  expectBox(await box(panel(page)), { x: 298 + BAR_SHIFT, y: 211, width: ROW_WIDTH }, 2, 'the panel');
-  const under = await box(panel(page));
-  expectBox(
-    await box(resting),
-    { x: 298 + BAR_SHIFT, y: under.y + under.height + 14, width: ROW_WIDTH },
-    2,
-    'the second row',
-  );
-
-  // A hover scrolls the second row into view, below the panel: the boxes are taken before it.
-  await resting.hover();
-  expect.soft(await painted(resting, 'backgroundColor')).toEqual(rgb(HOVER));
-  await page.mouse.move(700, 880);
-
-  // The mark: 34 px inside its border, with the logo of its tracker, 18 px, where the mockup writes a
-  // letter (FRU-543). The braces of an address are drawn.
-  const mark = chosen.locator('span[aria-hidden="true"]').first();
-  await expect(mark).toHaveText('');
-  expect.soft(await styles(mark, ['width', 'height', 'box-sizing', 'border-top-left-radius'])).toEqual({
-    width: '34px',
-    height: '34px',
-    'box-sizing': 'content-box',
+  // The logo is a file the console serves itself, in its box of 24 px, 14 px inside.
+  const logo = linear.locator('img[data-logo="linear"]');
+  await expect(logo).toHaveAttribute('src', '/logos/linear.svg');
+  await expect(logo).toHaveAttribute('alt', '');
+  expect(await logo.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true);
+  expect.soft(await styles(logo, ['width', 'height'])).toEqual({ width: '14px', height: '14px' });
+  const frame = logo.locator('..');
+  await expect(frame).toHaveAttribute('aria-hidden', 'true');
+  expect.soft(await styles(frame, ['width', 'height', 'border-top-left-radius'])).toEqual({
+    width: '24px',
+    height: '24px',
     'border-top-left-radius': '6px',
   });
-  expect.soft(await painted(mark, 'backgroundColor')).toEqual(rgb(WHITE));
-  const logo = mark.locator('svg[data-mark="linear"]');
-  expect.soft(await styles(logo, ['width', 'height'])).toEqual({ width: '18px', height: '18px' });
-  expect.soft(await logo.boundingBox()).not.toBeNull();
-  await expect(resting.locator('svg[data-mark="rest"]')).toHaveCount(1);
+  expect.soft(await painted(frame, 'borderTopColor')).toEqual(rgb(LINE));
+  await expect(rows(page).nth(1).locator('img[data-logo="rest"]')).toHaveAttribute('src', '/logos/rest.svg');
 
-  // The name, how the source is connected with the count of its sites, and its state.
-  const name = chosen.getByText('Linear', { exact: true });
-  expect.soft(await styles(name, ['font-size', 'font-weight'])).toEqual({ 'font-size': '13px', 'font-weight': '600' });
-  const detail = chosen.getByText('Workspace Acme · 2 sites');
-  expect.soft(await styles(detail, ['font-size'])).toEqual({ 'font-size': '12px' });
-  expect.soft(await painted(detail, 'color')).toEqual(rgb(MUTED));
-  await expect(resting.getByText('hooks.acme.dev/feedback · 1 site')).toBeVisible();
-  const state = chosen.getByText('Connected', { exact: true });
-  expect.soft(await styles(state, ['font-size', 'font-weight'])).toEqual({ 'font-size': '12px', 'font-weight': '600' });
+  // A tracker says « Connected »: the worker does not say yet whether its notes arrived (FRU-714).
+  const state = linear.locator('[data-pill]');
+  expect.soft(await styles(state, ['font-size', 'font-weight', 'height'])).toEqual({
+    'font-size': '12px',
+    'font-weight': '600',
+    height: '20px',
+  });
   expect.soft(await painted(state, 'color')).toEqual(rgb(DONE));
   expect
-    .soft(contrast(rgb(DONE), rgb(SELECTED)), 'the green on the tint of the chosen row')
+    .soft(contrast(rgb(DONE), await painted(state, 'backgroundColor')), 'the green on its tint')
     .toBeGreaterThanOrEqual(4.5);
 
-  // The panel: the tint of a panel inside the frame of the list, under the rule of its row. It has
-  // no card of its own, and its row shows its name: its title is said to a screen reader only.
-  expect.soft(await painted(panel(page), 'backgroundColor')).toEqual(rgb(SUBTLE));
-  expect.soft(await styles(panel(page), ['border-top-width'])).toEqual({ 'border-top-width': '1px' });
-  expect.soft(await painted(panel(page), 'borderTopColor')).toEqual(rgb(LINE));
+  // A press of « … » opens the settings in a dialog named after the connector. No accordion any more.
+  const opener = settingsOf(page, 'Linear');
+  await openSettings(page, 'Linear');
+  const dialog = page.getByRole('dialog', { name: 'Linear' });
+  await expect(dialog).toBeVisible();
+  await expect(panel(page)).toHaveAttribute('aria-label', 'Linear · Workspace Acme');
+  await expect(linear).toHaveAttribute('data-chosen', 'true');
   const card = panel(page).locator('aside');
-  expect.soft(await styles(card, ['border-top-width', 'background-color'])).toEqual({
-    'border-top-width': '0px',
-    'background-color': 'rgba(0, 0, 0, 0)',
-  });
-  const heading = card.getByRole('heading', { level: 2, name: 'Linear', exact: true });
-  await expect(heading).toBeAttached();
-  expect.soft(await styles(heading, ['width', 'height', 'position'])).toEqual({
-    width: '1px',
-    height: '1px',
-    position: 'absolute',
-  });
-  expect.soft(await styles(heading.locator('..'), ['padding', 'border-bottom-width'])).toEqual({
-    padding: '16px 22px 0px',
-    'border-bottom-width': '0px',
-  });
   await expect(card.getByText('Connected to the workspace Acme')).toBeVisible();
-  const block = card.getByRole('heading', { level: 3, name: 'Sites sending here' });
-  expect.soft(await styles(block, ['font-size', 'font-weight'])).toEqual({ 'font-size': '13px', 'font-weight': '600' });
-  expect.soft(await styles(block.locator('xpath=ancestor::section[1]/..'), ['padding', 'row-gap'])).toEqual({
-    padding: '20px 22px',
-    'row-gap': '24px',
-  });
 
   // The sites that send here, each with its places, read only: a site chooses them on the Sites
   // screen (FRU-399), which the block leads to.
   await expect(card.locator('[data-site]')).toHaveCount(2);
-  const sender = card.locator('[data-site="staging.acme.dev"]');
-  expect.soft(await styles(sender, ['padding-top', 'padding-bottom', 'border-bottom-width'])).toEqual({
-    'padding-top': '8px',
-    'padding-bottom': '8px',
-    'border-bottom-width': '1px',
-  });
-  expect
-    .soft(await styles(sender.getByText('https://staging.acme.dev', { exact: true }), ['font-weight']))
-    .toEqual({ 'font-weight': '600' });
-  await expect(card.getByRole('heading', { level: 3, name: 'Other sites' })).toHaveCount(0);
   await expect(card.locator('[data-site="support.acme.dev"]')).toHaveCount(0);
   await expect(card.getByText('Each site chooses where its notes go, on the Sites screen.')).toBeVisible();
   await expect(card.getByRole('link', { name: 'Open the sites' })).toHaveAttribute('href', '/w/w1/sites');
-
-  // The statuses: since FRU-368 they are set per site, on its statuses page. Since FRU-478 each site
-  // of « Sites sending here » links there on its own row: no second block lists the same sites again.
-  await expect(
-    card.getByText('The stage and the colour of each state of Linear are set for each site, on its statuses page.'),
-  ).toBeVisible();
+  // The statuses of each site, on its row (FRU-478).
   await expect(card.getByRole('heading', { level: 3 })).toHaveText(['Sites sending here']);
   await expect(card.getByRole('link', { name: /^Statuses of / })).toHaveText(['Statuses', 'Statuses']);
-  await expect(sender.getByRole('link', { name: 'Statuses of https://staging.acme.dev' })).toHaveAttribute(
-    'href',
-    '/w/w1/sites/s1/statuses',
-  );
   await expect(
-    card.locator('[data-site="acme.dev"]').getByRole('link', { name: 'Statuses of https://acme.dev' }),
-  ).toHaveAttribute('href', '/w/w1/sites/s2/statuses');
-  // The list of FRU-102 is gone from the panel: no state of Linear is chosen here any more.
-  await expect(card.getByRole('button', { name: /^Status for / })).toHaveCount(0);
-
+    card.locator('[data-site="staging.acme.dev"]').getByRole('link', { name: 'Statuses of https://staging.acme.dev' }),
+  ).toHaveAttribute('href', '/w/w1/sites/s1/statuses');
   await expect(card.getByRole('switch', { name: 'Show Linear comments as replies' })).toBeChecked();
-  // Not delivered: the picture of the element (FRU-198), and the date of the last issue (FRU-237).
-  await expect(card.getByText('Attach a picture of the element')).toHaveCount(0);
-  await expect(card.getByText(/Last issue created/)).toHaveCount(0);
+  await expect(card.getByRole('button', { name: 'Disconnect Linear', exact: true })).toBeVisible();
+  await expectNoViolation(page, 'the settings of a Linear', '[role="dialog"]');
 
-  // The foot: underlined words that disconnect, after a second question.
-  const disconnect = card.getByRole('button', { name: 'Disconnect Linear', exact: true });
-  expect.soft(await styles(disconnect, ['font-size', 'font-weight', 'text-decoration-line', 'padding-top'])).toEqual({
-    'font-size': '13px',
-    'font-weight': '600',
-    'text-decoration-line': 'underline',
-    'padding-top': '10px',
-  });
-  expect.soft(await styles(disconnect.locator('..'), ['padding', 'border-top-width'])).toEqual({
-    padding: '14px 22px',
-    'border-top-width': '1px',
-  });
-
-  await expectNoViolation(page, 'the list and the panel of a Linear');
+  // Escape closes it, and focus goes back to the button that opened it.
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  await expect(opener).toBeFocused();
+  // A press on the row opens them too.
+  await linear.locator('td').nth(1).click();
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expectNoViolation(page, 'the table');
 });
 
-test('an address says how many of its notes did not arrive, in a red that reads on its row', async ({ page }) => {
+test('an address says how many sends wait, « Retry » sends them again, and the bar counts them', async ({ page }) => {
   const worker = await workerWith(page);
   await open(page);
   const address = rows(page).nth(1);
-  const state = address.getByText('2 notes did not arrive', { exact: true });
+  const state = address.getByText('2 notes not delivered', { exact: true });
   await expect(state).toBeVisible();
-  expect.soft(await styles(state, ['font-size', 'font-weight'])).toEqual({ 'font-size': '12px', 'font-weight': '600' });
-  // At rest too, the strong red: the accent is under 4.5:1 on a row under the pointer (FRU-683).
-  expect.soft(await painted(state, 'color')).toEqual(rgb(ACCENT_STRONG));
-  expect.soft(contrast(await painted(state, 'color'), rgb(WHITE))).toBeGreaterThanOrEqual(4.5);
-  // On the chosen row, the strong accent: the accent is 4.28:1 on the tint.
-  await address.click();
-  await expect(panel(page)).toBeVisible();
+  // The strong red: the accent is under 4.5:1 on a tint (FRU-683).
   expect.soft(await painted(state, 'color')).toEqual(rgb(ACCENT_STRONG));
   expect
-    .soft(contrast(await painted(state, 'color'), await painted(address, 'backgroundColor')))
+    .soft(contrast(rgb(ACCENT_STRONG), await painted(state, 'backgroundColor')), 'the red on its tint')
+    .toBeGreaterThanOrEqual(4.5);
+  await address.hover();
+  expect.soft(await painted(address, 'backgroundColor')).toEqual(rgb(HOVER));
+  expect
+    .soft(contrast(rgb(ACCENT_STRONG), rgb(HOVER)), 'the red on a row under the pointer')
     .toBeGreaterThanOrEqual(4.5);
   expect(contrast(rgb(ACCENT), rgb(CHIP)), 'the control: the accent would not do').toBeLessThan(4.5);
 
-  // The panel of the address lists them, and its sites.
-  await expect(panel(page).getByRole('heading', { level: 2, name: 'REST API', exact: true })).toBeVisible();
-  await expect(panel(page).getByText('Sends to hooks.acme.dev/feedback')).toBeVisible();
+  // The red count of « Connectors » in the bar follows them.
+  await expect(failing(page)).toHaveText('failed sends:2');
+
+  // The settings of the address list them, as before.
+  await openSettings(page, 'REST API');
+  await expect(panel(page).getByRole('heading', { level: 2, name: 'REST API', exact: true })).toBeAttached();
   await expect(panel(page).getByText('Your receiver answered 500')).toBeVisible();
   await expect(panel(page).getByRole('button', { name: 'Try now' })).toHaveCount(2);
-  await expect(panel(page).getByRole('button', { name: 'Disconnect REST API', exact: true })).toBeVisible();
-  await expectNoViolation(page, 'the panel of an address');
+  await page.keyboard.press('Escape');
 
-  // One note: the singular. No note: « Connected ».
+  // « Retry » asks each of them again, then reads the health again.
+  worker.late = [];
+  await address.getByRole('button', { name: 'Retry REST API', exact: true }).click();
+  await expect(address.getByText('Healthy', { exact: true })).toBeVisible();
+  expect(worker.sent.map((each) => each.pathname)).toEqual([
+    '/console/workspaces/w1/connectors/r1/deliveries/d1/retry',
+    '/console/workspaces/w1/connectors/r1/deliveries/d2/retry',
+  ]);
+  await expect(address.getByRole('button', { name: /^Retry/ })).toHaveCount(0);
+  await expect(failing(page)).toHaveCount(0);
+
+  // One note: the singular.
   worker.late = LATE.slice(0, 1);
   await open(page);
-  await expect(rows(page).nth(1).getByText('1 note did not arrive', { exact: true })).toBeVisible();
-  worker.late = [];
-  await open(page);
-  await expect(rows(page).nth(1).getByText('Connected', { exact: true })).toBeVisible();
-  await expect(
-    rows(page)
-      .nth(1)
-      .getByText(/did not arrive/),
-  ).toHaveCount(0);
+  await expect(rows(page).nth(1).getByText('1 note not delivered', { exact: true })).toBeVisible();
+  await expect(failing(page)).toHaveText('failed sends:1');
 });
 
-test('a list of late notes that was not read is no number, and not « every note arrived »', async ({ page }) => {
+test('the sends of an address that were not read are « Not read », and the screen says so', async ({ page }) => {
   const worker = await workerWith(page);
   worker.late = undefined;
   await open(page);
   const address = rows(page).nth(1);
-  // The row says only what it knows.
-  await expect(address.getByText('Connected', { exact: true })).toBeVisible();
-  await expect(address.getByText(/did not arrive/)).toHaveCount(0);
-  await address.click();
+  // Never « Healthy »: the screen does not know.
+  await expect(address.locator('[data-pill]')).toHaveText('Not read');
+  await expect(address.getByText('Healthy')).toHaveCount(0);
+  await expect(page.getByRole('alert')).toHaveText(
+    'The health of some connectors did not load. Fruitback hit an error.',
+  );
+  await openSettings(page, 'REST API');
   await expect(panel(page).getByText('Fruitback hit an error. Try again in a moment.')).toBeVisible();
   await expect(panel(page).getByText('Every note arrived.')).toHaveCount(0);
+  await page.keyboard.press('Escape');
+
+  // « Try again » reads them again.
+  worker.late = [];
+  await page.getByRole('button', { name: 'Try again', exact: true }).click();
+  await expect(address.locator('[data-pill]')).toHaveText('Healthy');
+  await expect(page.getByRole('alert')).toHaveCount(0);
 });
 
-test('a source that its tracker refuses says so in red, on its row and in its panel', async ({ page }) => {
+test('a connector that its tracker refuses, or a place it refused, says so in red', async ({ page }) => {
   const worker = await workerWith(page);
   worker.connectors = [
     { ...LINEAR, label: 'Linear · Ana', attention: { reason: 'key-refused', since: '2026-10-10T10:00:00.000Z' } },
     ADDRESS,
   ];
   await open(page);
-  const row = rows(page).first();
-  const state = row.getByText('Needs attention', { exact: true });
+  const state = rows(page).first().locator('[data-pill]');
+  await expect(state).toHaveText('Needs attention');
   expect.soft(await painted(state, 'color')).toEqual(rgb(ACCENT_STRONG));
-  await expect(row.getByText('Connected', { exact: true })).toHaveCount(0);
-  await row.click();
-  expect.soft(await painted(state, 'color')).toEqual(rgb(ACCENT_STRONG));
+  await openSettings(page, 'Linear');
   await expect(panel(page).getByRole('alert').first()).toContainText('Linear refuses this connection since');
   await expect(panel(page).getByText('Connected with the key of Ana')).toBeVisible();
 });
 
-test('a connection that Linear ended is reconnected from its panel, and keeps its sites (FRU-633)', async ({
+test('a place of a site that the tracker refused makes its connector « Needs attention » (FRU-640)', async ({
+  page,
+}) => {
+  await workerWith(page);
+  await page.route(
+    `${WORKER_ORIGIN}/console/workspaces/w1/sites*`,
+    (route) =>
+      fulfillSites(route, [
+        {
+          ...SITES[0],
+          destinations: [{ ...PLACE, attention: { reason: 'place-gone', since: '2026-11-20T10:00:00Z' } }],
+        },
+      ]) || route.fallback(),
+  );
+  await open(page);
+  await expect(rows(page).first().locator('[data-pill]')).toHaveText('Needs attention');
+  await expect(rows(page).nth(1).locator('[data-pill]')).toHaveText('2 notes not delivered');
+});
+
+test('a connection that Linear ended is reconnected from its settings, and keeps its sites (FRU-633)', async ({
   page,
 }) => {
   const worker = await workerWith(page);
   const ended = { ...LINEAR, attention: { reason: 'connection-ended', since: '2026-11-12T09:54:53.000Z' } };
   worker.connectors = [ended, ADDRESS];
   await open(page);
-  await rows(page).first().click();
+  await openSettings(page, 'Linear');
   const alert = panel(page).getByRole('alert').first();
   await expect(alert).toContainText('Linear ended this connection, and since');
   await expect(alert).toContainText('Reconnect it: its sites and its settings stay as they are.');
-  await expect(alert).not.toContainText('Disconnect');
 
   await panel(page).getByRole('button', { name: 'Reconnect Linear', exact: true }).click();
 
+  // Back from Linear, the settings of the connector open by themselves, with what happened.
   await expect(page).toHaveURL(`${CONSOLE}/w/w1/connectors`);
   expect(worker.sent.map((each) => each.pathname)).toContain('/console/workspaces/w1/connectors/c1/reconnect');
   await expect(panel(page).getByRole('status')).toHaveText(
     'Linear is connected again. Its sites send their notes to the same places.',
   );
   await expect(panel(page).getByRole('alert')).toHaveCount(0);
-  await expect(rows(page).first().getByText('Connected', { exact: true })).toBeVisible();
+  await expect(rows(page).first().locator('[data-pill]')).toHaveText('Connected');
 });
 
 test('a member reads that a connection ended, and is not offered to reconnect it (FRU-633)', async ({ page }) => {
   const worker = await workerWith(page, 'member');
   worker.connectors = [{ ...LINEAR, attention: { reason: 'connection-ended', since: '2026-11-12T09:54:53.000Z' } }];
   await open(page);
-  await rows(page).first().click();
+  await openSettings(page, 'Linear');
   await expect(panel(page).getByRole('alert').first()).toContainText(
     'An owner or an admin of the workspace can reconnect it here.',
   );
   await expect(panel(page).getByRole('button', { name: 'Reconnect Linear' })).toHaveCount(0);
 });
 
-test('a consent for another workspace of Linear says so in the panel of the connector (FRU-633)', async ({ page }) => {
+test('a consent for another workspace of Linear says so in the settings of the connector (FRU-633)', async ({
+  page,
+}) => {
   await workerWith(page);
   await page.goto(`${CONSOLE}/w/w1/connectors?linear=other-organization&connector=c1`);
   await expect(panel(page).getByRole('alert').first()).toHaveText(
@@ -510,19 +460,18 @@ test('a consent for another workspace of Linear says so in the panel of the conn
   await expect(page).toHaveURL(`${CONSOLE}/w/w1/connectors`);
 });
 
-test('with no source, and with a read that failed, the screen says which of the two it is', async ({ page }) => {
+test('with no connector, and with a read that failed, the screen says which of the two it is', async ({ page }) => {
   const worker = await workerWith(page);
   worker.connectors = [];
   await open(page);
   await expect(page.getByText('No tracker yet. The notes stay in Fruitback.')).toBeVisible();
   await expect(rows(page)).toHaveCount(0);
   await expect(page.getByRole('alert')).toHaveCount(0);
-  await expectNoViolation(page, 'no source');
-
-  // With no source, the screen is the list of the sources to add (FRU-542), and no « New connector ».
-  await expect(sources(page)).toHaveCount(9);
-  await expect(page.getByRole('heading', { level: 2, name: 'Your connectors', exact: true })).toHaveCount(0);
+  await expect(tiles(page)).toHaveCount(12);
+  await expect(page.getByRole('heading', { level: 2, name: /^Your connectors/ })).toHaveCount(0);
+  // The catalogue is on the screen: no « New connector » leads to it.
   await expect(page.getByRole('button', { name: 'New connector', exact: true })).toHaveCount(0);
+  await expectNoViolation(page, 'no connector');
 
   // A read that failed is not « no tracker »: it says so, and reads again.
   worker.down = true;
@@ -533,310 +482,199 @@ test('with no source, and with a read that failed, the screen says which of the 
   await expect(page.getByText('No tracker yet. The notes stay in Fruitback.')).toHaveCount(0);
   // Nothing to add while the list is not read: the screen does not know how this worker connects
   // Linear, by the consent at Linear or by a key.
-  await expect(sources(page)).toHaveCount(0);
+  await expect(catalogue(page)).toHaveCount(0);
   worker.down = false;
   worker.connectors = [LINEAR, ADDRESS];
   await page.getByRole('button', { name: 'Try again', exact: true }).click();
   await expect(rows(page)).toHaveCount(2);
   await expect(page.getByRole('alert')).toHaveCount(0);
-  // The control of the count above: once read, the sources to add are there, and Linear is by consent.
-  await openCatalogue(page);
-  await expect(page.getByRole('button', { name: 'Use an API key', exact: true })).toBeVisible();
+  // The control of the count above: once read, the catalogue is there.
+  await expect(tiles(page)).toHaveCount(12);
 });
 
-test('« Add a connector » lists what connects, and what does not yet with a button that says when', async ({
-  page,
-}) => {
+test('the catalogue: a tile for each tracker, its logo, one line, and its state', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const worker = await workerWith(page);
+  worker.connectors = [ADDRESS];
+  await open(page);
+  await expect(tiles(page)).toHaveCount(12);
+  for (const [index, [name, kind]] of CATALOGUE.entries()) {
+    const each = tiles(page).nth(index);
+    await expect(each, name).toHaveAttribute('data-source', name);
+    await expect(each.locator(`img[data-logo="${kind}"]`), kind).toHaveAttribute('src', `/logos/${kind}.svg`);
+  }
+  // Every logo is drawn: each file is served by the console itself.
+  for (const image of await catalogue(page).locator('img[data-logo]').all()) {
+    expect(await image.evaluate((each: HTMLImageElement) => each.complete && each.naturalWidth > 0)).toBe(true);
+  }
+
+  // A tile of 64 px: the logo in its box of 36 px, 20 px inside; four in a row at 1440 px.
+  const first = tile(page, 'Linear');
+  expect.soft(await styles(first, ['height', 'border-top-left-radius', 'border-top-width'])).toEqual({
+    height: '64px',
+    'border-top-left-radius': '8px',
+    'border-top-width': '1px',
+  });
+  expect.soft(await painted(first, 'borderTopColor')).toEqual(rgb(LINE));
+  const frame = first.locator('img').locator('..');
+  expect.soft(await styles(frame, ['width', 'height'])).toEqual({ width: '36px', height: '36px' });
+  expect.soft(await styles(first.locator('img'), ['width', 'height'])).toEqual({ width: '20px', height: '20px' });
+  const boxes = await Promise.all([0, 1, 2, 3, 4].map(async (index) => box(tiles(page).nth(index))));
+  for (const index of [1, 2, 3]) expect(boxes[index]!.y, `tile ${index + 1}`).toBe(boxes[0]!.y);
+  expect(boxes[4]!.y).toBeGreaterThan(boxes[0]!.y);
+  expect.soft(await styles(catalogue(page).getByRole('list'), ['row-gap', 'column-gap'])).toEqual({
+    'row-gap': '10px',
+    'column-gap': '10px',
+  });
+
+  // One line of what a note becomes there, cut at its end; the whole sentence is the tooltip.
+  const line = tile(page, 'Webhook').locator('[data-tile-line]');
+  await expect(line).toHaveText('Tells any address when a note arrives');
+  expect.soft(await styles(line, ['white-space', 'text-overflow', 'overflow-x'])).toEqual({
+    'white-space': 'nowrap',
+    'text-overflow': 'ellipsis',
+    'overflow-x': 'hidden',
+  });
+  expect(await line.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+  await expect(line.locator('..')).toHaveAttribute('title', 'Tells Slack or any address when a note arrives.');
+  expect.soft(await painted(line, 'color')).toEqual(rgb(MUTED));
+
+  // The states: « Connected », « Connect », « Soon », and the « New » of the routine.
+  await expect(tile(page, 'REST API').locator('[data-pill]')).toHaveText('Connected');
+  await expect(tile(page, 'REST API').getByRole('button', { name: 'Connect another REST API' })).toBeVisible();
+  for (const name of ['Jira', 'GitLab', 'Asana', 'ClickUp', 'Trello', 'Notion', 'Slack', 'Webhook']) {
+    // No plugin of this kind on this worker: nothing here connects.
+    await expect(tile(page, name).locator('[data-pill]'), name).toHaveText('Soon');
+    await expect(tile(page, name).getByRole('button'), name).toHaveCount(0);
+  }
+  const connect = tile(page, 'GitHub Issues').getByRole('button', { name: 'Connect GitHub Issues', exact: true });
+  // The worker of these stubs has no GitHub App: the tile says so, and connects nothing.
+  await expect(connect).toHaveCount(0);
+  await expect(tile(page, 'GitHub Issues').locator('[data-pill]')).toHaveText('Not set up');
+  await expect(tile(page, 'GitHub Issues').locator('[data-tile-line]')).toHaveText(
+    'The operator of this Fruitback has not set up the GitHub App.',
+  );
+  await expect(tile(page, 'Claude Code routine').locator('[data-pill]')).toHaveText('New');
+  const routine = tile(page, 'Claude Code routine').getByRole('button', { name: 'Connect Claude Code routine' });
+  expect.soft(await styles(routine, ['height', 'font-size'])).toEqual({ height: '24px', 'font-size': '12px' });
+
+  // Linear connects by the consent at Linear, and its key is the other way, in a menu.
+  await expect(tile(page, 'Linear').getByRole('button', { name: 'Connect Linear', exact: true })).toBeVisible();
+  await tile(page, 'Linear').getByRole('button', { name: 'Other ways to connect Linear' }).click();
+  await page.getByRole('menuitem', { name: 'Use an API key' }).click();
+  await expect(tile(page, 'Linear').getByLabel('Linear API key')).toBeVisible();
+  // The tile of the form takes the whole row.
+  expect((await box(tile(page, 'Linear'))).width).toBeGreaterThan(boxes[0]!.width * 3);
+  await tile(page, 'Linear').getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(tile(page, 'Linear').getByLabel('Linear API key')).toHaveCount(0);
+  await expectNoViolation(page, 'the catalogue');
+});
+
+test('the catalogue searches its tiles, and shows one kind at a time', async ({ page }) => {
+  await workerWith(page);
+  await open(page);
+  const names = () => tiles(page).evaluateAll((items) => items.map((item) => item.getAttribute('data-source')));
+  await search(page).fill('git');
+  await expect.poll(names).toEqual(['GitHub Issues', 'GitLab']);
+  // No case and no accent: « Dépôt » finds what « depot » would.
+  await search(page).fill('TRELLO');
+  await expect.poll(names).toEqual(['Trello']);
+  await search(page).fill('zzz');
+  await expect(tiles(page)).toHaveCount(0);
+  await expect(catalogue(page).getByRole('status')).toHaveText('No connector matches « zzz ».');
+  await search(page).fill('');
+
+  const group = catalogue(page).getByRole('group', { name: 'Kind of connector' });
+  await expect(group.getByRole('button')).toHaveText(['All kinds', 'Trackers', 'Agents', 'Developers']);
+  await expect(group.getByRole('button', { name: 'All kinds' })).toHaveAttribute('aria-pressed', 'true');
+  await group.getByRole('button', { name: 'Developers' }).click();
+  await expect.poll(names).toEqual(['Webhook', 'REST API']);
+  await group.getByRole('button', { name: 'Agents' }).click();
+  await expect.poll(names).toEqual(['Claude Code routine']);
+  await group.getByRole('button', { name: 'Trackers' }).click();
+  await expect(tiles(page)).toHaveCount(9);
+  await expect(group.getByRole('button', { name: 'Trackers' })).toHaveAttribute('aria-pressed', 'true');
+});
+
+test('an address connected from its tile shows its secret once, then its settings open', async ({ page }) => {
   const worker = await workerWith(page);
   await open(page);
-  await openCatalogue(page);
-  // Each source has the mark of its tracker (FRU-543).
-  // FRU-594: a Claude Code routine, last, which the trigger of a site calls.
-  for (const [index, kind] of [
-    'linear',
-    'github',
-    'rest',
-    'jira',
-    'gitlab',
-    'trello',
-    'notion',
-    'webhook',
-    'claude-routine',
-  ].entries()) {
-    await expect(sources(page).nth(index).locator(`svg[data-mark="${kind}"]`), kind).toHaveCount(1);
-  }
-  await expect(sources(page)).toHaveCount(9);
-  // The sentences of the mockup.
-  for (const [name, sentence] of [
-    ['Jira', 'An issue in a Jira Cloud project.'],
-    ['GitLab', 'An issue in a project, cloud or self-managed.'],
-    ['Trello', 'A card in the list you choose.'],
-    ['Notion', 'A row in a database.'],
-    ['Webhook', 'Tells Slack or any address when a note arrives.'],
-  ] as const) {
-    const source = page.locator(`[data-source="${name}"]`);
-    await expect(source.getByText(sentence, { exact: true })).toBeVisible();
-    // No connector of this kind exists: nothing here connects.
-    await expect(source.getByRole('button')).toHaveText('After the beta');
-    await expect(source.getByRole('button')).toBeDisabled();
-  }
-  await expect(page.locator('[data-source="GitHub Issues"]').getByRole('button')).toBeDisabled();
-
-  // The two that exist: a button of 40 px named after its source, as the mockup names them.
-  const linear = page.getByRole('button', { name: 'Connect Linear', exact: true });
-  const address = page.getByRole('button', { name: 'Connect REST API', exact: true });
-  await expect(linear).toHaveText('Connect Linear');
-  expect
-    .soft(await styles(linear, ['height', 'padding-left', 'padding-right', 'border-top-left-radius', 'font-size']))
-    .toEqual({
-      height: '28px',
-      'padding-left': '16px',
-      'padding-right': '16px',
-      'border-top-left-radius': '6px',
-      'font-size': '13px',
-    });
-  expectBox(await box(linear), { width: 87.3, height: 28 }, 2, '« Connect »');
-  // A worker with a Linear application: the key is the other way.
-  await expect(page.getByRole('button', { name: 'Use an API key', exact: true })).toBeVisible();
-
-  // An address that the worker refuses keeps what was typed.
-  await address.click();
+  await tile(page, 'REST API').getByRole('button', { name: 'Connect another REST API' }).click();
   const field = page.getByRole('textbox', { name: 'Address of your receiver' });
+  // An address that the worker refuses keeps what was typed.
   worker.refuses = 'invalid-address';
   await field.fill('https://hooks.client.fr/notes');
-  await page.getByRole('button', { name: 'Connect', exact: true }).click();
-  await expect(page.locator('[data-source="REST API"]').getByRole('alert')).toContainText(
-    'Fruitback cannot send to this address.',
-  );
+  await tile(page, 'REST API').getByRole('button', { name: 'Connect', exact: true }).click();
+  await expect(tile(page, 'REST API').getByRole('alert')).toContainText('Fruitback cannot send to this address.');
   await expect(field).toHaveValue('https://hooks.client.fr/notes');
   await expectNoViolation(page, 'the form of an address');
 
-  // Kept: the secret that Fruitback made is on the screen once.
+  // Kept: the secret that Fruitback made is on the screen once, and the address is in the table.
   worker.refuses = undefined;
-  await page.getByRole('button', { name: 'Connect', exact: true }).click();
+  await tile(page, 'REST API').getByRole('button', { name: 'Connect', exact: true }).click();
   await expect(page.locator('[data-secret]')).toHaveText('made-by-fruitback-0123456789');
   await expect(rows(page)).toHaveCount(3);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
   await page.getByRole('button', { name: 'I kept it', exact: true }).click();
   await expect(page.locator('[data-secret]')).toHaveCount(0);
-  // The secret was kept: the list of the sources to add closes, over the new source.
-  await expect(sources(page)).toHaveCount(0);
-  // The button that had focus went with the list: the panel of the new address takes it.
-  await expect(panel(page)).toBeFocused();
+  // Its settings open, and the secret is gone from the screen.
   await expect(panel(page)).toHaveAttribute('aria-label', /hooks\.client\.fr\/notes/);
   await expect(page.getByText('made-by-fruitback-0123456789')).toHaveCount(0);
 });
 
-/**
- * FRU-562: « New connector » opens « Add a connector » in a dialog over the page, its sources a grid
- * of cards. The page behind is inert while it is open, so no read of a panel can take « New
- * connector » away under it (the case FRU-542 handled with a focus on « Your connectors »).
- */
-test('« New connector » opens a dialog with the sources as a grid of cards (FRU-562)', async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await workerWith(page);
+test('a secret on the screen stays when the read after it says no connector can be added', async ({ page }) => {
+  const worker = await workerWith(page);
   await open(page);
-  const opener = page.getByRole('button', { name: 'New connector', exact: true });
-  await opener.click();
-  const dialog = page.getByRole('dialog', { name: 'Add a connector' });
-  await expect(dialog).toBeVisible();
-  await expect(dialog.getByRole('listitem')).toHaveCount(9);
-  // Not in the page: the list of the connected sources stays where it is, under the dialog.
-  await expect(page.locator('main').getByRole('region', { name: 'Add a connector' })).toHaveCount(0);
-  // Focus is in the dialog, and Tab keeps it there.
-  expect(await dialog.evaluate((element) => element.contains(document.activeElement))).toBe(true);
-  for (let press = 0; press < 12; press += 1) {
-    await page.keyboard.press('Tab');
-    expect(await dialog.evaluate((element) => element.contains(document.activeElement)), `Tab ${press}`).toBe(true);
-  }
-
-  // A grid of cards: three in a row at 1440 px, each a frame of its own, their buttons at the foot.
-  const grid = dialog.getByRole('list');
-  expect.soft(await styles(grid, ['display', 'row-gap', 'column-gap'])).toEqual({
-    display: 'grid',
-    'row-gap': '12px',
-    'column-gap': '12px',
-  });
-  const cards = await Promise.all([0, 1, 2, 3].map(async (index) => box(dialog.getByRole('listitem').nth(index))));
-  expect(cards[1]!.y).toBe(cards[0]!.y);
-  expect(cards[2]!.y).toBe(cards[0]!.y);
-  expect(cards[3]!.y).toBeGreaterThan(cards[0]!.y);
-  const card = dialog.getByRole('listitem').nth(3);
-  expect
-    .soft(await styles(card, ['border-top-left-radius', 'border-top-width', 'padding-top', 'padding-left']))
-    .toEqual({
-      'border-top-left-radius': '8px',
-      'border-top-width': '1px',
-      'padding-top': '16px',
-      'padding-left': '16px',
-    });
-  expect.soft(await painted(card, 'borderTopColor')).toEqual(rgb(LINE));
-  // The dialog fades and zooms in (HeroUI's Modal): axe reads its contrast once it is there.
-  await page.evaluate(() => Promise.all(document.getAnimations().map((animation) => animation.finished)));
-  const results = await new AxeBuilder({ page }).include('[role="dialog"]').analyze();
-  expect.soft(results.violations.map((violation) => violation.id)).toEqual([]);
-
-  // Escape closes it, and focus goes back to « New connector ».
-  await page.keyboard.press('Escape');
-  await expect(dialog).toHaveCount(0);
-  await expect(opener).toBeFocused();
-
-  // A form open in it takes the whole row, and locks it: no Escape and no close button, which would
-  // take away a key being typed, or the secret of an address shown once.
-  await opener.click();
-  await dialog.getByRole('button', { name: 'Connect REST API', exact: true }).click();
-  const form = dialog.locator('[data-source="REST API"]');
-  expect((await box(form)).width).toBeGreaterThan(cards[0]!.width * 2);
-  await dialog.getByRole('textbox', { name: 'Address of your receiver' }).fill('https://hooks.client.fr/notes');
-  await expect(dialog.getByRole('button', { name: 'Close', exact: true })).toHaveCount(0);
-  await page.keyboard.press('Escape');
-  await expect(dialog).toBeVisible();
-  await expect(dialog.getByRole('textbox', { name: 'Address of your receiver' })).toHaveValue(
-    'https://hooks.client.fr/notes',
-  );
-  // « Cancel » ends the form, and the dialog closes again by its button.
-  await form.getByRole('button', { name: 'Cancel', exact: true }).click();
-  await dialog.getByRole('button', { name: 'Close', exact: true }).click();
-  await expect(dialog).toHaveCount(0);
-  await expect(opener).toBeFocused();
+  await tile(page, 'REST API').getByRole('button', { name: 'Connect another REST API' }).click();
+  await page.getByRole('textbox', { name: 'Address of your receiver' }).fill('https://hooks.client.fr/notes');
+  // The read that follows the address says this worker cannot keep a key any more: the buttons of
+  // the catalogue go, and the form with the secret must not go with them.
+  worker.unavailable = true;
+  await tile(page, 'REST API').getByRole('button', { name: 'Connect', exact: true }).click();
+  await expect(rows(page)).toHaveCount(3);
+  await expect(page.getByRole('button', { name: 'New connector', exact: true })).toHaveCount(0);
+  await expect(page.locator('[data-secret]')).toHaveText('made-by-fruitback-0123456789');
+  await page.getByRole('button', { name: 'I kept it', exact: true }).click();
+  await expect(panel(page)).toBeVisible();
 });
 
-/**
- * FRU-563: the panel of a connector unfolds when its card opens: its height grows from nothing and it
- * fades in, 220 ms on the curve of the kit. With reduced motion it is there at once.
- */
-test('the panel of a connector unfolds as its card opens, and is there at once with reduced motion (FRU-563)', async ({
-  page,
-}) => {
+test('« New connector » and `?new` lead to the search of the catalogue', async ({ page }) => {
   await workerWith(page);
   await open(page);
-  await expect(rows(page)).toHaveCount(2);
-  /** The heights of the panel at the first frames after a press of the first row, then once it settled. */
-  const heights = () =>
-    page.evaluate(async () => {
-      const row = document.querySelector<HTMLButtonElement>('button[id^="source-row-"]')!;
-      row.click();
-      const frame = () => new Promise((resolve) => requestAnimationFrame(resolve));
-      const read = () => document.getElementById('source-panel')?.getBoundingClientRect().height ?? -1;
-      await frame();
-      await frame();
-      const early = read();
-      await new Promise((resolve) => setTimeout(resolve, 600));
-      return { early, settled: read() };
-    });
+  await page.getByRole('button', { name: 'New connector', exact: true }).click();
+  await expect(search(page)).toBeFocused();
+  await expect(catalogue(page).getByRole('heading', { name: 'Add a connector' })).toBeInViewport();
 
-  const moving = await heights();
-  expect(moving.settled).toBeGreaterThan(100);
-  expect(moving.early, 'early in the move').toBeLessThan(moving.settled * 0.9);
-  expect
-    .soft(await styles(panel(page), ['animation-name', 'animation-duration']))
-    .toEqual({ 'animation-name': 'source-panel-open', 'animation-duration': '0.22s' });
-  // Settled, nothing is clipped, and focus is in the panel as before (FRU-197).
-  await unfolded(page);
-  await rows(page).first().click();
-  await expect(panel(page)).toHaveCount(0);
-
-  await page.emulateMedia({ reducedMotion: 'reduce' });
-  const still = await heights();
-  expect(still.early, 'at once with reduced motion').toBe(still.settled);
-  expect.soft(await styles(panel(page), ['animation-name'])).toEqual({ 'animation-name': 'none' });
-  // No move, so no event of its end: the panel is settled from the start (raised in review).
-  await unfolded(page);
-});
-
-test('a move of the panel that never ends leaves it unclipped (FRU-563)', async ({ page }) => {
-  await workerWith(page);
-  await open(page);
-  await expect(rows(page)).toHaveCount(2);
-  // The panel is hidden while it moves: its move sends no end (and Chromium no « animationcancel »).
-  const settled = await page.evaluate(async () => {
-    document.querySelector<HTMLButtonElement>('button[id^="source-row-"]')!.click();
-    await new Promise((resolve) => requestAnimationFrame(resolve));
-    const opened = document.getElementById('source-panel')!;
-    const ends: string[] = [];
-    opened.addEventListener('animationend', () => ends.push('end'));
-    opened.style.display = 'none';
-    await new Promise((resolve) => setTimeout(resolve, 700));
-    const after = { settled: opened.hasAttribute('data-settled'), ends: ends.length };
-    opened.style.display = '';
-
-    return after;
-  });
-  // The control: no end came, so only the timer can have settled it.
-  expect(settled).toEqual({ settled: true, ends: 0 });
-  await expect(panel(page).locator('.source-panel__body')).toHaveCSS('overflow-y', 'visible');
-});
-
-test('`?new` in the address opens « Add a connector », and leaves the address (FRU-562)', async ({ page }) => {
-  await workerWith(page);
   await page.goto(`${CONSOLE}/w/w1/connectors?new=1`);
-  await expect(page.getByRole('dialog', { name: 'Add a connector' })).toBeVisible();
-  await expect(sources(page)).toHaveCount(9);
+  await expect(search(page)).toBeFocused();
   await expect(page).toHaveURL(`${CONSOLE}/w/w1/connectors`);
 });
 
-test('`?new` opens nothing for a member, who adds no source (FRU-562)', async ({ page }) => {
+test('`?new` leads nowhere for a person who cannot add a connector', async ({ page }) => {
   await workerWith(page, 'member');
   await page.goto(`${CONSOLE}/w/w1/connectors?new=1`);
   await expect(rows(page)).toHaveCount(2);
-  await expect(page.getByRole('dialog')).toHaveCount(0);
-});
+  await expect(page).toHaveURL(`${CONSOLE}/w/w1/connectors`);
+  await expect(search(page)).not.toBeFocused();
 
-test('a secret shown in the dialog stays when the read after it says no source can be added (FRU-562)', async ({
-  page,
-}) => {
-  const worker = await workerWith(page);
-  await open(page);
-  await openCatalogue(page);
-  const dialog = page.getByRole('dialog', { name: 'Add a connector' });
-  await dialog.getByRole('button', { name: 'Connect REST API', exact: true }).click();
-  await dialog.getByRole('textbox', { name: 'Address of your receiver' }).fill('https://hooks.client.fr/notes');
-  // The read that follows the address says this worker cannot keep a key any more: « New connector »
-  // goes, and the dialog with the secret must not go with it (raised in review).
-  worker.unavailable = true;
-  await dialog.getByRole('button', { name: 'Connect', exact: true }).click();
-  await expect(rows(page)).toHaveCount(3);
-  await expect(page.getByRole('button', { name: 'New connector', exact: true })).toHaveCount(0);
-  await expect(dialog.locator('[data-secret]')).toHaveText('made-by-fruitback-0123456789');
-  await dialog.getByRole('button', { name: 'I kept it', exact: true }).click();
-  await expect(dialog).toHaveCount(0);
-  await expect(panel(page)).toBeFocused();
-});
-
-test('`?new` with a worker that cannot keep a key opens nothing, also after a read that can (FRU-562)', async ({
-  page,
-}) => {
-  const worker = await workerWith(page);
-  worker.unavailable = true;
+  // A worker that cannot keep a key: the same, also after a later read that can.
+  await page.unrouteAll({ behavior: 'ignoreErrors' });
+  const owner = await workerWith(page);
+  owner.unavailable = true;
   await page.goto(`${CONSOLE}/w/w1/connectors?new=1`);
   await expect(rows(page)).toHaveCount(2);
-  await expect(page).toHaveURL(`${CONSOLE}/w/w1/connectors`);
-  await expect(page.getByRole('dialog')).toHaveCount(0);
-  // A later read that can add a source opens no dialog by itself (raised in review).
-  worker.unavailable = false;
-  await rows(page).nth(1).click();
-  await unfolded(page);
-  await panel(page).getByRole('button', { name: 'Try now' }).first().click();
+  await expect(search(page)).not.toBeFocused();
+  await expect(page.getByRole('button', { name: 'New connector', exact: true })).toHaveCount(0);
+  owner.unavailable = false;
+  await page.getByRole('button', { name: 'Retry REST API', exact: true }).click();
   await expect(page.getByRole('button', { name: 'New connector', exact: true })).toBeVisible();
-  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(search(page)).not.toBeFocused();
 });
 
-test('with no source, the sources to add are a grid of cards on the page (FRU-562)', async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 900 });
-  const worker = await workerWith(page);
-  worker.connectors = [];
-  await open(page);
-  await expect(sources(page)).toHaveCount(9);
-  await expect(page.getByRole('dialog')).toHaveCount(0);
-  expect.soft(await styles(catalogue(page).getByRole('list'), ['display'])).toEqual({ display: 'grid' });
-  const first = await box(sources(page).nth(0));
-  expect((await box(sources(page).nth(1))).y).toBe(first.y);
-});
-
-test('« Add a connector » waits for the list of the sources, and its buttons do not move under a press', async ({
+test('the catalogue waits for the list of the connectors, and its buttons do not move under a press', async ({
   page,
 }) => {
   const worker = await workerWith(page);
-  // With no source, the list of the sources to add comes with the read (FRU-542).
   worker.connectors = [];
   // The read is held: the screen is drawn without the list, as on a slow line.
   let release: () => void = () => {};
@@ -848,15 +686,14 @@ test('« Add a connector » waits for the list of the sources, and its buttons d
   await open(page);
   const connect = page.getByRole('button', { name: 'Connect REST API', exact: true });
   await expect(page.locator('main').getByText('Loading…')).toBeVisible();
-  // Nothing to press yet: the list arrives above these buttons, and what « Connect Linear » does
-  // (the consent at Linear, or a key) is said by the same read.
-  await expect(sources(page)).toHaveCount(0);
+  // Nothing to press yet: what « Connect Linear » does (the consent at Linear, or a key) is said by
+  // the same read.
+  await expect(tiles(page)).toHaveCount(0);
   await expect(connect).toHaveCount(0);
 
   release();
-  await expect(sources(page)).toHaveCount(9);
+  await expect(tiles(page)).toHaveCount(12);
   await expect(rows(page)).toHaveCount(0);
-  // The buttons came with the list: a press finds them where they stay.
   const before = await connect.boundingBox();
   await page.mouse.move(before!.x + before!.width / 2, before!.y + before!.height / 2);
   await page.mouse.down();
@@ -866,44 +703,26 @@ test('« Add a connector » waits for the list of the sources, and its buttons d
   await expect(page.getByRole('textbox', { name: 'Address of your receiver' })).toBeVisible();
 });
 
-test('a worker with no Linear application connects Linear by a key, under its row', async ({ page }) => {
+test('a worker with no Linear application connects Linear by a key, and its settings open', async ({ page }) => {
   const worker = await workerWith(page);
   worker.oauth = false;
+  worker.connectors = [ADDRESS];
   await open(page);
-  await openCatalogue(page);
-  await expect(page.getByRole('button', { name: 'Use an API key', exact: true })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Connect Linear', exact: true }).click();
-  const source = page.locator('[data-source="Linear"]');
-  await expect(source.getByLabel('Linear API key')).toBeVisible();
-  await source.getByRole('button', { name: 'Cancel', exact: true }).click();
-  await expect(source.getByLabel('Linear API key')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Connect Linear', exact: true })).toBeVisible();
-});
-
-test('a Linear connected by a key from « New connector » opens its panel with focus (FRU-542)', async ({ page }) => {
-  const worker = await workerWith(page);
-  worker.oauth = false;
-  await open(page);
-  await openCatalogue(page);
-  await page.getByRole('button', { name: 'Connect Linear', exact: true }).click();
-  await page.getByLabel('Linear API key').fill('lin_api_0123456789');
-  await page.locator('[data-source="Linear"]').getByRole('button', { name: 'Connect', exact: true }).click();
-  // The form that had focus went with the list: the panel of the new source has it, once it is read.
-  await expect(sources(page)).toHaveCount(0);
-  await expect(rows(page)).toHaveCount(3);
+  await expect(tile(page, 'Linear').getByRole('button', { name: 'Other ways to connect Linear' })).toHaveCount(0);
+  await tile(page, 'Linear').getByRole('button', { name: 'Connect Linear', exact: true }).click();
+  await tile(page, 'Linear').getByLabel('Linear API key').fill('lin_api_0123456789');
+  await tile(page, 'Linear').getByRole('button', { name: 'Connect', exact: true }).click();
+  await expect(rows(page)).toHaveCount(2);
   await expect(panel(page)).toHaveAttribute('aria-label', 'Linear · Key of Bo');
-  await expect(panel(page)).toBeFocused();
+  await expect(tile(page, 'Linear').getByLabel('Linear API key')).toHaveCount(0);
 });
 
-test('a first address takes focus in its panel, also when its read ends after « I kept it » (FRU-542)', async ({
-  page,
-}) => {
+test('a first address opens its settings once read, also when the read ends after « I kept it »', async ({ page }) => {
   const worker = await workerWith(page);
   worker.connectors = [];
   await open(page);
   await page.getByRole('button', { name: 'Connect REST API', exact: true }).click();
   await page.getByRole('textbox', { name: 'Address of your receiver' }).fill('https://hooks.client.fr/notes');
-  // The read of the list that follows the address is held until the secret is kept.
   let release: () => void = () => {};
   const held = new Promise<void>((resolve) => (release = resolve));
   await page.route(`${WORKER_ORIGIN}/console/workspaces/w1/connectors`, async (route) => {
@@ -914,156 +733,114 @@ test('a first address takes focus in its panel, also when its read ends after «
   await expect(page.locator('[data-secret]')).toHaveText('made-by-fruitback-0123456789');
   await page.getByRole('button', { name: 'I kept it', exact: true }).click();
   await expect(rows(page)).toHaveCount(0);
+  await expect(panel(page)).toHaveCount(0);
   release();
   await expect(rows(page)).toHaveCount(1);
-  await expect(panel(page)).toBeFocused();
-});
-
-test('an address with its own secret closes the list, and its panel takes focus once read (FRU-542)', async ({
-  page,
-}) => {
-  await workerWith(page);
-  await open(page);
-  await openCatalogue(page);
-  await page.getByRole('button', { name: 'Connect REST API', exact: true }).click();
-  await page.getByRole('textbox', { name: 'Address of your receiver' }).fill('https://hooks.client.fr/notes');
-  await page.getByLabel('Secret (optional)').fill('my-own-secret-0123456789');
-  // The read of the list that follows the address is held: the list closes before the address is in it.
-  let release: () => void = () => {};
-  const held = new Promise<void>((resolve) => (release = resolve));
-  await page.route(`${WORKER_ORIGIN}/console/workspaces/w1/connectors`, async (route) => {
-    if (route.request().method() === 'GET') await held;
-    await route.fallback();
-  });
-  await page.getByRole('button', { name: 'Connect', exact: true }).click();
-  // No secret to show: the list closes at once.
-  await expect(sources(page)).toHaveCount(0);
-  await expect(page.locator('[data-secret]')).toHaveCount(0);
-  await expect(rows(page)).toHaveCount(2);
-  release();
-  await expect(rows(page)).toHaveCount(3);
   await expect(panel(page)).toHaveAttribute('aria-label', /hooks\.client\.fr\/notes/);
-  await expect(panel(page)).toBeFocused();
 });
 
-test('after an address whose read failed, « Cancel » of the next form closes only the form (FRU-542)', async ({
-  page,
-}) => {
+test('after an address whose read failed, « Cancel » of the next form closes only the form', async ({ page }) => {
   const worker = await workerWith(page);
   await open(page);
-  await openCatalogue(page);
-  await page.getByRole('button', { name: 'Connect REST API', exact: true }).click();
+  await tile(page, 'REST API').getByRole('button', { name: 'Connect another REST API' }).click();
   await page.getByRole('textbox', { name: 'Address of your receiver' }).fill('https://hooks.client.fr/notes');
   await page.getByLabel('Secret (optional)').fill('my-own-secret-0123456789');
-  // The address is kept, and the read that follows fails: no panel comes.
+  // The address is kept with a secret of its own, and the read that follows fails: no settings open.
   worker.down = true;
-  await page.getByRole('button', { name: 'Connect', exact: true }).click();
-  await expect(sources(page)).toHaveCount(0);
+  await tile(page, 'REST API').getByRole('button', { name: 'Connect', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('The connectors and their sites did not load.');
+  await expect(panel(page)).toHaveCount(0);
   worker.down = false;
-  await openCatalogue(page);
-  await page.getByRole('button', { name: 'Connect REST API', exact: true }).click();
-  await page.locator('[data-source="REST API"]').getByRole('button', { name: 'Cancel', exact: true }).click();
-  // « Cancel » closes the form, and the list stays.
-  await expect(sources(page)).toHaveCount(9);
-  await expect(page.getByRole('button', { name: 'Connect REST API', exact: true })).toBeVisible();
+  await tile(page, 'REST API').getByRole('button', { name: 'Connect another REST API' }).click();
+  await tile(page, 'REST API').getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(page.getByRole('textbox', { name: 'Address of your receiver' })).toHaveCount(0);
+  await expect(panel(page)).toHaveCount(0);
 });
 
-test('a member reads the sources and changes none', async ({ page }) => {
+test('a member reads the connectors and the catalogue, and changes nothing', async ({ page }) => {
   const worker = await workerWith(page, 'member');
   worker.connectors = [];
   await open(page);
   await expect(page.getByText('An owner or an admin adds a connector')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Connect Linear', exact: true })).toBeDisabled();
-  await expect(page.getByRole('button', { name: 'Connect REST API', exact: true })).toBeDisabled();
-  // With a source connected, nothing offers a list of buttons that the member cannot press.
+  await expect(tiles(page)).toHaveCount(12);
+  // No button that does nothing: the line above says who adds one.
+  await expect(catalogue(page).getByRole('button', { name: /^Connect/ })).toHaveCount(0);
   worker.connectors = [LINEAR, ADDRESS];
   await open(page);
   await expect(rows(page)).toHaveCount(2);
   await expect(page.getByRole('button', { name: 'New connector', exact: true })).toHaveCount(0);
-  await expect(sources(page)).toHaveCount(0);
-  await rows(page).first().click();
+  await expect(
+    rows(page)
+      .nth(1)
+      .getByRole('button', { name: /^Retry/ }),
+  ).toHaveCount(0);
+  await openSettings(page, 'Linear');
   await expect(panel(page).getByRole('heading', { level: 3, name: 'Sites sending here' })).toBeVisible();
   await expect(panel(page).locator('[data-site]')).toHaveCount(2);
-  // No list of the other sites, no status to set, nothing to disconnect.
-  await expect(panel(page).getByRole('heading', { level: 3, name: 'Other sites' })).toHaveCount(0);
   await expect(panel(page).getByRole('link', { name: /^Statuses of / })).toHaveCount(0);
   await expect(panel(page).getByRole('button')).toHaveCount(0);
   await expect(panel(page).getByRole('switch')).toHaveCount(0);
 });
 
-test('a link of the panel leads to the statuses of its site (FRU-368)', async ({ page }) => {
+test('a link of the settings leads to the statuses of its site (FRU-368)', async ({ page }) => {
   await workerWith(page);
   await open(page);
-  await rows(page).first().click();
-  await unfolded(page);
+  await openSettings(page, 'Linear');
   await panel(page).getByRole('link', { name: 'Statuses of https://staging.acme.dev' }).click();
-  // A cold dev server once reloaded the page here, for a dependency it bundled late: vite.config.ts.
   await expect(page).toHaveURL(/\/w\/w1\/sites\/s1\/statuses$/);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Statuses');
 });
 
-test('at 390 px a long address keeps one line on its row, and its state goes under it (FRU-321)', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
+test('a long address keeps one line in its row, cut at its end (FRU-321)', async ({ page }) => {
   const long = 'REST · hooks.a-very-long-subdomain-of-the-receiver.staging.acme-corporation.dev/feedback/notes';
   const worker = await workerWith(page);
   worker.connectors = [LINEAR, { ...ADDRESS, label: long }];
-  await open(page);
-  const address = rows(page).nth(1);
-  const line = address.locator('[data-source-line]');
-  // One line, cut at its end: the whole address is in the title of the line, and in the panel.
-  const box = await line.boundingBox();
-  // `leading-auto` computes to « normal », so one line is measured against the size of the font.
-  const fontSize = await line.evaluate((element) => parseFloat(getComputedStyle(element).fontSize));
-  expect(box?.height ?? 0).toBeLessThan(fontSize * 2);
-  expect(await line.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
-  await expect(address.locator('[title]')).toHaveAttribute('title', long.replace(/^REST · /, ''));
-  // The state is under the address, not in the middle of it.
-  const state = address.getByText('2 notes did not arrive', { exact: true });
-  expect((await state.boundingBox())?.y ?? 0).toBeGreaterThan((box?.y ?? 0) + (box?.height ?? 0) - 1);
-  expect(await sideScroll(page)).toBe(0);
-  // From 640 px the state is back at the end of the row.
-  await page.setViewportSize({ width: 1024, height: 844 });
-  const wide = await line.boundingBox();
-  expect(Math.abs(((await state.boundingBox())?.y ?? 0) - (wide?.y ?? 0))).toBeLessThan(24);
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await open(page);
+    const line = rows(page).nth(1).locator('[data-source-line]');
+    const fontSize = await line.evaluate((element) => parseFloat(getComputedStyle(element).fontSize));
+    expect((await box(line)).height, `${width} px`).toBeLessThan(fontSize * 2);
+    expect(await line.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+    await expect(line).toHaveAttribute('title', long.replace(/^REST · /, ''));
+    expect(await sideScroll(page), `${width} px`).toBe(0);
+  }
 });
 
 for (const locale of ['en', 'fr'] as const) {
-  test(`at 390 px nothing scrolls sideways, with a panel open, in ${locale}`, async ({ page }) => {
+  test(`at 390 px nothing scrolls sideways, with the settings open, in ${locale}`, async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await workerWith(page, 'owner', locale);
     await open(page);
-    expect.soft(await sideScroll(page), 'the list').toBe(0);
-    for (const index of [0, 1]) {
-      await rows(page).nth(index).click();
-      await expect(panel(page)).toBeVisible();
-      await page.waitForTimeout(300);
-      expect.soft(await sideScroll(page), `the panel of source ${index + 1}`).toBe(0);
-      await expectNoViolation(page, `the panel of source ${index + 1} at 390 px`);
-      await rows(page).nth(index).click();
+    expect.soft(await sideScroll(page), 'the table and the catalogue').toBe(0);
+    // A row is a card under 680 px (FRU-505): its words are one under the other.
+    await expect(page.locator('.kit-table')).toHaveAttribute('data-stacked', 'true');
+    for (const name of ['Linear', locale === 'en' ? 'REST API' : 'API REST']) {
+      await page
+        .getByRole('button', { name: `${locale === 'en' ? 'Settings of' : 'Réglages de'} ${name}`, exact: true })
+        .click();
+      await unfolded(page);
+      const dialog = await box(page.getByRole('dialog'));
+      expect.soft(dialog.x).toBeGreaterThanOrEqual(0);
+      expect.soft(dialog.x + dialog.width).toBeLessThanOrEqual(390);
+      await expectNoViolation(page, `the settings of ${name} at 390 px`, '[role="dialog"]');
+      await page.keyboard.press('Escape');
+      await expect(page.getByRole('dialog')).toHaveCount(0);
     }
+    // One tile in a row.
+    for (const each of await tiles(page).all())
+      expect.soft((await box(each)).x + (await box(each)).width).toBeLessThanOrEqual(390);
     await page
-      .getByRole('button', { name: locale === 'en' ? 'New connector' : 'Nouveau connecteur', exact: true })
-      .click();
-    expect.soft(await sideScroll(page), 'the list of the sources to add').toBe(0);
-    // The dialog fits the width of a phone: no card goes past its edge.
-    const dialog = page.getByRole('dialog');
-    const frame = await box(dialog);
-    expect.soft(frame.x).toBeGreaterThanOrEqual(0);
-    expect.soft(frame.x + frame.width).toBeLessThanOrEqual(390);
-    for (const card of await dialog.getByRole('listitem').all()) {
-      const each = await box(card);
-      expect.soft(each.x + each.width, 'a card in the dialog').toBeLessThanOrEqual(frame.x + frame.width);
-    }
-    await page
-      .getByRole('button', { name: locale === 'en' ? 'Connect REST API' : 'Connecter API REST', exact: true })
+      .getByRole('button', { name: locale === 'en' ? 'Connect another REST API' : 'Connecter un autre API REST' })
       .click();
     expect.soft(await sideScroll(page), 'the form of an address').toBe(0);
+    await expectNoViolation(page, `390 px in ${locale}`);
   });
 }
 
 /**
- * FRU-404. Several sources can reach one tracker, so an owner or an admin names each one in its panel,
- * and the name is what its row shows. An empty name gives it back the name of its kind.
+ * FRU-404. Several connectors can reach one tracker, so an owner or an admin names each one in its
+ * settings, and the name is what its row shows. An empty name gives it back the name of its kind.
  */
 for (const { width, height, locale, words } of [
   {
@@ -1071,6 +848,7 @@ for (const { width, height, locale, words } of [
     height: 900,
     locale: 'en',
     words: {
+      settings: 'Settings of',
       rename: 'Rename Linear',
       field: 'Name of this connector',
       save: 'Save',
@@ -1082,6 +860,7 @@ for (const { width, height, locale, words } of [
     height: 844,
     locale: 'fr',
     words: {
+      settings: 'Réglages de',
       rename: 'Renommer Linear',
       field: 'Nom de ce connecteur',
       save: 'Enregistrer',
@@ -1089,13 +868,14 @@ for (const { width, height, locale, words } of [
     },
   },
 ] as const) {
-  test(`an owner names a source, and its row says the name, at ${width} px in ${locale}`, async ({ page }) => {
+  test(`an owner names a connector, and its row says the name, at ${width} px in ${locale}`, async ({ page }) => {
     await page.setViewportSize({ width, height });
     const worker = await workerWith(page, 'owner', locale);
     worker.connectors = [LINEAR, { ...LINEAR, id: 'c2', label: 'Linear · Ana' }, ADDRESS];
     await open(page);
     const row = rows(page).first();
-    await row.click();
+    const name = row.locator('td').first();
+    await row.getByRole('button', { name: `${words.settings} Linear`, exact: true }).click();
     await unfolded(page);
 
     // A refused name keeps the form open, with what was typed.
@@ -1111,56 +891,53 @@ for (const { width, height, locale, words } of [
     worker.refusesName = undefined;
     await field.fill('  Clients  ');
     await field.press('Enter');
-    await expect(row.locator('span.font-semibold').first()).toHaveText('Clients');
+    await expect(name).toHaveText('Clients');
     expect(worker.sent.at(-1)).toEqual({ pathname: '/console/workspaces/w1/connectors/c1', body: { name: 'Clients' } });
-    // The kind goes under the name, so that a name never hides what the source is.
+    // The kind goes first in its account, so that a name never hides what the connector is.
     await expect(row.locator('[data-source-line]')).toHaveText(/^Linear · /);
+    // The dialog is named after it too.
+    await expect(page.getByRole('dialog', { name: 'Clients' })).toBeVisible();
     // The neighbour of the same kind keeps its own name.
-    await expect(rows(page).nth(1).locator('span.font-semibold').first()).toHaveText('Linear');
-    // Focus is back on « Rename », and the panel is still open.
+    await expect(rows(page).nth(1).locator('td').first()).toHaveText('Linear');
     await expect(panel(page).getByRole('button', { name: /Clients$/ })).toBeFocused();
-    expect(await sideScroll(page)).toBe(0);
-    await expectNoViolation(page, `named, ${width} px`);
+    await expectNoViolation(page, `named, ${width} px`, '[role="dialog"]');
 
-    // Escape in the form closes the form, not the panel.
+    // Escape in the form closes the form, not the dialog.
     await panel(page)
       .getByRole('button', { name: /Clients$/ })
       .click();
     await page.keyboard.press('Escape');
     await expect(panel(page)).toBeVisible();
 
-    // An empty name gives the source back the name of its kind.
+    // An empty name gives the connector back the name of its kind.
     await panel(page)
       .getByRole('button', { name: /Clients$/ })
       .click();
     await panel(page).getByRole('textbox', { name: words.field }).fill('');
     await panel(page).getByRole('button', { name: words.save, exact: true }).click();
-    await expect(row.locator('span.font-semibold').first()).toHaveText('Linear');
+    await expect(name).toHaveText('Linear');
     expect(worker.sent.at(-1)?.body).toEqual({ name: '' });
   });
 }
 
-test('« Rename » starts from the name of the last read, not the one of when the panel opened', async ({ page }) => {
+test('« Rename » starts from the name of the last read, not the one of when the settings opened', async ({ page }) => {
   const worker = await workerWith(page);
   await open(page);
-  // The panel of the address: « Try now » of a late note reads the list of the sources again.
-  const row = rows(page).nth(1);
-  await row.click();
-  await unfolded(page);
-  // Another admin names it meanwhile.
+  await openSettings(page, 'REST API');
+  // Another admin names it meanwhile; « Try now » of a late note reads the list again.
   worker.connectors = [LINEAR, { ...ADDRESS, name: 'Support' }];
   await panel(page).getByRole('button', { name: 'Try now' }).first().click();
-  await expect(row.locator('span.font-semibold').first()).toHaveText('Support');
+  await expect(rows(page).nth(1).locator('td').first()).toHaveText('Support');
   await panel(page).getByRole('button', { name: 'Rename Support', exact: true }).click();
   await expect(panel(page).getByRole('textbox', { name: 'Name of this connector' })).toHaveValue('Support');
 });
 
-test('a member reads the name of a source, and renames none', async ({ page }) => {
+test('a member reads the name of a connector, and renames none', async ({ page }) => {
   const worker = await workerWith(page, 'member');
   worker.connectors = [{ ...LINEAR, name: 'Clients' }, ADDRESS];
   await open(page);
-  await expect(rows(page).first().locator('span.font-semibold').first()).toHaveText('Clients');
-  await rows(page).first().click();
+  await expect(rows(page).first().locator('td').first()).toHaveText('Clients');
+  await openSettings(page, 'Clients');
   await expect(panel(page).getByText('Clients', { exact: true })).toBeVisible();
   await expect(panel(page).getByRole('button', { name: /^Rename/ })).toHaveCount(0);
 });

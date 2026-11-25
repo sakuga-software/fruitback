@@ -555,6 +555,14 @@ export default function Connectors() {
               </div>
             )}
             <DataTable label={t('Your connectors')} minWidth={680} dense hover stack>
+              {/* Widths of their own: a health that changes after « Retry » moves no column. */}
+              <colgroup>
+                <col className="w-[24%]" />
+                <col className="w-[32%]" />
+                <col className="w-[12%]" />
+                <col className="w-[20%]" />
+                <col className="w-[12%]" />
+              </colgroup>
               <thead>
                 <tr>
                   <th scope="col">{t('Connector')}</th>
@@ -844,7 +852,10 @@ function Tile({
   detail: string;
   offer: Offer;
   connected: boolean;
-  /** The person cannot add a source here: a member, or a worker that cannot keep a key. */
+  /**
+   * The person cannot add a source here: a member, or a worker that cannot keep a key. The tile then
+   * offers no button: a line above the tiles says why, and a disabled button would say nothing more.
+   */
   cannot: boolean;
   /** Its form is open. */
   typing: boolean;
@@ -879,19 +890,19 @@ function Tile({
           {offer.state === 'soon' && !connected ? <Pill tone="neutral">{t('Soon')}</Pill> : null}
           {offer.state === 'unset' && !connected ? <Pill tone="neutral">{t('Not set up')}</Pill> : null}
           {/* A workspace can connect a second one: another team of Linear, another address. */}
-          {offer.state === 'connect' && !typing && connected ? (
+          {offer.state === 'connect' && !cannot && !typing && connected ? (
             <IconButton
               size="small"
               label={t('Connect another {source}', { source: name })}
-              disabled={cannot || offer.busy !== undefined}
+              disabled={offer.busy !== undefined}
               onClick={offer.primary}
             >
               <NoteIcon name="add" />
             </IconButton>
           ) : null}
-          {offer.state === 'connect' && !typing && !connected ? (
+          {offer.state === 'connect' && !cannot && !typing && !connected ? (
             <>
-              <Button tone="outline" size="small" disabled={cannot || offer.busy !== undefined} onClick={offer.primary}>
+              <Button tone="outline" size="small" disabled={offer.busy !== undefined} onClick={offer.primary}>
                 {offer.busy ?? <Connect name={name} />}
               </Button>
               {offer.secondary === undefined ? null : (
@@ -899,7 +910,7 @@ function Tile({
                   trigger="icon"
                   triggerLabel={t('Other ways to connect {source}', { source: name })}
                   triggerClassName="size-control-sm!"
-                  items={[{ id: 'secondary', label: offer.secondary.label, disabled: cannot }]}
+                  items={[{ id: 'secondary', label: offer.secondary.label }]}
                   onAction={() => offer.secondary?.act()}
                 >
                   <NoteIcon name="down" />
