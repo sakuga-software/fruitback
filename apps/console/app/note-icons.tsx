@@ -30,9 +30,14 @@ const PATHS = {
   anonymous: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.4M12 17h.01',
   // An arrow that comes round: send again what did not arrive (FRU-685).
   retry: 'M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7',
+  // A chevron up and down: the note above and under it, from its panel (FRU-687).
+  up: 'M6 15l6-6 6 6',
+  down: 'M6 9l6 6 6-6',
+  // Three dots: more of this note (FRU-687).
+  more: 'M5 12h.01M12 12h.01M19 12h.01',
   // A cross: what is chosen is let go (FRU-656).
   close: 'M6 6l12 12M18 6L6 18',
-} as const satisfies Record<NoteAuthor['kind'] | 'open' | 'add' | 'retry' | 'close', string>;
+} as const satisfies Record<NoteAuthor['kind'] | 'open' | 'add' | 'retry' | 'up' | 'down' | 'more' | 'close', string>;
 
 type NoteIconName = keyof typeof PATHS;
 

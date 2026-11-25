@@ -179,7 +179,9 @@ test('the panel of a task written by hand copies its Markdown, and the keyboard 
   await expect(panel.locator('[data-task-text]')).toContainText('Every change of 0.8.0.');
   const status = p.locator('[data-copy-status]');
 
-  await panel.getByRole('button', { name: 'Copy as Markdown' }).click();
+  // FRU-687: the copies are in the menu of the head of the panel.
+  await panel.getByRole('button', { name: 'More of this note' }).click();
+  await p.getByRole('menuitem', { name: 'Copy as Markdown' }).click();
   await expect(status).toHaveText('Copied as Markdown.');
   expect(await clipboard(p)).toBe(
     [
