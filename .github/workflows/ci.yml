@@ -557,17 +557,18 @@ jobs:
           body=$(cat /tmp/refused-body)
           echo "$code: $body"
           test "$code" = 503
-          echo "$body" | grep -q 'FRUITBACK_DATABASE_URL'
+          grep -q 'FRUITBACK_DATABASE_URL' <<<"$body"
           # The page that says how to copy the files of before: a section of docs/self-hosting.md, then a
           # page of its own since FRU-427. Either passes, so this change can land before the split.
-          echo "$body" | grep -qE 'docs/self-hosting(/upgrade)?\.md'
-          echo "$body" | grep -q 'migrate-to-postgres'
+          grep -qE 'docs/self-hosting(/upgrade)?\.md' <<<"$body"
+          grep -q 'migrate-to-postgres' <<<"$body"
           for path in '/feedback?url=http%3A%2F%2Flocalhost%3A5173%2F' /session/sites /console/me; do
             status=$(curl -s -o /dev/null -w '%{http_code}' -H 'Origin: http://localhost:5173' "http://127.0.0.1:8080$path")
             echo "$path $status"
             test "$status" = 500
           done
-          docker logs worker 2>&1 | grep -q 'misconfigured, missing: FRUITBACK_DATABASE_URL'
+          logs=$(docker logs worker 2>&1)
+          grep -q 'misconfigured, missing: FRUITBACK_DATABASE_URL' <<<"$logs"
           # The healthcheck of the image: 15 s apart, three failures. Unhealthy within a minute and a half.
           health=starting
           for attempt in $(seq 1 18); do
@@ -610,7 +611,7 @@ jobs:
             body=$(cat /tmp/before-body)
             echo "$name: $code $body"
             test "$code" = 503
-            echo "$body" | grep -q "\"$name ("
+            grep -q "\"$name (" <<<"$body"
             docker rm -f "before-$port"
           done
 
@@ -746,11 +747,13 @@ jobs:
           }
           start worker-auth-on 8085
           for attempt in $(seq 1 30); do
-            if docker logs worker-auth-on 2>&1 | grep -q 'better-auth is ready, under /console/auth'; then break; fi
+            logs=$(docker logs worker-auth-on 2>&1 || true)
+            if grep -q 'better-auth is ready, under /console/auth' <<<"$logs"; then break; fi
             sleep 1
           done
-          docker logs worker-auth-on
-          docker logs worker-auth-on 2>&1 | grep -q 'better-auth is ready, under /console/auth'
+          logs=$(docker logs worker-auth-on 2>&1)
+          echo "$logs"
+          grep -q 'better-auth is ready, under /console/auth' <<<"$logs"
           for route in ok get-session organization/list; do
             status=$(curl -s -o /dev/null -w '%{http_code}' -H 'Origin: https://app.fruitback.example' \
               "http://127.0.0.1:8085/console/auth/$route")
@@ -825,15 +828,17 @@ jobs:
           test "$(curl -s http://127.0.0.1:8082/config.js)" = 'globalThis.__FRUITBACK__ = { api: "https://api.acme.example" };'
           test "$(curl -s http://127.0.0.1:8083/config.js)" = 'globalThis.__FRUITBACK__ = { api: "https://other.example:8443/fruitback" };'
           # The address is never kept by a browser, and the page loads it before its bundle.
-          curl -s -D - -o /dev/null http://127.0.0.1:8082/config.js | tr -d '\r' | grep -qi '^cache-control: no-store$'
-          curl -s http://127.0.0.1:8082/ | grep -q '<script src="/config.js"></script>'
+          headers=$(curl -s -D - -o /dev/null http://127.0.0.1:8082/config.js | tr -d '\r')
+          grep -qi '^cache-control: no-store$' <<<"$headers"
+          page=$(curl -s http://127.0.0.1:8082/)
+          grep -q '<script src="/config.js"></script>' <<<"$page"
           test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8082/fruitback.iife.js)" = 200
           # FRU-106. The address of before keeps five minutes; the versioned one, which the snippet
           # gives, is kept one year; the version of another image is sent to this one.
           header() { curl -s -D - -o /dev/null "http://127.0.0.1:8082$1" | tr -d '\r' | grep -i "^$2: " | cut -d' ' -f2-; }
           test "$(header /fruitback.iife.js cache-control)" = 'public, max-age=300'
           version=$(docker exec console-acme ls /usr/share/nginx/html/v)
-          echo "$version" | grep -Eq '^[0-9A-Za-z.-]+-[0-9a-f]{12}$'
+          grep -Eq '^[0-9A-Za-z.-]+-[0-9a-f]{12}$' <<<"$version"
           test "$(header "/v/$version/fruitback.iife.js" cache-control)" = 'public, max-age=31536000, immutable'
           test "$(header "/v/$version/fruitback.iife.js" access-control-allow-origin)" = '*'
           cmp <(curl -s "http://127.0.0.1:8082/v/$version/fruitback.iife.js") <(curl -s http://127.0.0.1:8082/fruitback.iife.js)
@@ -869,7 +874,7 @@ jobs:
             code=0
             said=$(timeout 30 docker run --rm "$@" fruitback-console:ci 2>&1) || code=$?
             echo "$code: $said"
-            test "$code" = 1 && echo "$said" | grep -q '^fruitback-console: FRUITBACK_API'
+            test "$code" = 1 && grep -q '^fruitback-console: FRUITBACK_API' <<<"$said"
           }
           refused
           refused -e "FRUITBACK_API=https://a.example; script-src *"
@@ -925,7 +930,7 @@ jobs:
             echo "docker compose started with no FRUITBACK_POSTGRES_PASSWORD"
             exit 1
           fi
-          echo "$said" | grep -q 'FRUITBACK_POSTGRES_PASSWORD'
+          grep -q 'FRUITBACK_POSTGRES_PASSWORD' <<<"$said"
           set_value() { sed -i "s|^$1=.*|$1=$2|" .env; grep -q "^$1=$2\$" .env; }
           set_value ALLOWED_ORIGINS https://staging.example.com
           set_value FRUITBACK_POSTGRES_PASSWORD "$(openssl rand -hex 32)"
