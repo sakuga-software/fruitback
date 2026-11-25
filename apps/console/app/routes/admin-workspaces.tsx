@@ -223,7 +223,7 @@ export default function AdminWorkspaces() {
                             {workspace.name}
                           </RowLink>
                           <span className="block text-hint text-muted tabular-nums">{sizeOf(workspace)}</span>
-                          <SuspendedSince workspace={workspace} chosen={isChosen} />
+                          <SuspendedSince workspace={workspace} />
                         </td>
                         <td className="[overflow-wrap:anywhere]">{ownersOf(workspace)}</td>
                         <td>
@@ -231,7 +231,7 @@ export default function AdminWorkspaces() {
                         </td>
                         <td>
                           <span className="block">{goesTo(workspace.destinations)}</span>
-                          <Alert workspace={workspace} chosen={isChosen} />
+                          <Alert workspace={workspace} />
                         </td>
                       </tr>
                       {!wide && isChosen ? <UnderRow columns={4}>{panel}</UnderRow> : null}

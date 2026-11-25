@@ -349,7 +349,7 @@ test('the section says what a place does, then the places in one frame, each wit
   await expect(rows).toHaveCount(2);
   expect
     .soft(await styles(list, ['border-top-width', 'border-top-left-radius']))
-    .toEqual({ 'border-top-width': '1px', 'border-top-left-radius': '14px' });
+    .toEqual({ 'border-top-width': '1px', 'border-top-left-radius': '8px' });
   expect.soft(await styles(rows.nth(0), ['border-bottom-width', 'padding-left'])).toEqual({
     'border-bottom-width': '1px',
     'padding-left': '16px',

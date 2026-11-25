@@ -133,7 +133,7 @@ export function StatusEditor({ status, adding = false, disabled, onSave, onCance
   return (
     <section
       aria-label={heading}
-      className="mt-[4px] rounded-frame border border-line bg-surface p-[20px] max-[480px]:p-[14px]"
+      className="mt-[4px] rounded-card border border-line bg-surface p-[20px] max-[480px]:p-[14px]"
       onKeyDown={(event) => {
         if (event.key !== 'Escape') return;
         event.stopPropagation();
@@ -232,11 +232,11 @@ export function StatusEditor({ status, adding = false, disabled, onSave, onCance
           {/* The preview is a picture of the colours chosen, even those the screen refuses: hidden from
               a screen reader, which reads the sentence under it (the contrast, in words). */}
           <div aria-hidden="true" data-sample className="flex flex-col gap-[10px]">
-            <div className="flex flex-col gap-[10px] rounded-box border border-line bg-subtle p-[14px]">
+            <div className="flex flex-col gap-[10px] rounded-card border border-line bg-subtle p-[14px]">
               <span className="text-tiny text-muted">{t('On a light page')}</span>
               <StatusMark name={nameShown} style={drawn.style} />
             </div>
-            <div className="flex flex-col gap-[10px] rounded-box bg-rail p-[14px]">
+            <div className="flex flex-col gap-[10px] rounded-card bg-rail p-[14px]">
               <span className="text-tiny text-rail-text">{t('On a dark page')}</span>
               <StatusMark name={nameShown} style={drawn.style} />
             </div>
@@ -287,7 +287,7 @@ export function MoveNotes({ status, notes, targets, disabled, onMove, onKeep }: 
     <div
       role="group"
       aria-label={t('Delete {name}', { name })}
-      className="mt-[4px] flex flex-col gap-[12px] rounded-frame border border-line bg-surface p-[20px] max-[480px]:p-[14px]"
+      className="mt-[4px] flex flex-col gap-[12px] rounded-card border border-line bg-surface p-[20px] max-[480px]:p-[14px]"
       onKeyDown={(event) => {
         if (event.key !== 'Escape') return;
         event.stopPropagation();

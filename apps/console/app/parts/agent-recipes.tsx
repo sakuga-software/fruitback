@@ -50,13 +50,13 @@ export function NoCodeRecipes({ kinds }: { kinds: readonly Connector['kind'][] }
         {shown.map((recipe) => (
           <li
             key={recipe.href}
-            className="flex min-w-0 flex-col gap-[12px] rounded-frame border border-line bg-surface p-[16px]"
+            className="flex min-w-0 flex-col gap-[12px] rounded-card border border-line bg-surface p-[16px]"
             data-recipe={recipe.href.split('#')[1]}
           >
             <span className="flex items-start gap-[12px]">
               <span
                 aria-hidden="true"
-                className="box-content flex h-[34px] w-[34px] flex-none items-center justify-center rounded-field border border-line bg-surface text-ink"
+                className="box-content flex h-[34px] w-[34px] flex-none items-center justify-center rounded-control border border-line bg-surface text-ink"
               >
                 <ConnectorMark kind={recipe.kind} size={18} />
               </span>

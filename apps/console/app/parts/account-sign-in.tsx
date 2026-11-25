@@ -290,7 +290,7 @@ function LinkQuestion({
   return (
     <section
       aria-labelledby="link-question"
-      className="mb-[12px] rounded-[12px] border border-line p-[16px] [overflow-wrap:anywhere]"
+      className="mb-[12px] rounded-card border border-line p-[16px] [overflow-wrap:anywhere]"
     >
       <p id="link-question" className="text-body leading-auto font-semibold">
         {t('Link the {provider} account {email} to your Fruitback account?', { provider, email })}

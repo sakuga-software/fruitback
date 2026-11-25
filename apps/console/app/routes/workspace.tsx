@@ -284,7 +284,7 @@ type RailEntry = { to: string; label: string; current: boolean; icon?: RailIconN
 const SETTINGS = 'workspace settings';
 
 /** The classes of the box at the top of the rail: what the rail is of. */
-export const RAIL_HEAD = 'flex w-full items-center gap-[10px] rounded-box p-[8px] text-left text-on-ink';
+export const RAIL_HEAD = 'flex w-full items-center gap-[10px] rounded-card p-[8px] text-left text-on-ink';
 
 /**
  * The dark rail of the mockup, for a workspace or for the instance (FRU-262): what it is of, its
@@ -332,7 +332,7 @@ export function RailFrame({
             <div
               key={link.href}
               data-rail-extension=""
-              className="mb-[8px] flex min-w-0 flex-col gap-[6px] rounded-box border border-status-done/45 bg-status-done/20 px-[10px] py-[10px]"
+              className="mb-[8px] flex min-w-0 flex-col gap-[6px] rounded-card border border-status-done/45 bg-status-done/20 px-[10px] py-[10px]"
             >
               <p className="flex min-w-0 flex-col gap-[2px] text-small leading-auto">
                 <span className="flex items-center gap-[8px] whitespace-nowrap text-on-ink">
@@ -356,7 +356,7 @@ export function RailFrame({
           target="_blank"
           rel="noreferrer"
           aria-label={t('Fruitback, its site, in a new tab')}
-          className="self-start rounded-[2px] opacity-100 hover:opacity-80"
+          className="self-start rounded-inner opacity-100 hover:opacity-80"
         >
           <Logo on="rail" />
         </a>
@@ -468,14 +468,14 @@ export function WorkspaceMark({ workspace, size = 32 }: { workspace: Workspace; 
         width={size}
         height={size}
         onError={() => setBroken(source)}
-        className={`${box} flex-none rounded-field bg-page object-contain`}
+        className={`${box} flex-none rounded-control bg-page object-contain`}
       />
     );
 
   return (
     <span
       aria-hidden="true"
-      className={`${box} flex flex-none items-center justify-center rounded-field bg-page leading-auto font-bold text-ink`}
+      className={`${box} flex flex-none items-center justify-center rounded-control bg-page leading-auto font-bold text-ink`}
     >
       {workspace.name.trim().charAt(0).toUpperCase()}
     </span>
@@ -570,7 +570,18 @@ export function RailNav({ label, entries }: { label: string; entries: readonly R
   const shown = entries.find((entry) => entry.current)?.to;
   useEffect(() => {
     const link = row.current?.querySelector<HTMLElement>('[aria-current="page"]');
-    if (link !== null && link !== undefined) reveal(link);
+    if (link === null || link === undefined) return;
+    reveal(link);
+    // Inter comes after the first paint (FRU-683): its words are wider, so the section is revealed
+    // again once the fonts are in. Measured at 390 px: without it, « My account » ended 20 px out.
+    let gone = false;
+    void document.fonts?.ready.then(() => {
+      if (!gone) reveal(link);
+    });
+
+    return () => {
+      gone = true;
+    };
   }, [shown]);
 
   return (
@@ -593,7 +604,7 @@ export function RailNav({ label, entries }: { label: string; entries: readonly R
             // A move between screens and frames cross-fades the screen, the rail held (FRU-356).
             viewTransition
             {...(active ? { 'aria-current': 'page' as const } : {})}
-            className={`flex min-h-[40px] flex-none items-center gap-[10px] rounded-box text-body leading-auto whitespace-nowrap ${
+            className={`flex min-h-[40px] flex-none items-center gap-[10px] rounded-card text-body leading-auto whitespace-nowrap ${
               active
                 ? 'bg-rail-active px-[12px] font-semibold text-on-ink'
                 : 'pr-[12px] pl-[31px] text-rail-text hover:bg-rail-active hover:text-on-ink'
