@@ -25,7 +25,7 @@ const SITES = [
   },
 ];
 
-type Worker = { posted: Record<string, unknown>[]; refuses?: string };
+type Worker = { posted: Record<string, unknown>[]; refuses?: string; answersAnother?: boolean };
 
 async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' = 'en'): Promise<Worker> {
   const worker: Worker = { posted: [] };
@@ -37,6 +37,8 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
       worker.posted.push(body);
       if (worker.refuses !== undefined) return json({ error: worker.refuses }, 403);
       const site = SITES.find((each) => each.origin === body.url);
+      // Another site than the one of the page: this one was not changed.
+      if (worker.answersAnother === true) return json({ ...site, ...body, id: 'another', origin: body.url }, 201);
 
       return json({ ...site, ...body, id: site?.id ?? 'new', origin: body.url }, 201);
     }
@@ -255,6 +257,15 @@ test('a refusal says why and keeps what was chosen, and a member reads the tab w
     'Only an owner or an admin of the workspace changes who sees the notes.',
   );
   await expect(levels(page).getByRole('radio', { name: 'Closed' })).toBeChecked();
+
+  // An answer that is another site: the page says it did not change, and keeps what was chosen.
+  worker.refuses = undefined;
+  worker.answersAnother = true;
+  await levels(page).getByText('Read only', { exact: true }).click();
+  await page.getByRole('button', { name: 'Save the access of staging.acme.dev' }).click();
+  await expect(page.locator('main')).toContainText('Who sees the notes did not change. Try again.');
+  await expect(levels(page).getByRole('radio', { name: 'Read only' })).toBeChecked();
+  await expect(page.getByRole('status')).toHaveCount(0);
 
   await page.unrouteAll({ behavior: 'ignoreErrors' });
   await workerWith(page, 'member');
