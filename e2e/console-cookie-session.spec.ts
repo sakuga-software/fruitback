@@ -38,9 +38,9 @@ async function signInByLink(page: Page, worker: Worker, email: string): Promise<
 /**
  * My account, at rest: the list of the browsers is read.
  *
- * WARNING: the list arrives after the screen is drawn, and « Sign out » is under it: the button goes
- * down 53 px when it does. A press that starts before and ends after is lost: the button has focus,
- * nothing is sent, and the page stays. Measured on `main` at 30c62f8, where this spec failed for it.
+ * WARNING: the list arrives after the screen is drawn. « Sign out » was under it until FRU-692, and
+ * went down 53 px when it came: a press that started before and ended after was lost (measured on
+ * `main` at 30c62f8). It is in the head of the page now; the spec still waits for the list.
  */
 async function openAccount(page: Page): Promise<void> {
   await page.getByRole('link', { name: 'My account' }).click();
@@ -255,7 +255,7 @@ test.describe('the console, signed in by the cookie of better-auth (FRU-148)', (
 
     await expect(page.getByRole('alert').filter({ hasText: 'You are still signed in' })).toBeVisible();
     await expect(page).toHaveURL(/\/account$/);
-    await expect(page.getByRole('heading', { name: 'My account' })).toBeVisible();
+    await expect(page.locator('main h1')).toHaveText('Profile');
     // The sentence is true: the cookie still opens the account.
     expect((await me()).status).toBe(200);
 

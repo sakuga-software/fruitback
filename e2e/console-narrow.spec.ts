@@ -241,6 +241,7 @@ const PAGES: readonly (readonly [string, string | undefined])[] = [
   ['/w/w1/connectors', undefined],
   ['/w/w1/members', 'invited.person.0@client-of-acme.dev'],
   ['/w/w1/account', undefined],
+  ['/w/w1/account/sessions', undefined],
   ['/w/w1/settings', undefined],
   ['/w/w1/settings/agents', undefined],
   ['/admin', undefined],

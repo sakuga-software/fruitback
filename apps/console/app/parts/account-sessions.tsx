@@ -227,27 +227,29 @@ export function SessionsSection({ workspace, limit }: { workspace: string; limit
             }
             const { browser } = each;
             const title = t('Extension · {browser}', { browser: browser.browser });
-            let under;
-            if (ending === browser.id)
-              under = (
-                <Confirmation
-                  confirmLabel={t('Disconnect the extension in {browser}', { browser: browser.browser })}
-                  keepLabel={t('Keep it')}
-                  consequence={t(
-                    'It stops showing notes at once. It connects again from its popup, with your approval here.',
-                  )}
-                  onConfirm={() => {
-                    setEnding(undefined);
-                    void disconnectExtension(browser);
-                  }}
-                  onKeep={() => setEnding(undefined)}
-                />
-              );
-            else if (extensionStuck === browser.id)
-              under = (
+            const notEnded =
+              extensionStuck === browser.id ? (
                 <Problem>
                   {t('This extension is still connected: Fruitback did not end its session. Try again.')}
                 </Problem>
+              ) : null;
+            // The second time stays after a refusal: the person tries again in one press.
+            const under =
+              ending === browser.id ? (
+                <div className="flex flex-col gap-[8px]">
+                  <Confirmation
+                    confirmLabel={t('Disconnect the extension in {browser}', { browser: browser.browser })}
+                    keepLabel={t('Keep it')}
+                    consequence={t(
+                      'It stops showing notes at once. It connects again from its popup, with your approval here.',
+                    )}
+                    onConfirm={() => void disconnectExtension(browser)}
+                    onKeep={() => setEnding(undefined)}
+                  />
+                  {notEnded}
+                </div>
+              ) : (
+                (notEnded ?? undefined)
               );
 
             return (

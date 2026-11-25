@@ -183,13 +183,15 @@ export function SignInSection({ workspace, primary }: { workspace: string; prima
   const [unlinking, setUnlinking] = useState<Linkable | undefined>();
 
   async function unlink(provider: Linkable) {
-    setUnlinking(undefined);
     setUnlinkStuck(undefined);
     setLinkError(null);
     const gone = await unlinkProvider(provider);
     if (!gone.ok && gone.status !== 404) {
       // Own keys only (`problemOf`): a code named `constructor` must not find a method of `Object`.
+      // The second time stays: the person tries again in one press.
       setUnlinkStuck({ provider, problem: problemOf(gone, UNLINK_PROBLEMS, NOT_UNLINKED) });
+    } else {
+      setUnlinking(undefined);
     }
     await readMethods();
   }
@@ -240,21 +242,30 @@ export function SignInSection({ workspace, primary }: { workspace: string; prima
           const known = typeof providers === 'object' ? providers[provider] : undefined;
           const named = PROVIDER_NAMES[provider];
           const Mark = PROVIDER_MARKS[provider];
-          let under;
-          if (unlinking === provider)
-            under = (
-              <Confirmation
-                confirmLabel={t('Unlink {provider}', { provider: named })}
-                keepLabel={t('Keep it')}
-                consequence={t('You no longer sign in with {provider}. Your account and its notes stay.', {
-                  provider: named,
-                })}
-                onConfirm={() => void unlink(provider)}
-                onKeep={() => setUnlinking(undefined)}
-              />
+          const stuck =
+            unlinkStuck?.provider === provider ? (
+              <Problem>{t(unlinkStuck.problem, { provider: named })}</Problem>
+            ) : null;
+          const under =
+            unlinking === provider ? (
+              <div className="flex flex-col gap-[8px]">
+                <Confirmation
+                  confirmLabel={t('Unlink {provider}', { provider: named })}
+                  keepLabel={t('Keep it')}
+                  consequence={t('You no longer sign in with {provider}. Your account and its notes stay.', {
+                    provider: named,
+                  })}
+                  onConfirm={() => void unlink(provider)}
+                  onKeep={() => {
+                    setUnlinkStuck(undefined);
+                    setUnlinking(undefined);
+                  }}
+                />
+                {stuck}
+              </div>
+            ) : (
+              (stuck ?? undefined)
             );
-          else if (unlinkStuck?.provider === provider)
-            under = <Problem>{t(unlinkStuck.problem, { provider: named })}</Problem>;
 
           return (
             <Row

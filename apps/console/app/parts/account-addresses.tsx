@@ -104,20 +104,26 @@ export function AddressesSection({ workspace, onPrimary }: { workspace: string; 
   }
 
   async function removeEmail(email: string) {
-    setRemoving(undefined);
     setAddressStuck(undefined);
     setMadePrimary(undefined);
     const removed = await removeAccountEmail(email);
     if (!removed.ok && removed.status !== 404) {
       return setAddressStuck({ email, problem: problemOf(removed, ADDRESS_PROBLEMS, ADDRESS_NOT_REMOVED) });
     }
+    setRemoving(undefined);
     await readEmails();
   }
 
-  /** Under the row of an address: the second time of « Remove », or why its action did not go through. */
+  /**
+   * Under the row of an address: the second time of « Remove », and why its action did not go through.
+   * The second time stays after a refusal, so the person tries again in one press.
+   */
   function rowUnder(email: string) {
-    if (removing === email)
-      return (
+    const stuck = addressStuck?.email === email ? <Problem>{t(addressStuck.problem)}</Problem> : null;
+    if (removing !== email) return stuck ?? undefined;
+
+    return (
+      <div className="flex flex-col gap-[8px]">
         <Confirmation
           confirmLabel={t('Remove {email}', { email })}
           keepLabel={t('Keep it')}
@@ -125,10 +131,9 @@ export function AddressesSection({ workspace, onPrimary }: { workspace: string; 
           onConfirm={() => void removeEmail(email)}
           onKeep={() => setRemoving(undefined)}
         />
-      );
-    if (addressStuck?.email === email) return <Problem>{t(addressStuck.problem)}</Problem>;
-
-    return undefined;
+        {stuck}
+      </div>
+    );
   }
 
   const add =
